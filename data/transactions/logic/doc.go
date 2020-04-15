@@ -99,7 +99,8 @@ var opDocList = []stringString{
 	{"app_opted_in", "check if account A opted in for the application B => {0 or 1}"},
 	{"app_local_gets", "read from account's A from local state of the current application key B  => value"},
 	{"app_local_get", "read from account's A from local state of the application B key C  => {0 or 1 (top), value}"},
-	{"app_global_get", "read key A from global state of a current application => {0 or 1 (top), value}"},
+	{"app_global_gets", "read key A from global state of a current application => value"},
+	{"app_global_get", "read from application A global state key B => {0 or 1 (top), value}"},
 	{"app_local_put", "write to account's A to local state of a current application key B with value C"},
 	{"app_global_put", "write key A and value B to global state of the current application"},
 	{"app_local_del", "delete from account's A local state key B of the current application"},
@@ -165,6 +166,7 @@ var opDocExtraList = []stringString{
 	{"app_opted_in", "params: account index, application id (top of the stack on opcode entry)"},
 	{"app_local_gets", "params: account index, state key. Return: value"},
 	{"app_local_get", "params: account index, application id, state key. Return: did_exist flag (top of the stack), value"},
+	{"app_global_get", "params: application id, state key. Return: value"},
 	{"app_local_put", "params: account index, state key, value"},
 	{"app_local_del", "params: account index, state key"},
 	{"app_global_del", "params: state key"},
@@ -194,7 +196,7 @@ var OpGroupList = []OpGroup{
 	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "concat", "substring", "substring3"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup"}},
-	{"State Access", []string{"balance", "app_opted_in", "app_local_gets", "app_local_get", "app_global_get", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
+	{"State Access", []string{"balance", "app_opted_in", "app_local_gets", "app_local_get", "app_global_gets", "app_global_get", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
 }
 
 var opCostByName map[string]int

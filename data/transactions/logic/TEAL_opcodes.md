@@ -571,18 +571,29 @@ params: account index, state key. Return: value
 
 params: account index, application id, state key. Return: did_exist flag (top of the stack), value
 
-## app_global_get
+## app_global_gets
 
 - Opcode: 0x64
 - Pops: *... stack*, []byte
-- Pushes: uint64, any
-- read key A from global state of a current application => {0 or 1 (top), value}
+- Pushes: any
+- read key A from global state of a current application => value
 - LogicSigVersion >= 2
 - Mode: Application
 
-## app_local_put
+## app_global_get
 
 - Opcode: 0x65
+- Pops: *... stack*, {uint64 A}, {[]byte B}
+- Pushes: uint64, any
+- read from application A global state key B => {0 or 1 (top), value}
+- LogicSigVersion >= 2
+- Mode: Application
+
+params: application id, state key. Return: value
+
+## app_local_put
+
+- Opcode: 0x66
 - Pops: *... stack*, {uint64 A}, {[]byte B}, {any C}
 - Pushes: _None_
 - write to account's A to local state of a current application key B with value C
@@ -593,7 +604,7 @@ params: account index, state key, value
 
 ## app_global_put
 
-- Opcode: 0x66
+- Opcode: 0x67
 - Pops: *... stack*, {[]byte A}, {any B}
 - Pushes: _None_
 - write key A and value B to global state of the current application
@@ -602,7 +613,7 @@ params: account index, state key, value
 
 ## app_local_del
 
-- Opcode: 0x67
+- Opcode: 0x68
 - Pops: *... stack*, {uint64 A}, {[]byte B}
 - Pushes: _None_
 - delete from account's A local state key B of the current application
@@ -613,7 +624,7 @@ params: account index, state key
 
 ## app_global_del
 
-- Opcode: 0x68
+- Opcode: 0x69
 - Pops: *... stack*, []byte
 - Pushes: _None_
 - delete key A from a global state of the current application
