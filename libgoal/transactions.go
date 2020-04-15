@@ -38,7 +38,8 @@ func (c *Client) SignTransactionWithWallet(walletHandle, pw []byte, utx transact
 	}
 
 	// Sign the transaction
-	resp, err := kmd.SignTransaction(walletHandle, pw, utx)
+	// TODO(rekeying): Probably libgoal should allow passing in authaddr
+	resp, err := kmd.SignTransaction(walletHandle, pw, crypto.PublicKey{}, utx)
 	if err != nil {
 		return
 	}

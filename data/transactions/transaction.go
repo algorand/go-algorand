@@ -206,6 +206,10 @@ func (tx Transaction) Sign(secrets *crypto.SignatureSecrets) SignedTxn {
 		Txn: tx,
 		Sig: sig,
 	}
+	// Set the AuthAddr if the signing key doesn't match the transaction sender
+	if basics.Address(secrets.SignatureVerifier) != tx.Sender {
+		s.AuthAddr = basics.Address(secrets.SignatureVerifier)
+	}
 	return s
 }
 
@@ -514,11 +518,14 @@ func (tx Transaction) GetReceiverAddress() basics.Address {
 
 // EstimateEncodedSize returns the estimated encoded size of the transaction including the signature.
 // This function is to be used for calculating the fee
+// Note that it may be an underestimate if the transaction is signed in an unusual way
+// (e.g., with an authaddr or via multisig or logicsig)
 func (tx Transaction) EstimateEncodedSize() int {
-	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
-	keys := crypto.GenerateSignatureSecrets(seed)
-	stx := tx.Sign(keys)
+	// Make a signedtxn with a nonzero signature and encode it
+	stx := SignedTxn{
+		Txn: tx,
+		Sig: crypto.Signature{1},
+	}
 	return stx.GetEncodedLength()
 }
 
