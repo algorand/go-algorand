@@ -2376,7 +2376,7 @@ func TestReturnTypes(t *testing.T) {
 						LocalDeltas: make(map[basics.Address]basics.StateDelta),
 					}
 					cx.globalStateCow = nil
-					cx.localStateCows = make(map[basics.Address]*keyValueCow)
+					cx.localStateCows = make(map[basics.Address]*indexedCow)
 					cx.readOnlyLocalStates = make(map[ckey]basics.TealKeyValue)
 				}
 				eval(program, &cx)
