@@ -11,9 +11,7 @@ pipeline {
     agent {
         dockerfile {
             filename 'scripts/release/common/docker/setup.Dockerfile'
-            /*
-            args '-v /etc/passwd:/etc/passwd'
-            */
+            args '-u root'
         }
     }
 
@@ -52,6 +50,12 @@ pipeline {
             steps {
                 input "Forward gpg-agent"
                 sh script: "scripts/release/build/stage/sign/run.sh"
+            }
+        }
+
+        stage("verify signatures") {
+            steps {
+                sh script: "scripts/release/build/stage/verify/run.sh"
             }
         }
 

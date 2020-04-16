@@ -28,14 +28,14 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+// 2019-12-15: removed column 'auxdata blob' from 'CREATE TABLE' statement. It was not explicitly removed from databases and may continue to exist with empty entries in some old databases.
 var blockSchema = []string{
 	`CREATE TABLE IF NOT EXISTS blocks (
 		rnd integer primary key,
 		proto text,
 		hdrdata blob,
 		blkdata blob,
-		certdata blob,
-		auxdata blob)`,
+		certdata blob)`,
 }
 
 var blockResetExprs = []string{
@@ -46,7 +46,7 @@ func blockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
 	for _, tableCreate := range blockSchema {
 		_, err := tx.Exec(tableCreate)
 		if err != nil {
-			return err
+			return fmt.Errorf("blockdb blockInit could not create table %v", err)
 		}
 	}
 
@@ -57,7 +57,7 @@ func blockInit(tx *sql.Tx, initBlocks []bookkeeping.Block) error {
 
 	if next == 0 {
 		for _, blk := range initBlocks {
-			err = blockPut(tx, blk, agreement.Certificate{}, evalAux{})
+			err = blockPut(tx, blk, agreement.Certificate{})
 			if err != nil {
 				serr, ok := err.(sqlite3.Error)
 				if ok && serr.Code == sqlite3.ErrConstraint {
@@ -141,27 +141,7 @@ func blockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agr
 	return
 }
 
-func blockGetAux(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, aux evalAux, err error) {
-	var blkbuf []byte
-	var auxbuf []byte
-	err = tx.QueryRow("SELECT blkdata, auxdata FROM blocks WHERE rnd=?", rnd).Scan(&blkbuf, &auxbuf)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			err = ErrNoEntry{Round: rnd}
-		}
-
-		return
-	}
-
-	err = protocol.Decode(blkbuf, &blk)
-	if err != nil {
-		return
-	}
-
-	return
-}
-
-func blockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate, aux evalAux) error {
+func blockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) error {
 	var max sql.NullInt64
 	err := tx.QueryRow("SELECT MAX(rnd) FROM blocks").Scan(&max)
 	if err != nil {
@@ -180,12 +160,13 @@ func blockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate, aux
 		}
 	}
 
-	_, err = tx.Exec("INSERT INTO blocks (rnd, proto, hdrdata, blkdata, certdata, auxdata) VALUES (?, ?, ?, ?, ?, ?)",
-		blk.Round(), blk.CurrentProtocol,
-		protocol.Encode(blk.BlockHeader),
-		protocol.Encode(blk),
-		protocol.Encode(cert),
-		protocol.Encode(aux))
+	_, err = tx.Exec("INSERT INTO blocks (rnd, proto, hdrdata, blkdata, certdata) VALUES (?, ?, ?, ?, ?)",
+		blk.Round(),
+		blk.CurrentProtocol,
+		protocol.Encode(&blk.BlockHeader),
+		protocol.Encode(&blk),
+		protocol.Encode(&cert),
+	)
 	return err
 }
 

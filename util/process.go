@@ -17,9 +17,11 @@
 package util
 
 import (
-	"io/ioutil"
+	"io"
 	"os"
 	"os/exec"
+	"sync"
+	"time"
 )
 
 // ExecAndCaptureOutput runs the specified command and args and captures
@@ -38,19 +40,36 @@ func ExecAndCaptureOutput(command string, args ...string) (string, string, error
 	subcmd.Stdout = wStdout
 	subcmd.Stderr = wStderr
 
+	outputStdout := make([]byte, 0, 10240)
+	outputStderr := make([]byte, 0, 1024)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	reader := func(input *os.File, output *[]byte) {
+		defer wg.Done()
+
+		for {
+			buf := make([]byte, 1024)
+			read, e := input.Read(buf)
+			if e == io.EOF {
+				break
+			}
+			if read > 0 {
+				*output = append(*output, buf[0:read]...)
+			} else {
+				time.Sleep(time.Microsecond)
+			}
+		}
+	}
+	go reader(rStdout, &outputStdout)
+	go reader(rStderr, &outputStderr)
+
 	err = subcmd.Run()
-
 	wStdout.Close()
-	outputStdout, errIO := ioutil.ReadAll(rStdout)
-	if err == nil {
-		err = errIO
-	}
-
 	wStderr.Close()
-	outputStderr, errIO := ioutil.ReadAll(rStderr)
-	if err == nil {
-		err = errIO
-	}
+
+	wg.Wait()
 
 	return string(outputStdout), string(outputStderr), err
 }

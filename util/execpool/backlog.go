@@ -42,7 +42,6 @@ type backlogItemTask struct {
 // BacklogPool supports all the ExecutionPool functions plus few more that tests the pending tasks.
 type BacklogPool interface {
 	ExecutionPool
-	IsFull() bool
 	EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg interface{}, out chan interface{}) error
 }
 
@@ -76,11 +75,6 @@ func (b *backlog) GetParallelism() int {
 	return b.pool.GetParallelism()
 }
 
-// IsFull test to see if the input buffer is full.
-func (b *backlog) IsFull() bool {
-	return len(b.buffer) == cap(b.buffer)
-}
-
 // Enqueue enqueues a single task into the backlog
 func (b *backlog) Enqueue(enqueueCtx context.Context, t ExecFunc, arg interface{}, priority Priority, out chan interface{}) error {
 	select {
@@ -95,6 +89,8 @@ func (b *backlog) Enqueue(enqueueCtx context.Context, t ExecFunc, arg interface{
 		return nil
 	case <-enqueueCtx.Done():
 		return enqueueCtx.Err()
+	case <-b.ctx.Done():
+		return b.ctx.Err()
 	}
 }
 
@@ -112,13 +108,15 @@ func (b *backlog) EnqueueBacklog(enqueueCtx context.Context, t ExecFunc, arg int
 		return nil
 	case <-enqueueCtx.Done():
 		return enqueueCtx.Err()
+	case <-b.ctx.Done():
+		return b.ctx.Err()
 	}
 }
 
 // Shutdown shuts down the backlog.
 func (b *backlog) Shutdown() {
 	b.ctxCancel()
-	close(b.buffer)
+	// NOTE: Do not close(b.buffer) because there's no good way to ensure Enqueue*() won't write to it and panic. Just let it be garbage collected.
 	b.wg.Wait()
 	if b.pool.GetOwner() == b {
 		b.pool.Shutdown()

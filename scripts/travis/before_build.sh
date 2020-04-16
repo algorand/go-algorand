@@ -43,12 +43,12 @@ GOPATH=$(go env GOPATH)
 export GOPATH
 export GO111MODULE=on
 
-echo "Building libsodium-fork..."
-make crypto/lib/libsodium.a
-
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 OS=$("${SCRIPTPATH}"/../ostype.sh)
 ARCH=$("${SCRIPTPATH}"/../archtype.sh)
+
+echo "Building libsodium-fork..."
+make crypto/libs/${OS}/${ARCH}/lib/libsodium.a
 
 if [ "${OS}-${ARCH}" = "linux-arm" ]; then
     echo "Skipping running 'go vet'/gofmt/golint for arm builds"

@@ -45,12 +45,12 @@ func (m *proposalManager) underlying() listener {
 // - It applies message relay rules to votePresent, voteVerified,
 //   payloadPresent, and payloadVerified events.
 //
-// - It enters a new round given a roundInterruption or a certThreshold event.
+// - It enters a new round given a roundInterruption.
 //
 // - It enters a new period given a nextThreshold event.  It also enters a new
-//   period given a softThreshold event, if necessary.
-//    - On entering a new period due to a softThreshold event, it dispatches
-//      this event to the proposalMachineRound.
+//   period given a softThreshold/certThreshold event, if necessary.
+//    - On entering a new period due to a softThreshold/certThreshold, it
+//      dispatches this event to the proposalMachineRound.
 //
 // For more details, see each method's respective documentation below.
 func (m *proposalManager) handle(r routerHandle, p player, e event) event {
@@ -59,9 +59,7 @@ func (m *proposalManager) handle(r routerHandle, p player, e event) event {
 		return m.handleMessageEvent(r, p, e.(filterableMessageEvent))
 	case roundInterruption:
 		return m.handleNewRound(r, p, e.(roundInterruptionEvent).Round)
-	case certThreshold:
-		return m.handleNewRound(r, p, e.(thresholdEvent).Round+1)
-	case softThreshold:
+	case softThreshold, certThreshold:
 		e := e.(thresholdEvent)
 		if p.Period < e.Period {
 			r = m.handleNewPeriod(r, p, e)
@@ -85,9 +83,8 @@ func (m *proposalManager) handleNewRound(r routerHandle, p player, round round) 
 	return e
 }
 
-// handleNewPeriod is called for nextThreshold events and softThreshold events
-// (when the softThreshold event is for a new period).  These events are
-// dispatched to the proposalMachineRound, and an empty event is returned.
+// handleNewPeriod is called for threshold events that move the state machine into a new period.
+// These events are dispatched to the proposalMachineRound, and an empty event is returned.
 func (m *proposalManager) handleNewPeriod(r routerHandle, p player, e thresholdEvent) routerHandle {
 	target := e.Period
 	if e.t() == nextThreshold {
@@ -227,7 +224,7 @@ func (m *proposalManager) filterProposalVote(p player, r routerHandle, uv unauth
 	qe := voteFilterRequestEvent{RawVote: uv.R}
 	sawVote := r.dispatch(p, qe, proposalMachinePeriod, uv.R.Round, uv.R.Period, 0)
 	if sawVote.t() == voteFiltered {
-		return fmt.Errorf("proposalManager: filtered proposal-vote: sender %v had already sent a vote in round %v period %v", uv.R.Sender, uv.R.Round, uv.R.Period)
+		return fmt.Errorf("proposalManager: filtered proposal-vote: sender %v had already sent a vote in round %d period %d", uv.R.Sender, uv.R.Round, uv.R.Period)
 	}
 	return nil
 }
@@ -237,17 +234,17 @@ func proposalFresh(freshData freshnessData, vote unauthenticatedVote) error {
 	switch vote.R.Round {
 	case freshData.PlayerRound:
 		if freshData.PlayerPeriod != 0 && freshData.PlayerPeriod-1 > vote.R.Period {
-			return fmt.Errorf("filtered stale proposal: period %v - 1 > %v", freshData.PlayerPeriod, vote.R.Period)
+			return fmt.Errorf("filtered stale proposal: period %d - 1 > %d", freshData.PlayerPeriod, vote.R.Period)
 		}
 		if freshData.PlayerPeriod+1 < vote.R.Period {
-			return fmt.Errorf("filtered premature proposal: period %v + 1 < %v", freshData.PlayerPeriod, vote.R.Period)
+			return fmt.Errorf("filtered premature proposal: period %d + 1 < %d", freshData.PlayerPeriod, vote.R.Period)
 		}
 	case freshData.PlayerRound + 1:
 		if vote.R.Period != 0 {
-			return fmt.Errorf("filtered premature proposal from next round: period %v > 0", vote.R.Period)
+			return fmt.Errorf("filtered premature proposal from next round: period %d > 0", vote.R.Period)
 		}
 	default:
-		return fmt.Errorf("filtered proposal from bad round: p.Round=%v, vote.Round=%v", freshData.PlayerRound, vote.R.Round)
+		return fmt.Errorf("filtered proposal from bad round: p.Round=%d, vote.Round=%d", freshData.PlayerRound, vote.R.Round)
 	}
 	return nil
 }
