@@ -5,8 +5,8 @@ AWS_REGION="$1"
 AWS_AMI="$2"
 AWS_INSTANCE_TYPE="$3"
 INSTANCE_NUMBER=$RANDOM
-KEY_NAME="ReleaseBuildInstanceKey_$INSTANCE_NUMBER"
-KEY_NAME_FILE="ReleaseBuildInstanceKey.pem"
+KEY_NAME=algorand_baseline
+KEY_NAME_FILE=algorand_baseline.pem
 SECURITY_GROUP_NAME="ReleaseBuildMachineSSH_$INSTANCE_NUMBER"
 CIDR="0.0.0.0/0"
 RED_FG=$(echo -en "\e[31m")
@@ -17,18 +17,6 @@ REPO_ROOT="$( cd "$(dirname "$0")" ; pwd -P )"
 
 cleanup () {
     rm -rf "$REPO_ROOT"/tmp
-}
-
-delete_local_key () {
-    rm -f "$KEY_NAME_FILE"
-}
-
-delete_key_pair () {
-    if ! aws ec2 delete-key-pair --key-name "$KEY_NAME" --region "$AWS_REGION"
-    then
-        exit 1
-        echo "$RED_FG[$0]$END_FG_COLOR: Key pair was not deleted!"
-    fi
 }
 
 delete_security_group () {
@@ -65,25 +53,12 @@ do
     fi
 done
 
-delete_local_key
-if ! aws ec2 create-key-pair --key-name "$KEY_NAME" --region "$AWS_REGION" | jq -r '.KeyMaterial' > "$KEY_NAME_FILE"
-then
-    echo "$RED_FG[$0]$END_FG_COLOR: There was a problem creating the key pair!"
-    delete_security_group
-    delete_local_key
-    exit 1
-else
-    chmod 400 "$KEY_NAME_FILE"
-fi
-
 mkdir -p "$REPO_ROOT/tmp"
 
 if ! aws ec2 run-instances --image-id "$AWS_AMI" --key-name "$KEY_NAME" --security-groups "$SECURITY_GROUP_NAME" --instance-type "$AWS_INSTANCE_TYPE" --tag-specifications "ResourceType=instance,Tags=[{Key=\"Name\",Value=\"Release_Build_Ephemeral_${INSTANCE_NUMBER}\"}, {Key=\"For\",Value=\"Release_Build_Ephemeral\"}]" --block-device-mappings '{ "DeviceName": "/dev/sda1", "Ebs": { "VolumeSize": 40 } }' --count 1 --region "$AWS_REGION" > "$REPO_ROOT"/tmp/instance.json
 then
     echo "$RED_FG[$0]$END_FG_COLOR: There was a problem launching the instance! Deleting the security group and the key pair!"
-    delete_key_pair
     delete_security_group
-    delete_local_key
     cleanup
     exit 1
 fi
@@ -109,8 +84,6 @@ do
     then
         echo "$YELLOW_FG[$0]$END_FG_COLOR: Instance is in state $INSTANCE_STATE..."
         PRIOR_INSTANCE_STATE="$INSTANCE_STATE"
-#    else
-#        cat "$REPO_ROOT"/tmp/instance2.json
     fi
 
     sleep 1s
@@ -136,7 +109,6 @@ do
 done
 
 echo "$RED_FG[$0]$END_FG_COLOR: Unable to establish SSH connection"
-delete_local_key
 cleanup
 exit 1
 

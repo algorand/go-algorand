@@ -144,6 +144,7 @@ export ARCH=${PLATFORM_SPLIT[1]}
 export REPO_ROOT=${REPO_ROOT}
 export RELEASE_GENESIS_PROCESS=true
 export VARIATIONS=base
+export EC2_INSTANCE_NAME=$(curl --silent http://169.254.169.254/latest/meta-data/public-hostname)
 EOF
 
 # strip leading 'export ' for docker --env-file
