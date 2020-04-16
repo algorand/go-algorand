@@ -3922,19 +3922,15 @@ func (z *EvalDelta) MarshalMsg(b []byte) (o []byte, err error) {
 			} else {
 				o = msgp.AppendMapHeader(o, uint32(len((*z).LocalDeltas)))
 			}
-			zb0003_keys := make([]Address, 0, len((*z).LocalDeltas))
+			zb0003_keys := make([]uint64, 0, len((*z).LocalDeltas))
 			for zb0003 := range (*z).LocalDeltas {
 				zb0003_keys = append(zb0003_keys, zb0003)
 			}
-			sort.Sort(SortAddress(zb0003_keys))
+			sort.Sort(SortUint64(zb0003_keys))
 			for _, zb0003 := range zb0003_keys {
 				zb0004 := (*z).LocalDeltas[zb0003]
 				_ = zb0004
-				o, err = zb0003.MarshalMsg(o)
-				if err != nil {
-					err = msgp.WrapError(err, "LocalDeltas", zb0003)
-					return
-				}
+				o = msgp.AppendUint64(o, zb0003)
 				if zb0004 == nil {
 					o = msgp.AppendNil(o)
 				} else {
@@ -4032,13 +4028,13 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			if zb0012 {
 				(*z).LocalDeltas = nil
 			} else if (*z).LocalDeltas == nil {
-				(*z).LocalDeltas = make(map[Address]StateDelta, zb0011)
+				(*z).LocalDeltas = make(map[uint64]StateDelta, zb0011)
 			}
 			for zb0011 > 0 {
-				var zb0003 Address
+				var zb0003 uint64
 				var zb0004 StateDelta
 				zb0011--
-				bts, err = zb0003.UnmarshalMsg(bts)
+				zb0003, bts, err = msgp.ReadUint64Bytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "struct-from-array", "LocalDeltas")
 					return
@@ -4152,13 +4148,13 @@ func (z *EvalDelta) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				if zb0018 {
 					(*z).LocalDeltas = nil
 				} else if (*z).LocalDeltas == nil {
-					(*z).LocalDeltas = make(map[Address]StateDelta, zb0017)
+					(*z).LocalDeltas = make(map[uint64]StateDelta, zb0017)
 				}
 				for zb0017 > 0 {
-					var zb0003 Address
+					var zb0003 uint64
 					var zb0004 StateDelta
 					zb0017--
-					bts, err = zb0003.UnmarshalMsg(bts)
+					zb0003, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "LocalDeltas")
 						return
@@ -4231,7 +4227,7 @@ func (z *EvalDelta) Msgsize() (s int) {
 		for zb0003, zb0004 := range (*z).LocalDeltas {
 			_ = zb0003
 			_ = zb0004
-			s += 0 + zb0003.Msgsize() + msgp.MapHeaderSize
+			s += 0 + msgp.Uint64Size + msgp.MapHeaderSize
 			if zb0004 != nil {
 				for zb0005, zb0006 := range zb0004 {
 					_ = zb0005

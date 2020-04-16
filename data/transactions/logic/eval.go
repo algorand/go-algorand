@@ -267,7 +267,7 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 
 	cx.appEvalDelta = basics.EvalDelta{
 		GlobalDelta: make(basics.StateDelta),
-		LocalDeltas: make(map[basics.Address]basics.StateDelta),
+		LocalDeltas: make(map[uint64]basics.StateDelta),
 	}
 
 	// Allocate global delta cow lazily to avoid ledger lookups
@@ -283,9 +283,9 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 	pass, err = eval(program, &cx)
 
 	// Fill in state deltas
-	for addr, idxCow := range cx.localStateCows {
+	for _, idxCow := range cx.localStateCows {
 		if len(idxCow.cow.delta) > 0 {
-			cx.appEvalDelta.LocalDeltas[addr] = idxCow.cow.delta
+			cx.appEvalDelta.LocalDeltas[idxCow.accountIdx] = idxCow.cow.delta
 		}
 	}
 
@@ -1484,23 +1484,6 @@ func opSubstring3(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-// getAccountAddrByOffset resolves account offset to address
-// it treats offset == 0 as Sender otherwise looks up into Txn.Accounts
-func getAccountAddrByOffset(txn *transactions.SignedTxn, accountIdx uint64) (basics.Address, error) {
-	var addr basics.Address
-	if accountIdx == 0 {
-		addr = txn.Txn.Sender
-		return addr, nil
-	}
-
-	if accountIdx > uint64(len(txn.Txn.Accounts)) {
-		return addr, fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(txn.Txn.Accounts))
-	}
-
-	addr = txn.Txn.Accounts[accountIdx-1]
-	return addr, nil
-}
-
 func opBalance(cx *evalContext) {
 	last := len(cx.stack) - 1 // account offset
 
@@ -1511,7 +1494,7 @@ func opBalance(cx *evalContext) {
 		return
 	}
 
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
 	if err != nil {
 		cx.err = err
 		return
@@ -1538,7 +1521,7 @@ func opAppCheckOptedIn(cx *evalContext) {
 		return
 	}
 
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
 	if err != nil {
 		cx.err = err
 		return
@@ -1556,7 +1539,7 @@ func opAppCheckOptedIn(cx *evalContext) {
 
 func (cx *evalContext) getReadOnlyLocalState(appID uint64, accountIdx uint64) (basics.TealKeyValue, error) {
 	// Convert the account offset to an address
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
 	if err != nil {
 		return nil, err
 	}
@@ -1576,7 +1559,7 @@ func (cx *evalContext) getReadOnlyLocalState(appID uint64, accountIdx uint64) (b
 
 func (cx *evalContext) getLocalStateCow(accountIdx uint64) (*keyValueCow, error) {
 	// Convert the account offset to an address
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
 	if err != nil {
 		return nil, err
 	}
@@ -1880,7 +1863,7 @@ func opAssetHoldingGet(cx *evalContext) {
 		return
 	}
 
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
 	if err != nil {
 		cx.err = err
 		return
@@ -1917,7 +1900,7 @@ func opAssetParamsGet(cx *evalContext) {
 		return
 	}
 
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
 	if err != nil {
 		cx.err = err
 		return
