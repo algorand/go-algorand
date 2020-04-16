@@ -702,11 +702,16 @@ type ApplicationCallTransactionType struct {
 
 	// Accounts lists the accounts (in addition to the sender) that may be
 	// accessed from the application's ApprovalProgram and ClearStateProgram.
-	// These programs may read and write the LocalState and GlobalState
-	// associated with the application.
 	//
 	// required: true
 	Accounts []string `json:"accounts"`
+
+	// ForeignApps lists the applications (in addition to txn.ApplicationID)
+	// whose global states may be accessed by this application's
+	// ApprovalProgram and ClearStateProgram. The access is read-only.
+	//
+	// required: true
+	ForeignApps []uint64 `json:"foreignapps"`
 
 	// ApplicationArgs lists some transaction-specific arguments accessible
 	// from application logic

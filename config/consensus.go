@@ -226,6 +226,7 @@ type ConsensusParams struct {
 	MaxApprovalProgramLen   int
 	MaxClearStateProgramLen int
 	MaxAppTxnAccounts       int
+	MaxAppTxnForeignApps    int
 	MaxAppProgramCost       int
 	MaxAppKeyLen            int
 	MaxAppBytesValueLen     int
@@ -644,6 +645,9 @@ func initConsensusProtocols() {
 
 	// Can look up Sender + 4 other balance records per Application txn
 	vFuture.MaxAppTxnAccounts = 4
+
+	// Can look up 2 other app creator balance records to see global state
+	vFuture.MaxAppTxnForeignApps = 2
 
 	// 64 byte keys @ ~333 microAlgos/byte + delta
 	vFuture.SchemaMinBalancePerEntry = 25000

@@ -77,10 +77,11 @@ func (oc OnCompletion) String() string {
 type ApplicationCallTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApplicationID   basics.AppIndex  `codec:"apid"`
-	OnCompletion    OnCompletion     `codec:"apan"`
-	ApplicationArgs [][]byte         `codec:"apaa,allocbound=1024"`
-	Accounts        []basics.Address `codec:"apat,allocbound=1024"`
+	ApplicationID   basics.AppIndex   `codec:"apid"`
+	OnCompletion    OnCompletion      `codec:"apan"`
+	ApplicationArgs [][]byte          `codec:"apaa,allocbound=256"`
+	Accounts        []basics.Address  `codec:"apat,allocbound=256"`
+	ForeignApps     []basics.AppIndex `codec:"apfa,allocbound=256"`
 
 	LocalStateSchema  basics.StateSchema `codec:"apls"`
 	GlobalStateSchema basics.StateSchema `codec:"apgs"`
@@ -104,6 +105,9 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 		return false
 	}
 	if ac.Accounts != nil {
+		return false
+	}
+	if ac.ForeignApps != nil {
 		return false
 	}
 	if ac.LocalStateSchema != (basics.StateSchema{}) {
@@ -460,11 +464,15 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 
 	// Initialize our TEAL evaluation context. Internally, this manages
 	// access to balance records for Stateful TEAL programs. Stateful TEAL
-	// may only access the sender's balance record or the balance records
-	// of accounts explicitly listed in ac.Accounts. Implicitly, the
-	// creator's balance record may be accessed via GlobalState.
-	whitelistWithSender := append(ac.Accounts, header.Sender)
-	err = steva.InitLedger(balances, params, whitelistWithSender, appIdx)
+	// may only access
+	// - The sender's balance record
+	// - The balance records of accounts explicitly listed in ac.Accounts
+	// - The app creator's balance record (to read/write GlobalState)
+	// - The balance records of creators of apps in ac.ForeignApps (to read
+	//   GlobalState)
+	acctWhitelist := append(ac.Accounts, header.Sender)
+	appGlobalWhitelist := append(ac.ForeignApps, appIdx)
+	err = steva.InitLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx)
 	if err != nil {
 		return err
 	}

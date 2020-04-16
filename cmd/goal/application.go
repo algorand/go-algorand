@@ -47,7 +47,13 @@ var (
 	globalSchemaUints      uint64
 	globalSchemaByteSlices uint64
 
-	appStrAccounts   []string
+	appStrAccounts []string
+
+	// Cobra only has a slice helper for uint, not uint64, so we'll parse
+	// uint64s from strings for now. 4bn transactions and using a 32-bit
+	// platform seems not so far-fetched?
+	foreignApps []string
+
 	appB64Args       []string
 	appInputFilename string
 
@@ -70,6 +76,7 @@ func init() {
 	appCmd.PersistentFlags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	appCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
 	appCmd.PersistentFlags().StringSliceVar(&appB64Args, "app-arg-b64", nil, "Base64 encoded args for application transactions")
+	appCmd.PersistentFlags().StringSliceVar(&foreignApps, "foreign-app", nil, "Indexes of other apps whose global state is read in this transaction")
 	appCmd.PersistentFlags().StringSliceVar(&appStrAccounts, "app-account", nil, "Accounts that may be accessed from application logic")
 	appCmd.PersistentFlags().StringVarP(&appInputFilename, "app-input", "i", "", "JSON file containing encoded arguments and inputs (mutually exclusive with app-arg-b64 and app-account)")
 
@@ -145,8 +152,9 @@ type appCallArg struct {
 }
 
 type appCallInputs struct {
-	Accounts []string     `json:"accounts"`
-	Args     []appCallArg `json:"args"`
+	Accounts    []string     `json:"accounts"`
+	ForeignApps []uint64     `json:"foreignapps"`
+	Args        []appCallArg `json:"args"`
 }
 
 func getAppArgs() []string {
@@ -158,7 +166,19 @@ func getAppArgs() []string {
 	return out
 }
 
-func processAppInputFile() (args, accounts []string) {
+func getForeignApps() []uint64 {
+	out := make([]uint64, len(foreignApps))
+	for i, app := range foreignApps {
+		parsed, err := strconv.ParseUint(app, 10, 64)
+		if err != nil {
+			reportErrorf("Could not parse foreign app id: %v", err)
+		}
+		out[i] = parsed
+	}
+	return out
+}
+
+func processAppInputFile() (args, accounts []string, foreignApps []uint64) {
 	var inputs appCallInputs
 	f, err := os.Open(appInputFilename)
 	if err != nil {
@@ -172,6 +192,7 @@ func processAppInputFile() (args, accounts []string) {
 	}
 
 	accounts = inputs.Accounts
+	foreignApps = inputs.ForeignApps
 	args = make([]string, len(inputs.Args))
 	for i, arg := range inputs.Args {
 		var rawValue string
@@ -213,14 +234,14 @@ func processAppInputFile() (args, accounts []string) {
 	return
 }
 
-func getAppInputs() (args, accounts []string) {
+func getAppInputs() (args, accounts []string, foreignApps []uint64) {
 	if (appB64Args != nil || appStrAccounts != nil) && appInputFilename != "" {
 		reportErrorf("Cannot specify both command-line arguments/accounts and JSON input filename")
 	}
 	if appInputFilename != "" {
 		return processAppInputFile()
 	}
-	return getAppArgs(), appStrAccounts
+	return getAppArgs(), appStrAccounts, getForeignApps()
 }
 
 var appCmd = &cobra.Command{
@@ -256,9 +277,9 @@ var createAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		approvalProg := assembleFile(approvalProgFile)
 		clearProg := assembleFile(clearProgFile)
-		appArgs, appAccounts := getAppInputs()
+		appArgs, appAccounts, foreignApps := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppCreateTx(transactions.NoOpOC, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts)
+		tx, err := client.MakeUnsignedAppCreateTx(transactions.NoOpOC, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -329,9 +350,9 @@ var updateAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		approvalProg := assembleFile(approvalProgFile)
 		clearProg := assembleFile(clearProgFile)
-		appArgs, appAccounts := getAppInputs()
+		appArgs, appAccounts, foreignApps := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppUpdateTx(appIdx, appArgs, appAccounts, approvalProg, clearProg)
+		tx, err := client.MakeUnsignedAppUpdateTx(appIdx, appArgs, appAccounts, foreignApps, approvalProg, clearProg)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -397,9 +418,9 @@ var optInAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		appArgs, appAccounts := getAppInputs()
+		appArgs, appAccounts, foreignApps := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppOptInTx(appIdx, appArgs, appAccounts)
+		tx, err := client.MakeUnsignedAppOptInTx(appIdx, appArgs, appAccounts, foreignApps)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -465,9 +486,9 @@ var closeOutAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		appArgs, appAccounts := getAppInputs()
+		appArgs, appAccounts, foreignApps := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppCloseOutTx(appIdx, appArgs, appAccounts)
+		tx, err := client.MakeUnsignedAppCloseOutTx(appIdx, appArgs, appAccounts, foreignApps)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -533,9 +554,9 @@ var clearAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		appArgs, appAccounts := getAppInputs()
+		appArgs, appAccounts, foreignApps := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppClearStateTx(appIdx, appArgs, appAccounts)
+		tx, err := client.MakeUnsignedAppClearStateTx(appIdx, appArgs, appAccounts, foreignApps)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -601,9 +622,9 @@ var callAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		appArgs, appAccounts := getAppInputs()
+		appArgs, appAccounts, foreignApps := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppNoOpTx(appIdx, appArgs, appAccounts)
+		tx, err := client.MakeUnsignedAppNoOpTx(appIdx, appArgs, appAccounts, foreignApps)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -669,9 +690,9 @@ var deleteAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		appArgs, appAccounts := getAppInputs()
+		appArgs, appAccounts, foreignApps := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppDeleteTx(appIdx, appArgs, appAccounts)
+		tx, err := client.MakeUnsignedAppDeleteTx(appIdx, appArgs, appAccounts, foreignApps)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}

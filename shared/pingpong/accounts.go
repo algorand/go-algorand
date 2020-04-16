@@ -309,7 +309,7 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 
 		prog := genBigNoOp(cfg.AppProgOps)
 		schema := basics.StateSchema{}
-		tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, schema, schema, nil, nil)
+		tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, schema, schema, nil, nil, nil)
 		if err != nil {
 			fmt.Printf("Cannot create app txn\n")
 			return
