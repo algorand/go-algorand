@@ -1578,7 +1578,13 @@ func (cx *evalContext) getLocalStateCow(addr basics.Address) (*keyValueCow, erro
 	return kvCow, nil
 }
 
-func (cx *evalContext) appReadLocalKey(appID uint64, addr basics.Address, key string) (basics.TealValue, bool, error) {
+func (cx *evalContext) appReadLocalKey(appID uint64, accountIdx uint64, key string) (basics.TealValue, bool, error) {
+	// Convert the account offset to an address
+	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	if err != nil {
+		return basics.TealValue{}, false, err
+	}
+
 	// If this is for the application mentioned in the transaction header,
 	// return the result from a LocalState cow, since we may have written
 	// to it
@@ -1601,7 +1607,13 @@ func (cx *evalContext) appReadLocalKey(appID uint64, addr basics.Address, key st
 }
 
 // appWriteLocalKey adds value to StateDelta
-func (cx *evalContext) appWriteLocalKey(addr basics.Address, key string, tv basics.TealValue) error {
+func (cx *evalContext) appWriteLocalKey(accountIdx uint64, key string, tv basics.TealValue) error {
+	// Convert the account offset to an address
+	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	if err != nil {
+		return err
+	}
+
 	kvCow, err := cx.getLocalStateCow(addr)
 	if err != nil {
 		return err
@@ -1611,7 +1623,13 @@ func (cx *evalContext) appWriteLocalKey(addr basics.Address, key string, tv basi
 }
 
 // appDeleteLocalKey deletes a value from the cache and adds it to StateDelta
-func (cx *evalContext) appDeleteLocalKey(addr basics.Address, key string) error {
+func (cx *evalContext) appDeleteLocalKey(accountIdx uint64, key string) error {
+	// Convert the account offset to an address
+	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	if err != nil {
+		return err
+	}
+
 	kvCow, err := cx.getLocalStateCow(addr)
 	if err != nil {
 		return err
@@ -1718,12 +1736,7 @@ func opAppGetLocalStateImpl(cx *evalContext, key []byte, appID uint64, accountId
 		return
 	}
 
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
-	if err != nil {
-		return
-	}
-
-	tv, ok, err := cx.appReadLocalKey(appID, addr, string(key))
+	tv, ok, err := cx.appReadLocalKey(appID, accountIdx, string(key))
 	if err != nil {
 		cx.err = err
 		return
@@ -1782,13 +1795,7 @@ func opAppPutLocalState(cx *evalContext) {
 		return
 	}
 
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
-	if err != nil {
-		cx.err = err
-		return
-	}
-
-	err = cx.appWriteLocalKey(addr, key, sv.toTealValue())
+	err := cx.appWriteLocalKey(accountIdx, key, sv.toTealValue())
 	if err != nil {
 		cx.err = err
 		return
@@ -1830,13 +1837,7 @@ func opAppDeleteLocalState(cx *evalContext) {
 		return
 	}
 
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
-	if err != nil {
-		cx.err = err
-		return
-	}
-
-	err = cx.appDeleteLocalKey(addr, key)
+	err := cx.appDeleteLocalKey(accountIdx, key)
 	if err != nil {
 		cx.err = err
 		return
