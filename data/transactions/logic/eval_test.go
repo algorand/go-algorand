@@ -1112,6 +1112,10 @@ int 1
 global LogicSigVersion // TODO: stricter checking on field vs version
 int 2
 ==
+&&
+global RoundNumber
+int 0
+==
 &&`
 
 func TestGlobal(t *testing.T) {

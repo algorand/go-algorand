@@ -198,3 +198,8 @@ func (al *appLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex
 
 	return params, nil
 }
+
+func (al *appLedger) RoundNumber() uint64 {
+	// TODO(applications): implement me
+	return 1
+}

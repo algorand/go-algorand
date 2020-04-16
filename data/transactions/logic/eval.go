@@ -101,6 +101,7 @@ func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 // LedgerForLogic represents ledger API for Stateful TEAL program
 type LedgerForLogic interface {
 	Balance(addr basics.Address) (uint64, error)
+	RoundNumber() uint64
 	AppGlobalState() (basics.TealKeyValue, error)
 	AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error)
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
@@ -1308,6 +1309,14 @@ func opGtxna(cx *evalContext) {
 	cx.nextpc = cx.pc + 4
 }
 
+func (cx *evalContext) getRoundNumber() (rnd uint64, err error) {
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+	return cx.Ledger.RoundNumber(), nil
+}
+
 var zeroAddress basics.Address
 
 func opGlobal(cx *evalContext) {
@@ -1326,6 +1335,14 @@ func opGlobal(cx *evalContext) {
 		sv.Uint = uint64(len(cx.TxnGroup))
 	case LogicSigVersion:
 		sv.Uint = cx.Proto.LogicSigVersion
+	case RoundNumber:
+		if (cx.runModeFlags & runModeApplication) == 0 {
+			sv.Uint = 0
+		} else {
+			if sv.Uint, cx.err = cx.getRoundNumber(); cx.err != nil {
+				return
+			}
+		}
 	default:
 		cx.err = fmt.Errorf("invalid global[%d]", gindex)
 		return

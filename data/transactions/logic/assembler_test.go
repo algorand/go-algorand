@@ -554,6 +554,7 @@ global MaxTxnLife
 global ZeroAddress
 global GroupSize
 global LogicSigVersion
+global RoundNumber
 txn Sender
 txn Fee
 bnz label1
