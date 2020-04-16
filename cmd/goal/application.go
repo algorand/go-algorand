@@ -47,12 +47,11 @@ var (
 	globalSchemaUints      uint64
 	globalSchemaByteSlices uint64
 
-	appStrAccounts []string
-
 	// Cobra only has a slice helper for uint, not uint64, so we'll parse
 	// uint64s from strings for now. 4bn transactions and using a 32-bit
 	// platform seems not so far-fetched?
 	foreignApps []string
+	appStrAccounts []string
 
 	appB64Args       []string
 	appInputFilename string
