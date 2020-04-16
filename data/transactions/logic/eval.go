@@ -27,7 +27,6 @@ import (
 	"io"
 	"math"
 	"math/big"
-	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -129,6 +128,9 @@ type EvalParams struct {
 
 	Ledger LedgerForLogic
 
+	// optional debugger
+	Debugger DebuggerHook
+
 	// determines eval mode: runModeSignature or runModeApplication
 	runModeFlags runMode
 }
@@ -211,9 +213,8 @@ type evalContext struct {
 	readOnlyLocalStates  map[ckey]basics.TealKeyValue
 	appEvalDelta         basics.EvalDelta
 
-	// Stores state & disassembly for the optional web debugger
+	// Stores state & disassembly for the optional debugger
 	debugState DebugState
-	debugger   DebuggerHook
 }
 
 // StackType describes the type of a value on the operand stack
@@ -333,8 +334,8 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 
 	defer func() {
 		// Ensure we update the debugger before exiting
-		if cx.debugger != nil {
-			cx.debugger.Complete(cx.refreshDebugState())
+		if cx.Debugger != nil {
+			cx.Debugger.Complete(cx.refreshDebugState())
 		}
 	}()
 
@@ -379,12 +380,7 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
 
-	debugURL := os.Getenv("TEAL_DEBUGGER_URL")
-	if debugURL != "" {
-		cx.debugger = &WebDebuggerHook{URL: debugURL}
-	}
-
-	if cx.debugger != nil {
+	if cx.Debugger != nil {
 		disasm, pcOffset, err := DisassembleInstrumented(cx.program)
 		if err != nil {
 			// Report disassembly error as program text
@@ -400,12 +396,12 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 			TxnGroup:    cx.TxnGroup,
 			Proto:       cx.Proto,
 		}
-		cx.debugger.Register(cx.refreshDebugState())
+		cx.Debugger.Register(cx.refreshDebugState())
 	}
 
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
-		if cx.debugger != nil {
-			cx.debugger.Update(cx.refreshDebugState())
+		if cx.Debugger != nil {
+			cx.Debugger.Update(cx.refreshDebugState())
 		}
 
 		cx.step()
