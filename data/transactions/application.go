@@ -382,7 +382,7 @@ func (ac *ApplicationCallTxnFields) checkPrograms(steva StateEvaluator, maxCost 
 // transaction. Index 0 corresponds to the transaction sender, and an index > 0
 // corresponds to an offset into txn.Accounts. Returns an error if the index is
 // not valid.
-func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender basics.Address) (addr basics.Address, err error) {
+func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender basics.Address) (basics.Address, error) {
 	// Index 0 always corresponds to the sender
 	if accountIdx == 0 {
 		return sender, nil
@@ -391,13 +391,12 @@ func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender bas
 	// An index > 0 corresponds to an offset into txn.Accounts. Check to
 	// make sure the index is valid.
 	if accountIdx > uint64(len(ac.Accounts)) {
-		err = fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(ac.Accounts))
-		return
+		err := fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(ac.Accounts))
+		return basics.Address{}, err
 	}
 
 	// accountIdx must be in [1, len(ac.Accounts)]
-	addr = ac.Accounts[accountIdx-1]
-	return addr, nil
+	return ac.Accounts[accountIdx-1], nil
 }
 
 func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, steva StateEvaluator, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
