@@ -135,9 +135,11 @@ func (l *testLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) 
 	return nil, fmt.Errorf("no such address")
 }
 
-func (l *testLedger) AppGlobalState() (basics.TealKeyValue, error) {
+func (l *testLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error) {
 	l.globalCount++
-	var appIdx basics.AppIndex = basics.AppIndex(l.appID)
+	if appIdx == 0 {
+		appIdx = basics.AppIndex(l.appID)
+	}
 	if state, ok := l.applications[appIdx]; ok {
 		return state, nil
 	}
@@ -262,6 +264,7 @@ bytec_0
 app_local_get
 pop
 &&
+int 0
 bytec_0
 app_global_get
 pop
@@ -397,7 +400,8 @@ pop
 		"int 0\nbalance",
 		"int 0\nint 0\napp_opted_in",
 		"int 0\nint 0\nbyte 0x01\napp_local_get",
-		"byte 0x01\napp_global_get",
+		"byte 0x01\napp_global_gets",
+		"int 0\nbyte 0x01\napp_global_get",
 		"int 1\nbyte 0x01\nbyte 0x01\napp_local_put",
 		"byte 0x01\nint 0\napp_global_put",
 		"int 0\nbyte 0x01\napp_local_del",
@@ -724,11 +728,11 @@ byte 0x414c474f
 	require.NoError(t, err)
 	require.True(t, pass)
 
-	// check app_local_gets error
+	// check app_local_gets default value
 	text = `int 0  // account idx
 byte 0x414c474f
 app_local_gets
-byte 0x414c474f
+int 0
 ==`
 
 	program, err = AssembleString(text)
@@ -736,21 +740,36 @@ byte 0x414c474f
 
 	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 	pass, _, err = EvalStateful(program, ep)
-	require.Error(t, err)
-	require.False(t, pass)
-	require.Contains(t, err.Error(), "no such key")
+	require.NoError(t, err)
+	require.True(t, pass)
 }
 
 func TestAppReadGlobalState(t *testing.T) {
 	t.Parallel()
 
-	text := `txn ApplicationArgs 0
+	text := `int 0
+txn ApplicationArgs 0
 app_global_get
 bnz exist
 err
 exist:
 byte 0x414c474f
-==`
+==
+int 100
+txn ApplicationArgs 0
+app_global_get
+bnz exist1
+err
+exist1:
+byte 0x414c474f
+==
+&&
+txn ApplicationArgs 0
+app_global_gets
+byte 0x414c474f
+==
+&&
+`
 	program, err := AssembleString(text)
 	require.NoError(t, err)
 
@@ -790,6 +809,20 @@ byte 0x414c474f
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	pass, _, err := EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	// check app_local_gets default value
+	text = `byte 0x414c474f55
+app_global_gets
+int 0
+==`
+
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+
+	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+	pass, _, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -1481,7 +1514,8 @@ int 1
 func TestAppGlobalReadWriteDeleteErrors(t *testing.T) {
 	t.Parallel()
 
-	sourceRead := `byte 0x414c474f  // key "ALGO"
+	sourceRead := `int 0
+byte 0x414c474f  // key "ALGO"
 app_global_get
 bnz ok
 err
@@ -1489,6 +1523,12 @@ ok:
 int 0x77
 ==
 `
+	sourceReadSimple := `byte 0x414c474f  // key "ALGO"
+app_global_gets
+int 0x77
+==
+`
+
 	sourceWrite := `byte 0x414c474f  // key "ALGO"
 int 100
 app_global_put
@@ -1500,6 +1540,7 @@ int 1
 `
 	tests := map[string]string{
 		"read":   sourceRead,
+		"reads":  sourceReadSimple,
 		"write":  sourceWrite,
 		"delete": sourceDelete,
 	}
@@ -1555,20 +1596,56 @@ func TestAppGlobalReadWrite(t *testing.T) {
 int 0x77						// value
 app_global_put
 byte 0x414c474f41  // key "ALGOA"
-byte 0x414c474f
+byte 0x414c474f    // value
 app_global_put
-byte 0x414c474f41
+// check simple
+byte 0x414c474f41  // key "ALGOA"
+app_global_gets
+byte 0x414c474f
+==
+// check generic with alias
+int 0 // current app id alias
+byte 0x414c474f41  // key "ALGOA"
+app_global_get
+bnz ok
+err
+ok:
+byte 0x414c474f
+==
+&&
+// check generic with exact app id
+int 100 // current app id
+byte 0x414c474f41  // key "ALGOA"
 app_global_get
 bnz ok1
 err
 ok1:
 byte 0x414c474f
 ==
+&&
+// check simple
+byte 0x414c474f
+app_global_gets
+int 0x77
+==
+&&
+// check generic with alias
+int 0 // current app id
 byte 0x414c474f
 app_global_get
 bnz ok2
 err
 ok2:
+int 0x77
+==
+&&
+// check generic with exact app id
+int 100 // current app id
+byte 0x414c474f
+app_global_get
+bnz ok3
+err
+ok3:
 int 0x77
 ==
 &&
@@ -1612,10 +1689,7 @@ int 0x77
 int 0x77						// value
 app_global_put
 byte 0x414c474f
-app_global_get
-bnz ok
-err
-ok:
+app_global_gets
 int 0x77
 ==
 `
@@ -1636,7 +1710,8 @@ int 0x77
 	require.Equal(t, 1, ledger.globalCount)
 
 	// write existing value after read
-	source = `byte 0x414c474f
+	source = `int 0
+byte 0x414c474f
 app_global_get
 bnz ok
 err
@@ -1646,10 +1721,7 @@ byte 0x414c474f
 int 0x77
 app_global_put
 byte 0x414c474f
-app_global_get
-bnz ok2
-err
-ok2:
+app_global_gets
 int 0x77
 ==
 `
@@ -1667,7 +1739,8 @@ int 0x77
 	require.Equal(t, 1, ledger.globalCount)
 
 	// write new values after and before read
-	source = `byte 0x414c474f
+	source = `int 0
+byte 0x414c474f
 app_global_get
 bnz ok
 err
@@ -1676,6 +1749,7 @@ pop
 byte 0x414c474f
 int 0x78
 app_global_put
+int 0
 byte 0x414c474f
 app_global_get
 bnz ok2
@@ -1686,6 +1760,7 @@ int 0x78
 byte 0x414c474f41
 byte 0x414c474f
 app_global_put
+int 0
 byte 0x414c474f41
 app_global_get
 bnz ok3
@@ -1743,9 +1818,11 @@ byte 0x414c474f
 app_global_del
 byte 0x414c474f41
 app_global_del
+int 0
 byte 0x414c474f
 app_global_get
 bnz error
+int 0
 byte 0x414c474f41
 app_global_get
 bnz error
@@ -1797,6 +1874,7 @@ int 1
 	// check delete existing
 	source = `byte 0x414c474f   // key "ALGO"
 app_global_del
+int 100
 byte 0x414c474f
 app_global_get
 ==  // two zeros
@@ -1825,6 +1903,7 @@ app_global_get
 	// check delete and write non-existing
 	source = `byte 0x414c474f41   // key "ALGOA"
 app_global_del
+int 0
 byte 0x414c474f41
 app_global_get
 ==  // two zeros
@@ -2363,7 +2442,6 @@ func TestReturnTypes(t *testing.T) {
 					sb.WriteString(name + "\n")
 				}
 				source := sb.String()
-				fmt.Printf("%s\n", source)
 				program, err := AssembleString(source)
 				require.NoError(t, err)
 
@@ -2376,9 +2454,11 @@ func TestReturnTypes(t *testing.T) {
 						LocalDeltas: make(map[uint64]basics.StateDelta),
 					}
 					cx.globalStateCow = nil
+					cx.readOnlyGlobalStates = make(map[uint64]basics.TealKeyValue)
 					cx.localStateCows = make(map[basics.Address]*indexedCow)
 					cx.readOnlyLocalStates = make(map[ckey]basics.TealKeyValue)
 				}
+
 				eval(program, &cx)
 
 				require.Equal(

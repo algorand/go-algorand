@@ -102,7 +102,7 @@ func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 type LedgerForLogic interface {
 	Balance(addr basics.Address) (basics.MicroAlgos, error)
 	Round() basics.Round
-	AppGlobalState() (basics.TealKeyValue, error)
+	AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error)
 	AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error)
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error)
@@ -202,10 +202,11 @@ type evalContext struct {
 
 	programHashCached crypto.Digest
 
-	globalStateCow      *keyValueCow
-	localStateCows      map[basics.Address]*indexedCow
-	readOnlyLocalStates map[ckey]basics.TealKeyValue
-	appEvalDelta        basics.EvalDelta
+	globalStateCow       *keyValueCow
+	readOnlyGlobalStates map[uint64]basics.TealKeyValue
+	localStateCows       map[basics.Address]*indexedCow
+	readOnlyLocalStates  map[ckey]basics.TealKeyValue
+	appEvalDelta         basics.EvalDelta
 }
 
 // StackType describes the type of a value on the operand stack
@@ -272,6 +273,9 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 
 	// Allocate global delta cow lazily to avoid ledger lookups
 	cx.globalStateCow = nil
+
+	// Stores read-only global key/value stores keyed off app
+	cx.readOnlyGlobalStates = make(map[uint64]basics.TealKeyValue)
 
 	// Stores state cows for each modified LocalState for this app
 	cx.localStateCows = make(map[basics.Address]*indexedCow)
@@ -1550,7 +1554,7 @@ func (cx *evalContext) getReadOnlyLocalState(appID uint64, accountIdx uint64) (b
 		var err error
 		localKV, err = cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch app local state local state for acct %s, app %d: %v", addr, appID, err)
+			return nil, fmt.Errorf("failed to fetch app local state for acct %s, app %d: %v", addr, appID, err)
 		}
 		cx.readOnlyLocalStates[kvIdx] = localKV
 	}
@@ -1571,7 +1575,7 @@ func (cx *evalContext) getLocalStateCow(accountIdx uint64) (*keyValueCow, error)
 		// No cached cow for this address. Make one.
 		localKV, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(0))
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch app local state local state for acct %s: %v", addr, err)
+			return nil, fmt.Errorf("failed to fetch app local state for acct %s: %v", addr, err)
 		}
 
 		localDelta := make(basics.StateDelta)
@@ -1624,9 +1628,22 @@ func (cx *evalContext) appDeleteLocalKey(accountIdx uint64, key string) error {
 	return nil
 }
 
+func (cx *evalContext) getReadOnlyGlobalState(appID uint64) (basics.TealKeyValue, error) {
+	globalKV, ok := cx.readOnlyGlobalStates[appID]
+	if !ok {
+		var err error
+		globalKV, err = cx.Ledger.AppGlobalState(basics.AppIndex(appID))
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch global state for app %d: %v", appID, err)
+		}
+		cx.readOnlyGlobalStates[appID] = globalKV
+	}
+	return globalKV, nil
+}
+
 func (cx *evalContext) getGlobalStateCow() (*keyValueCow, error) {
 	if cx.globalStateCow == nil {
-		globalKV, err := cx.Ledger.AppGlobalState()
+		globalKV, err := cx.Ledger.AppGlobalState(basics.AppIndex(0))
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch global state: %v", err)
 		}
@@ -1635,13 +1652,25 @@ func (cx *evalContext) getGlobalStateCow() (*keyValueCow, error) {
 	return cx.globalStateCow, nil
 }
 
-func (cx *evalContext) appReadGlobalKey(key string) (basics.TealValue, bool, error) {
-	kvCow, err := cx.getGlobalStateCow()
+func (cx *evalContext) appReadGlobalKey(appID uint64, key string) (basics.TealValue, bool, error) {
+	// If this is for the application mentioned in the transaction header,
+	// return the result from a GlobalState cow, since we may have written
+	// to it
+	if appID == 0 || appID == uint64(cx.Txn.Txn.ApplicationID) {
+		kvCow, err := cx.getGlobalStateCow()
+		if err != nil {
+			return basics.TealValue{}, false, err
+		}
+		tv, ok := kvCow.read(key)
+		return tv, ok, nil
+	}
+
+	// Otherwise, the state is read only, so return from the read only cache
+	kv, err := cx.getReadOnlyGlobalState(appID)
 	if err != nil {
 		return basics.TealValue{}, false, err
 	}
-
-	tv, ok := kvCow.read(key)
+	tv, ok := kv[key]
 	return tv, ok, nil
 }
 
@@ -1672,14 +1701,10 @@ func opAppGetLocalStateSimple(cx *evalContext) {
 	key := cx.stack[last].Bytes
 	accountIdx := cx.stack[prev].Uint
 
-	appID := uint64(0)
-	result, ok, err := opAppGetLocalStateImpl(cx, key, appID, accountIdx)
+	var appID uint64 = 0
+	result, _, err := opAppGetLocalStateImpl(cx, appID, key, accountIdx)
 	if err != nil {
 		cx.err = err
-		return
-	}
-	if !ok {
-		cx.err = fmt.Errorf("no such key %s", string(key))
 		return
 	}
 
@@ -1700,7 +1725,7 @@ func opAppGetLocalState(cx *evalContext) {
 		appID = 0 // 0 is an alias for the current app
 	}
 
-	result, ok, err := opAppGetLocalStateImpl(cx, key, appID, accountIdx)
+	result, ok, err := opAppGetLocalStateImpl(cx, appID, key, accountIdx)
 	if err != nil {
 		cx.err = err
 		return
@@ -1716,7 +1741,7 @@ func opAppGetLocalState(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opAppGetLocalStateImpl(cx *evalContext, key []byte, appID uint64, accountIdx uint64) (result stackValue, ok bool, err error) {
+func opAppGetLocalStateImpl(cx *evalContext, appID uint64, key []byte, accountIdx uint64) (result stackValue, ok bool, err error) {
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
 		return
@@ -1734,37 +1759,62 @@ func opAppGetLocalStateImpl(cx *evalContext, key []byte, appID uint64, accountId
 	return
 }
 
-func opAppGetGlobalState(cx *evalContext) {
-	// TODO: add Global State access restriction
+func opAppGetGlobalStateImpl(cx *evalContext, appID uint64, key []byte) (result stackValue, ok bool, err error) {
+	if cx.Ledger == nil {
+		err = fmt.Errorf("ledger not available")
+		return
+	}
 
+	tv, ok, err := cx.appReadGlobalKey(appID, string(key))
+	if err != nil {
+		return
+	}
+
+	if ok {
+		result, err = stackValueFromTealValue(&tv)
+	}
+	return
+}
+
+func opAppGetGlobalStateSimple(cx *evalContext) {
 	last := len(cx.stack) - 1 // state key
 
 	key := cx.stack[last].Bytes
 
-	if cx.Ledger == nil {
-		cx.err = fmt.Errorf("ledger not available")
-		return
-	}
-
-	tv, ok, err := cx.appReadGlobalKey(string(key))
+	var appID uint64 = 0
+	result, _, err := opAppGetGlobalStateImpl(cx, appID, key)
 	if err != nil {
 		cx.err = err
 		return
 	}
 
-	var result stackValue
+	cx.stack[last] = result
+}
+
+func opAppGetGlobalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // state key
+	prev := last - 1
+
+	key := cx.stack[last].Bytes
+	appID := cx.stack[prev].Uint
+
+	if appID != 0 && appID == uint64(cx.Txn.Txn.ApplicationID) {
+		appID = 0 // 0 is an alias for the current app
+	}
+
+	result, ok, err := opAppGetGlobalStateImpl(cx, appID, key)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
 	var isOk stackValue
 	if ok {
-		result, err = stackValueFromTealValue(&tv)
-		if err != nil {
-			cx.err = err
-			return
-		}
 		isOk.Uint = 1
 	}
 
-	cx.stack[last] = result
-	cx.stack = append(cx.stack, isOk)
+	cx.stack[prev] = result
+	cx.stack[last] = isOk
 }
 
 func opAppPutLocalState(cx *evalContext) {

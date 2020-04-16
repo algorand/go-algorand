@@ -552,7 +552,8 @@ func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
 	case "global":
 		// goto delete if first key exists
 		deleteBranch = `
-			int 1
+			int 0  // current app id
+			int 1  // key
 			itob
 			app_global_get
 			bnz delete
@@ -639,8 +640,7 @@ func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
 const asaClearAsm = `
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_get
-pop
+app_global_gets
 int 0
 int 0
 byte base64 Ymw=
@@ -686,8 +686,7 @@ bnz unless7
 // cannot modify frozen asset
 txn Sender
 byte base64 Y3I=
-app_global_get
-pop
+app_global_gets
 ==
 bnz if9
 int 0
@@ -701,8 +700,7 @@ int 1
 bnz if_end10
 if9:
 byte base64 Zno=
-app_global_get
-pop
+app_global_gets
 int 1
 ==
 if_end10:
@@ -712,8 +710,7 @@ err
 assert8:
 txn Sender
 byte base64 Y3I=
-app_global_get
-pop
+app_global_gets
 ==
 bnz if11
 int 0
@@ -731,8 +728,7 @@ bnz if_end12
 if11:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_get
-pop
+app_global_gets
 load 1
 -
 app_global_put
@@ -745,8 +741,7 @@ bnz unless13
 // cannot modify frozen asset
 txna Accounts 1
 byte base64 Y3I=
-app_global_get
-pop
+app_global_gets
 ==
 bnz if15
 int 1
@@ -760,8 +755,7 @@ int 1
 bnz if_end16
 if15:
 byte base64 Zno=
-app_global_get
-pop
+app_global_gets
 int 1
 ==
 if_end16:
@@ -771,8 +765,7 @@ err
 assert14:
 txna Accounts 1
 byte base64 Y3I=
-app_global_get
-pop
+app_global_gets
 ==
 bnz if17
 int 1
@@ -790,8 +783,7 @@ bnz if_end18
 if17:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_get
-pop
+app_global_gets
 load 1
 +
 app_global_put
@@ -814,8 +806,7 @@ bnz unless20
 // cannot modify frozen asset
 txn Sender
 byte base64 Y3I=
-app_global_get
-pop
+app_global_gets
 ==
 bnz if22
 int 0
@@ -829,8 +820,7 @@ int 1
 bnz if_end23
 if22:
 byte base64 Zno=
-app_global_get
-pop
+app_global_gets
 int 1
 ==
 if_end23:
@@ -840,8 +830,7 @@ err
 assert21:
 txn Sender
 byte base64 Y3I=
-app_global_get
-pop
+app_global_gets
 ==
 bnz if24
 int 0
@@ -859,8 +848,7 @@ bnz if_end25
 if24:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_get
-pop
+app_global_gets
 load 2
 -
 app_global_put
@@ -873,8 +861,7 @@ bnz unless26
 // cannot modify frozen asset
 txna Accounts 2
 byte base64 Y3I=
-app_global_get
-pop
+app_global_gets
 ==
 bnz if28
 int 2
@@ -888,8 +875,7 @@ int 1
 bnz if_end29
 if28:
 byte base64 Zno=
-app_global_get
-pop
+app_global_gets
 int 1
 ==
 if_end29:
@@ -899,8 +885,7 @@ err
 assert27:
 txna Accounts 2
 byte base64 Y3I=
-app_global_get
-pop
+app_global_gets
 ==
 bnz if30
 int 2
@@ -918,8 +903,7 @@ bnz if_end31
 if30:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_get
-pop
+app_global_gets
 load 2
 +
 app_global_put
@@ -970,8 +954,7 @@ btoi
 store 0
 txna Accounts 1
 byte base64 Y3I=
-app_global_get
-pop
+app_global_gets
 ==
 bnz if34
 int 1
@@ -989,16 +972,14 @@ bnz if_end35
 if34:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_get
-pop
+app_global_gets
 load 0
 -
 app_global_put
 if_end35:
 txna Accounts 2
 byte base64 Y3I=
-app_global_get
-pop
+app_global_gets
 ==
 bnz if36
 int 2
@@ -1016,8 +997,7 @@ bnz if_end37
 if36:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_get
-pop
+app_global_gets
 load 0
 +
 app_global_put
@@ -1031,8 +1011,7 @@ int 0
 &&
 txn Sender
 byte base64 Y2w=
-app_global_get
-pop
+app_global_gets
 ==
 &&
 int 1
@@ -1041,8 +1020,7 @@ cond5:
 // freeze asset holding
 txna Accounts 1
 byte base64 Y3I=
-app_global_get
-pop
+app_global_gets
 ==
 bnz if38
 int 1
@@ -1067,8 +1045,7 @@ int 0
 &&
 txn Sender
 byte base64 ZnI=
-app_global_get
-pop
+app_global_gets
 ==
 &&
 int 1
@@ -1084,8 +1061,7 @@ bnz when40
 int 0
 byte base64 Zno=
 byte base64 ZGY=
-app_global_get
-pop
+app_global_gets
 app_local_put
 when40:
 txn NumAppArgs
@@ -1096,16 +1072,13 @@ int 5
 ==
 txn Sender
 byte base64 bW4=
-app_global_get
-pop
+app_global_gets
 ==
 &&
 byte base64 dHQ=
-app_global_get
-pop
+app_global_gets
 byte base64 Ymw=
-app_global_get
-pop
+app_global_gets
 ==
 &&
 txn OnCompletion
@@ -1113,8 +1086,7 @@ int 1
 ==
 txn Sender
 byte base64 Y3I=
-app_global_get
-pop
+app_global_gets
 ==
 !
 &&
@@ -1131,15 +1103,13 @@ int 0
 bnz if41
 txn Sender
 byte base64 bW4=
-app_global_get
-pop
+app_global_gets
 ==
 txna ApplicationArgs 0
 global ZeroAddress
 ==
 byte base64 bW4=
-app_global_get
-pop
+app_global_gets
 global ZeroAddress
 ==
 !
@@ -1149,8 +1119,7 @@ txna ApplicationArgs 1
 global ZeroAddress
 ==
 byte base64 cnY=
-app_global_get
-pop
+app_global_gets
 global ZeroAddress
 ==
 !
@@ -1160,8 +1129,7 @@ txna ApplicationArgs 2
 global ZeroAddress
 ==
 byte base64 ZnI=
-app_global_get
-pop
+app_global_gets
 global ZeroAddress
 ==
 !
@@ -1171,8 +1139,7 @@ txna ApplicationArgs 3
 global ZeroAddress
 ==
 byte base64 Y2w=
-app_global_get
-pop
+app_global_gets
 global ZeroAddress
 ==
 !

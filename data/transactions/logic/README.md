@@ -240,7 +240,8 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | `app_opted_in` | check if account A opted in for the application B => {0 or 1} |
 | `app_local_gets` | read from account's A from local state of the current application key B  => value |
 | `app_local_get` | read from account's A from local state of the application B key C  => {0 or 1 (top), value} |
-| `app_global_get` | read key A from global state of a current application => {0 or 1 (top), value} |
+| `app_global_gets` | read key A from global state of a current application => value |
+| `app_global_get` | read from application A global state key B => {0 or 1 (top), value} |
 | `app_local_put` | write to account's A to local state of a current application key B with value C |
 | `app_global_put` | write key A and value B to global state of the current application |
 | `app_local_del` | delete from account's A local state key B of the current application |

@@ -114,10 +114,32 @@ func (al *appLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err er
 	return record.MicroAlgos, nil
 }
 
-// AppGlobalState returns the global state key/value store for this
+// AppGlobalState returns the global state key/value store for the requested
 // application. The returned map must NOT be modified.
-func (al *appLedger) AppGlobalState() (basics.TealKeyValue, error) {
-	keyValue := al.params.GlobalState
+func (al *appLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error) {
+	// Allow referring to the current appIdx as 0
+	var params basics.AppParams
+	if appIdx == 0 {
+		params = al.params
+	} else {
+		// TODO(applications): restrict access to other applications whose creators not in txn.Addresses
+		ok := false
+		for addr := range al.addresses {
+			record, err := al.balances.Get(addr, false)
+			if err != nil {
+				return nil, err
+			}
+			params, ok = record.AppParams[appIdx]
+			if ok {
+				break
+			}
+		}
+		if !ok {
+			return nil, fmt.Errorf("cannot fetch state for app %d", appIdx)
+		}
+	}
+
+	keyValue := params.GlobalState
 	if keyValue == nil {
 		keyValue = make(basics.TealKeyValue)
 	}
