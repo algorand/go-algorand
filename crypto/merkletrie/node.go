@@ -94,41 +94,66 @@ func (n *node) find(cache *merkleTrieCache, d []byte) (bool, error) {
 func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID storedNodeIdentifier, err error) {
 	// allocate a new node to replace the current one.
 	var pnode *node
-	pnode, nodeID = n.duplicate(cache)
-	if pnode.leaf {
+	if n.leaf {
+		// find the diff index:
+		idiff := 0
+		for ; n.hash[idiff] == d[idiff]; idiff++ {
+		}
+
+		curChildNode, curChildNodeID := cache.allocateNewNode()
+		newChildNode, newChildNodeID := cache.allocateNewNode()
+
+		curChildNode.leaf = true
+		curChildNode.hash = n.hash[idiff+1:]
+		newChildNode.leaf = true
+		newChildNode.hash = d[idiff+1:]
+
+		pnode, nodeID = cache.allocateNewNode()
 		pnode.leaf = false
-		// node was duplicated as a leaf, so we need to allocate the arrays
 		pnode.children = make([]storedNodeIdentifier, 256)
 		pnode.childrenNext = make([]byte, 256)
 
-		pnode.childrenNext[pnode.hash[0]] = pnode.hash[0]
-		pnode.firstChild = pnode.hash[0]
-
-		var childNode *node
-		childNode, pnode.children[pnode.hash[0]] = cache.allocateNewNode()
-		childNode.leaf = true
-		childNode.hash = pnode.hash[1:]
-
-		if d[0] == pnode.hash[0] {
-			// make the new one as a child of the current one.
-			child, err := childNode.add(cache, d[1:], append(path, d[0]))
-			if err != nil {
-				cache.deleteNode(child)
-				return nodeID, err
-			}
-			cache.deleteNode(pnode.children[pnode.hash[0]])
-			pnode.children[pnode.hash[0]] = child
-			err = pnode.recalculateHash(cache, path)
-			return nodeID, err
+		pnode.children[n.hash[idiff]] = curChildNodeID
+		pnode.children[d[idiff]] = newChildNodeID
+		if n.hash[idiff] < d[idiff] {
+			pnode.firstChild = n.hash[idiff]
+			pnode.childrenNext[pnode.firstChild] = d[idiff]
+			pnode.childrenNext[d[idiff]] = d[idiff]
+		} else {
+			pnode.firstChild = d[idiff]
+			pnode.childrenNext[pnode.firstChild] = n.hash[idiff]
+			pnode.childrenNext[n.hash[idiff]] = n.hash[idiff]
 		}
+		err = pnode.recalculateHash(cache, append(path, d[:idiff]...))
+
+		for i := idiff - 1; i >= 0; i-- {
+			// create a parent node for pnode.
+			pnode2, nodeID2 := cache.allocateNewNode()
+			pnode2.leaf = false
+			pnode2.children = make([]storedNodeIdentifier, 256)
+			pnode2.childrenNext = make([]byte, 256)
+			pnode2.children[d[i]] = nodeID
+			pnode2.firstChild = d[i]
+			pnode2.childrenNext[d[i]] = d[i]
+			err = pnode2.recalculateHash(cache, append(path, d[:i]...))
+
+			pnode = pnode2
+			nodeID = nodeID2
+		}
+
+		return nodeID, err
 	}
 
-	if pnode.children[d[0]] == storedNodeIdentifierNull {
+	if n.children[d[0]] == storedNodeIdentifierNull {
 		// no such child.
 		var childNode *node
-		childNode, pnode.children[d[0]] = cache.allocateNewNode()
+		var childNodeID storedNodeIdentifier
+		childNode, childNodeID = cache.allocateNewNode()
 		childNode.leaf = true
 		childNode.hash = d[1:]
+
+		pnode, nodeID = n.duplicate(cache)
+		pnode.children[d[0]] = childNodeID
 
 		if pnode.firstChild > d[0] {
 			pnode.childrenNext[d[0]] = pnode.firstChild
@@ -153,16 +178,19 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		}
 	} else {
 		// there is already a child there.
-		childNode, err := cache.getNode(pnode.children[d[0]])
+		childNode, err := cache.getNode(n.children[d[0]])
 		if err != nil {
+			_, nodeID = cache.allocateNewNode()
 			return nodeID, err
 		}
 		updatedChild, err := childNode.add(cache, d[1:], append(path, d[0]))
 		if err != nil {
 			cache.deleteNode(updatedChild)
+			_, nodeID = cache.allocateNewNode()
 			return nodeID, err
 		}
-		cache.deleteNode(pnode.children[d[0]])
+		pnode, nodeID = n.duplicate(cache)
+		cache.deleteNode(n.children[d[0]])
 		pnode.children[d[0]] = updatedChild
 	}
 	err = pnode.recalculateHash(cache, path)
@@ -197,16 +225,16 @@ func (n *node) recalculateHash(cache *merkleTrieCache, path []byte) error {
 func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID storedNodeIdentifier, err error) {
 	// allocate a new node to replace the current one.
 	var pnode, childNode *node
-	pnode, nodeID = n.duplicate(cache)
-	childNode, err = cache.getNode(pnode.children[key[0]])
+	childNode, err = cache.getNode(n.children[key[0]])
 	if err != nil {
 		return
 	}
 	if childNode.leaf {
+		pnode, nodeID = n.duplicate(cache)
+		cache.deleteNode(pnode.children[key[0]]) // add now
 		// we have one or more children, see if it's the first child:
 		if pnode.firstChild == key[0] {
 			// we're removing the first child.
-			cache.deleteNode(pnode.children[pnode.firstChild])
 			next := pnode.childrenNext[pnode.firstChild]
 			pnode.children[pnode.firstChild] = storedNodeIdentifierNull
 			pnode.childrenNext[pnode.firstChild] = 0
@@ -237,10 +265,13 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 	} else {
 		var updatedChildNodeID storedNodeIdentifier
 		updatedChildNodeID, err = childNode.remove(cache, key[1:], append(path, key[0]))
+
 		if err != nil {
 			cache.deleteNode(updatedChildNodeID)
+			_, nodeID = cache.allocateNewNode()
 			return nodeID, err
 		}
+		pnode, nodeID = n.duplicate(cache)
 		pnode.children[key[0]] = updatedChildNodeID
 	}
 	// at this point, we migth end up with a single leaf child. collapse that.
@@ -261,9 +292,6 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 	}
 	if !pnode.leaf {
 		err = pnode.recalculateHash(cache, path)
-		if err != nil {
-			return
-		}
 	}
 	return nodeID, nil
 }
