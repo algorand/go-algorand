@@ -267,7 +267,7 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 
 	cx.appEvalDelta = basics.EvalDelta{
 		GlobalDelta: make(basics.StateDelta),
-		LocalDeltas: make(map[uint64]basics.StateDelta),
+		LocalDeltas: make(map[uint64]basics.StateDelta, len(params.Txn.Txn.Accounts)+1),
 	}
 
 	// Allocate global delta cow lazily to avoid ledger lookups
