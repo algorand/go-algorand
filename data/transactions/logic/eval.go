@@ -40,6 +40,8 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+
+	"github.com/satori/go.uuid"
 )
 
 // EvalMaxVersion is the max version we can interpret and run
@@ -210,8 +212,8 @@ type evalContext struct {
 	appEvalDelta         basics.EvalDelta
 
 	// Stores state & disassembly for the optional web debugger
-	debuggerState DebuggerState
-	debugger      *Debugger
+	debugState DebugState
+	debugger   DebuggerHook
 }
 
 // StackType describes the type of a value on the operand stack
@@ -332,7 +334,7 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	defer func() {
 		// Ensure we update the debugger before exiting
 		if cx.debugger != nil {
-			cx.debugger.complete(cx)
+			cx.debugger.Complete(cx.refreshDebugState())
 		}
 	}()
 
@@ -379,16 +381,31 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 
 	debugURL := os.Getenv("TEAL_DEBUGGER_URL")
 	if debugURL != "" {
-		cx.debugger = &Debugger{URL: debugURL}
+		cx.debugger = &WebDebuggerHook{URL: debugURL}
 	}
 
 	if cx.debugger != nil {
-		cx.debugger.register(cx)
+		disasm, pcOffset, err := DisassembleInstrumented(cx.program)
+		if err != nil {
+			// Report disassembly error as program text
+			disasm = err.Error()
+		}
+
+		// initialize DebuggerState with imutable fields
+		cx.debugState = DebugState{
+			ExecID:      uuid.NewV4().String(),
+			Disassembly: disasm,
+			PCOffset:    pcOffset,
+			GroupIndex:  cx.GroupIndex,
+			TxnGroup:    cx.TxnGroup,
+			Proto:       cx.Proto,
+		}
+		cx.debugger.Register(cx.refreshDebugState())
 	}
 
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
 		if cx.debugger != nil {
-			cx.debugger.update(cx)
+			cx.debugger.Update(cx.refreshDebugState())
 		}
 
 		cx.step()
@@ -1364,7 +1381,6 @@ func GlobalFieldToTealValue(proto *config.ConsensusParams, txnGroup []transactio
 	sv, err := cx.globalFieldToStack(uint64(groupIndex))
 	return sv.toTealValue(), err
 }
-
 
 var zeroAddress basics.Address
 

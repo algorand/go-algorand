@@ -26,12 +26,21 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/transactions"
-
-	"github.com/satori/go.uuid"
 )
 
-// Debugger represents a connection to tealdbg
-type Debugger struct {
+// DebuggerHook functions are called by eval function during TEAL program execution
+// if provided
+type DebuggerHook interface {
+	// Register is fired on program creation
+	Register(state *DebugState) error
+	// Update is fired on every step
+	Update(state *DebugState) error
+	// Complete is called when the program exits
+	Complete(state *DebugState) error
+}
+
+// WebDebuggerHook represents a connection to tealdbg
+type WebDebuggerHook struct {
 	URL string
 }
 
@@ -42,9 +51,9 @@ type PCOffset struct {
 	Offset int `json:"offset"`
 }
 
-// DebuggerState is a representation of the evaluation context that we encode
+// DebugState is a representation of the evaluation context that we encode
 // to json and send to tealdbg
-type DebuggerState struct {
+type DebugState struct {
 	PC          int                      `json:"pc"`
 	Stack       []v1.TealValue           `json:"stack"`
 	Scratch     []v1.TealValue           `json:"scratch"`
@@ -57,25 +66,8 @@ type DebuggerState struct {
 	Proto       *config.ConsensusParams  `json:"proto"`
 }
 
-func (cx *evalContext) debugState() *DebuggerState {
-	ds := &cx.debuggerState
-
-	// Generate unique execution ID if necessary
-	if ds.ExecID == "" {
-		ds.ExecID = uuid.NewV4().String()
-	}
-
-	if ds.Disassembly == "" {
-		// Disassemble if necessary
-		disasm, pcOffset, err := DisassembleInstrumented(cx.program)
-		if err != nil {
-			// Report disassembly error as program text
-			disasm = err.Error()
-		}
-
-		ds.Disassembly = disasm
-		ds.PCOffset = pcOffset
-	}
+func (cx *evalContext) refreshDebugState() *DebugState {
+	ds := &cx.debugState
 
 	// Update PC, error, stack, and scratch space
 	ds.PC = cx.pc
@@ -105,15 +97,11 @@ func (cx *evalContext) debugState() *DebuggerState {
 
 	ds.Stack = stack
 	ds.Scratch = scratch
-	ds.GroupIndex = cx.GroupIndex
-	ds.TxnGroup = cx.TxnGroup
-	ds.Proto = cx.Proto
 
 	return ds
 }
 
-func (dbg *Debugger) postState(cx *evalContext, endpoint string) error {
-	state := cx.debugState()
+func (dbg *WebDebuggerHook) postState(state *DebugState, endpoint string) error {
 	enc, err := json.Marshal(state)
 	if err != nil {
 		return err
@@ -130,14 +118,17 @@ func (dbg *Debugger) postState(cx *evalContext, endpoint string) error {
 	return err
 }
 
-func (dbg *Debugger) register(cx *evalContext) error {
-	return dbg.postState(cx, "exec/register")
+// Register sends state to remote debugger
+func (dbg *WebDebuggerHook) Register(state *DebugState) error {
+	return dbg.postState(state, "exec/register")
 }
 
-func (dbg *Debugger) update(cx *evalContext) error {
-	return dbg.postState(cx, "exec/update")
+// Update sends state to remote debugger
+func (dbg *WebDebuggerHook) Update(state *DebugState) error {
+	return dbg.postState(state, "exec/update")
 }
 
-func (dbg *Debugger) complete(cx *evalContext) error {
-	return dbg.postState(cx, "exec/complete")
+// Complete sends state to remote debugger
+func (dbg *WebDebuggerHook) Complete(state *DebugState) error {
+	return dbg.postState(state, "exec/complete")
 }

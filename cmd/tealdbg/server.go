@@ -72,8 +72,8 @@ type ContinueRequest struct {
 // Notification is sent to the client over their websocket connection
 // on each new TEAL execution/update/complation
 type Notification struct {
-	Event         string              `json:"event"`
-	DebuggerState logic.DebuggerState `json:"state"`
+	Event      string           `json:"event"`
+	DebugState logic.DebugState `json:"state"`
 }
 
 type requestContext struct {
@@ -98,7 +98,7 @@ type requestContext struct {
 
 var execContextCounter int32 = 0
 
-func (rctx *requestContext) register(state logic.DebuggerState) {
+func (rctx *requestContext) register(state logic.DebugState) {
 	var exec execContext
 
 	// Allocate a default debugConfig (don't break)
@@ -127,7 +127,7 @@ func (rctx *requestContext) register(state logic.DebuggerState) {
 
 func (rctx *requestContext) registerHandler(w http.ResponseWriter, r *http.Request) {
 	// Decode a logic.DebuggerState from the request
-	var state logic.DebuggerState
+	var state logic.DebugState
 	dec := json.NewDecoder(r.Body)
 	err := dec.Decode(&state)
 	if err != nil {
@@ -145,7 +145,7 @@ func (rctx *requestContext) registerHandler(w http.ResponseWriter, r *http.Reque
 
 func (rctx *requestContext) updateHandler(w http.ResponseWriter, r *http.Request) {
 	// Decode a logic.DebuggerState from the request
-	var state logic.DebuggerState
+	var state logic.DebugState
 	dec := json.NewDecoder(r.Body)
 	err := dec.Decode(&state)
 	if err != nil {
@@ -192,7 +192,7 @@ func (rctx *requestContext) fetchExecContext(eid ExecID) (execContext, bool) {
 
 func (rctx *requestContext) completeHandler(w http.ResponseWriter, r *http.Request) {
 	// Decode a logic.DebuggerState from the request
-	var state logic.DebuggerState
+	var state logic.DebugState
 	dec := json.NewDecoder(r.Body)
 	err := dec.Decode(&state)
 	if err != nil {
@@ -477,7 +477,7 @@ func (rctx *requestContext) cdtWsHandler(w http.ResponseWriter, r *http.Request)
 	completed := false
 
 	var dbgStateMu sync.Mutex
-	var dbgState logic.DebuggerState
+	var dbgState logic.DebugState
 
 	// Debugger notifications processing loop
 	go func() {
@@ -488,7 +488,7 @@ func (rctx *requestContext) cdtWsHandler(w http.ResponseWriter, r *http.Request)
 				switch notification.Event {
 				case "registered":
 					// no mutex, the access already synchronized by "registred" chan
-					dbgState = notification.DebuggerState
+					dbgState = notification.DebugState
 					registred <- struct{}{}
 				case "completed":
 					// if completed we still want to see updated state
@@ -497,7 +497,7 @@ func (rctx *requestContext) cdtWsHandler(w http.ResponseWriter, r *http.Request)
 					fallthrough
 				case "updated":
 					dbgStateMu.Lock()
-					dbgState = notification.DebuggerState
+					dbgState = notification.DebugState
 					dbgStateMu.Unlock()
 					cdtUpdatedCh <- struct{}{}
 				default:
