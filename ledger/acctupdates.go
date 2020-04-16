@@ -39,7 +39,9 @@ import (
 const (
 	// balancesFlushInterval defines how frequently we want to flush our balances to disk.
 	balancesFlushInterval = 5 * time.Second
-	// trieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory
+	// pendingDeltasFlushThreshold is the deltas count threshold above we flush the pending balances regardless of the flush interval.
+	pendingDeltasFlushThreshold = 128
+	// trieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory.
 	trieCachedNodesCount = 10000
 )
 
@@ -372,7 +374,6 @@ func (au *accountUpdates) accountsUpdateBalaces(balancesTx *merkletrie.Transacti
 				au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", addHash)
 			}
 		}
-
 	}
 	// write it all to disk.
 	err = au.balancesTrie.Commit()
@@ -623,6 +624,14 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 		return au.dbRound
 	}
 
+	offset := uint64(newBase - au.dbRound)
+
+	// calculate the number of pending deltas
+	pendingDeltas := 0
+	for i := uint64(0); i < offset; i++ {
+		pendingDeltas += len(au.deltas[i])
+	}
+
 	// check to see if this is a catchpoint round
 	isCatchpointRound := (committedRound > 0) && (au.catchpointInterval != 0) && (0 == (uint64(committedRound) % au.catchpointInterval))
 
@@ -630,7 +639,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
 	//   so that all the instances of the catchpoint would contain the exacy same data )
 	flushTime := time.Now()
-	if !flushTime.After(au.lastFlushTime.Add(balancesFlushInterval)) && !isCatchpointRound {
+	if !flushTime.After(au.lastFlushTime.Add(balancesFlushInterval)) && !isCatchpointRound && pendingDeltas < pendingDeltasFlushThreshold {
 		return au.dbRound
 	}
 
@@ -640,7 +649,6 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 	var flushcount map[basics.Address]int
 	var assetFlushcount map[basics.AssetIndex]int
 
-	offset := uint64(newBase - au.dbRound)
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
 		mc, err0 := makeMerkleCommitter(tx, false)
 		if err0 != nil {
@@ -753,7 +761,6 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	if rnd != au.latest()+1 {
 		au.log.Panicf("accountUpdates: newBlock %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
 	}
-
 	au.deltas = append(au.deltas, delta.accts)
 	au.protos = append(au.protos, proto)
 	au.assetDeltas = append(au.assetDeltas, delta.assets)
@@ -789,6 +796,7 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	if allBefore != allAfter {
 		au.log.Panicf("accountUpdates: sum of money changed from %d to %d", allBefore.Raw, allAfter.Raw)
 	}
+
 	au.roundTotals = append(au.roundTotals, newTotals)
 }
 

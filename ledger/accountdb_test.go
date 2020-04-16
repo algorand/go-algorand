@@ -68,16 +68,23 @@ func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewards
 	updates = make(map[basics.Address]accountDelta)
 	totals = make(map[basics.Address]basics.AccountData)
 
+	// copy base -> totals
 	for addr, data := range base {
 		totals[addr] = data
 	}
 
 	// Change some existing accounts
-	for i := 0; i < len(base)/2 && i < niter; i++ {
+	{
+		i := 0
 		for addr, old := range base {
+			if i >= len(base)/2 || i >= niter {
+				break
+			}
+
 			if addr == testPoolAddr {
 				continue
 			}
+			i++
 
 			new := randomAccountData(rewardsLevel)
 			updates[addr] = accountDelta{old: old, new: new}

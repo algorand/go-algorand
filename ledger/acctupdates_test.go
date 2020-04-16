@@ -38,7 +38,7 @@ type mockLedgerForTracker struct {
 	log    logging.Logger
 }
 
-func makeMockLedgerForTracker(t *testing.T) *mockLedgerForTracker {
+func makeMockLedgerForTracker(t testing.TB) *mockLedgerForTracker {
 	dbs := dbOpenTest(t)
 	dblogger := logging.TestingLog(t)
 	dbs.rdb.SetLogger(dblogger)
@@ -240,4 +240,107 @@ func TestAcctUpdates(t *testing.T) {
 		au.committedUpTo(basics.Round(proto.MaxBalLookback) + i)
 		checkAcctUpdates(t, au, i, basics.Round(proto.MaxBalLookback+14), accts, rewardsLevels, proto)
 	}
+}
+
+func BenchmarkBalancesChanges(b *testing.B) {
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		b.Skip("This test is too slow on ARM and causes travis builds to time out")
+	}
+	if b.N < 100 {
+		b.N = 25
+	}
+	protocolVersion := protocol.ConsensusVersion("BenchmarkBalancesChanges-test-protocol-version")
+	testProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
+	testProtocol.MaxBalLookback = 25
+	config.Consensus[protocolVersion] = testProtocol
+	defer func() {
+		delete(config.Consensus, protocolVersion)
+	}()
+
+	proto := config.Consensus[protocolVersion]
+
+	ml := makeMockLedgerForTracker(b)
+	defer ml.close()
+	initialRounds := uint64(1)
+	ml.blocks = randomInitChain(protocolVersion, int(initialRounds))
+	accountsCount := 5000
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount)}
+	rewardsLevels := []uint64{0}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	au := &accountUpdates{initAccounts: accts[0], initProto: proto}
+	err := au.loadFromDisk(ml)
+	require.NoError(b, err)
+
+	// cover initialRounds genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < int(initialRounds); i++ {
+		accts = append(accts, accts[0])
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+
+	for i := basics.Round(initialRounds); i < basics.Round(proto.MaxBalLookback+uint64(b.N)); i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		accountChanges := 0
+		if i <= basics.Round(initialRounds)+basics.Round(b.N) {
+			accountChanges = accountsCount - 2
+		}
+
+		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
+		prevTotals, err := au.totals(basics.Round(i - 1))
+		require.NoError(b, err)
+
+		oldPool := accts[i-1][testPoolAddr]
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates[testPoolAddr] = accountDelta{old: oldPool, new: newPool}
+		totals[testPoolAddr] = newPool
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = protocolVersion
+
+		au.newBlock(blk, StateDelta{
+			accts: updates,
+			hdr:   &blk.BlockHeader,
+		})
+		accts = append(accts, totals)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+	for i := proto.MaxBalLookback; i < proto.MaxBalLookback+initialRounds; i++ {
+		// Clear the timer to ensure a flush
+		au.lastFlushTime = time.Time{}
+		au.committedUpTo(basics.Round(i))
+	}
+	b.ResetTimer()
+	startTime := time.Now()
+	for i := proto.MaxBalLookback + initialRounds; i < proto.MaxBalLookback+uint64(b.N); i++ {
+		// Clear the timer to ensure a flush
+		au.lastFlushTime = time.Time{}
+		au.committedUpTo(basics.Round(i))
+	}
+	deltaTime := time.Now().Sub(startTime)
+	if deltaTime > time.Second {
+		return
+	}
+	// we want to fake the N to reflect the time it took us, if we were to wait an entire second.
+	singleIterationTime := deltaTime / time.Duration((uint64(b.N) - initialRounds))
+	b.N = int(time.Second / singleIterationTime)
+	// and now, wait for the reminder of the second.
+	time.Sleep(time.Second - deltaTime)
+
 }
