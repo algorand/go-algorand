@@ -24,8 +24,20 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
+// appTealEvaluator implements transactions.StateEvaluator. When applying an
+// ApplicationCall transaction, InitLedger is called, followed by Check and/or
+// Eval. These pass the initialized LedgerForLogic (appLedger) to the TEAL
+// interpreter.
 type appTealEvaluator struct {
 	evalParams logic.EvalParams
+}
+
+// appLedger implements logic.LedgerForLogic
+type appLedger struct {
+	addresses map[basics.Address]bool
+	balances  transactions.Balances
+	appIdx    basics.AppIndex
+	params    basics.AppParams
 }
 
 // Eval evaluates a stateful TEAL program for an application. InitLedger must
@@ -58,14 +70,6 @@ func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, params ba
 	return nil
 }
 
-// appLedger implements logic.LedgerForLogic
-type appLedger struct {
-	addresses map[basics.Address]bool
-	balances  transactions.Balances
-	appIdx    basics.AppIndex
-	params    basics.AppParams
-}
-
 func newAppLedger(balances transactions.Balances, params basics.AppParams, whitelist []basics.Address, appIdx basics.AppIndex) (al *appLedger, err error) {
 	if balances == nil {
 		err = fmt.Errorf("cannot create appLedger with nil balances")
@@ -94,19 +98,20 @@ func newAppLedger(balances transactions.Balances, params basics.AppParams, white
 	return al, nil
 }
 
-func (al *appLedger) Balance(addr basics.Address) (uint64, error) {
+func (al *appLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err error) {
 	// Ensure requested address is on whitelist
 	if !al.addresses[addr] {
-		return 0, fmt.Errorf("cannot access balance for %s, not sender or in txn.Addresses", addr.String())
+		err = fmt.Errorf("cannot access balance for %s, not sender or in txn.Addresses", addr.String())
+		return
 	}
 
 	// Fetch record with pending rewards applied
 	record, err := al.balances.Get(addr, true)
 	if err != nil {
-		return 0, err
+		return
 	}
 
-	return record.MicroAlgos.Raw, nil
+	return record.MicroAlgos, nil
 }
 
 // AppGlobalState returns the global state key/value store for this
@@ -199,7 +204,6 @@ func (al *appLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex
 	return params, nil
 }
 
-func (al *appLedger) RoundNumber() uint64 {
-	// TODO(applications): implement me
-	return 1
+func (al *appLedger) Round() basics.Round {
+	return al.balances.Round()
 }

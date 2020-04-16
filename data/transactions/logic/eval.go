@@ -100,8 +100,8 @@ func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 
 // LedgerForLogic represents ledger API for Stateful TEAL program
 type LedgerForLogic interface {
-	Balance(addr basics.Address) (uint64, error)
-	RoundNumber() uint64
+	Balance(addr basics.Address) (basics.MicroAlgos, error)
+	Round() basics.Round
 	AppGlobalState() (basics.TealKeyValue, error)
 	AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error)
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
@@ -1309,12 +1309,12 @@ func opGtxna(cx *evalContext) {
 	cx.nextpc = cx.pc + 4
 }
 
-func (cx *evalContext) getRoundNumber() (rnd uint64, err error) {
+func (cx *evalContext) getRound() (rnd uint64, err error) {
 	if cx.Ledger == nil {
 		cx.err = fmt.Errorf("ledger not available")
 		return
 	}
-	return cx.Ledger.RoundNumber(), nil
+	return uint64(cx.Ledger.Round()), nil
 }
 
 var zeroAddress basics.Address
@@ -1335,11 +1335,11 @@ func opGlobal(cx *evalContext) {
 		sv.Uint = uint64(len(cx.TxnGroup))
 	case LogicSigVersion:
 		sv.Uint = cx.Proto.LogicSigVersion
-	case RoundNumber:
+	case Round:
 		if (cx.runModeFlags & runModeApplication) == 0 {
 			sv.Uint = 0
 		} else {
-			if sv.Uint, cx.err = cx.getRoundNumber(); cx.err != nil {
+			if sv.Uint, cx.err = cx.getRound(); cx.err != nil {
 				return
 			}
 		}
@@ -1512,13 +1512,13 @@ func opBalance(cx *evalContext) {
 		return
 	}
 
-	amount, err := cx.Ledger.Balance(addr)
+	microAlgos, err := cx.Ledger.Balance(addr)
 	if err != nil {
 		cx.err = fmt.Errorf("failed to fetch balance of %s: %s", addr, err.Error())
 		return
 	}
 
-	cx.stack[last].Uint = amount
+	cx.stack[last].Uint = microAlgos.Raw
 }
 
 func opAppCheckOptedIn(cx *evalContext) {

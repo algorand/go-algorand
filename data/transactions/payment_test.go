@@ -76,6 +76,10 @@ type mockBalances struct {
 	protocol.ConsensusVersion
 }
 
+func (balances mockBalances) Round() basics.Round {
+	return basics.Round(8675309)
+}
+
 func (balances mockBalances) PutWithCreatables(basics.BalanceRecord, []basics.CreatableLocator, []basics.CreatableLocator) error {
 	return nil
 }

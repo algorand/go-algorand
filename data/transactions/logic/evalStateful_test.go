@@ -104,19 +104,21 @@ func (l *testLedger) setHolding(addr basics.Address, assetID uint64, holding bas
 	l.balances[addr] = br
 }
 
-func (l *testLedger) RoundNumber() uint64 {
-	return rand.Uint64()
+func (l *testLedger) Round() basics.Round {
+	return basics.Round(rand.Uint64())
 }
 
-func (l *testLedger) Balance(addr basics.Address) (amount uint64, err error) {
+func (l *testLedger) Balance(addr basics.Address) (amount basics.MicroAlgos, err error) {
 	if l.balances == nil {
-		return 0, fmt.Errorf("empty ledger")
+		err = fmt.Errorf("empty ledger")
+		return
 	}
 	br, ok := l.balances[addr]
 	if !ok {
-		return 0, fmt.Errorf("no such address")
+		err = fmt.Errorf("no such address")
+		return
 	}
-	return br.balance, nil
+	return basics.MicroAlgos{Raw: br.balance}, nil
 }
 
 func (l *testLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error) {
@@ -2398,8 +2400,8 @@ func TestReturnTypes(t *testing.T) {
 	}
 }
 
-func TestRoundNumber(t *testing.T) {
-	source := `global RoundNumber
+func TestRound(t *testing.T) {
+	source := `global Round
 int 1
 >=
 `

@@ -408,7 +408,7 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 | 3 | ZeroAddress | []byte | 32 byte address of all zero bytes |
 | 4 | GroupSize | uint64 | Number of transactions in this atomic transaction group. At least 1. |
 | 5 | LogicSigVersion | uint64 |  |
-| 6 | RoundNumber | uint64 | Current round number |
+| 6 | Round | uint64 | Current round number |
 
 
 ## gtxn

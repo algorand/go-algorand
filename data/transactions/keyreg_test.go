@@ -62,6 +62,10 @@ func (balances keyregTestBalances) ConsensusParams() config.ConsensusParams {
 	return config.Consensus[balances.version]
 }
 
+func (balances keyregTestBalances) Round() basics.Round {
+	return basics.Round(8675309)
+}
+
 func TestKeyregApply(t *testing.T) {
 	secretSrc := keypair()
 	src := basics.Address(secretSrc.SignatureVerifier)

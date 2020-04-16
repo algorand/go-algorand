@@ -192,7 +192,7 @@ Global fields are fields that are common to all the transactions in the group. I
 | 3 | ZeroAddress | []byte | 32 byte address of all zero bytes |
 | 4 | GroupSize | uint64 | Number of transactions in this atomic transaction group. At least 1. |
 | 5 | LogicSigVersion | uint64 |  |
-| 6 | RoundNumber | uint64 | Current round number |
+| 6 | Round | uint64 | Current round number |
 
 
 **Asset Fields**

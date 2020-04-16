@@ -1113,7 +1113,7 @@ global LogicSigVersion // TODO: stricter checking on field vs version
 int 2
 ==
 &&
-global RoundNumber
+global Round
 int 0
 ==
 &&`

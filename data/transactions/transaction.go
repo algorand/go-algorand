@@ -75,6 +75,9 @@ type Balances interface {
 	// Balances correspond to a Round, which mean that they also correspond
 	// to a ConsensusParams.  This returns those parameters.
 	ConsensusParams() config.ConsensusParams
+
+	// Round returns the round that this Balances corresponds to
+	Round() basics.Round
 }
 
 // StateEvaluator is an interface that provides some Stateful TEAL
