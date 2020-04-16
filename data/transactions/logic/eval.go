@@ -175,6 +175,11 @@ type ckey struct {
 	addr basics.Address
 }
 
+type indexedCow struct {
+	accountIdx uint64
+	cow        *keyValueCow
+}
+
 type evalContext struct {
 	EvalParams
 
@@ -198,7 +203,7 @@ type evalContext struct {
 	programHashCached crypto.Digest
 
 	globalStateCow      *keyValueCow
-	localStateCows      map[basics.Address]*keyValueCow
+	localStateCows      map[basics.Address]*indexedCow
 	readOnlyLocalStates map[ckey]basics.TealKeyValue
 	appEvalDelta        basics.EvalDelta
 }
@@ -262,14 +267,14 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 
 	cx.appEvalDelta = basics.EvalDelta{
 		GlobalDelta: make(basics.StateDelta),
-		LocalDeltas: make(map[basics.Address]basics.StateDelta),
+		LocalDeltas: make(map[uint64]basics.StateDelta, len(params.Txn.Txn.Accounts)+1),
 	}
 
 	// Allocate global delta cow lazily to avoid ledger lookups
 	cx.globalStateCow = nil
 
 	// Stores state cows for each modified LocalState for this app
-	cx.localStateCows = make(map[basics.Address]*keyValueCow)
+	cx.localStateCows = make(map[basics.Address]*indexedCow)
 
 	// Stores read-only local key/value stores keyed off of <addr, app>
 	cx.readOnlyLocalStates = make(map[ckey]basics.TealKeyValue)
@@ -278,9 +283,9 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 	pass, err = eval(program, &cx)
 
 	// Fill in state deltas
-	for addr, kvCow := range cx.localStateCows {
-		if len(kvCow.delta) > 0 {
-			cx.appEvalDelta.LocalDeltas[addr] = kvCow.delta
+	for _, idxCow := range cx.localStateCows {
+		if len(idxCow.cow.delta) > 0 {
+			cx.appEvalDelta.LocalDeltas[idxCow.accountIdx] = idxCow.cow.delta
 		}
 	}
 
@@ -1479,23 +1484,6 @@ func opSubstring3(cx *evalContext) {
 	cx.stack = cx.stack[:prev]
 }
 
-// getAccountAddrByOffset resolves account offset to address
-// it treats offset == 0 as Sender otherwise looks up into Txn.Accounts
-func getAccountAddrByOffset(txn *transactions.SignedTxn, accountIdx uint64) (basics.Address, error) {
-	var addr basics.Address
-	if accountIdx == 0 {
-		addr = txn.Txn.Sender
-		return addr, nil
-	}
-
-	if accountIdx > uint64(len(txn.Txn.Accounts)) {
-		return addr, fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(txn.Txn.Accounts))
-	}
-
-	addr = txn.Txn.Accounts[accountIdx-1]
-	return addr, nil
-}
-
 func opBalance(cx *evalContext) {
 	last := len(cx.stack) - 1 // account offset
 
@@ -1506,7 +1494,7 @@ func opBalance(cx *evalContext) {
 		return
 	}
 
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
 	if err != nil {
 		cx.err = err
 		return
@@ -1533,7 +1521,7 @@ func opAppCheckOptedIn(cx *evalContext) {
 		return
 	}
 
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
 	if err != nil {
 		cx.err = err
 		return
@@ -1549,7 +1537,13 @@ func opAppCheckOptedIn(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func (cx *evalContext) getReadOnlyLocalState(appID uint64, addr basics.Address) (basics.TealKeyValue, error) {
+func (cx *evalContext) getReadOnlyLocalState(appID uint64, accountIdx uint64) (basics.TealKeyValue, error) {
+	// Convert the account offset to an address
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
+	if err != nil {
+		return nil, err
+	}
+
 	kvIdx := ckey{appID, addr}
 	localKV, ok := cx.readOnlyLocalStates[kvIdx]
 	if !ok {
@@ -1563,27 +1557,37 @@ func (cx *evalContext) getReadOnlyLocalState(appID uint64, addr basics.Address) 
 	return localKV, nil
 }
 
-func (cx *evalContext) getLocalStateCow(addr basics.Address) (*keyValueCow, error) {
-	kvCow, ok := cx.localStateCows[addr]
+func (cx *evalContext) getLocalStateCow(accountIdx uint64) (*keyValueCow, error) {
+	// Convert the account offset to an address
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
+	if err != nil {
+		return nil, err
+	}
+
+	// We key localStateCows by address and not accountIdx, because
+	// multiple accountIdxs may refer to the same address
+	idxCow, ok := cx.localStateCows[addr]
 	if !ok {
+		// No cached cow for this address. Make one.
 		localKV, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(0))
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch app local state local state for acct %s: %v", addr, err)
 		}
 
 		localDelta := make(basics.StateDelta)
-		kvCow = makeKeyValueCow(localKV, localDelta)
-		cx.localStateCows[addr] = kvCow
+		kvCow := makeKeyValueCow(localKV, localDelta)
+		idxCow = &indexedCow{accountIdx, kvCow}
+		cx.localStateCows[addr] = idxCow
 	}
-	return kvCow, nil
+	return idxCow.cow, nil
 }
 
-func (cx *evalContext) appReadLocalKey(appID uint64, addr basics.Address, key string) (basics.TealValue, bool, error) {
+func (cx *evalContext) appReadLocalKey(appID uint64, accountIdx uint64, key string) (basics.TealValue, bool, error) {
 	// If this is for the application mentioned in the transaction header,
 	// return the result from a LocalState cow, since we may have written
 	// to it
 	if appID == 0 || appID == uint64(cx.Txn.Txn.ApplicationID) {
-		kvCow, err := cx.getLocalStateCow(addr)
+		kvCow, err := cx.getLocalStateCow(accountIdx)
 		if err != nil {
 			return basics.TealValue{}, false, err
 		}
@@ -1592,7 +1596,7 @@ func (cx *evalContext) appReadLocalKey(appID uint64, addr basics.Address, key st
 	}
 
 	// Otherwise, the state is read only, so return from the read only cache
-	kv, err := cx.getReadOnlyLocalState(appID, addr)
+	kv, err := cx.getReadOnlyLocalState(appID, accountIdx)
 	if err != nil {
 		return basics.TealValue{}, false, err
 	}
@@ -1600,9 +1604,9 @@ func (cx *evalContext) appReadLocalKey(appID uint64, addr basics.Address, key st
 	return tv, ok, nil
 }
 
-// appWriteLocalKey adds value to StateDelta
-func (cx *evalContext) appWriteLocalKey(addr basics.Address, key string, tv basics.TealValue) error {
-	kvCow, err := cx.getLocalStateCow(addr)
+// appWriteLocalKey writes value to local key/value cow
+func (cx *evalContext) appWriteLocalKey(accountIdx uint64, key string, tv basics.TealValue) error {
+	kvCow, err := cx.getLocalStateCow(accountIdx)
 	if err != nil {
 		return err
 	}
@@ -1610,9 +1614,9 @@ func (cx *evalContext) appWriteLocalKey(addr basics.Address, key string, tv basi
 	return nil
 }
 
-// appDeleteLocalKey deletes a value from the cache and adds it to StateDelta
-func (cx *evalContext) appDeleteLocalKey(addr basics.Address, key string) error {
-	kvCow, err := cx.getLocalStateCow(addr)
+// appDeleteLocalKey deletes a value from the key/value cow
+func (cx *evalContext) appDeleteLocalKey(accountIdx uint64, key string) error {
+	kvCow, err := cx.getLocalStateCow(accountIdx)
 	if err != nil {
 		return err
 	}
@@ -1718,12 +1722,7 @@ func opAppGetLocalStateImpl(cx *evalContext, key []byte, appID uint64, accountId
 		return
 	}
 
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
-	if err != nil {
-		return
-	}
-
-	tv, ok, err := cx.appReadLocalKey(appID, addr, string(key))
+	tv, ok, err := cx.appReadLocalKey(appID, accountIdx, string(key))
 	if err != nil {
 		cx.err = err
 		return
@@ -1782,13 +1781,7 @@ func opAppPutLocalState(cx *evalContext) {
 		return
 	}
 
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
-	if err != nil {
-		cx.err = err
-		return
-	}
-
-	err = cx.appWriteLocalKey(addr, key, sv.toTealValue())
+	err := cx.appWriteLocalKey(accountIdx, key, sv.toTealValue())
 	if err != nil {
 		cx.err = err
 		return
@@ -1830,13 +1823,7 @@ func opAppDeleteLocalState(cx *evalContext) {
 		return
 	}
 
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
-	if err != nil {
-		cx.err = err
-		return
-	}
-
-	err = cx.appDeleteLocalKey(addr, key)
+	err := cx.appDeleteLocalKey(accountIdx, key)
 	if err != nil {
 		cx.err = err
 		return
@@ -1876,7 +1863,7 @@ func opAssetHoldingGet(cx *evalContext) {
 		return
 	}
 
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
 	if err != nil {
 		cx.err = err
 		return
@@ -1913,7 +1900,7 @@ func opAssetParamsGet(cx *evalContext) {
 		return
 	}
 
-	addr, err := getAccountAddrByOffset(cx.Txn, accountIdx)
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
 	if err != nil {
 		cx.err = err
 		return

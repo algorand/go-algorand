@@ -1260,12 +1260,12 @@ int 0x77
 	require.Equal(t, 0, len(delta.GlobalDelta))
 	require.Equal(t, 1, len(delta.LocalDeltas))
 
-	require.Equal(t, 2, len(delta.LocalDeltas[txn.Txn.Sender]))
-	vd := delta.LocalDeltas[txn.Txn.Sender]["ALGO"]
+	require.Equal(t, 2, len(delta.LocalDeltas[0]))
+	vd := delta.LocalDeltas[0]["ALGO"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
 	require.Equal(t, uint64(0x77), vd.Uint)
 
-	vd = delta.LocalDeltas[txn.Txn.Sender]["ALGOA"]
+	vd = delta.LocalDeltas[0]["ALGOA"]
 	require.Equal(t, basics.SetBytesAction, vd.Action)
 	require.Equal(t, "ALGO", vd.Bytes)
 
@@ -1357,8 +1357,8 @@ int 1
 	require.True(t, pass)
 	require.Equal(t, 0, len(delta.GlobalDelta))
 	require.Equal(t, 1, len(delta.LocalDeltas))
-	require.Equal(t, 1, len(delta.LocalDeltas[txn.Txn.Sender]))
-	vd = delta.LocalDeltas[txn.Txn.Sender]["ALGOA"]
+	require.Equal(t, 1, len(delta.LocalDeltas[0]))
+	vd = delta.LocalDeltas[0]["ALGOA"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
 	require.Equal(t, uint64(0x78), vd.Uint)
 	require.Equal(t, 1, ledger.localCount)
@@ -1389,8 +1389,8 @@ int 0x78
 	require.True(t, pass)
 	require.Equal(t, 0, len(delta.GlobalDelta))
 	require.Equal(t, 1, len(delta.LocalDeltas))
-	require.Equal(t, 1, len(delta.LocalDeltas[txn.Txn.Sender]))
-	vd = delta.LocalDeltas[txn.Txn.Sender]["ALGO"]
+	require.Equal(t, 1, len(delta.LocalDeltas[0]))
+	vd = delta.LocalDeltas[0]["ALGO"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
 	require.Equal(t, uint64(0x78), vd.Uint)
 	require.Equal(t, 1, ledger.localCount)
@@ -1419,8 +1419,8 @@ app_local_put
 	require.True(t, pass)
 	require.Equal(t, 0, len(delta.GlobalDelta))
 	require.Equal(t, 1, len(delta.LocalDeltas))
-	require.Equal(t, 1, len(delta.LocalDeltas[txn.Txn.Sender]))
-	vd = delta.LocalDeltas[txn.Txn.Sender]["ALGO"]
+	require.Equal(t, 1, len(delta.LocalDeltas[0]))
+	vd = delta.LocalDeltas[0]["ALGO"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
 	require.Equal(t, uint64(0x78), vd.Uint)
 	require.Equal(t, 1, ledger.localCount)
@@ -1461,17 +1461,17 @@ int 1
 	require.True(t, pass)
 	require.Equal(t, 0, len(delta.GlobalDelta))
 	require.Equal(t, 2, len(delta.LocalDeltas))
-	require.Equal(t, 2, len(delta.LocalDeltas[txn.Txn.Sender]))
-	require.Equal(t, 1, len(delta.LocalDeltas[txn.Txn.Receiver]))
-	vd = delta.LocalDeltas[txn.Txn.Sender]["ALGO"]
+	require.Equal(t, 2, len(delta.LocalDeltas[0]))
+	require.Equal(t, 1, len(delta.LocalDeltas[1]))
+	vd = delta.LocalDeltas[0]["ALGO"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
 	require.Equal(t, uint64(0x78), vd.Uint)
 
-	vd = delta.LocalDeltas[txn.Txn.Sender]["ALGOA"]
+	vd = delta.LocalDeltas[0]["ALGOA"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
 	require.Equal(t, uint64(0x78), vd.Uint)
 
-	vd = delta.LocalDeltas[txn.Txn.Receiver]["ALGO"]
+	vd = delta.LocalDeltas[1]["ALGO"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
 	require.Equal(t, uint64(0x79), vd.Uint)
 
@@ -2032,7 +2032,7 @@ app_local_get
 	require.True(t, pass)
 	require.Equal(t, 0, len(delta.GlobalDelta))
 	require.Equal(t, 1, len(delta.LocalDeltas))
-	vd := delta.LocalDeltas[txn.Txn.Sender]["ALGO"]
+	vd := delta.LocalDeltas[0]["ALGO"]
 	require.Equal(t, basics.DeleteAction, vd.Action)
 	require.Equal(t, uint64(0), vd.Uint)
 	require.Equal(t, "", vd.Bytes)
@@ -2069,7 +2069,7 @@ app_local_put
 	require.True(t, pass)
 	require.Equal(t, 0, len(delta.GlobalDelta))
 	require.Equal(t, 1, len(delta.LocalDeltas))
-	vd = delta.LocalDeltas[txn.Txn.Sender]["ALGOA"]
+	vd = delta.LocalDeltas[0]["ALGOA"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
 	require.Equal(t, uint64(0x78), vd.Uint)
 	require.Equal(t, "", vd.Bytes)
@@ -2102,7 +2102,7 @@ int 1
 	require.True(t, pass)
 	require.Equal(t, 0, len(delta.GlobalDelta))
 	require.Equal(t, 1, len(delta.LocalDeltas))
-	vd = delta.LocalDeltas[txn.Txn.Sender]["ALGO"]
+	vd = delta.LocalDeltas[0]["ALGO"]
 	require.Equal(t, basics.SetUintAction, vd.Action)
 	require.Equal(t, uint64(0x78), vd.Uint)
 	require.Equal(t, "", vd.Bytes)
@@ -2138,7 +2138,7 @@ int 1
 	require.True(t, pass)
 	require.Equal(t, 0, len(delta.GlobalDelta))
 	require.Equal(t, 1, len(delta.LocalDeltas))
-	vd = delta.LocalDeltas[txn.Txn.Sender]["ALGO"]
+	vd = delta.LocalDeltas[0]["ALGO"]
 	require.Equal(t, basics.DeleteAction, vd.Action)
 	require.Equal(t, uint64(0), vd.Uint)
 	require.Equal(t, "", vd.Bytes)
@@ -2373,10 +2373,10 @@ func TestReturnTypes(t *testing.T) {
 				if m == runModeApplication {
 					cx.appEvalDelta = basics.EvalDelta{
 						GlobalDelta: make(basics.StateDelta),
-						LocalDeltas: make(map[basics.Address]basics.StateDelta),
+						LocalDeltas: make(map[uint64]basics.StateDelta),
 					}
 					cx.globalStateCow = nil
-					cx.localStateCows = make(map[basics.Address]*keyValueCow)
+					cx.localStateCows = make(map[basics.Address]*indexedCow)
 					cx.readOnlyLocalStates = make(map[ckey]basics.TealKeyValue)
 				}
 				eval(program, &cx)

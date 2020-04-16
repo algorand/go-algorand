@@ -201,7 +201,7 @@ func applyDelta(stateDelta basics.StateDelta, kv basics.TealKeyValue) error {
 // applyStateDeltas applies a basics.EvalDelta to the app's global key/value
 // store as well as a set of local key/value stores. If this function returns
 // an error, the transaction must not be committed.
-func applyStateDeltas(evalDelta basics.EvalDelta, params basics.AppParams, creator basics.Address, balances Balances, appIdx basics.AppIndex, errIfNotApplied bool) error {
+func (ac *ApplicationCallTxnFields) applyStateDeltas(evalDelta basics.EvalDelta, params basics.AppParams, creator, sender basics.Address, balances Balances, appIdx basics.AppIndex, errIfNotApplied bool) error {
 	/*
 	 * 1. Apply GlobalState delta (if any), allocating the key/value store
 	 *    if req'd
@@ -249,7 +249,13 @@ func applyStateDeltas(evalDelta basics.EvalDelta, params basics.AppParams, creat
 	 */
 
 	changes := make(map[basics.Address]basics.AppLocalState, len(evalDelta.LocalDeltas))
-	for addr, delta := range evalDelta.LocalDeltas {
+	for accountIdx, delta := range evalDelta.LocalDeltas {
+		// LocalDeltas are keyed by account index [sender, tx.Accounts[0], ...]
+		addr, err := ac.AddressByIndex(accountIdx, sender)
+		if err != nil {
+			return err
+		}
+
 		// Skip over empty deltas, because we shouldn't fail because of
 		// a zero-delta on an account that hasn't opted in
 		if len(delta) == 0 {
@@ -258,7 +264,7 @@ func applyStateDeltas(evalDelta basics.EvalDelta, params basics.AppParams, creat
 
 		// Check that the local state delta isn't breaking any rules regarding
 		// key/value lengths
-		err := delta.Valid(&proto)
+		err = delta.Valid(&proto)
 		if err != nil {
 			if !errIfNotApplied {
 				return nil
@@ -372,6 +378,27 @@ func (ac *ApplicationCallTxnFields) checkPrograms(steva StateEvaluator, maxCost 
 	return nil
 }
 
+// AddressByIndex converts an integer index into an address associated with the
+// transaction. Index 0 corresponds to the transaction sender, and an index > 0
+// corresponds to an offset into txn.Accounts. Returns an error if the index is
+// not valid.
+func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender basics.Address) (basics.Address, error) {
+	// Index 0 always corresponds to the sender
+	if accountIdx == 0 {
+		return sender, nil
+	}
+
+	// An index > 0 corresponds to an offset into txn.Accounts. Check to
+	// make sure the index is valid.
+	if accountIdx > uint64(len(ac.Accounts)) {
+		err := fmt.Errorf("cannot load account[%d] of %d", accountIdx, len(ac.Accounts))
+		return basics.Address{}, err
+	}
+
+	// accountIdx must be in [1, len(ac.Accounts)]
+	return ac.Accounts[accountIdx-1], nil
+}
+
 func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, steva StateEvaluator, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
 	// Keep track of the application ID we're working on
 	appIdx := ac.ApplicationID
@@ -480,7 +507,8 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 				// the GlobalStateSchema and LocalStateSchema. If they do exceed
 				// those bounds, then don't fail, but also don't apply the changes.
 				failIfNotApplied := false
-				err = applyStateDeltas(stateDeltas, params, creator, balances, appIdx, failIfNotApplied)
+				err = ac.applyStateDeltas(stateDeltas, params, creator, header.Sender,
+					balances, appIdx, failIfNotApplied)
 				if err != nil {
 					return err
 				}
@@ -572,7 +600,8 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 	// the bounds set by the GlobalStateSchema and LocalStateSchema.
 	// If they would exceed those bounds, then fail.
 	failIfNotApplied := true
-	err = applyStateDeltas(stateDeltas, params, creator, balances, appIdx, failIfNotApplied)
+	err = ac.applyStateDeltas(stateDeltas, params, creator, header.Sender,
+		balances, appIdx, failIfNotApplied)
 	if err != nil {
 		return err
 	}
