@@ -18,6 +18,7 @@ package rpcs
 
 import (
 	"context"
+	"encoding/binary"
 	"net/http"
 	"strconv"
 
@@ -53,12 +54,15 @@ type LedgerService struct {
 
 // EncodedBlockCert defines how GetBlockBytes encodes a block and its certificate
 type EncodedBlockCert struct {
+	_struct struct{} `codec:""`
+
 	Block       bookkeeping.Block     `codec:"block"`
 	Certificate agreement.Certificate `codec:"cert"`
 }
 
 // PreEncodedBlockCert defines how GetBlockBytes encodes a block and its certificate,
 // using a pre-encoded Block and Certificate in msgpack format.
+//msgp:ignore PreEncodedBlockCert
 type PreEncodedBlockCert struct {
 	Block       codec.Raw `codec:"block"`
 	Certificate codec.Raw `codec:"cert"`
@@ -223,36 +227,111 @@ func (ls *LedgerService) ListenForCatchupReq(reqs <-chan network.IncomingMessage
 	}
 }
 
+const noRoundNumberErrMsg = "can't find the round number"
+const noDataTypeErrMsg = "can't find the data-type"
+const roundNumberParseErrMsg = "unable to parse round number"
+const blockNotAvailabeErrMsg = "requested block is not available"
+const datatypeUnsupportedErrMsg = "requested data type is unsupported"
+
 // a blocking function for handling a catchup request
 func (ls *LedgerService) handleCatchupReq(ctx context.Context, reqMsg network.IncomingMessage) {
 	var res WsGetBlockOut
+	target := reqMsg.Sender.(network.UnicastPeer)
+	var respTopics network.Topics
+
+	if target.Version() == "1" {
+
+		defer func() {
+			ls.sendCatchupRes(ctx, target, reqMsg.Tag, res)
+		}()
+		var req WsGetBlockRequest
+		err := protocol.DecodeReflect(reqMsg.Data, &req)
+		if err != nil {
+			res.Error = err.Error()
+			return
+		}
+		res.Round = req.Round
+		encodedBlob, err := RawBlockBytes(ls.ledger, basics.Round(req.Round))
+
+		if err != nil {
+			res.Error = err.Error()
+			return
+		}
+		res.BlockBytes = encodedBlob
+		return
+	}
+	// Else, if version == 2.1
 	defer func() {
-		ls.sendCatchupRes(ctx, reqMsg.Sender.(network.UnicastPeer), reqMsg.Tag, res)
+		target.Respond(ctx, reqMsg, respTopics)
 	}()
 
-	var req WsGetBlockRequest
-	err := protocol.Decode(reqMsg.Data, &req)
+	topics, err := network.UnmarshallTopics(reqMsg.Data)
 	if err != nil {
-		res.Error = err.Error()
+		logging.Base().Infof("LedgerService handleCatchupReq: %s", err.Error())
+		respTopics = network.Topics{
+			network.MakeTopic(network.ErrorKey, []byte(err.Error()))}
 		return
 	}
-	res.Round = req.Round
-	encodedBlob, err := RawBlockBytes(ls.ledger, basics.Round(req.Round))
+	roundBytes, found := topics.GetValue(roundKey)
+	if !found {
+		logging.Base().Infof("LedgerService handleCatchupReq: %s", noRoundNumberErrMsg)
+		respTopics = network.Topics{
+			network.MakeTopic(network.ErrorKey,
+				[]byte(noRoundNumberErrMsg))}
+		return
+	}
+	requestType, found := topics.GetValue(requestDataTypeKey)
+	if !found {
+		logging.Base().Infof("LedgerService handleCatchupReq: %s", noDataTypeErrMsg)
+		respTopics = network.Topics{
+			network.MakeTopic(network.ErrorKey,
+				[]byte(noDataTypeErrMsg))}
+		return
+	}
 
-	if err != nil {
-		res.Error = err.Error()
+	round, read := binary.Uvarint(roundBytes)
+	if read <= 0 {
+		logging.Base().Infof("LedgerService handleCatchupReq: %s", roundNumberParseErrMsg)
+		respTopics = network.Topics{
+			network.MakeTopic(network.ErrorKey,
+				[]byte(roundNumberParseErrMsg))}
 		return
 	}
-	res.BlockBytes = encodedBlob
+	respTopics = topicBlockBytes(ls.ledger, basics.Round(round), string(requestType))
 	return
 }
 
 func (ls *LedgerService) sendCatchupRes(ctx context.Context, target network.UnicastPeer, reqTag protocol.Tag, outMsg WsGetBlockOut) {
 	t := reqTag.Complement()
 	logging.Base().Infof("catching down peer: %v, round %v. outcome: %v. ledger: %v", target.GetAddress(), outMsg.Round, outMsg.Error, ls.ledger.LastRound())
-	err := target.Unicast(ctx, protocol.Encode(outMsg), t)
+	err := target.Unicast(ctx, protocol.EncodeReflect(outMsg), t)
 	if err != nil {
 		logging.Base().Info("failed to respond to catchup req", err)
+	}
+}
+
+func topicBlockBytes(dataLedger *data.Ledger, round basics.Round, requestType string) network.Topics {
+	blk, cert, err := dataLedger.EncodedBlockCert(round)
+	if err != nil {
+		switch err.(type) {
+		case ledger.ErrNoEntry:
+		default:
+			logging.Base().Infof("LedgerService topicBlockBytes: %s", err)
+		}
+		return network.Topics{
+			network.MakeTopic(network.ErrorKey, []byte(blockNotAvailabeErrMsg))}
+	}
+	switch requestType {
+	case blockAndCertValue:
+		return network.Topics{
+			network.MakeTopic(
+				blockDataKey, blk),
+			network.MakeTopic(
+				certDataKey, cert),
+		}
+	default:
+		return network.Topics{
+			network.MakeTopic(network.ErrorKey, []byte(datatypeUnsupportedErrMsg))}
 	}
 }
 
@@ -263,7 +342,7 @@ func RawBlockBytes(ledger *data.Ledger, round basics.Round) ([]byte, error) {
 		return nil, err
 	}
 
-	return protocol.Encode(PreEncodedBlockCert{
+	return protocol.EncodeReflect(PreEncodedBlockCert{
 		Block:       blk,
 		Certificate: cert,
 	}), nil

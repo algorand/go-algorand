@@ -197,7 +197,7 @@ func (agg *voteAggregator) filterVote(proto protocol.ConsensusVersion, p player,
 	switch filterRes.t() {
 	case voteFilteredStep:
 		// we'll rebuild the filtered event later
-		return fmt.Errorf("voteAggregator: rejected vote: sender %v had already sent a vote in round %v period %v step %v", uv.R.Sender, uv.R.Round, uv.R.Period, uv.R.Step)
+		return fmt.Errorf("voteAggregator: rejected vote: sender %v had already sent a vote in round %d period %d step %d", uv.R.Sender, uv.R.Round, uv.R.Period, uv.R.Step)
 	case none:
 		return nil
 	}
@@ -205,8 +205,7 @@ func (agg *voteAggregator) filterVote(proto protocol.ConsensusVersion, p player,
 	panic("not reached")
 }
 
-// filterBundle filters a bundle, checking if it is both fresh and is neither a
-// duplicate nor equivocates twice.
+// filterBundle filters a bundle, checking if it is fresh.
 // TODO consider optimizing recovery by filtering bundles for some value if we
 // have already seen the threshold met for that value.  This will filter
 // repeated bundles sent by honest peers.
@@ -234,10 +233,10 @@ func voteStepFresh(descr string, proto protocol.ConsensusVersion, mine, vote ste
 	}
 
 	if mine != 0 && mine-1 > vote {
-		return fmt.Errorf("filtered stale vote %s: step %v - 1 > %v", descr, mine, vote)
+		return fmt.Errorf("filtered stale vote %s: step %d - 1 > %d", descr, mine, vote)
 	}
 	if mine+1 < vote {
-		return fmt.Errorf("filtered premature vote %s: step %v + 1 < %v", descr, mine, vote)
+		return fmt.Errorf("filtered premature vote %s: step %d + 1 < %d", descr, mine, vote)
 	}
 
 	return nil
@@ -276,11 +275,15 @@ func voteFresh(proto protocol.ConsensusVersion, freshData freshnessData, vote un
 // bundleFresh determines whether a bundle satisfies freshness rules.
 func bundleFresh(freshData freshnessData, b unauthenticatedBundle) error {
 	if freshData.PlayerRound != b.Round {
-		return fmt.Errorf("filtered bundle from different round: round %v != %v", freshData.PlayerRound, b.Round)
+		return fmt.Errorf("filtered bundle from different round: round %d != %d", freshData.PlayerRound, b.Round)
+	}
+
+	if b.Step == cert {
+		return nil
 	}
 
 	if freshData.PlayerPeriod != 0 && freshData.PlayerPeriod-1 > b.Period {
-		return fmt.Errorf("filtered stale bundle: period %v >= %v", freshData.PlayerPeriod, b.Period)
+		return fmt.Errorf("filtered stale bundle: period %d >= %d", freshData.PlayerPeriod, b.Period)
 	}
 
 	return nil

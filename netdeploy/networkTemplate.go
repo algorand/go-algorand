@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -30,25 +31,15 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/netdeploy/remote"
 	"github.com/algorand/go-algorand/util"
 )
 
-type walletTemplateData struct {
-	Name              string
-	ParticipationOnly bool
-}
-
-type nodeConfig struct {
-	Name              string
-	IsRelay           bool
-	Wallets           []walletTemplateData
-	DeadlockDetection int
-}
-
 // NetworkTemplate represents the template used for creating private named networks
 type NetworkTemplate struct {
-	Genesis gen.GenesisData
-	Nodes   []nodeConfig
+	Genesis   gen.GenesisData
+	Nodes     []remote.NodeConfigGoal
+	Consensus config.ConsensusProtocols
 }
 
 var defaultNetworkTemplate = NetworkTemplate{
@@ -58,7 +49,8 @@ var defaultNetworkTemplate = NetworkTemplate{
 func (t NetworkTemplate) generateGenesisAndWallets(targetFolder, networkName, binDir string) error {
 	genesisData := t.Genesis
 	genesisData.NetworkName = networkName
-	return gen.GenerateGenesisFiles(genesisData, targetFolder, true)
+	mergedConsensus := config.Consensus.Merge(t.Consensus)
+	return gen.GenerateGenesisFiles(genesisData, mergedConsensus, targetFolder, true)
 }
 
 // Create data folders for all NodeConfigs, configuring relays appropriately and
@@ -146,7 +138,7 @@ func (t NetworkTemplate) createNodeDirectories(targetFolder string, binDir strin
 
 		// Create any necessary config.json file for this node
 		nodeCfg := filepath.Join(nodeDir, config.ConfigFilename)
-		err = cfg.createConfigFile(nodeCfg, len(t.Nodes)-1) // minus 1 to avoid counting self
+		err = createConfigFile(cfg, nodeCfg, len(t.Nodes)-1) // minus 1 to avoid counting self
 		if err != nil {
 			return
 		}
@@ -180,17 +172,21 @@ func loadTemplateFromReader(reader io.Reader, template *NetworkTemplate) error {
 func (t NetworkTemplate) Validate() error {
 	// Genesis wallet percentages must add up to 100
 	// Genesis account names must be unique
-	totalPct := uint(0)
+	totalPct := big.NewFloat(float64(0))
 	accounts := make(map[string]bool)
 	for _, wallet := range t.Genesis.Wallets {
-		totalPct += uint(wallet.Stake)
+		if wallet.Stake < 0 {
+			return fmt.Errorf("invalid template: negative stake on Genesis account %s", wallet.Name)
+		}
+		totalPct = totalPct.Add(totalPct, big.NewFloat(wallet.Stake))
 		upperAcct := strings.ToUpper(wallet.Name)
 		if _, found := accounts[upperAcct]; found {
 			return fmt.Errorf("invalid template: duplicate Genesis account %s", wallet.Name)
 		}
 		accounts[upperAcct] = true
 	}
-	if totalPct != 100 {
+	totalPctInt, _ := totalPct.Int64()
+	if totalPctInt != 100 {
 		return fmt.Errorf("invalid template: Genesis account allocations must total 100 (actual %v)", totalPct)
 	}
 
@@ -218,7 +214,7 @@ func (t NetworkTemplate) Validate() error {
 }
 
 // TODO: Build the JSON object using a real encoder
-func (node nodeConfig) createConfigFile(configFile string, numNodes int) error {
+func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes int) error {
 	// Override default :8080 REST endpoint, and disable SRV lookup
 	configString := `{ "GossipFanout": ` + fmt.Sprintf("%d", numNodes) +
 		`, "EndpointAddress": "127.0.0.1:0", "DNSBootstrapID": "", "EnableProfiler": true`

@@ -28,11 +28,15 @@ type locker interface {
 	unlock(fd *os.File) error
 }
 
-func newLockedFile(path string) *lockedFile {
+func newLockedFile(path string) (*lockedFile, error) {
+	locker, err := makeLocker()
+	if err != nil {
+		return nil, err
+	}
 	return &lockedFile{
 		path:   path,
-		locker: makeLocker(),
-	}
+		locker: locker,
+	}, nil
 }
 
 // lockedFile implementation

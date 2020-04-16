@@ -66,6 +66,7 @@ const (
 	errorNodeRunning                 = "Node must be stopped before writing APIToken"
 	errorNodeFailGenToken            = "Cannot generate API token: %s"
 	errorNodeCreation                = "Error during node creation: %v"
+	errorNodeManagedBySystemd        = "This node is managed by systemd, you must run the following command to make your desired state change to your node:\n\nsystemctl %s algorand.service"
 	errorKill                        = "Cannot kill node: %s"
 	errorCloningNode                 = "Error cloning the node: %s"
 	infoNodeCloned                   = "Node cloned successfully to: %s"
@@ -115,6 +116,22 @@ const (
 	infoNetworkDeleted       = "Network Deleted under %s"
 
 	multisigProgramCollision = "should have at most one of --program/-p | --program-bytes/-P | --lsig/-L"
+
+	tealsignMutKeyArgs    = "--keyfile and --account are mutually exclusive"
+	tealsignMutLsigArgs   = "Need exactly one of --contract-addr or --lsig-txn"
+	tealsignKeyfileFail   = "Failed to read keyfile: %v"
+	tealsignNoWithAcct    = "--account is not yet supported"
+	tealsignEmptyLogic    = "LogicSig must have non-empty program"
+	tealsignParseAddr     = "Failed to parse contract addr: %v"
+	tealsignParseData     = "Failed to parse data to sign: %v"
+	tealsignParseb64      = "failed to base64 decode data to sign: %v"
+	tealsignParseb32      = "failed to base32 decode data to sign: %v"
+	tealsignTxIDLsigReq   = "--sign-txid requires --lsig-txn"
+	tealsignSetArgLsigReq = "--set-lsig-arg-idx requires --lsig-txn"
+	tealsignDataReq       = "need exactly one of --sign-txid, --data-file, --data-b64, or --data-b32"
+	tealsignInfoSig       = "Generated signature: %s"
+	tealsignTooManyArg    = "--set-lsig-arg-idx too large, maximum of %d arguments"
+	tealsignInfoWroteSig  = "Wrote signature for %s to LSig.Args[%d]"
 
 	// Wallet
 	infoRecoveryPrompt           = "Please type your recovery mnemonic below, and hit return when you are done: "

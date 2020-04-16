@@ -18,9 +18,7 @@
 package agreementtest
 
 import (
-	"context"
 	"fmt"
-	"net/http"
 	"strconv"
 	"time"
 
@@ -28,12 +26,11 @@ import (
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/agreement/gossip"
+	"github.com/algorand/go-algorand/components/mocks"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/network"
-	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/timers"
 )
@@ -116,47 +113,13 @@ func (i *instant) HasPending(queueName string) bool {
 	return true
 }
 
-type blackhole struct{}
+type blackhole struct {
+	mocks.MockNetwork
+}
 
 func (b *blackhole) Address() (string, bool) {
 	return "blackhole", true
 }
-
-func (b *blackhole) Broadcast(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
-	return nil
-}
-
-func (b *blackhole) Relay(ctx context.Context, tag protocol.Tag, data []byte, wait bool, except network.Peer) error {
-	return nil
-}
-
-func (b *blackhole) Disconnect(badpeer network.Peer) {}
-
-func (b *blackhole) DisconnectPeers() {}
-
-func (b *blackhole) GetPeers(options ...network.PeerOption) []network.Peer {
-	return nil
-}
-
-func (b *blackhole) Ready() chan struct{} {
-	var closed chan struct{}
-	close(closed)
-	return closed
-}
-
-func (b *blackhole) RegisterRPCName(string, interface{}) {}
-func (b *blackhole) RegisterHTTPHandler(path string, handler http.Handler) {
-}
-
-func (b *blackhole) RequestConnectOutgoing(bool, <-chan struct{}) {}
-
-func (b *blackhole) Start() {}
-
-func (b *blackhole) Stop() {}
-
-func (b *blackhole) RegisterHandlers(dispatch []network.TaggedMessageHandler) {}
-
-func (b *blackhole) ClearHandlers() {}
 
 // CryptoRandomSource is a random source that is based off our crypto library.
 type CryptoRandomSource struct{}
@@ -218,7 +181,7 @@ func Simulate(dbname string, n basics.Round, roundDeadline time.Duration, ledger
 		select {
 		case <-ledger.Wait(r):
 		case <-deadlineCh:
-			return fmt.Errorf("agreementtest.Simulate: round %v failed to complete by the deadline (%v)", r, roundDeadline)
+			return fmt.Errorf("agreementtest.Simulate: round %d failed to complete by the deadline (%v)", r, roundDeadline)
 		}
 	}
 

@@ -537,7 +537,7 @@ func (f *AuctionFixture) readAndDecode(filePath string, obj interface{}) {
 		return
 	}
 
-	err = protocol.Decode(data, obj)
+	err = protocol.DecodeReflect(data, obj)
 	if err != nil {
 		f.t.Errorf("Decoding from %s: %v", filePath, err)
 		return
@@ -842,7 +842,7 @@ func (f *AuctionFixture) signBid(walletHandle []byte, password string, account s
 		return
 	}
 
-	signedBidNote = client.BytesBase64(protocol.Encode(auction.NoteField{
+	signedBidNote = client.BytesBase64(protocol.Encode(&auction.NoteField{
 		Type: auction.NoteBid,
 		SignedBid: auction.SignedBid{
 			Bid: bid,

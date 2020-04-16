@@ -58,7 +58,7 @@ EOF
 # Note this file is scp'd in stage/upload.sh
 dpkg -l >> "${STATUSFILE}"
 gpg --clearsign "${STATUSFILE}"
-gzip "${STATUSFILE}".asc > "${HOME}"/node_pkg/"${STATUSFILE}".asc.gz
+gzip -c "${STATUSFILE}".asc > "${HOME}"/node_pkg/"${STATUSFILE}".asc.gz
 
 echo
 date "+build_release end UPLOAD stage %Y%m%d_%H%M%S"

@@ -17,13 +17,15 @@
 package main
 
 import (
-	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"time"
 
 	"golang.org/x/sys/unix"
+	"github.com/spf13/cobra"
+	"github.com/spf13/cobra/doc"
 
 	"github.com/algorand/go-algorand/cmd/kmd/codes"
 	"github.com/algorand/go-algorand/daemon/kmd"
@@ -36,30 +38,44 @@ const (
 	kmdLogFilePerm = 0640
 )
 
-func main() {
-	dataDir := flag.String("d", "", "kmd data directory")
-	timeoutSecs := flag.Uint("t", 0, "number of seconds after which to kill kmd if there are no requests. 0 means no timeout.")
-	flag.Parse()
+var (
+	dataDir     string
+	timeoutSecs uint64
+)
 
+func init() {
+	kmdCmd.Flags().StringVarP(&dataDir, "data-dir", "d", "", "kmd data directory.")
+	kmdCmd.Flags().Uint64VarP(&timeoutSecs, "timout-secs", "t", 0, "Number of seconds that kmd will run for before termination.")
+	kmdCmd.MarkFlagRequired("data-dir")
+}
+
+var kmdCmd = &cobra.Command{
+	Use:   "kmd",
+	Short: "Key Management Daemon (kmd)",
+	Long:  `The Key Management Daemon (kmd) is a low level wallet and key management
+tool. It works in conjunction with algod and goal to keep secrets safe. An
+optional timeout flag will automatically terminate kmd after a number of
+seconds has elapsed, allowing a simple way to ensure kmd will be shutdown in
+a timely manner. This is a blocking command.`,
+	Run: func(cmd *cobra.Command, args []string) {
+		runKmd(dataDir, timeoutSecs)
+	},
+}
+
+func runKmd(dataDir string, timeoutSecs uint64) {
 	// Use logging package instead of stdin/stdout
 	log := logging.NewLogger()
 	log.SetLevel(logging.Info)
 
-	// Validate flags
-	if *dataDir == "" {
-		log.Errorf("dataDir (-d) is a required argument")
-		os.Exit(codes.ExitCodeKMDInvalidArgs)
-	}
-
 	// Parse timeout duration. 0 timeout -> nil timeout
 	var timeout *time.Duration
-	if *timeoutSecs != 0 {
-		t := time.Duration(*timeoutSecs) * time.Second
+	if timeoutSecs != 0 {
+		t := time.Duration(timeoutSecs) * time.Second
 		timeout = &t
 	}
 
 	// We have a dataDir now, so use log files
-	kmdLogFilePath := filepath.Join(*dataDir, kmdLogFileName)
+	kmdLogFilePath := filepath.Join(dataDir, kmdLogFileName)
 	kmdLogFileMode := os.O_CREATE | os.O_WRONLY | os.O_APPEND
 	logFile, err := os.OpenFile(kmdLogFilePath, kmdLogFileMode, kmdLogFilePerm)
 	if err != nil {
@@ -82,7 +98,7 @@ func main() {
 
 	// Build a kmd StartConfig
 	startConfig := kmd.StartConfig{
-		DataDir: *dataDir,
+		DataDir: dataDir,
 		Kill:    kill,
 		Log:     log,
 		Timeout: timeout,
@@ -104,4 +120,22 @@ func main() {
 	// Wait until the kmd server exits
 	<-died
 	log.Infof("kmd server died. exiting...")
+}
+
+func main() {
+	// Hidden command to generate docs in a given directory
+	// kmd generate-docs [path]
+	if len(os.Args) == 3 && os.Args[1] == "generate-docs" {
+		err := doc.GenMarkdownTree(kmdCmd, os.Args[2])
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	if err := kmdCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }

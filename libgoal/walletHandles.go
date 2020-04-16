@@ -31,12 +31,18 @@ type walletHandles struct {
 }
 
 func readLocked(path string) ([]byte, error) {
-	lf := newLockedFile(path)
+	lf, err := newLockedFile(path)
+	if err != nil {
+		return nil, err
+	}
 	return lf.read()
 }
 
 func writeLocked(path string, data []byte, perm os.FileMode) error {
-	lf := newLockedFile(path)
+	lf, err := newLockedFile(path)
+	if err != nil {
+		return err
+	}
 	return lf.write(data, perm)
 }
 

@@ -152,6 +152,7 @@ type testingNetwork struct {
 	compoundPocket    chan<- multicastParams
 	partitionedNodes  map[nodeID]bool
 	crownedNodes      map[nodeID]bool
+	relayNodes        map[nodeID]bool
 	interceptFn       multicastInterceptFn
 }
 
@@ -219,7 +220,7 @@ func (n *testingNetwork) multicast(tag protocol.Tag, data []byte, source nodeID,
 		tag, data, source, exclude = out.tag, out.data, out.source, out.exclude
 	}
 
-	if n.dropSoftVotes || n.dropSlowNextVotes || n.dropVotes || n.certVotePocket != nil || n.softVotePocket != nil || n.compoundPocket != nil || n.crownedNodes != nil {
+	if n.dropSoftVotes || n.dropSlowNextVotes || n.dropVotes || n.certVotePocket != nil || n.softVotePocket != nil || n.compoundPocket != nil {
 		if tag == protocol.ProposalPayloadTag {
 			r := bytes.NewBuffer(data)
 
@@ -300,13 +301,18 @@ func (n *testingNetwork) multicast(tag protocol.Tag, data []byte, source nodeID,
 			continue
 		}
 		if n.partitionedNodes != nil {
-			if n.partitionedNodes[source] != n.partitionedNodes[nodeID(i)] {
+			if n.partitionedNodes[source] != n.partitionedNodes[peerid] {
 				continue
 			}
 		}
 		if n.crownedNodes != nil {
-			if !n.crownedNodes[nodeID(i)] {
-				return
+			if !n.crownedNodes[peerid] {
+				continue
+			}
+		}
+		if n.relayNodes != nil {
+			if !n.relayNodes[source] && !n.relayNodes[peerid] {
+				continue
 			}
 		}
 
@@ -377,6 +383,7 @@ func (n *testingNetwork) repairAll() {
 	n.compoundPocket = nil
 	n.partitionedNodes = nil
 	n.crownedNodes = nil
+	n.relayNodes = nil
 	n.interceptFn = nil
 }
 
@@ -406,7 +413,17 @@ func (n *testingNetwork) crown(prophets ...nodeID) {
 	defer n.mu.Unlock()
 	n.crownedNodes = make(map[nodeID]bool)
 	for i := 0; i < len(prophets); i++ {
-		n.crownedNodes[nodeID(i)] = true
+		n.crownedNodes[prophets[i]] = true
+	}
+}
+
+// Star topology with the given nodes at the center; to revert, call repairAll
+func (n *testingNetwork) makeRelays(relays ...nodeID) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.relayNodes = make(map[nodeID]bool)
+	for i := 0; i < len(relays); i++ {
+		n.relayNodes[relays[i]] = true
 	}
 }
 
@@ -443,16 +460,16 @@ func (n *testingNetwork) testingNetworkEndpoint(id nodeID) *testingNetworkEndpoi
 func (n *testingNetwork) prepareAllMulticast() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	for i := 0; i < len(n.monitors); i++ {
-		n.monitors[nodeID(i)].inc(networkCoserviceType)
+	for _, monitor := range n.monitors {
+		monitor.inc(networkCoserviceType)
 	}
 }
 
 func (n *testingNetwork) finishAllMulticast() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	for i := 0; i < len(n.monitors); i++ {
-		n.monitors[nodeID(i)].dec(networkCoserviceType)
+	for _, monitor := range n.monitors {
+		monitor.dec(networkCoserviceType)
 	}
 }
 
@@ -549,7 +566,7 @@ func (m *activityMonitor) waitForActivity() {
 func (m *activityMonitor) waitForQuiet() {
 	select {
 	case <-m.quiet:
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		m.dump()
 
 		var buf [1000000]byte
@@ -779,8 +796,8 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 	}
 
 	cleanupFn := func() {
-		for _, accessor := range dbAccessors {
-			defer accessor.Close()
+		for idx := 0; idx < len(dbAccessors); idx++ {
+			dbAccessors[idx].Close()
 		}
 
 		if r := recover(); r != nil {
@@ -1999,10 +2016,10 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreementWithValidator(t, numNodes, disabled, validator, makeTestLedger)
 	startRound := baseLedger.NextRound()
 	defer cleanupFn()
+
 	for i := 0; i < numNodes; i++ {
 		services[i].Start()
 	}
-
 	activityMonitor.waitForActivity()
 	activityMonitor.waitForQuiet()
 	zeroes := expectNewPeriod(clocks, 0)
@@ -2101,7 +2118,7 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 	}
 
 	// resume block verification, replay potentially cancelled blocks to ensure good caching
-	//  then wait for network to converge (round should terminate at this point)
+	// then wait for network to converge (round should terminate at this point)
 	activityMonitor.setCallback(nil)
 	close(ch)
 
@@ -2133,6 +2150,121 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 		ledger := ledgers[0].(*testLedger)
 		reference := ledger.entries[startRound+round(j)].Digest()
 		for i := 0; i < numNodes; i++ {
+			ledger := ledgers[i].(*testLedger)
+			if ledger.entries[startRound+round(j)].Digest() != reference {
+				panic("wrong block confirmed")
+			}
+		}
+	}
+}
+
+// Receiving a certificate should not cause a node to stop relaying important messages
+// (such as blocks and pipelined messages for the next round)
+// Note that the stall will be resolved by catchup even if the relay blocks.
+func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
+	numNodes := 5 // single relay, four leaf nodes
+	relayID := nodeID(0)
+	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
+
+	startRound := baseLedger.NextRound()
+	defer cleanupFn()
+	for i := 0; i < numNodes; i++ {
+		services[i].Start()
+	}
+	activityMonitor.waitForActivity()
+	activityMonitor.waitForQuiet()
+	zeroes := expectNewPeriod(clocks, 0)
+	// run two rounds
+	zeroes = runRound(clocks, activityMonitor, zeroes)
+	// make sure relay does not see block proposal for round 3
+	baseNetwork.intercept(func(params multicastParams) multicastParams {
+		if params.tag == protocol.ProposalPayloadTag {
+			var tp transmittedPayload
+			err := protocol.DecodeStream(bytes.NewBuffer(params.data), &tp)
+			if err != nil {
+				panic(err)
+			}
+			if tp.Round() == basics.Round(startRound+2) {
+				params.exclude = relayID
+			}
+		}
+		if params.source == relayID {
+			// must also drop relay's proposal so it cannot win leadership
+			r := bytes.NewBuffer(params.data)
+			if params.tag == protocol.AgreementVoteTag {
+				var uv unauthenticatedVote
+				err := protocol.DecodeStream(r, &uv)
+				if err != nil {
+					panic(err)
+				}
+				if uv.R.Step != propose {
+					return params
+				}
+			}
+			params.tag = protocol.UnknownMsgTag
+		}
+
+		return params
+	})
+	zeroes = runRound(clocks, activityMonitor, zeroes)
+
+	// Round 3:
+	// First partition the relay to prevent it from seeing certificate or block
+	baseNetwork.repairAll()
+	baseNetwork.partition(relayID)
+	// Get a copy of the certificate
+	pocketCert := make(chan multicastParams, 100)
+	baseNetwork.intercept(func(params multicastParams) multicastParams {
+		if params.tag == protocol.AgreementVoteTag {
+			r := bytes.NewBuffer(params.data)
+			var uv unauthenticatedVote
+			err := protocol.DecodeStream(r, &uv)
+			if err != nil {
+				panic(err)
+			}
+			if uv.R.Step == cert {
+				pocketCert <- params
+			}
+		}
+		return params
+	})
+	// And with some hypothetical second relay the network achieves consensus on a certificate and block.
+	triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+	zeroes = expectNewPeriod(clocks[1:], zeroes)
+	require.Equal(t, uint(3), clocks[0].(*testingClock).zeroes)
+	close(pocketCert)
+
+	// Round 4:
+	// Return to the relay topology
+	baseNetwork.repairAll()
+	baseNetwork.makeRelays(relayID)
+	// Trigger ensureDigest on the relay
+	baseNetwork.prepareAllMulticast()
+	for p := range pocketCert {
+		baseNetwork.multicast(p.tag, p.data, p.source, p.exclude)
+	}
+	baseNetwork.finishAllMulticast()
+	activityMonitor.waitForActivity()
+	activityMonitor.waitForQuiet()
+	// this relay must still relay initial messages. Note that payloads were already relayed with
+	// the previous global timeout.
+	triggerGlobalTimeout(filterTimeout, clocks[1:], activityMonitor)
+	zeroes = expectNewPeriod(clocks[1:], zeroes)
+	require.Equal(t, uint(3), clocks[0].(*testingClock).zeroes)
+
+	for i := 0; i < numNodes; i++ {
+		services[i].Shutdown()
+	}
+	const expectNumRounds = 4
+	for i := 1; i < numNodes; i++ {
+		if ledgers[i].NextRound() != startRound+round(expectNumRounds) {
+			panic("did not progress 4 rounds")
+		}
+	}
+	for j := 0; j < expectNumRounds; j++ {
+		ledger := ledgers[1].(*testLedger)
+		reference := ledger.entries[startRound+round(j)].Digest()
+		for i := 1; i < numNodes; i++ {
 			ledger := ledgers[i].(*testLedger)
 			if ledger.entries[startRound+round(j)].Digest() != reference {
 				panic("wrong block confirmed")
