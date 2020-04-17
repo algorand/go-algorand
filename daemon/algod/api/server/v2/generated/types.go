@@ -27,9 +27,7 @@ type Account struct {
 	// \[apar\] parameters of assets created by this account.
 	//
 	// Note: the raw account uses `map[int] -> Asset` for this type.
-	CreatedAssets *[]Asset `json:"created-assets,omitempty"`
-
-	// AccountParticipation describes the parameters used by this account in consensus protocol.
+	CreatedAssets *[]Asset              `json:"created-assets,omitempty"`
 	Participation *AccountParticipation `json:"participation,omitempty"`
 
 	// amount of MicroAlgos of pending rewards in this account.
@@ -61,33 +59,26 @@ type Account struct {
 type AccountParticipation struct {
 
 	// \[sel\] Selection public key (if any) currently registered for this round.
-	SelectionParticipationKey *[]byte `json:"selection-participation-key,omitempty"`
+	SelectionParticipationKey []byte `json:"selection-participation-key"`
 
 	// \[voteFst\] First round for which this participation is valid.
-	VoteFirstValid *uint64 `json:"vote-first-valid,omitempty"`
+	VoteFirstValid uint64 `json:"vote-first-valid"`
 
 	// \[voteKD\] Number of subkeys in each batch of participation keys.
-	VoteKeyDilution *uint64 `json:"vote-key-dilution,omitempty"`
+	VoteKeyDilution uint64 `json:"vote-key-dilution"`
 
 	// \[voteLst\] Last round for which this participation is valid.
-	VoteLastValid *uint64 `json:"vote-last-valid,omitempty"`
+	VoteLastValid uint64 `json:"vote-last-valid"`
 
 	// \[vote\] root participation public key (if any) currently registered for this round.
-	VoteParticipationKey *[]byte `json:"vote-participation-key,omitempty"`
+	VoteParticipationKey []byte `json:"vote-participation-key"`
 }
 
 // Asset defines model for Asset.
 type Asset struct {
 
 	// unique asset identifier
-	Index uint64 `json:"index"`
-
-	// AssetParams specifies the parameters for an asset.
-	//
-	// \[apar\] when part of an AssetConfig transaction.
-	//
-	// Definition:
-	// data/transactions/asset.go : AssetParams
+	Index  uint64      `json:"index"`
 	Params AssetParams `json:"params"`
 }
 
@@ -149,8 +140,6 @@ type AssetParams struct {
 
 // Version defines model for Version.
 type Version struct {
-
-	// the current algod build version information.
 	Build       VersionBuild `json:"build"`
 	GenesisHash []byte       `json:"genesis-hash"`
 	GenesisId   string       `json:"genesis-id"`
