@@ -86,7 +86,7 @@ type Balances interface {
 type StateEvaluator interface {
 	Eval(program []byte) (pass bool, stateDelta basics.EvalDelta, err error)
 	Check(program []byte) (cost int, err error)
-	InitLedger(balances Balances, params basics.AppParams, whitelist []basics.Address, appIdx basics.AppIndex) error
+	InitLedger(balances Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex) error
 }
 
 // Header captures the fields common to every transaction type.
@@ -362,6 +362,11 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		// Limit number of accounts referred to in a single ApplicationCall
 		if len(tx.Accounts) > proto.MaxAppTxnAccounts {
 			return fmt.Errorf("tx.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts)
+		}
+
+		// Limit number of other app global states referred to
+		if len(tx.ForeignApps) > proto.MaxAppTxnForeignApps {
+			return fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is %d", proto.MaxAppTxnForeignApps)
 		}
 
 		if len(tx.ApprovalProgram) > proto.MaxApprovalProgramLen {

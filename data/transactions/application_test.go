@@ -25,7 +25,7 @@ func TestApplicationCallFieldsNotChanged(t *testing.T) {
 	af := ApplicationCallTxnFields{}
 	s := reflect.ValueOf(&af).Elem()
 
-	if s.NumField() != 9 {
+	if s.NumField() != 10 {
 		t.Errorf("You added or removed a field from ApplicationCallTxnFields. " +
 			"Please ensure you have updated the Empty() method and then " +
 			"fix this test")
