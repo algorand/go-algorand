@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sort"
 )
 
 // storedNodeIdentifier is the "equivilent" of a node-ptr, but oriented around persisting the
@@ -163,7 +164,6 @@ func (mtc *merkleTrieCache) loadPage(page uint64) (err error) {
 }
 
 func (mtc *merkleTrieCache) deleteNode(nid storedNodeIdentifier) {
-
 	if mtc.txCreatedNodeIDs[nid] {
 		delete(mtc.txCreatedNodeIDs, nid)
 
@@ -234,6 +234,18 @@ func (mtc *merkleTrieCache) rollbackTransaction() {
 	mtc.txNextNodeID = storedNodeIdentifierNull
 }
 
+// Int64Slice attaches the methods of Interface to []uint64, sorting in increasing order.
+type Int64Slice []int64
+
+func (p Int64Slice) Len() int           { return len(p) }
+func (p Int64Slice) Less(i, j int) bool { return p[i] < p[j] }
+func (p Int64Slice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
+
+// SortInt64 sorts a slice of uint64s in increasing order.
+func SortInt64(a []int64) {
+	sort.Sort(Int64Slice(a))
+}
+
 // commit - used as part of the merkleTrie Commit functionality
 func (mtc *merkleTrieCache) commit() error {
 	pageSize := mtc.committer.GetNodesCountPerPage()
@@ -253,6 +265,19 @@ func (mtc *merkleTrieCache) commit() error {
 		nodePage := int64(nodeID) / pageSize
 		if nil == createdPages[nodePage] {
 			createdPages[nodePage] = mtc.pageToNIDsPtr[uint64(nodePage)]
+		}
+	}
+
+	// create a sorted list of created pages
+	sortedCreatedPages := make([]int64, 0, len(createdPages))
+	for page := range createdPages {
+		sortedCreatedPages = append(sortedCreatedPages, page)
+	}
+	SortInt64(sortedCreatedPages)
+	for _, page := range sortedCreatedPages {
+		err := mtc.recalculatePageHashes(page, createdPages[page])
+		if err != nil {
+			return err
 		}
 	}
 
@@ -317,6 +342,22 @@ func (mtc *merkleTrieCache) commit() error {
 	mtc.pendingCreatedNID = make(map[storedNodeIdentifier]bool)
 	mtc.pendingDeletionNID = make(map[storedNodeIdentifier]bool)
 	return nil
+}
+
+func (mtc *merkleTrieCache) recalculatePageHashes(page int64, nodes map[storedNodeIdentifier]*node) (err error) {
+	pageSize := mtc.committer.GetNodesCountPerPage()
+	for i := page * pageSize; i < (page+1)*pageSize; i++ {
+		if mtc.pendingCreatedNID[storedNodeIdentifier(i)] == false {
+			continue
+		}
+		node := nodes[storedNodeIdentifier(i)]
+		if node != nil && node.leaf == false {
+			if err = node.recalculateHash(mtc); err != nil {
+				return
+			}
+		}
+	}
+	return
 }
 
 func decodePage(bytes []byte) (nodesMap map[storedNodeIdentifier]*node, err error) {

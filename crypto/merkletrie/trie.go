@@ -118,7 +118,6 @@ func (mt *Trie) Add(d []byte) (bool, error) {
 	var updatedRoot storedNodeIdentifier
 	updatedRoot, err = pnode.add(mt.cache, d[:], make([]byte, 0, len(d)))
 	if err != nil {
-		mt.cache.deleteNode(updatedRoot)
 		mt.cache.rollbackTransaction()
 		return false, err
 	}
@@ -153,10 +152,11 @@ func (mt *Trie) Delete(d []byte) (bool, error) {
 	var updatedRoot storedNodeIdentifier
 	updatedRoot, err = pnode.remove(mt.cache, d[:], make([]byte, 0, len(d)))
 	if err != nil {
-		mt.cache.deleteNode(updatedRoot)
+
 		mt.cache.rollbackTransaction()
 		return false, err
 	}
+	mt.cache.deleteNode(mt.root)
 	mt.cache.commitTransaction()
 	mt.root = updatedRoot
 	return true, nil

@@ -41,6 +41,7 @@ func TestAddingAndRemoving(t *testing.T) {
 	for i := 0; i < len(hashes); i++ {
 		addResult, _ := mt.Add(hashes[i][:])
 		require.Equal(t, true, addResult)
+		require.NoError(t, mt.Commit())
 		rootsWhileAdding[i], _ = mt.RootHash()
 		stats, _ := mt.GetStats()
 		require.Equal(t, i+1, int(stats.leafCount))
@@ -53,14 +54,17 @@ func TestAddingAndRemoving(t *testing.T) {
 	require.Equal(t, 2490656, int(stats.size))
 	require.True(t, int(stats.nodesCount) > len(hashes))
 	require.True(t, int(stats.nodesCount) < 2*len(hashes))
+	require.NoError(t, mt.Commit())
 	allHashesAddedRoot, _ := mt.RootHash()
 
 	for i := len(hashes) - 1; i >= 0; i-- {
 		roothash, _ := mt.RootHash()
-		require.Equal(t, rootsWhileAdding[i], roothash)
+		require.Equalf(t, rootsWhileAdding[i], roothash, "i=%d", i)
 		deleteResult, _ := mt.Delete(hashes[i][:])
 		require.Equalf(t, true, deleteResult, "number %d", i)
+		require.NoError(t, mt.Commit())
 	}
+	require.NoError(t, mt.Commit())
 	roothash, _ := mt.RootHash()
 	require.Equal(t, crypto.Digest{}, roothash)
 	stats, _ = mt.GetStats()
@@ -73,6 +77,7 @@ func TestAddingAndRemoving(t *testing.T) {
 		addResult, _ := mt.Add(hashes[hashesOrder[i]][:])
 		require.Equal(t, true, addResult)
 	}
+	require.NoError(t, mt.Commit())
 	randomOrderedHashesRoot, _ := mt.RootHash()
 	require.Equal(t, randomOrderedHashesRoot, allHashesAddedRoot)
 }

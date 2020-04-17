@@ -124,7 +124,7 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 			pnode.childrenNext[pnode.firstChild] = n.hash[idiff]
 			pnode.childrenNext[n.hash[idiff]] = n.hash[idiff]
 		}
-		err = pnode.recalculateHash(cache, append(path, d[:idiff]...))
+		pnode.hash = append(path, d[:idiff]...)
 
 		for i := idiff - 1; i >= 0; i-- {
 			// create a parent node for pnode.
@@ -135,13 +135,12 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 			pnode2.children[d[i]] = nodeID
 			pnode2.firstChild = d[i]
 			pnode2.childrenNext[d[i]] = d[i]
-			err = pnode2.recalculateHash(cache, append(path, d[:i]...))
+			pnode2.hash = append(path, d[:i]...)
 
 			pnode = pnode2
 			nodeID = nodeID2
 		}
-
-		return nodeID, err
+		return nodeID, nil
 	}
 
 	if n.children[d[0]] == storedNodeIdentifierNull {
@@ -180,24 +179,25 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		// there is already a child there.
 		childNode, err := cache.getNode(n.children[d[0]])
 		if err != nil {
-			_, nodeID = cache.allocateNewNode()
-			return nodeID, err
+			return storedNodeIdentifierNull, err
 		}
 		updatedChild, err := childNode.add(cache, d[1:], append(path, d[0]))
 		if err != nil {
-			cache.deleteNode(updatedChild)
-			_, nodeID = cache.allocateNewNode()
-			return nodeID, err
+			return storedNodeIdentifierNull, err
 		}
 		pnode, nodeID = n.duplicate(cache)
 		cache.deleteNode(n.children[d[0]])
 		pnode.children[d[0]] = updatedChild
 	}
-	err = pnode.recalculateHash(cache, path)
-	return nodeID, err
+	pnode.hash = path
+	return nodeID, nil
 }
 
-func (n *node) recalculateHash(cache *merkleTrieCache, path []byte) error {
+func (n *node) recalculateHash(cache *merkleTrieCache) error {
+	if n.leaf {
+		return nil
+	}
+	path := n.hash
 	hashAccumulator := make([]byte, 0, 64*256)                 // we can have up to 256 elements, so preallocate sufficient storage; append would expand the storage if it won't be enough.
 	hashAccumulator = append(hashAccumulator, byte(len(path))) // we add this string length before the actual string so it could get "decoded"; in practice, it makes a good domain separator.
 	hashAccumulator = append(hashAccumulator, path...)
@@ -231,10 +231,11 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 	}
 	if childNode.leaf {
 		pnode, nodeID = n.duplicate(cache)
-		cache.deleteNode(pnode.children[key[0]]) // add now
+		cache.deleteNode(n.children[key[0]]) // add now
 		// we have one or more children, see if it's the first child:
 		if pnode.firstChild == key[0] {
 			// we're removing the first child.
+
 			next := pnode.childrenNext[pnode.firstChild]
 			pnode.children[pnode.firstChild] = storedNodeIdentifierNull
 			pnode.childrenNext[pnode.firstChild] = 0
@@ -262,18 +263,18 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 				i = pnode.childrenNext[i]
 			}
 		}
+
 	} else {
 		var updatedChildNodeID storedNodeIdentifier
 		updatedChildNodeID, err = childNode.remove(cache, key[1:], append(path, key[0]))
-
 		if err != nil {
-			cache.deleteNode(updatedChildNodeID)
-			_, nodeID = cache.allocateNewNode()
-			return nodeID, err
+			return storedNodeIdentifierNull, err
 		}
 		pnode, nodeID = n.duplicate(cache)
+		cache.deleteNode(n.children[key[0]]) // add now
 		pnode.children[key[0]] = updatedChildNodeID
 	}
+
 	// at this point, we migth end up with a single leaf child. collapse that.
 	if pnode.childrenNext[pnode.firstChild] == pnode.firstChild {
 		childNode, err = cache.getNode(pnode.children[pnode.firstChild])
@@ -284,14 +285,14 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 			// convert current node into a leaf.
 			pnode.leaf = true
 			pnode.hash = append([]byte{pnode.firstChild}, childNode.hash...)
-			pnode.childrenNext[key[0]] = 0
-			cache.deleteNode(pnode.children[key[0]])
-			pnode.children[key[0]] = storedNodeIdentifierNull
+			cache.deleteNode(pnode.children[pnode.firstChild])
+			pnode.children = nil
+			pnode.childrenNext = nil
 			pnode.firstChild = 0
 		}
 	}
 	if !pnode.leaf {
-		err = pnode.recalculateHash(cache, path)
+		pnode.hash = path
 	}
 	return nodeID, nil
 }
