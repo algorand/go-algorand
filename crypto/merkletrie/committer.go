@@ -59,12 +59,3 @@ func (mc *InMemoryCommitter) LoadPage(page uint64) (content []byte, err error) {
 func (mc *InMemoryCommitter) GetNodesCountPerPage() (pageSize int64) {
 	return inMemoryCommitterPageSize
 }
-
-// Duplicate duplicates the current memory committer.
-func (mc *InMemoryCommitter) Duplicate() (out *InMemoryCommitter) {
-	out = &InMemoryCommitter{memStore: make(map[uint64][]byte)}
-	for k, v := range mc.memStore {
-		out.memStore[k] = v
-	}
-	return
-}

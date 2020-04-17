@@ -60,36 +60,23 @@ func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error
 	return nil
 }
 
+// find searches the trie for the element, recursively.
 func (n *node) find(cache *merkleTrieCache, d []byte) (bool, error) {
 	if n.leaf {
 		return 0 == bytes.Compare(d, n.hash), nil
 	}
-	i := n.firstChild
-	for {
-		if i > d[0] {
-			break
-		}
-		if i == d[0] {
-			childNode, err := cache.getNode(n.children[i])
-			if err != nil {
-				return false, err
-			}
-			found, err := childNode.find(cache, d[1:])
-			if err != nil {
-				return false, err
-			}
-			if found {
-				return true, nil
-			}
-		}
-		if i == n.childrenNext[i] {
-			break
-		}
-		i = n.childrenNext[i]
+	childNodeID := n.children[d[0]]
+	if childNodeID == storedNodeIdentifierNull {
+		return false, nil
 	}
-	return false, nil
+	childNode, err := cache.getNode(childNodeID)
+	if err != nil {
+		return false, err
+	}
+	return childNode.find(cache, d[1:])
 }
 
+// add adds an element to the sub-trie
 // assumption : we know that the key is absent from the tree
 func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID storedNodeIdentifier, err error) {
 	// allocate a new node to replace the current one.
@@ -193,6 +180,7 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 	return nodeID, nil
 }
 
+// recalculateHash recalculate the hash of the non-leaf nodes
 func (n *node) recalculateHash(cache *merkleTrieCache) error {
 	if n.leaf {
 		return nil
@@ -220,6 +208,7 @@ func (n *node) recalculateHash(cache *merkleTrieCache) error {
 	return nil
 }
 
+// remove removes an element from the sub-trie
 // function remove is called only on non-leaf nodes.
 // assumption : we know that the key is already included in the tree
 func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID storedNodeIdentifier, err error) {
@@ -295,6 +284,7 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 	return nodeID, nil
 }
 
+// duplicate creates a copy of the current node
 func (n *node) duplicate(cache *merkleTrieCache) (pnode *node, nodeID storedNodeIdentifier) {
 	pnode, nodeID = cache.allocateNewNode()
 	pnode.firstChild = n.firstChild
@@ -339,6 +329,7 @@ func (n *node) serialize(buf []byte) int {
 	return w
 }
 
+// deserializeNode deserializes the node from a byte array
 func deserializeNode(buf []byte) (n *node, s int) {
 	n = &node{}
 	hashLength, hashLength2 := binary.Uvarint(buf[:])

@@ -332,7 +332,7 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 
 			// this trie Evict will commit using the current transaction.
 			// if anything goes wrong, it will still get rolled back.
-			_, err = trie.Evict()
+			_, err = trie.Evict(true)
 			if err != nil {
 				return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
 			}
@@ -350,12 +350,12 @@ func (au *accountUpdates) rebuildMerkleTrie() (err error) {
 	return nil
 }
 
-func (au *accountUpdates) accountsUpdateBalaces(balancesTx *merkletrie.Transaction, accountsDeltas map[basics.Address]accountDelta) (err error) {
+func (au *accountUpdates) accountsUpdateBalaces(accountsDeltas map[basics.Address]accountDelta) (err error) {
 	var added, deleted bool
 	for addr, delta := range accountsDeltas {
 		if !delta.old.IsZero() {
 			deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
-			deleted, err = balancesTx.Delete(deleteHash)
+			deleted, err = au.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return err
 			}
@@ -365,7 +365,7 @@ func (au *accountUpdates) accountsUpdateBalaces(balancesTx *merkletrie.Transacti
 		}
 		if !delta.new.IsZero() {
 			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
-			added, err = balancesTx.Add(addHash)
+			added, err = au.balancesTrie.Add(addHash)
 			if err != nil {
 				return err
 			}
@@ -653,15 +653,16 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 		if err0 != nil {
 			return err0
 		}
-		balancesHashTx := au.balancesTrie.BeginTransaction(mc)
-		defer func() {
+		if au.balancesTrie == nil {
+			trie, err := merkletrie.MakeTrie(mc, trieCachedNodesCount)
 			if err != nil {
-				balancesHashTx.Rollback()
-			} else {
-				balancesHashTx.Commit()
-				au.balancesTrie.Evict()
+				au.log.Warnf("unable to create merkle trie during committedUpTo: %v", err)
+				return err
 			}
-		}()
+			au.balancesTrie = trie
+		} else {
+			au.balancesTrie.SetCommitter(mc)
+		}
 		flushcount = make(map[basics.Address]int)
 		assetFlushcount = make(map[basics.AssetIndex]int)
 		for i := uint64(0); i < offset; i++ {
@@ -670,7 +671,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 			if err != nil {
 				return err
 			}
-			err = au.accountsUpdateBalaces(balancesHashTx, au.deltas[i])
+			err = au.accountsUpdateBalaces(au.deltas[i])
 			if err != nil {
 				return err
 			}
@@ -686,11 +687,17 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 		if isCatchpointRound {
 			err = au.accountsCreateCatchpointLabel(tx, committedRound, au.dbRound+basics.Round(offset), uint64(committedRound-au.dbRound)-1)
 		}
+
 		return err
 	})
 	if err != nil {
+		au.balancesTrie = nil
 		au.log.Warnf("unable to advance account snapshot: %v", err)
 		return au.dbRound
+	}
+	_, err = au.balancesTrie.Evict(false)
+	if err != nil {
+		au.log.Warnf("merkle trie failed to evict: %v", err)
 	}
 
 	// Drop reference counts to modified accounts, and evict them

@@ -247,7 +247,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		b.Skip("This test is too slow on ARM and causes travis builds to time out")
 	}
 	if b.N < 100 {
-		b.N = 25
+		b.N = 50
 	}
 	protocolVersion := protocol.ConsensusVersion("BenchmarkBalancesChanges-test-protocol-version")
 	testProtocol := config.Consensus[protocol.ConsensusCurrentVersion]

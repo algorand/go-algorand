@@ -32,11 +32,17 @@ const (
 	NodePageVersion = uint64(0x1000000010000000)
 )
 
+// ErrRootPageDecodingFailuire is returned if the decoding the root page has failed.
+var ErrRootPageDecodingFailuire = errors.New("error encountered while decoding root page")
+
 // ErrMismatchingElementLength is returned when an element is being added/removed from the trie that doesn't align with the trie's previous elements length
 var ErrMismatchingElementLength = errors.New("mismatching element length")
 
 // ErrMismatchingPageSize is returned when you try to provide an existing trie a committer with a different page size than it was originally created with.
 var ErrMismatchingPageSize = errors.New("mismatching page size")
+
+// ErrUnableToEvictPendingCommits is returned if the tree was modified and Evict was called with commit=false
+var ErrUnableToEvictPendingCommits = errors.New("unable to evict as pending commits available")
 
 // Trie is a merkle trie intended to efficiently calculate the merkle root of
 // unordered elements
@@ -214,11 +220,17 @@ func (mt *Trie) Commit() error {
 	return mt.cache.commit()
 }
 
-// Evict removes elements from the cache that are no longer needed. Must not be called while the tree contains any uncommited changes.
-func (mt *Trie) Evict() (int, error) {
-	if mt.cache.modified {
-		if err := mt.Commit(); err != nil {
-			return 0, err
+// Evict removes elements from the cache that are no longer needed.
+func (mt *Trie) Evict(commit bool) (int, error) {
+	if commit {
+		if mt.cache.modified {
+			if err := mt.Commit(); err != nil {
+				return 0, err
+			}
+		}
+	} else {
+		if mt.cache.modified {
+			return 0, ErrUnableToEvictPendingCommits
 		}
 	}
 	return mt.cache.evict(), nil

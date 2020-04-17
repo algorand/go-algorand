@@ -24,6 +24,15 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
+// Duplicate duplicates the current memory committer.
+func (mc *InMemoryCommitter) Duplicate() (out *InMemoryCommitter) {
+	out = &InMemoryCommitter{memStore: make(map[uint64][]byte)}
+	for k, v := range mc.memStore {
+		out.memStore[k] = v
+	}
+	return
+}
+
 func TestInMemoryCommitter(t *testing.T) {
 	var memoryCommitter InMemoryCommitter
 	mt1, _ := MakeTrie(&memoryCommitter, defaultTestEvictSize)
@@ -41,7 +50,7 @@ func TestInMemoryCommitter(t *testing.T) {
 	for i := len(hashes) / 4; i < len(hashes)/2; i++ {
 		mt1.Add(hashes[i][:])
 	}
-	releasedNodes, err := mt1.Evict()
+	releasedNodes, err := mt1.Evict(true)
 	require.NoError(t, err)
 	savedMemoryCommitter := memoryCommitter.Duplicate()
 	require.Equal(t, 18957, releasedNodes)
