@@ -18,6 +18,7 @@ ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \
     BUILDCHANNEL=${BUILDCHANNEL} \
     DEFAULTNETWORK=${DEFAULTNETWORK} \
     FULLVERSION=${FULLVERSION} \
+    GOPROXY=https://gocenter.io \
     PKG_ROOT=${PKG_ROOT}
 WORKDIR $GOPATH/src/github.com/algorand/go-algorand
 RUN make ci-deps && make clean
