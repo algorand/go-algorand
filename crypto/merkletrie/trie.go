@@ -215,8 +215,13 @@ func (mt *Trie) Commit() error {
 }
 
 // Evict removes elements from the cache that are no longer needed. Must not be called while the tree contains any uncommited changes.
-func (mt *Trie) Evict() int {
-	return mt.cache.evict()
+func (mt *Trie) Evict() (int, error) {
+	if mt.cache.modified {
+		if err := mt.Commit(); err != nil {
+			return 0, err
+		}
+	}
+	return mt.cache.evict(), nil
 }
 
 // serialize serializes the trie root

@@ -330,13 +330,12 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 				}
 			}
 
-			// this trie Commit call only attempt to write it to the database using the current transaction.
+			// this trie Evict will commit using the current transaction.
 			// if anything goes wrong, it will still get rolled back.
-			err = trie.Commit()
+			_, err = trie.Evict()
 			if err != nil {
 				return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
 			}
-			trie.Evict()
 			if len(bal) < balancesChunkReadSize {
 				break
 			}
