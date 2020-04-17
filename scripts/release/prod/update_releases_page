@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+#
+# This script builds https://releases.algorand.com/index.html.
+#
+# It assumes that the index.html file has already been downloaded from s3:algorand-releases
+# and will write the new build information into it in-place.
+
+import sys
+import boto3
+
+staging_bucket = "algorand-dev-deb-repo"
+staging_prefix = "http://algorand-dev-deb-repo.s3-website-us-east-1.amazonaws.com/"
+key_url = "https://releases.algorand.com/key.pub"
+releases_bucket = "algorand-releases"
+releases_prefix = "https://releases.algorand.com/"
+
+def get_stage_release_set(response):
+    prefix = None
+    they = []
+    for x in response["Contents"]:
+        path = x["Key"]
+        pre, fname = path.rsplit("/", 1)
+        if fname.startswith("tools_") or fname.startswith("install_") or fname.startswith("pending_"):
+            continue
+        if prefix is None:
+            prefix = pre
+            they.append(x)
+        elif prefix == pre:
+            they.append(x)
+        else:
+            break
+    return they
+
+def release_set_files(rset):
+    files = {}
+    for x in rset:
+        path = x["Key"]
+        pre, fname = path.rsplit("/", 1)
+        if fname.startswith("hashes_"):
+            continue
+        didsuf = False
+        for suffix in (".asc", ".sig"):
+            if fname.endswith(suffix):
+                froot = fname[:-len(suffix)]
+                fd = files.get(froot)
+                if fd is None:
+                    fd = {}
+                    files[froot] = fd
+                fd[suffix] = x
+                didsuf = True
+                break
+        if didsuf:
+            continue
+        fd = files.get(fname)
+        if fd is None:
+            fd = {}
+            files[fname] = fd
+        fd["file"] = path
+        fd["Size"] = x["Size"]
+    return files
+
+def get_hashes_data(s3, rset):
+    text = ""
+    for x in rset:
+        path = x["Key"]
+        pre, fname = path.rsplit("/", 1)
+        if fname.endswith(".asc"):
+            continue
+        if fname.endswith(".sig"):
+            continue
+        if fname.startswith("hashes"):
+            ob = s3.get_object(Bucket=staging_bucket, Key=path)
+            text += ob["Body"].read().decode()
+    return text
+
+def read_hashes(fin):
+    by_fname = {}
+    for line in fin:
+        if not line:
+            continue
+        line = line.strip()
+        if not line:
+            continue
+        if line[0] == "#":
+            continue
+        hashstr, fname = line.split()
+        ob = by_fname.get(fname)
+        if not ob:
+            ob = {}
+            by_fname[fname] = ob
+        if len(hashstr) == 32:
+            ob["md5"] = hashstr
+        elif len(hashstr) == 64:
+            ob["sha256"] = hashstr
+        elif len(hashstr) == 128:
+            ob["sha512"] = hashstr
+    return by_fname
+
+def objects_by_fname(they):
+    out = {}
+    for x in they:
+        path = x["Key"]
+        if path.endswith("/"):
+            continue
+        parts = path.rsplit("/", 1)
+        fname = parts[-1]
+        out[fname] = x
+    return out
+
+def main(channel):
+    s3 = boto3.client("s3")
+    staging_response = s3.list_objects_v2(Bucket=staging_bucket, Prefix="releases/" + channel + "/", MaxKeys=100)
+    rset = get_stage_release_set(staging_response)
+    hashftext = get_hashes_data(s3, rset)
+    fhashes = read_hashes(hashftext.splitlines())
+    files = release_set_files(rset)
+    releases_response = s3.list_objects_v2(Bucket=releases_bucket)
+    release_files = objects_by_fname(releases_response["Contents"])
+
+    def get_furl(fname, skey):
+        rfpath = release_files.get(fname)
+        if rfpath is not None:
+            return releases_prefix + rfpath["Key"]
+        else:
+            return staging_prefix + skey
+
+    tbody = ["<tbody>\n"]
+    for fname, info in files.items():
+        furl = get_furl(fname, info['file'])
+        ftext = '<div class="fname"><a href="{}">{}</a></div>'.format(furl, fname)
+        sig = info.get(".sig")
+        stext = ""
+        if sig is not None:
+            sfname = sig["Key"].rsplit("/", 1)[-1]
+            surl = get_furl(sfname, sig["Key"])
+            stext = '<a href="{}">.sig</a>'.format(surl)
+        size = info.get("Size", "")
+        hashes = fhashes.get(fname)
+        if hashes:
+            for hn in ("md5", "sha256", "sha512"):
+                hv = hashes.get(hn)
+                if hv:
+                    ftext += '<div class="hash {}">{}</div>\n'.format(hn, hv)
+        if not hashes and not stext:
+            continue
+        tbody.append("<tr><td>{}</td><td>{}</td><td>{}</td></tr>\n".format(ftext, size, stext))
+    tbody.append("</tbody>\n\n")
+    tbody.append('<tbody><tr class="spacer"><td></td></tr></tbody>\n\n')
+
+    match_string = "<!--" + channel + "-->"
+    tbody_string = "".join(tbody)
+
+    try:
+        with open("index.html", "r+") as fd:
+            contents = fd.readlines()
+            for index, line in enumerate(contents):
+                if match_string in line and tbody_string not in contents[index + 1]:
+                    contents.insert(index + 1, tbody_string)
+                    break
+            fd.seek(0)
+            fd.writelines(contents)
+    except FileNotFoundError:
+        print("The file `index.html` cannot be found in this directory. \
+                \nTry: `aws s3 cp --acl public-read releases_index.html s3://algorand-releases/index.html`")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    if len(sys.argv) == 1:
+        print("Usage:", sys.argv[0], "<channel=stable|beta>")
+        sys.exit(1)
+    elif sys.argv[1] not in ["stable", "beta"]:
+        print("Argument can only be `stable` or `beta`.")
+        sys.exit(1)
+    else:
+        main(sys.argv[1])
+
