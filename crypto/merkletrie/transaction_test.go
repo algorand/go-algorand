@@ -38,7 +38,6 @@ func TestTransactions(t *testing.T) {
 		require.NotEqual(t, false, added)
 		require.NoError(t, err)
 	}
-	require.NoError(t, mt.Commit())
 
 	baseline, err := mt.RootHash()
 	require.NoError(t, err)
@@ -49,7 +48,6 @@ func TestTransactions(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	require.NoError(t, mt.Commit())
 	beforeRollback, err := mt.RootHash()
 	require.NotEqual(t, baseline, beforeRollback)
 	require.NoError(t, err)
@@ -58,7 +56,6 @@ func TestTransactions(t *testing.T) {
 	require.Equal(t, nil, err)
 	require.Equal(t, 10, rolledBackCount)
 
-	require.NoError(t, mt.Commit())
 	afterRollback, err := mt.RootHash()
 	require.Equal(t, baseline, afterRollback)
 	require.Equal(t, nil, err)
@@ -79,7 +76,6 @@ func TestTransactionsFailedRollback(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	require.NoError(t, mt.Commit())
 	baseline, err := mt.RootHash()
 	require.NoError(t, err)
 	tx := mt.BeginTransaction(&InMemoryCommitter{})
@@ -94,7 +90,6 @@ func TestTransactionsFailedRollback(t *testing.T) {
 	require.Equal(t, true, deleted)
 	require.NoError(t, err)
 
-	require.NoError(t, mt.Commit())
 	beforeRollback, err := mt.RootHash()
 	require.NotEqual(t, baseline, beforeRollback)
 	require.NoError(t, err)
@@ -103,7 +98,6 @@ func TestTransactionsFailedRollback(t *testing.T) {
 	require.Equal(t, errTransactionRollbackFailed, err)
 	require.Equal(t, 5, rolledBackCount)
 
-	require.NoError(t, mt.Commit())
 	afterRollback, err := mt.RootHash()
 	require.Equal(t, beforeRollback, afterRollback)
 	require.NoError(t, err)

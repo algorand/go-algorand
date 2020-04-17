@@ -18,6 +18,7 @@ package merkletrie
 
 import (
 	"encoding/binary"
+	"errors"
 
 	"github.com/algorand/go-algorand/crypto"
 )
@@ -31,12 +32,19 @@ const (
 	NodePageVersion = uint64(0x1000000010000000)
 )
 
+// ErrMismatchingElementLength is returned when an element is being added/removed from the trie that doesn't align with the trie's previous elements length
+var ErrMismatchingElementLength = errors.New("mismatching element length")
+
+// ErrMismatchingPageSize is returned when you try to provide an existing trie a committer with a different page size than it was originally created with.
+var ErrMismatchingPageSize = errors.New("mismatching page size")
+
 // Trie is a merkle trie intended to efficiently calculate the merkle root of
 // unordered elements
 type Trie struct {
-	root       storedNodeIdentifier
-	nextNodeID storedNodeIdentifier
-	cache      *merkleTrieCache
+	root          storedNodeIdentifier
+	nextNodeID    storedNodeIdentifier
+	cache         *merkleTrieCache
+	elementLength int
 }
 
 // Stats structure is a helper for finding underlaying statistics about the trie
@@ -60,9 +68,13 @@ func MakeTrie(committer Committer, cachedNodesCount int) (*Trie, error) {
 		rootBytes, err := committer.LoadPage(storedNodeIdentifierNull)
 		if err == nil {
 			if rootBytes != nil {
-				err = mt.deserialize(rootBytes)
+				var pageSize int64
+				pageSize, err = mt.deserialize(rootBytes)
 				if err != nil {
 					return nil, err
+				}
+				if pageSize != committer.GetNodesCountPerPage() {
+					return nil, ErrMismatchingPageSize
 				}
 			}
 		} else {
@@ -76,6 +88,9 @@ func MakeTrie(committer Committer, cachedNodesCount int) (*Trie, error) {
 
 // SetCommitter set the provided committter as the current committer, and return the old one.
 func (mt *Trie) SetCommitter(committer Committer) (prevCommitter Committer) {
+	if committer.GetNodesCountPerPage() != mt.cache.committer.GetNodesCountPerPage() {
+		panic("committer has to retain the name page size")
+	}
 	prevCommitter = mt.cache.committer
 	mt.cache.committer = committer
 	return
@@ -85,6 +100,11 @@ func (mt *Trie) SetCommitter(committer Committer) (prevCommitter Committer) {
 func (mt *Trie) RootHash() (crypto.Digest, error) {
 	if mt.root == storedNodeIdentifierNull {
 		return crypto.Digest{}, nil
+	}
+	if mt.cache.modified {
+		if err := mt.Commit(); err != nil {
+			return crypto.Digest{}, err
+		}
 	}
 	pnode, err := mt.cache.getNode(mt.root)
 	if err != nil {
@@ -104,7 +124,11 @@ func (mt *Trie) Add(d []byte) (bool, error) {
 		mt.cache.commitTransaction()
 		pnode.leaf = true
 		pnode.hash = d
+		mt.elementLength = len(d)
 		return true, nil
+	}
+	if len(d) != mt.elementLength {
+		return false, ErrMismatchingElementLength
 	}
 	pnode, err := mt.cache.getNode(mt.root)
 	if err != nil {
@@ -133,6 +157,9 @@ func (mt *Trie) Delete(d []byte) (bool, error) {
 	if mt.root == storedNodeIdentifierNull {
 		return false, nil
 	}
+	if len(d) != mt.elementLength {
+		return false, ErrMismatchingElementLength
+	}
 	pnode, err := mt.cache.getNode(mt.root)
 	if err != nil {
 		return false, err
@@ -147,12 +174,12 @@ func (mt *Trie) Delete(d []byte) (bool, error) {
 		mt.cache.deleteNode(mt.root)
 		mt.root = storedNodeIdentifierNull
 		mt.cache.commitTransaction()
+		mt.elementLength = 0
 		return true, nil
 	}
 	var updatedRoot storedNodeIdentifier
 	updatedRoot, err = pnode.remove(mt.cache, d[:], make([]byte, 0, len(d)))
 	if err != nil {
-
 		mt.cache.rollbackTransaction()
 		return false, err
 	}
@@ -194,33 +221,44 @@ func (mt *Trie) Evict() int {
 
 // serialize serializes the trie root
 func (mt *Trie) serialize() []byte {
-	serializedBuffer := make([]byte, (8+1)*3) // allocate the worst-case scenario for the trie header.
+	serializedBuffer := make([]byte, (8+1)*4) // allocate the worst-case scenario for the trie header.
 	version := binary.PutUvarint(serializedBuffer[:], MerkleTreeVersion)
 	root := binary.PutUvarint(serializedBuffer[version:], uint64(mt.root))
 	next := binary.PutUvarint(serializedBuffer[version+root:], uint64(mt.nextNodeID))
-	return serializedBuffer[:version+root+next]
+	elementLength := binary.PutUvarint(serializedBuffer[version+root+next:], uint64(mt.elementLength))
+	pageSizeLength := binary.PutUvarint(serializedBuffer[version+root+next+elementLength:], uint64(mt.cache.committer.GetNodesCountPerPage()))
+	return serializedBuffer[:version+root+next+elementLength+pageSizeLength]
 }
 
 // serialize serializes the trie root
-func (mt *Trie) deserialize(bytes []byte) error {
+func (mt *Trie) deserialize(bytes []byte) (int64, error) {
 	version, versionLen := binary.Uvarint(bytes[:])
 	if versionLen <= 0 {
-		return ErrRootPageDecodingFailuire
+		return 0, ErrRootPageDecodingFailuire
 	}
 	if version != MerkleTreeVersion {
-		return ErrRootPageDecodingFailuire
+		return 0, ErrRootPageDecodingFailuire
 	}
 	root, rootLen := binary.Uvarint(bytes[versionLen:])
 	if rootLen <= 0 {
-		return ErrRootPageDecodingFailuire
+		return 0, ErrRootPageDecodingFailuire
 	}
 	nextNodeID, nextNodeIDLen := binary.Uvarint(bytes[versionLen+rootLen:])
 	if nextNodeIDLen <= 0 {
-		return ErrRootPageDecodingFailuire
+		return 0, ErrRootPageDecodingFailuire
+	}
+	elemLength, elemLengthLength := binary.Uvarint(bytes[versionLen+rootLen+nextNodeIDLen:])
+	if elemLengthLength <= 0 {
+		return 0, ErrRootPageDecodingFailuire
+	}
+	pageSize, pageSizeLength := binary.Uvarint(bytes[versionLen+rootLen+nextNodeIDLen+elemLengthLength:])
+	if pageSizeLength <= 0 {
+		return 0, ErrRootPageDecodingFailuire
 	}
 	mt.root = storedNodeIdentifier(root)
 	mt.nextNodeID = storedNodeIdentifier(nextNodeID)
-	return nil
+	mt.elementLength = int(elemLength)
+	return int64(pageSize), nil
 }
 
 // reset is used to reset the trie to a given root & nextID. It's used exclusively as part of the

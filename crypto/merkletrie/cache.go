@@ -50,6 +50,8 @@ type merkleTrieCache struct {
 	cachedNodeCount       int
 	cachedNodeCountTarget int
 	pageToNIDsPtr         map[uint64]map[storedNodeIdentifier]*node
+	modified              bool
+	nodesPerPage          int64
 
 	txCreatedNodeIDs map[storedNodeIdentifier]bool
 	txDeletedNodeIDs map[storedNodeIdentifier]bool
@@ -75,13 +77,14 @@ func (mtc *merkleTrieCache) initialize(mt *Trie, committer Committer, cachedNode
 	mtc.pagesPrioritizationMap = make(map[uint64]*list.Element)
 	mtc.cachedNodeCountTarget = cachedNodeCountTarget
 	mtc.deferedPageLoad = storedNodeIdentifierNull
+	mtc.nodesPerPage = committer.GetNodesCountPerPage()
 	if mt.nextNodeID != storedNodeIdentifierBase {
-		nodesPerPage := mtc.committer.GetNodesCountPerPage()
 		// if the next node is going to be on a new page, no need to reload the last page.
-		if (int64(mtc.mt.nextNodeID) / nodesPerPage) == (int64(mtc.mt.nextNodeID-1) / nodesPerPage) {
-			mtc.deferedPageLoad = uint64(mtc.mt.nextNodeID) / uint64(nodesPerPage)
+		if (int64(mtc.mt.nextNodeID) / mtc.nodesPerPage) == (int64(mtc.mt.nextNodeID-1) / mtc.nodesPerPage) {
+			mtc.deferedPageLoad = uint64(mtc.mt.nextNodeID) / uint64(mtc.nodesPerPage)
 		}
 	}
+	mtc.modified = false
 	return
 }
 
@@ -89,20 +92,19 @@ func (mtc *merkleTrieCache) allocateNewNode() (pnode *node, nid storedNodeIdenti
 	nextID := mtc.mt.nextNodeID
 	mtc.mt.nextNodeID++
 	newNode := &node{}
-	nodesPerPage := uint64(mtc.committer.GetNodesCountPerPage())
-	page := uint64(nextID) / nodesPerPage
+	page := uint64(nextID) / uint64(mtc.nodesPerPage)
 	if mtc.pageToNIDsPtr[page] == nil {
-		mtc.pageToNIDsPtr[page] = make(map[storedNodeIdentifier]*node, nodesPerPage)
+		mtc.pageToNIDsPtr[page] = make(map[storedNodeIdentifier]*node, mtc.nodesPerPage)
 	}
 	mtc.pageToNIDsPtr[page][nextID] = newNode
 	mtc.cachedNodeCount++
 	mtc.txCreatedNodeIDs[nextID] = true
+	mtc.modified = true
 	return newNode, nextID
 }
 
 func (mtc *merkleTrieCache) getNode(nid storedNodeIdentifier) (pnode *node, err error) {
-	nodesPerPage := mtc.committer.GetNodesCountPerPage()
-	nodePage := uint64(nid) / uint64(nodesPerPage)
+	nodePage := uint64(nid) / uint64(mtc.nodesPerPage)
 	pageNodes := mtc.pageToNIDsPtr[nodePage]
 	if pageNodes != nil {
 		pnode = pageNodes[nid]
@@ -127,8 +129,7 @@ func (mtc *merkleTrieCache) getNode(nid storedNodeIdentifier) (pnode *node, err 
 }
 
 func (mtc *merkleTrieCache) prioritizeNode(nid storedNodeIdentifier) {
-	nodesPerPage := mtc.committer.GetNodesCountPerPage()
-	page := uint64(nid) / uint64(nodesPerPage)
+	page := uint64(nid) / uint64(mtc.nodesPerPage)
 
 	element := mtc.pagesPrioritizationMap[page]
 	if element != nil {
@@ -154,7 +155,7 @@ func (mtc *merkleTrieCache) loadPage(page uint64) (err error) {
 		return
 	}
 	if mtc.pageToNIDsPtr[page] == nil {
-		mtc.pageToNIDsPtr[page] = make(map[storedNodeIdentifier]*node, mtc.committer.GetNodesCountPerPage())
+		mtc.pageToNIDsPtr[page] = make(map[storedNodeIdentifier]*node, mtc.nodesPerPage)
 	}
 	for nodeID, pnode := range decodedNodes {
 		mtc.pageToNIDsPtr[page][nodeID] = pnode
@@ -167,8 +168,7 @@ func (mtc *merkleTrieCache) deleteNode(nid storedNodeIdentifier) {
 	if mtc.txCreatedNodeIDs[nid] {
 		delete(mtc.txCreatedNodeIDs, nid)
 
-		nodesPerPage := mtc.committer.GetNodesCountPerPage()
-		page := uint64(nid) / uint64(nodesPerPage)
+		page := uint64(nid) / uint64(mtc.nodesPerPage)
 		delete(mtc.pageToNIDsPtr[page], nid)
 		if len(mtc.pageToNIDsPtr[page]) == 0 {
 			mtc.pageToNIDsPtr[page] = nil
@@ -177,6 +177,7 @@ func (mtc *merkleTrieCache) deleteNode(nid storedNodeIdentifier) {
 	} else {
 		mtc.txDeletedNodeIDs[nid] = true
 	}
+	mtc.modified = true
 }
 
 // beginTransaction - used internaly by the merkleTrie
@@ -204,8 +205,7 @@ func (mtc *merkleTrieCache) commitTransaction() {
 			mtc.pendingDeletionNID[nodeID] = true
 		}
 
-		nodesPerPage := mtc.committer.GetNodesCountPerPage()
-		page := uint64(nodeID) / uint64(nodesPerPage)
+		page := uint64(nodeID) / uint64(mtc.nodesPerPage)
 		delete(mtc.pageToNIDsPtr[page], nodeID)
 		if len(mtc.pageToNIDsPtr[page]) == 0 {
 			mtc.pageToNIDsPtr[page] = nil
@@ -221,8 +221,7 @@ func (mtc *merkleTrieCache) rollbackTransaction() {
 	mtc.txDeletedNodeIDs = nil
 	// drop all the created nodes ids
 	for nodeID := range mtc.txCreatedNodeIDs {
-		nodesPerPage := mtc.committer.GetNodesCountPerPage()
-		page := uint64(nodeID) / uint64(nodesPerPage)
+		page := uint64(nodeID) / uint64(mtc.nodesPerPage)
 		delete(mtc.pageToNIDsPtr[page], nodeID)
 		if len(mtc.pageToNIDsPtr[page]) == 0 {
 			mtc.pageToNIDsPtr[page] = nil
@@ -248,8 +247,6 @@ func SortInt64(a []int64) {
 
 // commit - used as part of the merkleTrie Commit functionality
 func (mtc *merkleTrieCache) commit() error {
-	pageSize := mtc.committer.GetNodesCountPerPage()
-
 	if mtc.deferedPageLoad != storedNodeIdentifierNull {
 		err := mtc.loadPage(mtc.deferedPageLoad)
 		if err != nil {
@@ -262,7 +259,7 @@ func (mtc *merkleTrieCache) commit() error {
 
 	// create a list of all the pages that need to be created/updated
 	for nodeID := range mtc.pendingCreatedNID {
-		nodePage := int64(nodeID) / pageSize
+		nodePage := int64(nodeID) / mtc.nodesPerPage
 		if nil == createdPages[nodePage] {
 			createdPages[nodePage] = mtc.pageToNIDsPtr[uint64(nodePage)]
 		}
@@ -294,9 +291,9 @@ func (mtc *merkleTrieCache) commit() error {
 	toRemovePages := make(map[int64]map[storedNodeIdentifier]*node)
 	toUpdatePages := make(map[int64]map[storedNodeIdentifier]*node)
 	for nodeID := range mtc.pendingDeletionNID {
-		nodePage := int64(nodeID) / pageSize
+		nodePage := int64(nodeID) / mtc.nodesPerPage
 		if toRemovePages[nodePage] == nil {
-			toRemovePages[nodePage] = make(map[storedNodeIdentifier]*node, pageSize)
+			toRemovePages[nodePage] = make(map[storedNodeIdentifier]*node, mtc.nodesPerPage)
 		}
 		toRemovePages[nodePage][nodeID] = nil
 	}
@@ -341,17 +338,17 @@ func (mtc *merkleTrieCache) commit() error {
 
 	mtc.pendingCreatedNID = make(map[storedNodeIdentifier]bool)
 	mtc.pendingDeletionNID = make(map[storedNodeIdentifier]bool)
+	mtc.modified = false
 	return nil
 }
 
 func (mtc *merkleTrieCache) recalculatePageHashes(page int64, nodes map[storedNodeIdentifier]*node) (err error) {
-	pageSize := mtc.committer.GetNodesCountPerPage()
-	for i := page * pageSize; i < (page+1)*pageSize; i++ {
+	for i := page * mtc.nodesPerPage; i < (page+1)*mtc.nodesPerPage; i++ {
 		if mtc.pendingCreatedNID[storedNodeIdentifier(i)] == false {
 			continue
 		}
 		node := nodes[storedNodeIdentifier(i)]
-		if node != nil && node.leaf == false {
+		if node != nil {
 			if err = node.recalculateHash(mtc); err != nil {
 				return
 			}
@@ -363,8 +360,7 @@ func (mtc *merkleTrieCache) recalculatePageHashes(page int64, nodes map[storedNo
 func decodePage(bytes []byte) (nodesMap map[storedNodeIdentifier]*node, err error) {
 	version, versionLength := binary.Uvarint(bytes[:])
 	if versionLength <= 0 {
-		//return nil, ErrPageDecodingFailuire
-		return nil, fmt.Errorf("unable to decode page with %d bytes : %v", len(bytes), bytes)
+		return nil, ErrPageDecodingFailuire
 	}
 	if version != NodePageVersion {
 		return nil, ErrPageDecodingFailuire

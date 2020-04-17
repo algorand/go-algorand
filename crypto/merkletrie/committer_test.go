@@ -43,6 +43,7 @@ func TestInMemoryCommitter(t *testing.T) {
 	}
 	mt1.Commit()
 	releasedNodes := mt1.Evict()
+	savedMemoryCommitter := memoryCommitter.Duplicate()
 	require.Equal(t, 18957, releasedNodes)
 	for i := len(hashes) / 2; i < len(hashes); i++ {
 		mt1.Add(hashes[i][:])
@@ -50,7 +51,7 @@ func TestInMemoryCommitter(t *testing.T) {
 
 	mt1Hash, _ := mt1.RootHash()
 
-	mt2, _ := MakeTrie(&memoryCommitter, defaultTestEvictSize)
+	mt2, _ := MakeTrie(savedMemoryCommitter, defaultTestEvictSize)
 
 	for i := len(hashes) / 2; i < len(hashes); i++ {
 		mt2.Add(hashes[i][:])
@@ -59,13 +60,13 @@ func TestInMemoryCommitter(t *testing.T) {
 	mt2Hash, _ := mt2.RootHash()
 
 	require.Equal(t, mt1Hash, mt2Hash)
-	require.Equal(t, 164, len(memoryCommitter.memStore)) // 164 pages.
+	require.Equal(t, 347, len(memoryCommitter.memStore)) // 347 pages.
 	// find the size of all the storage.
 	storageSize := 0
 	for _, bytes := range memoryCommitter.memStore {
 		storageSize += len(bytes)
 	}
-	require.Equal(t, 1133445, storageSize) // 1,133,445 / 25,000 ~= 45 bytes/leaf.
+	require.Equal(t, 2427986, storageSize) // 2,427,986 / 50,000 ~= 48 bytes/leaf.
 	stats, _ := mt1.GetStats()
 	require.Equal(t, leafsCount, int(stats.leafCount))
 	require.Equal(t, 61926, int(stats.nodesCount))
@@ -102,10 +103,16 @@ func TestNoRedundentPages(t *testing.T) {
 	mt1.Commit()
 
 	trieNodes := make(map[storedNodeIdentifier]bool)
-	for _, bytes := range memoryCommitter.memStore {
-		nodes, _ := decodePage(bytes)
-		for nodeID := range nodes {
-			trieNodes[nodeID] = true
+	for page, bytes := range memoryCommitter.memStore {
+		if page == 0 {
+			mt2, _ := MakeTrie(nil, defaultTestEvictSize)
+			_, err := mt2.deserialize(bytes)
+			require.NoError(t, err)
+		} else {
+			nodes, _ := decodePage(bytes)
+			for nodeID := range nodes {
+				trieNodes[nodeID] = true
+			}
 		}
 	}
 	stats, _ := mt1.GetStats()
