@@ -138,6 +138,12 @@ type accountUpdates struct {
 	// the channel is non-closed while a catchpoint file is being generated.
 	catchpointWriting chan struct{}
 
+	// catchpointSlowWriting suggest to the catchpoint generator whether it should slowly generate the catchpoint, or should it
+	// attempt to complete the catchpoint generation right away. When this channel is closed, the catchpoint generator would try and
+	// complete the catchpoint generation as soon as possible. otherwise, it would take it's time and perform periodic sleeps between
+	// chunks processing.
+	catchpointSlowWriting chan struct{}
+
 	// dbDirectory is the directory where the ledger and block sql file resides as well as the parent directroy for the catchup files to be generated
 	dbDirectory string
 
@@ -152,6 +158,9 @@ type accountUpdates struct {
 
 	// ctx is the canceling function canceling any pending catchpoint generation operation
 	ctxCancel context.CancelFunc
+
+	// deltasAccum stores the accumulated deltas for every round after dbRound.
+	deltasAccum []int
 }
 
 func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, genesisProto config.ConsensusParams, genesisAccounts map[basics.Address]basics.AccountData) {
@@ -232,6 +241,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	au.accounts = make(map[basics.Address]modifiedAccount)
 	au.assets = make(map[basics.AssetIndex]modifiedAsset)
 	loaded := au.dbRound
+	var writingCatchpointDigest crypto.Digest
 	for loaded < latest {
 		next := loaded + 1
 
@@ -247,14 +257,19 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 
 		au.newBlock(blk, delta)
 		loaded = next
-	}
-	// close it always for now.
-	au.catchpointWriting = make(chan struct{}, 1)
 
+		if next == basics.Round(writingCatchpointRound) {
+			writingCatchpointDigest = blk.Digest()
+		}
+	}
+	// keep these channel closed if we're not generating catchpoint
+	au.catchpointWriting = make(chan struct{}, 1)
+	au.catchpointSlowWriting = make(chan struct{}, 1)
 	if writingCatchpointRound == 0 {
 		close(au.catchpointWriting)
+		close(au.catchpointSlowWriting)
 	} else {
-		go au.generateCatchpoint(basics.Round(writingCatchpointRound))
+		go au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest)
 	}
 
 	return nil
@@ -379,7 +394,7 @@ func (au *accountUpdates) accountsUpdateBalaces(accountsDeltas map[basics.Addres
 	return
 }
 
-func (au *accountUpdates) accountsCreateCatchpointLabel(tx *sql.Tx, committedRound, balancesRound basics.Round, offset uint64) (err error) {
+func (au *accountUpdates) accountsCreateCatchpointLabel(tx *sql.Tx, committedRound, balancesRound basics.Round, ledgerBlockDigest crypto.Digest) (label string, err error) {
 	var totals AccountTotals
 	var balancesHash crypto.Digest
 	totals, err = au.totals(balancesRound)
@@ -390,17 +405,13 @@ func (au *accountUpdates) accountsCreateCatchpointLabel(tx *sql.Tx, committedRou
 	if err != nil {
 		return
 	}
-	ledgerBlockDigest := au.roundDigest[offset]
 	cpLabel := makeCatchpointLabel(committedRound, ledgerBlockDigest, balancesHash, totals)
-	label := cpLabel.String()
-	if label == "" {
-		return nil
-	}
+	label = cpLabel.String()
 	_, err = writeCatchpointStateString(context.Background(), tx, "lastCatchpoint", label)
 	if err == nil {
 		au.lastCatchpointLabel = label
 	}
-	return err
+	return
 }
 
 func (au *accountUpdates) close() {
@@ -610,6 +621,14 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 		au.log.Panicf("committedUpTo: block %d too far in the future, lookback %d, dbRound %d, deltas %d", committedRound, lookback, au.dbRound, len(au.deltas))
 	}
 
+	// check if there was a catchpoint between au.dbRound+lookback and newBase+lookback
+	if au.catchpointInterval > 0 {
+		nextCatchpoint := ((uint64(au.dbRound+lookback) + au.catchpointInterval) / au.catchpointInterval) * au.catchpointInterval
+		if nextCatchpoint < uint64(newBase+lookback) {
+			newBase = basics.Round(nextCatchpoint) - lookback
+		}
+	}
+
 	// if we're still writing the previous catchpoint, we can't flush the changes yet.
 	select {
 	case _, opened := <-au.catchpointWriting:
@@ -620,19 +639,24 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 		}
 	default:
 		// if we hit this path, it means that the channel is currently non-closed, which means that we're still writing the previous catchpoint.
+		// check if we're already attempting to perform fast-writing.
+		select {
+		case <-au.catchpointSlowWriting:
+			// yes, we're already doing fast-writing.
+		default:
+			// no, we're not yet doing fast writing, make it so.
+			close(au.catchpointSlowWriting)
+		}
 		return au.dbRound
 	}
 
 	offset := uint64(newBase - au.dbRound)
 
-	// calculate the number of pending deltas
-	pendingDeltas := 0
-	for i := uint64(0); i < offset; i++ {
-		pendingDeltas += len(au.deltas[i])
-	}
-
 	// check to see if this is a catchpoint round
-	isCatchpointRound := (committedRound > 0) && (au.catchpointInterval != 0) && (0 == (uint64(committedRound) % au.catchpointInterval))
+	isCatchpointRound := ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+au.dbRound))) % au.catchpointInterval))
+
+	// calculate the number of pending deltas
+	pendingDeltas := au.deltasAccum[offset-1] - au.deltasAccum[0]
 
 	// If we recently flushed, wait to aggregate some more blocks.
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
@@ -647,6 +671,9 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 	// au.accounts.
 	var flushcount map[basics.Address]int
 	var assetFlushcount map[basics.AssetIndex]int
+
+	var catchpointLabel string
+	var committedRoundDigest crypto.Digest
 
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
 		mc, err0 := makeMerkleCommitter(tx, false)
@@ -685,7 +712,8 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 			}
 		}
 		if isCatchpointRound {
-			err = au.accountsCreateCatchpointLabel(tx, committedRound, au.dbRound+basics.Round(offset), uint64(committedRound-au.dbRound)-1)
+			committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
+			catchpointLabel, err = au.accountsCreateCatchpointLabel(tx, au.dbRound+basics.Round(offset)+lookback, au.dbRound+basics.Round(offset), committedRoundDigest)
 		}
 
 		return err
@@ -738,19 +766,21 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 		}
 	}
 
+	if isCatchpointRound && au.archivalLedger {
+		// start generating the catchpoint on a separate goroutine.
+		au.catchpointWriting = make(chan struct{}, 1)
+		au.catchpointSlowWriting = make(chan struct{}, 1)
+		go au.generateCatchpoint(basics.Round(offset)+au.dbRound+lookback, catchpointLabel, committedRoundDigest)
+	}
+
 	au.deltas = au.deltas[offset:]
+	au.deltasAccum = au.deltasAccum[offset:]
 	au.roundDigest = au.roundDigest[offset:]
 	au.protos = au.protos[offset:]
 	au.roundTotals = au.roundTotals[offset:]
 	au.assetDeltas = au.assetDeltas[offset:]
 	au.dbRound = newBase
 	au.lastFlushTime = flushTime
-
-	if isCatchpointRound && au.archivalLedger {
-		// start generating the catchpoint on a separate goroutine.
-		au.catchpointWriting = make(chan struct{}, 1)
-		go au.generateCatchpoint(committedRound)
-	}
 
 	return au.dbRound
 }
@@ -771,6 +801,11 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	au.protos = append(au.protos, proto)
 	au.assetDeltas = append(au.assetDeltas, delta.assets)
 	au.roundDigest = append(au.roundDigest, blk.Digest())
+	var lastDeltasCount int
+	if len(au.deltasAccum) > 0 {
+		lastDeltasCount = au.deltasAccum[len(au.deltasAccum)-1]
+	}
+	au.deltasAccum = append(au.deltasAccum, len(delta.accts)+lastDeltasCount)
 
 	var ot basics.OverflowTracker
 	newTotals := au.roundTotals[len(au.roundTotals)-1]
@@ -820,7 +855,7 @@ func (au *accountUpdates) totals(rnd basics.Round) (totals AccountTotals, err er
 	return
 }
 
-func (au *accountUpdates) generateCatchpoint(committedRound basics.Round) {
+func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label string, committedRoundDigest crypto.Digest) {
 	retryCatchpointCreation := false
 	defer func() {
 		if !retryCatchpointCreation {
@@ -837,13 +872,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round) {
 		close(au.catchpointWriting)
 	}()
 
-	blockHdr, err := au.ledger.BlockHdr(committedRound)
-	if err != nil {
-		au.log.Warnf("accountUpdates: generateCatchpoint unable to retrieve block header for committed block round %d: %v", committedRound, err)
-		return
-	}
-
-	err = au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
 		_, err = writeCatchpointStateUint64(context.Background(), tx, "writingCatchpoint", uint64(committedRound))
 		return err
 	})
@@ -855,11 +884,12 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round) {
 	relCatchpointFileName := filepath.Join("catchpoints", catchpointRoundToPath(committedRound))
 	absCatchpointFileName := filepath.Join(au.dbDirectory, relCatchpointFileName)
 
-	catchpointWriter := makeCatchpointWriter(absCatchpointFileName, au.dbs.rdb, blockHdr.Round, blockHdr.Hash())
+	catchpointWriter := makeCatchpointWriter(absCatchpointFileName, au.dbs.rdb, committedRound, committedRoundDigest, label)
 
 	more := true
+	chunkExecutionDuration := 50 * time.Millisecond
 	for more {
-		stepCtx, stepCancelFunction := context.WithTimeout(au.ctx, 50*time.Millisecond)
+		stepCtx, stepCancelFunction := context.WithTimeout(au.ctx, chunkExecutionDuration)
 		more, err = catchpointWriter.WriteStep(stepCtx)
 		stepCancelFunction()
 		if more && err == nil {
@@ -870,6 +900,8 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round) {
 			case <-au.ctx.Done():
 				retryCatchpointCreation = true
 				return
+			case <-au.catchpointSlowWriting:
+				chunkExecutionDuration = time.Second
 			}
 		}
 		if err != nil {

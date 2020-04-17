@@ -29,8 +29,8 @@ import (
 
 	"github.com/algorand/go-codec/codec"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -53,7 +53,8 @@ type catchpointWriter struct {
 	balancesChunkNum  uint64
 	writtenBytes      int64
 	blocksRound       basics.Round
-	blockHeaderDigest bookkeeping.BlockHash
+	blockHeaderDigest crypto.Digest
+	label             string
 }
 
 type encodedBalanceRecord struct {
@@ -63,25 +64,26 @@ type encodedBalanceRecord struct {
 }
 
 type catchpointFileHeader struct {
-	_struct           struct{}              `codec:",omitempty,omitemptyarray"`
-	Version           uint64                `codec:"version"`
-	BalancesRound     basics.Round          `codec:"balancesRound"`
-	BlocksRound       basics.Round          `codec:"blocksRound"`
-	Totals            AccountTotals         `codec:"accountTotals"`
-	TotalAccounts     uint64                `codec:"accountsCount"`
-	TotalChunks       uint64                `codec:"chunksCount"`
-	Catchpoint        string                `codec:"catchpoint"`
-	BlockHeaderDigest bookkeeping.BlockHash `codec:"blockHeaderDigest"`
+	_struct           struct{}      `codec:",omitempty,omitemptyarray"`
+	Version           uint64        `codec:"version"`
+	BalancesRound     basics.Round  `codec:"balancesRound"`
+	BlocksRound       basics.Round  `codec:"blocksRound"`
+	Totals            AccountTotals `codec:"accountTotals"`
+	TotalAccounts     uint64        `codec:"accountsCount"`
+	TotalChunks       uint64        `codec:"chunksCount"`
+	Catchpoint        string        `codec:"catchpoint"`
+	BlockHeaderDigest crypto.Digest `codec:"blockHeaderDigest"`
 }
 
 type catchpointFileBalancesChunk []encodedBalanceRecord
 
-func makeCatchpointWriter(filePath string, dbr db.Accessor, blocksRound basics.Round, blockHeaderDigest bookkeeping.BlockHash) *catchpointWriter {
+func makeCatchpointWriter(filePath string, dbr db.Accessor, blocksRound basics.Round, blockHeaderDigest crypto.Digest, label string) *catchpointWriter {
 	return &catchpointWriter{
 		filePath:          filePath,
 		dbr:               dbr,
 		blocksRound:       blocksRound,
 		blockHeaderDigest: blockHeaderDigest,
+		label:             label,
 	}
 }
 
@@ -246,7 +248,7 @@ func (cw *catchpointWriter) readHeaderFromDatabase(tx *sql.Tx) (err error) {
 	}
 	header.TotalChunks = (header.TotalAccounts + balancesChunkReadSize) / balancesChunkReadSize
 	header.BlocksRound = cw.blocksRound
-	header.Catchpoint = fmt.Sprintf("%d#**todo-hash**", header.BlocksRound)
+	header.Catchpoint = cw.label
 	header.Version = initialVersion
 	header.BlockHeaderDigest = cw.blockHeaderDigest
 	cw.fileHeader = &header
