@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
@@ -64,6 +65,45 @@ type DebugState struct {
 	TxnGroup    []transactions.SignedTxn `json:"txngroup"`
 	GroupIndex  int                      `json:"gindex"`
 	Proto       *config.ConsensusParams  `json:"proto"`
+}
+
+// LineToPC converts line to pc
+// Return 0 on unsuccess
+func (d *DebugState) LineToPC(line int) int {
+	if len(d.PCOffset) == 0 || line < 1 {
+		return 0
+	}
+
+	lines := strings.Split(d.Disassembly, "\n")
+	offset := len(strings.Join(lines[:line], "\n"))
+
+	for i := 0; i < len(d.PCOffset); i++ {
+		if d.PCOffset[i].Offset >= offset {
+			return d.PCOffset[i].PC
+		}
+	}
+	return 0
+}
+
+// PCToLine converts pc to line
+// Return 0 on unsuccess
+func (d *DebugState) PCToLine(pc int) int {
+	if len(d.PCOffset) == 0 {
+		return 0
+	}
+
+	offset := 0
+	for i := 0; i < len(d.PCOffset); i++ {
+		if d.PCOffset[i].PC >= pc {
+			offset = d.PCOffset[i].Offset
+			break
+		}
+	}
+	if offset == 0 {
+		offset = d.PCOffset[len(d.PCOffset)-1].Offset
+	}
+
+	return len(strings.Split(d.Disassembly[:offset], "\n")) - 1
 }
 
 func (cx *evalContext) refreshDebugState() *DebugState {
