@@ -19,7 +19,6 @@ package transactions
 import (
 	"fmt"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
