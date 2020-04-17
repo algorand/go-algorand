@@ -5,7 +5,11 @@ With the V2 REST API we started using a design driven process.
 
 The API is defined using [OpenAPI v2](https://swagger.io/specification/v2/) in **algod.oas2.yml**.
 
-To update an endpoint:
+## Updating the V2 REST API
+Prerequisit:
+You need to install our fork of **oapi-codegen**, available here: https://github.com/algorand/oapi-codegen/
+Run `go build` in the cmd/oapi-codegen. At this point I haven't been able to get `go get` to work.
+
 1. Document your changes by editing **algod.oas2.yml**
 2. Regenerate the endpoints by running **generate.sh**. The sources at **server/v2/generated/** will be updated.
 3. Update the implementation in **server/v2/handlers.go**. It is sometimes useful to consult **generated/routes.go** to make sure the handler properly implements **ServerInterface**.
