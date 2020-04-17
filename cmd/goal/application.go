@@ -50,7 +50,7 @@ var (
 	// Cobra only has a slice helper for uint, not uint64, so we'll parse
 	// uint64s from strings for now. 4bn transactions and using a 32-bit
 	// platform seems not so far-fetched?
-	foreignApps []string
+	foreignApps    []string
 	appStrAccounts []string
 
 	appB64Args       []string
@@ -234,7 +234,7 @@ func processAppInputFile() (args, accounts []string, foreignApps []uint64) {
 }
 
 func getAppInputs() (args, accounts []string, foreignApps []uint64) {
-	if (appB64Args != nil || appStrAccounts != nil) && appInputFilename != "" {
+	if (appB64Args != nil || appStrAccounts != nil || foreignApps != nil) && appInputFilename != "" {
 		reportErrorf("Cannot specify both command-line arguments/accounts and JSON input filename")
 	}
 	if appInputFilename != "" {
