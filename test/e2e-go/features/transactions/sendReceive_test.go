@@ -46,9 +46,6 @@ func TestAccountsCanSendMoney(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	if testing.Short() {
-		t.Skip()
-	}
 	testAccountsCanSendMoney(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 }
 
