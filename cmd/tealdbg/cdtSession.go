@@ -196,12 +196,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			case <-cdtUpdatedCh:
 				dbgStateMu.Lock()
-				// TODO: save both pc and line in dbgState
-				line := dbgState.PCToLine(dbgState.PC)
-				if state.completed.IsSet() {
-					line++
-				}
-				state.Update(dbgState.PC, line, dbgState.Stack, dbgState.Scratch, dbgState.Error)
+				state.Update(dbgState.PC, dbgState.Line, dbgState.Stack, dbgState.Scratch, dbgState.Error)
 				dbgStateMu.Unlock()
 
 				event := s.computeEvent(&state)

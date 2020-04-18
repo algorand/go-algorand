@@ -247,7 +247,7 @@
                     curHighlight.classList.toggle("green", false);
                 }
 
-                var highlightLine = pcToLine(state["pc"], state["disasm"], state["pctooffset"]);
+                var highlightLine = state["line"]
                 var rows = codetable.querySelectorAll("tr");
                 rows[highlightLine].classList.toggle("green", true);
 
@@ -310,26 +310,6 @@
                         return pcToOffset[i]["pc"]
                     }
                 }
-            }
-
-            function pcToLine(pc, disasm, pcToOffset) {
-                if (pcToOffset.length == 0) {
-                    return 0;
-                }
-
-                var offset = 0;
-                for (var i = 0; i < pcToOffset.length; i++) {
-                    if (pcToOffset[i]["pc"] >= pc) {
-                        offset = pcToOffset[i]["offset"];
-                        break;
-                    }
-                }
-
-                if (i == pcToOffset.length) {
-                    offset = pcToOffset[pcToOffset.length - 1]["offset"];
-                }
-
-                return disasm.substring(0, offset).split("\n").length - 1
             }
 
             // addExec({"pc":1,"stack":[{"t":"u"}],"scratch":[{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"},{"t":"u"}],"disasm":"// version 2\nintcblock 0 1\nbytecblock 0x68656c6c6f 0x7772697465 0x636865636b 0x666f6f 0x626172\ntxn ApplicationArgs 0\nbytec_0\n==\nbnz label1\ntxn ApplicationArgs 0\nbytec_1\n==\nbnz label2\ntxn ApplicationArgs 0\nbytec_2\n==\nintc_0\nintc_0\nbytec_3\napp_local_get\nintc_0\n==\nbnz label3\ntxn ApplicationArgs 1\n==\n\u0026\u0026\nintc_1\nbnz label4\nlabel2:\nintc_0\nbytec_3\nbytec 4\napp_local_put\nintc_1\nbnz label1\nlabel1:\nintc_1\nintc_1\nbnz label4\nlabel3:\nintc_0\nintc_1\nbnz label4\n","pctooffset":[{"pc":1,"offset":13},{"pc":5,"offset":27},{"pc":33,"offset":95},{"pc":36,"offset":117},{"pc":37,"offset":125},{"pc":38,"offset":128},{"pc":41,"offset":139},{"pc":44,"offset":161},{"pc":45,"offset":169},{"pc":46,"offset":172},{"pc":49,"offset":183},{"pc":52,"offset":205},{"pc":53,"offset":213},{"pc":54,"offset":216},{"pc":55,"offset":223},{"pc":56,"offset":230},{"pc":57,"offset":238},{"pc":58,"offset":252},{"pc":59,"offset":259},{"pc":60,"offset":262},{"pc":63,"offset":273},{"pc":66,"offset":295},{"pc":67,"offset":298},{"pc":68,"offset":301},{"pc":69,"offset":308},{"pc":72,"offset":327},{"pc":73,"offset":334},{"pc":74,"offset":342},{"pc":76,"offset":350},{"pc":77,"offset":364},{"pc":78,"offset":371},{"pc":81,"offset":390},{"pc":82,"offset":397},{"pc":83,"offset":404},{"pc":86,"offset":423},{"pc":87,"offset":430},{"pc":88,"offset":437}],"execid":"PD2HPDBATVA73GHR7LSPJA47SH53B7WZZVASTV3ETPAF7TEJBD6Q","error":""});

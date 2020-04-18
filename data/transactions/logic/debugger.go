@@ -55,16 +55,18 @@ type PCOffset struct {
 // DebugState is a representation of the evaluation context that we encode
 // to json and send to tealdbg
 type DebugState struct {
-	PC          int                      `json:"pc"`
-	Stack       []v1.TealValue           `json:"stack"`
-	Scratch     []v1.TealValue           `json:"scratch"`
+	ExecID      string                   `json:"execid"`
 	Disassembly string                   `json:"disasm"`
 	PCOffset    []PCOffset               `json:"pctooffset"`
-	ExecID      string                   `json:"execid"`
-	Error       string                   `json:"error"`
 	TxnGroup    []transactions.SignedTxn `json:"txngroup"`
 	GroupIndex  int                      `json:"gindex"`
 	Proto       *config.ConsensusParams  `json:"proto"`
+
+	PC      int            `json:"pc"`
+	Line    int            `json:"line"`
+	Stack   []v1.TealValue `json:"stack"`
+	Scratch []v1.TealValue `json:"scratch"`
+	Error   string         `json:"error"`
 }
 
 // LineToPC converts line to pc
@@ -99,18 +101,23 @@ func (d *DebugState) PCToLine(pc int) int {
 			break
 		}
 	}
+
+	one := 1
+	// handle end of the program
 	if offset == 0 {
 		offset = d.PCOffset[len(d.PCOffset)-1].Offset
+		one = 0
 	}
 
-	return len(strings.Split(d.Disassembly[:offset], "\n")) - 1
+	return len(strings.Split(d.Disassembly[:offset], "\n")) - one
 }
 
 func (cx *evalContext) refreshDebugState() *DebugState {
 	ds := &cx.debugState
 
-	// Update PC, error, stack, and scratch space
+	// Update pc, line, error, stack, and scratch space
 	ds.PC = cx.pc
+	ds.Line = ds.PCToLine(cx.pc)
 	if cx.err != nil {
 		ds.Error = cx.err.Error()
 	}

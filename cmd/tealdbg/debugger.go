@@ -147,25 +147,6 @@ func (s *session) lineToPC(line int) int {
 	return 0
 }
 
-func (s *session) pcToLine(pc int) uint32 {
-	if len(s.offsets) == 0 {
-		return 0
-	}
-
-	offset := 0
-	for i := 0; i < len(s.offsets); i++ {
-		if s.offsets[i].PC >= pc {
-			offset = s.offsets[i].Offset
-			break
-		}
-	}
-	if offset == 0 {
-		offset = s.offsets[len(s.offsets)-1].Offset
-	}
-
-	return uint32(len(strings.Split(s.program[:offset], "\n")) - 1)
-}
-
 func (d *Debugger) getSession(sid string) (s *session, err error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()

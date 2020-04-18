@@ -87,8 +87,8 @@ func (a *CDTAdapter) SessionStarted(sid string, debugger Control, ch chan Notifi
 func (a *CDTAdapter) SessionEnded(sid string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-
 	delete(a.sessions, sid)
+	fmt.Printf("CDT session %s closed\n", sid)
 }
 
 // must be called with rctx.mux locked
