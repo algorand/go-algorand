@@ -40,6 +40,7 @@ type DebugAdapter interface {
 
 // Control interface for execution control
 type Control interface {
+	Step()
 	Resume()
 	SetBreakpoint(line int) error
 	RemoveBreakpoint(line int) error
@@ -114,6 +115,23 @@ func makeSession(program string, line int) (s *session) {
 	return
 }
 
+func (s *session) resume() {
+	select {
+	case s.acknowledged <- true:
+	default:
+	}
+}
+
+func (s *session) Step() {
+	func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.debugConfig = debugConfig{BreakAtLine: 0}
+	}()
+
+	s.resume()
+}
+
 func (s *session) Resume() {
 	currentLine := s.line.Load()
 
@@ -125,11 +143,7 @@ func (s *session) Resume() {
 			}
 		}
 	}
-
-	select {
-	case s.acknowledged <- true:
-	default:
-	}
+	s.resume()
 }
 
 func (s *session) SetBreakpoint(line int) error {
