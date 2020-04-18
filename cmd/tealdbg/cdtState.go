@@ -48,9 +48,10 @@ type cdtState struct {
 	err     atomicString
 
 	// debugger states
-	pauseOnError atomicBool
-	lastAction   atomicString
-	completed    atomicBool
+	lastAction      atomicString
+	pauseOnError    atomicBool
+	pauseOnCompeted atomicBool
+	completed       atomicBool
 }
 
 func (s *cdtState) Init(program string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int) {

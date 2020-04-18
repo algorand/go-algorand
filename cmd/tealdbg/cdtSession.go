@@ -370,7 +370,16 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 			events = append(events, &evDestroyed)
 		}
 		response = ChromeResponse{ID: req.ID, Result: empty}
-	case "Debugger.stepOver", "Debugger.stepInto", "Debugger.stepOut":
+	case "Debugger.stepOut":
+		state.lastAction.Store("step")
+		state.pauseOnCompeted.SetTo(true)
+		s.debugger.Resume()
+		if state.completed.IsSet() {
+			evDestroyed := s.makeContextDestroyedEvent()
+			events = append(events, &evDestroyed)
+		}
+		response = ChromeResponse{ID: req.ID, Result: empty}
+	case "Debugger.stepOver", "Debugger.stepInto":
 		state.lastAction.Store("step")
 		s.debugger.Step()
 		if state.completed.IsSet() {
@@ -386,13 +395,22 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 }
 
 func (s *cdtSession) computeEvent(state *cdtState) (event interface{}) {
-	if state.completed.IsSet() && state.pauseOnError.IsSet() && state.err.Length() != 0 {
-		event = s.makeDebuggerPausedEvent(state)
-	} else if state.completed.IsSet() && state.lastAction.Load() == "resume" {
-		event = s.makeContextDestroyedEvent()
-	} else {
-		event = s.makeDebuggerPausedEvent(state)
+	if state.completed.IsSet() {
+		if state.pauseOnCompeted.IsSet() {
+			event = s.makeDebuggerPausedEvent(state)
+			return
+		}
+		if state.pauseOnError.IsSet() && state.err.Length() != 0 {
+			event = s.makeDebuggerPausedEvent(state)
+			return
+		}
+		if state.lastAction.Load() == "resume" {
+			event = s.makeContextDestroyedEvent()
+			return
+		}
 	}
+
+	event = s.makeDebuggerPausedEvent(state)
 	return
 }
 
