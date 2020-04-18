@@ -16,6 +16,8 @@
 
 package main
 
+//go:generate ./bundle_home_html.sh
+
 import (
 	"encoding/json"
 	"fmt"

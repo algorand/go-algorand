@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
+// Code generated during build process. DO NOT EDIT.
 package main
 
-var homepage = `
+var homepage string = `
 <html>
     <head>
         <style>
