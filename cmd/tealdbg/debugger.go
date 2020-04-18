@@ -41,8 +41,9 @@ type DebugAdapter interface {
 // Control interface for execution control
 type Control interface {
 	Resume()
-	SetBreakpoint(line int)
-	RemoveBreakpoint(line int)
+	SetBreakpoint(line int) error
+	RemoveBreakpoint(line int) error
+	SetBreakpointsActive(active bool)
 }
 
 // Debugger is TEAL event-driven debugger
@@ -80,9 +81,9 @@ type session struct {
 	// program that is being debugged
 	program string
 	lines   []string
-	offsets []logic.PCOffset
 
 	breakpoints []breakpoint
+	line        atomicInt
 }
 
 type breakpoint struct {
@@ -94,7 +95,7 @@ func (bs *breakpoint) NonEmpty() bool {
 	return bs.set
 }
 
-func makeSession(program string, offsets []logic.PCOffset) (s *session) {
+func makeSession(program string, line int) (s *session) {
 	s = new(session)
 
 	// Allocate a default debugConfig (don't break)
@@ -107,29 +108,65 @@ func makeSession(program string, offsets []logic.PCOffset) (s *session) {
 	s.notifications = make(chan Notification)
 
 	s.program = program
-	s.offsets = offsets
 	s.lines = strings.Split(program, "\n")
 	s.breakpoints = make([]breakpoint, len(s.lines))
+	s.line.Store(line)
 	return
 }
 
 func (s *session) Resume() {
+	currentLine := s.line.Load()
+
+	if currentLine < len(s.breakpoints) {
+		for line, state := range s.breakpoints[currentLine+1:] {
+			if state.set && state.active {
+				s.SetBreakpoint(line + currentLine + 1)
+				break
+			}
+		}
+	}
+
 	select {
 	case s.acknowledged <- true:
 	default:
 	}
 }
 
-func (s *session) SetBreakpoint(line int) {
+func (s *session) SetBreakpoint(line int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if line >= len(s.breakpoints) {
+		return fmt.Errorf("invalid bp line %d", line)
+	}
+	s.breakpoints[line] = breakpoint{set: true, active: true}
 	s.debugConfig = debugConfig{BreakAtLine: line}
+	return nil
 }
 
-func (s *session) RemoveBreakpoint(line int) {
+func (s *session) RemoveBreakpoint(line int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.debugConfig = debugConfig{BreakAtLine: -1}
+
+	if line < 0 || line >= len(s.breakpoints) {
+		return fmt.Errorf("invalid bp line %d", line)
+	}
+	if s.breakpoints[line].NonEmpty() {
+		s.debugConfig = debugConfig{BreakAtLine: -1}
+		s.breakpoints[line] = breakpoint{}
+	}
+	return nil
+}
+
+func (s *session) SetBreakpointsActive(active bool) {
+	for i := 0; i < len(s.breakpoints); i++ {
+		if s.breakpoints[i].NonEmpty() {
+			s.breakpoints[i].active = active
+		}
+	}
+	if !active {
+		s.debugConfig = debugConfig{BreakAtLine: -1}
+	}
 }
 
 func (d *Debugger) getSession(sid string) (s *session, err error) {
@@ -142,11 +179,11 @@ func (d *Debugger) getSession(sid string) (s *session, err error) {
 	return
 }
 
-func (d *Debugger) createSession(sid string, program string, offsets []logic.PCOffset) (s *session) {
+func (d *Debugger) createSession(sid string, program string, line int) (s *session) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	s = makeSession(program, offsets)
+	s = makeSession(program, line)
 	d.sessions[sid] = s
 	return
 }
@@ -169,7 +206,7 @@ func (d *Debugger) AddAdapter(da DebugAdapter) {
 // Register setups new session and notifies frontends if any
 func (d *Debugger) Register(state *logic.DebugState) error {
 	sid := state.ExecID
-	s := d.createSession(sid, state.Disassembly, state.PCOffset)
+	s := d.createSession(sid, state.Disassembly, state.Line)
 
 	// Store the state for this execution
 	d.mu.Lock()
@@ -202,6 +239,7 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 	if err != nil {
 		return err
 	}
+	s.line.Store(state.Line)
 
 	go func() {
 		// Check if we are triggered and acknolwedge asynchronously

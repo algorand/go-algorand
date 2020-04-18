@@ -39,9 +39,8 @@ type cdtSession struct {
 	notifications chan Notification
 	endpoint      cdtTabDescription
 
-	contextID   int
-	scriptID    string
-	breakpoints []breakpoint
+	contextID int
+	scriptID  string
 }
 
 var contextCounter int32 = 0
@@ -50,10 +49,6 @@ var scriptCounter int32 = 0
 func (s *cdtSession) Setup() {
 	s.contextID = int(atomic.AddInt32(&contextCounter, 1))
 	s.scriptID = strconv.Itoa(int(atomic.AddInt32(&scriptCounter, 1)))
-}
-
-func (s *cdtSession) initBreakpoints(size int) {
-	s.breakpoints = make([]breakpoint, size)
 }
 
 func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
@@ -126,9 +121,6 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	func() {
 		dbgStateMu.Lock()
 		defer dbgStateMu.Unlock()
-
-		lines := strings.Split(dbgState.Disassembly, "\n")
-		s.initBreakpoints(len(lines))
 
 		// set immutable items
 		state.Init(dbgState.Disassembly, dbgState.Proto, dbgState.TxnGroup, dbgState.GroupIndex)
@@ -307,16 +299,7 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 				active = true
 			}
 		}
-		log.Printf("Setting all bpx to %v\n", active)
-		for i := 0; i < len(s.breakpoints); i++ {
-			if s.breakpoints[i].NonEmpty() {
-				s.breakpoints[i].active = active
-				log.Printf("Set %d to %v\n", i, active)
-			}
-		}
-		if !active {
-			s.debugger.RemoveBreakpoint(0)
-		}
+		s.debugger.SetBreakpointsActive(active)
 
 		response = ChromeResponse{ID: req.ID, Result: empty}
 	case "Debugger.getPossibleBreakpoints":
@@ -353,25 +336,18 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 		if err != nil {
 			return
 		}
-		if bpLine < 0 || bpLine >= len(s.breakpoints) {
-			err = fmt.Errorf("invalid bp line %d", bpLine)
+		err = s.debugger.RemoveBreakpoint(bpLine)
+		if err != nil {
 			return
-		}
-		if s.breakpoints[bpLine].NonEmpty() {
-			s.debugger.RemoveBreakpoint(0)
-			s.breakpoints[bpLine] = breakpoint{}
 		}
 		response = ChromeResponse{ID: req.ID, Result: empty}
 	case "Debugger.setBreakpointByUrl":
 		p := req.Params.(map[string]interface{})
 		bpLine := int(p["lineNumber"].(float64))
-		lines := strings.Split(state.program, "\n")
-		if bpLine >= len(lines) {
-			err = fmt.Errorf("invalid bp line %d", bpLine)
+		err = s.debugger.SetBreakpoint(bpLine)
+		if err != nil {
 			return
 		}
-		s.breakpoints[bpLine] = breakpoint{set: true, active: true}
-		s.debugger.SetBreakpoint(bpLine)
 
 		result := make(map[string]interface{})
 		result["breakpointId"] = strconv.Itoa(bpLine)
@@ -380,15 +356,6 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 		}
 		response = ChromeResponse{ID: req.ID, Result: result}
 	case "Debugger.resume":
-		currentLine := state.line.Load()
-		if currentLine < len(s.breakpoints) {
-			for line, bpState := range s.breakpoints[currentLine+1:] {
-				if bpState.set && bpState.active {
-					s.debugger.SetBreakpoint(line + currentLine + 1)
-					break
-				}
-			}
-		}
 		state.lastAction.Store("resume")
 		s.debugger.Resume()
 		if state.completed.IsSet() {
