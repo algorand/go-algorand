@@ -129,8 +129,6 @@ cp -p "${PKG_ROOT}/DEBIAN/copyright" "${PKG_ROOT}/usr/share/doc/algorand/copyrig
 OUTPUT="$OUTDIR/algorand_${VER}_${ARCH}.deb"
 dpkg-deb --build "${PKG_ROOT}" "${OUTPUT}"
 
-#sg docker ""${REPO_ROOT}"/docker/release/build_algod_docker.sh ${HOME}/node_pkg/node_${CHANNEL}_${OS}-${ARCH}_${FULLVERSION}.tar.gz"
-
 echo
 date "+build_release end PACKAGE DEB stage %Y%m%d_%H%M%S"
 echo

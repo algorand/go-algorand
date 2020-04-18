@@ -1,0 +1,9 @@
+tasks:
+  - task: shell.Make
+    target: package-docker
+
+jobs:
+  package-docker:
+    tasks:
+      - shell.Make
+

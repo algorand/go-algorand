@@ -37,3 +37,4 @@ echo "algod status"
 goal node status
 
 tail -f /dev/null
+
