@@ -25,12 +25,12 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 
-	"github.com/algorand/go-algorand/data/transactions/logic"
-
+	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
+
+	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
 type cdtSession struct {
@@ -77,7 +77,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	closed := make(chan struct{})
 	registred := make(chan struct{})
 
-	var dbgStateMu sync.Mutex
+	var dbgStateMu deadlock.Mutex
 	var dbgState logic.DebugState
 
 	var state cdtState

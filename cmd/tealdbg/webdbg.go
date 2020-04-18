@@ -24,14 +24,14 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"sync"
 
+	"github.com/algorand/go-deadlock"
 	"github.com/gorilla/mux"
 )
 
 // WebPageAdapter is web page debugger
 type WebPageAdapter struct {
-	mu       sync.Mutex
+	mu       deadlock.Mutex
 	sessions map[string]wpaSession
 }
 

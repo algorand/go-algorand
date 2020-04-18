@@ -19,7 +19,8 @@ package main
 import (
 	"fmt"
 	"strings"
-	"sync"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
@@ -49,9 +50,11 @@ type Control interface {
 
 // Debugger is TEAL event-driven debugger
 type Debugger struct {
-	mu       sync.Mutex
+	mus      deadlock.Mutex
 	sessions map[string]*session
-	das      []DebugAdapter
+
+	mud deadlock.Mutex
+	das []DebugAdapter
 }
 
 // MakeDebugger creates Debugger instance
@@ -67,7 +70,7 @@ type debugConfig struct {
 }
 
 type session struct {
-	mu sync.Mutex
+	mu deadlock.Mutex
 	// Reply to registration/update when bool received on acknolwedgement
 	// channel, allowing program execution to continue
 	acknowledged chan bool
@@ -135,27 +138,36 @@ func (s *session) Step() {
 func (s *session) Resume() {
 	currentLine := s.line.Load()
 
-	if currentLine < len(s.breakpoints) {
-		for line, state := range s.breakpoints[currentLine+1:] {
-			if state.set && state.active {
-				s.SetBreakpoint(line + currentLine + 1)
-				break
+	func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if currentLine < len(s.breakpoints) {
+			for line, state := range s.breakpoints[currentLine+1:] {
+				if state.set && state.active {
+					s.setBreakpoint(line + currentLine + 1)
+					break
+				}
 			}
 		}
-	}
+	}()
+
 	s.resume()
 }
 
-func (s *session) SetBreakpoint(line int) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
+// setBreakpoint must be called with lock taken
+func (s *session) setBreakpoint(line int) error {
 	if line >= len(s.breakpoints) {
 		return fmt.Errorf("invalid bp line %d", line)
 	}
 	s.breakpoints[line] = breakpoint{set: true, active: true}
 	s.debugConfig = debugConfig{BreakAtLine: line}
 	return nil
+}
+
+func (s *session) SetBreakpoint(line int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.setBreakpoint(line)
 }
 
 func (s *session) RemoveBreakpoint(line int) error {
@@ -173,6 +185,9 @@ func (s *session) RemoveBreakpoint(line int) error {
 }
 
 func (s *session) SetBreakpointsActive(active bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	for i := 0; i < len(s.breakpoints); i++ {
 		if s.breakpoints[i].NonEmpty() {
 			s.breakpoints[i].active = active
@@ -184,8 +199,8 @@ func (s *session) SetBreakpointsActive(active bool) {
 }
 
 func (d *Debugger) getSession(sid string) (s *session, err error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.mus.Lock()
+	defer d.mus.Unlock()
 	s, ok := d.sessions[sid]
 	if !ok {
 		err = fmt.Errorf("session %s not found", sid)
@@ -194,8 +209,8 @@ func (d *Debugger) getSession(sid string) (s *session, err error) {
 }
 
 func (d *Debugger) createSession(sid string, program string, line int) (s *session) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.mus.Lock()
+	defer d.mus.Unlock()
 
 	s = makeSession(program, line)
 	d.sessions[sid] = s
@@ -203,8 +218,8 @@ func (d *Debugger) createSession(sid string, program string, line int) (s *sessi
 }
 
 func (d *Debugger) removeSession(sid string) (s *session) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.mus.Lock()
+	defer d.mus.Unlock()
 
 	delete(d.sessions, sid)
 	return
@@ -212,8 +227,8 @@ func (d *Debugger) removeSession(sid string) (s *session) {
 
 // AddAdapter adds a new debugger adapter
 func (d *Debugger) AddAdapter(da DebugAdapter) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
+	d.mud.Lock()
+	defer d.mud.Unlock()
 	d.das = append(d.das, da)
 }
 
@@ -223,11 +238,11 @@ func (d *Debugger) Register(state *logic.DebugState) error {
 	s := d.createSession(sid, state.Disassembly, state.Line)
 
 	// Store the state for this execution
-	d.mu.Lock()
+	d.mud.Lock()
 	for _, da := range d.das {
 		da.SessionStarted(sid, s, s.notifications)
 	}
-	d.mu.Unlock()
+	d.mud.Unlock()
 
 	// TODO: Race or deadlock possible here:
 	// 1. registered sent, context switched
@@ -292,11 +307,11 @@ func (d *Debugger) Complete(state *logic.DebugState) error {
 	// Clean up exec-specific state
 	d.removeSession(sid)
 
-	d.mu.Lock()
+	d.mud.Lock()
 	for _, da := range d.das {
 		da.SessionEnded(sid)
 	}
-	d.mu.Unlock()
+	d.mud.Unlock()
 
 	return nil
 }

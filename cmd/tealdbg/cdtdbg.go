@@ -20,14 +20,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sync"
 
+	"github.com/algorand/go-deadlock"
 	"github.com/gorilla/mux"
 )
 
 // CDTAdapter is Chrome DevTools frontend
 type CDTAdapter struct {
-	mu         sync.Mutex
+	mu         deadlock.Mutex
 	sessions   map[string]cdtSession
 	router     *mux.Router
 	apiAddress string

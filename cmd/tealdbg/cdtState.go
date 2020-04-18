@@ -22,7 +22,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
@@ -39,7 +40,7 @@ type cdtState struct {
 	groupIndex int
 
 	// mutable program state
-	mu      sync.Mutex
+	mu      deadlock.Mutex
 	stack   []v1.TealValue
 	scratch []v1.TealValue
 	pc      atomicInt
