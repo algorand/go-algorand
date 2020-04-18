@@ -41,7 +41,7 @@ type cdtSession struct {
 
 	contextID   int
 	scriptID    string
-	breakpoints []breakpointState
+	breakpoints []breakpoint
 }
 
 var contextCounter int32 = 0
@@ -53,7 +53,7 @@ func (s *cdtSession) Setup() {
 }
 
 func (s *cdtSession) initBreakpoints(size int) {
-	s.breakpoints = make([]breakpointState, size)
+	s.breakpoints = make([]breakpoint, size)
 }
 
 func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
@@ -359,7 +359,7 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 		}
 		if s.breakpoints[bpLine].NonEmpty() {
 			s.debugger.RemoveBreakpoint(0)
-			s.breakpoints[bpLine] = breakpointState{}
+			s.breakpoints[bpLine] = breakpoint{}
 		}
 		response = ChromeResponse{ID: req.ID, Result: empty}
 	case "Debugger.setBreakpointByUrl":
@@ -370,8 +370,8 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 			err = fmt.Errorf("invalid bp line %d", bpLine)
 			return
 		}
-		s.breakpoints[bpLine] = breakpointState{set: true, active: true}
-		s.debugger.SetBreakpointAtLine(bpLine)
+		s.breakpoints[bpLine] = breakpoint{set: true, active: true}
+		s.debugger.SetBreakpoint(bpLine)
 
 		result := make(map[string]interface{})
 		result["breakpointId"] = strconv.Itoa(bpLine)
@@ -384,7 +384,7 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 		if currentLine < len(s.breakpoints) {
 			for line, bpState := range s.breakpoints[currentLine+1:] {
 				if bpState.set && bpState.active {
-					s.debugger.SetBreakpointAtLine(line + currentLine + 1)
+					s.debugger.SetBreakpoint(line + currentLine + 1)
 					break
 				}
 			}
@@ -397,7 +397,7 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 		}
 		response = ChromeResponse{ID: req.ID, Result: empty}
 	case "Debugger.stepOver", "Debugger.stepInto", "Debugger.stepOut":
-		s.debugger.SetBreakpointAtLine(state.line.Load() + 1)
+		s.debugger.SetBreakpoint(state.line.Load() + 1)
 		s.debugger.Resume()
 		state.line.Add(1)
 		state.lastAction.Store("step")

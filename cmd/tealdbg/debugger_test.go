@@ -67,7 +67,7 @@ func (d *testDbgAdapter) eventLoop() {
 				return
 			}
 			if n.Event == "registered" {
-				d.debugger.SetBreakpointAtLine(n.DebugState.Line + 1)
+				d.debugger.SetBreakpoint(n.DebugState.Line + 1)
 			}
 			// simulate user delay to workaround race cond
 			time.Sleep(10 * time.Millisecond)

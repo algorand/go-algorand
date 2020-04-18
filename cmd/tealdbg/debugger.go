@@ -41,10 +41,8 @@ type DebugAdapter interface {
 // Control interface for execution control
 type Control interface {
 	Resume()
-	SetBreakpoint(pc int)
-	SetBreakpointAtLine(line int)
-	RemoveBreakpoint(pc int)
-	RemoveBreakpointAtLine(line int)
+	SetBreakpoint(line int)
+	RemoveBreakpoint(line int)
 }
 
 // Debugger is TEAL event-driven debugger
@@ -63,7 +61,7 @@ func MakeDebugger() *Debugger {
 
 type debugConfig struct {
 	// If -1, don't break
-	BreakOnPC int `json:"breakonpc"`
+	BreakAtLine int `json:"breakatline"`
 }
 
 type session struct {
@@ -83,6 +81,17 @@ type session struct {
 	program string
 	lines   []string
 	offsets []logic.PCOffset
+
+	breakpoints []breakpoint
+}
+
+type breakpoint struct {
+	set    bool
+	active bool
+}
+
+func (bs *breakpoint) NonEmpty() bool {
+	return bs.set
 }
 
 func makeSession(program string, offsets []logic.PCOffset) (s *session) {
@@ -90,7 +99,7 @@ func makeSession(program string, offsets []logic.PCOffset) (s *session) {
 
 	// Allocate a default debugConfig (don't break)
 	s.debugConfig = debugConfig{
-		BreakOnPC: -1,
+		BreakAtLine: -1,
 	}
 
 	// Allocate an acknowledgement and notifications channels
@@ -100,6 +109,7 @@ func makeSession(program string, offsets []logic.PCOffset) (s *session) {
 	s.program = program
 	s.offsets = offsets
 	s.lines = strings.Split(program, "\n")
+	s.breakpoints = make([]breakpoint, len(s.lines))
 	return
 }
 
@@ -110,41 +120,16 @@ func (s *session) Resume() {
 	}
 }
 
-func (s *session) SetBreakpoint(pc int) {
+func (s *session) SetBreakpoint(line int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.debugConfig = debugConfig{BreakOnPC: pc}
+	s.debugConfig = debugConfig{BreakAtLine: line}
 }
 
-func (s *session) SetBreakpointAtLine(line int) {
-	pc := s.lineToPC(line)
-	s.SetBreakpoint(pc)
-}
-
-func (s *session) RemoveBreakpoint(pc int) {
+func (s *session) RemoveBreakpoint(line int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.debugConfig = debugConfig{BreakOnPC: -1}
-}
-
-func (s *session) RemoveBreakpointAtLine(line int) {
-	pc := s.lineToPC(line)
-	s.RemoveBreakpoint(pc)
-}
-
-func (s *session) lineToPC(line int) int {
-	if len(s.offsets) == 0 || line < 1 {
-		return 0
-	}
-
-	offset := len(strings.Join(s.lines[:line], "\n"))
-
-	for i := 0; i < len(s.offsets); i++ {
-		if s.offsets[i].Offset >= offset {
-			return s.offsets[i].PC
-		}
-	}
-	return 0
+	s.debugConfig = debugConfig{BreakAtLine: -1}
 }
 
 func (d *Debugger) getSession(sid string) (s *session, err error) {
@@ -221,8 +206,8 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 	go func() {
 		// Check if we are triggered and acknolwedge asynchronously
 		cfg := s.debugConfig
-		if cfg.BreakOnPC != -1 {
-			if cfg.BreakOnPC == 0 || state.PC == cfg.BreakOnPC {
+		if cfg.BreakAtLine != -1 {
+			if cfg.BreakAtLine == 0 || state.Line == cfg.BreakAtLine {
 				// Breakpoint hit! Inform the user
 				s.notifications <- Notification{"updated", *state}
 			} else {

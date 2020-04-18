@@ -25,15 +25,6 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type breakpointState struct {
-	set    bool
-	active bool
-}
-
-func (bs *breakpointState) NonEmpty() bool {
-	return bs.set
-}
-
 // CDTAdapter is Chrome DevTools frontend
 type CDTAdapter struct {
 	mu         sync.Mutex
