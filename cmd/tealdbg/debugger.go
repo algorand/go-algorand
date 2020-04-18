@@ -104,7 +104,6 @@ func makeSession(program string, offsets []logic.PCOffset) (s *session) {
 }
 
 func (s *session) Resume() {
-	// Try to continue
 	select {
 	case s.acknowledged <- true:
 	default:
@@ -212,6 +211,14 @@ func (d *Debugger) Register(state *logic.DebugState) error {
 		da.SessionStarted(sid, s, s.notifications)
 	}
 	d.mu.Unlock()
+
+	// TODO: Race or deadlock possible here:
+	// 1. registered sent, context switched
+	// 2. Non-blocking Resume() called in onRegistered handler on not ready acknowledged channel
+	// 3. context switched back and blocked on <-s.acknowledged below
+	//
+	// How to fix:
+	// make Resume() synchronous but special handling needed for already completed programs
 
 	// Inform the user to configure execution
 	s.notifications <- Notification{"registered", *state}
