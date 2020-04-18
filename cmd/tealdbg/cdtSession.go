@@ -39,8 +39,10 @@ type cdtSession struct {
 	notifications chan Notification
 	endpoint      cdtTabDescription
 
-	contextID int
-	scriptID  string
+	contextID  int
+	scriptID   string
+	scriptHash string
+	scriptURL  string
 }
 
 var contextCounter int32 = 0
@@ -125,7 +127,11 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		// set immutable items
 		state.Init(dbgState.Disassembly, dbgState.Proto, dbgState.TxnGroup, dbgState.GroupIndex)
 		// mutable
-		state.Update(0, 1, dbgState.Stack, dbgState.Scratch, "")
+		state.Update(dbgState.PC, dbgState.Line, dbgState.Stack, dbgState.Scratch, "")
+
+		hash := sha256.Sum256([]byte(state.program)) // some random hash
+		s.scriptHash = hex.EncodeToString(hash[:])
+		s.scriptURL = fmt.Sprintf("file://%s.teal.js", s.scriptHash)
 	}()
 
 	// Chrome Devtools reader
@@ -204,6 +210,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	// handle CDT window closing without resuming execution
 	// resume and consume a final "completed" notification
 	if !state.completed.IsSet() {
+		s.debugger.SetBreakpointsActive(false)
 		s.debugger.Resume()
 		defer func() {
 			for {
@@ -391,8 +398,6 @@ func (s *cdtSession) computeEvent(state *cdtState) (event interface{}) {
 
 func (s *cdtSession) makeScriptParsedEvent(state *cdtState) DebuggerScriptParsedEvent {
 	// {"method":"Debugger.scriptParsed","params":{"scriptId":"69","url":"internal/dtrace.js","startLine":0,"startColumn":0,"endLine":21,"endColumn":0,"executionContextId":1,"hash":"2e8fbf2f9f6aaa183be557d25f5fbc5b09fae00a","executionContextAuxData":{"isDefault":true},"isLiveEdit":false,"sourceMapURL":"","hasSourceURL":false,"isModule":false,"length":568,"stackTrace":{"callFrames":[{"functionName":"NativeModule.compile","scriptId":"7","url":"internal/bootstrap/loaders.js","lineNumber":298,"columnNumber":15}]}}}
-	hash := sha256.Sum256([]byte(state.program)) // some random hash
-	strHash := hex.EncodeToString(hash[:])
 	progLines := strings.Count(state.program, "\n")
 	length := len(state.program)
 
@@ -400,13 +405,13 @@ func (s *cdtSession) makeScriptParsedEvent(state *cdtState) DebuggerScriptParsed
 		Method: "Debugger.scriptParsed",
 		Params: DebuggerScriptParsedParams{
 			ScriptID:           s.scriptID,
-			URL:                fmt.Sprintf("file://%s.teal.js", strHash),
+			URL:                s.scriptURL,
 			StartLine:          0,
 			StartColumn:        0,
 			EndLine:            progLines,
 			EndColumn:          0,
 			ExecutionContextID: s.contextID,
-			Hash:               strHash,
+			Hash:               s.scriptHash,
 			IsLiveEdit:         false,
 			Length:             length,
 		},
@@ -454,7 +459,7 @@ func (s *cdtSession) makeDebuggerPausedEvent(state *cdtState) DebuggerPausedEven
 			LineNumber:   state.line.Load(),
 			ColumnNumber: 0,
 		},
-		URL:        "file://program.teal.js",
+		URL:        s.scriptURL,
 		ScopeChain: sc,
 	}
 
