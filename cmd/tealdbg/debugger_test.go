@@ -67,9 +67,10 @@ func (d *testDbgAdapter) eventLoop() {
 				return
 			}
 			if n.Event == "registered" {
-				// simulate user delay and allow block on ack channel
-				time.Sleep(10 * time.Millisecond)
+				d.debugger.SetBreakpointAtLine(n.DebugState.Line + 1)
 			}
+			// simulate user delay to workaround race cond
+			time.Sleep(10 * time.Millisecond)
 			d.debugger.Resume()
 		}
 	}
@@ -107,5 +108,5 @@ int 1
 
 	require.True(t, da.started)
 	require.True(t, da.ended)
-	require.Equal(t, 2, da.eventCount) // register + complete
+	require.Equal(t, 3, da.eventCount) // register, update, complete
 }

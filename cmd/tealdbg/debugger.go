@@ -42,7 +42,7 @@ type DebugAdapter interface {
 type Control interface {
 	Resume()
 	SetBreakpoint(pc int)
-	SetBreakpointAtLine(pc int)
+	SetBreakpointAtLine(line int)
 	RemoveBreakpoint(pc int)
 	RemoveBreakpointAtLine(line int)
 }

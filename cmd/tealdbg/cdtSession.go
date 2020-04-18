@@ -427,6 +427,7 @@ func (s *cdtSession) computeEvent(state *cdtState) (event interface{}) {
 func (s *cdtSession) makeScriptParsedEvent(state *cdtState) DebuggerScriptParsedEvent {
 	// {"method":"Debugger.scriptParsed","params":{"scriptId":"69","url":"internal/dtrace.js","startLine":0,"startColumn":0,"endLine":21,"endColumn":0,"executionContextId":1,"hash":"2e8fbf2f9f6aaa183be557d25f5fbc5b09fae00a","executionContextAuxData":{"isDefault":true},"isLiveEdit":false,"sourceMapURL":"","hasSourceURL":false,"isModule":false,"length":568,"stackTrace":{"callFrames":[{"functionName":"NativeModule.compile","scriptId":"7","url":"internal/bootstrap/loaders.js","lineNumber":298,"columnNumber":15}]}}}
 	hash := sha256.Sum256([]byte(state.program)) // some random hash
+	strHash := hex.EncodeToString(hash[:])
 	progLines := strings.Count(state.program, "\n")
 	length := len(state.program)
 
@@ -434,13 +435,13 @@ func (s *cdtSession) makeScriptParsedEvent(state *cdtState) DebuggerScriptParsed
 		Method: "Debugger.scriptParsed",
 		Params: DebuggerScriptParsedParams{
 			ScriptID:           s.scriptID,
-			URL:                "file://program.teal.js",
+			URL:                fmt.Sprintf("file://%s.teal.js", strHash),
 			StartLine:          0,
 			StartColumn:        0,
 			EndLine:            progLines,
 			EndColumn:          0,
 			ExecutionContextID: s.contextID,
-			Hash:               hex.EncodeToString(hash[:]),
+			Hash:               strHash,
 			IsLiveEdit:         false,
 			Length:             length,
 		},
@@ -486,7 +487,7 @@ func (s *cdtSession) makeDebuggerPausedEvent(state *cdtState) DebuggerPausedEven
 		Location: &DebuggerLocation{
 			ScriptID:     s.scriptID,
 			LineNumber:   state.line.Load(),
-			ColumnNumber: progLines,
+			ColumnNumber: 0,
 		},
 		URL:        "file://program.teal.js",
 		ScopeChain: sc,
