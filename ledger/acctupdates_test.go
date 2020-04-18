@@ -344,3 +344,27 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	time.Sleep(time.Second - deltaTime)
 
 }
+
+func BenchmarkBalancesChangesNodesPerPage(b *testing.B) {
+	b.Skip("This benchmark was used to tune up the NodesPerPage; it's not really usefull otherwise")
+	defaultNodesPerPage := merkleCommitterNodesPerPage
+	for nodesPerPage := 32; nodesPerPage < 300; nodesPerPage++ {
+		b.Run(fmt.Sprintf("Test_merkleCommitterNodesPerPage_%d", nodesPerPage), func(b *testing.B) {
+			merkleCommitterNodesPerPage = int64(nodesPerPage)
+			BenchmarkBalancesChanges(b)
+		})
+	}
+	merkleCommitterNodesPerPage = defaultNodesPerPage
+}
+
+func BenchmarkBalancesChangesCacheNodeSize(b *testing.B) {
+	//b.Skip("This benchmark was used to tune up the trieCachedNodesCount; it's not really usefull otherwise")
+	defaultTrieCachedNodesCount := trieCachedNodesCount
+	for cacheSize := 3000; cacheSize < 50000; cacheSize += 1000 {
+		b.Run(fmt.Sprintf("Test_cacheSize_%d", cacheSize), func(b *testing.B) {
+			trieCachedNodesCount = cacheSize
+			BenchmarkBalancesChanges(b)
+		})
+	}
+	trieCachedNodesCount = defaultTrieCachedNodesCount
+}

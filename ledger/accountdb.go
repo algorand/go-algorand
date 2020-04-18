@@ -598,9 +598,9 @@ func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
 	return
 }
 
-const (
-	merkleCommitterNodesPerPage = 128
-)
+// merkleCommitterNodesPerPage controls how many nodes will be stored in a single page
+// value was calibrated using BenchmarkBalancesChangesNodesPerPage
+var merkleCommitterNodesPerPage = int64(116)
 
 type merkleCommitter struct {
 	tx         *sql.Tx

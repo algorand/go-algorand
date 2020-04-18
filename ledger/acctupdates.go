@@ -41,9 +41,11 @@ const (
 	balancesFlushInterval = 5 * time.Second
 	// pendingDeltasFlushThreshold is the deltas count threshold above we flush the pending balances regardless of the flush interval.
 	pendingDeltasFlushThreshold = 128
-	// trieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory.
-	trieCachedNodesCount = 10000
 )
+
+// trieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory.
+// value was calibrated using BenchmarkBalancesChangesCacheNodeSize
+var trieCachedNodesCount = 9000
 
 // A modifiedAccount represents an account that has been modified since
 // the persistent state stored in the account DB (i.e., in the range of
