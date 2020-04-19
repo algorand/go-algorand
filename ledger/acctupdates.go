@@ -170,9 +170,7 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	au.initAccounts = genesisAccounts
 	au.dbDirectory = filepath.Dir(dbPathPrefix)
 	au.archivalLedger = cfg.Archival
-	//au.catchpointInterval = cfg.CatchpointInterval
-	// todo : re-enable this one, as we need to disable it for perf test.
-	au.catchpointInterval = 0
+	au.catchpointInterval = cfg.CatchpointInterval
 	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
 }
 
@@ -622,6 +620,12 @@ func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.
 }
 
 func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Round {
+	committedUpToStart := time.Now()
+	var pendingDeltas int
+	defer func() {
+		totalTime := time.Now().Sub(committedUpToStart)
+		au.log.Infof("committedUpTo: total execution time %d ns flushing %d deltas", totalTime.Nanoseconds(), pendingDeltas)
+	}()
 	lookback := basics.Round(au.protos[len(au.protos)-1].MaxBalLookback)
 	if committedRound < lookback {
 		return 0
@@ -672,7 +676,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 	isCatchpointRound := ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+au.dbRound))) % au.catchpointInterval))
 
 	// calculate the number of pending deltas
-	pendingDeltas := au.deltasAccum[offset-1] - au.deltasAccum[0]
+	pendingDeltas = au.deltasAccum[offset-1] - au.deltasAccum[0]
 
 	// If we recently flushed, wait to aggregate some more blocks.
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
