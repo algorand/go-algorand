@@ -17,6 +17,8 @@ export REPO_DIR="$WORKDIR"
 export GOPATH="$REPO_DIR/go"
 # TODO: Should there be a default network?
 export DEFAULTNETWORK=devnet
+FULLVERSION=$("$REPO_DIR/scripts/compute_build_number.sh" -f)
+export FULLVERSION
 
 DEFAULT_RELEASE_NETWORK=$("$REPO_DIR/scripts/compute_branch_release_network.sh" "${DEFAULTNETWORK}")
 export DEFAULT_RELEASE_NETWORK
@@ -28,7 +30,7 @@ TEMPDIR=$(mktemp -d)
 trap 'rm -rf $TEMPDIR' 0
 < "$REPO_DIR/installer/rpm/algorand.spec" \
     sed -e "s,@PKG_NAME@,${PKG_NAME:-algorand}," \
-        -e "s,@VER@,${FULLVERSION:-6.6.6}," \
+        -e "s,@VER@,$FULLVERSION," \
     > "$TEMPDIR/algorand.spec"
 
 rpmbuild --buildroot "$HOME/foo" --define "_rpmdir $RPMTMP" --define "RELEASE_GENESIS_PROCESS x$RELEASE_GENESIS_PROCESS" --define "LICENSE_FILE ./COPYING" -bb "$TEMPDIR/algorand.spec"
