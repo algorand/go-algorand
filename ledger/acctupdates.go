@@ -170,7 +170,9 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	au.initAccounts = genesisAccounts
 	au.dbDirectory = filepath.Dir(dbPathPrefix)
 	au.archivalLedger = cfg.Archival
-	au.catchpointInterval = cfg.CatchpointInterval
+	//au.catchpointInterval = cfg.CatchpointInterval
+	// todo : re-enable this one, as we need to disable it for perf test.
+	au.catchpointInterval = 0
 	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
 }
 
@@ -267,7 +269,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	// keep these channel closed if we're not generating catchpoint
 	au.catchpointWriting = make(chan struct{}, 1)
 	au.catchpointSlowWriting = make(chan struct{}, 1)
-	if writingCatchpointRound == 0 {
+	if writingCatchpointRound == 0 || au.catchpointInterval == 0 {
 		close(au.catchpointWriting)
 		close(au.catchpointSlowWriting)
 	} else {
@@ -300,6 +302,15 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 	rnd, err := accountsRound(tx)
 	if err != nil {
 		return 0, err
+	}
+
+	if au.catchpointInterval == 0 {
+		// catchpoint is disabled on this node, drop the table so that if it get enabled in the future, we would regenerate the hashes.
+		err = resetAccountHashes(tx)
+		if err != nil {
+			return 0, err
+		}
+		return rnd, nil
 	}
 
 	// create the merkle trie for the balances
@@ -368,6 +379,9 @@ func (au *accountUpdates) rebuildMerkleTrie() (err error) {
 }
 
 func (au *accountUpdates) accountsUpdateBalaces(accountsDeltas map[basics.Address]accountDelta) (err error) {
+	if au.catchpointInterval == 0 {
+		return nil
+	}
 	var added, deleted bool
 	for addr, delta := range accountsDeltas {
 		if !delta.old.IsZero() {
@@ -678,19 +692,21 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 	var committedRoundDigest crypto.Digest
 
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
-		mc, err0 := makeMerkleCommitter(tx, false)
-		if err0 != nil {
-			return err0
-		}
-		if au.balancesTrie == nil {
-			trie, err := merkletrie.MakeTrie(mc, trieCachedNodesCount)
-			if err != nil {
-				au.log.Warnf("unable to create merkle trie during committedUpTo: %v", err)
-				return err
+		if au.catchpointInterval > 0 {
+			mc, err0 := makeMerkleCommitter(tx, false)
+			if err0 != nil {
+				return err0
 			}
-			au.balancesTrie = trie
-		} else {
-			au.balancesTrie.SetCommitter(mc)
+			if au.balancesTrie == nil {
+				trie, err := merkletrie.MakeTrie(mc, trieCachedNodesCount)
+				if err != nil {
+					au.log.Warnf("unable to create merkle trie during committedUpTo: %v", err)
+					return err
+				}
+				au.balancesTrie = trie
+			} else {
+				au.balancesTrie.SetCommitter(mc)
+			}
 		}
 		flushcount = make(map[basics.Address]int)
 		assetFlushcount = make(map[basics.AssetIndex]int)
@@ -700,6 +716,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 			if err != nil {
 				return err
 			}
+
 			err = au.accountsUpdateBalaces(au.deltas[i])
 			if err != nil {
 				return err
@@ -725,9 +742,12 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 		au.log.Warnf("unable to advance account snapshot: %v", err)
 		return au.dbRound
 	}
-	_, err = au.balancesTrie.Evict(false)
-	if err != nil {
-		au.log.Warnf("merkle trie failed to evict: %v", err)
+
+	if au.balancesTrie != nil {
+		_, err = au.balancesTrie.Evict(false)
+		if err != nil {
+			au.log.Warnf("merkle trie failed to evict: %v", err)
+		}
 	}
 
 	// Drop reference counts to modified accounts, and evict them

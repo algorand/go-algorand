@@ -77,7 +77,6 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS assetcreators`,
 	`DROP TABLE IF EXISTS storedcatchpoints`,
 	`DROP TABLE IF EXISTS catchpointstate`,
-	`DROP TABLE IF EXISTS accounthashes`,
 }
 
 type accountDelta struct {
@@ -273,6 +272,11 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 	return nil
 }
 
+func resetAccountHashes(tx *sql.Tx) (err error) {
+	_, err = tx.Exec(`DROP TABLE IF EXISTS accounthashes`)
+	return
+}
+
 func accountsReset(tx *sql.Tx) error {
 	for _, stmt := range accountsResetExprs {
 		_, err := tx.Exec(stmt)
@@ -280,7 +284,7 @@ func accountsReset(tx *sql.Tx) error {
 			return err
 		}
 	}
-	return nil
+	return resetAccountHashes(tx)
 }
 
 func accountsRound(tx *sql.Tx) (rnd basics.Round, err error) {
