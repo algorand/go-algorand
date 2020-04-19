@@ -1,9 +1,25 @@
 tasks:
-  - task: shell.Make
-    target: package-docker
+  - task: docker.Version
+    configFilePath: scripts/configure_dev-deps.sh
+
+  - task: shell.docker.Ensure
+    image: algorand/go-algorand-ci-linux-ubuntu
+    version: '{{ docker.Version.outputs.version }}'
+    dockerFilePath: docker/build/cicd.centos.Dockerfile
+    dependencies: docker.Version
+
+  - task: docker.Make
+    docker:
+      image: algorand/go-algorand-ci-linux-ubuntu
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /projects/go-algorand
+    target: package-docker WORKDIR=/projects/go-algorand
 
 jobs:
   package-docker:
+    configs:
+      arch: amd64
     tasks:
-      - shell.Make
+      - shell.docker.Ensure
+      - docker.Make
 

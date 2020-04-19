@@ -9,13 +9,14 @@ echo
 
 OS_TYPE="$1"
 ARCH="$2"
+WORKDIR="$3"
 
-if [ -z "$OS_TYPE" ] || [ -z "$ARCH" ]; then
-    echo OS and ARCH variables must be defined.
+if [ -z "$OS_TYPE" ] || [ -z "$ARCH" ] || [ -z "$WORKDIR" ]; then
+    echo OS, ARCH and WORKDIR variables must be defined.
     exit 1
 fi
 
-export REPO_DIR="/home/btoll/projects/go-algorand"
+export REPO_DIR="$WORKDIR"
 BRANCH=$("$REPO_DIR/scripts/compute_branch.sh")
 export BRANCH
 CHANNEL=$("$REPO_DIR/scripts/compute_branch_channel.sh" "$BRANCH")
@@ -28,7 +29,7 @@ BRANCH=$("$REPO_DIR/scripts/compute_branch.sh")
 export BRANCH
 CHANNEL=$("$REPO_DIR/scripts/compute_branch_channel.sh" "$BRANCH")
 export CHANNEL
-FULLVERSION="$($REPO_DIR/scripts/compute_build_number.sh -f)"
+FULLVERSION=$("$REPO_DIR/scripts/compute_build_number.sh" -f)
 export FULLVERSION
 
 PKG_ROOT=$(mktemp -d)
