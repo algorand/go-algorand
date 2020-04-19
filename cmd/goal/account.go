@@ -114,15 +114,13 @@ func init() {
 	infoMultisigCmd.MarkFlagRequired("address")
 
 	// Balance flags
-	balanceCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
-	balanceCmd.MarkFlagRequired("address")
+	balanceCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (If not specified, uses default account)")
 
 	// Rewards flags
-	rewardsCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve rewards (required)")
-	rewardsCmd.MarkFlagRequired("address")
+	rewardsCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve rewards (If not specified, uses default account)")
 
 	// changeOnlineStatus flags
-	changeOnlineCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to change (required if no -partkeyfile)")
+	changeOnlineCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to change (required if no -partkeyfile, uses default account if not specified)")
 	changeOnlineCmd.Flags().StringVarP(&partKeyFile, "partkeyfile", "", "", "Participation key file (required if no -account)")
 	changeOnlineCmd.Flags().BoolVarP(&online, "online", "o", true, "Set this account to online or offline")
 	changeOnlineCmd.MarkFlagRequired("online")
@@ -522,7 +520,12 @@ var balanceCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformation(accountAddress)
+		accountList := makeAccountsList(dataDir)
+		if accountAddress == "" {
+			accountAddress = accountList.getDefaultAccount()
+		}
+
+		response, err := client.AccountInformation(accountList.getAddressByName(accountAddress))
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -539,7 +542,11 @@ var rewardsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		response, err := client.AccountInformation(accountAddress)
+		accountList := makeAccountsList(dataDir)
+		if accountAddress == "" {
+			accountAddress = accountList.getDefaultAccount()
+		}
+		response, err := client.AccountInformation(accountList.getAddressByName(accountAddress))
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -555,9 +562,11 @@ var changeOnlineCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
+		dataDir := ensureSingleDataDir()
+		accountList := makeAccountsList(dataDir)
 
-		if accountAddress == "" && partKeyFile == "" {
-			fmt.Printf("Must specify one of --address or --partkeyfile\n")
+		if accountAddress == "" && len(accountList.Accounts) == 0 && partKeyFile == "" {
+			fmt.Printf("Must specify --partkeyfile, --address or have a default account\n")
 			os.Exit(1)
 		}
 
@@ -566,7 +575,6 @@ var changeOnlineCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 
 		var part *algodAcct.Participation
@@ -587,6 +595,11 @@ var changeOnlineCmd = &cobra.Command{
 			if accountAddress == "" {
 				accountAddress = part.Parent.String()
 			}
+		} else {
+			if accountAddress == "" {
+				accountAddress = accountList.getDefaultAccount()
+			}
+			accountAddress = accountList.getAddressByName(accountAddress)
 		}
 
 		firstTxRound, lastTxRound, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
