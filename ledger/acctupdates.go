@@ -626,6 +626,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 		totalTime := time.Now().Sub(committedUpToStart)
 		au.log.Infof("committedUpTo: total execution time %d ns flushing %d deltas", totalTime.Nanoseconds(), pendingDeltas)
 	}()
+
 	lookback := basics.Round(au.protos[len(au.protos)-1].MaxBalLookback)
 	if committedRound < lookback {
 		return 0

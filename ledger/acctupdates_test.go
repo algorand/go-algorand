@@ -277,7 +277,8 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	au := &accountUpdates{initAccounts: accts[0], initProto: proto}
+	au := &accountUpdates{}
+	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
 	err := au.loadFromDisk(ml)
 	require.NoError(b, err)
 
