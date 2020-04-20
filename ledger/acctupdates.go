@@ -709,6 +709,11 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 		return au.dbRound
 	}
 
+	if isCatchpointRound && au.archivalLedger {
+		// we're going to start the catchpoitn generation on a separate go routine, so update it's state variables.
+		au.catchpointWriting = make(chan struct{}, 1)
+		au.catchpointSlowWriting = make(chan struct{}, 1)
+	}
 	au.committedOffset <- offset
 
 	return au.dbRound
@@ -841,8 +846,6 @@ func (au *accountUpdates) commitRound(offset uint64) {
 
 	if isCatchpointRound && au.archivalLedger {
 		// start generating the catchpoint on a separate goroutine.
-		au.catchpointWriting = make(chan struct{}, 1)
-		au.catchpointSlowWriting = make(chan struct{}, 1)
 		go au.generateCatchpoint(basics.Round(offset)+au.dbRound+lookback, catchpointLabel, committedRoundDigest)
 	}
 
