@@ -188,7 +188,9 @@ func TestAcctUpdates(t *testing.T) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	au := &accountUpdates{initAccounts: accts[0], initProto: proto}
+	au := &accountUpdates{}
+	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
+
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
 
@@ -294,7 +296,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		rewardLevel += rewardLevelDelta
 		accountChanges := 0
 		if i <= basics.Round(initialRounds)+basics.Round(b.N) {
-			accountChanges = accountsCount - 2
+			accountChanges = accountsCount - 2 - int(basics.Round(proto.MaxBalLookback+uint64(b.N))+i)
 		}
 
 		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)

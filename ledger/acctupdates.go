@@ -27,6 +27,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
@@ -161,8 +163,12 @@ type accountUpdates struct {
 	// ctx is the canceling function canceling any pending catchpoint generation operation
 	ctxCancel context.CancelFunc
 
-	// deltasAccum stores the accumulated deltas for every round after dbRound.
+	// deltasAccum stores the accumulated deltas for every round after dbRound-1.
 	deltasAccum []int
+
+	committedOffset chan uint64
+
+	accountsMu deadlock.RWMutex
 }
 
 func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, genesisProto config.ConsensusParams, genesisAccounts map[basics.Address]basics.AccountData) {
@@ -242,6 +248,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	au.assetDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
 	au.assets = make(map[basics.AssetIndex]modifiedAsset)
+	au.deltasAccum = []int{0}
 	loaded := au.dbRound
 	var writingCatchpointDigest crypto.Digest
 	for loaded < latest {
@@ -273,7 +280,8 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	} else {
 		go au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest)
 	}
-
+	au.committedOffset = make(chan uint64, 1)
+	go au.commitSyncer()
 	return nil
 }
 
@@ -372,10 +380,6 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 	return rnd, nil
 }
 
-func (au *accountUpdates) rebuildMerkleTrie() (err error) {
-	return nil
-}
-
 func (au *accountUpdates) accountsUpdateBalaces(accountsDeltas map[basics.Address]accountDelta) (err error) {
 	if au.catchpointInterval == 0 {
 		return nil
@@ -411,10 +415,14 @@ func (au *accountUpdates) accountsUpdateBalaces(accountsDeltas map[basics.Addres
 func (au *accountUpdates) accountsCreateCatchpointLabel(tx *sql.Tx, committedRound, balancesRound basics.Round, ledgerBlockDigest crypto.Digest) (label string, err error) {
 	var totals AccountTotals
 	var balancesHash crypto.Digest
-	totals, err = au.totals(balancesRound)
+	var offset uint64
+
+	offset, err = au.roundOffset(balancesRound)
 	if err != nil {
 		return
 	}
+
+	totals = au.roundTotals[offset]
 	balancesHash, err = au.balancesTrie.RootHash()
 	if err != nil {
 		return
@@ -432,6 +440,7 @@ func (au *accountUpdates) close() {
 	if au.ctxCancel != nil {
 		au.ctxCancel()
 	}
+	close(au.committedOffset)
 }
 
 func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err error) {
@@ -450,6 +459,8 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 }
 
 func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return
@@ -493,7 +504,10 @@ func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewa
 }
 
 func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address]basics.AccountData, err error) {
+	au.accountsMu.RLock()
+
 	offsetLimit, err := au.roundOffset(rnd)
+	au.accountsMu.RUnlock()
 	if err != nil {
 		return
 	}
@@ -506,7 +520,8 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 	if err != nil {
 		return
 	}
-
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
 	for offset := uint64(0); offset < offsetLimit; offset++ {
 		for addr, delta := range au.deltas[offset] {
 			bals[addr] = delta.new
@@ -516,6 +531,9 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 }
 
 func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) ([]basics.AssetLocator, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+
 	// Sort indices for assets that have been created/deleted. If this
 	// turns out to be too inefficient, we could keep around a heap of
 	// created/deleted asset indices in memory.
@@ -582,10 +600,14 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 }
 
 func (au *accountUpdates) getLastCatchpointLabel() string {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
 	return au.lastCatchpointLabel
 }
 
 func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.AssetIndex) (basics.Address, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return basics.Address{}, err
@@ -677,7 +699,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 	isCatchpointRound := ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+au.dbRound))) % au.catchpointInterval))
 
 	// calculate the number of pending deltas
-	pendingDeltas = au.deltasAccum[offset-1] - au.deltasAccum[0]
+	pendingDeltas = au.deltasAccum[offset] - au.deltasAccum[0]
 
 	// If we recently flushed, wait to aggregate some more blocks.
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
@@ -686,6 +708,25 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 	if !flushTime.After(au.lastFlushTime.Add(balancesFlushInterval)) && !isCatchpointRound && pendingDeltas < pendingDeltasFlushThreshold {
 		return au.dbRound
 	}
+
+	au.committedOffset <- offset
+
+	return au.dbRound
+}
+
+func (au *accountUpdates) commitSyncer() {
+	for committedOffset := range au.committedOffset {
+		au.commitRound(committedOffset)
+	}
+}
+
+func (au *accountUpdates) commitRound(offset uint64) {
+	au.accountsMu.RLock()
+
+	newBase := basics.Round(offset) + au.dbRound
+	flushTime := time.Now()
+	lookback := basics.Round(au.protos[len(au.protos)-1].MaxBalLookback)
+	isCatchpointRound := ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+au.dbRound))) % au.catchpointInterval))
 
 	// Keep track of how many changes to each account we flush to the
 	// account DB, so that we can drop the corresponding refcounts in
@@ -742,10 +783,10 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 
 		return err
 	})
+
 	if err != nil {
 		au.balancesTrie = nil
 		au.log.Warnf("unable to advance account snapshot: %v", err)
-		return au.dbRound
 	}
 
 	if au.balancesTrie != nil {
@@ -754,6 +795,11 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 			au.log.Warnf("merkle trie failed to evict: %v", err)
 		}
 	}
+
+	au.accountsMu.RUnlock()
+	// switch to full lock, as we're going to modify content.
+	au.accountsMu.Lock()
+	defer au.accountsMu.Unlock()
 
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
@@ -808,11 +854,12 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 	au.assetDeltas = au.assetDeltas[offset:]
 	au.dbRound = newBase
 	au.lastFlushTime = flushTime
-
-	return au.dbRound
 }
 
 func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
+	au.accountsMu.Lock()
+	defer au.accountsMu.Unlock()
+
 	proto := config.Consensus[blk.CurrentProtocol]
 	rnd := blk.Round()
 
@@ -828,11 +875,7 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	au.protos = append(au.protos, proto)
 	au.assetDeltas = append(au.assetDeltas, delta.assets)
 	au.roundDigest = append(au.roundDigest, blk.Digest())
-	var lastDeltasCount int
-	if len(au.deltasAccum) > 0 {
-		lastDeltasCount = au.deltasAccum[len(au.deltasAccum)-1]
-	}
-	au.deltasAccum = append(au.deltasAccum, len(delta.accts)+lastDeltasCount)
+	au.deltasAccum = append(au.deltasAccum, len(delta.accts)+au.deltasAccum[len(au.deltasAccum)-1])
 
 	var ot basics.OverflowTracker
 	newTotals := au.roundTotals[len(au.roundTotals)-1]
@@ -873,6 +916,8 @@ func (au *accountUpdates) latest() basics.Round {
 }
 
 func (au *accountUpdates) totals(rnd basics.Round) (totals AccountTotals, err error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return
