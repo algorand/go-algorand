@@ -15,6 +15,9 @@ func (z ConsensusVersion) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ ConsensusVersion) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(ConsensusVersion)
+	if !ok {
+		_, ok = (z).(*ConsensusVersion)
+	}
 	return ok
 }
 
@@ -58,6 +61,9 @@ func (z Error) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ Error) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(Error)
+	if !ok {
+		_, ok = (z).(*Error)
+	}
 	return ok
 }
 
@@ -101,6 +107,9 @@ func (z HashID) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ HashID) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(HashID)
+	if !ok {
+		_, ok = (z).(*HashID)
+	}
 	return ok
 }
 
@@ -144,6 +153,9 @@ func (z NetworkID) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ NetworkID) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(NetworkID)
+	if !ok {
+		_, ok = (z).(*NetworkID)
+	}
 	return ok
 }
 
@@ -187,6 +199,9 @@ func (z Tag) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ Tag) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(Tag)
+	if !ok {
+		_, ok = (z).(*Tag)
+	}
 	return ok
 }
 
@@ -230,6 +245,9 @@ func (z TxType) MarshalMsg(b []byte) (o []byte, err error) {
 
 func (_ TxType) CanMarshalMsg(z interface{}) bool {
 	_, ok := (z).(TxType)
+	if !ok {
+		_, ok = (z).(*TxType)
+	}
 	return ok
 }
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # shellcheck disable=1090
 
+set -ex
+
 echo
 date "+build_release begin PACKAGE stage %Y%m%d_%H%M%S"
 echo
-
-set -ex
 
 . "${HOME}/build_env"
 

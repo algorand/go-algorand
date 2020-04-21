@@ -97,7 +97,7 @@ func readFile(filename string) ([]byte, error) {
 
 // atomicEncode writes the encoding of [obj] using atomicWrite
 func atomicEncode(filename string, obj interface{}) {
-	atomicWrite(filename, protocol.Encode(obj))
+	atomicWrite(filename, protocol.EncodeReflect(obj))
 }
 
 // readAndDecode reads data from [filename] using readFile, and
@@ -108,7 +108,7 @@ func readAndDecode(filename string, obj interface{}) {
 		panic(fmt.Sprintf("reading %s: %v", filename, err))
 	}
 
-	err = protocol.Decode(data, obj)
+	err = protocol.DecodeReflect(data, obj)
 	if err != nil {
 		panic(fmt.Sprintf("decoding from %s: %v", filename, err))
 	}
@@ -140,7 +140,7 @@ func noteTxn(masterKey *crypto.SignatureSecrets, note auction.NoteField) transac
 			Fee:         basics.MicroAlgos{Raw: *notesFee},
 			FirstValid:  basics.Round(*txnRound),
 			LastValid:   basics.Round(*txnRound + maxTxnLife),
-			Note:        protocol.Encode(note),
+			Note:        protocol.Encode(&note),
 			GenesisHash: genHash,
 		},
 		PaymentTxnFields: transactions.PaymentTxnFields{
@@ -372,7 +372,7 @@ func settleAuction() {
 			Msig: msigBase,
 		}
 
-		paymentData = append(paymentData, protocol.Encode(signedTx)...)
+		paymentData = append(paymentData, protocol.Encode(&signedTx)...)
 	}
 
 	atomicWrite(fmt.Sprintf("auction%d.paymenttx", auctionID), paymentData)

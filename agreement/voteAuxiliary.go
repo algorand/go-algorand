@@ -39,7 +39,7 @@ func (t *voteTrackerPeriod) underlying() listener {
 // A voteTrackerPeriod handles:
 //   - voteAcceptedEvent, which it forwards to the vote tracker. This generates either
 //     a threshold event or an empty event (forwarded to the sender)
-//   - nextThresholds: It updates its next threshodl cache if this
+//   - nextThresholds: It updates its next threshold cache if this
 //     is a new next vote bundle for this period. Emits empty event. (We split this out
 //     so that we can unit test the voteTrackerPeriod trace without depending on the
 //     voteTrackerStep.)
@@ -92,7 +92,8 @@ func (t *voteTrackerPeriod) handle(r routerHandle, p player, e event) event {
 //
 // Bundle "freshness" is an ordering relation defined on thresholdEvents.  The
 // relation is defined as follows:
-//  - thresholdEvents are fresher than thresholdEvents from older periods.
+//  - certThresholds are fresher than other kinds of thresholdEvent.
+//  - other thresholdEvents are fresher than thresholdEvents from older periods.
 //  - nextThresholds are fresher than softThreshold in the same period.
 //  - nextThresholds for the bottom proposal-value are fresher than
 //    nextThresholds for another proposal-value.

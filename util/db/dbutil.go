@@ -26,6 +26,8 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/mattn/go-sqlite3"
@@ -48,6 +50,7 @@ const busy = 1000
 // connection.  For now, it's just an optional "PRAGMA fullfsync=true" on
 // MacOSX.
 var initStatements []string
+var sqliteInitOnce sync.Once
 
 // An Accessor manages a sqlite database handle and any outstanding batching operations.
 type Accessor struct {
@@ -58,30 +61,48 @@ type Accessor struct {
 
 // MakeAccessor creates a new Accessor.
 func MakeAccessor(dbfilename string, readOnly bool, inMemory bool) (Accessor, error) {
-	var db Accessor
-	db.readOnly = readOnly
-
-	var err error
-	db.Handle, err = sql.Open("sqlite3", URI(dbfilename, readOnly, inMemory)+"&_journal_mode=wal")
-
-	if err == nil {
-		err = db.runInitStatements()
-	}
-
-	return db, err
+	return makeAccessorImpl(dbfilename, readOnly, inMemory, []string{"_journal_mode=wal"})
 }
 
 // MakeErasableAccessor creates a new Accessor with the secure_delete pragma set;
 // see https://www.sqlite.org/pragma.html#pragma_secure_delete
 // It is not read-only and not in-memory (otherwise, erasability doesn't matter)
 func MakeErasableAccessor(dbfilename string) (Accessor, error) {
-	var db Accessor
-	db.readOnly = false
+	return makeAccessorImpl(dbfilename, false, false, []string{"_secure_delete=on"})
+}
 
+func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []string) (Accessor, error) {
+	var db Accessor
+	db.readOnly = readOnly
+
+	// SQLite3 driver we use (mattn/go-sqlite3) does not implement driver.DriverContext interface
+	// that forces sql.Open calling sql.OpenDB and return a struct without any touches to the underlying driver.
+	// Because of that SQLite library is not initialized until the very first call of sqlite3_open_v2 that happens
+	// in sql.DB.conn. SQLite initialization is not thread-safe on date of writing (2/27/2020) and
+	// mattn/go-sqlite3 has no special code to handle this case.
+	// Solution is to create a connection using a safe synchronization barrier right here.
+	// The connection goes to a connection pool inside Go's sql package and will be re-used when needed.
+	// See https://github.com/algorand/go-algorand/issues/846 for more details.
 	var err error
-	db.Handle, err = sql.Open("sqlite3", URI(dbfilename, false, false)+"&_secure_delete=on")
+	db.Handle, err = sql.Open("sqlite3", URI(dbfilename, readOnly, inMemory)+"&"+strings.Join(params, "&"))
 
 	if err == nil {
+		// create a connection to safely initialize SQLite once
+		initFn := func() {
+			var conn *sql.Conn
+			if conn, err = db.Handle.Conn(context.Background()); err != nil {
+				db.Close()
+				return
+			}
+			if err = conn.Close(); err != nil {
+				db.Close()
+			}
+		}
+		sqliteInitOnce.Do(initFn)
+		if err != nil {
+			// init failed, db closed and err is set
+			return db, err
+		}
 		err = db.runInitStatements()
 	}
 
@@ -89,11 +110,11 @@ func MakeErasableAccessor(dbfilename string) (Accessor, error) {
 }
 
 // runInitStatements executes initialization statements.
-func (db Accessor) runInitStatements() error {
+func (db *Accessor) runInitStatements() error {
 	for _, stmt := range initStatements {
 		_, err := db.Handle.Exec(stmt)
 		if err != nil {
-			db.Handle.Close()
+			db.Close()
 			return err
 		}
 	}
@@ -114,7 +135,7 @@ func (db *Accessor) logger() logging.Logger {
 }
 
 // Close closes the connection.
-func (db Accessor) Close() {
+func (db *Accessor) Close() {
 	db.Handle.Close()
 	db.Handle = nil
 }
@@ -123,22 +144,20 @@ func (db Accessor) Close() {
 // that indicates database contention that warrants a retry.
 // Sends warnings and errors to log.
 func LoggedRetry(fn func() error, log logging.Logger) (err error) {
-	for i := 0; ; i++ {
-		if i > 0 && i%warnTxRetries == 0 {
-			if i >= 1000 {
-				log.Errorf("db.Retry: %d retries (last err: %v)", i, err)
+	for i := 0; (i == 0) || dbretry(err); i++ {
+		if i > 0 {
+			if i < infoTxRetries {
+				log.Infof("db.LoggedRetry: %d retries (last err: %v)", i, err)
+			} else if i >= 1000 {
+				log.Errorf("db.LoggedRetry: %d retries (last err: %v)", i, err)
 				return
+			} else if i%warnTxRetriesInterval == 0 {
+				log.Warnf("db.LoggedRetry: %d retries (last err: %v)", i, err)
 			}
-			log.Warnf("db.Retry: %d retries (last err: %v)", i, err)
 		}
-
 		err = fn()
-		if dbretry(err) {
-			continue
-		}
-
-		return
 	}
+	return
 }
 
 // Retry executes a function repeatedly as long as it returns an error
@@ -168,7 +187,7 @@ func (db *Accessor) getDecoratedLogger(fn idemFn, extras ...interface{}) logging
 
 // Atomic executes a piece of code with respect to the database atomically.
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
-func (db Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
+func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
 	start := time.Now()
 
 	// note that the sql library will drop panics inside an active transaction
@@ -188,21 +207,38 @@ func (db Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
 	}
 
 	var tx *sql.Tx
-	ctx := context.Background()
 	var conn *sql.Conn
-	conn, err = db.Handle.Conn(ctx)
+	ctx := context.Background()
+
+	for i := 0; (i == 0) || dbretry(err); i++ {
+		if i > 0 {
+			if i < infoTxRetries {
+				db.getDecoratedLogger(fn, extras).Infof("db.atomic: %d connection retries (last err: %v)", i, err)
+			} else if i >= 1000 {
+				db.getDecoratedLogger(fn, extras).Errorf("db.atomic: %d connection retries (last err: %v)", i, err)
+				break
+			} else if i%warnTxRetriesInterval == 0 {
+				db.getDecoratedLogger(fn, extras).Warnf("db.atomic: %d connection retries (last err: %v)", i, err)
+			}
+		}
+		conn, err = db.Handle.Conn(ctx)
+	}
+
 	if err != nil {
 		return
 	}
 	defer conn.Close()
 
 	for i := 0; ; i++ {
-		if i > 0 && i%warnTxRetries == 0 {
-			if i >= 1000 {
-				db.getDecoratedLogger(fn, extras).Errorf("dbatomic: %d retries (last err: %v)", i, err)
+		if i > 0 {
+			if i < infoTxRetries {
+				db.getDecoratedLogger(fn, extras).Infof("db.atomic: %d retries (last err: %v)", i, err)
+			} else if i >= 1000 {
+				db.getDecoratedLogger(fn, extras).Errorf("db.atomic: %d retries (last err: %v)", i, err)
 				break
+			} else if i%warnTxRetriesInterval == 0 {
+				db.getDecoratedLogger(fn, extras).Warnf("db.atomic: %d retries (last err: %v)", i, err)
 			}
-			db.getDecoratedLogger(fn, extras).Warnf("dbatomic: %d retries (last err: %v)", i, err)
 		}
 
 		tx, err = conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: db.readOnly})
@@ -261,4 +297,5 @@ func dbretry(obj error) bool {
 
 type idemFn func(tx *sql.Tx) error
 
-const warnTxRetries = 1
+const infoTxRetries = 5
+const warnTxRetriesInterval = 1

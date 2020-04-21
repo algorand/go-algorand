@@ -1,54 +1,68 @@
 #!/usr/bin/env bash
 
+set -ex
+
 if [ -z "${BUILDTIMESTAMP}" ]; then
     date "+%Y%m%d_%H%M%S" > "${HOME}/buildtimestamp"
     BUILDTIMESTAMP=$(cat "${HOME}/buildtimestamp")
     export BUILDTIMESTAMP
     echo run "${0}" with output to "${HOME}/buildlog_${BUILDTIMESTAMP}"
-    (bash "${0}" "${1}" "${2}" 2>&1) | tee "${HOME}/buildlog_${BUILDTIMESTAMP}"
-    exit 0
+    bash "${0}" "${1}" 2>&1 | tee "${HOME}/buildlog_${BUILDTIMESTAMP}"
+    # http://tldp.org/LDP/abs/html/internalvariables.html#PIPESTATUSREF
+    exit "${PIPESTATUS[0]}"
 fi
 
 echo
 date "+build_release begin SETUP stage %Y%m%d_%H%M%S"
 echo
 
-set -ex
+# `apt-get` fails randomly when downloading package, this is a hack that "works" reasonably well.
+echo -e "deb http://us.archive.ubuntu.com/ubuntu/ bionic main universe multiverse\ndeb http://archive.ubuntu.com/ubuntu/ bionic main universe multiverse" | sudo tee /etc/apt/sources.list.d/ubuntu
 
-GIT_REPO_PATH=https://github.com/algorand/go-algorand
-BRANCH=${1:-"master"}
-export BRANCH
-CHANNEL=${2:-"stable"}
-export CHANNEL
-RELEASE="$3"
-export RELEASE
-export DEBIAN_FRONTEND=noninteractive
+sudo apt-get update
+sudo apt-get upgrade -y
 
-sudo apt-get update -q
-sudo apt-get upgrade -q -y
-sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
+# `apt-get` fails randomly when downloading package, this is a hack that "works" reasonably well.
+sudo apt-get update
+
+sudo apt-get install -y build-essential automake autoconf awscli docker.io git gpg nfs-common python python3 rpm sqlite3 python3-boto3 g++ libtool rng-tools
 sudo rngd -r /dev/urandom
 
 #umask 0077
 mkdir -p "${HOME}"/{.gnupg,dummyaptly,dummyrepo,go,gpgbin,keys,node_pkg,prodrepo}
 mkdir -p "${HOME}"/go/bin
 
+BRANCH=${1:-"master"}
+export BRANCH
+
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"
-cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${BRANCH}" "${GIT_REPO_PATH}" go-algorand
-# TODO: if we are checking out a release tag, `git tag --verify` it
+cd "${HOME}/go/src/github.com/algorand"
+if ! git clone --single-branch --branch "${BRANCH}" https://github.com/algorand/go-algorand go-algorand
+then
+    echo There has been a problem cloning the "$BRANCH" branch.
+    exit 1
+fi
 
-# Install latest Go
+cd go-algorand
+COMMIT_HASH=$(git rev-parse "${BRANCH}")
+
+export DEBIAN_FRONTEND=noninteractive
+
+# Install latest go.1.12.9.
 cd "${HOME}"
-python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
-# $HOME will be interpreted by the outer shell to create the string passed to sudo bash
+if ! curl -O https://dl.google.com/go/go1.12.9.linux-amd64.tar.gz
+then
+    echo Golang could not be installed!
+    exit 1
+fi
 sudo bash -c "cd /usr/local && tar zxf ${HOME}/go*.tar.gz"
 
 GOPATH=$(/usr/local/go/bin/go env GOPATH)
 export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
 export GOPATH
 
-cat <<EOF>"${HOME}/gpgbin/remote_gpg_socket"
+cat << EOF > "${HOME}/gpgbin/remote_gpg_socket"
 export GOPATH=\${HOME}/go
 export PATH=\${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
 gpgconf --list-dirs | grep agent-socket | awk -F: '{ print \$2 }'
@@ -87,11 +101,11 @@ sudo usermod -a -G docker ubuntu
 sg docker "docker pull centos:7"
 sg docker "docker pull ubuntu:18.04"
 
-cat<<EOF>> "${HOME}/.bashrc"
+cat << EOF >> "${HOME}/.bashrc"
 export EDITOR=vi
 EOF
 
-cat<<EOF>> "${HOME}/.profile"
+cat << EOF >> "${HOME}/.profile"
 export GOPATH=\${HOME}/go
 export PATH=\${HOME}/gpgbin:\${GOPATH}/bin:/usr/local/go/bin:\${PATH}
 EOF
@@ -99,7 +113,11 @@ EOF
 # Install aptly for building debian repo
 mkdir -p "$GOPATH/src/github.com/aptly-dev"
 cd "$GOPATH/src/github.com/aptly-dev"
-git clone https://github.com/aptly-dev/aptly
+if ! git clone https://github.com/aptly-dev/aptly
+then
+    echo There has been a problem cloning the aptly project.
+    exit 1
+fi
 cd aptly && git fetch
 
 # As of 2019-06-06 release tag v1.3.0 is 2018-May, GnuPG 2 support was added in October but they haven't tagged a new release yet. Hash below seems to work so far.
@@ -107,12 +125,29 @@ cd aptly && git fetch
 git checkout v1.4.0
 make install
 
+REPO_ROOT="${GOPATH}"/src/github.com/algorand/go-algorand
+PLATFORM=$("${REPO_ROOT}"/scripts/osarchtype.sh)
+PLATFORM_SPLIT=(${PLATFORM//\// })
+
 # a bash user might `source build_env` to manually continue a broken build
-cat <<EOF>>"${HOME}"/build_env
-CHANNEL=${CHANNEL}
-DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
-FULLVERSION=${RELEASE}
+cat << EOF > "${HOME}"/build_env
+export BRANCH=${BRANCH}
+export CHANNEL=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "${BRANCH}")
+export COMMIT_HASH=${COMMIT_HASH}
+export DEFAULTNETWORK=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_branch_network.sh)
+export DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
+export FULLVERSION=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_build_number.sh -f)
+export PKG_ROOT=${HOME}/node_pkg
+export PLATFORM=${PLATFORM}
+export OS=${PLATFORM_SPLIT[0]}
+export ARCH=${PLATFORM_SPLIT[1]}
+export REPO_ROOT=${REPO_ROOT}
+export RELEASE_GENESIS_PROCESS=true
+export VARIATIONS=base
 EOF
+
+# strip leading 'export ' for docker --env-file
+sed 's/^export //g' < "${HOME}"/build_env > "${HOME}"/build_env_docker
 
 echo
 date "+build_release end SETUP stage %Y%m%d_%H%M%S"

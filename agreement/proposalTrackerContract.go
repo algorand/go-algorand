@@ -24,13 +24,13 @@ type proposalTrackerContract struct {
 	SawOneVote       bool
 	Froze            bool
 	SawSoftThreshold bool
-	Expected         proposalValue
+	SawCertThreshold bool
 }
 
 // TODO check concrete types of events
 func (c *proposalTrackerContract) pre(p player, in event) (pre []error) {
 	switch in.t() {
-	case voteVerified, proposalFrozen, softThreshold, voteFilterRequest, readStaging:
+	case voteVerified, proposalFrozen, softThreshold, certThreshold, voteFilterRequest, readStaging:
 	default:
 		pre = append(pre, fmt.Errorf("incoming event has invalid type: %v", in.t()))
 	}
@@ -72,7 +72,7 @@ func (c *proposalTrackerContract) post(p player, in, out event) (post []error) {
 			return
 		}
 
-		if !c.SawOneVote && !c.Froze && !c.SawSoftThreshold {
+		if !c.SawOneVote && !c.Froze && !c.SawSoftThreshold && !c.SawCertThreshold {
 			if out.t() != proposalAccepted {
 				post = append(post, fmt.Errorf("expected first vote to have event type %v; had %v", proposalAccepted, out.t()))
 			} else if out.(proposalAcceptedEvent).Proposal != in.(messageEvent).Input.Vote.R.Proposal {
@@ -80,8 +80,8 @@ func (c *proposalTrackerContract) post(p player, in, out event) (post []error) {
 			}
 		}
 
-		if (c.Froze || c.SawSoftThreshold) && out.t() != voteFiltered {
-			post = append(post, fmt.Errorf("Frozen state = %v and soft threshold state = %v but got event type %v != voteFiltered", c.Froze, c.SawSoftThreshold, out.t()))
+		if (c.Froze || c.SawSoftThreshold || c.SawCertThreshold) && out.t() != voteFiltered {
+			post = append(post, fmt.Errorf("Frozen state = %v and soft threshold state = %v and cert threshold state = %v but got event type %v != voteFiltered", c.Froze, c.SawSoftThreshold, c.SawCertThreshold, out.t()))
 		}
 
 		if !c.SawOneVote {
@@ -103,7 +103,6 @@ func (c *proposalTrackerContract) post(p player, in, out event) (post []error) {
 		}
 
 		c.Froze = true
-		c.Expected = out.(proposalFrozenEvent).Proposal
 	case softThreshold:
 		if out.t() != proposalAccepted {
 			post = append(post, fmt.Errorf("output event from proposalFrozen has bad type: %v", out.t()))
@@ -121,7 +120,19 @@ func (c *proposalTrackerContract) post(p player, in, out event) (post []error) {
 		}
 
 		c.SawSoftThreshold = true
-		c.Expected = out.(proposalAcceptedEvent).Proposal
+	case certThreshold:
+		if out.t() != proposalAccepted {
+			post = append(post, fmt.Errorf("output event from certThreshold has bad type: %v", out.t()))
+		}
+		_, ok := out.(proposalAcceptedEvent)
+		if !ok {
+			post = append(post, fmt.Errorf("output event does not cast to proposalAcceptedEvent: output is %#v", out))
+		}
+		outProp := out.(proposalAcceptedEvent).Proposal
+		if outProp != in.(thresholdEvent).Proposal {
+			post = append(post, fmt.Errorf("expected proposal-value %v; instead got %v", outProp, in.(thresholdEvent).Proposal))
+		}
+		c.SawCertThreshold = true
 	}
 	return
 }

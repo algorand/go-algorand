@@ -1,5 +1,5 @@
 {
-    "Version": 5,
+    "Version": 6,
     "AnnounceParticipationKey": true,
     "Archival": false,
     "BaseLoggerDebugLevel": 4,
@@ -9,6 +9,7 @@
     "CatchupParallelBlocks": 16,
     "ConnectionsRateLimitingCount": 60,
     "ConnectionsRateLimitingWindowSeconds": 1,
+    "DisableOutgoingConnectionThrottling": false,
     "DeadlockDetection": 0,
     "DNSBootstrapID": "<network>.algorand.network",
     "EnableIncomingMessageFilter": false,
@@ -33,6 +34,7 @@
     "NodeExporterPath": "./node_exporter",
     "OutgoingMessageFilterBucketCount": 3,
     "OutgoingMessageFilterBucketSize": 128,
+    "PeerConnectionsUpdateInterval": 3600,
     "PriorityPeers": {},
     "ReconnectTime": 60000000000,
     "ReservedFDs": 256,
@@ -47,5 +49,7 @@
     "TxSyncIntervalSeconds": 60,
     "TxSyncServeResponseSize": 1000000,
     "TxSyncTimeoutSeconds": 30,
-    "PeerConnectionsUpdateInterval": 3600
+    "PeerConnectionsUpdateInterval": 3600,
+    "DNSSecurityFlags": 1,
+    "EnablePingHandler": true
 }

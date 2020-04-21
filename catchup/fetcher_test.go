@@ -221,7 +221,7 @@ func (df *dummyFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data
 		},
 	}
 
-	encodedData := protocol.Encode(dummyBlock)
+	encodedData := protocol.Encode(&dummyBlock)
 
 	select {
 	case <-timer.C:
@@ -770,12 +770,58 @@ func TestGetFutureBlock(t *testing.T) {
 
 // implement network.UnicastPeer
 type testUnicastPeer struct {
-	gn network.GossipNode
-	t  *testing.T
+	gn               network.GossipNode
+	version          string
+	responseChannels map[uint64]chan *network.Response
+	t                *testing.T
 }
 
 func (p *testUnicastPeer) GetAddress() string {
 	return "test"
+}
+
+func (p *testUnicastPeer) Request(ctx context.Context, tag protocol.Tag, topics network.Topics) (resp *network.Response, e error) {
+
+	responseChannel := make(chan *network.Response, 1)
+	p.responseChannels[0] = responseChannel
+
+	ps := p.gn.(*httpTestPeerSource)
+	var dispather network.MessageHandler
+	for _, v := range ps.dispatchHandlers {
+		if v.Tag == tag {
+			dispather = v.MessageHandler
+			break
+		}
+	}
+	require.NotNil(p.t, dispather)
+	dispather.Handle(network.IncomingMessage{Tag: tag, Data: topics.MarshallTopics(), Sender: p, Net: p.gn})
+
+	// wait for the channel.
+	select {
+	case resp = <-responseChannel:
+		return resp, nil
+	case <-ctx.Done():
+		return resp, ctx.Err()
+	}
+}
+
+func (p *testUnicastPeer) Respond(ctx context.Context, reqMsg network.IncomingMessage, responseTopics network.Topics) (e error) {
+
+	hashKey := uint64(0)
+	channel, found := p.responseChannels[hashKey]
+	if !found {
+	}
+
+	select {
+	case channel <- &network.Response{Topics: responseTopics}:
+	default:
+	}
+
+	return nil
+}
+
+func (p *testUnicastPeer) Version() string {
+	return p.version
 }
 
 func (p *testUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.Tag) error {
@@ -792,10 +838,12 @@ func (p *testUnicastPeer) Unicast(ctx context.Context, msg []byte, tag protocol.
 	return nil
 }
 
-func makeTestUnicastPeer(gn network.GossipNode, t *testing.T) network.UnicastPeer {
+func makeTestUnicastPeer(gn network.GossipNode, version string, t *testing.T) network.UnicastPeer {
 	wsp := testUnicastPeer{}
 	wsp.gn = gn
 	wsp.t = t
+	wsp.version = version
+	wsp.responseChannels = make(map[uint64]chan *network.Response)
 	return &wsp
 }
 
@@ -816,40 +864,44 @@ func TestGetBlockWS(t *testing.T) {
 		return
 	}
 
-	net := buildTestHTTPPeerSource()
-	ledgerServiceConfig := config.GetDefaultLocal()
-	ledgerServiceConfig.CatchupParallelBlocks = 5
-	ls := rpcs.RegisterLedgerService(ledgerServiceConfig, ledger, net, "test genesisID")
+	versions := []string{"1", "2.1"}
+	for _, version := range versions { // range network.SupportedProtocolVersions {
 
-	ls.Start()
+		net := buildTestHTTPPeerSource()
+		ledgerServiceConfig := config.GetDefaultLocal()
+		ledgerServiceConfig.CatchupParallelBlocks = 5
+		ls := rpcs.RegisterLedgerService(ledgerServiceConfig, ledger, net, "test genesisID")
 
-	up := makeTestUnicastPeer(net, t)
-	net.peers = append(net.peers, up)
+		ls.Start()
 
-	fs := rpcs.RegisterWsFetcherService(logging.TestingLog(t), net)
+		up := makeTestUnicastPeer(net, version, t)
+		net.peers = append(net.peers, up)
 
-	_, ok := net.GetPeers(network.PeersConnectedIn)[0].(network.UnicastPeer)
-	require.True(t, ok)
-	factory := MakeNetworkFetcherFactory(net, numberOfPeers, fs)
-	factory.log = logging.TestingLog(t)
-	fetcher := factory.NewOverGossip(protocol.UniCatchupReqTag)
-	// we have one peer, the Ws block server
-	require.Equal(t, fetcher.NumPeers(), 1)
+		fs := rpcs.RegisterWsFetcherService(logging.TestingLog(t), net)
 
-	var block *bookkeeping.Block
-	var cert *agreement.Certificate
-	var client FetcherClient
+		_, ok := net.GetPeers(network.PeersConnectedIn)[0].(network.UnicastPeer)
+		require.True(t, ok)
+		factory := MakeNetworkFetcherFactory(net, numberOfPeers, fs)
+		factory.log = logging.TestingLog(t)
+		fetcher := factory.NewOverGossip(protocol.UniCatchupReqTag)
+		// we have one peer, the Ws block server
+		require.Equal(t, fetcher.NumPeers(), 1)
 
-	start := time.Now()
-	block, cert, client, err = fetcher.FetchBlock(context.Background(), next)
-	require.NotNil(t, client)
-	require.NoError(t, err)
-	end := time.Now()
-	require.True(t, end.Sub(start) < 10*time.Second)
-	require.Equal(t, &b, block)
-	if err == nil {
-		require.NotEqual(t, nil, block)
-		require.NotEqual(t, nil, cert)
+		var block *bookkeeping.Block
+		var cert *agreement.Certificate
+		var client FetcherClient
+
+		//		start := time.Now()
+		block, cert, client, err = fetcher.FetchBlock(context.Background(), next)
+		require.NotNil(t, client)
+		require.NoError(t, err)
+		//		end := time.Now()
+		//		require.True(t, end.Sub(start) < 10*time.Second)
+		require.Equal(t, &b, block)
+		if err == nil {
+			require.NotEqual(t, nil, block)
+			require.NotEqual(t, nil, cert)
+		}
+		fetcher.Close()
 	}
-	fetcher.Close()
 }

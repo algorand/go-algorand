@@ -25,7 +25,7 @@ GO_BIN="$(echo "$GOPATH" | cut -d: -f1)/bin"
 MISSING=0
 
 missing_dep() {
-    echo "$YELLOW_FG[WARNING]$END_FG_COLOR Mising dependency \`$TEAL_FG${1}$END_FG_COLOR\`."
+    echo "$YELLOW_FG[WARNING]$END_FG_COLOR Missing dependency \`$TEAL_FG${1}$END_FG_COLOR\`."
     MISSING=1
 }
 
@@ -51,6 +51,12 @@ check_deps() {
     if ! which shellcheck > /dev/null
     then
         missing_dep shellcheck
+    fi
+
+    # Don't print `sqlite3`s location.
+    if ! which sqlite3 > /dev/null
+    then
+        missing_dep sqlite3
     fi
 }
 

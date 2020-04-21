@@ -1,7 +1,0 @@
-stages:
-  release:
-  - task: release.notes.GenerateReleaseNotes
-    releaseVersion: ${GO_ALGORAND_RELEASE_VERSION}
-    githubPatToken: ${GITHUB_PAT_TOKEN}
-    githubRepoFullName: algorand/go-algorand
-

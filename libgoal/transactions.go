@@ -36,7 +36,8 @@ func (c *Client) SignTransactionWithWallet(walletHandle, pw []byte, utx transact
 	}
 
 	// Sign the transaction
-	resp, err := kmd.SignTransaction(walletHandle, pw, utx)
+	// TODO(rekeying): Probably libgoal should allow passing in authaddr
+	resp, err := kmd.SignTransaction(walletHandle, pw, crypto.PublicKey{}, utx)
 	if err != nil {
 		return
 	}
@@ -66,7 +67,7 @@ func (c *Client) SignProgramWithWallet(walletHandle, pw []byte, addr string, pro
 // MultisigSignTransactionWithWallet creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
 // TODO instead of returning MultisigSigs, accept and return blobs
 func (c *Client) MultisigSignTransactionWithWallet(walletHandle, pw []byte, utx transactions.Transaction, signerAddr string, partial crypto.MultisigSig) (msig crypto.MultisigSig, err error) {
-	txBytes := protocol.Encode(utx)
+	txBytes := protocol.Encode(&utx)
 	addr, err := basics.UnmarshalChecksumAddress(signerAddr)
 	if err != nil {
 		return

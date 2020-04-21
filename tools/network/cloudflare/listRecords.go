@@ -27,9 +27,6 @@ import (
 // listDNSRecordRequest creates a new http request for listing of DNS records.
 func listDNSRecordRequest(zoneID string, authEmail string, authKey string, recordType string, name string, content string, page uint, perPage uint, order string, direction string, match string) (*http.Request, error) {
 	// verify and validate input parameters.
-	if recordType == "" {
-		recordType = "A"
-	}
 	if page == 0 {
 		page = 1
 	}
@@ -48,7 +45,9 @@ func listDNSRecordRequest(zoneID string, authEmail string, authKey string, recor
 
 	// build all the arguments
 	uriValues := make(url.Values)
-	uriValues.Add("type", recordType)
+	if len(recordType) > 0 {
+		uriValues.Add("type", recordType)
+	}
 	if len(name) > 0 {
 		uriValues.Add("name", name)
 	}
@@ -127,7 +126,7 @@ func parseListDNSRecordResponse(response *http.Response) (*ListDNSRecordResponse
 	}
 	var parsedResponse ListDNSRecordResponse
 	if err := json.Unmarshal(body, &parsedResponse); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to unmarshal response body '%s' : %v", string(body), err)
 	}
 	return &parsedResponse, nil
 }
