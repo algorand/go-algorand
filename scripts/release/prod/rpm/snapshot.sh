@@ -47,7 +47,7 @@ createrepo --database /root/prodrepo
 rm -f /root/prodrepo/repodata/repomd.xml.asc
 gpg -u rpm@algorand.com --detach-sign --armor /root/prodrepo/repodata/repomd.xml
 
-aws s3 sync --quiet /root/prodrepo/ s3://ben-test-2.0.3/rpm/stable/
+aws s3 sync --quiet /root/prodrepo/ s3://algorand-releases/rpm/stable/
 
 echo CENTOS_DOCKER_SNAPSHOT_OK
 
