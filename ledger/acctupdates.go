@@ -151,19 +151,19 @@ type accountUpdates struct {
 	// dbDirectory is the directory where the ledger and block sql file resides as well as the parent directroy for the catchup files to be generated
 	dbDirectory string
 
-	// the configured interval at which we generate catchpoints
+	// catchpointInterval is the configured interval at which the accountUpdates would generate catchpoint labels and catchpoint files.
 	catchpointInterval uint64
 
-	// was the ledger configured as an archival ledger ?
+	// archivalLedger determines whether the associated ledger was configured as archival ledger or not.
 	archivalLedger bool
 
 	// ctx is the context for canceling any pending catchpoint generation operation
 	ctx context.Context
 
-	// ctx is the canceling function canceling any pending catchpoint generation operation
+	// ctxCancel is the canceling function canceling any pending catchpoint generation operation
 	ctxCancel context.CancelFunc
 
-	// deltasAccum stores the accumulated deltas for every round after dbRound-1.
+	// deltasAccum stores the accumulated deltas for every round starting dbRound-1.
 	deltasAccum []int
 
 	committedOffset chan uint64
@@ -171,6 +171,7 @@ type accountUpdates struct {
 	accountsMu deadlock.RWMutex
 }
 
+// initialize initializes the accountUpdates structure
 func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, genesisProto config.ConsensusParams, genesisAccounts map[basics.Address]basics.AccountData) {
 	au.initProto = genesisProto
 	au.initAccounts = genesisAccounts
@@ -180,6 +181,8 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
 }
 
+// loadFromDisk is the 2nd level initializtion, and is required before the accountUpdates becomes functional
+// The close function is expected to be call in pair with loadFromDisk
 func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	var writingCatchpointRound uint64
 	au.dbs = l.trackerDB()
@@ -285,177 +288,11 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	return nil
 }
 
-// accountHashBuilder calculates the hash key used for the trie by combining the account address and the account data
-func accountHashBuilder(addr basics.Address, accountData basics.AccountData, encodedAccountData []byte) []byte {
-	hash := make([]byte, 4+crypto.DigestSize)
-	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
-	// recent updated to be in-cache, and "older" nodes will be left alone.
-	for i, rewards := 3, accountData.RewardsBase; i >= 0; i, rewards = i-1, rewards>>8 {
-		hash[i] = byte(accountData.RewardsBase & 0x255)
-	}
-	entryHash := crypto.Hash(append(addr[:], encodedAccountData[:]...))
-	copy(hash[4:], entryHash[:])
-	return hash[:]
-}
-
-// Initialize accounts DB if needed and return account round
-func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
-	err := accountsInit(tx, au.initAccounts, au.initProto)
-	if err != nil {
-		return 0, err
-	}
-
-	rnd, err := accountsRound(tx)
-	if err != nil {
-		return 0, err
-	}
-
-	if au.catchpointInterval == 0 {
-		// catchpoint is disabled on this node, drop the table so that if it get enabled in the future, we would regenerate the hashes.
-		err = resetAccountHashes(tx)
-		if err != nil {
-			return 0, err
-		}
-		return rnd, nil
-	}
-
-	// create the merkle trie for the balances
-	committer, err := makeMerkleCommitter(tx, false)
-	if err != nil {
-		return 0, fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
-	}
-	trie, err := merkletrie.MakeTrie(committer, trieCachedNodesCount)
-	if err != nil {
-		return 0, fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
-	}
-
-	// we migth have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
-	// we can figure this out by examinine the hash of the root:
-	rootHash, err := trie.RootHash()
-	if err != nil {
-		return rnd, fmt.Errorf("accountsInitialize was unable to retrieve trie root hash: %v", err)
-	}
-	if rootHash.IsZero() {
-		accountIdx := 0
-		for {
-			bal, err := encodedAccountsRange(tx, accountIdx, balancesChunkReadSize)
-			if err != nil {
-				return rnd, err
-			}
-			if len(bal) == 0 {
-				break
-			}
-			for _, balance := range bal {
-				addrBytes, accountBytes := balance.Address, balance.AccountData
-				var addr basics.Address
-				copy(addr[:], addrBytes)
-				var accountData basics.AccountData
-				err = protocol.Decode(accountBytes, &accountData)
-				if err != nil {
-					return rnd, err
-				}
-				hash := accountHashBuilder(addr, accountData, accountBytes)
-				added, err := trie.Add(hash)
-				if err != nil {
-					return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
-				}
-				if !added {
-					au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.", hash)
-				}
-			}
-
-			// this trie Evict will commit using the current transaction.
-			// if anything goes wrong, it will still get rolled back.
-			_, err = trie.Evict(true)
-			if err != nil {
-				return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
-			}
-			if len(bal) < balancesChunkReadSize {
-				break
-			}
-			accountIdx += balancesChunkReadSize
-		}
-	}
-	au.balancesTrie = trie
-	return rnd, nil
-}
-
-func (au *accountUpdates) accountsUpdateBalaces(accountsDeltas map[basics.Address]accountDelta) (err error) {
-	if au.catchpointInterval == 0 {
-		return nil
-	}
-	var added, deleted bool
-	for addr, delta := range accountsDeltas {
-		if !delta.old.IsZero() {
-			deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
-			deleted, err = au.balancesTrie.Delete(deleteHash)
-			if err != nil {
-				return err
-			}
-			if !deleted {
-				au.log.Warnf("failed to delete hash '%v' from merkle trie", deleteHash)
-			}
-		}
-		if !delta.new.IsZero() {
-			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
-			added, err = au.balancesTrie.Add(addHash)
-			if err != nil {
-				return err
-			}
-			if !added {
-				au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", addHash)
-			}
-		}
-	}
-	// write it all to disk.
-	err = au.balancesTrie.Commit()
-	return
-}
-
-func (au *accountUpdates) accountsCreateCatchpointLabel(tx *sql.Tx, committedRound, balancesRound basics.Round, ledgerBlockDigest crypto.Digest) (label string, err error) {
-	var totals AccountTotals
-	var balancesHash crypto.Digest
-	var offset uint64
-
-	offset, err = au.roundOffset(balancesRound)
-	if err != nil {
-		return
-	}
-
-	totals = au.roundTotals[offset]
-	balancesHash, err = au.balancesTrie.RootHash()
-	if err != nil {
-		return
-	}
-	cpLabel := makeCatchpointLabel(committedRound, ledgerBlockDigest, balancesHash, totals)
-	label = cpLabel.String()
-	_, err = writeCatchpointStateString(context.Background(), tx, "lastCatchpoint", label)
-	if err == nil {
-		au.lastCatchpointLabel = label
-	}
-	return
-}
-
 func (au *accountUpdates) close() {
 	if au.ctxCancel != nil {
 		au.ctxCancel()
 	}
 	close(au.committedOffset)
-}
-
-func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err error) {
-	if rnd < au.dbRound {
-		err = fmt.Errorf("round %d before dbRound %d", rnd, au.dbRound)
-		return
-	}
-
-	off := uint64(rnd - au.dbRound)
-	if off > uint64(len(au.deltas)) {
-		err = fmt.Errorf("round %d too high: dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
-		return
-	}
-
-	return off, nil
 }
 
 func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
@@ -642,6 +479,8 @@ func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.
 }
 
 func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Round {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
 	committedUpToStart := time.Now()
 	var pendingDeltas int
 	defer func() {
@@ -714,9 +553,297 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 		au.catchpointWriting = make(chan struct{}, 1)
 		au.catchpointSlowWriting = make(chan struct{}, 1)
 	}
-	au.committedOffset <- offset
 
+	au.accountsMu.RUnlock()
+	au.committedOffset <- offset
+	time.Sleep(200 * time.Millisecond)
+	au.accountsMu.RLock()
 	return au.dbRound
+}
+
+func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
+	au.accountsMu.Lock()
+	defer au.accountsMu.Unlock()
+
+	proto := config.Consensus[blk.CurrentProtocol]
+	rnd := blk.Round()
+
+	if rnd <= au.latest() {
+		// Duplicate, ignore.
+		return
+	}
+
+	if rnd != au.latest()+1 {
+		au.log.Panicf("accountUpdates: newBlock %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
+	}
+	au.deltas = append(au.deltas, delta.accts)
+	au.protos = append(au.protos, proto)
+	au.assetDeltas = append(au.assetDeltas, delta.assets)
+	au.roundDigest = append(au.roundDigest, blk.Digest())
+	au.deltasAccum = append(au.deltasAccum, len(delta.accts)+au.deltasAccum[len(au.deltasAccum)-1])
+
+	var ot basics.OverflowTracker
+	newTotals := au.roundTotals[len(au.roundTotals)-1]
+	allBefore := newTotals.All()
+	newTotals.applyRewards(delta.hdr.RewardsLevel, &ot)
+
+	for addr, data := range delta.accts {
+		newTotals.delAccount(proto, data.old, &ot)
+		newTotals.addAccount(proto, data.new, &ot)
+
+		macct := au.accounts[addr]
+		macct.ndeltas++
+		macct.data = data.new
+		au.accounts[addr] = macct
+	}
+
+	for aidx, adelta := range delta.assets {
+		masset := au.assets[aidx]
+		masset.creator = adelta.creator
+		masset.created = adelta.created
+		masset.ndeltas++
+		au.assets[aidx] = masset
+	}
+
+	if ot.Overflowed {
+		au.log.Panicf("accountUpdates: newBlock %d overflowed totals", rnd)
+	}
+	allAfter := newTotals.All()
+	if allBefore != allAfter {
+		au.log.Panicf("accountUpdates: sum of money changed from %d to %d", allBefore.Raw, allAfter.Raw)
+	}
+
+	au.roundTotals = append(au.roundTotals, newTotals)
+}
+
+func (au *accountUpdates) totals(rnd basics.Round) (totals AccountTotals, err error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return
+	}
+
+	totals = au.roundTotals[offset]
+	return
+}
+
+func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser, error) {
+	dbFileName := ""
+	err := au.dbs.rdb.Atomic(func(tx *sql.Tx) (err error) {
+		dbFileName, _, _, err = getCatchpoint(tx, round)
+		return
+	})
+	if err != nil && err != sql.ErrNoRows {
+		// we had some sql error.
+		return nil, fmt.Errorf("catchpointTracker: getCatchpointStream: unable to lookup catchpoint %d: %v", round, err)
+	}
+	if dbFileName != "" {
+		catchpointPath := filepath.Join(au.dbDirectory, dbFileName)
+		file, err := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
+		if err == nil && file != nil {
+			return file, nil
+		}
+		// else, see if this is a file-not-found error
+		if os.IsNotExist(err) {
+			// the database told us that we have this file.. but we couldn't find it.
+			// delete it from the database.
+			err := au.saveCatchpointFile(round, "", 0, "")
+			if err != nil {
+				au.log.Warnf("catchpointTracker: getCatchpointStream: unable to delete missing catchpoint entry: %v", err)
+				return nil, err
+			}
+
+			return nil, ErrNoEntry{}
+		}
+		// it's some other error.
+		return nil, fmt.Errorf("catchpointTracker: getCatchpointStream: unable to open catchpoint file '%s' %v", catchpointPath, err)
+	}
+
+	// if the database doesn't know about that round, see if we have that file anyway:
+	fileName := filepath.Join("catchpoints", catchpointRoundToPath(round))
+	catchpointPath := filepath.Join(au.dbDirectory, fileName)
+	file, err := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
+	if err == nil && file != nil {
+		// great, if found that we should have had this in the database.. add this one now :
+		fileInfo, err := file.Stat()
+		if err != nil {
+			// we couldn't get the stat, so just return with the file.
+			return file, nil
+		}
+
+		au.saveCatchpointFile(round, fileName, fileInfo.Size(), "")
+		return file, nil
+	}
+	return nil, ErrNoEntry{}
+}
+
+// functions below this line are all internal functions
+
+// accountHashBuilder calculates the hash key used for the trie by combining the account address and the account data
+func accountHashBuilder(addr basics.Address, accountData basics.AccountData, encodedAccountData []byte) []byte {
+	hash := make([]byte, 4+crypto.DigestSize)
+	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
+	// recent updated to be in-cache, and "older" nodes will be left alone.
+	for i, rewards := 3, accountData.RewardsBase; i >= 0; i, rewards = i-1, rewards>>8 {
+		hash[i] = byte(accountData.RewardsBase & 0x255)
+	}
+	entryHash := crypto.Hash(append(addr[:], encodedAccountData[:]...))
+	copy(hash[4:], entryHash[:])
+	return hash[:]
+}
+
+// Initialize accounts DB if needed and return account round
+func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
+	err := accountsInit(tx, au.initAccounts, au.initProto)
+	if err != nil {
+		return 0, err
+	}
+
+	rnd, err := accountsRound(tx)
+	if err != nil {
+		return 0, err
+	}
+
+	if au.catchpointInterval == 0 {
+		// catchpoint is disabled on this node, drop the table so that if it get enabled in the future, we would regenerate the hashes.
+		err = resetAccountHashes(tx)
+		if err != nil {
+			return 0, err
+		}
+		return rnd, nil
+	}
+
+	// create the merkle trie for the balances
+	committer, err := makeMerkleCommitter(tx, false)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
+	}
+	trie, err := merkletrie.MakeTrie(committer, trieCachedNodesCount)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
+	}
+
+	// we migth have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
+	// we can figure this out by examinine the hash of the root:
+	rootHash, err := trie.RootHash()
+	if err != nil {
+		return rnd, fmt.Errorf("accountsInitialize was unable to retrieve trie root hash: %v", err)
+	}
+	if rootHash.IsZero() {
+		accountIdx := 0
+		for {
+			bal, err := encodedAccountsRange(tx, accountIdx, balancesChunkReadSize)
+			if err != nil {
+				return rnd, err
+			}
+			if len(bal) == 0 {
+				break
+			}
+			for _, balance := range bal {
+				addrBytes, accountBytes := balance.Address, balance.AccountData
+				var addr basics.Address
+				copy(addr[:], addrBytes)
+				var accountData basics.AccountData
+				err = protocol.Decode(accountBytes, &accountData)
+				if err != nil {
+					return rnd, err
+				}
+				hash := accountHashBuilder(addr, accountData, accountBytes)
+				added, err := trie.Add(hash)
+				if err != nil {
+					return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
+				}
+				if !added {
+					au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.", hash)
+				}
+			}
+
+			// this trie Evict will commit using the current transaction.
+			// if anything goes wrong, it will still get rolled back.
+			_, err = trie.Evict(true)
+			if err != nil {
+				return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
+			}
+			if len(bal) < balancesChunkReadSize {
+				break
+			}
+			accountIdx += balancesChunkReadSize
+		}
+	}
+	au.balancesTrie = trie
+	return rnd, nil
+}
+
+func (au *accountUpdates) accountsUpdateBalaces(accountsDeltas map[basics.Address]accountDelta) (err error) {
+	if au.catchpointInterval == 0 {
+		return nil
+	}
+	var added, deleted bool
+	for addr, delta := range accountsDeltas {
+		if !delta.old.IsZero() {
+			deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
+			deleted, err = au.balancesTrie.Delete(deleteHash)
+			if err != nil {
+				return err
+			}
+			if !deleted {
+				au.log.Warnf("failed to delete hash '%v' from merkle trie", deleteHash)
+			}
+		}
+		if !delta.new.IsZero() {
+			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
+			added, err = au.balancesTrie.Add(addHash)
+			if err != nil {
+				return err
+			}
+			if !added {
+				au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", addHash)
+			}
+		}
+	}
+	// write it all to disk.
+	err = au.balancesTrie.Commit()
+	return
+}
+
+func (au *accountUpdates) accountsCreateCatchpointLabel(tx *sql.Tx, committedRound, balancesRound basics.Round, ledgerBlockDigest crypto.Digest) (label string, err error) {
+	var totals AccountTotals
+	var balancesHash crypto.Digest
+	var offset uint64
+
+	offset, err = au.roundOffset(balancesRound)
+	if err != nil {
+		return
+	}
+
+	totals = au.roundTotals[offset]
+	balancesHash, err = au.balancesTrie.RootHash()
+	if err != nil {
+		return
+	}
+	cpLabel := makeCatchpointLabel(committedRound, ledgerBlockDigest, balancesHash, totals)
+	label = cpLabel.String()
+	_, err = writeCatchpointStateString(context.Background(), tx, "lastCatchpoint", label)
+	if err == nil {
+		au.lastCatchpointLabel = label
+	}
+	return
+}
+
+func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err error) {
+	if rnd < au.dbRound {
+		err = fmt.Errorf("round %d before dbRound %d", rnd, au.dbRound)
+		return
+	}
+
+	off := uint64(rnd - au.dbRound)
+	if off > uint64(len(au.deltas)) {
+		err = fmt.Errorf("round %d too high: dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
+		return
+	}
+
+	return off, nil
 }
 
 func (au *accountUpdates) commitSyncer() {
@@ -859,75 +986,8 @@ func (au *accountUpdates) commitRound(offset uint64) {
 	au.lastFlushTime = flushTime
 }
 
-func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
-	au.accountsMu.Lock()
-	defer au.accountsMu.Unlock()
-
-	proto := config.Consensus[blk.CurrentProtocol]
-	rnd := blk.Round()
-
-	if rnd <= au.latest() {
-		// Duplicate, ignore.
-		return
-	}
-
-	if rnd != au.latest()+1 {
-		au.log.Panicf("accountUpdates: newBlock %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
-	}
-	au.deltas = append(au.deltas, delta.accts)
-	au.protos = append(au.protos, proto)
-	au.assetDeltas = append(au.assetDeltas, delta.assets)
-	au.roundDigest = append(au.roundDigest, blk.Digest())
-	au.deltasAccum = append(au.deltasAccum, len(delta.accts)+au.deltasAccum[len(au.deltasAccum)-1])
-
-	var ot basics.OverflowTracker
-	newTotals := au.roundTotals[len(au.roundTotals)-1]
-	allBefore := newTotals.All()
-	newTotals.applyRewards(delta.hdr.RewardsLevel, &ot)
-
-	for addr, data := range delta.accts {
-		newTotals.delAccount(proto, data.old, &ot)
-		newTotals.addAccount(proto, data.new, &ot)
-
-		macct := au.accounts[addr]
-		macct.ndeltas++
-		macct.data = data.new
-		au.accounts[addr] = macct
-	}
-
-	for aidx, adelta := range delta.assets {
-		masset := au.assets[aidx]
-		masset.creator = adelta.creator
-		masset.created = adelta.created
-		masset.ndeltas++
-		au.assets[aidx] = masset
-	}
-
-	if ot.Overflowed {
-		au.log.Panicf("accountUpdates: newBlock %d overflowed totals", rnd)
-	}
-	allAfter := newTotals.All()
-	if allBefore != allAfter {
-		au.log.Panicf("accountUpdates: sum of money changed from %d to %d", allBefore.Raw, allAfter.Raw)
-	}
-
-	au.roundTotals = append(au.roundTotals, newTotals)
-}
-
 func (au *accountUpdates) latest() basics.Round {
 	return au.dbRound + basics.Round(len(au.deltas))
-}
-
-func (au *accountUpdates) totals(rnd basics.Round) (totals AccountTotals, err error) {
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return
-	}
-
-	totals = au.roundTotals[offset]
-	return
 }
 
 func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label string, committedRoundDigest crypto.Digest) {
@@ -1006,57 +1066,7 @@ func catchpointRoundToPath(rnd basics.Round) string {
 	return outStr
 }
 
-func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser, error) {
-	dbFileName := ""
-	err := au.dbs.rdb.Atomic(func(tx *sql.Tx) (err error) {
-		dbFileName, _, _, err = getCatchpoint(tx, round)
-		return
-	})
-	if err != nil && err != sql.ErrNoRows {
-		// we had some sql error.
-		return nil, fmt.Errorf("catchpointTracker: getCatchpointStream: unable to lookup catchpoint %d: %v", round, err)
-	}
-	if dbFileName != "" {
-		catchpointPath := filepath.Join(au.dbDirectory, dbFileName)
-		file, err := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
-		if err == nil && file != nil {
-			return file, nil
-		}
-		// else, see if this is a file-not-found error
-		if os.IsNotExist(err) {
-			// the database told us that we have this file.. but we couldn't find it.
-			// delete it from the database.
-			err := au.saveCatchpoint(round, "", 0, "")
-			if err != nil {
-				au.log.Warnf("catchpointTracker: getCatchpointStream: unable to delete missing catchpoint entry: %v", err)
-				return nil, err
-			}
-
-			return nil, ErrNoEntry{}
-		}
-		// it's some other error.
-		return nil, fmt.Errorf("catchpointTracker: getCatchpointStream: unable to open catchpoint file '%s' %v", catchpointPath, err)
-	}
-
-	// if the database doesn't know about that round, see if we have that file anyway:
-	fileName := filepath.Join("catchpoints", catchpointRoundToPath(round))
-	catchpointPath := filepath.Join(au.dbDirectory, fileName)
-	file, err := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
-	if err == nil && file != nil {
-		// great, if found that we should have had this in the database.. add this one now :
-		fileInfo, err := file.Stat()
-		if err != nil {
-			// we couldn't get the stat, so just return with the file.
-			return file, nil
-		}
-
-		au.saveCatchpoint(round, fileName, fileInfo.Size(), "")
-		return file, nil
-	}
-	return nil, ErrNoEntry{}
-}
-
-func (au *accountUpdates) saveCatchpoint(round basics.Round, fileName string, fileSize int64, catchpoint string) (err error) {
+func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string, fileSize int64, catchpoint string) (err error) {
 	err = au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
 		err = storeCatchpoint(tx, round, fileName, catchpoint, fileSize)
 		return
