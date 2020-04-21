@@ -285,6 +285,26 @@ func genBigNoOp(numOps uint32) []byte {
 	return progBytes
 }
 
+func genBigHashes(numHashes int, numPad int) []byte {
+	var progParts []string
+	progParts = append(progParts, `byte base64 AA==`)
+	for i := 0; i < numHashes; i++ {
+		progParts = append(progParts, `sha256`)
+	}
+	for i := 0; i < numPad/2; i++ {
+		progParts = append(progParts, `int 1`)
+		progParts = append(progParts, `pop`)
+	}
+	progParts = append(progParts, `int 1`)
+	progParts = append(progParts, `return`)
+	progAsm := strings.Join(progParts, "\n")
+	progBytes, err := logic.AssembleString(progAsm)
+	if err != nil {
+		panic(err)
+	}
+	return progBytes
+}
+
 func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (appParams map[uint64]v1.AppParams, err error) {
 	// get existing apps
 	account, accountErr := client.AccountInformation(cfg.SrcAccount)
@@ -307,7 +327,18 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 	for i := 0; i < toCreate; i++ {
 		var tx transactions.Transaction
 
-		prog := genBigNoOp(cfg.AppProgOps)
+		var prog []byte
+		switch cfg.AppProgOps {
+		case 10:
+			prog = genBigHashes(10, 625)
+		case 200:
+			prog = genBigHashes(25, 520)
+		case 696:
+			prog = genBigHashes(50, 344)
+		default:
+			panic("unexpected AppProgOps")
+		}
+
 		schema := basics.StateSchema{}
 		tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, schema, schema, nil, nil, nil)
 		if err != nil {
