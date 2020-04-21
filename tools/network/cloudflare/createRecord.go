@@ -149,7 +149,7 @@ func parseCreateDNSRecordResponse(response *http.Response) (*CreateDNSRecordResp
 		return nil, err
 	}
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Response status code %d", response.StatusCode)
+		return nil, fmt.Errorf("Response status code %d; body = %s", response.StatusCode, string(body))
 	}
 	var parsedReponse CreateDNSRecordResponse
 	if err := json.Unmarshal(body, &parsedReponse); err != nil {
