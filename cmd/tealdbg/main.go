@@ -18,7 +18,9 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
@@ -43,9 +45,9 @@ with Web or Chrome DevTools frontends`,
 }
 
 var debugCmd = &cobra.Command{
-	Use:   "debug",
-	Short: "Debug a local TEAL program",
-	Long:  `Debug a local TEAL program in controlled environment`,
+	Use:   "debug program.tok [program.teal ...]",
+	Short: "Debug a local TEAL program(s)",
+	Long:  `Debug a local TEAL program(s) in controlled environment`,
 	Run: func(cmd *cobra.Command, args []string) {
 		debugLocal(args)
 		// //If no arguments passed, we should fallback to help
@@ -62,32 +64,42 @@ var remoteCmd = &cobra.Command{
 	},
 }
 
-var frontend frontendValue
+// cobraStringValue is a cobra's string flag with restricted values
+type cobraStringValue struct {
+	value   string
+	allowed []string
+}
+
+func makeCobraStringValue(value string, others []string) *cobraStringValue {
+	c := new(cobraStringValue)
+	c.value = value
+	c.allowed = make([]string, 0, len(others)+1)
+	c.allowed = append(c.allowed, value)
+	for _, s := range others {
+		c.allowed = append(c.allowed, s)
+	}
+	return c
+}
+
+func (c *cobraStringValue) String() string { return c.value }
+func (c *cobraStringValue) Type() string   { return "string" }
+
+func (c *cobraStringValue) Set(other string) error {
+	for _, s := range c.allowed {
+		if other == s {
+			c.value = other
+			return nil
+		}
+	}
+	return fmt.Errorf("value %s not allowed", other)
+}
+
+func (c *cobraStringValue) AllowedString() string {
+	return strings.Join(c.allowed, ", ")
+}
 
 type frontendValue struct {
-	value string
-}
-
-func (f *frontendValue) String() string {
-	return f.value
-}
-
-func (f *frontendValue) Type() string {
-	return "string"
-}
-
-func (f *frontendValue) Set(other string) error {
-	allowed := map[string]bool{
-		"web": true,
-		"cdt": true,
-	}
-	if !allowed[other] {
-		return fmt.Errorf("value %s not allowed", other)
-	}
-
-	f.value = other
-
-	return nil
+	*cobraStringValue
 }
 
 func (f *frontendValue) MakeAdapter(router *mux.Router, appAddress string) (da DebugAdapter) {
@@ -105,9 +117,28 @@ func (f *frontendValue) MakeAdapter(router *mux.Router, appAddress string) (da D
 	}
 }
 
+type runModeValue struct {
+	*cobraStringValue
+}
+
+var frontend frontendValue = frontendValue{makeCobraStringValue("cdt", []string{"web"})}
+var proto string
+var txnFile string
+var groupIndex int
+var balanceFile string
+var roundNumber int
+var runMode runModeValue = runModeValue{makeCobraStringValue("signature", []string{"application"})}
+
 func init() {
-	// rootCmd.PersistentFlags().StringVarP(&frontend, "frontend", "f", "cdt", "Frontend to use: web, cdt")
-	rootCmd.PersistentFlags().VarP(&frontend, "frontend", "f", "Frontend to use: web, cdt")
+	rootCmd.PersistentFlags().VarP(&frontend, "frontend", "f", "Frontend to use: "+frontend.AllowedString())
+
+	debugCmd.PersistentFlags().StringVarP(&proto, "proto", "p", "", "Consensus protocol version for TEAL")
+	debugCmd.PersistentFlags().StringVarP(&txnFile, "txn", "t", "", "Transaction(s) to evaluate TEAL on in form of json or msgpack file")
+	debugCmd.PersistentFlags().IntVarP(&groupIndex, "group-index", "g", 0, "Transaction index in a txn group")
+	debugCmd.PersistentFlags().StringVarP(&balanceFile, "balance", "b", "", "Balance records to evaluate stateful TEAL on in form of json or msgpack file")
+	debugCmd.PersistentFlags().IntVarP(&roundNumber, "round", "r", 1095518031, "Ledger round number to evaluate stateful TEAL on")
+	debugCmd.PersistentFlags().VarP(&runMode, "mode", "m", "TEAL evaluation mode: "+runMode.AllowedString())
+
 	rootCmd.AddCommand(debugCmd)
 	rootCmd.AddCommand(remoteCmd)
 }
@@ -116,11 +147,31 @@ func debugRemote() {
 	ds := makeDebugServer(&frontend)
 	ds.enableRemoteHook()
 
-	ds.startDebugging()
+	ds.startRemote()
 }
 
 func debugLocal(args []string) {
+	// simple pre-invalidation
+	if len(args) == 0 {
+		log.Fatalln("No program to debug")
+	}
+	if roundNumber < 0 {
+		log.Fatalln("Invalid round")
+	}
+
 	ds := makeDebugServer(&frontend)
 
-	ds.startDebugging()
+	dp := DebugParams{
+		Programs:    args,
+		Proto:       proto,
+		TxnFile:     txnFile,
+		GroupIndex:  groupIndex,
+		BalanceFile: balanceFile,
+		Round:       roundNumber,
+		RunMode:     runMode.String(),
+	}
+	err := ds.startDebug(&dp)
+	if err != nil {
+		log.Fatalf("Debugging error: %s", err.Error())
+	}
 }

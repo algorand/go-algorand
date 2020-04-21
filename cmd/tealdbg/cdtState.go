@@ -225,13 +225,7 @@ func prepareArray(array []v1.TealValue) []fieldDesc {
 			if err != nil {
 				value = tv.Bytes
 			} else {
-				printable := true
-				for i := 0; i < len(data); i++ {
-					if !strconv.IsPrint(rune(data[i])) {
-						printable = false
-						break
-					}
-				}
+				printable := IsText(data)
 				if printable {
 					value = string(data)
 				} else if len(data) < 8 {

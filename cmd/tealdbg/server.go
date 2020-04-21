@@ -52,6 +52,17 @@ type DebugServer struct {
 	remote   *RemoteHookAdapter
 }
 
+// DebugParams is a container for debug parameters
+type DebugParams struct {
+	Programs    []string
+	Proto       string
+	TxnFile     string
+	GroupIndex  int
+	BalanceFile string
+	Round       int
+	RunMode     string
+}
+
 // AdapterMaker interface for attaching debug adapters
 type AdapterMaker interface {
 	MakeAdapter(router *mux.Router, appAddress string) (da DebugAdapter)
@@ -80,21 +91,17 @@ func makeDebugServer(maker AdapterMaker) DebugServer {
 	}
 }
 
-func (ds *DebugServer) startDebugging() {
-	if ds.remote != nil {
-		log.Printf("starting server on %s", ds.server.Addr)
-		ds.server.ListenAndServe()
-		return
-	}
+func (ds *DebugServer) startRemote() {
+	log.Printf("starting server on %s", ds.server.Addr)
+	ds.server.ListenAndServe()
+}
 
+func (ds *DebugServer) startDebug(dp *DebugParams) (err error) {
 	go ds.server.ListenAndServe()
 
-	err := RunLocal(ds.debugger)
-	if err != nil {
-		log.Println(err.Error())
-	}
-
+	err = RunLocal(ds.debugger, dp)
 	ds.server.Shutdown(context.Background())
+	return
 }
 
 func (ds *DebugServer) enableRemoteHook() {
