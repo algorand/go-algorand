@@ -16,18 +16,14 @@ if [ -z "$OS_TYPE" ] || [ -z "$ARCH" ] || [ -z "$WORKDIR" ]; then
     exit 1
 fi
 
-export REPO_DIR="$WORKDIR"
-export GOPATH="$REPO_DIR/go"
-export PATH="$GOPATH:/usr/local/go/bin:$PATH"
-
-mkdir -p "$REPO_DIR/tmp/node_pkgs/linux/amd64/pkg"
-export OUTDIR="$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH/pkg"
+REPO_DIR="$WORKDIR"
 BRANCH=$("$REPO_DIR/scripts/compute_branch.sh")
-export BRANCH
 CHANNEL=$("$REPO_DIR/scripts/compute_branch_channel.sh" "$BRANCH")
-export CHANNEL
-export VARIATIONS="$OS_TYPE/$ARCH"
-
+BASE="$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH"
+mkdir -p "$BASE/$CHANNEL/$OS_TYPE-$ARCH/bin"
+ALGO_BIN="$BASE/$CHANNEL/$OS_TYPE-$ARCH/bin"
+mkdir -p "$BASE/pkg"
+OUTDIR="$BASE/pkg"
 PKG_NAME=$("$REPO_DIR/scripts/compute_package_name.sh" "${CHANNEL:-stable}")
 
 echo "Building debian package for '${OS} - ${ARCH}'"
@@ -44,20 +40,18 @@ trap "rm -rf $PKG_ROOT" 0
 
 mkdir -p "${PKG_ROOT}/usr/bin"
 
-if [ "${VARIATIONS}" = "" ]; then
-    # NOTE: keep in sync with installer/rpm/algorand.spec
-    bin_files=("algocfg" "algod" "algoh" "algokey" "carpenter" "catchupsrv" "ddconfig.sh" "diagcfg" "goal" "kmd" "msgpacktool" "node_exporter")
-fi
+# NOTE: keep in sync with installer/rpm/algorand.spec
+bin_files=("algocfg" "algod" "algoh" "algokey" "carpenter" "catchupsrv" "ddconfig.sh" "diagcfg" "goal" "kmd" "msgpacktool" "node_exporter")
 
-for bin in "${bin_files[@]}"; do
-    cp "${GOPATH}/bin/${bin}" "${PKG_ROOT}"/usr/bin
-    chmod 755 "${PKG_ROOT}/usr/bin/${bin}"
+for binary in "${bin_files[@]}"; do
+    cp "${ALGO_BIN}/${binary}" "${PKG_ROOT}"/usr/bin
+    chmod 755 "${PKG_ROOT}/usr/bin/${binary}"
 done
 
 mkdir -p "${PKG_ROOT}/usr/lib/algorand"
 lib_files=("updater" "find-nodes.sh")
 for lib in "${lib_files[@]}"; do
-    cp "${GOPATH}/bin/${lib}" "${PKG_ROOT}/usr/lib/algorand"
+    cp "${ALGO_BIN}/${lib}" "${PKG_ROOT}/usr/lib/algorand"
     chmod g-w "${PKG_ROOT}/usr/lib/algorand/${lib}"
 done
 

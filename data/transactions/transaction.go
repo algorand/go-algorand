@@ -93,6 +93,12 @@ type Header struct {
 	// the LastValid round passes.  While this transaction possesses the
 	// lease, no other transaction specifying this lease can be confirmed.
 	Lease [32]byte `codec:"lx"`
+
+	// RekeyTo, if nonzero, sets the sender's SpendingKey to the given address
+	// If the RekeyTo address is the sender's actual address, the SpendingKey is set to zero
+	// This allows "re-keying" a long-lived account -- rotating the signing key, changing
+	// membership of a multisig account, etc.
+	RekeyTo basics.Address `codec:"rekey"`
 }
 
 // Transaction describes a transaction that can appear in a block.
@@ -160,6 +166,10 @@ func (tx Transaction) Sign(secrets *crypto.SignatureSecrets) SignedTxn {
 	s := SignedTxn{
 		Txn: tx,
 		Sig: sig,
+	}
+	// Set the AuthAddr if the signing key doesn't match the transaction sender
+	if basics.Address(secrets.SignatureVerifier) != tx.Sender {
+		s.AuthAddr = basics.Address(secrets.SignatureVerifier)
 	}
 	return s
 }
@@ -332,6 +342,9 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	if !proto.SupportTxGroups && (tx.Group != crypto.Digest{}) {
 		return fmt.Errorf("transaction has group but groups not yet enabled")
 	}
+	if !proto.SupportRekeying && (tx.RekeyTo != basics.Address{}) {
+		return fmt.Errorf("transaction has RekeyTo set but rekeying not yet enabled")
+	}
 	return nil
 }
 
@@ -399,11 +412,14 @@ func (tx Transaction) GetReceiverAddress() basics.Address {
 
 // EstimateEncodedSize returns the estimated encoded size of the transaction including the signature.
 // This function is to be used for calculating the fee
+// Note that it may be an underestimate if the transaction is signed in an unusual way
+// (e.g., with an authaddr or via multisig or logicsig)
 func (tx Transaction) EstimateEncodedSize() int {
-	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
-	keys := crypto.GenerateSignatureSecrets(seed)
-	stx := tx.Sign(keys)
+	// Make a signedtxn with a nonzero signature and encode it
+	stx := SignedTxn{
+		Txn: tx,
+		Sig: crypto.Signature{1},
+	}
 	return stx.GetEncodedLength()
 }
 
@@ -415,6 +431,27 @@ func (tx Transaction) Apply(balances Balances, spec SpecialAddresses, ctr uint64
 	err = balances.Move(tx.Sender, spec.FeeSink, tx.Fee, &ad.SenderRewards, nil)
 	if err != nil {
 		return
+	}
+
+	// rekeying: update balrecord.SpendingKey to tx.RekeyTo if provided
+	if (tx.RekeyTo != basics.Address{}) {
+		var record basics.BalanceRecord
+		record, err = balances.Get(tx.Sender, false)
+		if err != nil {
+			return
+		}
+		// Special case: rekeying to the account's actual address just sets balrecord.SpendingKey to 0
+		// This saves 32 bytes in your balance record if you want to go back to using your original key
+		if tx.RekeyTo == tx.Sender {
+			record.SpendingKey = basics.Address{}
+		} else {
+			record.SpendingKey = tx.RekeyTo
+		}
+
+		err = balances.Put(record)
+		if err != nil {
+			return
+		}
 	}
 
 	switch tx.Type {
