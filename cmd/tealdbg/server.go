@@ -17,6 +17,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"strings"
@@ -43,31 +44,61 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func main() {
-	router := mux.NewRouter()
+// DebugServer is Debugger + HTTP/WS handlers for frontends
+type DebugServer struct {
+	debugger *Debugger
+	router   *mux.Router
+	server   *http.Server
+	remote   *RemoteHookAdapter
+}
 
-	appAddress := "localhost:9392"
+// AdapterMaker interface for attaching debug adapters
+type AdapterMaker interface {
+	MakeAdapter(router *mux.Router, appAddress string) (da DebugAdapter)
+}
 
+func makeDebugServer(maker AdapterMaker) DebugServer {
 	debugger := MakeDebugger()
 
-	remote := RemoteHookAdapter{debugger}
-	remote.Setup(router)
+	router := mux.NewRouter()
+	appAddress := "localhost:9392"
 
-	wa := WebPageAdapter{}
-	wa.Setup(router)
-	debugger.AddAdapter(&wa)
+	da := maker.MakeAdapter(router, appAddress)
+	debugger.AddAdapter(da)
 
-	cdta := CDTAdapter{}
-	cdta.Setup(&CDTSetupParams{router, appAddress})
-	debugger.AddAdapter(&cdta)
-
-	server := http.Server{
+	server := &http.Server{
 		Handler:      router,
 		Addr:         appAddress,
 		WriteTimeout: time.Duration(0),
 		ReadTimeout:  time.Duration(0),
 	}
 
-	log.Printf("starting server on %s", appAddress)
-	server.ListenAndServe()
+	return DebugServer{
+		debugger: debugger,
+		router:   router,
+		server:   server,
+	}
+}
+
+func (ds *DebugServer) startDebugging() {
+	if ds.remote != nil {
+		log.Printf("starting server on %s", ds.server.Addr)
+		ds.server.ListenAndServe()
+		return
+	}
+
+	go ds.server.ListenAndServe()
+
+	err := RunLocal(ds.debugger)
+	if err != nil {
+		log.Println(err.Error())
+	}
+
+	ds.server.Shutdown(context.Background())
+}
+
+func (ds *DebugServer) enableRemoteHook() {
+	remote := RemoteHookAdapter{ds.debugger}
+	remote.Setup(ds.router)
+	ds.remote = &remote
 }
