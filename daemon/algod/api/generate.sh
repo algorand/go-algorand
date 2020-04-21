@@ -7,6 +7,7 @@ pushd $rootdir
 # Convert v2 to v3
 curl -s -X POST "https://converter.swagger.io/api/convert" -H "accept: application/json" -H "Content-Type: application/json" -d @./algod.oas2.json  -o 3.json
 cat 3.json | json_pp > algod.oas3.json
+rm 3.json
 sed -i 's/\*.\*/application\/json/g' algod.oas3.json
 
 echo "generating code."
