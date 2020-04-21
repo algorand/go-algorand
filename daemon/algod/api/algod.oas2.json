@@ -174,25 +174,25 @@
           "400": {
             "description": "Bad Request - Non integer number",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "404": {
             "description": "None existing block ",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "default": {
@@ -235,7 +235,7 @@
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "default": {
@@ -343,7 +343,7 @@
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "500": {
@@ -386,19 +386,19 @@
           "400": {
             "description": "Bad Request -- number must be non-negative integer ",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "default": {
@@ -447,19 +447,19 @@
           "400": {
             "description": "Bad Request - Malformed Algorand transaction ",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "default": {
@@ -485,7 +485,7 @@
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "default": {
@@ -521,13 +521,13 @@
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "default": {
@@ -567,19 +567,19 @@
           "400": {
             "description": "Bad Request",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "404": {
             "description": "Transaction Not Found",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "default": {
@@ -811,6 +811,21 @@
         },
         "url": {
           "description": "\\[au\\] URL where more information about the asset can be retrieved.",
+          "type": "string"
+        }
+      }
+    },
+    "ErrorResponse": {
+      "description": "An error response with optional data field.",
+      "type": "object",
+      "required": [
+        "message"
+      ],
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "message": {
           "type": "string"
         }
       }
@@ -1063,23 +1078,6 @@
             "description": "Optional certificate object. This is only included when the format is set to message pack.",
             "type": "object",
             "x-algorand-format": "BlockCertificate"
-          }
-        }
-      }
-    },
-    "ErrorResponse": {
-      "description": "An error response with optional data field.",
-      "schema": {
-        "type": "object",
-        "required": [
-          "message"
-        ],
-        "properties": {
-          "data": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
           }
         }
       }

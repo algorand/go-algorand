@@ -27,7 +27,9 @@ type Account struct {
 	// \[apar\] parameters of assets created by this account.
 	//
 	// Note: the raw account uses `map[int] -> Asset` for this type.
-	CreatedAssets *[]Asset              `json:"created-assets,omitempty"`
+	CreatedAssets *[]Asset `json:"created-assets,omitempty"`
+
+	// AccountParticipation describes the parameters used by this account in consensus protocol.
 	Participation *AccountParticipation `json:"participation,omitempty"`
 
 	// amount of MicroAlgos of pending rewards in this account.
@@ -78,7 +80,14 @@ type AccountParticipation struct {
 type Asset struct {
 
 	// unique asset identifier
-	Index  uint64      `json:"index"`
+	Index uint64 `json:"index"`
+
+	// AssetParams specifies the parameters for an asset.
+	//
+	// \[apar\] when part of an AssetConfig transaction.
+	//
+	// Definition:
+	// data/transactions/asset.go : AssetParams
 	Params AssetParams `json:"params"`
 }
 
@@ -138,8 +147,16 @@ type AssetParams struct {
 	Url *string `json:"url,omitempty"`
 }
 
+// ErrorResponse defines model for ErrorResponse.
+type ErrorResponse struct {
+	Data    *string `json:"data,omitempty"`
+	Message string  `json:"message"`
+}
+
 // Version defines model for Version.
 type Version struct {
+
+	// the current algod build version information.
 	Build       VersionBuild `json:"build"`
 	GenesisHash []byte       `json:"genesis-hash"`
 	GenesisId   string       `json:"genesis-id"`
@@ -230,12 +247,6 @@ type BlockResponse struct {
 
 	// Optional certificate object. This is only included when the format is set to message pack.
 	Cert *map[string]interface{} `json:"cert,omitempty"`
-}
-
-// ErrorResponse defines model for ErrorResponse.
-type ErrorResponse struct {
-	Data    *string `json:"data,omitempty"`
-	Message string  `json:"message"`
 }
 
 // NodeStatusResponse defines model for NodeStatusResponse.
