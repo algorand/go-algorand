@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -33,6 +34,7 @@ var signKeyfile string
 var signTxfile string
 var signOutfile string
 var signMnemonic string
+var rekeyed bool
 
 func init() {
 	signCmd.Flags().StringVarP(&signKeyfile, "keyfile", "k", "", "Private key filename")
@@ -41,6 +43,7 @@ func init() {
 	signCmd.MarkFlagRequired("txfile")
 	signCmd.Flags().StringVarP(&signOutfile, "outfile", "o", "", "Transaction output filename")
 	signCmd.MarkFlagRequired("outfile")
+	signCmd.Flags().BoolVarP(&rekeyed, "rekeyed", "r", false, "Required if the sending account has been rekeyed and the signing key doesn't match the account address")
 }
 
 var signCmd = &cobra.Command{
@@ -71,6 +74,9 @@ var signCmd = &cobra.Command{
 			}
 
 			stxn.Sig = key.Sign(stxn.Txn)
+			if rekeyed {
+				stxn.AuthAddr = basics.Address(key.SignatureVerifier)
+			}
 			outBytes = append(outBytes, protocol.Encode(&stxn)...)
 		}
 
