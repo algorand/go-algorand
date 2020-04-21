@@ -3,7 +3,7 @@ pipeline {
         string defaultValue: 'master', description: 'Release to deploy to production', name: 'branch', trim: true
         string defaultValue: 'stable', description: 'Staged channel which should be deployed to production.', name: 'channel', trim: true
         string defaultValue: '', description: 'Release to deploy to production', name: 'release', trim: true
-        string defaultValue: 'algorand-builds', description: 'Staging location', name: 'bucket_location_staging', trim: true
+        string defaultValue: 'algorand-builds/channel', description: 'Staging location', name: 'bucket_location_staging', trim: true
         string defaultValue: 'algorand-dev-deb-repo/releases', description: 'Production location', name: 'bucket_location_prod', trim: true
 
         // AWS
@@ -32,7 +32,7 @@ pipeline {
             }
         }
 
-        stage("setup ec2 instance") {
+        stage("setup") {
             steps {
                 script {
                     if (params.channel == null || params.channel == "") {

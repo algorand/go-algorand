@@ -44,7 +44,7 @@ const (
 	sqliteWalletDriverVersion   = 1
 	sqliteWalletsDirName        = "sqlite_wallets"
 	sqliteWalletsDirPermissions = 0700
-	sqliteWalletDBOptions       = "_secure_delete=on&_tx_lock=exclusive"
+	sqliteWalletDBOptions       = "_secure_delete=on&_txlock=exclusive"
 	sqliteMaxWalletNameLen      = 64
 	sqliteMaxWalletIDLen        = 64
 	sqliteIntOverflow           = 1 << 63
@@ -831,7 +831,7 @@ func (sw *SQLiteWallet) GenerateKey(displayMnemonic bool) (addr crypto.Digest, e
 		return
 	}
 
-	// Begin an exclusive database transaction (we set _tx_lock=exclusive on the
+	// Begin an exclusive database transaction (we set _txlock=exclusive on the
 	// database connection string)
 	tx, err := db.Beginx()
 	if err != nil {
@@ -1087,9 +1087,9 @@ func (sw *SQLiteWallet) ListMultisigAddrs() (addrs []crypto.Digest, err error) {
 	return
 }
 
-// SignTransaction signs the passed transaction, inferring the required private
-// key from the transaction itself
-func (sw *SQLiteWallet) SignTransaction(tx transactions.Transaction, pw []byte) (stx []byte, err error) {
+// SignTransaction signs the passed transaction with the private key whose public key is provided, or
+// if the provided public key is zero, inferring the required private key from the transaction itself
+func (sw *SQLiteWallet) SignTransaction(tx transactions.Transaction, pk crypto.PublicKey, pw []byte) (stx []byte, err error) {
 	// Check the password
 	err = sw.CheckPassword(pw)
 	if err != nil {
@@ -1097,7 +1097,12 @@ func (sw *SQLiteWallet) SignTransaction(tx transactions.Transaction, pw []byte) 
 	}
 
 	// Fetch the required key
-	sk, err := sw.fetchSecretKey(crypto.Digest(tx.Src()))
+	var sk crypto.PrivateKey
+	if (pk == crypto.PublicKey{}) {
+		sk, err = sw.fetchSecretKey(crypto.Digest(tx.Src()))
+	} else {
+		sk, err = sw.fetchSecretKey(crypto.Digest(pk))
+	}
 	if err != nil {
 		return
 	}

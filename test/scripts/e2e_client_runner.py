@@ -109,22 +109,23 @@ def _script_thread_inner(runset, scriptname):
         retcode = -1
     dt = time.time() - start
     if retcode != 0:
-        logger.error('%s failed in %f seconds', scriptname, dt)
-        st = os.stat(cmdlogpath)
-        with open(cmdlogpath, 'r') as fin:
-            if st.st_size > LOG_WHOLE_CUTOFF:
-                fin.seek(st.st_size - LOG_WHOLE_CUTOFF)
-                text = fin.read()
-                lines = text.splitlines()
-                if len(lines) > 1:
-                    # drop probably-partial first line
-                    lines = lines[1:]
-                sys.stderr.write('end of log follows:\n')
-                sys.stderr.write('\n'.join(lines))
-                sys.stderr.write('\n\n')
-            else:
-                sys.stderr.write('whole log follows:\n')
-                sys.stderr.write(fin.read())
+        with runset.lock:
+            logger.error('%s failed in %f seconds', scriptname, dt)
+            st = os.stat(cmdlogpath)
+            with open(cmdlogpath, 'r') as fin:
+                if st.st_size > LOG_WHOLE_CUTOFF:
+                    fin.seek(st.st_size - LOG_WHOLE_CUTOFF)
+                    text = fin.read()
+                    lines = text.splitlines()
+                    if len(lines) > 1:
+                        # drop probably-partial first line
+                        lines = lines[1:]
+                    sys.stderr.write('end of log follows ({}):\n'.format(scriptname))
+                    sys.stderr.write('\n'.join(lines))
+                    sys.stderr.write('\n\n')
+                else:
+                    sys.stderr.write('whole log follows ({}):\n'.format(scriptname))
+                    sys.stderr.write(fin.read())
     else:
         logger.info('finished %s OK in %f seconds', scriptname, dt)
     runset.done(scriptname, retcode == 0, dt)
@@ -316,25 +317,25 @@ def xrun(cmd, *args, **kwargs):
         cmdr = repr(cmd)
         logger.error('subprocess timed out {}'.format(cmdr), exc_info=True)
         if p.stdout:
-            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout))
+            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout.read()))
         if p.stderr:
-            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr))
+            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr.read()))
         raise
     except Exception as e:
         cmdr = repr(cmd)
         logger.error('subprocess exception {}'.format(cmdr), exc_info=True)
         if p.stdout:
-            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout))
+            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout.read()))
         if p.stderr:
-            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr))
+            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr.read()))
         raise
     if p.returncode != 0:
         cmdr = repr(cmd)
         logger.error('cmd failed {}'.format(cmdr))
         if p.stdout:
-            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout))
+            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout.read()))
         if p.stderr:
-            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr))
+            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr.read()))
         raise Exception('error: cmd failed: {}'.format(cmdr))
 
 _logging_format = '%(asctime)s :%(lineno)d %(message)s'

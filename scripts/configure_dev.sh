@@ -21,7 +21,7 @@ if [ "${OS}" = "linux" ]; then
     fi
 
     sudo apt-get update
-    sudo apt-get install -y libboost-all-dev expect jq autoconf shellcheck
+    sudo apt-get install -y libboost-all-dev expect jq autoconf shellcheck sqlite3
 elif [ "${OS}" = "darwin" ]; then
     brew update
     brew tap homebrew/cask

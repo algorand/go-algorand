@@ -184,7 +184,7 @@ func makeVote(rv rawVote, voting crypto.OneTimeSigner, selection *crypto.VRFSecr
 
 // ToBeHashed implements the Hashable interface.
 func (rv rawVote) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Vote, protocol.Encode(rv)
+	return protocol.Vote, protocol.Encode(&rv)
 }
 
 func (v vote) u() unauthenticatedVote {

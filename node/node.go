@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -84,9 +85,8 @@ type AlgorandFullNode struct {
 	cancelCtx context.CancelFunc
 	config    config.Local
 
-	ledger    *data.Ledger
-	net       network.GossipNode
-	phonebook *network.ThreadsafePhonebook
+	ledger *data.Ledger
+	net    network.GossipNode
 
 	transactionPool *pools.TransactionPool
 	txHandler       *data.TxHandler
@@ -140,7 +140,7 @@ type TxnWithStatus struct {
 
 // MakeFull sets up an Algorand full node
 // (i.e., it returns a node that participates in consensus)
-func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
+func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAddresses []string, genesis bookkeeping.Genesis) (*AlgorandFullNode, error) {
 
 	node := new(AlgorandFullNode)
 	node.rootDir = rootDir
@@ -148,17 +148,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 	node.log = log.With("name", cfg.NetAddress)
 	node.genesisID = genesis.ID()
 	node.genesisHash = crypto.HashObj(genesis)
-	node.phonebook = network.MakeThreadsafePhonebook(cfg.ConnectionsRateLimitingCount,
-		time.Duration(cfg.ConnectionsRateLimitingWindowSeconds)*time.Second)
-
-	addrs, err := config.LoadPhonebook(phonebookDir)
-	if err != nil {
-		log.Debugf("Cannot load static phonebook: %v", err)
-	}
-	node.phonebook.ReplacePeerList(addrs)
 
 	// tie network, block fetcher, and agreement services together
-	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, node.phonebook, genesis.ID(), genesis.Network)
+	p2pNode, err := network.NewWebsocketNetwork(node.log, node.config, phonebookAddresses, genesis.ID(), genesis.Network)
 	if err != nil {
 		log.Errorf("could not create websocket node: %v", err)
 		return nil, err
@@ -229,9 +221,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 		return nil, err
 	}
 
-	blockFactory := makeBlockFactory(node.ledger, node.transactionPool, node.config.EnableProcessBlockStats, node.highPriorityCryptoVerificationPool)
 	blockValidator := blockValidatorImpl{l: node.ledger, tp: node.transactionPool, verificationPool: node.highPriorityCryptoVerificationPool}
-	agreementLedger := makeAgreementLedger(node.ledger)
+	agreementLedger := makeAgreementLedger(node.ledger, node.net)
 
 	agreementParameters := agreement.Parameters{
 		Logger:         log,
@@ -240,7 +231,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookDir
 		Local:          node.config,
 		Network:        gossip.WrapNetwork(node.net, log),
 		Ledger:         agreementLedger,
-		BlockFactory:   blockFactory,
+		BlockFactory:   node,
 		BlockValidator: blockValidator,
 		KeyManager:     node.accountManager,
 		RandomSource:   node,
@@ -419,7 +410,7 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 	var enc []byte
 	var txids []transactions.Txid
 	for _, tx := range txgroup {
-		enc = append(enc, protocol.Encode(tx)...)
+		enc = append(enc, protocol.Encode(&tx)...)
 		txids = append(txids, tx.ID())
 	}
 	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, true, nil)
@@ -593,16 +584,6 @@ func (node *AlgorandFullNode) PoolStats() PoolStats {
 	}
 }
 
-// ExtendPeerList dynamically adds a peer to a node's peer list.
-func (node *AlgorandFullNode) ExtendPeerList(peers ...string) {
-	node.phonebook.ExtendPeerList(peers)
-}
-
-// ReplacePeerList replaces the current peer list with a different one
-func (node *AlgorandFullNode) ReplacePeerList(peers ...string) {
-	node.phonebook.ReplacePeerList(peers)
-}
-
 // SuggestedFee returns the suggested fee per byte recommended to ensure a new transaction is processed in a timely fashion.
 // Caller should set fee to max(MinTxnFee, SuggestedFee() * len(encoded SignedTxn))
 func (node *AlgorandFullNode) SuggestedFee() basics.MicroAlgos {
@@ -773,4 +754,30 @@ func (node *AlgorandFullNode) GetTransactionByID(txid transactions.Txid, rnd bas
 		ConfirmedRound: rnd,
 		ApplyData:      stx.ApplyData,
 	}, nil
+}
+
+// validatedBlock satisfies agreement.ValidatedBlock
+type validatedBlock struct {
+	vb *ledger.ValidatedBlock
+}
+
+// WithSeed satisfies the agreement.ValidatedBlock interface.
+func (vb validatedBlock) WithSeed(s committee.Seed) agreement.ValidatedBlock {
+	lvb := vb.vb.WithSeed(s)
+	return validatedBlock{vb: &lvb}
+}
+
+// Block satisfies the agreement.ValidatedBlock interface.
+func (vb validatedBlock) Block() bookkeeping.Block {
+	blk := vb.vb.Block()
+	return blk
+}
+
+// AssembleBlock implements Ledger.AssembleBlock.
+func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
+	lvb, err := node.transactionPool.AssembleBlock(round, deadline)
+	if err != nil {
+		return nil, err
+	}
+	return validatedBlock{vb: lvb}, nil
 }

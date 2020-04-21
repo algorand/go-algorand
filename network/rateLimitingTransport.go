@@ -24,7 +24,7 @@ import (
 
 // rateLimitingTransport is the transport for execute a single HTTP transaction, obtaining the Response for a given Request.
 type rateLimitingTransport struct {
-	phonebook       *MultiPhonebook
+	phonebook       Phonebook
 	innerTransport  *http.Transport
 	queueingTimeout time.Duration
 }
@@ -35,7 +35,7 @@ var ErrConnectionQueueingTimeout = errors.New("rateLimitingTransport: queueing t
 
 // makeRateLimitingTransport creates a rate limiting http transport that would limit the requests rate
 // according to the entries in the phonebook.
-func makeRateLimitingTransport(phonebook *MultiPhonebook, queueingTimeout time.Duration, dialer *Dialer) rateLimitingTransport {
+func makeRateLimitingTransport(phonebook Phonebook, queueingTimeout time.Duration, dialer *Dialer) rateLimitingTransport {
 	defaultTransport := http.DefaultTransport.(*http.Transport)
 	return rateLimitingTransport{
 		phonebook: phonebook,
