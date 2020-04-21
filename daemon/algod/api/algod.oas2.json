@@ -51,19 +51,19 @@
           "400": {
             "description": "Malformed address",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "default": {
@@ -114,19 +114,19 @@
           "400": {
             "description": "Max must be a non-negative integer",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "401": {
             "description": "Invalid API Token",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "500": {
             "description": "Internal Error",
             "schema": {
-              "$ref": "#/definitions/error-model"
+              "$ref": "#/definitions/ErrorResponse"
             }
           },
           "default": {
@@ -876,20 +876,6 @@
           "type": "integer"
         }
       }
-    },
-    "error-model": {
-      "type": "object",
-      "required": [
-        "msg"
-      ],
-      "properties": {
-        "data": {
-          "type": "string"
-        },
-        "msg": {
-          "type": "string"
-        }
-      }
     }
   },
   "parameters": {
@@ -1081,15 +1067,18 @@
         }
       }
     },
-    "Error": {
-      "description": "(empty)",
+    "ErrorResponse": {
+      "description": "An error response with optional data field.",
       "schema": {
         "type": "object",
         "required": [
-          "error"
+          "message"
         ],
         "properties": {
-          "error": {
+          "data": {
+            "type": "string"
+          },
+          "message": {
             "type": "string"
           }
         }
