@@ -19,6 +19,8 @@ package lib
 import (
 	"net/http"
 
+	"github.com/labstack/echo/v4"
+
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 )
@@ -27,7 +29,7 @@ import (
 var SwaggerSpecJSON string
 
 // HandlerFunc defines a wrapper for http.HandlerFunc that includes a context
-type HandlerFunc func(ReqContext, http.ResponseWriter, *http.Request)
+type HandlerFunc func(ReqContext, echo.Context)
 
 // Route type description
 type Route struct {
@@ -45,6 +47,7 @@ type Routes []Route
 type ReqContext struct {
 	Node     *node.AlgorandFullNode
 	Log      logging.Logger
+	Context  echo.Context
 	Shutdown <-chan struct{}
 }
 

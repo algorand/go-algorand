@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package data
+package node
 
 import (
 	"fmt"
@@ -26,28 +26,17 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func incaddr(user *basics.Address) {
-	pos := len(user) - 1
-	for true {
-		v := user[pos] + 1
-		user[pos] = v
-		if v == 0 {
-			pos--
-		} else {
-			return
-		}
-	}
-}
+var genesisHash = crypto.Digest{0xff, 0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe}
+var genesisID = "testingid"
 
 func keypair() *crypto.SignatureSecrets {
 	var seed crypto.Seed
@@ -60,7 +49,7 @@ var proto = config.Consensus[protocol.ConsensusCurrentVersion]
 
 const mockBalancesMinBalance = 1000
 
-func BenchmarkAssemblePayset(b *testing.B) {
+func BenchmarkAssembleBlock(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
 	const numRounds = 10
@@ -88,11 +77,11 @@ func BenchmarkAssemblePayset(b *testing.B) {
 	}
 
 	require.Equal(b, len(genesis), numUsers+1)
-	genBal := MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	ledgerName := fmt.Sprintf("%s-mem-%d", b.Name(), b.N)
 	const inMem = true
 	const archival = true
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, archival)
+	ledger, err := data.LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, archival)
 	require.NoError(b, err)
 
 	l := ledger
@@ -102,7 +91,6 @@ func BenchmarkAssemblePayset(b *testing.B) {
 	// 	b.Logf("%s\t%d", addr, ad.MicroAlgos)
 	// }
 	next := l.LastRound()
-	prev, err := l.BlockHdr(next)
 	if err != nil {
 		b.Errorf("could not make proposals at round %d: could not read block from ledger: %v", next, err)
 		return
@@ -159,17 +147,19 @@ func BenchmarkAssemblePayset(b *testing.B) {
 			sourcei = (sourcei + 1) % len(addresses)
 		}
 		b.StartTimer()
-		newEmptyBlk := bookkeeping.MakeBlock(prev)
-		eval, err := l.StartEvaluator(newEmptyBlk.BlockHeader, 0)
+		deadline := time.Now().Add(time.Second)
+		_, err := tp.AssembleBlock(next, deadline)
+		b.StopTimer()
+
 		if err != nil {
-			b.Errorf("could not make proposals at round %d: could not start evaluator: %v", next, err)
+			b.Errorf("could assemble block at round %d: %v", next, err)
 			return
 		}
-		var stats telemetryspec.AssembleBlockMetrics
-		deadline := time.Now().Add(time.Second)
-		stats.AssembleBlockStats = l.AssemblePayset(tp, eval, deadline)
-		b.StopTimer()
-		require.Equal(b, stats.AssembleBlockStats.StopReason, telemetryspec.AssembleBlockFull)
+
+		// TODO renable this check when possible
+		// var stats telemetryspec.AssembleBlockMetrics
+		// require.Equal(b, stats.AssembleBlockStats.StopReason, telemetryspec.AssembleBlockFull)
+
 		// the worst txn, with lower fee than the rest, should still be in the pool
 		_, _, found := tp.Lookup(worstTxID)
 		require.True(b, found)
