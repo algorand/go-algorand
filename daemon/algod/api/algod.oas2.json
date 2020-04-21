@@ -1003,7 +1003,6 @@
     },
     "note-prefix": {
       "type": "string",
-      "format": "byte",
       "description": "Specifies a prefix which must be contained in the note field.",
       "name": "note-prefix",
       "in": "query"
@@ -1034,7 +1033,6 @@
     },
     "tx-id": {
       "type": "string",
-      "format": "byte",
       "x-algorand-format": "Address",
       "x-go-name": "TxID",
       "description": "Lookup the specific transaction by ID.",

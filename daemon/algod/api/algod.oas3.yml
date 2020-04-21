@@ -1,18 +1,32 @@
 {
-   "info" : {
-      "contact" : {
-         "name" : "algorand",
-         "url" : "https://www.algorand.com/get-in-touch/contact",
-         "email" : "contact@algorand.com"
-      },
-      "version" : "0.0.1",
-      "title" : "Algod REST API.",
-      "description" : "API endpoint for algod operations."
-   },
+   "security" : [
+      {
+         "api_key" : []
+      }
+   ],
    "openapi" : "3.0.1",
+   "info" : {
+      "title" : "Algod REST API.",
+      "description" : "API endpoint for algod operations.",
+      "contact" : {
+         "email" : "contact@algorand.com",
+         "name" : "algorand",
+         "url" : "https://www.algorand.com/get-in-touch/contact"
+      },
+      "version" : "0.0.1"
+   },
+   "servers" : [
+      {
+         "url" : "http://localhost/"
+      },
+      {
+         "url" : "https://localhost/"
+      }
+   ],
    "paths" : {
-      "/v2/transactions" : {
+      "/v2/register-participation-keys/{address}" : {
          "post" : {
+            "operationId" : "RegisterParticipationKeys",
             "responses" : {
                "200" : {
                   "description" : "Transaction ID of the submission.",
@@ -25,10 +39,231 @@
                            ],
                            "properties" : {
                               "txId" : {
+                                 "type" : "string",
+                                 "description" : "encoding of the transaction hash."
+                              }
+                           }
+                        }
+                     }
+                  }
+               }
+            },
+            "parameters" : [
+               {
+                  "in" : "path",
+                  "description" : "The `account-id` to update, or `all` to update all accounts.",
+                  "required" : true,
+                  "schema" : {
+                     "type" : "string"
+                  },
+                  "name" : "address"
+               },
+               {
+                  "name" : "fee",
+                  "schema" : {
+                     "default" : 1000,
+                     "type" : "integer"
+                  },
+                  "description" : "The fee to use when submitting key registration transactions. Defaults to the suggested fee.",
+                  "in" : "query"
+               },
+               {
+                  "schema" : {
+                     "type" : "integer"
+                  },
+                  "name" : "key-dilution",
+                  "description" : "value to use for two-level participation key.",
+                  "in" : "query"
+               },
+               {
+                  "name" : "round-last-valid",
+                  "schema" : {
+                     "type" : "integer"
+                  },
+                  "description" : "The last round for which the generated participation keys will be valid.",
+                  "in" : "query"
+               },
+               {
+                  "name" : "no-wait",
+                  "schema" : {
+                     "type" : "boolean"
+                  },
+                  "in" : "query",
+                  "description" : "Don't wait for transaction to commit before returning response."
+               }
+            ],
+            "description" : "Generate (or renew) and register participation keys on the node for a given account address.",
+            "tags" : [
+               "private"
+            ]
+         }
+      },
+      "/v2/blocks/{round}" : {
+         "get" : {
+            "operationId" : "GetBlock",
+            "parameters" : [
+               {
+                  "description" : "Configures whether the response object is JSON or MessagePack encoded.",
+                  "in" : "query",
+                  "name" : "format",
+                  "schema" : {
+                     "type" : "string",
+                     "enum" : [
+                        "json",
+                        "msgpack"
+                     ]
+                  }
+               },
+               {
+                  "in" : "path",
+                  "description" : "The round from which to fetch block information.",
+                  "required" : true,
+                  "schema" : {
+                     "minimum" : 0,
+                     "type" : "integer"
+                  },
+                  "name" : "round"
+               }
+            ],
+            "summary" : "Get the block for the given round.",
+            "responses" : {
+               "404" : {
+                  "content" : {
+                     "application/msgpack" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     },
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "None existing block "
+               },
+               "200" : {
+                  "description" : "Encoded block object.",
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "type" : "object",
+                           "properties" : {
+                              "block" : {
+                                 "x-algorand-format" : "BlockHeader",
+                                 "description" : "Block header data.",
+                                 "properties" : {},
+                                 "type" : "object"
+                              },
+                              "cert" : {
+                                 "type" : "object",
+                                 "properties" : {},
+                                 "description" : "Optional certificate object. This is only included when the format is set to message pack.",
+                                 "x-algorand-format" : "BlockCertificate"
+                              }
+                           },
+                           "required" : [
+                              "block"
+                           ]
+                        }
+                     },
+                     "application/msgpack" : {
+                        "schema" : {
+                           "required" : [
+                              "block"
+                           ],
+                           "properties" : {
+                              "block" : {
+                                 "type" : "object",
+                                 "properties" : {},
+                                 "x-algorand-format" : "BlockHeader",
+                                 "description" : "Block header data."
+                              },
+                              "cert" : {
+                                 "properties" : {},
+                                 "x-algorand-format" : "BlockCertificate",
+                                 "description" : "Optional certificate object. This is only included when the format is set to message pack.",
+                                 "type" : "object"
+                              }
+                           },
+                           "type" : "object"
+                        }
+                     }
+                  }
+               },
+               "400" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     },
+                     "application/msgpack" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "Bad Request - Non integer number"
+               },
+               "default" : {
+                  "description" : "Unknown Error",
+                  "content" : {}
+               },
+               "401" : {
+                  "content" : {
+                     "application/msgpack" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     },
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "Invalid API Token"
+               },
+               "500" : {
+                  "description" : "Internal Error",
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     },
+                     "application/msgpack" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  }
+               }
+            }
+         }
+      },
+      "/v2/transactions" : {
+         "post" : {
+            "operationId" : "RawTransaction",
+            "summary" : "Broadcasts a raw transaction to the network.",
+            "x-codegen-request-body-name" : "rawtxn",
+            "responses" : {
+               "200" : {
+                  "description" : "Transaction ID of the submission.",
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "type" : "object",
+                           "properties" : {
+                              "txId" : {
                                  "description" : "encoding of the transaction hash.",
                                  "type" : "string"
                               }
-                           }
+                           },
+                           "required" : [
+                              "txId"
+                           ]
                         }
                      }
                   }
@@ -44,167 +279,8 @@
                   "description" : "Bad Request - Malformed Algorand transaction "
                },
                "default" : {
-                  "description" : "Unknown Error",
-                  "content" : {}
-               },
-               "500" : {
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  },
-                  "description" : "Internal Error"
-               },
-               "401" : {
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  },
-                  "description" : "Invalid API Token"
-               }
-            },
-            "summary" : "Broadcasts a raw transaction to the network.",
-            "requestBody" : {
-               "description" : "The byte encoded signed transaction to broadcast to network",
-               "required" : true,
-               "content" : {
-                  "application/x-binary" : {
-                     "schema" : {
-                        "type" : "string",
-                        "format" : "binary"
-                     }
-                  }
-               }
-            },
-            "operationId" : "RawTransaction",
-            "x-codegen-request-body-name" : "rawtxn"
-         }
-      },
-      "/v2/register-participation-keys/{address}" : {
-         "post" : {
-            "operationId" : "RegisterParticipationKeys",
-            "description" : "Generate (or renew) and register participation keys on the node for a given account address.",
-            "parameters" : [
-               {
-                  "description" : "The `account-id` to update, or `all` to update all accounts.",
-                  "required" : true,
-                  "schema" : {
-                     "type" : "string"
-                  },
-                  "name" : "address",
-                  "in" : "path"
-               },
-               {
-                  "name" : "fee",
-                  "in" : "query",
-                  "description" : "The fee to use when submitting key registration transactions. Defaults to the suggested fee.",
-                  "schema" : {
-                     "type" : "integer",
-                     "default" : 1000
-                  }
-               },
-               {
-                  "name" : "key-dilution",
-                  "in" : "query",
-                  "description" : "value to use for two-level participation key.",
-                  "schema" : {
-                     "type" : "integer"
-                  }
-               },
-               {
-                  "description" : "The last round for which the generated participation keys will be valid.",
-                  "schema" : {
-                     "type" : "integer"
-                  },
-                  "name" : "round-last-valid",
-                  "in" : "query"
-               },
-               {
-                  "in" : "query",
-                  "name" : "no-wait",
-                  "description" : "Don't wait for transaction to commit before returning response.",
-                  "schema" : {
-                     "type" : "boolean"
-                  }
-               }
-            ],
-            "responses" : {
-               "200" : {
-                  "description" : "Transaction ID of the submission.",
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "type" : "object",
-                           "properties" : {
-                              "txId" : {
-                                 "type" : "string",
-                                 "description" : "encoding of the transaction hash."
-                              }
-                           },
-                           "required" : [
-                              "txId"
-                           ]
-                        }
-                     }
-                  }
-               }
-            },
-            "tags" : [
-               "private"
-            ]
-         }
-      },
-      "/v2/accounts/{address}/transactions/pending" : {
-         "get" : {
-            "description" : "Get the list of pending transactions by address, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.\n",
-            "operationId" : "GetPendingTransactionsByAddress",
-            "parameters" : [
-               {
-                  "name" : "address",
-                  "in" : "path",
-                  "schema" : {
-                     "type" : "string",
-                     "pattern" : "[A-Z0-9]{58}"
-                  },
-                  "description" : "An account public key",
-                  "required" : true
-               },
-               {
-                  "schema" : {
-                     "type" : "integer"
-                  },
-                  "description" : "Truncated number of transactions to display. If max=0, returns all pending txns.",
-                  "in" : "query",
-                  "name" : "max"
-               },
-               {
-                  "description" : "Configures whether the response object is JSON or MessagePack encoded.",
-                  "schema" : {
-                     "enum" : [
-                        "json",
-                        "msgpack"
-                     ],
-                     "type" : "string"
-                  },
-                  "in" : "query",
-                  "name" : "format"
-               }
-            ],
-            "responses" : {
-               "500" : {
-                  "description" : "Internal Error",
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  }
+                  "content" : {},
+                  "description" : "Unknown Error"
                },
                "401" : {
                   "description" : "Invalid API Token",
@@ -216,7 +292,7 @@
                      }
                   }
                },
-               "400" : {
+               "500" : {
                   "content" : {
                      "application/json" : {
                         "schema" : {
@@ -224,101 +300,33 @@
                         }
                      }
                   },
-                  "description" : "Max must be a non-negative integer"
-               },
-               "default" : {
-                  "content" : {},
-                  "description" : "Unknown Error"
-               },
-               "200" : {
-                  "description" : "A potentially truncated list of transactions currently in the node's transaction pool. You can compute whether or not the list is truncated if the number of elements in the **top-transactions** array is fewer than **total-transactions**.",
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "type" : "object",
-                           "description" : "PendingTransactions is an array of signed transactions exactly as they were submitted.",
-                           "properties" : {
-                              "total-transactions" : {
-                                 "type" : "integer",
-                                 "description" : "Total number of transactions in the pool."
-                              },
-                              "top-transactions" : {
-                                 "description" : "An array of signed transaction objects.",
-                                 "type" : "array",
-                                 "items" : {
-                                    "properties" : {},
-                                    "x-algorand-format" : "SignedTransaction",
-                                    "type" : "object"
-                                 }
-                              }
-                           },
-                           "required" : [
-                              "top-transactions",
-                              "total-transactions"
-                           ]
-                        }
-                     }
-                  }
+                  "description" : "Internal Error"
                }
             },
-            "summary" : "Get a list of unconfirmed transactions currently in the transaction pool by address."
+            "requestBody" : {
+               "description" : "The byte encoded signed transaction to broadcast to network",
+               "content" : {
+                  "application/x-binary" : {
+                     "schema" : {
+                        "type" : "string",
+                        "format" : "binary"
+                     }
+                  }
+               },
+               "required" : true
+            }
          }
       },
       "/v2/status" : {
          "get" : {
-            "summary" : "Gets the current node status.",
+            "operationId" : "GetStatus",
             "responses" : {
-               "200" : {
-                  "description" : "(empty)",
+               "401" : {
+                  "description" : "Invalid API Token",
                   "content" : {
                      "application/json" : {
                         "schema" : {
-                           "type" : "object",
-                           "description" : "NodeStatus contains the information about a node status",
-                           "properties" : {
-                              "time-since-last-round" : {
-                                 "description" : "TimeSinceLastRound in nanoseconds",
-                                 "type" : "integer"
-                              },
-                              "next-version-round" : {
-                                 "type" : "integer",
-                                 "description" : "NextVersionRound is the round at which the next consensus version will apply"
-                              },
-                              "next-version-supported" : {
-                                 "description" : "NextVersionSupported indicates whether the next consensus version is supported by this node",
-                                 "type" : "boolean"
-                              },
-                              "catchup-time" : {
-                                 "type" : "integer",
-                                 "description" : "CatchupTime in nanoseconds"
-                              },
-                              "next-version" : {
-                                 "description" : "NextVersion of consensus protocol to use",
-                                 "type" : "string"
-                              },
-                              "last-version" : {
-                                 "description" : "LastVersion indicates the last consensus version supported",
-                                 "type" : "string"
-                              },
-                              "last-round" : {
-                                 "type" : "integer",
-                                 "description" : "LastRound indicates the last round seen"
-                              },
-                              "stopped-at-unsupported-round" : {
-                                 "description" : "StoppedAtUnsupportedRound indicates that the node does not support the new rounds and has stopped making progress",
-                                 "type" : "boolean"
-                              }
-                           },
-                           "required" : [
-                              "catchup-time",
-                              "last-round",
-                              "last-version",
-                              "next-version",
-                              "next-version-round",
-                              "next-version-supported",
-                              "stopped-at-unsupported-round",
-                              "time-since-last-round"
-                           ]
+                           "$ref" : "#/components/schemas/ErrorResponse"
                         }
                      }
                   }
@@ -337,513 +345,47 @@
                   },
                   "description" : "Internal Error"
                },
-               "401" : {
-                  "description" : "Invalid API Token",
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  }
-               }
-            },
-            "operationId" : "GetStatus"
-         }
-      },
-      "/v2/blocks/{round}" : {
-         "get" : {
-            "responses" : {
-               "500" : {
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     },
-                     "application/msgpack" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  },
-                  "description" : "Internal Error"
-               },
-               "401" : {
-                  "description" : "Invalid API Token",
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     },
-                     "application/msgpack" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  }
-               },
-               "400" : {
-                  "description" : "Bad Request - Non integer number",
-                  "content" : {
-                     "application/msgpack" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     },
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  }
-               },
-               "default" : {
-                  "description" : "Unknown Error",
-                  "content" : {}
-               },
-               "404" : {
-                  "description" : "None existing block ",
-                  "content" : {
-                     "application/msgpack" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     },
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  }
-               },
                "200" : {
-                  "description" : "Encoded block object.",
+                  "description" : "(empty)",
                   "content" : {
                      "application/json" : {
                         "schema" : {
-                           "required" : [
-                              "block"
-                           ],
+                           "type" : "object",
+                           "description" : "NodeStatus contains the information about a node status",
                            "properties" : {
-                              "cert" : {
-                                 "x-algorand-format" : "BlockCertificate",
-                                 "description" : "Optional certificate object. This is only included when the format is set to message pack.",
-                                 "type" : "object",
-                                 "properties" : {}
-                              },
-                              "block" : {
-                                 "x-algorand-format" : "BlockHeader",
-                                 "type" : "object",
-                                 "description" : "Block header data.",
-                                 "properties" : {}
-                              }
-                           },
-                           "type" : "object"
-                        }
-                     },
-                     "application/msgpack" : {
-                        "schema" : {
-                           "required" : [
-                              "block"
-                           ],
-                           "properties" : {
-                              "cert" : {
-                                 "description" : "Optional certificate object. This is only included when the format is set to message pack.",
-                                 "x-algorand-format" : "BlockCertificate",
-                                 "type" : "object",
-                                 "properties" : {}
-                              },
-                              "block" : {
-                                 "x-algorand-format" : "BlockHeader",
-                                 "type" : "object",
-                                 "description" : "Block header data.",
-                                 "properties" : {}
-                              }
-                           },
-                           "type" : "object"
-                        }
-                     }
-                  }
-               }
-            },
-            "summary" : "Get the block for the given round.",
-            "parameters" : [
-               {
-                  "schema" : {
-                     "type" : "string",
-                     "enum" : [
-                        "json",
-                        "msgpack"
-                     ]
-                  },
-                  "description" : "Configures whether the response object is JSON or MessagePack encoded.",
-                  "name" : "format",
-                  "in" : "query"
-               },
-               {
-                  "required" : true,
-                  "description" : "The round from which to fetch block information.",
-                  "schema" : {
-                     "minimum" : 0,
-                     "type" : "integer"
-                  },
-                  "in" : "path",
-                  "name" : "round"
-               }
-            ],
-            "operationId" : "GetBlock"
-         }
-      },
-      "/v2/transactions/params" : {
-         "get" : {
-            "operationId" : "TransactionParams",
-            "responses" : {
-               "401" : {
-                  "description" : "Invalid API Token",
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  }
-               },
-               "default" : {
-                  "content" : {},
-                  "description" : "Unknown Error"
-               },
-               "200" : {
-                  "description" : "TransactionParams contains the parameters that help a client construct a new transaction.",
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "required" : [
-                              "consensus-version",
-                              "fee",
-                              "genesis-hash",
-                              "genesis-id",
-                              "last-round",
-                              "min-fee"
-                           ],
-                           "properties" : {
-                              "genesis-id" : {
-                                 "description" : "GenesisID is an ID listed in the genesis block.",
-                                 "type" : "string"
-                              },
-                              "fee" : {
-                                 "type" : "integer",
-                                 "description" : "Fee is the suggested transaction fee\nFee is in units of micro-Algos per byte.\nFee may fall to zero but transactions must still have a fee of\nat least MinTxnFee for the current network protocol."
+                              "stopped-at-unsupported-round" : {
+                                 "type" : "boolean",
+                                 "description" : "StoppedAtUnsupportedRound indicates that the node does not support the new rounds and has stopped making progress"
                               },
                               "last-round" : {
                                  "type" : "integer",
                                  "description" : "LastRound indicates the last round seen"
                               },
-                              "consensus-version" : {
-                                 "type" : "string",
-                                 "description" : "ConsensusVersion indicates the consensus protocol version\nas of LastRound."
+                              "catchup-time" : {
+                                 "type" : "integer",
+                                 "description" : "CatchupTime in nanoseconds"
                               },
-                              "genesis-hash" : {
-                                 "pattern" : "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                                 "format" : "byte",
-                                 "description" : "GenesisHash is the hash of the genesis block.",
+                              "time-since-last-round" : {
+                                 "description" : "TimeSinceLastRound in nanoseconds",
+                                 "type" : "integer"
+                              },
+                              "next-version" : {
+                                 "type" : "string",
+                                 "description" : "NextVersion of consensus protocol to use"
+                              },
+                              "next-version-round" : {
+                                 "description" : "NextVersionRound is the round at which the next consensus version will apply",
+                                 "type" : "integer"
+                              },
+                              "last-version" : {
+                                 "description" : "LastVersion indicates the last consensus version supported",
                                  "type" : "string"
                               },
-                              "min-fee" : {
-                                 "description" : "The minimum transaction fee (not per byte) required for the\ntxn to validate for the current network protocol.",
-                                 "type" : "integer"
+                              "next-version-supported" : {
+                                 "type" : "boolean",
+                                 "description" : "NextVersionSupported indicates whether the next consensus version is supported by this node"
                               }
                            },
-                           "type" : "object",
-                           "description" : "TransactionParams contains the parameters that help a client construct\na new transaction.",
-                           "x-go-package" : "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
-                        }
-                     }
-                  }
-               }
-            },
-            "summary" : "Get parameters for constructing a new transaction"
-         }
-      },
-      "/v2/transactions/pending" : {
-         "get" : {
-            "parameters" : [
-               {
-                  "in" : "query",
-                  "name" : "max",
-                  "description" : "Truncated number of transactions to display. If max=0, returns all pending txns.",
-                  "schema" : {
-                     "type" : "integer"
-                  }
-               },
-               {
-                  "description" : "Configures whether the response object is JSON or MessagePack encoded.",
-                  "schema" : {
-                     "enum" : [
-                        "json",
-                        "msgpack"
-                     ],
-                     "type" : "string"
-                  },
-                  "name" : "format",
-                  "in" : "query"
-               }
-            ],
-            "responses" : {
-               "default" : {
-                  "description" : "Unknown Error",
-                  "content" : {}
-               },
-               "401" : {
-                  "description" : "Invalid API Token",
-                  "content" : {
-                     "application/msgpack" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     },
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  }
-               },
-               "500" : {
-                  "description" : "Internal Error",
-                  "content" : {
-                     "application/msgpack" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     },
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  }
-               },
-               "200" : {
-                  "content" : {
-                     "application/msgpack" : {
-                        "schema" : {
-                           "required" : [
-                              "top-transactions",
-                              "total-transactions"
-                           ],
-                           "properties" : {
-                              "total-transactions" : {
-                                 "type" : "integer",
-                                 "description" : "Total number of transactions in the pool."
-                              },
-                              "top-transactions" : {
-                                 "items" : {
-                                    "properties" : {},
-                                    "type" : "object",
-                                    "x-algorand-format" : "SignedTransaction"
-                                 },
-                                 "description" : "An array of signed transaction objects.",
-                                 "type" : "array"
-                              }
-                           },
-                           "type" : "object",
-                           "description" : "PendingTransactions is an array of signed transactions exactly as they were submitted."
-                        }
-                     },
-                     "application/json" : {
-                        "schema" : {
-                           "description" : "PendingTransactions is an array of signed transactions exactly as they were submitted.",
-                           "type" : "object",
-                           "required" : [
-                              "top-transactions",
-                              "total-transactions"
-                           ],
-                           "properties" : {
-                              "total-transactions" : {
-                                 "description" : "Total number of transactions in the pool.",
-                                 "type" : "integer"
-                              },
-                              "top-transactions" : {
-                                 "type" : "array",
-                                 "description" : "An array of signed transaction objects.",
-                                 "items" : {
-                                    "type" : "object",
-                                    "x-algorand-format" : "SignedTransaction",
-                                    "properties" : {}
-                                 }
-                              }
-                           }
-                        }
-                     }
-                  },
-                  "description" : "A potentially truncated list of transactions currently in the node's transaction pool. You can compute whether or not the list is truncated if the number of elements in the **top-transactions** array is fewer than **total-transactions**."
-               }
-            },
-            "summary" : "Get a list of unconfirmed transactions currently in the transaction pool.",
-            "operationId" : "GetPendingTransactions",
-            "description" : "Get the list of pending transactions, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.\n"
-         }
-      },
-      "/v2/shutdown" : {
-         "post" : {
-            "parameters" : [
-               {
-                  "schema" : {
-                     "default" : 0,
-                     "type" : "integer"
-                  },
-                  "name" : "timeout",
-                  "in" : "query"
-               }
-            ],
-            "tags" : [
-               "private"
-            ],
-            "responses" : {
-               "200" : {
-                  "description" : "(empty)",
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "type" : "object"
-                        }
-                     }
-                  }
-               }
-            },
-            "operationId" : "ShutdownNode",
-            "description" : "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds."
-         }
-      },
-      "/v2/ledger/supply" : {
-         "get" : {
-            "operationId" : "GetSupply",
-            "summary" : "Get the current supply reported by the ledger.",
-            "responses" : {
-               "default" : {
-                  "description" : "Unknown Error",
-                  "content" : {}
-               },
-               "401" : {
-                  "description" : "Invalid API Token",
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  }
-               },
-               "200" : {
-                  "description" : "Supply represents the current supply of MicroAlgos in the system.",
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "description" : "Supply represents the current supply of MicroAlgos in the system",
-                           "type" : "object",
-                           "properties" : {
-                              "current_round" : {
-                                 "description" : "Round",
-                                 "type" : "integer"
-                              },
-                              "online-money" : {
-                                 "type" : "integer",
-                                 "description" : "OnlineMoney"
-                              },
-                              "total-money" : {
-                                 "type" : "integer",
-                                 "description" : "TotalMoney"
-                              }
-                           },
-                           "required" : [
-                              "current_round",
-                              "online-money",
-                              "total-money"
-                           ]
-                        }
-                     }
-                  }
-               }
-            }
-         }
-      },
-      "/v2/accounts/{address}" : {
-         "get" : {
-            "parameters" : [
-               {
-                  "schema" : {
-                     "type" : "string",
-                     "pattern" : "[A-Z0-9]{58}"
-                  },
-                  "description" : "An account public key",
-                  "required" : true,
-                  "name" : "address",
-                  "in" : "path"
-               }
-            ],
-            "responses" : {
-               "400" : {
-                  "description" : "Malformed address",
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  }
-               },
-               "default" : {
-                  "description" : "Unknown Error",
-                  "content" : {}
-               },
-               "401" : {
-                  "description" : "Invalid API Token",
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  }
-               },
-               "500" : {
-                  "description" : "Internal Error",
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  }
-               },
-               "200" : {
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/Account"
-                        }
-                     }
-                  },
-                  "description" : "(empty)"
-               }
-            },
-            "summary" : "Get account information.",
-            "operationId" : "AccountInformation",
-            "description" : "Given a specific account public key, this call returns the accounts status, balance and spendable amounts"
-         }
-      },
-      "/v2/status/wait-for-block-after/{round}/" : {
-         "get" : {
-            "responses" : {
-               "200" : {
-                  "description" : "(empty)",
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "description" : "NodeStatus contains the information about a node status",
-                           "type" : "object",
                            "required" : [
                               "catchup-time",
                               "last-round",
@@ -853,139 +395,53 @@
                               "next-version-supported",
                               "stopped-at-unsupported-round",
                               "time-since-last-round"
-                           ],
-                           "properties" : {
-                              "stopped-at-unsupported-round" : {
-                                 "type" : "boolean",
-                                 "description" : "StoppedAtUnsupportedRound indicates that the node does not support the new rounds and has stopped making progress"
-                              },
-                              "next-version-supported" : {
-                                 "type" : "boolean",
-                                 "description" : "NextVersionSupported indicates whether the next consensus version is supported by this node"
-                              },
-                              "next-version-round" : {
-                                 "description" : "NextVersionRound is the round at which the next consensus version will apply",
-                                 "type" : "integer"
-                              },
-                              "time-since-last-round" : {
-                                 "type" : "integer",
-                                 "description" : "TimeSinceLastRound in nanoseconds"
-                              },
-                              "next-version" : {
-                                 "description" : "NextVersion of consensus protocol to use",
-                                 "type" : "string"
-                              },
-                              "catchup-time" : {
-                                 "description" : "CatchupTime in nanoseconds",
-                                 "type" : "integer"
-                              },
-                              "last-version" : {
-                                 "type" : "string",
-                                 "description" : "LastVersion indicates the last consensus version supported"
-                              },
-                              "last-round" : {
-                                 "type" : "integer",
-                                 "description" : "LastRound indicates the last round seen"
-                              }
-                           }
-                        }
-                     }
-                  }
-               },
-               "400" : {
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  },
-                  "description" : "Bad Request -- number must be non-negative integer "
-               },
-               "default" : {
-                  "content" : {},
-                  "description" : "Unknown Error"
-               },
-               "500" : {
-                  "description" : "Internal Error",
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
-                        }
-                     }
-                  }
-               },
-               "401" : {
-                  "description" : "Invalid API Token",
-                  "content" : {
-                     "application/json" : {
-                        "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
+                           ]
                         }
                      }
                   }
                }
             },
-            "summary" : "Gets the node status after waiting for the given round.",
-            "parameters" : [
-               {
-                  "in" : "path",
-                  "name" : "round",
-                  "required" : true,
-                  "description" : "The round to wait until returning status",
-                  "schema" : {
-                     "minimum" : 0,
-                     "type" : "integer"
-                  }
-               }
-            ],
-            "operationId" : "WaitForBlock",
-            "description" : "Waits for a block to appear after round {round} and returns the node's status at the time."
+            "summary" : "Gets the current node status."
          }
       },
-      "/v2/transactions/pending/{txid}" : {
+      "/v2/ledger/supply" : {
          "get" : {
-            "description" : "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0) - transaction still in the pool (committed round = 0, pool error = \"\") - transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
-            "operationId" : "PendingTransactionInformation",
-            "parameters" : [
-               {
-                  "in" : "path",
-                  "name" : "txid",
-                  "required" : true,
-                  "description" : "A transaction id",
-                  "schema" : {
-                     "pattern" : "[A-Z0-9]+",
-                     "type" : "string"
-                  }
-               },
-               {
-                  "schema" : {
-                     "enum" : [
-                        "json",
-                        "msgpack"
-                     ],
-                     "type" : "string"
-                  },
-                  "description" : "Configures whether the response object is JSON or MessagePack encoded.",
-                  "name" : "format",
-                  "in" : "query"
-               }
-            ],
+            "operationId" : "GetSupply",
+            "summary" : "Get the current supply reported by the ledger.",
             "responses" : {
-               "400" : {
-                  "description" : "Bad Request",
+               "200" : {
                   "content" : {
                      "application/json" : {
                         "schema" : {
-                           "$ref" : "#/components/schemas/ErrorResponse"
+                           "type" : "object",
+                           "description" : "Supply represents the current supply of MicroAlgos in the system",
+                           "required" : [
+                              "current_round",
+                              "online-money",
+                              "total-money"
+                           ],
+                           "properties" : {
+                              "online-money" : {
+                                 "type" : "integer",
+                                 "description" : "OnlineMoney"
+                              },
+                              "current_round" : {
+                                 "type" : "integer",
+                                 "description" : "Round"
+                              },
+                              "total-money" : {
+                                 "description" : "TotalMoney",
+                                 "type" : "integer"
+                              }
+                           }
                         }
                      }
-                  }
+                  },
+                  "description" : "Supply represents the current supply of MicroAlgos in the system."
                },
                "default" : {
-                  "description" : "Unknown Error",
-                  "content" : {}
+                  "content" : {},
+                  "description" : "Unknown Error"
                },
                "401" : {
                   "content" : {
@@ -996,57 +452,113 @@
                      }
                   },
                   "description" : "Invalid API Token"
+               }
+            }
+         }
+      },
+      "/v2/transactions/pending/{txid}" : {
+         "get" : {
+            "summary" : "Get a specific pending transaction.",
+            "parameters" : [
+               {
+                  "description" : "A transaction id",
+                  "in" : "path",
+                  "required" : true,
+                  "schema" : {
+                     "pattern" : "[A-Z0-9]+",
+                     "type" : "string"
+                  },
+                  "name" : "txid"
+               },
+               {
+                  "description" : "Configures whether the response object is JSON or MessagePack encoded.",
+                  "in" : "query",
+                  "name" : "format",
+                  "schema" : {
+                     "type" : "string",
+                     "enum" : [
+                        "json",
+                        "msgpack"
+                     ]
+                  }
+               }
+            ],
+            "description" : "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0) - transaction still in the pool (committed round = 0, pool error = \"\") - transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
+            "responses" : {
+               "401" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "Invalid API Token"
+               },
+               "default" : {
+                  "description" : "Unknown Error",
+                  "content" : {}
                },
                "200" : {
                   "description" : "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\n\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.",
                   "content" : {
                      "application/json" : {
                         "schema" : {
-                           "required" : [
-                              "pool-error",
-                              "txn"
-                           ],
                            "properties" : {
-                              "closing-amount" : {
-                                 "description" : "Closing amount for the transaction.",
+                              "asset-index" : {
+                                 "type" : "integer",
+                                 "description" : "The asset index if the transaction was found and it created an asset."
+                              },
+                              "confirmed-round" : {
+                                 "description" : "The round where this transaction was confirmed, if present.",
                                  "type" : "integer"
+                              },
+                              "closing-amount" : {
+                                 "type" : "integer",
+                                 "description" : "Closing amount for the transaction."
+                              },
+                              "txn" : {
+                                 "properties" : {},
+                                 "x-algorand-format" : "SignedTransaction",
+                                 "description" : "The raw signed transaction.",
+                                 "type" : "object"
                               },
                               "receiver-rewards" : {
-                                 "description" : "Rewards in microalgos applied to the receiver account.",
-                                 "type" : "integer"
-                              },
-                              "asset-index" : {
-                                 "description" : "The asset index if the transaction was found and it created an asset.",
-                                 "type" : "integer"
+                                 "type" : "integer",
+                                 "description" : "Rewards in microalgos applied to the receiver account."
                               },
                               "close-rewards" : {
                                  "type" : "integer",
                                  "description" : "Rewards in microalgos applied to the close remainder to account."
                               },
-                              "txn" : {
-                                 "properties" : {},
-                                 "x-algorand-format" : "SignedTransaction",
-                                 "type" : "object",
-                                 "description" : "The raw signed transaction."
+                              "pool-error" : {
+                                 "description" : "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
+                                 "type" : "string"
                               },
                               "sender-rewards" : {
-                                 "type" : "integer",
-                                 "description" : "Rewards in microalgos applied to the sender account."
-                              },
-                              "pool-error" : {
-                                 "type" : "string",
-                                 "description" : "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n"
-                              },
-                              "confirmed-round" : {
-                                 "description" : "The round where this transaction was confirmed, if present.",
+                                 "description" : "Rewards in microalgos applied to the sender account.",
                                  "type" : "integer"
                               }
                            },
-                           "type" : "object",
-                           "description" : "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details."
+                           "required" : [
+                              "pool-error",
+                              "txn"
+                           ],
+                           "description" : "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.",
+                           "type" : "object"
                         }
                      }
                   }
+               },
+               "400" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "Bad Request"
                },
                "404" : {
                   "content" : {
@@ -1059,96 +571,837 @@
                   "description" : "Transaction Not Found"
                }
             },
-            "summary" : "Get a specific pending transaction."
-         }
-      }
-   },
-   "tags" : [
-      {
-         "name" : "private"
-      }
-   ],
-   "servers" : [
-      {
-         "url" : "http://localhost/"
-      },
-      {
-         "url" : "https://localhost/"
-      }
-   ],
-   "components" : {
-      "securitySchemes" : {
-         "api_key" : {
-            "type" : "apiKey",
-            "description" : "Generated header parameter. This token can be generated using the Goal command line tool. Example value ='b7e384d0317b8050ce45900a94a1931e28540e1f69b2d242b424659c341b4697'",
-            "in" : "header",
-            "name" : "X-Algo-API-Token"
+            "operationId" : "PendingTransactionInformation"
          }
       },
-      "responses" : {
-         "SupplyResponse" : {
-            "description" : "Supply represents the current supply of MicroAlgos in the system.",
-            "content" : {
-               "application/json" : {
+      "/v2/accounts/{address}" : {
+         "get" : {
+            "parameters" : [
+               {
+                  "description" : "An account public key",
+                  "in" : "path",
+                  "required" : true,
                   "schema" : {
-                     "description" : "Supply represents the current supply of MicroAlgos in the system",
-                     "type" : "object",
-                     "properties" : {
-                        "online-money" : {
-                           "type" : "integer",
-                           "description" : "OnlineMoney"
-                        },
-                        "current_round" : {
-                           "type" : "integer",
-                           "description" : "Round"
-                        },
-                        "total-money" : {
-                           "description" : "TotalMoney",
-                           "type" : "integer"
+                     "type" : "string",
+                     "pattern" : "[A-Z0-9]{58}"
+                  },
+                  "name" : "address"
+               }
+            ],
+            "summary" : "Get account information.",
+            "description" : "Given a specific account public key, this call returns the accounts status, balance and spendable amounts",
+            "responses" : {
+               "401" : {
+                  "description" : "Invalid API Token",
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  }
+               },
+               "default" : {
+                  "content" : {},
+                  "description" : "Unknown Error"
+               },
+               "500" : {
+                  "description" : "Internal Error",
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  }
+               },
+               "400" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "Malformed address"
+               },
+               "200" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/Account"
+                        }
+                     }
+                  },
+                  "description" : "(empty)"
+               }
+            },
+            "operationId" : "AccountInformation"
+         }
+      },
+      "/v2/transactions/pending" : {
+         "get" : {
+            "operationId" : "GetPendingTransactions",
+            "parameters" : [
+               {
+                  "schema" : {
+                     "type" : "integer"
+                  },
+                  "name" : "max",
+                  "in" : "query",
+                  "description" : "Truncated number of transactions to display. If max=0, returns all pending txns."
+               },
+               {
+                  "name" : "format",
+                  "schema" : {
+                     "enum" : [
+                        "json",
+                        "msgpack"
+                     ],
+                     "type" : "string"
+                  },
+                  "description" : "Configures whether the response object is JSON or MessagePack encoded.",
+                  "in" : "query"
+               }
+            ],
+            "summary" : "Get a list of unconfirmed transactions currently in the transaction pool.",
+            "description" : "Get the list of pending transactions, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.\n",
+            "responses" : {
+               "500" : {
+                  "description" : "Internal Error",
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
                         }
                      },
-                     "required" : [
-                        "current_round",
-                        "online-money",
-                        "total-money"
-                     ]
+                     "application/msgpack" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  }
+               },
+               "default" : {
+                  "content" : {},
+                  "description" : "Unknown Error"
+               },
+               "401" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     },
+                     "application/msgpack" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "Invalid API Token"
+               },
+               "200" : {
+                  "description" : "A potentially truncated list of transactions currently in the node's transaction pool. You can compute whether or not the list is truncated if the number of elements in the **top-transactions** array is fewer than **total-transactions**.",
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "type" : "object",
+                           "required" : [
+                              "top-transactions",
+                              "total-transactions"
+                           ],
+                           "properties" : {
+                              "top-transactions" : {
+                                 "type" : "array",
+                                 "items" : {
+                                    "x-algorand-format" : "SignedTransaction",
+                                    "properties" : {},
+                                    "type" : "object"
+                                 },
+                                 "description" : "An array of signed transaction objects."
+                              },
+                              "total-transactions" : {
+                                 "type" : "integer",
+                                 "description" : "Total number of transactions in the pool."
+                              }
+                           },
+                           "description" : "PendingTransactions is an array of signed transactions exactly as they were submitted."
+                        }
+                     },
+                     "application/msgpack" : {
+                        "schema" : {
+                           "type" : "object",
+                           "description" : "PendingTransactions is an array of signed transactions exactly as they were submitted.",
+                           "properties" : {
+                              "total-transactions" : {
+                                 "type" : "integer",
+                                 "description" : "Total number of transactions in the pool."
+                              },
+                              "top-transactions" : {
+                                 "type" : "array",
+                                 "items" : {
+                                    "type" : "object",
+                                    "properties" : {},
+                                    "x-algorand-format" : "SignedTransaction"
+                                 },
+                                 "description" : "An array of signed transaction objects."
+                              }
+                           },
+                           "required" : [
+                              "top-transactions",
+                              "total-transactions"
+                           ]
+                        }
+                     }
                   }
                }
             }
+         }
+      },
+      "/v2/transactions/params" : {
+         "get" : {
+            "responses" : {
+               "401" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "Invalid API Token"
+               },
+               "default" : {
+                  "content" : {},
+                  "description" : "Unknown Error"
+               },
+               "200" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "properties" : {
+                              "consensus-version" : {
+                                 "description" : "ConsensusVersion indicates the consensus protocol version\nas of LastRound.",
+                                 "type" : "string"
+                              },
+                              "min-fee" : {
+                                 "description" : "The minimum transaction fee (not per byte) required for the\ntxn to validate for the current network protocol.",
+                                 "type" : "integer"
+                              },
+                              "genesis-hash" : {
+                                 "type" : "string",
+                                 "format" : "byte",
+                                 "description" : "GenesisHash is the hash of the genesis block.",
+                                 "pattern" : "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+                              },
+                              "last-round" : {
+                                 "type" : "integer",
+                                 "description" : "LastRound indicates the last round seen"
+                              },
+                              "genesis-id" : {
+                                 "description" : "GenesisID is an ID listed in the genesis block.",
+                                 "type" : "string"
+                              },
+                              "fee" : {
+                                 "description" : "Fee is the suggested transaction fee\nFee is in units of micro-Algos per byte.\nFee may fall to zero but transactions must still have a fee of\nat least MinTxnFee for the current network protocol.",
+                                 "type" : "integer"
+                              }
+                           },
+                           "required" : [
+                              "consensus-version",
+                              "fee",
+                              "genesis-hash",
+                              "genesis-id",
+                              "last-round",
+                              "min-fee"
+                           ],
+                           "description" : "TransactionParams contains the parameters that help a client construct\na new transaction.",
+                           "x-go-package" : "github.com/algorand/go-algorand/daemon/algod/api/spec/v1",
+                           "type" : "object"
+                        }
+                     }
+                  },
+                  "description" : "TransactionParams contains the parameters that help a client construct a new transaction."
+               }
+            },
+            "summary" : "Get parameters for constructing a new transaction",
+            "operationId" : "TransactionParams"
+         }
+      },
+      "/v2/shutdown" : {
+         "post" : {
+            "operationId" : "ShutdownNode",
+            "responses" : {
+               "200" : {
+                  "description" : "(empty)",
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "type" : "object"
+                        }
+                     }
+                  }
+               }
+            },
+            "tags" : [
+               "private"
+            ],
+            "description" : "Special management endpoint to shutdown the node. Optionally provide a timeout parameter to indicate that the node should begin shutting down after a number of seconds.",
+            "parameters" : [
+               {
+                  "in" : "query",
+                  "name" : "timeout",
+                  "schema" : {
+                     "type" : "integer",
+                     "default" : 0
+                  }
+               }
+            ]
+         }
+      },
+      "/v2/status/wait-for-block-after/{round}/" : {
+         "get" : {
+            "operationId" : "WaitForBlock",
+            "responses" : {
+               "default" : {
+                  "content" : {},
+                  "description" : "Unknown Error"
+               },
+               "500" : {
+                  "description" : "Internal Error",
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  }
+               },
+               "401" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "Invalid API Token"
+               },
+               "400" : {
+                  "description" : "Bad Request -- number must be non-negative integer ",
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  }
+               },
+               "200" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "type" : "object",
+                           "properties" : {
+                              "stopped-at-unsupported-round" : {
+                                 "type" : "boolean",
+                                 "description" : "StoppedAtUnsupportedRound indicates that the node does not support the new rounds and has stopped making progress"
+                              },
+                              "next-version" : {
+                                 "type" : "string",
+                                 "description" : "NextVersion of consensus protocol to use"
+                              },
+                              "catchup-time" : {
+                                 "type" : "integer",
+                                 "description" : "CatchupTime in nanoseconds"
+                              },
+                              "time-since-last-round" : {
+                                 "type" : "integer",
+                                 "description" : "TimeSinceLastRound in nanoseconds"
+                              },
+                              "last-round" : {
+                                 "type" : "integer",
+                                 "description" : "LastRound indicates the last round seen"
+                              },
+                              "next-version-round" : {
+                                 "type" : "integer",
+                                 "description" : "NextVersionRound is the round at which the next consensus version will apply"
+                              },
+                              "last-version" : {
+                                 "type" : "string",
+                                 "description" : "LastVersion indicates the last consensus version supported"
+                              },
+                              "next-version-supported" : {
+                                 "description" : "NextVersionSupported indicates whether the next consensus version is supported by this node",
+                                 "type" : "boolean"
+                              }
+                           },
+                           "required" : [
+                              "catchup-time",
+                              "last-round",
+                              "last-version",
+                              "next-version",
+                              "next-version-round",
+                              "next-version-supported",
+                              "stopped-at-unsupported-round",
+                              "time-since-last-round"
+                           ],
+                           "description" : "NodeStatus contains the information about a node status"
+                        }
+                     }
+                  },
+                  "description" : "(empty)"
+               }
+            },
+            "description" : "Waits for a block to appear after round {round} and returns the node's status at the time.",
+            "parameters" : [
+               {
+                  "name" : "round",
+                  "schema" : {
+                     "type" : "integer",
+                     "minimum" : 0
+                  },
+                  "required" : true,
+                  "in" : "path",
+                  "description" : "The round to wait until returning status"
+               }
+            ],
+            "summary" : "Gets the node status after waiting for the given round."
+         }
+      },
+      "/v2/accounts/{address}/transactions/pending" : {
+         "get" : {
+            "summary" : "Get a list of unconfirmed transactions currently in the transaction pool by address.",
+            "parameters" : [
+               {
+                  "description" : "An account public key",
+                  "in" : "path",
+                  "required" : true,
+                  "schema" : {
+                     "type" : "string",
+                     "pattern" : "[A-Z0-9]{58}"
+                  },
+                  "name" : "address"
+               },
+               {
+                  "schema" : {
+                     "type" : "integer"
+                  },
+                  "name" : "max",
+                  "in" : "query",
+                  "description" : "Truncated number of transactions to display. If max=0, returns all pending txns."
+               },
+               {
+                  "schema" : {
+                     "type" : "string",
+                     "enum" : [
+                        "json",
+                        "msgpack"
+                     ]
+                  },
+                  "name" : "format",
+                  "description" : "Configures whether the response object is JSON or MessagePack encoded.",
+                  "in" : "query"
+               }
+            ],
+            "description" : "Get the list of pending transactions by address, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.\n",
+            "responses" : {
+               "500" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "Internal Error"
+               },
+               "default" : {
+                  "description" : "Unknown Error",
+                  "content" : {}
+               },
+               "401" : {
+                  "description" : "Invalid API Token",
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  }
+               },
+               "200" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "properties" : {
+                              "top-transactions" : {
+                                 "type" : "array",
+                                 "items" : {
+                                    "properties" : {},
+                                    "x-algorand-format" : "SignedTransaction",
+                                    "type" : "object"
+                                 },
+                                 "description" : "An array of signed transaction objects."
+                              },
+                              "total-transactions" : {
+                                 "description" : "Total number of transactions in the pool.",
+                                 "type" : "integer"
+                              }
+                           },
+                           "required" : [
+                              "top-transactions",
+                              "total-transactions"
+                           ],
+                           "description" : "PendingTransactions is an array of signed transactions exactly as they were submitted.",
+                           "type" : "object"
+                        }
+                     }
+                  },
+                  "description" : "A potentially truncated list of transactions currently in the node's transaction pool. You can compute whether or not the list is truncated if the number of elements in the **top-transactions** array is fewer than **total-transactions**."
+               },
+               "400" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "Max must be a non-negative integer"
+               }
+            },
+            "operationId" : "GetPendingTransactionsByAddress"
+         }
+      }
+   },
+   "components" : {
+      "parameters" : {
+         "next" : {
+            "description" : "The next page of results. Use the next token provided by the previous results.",
+            "in" : "query",
+            "schema" : {
+               "type" : "string"
+            },
+            "name" : "next"
          },
-         "TransactionParametersResponse" : {
-            "description" : "TransactionParams contains the parameters that help a client construct a new transaction.",
+         "address-role" : {
+            "schema" : {
+               "enum" : [
+                  "sender",
+                  "receiver",
+                  "freeze-target"
+               ],
+               "type" : "string"
+            },
+            "name" : "address-role",
+            "in" : "query",
+            "description" : "Combine with the address parameter to define what type of address to search for."
+         },
+         "max" : {
+            "schema" : {
+               "type" : "integer"
+            },
+            "name" : "max",
+            "in" : "query",
+            "description" : "Truncated number of transactions to display. If max=0, returns all pending txns."
+         },
+         "exclude-close-to" : {
+            "in" : "query",
+            "description" : "Combine with address and address-role parameters to define what type of address to search for. The close to fields are normally treated as a receiver, if you would like to exclude them set this parameter to true.",
+            "name" : "exclude-close-to",
+            "schema" : {
+               "type" : "boolean"
+            }
+         },
+         "before-time" : {
+            "description" : "Include results before the given time. Must be an RFC 3339 formatted string.",
+            "x-algorand-format" : "RFC3339 String",
+            "in" : "query",
+            "name" : "before-time",
+            "schema" : {
+               "x-algorand-format" : "RFC3339 String",
+               "type" : "string",
+               "format" : "date-time"
+            }
+         },
+         "asset-id" : {
+            "x-go-name" : "AssetID",
+            "description" : "Asset ID",
+            "in" : "query",
+            "name" : "asset-id",
+            "schema" : {
+               "x-go-name" : "AssetID",
+               "type" : "integer"
+            }
+         },
+         "account-id" : {
+            "required" : true,
+            "x-go-name" : "AccountID",
+            "in" : "path",
+            "description" : "account string",
+            "name" : "account-id",
+            "schema" : {
+               "type" : "string",
+               "x-go-name" : "AccountID"
+            }
+         },
+         "round-number" : {
+            "in" : "path",
+            "description" : "Round number",
+            "required" : true,
+            "schema" : {
+               "type" : "integer"
+            },
+            "name" : "round-number"
+         },
+         "tx-type" : {
+            "in" : "query",
+            "schema" : {
+               "type" : "string",
+               "enum" : [
+                  "pay",
+                  "keyreg",
+                  "acfg",
+                  "axfer",
+                  "afrz"
+               ]
+            },
+            "name" : "tx-type"
+         },
+         "after-time" : {
+            "schema" : {
+               "x-algorand-format" : "RFC3339 String",
+               "type" : "string",
+               "format" : "date-time"
+            },
+            "name" : "after-time",
+            "description" : "Include results after the given time. Must be an RFC 3339 formatted string.",
+            "x-algorand-format" : "RFC3339 String",
+            "in" : "query"
+         },
+         "note-prefix" : {
+            "schema" : {
+               "type" : "string"
+            },
+            "name" : "note-prefix",
+            "in" : "query",
+            "description" : "Specifies a prefix which must be contained in the note field."
+         },
+         "currency-less-than" : {
+            "description" : "Results should have an amount less than this value. MicroAlgos are the default currency unless an asset-id is provided, in which case the asset will be used.",
+            "in" : "query",
+            "name" : "currency-less-than",
+            "schema" : {
+               "type" : "integer"
+            }
+         },
+         "currency-greater-than" : {
+            "schema" : {
+               "type" : "integer"
+            },
+            "name" : "currency-greater-than",
+            "in" : "query",
+            "description" : "Results should have an amount greater than this value. MicroAlgos are the default currency unless an asset-id is provided, in which case the asset will be used."
+         },
+         "limit" : {
+            "name" : "limit",
+            "schema" : {
+               "type" : "integer"
+            },
+            "description" : "Maximum number of results to return.",
+            "in" : "query"
+         },
+         "address" : {
+            "schema" : {
+               "x-algorand-format" : "RFC3339 String",
+               "type" : "string"
+            },
+            "name" : "address",
+            "description" : "Only include transactions with this address in one of the transaction fields.",
+            "in" : "query",
+            "x-algorand-format" : "RFC3339 String"
+         },
+         "max-round" : {
+            "description" : "Include results at or before the specified max-round.",
+            "in" : "query",
+            "schema" : {
+               "type" : "integer"
+            },
+            "name" : "max-round"
+         },
+         "format" : {
+            "description" : "Configures whether the response object is JSON or MessagePack encoded.",
+            "in" : "query",
+            "name" : "format",
+            "schema" : {
+               "type" : "string",
+               "enum" : [
+                  "json",
+                  "msgpack"
+               ]
+            }
+         },
+         "tx-id" : {
+            "description" : "Lookup the specific transaction by ID.",
+            "x-algorand-format" : "Address",
+            "in" : "query",
+            "x-go-name" : "TxID",
+            "schema" : {
+               "x-algorand-format" : "Address",
+               "x-go-name" : "TxID",
+               "type" : "string"
+            },
+            "name" : "tx-id"
+         },
+         "min-round" : {
+            "in" : "query",
+            "description" : "Include results at or after the specified min-round.",
+            "name" : "min-round",
+            "schema" : {
+               "type" : "integer"
+            }
+         },
+         "round" : {
+            "description" : "Include results for the specified round.",
+            "in" : "query",
+            "name" : "round",
+            "schema" : {
+               "type" : "integer"
+            }
+         },
+         "sig-type" : {
+            "name" : "sig-type",
+            "schema" : {
+               "enum" : [
+                  "sig",
+                  "msig",
+                  "lsig"
+               ],
+               "type" : "string"
+            },
+            "in" : "query",
+            "description" : "SigType filters just results using the specified type of signature:\n* sig - Standard\n* msig - MultiSig\n* lsig - LogicSig"
+         }
+      },
+      "responses" : {
+         "PostTransactionsResponse" : {
             "content" : {
                "application/json" : {
                   "schema" : {
                      "type" : "object",
-                     "description" : "TransactionParams contains the parameters that help a client construct\na new transaction.",
+                     "required" : [
+                        "txId"
+                     ],
                      "properties" : {
-                        "genesis-id" : {
-                           "description" : "GenesisID is an ID listed in the genesis block.",
-                           "type" : "string"
+                        "txId" : {
+                           "type" : "string",
+                           "description" : "encoding of the transaction hash."
+                        }
+                     }
+                  }
+               }
+            },
+            "description" : "Transaction ID of the submission."
+         },
+         "PendingTransactionsResponse" : {
+            "content" : {
+               "application/json" : {
+                  "schema" : {
+                     "type" : "object",
+                     "description" : "PendingTransactions is an array of signed transactions exactly as they were submitted.",
+                     "required" : [
+                        "top-transactions",
+                        "total-transactions"
+                     ],
+                     "properties" : {
+                        "top-transactions" : {
+                           "description" : "An array of signed transaction objects.",
+                           "type" : "array",
+                           "items" : {
+                              "type" : "object",
+                              "x-algorand-format" : "SignedTransaction",
+                              "properties" : {}
+                           }
                         },
-                        "fee" : {
+                        "total-transactions" : {
                            "type" : "integer",
-                           "description" : "Fee is the suggested transaction fee\nFee is in units of micro-Algos per byte.\nFee may fall to zero but transactions must still have a fee of\nat least MinTxnFee for the current network protocol."
+                           "description" : "Total number of transactions in the pool."
+                        }
+                     }
+                  }
+               }
+            },
+            "description" : "A potentially truncated list of transactions currently in the node's transaction pool. You can compute whether or not the list is truncated if the number of elements in the **top-transactions** array is fewer than **total-transactions**."
+         },
+         "AccountResponse" : {
+            "content" : {
+               "application/json" : {
+                  "schema" : {
+                     "$ref" : "#/components/schemas/Account"
+                  }
+               }
+            },
+            "description" : "(empty)"
+         },
+         "BlockResponse" : {
+            "content" : {
+               "application/json" : {
+                  "schema" : {
+                     "properties" : {
+                        "block" : {
+                           "type" : "object",
+                           "x-algorand-format" : "BlockHeader",
+                           "description" : "Block header data.",
+                           "properties" : {}
                         },
-                        "last-round" : {
+                        "cert" : {
+                           "properties" : {},
+                           "description" : "Optional certificate object. This is only included when the format is set to message pack.",
+                           "x-algorand-format" : "BlockCertificate",
+                           "type" : "object"
+                        }
+                     },
+                     "required" : [
+                        "block"
+                     ],
+                     "type" : "object"
+                  }
+               }
+            },
+            "description" : "Encoded block object."
+         },
+         "TransactionParametersResponse" : {
+            "content" : {
+               "application/json" : {
+                  "schema" : {
+                     "properties" : {
+                        "min-fee" : {
                            "type" : "integer",
-                           "description" : "LastRound indicates the last round seen"
+                           "description" : "The minimum transaction fee (not per byte) required for the\ntxn to validate for the current network protocol."
                         },
                         "consensus-version" : {
                            "type" : "string",
                            "description" : "ConsensusVersion indicates the consensus protocol version\nas of LastRound."
                         },
-                        "min-fee" : {
-                           "description" : "The minimum transaction fee (not per byte) required for the\ntxn to validate for the current network protocol.",
-                           "type" : "integer"
-                        },
                         "genesis-hash" : {
-                           "type" : "string",
-                           "description" : "GenesisHash is the hash of the genesis block.",
                            "pattern" : "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                           "description" : "GenesisHash is the hash of the genesis block.",
+                           "type" : "string",
                            "format" : "byte"
+                        },
+                        "genesis-id" : {
+                           "type" : "string",
+                           "description" : "GenesisID is an ID listed in the genesis block."
+                        },
+                        "last-round" : {
+                           "type" : "integer",
+                           "description" : "LastRound indicates the last round seen"
+                        },
+                        "fee" : {
+                           "type" : "integer",
+                           "description" : "Fee is the suggested transaction fee\nFee is in units of micro-Algos per byte.\nFee may fall to zero but transactions must still have a fee of\nat least MinTxnFee for the current network protocol."
                         }
                      },
                      "required" : [
@@ -1159,158 +1412,83 @@
                         "last-round",
                         "min-fee"
                      ],
-                     "x-go-package" : "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
-                  }
-               }
-            }
-         },
-         "PendingTransactionResponse" : {
-            "content" : {
-               "application/json" : {
-                  "schema" : {
-                     "properties" : {
-                        "asset-index" : {
-                           "type" : "integer",
-                           "description" : "The asset index if the transaction was found and it created an asset."
-                        },
-                        "close-rewards" : {
-                           "type" : "integer",
-                           "description" : "Rewards in microalgos applied to the close remainder to account."
-                        },
-                        "receiver-rewards" : {
-                           "description" : "Rewards in microalgos applied to the receiver account.",
-                           "type" : "integer"
-                        },
-                        "closing-amount" : {
-                           "type" : "integer",
-                           "description" : "Closing amount for the transaction."
-                        },
-                        "pool-error" : {
-                           "type" : "string",
-                           "description" : "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n"
-                        },
-                        "confirmed-round" : {
-                           "description" : "The round where this transaction was confirmed, if present.",
-                           "type" : "integer"
-                        },
-                        "txn" : {
-                           "properties" : {},
-                           "description" : "The raw signed transaction.",
-                           "x-algorand-format" : "SignedTransaction",
-                           "type" : "object"
-                        },
-                        "sender-rewards" : {
-                           "type" : "integer",
-                           "description" : "Rewards in microalgos applied to the sender account."
-                        }
-                     },
-                     "required" : [
-                        "pool-error",
-                        "txn"
-                     ],
-                     "type" : "object",
-                     "description" : "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details."
+                     "description" : "TransactionParams contains the parameters that help a client construct\na new transaction.",
+                     "x-go-package" : "github.com/algorand/go-algorand/daemon/algod/api/spec/v1",
+                     "type" : "object"
                   }
                }
             },
-            "description" : "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\n\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error."
+            "description" : "TransactionParams contains the parameters that help a client construct a new transaction."
          },
-         "PendingTransactionsResponse" : {
-            "description" : "A potentially truncated list of transactions currently in the node's transaction pool. You can compute whether or not the list is truncated if the number of elements in the **top-transactions** array is fewer than **total-transactions**.",
+         "SupplyResponse" : {
             "content" : {
                "application/json" : {
                   "schema" : {
-                     "description" : "PendingTransactions is an array of signed transactions exactly as they were submitted.",
                      "type" : "object",
-                     "required" : [
-                        "top-transactions",
-                        "total-transactions"
-                     ],
+                     "description" : "Supply represents the current supply of MicroAlgos in the system",
                      "properties" : {
-                        "top-transactions" : {
-                           "items" : {
-                              "properties" : {},
-                              "x-algorand-format" : "SignedTransaction",
-                              "type" : "object"
-                           },
-                           "type" : "array",
-                           "description" : "An array of signed transaction objects."
-                        },
-                        "total-transactions" : {
+                        "total-money" : {
                            "type" : "integer",
-                           "description" : "Total number of transactions in the pool."
-                        }
-                     }
-                  }
-               }
-            }
-         },
-         "PostTransactionsResponse" : {
-            "description" : "Transaction ID of the submission.",
-            "content" : {
-               "application/json" : {
-                  "schema" : {
-                     "type" : "object",
-                     "properties" : {
-                        "txId" : {
-                           "description" : "encoding of the transaction hash.",
-                           "type" : "string"
+                           "description" : "TotalMoney"
+                        },
+                        "current_round" : {
+                           "description" : "Round",
+                           "type" : "integer"
+                        },
+                        "online-money" : {
+                           "type" : "integer",
+                           "description" : "OnlineMoney"
                         }
                      },
                      "required" : [
-                        "txId"
+                        "current_round",
+                        "online-money",
+                        "total-money"
                      ]
                   }
                }
-            }
-         },
-         "AccountResponse" : {
-            "description" : "(empty)",
-            "content" : {
-               "application/json" : {
-                  "schema" : {
-                     "$ref" : "#/components/schemas/Account"
-                  }
-               }
-            }
+            },
+            "description" : "Supply represents the current supply of MicroAlgos in the system."
          },
          "NodeStatusResponse" : {
             "description" : "(empty)",
             "content" : {
                "application/json" : {
                   "schema" : {
+                     "type" : "object",
+                     "description" : "NodeStatus contains the information about a node status",
                      "properties" : {
                         "stopped-at-unsupported-round" : {
                            "description" : "StoppedAtUnsupportedRound indicates that the node does not support the new rounds and has stopped making progress",
                            "type" : "boolean"
                         },
+                        "next-version" : {
+                           "description" : "NextVersion of consensus protocol to use",
+                           "type" : "string"
+                        },
                         "time-since-last-round" : {
                            "type" : "integer",
                            "description" : "TimeSinceLastRound in nanoseconds"
                         },
-                        "next-version-supported" : {
-                           "description" : "NextVersionSupported indicates whether the next consensus version is supported by this node",
-                           "type" : "boolean"
+                        "catchup-time" : {
+                           "description" : "CatchupTime in nanoseconds",
+                           "type" : "integer"
+                        },
+                        "last-round" : {
+                           "type" : "integer",
+                           "description" : "LastRound indicates the last round seen"
                         },
                         "next-version-round" : {
                            "type" : "integer",
                            "description" : "NextVersionRound is the round at which the next consensus version will apply"
                         },
-                        "catchup-time" : {
-                           "type" : "integer",
-                           "description" : "CatchupTime in nanoseconds"
-                        },
-                        "next-version" : {
-                           "description" : "NextVersion of consensus protocol to use",
-                           "type" : "string"
+                        "next-version-supported" : {
+                           "description" : "NextVersionSupported indicates whether the next consensus version is supported by this node",
+                           "type" : "boolean"
                         },
                         "last-version" : {
-                           "type" : "string",
-                           "description" : "LastVersion indicates the last consensus version supported"
-                        },
-                        "last-round" : {
-                           "type" : "integer",
-                           "description" : "LastRound indicates the last round seen"
+                           "description" : "LastVersion indicates the last consensus version supported",
+                           "type" : "string"
                         }
                      },
                      "required" : [
@@ -1322,275 +1500,65 @@
                         "next-version-supported",
                         "stopped-at-unsupported-round",
                         "time-since-last-round"
-                     ],
-                     "description" : "NodeStatus contains the information about a node status",
-                     "type" : "object"
+                     ]
                   }
                }
             }
          },
-         "BlockResponse" : {
+         "PendingTransactionResponse" : {
+            "description" : "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\n\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.",
             "content" : {
                "application/json" : {
                   "schema" : {
                      "type" : "object",
+                     "required" : [
+                        "pool-error",
+                        "txn"
+                     ],
                      "properties" : {
-                        "cert" : {
-                           "properties" : {},
-                           "type" : "object",
-                           "x-algorand-format" : "BlockCertificate",
-                           "description" : "Optional certificate object. This is only included when the format is set to message pack."
+                        "asset-index" : {
+                           "description" : "The asset index if the transaction was found and it created an asset.",
+                           "type" : "integer"
                         },
-                        "block" : {
-                           "description" : "Block header data.",
-                           "x-algorand-format" : "BlockHeader",
+                        "closing-amount" : {
+                           "type" : "integer",
+                           "description" : "Closing amount for the transaction."
+                        },
+                        "confirmed-round" : {
+                           "type" : "integer",
+                           "description" : "The round where this transaction was confirmed, if present."
+                        },
+                        "txn" : {
                            "type" : "object",
+                           "x-algorand-format" : "SignedTransaction",
+                           "description" : "The raw signed transaction.",
                            "properties" : {}
+                        },
+                        "sender-rewards" : {
+                           "type" : "integer",
+                           "description" : "Rewards in microalgos applied to the sender account."
+                        },
+                        "pool-error" : {
+                           "type" : "string",
+                           "description" : "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n"
+                        },
+                        "close-rewards" : {
+                           "description" : "Rewards in microalgos applied to the close remainder to account.",
+                           "type" : "integer"
+                        },
+                        "receiver-rewards" : {
+                           "type" : "integer",
+                           "description" : "Rewards in microalgos applied to the receiver account."
                         }
                      },
-                     "required" : [
-                        "block"
-                     ]
+                     "description" : "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details."
                   }
                }
-            },
-            "description" : "Encoded block object."
-         }
-      },
-      "parameters" : {
-         "sig-type" : {
-            "schema" : {
-               "enum" : [
-                  "sig",
-                  "msig",
-                  "lsig"
-               ],
-               "type" : "string"
-            },
-            "description" : "SigType filters just results using the specified type of signature:\n* sig - Standard\n* msig - MultiSig\n* lsig - LogicSig",
-            "name" : "sig-type",
-            "in" : "query"
-         },
-         "next" : {
-            "in" : "query",
-            "name" : "next",
-            "description" : "The next page of results. Use the next token provided by the previous results.",
-            "schema" : {
-               "type" : "string"
-            }
-         },
-         "before-time" : {
-            "name" : "before-time",
-            "in" : "query",
-            "x-algorand-format" : "RFC3339 String",
-            "description" : "Include results before the given time. Must be an RFC 3339 formatted string.",
-            "schema" : {
-               "format" : "date-time",
-               "x-algorand-format" : "RFC3339 String",
-               "type" : "string"
-            }
-         },
-         "note-prefix" : {
-            "description" : "Specifies a prefix which must be contained in the note field.",
-            "schema" : {
-               "type" : "string",
-               "format" : "byte"
-            },
-            "name" : "note-prefix",
-            "in" : "query"
-         },
-         "limit" : {
-            "in" : "query",
-            "name" : "limit",
-            "description" : "Maximum number of results to return.",
-            "schema" : {
-               "type" : "integer"
-            }
-         },
-         "max" : {
-            "schema" : {
-               "type" : "integer"
-            },
-            "description" : "Truncated number of transactions to display. If max=0, returns all pending txns.",
-            "in" : "query",
-            "name" : "max"
-         },
-         "address-role" : {
-            "in" : "query",
-            "name" : "address-role",
-            "description" : "Combine with the address parameter to define what type of address to search for.",
-            "schema" : {
-               "type" : "string",
-               "enum" : [
-                  "sender",
-                  "receiver",
-                  "freeze-target"
-               ]
-            }
-         },
-         "round" : {
-            "in" : "query",
-            "name" : "round",
-            "description" : "Include results for the specified round.",
-            "schema" : {
-               "type" : "integer"
-            }
-         },
-         "after-time" : {
-            "schema" : {
-               "format" : "date-time",
-               "x-algorand-format" : "RFC3339 String",
-               "type" : "string"
-            },
-            "x-algorand-format" : "RFC3339 String",
-            "description" : "Include results after the given time. Must be an RFC 3339 formatted string.",
-            "in" : "query",
-            "name" : "after-time"
-         },
-         "max-round" : {
-            "name" : "max-round",
-            "in" : "query",
-            "description" : "Include results at or before the specified max-round.",
-            "schema" : {
-               "type" : "integer"
-            }
-         },
-         "currency-less-than" : {
-            "name" : "currency-less-than",
-            "in" : "query",
-            "schema" : {
-               "type" : "integer"
-            },
-            "description" : "Results should have an amount less than this value. MicroAlgos are the default currency unless an asset-id is provided, in which case the asset will be used."
-         },
-         "tx-id" : {
-            "name" : "tx-id",
-            "in" : "query",
-            "schema" : {
-               "type" : "string",
-               "x-go-name" : "TxID",
-               "x-algorand-format" : "Address",
-               "format" : "byte"
-            },
-            "x-algorand-format" : "Address",
-            "x-go-name" : "TxID",
-            "description" : "Lookup the specific transaction by ID."
-         },
-         "tx-type" : {
-            "in" : "query",
-            "name" : "tx-type",
-            "schema" : {
-               "type" : "string",
-               "enum" : [
-                  "pay",
-                  "keyreg",
-                  "acfg",
-                  "axfer",
-                  "afrz"
-               ]
-            }
-         },
-         "format" : {
-            "description" : "Configures whether the response object is JSON or MessagePack encoded.",
-            "schema" : {
-               "enum" : [
-                  "json",
-                  "msgpack"
-               ],
-               "type" : "string"
-            },
-            "in" : "query",
-            "name" : "format"
-         },
-         "address" : {
-            "schema" : {
-               "type" : "string",
-               "x-algorand-format" : "RFC3339 String"
-            },
-            "description" : "Only include transactions with this address in one of the transaction fields.",
-            "x-algorand-format" : "RFC3339 String",
-            "in" : "query",
-            "name" : "address"
-         },
-         "currency-greater-than" : {
-            "description" : "Results should have an amount greater than this value. MicroAlgos are the default currency unless an asset-id is provided, in which case the asset will be used.",
-            "schema" : {
-               "type" : "integer"
-            },
-            "in" : "query",
-            "name" : "currency-greater-than"
-         },
-         "round-number" : {
-            "in" : "path",
-            "name" : "round-number",
-            "schema" : {
-               "type" : "integer"
-            },
-            "required" : true,
-            "description" : "Round number"
-         },
-         "account-id" : {
-            "required" : true,
-            "x-go-name" : "AccountID",
-            "description" : "account string",
-            "schema" : {
-               "x-go-name" : "AccountID",
-               "type" : "string"
-            },
-            "in" : "path",
-            "name" : "account-id"
-         },
-         "exclude-close-to" : {
-            "in" : "query",
-            "name" : "exclude-close-to",
-            "schema" : {
-               "type" : "boolean"
-            },
-            "description" : "Combine with address and address-role parameters to define what type of address to search for. The close to fields are normally treated as a receiver, if you would like to exclude them set this parameter to true."
-         },
-         "min-round" : {
-            "name" : "min-round",
-            "in" : "query",
-            "description" : "Include results at or after the specified min-round.",
-            "schema" : {
-               "type" : "integer"
-            }
-         },
-         "asset-id" : {
-            "in" : "query",
-            "name" : "asset-id",
-            "description" : "Asset ID",
-            "x-go-name" : "AssetID",
-            "schema" : {
-               "type" : "integer",
-               "x-go-name" : "AssetID"
             }
          }
       },
       "schemas" : {
          "VersionBuild" : {
-            "properties" : {
-               "build-number" : {
-                  "type" : "integer"
-               },
-               "branch" : {
-                  "type" : "string"
-               },
-               "minor" : {
-                  "type" : "integer"
-               },
-               "commit-hash" : {
-                  "pattern" : "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                  "format" : "byte",
-                  "type" : "string"
-               },
-               "major" : {
-                  "type" : "integer"
-               },
-               "channel" : {
-                  "type" : "string"
-               }
-            },
             "required" : [
                "branch",
                "build-number",
@@ -1599,10 +1567,130 @@
                "major",
                "minor"
             ],
-            "type" : "object",
-            "description" : "the current algod build version information."
+            "properties" : {
+               "major" : {
+                  "type" : "integer"
+               },
+               "channel" : {
+                  "type" : "string"
+               },
+               "build-number" : {
+                  "type" : "integer"
+               },
+               "commit-hash" : {
+                  "pattern" : "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                  "type" : "string",
+                  "format" : "byte"
+               },
+               "branch" : {
+                  "type" : "string"
+               },
+               "minor" : {
+                  "type" : "integer"
+               }
+            },
+            "description" : "the current algod build version information.",
+            "type" : "object"
+         },
+         "AssetParams" : {
+            "properties" : {
+               "name" : {
+                  "description" : "\\[an\\] Name of this asset, as supplied by the creator.",
+                  "type" : "string"
+               },
+               "reserve" : {
+                  "description" : "\\[r\\] Address of account holding reserve (non-minted) units of this asset.",
+                  "type" : "string"
+               },
+               "url" : {
+                  "type" : "string",
+                  "description" : "\\[au\\] URL where more information about the asset can be retrieved."
+               },
+               "metadata-hash" : {
+                  "format" : "byte",
+                  "type" : "string",
+                  "pattern" : "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                  "description" : "\\[am\\] A commitment to some unspecified asset metadata. The format of this metadata is up to the application."
+               },
+               "creator" : {
+                  "type" : "string",
+                  "description" : "The address that created this asset. This is the address where the parameters for this asset can be found, and also the address where unwanted asset units can be sent in the worst case."
+               },
+               "clawback" : {
+                  "type" : "string",
+                  "description" : "\\[c\\] Address of account used to clawback holdings of this asset.  If empty, clawback is not permitted."
+               },
+               "total" : {
+                  "type" : "integer",
+                  "description" : "\\[t\\] The total number of units of this asset.",
+                  "x-algorand-format" : "uint64"
+               },
+               "unit-name" : {
+                  "description" : "\\[un\\] Name of a unit of this asset, as supplied by the creator.",
+                  "type" : "string"
+               },
+               "default-frozen" : {
+                  "description" : "\\[df\\] Whether holdings of this asset are frozen by default.",
+                  "type" : "boolean"
+               },
+               "manager" : {
+                  "description" : "\\[m\\] Address of account used to manage the keys of this asset and to destroy it.",
+                  "type" : "string"
+               },
+               "freeze" : {
+                  "description" : "\\[f\\] Address of account used to freeze holdings of this asset.  If empty, freezing is not permitted.",
+                  "type" : "string"
+               },
+               "decimals" : {
+                  "type" : "integer",
+                  "minimum" : 0,
+                  "maximum" : 19,
+                  "description" : "\\[dc\\] The number of digits to use after the decimal point when displaying this asset. If 0, the asset is not divisible. If 1, the base unit of the asset is in tenths. If 2, the base unit of the asset is in hundredths, and so on. This value must be between 0 and 19 (inclusive)."
+               }
+            },
+            "required" : [
+               "creator",
+               "decimals",
+               "total"
+            ],
+            "description" : "AssetParams specifies the parameters for an asset.\n\n\\[apar\\] when part of an AssetConfig transaction.\n\nDefinition:\ndata/transactions/asset.go : AssetParams",
+            "type" : "object"
+         },
+         "Version" : {
+            "x-go-package" : "github.com/algorand/go-algorand/daemon/algod/api/spec/common",
+            "description" : "Note that we annotate this as a model so that legacy clients\ncan directly import a swagger generated Version model.",
+            "required" : [
+               "build",
+               "genesis-hash",
+               "genesis-id",
+               "versions"
+            ],
+            "properties" : {
+               "genesis-hash" : {
+                  "pattern" : "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                  "type" : "string",
+                  "format" : "byte"
+               },
+               "versions" : {
+                  "items" : {
+                     "type" : "string"
+                  },
+                  "type" : "array"
+               },
+               "build" : {
+                  "$ref" : "#/components/schemas/VersionBuild"
+               },
+               "genesis-id" : {
+                  "type" : "string"
+               }
+            },
+            "type" : "object"
          },
          "ErrorResponse" : {
+            "type" : "object",
+            "required" : [
+               "message"
+            ],
             "properties" : {
                "data" : {
                   "type" : "string"
@@ -1611,133 +1699,32 @@
                   "type" : "string"
                }
             },
-            "required" : [
-               "message"
-            ],
-            "type" : "object",
             "description" : "An error response with optional data field."
          },
          "Asset" : {
-            "type" : "object",
             "description" : "Specifies both the unique identifier and the parameters for an asset",
-            "required" : [
-               "index",
-               "params"
-            ],
             "properties" : {
                "index" : {
-                  "description" : "unique asset identifier",
-                  "type" : "integer"
+                  "type" : "integer",
+                  "description" : "unique asset identifier"
                },
                "params" : {
                   "$ref" : "#/components/schemas/AssetParams"
                }
-            }
-         },
-         "AssetParams" : {
+            },
             "required" : [
-               "creator",
-               "decimals",
-               "total"
+               "index",
+               "params"
             ],
-            "properties" : {
-               "creator" : {
-                  "type" : "string",
-                  "description" : "The address that created this asset. This is the address where the parameters for this asset can be found, and also the address where unwanted asset units can be sent in the worst case."
-               },
-               "default-frozen" : {
-                  "description" : "\\[df\\] Whether holdings of this asset are frozen by default.",
-                  "type" : "boolean"
-               },
-               "total" : {
-                  "x-algorand-format" : "uint64",
-                  "type" : "integer",
-                  "description" : "\\[t\\] The total number of units of this asset."
-               },
-               "metadata-hash" : {
-                  "description" : "\\[am\\] A commitment to some unspecified asset metadata. The format of this metadata is up to the application.",
-                  "type" : "string",
-                  "pattern" : "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                  "format" : "byte"
-               },
-               "unit-name" : {
-                  "description" : "\\[un\\] Name of a unit of this asset, as supplied by the creator.",
-                  "type" : "string"
-               },
-               "decimals" : {
-                  "type" : "integer",
-                  "description" : "\\[dc\\] The number of digits to use after the decimal point when displaying this asset. If 0, the asset is not divisible. If 1, the base unit of the asset is in tenths. If 2, the base unit of the asset is in hundredths, and so on. This value must be between 0 and 19 (inclusive).",
-                  "minimum" : 0,
-                  "maximum" : 19
-               },
-               "reserve" : {
-                  "type" : "string",
-                  "description" : "\\[r\\] Address of account holding reserve (non-minted) units of this asset."
-               },
-               "freeze" : {
-                  "type" : "string",
-                  "description" : "\\[f\\] Address of account used to freeze holdings of this asset.  If empty, freezing is not permitted."
-               },
-               "name" : {
-                  "type" : "string",
-                  "description" : "\\[an\\] Name of this asset, as supplied by the creator."
-               },
-               "url" : {
-                  "description" : "\\[au\\] URL where more information about the asset can be retrieved.",
-                  "type" : "string"
-               },
-               "manager" : {
-                  "type" : "string",
-                  "description" : "\\[m\\] Address of account used to manage the keys of this asset and to destroy it."
-               },
-               "clawback" : {
-                  "description" : "\\[c\\] Address of account used to clawback holdings of this asset.  If empty, clawback is not permitted.",
-                  "type" : "string"
-               }
-            },
-            "type" : "object",
-            "description" : "AssetParams specifies the parameters for an asset.\n\n\\[apar\\] when part of an AssetConfig transaction.\n\nDefinition:\ndata/transactions/asset.go : AssetParams"
-         },
-         "AssetHolding" : {
-            "type" : "object",
-            "description" : "Describes an asset held by an account.\n\nDefinition:\ndata/basics/userBalance.go : AssetHolding",
-            "properties" : {
-               "is-frozen" : {
-                  "type" : "boolean",
-                  "description" : "\\[f\\] whether or not the holding is frozen."
-               },
-               "creator" : {
-                  "type" : "string",
-                  "description" : "Address that created this asset. This is the address where the parameters for this asset can be found, and also the address where unwanted asset units can be sent in the worst case."
-               },
-               "asset-id" : {
-                  "type" : "integer",
-                  "x-go-name" : "AssetID",
-                  "description" : "Asset ID of the holding."
-               },
-               "amount" : {
-                  "type" : "integer",
-                  "description" : "\\[a\\] number of units held."
-               }
-            },
-            "required" : [
-               "amount",
-               "asset-id",
-               "creator",
-               "is-frozen"
-            ]
+            "type" : "object"
          },
          "AccountParticipation" : {
+            "type" : "object",
+            "description" : "AccountParticipation describes the parameters used by this account in consensus protocol.",
             "properties" : {
                "vote-key-dilution" : {
                   "type" : "integer",
                   "description" : "\\[voteKD\\] Number of subkeys in each batch of participation keys."
-               },
-               "selection-participation-key" : {
-                  "type" : "string",
-                  "description" : "\\[sel\\] Selection public key (if any) currently registered for this round.",
-                  "pattern" : "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                  "format" : "byte"
                },
                "vote-first-valid" : {
                   "description" : "\\[voteFst\\] First round for which this participation is valid.",
@@ -1748,10 +1735,16 @@
                   "type" : "integer"
                },
                "vote-participation-key" : {
-                  "description" : "\\[vote\\] root participation public key (if any) currently registered for this round.",
-                  "type" : "string",
                   "format" : "byte",
-                  "pattern" : "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+                  "type" : "string",
+                  "pattern" : "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                  "description" : "\\[vote\\] root participation public key (if any) currently registered for this round."
+               },
+               "selection-participation-key" : {
+                  "description" : "\\[sel\\] Selection public key (if any) currently registered for this round.",
+                  "pattern" : "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+                  "type" : "string",
+                  "format" : "byte"
                }
             },
             "required" : [
@@ -1760,43 +1753,11 @@
                "vote-key-dilution",
                "vote-last-valid",
                "vote-participation-key"
-            ],
-            "type" : "object",
-            "description" : "AccountParticipation describes the parameters used by this account in consensus protocol."
-         },
-         "Version" : {
-            "x-go-package" : "github.com/algorand/go-algorand/daemon/algod/api/spec/common",
-            "properties" : {
-               "versions" : {
-                  "type" : "array",
-                  "items" : {
-                     "type" : "string"
-                  }
-               },
-               "genesis-id" : {
-                  "type" : "string"
-               },
-               "build" : {
-                  "$ref" : "#/components/schemas/VersionBuild"
-               },
-               "genesis-hash" : {
-                  "format" : "byte",
-                  "pattern" : "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-                  "type" : "string"
-               }
-            },
-            "required" : [
-               "build",
-               "genesis-hash",
-               "genesis-id",
-               "versions"
-            ],
-            "description" : "Note that we annotate this as a model so that legacy clients\ncan directly import a swagger generated Version model.",
-            "type" : "object"
+            ]
          },
          "Account" : {
-            "description" : "Account information at a given round.\n\nDefinition:\ndata/basics/userBalance.go : AccountData\n",
             "type" : "object",
+            "description" : "Account information at a given round.\n\nDefinition:\ndata/basics/userBalance.go : AccountData\n",
             "required" : [
                "address",
                "amount",
@@ -1807,71 +1768,108 @@
                "status"
             ],
             "properties" : {
-               "assets" : {
-                  "type" : "array",
-                  "description" : "\\[asset\\] assets held by this account.\n\nNote the raw object uses `map[int] -> AssetHolding` for this type.",
-                  "items" : {
-                     "$ref" : "#/components/schemas/AssetHolding"
-                  }
-               },
-               "created-assets" : {
-                  "items" : {
-                     "$ref" : "#/components/schemas/Asset"
-                  },
-                  "type" : "array",
-                  "description" : "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -> Asset` for this type."
-               },
-               "amount" : {
-                  "type" : "integer",
-                  "description" : "\\[algo\\] total number of MicroAlgos in the account"
-               },
                "participation" : {
                   "$ref" : "#/components/schemas/AccountParticipation"
                },
-               "rewards" : {
-                  "type" : "integer",
-                  "description" : "\\[ern\\] total rewards of MicroAlgos the account has received, including pending rewards."
+               "amount-without-pending-rewards" : {
+                  "description" : "specifies the amount of MicroAlgos in the account, without the pending rewards.",
+                  "type" : "integer"
                },
-               "reward-base" : {
-                  "type" : "integer",
-                  "description" : "\\[ebase\\] used as part of the rewards computation. Only applicable to accounts which are participating."
+               "address" : {
+                  "description" : "the account public key",
+                  "type" : "string"
+               },
+               "amount" : {
+                  "description" : "\\[algo\\] total number of MicroAlgos in the account",
+                  "type" : "integer"
+               },
+               "type" : {
+                  "description" : "Indicates what type of signature is used by this account, must be one of:\n* sig\n* msig\n* lsig",
+                  "type" : "string",
+                  "enum" : [
+                     "sig",
+                     "msig",
+                     "lsig"
+                  ]
                },
                "round" : {
                   "description" : "The round for which this information is relevant.",
                   "type" : "integer"
                },
-               "type" : {
-                  "enum" : [
-                     "sig",
-                     "msig",
-                     "lsig"
-                  ],
-                  "description" : "Indicates what type of signature is used by this account, must be one of:\n* sig\n* msig\n* lsig",
-                  "type" : "string"
+               "pending-rewards" : {
+                  "description" : "amount of MicroAlgos of pending rewards in this account.",
+                  "type" : "integer"
+               },
+               "reward-base" : {
+                  "type" : "integer",
+                  "description" : "\\[ebase\\] used as part of the rewards computation. Only applicable to accounts which are participating."
+               },
+               "rewards" : {
+                  "description" : "\\[ern\\] total rewards of MicroAlgos the account has received, including pending rewards.",
+                  "type" : "integer"
+               },
+               "created-assets" : {
+                  "type" : "array",
+                  "items" : {
+                     "$ref" : "#/components/schemas/Asset"
+                  },
+                  "description" : "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -> Asset` for this type."
+               },
+               "assets" : {
+                  "type" : "array",
+                  "items" : {
+                     "$ref" : "#/components/schemas/AssetHolding"
+                  },
+                  "description" : "\\[asset\\] assets held by this account.\n\nNote the raw object uses `map[int] -> AssetHolding` for this type."
                },
                "status" : {
                   "type" : "string",
                   "description" : "\\[onl\\] delegation status of the account's MicroAlgos\n* Offline - indicates that the associated account is delegated.\n*  Online  - indicates that the associated account used as part of the delegation pool.\n*   NotParticipating - indicates that the associated account is neither a delegator nor a delegate."
-               },
-               "address" : {
-                  "type" : "string",
-                  "description" : "the account public key"
-               },
-               "amount-without-pending-rewards" : {
-                  "type" : "integer",
-                  "description" : "specifies the amount of MicroAlgos in the account, without the pending rewards."
-               },
-               "pending-rewards" : {
-                  "type" : "integer",
-                  "description" : "amount of MicroAlgos of pending rewards in this account."
                }
             }
+         },
+         "AssetHolding" : {
+            "properties" : {
+               "creator" : {
+                  "description" : "Address that created this asset. This is the address where the parameters for this asset can be found, and also the address where unwanted asset units can be sent in the worst case.",
+                  "type" : "string"
+               },
+               "amount" : {
+                  "type" : "integer",
+                  "description" : "\\[a\\] number of units held."
+               },
+               "asset-id" : {
+                  "type" : "integer",
+                  "description" : "Asset ID of the holding.",
+                  "x-go-name" : "AssetID"
+               },
+               "is-frozen" : {
+                  "description" : "\\[f\\] whether or not the holding is frozen.",
+                  "type" : "boolean"
+               }
+            },
+            "required" : [
+               "amount",
+               "asset-id",
+               "creator",
+               "is-frozen"
+            ],
+            "description" : "Describes an asset held by an account.\n\nDefinition:\ndata/basics/userBalance.go : AssetHolding",
+            "type" : "object"
+         }
+      },
+      "securitySchemes" : {
+         "api_key" : {
+            "name" : "X-Algo-API-Token",
+            "type" : "apiKey",
+            "description" : "Generated header parameter. This token can be generated using the Goal command line tool. Example value ='b7e384d0317b8050ce45900a94a1931e28540e1f69b2d242b424659c341b4697'",
+            "in" : "header"
          }
       }
    },
-   "security" : [
+   "tags" : [
       {
-         "api_key" : []
+         "name" : "private"
       }
    ]
 }

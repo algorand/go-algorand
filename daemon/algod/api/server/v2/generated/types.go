@@ -219,7 +219,7 @@ type MinRound uint64
 type Next string
 
 // NotePrefix defines model for note-prefix.
-type NotePrefix []byte
+type NotePrefix string
 
 // Round defines model for round.
 type Round uint64
@@ -231,7 +231,7 @@ type RoundNumber uint64
 type SigType string
 
 // TxId defines model for tx-id.
-type TxId []byte
+type TxId string
 
 // TxType defines model for tx-type.
 type TxType string
