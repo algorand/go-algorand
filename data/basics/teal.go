@@ -17,6 +17,7 @@
 package basics
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -242,6 +243,13 @@ func (tv *TealValue) ToValueDelta() (vd ValueDelta) {
 		vd.Bytes = tv.Bytes
 	}
 	return
+}
+
+func (tv *TealValue) String() string {
+	if tv.Type == TealBytesType {
+		return hex.EncodeToString([]byte(tv.Bytes))
+	}
+	return fmt.Sprintf("%d", tv.Uint)
 }
 
 // TealKeyValue represents a key/value store for use in an application's

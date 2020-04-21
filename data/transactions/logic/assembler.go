@@ -1299,19 +1299,19 @@ func disAssetParams(dis *disassembleState, spec *OpSpec) {
 	_, dis.err = fmt.Fprintf(dis.out, "asset_params_get %s\n", AssetParamsFieldNames[arg])
 }
 
-// Disassemble produces a text form of program bytes.
-// AssembleString(Disassemble()) should result in the same program bytes.
-func Disassemble(program []byte) (text string, err error) {
+// DisassembleInstrumented is like Disassemble, but additionally returns where
+// each program counter value maps in the disassembly
+func DisassembleInstrumented(program []byte) (text string, pcOffset []PCOffset, err error) {
 	out := strings.Builder{}
 	dis := disassembleState{program: program, out: &out}
 	version, vlen := binary.Uvarint(program)
 	if vlen <= 0 {
 		fmt.Fprintf(dis.out, "// invalid version\n")
-		return out.String(), nil
+		return out.String(), nil, nil
 	}
 	if version > LogicVersion {
 		fmt.Fprintf(dis.out, "// unsupported version %d\n", version)
-		return out.String(), nil
+		return out.String(), nil, nil
 	}
 	fmt.Fprintf(dis.out, "// version %d\n", version)
 	dis.pc = vlen
@@ -1320,11 +1320,12 @@ func Disassemble(program []byte) (text string, err error) {
 		if hasLabel {
 			_, dis.err = fmt.Fprintf(dis.out, "%s:\n", label)
 			if dis.err != nil {
-				return "", dis.err
+				return "", nil, dis.err
 			}
 		}
 		op := opsByOpcode[version][program[dis.pc]]
 		if op.Name == "" {
+			pcOffset = append(pcOffset, PCOffset{dis.pc, out.Len()})
 			msg := fmt.Sprintf("invalid opcode %02x at pc=%d", program[dis.pc], dis.pc)
 			out.WriteString(msg)
 			out.WriteRune('\n')
@@ -1333,12 +1334,22 @@ func Disassemble(program []byte) (text string, err error) {
 			return
 		}
 
+		// pcOffset tracks where in the output each opcode maps to assembly
+		pcOffset = append(pcOffset, PCOffset{dis.pc, out.Len()})
+
 		// Actually do the disassembly
 		op.dis(&dis, &op)
 		if dis.err != nil {
-			return "", dis.err
+			return "", nil, dis.err
 		}
 		dis.pc = dis.nextpc
 	}
-	return out.String(), nil
+	return out.String(), pcOffset, nil
+}
+
+// Disassemble produces a text form of program bytes.
+// AssembleString(Disassemble()) should result in the same program bytes.
+func Disassemble(program []byte) (text string, err error) {
+	text, _, err = DisassembleInstrumented(program)
+	return
 }

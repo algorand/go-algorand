@@ -39,6 +39,8 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+
+	"github.com/satori/go.uuid"
 )
 
 // EvalMaxVersion is the max version we can interpret and run
@@ -126,6 +128,9 @@ type EvalParams struct {
 
 	Ledger LedgerForLogic
 
+	// optional debugger
+	Debugger DebuggerHook
+
 	// determines eval mode: runModeSignature or runModeApplication
 	runModeFlags runMode
 }
@@ -207,6 +212,9 @@ type evalContext struct {
 	localStateCows       map[basics.Address]*indexedCow
 	readOnlyLocalStates  map[ckey]basics.TealKeyValue
 	appEvalDelta         basics.EvalDelta
+
+	// Stores state & disassembly for the optional debugger
+	debugState DebugState
 }
 
 // StackType describes the type of a value on the operand stack
@@ -324,6 +332,13 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 		}
 	}()
 
+	defer func() {
+		// Ensure we update the debugger before exiting
+		if cx.Debugger != nil {
+			cx.Debugger.Complete(cx.refreshDebugState())
+		}
+	}()
+
 	if (cx.EvalParams.Proto == nil) || (cx.EvalParams.Proto.LogicSigVersion == 0) {
 		err = errLogicSignNotSupported
 		return
@@ -365,7 +380,30 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
 
+	if cx.Debugger != nil {
+		disasm, pcOffset, err := DisassembleInstrumented(cx.program)
+		if err != nil {
+			// Report disassembly error as program text
+			disasm = err.Error()
+		}
+
+		// initialize DebuggerState with imutable fields
+		cx.debugState = DebugState{
+			ExecID:      uuid.NewV4().String(),
+			Disassembly: disasm,
+			PCOffset:    pcOffset,
+			GroupIndex:  cx.GroupIndex,
+			TxnGroup:    cx.TxnGroup,
+			Proto:       cx.Proto,
+		}
+		cx.Debugger.Register(cx.refreshDebugState())
+	}
+
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
+		if cx.Debugger != nil {
+			cx.Debugger.Update(cx.refreshDebugState())
+		}
+
 		cx.step()
 		cx.stepCount++
 		if cx.stepCount > len(cx.program) {
@@ -1144,6 +1182,13 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field 
 	return
 }
 
+// TxnFieldToTealValue is a thin wrapper for txnFieldToStack for external use
+func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field TxnField) (basics.TealValue, error) {
+	cx := evalContext{EvalParams: EvalParams{GroupIndex: groupIndex}}
+	sv, err := cx.txnFieldToStack(txn, uint64(field), 0)
+	return sv.toTealValue(), err
+}
+
 func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint64, arrayFieldIdx uint64) (sv stackValue, err error) {
 	err = nil
 	switch TxnField(field) {
@@ -1326,11 +1371,16 @@ func (cx *evalContext) getRound() (rnd uint64, err error) {
 	return uint64(cx.Ledger.Round()), nil
 }
 
+// GlobalFieldToTealValue is a thin wrapper for globalFieldToStack for external use
+func GlobalFieldToTealValue(proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int) (basics.TealValue, error) {
+	cx := evalContext{EvalParams: EvalParams{Proto: proto, TxnGroup: txnGroup}}
+	sv, err := cx.globalFieldToStack(uint64(groupIndex))
+	return sv.toTealValue(), err
+}
+
 var zeroAddress basics.Address
 
-func opGlobal(cx *evalContext) {
-	gindex := uint64(cx.program[cx.pc+1])
-	var sv stackValue
+func (cx *evalContext) globalFieldToStack(gindex uint64) (sv stackValue, err error) {
 	switch GlobalField(gindex) {
 	case MinTxnFee:
 		sv.Uint = cx.Proto.MinTxnFee
@@ -1353,7 +1403,16 @@ func opGlobal(cx *evalContext) {
 			}
 		}
 	default:
-		cx.err = fmt.Errorf("invalid global[%d]", gindex)
+		err = fmt.Errorf("invalid global[%d]", gindex)
+	}
+	return sv, err
+}
+
+func opGlobal(cx *evalContext) {
+	gindex := uint64(cx.program[cx.pc+1])
+	sv, err := cx.globalFieldToStack(gindex)
+	if err != nil {
+		cx.err = err
 		return
 	}
 
