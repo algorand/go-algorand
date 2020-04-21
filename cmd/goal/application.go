@@ -41,6 +41,9 @@ var (
 	approvalProgFile string
 	clearProgFile    string
 
+	approvalProgRawFile string
+	clearProgRawFile    string
+
 	localSchemaUints      uint64
 	localSchemaByteSlices uint64
 
@@ -79,11 +82,11 @@ func init() {
 	appCmd.PersistentFlags().StringSliceVar(&appStrAccounts, "app-account", nil, "Accounts that may be accessed from application logic")
 	appCmd.PersistentFlags().StringVarP(&appInputFilename, "app-input", "i", "", "JSON file containing encoded arguments and inputs (mutually exclusive with app-arg-b64 and app-account)")
 
-	createAppCmd.Flags().StringVar(&approvalProgFile, "approval-prog", "", "TEAL assembly program filename for approving/rejecting transactions")
-	createAppCmd.Flags().StringVar(&clearProgFile, "clear-prog", "", "TEAL assembly program filename for updating application state when a user clears their local state")
+	appCmd.PersistentFlags().StringVar(&approvalProgFile, "approval-prog", "", "(Uncompiled) TEAL assembly program filename for approving/rejecting transactions")
+	appCmd.PersistentFlags().StringVar(&clearProgFile, "clear-prog", "", "(Uncompiled) TEAL assembly program filename for updating application state when a user clears their local state")
 
-	updateAppCmd.Flags().StringVar(&approvalProgFile, "approval-prog", "", "TEAL assembly program filename for approving/rejecting transactions")
-	updateAppCmd.Flags().StringVar(&clearProgFile, "clear-prog", "", "TEAL assembly program filename for updating application state when a user clears their local state")
+	appCmd.PersistentFlags().StringVar(&approvalProgRawFile, "approval-prog-raw", "", "Compiled TEAL program filename for approving/rejecting transactions")
+	appCmd.PersistentFlags().StringVar(&clearProgRawFile, "clear-prog-raw", "", "Compiled TEAL program filename for updating application state when a user clears their local state")
 
 	createAppCmd.Flags().Uint64Var(&globalSchemaUints, "global-ints", 0, "Maximum number of integer values that may be stored in the global key/value store. Immutable.")
 	createAppCmd.Flags().Uint64Var(&globalSchemaByteSlices, "global-byteslices", 0, "Maximum number of byte slices that may be stored in the global key/value store. Immutable.")
@@ -119,8 +122,6 @@ func init() {
 	createAppCmd.MarkFlagRequired("global-byteslices")
 	createAppCmd.MarkFlagRequired("local-ints")
 	createAppCmd.MarkFlagRequired("local-byteslices")
-	createAppCmd.MarkFlagRequired("approval-prog")
-	createAppCmd.MarkFlagRequired("clear-prog")
 
 	optInAppCmd.MarkFlagRequired("app-id")
 	optInAppCmd.MarkFlagRequired("from")
@@ -139,8 +140,6 @@ func init() {
 
 	updateAppCmd.MarkFlagRequired("app-id")
 	updateAppCmd.MarkFlagRequired("from")
-	updateAppCmd.MarkFlagRequired("approval-prog")
-	updateAppCmd.MarkFlagRequired("clear-prog")
 
 	readStateAppCmd.MarkFlagRequired("app-id")
 }
@@ -253,6 +252,30 @@ var appCmd = &cobra.Command{
 	},
 }
 
+func mustParseProgArgs() (approval []byte, clear []byte) {
+	// Ensure we don't have ambiguous or all empty args
+	if (approvalProgFile == "") == (approvalProgRawFile == "") {
+		reportErrorf(errorApprovProgArgsRequired)
+	}
+	if (clearProgFile == "") == (clearProgRawFile == "") {
+		reportErrorf(errorClearProgArgsRequired)
+	}
+
+	if approvalProgFile != "" {
+		approval = assembleFile(approvalProgFile)
+	} else {
+		approval = mustReadFile(approvalProgRawFile)
+	}
+
+	if clearProgFile != "" {
+		clear = assembleFile(clearProgFile)
+	} else {
+		clear = mustReadFile(clearProgRawFile)
+	}
+
+	return
+}
+
 var createAppCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create an application",
@@ -274,8 +297,7 @@ var createAppCmd = &cobra.Command{
 		}
 
 		// Parse transaction parameters
-		approvalProg := assembleFile(approvalProgFile)
-		clearProg := assembleFile(clearProgFile)
+		approvalProg, clearProg := mustParseProgArgs()
 		appArgs, appAccounts, foreignApps := getAppInputs()
 
 		tx, err := client.MakeUnsignedAppCreateTx(transactions.NoOpOC, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps)
@@ -347,8 +369,7 @@ var updateAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		approvalProg := assembleFile(approvalProgFile)
-		clearProg := assembleFile(clearProgFile)
+		approvalProg, clearProg := mustParseProgArgs()
 		appArgs, appAccounts, foreignApps := getAppInputs()
 
 		tx, err := client.MakeUnsignedAppUpdateTx(appIdx, appArgs, appAccounts, foreignApps, approvalProg, clearProg)

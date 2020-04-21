@@ -770,6 +770,14 @@ var splitCmd = &cobra.Command{
 	},
 }
 
+func mustReadFile(fname string) []byte {
+	contents, err := readFile(fname)
+	if err != nil {
+		reportErrorf("%s: %s\n", fname, err)
+	}
+	return contents
+}
+
 func assembleFile(fname string) (program []byte) {
 	text, err := readFile(fname)
 	if err != nil {
