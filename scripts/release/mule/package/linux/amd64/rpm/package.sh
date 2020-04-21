@@ -13,15 +13,20 @@ if [ -z "$OS_TYPE" ] || [ -z "$ARCH" ] || [ -z "$WORKDIR" ]; then
     exit 1
 fi
 
-export REPO_DIR="$WORKDIR"
-export GOPATH="$REPO_DIR/go"
-# TODO: Should there be a default network?
-export DEFAULTNETWORK=devnet
+REPO_DIR="$WORKDIR"
 FULLVERSION=$("$REPO_DIR/scripts/compute_build_number.sh" -f)
-export FULLVERSION
-
+BRANCH=$("$REPO_DIR/scripts/compute_branch.sh")
+CHANNEL=$("$REPO_DIR/scripts/compute_branch_channel.sh" "$BRANCH")
+ALGO_BIN="$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH/$CHANNEL/$OS_TYPE-$ARCH/bin"
+# TODO: Should there be a default network?
+DEFAULTNETWORK=devnet
 DEFAULT_RELEASE_NETWORK=$("$REPO_DIR/scripts/compute_branch_release_network.sh" "${DEFAULTNETWORK}")
+
+# The following need to be exported for use in ./go-algorand/installer/rpm/algorand.spec.
+export DEFAULT_NETWORK
 export DEFAULT_RELEASE_NETWORK
+export REPO_DIR
+export ALGO_BIN
 
 RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
 trap 'rm -rf $RPMTMP' 0
