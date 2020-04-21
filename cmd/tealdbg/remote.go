@@ -59,7 +59,7 @@ func (rha *RemoteHookAdapter) registerHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Proceed!
-	w.WriteHeader(http.StatusBadRequest)
+	w.WriteHeader(http.StatusOK)
 	return
 }
 
