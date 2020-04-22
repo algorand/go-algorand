@@ -115,11 +115,9 @@ The only thing that is not automated is pre-setting the `gpg-agent` with the pas
 
 To complete this step, you will need to do the following:
 
-1. Download the `ReleaseBuildInstanceKey.pem` certificate from the appropriate Jenkins workspace and `chmod 400` on it or GPG will complain.  Move this to the `$GOPATH/src/github/algorand/go-algorand/scripts/release/controller` directory.
-1. Get the instance name from AWS, i.e., `https://us-west-1.console.aws.amazon.com/ec2/home?region=us-west-1#Instances:sort=instanceState` or from the Jenkins workspace (`scripts/release/tmp/instance`).
-1. Change to the `$GOPATH/src/github/algorand/go-algorand/scripts/release/controller` directory and execute `./socket.sh`, passing it the ec2 instance name:
+1. Change to the `$GOPATH/src/github/algorand/go-algorand/scripts/release/` directory and execute `./forward_gpg_agent.sh`:
 
-        ./socket ec2-13-57-188-227.us-west-1.compute.amazonaws.com
+        ./forward_gpg_agent.sh
 
 1. At the prompt, input the GPG passphrase (**Don't do this in a public space!!**).
 1. You should now be logged into the remote machine!
