@@ -291,7 +291,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	cost2, err := Check(program2, ep)
 	require.NoError(t, err)
 
-	// Costs for the v2 should be higher because of hash opcode changes
+	// Costs for v2 should be higher because of hash opcode cost changes
 	require.Equal(t, 2308, cost2)
 	pass, err = Eval(program2, ep)
 	if err != nil || !pass {
