@@ -1452,6 +1452,78 @@ func TestTxn(t *testing.T) {
 	}
 }
 
+func TestCachedTxIDs(t *testing.T) {
+	t.Parallel()
+	cachedTxnProg := `
+gtxn 0 TxID
+arg 0
+==
+bz fail
+
+gtxn 0 TxID
+arg 0
+==
+bz fail
+
+txn TxID
+arg 0
+==
+bz fail
+
+txn TxID
+arg 0
+==
+bz fail
+
+gtxn 1 TxID
+arg 1
+==
+bz fail
+
+gtxn 1 TxID
+arg 1
+==
+bz fail
+
+success:
+int 1
+return
+
+fail:
+int 0
+return
+`
+	program, err := AssembleStringWithVersion(cachedTxnProg, 2)
+	require.NoError(t, err)
+	sb := strings.Builder{}
+	cost, err := Check(program, defaultEvalParams(&sb, nil))
+	if err != nil {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	txn := makeSampleTxn()
+	txgroup := makeSampleTxnGroup(txn)
+	txn.Lsig.Logic = program
+	txid0 := txgroup[0].ID()
+	txid1 := txgroup[1].ID()
+	txn.Lsig.Args = [][]byte{
+		txid0[:],
+		txid1[:],
+	}
+	sb = strings.Builder{}
+	ep := defaultEvalParams(&sb, &txn)
+	ep.TxnGroup = txgroup
+	pass, err := Eval(program, ep)
+	if !pass || err != nil {
+		t.Log(hex.EncodeToString(program))
+		t.Log(sb.String())
+	}
+	require.NoError(t, err)
+	require.True(t, pass)
+}
+
 func TestGtxn(t *testing.T) {
 	t.Parallel()
 	gtxnTextV1 := `gtxn 1 Amount
