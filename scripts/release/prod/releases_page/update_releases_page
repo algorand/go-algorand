@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 #
 # This script builds https://releases.algorand.com/index.html.
+#
+# To run:
+# ./update_releases_page > index.html
 
 import sys
 import boto3
@@ -144,7 +147,6 @@ def main(channel):
         for fname, info in files.items():
             if "file" not in info:
                 continue
-            tbody = ['<tbody><tr class="spacer"><td></td></tr></tbody><tbody>\n']
             furl = get_furl(fname, info['file'])
             ftext = '<div class="fname"><a href="{}">{}</a></div>'.format(furl, fname)
             sig = info.get(".sig")
@@ -159,11 +161,14 @@ def main(channel):
                 for hn in ("md5", "sha256", "sha512"):
                     hv = hashes.get(hn)
                     if hv:
-                        ftext += '<div class="hash {}">{}</div>\n'.format(hn, hv)
+                        ftext += '<div class="hash {}">{}</div>'.format(hn, hv)
             if not hashes and not stext:
                 continue
-            tbody.append("<tr><td>{}</td><td>{}</td><td>{}</td></tr></tbody>\n".format(ftext, size, stext))
+            tbody = ["<tbody><tr><td>{}</td><td>{}</td><td>{}</td></tr></tbody>".format(ftext, size, stext)]
             table.append("".join(tbody))
+
+        # Only add the spacer after every set.
+        table.append('<tbody><tr class="spacer"><td></td></tr></tbody>')
 
     build_page(table)
 
