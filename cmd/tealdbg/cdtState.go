@@ -38,6 +38,7 @@ type cdtState struct {
 	proto      *config.ConsensusParams
 	txnGroup   []transactions.SignedTxn
 	groupIndex int
+	globals    []v1.TealValue
 
 	// mutable program state
 	mu      deadlock.Mutex
@@ -54,11 +55,12 @@ type cdtState struct {
 	completed       atomicBool
 }
 
-func (s *cdtState) Init(program string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int) {
+func (s *cdtState) Init(program string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int, globals []v1.TealValue) {
 	s.program = program
 	s.proto = proto
 	s.txnGroup = txnGroup
 	s.groupIndex = groupIndex
+	s.globals = globals
 }
 
 func (s *cdtState) Update(pc int, line int, stack []v1.TealValue, scratch []v1.TealValue, err string) {
@@ -171,20 +173,20 @@ type fieldDesc struct {
 	Type  string
 }
 
-func prepareGlobals(txnGroup []transactions.SignedTxn, groupIndex int, proto *config.ConsensusParams) []fieldDesc {
+func prepareGlobals(globals []v1.TealValue) []fieldDesc {
 	result := make([]fieldDesc, 0, len(logic.GlobalFieldNames))
-	for field, name := range logic.GlobalFieldNames {
-		var value string
-		var valType string = "string"
-		tv, err := logic.GlobalFieldToTealValue(proto, txnGroup, logic.GlobalField(field))
-		if err != nil {
-			value = err.Error()
-			valType = "undefined"
-		} else {
-			value = tv.String()
-			valType = tealTypeMap[tv.Type]
+	if len(globals) != len(logic.GlobalFieldNames) {
+		desc := fieldDesc{
+			"error",
+			fmt.Sprintf("globals: invalid length %d != %d", len(globals), len(logic.GlobalFieldNames)),
+			"undefined",
 		}
-		result = append(result, fieldDesc{name, value, valType})
+		result = append(result, desc)
+		return result
+	}
+
+	for fieldIdx, name := range logic.GlobalFieldNames {
+		result = append(result, tealValueToFieldDesc(name, globals[fieldIdx]))
 	}
 	return result
 }
@@ -212,36 +214,40 @@ func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
 	return result
 }
 
+func tealValueToFieldDesc(name string, tv v1.TealValue) fieldDesc {
+	var value string
+	var valType string
+	if tv.Type == "b" {
+		valType = "string"
+		data, err := base64.StdEncoding.DecodeString(tv.Bytes)
+		if err != nil {
+			value = tv.Bytes
+		} else {
+			printable := IsText(data)
+			if printable {
+				value = string(data)
+			} else if len(data) < 8 {
+				value = fmt.Sprintf("%q", data)
+				if value[0] == '"' {
+					value = value[1 : len(value)-1]
+				}
+			} else {
+				value = hex.EncodeToString(data)
+			}
+		}
+	} else {
+		valType = "number"
+		value = strconv.Itoa(int(tv.Uint))
+	}
+	return fieldDesc{name, value, valType}
+}
+
 func prepareArray(array []v1.TealValue) []fieldDesc {
 	result := make([]fieldDesc, 0, len(logic.TxnFieldNames))
 	for i := 0; i < len(array); i++ {
 		tv := array[i]
 		name := strconv.Itoa(i)
-		var value string
-		var valType string
-		if tv.Type == "b" {
-			valType = "string"
-			data, err := base64.StdEncoding.DecodeString(tv.Bytes)
-			if err != nil {
-				value = tv.Bytes
-			} else {
-				printable := IsText(data)
-				if printable {
-					value = string(data)
-				} else if len(data) < 8 {
-					value = fmt.Sprintf("%q", data)
-					if value[0] == '"' {
-						value = value[1 : len(value)-1]
-					}
-				} else {
-					value = hex.EncodeToString(data)
-				}
-			}
-		} else {
-			valType = "number"
-			value = strconv.Itoa(int(tv.Uint))
-		}
-		result = append(result, fieldDesc{name, value, valType})
+		result = append(result, tealValueToFieldDesc(name, tv))
 	}
 	return result
 }
@@ -313,9 +319,9 @@ func makeArrayPreview(array []v1.TealValue) RuntimeObjectPreview {
 	return p
 }
 
-func makeGlobalsPreview(txnGroup []transactions.SignedTxn, groupIndex int, proto *config.ConsensusParams) RuntimeObjectPreview {
+func makeGlobalsPreview(globals []v1.TealValue) RuntimeObjectPreview {
 	var prop []RuntimePropertyPreview
-	fields := prepareGlobals(txnGroup, groupIndex, proto)
+	fields := prepareGlobals(globals)
 
 	for _, field := range fields {
 		v := RuntimePropertyPreview{
@@ -352,7 +358,7 @@ func decodeGroupTxnID(objID string) (int, bool) {
 func makeGlobalScope(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
 	globals := makeObject("globals", globalsObjID)
 	if preview {
-		globalsPreview := makeGlobalsPreview(s.txnGroup, s.groupIndex, s.proto)
+		globalsPreview := makeGlobalsPreview(s.globals)
 		globals.Value.Preview = &globalsPreview
 	}
 
@@ -403,7 +409,7 @@ func makeLocalScope(s *cdtState, preview bool) (descr []RuntimePropertyDescripto
 }
 
 func makeGlobals(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
-	fields := prepareGlobals(s.txnGroup, s.groupIndex, s.proto)
+	fields := prepareGlobals(s.globals)
 	for _, field := range fields {
 		descr = append(descr, makePrimitive(field))
 	}

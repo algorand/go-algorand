@@ -125,7 +125,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		defer dbgStateMu.Unlock()
 
 		// set immutable items
-		state.Init(dbgState.Disassembly, dbgState.Proto, dbgState.TxnGroup, dbgState.GroupIndex)
+		state.Init(dbgState.Disassembly, dbgState.Proto, dbgState.TxnGroup, dbgState.GroupIndex, dbgState.Globals)
 		// mutable
 		state.Update(dbgState.PC, dbgState.Line, dbgState.Stack, dbgState.Scratch, "")
 

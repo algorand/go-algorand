@@ -159,13 +159,7 @@ func RunLocal(debugger *Debugger, dp *DebugParams) (err error) {
 		Ledger:     &ledger,
 	}
 
-	var data []byte
-	for _, file := range dp.Programs {
-		data, err = ioutil.ReadFile(file)
-		if err != nil {
-			return err
-		}
-
+	for _, data := range dp.ProgramBlobs {
 		var program []byte = data
 		if IsTextFile(data) {
 			program, err = logic.AssembleStringWithVersion(string(data), proto.LogicSigVersion)
