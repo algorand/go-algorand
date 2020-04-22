@@ -285,11 +285,11 @@ func genBigNoOp(numOps uint32) []byte {
 	return progBytes
 }
 
-func genBigHashes(numHashes int, numPad int) []byte {
+func genBigHashes(numHashes int, numPad int, hash string) []byte {
 	var progParts []string
 	progParts = append(progParts, `byte base64 AA==`)
 	for i := 0; i < numHashes; i++ {
-		progParts = append(progParts, `sha256`)
+		progParts = append(progParts, hash)
 	}
 	for i := 0; i < numPad/2; i++ {
 		progParts = append(progParts, `int 1`)
@@ -330,11 +330,11 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 		var prog []byte
 		switch cfg.AppProgOps {
 		case 10:
-			prog = genBigHashes(10, 625)
+			prog = genBigHashes(19, 30, "sha256")
 		case 200:
-			prog = genBigHashes(25, 520)
+			prog = genBigHashes(15, 20, "sha512_256")
 		case 696:
-			prog = genBigHashes(50, 344)
+			prog = genBigHashes(5, 44, "keccak256")
 		default:
 			panic("unexpected AppProgOps")
 		}
