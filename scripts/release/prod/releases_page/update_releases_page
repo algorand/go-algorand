@@ -5,13 +5,13 @@
 import sys
 import boto3
 
-import ipdb
-
 staging_bucket = "algorand-dev-deb-repo"
 staging_prefix = "http://algorand-dev-deb-repo.s3-website-us-east-1.amazonaws.com/"
 key_url = "https://releases.algorand.com/key.pub"
 releases_bucket = "algorand-releases"
 releases_prefix = "https://releases.algorand.com/"
+html_tpl = "html.tpl"
+styles_url = "releases_page.css"
 
 def get_stage_release_set(response):
     prefix = None
@@ -109,21 +109,30 @@ def objects_by_fname(they):
         out[fname] = x
     return out
 
+def getContent(url):
+    with open(url, "r") as reader:
+        content = reader.read()
+
+    return content
+
+def build_page(table):
+    html = getContent(html_tpl).replace("{styles}", getContent(styles_url)).replace("{body}", "".join(table))
+    sys.stdout.write(html)
+
 def main(channel):
     s3 = boto3.client("s3")
     staging_response = s3.list_objects_v2(Bucket=staging_bucket, Prefix="releases/" + channel + "/", MaxKeys=100)
-
     release_sets = get_stage_release_set(staging_response)
+    releases_response = s3.list_objects_v2(Bucket=releases_bucket)
+    release_files = objects_by_fname(releases_response["Contents"])
 
-    html = ["<!doctype html><html><head></head><body><table>"]
+    table = ["<table><tr><th>File</th><th>Bytes</th><th>GPG Signature</th></tr>"]
+
     for key in release_sets:
         rset = release_sets[key]
-
         hashftext = get_hashes_data(s3, rset)
         fhashes = read_hashes(hashftext.splitlines())
         files = release_set_files(rset)
-        releases_response = s3.list_objects_v2(Bucket=releases_bucket)
-        release_files = objects_by_fname(releases_response["Contents"])
 
         def get_furl(fname, skey):
             rfpath = release_files.get(fname)
@@ -133,9 +142,9 @@ def main(channel):
                 return staging_prefix + skey
 
         for fname, info in files.items():
-            tbody = ["<tbody>\n"]
-#            if "file" not in info:
-#                continue
+            if "file" not in info:
+                continue
+            tbody = ['<tbody><tr class="spacer"><td></td></tr></tbody><tbody>\n']
             furl = get_furl(fname, info['file'])
             ftext = '<div class="fname"><a href="{}">{}</a></div>'.format(furl, fname)
             sig = info.get(".sig")
@@ -153,13 +162,10 @@ def main(channel):
                         ftext += '<div class="hash {}">{}</div>\n'.format(hn, hv)
             if not hashes and not stext:
                 continue
-            tbody.append("<tr><td>{}</td><td>{}</td><td>{}</td></tr>\n".format(ftext, size, stext))
-            tbody.append("</tbody>\n\n")
-            tbody.append('<tbody><tr class="spacer"><td></td></tr></tbody>\n\n')
-            html.append("".join(tbody))
+            tbody.append("<tr><td>{}</td><td>{}</td><td>{}</td></tr></tbody>\n".format(ftext, size, stext))
+            table.append("".join(tbody))
 
-        html.append("</table></body></html>")
-        sys.stdout.write("".join(html))
+    build_page(table)
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
