@@ -53,7 +53,6 @@ func (nc NodeController) AlgodClient() (algodClient client.RestClient, err error
 		return
 	}
 
-
 	// Fetch the server URL from the net file, if it exists
 	algodURL, err := nc.ServerURL()
 	if err != nil {

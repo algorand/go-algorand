@@ -56,7 +56,7 @@ const (
 	infoNodeStart                    = "Algorand node successfully started!"
 	infoNodeAlreadyStarted           = "Algorand node was already started!"
 	infoTryingToStopNode             = "Trying to stop the node..."
-	infoNodeShuttingDown			 = "Algorand node is shutting down..."
+	infoNodeShuttingDown             = "Algorand node is shutting down..."
 	infoNodeSuccessfullyStopped      = "The node was successfully stopped."
 	infoNodeStatus                   = "Last committed block: %d\nTime since last block: %s\nSync Time: %s\nLast consensus protocol: %s\nNext consensus protocol: %s\nRound for next consensus protocol: %d\nNext consensus protocol supported: %v"
 	catchupStoppedOnUnsupported      = "Last supported block (%d) is committed. The next block consensus protocol is not supported. Catchup service is stopped."
@@ -76,7 +76,7 @@ const (
 	infoNodeNoPendingTxnsDescription = "None"
 	infoDataDir                      = "[Data Directory: %s]"
 	errLoadingConfig                 = "Error loading Config file from '%s': %v"
-	errorNodeFailedToShutdown		 = "Unable to shut down node: %s"
+	errorNodeFailedToShutdown        = "Unable to shut down node: %s"
 
 	// Asset
 	malformedMetadataHash = "Cannot base64-decode metadata hash %s: %s"

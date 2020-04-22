@@ -36,9 +36,9 @@ import (
 )
 
 const (
-	authHeader           = "X-Algo-API-Token"
-	healthCheckEndpoint  = "/health"
-	maxRawResponseBytes  = 50e6
+	authHeader          = "X-Algo-API-Token"
+	healthCheckEndpoint = "/health"
+	maxRawResponseBytes = 50e6
 )
 
 // rawRequestPaths is a set of paths where the body should not be urlencoded
@@ -48,16 +48,16 @@ var rawRequestPaths = map[string]bool{
 
 // RestClient manages the REST interface for a calling user.
 type RestClient struct {
-	serverURL url.URL
-	apiToken  string
+	serverURL     url.URL
+	apiToken      string
 	adminAPIToken string
 }
 
 // MakeRestClient is the factory for constructing a RestClient for a given endpoint
 func MakeRestClient(url url.URL, apiToken, adminAPIToken string) RestClient {
 	return RestClient{
-		serverURL: url,
-		apiToken:  apiToken,
+		serverURL:     url,
+		apiToken:      apiToken,
 		adminAPIToken: adminAPIToken,
 	}
 }

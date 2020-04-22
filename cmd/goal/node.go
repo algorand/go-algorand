@@ -151,7 +151,7 @@ var shutdownCmd = &cobra.Command{
 		onDataDirs(func(dataDir string) {
 			nc := nodecontrol.MakeNodeController(binDir, dataDir)
 			err := nc.Shutdown()
-			
+
 			if err == nil {
 				reportInfoln(infoNodeShuttingDown)
 			} else {

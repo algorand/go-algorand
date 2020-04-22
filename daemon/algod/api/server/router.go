@@ -131,7 +131,7 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	e.Pre(middleware.RemoveTrailingSlash())
 
 	e.Use(echo.WrapMiddleware(middlewares.Logger(logger)))
-	e.Use(middlewares.Auth(logger, makeAuthRoutes(apiToken, adminAPIToken,node.Config().EnableProfiler )))
+	e.Use(middlewares.Auth(logger, makeAuthRoutes(apiToken, adminAPIToken, node.Config().EnableProfiler)))
 	e.Use(echo.WrapMiddleware(middlewares.CORS))
 
 	// Note: Echo has builtin middleware for logging / CORS that we should investigate:
