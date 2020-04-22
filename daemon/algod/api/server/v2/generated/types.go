@@ -153,6 +153,45 @@ type ErrorResponse struct {
 	Message string  `json:"message"`
 }
 
+// TealStep defines model for TealStep.
+type TealStep struct {
+
+	// Op mnemonic executed.
+	Op string `json:"op"`
+
+	// Program Counter. The byte offset into the program.
+	Pc uint64 `json:"pc"`
+
+	// The state of the stack at the end of this step.
+	Stack *[]TealValue `json:"stack,omitempty"`
+}
+
+// TealTrace defines model for TealTrace.
+type TealTrace map[string]interface{}
+
+// TealValue defines model for TealValue.
+type TealValue struct {
+
+	// a binary string (uint64 encoded when in json)
+	B *[]byte `json:"b,omitempty"`
+
+	// Type, "b" or "u". Disambiguates 0 from empty-byte-string.
+	T *string `json:"t,omitempty"`
+
+	// a uint64
+	U *uint64 `json:"u,omitempty"`
+}
+
+// TransactionTrace defines model for TransactionTrace.
+type TransactionTrace struct {
+
+	// Record of TEAL actions.
+	App *TealTrace `json:"app,omitempty"`
+
+	// Record of TEAL actions.
+	Lsig *TealTrace `json:"lsig,omitempty"`
+}
+
 // Version defines model for Version.
 type Version struct {
 
@@ -335,6 +374,11 @@ type SupplyResponse struct {
 	TotalMoney uint64 `json:"total-money"`
 }
 
+// TransactionDryRunResponse defines model for TransactionDryRunResponse.
+type TransactionDryRunResponse struct {
+	Txns []TransactionTrace `json:"txns"`
+}
+
 // TransactionParametersResponse defines model for TransactionParametersResponse.
 type TransactionParametersResponse struct {
 
@@ -379,6 +423,9 @@ type GetBlockParams struct {
 	Format *string `json:"format,omitempty"`
 }
 
+// TransactionDryRunJSONBody defines parameters for TransactionDryRun.
+type TransactionDryRunJSONBody string
+
 // GetPendingTransactionsParams defines parameters for GetPendingTransactions.
 type GetPendingTransactionsParams struct {
 
@@ -395,3 +442,6 @@ type PendingTransactionInformationParams struct {
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
 }
+
+// TransactionDryRunRequestBody defines body for TransactionDryRun for application/json ContentType.
+type TransactionDryRunJSONRequestBody TransactionDryRunJSONBody

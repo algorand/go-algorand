@@ -468,6 +468,61 @@
         }
       }
     },
+    "/v2/transactions/dryrun": {
+      "post": {
+        "consumes": [
+          "application/x-msgpack",
+	  "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Provide debugging information for a transaction (or group).",
+        "operationId": "TransactionDryRun",
+        "parameters": [
+          {
+            "description": "Transaction (or group) and any accompanying state-simulation data",
+            "name": "rawtxn",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "binary"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+	    "description": "debugging json",
+	    "schema": { "type": "object" }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/transactions/params": {
       "get": {
         "produces": [
@@ -828,6 +883,71 @@
         "message": {
           "type": "string"
         }
+      }
+    },
+    "TealStep": {
+      "description": "Record of one TEAL action.",
+      "type": "object",
+      "required": ["pc","op"],
+      "properties": {
+	"pc": {
+	  "description": "Program Counter. The byte offset into the program.",
+	  "type": "integer"
+	},
+	"op": {
+	  "description": "Op mnemonic executed.",
+	  "type": "string"
+	},
+	"stack": {
+	  "description": "The state of the stack at the end of this step.",
+	  "type": "array",
+	  "items": {
+	    "$ref": "#/definitions/TealValue"
+	  }
+	}
+      }
+    },
+    "TealTrace": {
+      "description": "Record of TEAL actions.",
+      "type": "object",
+      "required": [],
+      "properties": {
+      }
+    },
+    "TealValue": {
+      "description": "A TEAL value, either uint64 or byte string.",
+      "type": "object",
+      "required": [],
+      "properties": {
+        "u": {
+          "description": "a uint64",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "b": {
+          "description": "a binary string (uint64 encoded when in json)",
+          "type": "string",
+          "format": "byte"
+        },
+	"t": {
+          "description": "Type, \"b\" or \"u\". Disambiguates 0 from empty-byte-string.",
+          "type": "string"
+	}
+      }
+    },
+    "TransactionTrace": {
+      "description": "Record of TEAL actions for a transaction.",
+      "type": "object",
+      "required": [],
+      "properties": {
+	"lsig": {
+	  "description": "trace resulting from execution of LogicSig",
+          "$ref": "#/definitions/TealTrace"
+	},
+	"app": {
+	  "description": "trace resulting from execution of Application Call",
+          "$ref": "#/definitions/TealTrace"
+	}
       }
     },
     "Version": {
@@ -1241,6 +1361,23 @@
             "type": "integer"
           }
         }
+      }
+    },
+    "TransactionDryRunResponse": {
+      "description": "Debugging information resulting from evaluating TEAL scripts but not applying the transactions.",
+      "schema": {
+	"description": "Debugging information resulting from evaluating TEAL scripts but not applying the transactions.",
+	"type": "object",
+	"required": ["txns"],
+	"properties": {
+	  "txns": {
+	    "description": "",
+	    "type": "array",
+	    "items": {
+	      "$ref": "#/definitions/TransactionTrace"
+	    }
+	  }
+	}
       }
     },
     "TransactionParametersResponse": {

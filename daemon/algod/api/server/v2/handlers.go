@@ -31,10 +31,12 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-codec/codec"
 )
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
@@ -291,6 +293,141 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	// For backwards compatibility, return txid of first tx in group
 	txid := txgroup[0].ID()
 	return ctx.JSON(http.StatusOK, generated.PostTransactionsResponse{TxId: txid.String()})
+}
+
+// Provide debugging information for a transaction (or group).
+// (POST /v2/transactions/dryrun)
+func (v2 *Handlers) TransactionDryRun(ctx echo.Context) error {
+	req := ctx.Request()
+	dec := protocol.NewJSONDecoder(req.Body)
+	var dr DryrunRequest
+	err := dec.Decode(&dr)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	var response DryrunResponse
+	response.Txns = make([]*DryrunTxnResult, len(dr.Txns))
+
+	var proto config.ConsensusParams
+	if dr.ProtocolVersion != "" {
+		var ok bool
+		proto, ok = config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
+		if !ok {
+			return badRequest(ctx, nil, "invalid protocol version", v2.Log)
+		}
+	} else {
+		actualLedger := v2.Node.Ledger()
+		block, err := actualLedger.BlockHdr(actualLedger.Latest())
+		if err != nil {
+			return internalError(ctx, err, "current block error", v2.Log)
+		}
+		proto = config.Consensus[block.CurrentProtocol]
+	}
+
+	if dr.Round == 0 {
+		dr.Round = uint64(v2.Node.Ledger().Latest())
+	}
+
+	ledger := dryrunLedger{&dr}
+	for ti, stxn := range dr.Txns {
+		ep := logic.EvalParams{
+			Txn:        &stxn,
+			Proto:      &proto,
+			TxnGroup:   dr.Txns,
+			GroupIndex: ti,
+			//Logger: nil, // TODO: capture logs, send them back
+			Ledger: &ledger,
+		}
+		var result *DryrunTxnResult
+		if len(stxn.Lsig.Logic) > 0 {
+			var debug dryrunDebugReceiver
+			ep.Debugger = &debug
+			pass, err := logic.Eval(stxn.Lsig.Logic, ep)
+			result = new(DryrunTxnResult)
+			var messages []string
+			result.LogicSigTrace = debug.history
+			if pass {
+				messages = append(messages, "PASS")
+			} else {
+				messages = append(messages, "REJECT")
+			}
+			if err != nil {
+				messages = append(messages, err.Error())
+			}
+			result.LogicSigMessages = messages
+		}
+		if stxn.Txn.Type == protocol.ApplicationCallTx {
+			appid := stxn.Txn.ApplicationID
+			var app basics.AppParams
+			ok := false
+			for _, appt := range dr.Apps {
+				if appt.AppIndex == uint64(appid) {
+					app = appt.Params
+					ok = true
+					break
+				}
+			}
+			var messages []string
+			if !ok {
+				messages = make([]string, 1)
+				messages[0] = fmt.Sprintf("uploaded state did not include app id %d referenced in txn[%d]", appid, ti)
+			} else {
+				var debug dryrunDebugReceiver
+				ep.Debugger = &debug
+				var program []byte
+				messages = make([]string, 1)
+				if stxn.Txn.OnCompletion == transactions.ClearStateOC {
+					program = app.ClearStateProgram
+					messages[0] = "ClearStateProgram"
+				} else {
+					program = app.ApprovalProgram
+					messages[0] = "ApprovalProgram"
+				}
+				pass, delta, err := logic.EvalStateful(program, ep)
+				if result == nil {
+					result = new(DryrunTxnResult)
+				}
+				result.AppCallTrace = debug.history
+				result.GlobalDelta = delta.GlobalDelta
+				if len(delta.LocalDeltas) > 0 {
+					result.LocalDeltas = make(map[string]basics.StateDelta, len(delta.LocalDeltas))
+					for k, v := range delta.LocalDeltas {
+						var ldaddr basics.Address
+						if k == 0 {
+							ldaddr = stxn.Txn.Sender
+						} else {
+							ldaddr = stxn.Txn.Accounts[k-1]
+						}
+						result.LocalDeltas[ldaddr.String()] = v
+					}
+				}
+				if pass {
+					messages = append(messages, "PASS")
+				} else {
+					messages = append(messages, "REJECT")
+				}
+				if err != nil {
+					messages = append(messages, err.Error())
+				}
+			}
+			result.AppCallMessages = messages
+		}
+		response.Txns[ti] = result
+	}
+	//return ctx.JSON(http.StatusOK, response)
+	var tightJSON codec.JsonHandle
+	// compare to go-algorand/protocol/codec.go
+	tightJSON.ErrorIfNoField = true
+	tightJSON.ErrorIfNoArrayExpand = true
+	tightJSON.Canonical = true
+	tightJSON.RecursiveEmptyCheck = true
+	tightJSON.Indent = 0 // be compact
+	tightJSON.HTMLCharsAsIs = true
+	var rblob []byte
+	enc := codec.NewEncoderBytes(&rblob, &tightJSON)
+	enc.MustEncode(response)
+	return ctx.JSONBlob(http.StatusOK, rblob)
 }
 
 // TransactionParams returns the suggested parameters for constructing a new transaction.
