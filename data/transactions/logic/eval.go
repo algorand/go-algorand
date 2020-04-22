@@ -396,6 +396,7 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 			TxnGroup:    cx.TxnGroup,
 			Proto:       cx.Proto,
 		}
+		cx.setDebugStateGlobals()
 		cx.Debugger.Register(cx.refreshDebugState())
 	}
 
@@ -1369,13 +1370,6 @@ func (cx *evalContext) getRound() (rnd uint64, err error) {
 		return
 	}
 	return uint64(cx.Ledger.Round()), nil
-}
-
-// GlobalFieldToTealValue is a thin wrapper for globalFieldToStack for external use
-func GlobalFieldToTealValue(proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, globalField GlobalField) (basics.TealValue, error) {
-	cx := evalContext{EvalParams: EvalParams{Proto: proto, TxnGroup: txnGroup}}
-	sv, err := cx.globalFieldToStack(globalField)
-	return sv.toTealValue(), err
 }
 
 var zeroAddress basics.Address

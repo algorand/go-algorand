@@ -107,6 +107,8 @@ func (ds *DebugServer) startDebug() (err error) {
 	go ds.server.ListenAndServe()
 
 	err = RunLocal(ds.debugger, ds.params)
+
+	// TODO: better sync to give frontend a change to process all notifications
 	ds.server.Shutdown(context.Background())
 	return
 }
