@@ -17,10 +17,8 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 
 	"github.com/algorand/go-algorand/config"
@@ -48,20 +46,16 @@ func protoFromString(protoString string) (name string, proto config.ConsensusPar
 }
 
 func txnGroupFromParams(dp *DebugParams) (txnGroup []transactions.SignedTxn, groupIndex int, err error) {
-	if dp.TxnFile == "" {
+	if len(dp.TxnBlob) == 0 {
 		txnGroup = append(txnGroup, transactions.SignedTxn{})
 		return
 	}
 
-	var data []byte
-	data, err = ioutil.ReadFile(dp.TxnFile)
-	if err != nil {
-		return
-	}
+	var data []byte = dp.TxnBlob
 
 	// 1. Attempt json - a single transaction
 	var txn transactions.SignedTxn
-	err = json.Unmarshal(data, &txn)
+	err = protocol.DecodeJSON(data, &txn)
 	if err == nil {
 		// groupIndex must be zero
 		if dp.GroupIndex != 0 {
@@ -74,7 +68,7 @@ func txnGroupFromParams(dp *DebugParams) (txnGroup []transactions.SignedTxn, gro
 	}
 
 	// 2. Attempt json - array of transactions
-	err = json.Unmarshal(data, &txnGroup)
+	err = protocol.DecodeJSON(data, &txnGroup)
 	if err == nil {
 		if dp.GroupIndex >= len(txnGroup) {
 			err = fmt.Errorf("invalid group index %d for a txn transaction group of %d", dp.GroupIndex, len(txnGroup))

@@ -57,7 +57,7 @@ type DebugServer struct {
 type DebugParams struct {
 	ProgramBlobs [][]byte
 	Proto        string
-	TxnFile      string
+	TxnBlob      []byte
 	GroupIndex   int
 	BalanceBlob  []byte
 	Round        int
