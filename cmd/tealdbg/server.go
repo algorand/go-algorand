@@ -50,17 +50,19 @@ type DebugServer struct {
 	router   *mux.Router
 	server   *http.Server
 	remote   *RemoteHookAdapter
+	params   *DebugParams
 }
 
 // DebugParams is a container for debug parameters
 type DebugParams struct {
-	Programs    []string
-	Proto       string
-	TxnFile     string
-	GroupIndex  int
-	BalanceFile string
-	Round       int
-	RunMode     string
+	ProgramBlobs [][]byte
+	Proto        string
+	TxnFile      string
+	GroupIndex   int
+	BalanceBlob  []byte
+	Round        int
+	RunMode      string
+	Remote       bool
 }
 
 // AdapterMaker interface for attaching debug adapters
@@ -68,7 +70,7 @@ type AdapterMaker interface {
 	MakeAdapter(router *mux.Router, appAddress string) (da DebugAdapter)
 }
 
-func makeDebugServer(maker AdapterMaker) DebugServer {
+func makeDebugServer(maker AdapterMaker, dp *DebugParams) DebugServer {
 	debugger := MakeDebugger()
 
 	router := mux.NewRouter()
@@ -88,24 +90,23 @@ func makeDebugServer(maker AdapterMaker) DebugServer {
 		debugger: debugger,
 		router:   router,
 		server:   server,
+		params:   dp,
 	}
 }
 
 func (ds *DebugServer) startRemote() {
+	remote := RemoteHookAdapter{ds.debugger}
+	remote.Setup(ds.router)
+	ds.remote = &remote
+
 	log.Printf("starting server on %s", ds.server.Addr)
 	ds.server.ListenAndServe()
 }
 
-func (ds *DebugServer) startDebug(dp *DebugParams) (err error) {
+func (ds *DebugServer) startDebug() (err error) {
 	go ds.server.ListenAndServe()
 
-	err = RunLocal(ds.debugger, dp)
+	err = RunLocal(ds.debugger, ds.params)
 	ds.server.Shutdown(context.Background())
 	return
-}
-
-func (ds *DebugServer) enableRemoteHook() {
-	remote := RemoteHookAdapter{ds.debugger}
-	remote.Setup(ds.router)
-	ds.remote = &remote
 }
