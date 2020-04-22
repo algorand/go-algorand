@@ -100,7 +100,7 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 
 func makeAuthRoutes(apiToken string, adminAPIToken string, enableProfiler bool) middlewares.AuthRoutes {
 	authRoutes := make(middlewares.AuthRoutes)
-	authRoutes[""] = []string{"/healthcheck", "/swagger.json"}
+	authRoutes[""] = []string{"/health", "/swagger.json"}
 
 	for _, route := range routes.V1Routes {
 		authRoutes[apiToken] = append(authRoutes[apiToken], apiV1Tag+route.Path)
