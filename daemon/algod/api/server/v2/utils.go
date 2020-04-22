@@ -36,7 +36,7 @@ import (
 // returnError logs an internal message while returning the encoded response.
 func returnError(ctx echo.Context, code int, internal error, external string, logger logging.Logger) error {
 	logger.Info(internal)
-	return ctx.JSON(code, generated.Error{Error: external})
+	return ctx.JSON(code, generated.ErrorResponse{Message: external})
 }
 
 func badRequest(ctx echo.Context, internal error, external string, log logging.Logger) error {
