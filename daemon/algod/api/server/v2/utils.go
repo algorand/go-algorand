@@ -186,3 +186,51 @@ func toCodecMap(input interface{}, output *map[string]interface{}) (err error) {
 	err = decode(protocol.CodecHandle, encoded, &output)
 	return
 }
+
+type pathColletingRouter struct {
+	paths map[string]struct{}
+}
+
+func (p *pathColletingRouter) CONNECT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[path] = struct{}{}
+	return nil
+}
+func (p *pathColletingRouter) DELETE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[path] = struct{}{}
+	return nil
+}
+func (p *pathColletingRouter) GET(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[path] = struct{}{}
+	return nil
+}
+func (p *pathColletingRouter) HEAD(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[path] = struct{}{}
+	return nil
+}
+func (p *pathColletingRouter) OPTIONS(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[path] = struct{}{}
+	return nil
+}
+func (p *pathColletingRouter) PATCH(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[path] = struct{}{}
+	return nil
+}
+func (p *pathColletingRouter) POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[path] = struct{}{}
+	return nil
+}
+func (p *pathColletingRouter) PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[path] = struct{}{}
+	return nil
+}
+func (p *pathColletingRouter) TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[path] = struct{}{}
+	return nil
+}
+
+// GetRoutes returns a map of all the routes defined in the V2 router
+func GetRoutes() map[string]struct{} {
+	collector := pathColletingRouter{paths: make(map[string]struct{})}
+	generated.RegisterHandlers(&collector, &Handlers{})
+	return collector.paths
+}

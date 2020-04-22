@@ -77,7 +77,7 @@ import (
 )
 
 const (
-	apiV1Tag = "v1"
+	apiV1Tag = "/v1"
 )
 
 // wrapCtx passes a common context to each request without a global variable.
@@ -97,8 +97,30 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 	}
 }
 
+var adminRoutes = map[string]bool{"/v2/shutdown": true}
+
+func makeAuthRoutes(apiToken string, adminAPIToken string) middlewares.AuthRoutes {
+	authRoutes := make(middlewares.AuthRoutes)
+	authRoutes[""] = []string{"/healthcheck", "/swagger.json"}
+
+	for _, route := range routes.V1Routes {
+		authRoutes[apiToken] = append(authRoutes[apiToken], apiV1Tag+route.Path)
+	}
+	authRoutes[apiToken] = append(authRoutes[apiToken], "/versions")
+
+	for path := range v2.GetRoutes() {
+		if !adminRoutes[path] {
+			authRoutes[apiToken] = append(authRoutes[apiToken], path)
+		}
+	}
+	for path := range adminRoutes {
+		authRoutes[adminAPIToken] = append(authRoutes[adminAPIToken], path)
+	}
+	return authRoutes
+}
+
 // NewRouter builds and returns a new router with our REST handlers registered.
-func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, listener net.Listener) *echo.Echo {
+func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener) *echo.Echo {
 	e := echo.New()
 
 	e.Listener = listener
@@ -108,7 +130,7 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 
 	e.Use(echo.WrapMiddleware(middlewares.Logger(logger)))
 	// TODO: New auth middleware - https://github.com/algorand/go-algorand/issues/863
-	e.Use(middlewares.Auth(logger, apiToken))
+	e.Use(middlewares.Auth(logger, makeAuthRoutes(apiToken, adminAPIToken)))
 	e.Use(echo.WrapMiddleware(middlewares.CORS))
 
 	// Note: Echo has builtin middleware for logging / CORS that we should investigate:

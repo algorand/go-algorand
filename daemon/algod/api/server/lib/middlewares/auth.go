@@ -34,19 +34,37 @@ const TokenHeader = "X-Algo-API-Token"
 const urlAuthFormatter = "/urlAuth/%s"
 const debugRouteName = "debug"
 
-// Allowed auth bypass names
-var noneAuthRoutes = []string{"healthcheck", "swagger.json"}
+// AuthRoutes define the mapping of authenticaion key to allowed routes.
+type AuthRoutes map[string][]string
+
+type privateAuth struct {
+	tokenBytes []byte
+	paths      map[string]bool
+}
 
 // Auth takes a logger and an api token and return a middleware function
 // that satisfies the gorilla middleware interface.
-func Auth(log logging.Logger, apiToken string) func(echo.HandlerFunc) echo.HandlerFunc {
+func Auth(log logging.Logger, authRoutes AuthRoutes) func(echo.HandlerFunc) echo.HandlerFunc {
+	authTokens := []privateAuth{}
+	noneAuthRoutes := []string{}
 	// Make sure no one is trying to call us with an invalid token
-	err := tokens.ValidateAPIToken(apiToken)
-	if err != nil {
-		log.Fatalf("Invalid APIToken: %v", err)
+	for apiToken, paths := range authRoutes {
+		if len(apiToken) == 0 {
+			for _, path := range paths {
+				noneAuthRoutes = append(noneAuthRoutes, path)
+			}
+			continue
+		}
+		err := tokens.ValidateAPIToken(apiToken)
+		if err != nil {
+			log.Fatalf("Invalid APIToken: %v", err)
+		}
+		auth := privateAuth{tokenBytes: []byte(apiToken), paths: make(map[string]bool)}
+		for _, path := range paths {
+			auth.paths[path] = true
+		}
+		authTokens = append(authTokens, auth)
 	}
-
-	apiTokenBytes := []byte(apiToken)
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(ctx echo.Context) error {
@@ -96,10 +114,19 @@ func Auth(log logging.Logger, apiToken string) func(echo.HandlerFunc) echo.Handl
 				ctx.Request().URL.Path = newPath
 			}
 
+			matchingAuthIndex := -1
 			// Check the token in constant time
-			if subtle.ConstantTimeCompare(providedToken, apiTokenBytes) == 1 {
+			for i, privAuth := range authTokens {
+				compareResult := subtle.ConstantTimeCompare(providedToken, privAuth.tokenBytes)
+				// if compareResult is 1, we want to update matchingAuthIndex with i. otherwise, we want to keep it as is.
+				matchingAuthIndex = compareResult*i + matchingAuthIndex*(1-compareResult)
+			}
+
+			if matchingAuthIndex >= 0 {
 				// Token was correct, keep serving request
-				return next(ctx)
+				if authTokens[matchingAuthIndex].paths[route] {
+					return next(ctx)
+				}
 			}
 
 			return ctx.String(http.StatusUnauthorized, "Invalid API Token")
