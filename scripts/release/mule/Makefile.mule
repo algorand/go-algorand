@@ -51,7 +51,11 @@ package-deb-$(OS_TYPE)-$(ARCH):
 package-rpm-$(OS_TYPE)-$(ARCH):
 	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/rpm/package.sh $(OS_TYPE) $(ARCH) $$WORKDIR
 
+package-docker-$(OS_TYPE)-$(ARCH):
+	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/docker/package.sh $(OS_TYPE) $(ARCH) $$WORKDIR
+
 package: package-$(OS_TYPE)-$(ARCH)
 package-deb: package-deb-$(OS_TYPE)-$(ARCH)
 package-rpm: package-rpm-$(OS_TYPE)-$(ARCH)
+package-docker: package-docker-$(OS_TYPE)-$(ARCH)
 
