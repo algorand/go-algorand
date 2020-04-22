@@ -64,6 +64,15 @@ var OpSpecs = []OpSpec{
 	{0x01, "sha256", opSHA256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, opSize{7, 1, nil}},
 	{0x02, "keccak256", opKeccak256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, opSize{26, 1, nil}},
 	{0x03, "sha512_256", opSHA512_256, asmDefault, disDefault, oneBytes, oneBytes, 1, modeAny, opSize{9, 1, nil}},
+
+	// Cost of these opcodes increases in TEAL version 2 based on measured
+	// performance. Should be able to run max hashes during stateful TEAL
+	// and achieve reasonable TPS. Same opcode for different TEAL versions
+	// is OK.
+	{0x01, "sha256", opSHA256, asmDefault, disDefault, oneBytes, oneBytes, 2, modeAny, opSize{35, 1, nil}},
+	{0x02, "keccak256", opKeccak256, asmDefault, disDefault, oneBytes, oneBytes, 2, modeAny, opSize{130, 1, nil}},
+	{0x03, "sha512_256", opSHA512_256, asmDefault, disDefault, oneBytes, oneBytes, 2, modeAny, opSize{45, 1, nil}},
+
 	{0x04, "ed25519verify", opEd25519verify, asmDefault, disDefault, threeBytes, oneInt, 1, runModeSignature, opSize{1900, 1, nil}},
 	{0x08, "+", opPlus, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opSizeDefault},
 	{0x09, "-", opMinus, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opSizeDefault},
