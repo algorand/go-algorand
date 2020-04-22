@@ -25,6 +25,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -229,8 +230,12 @@ func (p *pathColletingRouter) TRACE(path string, h echo.HandlerFunc, m ...echo.M
 }
 
 // GetRoutes returns a map of all the routes defined in the V2 router
-func GetRoutes() map[string]struct{} {
+func GetRoutes(privateEndpoints bool) map[string]struct{} {
 	collector := pathColletingRouter{paths: make(map[string]struct{})}
-	generated.RegisterHandlers(&collector, &Handlers{})
+	if privateEndpoints {
+		private.RegisterHandlers(&collector, &Handlers{})
+	} else {
+		generated.RegisterHandlers(&collector, &Handlers{})
+	}
 	return collector.paths
 }

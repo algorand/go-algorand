@@ -16,5 +16,7 @@ rm 3.json
 sed -i '' 's/\*.\*/application\/json/g' algod.oas3.yml
 
 echo "generating code."
-oapi-codegen -package generated -type-mappings integer=uint64 -generate types -o ./server/v2/generated/types.go algod.oas3.yml
-oapi-codegen -package generated -type-mappings integer=uint64 -generate server,spec -o ./server/v2/generated/routes.go algod.oas3.yml
+oapi-codegen -package generated -type-mappings integer=uint64 -generate types -exclude-tags=private -o ./server/v2/generated/types.go algod.oas3.yml
+oapi-codegen -package generated -type-mappings integer=uint64 -generate server,spec -exclude-tags=private -o ./server/v2/generated/routes.go algod.oas3.yml
+oapi-codegen -package private -type-mappings integer=uint64 -generate types -include-tags=private -o ./server/v2/generated/private/types.go algod.oas3.yml
+oapi-codegen -package private -type-mappings integer=uint64 -generate server,spec -include-tags=private -o ./server/v2/generated/private/routes.go algod.oas3.yml

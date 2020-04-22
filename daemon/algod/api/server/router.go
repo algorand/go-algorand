@@ -97,8 +97,6 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 	}
 }
 
-var adminRoutes = map[string]bool{"/v2/shutdown": true}
-
 func makeAuthRoutes(apiToken string, adminAPIToken string) middlewares.AuthRoutes {
 	authRoutes := make(middlewares.AuthRoutes)
 	authRoutes[""] = []string{"/healthcheck", "/swagger.json"}
@@ -108,12 +106,11 @@ func makeAuthRoutes(apiToken string, adminAPIToken string) middlewares.AuthRoute
 	}
 	authRoutes[apiToken] = append(authRoutes[apiToken], "/versions")
 
-	for path := range v2.GetRoutes() {
-		if !adminRoutes[path] {
-			authRoutes[apiToken] = append(authRoutes[apiToken], path)
-		}
+	for path := range v2.GetRoutes(false) {
+		authRoutes[apiToken] = append(authRoutes[apiToken], path)
 	}
-	for path := range adminRoutes {
+
+	for path := range v2.GetRoutes(true) {
 		authRoutes[adminAPIToken] = append(authRoutes[adminAPIToken], path)
 	}
 	return authRoutes
