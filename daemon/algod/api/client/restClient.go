@@ -37,13 +37,13 @@ import (
 
 const (
 	authHeader          = "X-Algo-API-Token"
-	healthCheckEndpoint = "/health"
 	maxRawResponseBytes = 50e6
 )
 
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
-	"/transactions": true,
+	"/v1/transactions": true,
+	"/v2/transactions": true,
 }
 
 // RestClient manages the REST interface for a calling user.
@@ -117,9 +117,9 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 		return err
 	}
 
-	// If we add another endpoint that does not require auth, we should add a
-	// requiresAuth argument to submitForm rather than checking here
-	if path != healthCheckEndpoint {
+	// if the caller provided an authenticaion token, pass it along.
+	// ( some entrypoints, such as health doesn't require a security token to be passed )
+	if authToken != "" {
 		req.Header.Set(authHeader, authToken)
 	}
 

@@ -76,7 +76,7 @@ const (
 	infoNodeNoPendingTxnsDescription = "None"
 	infoDataDir                      = "[Data Directory: %s]"
 	errLoadingConfig                 = "Error loading Config file from '%s': %v"
-	errorNodeFailedToShutdown        = "Unable to shut down node: %s"
+	errorNodeFailedToShutdown        = "Unable to shut down node: %v"
 
 	// Asset
 	malformedMetadataHash = "Cannot base64-decode metadata hash %s: %s"
