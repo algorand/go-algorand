@@ -136,11 +136,11 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 	var apiParticipation *generated.AccountParticipation
 	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
 		apiParticipation = &generated.AccountParticipation{
-			VoteParticipationKey:      byteOrNil(record.VoteID[:]),
-			SelectionParticipationKey: byteOrNil(record.SelectionID[:]),
-			VoteFirstValid:            numOrNil(uint64(record.VoteFirstValid)),
-			VoteLastValid:             numOrNil(uint64(record.VoteLastValid)),
-			VoteKeyDilution:           numOrNil(uint64(record.VoteKeyDilution)),
+			VoteParticipationKey:      record.VoteID[:],
+			SelectionParticipationKey: record.SelectionID[:],
+			VoteFirstValid:            uint64(record.VoteFirstValid),
+			VoteLastValid:             uint64(record.VoteLastValid),
+			VoteKeyDilution:           uint64(record.VoteKeyDilution),
 		}
 	}
 
