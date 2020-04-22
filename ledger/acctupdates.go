@@ -46,7 +46,7 @@ const (
 )
 
 // trieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory.
-// value was calibrated using BenchmarkBalancesChangesCacheNodeSize
+// value was calibrated using BenchmarkCalibrateCacheNodeSize
 var trieCachedNodesCount = 9000
 
 // A modifiedAccount represents an account that has been modified since
@@ -77,6 +77,23 @@ type modifiedAsset struct {
 }
 
 type accountUpdates struct {
+	// constant variables ( initialized on initialize, and never changed afterward )
+
+	// initAccounts specifies initial account values for database.
+	initAccounts map[basics.Address]basics.AccountData
+
+	// initProto specifies the initial consensus parameters.
+	initProto config.ConsensusParams
+
+	// dbDirectory is the directory where the ledger and block sql file resides as well as the parent directroy for the catchup files to be generated
+	dbDirectory string
+
+	// catchpointInterval is the configured interval at which the accountUpdates would generate catchpoint labels and catchpoint files.
+	catchpointInterval uint64
+
+	// archivalLedger determines whether the associated ledger was configured as archival ledger or not.
+	archivalLedger bool
+
 	// Connection to the database.
 	dbs dbPair
 
@@ -112,12 +129,6 @@ type accountUpdates struct {
 	// roundDigest stores the digest of the block for every round starting with dbRound and every round after it.
 	roundDigest []crypto.Digest
 
-	// initAccounts specifies initial account values for database.
-	initAccounts map[basics.Address]basics.AccountData
-
-	// initProto specifies the initial consensus parameters.
-	initProto config.ConsensusParams
-
 	// log copied from ledger
 	log logging.Logger
 
@@ -138,24 +149,14 @@ type accountUpdates struct {
 	// note that this is the last catchpoint *label* and not the catchpoint file.
 	lastCatchpointLabel string
 
-	// catchpointWriting help to syncronize the catchpoint writing. When this channel is closed, no writting is going on.
-	// the channel is non-closed while a catchpoint file is being generated.
-	catchpointWriting chan struct{}
+	// accountsWriting help to syncronize the accounts writing. When this channel is closed, no writting is going on.
+	// the channel is non-closed while writing the current accounts state to disk.
+	accountsWriting chan struct{}
 
-	// catchpointSlowWriting suggest to the catchpoint generator whether it should slowly generate the catchpoint, or should it
-	// attempt to complete the catchpoint generation right away. When this channel is closed, the catchpoint generator would try and
-	// complete the catchpoint generation as soon as possible. otherwise, it would take it's time and perform periodic sleeps between
-	// chunks processing.
+	// catchpointSlowWriting suggest to the accounts writer that it should finish writing up the catchpoint file ASAP.
+	// when this channel is closed, the accounts writer would try and complete the writing as soon as possible.
+	// otherwise, it would take it's time and perform periodic sleeps between chunks processing.
 	catchpointSlowWriting chan struct{}
-
-	// dbDirectory is the directory where the ledger and block sql file resides as well as the parent directroy for the catchup files to be generated
-	dbDirectory string
-
-	// catchpointInterval is the configured interval at which the accountUpdates would generate catchpoint labels and catchpoint files.
-	catchpointInterval uint64
-
-	// archivalLedger determines whether the associated ledger was configured as archival ledger or not.
-	archivalLedger bool
 
 	// ctx is the context for canceling any pending catchpoint generation operation
 	ctx context.Context
@@ -166,8 +167,10 @@ type accountUpdates struct {
 	// deltasAccum stores the accumulated deltas for every round starting dbRound-1.
 	deltasAccum []int
 
+	// committedOffset is the offset at which we'd like to persist all the previous account information to disk.
 	committedOffset chan uint64
 
+	// accountsMu is the syncronization mutex for accessing the various non-static varaibles.
 	accountsMu deadlock.RWMutex
 }
 
@@ -178,7 +181,6 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	au.dbDirectory = filepath.Dir(dbPathPrefix)
 	au.archivalLedger = cfg.Archival
 	au.catchpointInterval = cfg.CatchpointInterval
-	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
 }
 
 // loadFromDisk is the 2nd level initializtion, and is required before the accountUpdates becomes functional
@@ -275,24 +277,38 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		}
 	}
 	// keep these channel closed if we're not generating catchpoint
-	au.catchpointWriting = make(chan struct{}, 1)
+	au.accountsWriting = make(chan struct{}, 1)
 	au.catchpointSlowWriting = make(chan struct{}, 1)
-	if writingCatchpointRound == 0 || au.catchpointInterval == 0 {
-		close(au.catchpointWriting)
-		close(au.catchpointSlowWriting)
-	} else {
-		go au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest)
+	close(au.catchpointSlowWriting)
+	close(au.accountsWriting)
+
+	if writingCatchpointRound != 0 && au.catchpointInterval != 0 {
+		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest)
 	}
 	au.committedOffset = make(chan uint64, 1)
 	go au.commitSyncer()
+	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
 	return nil
 }
 
+func (au *accountUpdates) waitAccountsWriting() {
+	// wait until the accountsWriting is closed.
+	select {
+	case <-au.accountsWriting:
+		// au.accountsWriting is closed.
+	default:
+		if au.accountsWriting != nil {
+			<-au.accountsWriting
+		}
+	}
+}
+
 func (au *accountUpdates) close() {
+	au.waitAccountsWriting()
+
 	if au.ctxCancel != nil {
 		au.ctxCancel()
 	}
-	close(au.committedOffset)
 }
 
 func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
@@ -478,58 +494,66 @@ func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.
 	return au.accountsq.lookupAssetCreator(aidx)
 }
 
-func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Round {
+func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound basics.Round) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
-	committedUpToStart := time.Now()
+
+	retRound = basics.Round(0)
 	var pendingDeltas int
+	/*committedUpToStart := time.Now()
 	defer func() {
 		totalTime := time.Now().Sub(committedUpToStart)
-		au.log.Infof("committedUpTo: total execution time %d ns flushing %d deltas", totalTime.Nanoseconds(), pendingDeltas)
-	}()
+		au.log.Infof("committedUpTo(%d): total execution time %d ns flushing %d deltas", committedRound, totalTime.Nanoseconds(), pendingDeltas)
+	}()*/
 
 	lookback := basics.Round(au.protos[len(au.protos)-1].MaxBalLookback)
 	if committedRound < lookback {
-		return 0
+		return
 	}
 
+	retRound = au.dbRound
 	newBase := committedRound - lookback
 	if newBase <= au.dbRound {
 		// Already forgotten
-		return au.dbRound
+		return
 	}
 
 	if newBase > au.dbRound+basics.Round(len(au.deltas)) {
 		au.log.Panicf("committedUpTo: block %d too far in the future, lookback %d, dbRound %d, deltas %d", committedRound, lookback, au.dbRound, len(au.deltas))
 	}
 
+	hasIntermediateCatchpoint := false
 	// check if there was a catchpoint between au.dbRound+lookback and newBase+lookback
 	if au.catchpointInterval > 0 {
 		nextCatchpoint := ((uint64(au.dbRound+lookback) + au.catchpointInterval) / au.catchpointInterval) * au.catchpointInterval
 		if nextCatchpoint < uint64(newBase+lookback) {
 			newBase = basics.Round(nextCatchpoint) - lookback
+			hasIntermediateCatchpoint = true
 		}
 	}
 
-	// if we're still writing the previous catchpoint, we can't flush the changes yet.
+	// if we're still writing the previous balances, we can't move forward yet.
 	select {
-	case _, opened := <-au.catchpointWriting:
+	case _, opened := <-au.accountsWriting:
 		// the channel is not close, which mean someone wrote to that channel. This is should not happen.
 		if opened {
-			au.log.Warnf("committedUpTo: catchpointWriting was written into")
-			return au.dbRound
+			au.log.Panicf("committedUpTo: accountsWriting was written into")
+			return
 		}
 	default:
-		// if we hit this path, it means that the channel is currently non-closed, which means that we're still writing the previous catchpoint.
-		// check if we're already attempting to perform fast-writing.
-		select {
-		case <-au.catchpointSlowWriting:
-			// yes, we're already doing fast-writing.
-		default:
-			// no, we're not yet doing fast writing, make it so.
-			close(au.catchpointSlowWriting)
+		// if we hit this path, it means that the channel is currently non-closed, which means that we're still writing.
+		// see if we're writing a catchpoint in that range.
+		if hasIntermediateCatchpoint {
+			// check if we're already attempting to perform fast-writing.
+			select {
+			case <-au.catchpointSlowWriting:
+				// yes, we're already doing fast-writing.
+			default:
+				// no, we're not yet doing fast writing, make it so.
+				close(au.catchpointSlowWriting)
+			}
 		}
-		return au.dbRound
+		return
 	}
 
 	offset := uint64(newBase - au.dbRound)
@@ -548,17 +572,14 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) basics.Roun
 		return au.dbRound
 	}
 
-	if isCatchpointRound && au.archivalLedger {
-		// we're going to start the catchpoitn generation on a separate go routine, so update it's state variables.
-		au.catchpointWriting = make(chan struct{}, 1)
+	au.accountsWriting = make(chan struct{}, 1)
+
+	if isCatchpointRound {
 		au.catchpointSlowWriting = make(chan struct{}, 1)
 	}
 
-	au.accountsMu.RUnlock()
 	au.committedOffset <- offset
-	time.Sleep(200 * time.Millisecond)
-	au.accountsMu.RLock()
-	return au.dbRound
+	return
 }
 
 func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
@@ -847,18 +868,36 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 }
 
 func (au *accountUpdates) commitSyncer() {
-	for committedOffset := range au.committedOffset {
-		au.commitRound(committedOffset)
+	for {
+		select {
+		case committedOffset, ok := <-au.committedOffset:
+			if !ok {
+				return
+			}
+			au.commitRound(committedOffset)
+		case <-au.ctx.Done():
+			return
+		}
 	}
 }
 
 func (au *accountUpdates) commitRound(offset uint64) {
+	/*commitRoundStart := time.Now()
+	defer func() {
+		totalTime := time.Now().Sub(commitRoundStart)
+		au.log.Infof("commitRound: total execution time %d ns offset %d", totalTime.Nanoseconds(), offset)
+	}()*/
+	defer close(au.accountsWriting)
+
 	au.accountsMu.RLock()
 
-	newBase := basics.Round(offset) + au.dbRound
+	dbRound := au.dbRound
+	newBase := basics.Round(offset) + dbRound
 	flushTime := time.Now()
 	lookback := basics.Round(au.protos[len(au.protos)-1].MaxBalLookback)
-	isCatchpointRound := ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+au.dbRound))) % au.catchpointInterval))
+	isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+dbRound))) % au.catchpointInterval))
+
+	au.accountsMu.RUnlock()
 
 	// Keep track of how many changes to each account we flush to the
 	// account DB, so that we can drop the corresponding refcounts in
@@ -889,7 +928,7 @@ func (au *accountUpdates) commitRound(offset uint64) {
 		flushcount = make(map[basics.Address]int)
 		assetFlushcount = make(map[basics.AssetIndex]int)
 		for i := uint64(0); i < offset; i++ {
-			rnd := au.dbRound + basics.Round(i) + 1
+			rnd := dbRound + basics.Round(i) + 1
 			err = accountsNewRound(tx, rnd, au.deltas[i], au.roundTotals[i+1].RewardsLevel, au.protos[i+1])
 			if err != nil {
 				return err
@@ -910,9 +949,8 @@ func (au *accountUpdates) commitRound(offset uint64) {
 		}
 		if isCatchpointRound {
 			committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
-			catchpointLabel, err = au.accountsCreateCatchpointLabel(tx, au.dbRound+basics.Round(offset)+lookback, au.dbRound+basics.Round(offset), committedRoundDigest)
+			catchpointLabel, err = au.accountsCreateCatchpointLabel(tx, dbRound+basics.Round(offset)+lookback, dbRound+basics.Round(offset), committedRoundDigest)
 		}
-
 		return err
 	})
 
@@ -928,10 +966,7 @@ func (au *accountUpdates) commitRound(offset uint64) {
 		}
 	}
 
-	au.accountsMu.RUnlock()
-	// switch to full lock, as we're going to modify content.
 	au.accountsMu.Lock()
-	defer au.accountsMu.Unlock()
 
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
@@ -971,11 +1006,6 @@ func (au *accountUpdates) commitRound(offset uint64) {
 		}
 	}
 
-	if isCatchpointRound && au.archivalLedger {
-		// start generating the catchpoint on a separate goroutine.
-		go au.generateCatchpoint(basics.Round(offset)+au.dbRound+lookback, catchpointLabel, committedRoundDigest)
-	}
-
 	au.deltas = au.deltas[offset:]
 	au.deltasAccum = au.deltasAccum[offset:]
 	au.roundDigest = au.roundDigest[offset:]
@@ -984,6 +1014,13 @@ func (au *accountUpdates) commitRound(offset uint64) {
 	au.assetDeltas = au.assetDeltas[offset:]
 	au.dbRound = newBase
 	au.lastFlushTime = flushTime
+	au.accountsMu.Unlock()
+
+	if isCatchpointRound && au.archivalLedger {
+		// start generating the catchpoint on a separate goroutine.
+		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest)
+	}
+
 }
 
 func (au *accountUpdates) latest() basics.Round {
@@ -1003,8 +1040,6 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 				au.log.Warnf("accountUpdates: generateCatchpoint unable to clear catchpoint state 'writingCatchpoint' for round %d: %v", committedRound, err)
 			}
 		}
-
-		close(au.catchpointWriting)
 	}()
 
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {

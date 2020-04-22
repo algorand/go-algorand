@@ -190,6 +190,7 @@ func TestAcctUpdates(t *testing.T) {
 
 	au := &accountUpdates{}
 	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
+	defer au.close()
 
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
@@ -240,6 +241,7 @@ func TestAcctUpdates(t *testing.T) {
 		au.lastFlushTime = time.Time{}
 
 		au.committedUpTo(basics.Round(proto.MaxBalLookback) + i)
+		au.waitAccountsWriting()
 		checkAcctUpdates(t, au, i, basics.Round(proto.MaxBalLookback+14), accts, rewardsLevels, proto)
 	}
 }
@@ -283,6 +285,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
 	err := au.loadFromDisk(ml)
 	require.NoError(b, err)
+	defer au.close()
 
 	// cover initialRounds genesis blocks
 	rewardLevel := uint64(0)
@@ -329,6 +332,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		au.lastFlushTime = time.Time{}
 		au.committedUpTo(basics.Round(i))
 	}
+	au.waitAccountsWriting()
 	b.ResetTimer()
 	startTime := time.Now()
 	for i := proto.MaxBalLookback + initialRounds; i < proto.MaxBalLookback+uint64(b.N); i++ {
@@ -336,6 +340,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		au.lastFlushTime = time.Time{}
 		au.committedUpTo(basics.Round(i))
 	}
+	au.waitAccountsWriting()
 	deltaTime := time.Now().Sub(startTime)
 	if deltaTime > time.Second {
 		return
@@ -348,7 +353,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 }
 
-func BenchmarkBalancesChangesNodesPerPage(b *testing.B) {
+func BenchmarkCalibrateNodesPerPage(b *testing.B) {
 	b.Skip("This benchmark was used to tune up the NodesPerPage; it's not really usefull otherwise")
 	defaultNodesPerPage := merkleCommitterNodesPerPage
 	for nodesPerPage := 32; nodesPerPage < 300; nodesPerPage++ {
@@ -360,7 +365,7 @@ func BenchmarkBalancesChangesNodesPerPage(b *testing.B) {
 	merkleCommitterNodesPerPage = defaultNodesPerPage
 }
 
-func BenchmarkBalancesChangesCacheNodeSize(b *testing.B) {
+func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
 	//b.Skip("This benchmark was used to tune up the trieCachedNodesCount; it's not really usefull otherwise")
 	defaultTrieCachedNodesCount := trieCachedNodesCount
 	for cacheSize := 3000; cacheSize < 50000; cacheSize += 1000 {

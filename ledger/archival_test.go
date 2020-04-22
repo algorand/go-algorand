@@ -132,7 +132,6 @@ func TestArchival(t *testing.T) {
 		}
 
 		wl.l.WaitForCommit(blk.Round())
-
 		minMinSave, err := checkTrackers(t, wl, blk.Round())
 		require.NoError(t, err)
 		if err != nil {
@@ -554,26 +553,36 @@ func TestArchivalFromNonArchival(t *testing.T) {
 
 func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Round, error) {
 	minMinSave := rnd
-
 	for _, trk := range wl.l.trackers.trackers {
 		wl.l.trackerMu.RLock()
+		if au, ok := trk.(*accountUpdates); ok {
+			au.waitAccountsWriting()
+		}
 		minSave := trk.committedUpTo(rnd)
+		if au, ok := trk.(*accountUpdates); ok {
+			au.waitAccountsWriting()
+		}
 		wl.l.trackerMu.RUnlock()
 		if minSave < minMinSave {
 			minMinSave = minSave
 		}
+		wl.minQueriedBlock = rnd
 
 		trackerType := reflect.TypeOf(trk).Elem()
 		cleanTracker := reflect.New(trackerType).Interface().(ledgerTracker)
 		if trackerType.String() == "ledger.accountUpdates" {
-			cleanTracker.(*accountUpdates).initAccounts = wl.l.accts.initAccounts
-		}
+			au := cleanTracker.(*accountUpdates)
+			cfg := config.GetDefaultLocal()
+			cfg.Archival = true
+			au.initialize(cfg, "", au.initProto, wl.l.accts.initAccounts)
 
-		wl.minQueriedBlock = rnd
+		}
 
 		cleanTracker.close()
 		err := cleanTracker.loadFromDisk(wl)
 		require.NoError(t, err)
+
+		cleanTracker.close()
 
 		// Special case: initAccounts reflects state after block 0,
 		// so it's OK to return minSave=0 but query block 1.

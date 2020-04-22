@@ -145,7 +145,6 @@ func (l *Ledger) reloadLedger() error {
 	}
 
 	// reload.
-
 	var err error
 	l.blockQ, err = bqInit(l)
 	if err != nil {
