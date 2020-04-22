@@ -216,14 +216,14 @@ func main() {
 	}
 
 	// Generate a admin REST API token if one was not provided
-	adminApiToken, wroteNewToken, err := tokens.ValidateOrGenerateAPIToken(s.RootPath, tokens.AlgodAdminTokenFilename)
+	adminAPIToken, wroteNewToken, err := tokens.ValidateOrGenerateAPIToken(s.RootPath, tokens.AlgodAdminTokenFilename)
 
 	if err != nil {
 		log.Fatalf("API token error: %v", err)
 	}
 
 	if wroteNewToken {
-		fmt.Printf("No REST API Token found. Generated token: %s\n", adminApiToken)
+		fmt.Printf("No REST API Token found. Generated token: %s\n", adminAPIToken)
 	}
 
 	// Allow overriding default listening address
