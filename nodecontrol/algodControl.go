@@ -48,6 +48,12 @@ func (nc NodeController) AlgodClient() (algodClient client.RestClient, err error
 		return
 	}
 
+	algodAdminAPIToken, err := tokens.GetAndValidateAPIToken(nc.algodDataDir, tokens.AlgodAdminTokenFilename)
+	if err != nil {
+		return
+	}
+
+
 	// Fetch the server URL from the net file, if it exists
 	algodURL, err := nc.ServerURL()
 	if err != nil {
@@ -55,7 +61,7 @@ func (nc NodeController) AlgodClient() (algodClient client.RestClient, err error
 	}
 
 	// Build the client from the URL and API token
-	algodClient = client.MakeRestClient(algodURL, algodAPIToken)
+	algodClient = client.MakeRestClient(algodURL, algodAPIToken, algodAdminAPIToken)
 	return
 }
 
@@ -385,4 +391,13 @@ func (nc NodeController) SetConsensus(consensus config.ConsensusProtocols) error
 // GetConsensus rebuild the consensus version from the data directroy
 func (nc NodeController) GetConsensus() (config.ConsensusProtocols, error) {
 	return config.PreloadConfigurableConsensusProtocols(nc.algodDataDir)
+}
+
+// Shutdown requests the node to shut itself down
+func (nc NodeController) Shutdown() error {
+	algodClient, err := nc.AlgodClient()
+	if err == nil {
+		err = algodClient.Shutdown()
+	}
+	return err
 }

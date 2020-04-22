@@ -72,6 +72,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 )
@@ -97,7 +98,7 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 	}
 }
 
-func makeAuthRoutes(apiToken string, adminAPIToken string) middlewares.AuthRoutes {
+func makeAuthRoutes(apiToken string, adminAPIToken string, enableProfiler bool) middlewares.AuthRoutes {
 	authRoutes := make(middlewares.AuthRoutes)
 	authRoutes[""] = []string{"/healthcheck", "/swagger.json"}
 
@@ -113,6 +114,10 @@ func makeAuthRoutes(apiToken string, adminAPIToken string) middlewares.AuthRoute
 	for path := range v2.GetRoutes(true) {
 		authRoutes[adminAPIToken] = append(authRoutes[adminAPIToken], path)
 	}
+	if enableProfiler {
+		authRoutes[adminAPIToken] = append(authRoutes[adminAPIToken], "/urlAuth/:token/debug/pprof/*")
+		authRoutes[adminAPIToken] = append(authRoutes[adminAPIToken], "/debug/pprof/*")
+	}
 	return authRoutes
 }
 
@@ -126,8 +131,7 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	e.Pre(middleware.RemoveTrailingSlash())
 
 	e.Use(echo.WrapMiddleware(middlewares.Logger(logger)))
-	// TODO: New auth middleware - https://github.com/algorand/go-algorand/issues/863
-	e.Use(middlewares.Auth(logger, makeAuthRoutes(apiToken, adminAPIToken)))
+	e.Use(middlewares.Auth(logger, makeAuthRoutes(apiToken, adminAPIToken,node.Config().EnableProfiler )))
 	e.Use(echo.WrapMiddleware(middlewares.CORS))
 
 	// Note: Echo has builtin middleware for logging / CORS that we should investigate:
@@ -159,6 +163,7 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 		Shutdown: shutdown,
 	}
 	generated.RegisterHandlers(e, &v2Handler)
+	private.RegisterHandlers(e, &v2Handler)
 
 	return e
 }

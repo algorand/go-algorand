@@ -350,7 +350,7 @@ func main() {
 		log.SetLevel(logging.Warn)
 	}
 
-	rc = client.MakeRestClient(*algodURL, apiToken)
+	rc = client.MakeRestClient(*algodURL, apiToken, "")
 
 	// Create an auction tracker
 	// Get current round

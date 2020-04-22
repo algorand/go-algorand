@@ -62,7 +62,9 @@ func (f *RestClientFixture) GetAlgodClientForController(nc nodecontrol.NodeContr
 	f.failOnError(err, fmt.Sprintf("get ServerURL failed for %s: %%v", nc.GetDataDir()))
 	apiToken, err := tokens.GetAndValidateAPIToken(nc.GetDataDir(), tokens.AlgodTokenFilename)
 	f.failOnError(err, "error validating APIToken for node: %v")
-	return client.MakeRestClient(url, apiToken)
+	adminAPIToken, err := tokens.GetAndValidateAPIToken(nc.GetDataDir(), tokens.AlgodAdminTokenFilename)
+	f.failOnError(err, "error validating AdminAPIToken for node: %v")
+	return client.MakeRestClient(url, apiToken, adminAPIToken)
 }
 
 // WaitForRound waits up to the specified amount of time for
