@@ -896,13 +896,32 @@ func (au *accountUpdates) commitRound(offset uint64) {
 	lookback := basics.Round(au.protos[len(au.protos)-1].MaxBalLookback)
 	isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+dbRound))) % au.catchpointInterval))
 
-	au.accountsMu.RUnlock()
+	// create a copy of thej deltas, reward levels and protos for the range we're going to flush.
+	deltas := make([]map[basics.Address]accountDelta, offset, offset)
+	roundTotals := make([]AccountTotals, offset+1, offset+1)
+	protos := make([]config.ConsensusParams, offset+1, offset+1)
+	copy(deltas, au.deltas[:offset])
+	copy(roundTotals, au.roundTotals[:offset+1])
+	copy(protos, au.protos[:offset+1])
 
 	// Keep track of how many changes to each account we flush to the
 	// account DB, so that we can drop the corresponding refcounts in
 	// au.accounts.
-	var flushcount map[basics.Address]int
-	var assetFlushcount map[basics.AssetIndex]int
+	flushcount := make(map[basics.Address]int)
+	assetFlushcount := make(map[basics.AssetIndex]int)
+	for i := uint64(0); i < offset; i++ {
+		for aidx := range au.assetDeltas[i] {
+			assetFlushcount[aidx] = assetFlushcount[aidx] + 1
+		}
+	}
+
+	au.accountsMu.RUnlock()
+
+	for i := uint64(0); i < offset; i++ {
+		for addr := range deltas[i] {
+			flushcount[addr] = flushcount[addr] + 1
+		}
+	}
 
 	var catchpointLabel string
 	var committedRoundDigest crypto.Digest
@@ -924,26 +943,15 @@ func (au *accountUpdates) commitRound(offset uint64) {
 				au.balancesTrie.SetCommitter(mc)
 			}
 		}
-		flushcount = make(map[basics.Address]int)
-		assetFlushcount = make(map[basics.AssetIndex]int)
 		for i := uint64(0); i < offset; i++ {
-			rnd := dbRound + basics.Round(i) + 1
-			err = accountsNewRound(tx, rnd, au.deltas[i], au.roundTotals[i+1].RewardsLevel, au.protos[i+1])
+			err = accountsNewRound(tx, dbRound+basics.Round(i)+1, deltas[i], roundTotals[i+1].RewardsLevel, protos[i+1])
 			if err != nil {
 				return err
 			}
 
-			err = au.accountsUpdateBalaces(au.deltas[i])
+			err = au.accountsUpdateBalaces(deltas[i])
 			if err != nil {
 				return err
-			}
-
-			for aidx := range au.assetDeltas[i] {
-				assetFlushcount[aidx] = assetFlushcount[aidx] + 1
-			}
-
-			for addr := range au.deltas[i] {
-				flushcount[addr] = flushcount[addr] + 1
 			}
 		}
 		if isCatchpointRound {
@@ -966,7 +974,6 @@ func (au *accountUpdates) commitRound(offset uint64) {
 	}
 
 	au.accountsMu.Lock()
-
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
 	for addr, cnt := range flushcount {
