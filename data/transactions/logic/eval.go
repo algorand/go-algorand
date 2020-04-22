@@ -206,6 +206,7 @@ type evalContext struct {
 	branchTargets []int
 
 	programHashCached crypto.Digest
+	txidCache         map[int]transactions.Txid
 
 	globalStateCow       *keyValueCow
 	readOnlyGlobalStates map[uint64]basics.TealKeyValue
@@ -1186,11 +1187,27 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field 
 // TxnFieldToTealValue is a thin wrapper for txnFieldToStack for external use
 func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field TxnField) (basics.TealValue, error) {
 	cx := evalContext{EvalParams: EvalParams{GroupIndex: groupIndex}}
-	sv, err := cx.txnFieldToStack(txn, uint64(field), 0)
+	sv, err := cx.txnFieldToStack(txn, uint64(field), 0, groupIndex)
 	return sv.toTealValue(), err
 }
 
-func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint64, arrayFieldIdx uint64) (sv stackValue, err error) {
+func (cx *evalContext) getTxID(txn *transactions.Transaction, groupIndex int) transactions.Txid {
+	// Initialize txidCache if necessary
+	if cx.txidCache == nil {
+		cx.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
+	}
+
+	// Hashes are expensive, so we cache computed TxIDs
+	txid, ok := cx.txidCache[groupIndex]
+	if !ok {
+		txid = txn.ID()
+		cx.txidCache[groupIndex] = txid
+	}
+
+	return txid
+}
+
+func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint64, arrayFieldIdx uint64, groupIndex int) (sv stackValue, err error) {
 	err = nil
 	switch TxnField(field) {
 	case Sender:
@@ -1234,9 +1251,9 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 	case AssetCloseTo:
 		sv.Bytes = txn.AssetCloseTo[:]
 	case GroupIndex:
-		sv.Uint = uint64(cx.GroupIndex)
+		sv.Uint = uint64(groupIndex)
 	case TxID:
-		txid := txn.ID()
+		txid := cx.getTxID(txn, groupIndex)
 		sv.Bytes = txid[:]
 	case Lease:
 		sv.Bytes = txn.Lease[:]
@@ -1289,7 +1306,7 @@ func opTxn(cx *evalContext) {
 	field := uint64(cx.program[cx.pc+1])
 	var sv stackValue
 	var err error
-	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, 0)
+	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, 0, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -1307,7 +1324,7 @@ func opTxna(cx *evalContext) {
 		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
-	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx)
+	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
@@ -1330,7 +1347,7 @@ func opGtxn(cx *evalContext) {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
 	} else {
-		sv, err = cx.txnFieldToStack(tx, field, 0)
+		sv, err = cx.txnFieldToStack(tx, field, 0, gtxid)
 		if err != nil {
 			cx.err = err
 			return
@@ -1355,7 +1372,7 @@ func opGtxna(cx *evalContext) {
 		return
 	}
 	arrayFieldIdx := uint64(cx.program[cx.pc+3])
-	sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx)
+	sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
 	if err != nil {
 		cx.err = err
 		return
