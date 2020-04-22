@@ -25,6 +25,7 @@ var Routes = lib.Routes{
 	lib.Route{
 		Method:      "OPTIONS",
 		HandlerFunc: optionsHandler,
+		AuthFree:    true,
 	},
 
 	lib.Route{
@@ -39,6 +40,7 @@ var Routes = lib.Routes{
 		Method:      "GET",
 		Path:        "/health",
 		HandlerFunc: HealthCheck,
+		AuthFree:    true,
 	},
 
 	lib.Route{
@@ -46,5 +48,6 @@ var Routes = lib.Routes{
 		Method:      "GET",
 		Path:        "/swagger.json",
 		HandlerFunc: SwaggerJSON,
+		AuthFree:    true,
 	},
 }

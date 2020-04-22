@@ -100,17 +100,28 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 
 func makeAuthRoutes(apiToken string, adminAPIToken string, enableProfiler bool) middlewares.AuthRoutes {
 	authRoutes := make(middlewares.AuthRoutes)
-	authRoutes[""] = []string{"/health", "/swagger.json"}
 
+	for _, route := range common.Routes {
+		if len(route.Path) == 0 {
+			// i.e. OPTIONS
+			continue
+		}
+		if route.AuthFree {
+			authRoutes[""] = append(authRoutes[""], route.Path)
+		} else {
+			authRoutes[apiToken] = append(authRoutes[apiToken], route.Path)
+		}
+	}
 	for _, route := range routes.V1Routes {
 		authRoutes[apiToken] = append(authRoutes[apiToken], apiV1Tag+route.Path)
 	}
-	authRoutes[apiToken] = append(authRoutes[apiToken], "/versions")
 
+	// pick the "regular" endpoints
 	for path := range v2.GetRoutes(false) {
 		authRoutes[apiToken] = append(authRoutes[apiToken], path)
 	}
 
+	// pick the "admin" endpoints
 	for path := range v2.GetRoutes(true) {
 		authRoutes[adminAPIToken] = append(authRoutes[adminAPIToken], path)
 	}
