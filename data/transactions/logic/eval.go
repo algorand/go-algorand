@@ -1191,6 +1191,22 @@ func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field Tx
 	return sv.toTealValue(), err
 }
 
+func (cx *evalContext) getTxID(txn *transactions.Transaction, groupIndex int) transactions.Txid {
+	// Initialize txidCache if necessary
+	if cx.txidCache == nil {
+		cx.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
+	}
+
+	// Hashes are expensive, so we cache computed TxIDs
+	txid, ok := cx.txidCache[groupIndex]
+	if !ok {
+		txid = txn.ID()
+		cx.txidCache[groupIndex] = txid
+	}
+
+	return txid
+}
+
 func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint64, arrayFieldIdx uint64, groupIndex int) (sv stackValue, err error) {
 	err = nil
 	switch TxnField(field) {
@@ -1235,19 +1251,9 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 	case AssetCloseTo:
 		sv.Bytes = txn.AssetCloseTo[:]
 	case GroupIndex:
-		sv.Uint = uint64(cx.GroupIndex)
+		sv.Uint = uint64(groupIndex)
 	case TxID:
-		// Initialize txidCache if necessary
-		if cx.txidCache == nil {
-			cx.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
-		}
-
-		// Hashes are expensive, so we cache computed TxIDs
-		txid, ok := cx.txidCache[groupIndex]
-		if !ok {
-			txid = txn.ID()
-			cx.txidCache[groupIndex] = txid
-		}
+		txid := cx.getTxID(txn, groupIndex)
 		sv.Bytes = txid[:]
 	case Lease:
 		sv.Bytes = txn.Lease[:]
