@@ -1365,23 +1365,23 @@ func opGtxna(cx *evalContext) {
 
 func (cx *evalContext) getRound() (rnd uint64, err error) {
 	if cx.Ledger == nil {
-		cx.err = fmt.Errorf("ledger not available")
+		err = fmt.Errorf("ledger not available")
 		return
 	}
 	return uint64(cx.Ledger.Round()), nil
 }
 
 // GlobalFieldToTealValue is a thin wrapper for globalFieldToStack for external use
-func GlobalFieldToTealValue(proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int) (basics.TealValue, error) {
+func GlobalFieldToTealValue(proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, globalField GlobalField) (basics.TealValue, error) {
 	cx := evalContext{EvalParams: EvalParams{Proto: proto, TxnGroup: txnGroup}}
-	sv, err := cx.globalFieldToStack(uint64(groupIndex))
+	sv, err := cx.globalFieldToStack(globalField)
 	return sv.toTealValue(), err
 }
 
 var zeroAddress basics.Address
 
-func (cx *evalContext) globalFieldToStack(gindex uint64) (sv stackValue, err error) {
-	switch GlobalField(gindex) {
+func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err error) {
+	switch field {
 	case MinTxnFee:
 		sv.Uint = cx.Proto.MinTxnFee
 	case MinBalance:
@@ -1398,25 +1398,23 @@ func (cx *evalContext) globalFieldToStack(gindex uint64) (sv stackValue, err err
 		if (cx.runModeFlags & runModeApplication) == 0 {
 			sv.Uint = 0
 		} else {
-			if sv.Uint, cx.err = cx.getRound(); cx.err != nil {
-				return
-			}
+			sv.Uint, err = cx.getRound()
 		}
 	default:
-		err = fmt.Errorf("invalid global[%d]", gindex)
+		err = fmt.Errorf("invalid global[%d]", field)
 	}
 	return sv, err
 }
 
 func opGlobal(cx *evalContext) {
 	gindex := uint64(cx.program[cx.pc+1])
-	sv, err := cx.globalFieldToStack(gindex)
+	globalField := GlobalField(gindex)
+	sv, err := cx.globalFieldToStack(globalField)
 	if err != nil {
 		cx.err = err
 		return
 	}
 
-	globalField := GlobalField(gindex)
 	globalFieldType := GlobalFieldTypes[globalField]
 	if globalFieldType != sv.argType() {
 		cx.err = fmt.Errorf("%s expected field type is %s but got %s", globalField.String(), globalFieldType.String(), sv.argType().String())

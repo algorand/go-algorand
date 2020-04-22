@@ -173,10 +173,10 @@ type fieldDesc struct {
 
 func prepareGlobals(txnGroup []transactions.SignedTxn, groupIndex int, proto *config.ConsensusParams) []fieldDesc {
 	result := make([]fieldDesc, 0, len(logic.GlobalFieldNames))
-	for _, name := range logic.GlobalFieldNames {
+	for field, name := range logic.GlobalFieldNames {
 		var value string
 		var valType string = "string"
-		tv, err := logic.GlobalFieldToTealValue(proto, txnGroup, groupIndex)
+		tv, err := logic.GlobalFieldToTealValue(proto, txnGroup, logic.GlobalField(field))
 		if err != nil {
 			value = err.Error()
 			valType = "undefined"
@@ -225,13 +225,7 @@ func prepareArray(array []v1.TealValue) []fieldDesc {
 			if err != nil {
 				value = tv.Bytes
 			} else {
-				printable := true
-				for i := 0; i < len(data); i++ {
-					if !strconv.IsPrint(rune(data[i])) {
-						printable = false
-						break
-					}
-				}
+				printable := IsText(data)
 				if printable {
 					value = string(data)
 				} else if len(data) < 8 {

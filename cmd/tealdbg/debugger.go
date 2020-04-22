@@ -141,6 +141,7 @@ func (s *session) Resume() {
 	func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		s.debugConfig = debugConfig{BreakAtLine: -1} // reset possible break after Step
 		if currentLine < len(s.breakpoints) {
 			for line, state := range s.breakpoints[currentLine+1:] {
 				if state.set && state.active {
