@@ -61,6 +61,7 @@ type DebugState struct {
 	TxnGroup    []transactions.SignedTxn `json:"txngroup"`
 	GroupIndex  int                      `json:"gindex"`
 	Proto       *config.ConsensusParams  `json:"proto"`
+	Globals     []v1.TealValue           `json:"globals"`
 
 	PC      int            `json:"pc"`
 	Line    int            `json:"line"`
@@ -112,6 +113,27 @@ func (d *DebugState) PCToLine(pc int) int {
 	return len(strings.Split(d.Disassembly[:offset], "\n")) - one
 }
 
+func (cx *evalContext) setDebugStateGlobals() {
+	globals := make([]v1.TealValue, len(GlobalFieldNames))
+	for fieldIdx := range GlobalFieldNames {
+		sv, err := cx.globalFieldToStack(GlobalField(fieldIdx))
+		if err != nil {
+			sv = stackValue{Bytes: []byte(err.Error())}
+		}
+		globals[fieldIdx] = stackValueToV1TealValue(&sv)
+	}
+	cx.debugState.Globals = globals
+}
+
+func stackValueToV1TealValue(sv *stackValue) v1.TealValue {
+	tv := sv.toTealValue()
+	return v1.TealValue{
+		Type:  tv.Type.String(),
+		Bytes: base64.StdEncoding.EncodeToString([]byte(tv.Bytes)),
+		Uint:  tv.Uint,
+	}
+}
+
 func (cx *evalContext) refreshDebugState() *DebugState {
 	ds := &cx.debugState
 
@@ -124,22 +146,12 @@ func (cx *evalContext) refreshDebugState() *DebugState {
 
 	stack := make([]v1.TealValue, len(cx.stack), len(cx.stack))
 	for i, sv := range cx.stack {
-		tv := sv.toTealValue()
-		stack[i] = v1.TealValue{
-			Type:  tv.Type.String(),
-			Bytes: base64.StdEncoding.EncodeToString([]byte(tv.Bytes)),
-			Uint:  tv.Uint,
-		}
+		stack[i] = stackValueToV1TealValue(&sv)
 	}
 
 	scratch := make([]v1.TealValue, len(cx.scratch), len(cx.scratch))
 	for i, sv := range cx.scratch {
-		tv := sv.toTealValue()
-		scratch[i] = v1.TealValue{
-			Type:  tv.Type.String(),
-			Bytes: base64.StdEncoding.EncodeToString([]byte(tv.Bytes)),
-			Uint:  tv.Uint,
-		}
+		scratch[i] = stackValueToV1TealValue(&sv)
 	}
 
 	ds.Stack = stack

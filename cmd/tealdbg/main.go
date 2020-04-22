@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -132,20 +133,20 @@ var runMode runModeValue = runModeValue{makeCobraStringValue("signature", []stri
 func init() {
 	rootCmd.PersistentFlags().VarP(&frontend, "frontend", "f", "Frontend to use: "+frontend.AllowedString())
 
-	debugCmd.PersistentFlags().StringVarP(&proto, "proto", "p", "", "Consensus protocol version for TEAL")
-	debugCmd.PersistentFlags().StringVarP(&txnFile, "txn", "t", "", "Transaction(s) to evaluate TEAL on in form of json or msgpack file")
-	debugCmd.PersistentFlags().IntVarP(&groupIndex, "group-index", "g", 0, "Transaction index in a txn group")
-	debugCmd.PersistentFlags().StringVarP(&balanceFile, "balance", "b", "", "Balance records to evaluate stateful TEAL on in form of json or msgpack file")
-	debugCmd.PersistentFlags().IntVarP(&roundNumber, "round", "r", 1095518031, "Ledger round number to evaluate stateful TEAL on")
-	debugCmd.PersistentFlags().VarP(&runMode, "mode", "m", "TEAL evaluation mode: "+runMode.AllowedString())
+	debugCmd.Flags().StringVarP(&proto, "proto", "p", "", "Consensus protocol version for TEAL")
+	debugCmd.Flags().StringVarP(&txnFile, "txn", "t", "", "Transaction(s) to evaluate TEAL on in form of json or msgpack file")
+	debugCmd.Flags().IntVarP(&groupIndex, "group-index", "g", 0, "Transaction index in a txn group")
+	debugCmd.Flags().StringVarP(&balanceFile, "balance", "b", "", "Balance records to evaluate stateful TEAL on in form of json or msgpack file")
+	debugCmd.Flags().IntVarP(&roundNumber, "round", "r", 1095518031, "Ledger round number to evaluate stateful TEAL on")
+	debugCmd.Flags().VarP(&runMode, "mode", "m", "TEAL evaluation mode: "+runMode.AllowedString())
 
 	rootCmd.AddCommand(debugCmd)
 	rootCmd.AddCommand(remoteCmd)
 }
 
 func debugRemote() {
-	ds := makeDebugServer(&frontend)
-	ds.enableRemoteHook()
+	dp := DebugParams{Remote: true}
+	ds := makeDebugServer(&frontend, &dp)
 
 	ds.startRemote()
 }
@@ -159,18 +160,37 @@ func debugLocal(args []string) {
 		log.Fatalln("Invalid round")
 	}
 
-	ds := makeDebugServer(&frontend)
+	programBlobs := make([][]byte, len(args))
+	for i, file := range args {
+		data, err := ioutil.ReadFile(file)
+		if err != nil {
+			log.Fatalf("Error reading %s: %s", file, err)
+		}
+		programBlobs[i] = data
+	}
+
+	var balanceBlob []byte
+	if len(balanceFile) > 0 {
+		var err error
+		balanceBlob, err = ioutil.ReadFile(balanceFile)
+		if err != nil {
+			log.Fatalf("Error reading %s: %s", balanceFile, err)
+		}
+	}
 
 	dp := DebugParams{
-		Programs:    args,
-		Proto:       proto,
-		TxnFile:     txnFile,
-		GroupIndex:  groupIndex,
-		BalanceFile: balanceFile,
-		Round:       roundNumber,
-		RunMode:     runMode.String(),
+		ProgramBlobs: programBlobs,
+		Proto:        proto,
+		TxnFile:      txnFile,
+		GroupIndex:   groupIndex,
+		BalanceBlob:  balanceBlob,
+		Round:        roundNumber,
+		RunMode:      runMode.String(),
 	}
-	err := ds.startDebug(&dp)
+
+	ds := makeDebugServer(&frontend, &dp)
+
+	err := ds.startDebug()
 	if err != nil {
 		log.Fatalf("Debugging error: %s", err.Error())
 	}
