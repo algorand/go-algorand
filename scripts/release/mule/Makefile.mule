@@ -1,0 +1,57 @@
+# This file is imported into go-algorand/Makefile.
+
+.PHONY: ci-clean ci-deps ci-setup ci-build package package-deb package-rpm package-$(OS_TYPE)-$(ARCH) package-deb-$(OS_TYPE)-$(ARCH) package-rpm-$(OS_TYPE)-$(ARCH)
+
+ci-clean:
+	rm -rf tmp
+
+ci-deps:
+	scripts/configure_dev-deps.sh && \
+	scripts/check_deps.sh
+
+ci-setup:
+	mkdir -p $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)
+
+ci-test: ci-build
+ifeq ($(ARCH), amd64)
+	RACE=-race
+else
+	RACE=
+endif
+	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
+		go test $(GOTAGS) -timeout 2000s $(RACE) $$PACKAGE_DIRECTORY; \
+	done
+
+ci-integration:
+
+ifeq ($(ARCH), amd64)
+	export NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin && \
+	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin:$$PATH && \
+	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/test-utils:$$PATH && \
+	export SRCROOT=$(SRCPATH) && \
+	./test/scripts/e2e_go_tests.sh
+else
+	export NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin && \
+	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin:$$PATH && \
+	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/test-utils:$$PATH && \
+	export SRCROOT=$(SRCPATH) && \
+	./test/scripts/e2e_go_tests.sh -norace
+endif
+
+ci-build: ci-setup buildsrc gen
+	PKG_ROOT=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH) \
+		 NO_BUILD=True VARIATIONS=$(OS_TYPE)/$(ARCH) \
+		 scripts/build_packages.sh $(OS_TYPE)/$(ARCH)
+
+package-$(OS_TYPE)-$(ARCH): package-deb-$(OS_TYPE)-$(ARCH) package-rpm-$(OS_TYPE)-$(ARCH)
+
+package-deb-$(OS_TYPE)-$(ARCH):
+	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/deb/package.sh $(OS_TYPE) $(ARCH) $$WORKDIR
+
+package-rpm-$(OS_TYPE)-$(ARCH):
+	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/rpm/package.sh $(OS_TYPE) $(ARCH) $$WORKDIR
+
+package: package-$(OS_TYPE)-$(ARCH)
+package-deb: package-deb-$(OS_TYPE)-$(ARCH)
+package-rpm: package-rpm-$(OS_TYPE)-$(ARCH)
+
