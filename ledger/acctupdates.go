@@ -281,13 +281,13 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	au.catchpointSlowWriting = make(chan struct{}, 1)
 	close(au.catchpointSlowWriting)
 	close(au.accountsWriting)
-
+	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
 	if writingCatchpointRound != 0 && au.catchpointInterval != 0 {
 		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest)
 	}
 	au.committedOffset = make(chan uint64, 1)
 	go au.commitSyncer()
-	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
+
 	return nil
 }
 
@@ -304,11 +304,10 @@ func (au *accountUpdates) waitAccountsWriting() {
 }
 
 func (au *accountUpdates) close() {
-	au.waitAccountsWriting()
-
 	if au.ctxCancel != nil {
 		au.ctxCancel()
 	}
+	au.waitAccountsWriting()
 }
 
 func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
