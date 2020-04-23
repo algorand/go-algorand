@@ -36,10 +36,8 @@ app_global_gets
 ==
 bnz if9
 int 0
-int 0
 byte base64 Zno=
-app_local_get
-pop
+app_local_gets
 int 1
 ==
 int 1
@@ -62,10 +60,8 @@ bnz if11
 int 0
 byte base64 Ymw=
 int 0
-int 0
 byte base64 Ymw=
-app_local_get
-pop
+app_local_gets
 load 1
 -
 app_local_put
@@ -91,10 +87,8 @@ app_global_gets
 ==
 bnz if15
 int 1
-int 0
 byte base64 Zno=
-app_local_get
-pop
+app_local_gets
 int 1
 ==
 int 1
@@ -117,10 +111,8 @@ bnz if17
 int 1
 byte base64 Ymw=
 int 1
-int 0
 byte base64 Ymw=
-app_local_get
-pop
+app_local_gets
 load 1
 +
 app_local_put
@@ -140,10 +132,8 @@ global ZeroAddress
 ==
 bnz unless19
 int 0
-int 0
 byte base64 Ymw=
-app_local_get
-pop
+app_local_gets
 store 2
 load 2
 int 0
@@ -156,10 +146,8 @@ app_global_gets
 ==
 bnz if22
 int 0
-int 0
 byte base64 Zno=
-app_local_get
-pop
+app_local_gets
 int 1
 ==
 int 1
@@ -182,10 +170,8 @@ bnz if24
 int 0
 byte base64 Ymw=
 int 0
-int 0
 byte base64 Ymw=
-app_local_get
-pop
+app_local_gets
 load 2
 -
 app_local_put
@@ -211,10 +197,8 @@ app_global_gets
 ==
 bnz if28
 int 2
-int 0
 byte base64 Zno=
-app_local_get
-pop
+app_local_gets
 int 1
 ==
 int 1
@@ -237,10 +221,8 @@ bnz if30
 int 2
 byte base64 Ymw=
 int 2
-int 0
 byte base64 Ymw=
-app_local_get
-pop
+app_local_gets
 load 2
 +
 app_local_put
@@ -271,10 +253,8 @@ txn OnCompletion
 int 2
 ==
 int 0
-int 0
 byte base64 Ymw=
-app_local_get
-pop
+app_local_gets
 int 0
 ==
 &&
@@ -306,10 +286,8 @@ bnz if34
 int 1
 byte base64 Ymw=
 int 1
-int 0
 byte base64 Ymw=
-app_local_get
-pop
+app_local_gets
 load 0
 -
 app_local_put
@@ -331,10 +309,8 @@ bnz if36
 int 2
 byte base64 Ymw=
 int 2
-int 0
 byte base64 Ymw=
-app_local_get
-pop
+app_local_gets
 load 0
 +
 app_local_put
