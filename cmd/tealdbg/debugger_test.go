@@ -42,10 +42,11 @@ type testDbgAdapter struct {
 func makeTestDbgAdapter(params interface{}) (d *testDbgAdapter) {
 	d = new(testDbgAdapter)
 	d.done = make(chan struct{})
-	return nil
+	return d
 }
 
 func (d *testDbgAdapter) WaitForCompletion() {
+	<-d.done
 }
 
 func (d *testDbgAdapter) SessionStarted(sid string, debugger Control, ch chan Notification) {
@@ -80,10 +81,6 @@ func (d *testDbgAdapter) eventLoop() {
 	}
 }
 
-func (d *testDbgAdapter) waitForCompletion() {
-	<-d.done
-}
-
 func TestDebuggerSimple(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusV23]
 	debugger := MakeDebugger()
@@ -107,7 +104,7 @@ int 1
 	_, err = logic.Eval(program, ep)
 	require.NoError(t, err)
 
-	da.waitForCompletion()
+	da.WaitForCompletion()
 
 	require.True(t, da.started)
 	require.True(t, da.ended)
