@@ -48,17 +48,15 @@ var rawRequestPaths = map[string]bool{
 
 // RestClient manages the REST interface for a calling user.
 type RestClient struct {
-	serverURL     url.URL
-	apiToken      string
-	adminAPIToken string
+	serverURL url.URL
+	apiToken  string
 }
 
 // MakeRestClient is the factory for constructing a RestClient for a given endpoint
-func MakeRestClient(url url.URL, apiToken, adminAPIToken string) RestClient {
+func MakeRestClient(url url.URL, apiToken string) RestClient {
 	return RestClient{
-		serverURL:     url,
-		apiToken:      apiToken,
-		adminAPIToken: adminAPIToken,
+		serverURL: url,
+		apiToken:  apiToken,
 	}
 }
 
@@ -117,7 +115,7 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 		return err
 	}
 
-	// if the caller provided an authenticaion token, pass it along.
+	// if the caller provided an authentication token, pass it along.
 	// ( some entrypoints, such as health doesn't require a security token to be passed )
 	if authToken != "" {
 		req.Header.Set(authHeader, authToken)
@@ -330,7 +328,7 @@ func (client RestClient) RawBlock(round uint64) (response v1.RawBlock, err error
 // Shutdown requests the node to shut itself down
 func (client RestClient) Shutdown() (err error) {
 	response := 1
-	err = client.post(&response, "/v2/shutdown", nil, client.adminAPIToken)
+	err = client.post(&response, "/v2/shutdown", nil, client.apiToken)
 	return
 }
 
@@ -359,7 +357,7 @@ func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryA
 	}
 	req.URL.RawQuery = q.Encode()
 
-	req.Header.Set(authHeader, client.adminAPIToken)
+	req.Header.Set(authHeader, client.apiToken)
 
 	httpClient := http.Client{}
 	resp, err := httpClient.Do(req.WithContext(ctx))

@@ -43,14 +43,12 @@ const StdOutFilename = "algod-out.log"
 // AlgodClient attempts to build a client.RestClient for communication with
 // the algod REST API, but fails if we can't find the net file
 func (nc NodeController) AlgodClient() (algodClient client.RestClient, err error) {
-	algodAPIToken, err := tokens.GetAndValidateAPIToken(nc.algodDataDir, tokens.AlgodTokenFilename)
+	algodAPIToken, err := tokens.GetAndValidateAPIToken(nc.algodDataDir, tokens.AlgodAdminTokenFilename)
 	if err != nil {
-		return
-	}
-
-	algodAdminAPIToken, err := tokens.GetAndValidateAPIToken(nc.algodDataDir, tokens.AlgodAdminTokenFilename)
-	if err != nil {
-		return
+		algodAPIToken, err = tokens.GetAndValidateAPIToken(nc.algodDataDir, tokens.AlgodTokenFilename)
+		if err != nil {
+			return
+		}
 	}
 
 	// Fetch the server URL from the net file, if it exists
@@ -60,7 +58,7 @@ func (nc NodeController) AlgodClient() (algodClient client.RestClient, err error
 	}
 
 	// Build the client from the URL and API token
-	algodClient = client.MakeRestClient(algodURL, algodAPIToken, algodAdminAPIToken)
+	algodClient = client.MakeRestClient(algodURL, algodAPIToken)
 	return
 }
 

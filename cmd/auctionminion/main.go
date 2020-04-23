@@ -127,7 +127,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	restClient := client.MakeRestClient(*algodURL, cfg.AlgodToken, "")
+	restClient := client.MakeRestClient(*algodURL, cfg.AlgodToken)
 
 	var results []auction.MasterInput
 	var ra *auction.RunningAuction

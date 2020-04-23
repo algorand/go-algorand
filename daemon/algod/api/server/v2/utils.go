@@ -188,50 +188,50 @@ func toCodecMap(input interface{}, output *map[string]interface{}) (err error) {
 	return
 }
 
-type pathColletingRouter struct {
-	paths map[string]struct{}
+type pathCollectingRouter struct {
+	paths map[echo.Route]echo.HandlerFunc
 }
 
-func (p *pathColletingRouter) CONNECT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
-	p.paths[path] = struct{}{}
+func (p *pathCollectingRouter) CONNECT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.CONNECT, Path: path}] = h
 	return nil
 }
-func (p *pathColletingRouter) DELETE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
-	p.paths[path] = struct{}{}
+func (p *pathCollectingRouter) DELETE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.DELETE, Path: path}] = h
 	return nil
 }
-func (p *pathColletingRouter) GET(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
-	p.paths[path] = struct{}{}
+func (p *pathCollectingRouter) GET(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.GET, Path: path}] = h
 	return nil
 }
-func (p *pathColletingRouter) HEAD(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
-	p.paths[path] = struct{}{}
+func (p *pathCollectingRouter) HEAD(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.HEAD, Path: path}] = h
 	return nil
 }
-func (p *pathColletingRouter) OPTIONS(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
-	p.paths[path] = struct{}{}
+func (p *pathCollectingRouter) OPTIONS(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.OPTIONS, Path: path}] = h
 	return nil
 }
-func (p *pathColletingRouter) PATCH(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
-	p.paths[path] = struct{}{}
+func (p *pathCollectingRouter) PATCH(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.PATCH, Path: path}] = h
 	return nil
 }
-func (p *pathColletingRouter) POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
-	p.paths[path] = struct{}{}
+func (p *pathCollectingRouter) POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.POST, Path: path}] = h
 	return nil
 }
-func (p *pathColletingRouter) PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
-	p.paths[path] = struct{}{}
+func (p *pathCollectingRouter) PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.PUT, Path: path}] = h
 	return nil
 }
-func (p *pathColletingRouter) TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
-	p.paths[path] = struct{}{}
+func (p *pathCollectingRouter) TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.TRACE, Path: path}] = h
 	return nil
 }
 
 // GetRoutes returns a map of all the routes defined in the V2 router
-func GetRoutes(privateEndpoints bool) map[string]struct{} {
-	collector := pathColletingRouter{paths: make(map[string]struct{})}
+func GetRoutes(privateEndpoints bool) map[echo.Route]echo.HandlerFunc {
+	collector := pathCollectingRouter{paths: make(map[echo.Route]echo.HandlerFunc)}
 	if privateEndpoints {
 		private.RegisterHandlers(&collector, &Handlers{})
 	} else {

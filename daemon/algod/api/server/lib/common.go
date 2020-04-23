@@ -37,7 +37,7 @@ type Route struct {
 	Method      string
 	Path        string
 	HandlerFunc HandlerFunc
-	AuthFree    bool // routes that has the AuthFree set to true doesn't require authentication
+	NoAuth      bool // routes that has the NoAuth set to true doesn't require authentication
 }
 
 // Routes contains all routes
