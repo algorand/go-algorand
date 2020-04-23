@@ -143,8 +143,7 @@ func init() {
 }
 
 func debugRemote() {
-	dp := DebugParams{Remote: true}
-	ds := makeDebugServer(&frontend, &dp)
+	ds := makeDebugServer(&frontend, nil)
 
 	ds.startRemote()
 }

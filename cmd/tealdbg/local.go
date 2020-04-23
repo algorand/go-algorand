@@ -212,15 +212,34 @@ func (l *debugLedger) AssetParams(addr basics.Address, assetIdx basics.AssetInde
 	return ap, nil
 }
 
-// RunLocal starts a local debugging session
-func RunLocal(debugger *Debugger, dp *DebugParams) (err error) {
-	protoName, proto, err := protoFromString(dp.Proto)
+// LocalRunner runs local eval
+type LocalRunner struct {
+	debugger   *Debugger
+	programs   [][]byte
+	proto      config.ConsensusParams
+	protoName  string
+	txnGroup   []transactions.SignedTxn
+	groupIndex int
+	ledger     *debugLedger
+	eval       func(program []byte, ep logic.EvalParams) (bool, error)
+}
+
+// MakeLocalRunner creates LocalRunner
+func MakeLocalRunner(debugger *Debugger) *LocalRunner {
+	r := new(LocalRunner)
+	r.debugger = debugger
+	return r
+}
+
+// Setup validates input params
+func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
+	r.protoName, r.proto, err = protoFromString(dp.Proto)
 	if err != nil {
 		return
 	}
-	log.Printf("Using proto: %s", protoName)
+	log.Printf("Using proto: %s", r.protoName)
 
-	txnGroup, groupIndex, err := txnGroupFromParams(dp)
+	r.txnGroup, r.groupIndex, err = txnGroupFromParams(dp)
 	if err != nil {
 		return
 	}
@@ -235,41 +254,72 @@ func RunLocal(debugger *Debugger, dp *DebugParams) (err error) {
 		balances[record.Addr] = record.AccountData
 	}
 
-	ledger := debugLedger{
+	r.ledger = &debugLedger{
 		round:    dp.Round,
 		balances: balances,
 	}
-	ep := logic.EvalParams{
-		Proto:      &proto,
-		Debugger:   debugger,
-		Txn:        &txnGroup[groupIndex],
-		TxnGroup:   txnGroup,
-		GroupIndex: groupIndex,
-		Ledger:     &ledger,
-	}
 
-	for _, data := range dp.ProgramBlobs {
-		var program []byte = data
+	r.programs = make([][]byte, len(dp.ProgramBlobs))
+	for i, data := range dp.ProgramBlobs {
+		r.programs[i] = data
 		if IsTextFile(data) {
-			program, err = logic.AssembleStringWithVersion(string(data), proto.LogicSigVersion)
+			r.programs[i], err = logic.AssembleStringWithVersion(string(data), r.proto.LogicSigVersion)
 			if err != nil {
 				return err
 			}
 		}
+	}
 
-		switch dp.RunMode {
-		case "signature":
-			_, err = logic.Eval(program, ep)
-		case "application":
-			_, _, err = logic.EvalStateful(program, ep)
-		default:
-			err = fmt.Errorf("unknown run mode")
-			return
+	switch dp.RunMode {
+	case "signature":
+		r.eval = logic.Eval
+	case "application":
+		r.eval = func(program []byte, ep logic.EvalParams) (bool, error) {
+			pass, _, err := logic.EvalStateful(program, ep)
+			return pass, err
 		}
+	default:
+		err = fmt.Errorf("unknown run mode")
+		return
+	}
+
+	return nil
+}
+
+// RunAll runs all the programs
+func (r *LocalRunner) RunAll() error {
+	ep := logic.EvalParams{
+		Proto:      &r.proto,
+		Debugger:   r.debugger,
+		Txn:        &r.txnGroup[groupIndex],
+		TxnGroup:   r.txnGroup,
+		GroupIndex: r.groupIndex,
+		Ledger:     r.ledger,
+	}
+
+	for _, program := range r.programs {
+		_, err := r.eval(program, ep)
 		if err != nil {
 			return err
 		}
 	}
-
 	return nil
+}
+
+// Run starts the first program in list
+func (r *LocalRunner) Run() (bool, error) {
+	ep := logic.EvalParams{
+		Proto:      &r.proto,
+		Debugger:   r.debugger,
+		Txn:        &r.txnGroup[groupIndex],
+		TxnGroup:   r.txnGroup,
+		GroupIndex: r.groupIndex,
+		Ledger:     r.ledger,
+	}
+
+	if len(r.programs) < 1 {
+		return false, fmt.Errorf("no program to debug")
+	}
+
+	return r.eval(r.programs[0], ep)
 }
