@@ -17,9 +17,9 @@ fi
 
 BRANCH=$(./scripts/compute_branch.sh)
 CHANNEL=$(./scripts/compute_branch_channel.sh "$BRANCH")
-TARBALLS="./tmp/node_pkgs/$OS_TYPE/$ARCH"
+PKG_ROOT_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH"
 FULLVERSION=$(./scripts/compute_build_number.sh -f)
-ALGOD_INSTALL_TAR_FILE="$TARBALLS/node_${CHANNEL}_${OS_TYPE}-${ARCH}_${FULLVERSION}.tar.gz"
+ALGOD_INSTALL_TAR_FILE="$PKG_ROOT_DIR/node_${CHANNEL}_${OS_TYPE}-${ARCH}_${FULLVERSION}.tar.gz"
 
 if [ -f "$ALGOD_INSTALL_TAR_FILE" ]; then
     echo "using install file $ALGOD_INSTALL_TAR_FILE"
@@ -30,7 +30,7 @@ fi
 
 INPUT_ALGOD_TAR_FILE="temp_install.tar.gz"
 CHANNEL_VERSION="${CHANNEL}_${FULLVERSION}"
-PKG_DIR="algod_pkg_$CHANNEL_VERSION"
+NEW_PKG_DIR="algod_pkg_$CHANNEL_VERSION"
 DOCKER_EXPORT_FILE="algod_docker_export_$CHANNEL_VERSION.tar.gz"
 DOCKER_PKG_FILE="algod_docker_package_$CHANNEL_VERSION.tar.gz"
 DOCKER_IMAGE="algorand/algod_$CHANNEL_VERSION:latest"
@@ -51,10 +51,10 @@ cp "$ALGOD_INSTALL_TAR_FILE" "/tmp/$INPUT_ALGOD_TAR_FILE"
 cp "$ALGOD_DOCKER_INIT" /tmp
 docker build --build-arg ALGOD_INSTALL_TAR_FILE="$INPUT_ALGOD_TAR_FILE" /tmp -t "$DOCKER_IMAGE" -f "$DOCKERFILE"
 
-mkdir -p "/tmp/$PKG_DIR"
+mkdir -p "/tmp/$NEW_PKG_DIR"
 
 echo "exporting image '$DOCKER_IMAGE' to file '$DOCKER_EXPORT_FILE'"
-docker save --output "/tmp/$PKG_DIR/$DOCKER_EXPORT_FILE" "$DOCKER_IMAGE"
+docker save --output "/tmp/$NEW_PKG_DIR/$DOCKER_EXPORT_FILE" "$DOCKER_IMAGE"
 
 DOCKER_EXPORT_STATUS=$?
 if [ "$DOCKER_EXPORT_STATUS" -ne 0 ]; then
@@ -63,14 +63,14 @@ if [ "$DOCKER_EXPORT_STATUS" -ne 0 ]; then
 fi
 
 echo "creating docker package tar file $DOCKER_PKG_FILE"
-cp "$START_ALGOD_FILE" "/tmp/$PKG_DIR/"
-cp ./docker/release/deploy_README.md "/tmp/$PKG_DIR/README.md"
-sed -i "s/%CHANNEL_VERSION%/$CHANNEL_VERSION/g" "/tmp/$PKG_DIR/start_algod_docker.sh"
+cp "$START_ALGOD_FILE" "/tmp/$NEW_PKG_DIR/"
+cp ./docker/release/deploy_README.md "/tmp/$NEW_PKG_DIR/README.md"
+sed -i "s/%CHANNEL_VERSION%/$CHANNEL_VERSION/g" "/tmp/$NEW_PKG_DIR/start_algod_docker.sh"
 
-tar cvf "/tmp/$DOCKER_PKG_FILE" "/tmp/$PKG_DIR"
+tar cvf "/tmp/$DOCKER_PKG_FILE" "/tmp/$NEW_PKG_DIR"
 
-echo "moving resulting docker package to ${TARBALLS}${DOCKER_PKG_FILE}"
-cp "/tmp/$DOCKER_PKG_FILE" "$TARBALLS"
+echo "moving resulting docker package to ${PKG_ROOT_DIR}${DOCKER_PKG_FILE}"
+cp "/tmp/$DOCKER_PKG_FILE" "$PKG_ROOT_DIR"
 
 echo
 date "+build_release end PACKAGE DOCKER stage %Y%m%d_%H%M%S"
