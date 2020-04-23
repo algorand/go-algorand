@@ -33,7 +33,7 @@ def get_stage_release_set(response):
         else:
             all[prefix] = they
             prefix = None
-            they = []
+            they = [x]
     return all
 
 def release_set_files(rset):
@@ -118,67 +118,66 @@ def getContent(url):
 
     return content
 
-def build_page(table):
-    html = getContent(html_tpl).replace("{styles}", getContent(styles_url)).replace("{body}", "".join(table))
+def build_page(channels):
+    html = getContent(html_tpl).replace("{styles}", getContent(styles_url))
+    html = html.replace("{stable}", "".join(channels["stable"])).replace("{beta}", "".join(channels["beta"]))
     sys.stdout.write(html)
 
-def main(channel):
+def main():
     s3 = boto3.client("s3")
-    staging_response = s3.list_objects_v2(Bucket=staging_bucket, Prefix="releases/" + channel + "/", MaxKeys=100)
-    release_sets = get_stage_release_set(staging_response)
-    releases_response = s3.list_objects_v2(Bucket=releases_bucket)
-    release_files = objects_by_fname(releases_response["Contents"])
+    channels = {}
 
-    table = ["<table><tr><th>File</th><th>Bytes</th><th>GPG Signature</th></tr>"]
+    for channel in ["stable", "beta"]:
+        staging_response = s3.list_objects_v2(Bucket=staging_bucket, Prefix="releases/" + channel + "/", MaxKeys=100)
+        release_sets = get_stage_release_set(staging_response)
+        releases_response = s3.list_objects_v2(Bucket=releases_bucket)
+        release_files = objects_by_fname(releases_response["Contents"])
 
-    for key in release_sets:
-        rset = release_sets[key]
-        hashftext = get_hashes_data(s3, rset)
-        fhashes = read_hashes(hashftext.splitlines())
-        files = release_set_files(rset)
+        table = []
 
-        def get_furl(fname, skey):
-            rfpath = release_files.get(fname)
-            if rfpath is not None:
-                return releases_prefix + rfpath["Key"]
-            else:
-                return staging_prefix + skey
+        for key in release_sets:
+            rset = release_sets[key]
+            hashftext = get_hashes_data(s3, rset)
+            fhashes = read_hashes(hashftext.splitlines())
+            files = release_set_files(rset)
 
-        for fname, info in files.items():
-            if "file" not in info:
-                continue
-            furl = get_furl(fname, info['file'])
-            ftext = '<div class="fname"><a href="{}">{}</a></div>'.format(furl, fname)
-            sig = info.get(".sig")
-            stext = ""
-            if sig is not None:
-                sfname = sig["Key"].rsplit("/", 1)[-1]
-                surl = get_furl(sfname, sig["Key"])
-                stext = '<a href="{}">.sig</a>'.format(surl)
-            size = info.get("Size", "")
-            hashes = fhashes.get(fname)
-            if hashes:
-                for hn in ("md5", "sha256", "sha512"):
-                    hv = hashes.get(hn)
-                    if hv:
-                        ftext += '<div class="hash {}">{}</div>'.format(hn, hv)
-            if not hashes and not stext:
-                continue
-            tbody = ["<tbody><tr><td>{}</td><td>{}</td><td>{}</td></tr></tbody>".format(ftext, size, stext)]
-            table.append("".join(tbody))
+            def get_furl(fname, skey):
+                rfpath = release_files.get(fname)
+                if rfpath is not None:
+                    return releases_prefix + rfpath["Key"]
+                else:
+                    return staging_prefix + skey
 
-        # Only add the spacer after every set.
-        table.append('<tbody><tr class="spacer"><td></td></tr></tbody>')
+            for fname, info in files.items():
+                if "file" not in info:
+                    continue
+                furl = get_furl(fname, info['file'])
+                ftext = '<div class="fname"><a href="{}">{}</a></div>'.format(furl, fname)
+                sig = info.get(".sig")
+                stext = ""
+                if sig is not None:
+                    sfname = sig["Key"].rsplit("/", 1)[-1]
+                    surl = get_furl(sfname, sig["Key"])
+                    stext = '<a href="{}">.sig</a>'.format(surl)
+                size = info.get("Size", "")
+                hashes = fhashes.get(fname)
+                if hashes:
+                    for hn in ("md5", "sha256", "sha512"):
+                        hv = hashes.get(hn)
+                        if hv:
+                            ftext += '<div class="hash {}">{}</div>'.format(hn, hv)
+                if not hashes and not stext:
+                    continue
+                tbody = ["<tbody><tr><td>{}</td><td>{}</td><td>{}</td></tr></tbody>".format(ftext, size, stext)]
+                table.append("".join(tbody))
 
-    build_page(table)
+            # Only add the spacer *after* every set.
+            table.append('<tbody><tr class="spacer"><td></td></tr></tbody>')
+
+        channels[channel] = table
+
+    build_page(channels)
 
 if __name__ == "__main__":
-    if len(sys.argv) == 1:
-        print("Usage:", sys.argv[0], "<channel=stable|beta>")
-        sys.exit(1)
-    elif sys.argv[1] not in ["stable", "beta"]:
-        print("Argument can only be `stable` or `beta`.")
-        sys.exit(1)
-    else:
-        main(sys.argv[1])
+    main()
 

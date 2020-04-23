@@ -1,13 +1,9 @@
 div.hash {
-    font-family:monospace;
+    font-family: monospace;
 }
 
 div.fname {
-    font-size:120%;
-}
-
-section {
-    margin-bottom: 3em;
+    font-size: 120%;
 }
 
 table {

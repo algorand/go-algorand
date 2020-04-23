@@ -14,7 +14,17 @@
 <p><sup><b>**</b></sup> The RPM package for the 2.0.3 release was signed with the <a href="https://releases.algorand.com/key.pub">https://releases.algorand.com/key.pub</a>. All other releases will have been signed with the RPM key as noted.</p>
 
 <hr>
-{body}
+
+<h2>Stable releases</h2>
+<table><tr><th>File</th><th>Bytes</th><th>GPG Signature</th></tr>
+{stable}
+</table>
+
+<h2>Beta releases</h2>
+<table><tr><th>File</th><th>Bytes</th><th>GPG Signature</th></tr>
+{beta}
+</table>
+
 </body>
 </html>
 
