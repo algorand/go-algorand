@@ -38,6 +38,7 @@ type cdtSession struct {
 	debugger      Control
 	notifications chan Notification
 	endpoint      cdtTabDescription
+	done          chan struct{}
 
 	contextID  int
 	scriptID   string
@@ -48,12 +49,22 @@ type cdtSession struct {
 var contextCounter int32 = 0
 var scriptCounter int32 = 0
 
-func (s *cdtSession) Setup() {
+func makeCDTSession(uuid string, debugger Control, ch chan Notification) *cdtSession {
+	s := new(cdtSession)
+	s.uuid = uuid
+	s.debugger = debugger
+	s.notifications = ch
+	s.done = make(chan struct{})
 	s.contextID = int(atomic.AddInt32(&contextCounter, 1))
 	s.scriptID = strconv.Itoa(int(atomic.AddInt32(&scriptCounter, 1)))
+	return s
 }
 
 func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		close(s.done)
+	}()
+
 	uuid := r.URL.Path
 	if uuid[0] == '/' {
 		uuid = uuid[1:]

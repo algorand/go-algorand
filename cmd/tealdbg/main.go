@@ -103,17 +103,15 @@ type frontendValue struct {
 	*cobraStringValue
 }
 
-func (f *frontendValue) MakeAdapter(router *mux.Router, appAddress string) (da DebugAdapter) {
+func (f *frontendValue) Make(router *mux.Router, appAddress string) (da DebugAdapter) {
 	switch f.value {
 	case "web":
-		wa := &WebPageAdapter{}
-		wa.Setup(router)
+		wa := MakeWebPageAdapter(router)
 		return wa
 	case "cdt":
 		fallthrough
 	default:
-		cdt := &CDTAdapter{}
-		cdt.Setup(&CDTSetupParams{router, appAddress})
+		cdt := MakeCDTAdapter(&CDTSetupParams{router, appAddress})
 		return cdt
 	}
 }

@@ -34,9 +34,9 @@ type Notification struct {
 
 // DebugAdapter represents debugger frontend (i.e. CDT, webpage, VSCode, etc)
 type DebugAdapter interface {
-	Setup(ctx interface{}) error
 	SessionStarted(sid string, debugger Control, ch chan Notification)
 	SessionEnded(sid string)
+	WaitForCompletion()
 }
 
 // Control interface for execution control
