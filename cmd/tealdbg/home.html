@@ -260,17 +260,22 @@
 
                 var buttonHandler = function(singlestep) {
                     return function() {
-                        var breakLine = 0;
-                        if (!singlestep) {
-                            // Iterate over breakpoints and find the next one greater
-                            // than the current line. If none, don't break at all (-1).
-                            breakLine = -1;
-                            var checkboxes = exec.querySelectorAll("input");
-                            for (var i = state["line"] + 1; i < checkboxes.length; i++) {
-                                if (checkboxes[i].checked) {
-                                    breakLine = i
-                                    break
-                                }
+                        if (singlestep) {
+                            // Tell server to notify us on this PC
+                            let req = new XMLHttpRequest();
+                            req.open("POST", "/exec/step", false);
+                            req.setRequestHeader("Content-Type", "application/json");
+                            req.send(JSON.stringify({"execid": state["execid"], "breakatline": 0}));
+                            return
+                        }
+                        // Iterate over breakpoints and find the next one greater
+                        // than the current line. If none, don't break at all (-1).
+                        let breakLine = -1;
+                        var checkboxes = exec.querySelectorAll("input");
+                        for (var i = state["line"] + 1; i < checkboxes.length; i++) {
+                            if (checkboxes[i].checked) {
+                                breakLine = i
+                                break
                             }
                         }
 

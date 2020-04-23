@@ -34,17 +34,17 @@ type CDTAdapter struct {
 	apiAddress string
 }
 
-// CDTSetupParams for Setup
-type CDTSetupParams struct {
+// CDTAdapterParams for Setup
+type CDTAdapterParams struct {
 	router     *mux.Router
 	apiAddress string
 }
 
 // MakeCDTAdapter creates new CDTAdapter
 func MakeCDTAdapter(ctx interface{}) (a *CDTAdapter) {
-	params, ok := ctx.(*CDTSetupParams)
+	params, ok := ctx.(*CDTAdapterParams)
 	if !ok {
-		panic("CDTAdapter.Setup expected CDTSetupParams")
+		panic("MakeCDTAdapter expected CDTAdapterParams")
 	}
 
 	a = new(CDTAdapter)

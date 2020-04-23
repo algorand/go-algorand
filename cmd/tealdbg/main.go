@@ -106,12 +106,12 @@ type frontendValue struct {
 func (f *frontendValue) Make(router *mux.Router, appAddress string) (da DebugAdapter) {
 	switch f.value {
 	case "web":
-		wa := MakeWebPageAdapter(router)
+		wa := MakeWebPageAdapter(&WebPageAdapterParams{router, appAddress})
 		return wa
 	case "cdt":
 		fallthrough
 	default:
-		cdt := MakeCDTAdapter(&CDTSetupParams{router, appAddress})
+		cdt := MakeCDTAdapter(&CDTAdapterParams{router, appAddress})
 		return cdt
 	}
 }
