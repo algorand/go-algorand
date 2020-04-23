@@ -123,6 +123,13 @@ def build_page(channels):
     html = html.replace("{stable}", "".join(channels["stable"])).replace("{beta}", "".join(channels["beta"]))
     sys.stdout.write(html)
 
+def get_furl(release_files, fname, skey):
+    rfpath = release_files.get(fname)
+    if rfpath is not None:
+        return releases_prefix + rfpath["Key"]
+    else:
+        return staging_prefix + skey
+
 def main():
     s3 = boto3.client("s3")
     channels = {}
@@ -135,29 +142,21 @@ def main():
 
         table = []
 
-        for key in release_sets:
-            rset = release_sets[key]
+        for key, rset in release_sets.items():
             hashftext = get_hashes_data(s3, rset)
             fhashes = read_hashes(hashftext.splitlines())
             files = release_set_files(rset)
 
-            def get_furl(fname, skey):
-                rfpath = release_files.get(fname)
-                if rfpath is not None:
-                    return releases_prefix + rfpath["Key"]
-                else:
-                    return staging_prefix + skey
-
             for fname, info in files.items():
                 if "file" not in info:
                     continue
-                furl = get_furl(fname, info['file'])
+                furl = get_furl(release_files, fname, info['file'])
                 ftext = '<div class="fname"><a href="{}">{}</a></div>'.format(furl, fname)
                 sig = info.get(".sig")
                 stext = ""
                 if sig is not None:
                     sfname = sig["Key"].rsplit("/", 1)[-1]
-                    surl = get_furl(sfname, sig["Key"])
+                    surl = get_furl(release_files, sfname, sig["Key"])
                     stext = '<a href="{}">.sig</a>'.format(surl)
                 size = info.get("Size", "")
                 hashes = fhashes.get(fname)
