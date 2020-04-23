@@ -55,3 +55,15 @@ package: package-$(OS_TYPE)-$(ARCH)
 package-deb: package-deb-$(OS_TYPE)-$(ARCH)
 package-rpm: package-rpm-$(OS_TYPE)-$(ARCH)
 
+package-sign-$(OS_TYPE)-$(ARCH): package-sign-deb-$(OS_TYPE)-$(ARCH) package-sign-rpm-$(OS_TYPE)-$(ARCH)
+
+package-sign-deb-$(OS_TYPE)-$(ARCH):
+	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/deb/sign.sh $(OS_TYPE) $(ARCH) $$WORKDIR
+
+package-sign-rpm-$(OS_TYPE)-$(ARCH):
+	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/rpm/sign.sh $(OS_TYPE) $(ARCH) $$WORKDIR
+
+package-sign: package-sign-$(OS_TYPE)-$(ARCH)
+package-sign-deb: package-sign-deb-$(OS_TYPE)-$(ARCH)
+package-sign-rpm: package-sign-rpm-$(OS_TYPE)-$(ARCH)
+
