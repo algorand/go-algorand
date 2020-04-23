@@ -47,6 +47,7 @@ var upgrader = websocket.Upgrader{
 // DebugServer is Debugger + HTTP/WS handlers for frontends
 type DebugServer struct {
 	debugger *Debugger
+	frontend DebugAdapter
 	router   *mux.Router
 	server   *http.Server
 	remote   *RemoteHookAdapter
@@ -57,7 +58,7 @@ type DebugServer struct {
 type DebugParams struct {
 	ProgramBlobs [][]byte
 	Proto        string
-	TxnFile      string
+	TxnBlob      []byte
 	GroupIndex   int
 	BalanceBlob  []byte
 	Round        int
@@ -65,18 +66,18 @@ type DebugParams struct {
 	Remote       bool
 }
 
-// AdapterMaker interface for attaching debug adapters
-type AdapterMaker interface {
-	MakeAdapter(router *mux.Router, appAddress string) (da DebugAdapter)
+// FrontendFactory interface for attaching debug frontends
+type FrontendFactory interface {
+	Make(router *mux.Router, appAddress string) (da DebugAdapter)
 }
 
-func makeDebugServer(maker AdapterMaker, dp *DebugParams) DebugServer {
+func makeDebugServer(ff FrontendFactory, dp *DebugParams) DebugServer {
 	debugger := MakeDebugger()
 
 	router := mux.NewRouter()
 	appAddress := "localhost:9392"
 
-	da := maker.MakeAdapter(router, appAddress)
+	da := ff.Make(router, appAddress)
 	debugger.AddAdapter(da)
 
 	server := &http.Server{
@@ -88,6 +89,7 @@ func makeDebugServer(maker AdapterMaker, dp *DebugParams) DebugServer {
 
 	return DebugServer{
 		debugger: debugger,
+		frontend: da,
 		router:   router,
 		server:   server,
 		params:   dp,
@@ -107,8 +109,8 @@ func (ds *DebugServer) startDebug() (err error) {
 	go ds.server.ListenAndServe()
 
 	err = RunLocal(ds.debugger, ds.params)
+	ds.frontend.WaitForCompletion()
 
-	// TODO: better sync to give frontend a change to process all notifications
 	ds.server.Shutdown(context.Background())
 	return
 }

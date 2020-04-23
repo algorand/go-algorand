@@ -39,9 +39,13 @@ type testDbgAdapter struct {
 	done chan struct{}
 }
 
-func (d *testDbgAdapter) Setup(params interface{}) error {
+func makeTestDbgAdapter(params interface{}) (d *testDbgAdapter) {
+	d = new(testDbgAdapter)
 	d.done = make(chan struct{})
 	return nil
+}
+
+func (d *testDbgAdapter) WaitForCompletion() {
 }
 
 func (d *testDbgAdapter) SessionStarted(sid string, debugger Control, ch chan Notification) {
@@ -84,9 +88,8 @@ func TestDebuggerSimple(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusV23]
 	debugger := MakeDebugger()
 
-	da := testDbgAdapter{}
-	da.Setup(nil)
-	debugger.AddAdapter(&da)
+	da := makeTestDbgAdapter(nil)
+	debugger.AddAdapter(da)
 
 	ep := logic.EvalParams{
 		Proto:    &proto,

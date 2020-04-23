@@ -18,8 +18,9 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 	"github.com/gorilla/mux"
@@ -33,18 +34,20 @@ type CDTAdapter struct {
 	apiAddress string
 }
 
-// CDTSetupParams for Setup
-type CDTSetupParams struct {
+// CDTAdapterParams for Setup
+type CDTAdapterParams struct {
 	router     *mux.Router
 	apiAddress string
 }
 
-// Setup initialized the adapter
-func (a *CDTAdapter) Setup(ctx interface{}) error {
-	params, ok := ctx.(*CDTSetupParams)
+// MakeCDTAdapter creates new CDTAdapter
+func MakeCDTAdapter(ctx interface{}) (a *CDTAdapter) {
+	params, ok := ctx.(*CDTAdapterParams)
 	if !ok {
-		return fmt.Errorf("CDTAdapter.Setup expected CDTSetupParams")
+		panic("MakeCDTAdapter expected CDTAdapterParams")
 	}
+
+	a = new(CDTAdapter)
 
 	a.sessions = make(map[string]cdtSession)
 	a.router = params.router
@@ -54,32 +57,44 @@ func (a *CDTAdapter) Setup(ctx interface{}) error {
 	a.router.HandleFunc("/json", a.jsonHandler).Methods("GET")
 	a.router.HandleFunc("/json/list", a.jsonHandler).Methods("GET")
 
-	return nil
+	return a
 }
 
 // SessionStarted registers new session
 func (a *CDTAdapter) SessionStarted(sid string, debugger Control, ch chan Notification) {
-	s := cdtSession{
-		uuid:          sid,
-		debugger:      debugger,
-		notifications: ch,
-	}
+	s := makeCDTSession(sid, debugger, ch)
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
 	s.endpoint = a.enableWebsocketEndpoint(sid, a.apiAddress, s.websocketHandler)
-	s.Setup()
 
-	a.sessions[sid] = s
+	a.sessions[sid] = *s
 }
 
 // SessionEnded removes the session
 func (a *CDTAdapter) SessionEnded(sid string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	delete(a.sessions, sid)
-	fmt.Printf("CDT session %s closed\n", sid)
+	go func() {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		s := a.sessions[sid]
+		<-s.done
+		delete(a.sessions, sid)
+		log.Printf("CDT session %s closed\n", sid)
+	}()
+}
+
+// WaitForCompletion returns when no active connections left
+func (a *CDTAdapter) WaitForCompletion() {
+	for {
+		a.mu.Lock()
+		active := len(a.sessions)
+		a.mu.Unlock()
+		if active == 0 {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 // must be called with rctx.mux locked
@@ -100,8 +115,11 @@ func (a *CDTAdapter) enableWebsocketEndpoint(uuid string, apiAddress string, han
 
 	a.router.HandleFunc("/"+uuid, handler)
 
-	fmt.Printf("CDT debugger listening on: %s\n", desc.WebSocketDebuggerURL)
-	fmt.Printf("Or open in Chrome:\n%s\n", desc.DevtoolsFrontendURL)
+	log.Println("------------------------------------------------")
+	log.Printf("CDT debugger listening on: %s", desc.WebSocketDebuggerURL)
+	log.Printf("Or open in Chrome:")
+	log.Printf("%s", desc.DevtoolsFrontendURL)
+	log.Println("------------------------------------------------")
 
 	return desc
 }

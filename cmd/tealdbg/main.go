@@ -103,17 +103,15 @@ type frontendValue struct {
 	*cobraStringValue
 }
 
-func (f *frontendValue) MakeAdapter(router *mux.Router, appAddress string) (da DebugAdapter) {
+func (f *frontendValue) Make(router *mux.Router, appAddress string) (da DebugAdapter) {
 	switch f.value {
 	case "web":
-		wa := &WebPageAdapter{}
-		wa.Setup(router)
+		wa := MakeWebPageAdapter(&WebPageAdapterParams{router, appAddress})
 		return wa
 	case "cdt":
 		fallthrough
 	default:
-		cdt := &CDTAdapter{}
-		cdt.Setup(&CDTSetupParams{router, appAddress})
+		cdt := MakeCDTAdapter(&CDTAdapterParams{router, appAddress})
 		return cdt
 	}
 }
@@ -164,24 +162,32 @@ func debugLocal(args []string) {
 	for i, file := range args {
 		data, err := ioutil.ReadFile(file)
 		if err != nil {
-			log.Fatalf("Error reading %s: %s", file, err)
+			log.Fatalf("Error program reading %s: %s", file, err)
 		}
 		programBlobs[i] = data
 	}
 
+	var err error
+	var txnBlob []byte
+	if len(txnFile) > 0 {
+		txnBlob, err = ioutil.ReadFile(txnFile)
+		if err != nil {
+			log.Fatalf("Error txn reading %s: %s", balanceFile, err)
+		}
+	}
+
 	var balanceBlob []byte
 	if len(balanceFile) > 0 {
-		var err error
 		balanceBlob, err = ioutil.ReadFile(balanceFile)
 		if err != nil {
-			log.Fatalf("Error reading %s: %s", balanceFile, err)
+			log.Fatalf("Error balance reading %s: %s", balanceFile, err)
 		}
 	}
 
 	dp := DebugParams{
 		ProgramBlobs: programBlobs,
 		Proto:        proto,
-		TxnFile:      txnFile,
+		TxnBlob:      txnBlob,
 		GroupIndex:   groupIndex,
 		BalanceBlob:  balanceBlob,
 		Round:        roundNumber,
@@ -190,7 +196,7 @@ func debugLocal(args []string) {
 
 	ds := makeDebugServer(&frontend, &dp)
 
-	err := ds.startDebug()
+	err = ds.startDebug()
 	if err != nil {
 		log.Fatalf("Debugging error: %s", err.Error())
 	}

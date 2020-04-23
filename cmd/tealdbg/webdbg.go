@@ -20,7 +20,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -31,8 +30,10 @@ import (
 
 // WebPageAdapter is web page debugger
 type WebPageAdapter struct {
-	mu       deadlock.Mutex
-	sessions map[string]wpaSession
+	mu         deadlock.Mutex
+	sessions   map[string]wpaSession
+	apiAddress string
+	done       chan struct{}
 }
 
 type wpaSession struct {
@@ -54,21 +55,32 @@ type ContinueRequest struct {
 	ExecID ExecID `json:"execid"`
 }
 
-// Setup http endpoints
-func (a *WebPageAdapter) Setup(ctx interface{}) error {
-	router, ok := ctx.(*mux.Router)
+// WebPageAdapterParams initialization parameters
+type WebPageAdapterParams struct {
+	router     *mux.Router
+	apiAddress string
+}
+
+// MakeWebPageAdapter creates new WebPageAdapter
+func MakeWebPageAdapter(ctx interface{}) (a *WebPageAdapter) {
+	params, ok := ctx.(*WebPageAdapterParams)
 	if !ok {
-		return fmt.Errorf("WebPageAdapter.Setup expected mux.Router")
+		panic("MakeWebPageAdapter expected CDTAdapterParams")
 	}
 
+	a = new(WebPageAdapter)
 	a.sessions = make(map[string]wpaSession)
+	a.apiAddress = params.apiAddress
+	a.done = make(chan struct{})
 
-	router.HandleFunc("/", a.homeHandler).Methods("GET")
-	router.HandleFunc("/exec/config", a.configHandler).Methods("POST")
-	router.HandleFunc("/exec/continue", a.continueHandler).Methods("POST")
+	params.router.HandleFunc("/", a.homeHandler).Methods("GET")
+	params.router.HandleFunc("/exec/step", a.stepHandler).Methods("POST")
+	params.router.HandleFunc("/exec/config", a.configHandler).Methods("POST")
+	params.router.HandleFunc("/exec/continue", a.continueHandler).Methods("POST")
 
-	router.HandleFunc("/ws", a.subscribeHandler)
-	return nil
+	params.router.HandleFunc("/ws", a.subscribeHandler)
+
+	return a
 }
 
 // SessionStarted registers new session
@@ -77,6 +89,8 @@ func (a *WebPageAdapter) SessionStarted(sid string, debugger Control, ch chan No
 	defer a.mu.Unlock()
 
 	a.sessions[sid] = wpaSession{debugger, ch}
+
+	log.Printf("Open %s in a web browser", a.apiAddress)
 }
 
 // SessionEnded removes the session
@@ -85,6 +99,11 @@ func (a *WebPageAdapter) SessionEnded(sid string) {
 	defer a.mu.Unlock()
 
 	delete(a.sessions, sid)
+}
+
+// WaitForCompletion waits session to complete
+func (a *WebPageAdapter) WaitForCompletion() {
+	<-a.done
 }
 
 func (a *WebPageAdapter) homeHandler(w http.ResponseWriter, r *http.Request) {
@@ -96,6 +115,30 @@ func (a *WebPageAdapter) homeHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	home.Execute(w, nil)
+	return
+}
+
+func (a *WebPageAdapter) stepHandler(w http.ResponseWriter, r *http.Request) {
+	// Decode a ConfigRequest
+	var req ConfigRequest
+	dec := json.NewDecoder(r.Body)
+	err := dec.Decode(&req)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	// Ensure that we are trying to configure an execution we know about
+	a.mu.Lock()
+	s, ok := a.sessions[string(req.ExecID)]
+	a.mu.Unlock()
+	if !ok {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	s.debugger.Step()
+
+	w.WriteHeader(http.StatusOK)
 	return
 }
 
@@ -155,6 +198,10 @@ func (a *WebPageAdapter) continueHandler(w http.ResponseWriter, r *http.Request)
 }
 
 func (a *WebPageAdapter) subscribeHandler(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		close(a.done)
+	}()
+
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("subscribeHandler error: %s\n", err.Error())

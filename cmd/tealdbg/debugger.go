@@ -34,9 +34,9 @@ type Notification struct {
 
 // DebugAdapter represents debugger frontend (i.e. CDT, webpage, VSCode, etc)
 type DebugAdapter interface {
-	Setup(ctx interface{}) error
 	SessionStarted(sid string, debugger Control, ch chan Notification)
 	SessionEnded(sid string)
+	WaitForCompletion()
 }
 
 // Control interface for execution control
@@ -142,6 +142,7 @@ func (s *session) Resume() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.debugConfig = debugConfig{BreakAtLine: -1} // reset possible break after Step
+		// find any active breakpoints and set next break
 		if currentLine < len(s.breakpoints) {
 			for line, state := range s.breakpoints[currentLine+1:] {
 				if state.set && state.active {
