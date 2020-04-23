@@ -81,12 +81,184 @@ func TestTxnMessagePackInput(t *testing.T) {
 	a.Equal(1, len(txnGroup))
 	a.Equal(basics.MicroAlgos{Raw: 1176}, txnGroup[0].Txn.Fee)
 
-	blob = append(blob, blob...)
-
-	dp.TxnBlob = blob
+	dp.TxnBlob = append(blob, blob...)
 	txnGroup, _, err = txnGroupFromParams(&dp)
 	a.NoError(err)
 	a.Equal(2, len(txnGroup))
 	a.Equal(basics.MicroAlgos{Raw: 1176}, txnGroup[0].Txn.Fee)
 	a.Equal(basics.MicroAlgos{Raw: 1000}, txnGroup[1].Txn.Amount)
+}
+
+var balanceSample string = `{
+	"addr": "47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU",
+	"onl": 1,
+	"algo": 500000000,
+	"apar": {
+		"50": {
+			"an": "asset",
+			"t": 100,
+			"un": "tok"
+		}
+	},
+	"asset": {
+		"50": {
+			"a": 10
+		}
+	},
+	"appl": {
+		"100": {
+			"hsch": {
+				"nbs": 3,
+				"nui": 2
+			},
+			"tkv": {
+				"lkeybyte": {
+					"tb": "local",
+					"tt": 1
+				},
+				"lkeyint": {
+					"tt": 2,
+					"ui": 1
+				}
+			}
+		}
+	},
+	"appp": {
+		"100": {
+			"approv": "AQE=",
+			"gs": {
+				"gkeyint": {
+					"tt": 2,
+					"ui": 2
+				}
+			},
+			"gsch": {
+				"nbs": 1,
+				"nui": 1
+			},
+			"lsch": {
+				"nbs": 3,
+				"nui": 2
+			}
+		}
+	}
+}`
+
+func makeSampleBalanceRecord(addr basics.Address, assetIdx basics.AssetIndex, appIdx basics.AppIndex) basics.BalanceRecord {
+	var br basics.BalanceRecord
+	br.Addr = addr
+
+	br.MicroAlgos = basics.MicroAlgos{Raw: 500000000}
+	br.Status = basics.Status(1)
+	br.AssetParams = map[basics.AssetIndex]basics.AssetParams{
+		assetIdx: basics.AssetParams{
+			Total:     100,
+			UnitName:  "tok",
+			AssetName: "asset",
+		},
+	}
+	br.Assets = map[basics.AssetIndex]basics.AssetHolding{
+		assetIdx: basics.AssetHolding{
+			Amount: 10,
+		},
+	}
+	br.AppLocalStates = map[basics.AppIndex]basics.AppLocalState{
+		appIdx: basics.AppLocalState{
+			Schema: basics.StateSchema{
+				NumUint:      2,
+				NumByteSlice: 3,
+			},
+			KeyValue: basics.TealKeyValue{
+				"lkeyint": {
+					Type: basics.TealType(basics.TealUintType),
+					Uint: 1,
+				},
+				"lkeybyte": {
+					Type:  basics.TealType(basics.TealBytesType),
+					Bytes: "local",
+				},
+			},
+		},
+	}
+	br.AppParams = map[basics.AppIndex]basics.AppParams{
+		appIdx: basics.AppParams{
+			ApprovalProgram: []byte{1, 1},
+			LocalStateSchema: basics.StateSchema{
+				NumUint:      2,
+				NumByteSlice: 3,
+			},
+			GlobalStateSchema: basics.StateSchema{
+				NumUint:      1,
+				NumByteSlice: 1,
+			},
+			GlobalState: basics.TealKeyValue{
+				"gkeyint": {
+					Type: basics.TealType(basics.TealUintType),
+					Uint: 2,
+				},
+				"lkeybyte": {
+					Type:  basics.TealType(basics.TealBytesType),
+					Bytes: "global",
+				},
+			},
+		},
+	}
+	return br
+}
+
+func makeSampleSerializedBalanceRecord(addr basics.Address, toJSON bool) []byte {
+	br := makeSampleBalanceRecord(addr, 50, 100)
+	if toJSON {
+		return protocol.EncodeJSON(&br)
+	}
+	return protocol.EncodeMsgp(&br)
+}
+
+func TestBalanceJSONInput(t *testing.T) {
+	a := require.New(t)
+
+	addr, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
+	a.NoError(err)
+
+	dp := DebugParams{
+		BalanceBlob: []byte(balanceSample),
+	}
+	balances, err := balanceRecordsFromParams(&dp)
+	a.NoError(err)
+	a.Equal(1, len(balances))
+	a.Equal(addr, balances[0].Addr)
+
+	dp.BalanceBlob = []byte("[" + strings.Join([]string{balanceSample, balanceSample}, ",") + "]")
+	balances, err = balanceRecordsFromParams(&dp)
+	a.NoError(err)
+	a.Equal(2, len(balances))
+	a.Equal(addr, balances[0].Addr)
+	a.Equal(basics.MicroAlgos{Raw: 500000000}, balances[1].MicroAlgos)
+}
+
+func TestBalanceMessagePackInput(t *testing.T) {
+	a := require.New(t)
+	addr, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
+	a.NoError(err)
+
+	var br basics.BalanceRecord
+	err = protocol.DecodeJSON([]byte(balanceSample), &br)
+	a.NoError(err)
+
+	blob := protocol.EncodeMsgp(&br)
+	dp := DebugParams{
+		BalanceBlob: blob,
+	}
+
+	balances, err := balanceRecordsFromParams(&dp)
+	a.NoError(err)
+	a.Equal(1, len(balances))
+	a.Equal(addr, balances[0].Addr)
+
+	dp.BalanceBlob = append(blob, blob...)
+	balances, err = balanceRecordsFromParams(&dp)
+	a.NoError(err)
+	a.Equal(2, len(balances))
+	a.Equal(addr, balances[0].Addr)
+	a.Equal(basics.MicroAlgos{Raw: 500000000}, balances[1].MicroAlgos)
 }

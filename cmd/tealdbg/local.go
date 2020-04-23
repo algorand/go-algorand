@@ -45,6 +45,9 @@ func protoFromString(protoString string) (name string, proto config.ConsensusPar
 	return
 }
 
+// txnGroupFromParams validates DebugParams.TxnBlob and DebugParams.GroupIndex.
+// DebugParams.TxnBlob parsed as JSON object, JSON array or MessagePack array of transactions.SignedTxn.
+// The function returns ready to use txnGroup and groupIndex, or error
 func txnGroupFromParams(dp *DebugParams) (txnGroup []transactions.SignedTxn, groupIndex int, err error) {
 	if len(dp.TxnBlob) == 0 {
 		txnGroup = append(txnGroup, transactions.SignedTxn{})
@@ -103,29 +106,110 @@ func txnGroupFromParams(dp *DebugParams) (txnGroup []transactions.SignedTxn, gro
 	return
 }
 
+// balanceRecordsFromParams attempts to parse DebugParams.BalanceBlob as
+// JSON object, JSON array or MessagePack array of basics.BalanceRecord
+func balanceRecordsFromParams(dp *DebugParams) (records []basics.BalanceRecord, err error) {
+	if len(dp.BalanceBlob) == 0 {
+		return
+	}
+
+	var data []byte = dp.BalanceBlob
+
+	// 1. Attempt json - a single record
+	var record basics.BalanceRecord
+	err = protocol.DecodeJSON(data, &record)
+	if err == nil {
+		records = append(records, record)
+		return
+	}
+
+	// 2. Attempt json - a array of records
+	err = protocol.DecodeJSON(data, &records)
+	if err == nil {
+		return
+	}
+
+	// 2. Attempt msgp - a array of records
+	dec := protocol.NewDecoderBytes(data)
+	for {
+		err = dec.Decode(&record)
+		if err == io.EOF {
+			err = nil
+			break
+		}
+		if err != nil {
+			break
+		}
+		records = append(records, record)
+	}
+
+	return
+}
+
 type debugLedger struct {
-	round int
+	round    int
+	balances map[basics.Address]basics.AccountData
 }
 
 func (l *debugLedger) Balance(addr basics.Address) (basics.MicroAlgos, error) {
-	return basics.MicroAlgos{Raw: 0}, nil
+	br, ok := l.balances[addr]
+	if !ok {
+		return basics.MicroAlgos{}, fmt.Errorf("no such address %s", addr.String())
+	}
+	return br.MicroAlgos, nil
 }
+
 func (l *debugLedger) Round() basics.Round {
 	return basics.Round(l.round)
 }
+
 func (l *debugLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error) {
-	return nil, nil
+	var ap basics.AppParams
+	for _, br := range l.balances {
+		var ok bool
+		ap, ok = br.AppParams[appIdx]
+		if ok {
+			return ap.GlobalState, nil
+		}
+
+	}
+	return basics.TealKeyValue{}, fmt.Errorf("no such application %d", appIdx)
 }
+
 func (l *debugLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error) {
-	return nil, nil
-
+	br, ok := l.balances[addr]
+	if !ok {
+		return basics.TealKeyValue{}, fmt.Errorf("no such address %s", addr.String())
+	}
+	ls, ok := br.AppLocalStates[appIdx]
+	if !ok {
+		return basics.TealKeyValue{}, fmt.Errorf("no local state for application %d", appIdx)
+	}
+	return ls.KeyValue, nil
 }
+
 func (l *debugLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {
-	return basics.AssetHolding{}, nil
-
+	br, ok := l.balances[addr]
+	if !ok {
+		return basics.AssetHolding{}, fmt.Errorf("no such address %s", addr.String())
+	}
+	ah, ok := br.Assets[assetIdx]
+	if !ok {
+		return basics.AssetHolding{}, fmt.Errorf("no such asset %d", assetIdx)
+	}
+	return ah, nil
 }
+
 func (l *debugLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error) {
-	return basics.AssetParams{}, nil
+	br, ok := l.balances[addr]
+	if !ok {
+		return basics.AssetParams{}, fmt.Errorf("no such address %s", addr.String())
+	}
+	ap, ok := br.AssetParams[assetIdx]
+	if !ok {
+		return basics.AssetParams{}, fmt.Errorf("no such asset %d", assetIdx)
+	}
+	return ap, nil
 }
 
 // RunLocal starts a local debugging session
@@ -141,8 +225,19 @@ func RunLocal(debugger *Debugger, dp *DebugParams) (err error) {
 		return
 	}
 
+	records, err := balanceRecordsFromParams(dp)
+	if err != nil {
+		return
+	}
+
+	balances := make(map[basics.Address]basics.AccountData)
+	for _, record := range records {
+		balances[record.Addr] = record.AccountData
+	}
+
 	ledger := debugLedger{
-		round: dp.Round,
+		round:    dp.Round,
+		balances: balances,
 	}
 	ep := logic.EvalParams{
 		Proto:      &proto,
