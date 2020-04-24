@@ -156,6 +156,24 @@ type RuntimePropertyDescriptor struct {
 	Symbol       *RuntimeRemoteObject `json:"symbol,omitempty"`    // Property symbol object, if the property is of the `symbol` type.
 }
 
+// RuntimeCallArgument represents function call argument. Either remote object id `objectId`, primitive `value`, unserializable primitive value or neither of (for undefined) them should be specified.
+type RuntimeCallArgument struct {
+	Value               interface{} `json:"value,omitempty"`               // Primitive value or serializable javascript object.
+	UnserializableValue string      `json:"unserializableValue,omitempty"` // Primitive value which can not be JSON-stringified.
+	ObjectID            string      `json:"objectId,omitempty"`            // Remote object handle.
+}
+
+// RuntimeCallPackRangesObject is packRanges response object
+type RuntimeCallPackRangesObject struct {
+	Type  string                     `json:"type,omitempty"`
+	Value RuntimeCallPackRangesRange `json:"value,omitempty"`
+}
+
+// RuntimeCallPackRangesRange range object
+type RuntimeCallPackRangesRange struct {
+	Ranges [][3]int `json:"ranges,omitempty"`
+}
+
 // DebuggerScriptParsedParams type
 type DebuggerScriptParsedParams struct {
 	ScriptID                string                 `json:"scriptId"`                          // Identifier of the script parsed.
