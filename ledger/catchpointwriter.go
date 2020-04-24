@@ -87,6 +87,20 @@ func makeCatchpointWriter(filePath string, dbr db.Accessor, blocksRound basics.R
 	}
 }
 
+func (cw *catchpointWriter) Abort() error {
+	if cw.tar != nil {
+		cw.tar.Close()
+	}
+	if cw.gzip != nil {
+		cw.gzip.Close()
+	}
+	if cw.file != nil {
+		cw.gzip.Close()
+	}
+	err := os.Remove(cw.filePath)
+	return err
+}
+
 func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error) {
 	if cw.file == nil {
 		err = os.MkdirAll(filepath.Dir(cw.filePath), 0700)

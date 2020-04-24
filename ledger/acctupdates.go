@@ -494,8 +494,17 @@ func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.
 }
 
 func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound basics.Round) {
+	var isCatchpointRound, hasMultipleIntermediateCatchpoint bool
+	var offset uint64
 	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
+	defer func() {
+		au.accountsMu.RUnlock()
+		if isCatchpointRound && hasMultipleIntermediateCatchpoint && offset != 0 {
+			// this doesn't happen unless we're catching up faster than the writing rate. In this case
+			// we want to slow down the writing of new blocks to complete the balances write.
+			au.waitAccountsWriting()
+		}
+	}()
 
 	retRound = basics.Round(0)
 	var pendingDeltas int
@@ -522,12 +531,17 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	}
 
 	hasIntermediateCatchpoint := false
+	hasMultipleIntermediateCatchpoint = false
 	// check if there was a catchpoint between au.dbRound+lookback and newBase+lookback
 	if au.catchpointInterval > 0 {
-		nextCatchpoint := ((uint64(au.dbRound+lookback) + au.catchpointInterval) / au.catchpointInterval) * au.catchpointInterval
-		if nextCatchpoint < uint64(newBase+lookback) {
-			newBase = basics.Round(nextCatchpoint) - lookback
+		nextCatchpointRound := ((uint64(au.dbRound+lookback) + au.catchpointInterval) / au.catchpointInterval) * au.catchpointInterval
+		nextNextCatchpointRound := ((uint64(au.dbRound+lookback) + 2*au.catchpointInterval) / au.catchpointInterval) * au.catchpointInterval
+		if nextCatchpointRound < uint64(newBase+lookback) {
 			hasIntermediateCatchpoint = true
+			if nextNextCatchpointRound < uint64(newBase+lookback) {
+				hasMultipleIntermediateCatchpoint = true
+			}
+			newBase = basics.Round(nextCatchpointRound) - lookback
 		}
 	}
 
@@ -539,6 +553,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 			au.log.Panicf("committedUpTo: accountsWriting was written into")
 			return
 		}
+		// the channel accountsWriting is currently closed
 	default:
 		// if we hit this path, it means that the channel is currently non-closed, which means that we're still writing.
 		// see if we're writing a catchpoint in that range.
@@ -555,10 +570,10 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 		return
 	}
 
-	offset := uint64(newBase - au.dbRound)
+	offset = uint64(newBase - au.dbRound)
 
 	// check to see if this is a catchpoint round
-	isCatchpointRound := ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+au.dbRound))) % au.catchpointInterval))
+	isCatchpointRound = ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+au.dbRound))) % au.catchpointInterval))
 
 	// calculate the number of pending deltas
 	pendingDeltas = au.deltasAccum[offset] - au.deltasAccum[0]
@@ -575,9 +590,13 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 
 	if isCatchpointRound {
 		au.catchpointSlowWriting = make(chan struct{}, 1)
+		if hasMultipleIntermediateCatchpoint {
+			close(au.catchpointSlowWriting)
+		}
 	}
 
 	au.committedOffset <- offset
+
 	return
 }
 
@@ -1035,6 +1054,7 @@ func (au *accountUpdates) latest() basics.Round {
 
 func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label string, committedRoundDigest crypto.Digest) {
 	retryCatchpointCreation := false
+	au.log.Infof("accountUpdates: generateCatchpoint: generating catchpoint for round %d", committedRound)
 	defer func() {
 		if !retryCatchpointCreation {
 			// clear the writingCatchpoint flag
@@ -1063,7 +1083,15 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	catchpointWriter := makeCatchpointWriter(absCatchpointFileName, au.dbs.rdb, committedRound, committedRoundDigest, label)
 
 	more := true
-	chunkExecutionDuration := 50 * time.Millisecond
+	const shortChunkExecutionDuration = 50 * time.Millisecond
+	const longChunkExecutionDuration = 1 * time.Second
+	var chunkExecutionDuration time.Duration
+	select {
+	case <-au.catchpointSlowWriting:
+		chunkExecutionDuration = longChunkExecutionDuration
+	default:
+		chunkExecutionDuration = shortChunkExecutionDuration
+	}
 	for more {
 		stepCtx, stepCancelFunction := context.WithTimeout(au.ctx, chunkExecutionDuration)
 		more, err = catchpointWriter.WriteStep(stepCtx)
@@ -1075,13 +1103,21 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 			case <-time.After(100 * time.Millisecond):
 			case <-au.ctx.Done():
 				retryCatchpointCreation = true
+				err2 := catchpointWriter.Abort()
+				if err2 != nil {
+					au.log.Warnf("accountUpdates: generateCatchpoint: error removing catchpoint file : %v", err2)
+				}
 				return
 			case <-au.catchpointSlowWriting:
-				chunkExecutionDuration = time.Second
+				chunkExecutionDuration = longChunkExecutionDuration
 			}
 		}
 		if err != nil {
 			au.log.Warnf("accountUpdates: generateCatchpoint: unable to create catchpoint : %v", err)
+			err2 := catchpointWriter.Abort()
+			if err2 != nil {
+				au.log.Warnf("accountUpdates: generateCatchpoint: error removing catchpoint file : %v", err2)
+			}
 			return
 		}
 	}

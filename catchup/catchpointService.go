@@ -25,7 +25,6 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
@@ -33,13 +32,13 @@ import (
 	"github.com/algorand/go-algorand/network"
 )
 
-// CatchpointCatchupNodeServices defines set of functionalities required by the node to be supplied for the catchpoint catchup service.
+// CatchpointCatchupNodeServices defines the extenal node support needed
+// for the catchpoint service to switch the node between "regular" operational mode and catchup mode.
 type CatchpointCatchupNodeServices interface {
-	Ledger() *data.Ledger
 	SetCatchpointCatchupMode(bool) (newCtx context.Context)
 }
 
-// CatchpointCatchupStats is used for querying the current state of the catchpoint catchup process
+// CatchpointCatchupStats is used for querying and reporting the current state of the catchpoint catchup process
 type CatchpointCatchupStats struct {
 	CatchpointLabel   string
 	TotalAccounts     uint64
@@ -63,24 +62,30 @@ type CatchpointCatchupService struct {
 	log            logging.Logger
 	newService     bool // indicates whether this service was created after the node was running ( i.e. true ) or the node just started to find that it was previously perfoming catchup
 	net            network.GossipNode
+	ledger         *ledger.Ledger
 }
 
 const (
+	// maxLedgerDownloadAttempts is the number of attempts the catchpoint file will be downloaded and verified. Once we pass that number of attempts
+	// the catchpoint catchup is considered to be a failuire, and the node would resume to work as before.
 	maxLedgerDownloadAttempts = 50
-	maxBlockDownloadAttempts  = 50
+	// maxBlockDownloadAttempts is the number of block download attempts failuires allows while downloading the blocks. Once we pass that number of attempts
+	// the catchpoint catchup is considered to be a failuire, and the node would resume to work as before.
+	maxBlockDownloadAttempts = 50
 )
 
 // MakeCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
-func MakeCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode) (*CatchpointCatchupService, error) {
+func MakeCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger) (*CatchpointCatchupService, error) {
 	service := &CatchpointCatchupService{
 		stats: CatchpointCatchupStats{
 			StartTime: time.Now(),
 		},
 		node:           node,
-		ledgerAccessor: ledger.MakeCatchpointCatchupAccessor(node.Ledger().Ledger, log),
+		ledgerAccessor: ledger.MakeCatchpointCatchupAccessor(l, log),
 		log:            log,
 		newService:     false,
 		net:            net,
+		ledger:         l,
 	}
 	err := service.loadStateVariables(ctx)
 	if err != nil {
@@ -91,18 +96,19 @@ func MakeCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNod
 }
 
 // MakeNewCatchpointCatchupService creates a new catchpoint catchup service for a node that is not in catchpoint catchup mode
-func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode) (*CatchpointCatchupService, error) {
+func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger) (*CatchpointCatchupService, error) {
 	service := &CatchpointCatchupService{
 		stats: CatchpointCatchupStats{
 			CatchpointLabel: catchpoint,
 			StartTime:       time.Now(),
 		},
 		node:           node,
-		ledgerAccessor: ledger.MakeCatchpointCatchupAccessor(node.Ledger().Ledger, log),
+		ledgerAccessor: ledger.MakeCatchpointCatchupAccessor(l, log),
 		stage:          ledger.CatchpointCatchupStateInactive,
 		log:            log,
 		newService:     true,
 		net:            net,
+		ledger:         l,
 	}
 	if catchpoint == "" {
 		return nil, fmt.Errorf("MakeNewCatchpointCatchupService: catchpoint is invalid")
@@ -120,7 +126,7 @@ func (cs *CatchpointCatchupService) Start(ctx context.Context) {
 
 // Abort aborts the catchpoint catchup process
 func (cs *CatchpointCatchupService) Abort() {
-
+	cs.cancelCtxFunc()
 }
 
 // Stop stops the catchpoint catchup service - unlike Abort, this is not intended to abort the process but rather to allow
@@ -132,6 +138,7 @@ func (cs *CatchpointCatchupService) Stop() {
 	cs.running.Wait()
 }
 
+// run is the main stage-swtiching background service function. It switches the current stage into the correct stage handler.
 func (cs *CatchpointCatchupService) run() {
 	defer cs.running.Done()
 	var err error
@@ -167,6 +174,8 @@ func (cs *CatchpointCatchupService) run() {
 	}
 }
 
+// loadStateVariables loads the current stage and catchpoint label from disk. It's used only in the case of catchpoint catchup recovery.
+// ( i.e. the node never completed the catchup, and the node was shutdown )
 func (cs *CatchpointCatchupService) loadStateVariables(ctx context.Context) (err error) {
 	var label string
 	label, err = cs.ledgerAccessor.GetLabel(ctx)
@@ -184,6 +193,8 @@ func (cs *CatchpointCatchupService) loadStateVariables(ctx context.Context) (err
 	return nil
 }
 
+// processStageInactive is the first catchpoint stage. It stores the desired label for catching up, so that if the catchpoint catchup is interrupted
+// it could be resumed from that point.
 func (cs *CatchpointCatchupService) processStageInactive() (err error) {
 	cs.statsMu.Lock()
 	label := cs.stats.CatchpointLabel
@@ -203,6 +214,7 @@ func (cs *CatchpointCatchupService) processStageInactive() (err error) {
 	return nil
 }
 
+// processStageLedgerDownload is the second catchpoint catchup stage. It downloads the ledger.
 func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	cs.statsMu.Lock()
 	label := cs.stats.CatchpointLabel
@@ -222,6 +234,9 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 
 		err = cs.ledgerAccessor.ResetStagingBalances(cs.ctx, true)
 		if err != nil {
+			if err == cs.ctx.Err() {
+				return cs.abort(err) // we want to keep it with the context error.
+			}
 			return cs.abort(fmt.Errorf("processStageLedgerDownload failed to reset staging balances : %v", err))
 		}
 		err = ledgerFetcher.getLedger(cs.ctx, round)
@@ -229,7 +244,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 			break
 		}
 		if err == cs.ctx.Err() {
-			return err // we want to keep it with the context error.
+			return cs.abort(err) // we want to keep it with the context error.
 		}
 
 		if attemptsCount >= maxLedgerDownloadAttempts {
@@ -246,17 +261,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	return nil
 }
 
-func (cs *CatchpointCatchupService) abort(originatingErr error) error {
-	outError := originatingErr
-	err0 := cs.ledgerAccessor.ResetStagingBalances(cs.ctx, false)
-	if err0 != nil {
-		outError = fmt.Errorf("unable to reset staging balances : %v; %v", err0, outError)
-	}
-	cs.updateNodeCatchupMode(false)
-	cs.cancelCtxFunc()
-	return outError
-}
-
+// processStageLedgerDownload is the third catchpoint catchup stage. It downloads the latest block and verify that against the previously downloaded ledger.
 func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err error) {
 	blockRound, err := cs.ledgerAccessor.GetCatchupBlockRound(cs.ctx)
 	if err != nil {
@@ -267,23 +272,30 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 	attemptsCount := 0
 	var blk *bookkeeping.Block
 	var client FetcherClient
+	// check to see if the current ledger might have this block. If so, we should try this first instead of downloading anything.
+	if ledgerBlock, err := cs.ledger.Block(blockRound); err == nil {
+		blk = &ledgerBlock
+	}
 	for {
 		attemptsCount++
 
-		fetcher := fetcherFactory.New()
-		blk, _, client, err = fetcher.FetchBlock(cs.ctx, blockRound)
-		if err != nil {
-			if err == cs.ctx.Err() {
-				return err
+		if blk == nil {
+			fetcher := fetcherFactory.New()
+			blk, _, client, err = fetcher.FetchBlock(cs.ctx, blockRound)
+			if err != nil {
+				if err == cs.ctx.Err() {
+					return cs.abort(err)
+				}
+				if attemptsCount <= maxBlockDownloadAttempts {
+					// try again.
+					blk = nil
+					continue
+				}
+				return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed to get block %d : %v", blockRound, err))
 			}
-			if attemptsCount <= maxBlockDownloadAttempts {
-				// try again.
-				continue
-			}
-			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed to get block %d : %v", blockRound, err))
+			// success
+			client.Close()
 		}
-		// success
-		client.Close()
 
 		// check block protocol version support.
 		if _, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
@@ -294,8 +306,12 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		// verify that the catchpoint is valid.
 		err = cs.ledgerAccessor.VerifyCatchpoint(cs.ctx, blk)
 		if err != nil {
+			if err == cs.ctx.Err() {
+				return cs.abort(err)
+			}
 			if attemptsCount <= maxBlockDownloadAttempts {
 				// try again.
+				blk = nil
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed when calling VerifyCatchpoint : %v", err))
@@ -305,6 +321,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		if err != nil {
 			if attemptsCount <= maxBlockDownloadAttempts {
 				// try again.
+				blk = nil
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed when calling StoreFirstBlock : %v", err))
@@ -314,15 +331,19 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		if err != nil {
 			if attemptsCount <= maxBlockDownloadAttempts {
 				// try again.
+				blk = nil
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed to update stage : %v", err))
 		}
+
+		// great ! everything is ready for next stage.
 		break
 	}
 	return nil
 }
 
+// processStageLedgerDownload is the fourth catchpoint catchup stage. It downloads all the reminder of the blocks, verifying each one of them against it's predecessor.
 func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	topBlock, err := cs.ledgerAccessor.EnsureFirstBlock(cs.ctx)
 	if err != nil {
@@ -349,20 +370,33 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	var client FetcherClient
 	for blocksFetched <= lookback {
 		attemptsCount++
-		fetcher := fetcherFactory.New()
-		blk, _, client, err = fetcher.FetchBlock(cs.ctx, topBlock.Round()-basics.Round(blocksFetched))
-		if err != nil {
-			if err == cs.ctx.Err() {
-				return err
-			}
-			if attemptsCount <= maxBlockDownloadAttempts {
-				// try again.
-				continue
-			}
-			return cs.abort(fmt.Errorf("processStageBlocksDownload failed after multiple blocks download attempts"))
+
+		if err := cs.ctx.Err(); err != nil {
+			return err
 		}
-		// success
-		client.Close()
+
+		blk = nil
+		// check to see if the current ledger might have this block. If so, we should try this first instead of downloading anything.
+		if ledgerBlock, err := cs.ledger.Block(topBlock.Round() - basics.Round(blocksFetched)); err == nil {
+			blk = &ledgerBlock
+		}
+
+		if blk == nil {
+			fetcher := fetcherFactory.New()
+			blk, _, client, err = fetcher.FetchBlock(cs.ctx, topBlock.Round()-basics.Round(blocksFetched))
+			if err != nil {
+				if err == cs.ctx.Err() {
+					return cs.abort(err)
+				}
+				if attemptsCount <= maxBlockDownloadAttempts {
+					// try again.
+					continue
+				}
+				return cs.abort(fmt.Errorf("processStageBlocksDownload failed after multiple blocks download attempts"))
+			}
+			// success
+			client.Close()
+		}
 
 		cs.statsMu.Lock()
 		cs.stats.DownloadedBlocks++
@@ -412,6 +446,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	return nil
 }
 
+// processStageLedgerDownload is the fifth catchpoint catchup stage. It completes the catchup process, swap the new tables and restart the node functionality.
 func (cs *CatchpointCatchupService) processStageSwitch() (err error) {
 	err = cs.ledgerAccessor.CompleteCatchup(cs.ctx)
 	if err != nil {
@@ -423,10 +458,27 @@ func (cs *CatchpointCatchupService) processStageSwitch() (err error) {
 		return cs.abort(fmt.Errorf("processStageSwitch failed to update stage : %v", err))
 	}
 	cs.updateNodeCatchupMode(false)
+	// we've completed the catchup, so we want to cancel the context so that the
+	// run function would exit.
 	cs.cancelCtxFunc()
 	return nil
 }
 
+// abort aborts the current catchpoint catchup process, reverting to node to standard operation.
+func (cs *CatchpointCatchupService) abort(originatingErr error) error {
+	outError := originatingErr
+	err0 := cs.ledgerAccessor.ResetStagingBalances(cs.ctx, false)
+	if err0 != nil {
+		outError = fmt.Errorf("unable to reset staging balances : %v; %v", err0, outError)
+	}
+	cs.updateNodeCatchupMode(false)
+	// we want to abort the catchpoint catchup process, and the node already reverted to normal operation.
+	// at this point, all we need to do is to abort the run function.
+	cs.cancelCtxFunc()
+	return outError
+}
+
+// updateStage updates the current catchpoint catchup stage to the provided new stage.
 func (cs *CatchpointCatchupService) updateStage(newStage ledger.CatchpointCatchupState) (err error) {
 	err = cs.ledgerAccessor.SetState(cs.ctx, newStage)
 	if err != nil {
@@ -448,7 +500,7 @@ func (cs *CatchpointCatchupService) updateLedgerFetcherProgress(fetcherStats *le
 	cs.stats.ProcessedAccounts = fetcherStats.ProcessedAccounts
 }
 
-// GetStatistics returns a copy of the current statistics
+// GetStatistics returns a copy of the current catchpoint catchup statistics
 func (cs *CatchpointCatchupService) GetStatistics() (out CatchpointCatchupStats) {
 	cs.statsMu.Lock()
 	defer cs.statsMu.Unlock()
