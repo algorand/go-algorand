@@ -109,16 +109,12 @@ func makeAuthRoutes(ctx lib.ReqContext, apiToken string, adminAPIToken string, e
 	authRoutes[apiToken] = defaultAuthRoutes
 	authRoutes[adminAPIToken] = adminAuthRoutes
 	for _, route := range common.Routes {
-		if len(route.Path) == 0 {
-			// i.e. OPTIONS
-			continue
-		}
 		if route.NoAuth {
 			noAuthRoutes[echo.Route{Method: route.Method, Path: route.Path}] = wrapCtx(ctx, route.HandlerFunc)
-		} else {
-			defaultAuthRoutes[echo.Route{Method: route.Method, Path: route.Path}] = wrapCtx(ctx, route.HandlerFunc)
-			adminAuthRoutes[echo.Route{Method: route.Method, Path: route.Path}] = wrapCtx(ctx, route.HandlerFunc)
+			continue
 		}
+		defaultAuthRoutes[echo.Route{Method: route.Method, Path: route.Path}] = wrapCtx(ctx, route.HandlerFunc)
+		adminAuthRoutes[echo.Route{Method: route.Method, Path: route.Path}] = wrapCtx(ctx, route.HandlerFunc)
 	}
 	for _, route := range routes.V1Routes {
 		defaultAuthRoutes[echo.Route{Method: route.Method, Path: apiV1Tag + route.Path}] = wrapCtx(ctx, route.HandlerFunc)
@@ -126,13 +122,13 @@ func makeAuthRoutes(ctx lib.ReqContext, apiToken string, adminAPIToken string, e
 	}
 
 	// pick the "regular" endpoints
-	for route, handler := range v2.GetRoutes(false) {
+	for route, handler := range v2.GetRoutes(ctx, false) {
 		defaultAuthRoutes[route] = handler
 		adminAuthRoutes[route] = handler
 	}
 
 	// pick the "admin" endpoints
-	for route, handler := range v2.GetRoutes(true) {
+	for route, handler := range v2.GetRoutes(ctx, true) {
 		adminAuthRoutes[route] = handler
 	}
 	if enableProfiler {

@@ -84,6 +84,10 @@ func makeAuthenticatedHandler(tokens []string, handler echo.HandlerFunc, route e
 	return authHandler
 }
 func (h *authenticatedHandler) GetHandler() echo.HandlerFunc {
+	if len(h.tokens) == 1 && len(h.tokens[0]) == 0 {
+		// no authentication is needed
+		return h.handler
+	}
 	if h.route.Path == "/urlAuth/:token/debug/pprof/*" {
 		return h.DebugHandler
 	}
