@@ -132,6 +132,7 @@ func balanceRecordsFromParams(dp *DebugParams) (records []basics.BalanceRecord, 
 	// 2. Attempt msgp - a array of records
 	dec := protocol.NewDecoderBytes(data)
 	for {
+		var record basics.BalanceRecord
 		err = dec.Decode(&record)
 		if err == io.EOF {
 			err = nil
@@ -147,8 +148,10 @@ func balanceRecordsFromParams(dp *DebugParams) (records []basics.BalanceRecord, 
 }
 
 type debugLedger struct {
-	round    int
-	balances map[basics.Address]basics.AccountData
+	round      int
+	balances   map[basics.Address]basics.AccountData
+	txnGroup   []transactions.SignedTxn
+	groupIndex int
 }
 
 func (l *debugLedger) Balance(addr basics.Address) (basics.MicroAlgos, error) {
@@ -165,6 +168,28 @@ func (l *debugLedger) Round() basics.Round {
 
 func (l *debugLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error) {
 	var ap basics.AppParams
+	if appIdx == 0 {
+		if l.groupIndex >= len(l.txnGroup) {
+			return basics.TealKeyValue{}, fmt.Errorf("can't resolve application %d", appIdx)
+		}
+		appIdx = l.txnGroup[l.groupIndex].Txn.ApplicationID
+	}
+
+	allowed := false
+	if appIdx == l.txnGroup[l.groupIndex].Txn.ApplicationID {
+		allowed = true
+	} else {
+		for _, faIdx := range l.txnGroup[l.groupIndex].Txn.ForeignApps {
+			if appIdx == faIdx {
+				allowed = true
+				break
+			}
+		}
+	}
+	if !allowed {
+		return basics.TealKeyValue{}, fmt.Errorf("access to the app forbidden %d", appIdx)
+	}
+
 	for _, br := range l.balances {
 		var ok bool
 		ap, ok = br.AppParams[appIdx]
@@ -177,6 +202,13 @@ func (l *debugLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValu
 }
 
 func (l *debugLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error) {
+	if appIdx == 0 {
+		if l.groupIndex >= len(l.txnGroup) {
+			return basics.TealKeyValue{}, fmt.Errorf("can't resolve application %d", appIdx)
+		}
+		appIdx = l.txnGroup[l.groupIndex].Txn.ApplicationID
+	}
+
 	br, ok := l.balances[addr]
 	if !ok {
 		return basics.TealKeyValue{}, fmt.Errorf("no such address %s", addr.String())
@@ -255,8 +287,10 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 	}
 
 	r.ledger = &debugLedger{
-		round:    dp.Round,
-		balances: balances,
+		round:      dp.Round,
+		balances:   balances,
+		txnGroup:   r.txnGroup,
+		groupIndex: r.groupIndex,
 	}
 
 	r.programs = make([][]byte, len(dp.ProgramBlobs))
@@ -310,11 +344,18 @@ func (r *LocalRunner) RunAll() error {
 func (r *LocalRunner) Run() (bool, error) {
 	ep := logic.EvalParams{
 		Proto:      &r.proto,
-		Debugger:   r.debugger,
 		Txn:        &r.txnGroup[groupIndex],
 		TxnGroup:   r.txnGroup,
 		GroupIndex: r.groupIndex,
 		Ledger:     r.ledger,
+	}
+
+	// Workaround for Go's nil/empty interfaces nil check after nil assignment, i.e.
+	// r.debugger = nil
+	// ep.Debugger = r.debugger
+	// if ep.Debugger != nil // FALSE
+	if r.debugger != nil {
+		ep.Debugger = r.debugger
 	}
 
 	if len(r.programs) < 1 {
