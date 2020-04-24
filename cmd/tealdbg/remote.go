@@ -31,6 +31,13 @@ type RemoteHookAdapter struct {
 	debugger *Debugger
 }
 
+// MakeRemoteHook creates new RemoteHookAdapter
+func MakeRemoteHook(debugger *Debugger) *RemoteHookAdapter {
+	r := new(RemoteHookAdapter)
+	r.debugger = debugger
+	return r
+}
+
 // Setup adds HTTP handlers for remote WebDebuggerHook
 func (rha *RemoteHookAdapter) Setup(router *mux.Router) {
 	router.HandleFunc("/exec/register", rha.registerHandler).Methods("POST")

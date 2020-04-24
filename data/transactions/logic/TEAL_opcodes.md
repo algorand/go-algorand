@@ -16,7 +16,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Pops: *... stack*, []byte
 - Pushes: []byte
 - SHA256 hash of value X, yields [32]byte
-- **Cost**: 7
+- **Cost**: 35
 
 ## keccak256
 
@@ -24,7 +24,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Pops: *... stack*, []byte
 - Pushes: []byte
 - Keccak256 hash of value X, yields [32]byte
-- **Cost**: 26
+- **Cost**: 130
 
 ## sha512_256
 
@@ -32,7 +32,7 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Pops: *... stack*, []byte
 - Pushes: []byte
 - SHA512_256 hash of value X, yields [32]byte
-- **Cost**: 9
+- **Cost**: 45
 
 ## ed25519verify
 

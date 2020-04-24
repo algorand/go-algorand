@@ -63,7 +63,6 @@ type DebugParams struct {
 	BalanceBlob  []byte
 	Round        int
 	RunMode      string
-	Remote       bool
 }
 
 // FrontendFactory interface for attaching debug frontends
@@ -97,20 +96,28 @@ func makeDebugServer(ff FrontendFactory, dp *DebugParams) DebugServer {
 }
 
 func (ds *DebugServer) startRemote() {
-	remote := RemoteHookAdapter{ds.debugger}
+	remote := MakeRemoteHook(ds.debugger)
 	remote.Setup(ds.router)
-	ds.remote = &remote
+	ds.remote = remote
 
 	log.Printf("starting server on %s", ds.server.Addr)
 	ds.server.ListenAndServe()
 }
 
 func (ds *DebugServer) startDebug() (err error) {
+	local := MakeLocalRunner(ds.debugger)
+	if err = local.Setup(ds.params); err != nil {
+		return
+	}
+
 	go ds.server.ListenAndServe()
+	defer ds.server.Shutdown(context.Background())
 
-	err = RunLocal(ds.debugger, ds.params)
+	err = local.RunAll()
+	if err != nil {
+		return
+	}
+
 	ds.frontend.WaitForCompletion()
-
-	ds.server.Shutdown(context.Background())
 	return
 }
