@@ -196,7 +196,7 @@ func makeSampleBalanceRecord(addr basics.Address, assetIdx basics.AssetIndex, ap
 					Type: basics.TealType(basics.TealUintType),
 					Uint: 2,
 				},
-				"lkeybyte": {
+				"gkeybyte": {
 					Type:  basics.TealType(basics.TealBytesType),
 					Bytes: "global",
 				},
