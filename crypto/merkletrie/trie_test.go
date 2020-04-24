@@ -86,11 +86,12 @@ func TestRandomAddingAndRemoving(t *testing.T) {
 	require.NoError(t, err)
 
 	// create 10000 hashes.
-	toAddHashes := make([]crypto.Digest, 10000)
+	toAddHashes := make([][]byte, 10000)
 	for i := 0; i < len(toAddHashes); i++ {
-		toAddHashes[i] = crypto.Hash([]byte{byte(i % 256), byte(i / 256)})
+		hash := crypto.Hash([]byte{byte(i % 256), byte(i / 256)})
+		toAddHashes[i] = hash[:]
 	}
-	toRemoveHashes := make([]crypto.Digest, 0, 10000)
+	toRemoveHashes := make([][]byte, 0, 10000)
 
 	nextOperation := 0 // 0 is for adding, 1 is for removing.
 	for i := 0; i < 100000; i++ {
@@ -105,8 +106,7 @@ func TestRandomAddingAndRemoving(t *testing.T) {
 			// pick an item to add:
 			semiRandomIdx := int(toAddHashes[0][0]) + int(toAddHashes[0][1])*256 + int(toAddHashes[0][3])*65536 + i
 			semiRandomIdx %= len(toAddHashes)
-			processesHash = make([]byte, crypto.DigestSize)
-			copy(processesHash, toAddHashes[semiRandomIdx][:])
+			processesHash = toAddHashes[semiRandomIdx]
 			addResult, err := mt.Add(processesHash)
 			require.NoError(t, err)
 			require.Equal(t, true, addResult)
@@ -117,8 +117,7 @@ func TestRandomAddingAndRemoving(t *testing.T) {
 			// pick an item to remove:
 			semiRandomIdx := int(toRemoveHashes[0][0]) + int(toRemoveHashes[0][1])*256 + int(toRemoveHashes[0][3])*65536 + i
 			semiRandomIdx %= len(toRemoveHashes)
-			processesHash = make([]byte, crypto.DigestSize)
-			copy(processesHash, toRemoveHashes[semiRandomIdx][:])
+			processesHash = toRemoveHashes[semiRandomIdx]
 			deleteResult, err := mt.Delete(processesHash)
 			require.NoError(t, err)
 			require.Equal(t, true, deleteResult)
