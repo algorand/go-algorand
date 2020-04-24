@@ -80,3 +80,62 @@ func TestAddingAndRemoving(t *testing.T) {
 	randomOrderedHashesRoot, _ := mt.RootHash()
 	require.Equal(t, randomOrderedHashesRoot, allHashesAddedRoot)
 }
+
+
+func TestRandomAddingAndRemoving(t *testing.T) {
+	mt, err := MakeTrie(nil, defaultTestEvictSize)
+	require.NoError(t, err)
+	
+	// create 10000 hashes.
+	to_add_hashes := make([]crypto.Digest, 10000)
+	for i := 0; i < len(to_add_hashes); i++ {
+		to_add_hashes[i] = crypto.Hash([]byte{byte(i % 256), byte(i / 256)})
+	}
+	to_remove_hashes := make([]crypto.Digest, 0, 10000)
+
+	nextOperation := 0 // 0 is for adding, 1 is for removing.
+	for i := 0; i < 100000; i++ {
+		if nextOperation == 0 && len(to_add_hashes) == 0 {
+			nextOperation = 1
+		}
+		if nextOperation == 1 && len(to_remove_hashes) == 0 {
+			nextOperation = 0
+		}
+		var processesHash []byte
+		if nextOperation == 0 {
+			// pick an item to add:
+			semiRandomIdx := int(to_add_hashes[0][0])+int(to_add_hashes[0][1])*256+int(to_add_hashes[0][3])*65536 + i
+			semiRandomIdx %= len(to_add_hashes)
+			processesHash = make([]byte, crypto.DigestSize)
+			copy(processesHash, to_add_hashes[semiRandomIdx][:])
+			addResult, err := mt.Add(processesHash)
+			require.NoError(t, err)
+			require.Equal(t, true, addResult)
+	
+			to_remove_hashes = append(to_remove_hashes, to_add_hashes[semiRandomIdx])
+			to_add_hashes = append(to_add_hashes[:semiRandomIdx], to_add_hashes[semiRandomIdx+1:]...)
+		} else {
+			// pick an item to remove:
+			semiRandomIdx := int(to_remove_hashes[0][0])+int(to_remove_hashes[0][1])*256+int(to_remove_hashes[0][3])*65536 + i
+			semiRandomIdx %= len(to_remove_hashes)
+			processesHash = make([]byte, crypto.DigestSize)
+			copy(processesHash, to_remove_hashes[semiRandomIdx][:])
+			deleteResult, err := mt.Delete(processesHash)
+			require.NoError(t, err)
+			require.Equal(t, true, deleteResult)
+			
+			
+			to_add_hashes = append(to_add_hashes, to_remove_hashes[semiRandomIdx])
+			to_remove_hashes = append(to_remove_hashes[:semiRandomIdx], to_remove_hashes[semiRandomIdx+1:]...)
+		}
+		if processesHash[0] > 128 {
+			nextOperation = 0
+		} else {
+			nextOperation = 1
+		}
+		if (i % (1+int(processesHash[0]))) == 42 {
+			err := mt.Commit()
+			require.NoError(t, err)
+		}
+	}
+}
