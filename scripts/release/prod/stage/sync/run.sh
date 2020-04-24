@@ -10,7 +10,6 @@ if [ -z "$CHANNEL" ] || [ -z "$VERSION" ]; then
     exit 1
 fi
 
-# Path is relative to the root of the Jenkins workspace.
 RSTAMP=$(./scripts/release/prod/reverse_hex_timestamp)
 
 if ! aws s3 sync "s3://algorand-builds/$CHANNEL/$VERSION" "s3://algorand-releases/$CHANNEL/${RSTAMP}_${VERSION}"; then
