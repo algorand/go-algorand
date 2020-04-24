@@ -3,6 +3,13 @@ tasks:
     configFilePath: scripts/configure_dev-deps.sh
 
   - task: shell.docker.Ensure
+    name: docker-ubuntu
+    image: algorand/go-algorand-docker-linux-ubuntu
+    version: '{{ docker.Version.outputs.version }}'
+    dockerFilePath: docker/build/docker.ubuntu.Dockerfile
+    dependencies: docker.Version
+
+  - task: shell.docker.Ensure
     name: rpm
     image: algorand/go-algorand-ci-linux-centos
     version: '{{ docker.Version.outputs.version }}'
@@ -40,6 +47,15 @@ tasks:
       workDir: /projects/go-algorand
     target: package-deb WORKDIR=/projects/go-algorand
 
+  - task: docker.Make
+    name: docker-image
+    docker:
+      image: algorand/go-algorand-docker-linux-ubuntu
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /projects/go-algorand
+      volumes: [ /var/run/docker.sock:/var/run/docker.sock ]
+    target: package-docker WORKDIR=/projects/go-algorand
+
 jobs:
   package:
     configs:
@@ -49,4 +65,11 @@ jobs:
       - docker.Make.rpm
       - shell.docker.Ensure.deb
       - docker.Make.deb
+
+  package-docker:
+    configs:
+      arch: amd64
+    tasks:
+      - shell.docker.Ensure.docker-ubuntu
+      - docker.Make.docker-image
 
