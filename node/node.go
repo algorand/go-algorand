@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -220,7 +221,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	blockFactory := makeBlockFactory(node.ledger, node.transactionPool, node.config.EnableProcessBlockStats, node.highPriorityCryptoVerificationPool)
 	blockValidator := blockValidatorImpl{l: node.ledger, tp: node.transactionPool, verificationPool: node.highPriorityCryptoVerificationPool}
 	agreementLedger := makeAgreementLedger(node.ledger, node.net)
 
@@ -231,7 +231,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		Local:          node.config,
 		Network:        gossip.WrapNetwork(node.net, log),
 		Ledger:         agreementLedger,
-		BlockFactory:   blockFactory,
+		BlockFactory:   node,
 		BlockValidator: blockValidator,
 		KeyManager:     node.accountManager,
 		RandomSource:   node,
@@ -754,4 +754,30 @@ func (node *AlgorandFullNode) GetTransactionByID(txid transactions.Txid, rnd bas
 		ConfirmedRound: rnd,
 		ApplyData:      stx.ApplyData,
 	}, nil
+}
+
+// validatedBlock satisfies agreement.ValidatedBlock
+type validatedBlock struct {
+	vb *ledger.ValidatedBlock
+}
+
+// WithSeed satisfies the agreement.ValidatedBlock interface.
+func (vb validatedBlock) WithSeed(s committee.Seed) agreement.ValidatedBlock {
+	lvb := vb.vb.WithSeed(s)
+	return validatedBlock{vb: &lvb}
+}
+
+// Block satisfies the agreement.ValidatedBlock interface.
+func (vb validatedBlock) Block() bookkeeping.Block {
+	blk := vb.vb.Block()
+	return blk
+}
+
+// AssembleBlock implements Ledger.AssembleBlock.
+func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
+	lvb, err := node.transactionPool.AssembleBlock(round, deadline)
+	if err != nil {
+		return nil, err
+	}
+	return validatedBlock{vb: lvb}, nil
 }
