@@ -23,7 +23,7 @@ tail -n 7 ${GENESIS_FILE}
 
 if [[ -f "${CONFIG_FILE}" ]]; then
    echo "config file exist: '${CONFIG_FILE}'"
-else 
+else
    echo "setting up config file: '${CONFIG_FILE}'"
    cp /root/node/data/config.json.example /root/node/data/config.json
 fi
@@ -37,3 +37,4 @@ echo "algod status"
 goal node status
 
 tail -f /dev/null
+

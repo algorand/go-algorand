@@ -20,6 +20,7 @@ import (
 	"errors"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -30,10 +31,11 @@ import (
 type SignedTxn struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sig  crypto.Signature   `codec:"sig"`
-	Msig crypto.MultisigSig `codec:"msig"`
-	Lsig LogicSig           `codec:"lsig"`
-	Txn  Transaction        `codec:"txn"`
+	Sig      crypto.Signature   `codec:"sig"`
+	Msig     crypto.MultisigSig `codec:"msig"`
+	Lsig     LogicSig           `codec:"lsig"`
+	Txn      Transaction        `codec:"txn"`
+	AuthAddr basics.Address     `codec:"sgnr"`
 }
 
 // SignedTxnInBlock is how a signed transaction is encoded in a block.
@@ -71,8 +73,20 @@ func (s SignedTxn) GetEncodedLength() int {
 	return len(protocol.Encode(&s))
 }
 
+// Authorizer returns the address against which the signature/msig/lsig should be checked,
+// or so the SignedTxn claims.
+// This is just s.AuthAddr or, if s.AuthAddr is zero, s.Txn.Sender.
+// It's provided as a convenience method.
+func (s SignedTxn) Authorizer() basics.Address {
+	if (s.AuthAddr == basics.Address{}) {
+		return s.Txn.Sender
+	}
+	return s.AuthAddr
+}
+
 // AssembleSignedTxn assembles a multisig-signed transaction from a transaction an optional sig, and an optional multisig.
 // No signature checking is done -- for example, this might only be a partial multisig
+// TODO: is this method used anywhere, or is it safe to remove?
 func AssembleSignedTxn(txn Transaction, sig crypto.Signature, msig crypto.MultisigSig) (SignedTxn, error) {
 	if sig != (crypto.Signature{}) && !msig.Blank() {
 		return SignedTxn{}, errors.New("signed txn can only have one of sig or msig")

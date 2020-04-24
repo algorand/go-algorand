@@ -188,16 +188,6 @@ $(GOPATH1)/bin/%:
 test: build
 	go test $(GOTAGS) -race $(UNIT_TEST_SOURCES) -timeout 3600s
 
-ci-test: ci-build
-ifeq ($(ARCH), amd64)
-	RACE=-race
-else
-	RACE=
-endif
-	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
-		go test $(GOTAGS) -timeout 2000s $(RACE) $$PACKAGE_DIRECTORY; \
-	done
-
 fulltest: build-race
 	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
 		go test $(GOTAGS) -timeout 2000s -race $$PACKAGE_DIRECTORY; \
@@ -210,23 +200,6 @@ $(addprefix short_test_target_, $(UNIT_TEST_SOURCES)): build
 
 integration: build-race
 	./test/scripts/run_integration_tests.sh
-
-ci-integration:
-
-ifeq ($(ARCH), amd64)
-	export NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin && \
-	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin:$$PATH && \
-	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/test-utils:$$PATH && \
-	export SRCROOT=$(SRCPATH) && \
-	./test/scripts/e2e_go_tests.sh
-else
-	export NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin && \
-	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin:$$PATH && \
-	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/test-utils:$$PATH && \
-	export SRCROOT=$(SRCPATH) && \
-	./test/scripts/e2e_go_tests.sh -norace
-endif
-
 
 testall: fulltest integration
 
@@ -303,12 +276,6 @@ install: build
 
 .PHONY: default fmt vet lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN
 
-### TARGETS FOR CICD PROCESS
+###### TARGETS FOR CICD PROCESS ######
+include ./scripts/release/mule/Makefile.mule
 
-ci-deps:
-	scripts/configure_dev-deps.sh && \
-	scripts/check_deps.sh
-
-ci-build: buildsrc gen
-	mkdir -p $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH) && \
-	PKG_ROOT=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH) NO_BUILD=True VARIATIONS=$(OS_TYPE)/$(ARCH) scripts/build_packages.sh $(OS_TYPE)/$(ARCH)
