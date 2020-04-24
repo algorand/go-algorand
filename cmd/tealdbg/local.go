@@ -84,6 +84,7 @@ func txnGroupFromParams(dp *DebugParams) (txnGroup []transactions.SignedTxn, gro
 	// 3. Attempt msgp - array of transactions
 	dec := protocol.NewDecoderBytes(data)
 	for {
+		var txn transactions.SignedTxn
 		err = dec.Decode(&txn)
 		if err == io.EOF {
 			err = nil
