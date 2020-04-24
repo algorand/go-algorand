@@ -181,7 +181,7 @@ func (mtc *merkleTrieCache) loadPage(page uint64) (err error) {
 		mtc.pageToNIDsPtr[page][nodeID] = pnode
 	}
 	mtc.cachedNodeCount += len(mtc.pageToNIDsPtr[page])
-	
+
 	// if we've just loaded a deferred page, no need to reload it during the commit.
 	if mtc.deferedPageLoad != page {
 		mtc.deferedPageLoad = storedNodeIdentifierNull
