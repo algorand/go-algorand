@@ -20,6 +20,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -106,12 +107,122 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (descr []Runt
 			if len(s.txnGroup) > 0 {
 				return makeTxnImpl(&s.txnGroup[idx].Txn, idx, preview), nil
 			}
+		} else if parentObjID, ok := decodeArrayLength(objID); ok {
+			switch parentObjID {
+			case stackObjID:
+				return makeArrayLengh(s.stack), nil
+			case scratchObjID:
+				return makeArrayLengh(s.scratch), nil
+			default:
+			}
+		} else if parentObjID, from, to, ok := decodeArraySlice(objID); ok {
+			switch parentObjID {
+			case stackObjID:
+				return makeStackSlice(s, from, to, preview), nil
+			case scratchObjID:
+				return makeScratchSlice(s, from, to, preview), nil
+			default:
+			}
 		}
 		// might be nested object in array, parse and call
 		err = fmt.Errorf("unk object id: %s", objID)
 		return
 	}
 	return maker(s, preview), nil
+}
+
+func convertCallArgs(argsRaw []interface{}) (args []RuntimeCallArgument) {
+	for _, item := range argsRaw {
+		argRaw := item.(map[string]interface{})
+		value := argRaw["value"]
+		args = append(args, RuntimeCallArgument{Value: value})
+	}
+	return
+}
+
+func (s *cdtState) packRanges(objID string, argsRaw []interface{}) (result RuntimeCallPackRangesObject) {
+	if len(argsRaw) < 5 {
+		return
+	}
+
+	args := convertCallArgs(argsRaw)
+	fromIndex := int(args[0].Value.(float64))
+	toIndex := int(args[1].Value.(float64))
+	bucketThreshold := int(args[2].Value.(float64))
+	// sparseIterationThreshold := args[3].Value.(float64)
+	// getOwnPropertyNamesThreshold := args[4].Value.(float64)
+
+	// based on JS code that CDT asks to execute
+	count := toIndex - fromIndex + 1
+	bucketSize := count
+	if count > bucketThreshold {
+		bucketSize = int(math.Pow(float64(bucketThreshold), math.Ceil(math.Log(float64(count))/math.Log(float64(bucketThreshold)))-1))
+	}
+
+	var ranges [][3]int
+
+	count = 0
+	groupStart := -1
+	groupEnd := 0
+	for i := fromIndex; i <= toIndex; i++ {
+		if groupStart == -1 {
+			groupStart = i
+		}
+		groupEnd = i
+		count++
+		if count == bucketSize {
+			ranges = append(ranges, [3]int{groupStart, groupEnd, count})
+			count = 0
+			groupStart = -1
+		}
+	}
+	if count > 0 {
+		ranges = append(ranges, [3]int{groupStart, groupEnd, count})
+	}
+
+	result.Type = "object"
+	result.Value = RuntimeCallPackRangesRange{
+		Ranges: ranges,
+	}
+
+	return
+}
+
+func (s *cdtState) buildFragment(objID string, argsRaw []interface{}) RuntimeRemoteObject {
+	var source []v1.TealValue
+	switch objID {
+	case stackObjID:
+		source = s.stack
+	case scratchObjID:
+		source = s.scratch
+	default:
+		return RuntimeRemoteObject{}
+	}
+
+	// buildObjectFragment
+	if len(argsRaw) < 3 {
+		return RuntimeRemoteObject{
+			Type:        "object",
+			Subtype:     "array",
+			ClassName:   "Array",
+			Description: fmt.Sprintf("Array(%d)", len(source)),
+			ObjectID:    encodeArrayLength(objID),
+		}
+	}
+
+	// buildArrayFragment
+
+	args := convertCallArgs(argsRaw)
+	fromIndex := int(args[0].Value.(float64))
+	toIndex := int(args[1].Value.(float64))
+	// sparseIterationThreshold := args[2].Value.(float64)
+
+	return RuntimeRemoteObject{
+		Type:        "object",
+		ClassName:   "Object",
+		Description: "Object",
+		ObjectID:    encodeArraySlice(objID, fromIndex, toIndex),
+	}
 }
 
 func makeObject(name, id string) RuntimePropertyDescriptor {
@@ -355,6 +466,44 @@ func decodeGroupTxnID(objID string) (int, bool) {
 	return 0, false
 }
 
+func encodeArrayLength(objID string) string {
+	return fmt.Sprintf("%s_length", objID)
+}
+
+func decodeArrayLength(objID string) (string, bool) {
+	if strings.HasSuffix(objID, "_length") {
+		if strings.HasPrefix(objID, stackObjID) {
+			return stackObjID, true
+		} else if strings.HasPrefix(objID, scratchObjID) {
+			return scratchObjID, true
+		}
+	}
+	return "", false
+}
+
+func encodeArraySlice(objID string, fromIndex int, toIndex int) string {
+	return fmt.Sprintf("%s_%d_%d", objID, fromIndex, toIndex)
+}
+
+func decodeArraySlice(objID string) (string, int, int, bool) {
+	if strings.HasPrefix(objID, stackObjID) || strings.HasPrefix(objID, scratchObjID) {
+		parts := strings.Split(objID, "_")
+		if len(parts) != 3 {
+			return "", 0, 0, false
+		}
+		var err error
+		var fromIndex, toIndex int64
+		if fromIndex, err = strconv.ParseInt(parts[1], 10, 32); err != nil {
+			return "", 0, 0, false
+		}
+		if toIndex, err = strconv.ParseInt(parts[2], 10, 32); err != nil {
+			return "", 0, 0, false
+		}
+		return parts[0], int(fromIndex), int(toIndex), true
+	}
+	return "", 0, 0, false
+}
+
 func makeGlobalScope(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
 	globals := makeObject("globals", globalsObjID)
 	if preview {
@@ -445,13 +594,19 @@ func makeTxnGroup(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor)
 	return
 }
 
-func makeStack(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
-	fmt.Printf("makeStack\n")
+func makeArrayLengh(array []v1.TealValue) (descr []RuntimePropertyDescriptor) {
+	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(array)), Type: "number"}
+	descr = append(descr, makePrimitive(field))
+	return
+}
+
+func makeStackSlice(s *cdtState, from int, to int, preview bool) (descr []RuntimePropertyDescriptor) {
 	stack := make([]v1.TealValue, len(s.stack))
 	for i := 0; i < len(stack); i++ {
 		stack[i] = s.stack[len(s.stack)-1-i]
 	}
 
+	stack = stack[from : to+1]
 	fields := prepareArray(stack)
 	for _, field := range fields {
 		descr = append(descr, makePrimitive(field))
@@ -461,14 +616,24 @@ func makeStack(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
 	return
 }
 
-func makeScratch(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
-	fields := prepareArray(s.scratch)
+func makeStack(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
+	return makeStackSlice(s, 0, len(s.stack)-1, preview)
+}
+
+func makeScratchSlice(s *cdtState, from int, to int, preview bool) (descr []RuntimePropertyDescriptor) {
+	fmt.Printf("makeScratchSlice: %d %d, len %d\n", from, to, len(s.scratch))
+	scratch := s.scratch[from : to+1]
+	fields := prepareArray(scratch)
 	for _, field := range fields {
 		descr = append(descr, makePrimitive(field))
 	}
-	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(s.scratch)), Type: "number"}
+	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(scratch)), Type: "number"}
 	descr = append(descr, makePrimitive(field))
 	return
+}
+
+func makeScratch(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
+	return makeScratchSlice(s, 0, len(s.scratch)-1, preview)
 }
 
 func makeTealError(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {

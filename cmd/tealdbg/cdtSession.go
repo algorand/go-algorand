@@ -236,6 +236,9 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (response ChromeResponse, events []interface{}, err error) {
 	empty := make(map[string]interface{})
+	type cmdResult struct {
+		Result interface{} `json:"result"`
+	}
 	switch req.Method {
 	case "Debugger.enable":
 		evCtxCreated := s.makeContextCreatedEvent()
@@ -274,6 +277,35 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 		}
 		state.pauseOnError.SetTo(enable)
 		response = ChromeResponse{ID: req.ID, Result: empty}
+	case "Runtime.callFunctionOn":
+		p := req.Params.(map[string]interface{})
+		objIDRaw, ok := p["objectId"]
+		if !ok {
+			err = fmt.Errorf("callFunctionOn failed: no objectId")
+			return
+		}
+		objID := objIDRaw.(string)
+		funcDeclRaw, ok := p["functionDeclaration"]
+		if !ok {
+			err = fmt.Errorf("callFunctionOn failed: no functionDeclaration")
+			return
+		}
+		funcDecl := funcDeclRaw.(string)
+		argsRaw, ok := p["arguments"]
+		if !ok {
+			err = fmt.Errorf("callFunctionOn failed: no arguments")
+			return
+		}
+		args := argsRaw.([]interface{})
+		if strings.HasPrefix(funcDecl, "function packRanges") {
+			ranges := state.packRanges(objID, args)
+			response = ChromeResponse{ID: req.ID, Result: cmdResult{ranges}}
+		} else if strings.HasPrefix(funcDecl, "function buildArrayFragment") || strings.HasPrefix(funcDecl, "function buildObjectFragment") {
+			obj := state.buildFragment(objID, args)
+			response = ChromeResponse{ID: req.ID, Result: cmdResult{obj}}
+		} else {
+			response = ChromeResponse{ID: req.ID, Result: cmdResult{}}
+		}
 	case "Runtime.getProperties":
 		p := req.Params.(map[string]interface{})
 		objIDRaw, ok := p["objectId"]
@@ -304,10 +336,7 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 		}
 		log.Printf("Descr object: %s", string(data))
 
-		result := map[string][]RuntimePropertyDescriptor{
-			"result": descr,
-		}
-		response = ChromeResponse{ID: req.ID, Result: result}
+		response = ChromeResponse{ID: req.ID, Result: cmdResult{descr}}
 	case "Debugger.setBreakpointsActive":
 		p := req.Params.(map[string]interface{})
 		activeRaw, ok := p["active"]
