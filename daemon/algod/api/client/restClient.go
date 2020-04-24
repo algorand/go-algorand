@@ -37,13 +37,13 @@ import (
 
 const (
 	authHeader          = "X-Algo-API-Token"
+	healthCheckEndpoint = "/health"
 	maxRawResponseBytes = 50e6
 )
 
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
 	"/v1/transactions": true,
-	"/v2/transactions": true,
 }
 
 // RestClient manages the REST interface for a calling user.
@@ -81,7 +81,7 @@ func stripTransaction(tx string) string {
 }
 
 // submitForm is a helper used for submitting (ex.) GETs and POSTs to the server
-func (client RestClient) submitForm(response interface{}, path string, request interface{}, requestMethod string, encodeJSON bool, decodeJSON bool, authToken string) error {
+func (client RestClient) submitForm(response interface{}, path string, request interface{}, requestMethod string, encodeJSON bool, decodeJSON bool) error {
 	var err error
 	queryURL := client.serverURL
 	queryURL.Path = path
@@ -115,10 +115,10 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 		return err
 	}
 
-	// if the caller provided an authentication token, pass it along.
-	// ( some entrypoints, such as health doesn't require a security token to be passed )
-	if authToken != "" {
-		req.Header.Set(authHeader, authToken)
+	// If we add another endpoint that does not require auth, we should add a
+	// requiresAuth argument to submitForm rather than checking here
+	if path != healthCheckEndpoint {
+		req.Header.Set(authHeader, client.apiToken)
 	}
 
 	httpClient := &http.Client{}
@@ -157,42 +157,42 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 }
 
 // get performs a GET request to the specific path against the server
-func (client RestClient) get(response interface{}, path string, request interface{}, authToken string) error {
-	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, true /* decodeJSON */, authToken)
+func (client RestClient) get(response interface{}, path string, request interface{}) error {
+	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, true /* decodeJSON */)
 }
 
 // getRaw behaves identically to get but doesn't json decode the response, and
 // the response must implement the v1.RawResponse interface
-func (client RestClient) getRaw(response v1.RawResponse, path string, request interface{}, authToken string) error {
-	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, false /* decodeJSON */, authToken)
+func (client RestClient) getRaw(response v1.RawResponse, path string, request interface{}) error {
+	return client.submitForm(response, path, request, "GET", false /* encodeJSON */, false /* decodeJSON */)
 }
 
 // post sends a POST request to the given path with the given request object.
 // No query parameters will be sent if request is nil.
 // response must be a pointer to an object as post writes the response there.
-func (client RestClient) post(response interface{}, path string, request interface{}, authToken string) error {
-	return client.submitForm(response, path, request, "POST", true /* encodeJSON */, true /* decodeJSON */, authToken)
+func (client RestClient) post(response interface{}, path string, request interface{}) error {
+	return client.submitForm(response, path, request, "POST", true /* encodeJSON */, true /* decodeJSON */)
 }
 
 // Status retrieves the StatusResponse from the running node
 // the StatusResponse includes data like the consensus version and current round
 // Not supported
 func (client RestClient) Status() (response v1.NodeStatus, err error) {
-	err = client.get(&response, "/v1/status", nil, client.apiToken)
+	err = client.get(&response, "/v1/status", nil)
 	return
 }
 
 // HealthCheck does a health check on the the potentially running node,
 // returning an error if the API is down
 func (client RestClient) HealthCheck() error {
-	return client.get(nil, "/health", nil, "")
+	return client.get(nil, "/health", nil)
 }
 
 // StatusAfterBlock waits for a block to occur then returns the StatusResponse after that block
 // blocks on the node end
 // Not supported
 func (client RestClient) StatusAfterBlock(blockNum uint64) (response v1.NodeStatus, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/status/wait-for-block-after/%d", blockNum), nil, client.apiToken)
+	err = client.get(&response, fmt.Sprintf("/v1/status/wait-for-block-after/%d", blockNum), nil)
 	return
 }
 
@@ -203,20 +203,20 @@ type pendingTransactionsParams struct {
 // GetPendingTransactions asks algod for a snapshot of current pending txns on the node, bounded by maxTxns.
 // If maxTxns = 0, fetches as many transactions as possible.
 func (client RestClient) GetPendingTransactions(maxTxns uint64) (response v1.PendingTransactions, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/transactions/pending"), pendingTransactionsParams{maxTxns}, client.apiToken)
+	err = client.get(&response, fmt.Sprintf("/v1/transactions/pending"), pendingTransactionsParams{maxTxns})
 	return
 }
 
 // Versions retrieves the VersionResponse from the running node
 // the VersionResponse includes data like version number and genesis ID
 func (client RestClient) Versions() (response common.Version, err error) {
-	err = client.get(&response, "/versions", nil, client.apiToken)
+	err = client.get(&response, "/versions", nil)
 	return
 }
 
 // LedgerSupply gets the supply details for the specified node's Ledger
 func (client RestClient) LedgerSupply() (response v1.Supply, err error) {
-	err = client.get(&response, "/v1/ledger/supply", nil, client.apiToken)
+	err = client.get(&response, "/v1/ledger/supply", nil)
 	return
 }
 
@@ -238,32 +238,32 @@ type rawblockParams struct {
 // TransactionsByAddr returns all transactions for a PK [addr] in the [first,
 // last] rounds range.
 func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64) (response v1.TransactionList, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions", addr), transactionsByAddrParams{first, last, max}, client.apiToken)
+	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions", addr), transactionsByAddrParams{first, last, max})
 	return
 }
 
 // AssetInformation gets the AssetInformationResponse associated with the passed asset index
 func (client RestClient) AssetInformation(index uint64) (response v1.AssetParams, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/asset/%d", index), nil, client.apiToken)
+	err = client.get(&response, fmt.Sprintf("/v1/asset/%d", index), nil)
 	return
 }
 
 // Assets gets up to max assets with maximum asset index assetIdx
 func (client RestClient) Assets(assetIdx, max uint64) (response v1.AssetList, err error) {
-	err = client.get(&response, "/v1/assets", assetsParams{assetIdx, max}, client.apiToken)
+	err = client.get(&response, "/v1/assets", assetsParams{assetIdx, max})
 	return
 }
 
 // AccountInformation also gets the AccountInformationResponse associated with the passed address
 func (client RestClient) AccountInformation(address string) (response v1.Account, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/account/%s", address), nil, client.apiToken)
+	err = client.get(&response, fmt.Sprintf("/v1/account/%s", address), nil)
 	return
 }
 
 // TransactionInformation gets information about a specific transaction involving a specific account
 func (client RestClient) TransactionInformation(accountAddress, transactionID string) (response v1.Transaction, err error) {
 	transactionID = stripTransaction(transactionID)
-	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transaction/%s", accountAddress, transactionID), nil, client.apiToken)
+	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transaction/%s", accountAddress, transactionID), nil)
 	return
 }
 
@@ -278,25 +278,25 @@ func (client RestClient) TransactionInformation(accountAddress, transactionID st
 // node no longer remembers it, and this will return an error.
 func (client RestClient) PendingTransactionInformation(transactionID string) (response v1.Transaction, err error) {
 	transactionID = stripTransaction(transactionID)
-	err = client.get(&response, fmt.Sprintf("/v1/transactions/pending/%s", transactionID), nil, client.apiToken)
+	err = client.get(&response, fmt.Sprintf("/v1/transactions/pending/%s", transactionID), nil)
 	return
 }
 
 // SuggestedFee gets the recommended transaction fee from the node
 func (client RestClient) SuggestedFee() (response v1.TransactionFee, err error) {
-	err = client.get(&response, "/v1/transactions/fee", nil, client.apiToken)
+	err = client.get(&response, "/v1/transactions/fee", nil)
 	return
 }
 
 // SuggestedParams gets the suggested transaction parameters
 func (client RestClient) SuggestedParams() (response v1.TransactionParams, err error) {
-	err = client.get(&response, "/v1/transactions/params", nil, client.apiToken)
+	err = client.get(&response, "/v1/transactions/params", nil)
 	return
 }
 
 // SendRawTransaction gets a SignedTxn and broadcasts it to the network
 func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response v1.TransactionID, err error) {
-	err = client.post(&response, "/v1/transactions", protocol.Encode(&txn), client.apiToken)
+	err = client.post(&response, "/v1/transactions", protocol.Encode(&txn))
 	return
 }
 
@@ -310,25 +310,25 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 	}
 
 	var response v1.TransactionID
-	return client.post(&response, "/v1/transactions", enc, client.apiToken)
+	return client.post(&response, "/v1/transactions", enc)
 }
 
 // Block gets the block info for the given round
 func (client RestClient) Block(round uint64) (response v1.Block, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/block/%d", round), nil, client.apiToken)
+	err = client.get(&response, fmt.Sprintf("/v1/block/%d", round), nil)
 	return
 }
 
 // RawBlock gets the encoded, raw msgpack block for the given round
 func (client RestClient) RawBlock(round uint64) (response v1.RawBlock, err error) {
-	err = client.getRaw(&response, fmt.Sprintf("/v1/block/%d", round), rawblockParams{1}, client.apiToken)
+	err = client.getRaw(&response, fmt.Sprintf("/v1/block/%d", round), rawblockParams{1})
 	return
 }
 
 // Shutdown requests the node to shut itself down
 func (client RestClient) Shutdown() (err error) {
 	response := 1
-	err = client.post(&response, "/v2/shutdown", nil, client.apiToken)
+	err = client.post(&response, "/v2/shutdown", nil)
 	return
 }
 
