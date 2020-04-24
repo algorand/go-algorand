@@ -2,10 +2,8 @@ byte base64 Ymw=
 byte base64 Ymw=
 app_global_gets
 int 0
-int 0
 byte base64 Ymw=
-app_local_get
-pop
+app_local_gets
 +
 app_global_put
 int 1
