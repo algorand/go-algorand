@@ -44,6 +44,8 @@ type cdtSession struct {
 	scriptID   string
 	scriptHash string
 	scriptURL  string
+
+	verbose bool
 }
 
 var contextCounter int32 = 0
@@ -100,7 +102,10 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		for {
 			select {
 			case notification := <-notifications:
-				log.Printf("received: %s\n", notification.Event)
+				if s.verbose {
+					log.Printf("received: %s\n", notification.Event)
+				}
+
 				switch notification.Event {
 				case "registered":
 					// no mutex, the access already synchronized by "registred" chan
@@ -138,7 +143,8 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		// set immutable items
 		state.Init(dbgState.Disassembly, dbgState.Proto, dbgState.TxnGroup, dbgState.GroupIndex, dbgState.Globals)
 		// mutable
-		state.Update(dbgState.PC, dbgState.Line, dbgState.Stack, dbgState.Scratch, "")
+		// set pc and line to 0 to workaround Register ack
+		state.Update(0, 0, dbgState.Stack, dbgState.Scratch, "")
 
 		hash := sha256.Sum256([]byte(state.program)) // some random hash
 		s.scriptHash = hex.EncodeToString(hash[:])
@@ -151,7 +157,6 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 			var cdtReq ChromeRequest
 			mtype, reader, err := ws.NextReader()
 			if err != nil {
-				log.Println(err.Error())
 				closed <- struct{}{}
 				close(closed)
 				return
@@ -163,13 +168,15 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 			msg := make([]byte, 64000)
 			n, err := reader.Read(msg)
 			if err != nil {
-				log.Println(err.Error())
 				closed <- struct{}{}
 				close(closed)
 				return
 			}
 			json.Unmarshal(msg[:n], &cdtReq)
-			log.Printf("%v\n", cdtReq)
+
+			if s.verbose {
+				log.Printf("%v\n", cdtReq)
+			}
 
 			dbgStateMu.Lock()
 			cdtResp, events, err := s.handleCDTRequest(&cdtReq, &state)
@@ -190,14 +197,18 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		for {
 			select {
 			case devtoolResp := <-cdtRespCh:
-				log.Printf("responsing: %v\n", devtoolResp)
+				if s.verbose {
+					log.Printf("responsing: %v\n", devtoolResp)
+				}
 				err := ws.WriteJSON(&devtoolResp)
 				if err != nil {
 					log.Println(err.Error())
 					return
 				}
 			case devtoolEv := <-cdtEventCh:
-				log.Printf("firing: %v\n", devtoolEv)
+				if s.verbose {
+					log.Printf("firing: %v\n", devtoolEv)
+				}
 				err := ws.WriteJSON(&devtoolEv)
 				if err != nil {
 					log.Println(err.Error())
@@ -328,13 +339,15 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 			return
 		}
 
-		var data []byte
-		data, err = json.Marshal(descr)
-		if err != nil {
-			err = fmt.Errorf("getObjectDescriptor json error: " + err.Error())
-			return
+		if s.verbose {
+			var data []byte
+			data, err = json.Marshal(descr)
+			if err != nil {
+				err = fmt.Errorf("getObjectDescriptor json error: " + err.Error())
+				return
+			}
+			log.Printf("Descr object: %s", string(data))
 		}
-		log.Printf("Descr object: %s", string(data))
 
 		response = ChromeResponse{ID: req.ID, Result: cmdResult{descr}}
 	case "Debugger.setBreakpointsActive":

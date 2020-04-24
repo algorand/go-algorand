@@ -621,7 +621,6 @@ func makeStack(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
 }
 
 func makeScratchSlice(s *cdtState, from int, to int, preview bool) (descr []RuntimePropertyDescriptor) {
-	fmt.Printf("makeScratchSlice: %d %d, len %d\n", from, to, len(s.scratch))
 	scratch := s.scratch[from : to+1]
 	fields := prepareArray(scratch)
 	for _, field := range fields {
