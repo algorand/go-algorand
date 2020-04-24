@@ -30,7 +30,7 @@ popd
 
 # build docker release package
 cd "${REPO_ROOT}"/docker/release
-sg docker "./build_algod_docker.sh ${HOME}/node_pkg/node_${CHANNEL}_${OS}-${ARCH}_${FULLVERSION}.tar.gz"
+sg docker "${REPO_ROOT}/scripts/release/build/build_algod_docker.sh ${HOME}/node_pkg/node_${CHANNEL}_${OS}-${ARCH}_${FULLVERSION}.tar.gz"
 
 echo
 date "+build_release end PACKAGE DEB stage %Y%m%d_%H%M%S"
