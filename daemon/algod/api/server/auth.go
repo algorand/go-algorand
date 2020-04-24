@@ -89,10 +89,15 @@ func makeAuthenticatedHandler(tokens []string, handler echo.HandlerFunc, route e
 // GetHandler retrives the "correct" handler function wrapper for the underlaying handler.
 // in case of no-auth, it use the underlaying handler directly.
 func (h *authenticatedHandler) GetHandler() echo.HandlerFunc {
-	if len(h.tokens) == 1 && len(h.tokens[0]) == 0 {
-		// no authentication is needed
-		return h.handler
+	// if this entrypoint require no authentication, use that
+	// as this is the least restrictive.
+	for _, token := range h.tokens {
+		if len(token) == 0 {
+			// no authentication is needed
+			return h.handler
+		}
 	}
+
 	if h.route.Path == "/urlAuth/:token/debug/pprof/*" {
 		return h.DebugHandler
 	}
