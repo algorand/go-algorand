@@ -31,10 +31,10 @@ import (
 const urlAuthFormatter = "/urlAuth/%s"
 const debugRouteName = "debug"
 
-// AuthRoutes define the mapping of authentication key to allowed routes.
+// AuthRoutes define the desired mapping of authentication token keys to allowed routes.
 type AuthRoutes map[string]map[echo.Route]echo.HandlerFunc
 
-// Auth is the authentication layer
+// Auth is the authentication layer manager. It creates a wrapper around each invoked call and provide authentication.
 type Auth struct {
 	log  logging.Logger
 	echo *echo.Echo
@@ -63,15 +63,17 @@ func (auth *Auth) RegisterHandlers(authRoutes AuthRoutes) {
 			auth.echo.Add(route.Method, route.Path, makeAuthenticatedHandler(routeTokens[route], routeFunction, route).GetHandler())
 		}
 	}
-
 }
 
+// authenticatedHandler is a helper struct to "tunnel" the correct authntication scheme for
+// given function. ( no-auth, debug, regular auth )
 type authenticatedHandler struct {
 	tokens  [][]byte
 	handler echo.HandlerFunc
 	route   echo.Route
 }
 
+// makeAuthenticatedHandler creates the authentication handler.
 func makeAuthenticatedHandler(tokens []string, handler echo.HandlerFunc, route echo.Route) *authenticatedHandler {
 	authHandler := &authenticatedHandler{
 		handler: handler,
@@ -83,6 +85,9 @@ func makeAuthenticatedHandler(tokens []string, handler echo.HandlerFunc, route e
 
 	return authHandler
 }
+
+// GetHandler retrives the "correct" handler function wrapper for the underlaying handler.
+// in case of no-auth, it use the underlaying handler directly.
 func (h *authenticatedHandler) GetHandler() echo.HandlerFunc {
 	if len(h.tokens) == 1 && len(h.tokens[0]) == 0 {
 		// no authentication is needed
@@ -94,6 +99,7 @@ func (h *authenticatedHandler) GetHandler() echo.HandlerFunc {
 	return h.Handler
 }
 
+// DebugHandler is the pprof debug handler, and used only for the `/urlAuth/:token/debug/pprof/*` path
 func (h *authenticatedHandler) DebugHandler(ctx echo.Context) error {
 	var providedToken []byte
 	// Handle debug routes with /urlAuth/:token prefix.
@@ -126,6 +132,9 @@ func (h *authenticatedHandler) DebugHandler(ctx echo.Context) error {
 
 	return echo.NewHTTPError(http.StatusUnauthorized, "Invalid API Token")
 }
+
+// Handler is the classic handler, where we perform a authentication based on the header,
+// and compare it with constant time to a predefined array of known authentication tokens
 func (h *authenticatedHandler) Handler(ctx echo.Context) error {
 	// Grab the apiToken from the HTTP header, or as a bearer token
 	providedToken := []byte(ctx.Request().Header.Get(middlewares.TokenHeader))

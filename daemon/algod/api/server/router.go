@@ -88,18 +88,6 @@ func wrapCtx(ctx lib.ReqContext, handler func(lib.ReqContext, echo.Context)) ech
 	}
 }
 
-// registerHandler registers a set of Routes to [router]. if [prefix] is not empty, it
-// registers the routes to a new sub-router [prefix]
-func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx lib.ReqContext) {
-	for _, route := range routes {
-		if len(route.Path) == 0 {
-			continue
-		}
-		r := router.Add(route.Method, prefix+route.Path, wrapCtx(ctx, route.HandlerFunc))
-		r.Name = route.Name
-	}
-}
-
 func makeAuthRoutes(ctx lib.ReqContext, apiToken string, adminAPIToken string, enableProfiler bool) AuthRoutes {
 	authRoutes := make(AuthRoutes)
 	noAuthRoutes := make(map[echo.Route]echo.HandlerFunc)
