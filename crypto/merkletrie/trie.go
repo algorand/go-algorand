@@ -208,11 +208,6 @@ func (mt *Trie) GetStats() (stats Stats, err error) {
 	return
 }
 
-// BeginTransaction starts an atomic transaction on the markle trie.
-func (mt *Trie) BeginTransaction(committer Committer) *Transaction {
-	return makeTransaction(mt, committer)
-}
-
 // Commit stores the existings trie using the committer.
 func (mt *Trie) Commit() error {
 	bytes := mt.serialize()
