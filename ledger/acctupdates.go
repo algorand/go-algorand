@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -149,9 +150,9 @@ type accountUpdates struct {
 	// note that this is the last catchpoint *label* and not the catchpoint file.
 	lastCatchpointLabel string
 
-	// accountsWriting help to syncronize the accounts writing. When this channel is closed, no writting is going on.
+	// catchpointWriting help to syncronize the catchpoint file writing. When this channel is closed, no writting is going on.
 	// the channel is non-closed while writing the current accounts state to disk.
-	accountsWriting chan struct{}
+	catchpointWriting chan struct{}
 
 	// catchpointSlowWriting suggest to the accounts writer that it should finish writing up the catchpoint file ASAP.
 	// when this channel is closed, the accounts writer would try and complete the writing as soon as possible.
@@ -168,10 +169,19 @@ type accountUpdates struct {
 	deltasAccum []int
 
 	// committedOffset is the offset at which we'd like to persist all the previous account information to disk.
-	committedOffset chan uint64
+	committedOffset chan deferedCommit
 
 	// accountsMu is the syncronization mutex for accessing the various non-static varaibles.
 	accountsMu deadlock.RWMutex
+
+	// accountsWriting provides syncronization around the background writing of account balances.
+	accountsWriting sync.WaitGroup
+}
+
+type deferedCommit struct {
+	offset   uint64
+	dbRound  basics.Round
+	lookback basics.Round
 }
 
 // initialize initializes the accountUpdates structure
@@ -187,6 +197,9 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 // The close function is expected to be call in pair with loadFromDisk
 func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	var writingCatchpointRound uint64
+	// todo - figure this out.
+	//au.accountsMu.Lock()
+	//defer au.accountsMu.Unlock()
 	au.dbs = l.trackerDB()
 	au.log = l.trackerLog()
 	au.ledger = l
@@ -277,30 +290,23 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		}
 	}
 	// keep these channel closed if we're not generating catchpoint
-	au.accountsWriting = make(chan struct{}, 1)
+	au.catchpointWriting = make(chan struct{}, 1)
 	au.catchpointSlowWriting = make(chan struct{}, 1)
 	close(au.catchpointSlowWriting)
-	close(au.accountsWriting)
+	close(au.catchpointWriting)
 	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
 	if writingCatchpointRound != 0 && au.catchpointInterval != 0 {
 		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest)
 	}
-	au.committedOffset = make(chan uint64, 1)
+	au.committedOffset = make(chan deferedCommit, 1)
 	go au.commitSyncer()
 
 	return nil
 }
 
+// waitAccountsWriting waits for all the pending ( or current ) account writing to be completed.
 func (au *accountUpdates) waitAccountsWriting() {
-	// wait until the accountsWriting is closed.
-	select {
-	case <-au.accountsWriting:
-		// au.accountsWriting is closed.
-	default:
-		if au.accountsWriting != nil {
-			<-au.accountsWriting
-		}
-	}
+	au.accountsWriting.Wait()
 }
 
 func (au *accountUpdates) close() {
@@ -451,12 +457,14 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 	return res, nil
 }
 
+// getLastCatchpointLabel retrieves the last catchpoint label that was stored to the database.
 func (au *accountUpdates) getLastCatchpointLabel() string {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 	return au.lastCatchpointLabel
 }
 
+// getAssetCreatorForRound returns the asset creator for a given asset index at a given round
 func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.AssetIndex) (basics.Address, error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
@@ -493,26 +501,27 @@ func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.
 	return au.accountsq.lookupAssetCreator(aidx)
 }
 
+// committedUpTo enqueues commiting the balances for round committedRound-lookback.
+// The defered committing is done so that we could calculate the historical balances lookback rounds back.
+// Since we don't want to hold off the tracker's mutex for too long, we'll defer the database persistance of this
+// operation to a syncer goroutine. The one caviat is that when storing a catchpoint round, we would want to
+// wait until the catchpoint creation is done, so that the persistance of the catchpoint file would have an
+// uninterrupted view of the balances at a given point of time.
 func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound basics.Round) {
 	var isCatchpointRound, hasMultipleIntermediateCatchpoint bool
 	var offset uint64
+	var dc deferedCommit
 	au.accountsMu.RLock()
 	defer func() {
 		au.accountsMu.RUnlock()
-		if isCatchpointRound && hasMultipleIntermediateCatchpoint && offset != 0 {
-			// this doesn't happen unless we're catching up faster than the writing rate. In this case
-			// we want to slow down the writing of new blocks to complete the balances write.
-			au.waitAccountsWriting()
+		if dc.offset != 0 {
+			au.accountsWriting.Add(1)
+			au.committedOffset <- dc
 		}
 	}()
 
 	retRound = basics.Round(0)
 	var pendingDeltas int
-	/*committedUpToStart := time.Now()
-	defer func() {
-		totalTime := time.Now().Sub(committedUpToStart)
-		au.log.Infof("committedUpTo(%d): total execution time %d ns flushing %d deltas", committedRound, totalTime.Nanoseconds(), pendingDeltas)
-	}()*/
 
 	lookback := basics.Round(au.protos[len(au.protos)-1].MaxBalLookback)
 	if committedRound < lookback {
@@ -535,27 +544,26 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	// check if there was a catchpoint between au.dbRound+lookback and newBase+lookback
 	if au.catchpointInterval > 0 {
 		nextCatchpointRound := ((uint64(au.dbRound+lookback) + au.catchpointInterval) / au.catchpointInterval) * au.catchpointInterval
-		nextNextCatchpointRound := ((uint64(au.dbRound+lookback) + 2*au.catchpointInterval) / au.catchpointInterval) * au.catchpointInterval
+
 		if nextCatchpointRound < uint64(newBase+lookback) {
-			hasIntermediateCatchpoint = true
-			if nextNextCatchpointRound < uint64(newBase+lookback) {
-				hasMultipleIntermediateCatchpoint = true
-			}
+			mostRecentCatchpointRound := (uint64(committedRound) / au.catchpointInterval) * au.catchpointInterval
 			newBase = basics.Round(nextCatchpointRound) - lookback
+			if mostRecentCatchpointRound > nextCatchpointRound {
+				hasMultipleIntermediateCatchpoint = true
+				// skip if there is more than one catchpoint in queue
+				newBase = basics.Round(mostRecentCatchpointRound) - lookback
+			}
+			hasIntermediateCatchpoint = true
 		}
 	}
 
 	// if we're still writing the previous balances, we can't move forward yet.
 	select {
-	case _, opened := <-au.accountsWriting:
-		// the channel is not close, which mean someone wrote to that channel. This is should not happen.
-		if opened {
-			au.log.Panicf("committedUpTo: accountsWriting was written into")
-			return
-		}
-		// the channel accountsWriting is currently closed
+	case <-au.catchpointWriting:
+		// the channel catchpointWriting is currently closed, meaning that we're currently not writing any
+		// catchpoint file. At this point, we should attempt to enqueue further tasks as usual.
 	default:
-		// if we hit this path, it means that the channel is currently non-closed, which means that we're still writing.
+		// if we hit this path, it means that the channel is currently non-closed, which means that we're still writing a catchpoint.
 		// see if we're writing a catchpoint in that range.
 		if hasIntermediateCatchpoint {
 			// check if we're already attempting to perform fast-writing.
@@ -586,17 +594,19 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 		return au.dbRound
 	}
 
-	au.accountsWriting = make(chan struct{}, 1)
-
-	if isCatchpointRound {
+	if isCatchpointRound && au.archivalLedger {
+		au.catchpointWriting = make(chan struct{}, 1)
 		au.catchpointSlowWriting = make(chan struct{}, 1)
 		if hasMultipleIntermediateCatchpoint {
 			close(au.catchpointSlowWriting)
 		}
 	}
 
-	au.committedOffset <- offset
-
+	dc = deferedCommit{
+		offset:   offset,
+		dbRound:  au.dbRound,
+		lookback: lookback,
+	}
 	return
 }
 
@@ -892,27 +902,23 @@ func (au *accountUpdates) commitSyncer() {
 			if !ok {
 				return
 			}
-			au.commitRound(committedOffset)
+			au.commitRound(committedOffset.offset, committedOffset.dbRound, committedOffset.lookback)
 		case <-au.ctx.Done():
 			return
 		}
 	}
 }
 
-func (au *accountUpdates) commitRound(offset uint64) {
-	/*commitRoundStart := time.Now()
-	defer func() {
-		totalTime := time.Now().Sub(commitRoundStart)
-		au.log.Infof("commitRound: total execution time %d ns offset %d", totalTime.Nanoseconds(), offset)
-	}()*/
-	defer close(au.accountsWriting)
-
+func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookback basics.Round) {
+	defer au.accountsWriting.Done()
 	au.accountsMu.RLock()
 
-	dbRound := au.dbRound
+	// adjust teh offset according to what happend meanwhile..
+	offset -= uint64(au.dbRound - dbRound)
+	dbRound = au.dbRound
+
 	newBase := basics.Round(offset) + dbRound
 	flushTime := time.Now()
-	lookback := basics.Round(au.protos[len(au.protos)-1].MaxBalLookback)
 	isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+dbRound))) % au.catchpointInterval))
 
 	// create a copy of thej deltas, reward levels and protos for the range we're going to flush.
@@ -1044,6 +1050,7 @@ func (au *accountUpdates) commitRound(offset uint64) {
 	if isCatchpointRound && au.archivalLedger {
 		// start generating the catchpoint on a separate goroutine.
 		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest)
+		close(au.catchpointWriting)
 	}
 
 }
@@ -1054,7 +1061,7 @@ func (au *accountUpdates) latest() basics.Round {
 
 func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label string, committedRoundDigest crypto.Digest) {
 	retryCatchpointCreation := false
-	au.log.Infof("accountUpdates: generateCatchpoint: generating catchpoint for round %d", committedRound)
+	au.log.Debugf("accountUpdates: generateCatchpoint: generating catchpoint for round %d", committedRound)
 	defer func() {
 		if !retryCatchpointCreation {
 			// clear the writingCatchpoint flag
