@@ -19,7 +19,6 @@ package transactions
 import (
 	"math/rand"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -41,7 +40,7 @@ func GenerateRandomBytes(n int) []byte {
 // this test checks that two accounts' balances stay up to date
 // as they send each other money many times
 func TestAccountsCanSendMoney(t *testing.T) {
-	if runtime.GOOS == "darwin" {
+	if testing.Short() {
 		t.Skip()
 	}
 	if testing.Short() {

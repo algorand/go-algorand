@@ -52,12 +52,12 @@ func (nps *netPrioStub) MakePrioResponse(challenge string) []byte {
 		Addr:  nps.addr,
 		Prio:  nps.prio,
 	}
-	return protocol.Encode(r)
+	return protocol.EncodeReflect(r)
 }
 
 func (nps *netPrioStub) VerifyPrioResponse(challenge string, response []byte) (addr basics.Address, err error) {
 	var r netPrioStubResponse
-	err = protocol.Decode(response, &r)
+	err = protocol.DecodeReflect(response, &r)
 	if err != nil {
 		return
 	}

@@ -31,7 +31,7 @@ func TestLeaseTransactionsSameSender(t *testing.T) {
 	a := require.New(t)
 
 	var fixture fixtures.RestClientFixture
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer fixture.Shutdown()
 
 	client := fixture.LibGoalClient
@@ -85,12 +85,143 @@ func TestLeaseTransactionsSameSender(t *testing.T) {
 	a.Equal(bal2, uint64(0))
 }
 
+func TestLeaseRegressionFaultyFirstValidCheckOld_2f3880f7(t *testing.T) {
+	t.Parallel()
+	a := require.New(t)
+
+	var fixture fixtures.RestClientFixture
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachV22.json"))
+	defer fixture.Shutdown()
+
+	client := fixture.LibGoalClient
+	accountList, err := fixture.GetWalletsSortedByBalance()
+	a.NoError(err)
+	account0 := accountList[0].Address
+	wh, err := client.GetUnencryptedWalletHandle()
+	a.NoError(err)
+
+	account1, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	account2, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	lease := [32]byte{1, 2, 3, 4}
+
+	// construct transactions for sending money to account1 and account2
+	// from same sender with identical lease
+	tx1, err := client.ConstructPayment(account0, account1, 0, 1000000, nil, "", lease, 0, 0)
+	a.NoError(err)
+
+	stx1, err := client.SignTransactionWithWallet(wh, nil, tx1)
+	a.NoError(err)
+
+	// submitting the first transaction should succeed
+	_, err = client.BroadcastTransaction(stx1)
+	a.NoError(err)
+
+	// wait for the txids and check balance
+	txids := make(map[string]string)
+	txids[stx1.Txn.ID().String()] = account0
+
+	_, curRound := fixture.GetBalanceAndRound(account0)
+	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	a.True(confirmed, "lease txn confirmed")
+
+	bal1, _ := fixture.GetBalanceAndRound(account1)
+	bal2, _ := fixture.GetBalanceAndRound(account2)
+	a.Equal(bal1, uint64(1000000))
+	a.Equal(bal2, uint64(0))
+
+	tx2, err := client.ConstructPayment(account0, account2, 0, 2000000, nil, "", lease, 0, 0)
+	a.NoError(err)
+
+	stx2, err := client.SignTransactionWithWallet(wh, nil, tx2)
+	a.NoError(err)
+
+	// submitting the second transaction should succeed
+	_, err = client.BroadcastTransaction(stx2)
+	a.NoError(err)
+
+	// wait for the txids and check balance
+	txids = make(map[string]string)
+	txids[stx2.Txn.ID().String()] = account0
+
+	_, curRound = fixture.GetBalanceAndRound(account0)
+	confirmed = fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	a.True(confirmed, "lease txn confirmed")
+
+	bal1, _ = fixture.GetBalanceAndRound(account1)
+	bal2, _ = fixture.GetBalanceAndRound(account2)
+	a.Equal(bal1, uint64(1000000))
+	a.Equal(bal2, uint64(2000000))
+}
+
+func TestLeaseRegressionFaultyFirstValidCheckNew_2f3880f7(t *testing.T) {
+	t.Parallel()
+	a := require.New(t)
+
+	var fixture fixtures.RestClientFixture
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
+	defer fixture.Shutdown()
+
+	client := fixture.LibGoalClient
+	accountList, err := fixture.GetWalletsSortedByBalance()
+	a.NoError(err)
+	account0 := accountList[0].Address
+	wh, err := client.GetUnencryptedWalletHandle()
+	a.NoError(err)
+
+	account1, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	account2, err := client.GenerateAddress(wh)
+	a.NoError(err)
+
+	lease := [32]byte{1, 2, 3, 4}
+
+	// construct transactions for sending money to account1 and account2
+	// from same sender with identical lease
+	tx1, err := client.ConstructPayment(account0, account1, 0, 1000000, nil, "", lease, 0, 0)
+	a.NoError(err)
+
+	stx1, err := client.SignTransactionWithWallet(wh, nil, tx1)
+	a.NoError(err)
+
+	// submitting the first transaction should succeed
+	_, err = client.BroadcastTransaction(stx1)
+	a.NoError(err)
+
+	// wait for the txids and check balance
+	txids := make(map[string]string)
+	txids[stx1.Txn.ID().String()] = account0
+
+	_, curRound := fixture.GetBalanceAndRound(account0)
+	confirmed := fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+	a.True(confirmed, "lease txn confirmed")
+
+	bal1, _ := fixture.GetBalanceAndRound(account1)
+	bal2, _ := fixture.GetBalanceAndRound(account2)
+	a.Equal(bal1, uint64(1000000))
+	a.Equal(bal2, uint64(0))
+
+	tx2, err := client.ConstructPayment(account0, account2, 0, 2000000, nil, "", lease, 0, 0)
+	a.NoError(err)
+
+	stx2, err := client.SignTransactionWithWallet(wh, nil, tx2)
+	a.NoError(err)
+
+	// submitting the second transaction should fail
+	_, err = client.BroadcastTransaction(stx2)
+	a.Error(err)
+}
+
 func TestLeaseTransactionsSameSenderDifferentLease(t *testing.T) {
 	t.Parallel()
 	a := require.New(t)
 
 	var fixture fixtures.RestClientFixture
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer fixture.Shutdown()
 
 	client := fixture.LibGoalClient
@@ -151,7 +282,7 @@ func TestLeaseTransactionsDifferentSender(t *testing.T) {
 	a := require.New(t)
 
 	var fixture fixtures.RestClientFixture
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer fixture.Shutdown()
 
 	client := fixture.LibGoalClient
@@ -225,7 +356,7 @@ func TestOverlappingLeases(t *testing.T) {
 	a := require.New(t)
 
 	var fixture fixtures.RestClientFixture
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
+	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer fixture.Shutdown()
 
 	client := fixture.LibGoalClient

@@ -59,13 +59,8 @@ func (wl *wrappedLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, er
 	return wl.l.BlockHdr(rnd)
 }
 
-func (wl *wrappedLedger) blockAux(rnd basics.Round) (bookkeeping.Block, evalAux, error) {
-	wl.recordBlockQuery(rnd)
-	return wl.l.blockAux(rnd)
-}
-
-func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, aux evalAux) (StateDelta, error) {
-	return wl.l.trackerEvalVerified(blk, aux)
+func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block) (StateDelta, error) {
+	return wl.l.trackerEvalVerified(blk)
 }
 
 func (wl *wrappedLedger) Latest() basics.Round {
@@ -109,7 +104,8 @@ func TestArchival(t *testing.T) {
 	genesisInitState := getInitState()
 	const inMem = true
 	const archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, archival)
 	require.NoError(t, err)
 	defer l.Close()
 	wl := &wrappedLedger{
@@ -500,7 +496,8 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	const inMem = false // use persistent storage
 	archival := false
 
-	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, archival)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
@@ -529,7 +526,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	l.Close()
 
 	archival = true
-	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	l, err = OpenLedger(log, dbPrefix, inMem, genesisInitState, archival)
 	require.NoError(t, err)
 	defer l.Close()
 

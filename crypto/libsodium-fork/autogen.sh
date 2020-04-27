@@ -32,5 +32,5 @@ fi
 
 $LIBTOOLIZE && \
 aclocal && \
-automake --add-missing --force-missing --include-deps && \
+automake $* --add-missing --force-missing --include-deps && \
 autoconf

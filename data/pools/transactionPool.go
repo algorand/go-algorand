@@ -451,16 +451,6 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledger.St
 	}
 }
 
-// alwaysVerifiedPool implements ledger.VerifiedTxnCache and returns every
-// transaction as verified.
-type alwaysVerifiedPool struct {
-	pool *TransactionPool
-}
-
-func (*alwaysVerifiedPool) Verified(txn transactions.SignedTxn, params verify.Params) bool {
-	return true
-}
-
 func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactions.SignedTxn) error {
 	r := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
 	for _, tx := range txgroup {
@@ -521,7 +511,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	next := bookkeeping.MakeBlock(prev)
 	pool.numPendingWholeBlocks = 0
-	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, &alwaysVerifiedPool{pool}, nil)
+	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader)
 	if err != nil {
 		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return

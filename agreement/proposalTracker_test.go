@@ -62,19 +62,19 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	assert.False(t, s.Filled)
 
 	// issue events in the following order: 2, 3, 1, (freeze), 0
-	s, err = s.accept(votes[2])
+	s, err = s.accept(votes[2], false) //TODO(upgrade) delete the ", false"
 	assert.NoError(t, err)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[2]))
 
-	s, err = s.accept(votes[3])
+	s, err = s.accept(votes[3], false) //TODO(upgrade) delete the ", false"
 	assert.Error(t, err)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[2]))
 
-	s, err = s.accept(votes[1])
+	s, err = s.accept(votes[1], false) //TODO(upgrade) delete the ", false"
 	assert.NoError(t, err)
 	assert.False(t, s.Frozen)
 	assert.True(t, s.Filled)
@@ -85,7 +85,7 @@ func TestProposalTrackerProposalSeeker(t *testing.T) {
 	assert.True(t, s.Filled)
 	assert.True(t, s.Lowest.equals(votes[1]))
 
-	s, err = s.accept(votes[0])
+	s, err = s.accept(votes[0], false) //TODO(upgrade) delete the ", false"
 	assert.Error(t, err)
 	assert.True(t, s.Frozen)
 	assert.True(t, s.Filled)
@@ -266,6 +266,30 @@ func (s *proposalTrackerTestShadow) stage(pv proposalValue) {
 	s.outputs = append(s.outputs, res)
 }
 
+func (s *proposalTrackerTestShadow) stageWithCert(pv proposalValue) {
+	var req, res event
+
+	// check staging
+	req = stagingValueEvent{}
+	res = stagingValueEvent{}
+	s.inputs = append(s.inputs, req)
+	s.outputs = append(s.outputs, res)
+
+	// deliver cert threshold
+	req = thresholdEvent{T: certThreshold, Proposal: pv}
+	res = proposalAcceptedEvent{Round: s.round, Period: s.period, Proposal: pv}
+	s.inputs = append(s.inputs, req)
+	s.outputs = append(s.outputs, res)
+	s.staged = true
+	s.staging = pv
+
+	// check staging
+	req = stagingValueEvent{}
+	res = stagingValueEvent{Proposal: pv}
+	s.inputs = append(s.inputs, req)
+	s.outputs = append(s.outputs, res)
+}
+
 // create many proposal-votes, sorted in increasing credential-order.
 func setupProposalTrackerTests(t *testing.T) (votes []vote) {
 	ledger, addrs, vrfs, ots := readOnlyFixture100()
@@ -406,6 +430,56 @@ func TestProposalTrackerBasic(t *testing.T) {
 		lowDelivery(shadow, "failed to track votes properly after staged")
 		midDelivery(shadow, "failed to track votes properly after staged")
 	})
+
+	t.Run("EarlyStagingCert", func(t *testing.T) {
+		targetCert := midvotes[0]
+		shadow := makeProposalTrackerTestShadow(votes[0].R.Round, votes[0].R.Period)
+
+		shadow.stageWithCert(targetCert.R.Proposal)
+		shadow.execute(t, "failed to deliver cert threshold properly")
+
+		highDelivery(shadow, "failed to track votes after staged")
+
+		shadow.freeze()
+		shadow.execute(t, "failed to freeze machine properly")
+
+		lowDelivery(shadow, "failed to track votes properly after staged")
+		midDelivery(shadow, "failed to track votes properly after staged")
+	})
+
+	t.Run("LateStagingCert", func(t *testing.T) {
+		targetCert := midvotes[0]
+		shadow := makeProposalTrackerTestShadow(votes[0].R.Round, votes[0].R.Period)
+
+		highDelivery(shadow, "failed to track votes properly at zero state")
+
+		shadow.freeze()
+		shadow.execute(t, "failed to freeze machine properly")
+
+		midDelivery(shadow, "failed to track votes properly after frozen (but not staged)")
+
+		shadow.stageWithCert(targetCert.R.Proposal)
+		shadow.execute(t, "failed to deliver soft threshold properly")
+
+		lowDelivery(shadow, "failed to track votes properly after staged")
+	})
+
+	t.Run("SynchronousCert", func(t *testing.T) {
+		targetCert := lowvotes[0]
+		shadow := makeProposalTrackerTestShadow(votes[0].R.Round, votes[0].R.Period)
+
+		midDelivery(shadow, "failed to track votes properly at zero state")
+		highDelivery(shadow, "failed to track votes properly at zero state")
+		lowDelivery(shadow, "failed to track votes properly at zero state")
+
+		shadow.freeze()
+		shadow.execute(t, "failed to freeze machine properly")
+
+		shadow.stageWithCert(targetCert.R.Proposal)
+		shadow.execute(t, "failed to deliver cert threshold properly")
+
+	})
+
 }
 
 //   func TestProposalTrackerSenderSpam(t *testing.T) {

@@ -21,7 +21,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
+	"sync"
+	"sync/atomic"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
@@ -51,7 +56,7 @@ type genesisAllocation struct {
 }
 
 // GenerateGenesisFiles generates the genesis.json file and wallet files for a give genesis configuration.
-func GenerateGenesisFiles(genesisData GenesisData, outDir string, verbose bool) error {
+func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusProtocols, outDir string, verbose bool) error {
 	err := os.Mkdir(outDir, os.ModeDir|os.FileMode(0777))
 	if err != nil && os.IsNotExist(err) {
 		return fmt.Errorf("couldn't make output directory '%s': %v", outDir, err.Error())
@@ -93,127 +98,183 @@ func GenerateGenesisFiles(genesisData GenesisData, outDir string, verbose bool) 
 		genesisData.RewardsPool = defaultPoolAddr
 	}
 
-	return generateGenesisFiles(outDir, proto, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.PartKeyDilution, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment, verbose)
+	consensusParams, ok := consensus[proto]
+	if !ok {
+		return fmt.Errorf("protocol %s not supported", proto)
+	}
+
+	return generateGenesisFiles(outDir, proto, consensusParams, genesisData.NetworkName, genesisData.VersionModifier, allocation, genesisData.FirstPartKeyRound, genesisData.LastPartKeyRound, genesisData.PartKeyDilution, genesisData.FeeSink, genesisData.RewardsPool, genesisData.Comment, verbose)
 }
 
-func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netName string, schemaVersionModifier string,
+func generateGenesisFiles(outDir string, protoVersion protocol.ConsensusVersion, protoParams config.ConsensusParams, netName string, schemaVersionModifier string,
 	allocation []genesisAllocation, firstWalletValid uint64, lastWalletValid uint64, partKeyDilution uint64, feeSink, rewardsPool basics.Address, comment string, verbose bool) (err error) {
 
 	genesisAddrs := make(map[string]basics.Address)
 	records := make(map[string]basics.AccountData)
 
-	params, ok := config.Consensus[proto]
-	if !ok {
-		return fmt.Errorf("protocol %s not supported", proto)
-	}
 	if partKeyDilution == 0 {
-		partKeyDilution = params.DefaultKeyDilution
+		partKeyDilution = protoParams.DefaultKeyDilution
 	}
 
 	// Sort account names alphabetically
 	sort.SliceStable(allocation, func(i, j int) bool {
 		return allocation[i].Name < allocation[j].Name
 	})
-	rootKeyCreated := 0
-	partKeyCreated := 0
+	rootKeyCreated := int64(0)
+	partKeyCreated := int64(0)
+
+	pendingWallets := make(chan genesisAllocation, len(allocation))
+
+	concurrentWalletGenerators := runtime.NumCPU() * 2
+	errorsChannel := make(chan error, concurrentWalletGenerators)
+	verbosedOutput := make(chan string)
+	var creatingWalletsWaitGroup sync.WaitGroup
+	var writeMu deadlock.Mutex
+
+	createWallet := func() {
+		var err error
+		defer creatingWalletsWaitGroup.Done()
+		for {
+			var wallet genesisAllocation
+			select {
+			case wallet = <-pendingWallets:
+			default:
+				return
+			}
+			var root account.Root
+			var part account.Participation
+
+			wfilename := filepath.Join(outDir, config.RootKeyFilename(wallet.Name))
+			pfilename := filepath.Join(outDir, config.PartKeyFilename(wallet.Name, firstWalletValid, lastWalletValid))
+
+			root, rootDB, rootkeyErr := loadRootKey(wfilename)
+			if rootkeyErr != nil && !os.IsNotExist(rootkeyErr) {
+				errorsChannel <- rootkeyErr
+				return
+			}
+
+			part, partDB, partkeyErr := loadPartKeys(pfilename)
+			if partkeyErr != nil && !os.IsNotExist(partkeyErr) && partkeyErr != account.ErrUnsupportedSchema {
+				errorsChannel <- partkeyErr
+				return
+			}
+
+			if rootkeyErr == nil && partkeyErr == nil {
+				if verbose {
+					verbosedOutput <- fmt.Sprintln("Reusing existing wallet:", wfilename, pfilename)
+				}
+			} else {
+				// At this point either rootKeys is valid or rootkeyErr != nil
+				// Likewise, either partkey is valid or partkeyErr != nil
+				if rootkeyErr != nil {
+					os.Remove(wfilename)
+
+					rootDB, err = db.MakeErasableAccessor(wfilename)
+					if err != nil {
+						err = fmt.Errorf("couldn't open root DB accessor %s: %v", wfilename, err)
+					} else {
+						root, err = account.GenerateRoot(rootDB)
+					}
+					if err != nil {
+						os.Remove(wfilename)
+						errorsChannel <- err
+						return
+					}
+					if verbose {
+						verbosedOutput <- fmt.Sprintf("Created new rootkey: %s", wfilename)
+					}
+					atomic.AddInt64(&rootKeyCreated, 1)
+				}
+
+				if partkeyErr != nil && wallet.Online == basics.Online {
+					os.Remove(pfilename)
+
+					partDB, err = db.MakeErasableAccessor(pfilename)
+					if err != nil {
+						err = fmt.Errorf("couldn't open participation DB accessor %s: %v", pfilename, err)
+						os.Remove(pfilename)
+						errorsChannel <- err
+						return
+					}
+
+					part, err = account.FillDBWithParticipationKeys(partDB, root.Address(), basics.Round(firstWalletValid), basics.Round(lastWalletValid), partKeyDilution)
+					if err != nil {
+						err = fmt.Errorf("could not generate new participation file %s: %v", pfilename, err)
+						os.Remove(pfilename)
+						errorsChannel <- err
+						return
+					}
+					if verbose {
+						verbosedOutput <- fmt.Sprintf("Created new partkey: %s", pfilename)
+					}
+					atomic.AddInt64(&partKeyCreated, 1)
+				}
+			}
+
+			var data basics.AccountData
+			data.Status = wallet.Online
+			data.MicroAlgos.Raw = wallet.Stake
+			if wallet.Online == basics.Online {
+				data.VoteID = part.VotingSecrets().OneTimeSignatureVerifier
+				data.SelectionID = part.VRFSecrets().PK
+				data.VoteFirstValid = part.FirstValid
+				data.VoteLastValid = part.LastValid
+				data.VoteKeyDilution = part.KeyDilution
+			}
+
+			writeMu.Lock()
+			records[wallet.Name] = data
+
+			genesisAddrs[wallet.Name] = root.Address()
+			writeMu.Unlock()
+
+			rootDB.Close()
+			if wallet.Online == basics.Online {
+				partDB.Close()
+			}
+		}
+	}
 
 	for _, wallet := range allocation {
-		var root account.Root
-		var part account.Participation
+		pendingWallets <- wallet
+	}
 
-		wfilename := filepath.Join(outDir, config.RootKeyFilename(wallet.Name))
-		pfilename := filepath.Join(outDir, config.PartKeyFilename(wallet.Name, firstWalletValid, lastWalletValid))
-
-		root, rootDB, rootkeyErr := loadRootKey(wfilename)
-		if rootkeyErr != nil && !os.IsNotExist(rootkeyErr) {
-			return rootkeyErr
-		}
-
-		part, partDB, partkeyErr := loadPartKeys(pfilename)
-		if partkeyErr != nil && !os.IsNotExist(partkeyErr) && partkeyErr != account.ErrUnsupportedSchema {
-			return partkeyErr
-		}
-
-		if rootkeyErr == nil && partkeyErr == nil {
-			if verbose {
-				fmt.Println("Reusing existing wallet:", wfilename, pfilename)
+	if verbose {
+		// create a listener for the verbosedOutput
+		go func() {
+			for textOut := range verbosedOutput {
+				fmt.Printf("%s\n", textOut)
 			}
-		} else {
-			// At this point either rootKeys is valid or rootkeyErr != nil
-			// Likewise, either partkey is valid or partkeyErr != nil
-			if rootkeyErr != nil {
-				os.Remove(wfilename)
+		}()
+	}
 
-				rootDB, err = db.MakeErasableAccessor(wfilename)
-				if err != nil {
-					err = fmt.Errorf("couldn't open root DB accessor %s: %v", wfilename, err)
-				} else {
-					root, err = account.GenerateRoot(rootDB)
-				}
-				if err != nil {
-					os.Remove(wfilename)
-					return
-				}
-				if verbose {
-					fmt.Printf("Created new rootkey: %s\n", wfilename)
-				}
-				rootKeyCreated++
-			}
+	creatingWalletsWaitGroup.Add(concurrentWalletGenerators)
+	for routinesCounter := 0; routinesCounter < concurrentWalletGenerators; routinesCounter++ {
+		go createWallet()
+	}
 
-			if partkeyErr != nil && wallet.Online == basics.Online {
-				os.Remove(pfilename)
+	// wait until all goroutines are done.
+	creatingWalletsWaitGroup.Wait()
 
-				partDB, err = db.MakeErasableAccessor(pfilename)
-				if err != nil {
-					err = fmt.Errorf("couldn't open participation DB accessor %s: %v", pfilename, err)
-					os.Remove(pfilename)
-					return
-				}
+	close(verbosedOutput)
 
-				part, err = account.FillDBWithParticipationKeys(partDB, root.Address(), basics.Round(firstWalletValid), basics.Round(lastWalletValid), partKeyDilution)
-				if err != nil {
-					err = fmt.Errorf("could not generate new participation file %s: %v", pfilename, err)
-					os.Remove(pfilename)
-					return
-				}
-				if verbose {
-					fmt.Printf("Created new partkey: %s\n", pfilename)
-				}
-				partKeyCreated++
-			}
-		}
-
-		var data basics.AccountData
-		data.Status = wallet.Online
-		data.MicroAlgos.Raw = wallet.Stake
-		if wallet.Online == basics.Online {
-			data.VoteID = part.VotingSecrets().OneTimeSignatureVerifier
-			data.SelectionID = part.VRFSecrets().PK
-			data.VoteFirstValid = part.FirstValid
-			data.VoteLastValid = part.LastValid
-			data.VoteKeyDilution = part.KeyDilution
-		}
-
-		records[wallet.Name] = data
-
-		genesisAddrs[wallet.Name] = root.Address()
-
-		rootDB.Close()
-		if wallet.Online == basics.Online {
-			partDB.Close()
-		}
+	// check to see if we had any errors.
+	select {
+	case err := <-errorsChannel:
+		return err
+	default:
 	}
 
 	genesisAddrs["FeeSink"] = feeSink
 	genesisAddrs["RewardsPool"] = rewardsPool
 
 	if verbose {
-		fmt.Println(proto, config.Consensus[proto].MinBalance)
+		fmt.Println(protoVersion, protoParams.MinBalance)
 	}
 
 	records["FeeSink"] = basics.AccountData{
 		Status:     basics.NotParticipating,
-		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[proto].MinBalance},
+		MicroAlgos: basics.MicroAlgos{Raw: protoParams.MinBalance},
 	}
 	records["RewardsPool"] = basics.AccountData{
 		Status:     basics.NotParticipating,
@@ -222,7 +283,7 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 
 	sinkAcct := genesisAllocation{
 		Name:   "FeeSink",
-		Stake:  config.Consensus[proto].MinBalance,
+		Stake:  protoParams.MinBalance,
 		Online: basics.NotParticipating,
 	}
 	poolAcct := genesisAllocation{
@@ -238,7 +299,7 @@ func generateGenesisFiles(outDir string, proto protocol.ConsensusVersion, netNam
 
 	g := bookkeeping.Genesis{
 		SchemaID:    schemaID + schemaVersionModifier,
-		Proto:       proto,
+		Proto:       protoVersion,
 		Network:     protocol.NetworkID(netName),
 		Timestamp:   0,
 		FeeSink:     feeSink.String(),

@@ -36,7 +36,7 @@ type txTail struct {
 
 	lastValid map[basics.Round]map[transactions.Txid]struct{} // map tx.LastValid -> tx confirmed set
 
-	// duplicate detection queries with LastValid not before
+	// duplicate detection queries with LastValid before
 	// lowWaterMark are not guaranteed to succeed
 	lowWaterMark basics.Round // the last round known to be committed to disk
 }
@@ -128,7 +128,14 @@ func (t *txTail) isDup(proto config.ConsensusParams, current basics.Round, first
 	}
 
 	if proto.SupportTransactionLeases && (txl.lease != [32]byte{}) {
-		for rnd := firstValid; rnd <= lastValid; rnd++ {
+		firstChecked := firstValid
+		lastChecked := lastValid
+		if proto.FixTransactionLeases {
+			firstChecked = current.SubSaturate(basics.Round(proto.MaxTxnLife))
+			lastChecked = current
+		}
+
+		for rnd := firstChecked; rnd <= lastChecked; rnd++ {
 			expires, ok := t.recent[rnd].txleases[txl]
 			if ok && current <= expires {
 				return true, nil
