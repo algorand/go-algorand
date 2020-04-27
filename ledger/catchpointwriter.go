@@ -260,7 +260,7 @@ func (cw *catchpointWriter) readHeaderFromDatabase(tx *sql.Tx) (err error) {
 	if err != nil {
 		return
 	}
-	header.TotalChunks = (header.TotalAccounts + balancesChunkReadSize) / balancesChunkReadSize
+	header.TotalChunks = (header.TotalAccounts + balancesChunkReadSize - 1) / balancesChunkReadSize
 	header.BlocksRound = cw.blocksRound
 	header.Catchpoint = cw.label
 	header.Version = initialVersion
