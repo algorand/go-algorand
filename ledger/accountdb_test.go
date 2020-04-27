@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"database/sql"
-	//"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
