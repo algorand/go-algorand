@@ -262,7 +262,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		return err
 	}
 
-	au.accountsq, err = accountsDbInit(au.dbs.rdb.Handle)
+	au.accountsq, err = accountsDbInit(au.dbs.rdb.Handle, au.dbs.wdb.Handle)
 	if err != nil {
 		au.accountsMu.Unlock()
 		return err

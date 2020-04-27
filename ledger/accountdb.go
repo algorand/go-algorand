@@ -81,6 +81,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS assetcreators`,
 	`DROP TABLE IF EXISTS storedcatchpoints`,
 	`DROP TABLE IF EXISTS catchpointstate`,
+	// the accounthashes is intentionally not here.
 }
 
 type accountDelta struct {
@@ -280,36 +281,36 @@ func accountsRound(tx *sql.Tx) (rnd basics.Round, err error) {
 	return
 }
 
-func accountsDbInit(q db.Queryable) (*accountsDbQueries, error) {
+func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) {
 	var err error
 	qs := &accountsDbQueries{}
 
-	qs.listAssetsStmt, err = q.Prepare("SELECT asset, creator FROM assetcreators WHERE asset <= ? ORDER BY asset desc LIMIT ?")
+	qs.listAssetsStmt, err = r.Prepare("SELECT asset, creator FROM assetcreators WHERE asset <= ? ORDER BY asset desc LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.lookupStmt, err = q.Prepare("SELECT data FROM accountbase WHERE address=?")
+	qs.lookupStmt, err = r.Prepare("SELECT data FROM accountbase WHERE address=?")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.lookupAssetCreatorStmt, err = q.Prepare("SELECT creator FROM assetcreators WHERE asset=?")
+	qs.lookupAssetCreatorStmt, err = r.Prepare("SELECT creator FROM assetcreators WHERE asset=?")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.deleteStoredCatchpoint, err = q.Prepare("DELETE FROM storedcatchpoints WHERE round=?")
+	qs.deleteStoredCatchpoint, err = w.Prepare("DELETE FROM storedcatchpoints WHERE round=?")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.insertStoredCatchpoint, err = q.Prepare("INSERT INTO storedcatchpoints(round, filename, catchpoint, filesize, pinned) VALUES(?, ?, ?, ?, 0)")
+	qs.insertStoredCatchpoint, err = w.Prepare("INSERT INTO storedcatchpoints(round, filename, catchpoint, filesize, pinned) VALUES(?, ?, ?, ?, 0)")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.selectOldestsCatchpointFiles, err = q.Prepare("SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?")
+	qs.selectOldestsCatchpointFiles, err = r.Prepare("SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
