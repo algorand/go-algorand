@@ -447,7 +447,7 @@ func init() {
 	params = testParams{
 		testType: "app",
 		name:     "big-hashes",
-		program:  genBigHashes(10, 625),
+		program:  genBigHashes(10, 344),
 	}
 	testCases[params.name] = params
 }

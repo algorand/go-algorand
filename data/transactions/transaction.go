@@ -377,12 +377,12 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("clear state program too long. max len %d bytes", proto.MaxClearStateProgramLen)
 		}
 
-		if tx.LocalStateSchema.NumEntries() > proto.MaxSchemaEntries {
-			return fmt.Errorf("tx.LocalStateSchema too large, max number of keys is %d", proto.MaxSchemaEntries)
+		if tx.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {
+			return fmt.Errorf("tx.LocalStateSchema too large, max number of keys is %d", proto.MaxLocalSchemaEntries)
 		}
 
-		if tx.GlobalStateSchema.NumEntries() > proto.MaxSchemaEntries {
-			return fmt.Errorf("tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxSchemaEntries)
+		if tx.GlobalStateSchema.NumEntries() > proto.MaxGlobalSchemaEntries {
+			return fmt.Errorf("tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxGlobalSchemaEntries)
 		}
 	default:
 		return fmt.Errorf("unknown tx type %v", tx.Type)
