@@ -305,6 +305,74 @@ func genBigHashes(numHashes int, numPad int, hash string) []byte {
 	return progBytes
 }
 
+func genMaxClone(numKeys int) []byte {
+	// goto flip if first key exists
+	flipBranch := `
+		int 0  // current app id
+		int 1  // key
+		itob
+		app_global_get
+		bnz flip
+	`
+
+	writePrefix := `
+		write:
+		int 0
+	`
+
+	writeBlock := `
+		int 1
+		+
+		dup
+		itob
+		dup
+		app_global_put
+	`
+
+	writeSuffix := `
+		int 1
+		return
+	`
+
+	// flip stored value's low bit
+	flipPrefix := `
+		flip:
+		btoi
+		int 1
+		^
+		itob
+		store 0
+		int 1
+		itob
+		load 0
+		app_global_put
+	`
+
+	flipSuffix := `
+		int 1
+		return
+	`
+
+	// generate assembly
+	var progParts []string
+	progParts = append(progParts, flipBranch)
+	progParts = append(progParts, writePrefix)
+	for i := 0; i < numKeys; i++ {
+		progParts = append(progParts, writeBlock)
+	}
+	progParts = append(progParts, writeSuffix)
+	progParts = append(progParts, flipPrefix)
+	progParts = append(progParts, flipSuffix)
+	progAsm := strings.Join(progParts, "\n")
+
+	// assemble
+	progBytes, err := logic.AssembleString(progAsm)
+	if err != nil {
+		panic(err)
+	}
+	return progBytes
+}
+
 func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (appParams map[uint64]v1.AppParams, err error) {
 	// get existing apps
 	account, accountErr := client.AccountInformation(cfg.SrcAccount)
@@ -330,17 +398,18 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 		var prog []byte
 		switch cfg.AppProgOps {
 		case 10:
-			prog = genBigHashes(19, 30, "sha256")
+			prog = genMaxClone(16)
 		case 200:
-			prog = genBigHashes(15, 20, "sha512_256")
+			prog = genMaxClone(32)
 		case 696:
-			prog = genBigHashes(5, 44, "keccak256")
+			prog = genMaxClone(64)
 		default:
 			panic("unexpected AppProgOps")
 		}
 
-		schema := basics.StateSchema{}
-		tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, schema, schema, nil, nil, nil)
+		globSchema := basics.StateSchema{NumByteSlice: 64}
+		locSchema := basics.StateSchema{}
+		tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil)
 		if err != nil {
 			fmt.Printf("Cannot create app txn\n")
 			return
