@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -93,7 +94,7 @@ func (i *blockFactoryImpl) AssembleBlock(round basics.Round, deadline time.Time)
 
 	newEmptyBlk := bookkeeping.MakeBlock(prev)
 
-	eval, err := i.l.StartEvaluator(newEmptyBlk.BlockHeader, i.tp, i.verificationPool)
+	eval, err := i.l.StartEvaluator(newEmptyBlk.BlockHeader)
 	if err != nil {
 		return nil, fmt.Errorf("could not make proposals at round %d: could not start evaluator: %v", round, err)
 	}
@@ -142,41 +143,42 @@ func (vb validatedBlock) Block() bookkeeping.Block {
 type agreementLedger struct {
 	*data.Ledger
 	UnmatchedPendingCertificates chan catchup.PendingUnmatchedCertificate
+	n                            network.GossipNode
 }
 
-func makeAgreementLedger(ledger *data.Ledger) agreementLedger {
+func makeAgreementLedger(ledger *data.Ledger, net network.GossipNode) agreementLedger {
 	return agreementLedger{
 		Ledger:                       ledger,
 		UnmatchedPendingCertificates: make(chan catchup.PendingUnmatchedCertificate, 1),
+		n:                            net,
 	}
 }
 
 // EnsureBlock implements agreement.LedgerWriter.EnsureBlock.
 func (l agreementLedger) EnsureBlock(e bookkeeping.Block, c agreement.Certificate) {
 	l.Ledger.EnsureBlock(&e, c)
+	// let the network know that we've made some progress.
+	l.n.OnNetworkAdvance()
 }
 
 // EnsureValidatedBlock implements agreement.LedgerWriter.EnsureValidatedBlock.
 func (l agreementLedger) EnsureValidatedBlock(ve agreement.ValidatedBlock, c agreement.Certificate) {
 	l.Ledger.EnsureValidatedBlock(ve.(validatedBlock).vb, c)
+	// let the network know that we've made some progress.
+	l.n.OnNetworkAdvance()
 }
 
 // EnsureDigest implements agreement.LedgerWriter.EnsureDigest.
-func (l agreementLedger) EnsureDigest(cert agreement.Certificate, quit chan struct{}, verifier *agreement.AsyncVoteVerifier) {
-	certRoundReachedCh := l.Wait(cert.Round)
+func (l agreementLedger) EnsureDigest(cert agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
+	// let the network know that we've made some progress.
+	// this might be controverasl since we haven't received the entire block, but we did get the
+	// certificate, which means that network connections are likely to be just fine.
+	l.n.OnNetworkAdvance()
+
 	// clear out the pending certificates ( if any )
 	select {
 	case pendingCert := <-l.UnmatchedPendingCertificates:
 		logging.Base().Debugf("agreementLedger.EnsureDigest has flushed out pending request for certificate for round %d in favor of recent certificate for round %d", pendingCert.Cert.Round, cert.Round)
-	default:
-	}
-
-	// if the quit channel is closed, we want to exit here before placing the request on the UnmatchedPendingCertificates
-	// channel.
-	select {
-	case <-quit:
-		logging.Base().Debugf("EnsureDigest was asked to quit before we enqueue the certificate request")
-		return
 	default:
 	}
 
@@ -185,21 +187,5 @@ func (l agreementLedger) EnsureDigest(cert agreement.Certificate, quit chan stru
 	// 2. we just cleared a single item off this channel ( if there was any )
 	// 3. the EnsureDigest method is being called with the agreeement service guarantee
 	// 4. no other senders to this channel exists
-	// we want to have this as a select statement to check if we neeed to exit before enqueueing the task to the catchup service.
 	l.UnmatchedPendingCertificates <- catchup.PendingUnmatchedCertificate{Cert: cert, VoteVerifier: verifier}
-
-	defer func() {
-		// clear out the content of the UnmatchedPendingCertificates channel if we somehow managed to get this round aquired by a different method ( i.e. regular catchup )
-		select {
-		case <-l.UnmatchedPendingCertificates:
-		default:
-		}
-	}()
-
-	select {
-	case <-quit:
-		logging.Base().Debugf("EnsureDigest was asked to quit before we could acquire the block")
-	case <-certRoundReachedCh:
-		// great! we've reached the desired round.
-	}
 }

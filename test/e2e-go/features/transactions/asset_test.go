@@ -19,7 +19,6 @@ package transactions
 import (
 	"fmt"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -420,9 +419,6 @@ func TestAssetConfig(t *testing.T) {
 }
 
 func TestAssetInformation(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	t.Parallel()
 	a := require.New(t)
 
@@ -640,9 +636,6 @@ func TestAssetGroupCreateSendDestroy(t *testing.T) {
 }
 
 func TestAssetSend(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	t.Parallel()
 	a := require.New(t)
 
@@ -890,7 +883,7 @@ func TestAssetSend(t *testing.T) {
 }
 
 func TestAssetCreateWaitRestartDelete(t *testing.T) {
-	a, fixture, client, account0 := setupTestAndNetwork(t, "")
+	a, fixture, client, account0 := setupTestAndNetwork(t, "", nil)
 	defer fixture.Shutdown()
 
 	// There should be no assets to start with
@@ -954,7 +947,25 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	a, fixture, client, account0 := setupTestAndNetwork(t, "TwoNodes50EachTestShorterLookback.json")
+	configurableConsensus := make(config.ConsensusProtocols)
+
+	consensusVersion := protocol.ConsensusVersion("test-shorter-lookback")
+
+	// Setting the testShorterLookback parameters derived from ConsensusCurrentVersion
+	// Will result in MaxBalLookback = 32
+	// Used to run tests faster where past MaxBalLookback values are checked
+	consensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	consensusParams.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
+	// MaxBalLookback  =  2 x SeedRefreshInterval x SeedLookback
+	// ref. https://github.com/algorandfoundation/specs/blob/master/dev/abft.md
+	consensusParams.SeedLookback = 2
+	consensusParams.SeedRefreshInterval = 8
+	consensusParams.MaxBalLookback = 2 * consensusParams.SeedLookback * consensusParams.SeedRefreshInterval // 32
+
+	configurableConsensus[consensusVersion] = consensusParams
+
+	a, fixture, client, account0 := setupTestAndNetwork(t, "TwoNodes50EachTestShorterLookback.json", configurableConsensus)
 	defer fixture.Shutdown()
 
 	// There should be no assets to start with
@@ -1018,7 +1029,7 @@ func TestAssetCreateWaitBalLookbackDelete(t *testing.T) {
 /** Helper functions **/
 
 // Setup the test and the network
-func setupTestAndNetwork(t *testing.T, networkTemplate string) (
+func setupTestAndNetwork(t *testing.T, networkTemplate string, consensus config.ConsensusProtocols) (
 	Assertions *require.Assertions, Fixture *fixtures.RestClientFixture, Client *libgoal.Client, Account0 string) {
 
 	t.Parallel()
@@ -1028,6 +1039,9 @@ func setupTestAndNetwork(t *testing.T, networkTemplate string) (
 		networkTemplate = "TwoNodes50Each.json"
 	}
 	var fixture fixtures.RestClientFixture
+	if consensus != nil {
+		fixture.SetConsensus(consensus)
+	}
 	fixture.Setup(t, filepath.Join("nettemplates", networkTemplate))
 	accountList, err := fixture.GetWalletsSortedByBalance()
 	asser.NoError(err)

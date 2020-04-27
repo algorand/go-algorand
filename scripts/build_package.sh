@@ -33,6 +33,7 @@ if [ ! -d "${PKG_ROOT}" ]; then
 fi
 
 export GOPATH=$(go env GOPATH)
+export GOPATHBIN=${GOPATH%%:*}/bin
 REPO_DIR=$(pwd)
 
 echo "Building package for '${OS} - ${ARCH}'"
@@ -59,7 +60,7 @@ mkdir ${PKG_ROOT}/bin
 # If you modify this list, also update this list in ./cmd/updater/update.sh backup_binaries()
 bin_files=("algocfg" "algod" "algoh" "algokey" "carpenter" "catchupsrv" "ddconfig.sh" "diagcfg" "find-nodes.sh" "goal" "kmd" "msgpacktool" "node_exporter" "update.sh" "updater" "COPYING")
 for bin in "${bin_files[@]}"; do
-    cp ${GOPATH}/bin/${bin} ${PKG_ROOT}/bin
+    cp ${GOPATHBIN}/${bin} ${PKG_ROOT}/bin
     if [ $? -ne 0 ]; then exit 1; fi
 done
 
@@ -87,7 +88,7 @@ if [ ! -z "${RELEASE_GENESIS_PROCESS}" ]; then
     for dir in "${genesis_dirs[@]}"; do
         mkdir -p ${PKG_ROOT}/genesis/${dir}
         cp ${REPO_DIR}/installer/genesis/${dir}/genesis.json ${PKG_ROOT}/genesis/${dir}/
-        #${GOPATH}/bin/buildtools genesis ensure -n ${dir} --source ${REPO_DIR}/gen/${dir}/genesis.json --target ${PKG_ROOT}/genesis/${dir}/genesis.json --releasedir ${REPO_DIR}/installer/genesis
+        #${GOPATHBIN}/buildtools genesis ensure -n ${dir} --source ${REPO_DIR}/gen/${dir}/genesis.json --target ${PKG_ROOT}/genesis/${dir}/genesis.json --releasedir ${REPO_DIR}/installer/genesis
         if [ $? -ne 0 ]; then exit 1; fi
     done
     # Copy the appropriate network genesis.json for our default (in root ./genesis folder)
@@ -95,7 +96,7 @@ if [ ! -z "${RELEASE_GENESIS_PROCESS}" ]; then
     if [ $? -ne 0 ]; then exit 1; fi
 elif [[ "${CHANNEL}" == "dev" || "${CHANNEL}" == "stable" || "${CHANNEL}" == "nightly" || "${CHANNEL}" == "beta" ]]; then
     cp ${REPO_DIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json ${PKG_ROOT}/genesis/
-    #${GOPATH}/bin/buildtools genesis ensure -n ${DEFAULTNETWORK} --source ${REPO_DIR}/gen/${DEFAULTNETWORK}/genesis.json --target ${PKG_ROOT}/genesis/genesis.json --releasedir ${REPO_DIR}/installer/genesis
+    #${GOPATHBIN}/buildtools genesis ensure -n ${DEFAULTNETWORK} --source ${REPO_DIR}/gen/${DEFAULTNETWORK}/genesis.json --target ${PKG_ROOT}/genesis/genesis.json --releasedir ${REPO_DIR}/installer/genesis
     if [ $? -ne 0 ]; then exit 1; fi
 else
     cp installer/genesis/${DEFAULTNETWORK}/genesis.json ${PKG_ROOT}/genesis
@@ -103,7 +104,7 @@ else
     #if [ -z "${TIMESTAMP}" ]; then
     #  TIMESTAMP=$(date +%s)
     #fi
-    #${GOPATH}/bin/buildtools genesis timestamp -f ${PKG_ROOT}/genesis/genesis.json -t ${TIMESTAMP}
+    #${GOPATHBIN}/buildtools genesis timestamp -f ${PKG_ROOT}/genesis/genesis.json -t ${TIMESTAMP}
 fi
 
 TOOLS_ROOT=${PKG_ROOT}/tools
@@ -113,7 +114,7 @@ echo "Staging tools package files"
 bin_files=("algons" "auctionconsole" "auctionmaster" "auctionminion" "coroner" "dispenser" "netgoal" "nodecfg" "pingpong" "cc_service" "cc_agent" "cc_client" "COPYING")
 mkdir -p ${TOOLS_ROOT}
 for bin in "${bin_files[@]}"; do
-    cp ${GOPATH}/bin/${bin} ${TOOLS_ROOT}
+    cp ${GOPATHBIN}/${bin} ${TOOLS_ROOT}
     if [ $? -ne 0 ]; then exit 1; fi
 done
 

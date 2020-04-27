@@ -286,6 +286,7 @@ func (l *Ledger) EnsureValidatedBlock(vb *ledger.ValidatedBlock, c agreement.Cer
 // EnsureBlock ensures that the block, and associated certificate c, are
 // written to the ledger, or that some other block for the same round is
 // written to the ledger.
+// This function can be called concurrently.
 func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) {
 	round := block.Round()
 	protocolErrorLogged := false

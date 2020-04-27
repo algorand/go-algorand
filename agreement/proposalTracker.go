@@ -19,6 +19,7 @@ package agreement
 import (
 	"fmt"
 
+	"github.com/algorand/go-algorand/config" // TODO(upgrade): Please remove this line after the upgrade goes through
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 )
@@ -37,14 +38,23 @@ type proposalSeeker struct {
 
 // accept compares a given vote with the current lowest-credentialled vote and
 // sets it if freeze has not been called.
-func (s proposalSeeker) accept(v vote) (proposalSeeker, error) {
+// TODO(upgrade): Please remove the "useBuggyLowestOutput" argument as soon as the protocol upgrade goes through
+func (s proposalSeeker) accept(v vote, useBuggyLowestOutput bool) (proposalSeeker, error) {
 	if s.Frozen {
 		return s, errProposalSeekerFrozen{}
 	}
 
-	if s.Filled && !v.Cred.Less(s.Lowest.Cred) {
-		return s, errProposalSeekerNotLess{NewSender: v.R.Sender, LowestSender: s.Lowest.R.Sender}
-	}
+	// TODO(upgrade): Please remove the lines below as soon as the upgrade goes through
+	if useBuggyLowestOutput {
+		if s.Filled && !v.Cred.LessBuggy(s.Lowest.Cred) {
+			return s, errProposalSeekerNotLess{NewSender: v.R.Sender, LowestSender: s.Lowest.R.Sender}
+		}
+	} else {
+		// TODO(upgrade): Please remove the lines above as soon as the upgrade goes through
+		if s.Filled && !v.Cred.Less(s.Lowest.Cred) {
+			return s, errProposalSeekerNotLess{NewSender: v.R.Sender, LowestSender: s.Lowest.R.Sender}
+		}
+	} // TODO(upgrade): Please remove this line when the upgrade goes through
 
 	s.Lowest = v
 	s.Filled = true
@@ -146,7 +156,7 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 		}
 
 		var err error
-		t.Freezer, err = t.Freezer.accept(v)
+		t.Freezer, err = t.Freezer.accept(v, config.Consensus[e.Proto.Version].UseBuggyProposalLowestOutput) // TODO(upgrade): Please remove the second argument as soon as the upgrade goes through
 		if err != nil {
 			err := errProposalTrackerPS{Sub: err}
 			return filteredEvent{T: voteFiltered, Err: makeSerErr(err)}
@@ -164,7 +174,7 @@ func (t *proposalTracker) handle(r routerHandle, p player, e event) event {
 		t.Freezer = t.Freezer.freeze()
 		return e
 
-	case softThreshold:
+	case softThreshold, certThreshold:
 		e := e.(thresholdEvent)
 		t.Staging = e.Proposal
 
@@ -208,7 +218,7 @@ type errProposalTrackerSenderDup struct {
 }
 
 func (err errProposalTrackerSenderDup) Error() string {
-	return fmt.Sprintf("proposalTracker: filtered vote: sender %v had already sent a vote in round %v period %v", err.Sender, err.Round, err.Period)
+	return fmt.Sprintf("proposalTracker: filtered vote: sender %v had already sent a vote in round %d period %d", err.Sender, err.Round, err.Period)
 
 }
 

@@ -190,7 +190,7 @@ func TestMultisigSign(t *testing.T) {
 	// Try to sign
 	req2 := kmdapi.APIV1POSTMultisigTransactionSignRequest{
 		WalletHandleToken: walletHandleToken,
-		Transaction:       protocol.Encode(tx),
+		Transaction:       protocol.Encode(&tx),
 		PublicKey:         pk1,
 		PartialMsig:       crypto.MultisigSig{},
 		WalletPassword:    f.WalletPassword,
@@ -206,7 +206,7 @@ func TestMultisigSign(t *testing.T) {
 	// Try to add another signature
 	req3 := kmdapi.APIV1POSTMultisigTransactionSignRequest{
 		WalletHandleToken: walletHandleToken,
-		Transaction:       protocol.Encode(tx),
+		Transaction:       protocol.Encode(&tx),
 		PublicKey:         pk2,
 		PartialMsig:       msig,
 		WalletPassword:    f.WalletPassword,
