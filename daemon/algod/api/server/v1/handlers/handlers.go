@@ -61,7 +61,7 @@ func getNodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
 		Catchpoint:                         stat.Catchpoint,
 		CatchpointCatchupTotalAccounts:     stat.CatchpointCatchupTotalAccounts,
 		CatchpointCatchupProcessedAccounts: stat.CatchpointCatchupProcessedAccounts,
-		CatchpointCatchupPendingBlocks:     stat.CatchpointCatchupPendingBlocks,
+		CatchpointCatchupTotalBlocks:       stat.CatchpointCatchupTotalBlocks,
 		CatchpointCatchupDownloadedBlocks:  stat.CatchpointCatchupDownloadedBlocks,
 	}, nil
 }

@@ -84,10 +84,10 @@ type NodeStatus struct {
 	// Required: false
 	CatchpointCatchupProcessedAccounts uint64 `json:"catchpointCatchupProcessedAccounts,omitempty"`
 
-	// CatchpointCatchupPendingBlocks indicates number of pending blocks to be downloaded
+	// CatchpointCatchupTotalBlocks indicates the total number of blocks to be downloaded
 	//
 	// Required: false
-	CatchpointCatchupPendingBlocks uint64 `json:"catchpointCatchupPendingBlocks,omitempty"`
+	CatchpointCatchupTotalBlocks uint64 `json:"catchpointCatchupTotalBlocks,omitempty"`
 
 	// CatchpointCatchupDownloadedBlocks indicates the total number of downloaded blocks
 	//

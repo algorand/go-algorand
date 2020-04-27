@@ -61,7 +61,7 @@ const (
 	catchupStoppedOnUnsupported       = "Last supported block (%d) is committed. The next block consensus protocol is not supported. Catchup service is stopped."
 	infoNodeCatchpointCatchupStatus   = "Last committed block: %d\nSync Time: %s\nCatchpoint: %s"
 	infoNodeCatchpointCatchupAccounts = "Catchpoint total accounts: %d\nCatchpoint accounts processed: %d"
-	infoNodeCatchpointCatchupBlocks   = "Catchpoint pending blocks: %d\nCatchpoint downloaded blocks: %d"
+	infoNodeCatchpointCatchupBlocks   = "Catchpoint total blocks: %d\nCatchpoint downloaded blocks: %d"
 	nodeLastCatchpoint                = "Last Catchpoint: %s"
 	errorNodeCreationIPFailure        = "Parsing passed IP %v failed: need a valid IPv4 or IPv6 address with a specified port number"
 	errorNodeNotDetected              = "Algorand node does not appear to be running: %s"

@@ -70,7 +70,7 @@ type StatusReport struct {
 	Catchpoint                         string // the catchpoint where we're currently catching up to. If the node isn't in fast catchup mode, it will be empty.
 	CatchpointCatchupTotalAccounts     uint64
 	CatchpointCatchupProcessedAccounts uint64
-	CatchpointCatchupPendingBlocks     uint64
+	CatchpointCatchupTotalBlocks       uint64
 	CatchpointCatchupDownloadedBlocks  uint64
 }
 
@@ -605,7 +605,7 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 		s.Catchpoint = stats.CatchpointLabel
 		s.CatchpointCatchupTotalAccounts = stats.TotalAccounts
 		s.CatchpointCatchupProcessedAccounts = stats.ProcessedAccounts
-		s.CatchpointCatchupPendingBlocks = stats.PendingBlocks
+		s.CatchpointCatchupTotalBlocks = stats.TotalBlocks
 		s.CatchpointCatchupDownloadedBlocks = stats.DownloadedBlocks
 		s.CatchupTime = time.Now().Sub(stats.StartTime)
 	} else {

@@ -162,6 +162,7 @@ func (c *CatchpointCatchupAccessor) ResetStagingBalances(ctx context.Context, ne
 type CatchpointCatchupAccessorProgress struct {
 	TotalAccounts     uint64
 	ProcessedAccounts uint64
+	ProcessedBytes    uint64
 	TotalChunks       uint64
 	SeenHeader        bool
 }
@@ -189,7 +190,7 @@ func (c *CatchpointCatchupAccessor) processStagingContent(ctx context.Context, b
 	if err != nil {
 		return err
 	}
-	if fileHeader.Version != initialVersion {
+	if fileHeader.Version != catchpointFileVersion {
 		return fmt.Errorf("unable to process catchpoint - version %d is not supported", fileHeader.Version)
 	}
 
@@ -267,8 +268,7 @@ func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, 
 			hash := accountHashBuilder(addr, accountData, balance.AccountData)
 			added, err := trie.Add(hash)
 			if !added {
-				panic("attempted to add duplicate hash '%v' to merkle trie.")
-				//c.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.", hash)
+				return fmt.Errorf("The provided catchpoint file contained the same account more than once. Account address %#v, account data %#v", addr, accountData)
 			}
 			if err != nil {
 				return err
@@ -282,6 +282,7 @@ func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, 
 	})
 	if err == nil {
 		progress.ProcessedAccounts += uint64(len(balances))
+		progress.ProcessedBytes += uint64(len(bytes))
 	}
 	return err
 }

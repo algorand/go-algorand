@@ -43,9 +43,10 @@ type CatchpointCatchupStats struct {
 	CatchpointLabel   string
 	TotalAccounts     uint64
 	ProcessedAccounts uint64
-	PendingBlocks     uint64
+	TotalBlocks       uint64
 	DownloadedBlocks  uint64
 	VerifiedBlocks    uint64
+	ProcessedBytes    uint64
 	StartTime         time.Time
 }
 
@@ -251,7 +252,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 			err = fmt.Errorf("catchpoint catchup exceeded number of attempts to retrieve ledger")
 			return cs.abort(err)
 		}
-		cs.log.Infof("unable to download ledger : %v", err)
+		cs.log.Warnf("unable to download ledger : %v", err)
 	}
 
 	err = cs.updateStage(ledger.CatchpointCatchupStateLastestBlockDownload)
@@ -357,7 +358,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	}
 
 	cs.statsMu.Lock()
-	cs.stats.PendingBlocks = uint64(lookback)
+	cs.stats.TotalBlocks = uint64(lookback)
 	cs.stats.DownloadedBlocks = 0
 	cs.stats.VerifiedBlocks = 0
 	cs.statsMu.Unlock()
@@ -372,7 +373,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		attemptsCount++
 
 		if err := cs.ctx.Err(); err != nil {
-			return err
+			return cs.abort(err)
 		}
 
 		blk = nil
@@ -434,9 +435,6 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		}
 		prevBlock = blk
 		blocksFetched++
-		cs.statsMu.Lock()
-		cs.stats.PendingBlocks--
-		cs.statsMu.Unlock()
 	}
 
 	err = cs.updateStage(ledger.CatchpointCatchupStateSwitch)
@@ -498,6 +496,7 @@ func (cs *CatchpointCatchupService) updateLedgerFetcherProgress(fetcherStats *le
 	defer cs.statsMu.Unlock()
 	cs.stats.TotalAccounts = fetcherStats.TotalAccounts
 	cs.stats.ProcessedAccounts = fetcherStats.ProcessedAccounts
+	cs.stats.ProcessedBytes = fetcherStats.ProcessedBytes
 }
 
 // GetStatistics returns a copy of the current catchpoint catchup statistics

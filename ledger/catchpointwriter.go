@@ -35,9 +35,17 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
+// balancesChunkReadSize defines the number of accounts that would be stored in each chunk in the catchpoint file.
+// note that the last chunk would typically be less than this number.
 const balancesChunkReadSize = 512
-const initialVersion = uint64(0200)
 
+// catchpointFileVersion is the catchpoint file version
+const catchpointFileVersion = uint64(0200)
+
+// catchpointWriter is the struct managing the persistance of accounts data into the catchpoint file.
+// it's designed to work in a step fashion : a caller will call the WriteStep method in a loop until
+// the writing is complete. It migth take multiple steps until the operation is over, and the caller
+// has the option of throtteling the CPU utilization in between the calls.
 type catchpointWriter struct {
 	hasher            hash.Hash
 	innerWriter       io.WriteCloser
@@ -263,7 +271,7 @@ func (cw *catchpointWriter) readHeaderFromDatabase(tx *sql.Tx) (err error) {
 	header.TotalChunks = (header.TotalAccounts + balancesChunkReadSize - 1) / balancesChunkReadSize
 	header.BlocksRound = cw.blocksRound
 	header.Catchpoint = cw.label
-	header.Version = initialVersion
+	header.Version = catchpointFileVersion
 	header.BlockHeaderDigest = cw.blockHeaderDigest
 	cw.fileHeader = &header
 	return
