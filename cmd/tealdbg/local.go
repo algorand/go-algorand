@@ -45,10 +45,10 @@ func protoFromString(protoString string) (name string, proto config.ConsensusPar
 	return
 }
 
-// txnGroupFromParams validates DebugParams.TxnBlob and DebugParams.GroupIndex.
+// txnGroupFromParams validates DebugParams.TxnBlob
 // DebugParams.TxnBlob parsed as JSON object, JSON array or MessagePack array of transactions.SignedTxn.
-// The function returns ready to use txnGroup and groupIndex, or error
-func txnGroupFromParams(dp *DebugParams) (txnGroup []transactions.SignedTxn, groupIndex int, err error) {
+// The function returns ready to use txnGroup or an error
+func txnGroupFromParams(dp *DebugParams) (txnGroup []transactions.SignedTxn, err error) {
 	if len(dp.TxnBlob) == 0 {
 		txnGroup = append(txnGroup, transactions.SignedTxn{})
 		return
@@ -60,24 +60,13 @@ func txnGroupFromParams(dp *DebugParams) (txnGroup []transactions.SignedTxn, gro
 	var txn transactions.SignedTxn
 	err = protocol.DecodeJSON(data, &txn)
 	if err == nil {
-		// groupIndex must be zero
-		if dp.GroupIndex != 0 {
-			err = fmt.Errorf("invalid group index %d for a single transaction", dp.GroupIndex)
-			return
-		}
 		txnGroup = append(txnGroup, txn)
-		groupIndex = 0
 		return
 	}
 
 	// 2. Attempt json - array of transactions
 	err = protocol.DecodeJSON(data, &txnGroup)
 	if err == nil {
-		if dp.GroupIndex >= len(txnGroup) {
-			err = fmt.Errorf("invalid group index %d for a txn transaction group of %d", dp.GroupIndex, len(txnGroup))
-			return
-		}
-		groupIndex = dp.GroupIndex
 		return
 	}
 
@@ -94,14 +83,6 @@ func txnGroupFromParams(dp *DebugParams) (txnGroup []transactions.SignedTxn, gro
 			break
 		}
 		txnGroup = append(txnGroup, txn)
-	}
-	if err == nil {
-		if dp.GroupIndex >= len(txnGroup) {
-			err = fmt.Errorf("invalid group index %d for a txn transaction group of %d", dp.GroupIndex, len(txnGroup))
-			return
-		}
-		groupIndex = dp.GroupIndex
-		return
 	}
 
 	return
@@ -148,113 +129,21 @@ func balanceRecordsFromParams(dp *DebugParams) (records []basics.BalanceRecord, 
 	return
 }
 
-type debugLedger struct {
-	round      int
-	balances   map[basics.Address]basics.AccountData
-	txnGroup   []transactions.SignedTxn
+// evaluation is a description of a single debugger run
+type evaluation struct {
+	program    []byte
 	groupIndex int
-}
-
-func (l *debugLedger) Balance(addr basics.Address) (basics.MicroAlgos, error) {
-	br, ok := l.balances[addr]
-	if !ok {
-		return basics.MicroAlgos{}, fmt.Errorf("no such address %s", addr.String())
-	}
-	return br.MicroAlgos, nil
-}
-
-func (l *debugLedger) Round() basics.Round {
-	return basics.Round(l.round)
-}
-
-func (l *debugLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error) {
-	var ap basics.AppParams
-	if appIdx == 0 {
-		if l.groupIndex >= len(l.txnGroup) {
-			return basics.TealKeyValue{}, fmt.Errorf("can't resolve application %d", appIdx)
-		}
-		appIdx = l.txnGroup[l.groupIndex].Txn.ApplicationID
-	}
-
-	allowed := false
-	if appIdx == l.txnGroup[l.groupIndex].Txn.ApplicationID {
-		allowed = true
-	} else {
-		for _, faIdx := range l.txnGroup[l.groupIndex].Txn.ForeignApps {
-			if appIdx == faIdx {
-				allowed = true
-				break
-			}
-		}
-	}
-	if !allowed {
-		return basics.TealKeyValue{}, fmt.Errorf("access to the app forbidden %d", appIdx)
-	}
-
-	for _, br := range l.balances {
-		var ok bool
-		ap, ok = br.AppParams[appIdx]
-		if ok {
-			return ap.GlobalState, nil
-		}
-
-	}
-	return basics.TealKeyValue{}, fmt.Errorf("no such application %d", appIdx)
-}
-
-func (l *debugLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error) {
-	if appIdx == 0 {
-		if l.groupIndex >= len(l.txnGroup) {
-			return basics.TealKeyValue{}, fmt.Errorf("can't resolve application %d", appIdx)
-		}
-		appIdx = l.txnGroup[l.groupIndex].Txn.ApplicationID
-	}
-
-	br, ok := l.balances[addr]
-	if !ok {
-		return basics.TealKeyValue{}, fmt.Errorf("no such address %s", addr.String())
-	}
-	ls, ok := br.AppLocalStates[appIdx]
-	if !ok {
-		return basics.TealKeyValue{}, fmt.Errorf("no local state for application %d", appIdx)
-	}
-	return ls.KeyValue, nil
-}
-
-func (l *debugLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {
-	br, ok := l.balances[addr]
-	if !ok {
-		return basics.AssetHolding{}, fmt.Errorf("no such address %s", addr.String())
-	}
-	ah, ok := br.Assets[assetIdx]
-	if !ok {
-		return basics.AssetHolding{}, fmt.Errorf("no such asset %d", assetIdx)
-	}
-	return ah, nil
-}
-
-func (l *debugLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error) {
-	br, ok := l.balances[addr]
-	if !ok {
-		return basics.AssetParams{}, fmt.Errorf("no such address %s", addr.String())
-	}
-	ap, ok := br.AssetParams[assetIdx]
-	if !ok {
-		return basics.AssetParams{}, fmt.Errorf("no such asset %d", assetIdx)
-	}
-	return ap, nil
+	eval       func(program []byte, ep logic.EvalParams) (bool, error)
+	ledger     *localLedger
 }
 
 // LocalRunner runs local eval
 type LocalRunner struct {
-	debugger   *Debugger
-	programs   [][]byte
-	proto      config.ConsensusParams
-	protoName  string
-	txnGroup   []transactions.SignedTxn
-	groupIndex int
-	ledger     *debugLedger
-	eval       func(program []byte, ep logic.EvalParams) (bool, error)
+	debugger  *Debugger
+	proto     config.ConsensusParams
+	protoName string
+	txnGroup  []transactions.SignedTxn
+	runs      []evaluation
 }
 
 // MakeLocalRunner creates LocalRunner
@@ -272,7 +161,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 	}
 	log.Printf("Using proto: %s", r.protoName)
 
-	r.txnGroup, r.groupIndex, err = txnGroupFromParams(dp)
+	r.txnGroup, err = txnGroupFromParams(dp)
 	if err != nil {
 		return
 	}
@@ -287,53 +176,149 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 		balances[record.Addr] = record.AccountData
 	}
 
-	r.ledger = &debugLedger{
-		round:      dp.Round,
-		balances:   balances,
-		txnGroup:   r.txnGroup,
-		groupIndex: r.groupIndex,
+	// if program(s) specified then run from it
+	if len(dp.ProgramBlobs) > 0 {
+		if len(r.txnGroup) == 1 && dp.GroupIndex != 0 {
+			err = fmt.Errorf("invalid group index %d for a single transaction", dp.GroupIndex)
+			return
+		}
+		if len(r.txnGroup) > 0 && dp.GroupIndex >= len(r.txnGroup) {
+			err = fmt.Errorf("invalid group index %d for a txn in a transaction group of %d", dp.GroupIndex, len(r.txnGroup))
+			return
+		}
+		groupIndex := dp.GroupIndex
+		ledger := &localLedger{
+			round:      dp.Round,
+			balances:   balances,
+			txnGroup:   r.txnGroup,
+			groupIndex: groupIndex,
+		}
+
+		var eval func(program []byte, ep logic.EvalParams) (bool, error)
+		switch dp.RunMode {
+		case "signature":
+			eval = logic.Eval
+		case "application":
+			eval = func(program []byte, ep logic.EvalParams) (bool, error) {
+				pass, _, err := logic.EvalStateful(program, ep)
+				return pass, err
+			}
+		default:
+			err = fmt.Errorf("unknown run mode")
+			return
+		}
+
+		r.runs = make([]evaluation, len(dp.ProgramBlobs))
+		for i, data := range dp.ProgramBlobs {
+			r.runs[i].program = data
+			if IsTextFile(data) {
+				r.runs[i].program, err = logic.AssembleStringWithVersion(string(data), r.proto.LogicSigVersion)
+				if err != nil {
+					return err
+				}
+			}
+			r.runs[i].groupIndex = groupIndex
+			r.runs[i].ledger = ledger
+			r.runs[i].eval = eval
+		}
+		return nil
 	}
 
-	r.programs = make([][]byte, len(dp.ProgramBlobs))
-	for i, data := range dp.ProgramBlobs {
-		r.programs[i] = data
-		if IsTextFile(data) {
-			r.programs[i], err = logic.AssembleStringWithVersion(string(data), r.proto.LogicSigVersion)
-			if err != nil {
-				return err
+	r.runs = nil
+	// otherwise, if no program(s) set, check transactions for TEAL programs
+	for gi, stxn := range r.txnGroup {
+		// make a new ledger per possible execution since it requires a current group index
+		ledger := localLedger{
+			round:      dp.Round,
+			balances:   balances,
+			txnGroup:   r.txnGroup,
+			groupIndex: gi,
+		}
+		if len(stxn.Lsig.Logic) > 0 {
+			run := evaluation{
+				program:    stxn.Lsig.Logic,
+				groupIndex: gi,
+				eval:       logic.Eval,
+				ledger:     &ledger,
+			}
+			r.runs = append(r.runs, run)
+		} else if stxn.Txn.Type == protocol.ApplicationCallTx {
+			eval := func(program []byte, ep logic.EvalParams) (bool, error) {
+				pass, _, err := logic.EvalStateful(program, ep)
+				return pass, err
+			}
+			appIdx := stxn.Txn.ApplicationID
+			if appIdx == 0 { // app create, use ApprovalProgram from the transaction
+				if len(stxn.Txn.ApprovalProgram) > 0 {
+					run := evaluation{
+						program:    stxn.Txn.ApprovalProgram,
+						groupIndex: gi,
+						eval:       eval,
+						ledger:     &ledger,
+					}
+					r.runs = append(r.runs, run)
+				}
+			} else {
+				// attempt to find this appIdx in balance records provided
+				// and error if it is not there
+				found := false
+				for _, rec := range records {
+					for a, ap := range rec.AppParams {
+						if a == appIdx {
+							var program []byte
+							if stxn.Txn.OnCompletion == transactions.ClearStateOC {
+								program = ap.ClearStateProgram
+							} else {
+								program = ap.ApprovalProgram
+							}
+							if len(program) == 0 {
+								err = fmt.Errorf("empty program found for app idx %d", appIdx)
+								return
+							}
+							run := evaluation{
+								program:    program,
+								groupIndex: gi,
+								eval:       eval,
+								ledger:     &ledger,
+							}
+							r.runs = append(r.runs, run)
+							found = true
+							break
+						}
+					}
+				}
+				if !found {
+					err = fmt.Errorf("no program found for app idx %d", appIdx)
+					return
+				}
 			}
 		}
 	}
 
-	switch dp.RunMode {
-	case "signature":
-		r.eval = logic.Eval
-	case "application":
-		r.eval = func(program []byte, ep logic.EvalParams) (bool, error) {
-			pass, _, err := logic.EvalStateful(program, ep)
-			return pass, err
-		}
-	default:
-		err = fmt.Errorf("unknown run mode")
-		return
+	if len(r.runs) == 0 {
+		err = fmt.Errorf("no programs found in transactions")
 	}
 
-	return nil
+	return
 }
 
 // RunAll runs all the programs
 func (r *LocalRunner) RunAll() error {
-	ep := logic.EvalParams{
-		Proto:      &r.proto,
-		Debugger:   r.debugger,
-		Txn:        &r.txnGroup[groupIndex],
-		TxnGroup:   r.txnGroup,
-		GroupIndex: r.groupIndex,
-		Ledger:     r.ledger,
+	if len(r.runs) < 1 {
+		return fmt.Errorf("no program to debug")
 	}
 
-	for _, program := range r.programs {
-		_, err := r.eval(program, ep)
+	for _, run := range r.runs {
+		ep := logic.EvalParams{
+			Proto:      &r.proto,
+			Debugger:   r.debugger,
+			Txn:        &r.txnGroup[groupIndex],
+			TxnGroup:   r.txnGroup,
+			GroupIndex: run.groupIndex,
+			Ledger:     run.ledger,
+		}
+
+		_, err := run.eval(run.program, ep)
 		if err != nil {
 			return err
 		}
@@ -343,12 +328,18 @@ func (r *LocalRunner) RunAll() error {
 
 // Run starts the first program in list
 func (r *LocalRunner) Run() (bool, error) {
+	if len(r.runs) < 1 {
+		return false, fmt.Errorf("no program to debug")
+	}
+
+	run := r.runs[0]
+
 	ep := logic.EvalParams{
 		Proto:      &r.proto,
 		Txn:        &r.txnGroup[groupIndex],
 		TxnGroup:   r.txnGroup,
-		GroupIndex: r.groupIndex,
-		Ledger:     r.ledger,
+		GroupIndex: run.groupIndex,
+		Ledger:     run.ledger,
 	}
 
 	// Workaround for Go's nil/empty interfaces nil check after nil assignment, i.e.
@@ -359,9 +350,5 @@ func (r *LocalRunner) Run() (bool, error) {
 		ep.Debugger = r.debugger
 	}
 
-	if len(r.programs) < 1 {
-		return false, fmt.Errorf("no program to debug")
-	}
-
-	return r.eval(r.programs[0], ep)
+	return run.eval(run.program, ep)
 }
