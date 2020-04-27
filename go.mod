@@ -44,8 +44,7 @@ require (
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/stretchr/testify v1.4.0
 	golang.org/x/crypto v0.0.0-20200414173820-0848c9571904
-	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
-	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e // indirect
+	golang.org/x/net v0.0.0-20200421231249-e086a090c8fd
 	golang.org/x/sys v0.0.0-20200413165638-669c56c373c4
 	google.golang.org/appengine v1.6.1 // indirect
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
