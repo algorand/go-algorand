@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -56,6 +57,7 @@ type DebugServer struct {
 
 // DebugParams is a container for debug parameters
 type DebugParams struct {
+	// ProgramNames []string
 	ProgramBlobs [][]byte
 	Proto        string
 	TxnBlob      []byte
@@ -70,11 +72,11 @@ type FrontendFactory interface {
 	Make(router *mux.Router, appAddress string) (da DebugAdapter)
 }
 
-func makeDebugServer(ff FrontendFactory, dp *DebugParams) DebugServer {
+func makeDebugServer(port int, ff FrontendFactory, dp *DebugParams) DebugServer {
 	debugger := MakeDebugger()
 
 	router := mux.NewRouter()
-	appAddress := "localhost:9392"
+	appAddress := fmt.Sprintf("localhost:%d", port)
 
 	da := ff.Make(router, appAddress)
 	debugger.AddAdapter(da)

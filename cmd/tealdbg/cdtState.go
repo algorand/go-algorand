@@ -272,6 +272,13 @@ func makePrimitive(field fieldDesc) RuntimePropertyDescriptor {
 	}
 }
 
+func makeStringResult(value string) RuntimeRemoteObject {
+	return RuntimeRemoteObject{
+		Type:  "string",
+		Value: value,
+	}
+}
+
 // tealTypeMap maps TealType to JS type
 var tealTypeMap = map[basics.TealType]string{
 	basics.TealBytesType: "string",

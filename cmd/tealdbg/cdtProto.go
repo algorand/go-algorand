@@ -201,9 +201,9 @@ type DebuggerScriptParsedEvent struct {
 
 // DebuggerLocation is location in the source code.
 type DebuggerLocation struct {
-	ScriptID     string `json:"scriptId"`               // Script identifier as reported in the `Debugger.scriptParsed`.
-	LineNumber   int    `json:"lineNumber"`             // Line number in the script (0-based).
-	ColumnNumber int    `json:"columnNumber,omitempty"` // Column number in the script (0-based).
+	ScriptID     string `json:"scriptId"`     // Script identifier as reported in the `Debugger.scriptParsed`.
+	LineNumber   int    `json:"lineNumber"`   // Line number in the script (0-based).
+	ColumnNumber int    `json:"columnNumber"` // Column number in the script (0-based).
 }
 
 // DebuggerContinueToLocationParams type
