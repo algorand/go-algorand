@@ -1,4 +1,4 @@
-Name:          algorand
+Name:          @PKG_NAME@
 Version:       @VER@
 Release:       1
 Summary:       Algorand node software
@@ -18,17 +18,17 @@ This package provides an implementation of the Algorand protocol.
 %include %{LICENSE_FILE}
 
 %prep
-## Nothing to prep; intended to be built using scripts/build_rpm.sh
+## Nothing to prep; intended to be built using scripts/release/mule/package/{OS_TYPE}/{ARCH}/rpm/package.sh
 
 %build
-## Nothing to prep; intended to be built using scripts/build_rpm.sh
+## Nothing to prep; intended to be built using scripts/release/mule/package/{OS_TYPE}/{ARCH}/rpm/package.sh
 
 %install
 mkdir -p %{buildroot}/usr/bin
 # NOTE: keep in sync with scripts/build_deb.sh bin_files
 # NOTE: keep in sync with %files section below
 for f in algocfg algod algoh algokey carpenter catchupsrv ddconfig.sh diagcfg goal kmd msgpacktool node_exporter; do
-  install -m 755 ${GOPATH}/bin/${f} %{buildroot}/usr/bin/${f}
+  install -m 755 ${ALGO_BIN}/${f} %{buildroot}/usr/bin/${f}
 done
 
 mkdir -p %{buildroot}/var/lib/algorand
@@ -63,7 +63,7 @@ if [ "%{RELEASE_GENESIS_PROCESS}" != "x" ]; then
   done
   cp %{buildroot}/var/lib/algorand/genesis/${DEFAULT_RELEASE_NETWORK}/genesis.json %{buildroot}/var/lib/algorand/genesis.json
 else
-  cp installer/genesis/${DEFAULTNETWORK}/genesis.json %{buildroot}/var/lib/algorand/genesis.json
+  cp ${REPO_DIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json %{buildroot}/var/lib/algorand/genesis.json
   #${GOPATH}/bin/buildtools genesis ensure -n ${DEFAULT_RELEASE_NETWORK} --source ${REPO_DIR}/gen/${DEFAULT_RELEASE_NETWORK}/genesis.json --target %{buildroot}/var/lib/algorand/genesis.json --releasedir ${REPO_DIR}/installer/genesis
 fi
 
@@ -113,3 +113,4 @@ chown -R algorand:algorand /var/lib/algorand
 %postun
 %systemd_postun_with_restart algorand
 %systemd_postun_with_restart algorand@*
+
