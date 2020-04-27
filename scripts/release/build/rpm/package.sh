@@ -24,6 +24,10 @@ export ALGO_BIN
 RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
 trap 'rm -rf ${RPMTMP}' 0
 
+BRANCH=$("$REPO_DIR/scripts/compute_branch.sh")
+CHANNEL=$("$REPO_DIR/scripts/compute_branch_channel.sh" "$BRANCH")
+PKG_NAME=$("$REPO_DIR/scripts/compute_package_name.sh" "${CHANNEL:-stable}")
+
 TEMPDIR=$(mktemp -d)
 trap 'rm -rf $TEMPDIR' 0
 < "$REPO_DIR/installer/rpm/algorand.spec" \

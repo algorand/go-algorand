@@ -15,12 +15,6 @@ pipeline {
         }
     }
 
-    /*
-    triggers {
-        cron('* * * * *')
-    }
-    */
-
     stages {
         stage("create ec2 instance") {
             steps {
@@ -46,6 +40,7 @@ pipeline {
             }
         }
 
+        /*
         stage("sign") {
             steps {
                 input "Forward gpg-agent"
@@ -58,6 +53,7 @@ pipeline {
                 sh script: "scripts/release/build/stage/verify/run.sh"
             }
         }
+        */
 
         stage("upload") {
             steps {
@@ -73,6 +69,7 @@ pipeline {
             }
         }
 
+        /*
         stage("trigger test job") {
             steps {
                 build job: 'test-packages',
@@ -81,6 +78,7 @@ pipeline {
                 ]
             }
         }
+        */
     }
 }
 
