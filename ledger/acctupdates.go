@@ -244,17 +244,6 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		}
 
 		au.roundTotals = []AccountTotals{totals}
-
-		au.lastCatchpointLabel, _, err0 = readCatchpointStateString(context.Background(), tx, "lastCatchpoint")
-		if err0 != nil {
-			return err0
-		}
-
-		writingCatchpointRound, _, err0 = readCatchpointStateUint64(context.Background(), tx, "writingCatchpoint")
-		if err0 != nil {
-			return err0
-		}
-
 		return nil
 	})
 	if err != nil {
@@ -265,6 +254,17 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	au.accountsq, err = accountsDbInit(au.dbs.rdb.Handle, au.dbs.wdb.Handle)
 	if err != nil {
 		au.accountsMu.Unlock()
+		return err
+	}
+
+	au.lastCatchpointLabel, _, err = au.accountsq.readCatchpointStateString(context.Background(), "lastCatchpoint")
+	if err != nil {
+		au.accountsMu.Unlock()
+		return err
+	}
+
+	writingCatchpointRound, _, err = au.accountsq.readCatchpointStateUint64(context.Background(), "writingCatchpoint")
+	if err != nil {
 		return err
 	}
 
@@ -878,7 +878,7 @@ func (au *accountUpdates) accountsUpdateBalaces(accountsDeltas map[basics.Addres
 	return
 }
 
-func (au *accountUpdates) accountsCreateCatchpointLabel(tx *sql.Tx, committedRound, balancesRound basics.Round, ledgerBlockDigest crypto.Digest) (label string, err error) {
+func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound, balancesRound basics.Round, ledgerBlockDigest crypto.Digest) (label string, err error) {
 	var totals AccountTotals
 	var balancesHash crypto.Digest
 	var offset uint64
@@ -895,7 +895,8 @@ func (au *accountUpdates) accountsCreateCatchpointLabel(tx *sql.Tx, committedRou
 	}
 	cpLabel := makeCatchpointLabel(committedRound, ledgerBlockDigest, balancesHash, totals)
 	label = cpLabel.String()
-	_, err = writeCatchpointStateString(context.Background(), tx, "lastCatchpoint", label)
+
+	_, err = au.accountsq.writeCatchpointStateString(context.Background(), "lastCatchpoint", label)
 	if err == nil {
 		au.lastCatchpointLabel = label
 	}
@@ -1001,10 +1002,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 				return err
 			}
 		}
-		if isCatchpointRound {
-			committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
-			catchpointLabel, err = au.accountsCreateCatchpointLabel(tx, dbRound+basics.Round(offset)+lookback, dbRound+basics.Round(offset), committedRoundDigest)
-		}
+
 		return err
 	})
 
@@ -1012,7 +1010,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		au.balancesTrie = nil
 		au.log.Warnf("unable to advance account snapshot: %v", err)
 	}
-
+	if isCatchpointRound {
+		committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
+		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, dbRound+basics.Round(offset), committedRoundDigest)
+	}
 	if au.balancesTrie != nil {
 		_, err = au.balancesTrie.Evict(false)
 		if err != nil {
@@ -1089,20 +1090,14 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	defer func() {
 		if !retryCatchpointCreation {
 			// clear the writingCatchpoint flag
-			err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
-				_, err = writeCatchpointStateUint64(context.Background(), tx, "writingCatchpoint", uint64(0))
-				return err
-			})
+			_, err := au.accountsq.writeCatchpointStateUint64(context.Background(), "writingCatchpoint", uint64(0))
 			if err != nil {
 				au.log.Warnf("accountUpdates: generateCatchpoint unable to clear catchpoint state 'writingCatchpoint' for round %d: %v", committedRound, err)
 			}
 		}
 	}()
 
-	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
-		_, err = writeCatchpointStateUint64(context.Background(), tx, "writingCatchpoint", uint64(committedRound))
-		return err
-	})
+	_, err := au.accountsq.writeCatchpointStateUint64(context.Background(), "writingCatchpoint", uint64(committedRound))
 	if err != nil {
 		au.log.Warnf("accountUpdates: generateCatchpoint unable to write catchpoint state 'writingCatchpoint' for round %d: %v", committedRound, err)
 		return
@@ -1173,7 +1168,7 @@ func catchpointRoundToPath(rnd basics.Round) string {
 
 func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string, fileSize int64, catchpoint string) (err error) {
 	if au.catchpointFileHistoryLength != 0 {
-		err = au.accountsq.storeCatchpoint(round, fileName, catchpoint, fileSize)
+		err = au.accountsq.storeCatchpoint(context.Background(), round, fileName, catchpoint, fileSize)
 		if err != nil {
 			au.log.Warnf("accountUpdates: saveCatchpoint: unable to save catchpoint: %v", err)
 			return
@@ -1189,7 +1184,7 @@ func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string
 		return
 	}
 	var filesToDelete map[basics.Round]string
-	filesToDelete, err = au.accountsq.getOldestCatchpointFiles(2, au.catchpointFileHistoryLength)
+	filesToDelete, err = au.accountsq.getOldestCatchpointFiles(context.Background(), 2, au.catchpointFileHistoryLength)
 	if err != nil {
 		return fmt.Errorf("unable to delete catchpoint file, getOldestCatchpointFiles failed : %v", err)
 	}
@@ -1203,7 +1198,7 @@ func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string
 			// we can't delete the file, abort -
 			return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
 		}
-		err = au.accountsq.storeCatchpoint(round, "", "", 0)
+		err = au.accountsq.storeCatchpoint(context.Background(), round, "", "", 0)
 		if err != nil {
 			return fmt.Errorf("unable to delete old catchpoint entry '%s' : %v", fileToDelete, err)
 		}

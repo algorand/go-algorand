@@ -125,7 +125,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 
-	aq, err := accountsDbInit(tx)
+	aq, err := accountsDbInit(tx, tx)
 	require.NoError(t, err)
 
 	var totalOnline, totalOffline, totalNotPart uint64

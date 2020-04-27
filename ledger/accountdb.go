@@ -38,6 +38,11 @@ type accountsDbQueries struct {
 	deleteStoredCatchpoint       *sql.Stmt
 	insertStoredCatchpoint       *sql.Stmt
 	selectOldestsCatchpointFiles *sql.Stmt
+	selectCatchpointStateUint64  *sql.Stmt
+	deleteCatchpointState        *sql.Stmt
+	insertCatchpointStateUint64  *sql.Stmt
+	selectCatchpointStateString  *sql.Stmt
+	insertCatchpointStateString  *sql.Stmt
 }
 
 var accountsSchema = []string{
@@ -156,58 +161,6 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 	return
 }
 
-func readCatchpointStateUint64(ctx context.Context, tx *sql.Tx, stateName string) (rnd uint64, def bool, err error) {
-	var val sql.NullInt64
-	err = tx.QueryRowContext(ctx, "SELECT intval FROM catchpointstate WHERE id=?", stateName).Scan(&val)
-	if err == sql.ErrNoRows || false == val.Valid {
-		rnd = 0 // default to zero.
-		err = nil
-		def = true
-		return
-	}
-	if err == nil {
-		rnd = uint64(val.Int64)
-	}
-	return
-}
-
-func writeCatchpointStateUint64(ctx context.Context, tx *sql.Tx, stateName string, setValue uint64) (cleared bool, err error) {
-	if setValue == 0 {
-		_, err = tx.Exec("DELETE FROM catchpointstate WHERE id=?", stateName)
-		return true, err
-	}
-
-	// we don't know if there is an entry in the table for this state, so we'll insert/replace it just in case.
-	_, err = tx.Exec("INSERT OR REPLACE INTO catchpointstate(id, intval) VALUES(?, ?)", stateName, setValue)
-	return false, err
-}
-
-func readCatchpointStateString(ctx context.Context, tx *sql.Tx, stateName string) (str string, def bool, err error) {
-	var val sql.NullString
-	err = tx.QueryRowContext(ctx, "SELECT strval FROM catchpointstate WHERE id=?", stateName).Scan(&val)
-	if err == sql.ErrNoRows || false == val.Valid {
-		str = "" // default to empty string
-		err = nil
-		def = true
-		return
-	}
-	if err == nil {
-		str = val.String
-	}
-	return
-}
-
-func writeCatchpointStateString(ctx context.Context, tx *sql.Tx, stateName string, setValue string) (cleared bool, err error) {
-	if setValue == "" {
-		_, err = tx.Exec("DELETE FROM catchpointstate WHERE id=?", stateName)
-		return true, err
-	}
-
-	// we don't know if there is an entry in the table for this state, so we'll insert/replace it just in case.
-	_, err = tx.Exec("INSERT OR REPLACE INTO catchpointstate(id, strval) VALUES(?, ?)", stateName, setValue)
-	return false, err
-}
-
 func getCatchpoint(tx *sql.Tx, round basics.Round) (fileName string, catchpoint string, fileSize int64, err error) {
 	err = tx.QueryRow("SELECT filename, catchpoint, filesize FROM storedcatchpoints WHERE round=?", int64(round)).Scan(&fileName, &catchpoint, &fileSize)
 	return
@@ -315,6 +268,30 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 		return nil, err
 	}
 
+	qs.selectCatchpointStateUint64, err = r.Prepare("SELECT intval FROM catchpointstate WHERE id=?")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.deleteCatchpointState, err = r.Prepare("DELETE FROM catchpointstate WHERE id=?")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.insertCatchpointStateUint64, err = r.Prepare("INSERT OR REPLACE INTO catchpointstate(id, intval) VALUES(?, ?)")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.insertCatchpointStateString, err = r.Prepare("INSERT OR REPLACE INTO catchpointstate(id, strval) VALUES(?, ?)")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.selectCatchpointStateString, err = r.Prepare("SELECT strval FROM catchpointstate WHERE id=?")
+	if err != nil {
+		return nil, err
+	}
 	return qs, nil
 }
 
@@ -380,41 +357,107 @@ func (qs *accountsDbQueries) lookup(addr basics.Address) (data basics.AccountDat
 	return
 }
 
-func (qs *accountsDbQueries) storeCatchpoint(round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
+func (qs *accountsDbQueries) storeCatchpoint(ctx context.Context, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
 	err = db.Retry(func() (err error) {
-		_, err = qs.deleteStoredCatchpoint.Exec(round)
+		_, err = qs.deleteStoredCatchpoint.ExecContext(ctx, round)
 
 		if err != nil || (fileName == "" && catchpoint == "" && fileSize == 0) {
 			return
 		}
 
-		_, err = qs.insertStoredCatchpoint.Exec(round, fileName, catchpoint, fileSize)
+		_, err = qs.insertStoredCatchpoint.ExecContext(ctx, round, fileName, catchpoint, fileSize)
 		return
 	})
 	return
 }
 
-func (qs *accountsDbQueries) getOldestCatchpointFiles(fileCount int, filesToKeep int) (fileNames map[basics.Round]string, err error) {
-	var rows *sql.Rows
-	rows, err = qs.selectOldestsCatchpointFiles.Query(filesToKeep, fileCount)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-
-	fileNames = make(map[basics.Round]string)
-	for rows.Next() {
-		var fileName string
-		var round basics.Round
-		err = rows.Scan(&round, &fileName)
+func (qs *accountsDbQueries) getOldestCatchpointFiles(ctx context.Context, fileCount int, filesToKeep int) (fileNames map[basics.Round]string, err error) {
+	err = db.Retry(func() (err error) {
+		var rows *sql.Rows
+		rows, err = qs.selectOldestsCatchpointFiles.QueryContext(ctx, filesToKeep, fileCount)
 		if err != nil {
 			return
 		}
-		fileNames[round] = fileName
-	}
+		defer rows.Close()
 
-	err = rows.Err()
+		fileNames = make(map[basics.Round]string)
+		for rows.Next() {
+			var fileName string
+			var round basics.Round
+			err = rows.Scan(&round, &fileName)
+			if err != nil {
+				return
+			}
+			fileNames[round] = fileName
+		}
+
+		err = rows.Err()
+		return
+	})
 	return
+}
+
+func (qs *accountsDbQueries) readCatchpointStateUint64(ctx context.Context, stateName string) (rnd uint64, def bool, err error) {
+	var val sql.NullInt64
+	err = db.Retry(func() (err error) {
+		err = qs.selectCatchpointStateUint64.QueryRowContext(ctx, stateName).Scan(&val)
+		if err == sql.ErrNoRows || (err == nil && false == val.Valid) {
+			val.Int64 = 0 // default to zero.
+			err = nil
+			def = true
+			return
+		}
+		return err
+	})
+	return uint64(val.Int64), def, err
+}
+
+func (qs *accountsDbQueries) writeCatchpointStateUint64(ctx context.Context, stateName string, setValue uint64) (cleared bool, err error) {
+	err = db.Retry(func() (err error) {
+		if setValue == 0 {
+			_, err = qs.deleteCatchpointState.ExecContext(ctx, stateName)
+			cleared = true
+			return err
+		}
+
+		// we don't know if there is an entry in the table for this state, so we'll insert/replace it just in case.
+		_, err = qs.insertCatchpointStateUint64.ExecContext(ctx, stateName, setValue)
+		cleared = false
+		return err
+	})
+	return cleared, err
+
+}
+
+func (qs *accountsDbQueries) readCatchpointStateString(ctx context.Context, stateName string) (str string, def bool, err error) {
+	var val sql.NullString
+	err = db.Retry(func() (err error) {
+		err = qs.selectCatchpointStateString.QueryRowContext(ctx, stateName).Scan(&val)
+		if err == sql.ErrNoRows || (err == nil && false == val.Valid) {
+			val.String = "" // default to empty string
+			err = nil
+			def = true
+			return
+		}
+		return err
+	})
+	return val.String, def, err
+}
+
+func (qs *accountsDbQueries) writeCatchpointStateString(ctx context.Context, stateName string, setValue string) (cleared bool, err error) {
+	err = db.Retry(func() (err error) {
+		if setValue == "" {
+			_, err = qs.deleteCatchpointState.ExecContext(ctx, stateName)
+			cleared = true
+			return err
+		}
+
+		// we don't know if there is an entry in the table for this state, so we'll insert/replace it just in case.
+		_, err = qs.insertCatchpointStateString.ExecContext(ctx, stateName, setValue)
+		cleared = false
+		return err
+	})
+	return cleared, err
 }
 
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
