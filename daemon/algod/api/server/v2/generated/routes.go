@@ -62,6 +62,16 @@ type ServerInterfaceWrapper struct {
 
 // AccountInformation converts echo context to params.
 func (w *ServerInterfaceWrapper) AccountInformation(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
 	var err error
 	// ------------- Path parameter "address" -------------
 	var address string
@@ -80,6 +90,19 @@ func (w *ServerInterfaceWrapper) AccountInformation(ctx echo.Context) error {
 
 // GetPendingTransactionsByAddress converts echo context to params.
 func (w *ServerInterfaceWrapper) GetPendingTransactionsByAddress(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{
+		"max":    true,
+		"format": true,
+	}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
 	var err error
 	// ------------- Path parameter "address" -------------
 	var address string
@@ -120,6 +143,18 @@ func (w *ServerInterfaceWrapper) GetPendingTransactionsByAddress(ctx echo.Contex
 
 // GetBlock converts echo context to params.
 func (w *ServerInterfaceWrapper) GetBlock(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{
+		"format": true,
+	}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
 	var err error
 	// ------------- Path parameter "round" -------------
 	var round uint64
@@ -150,6 +185,16 @@ func (w *ServerInterfaceWrapper) GetBlock(ctx echo.Context) error {
 
 // GetSupply converts echo context to params.
 func (w *ServerInterfaceWrapper) GetSupply(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
 	var err error
 
 	ctx.Set("api_key.Scopes", []string{""})
@@ -161,6 +206,21 @@ func (w *ServerInterfaceWrapper) GetSupply(ctx echo.Context) error {
 
 // RegisterParticipationKeys converts echo context to params.
 func (w *ServerInterfaceWrapper) RegisterParticipationKeys(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{
+		"fee":              true,
+		"key-dilution":     true,
+		"round-last-valid": true,
+		"no-wait":          true,
+	}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
 	var err error
 	// ------------- Path parameter "address" -------------
 	var address string
@@ -221,6 +281,18 @@ func (w *ServerInterfaceWrapper) RegisterParticipationKeys(ctx echo.Context) err
 
 // ShutdownNode converts echo context to params.
 func (w *ServerInterfaceWrapper) ShutdownNode(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{
+		"timeout": true,
+	}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
 	var err error
 
 	ctx.Set("api_key.Scopes", []string{""})
@@ -244,6 +316,16 @@ func (w *ServerInterfaceWrapper) ShutdownNode(ctx echo.Context) error {
 
 // GetStatus converts echo context to params.
 func (w *ServerInterfaceWrapper) GetStatus(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
 	var err error
 
 	ctx.Set("api_key.Scopes", []string{""})
@@ -255,6 +337,16 @@ func (w *ServerInterfaceWrapper) GetStatus(ctx echo.Context) error {
 
 // WaitForBlock converts echo context to params.
 func (w *ServerInterfaceWrapper) WaitForBlock(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
 	var err error
 	// ------------- Path parameter "round" -------------
 	var round uint64
@@ -273,6 +365,16 @@ func (w *ServerInterfaceWrapper) WaitForBlock(ctx echo.Context) error {
 
 // RawTransaction converts echo context to params.
 func (w *ServerInterfaceWrapper) RawTransaction(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
 	var err error
 
 	ctx.Set("api_key.Scopes", []string{""})
@@ -284,6 +386,16 @@ func (w *ServerInterfaceWrapper) RawTransaction(ctx echo.Context) error {
 
 // TransactionParams converts echo context to params.
 func (w *ServerInterfaceWrapper) TransactionParams(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
 	var err error
 
 	ctx.Set("api_key.Scopes", []string{""})
@@ -295,6 +407,19 @@ func (w *ServerInterfaceWrapper) TransactionParams(ctx echo.Context) error {
 
 // GetPendingTransactions converts echo context to params.
 func (w *ServerInterfaceWrapper) GetPendingTransactions(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{
+		"max":    true,
+		"format": true,
+	}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
 	var err error
 
 	ctx.Set("api_key.Scopes", []string{""})
@@ -328,6 +453,18 @@ func (w *ServerInterfaceWrapper) GetPendingTransactions(ctx echo.Context) error 
 
 // PendingTransactionInformation converts echo context to params.
 func (w *ServerInterfaceWrapper) PendingTransactionInformation(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{
+		"format": true,
+	}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
 	var err error
 	// ------------- Path parameter "txid" -------------
 	var txid string
@@ -367,24 +504,24 @@ func RegisterHandlers(router interface {
 	POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
 	PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
 	TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-}, si ServerInterface) {
+}, si ServerInterface, m ...echo.MiddlewareFunc) {
 
 	wrapper := ServerInterfaceWrapper{
 		Handler: si,
 	}
 
-	router.GET("/v2/accounts/:address", wrapper.AccountInformation)
-	router.GET("/v2/accounts/:address/transactions/pending", wrapper.GetPendingTransactionsByAddress)
-	router.GET("/v2/blocks/:round", wrapper.GetBlock)
-	router.GET("/v2/ledger/supply", wrapper.GetSupply)
-	router.POST("/v2/register-participation-keys/:address", wrapper.RegisterParticipationKeys)
-	router.POST("/v2/shutdown", wrapper.ShutdownNode)
-	router.GET("/v2/status", wrapper.GetStatus)
-	router.GET("/v2/status/wait-for-block-after/:round/", wrapper.WaitForBlock)
-	router.POST("/v2/transactions", wrapper.RawTransaction)
-	router.GET("/v2/transactions/params", wrapper.TransactionParams)
-	router.GET("/v2/transactions/pending", wrapper.GetPendingTransactions)
-	router.GET("/v2/transactions/pending/:txid", wrapper.PendingTransactionInformation)
+	router.GET("/v2/accounts/:address", wrapper.AccountInformation, m...)
+	router.GET("/v2/accounts/:address/transactions/pending", wrapper.GetPendingTransactionsByAddress, m...)
+	router.GET("/v2/blocks/:round", wrapper.GetBlock, m...)
+	router.GET("/v2/ledger/supply", wrapper.GetSupply, m...)
+	router.POST("/v2/register-participation-keys/:address", wrapper.RegisterParticipationKeys, m...)
+	router.POST("/v2/shutdown", wrapper.ShutdownNode, m...)
+	router.GET("/v2/status", wrapper.GetStatus, m...)
+	router.GET("/v2/status/wait-for-block-after/:round/", wrapper.WaitForBlock, m...)
+	router.POST("/v2/transactions", wrapper.RawTransaction, m...)
+	router.GET("/v2/transactions/params", wrapper.TransactionParams, m...)
+	router.GET("/v2/transactions/pending", wrapper.GetPendingTransactions, m...)
+	router.GET("/v2/transactions/pending/:txid", wrapper.PendingTransactionInformation, m...)
 
 }
 
