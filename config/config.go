@@ -277,6 +277,10 @@ type Local struct {
 	// CatchpointInterval set the interval at which catchpoint are being generated.
 	CatchpointInterval uint64
 
+	// CatchpointFileHistoryLength defines how many catchpoint files we want to store back.
+	// 0 means don't store any, -1 mean unlimited and positive number suggest the number of most recent catchpoint files.
+	CatchpointFileHistoryLength int
+
 	// EnableLedgerService enables the ledger serving service. The functionality of this depends on NetAddress, which must also be provided.
 	// This functionality is required for the catchpoint catchup.
 	EnableLedgerService bool

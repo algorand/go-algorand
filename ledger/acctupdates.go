@@ -95,6 +95,12 @@ type accountUpdates struct {
 	// archivalLedger determines whether the associated ledger was configured as archival ledger or not.
 	archivalLedger bool
 
+	// catchpointFileHistoryLength defines how many catchpoint files we want to store back.
+	// 0 means don't store any, -1 mean unlimited and positive number suggest the number of most recent catchpoint files.
+	catchpointFileHistoryLength int
+
+	// dynamic variables
+
 	// Connection to the database.
 	dbs dbPair
 
@@ -191,6 +197,10 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	au.dbDirectory = filepath.Dir(dbPathPrefix)
 	au.archivalLedger = cfg.Archival
 	au.catchpointInterval = cfg.CatchpointInterval
+	au.catchpointFileHistoryLength = cfg.CatchpointFileHistoryLength
+	if cfg.CatchpointFileHistoryLength < -1 {
+		au.catchpointFileHistoryLength = -1
+	}
 }
 
 // loadFromDisk is the 2nd level initializtion, and is required before the accountUpdates becomes functional
@@ -729,7 +739,11 @@ func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser
 			return file, nil
 		}
 
-		au.saveCatchpointFile(round, fileName, fileInfo.Size(), "")
+		err = au.saveCatchpointFile(round, fileName, fileInfo.Size(), "")
+		if err != nil {
+			au.log.Warnf("catchpointTracker: getCatchpointStream: unable to save missing catchpoint entry: %v", err)
+			err = nil
+		}
 		return file, nil
 	}
 	return nil, ErrNoEntry{}
@@ -1139,10 +1153,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 		}
 	}
 
-	err = au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
-		err = storeCatchpoint(tx, committedRound, relCatchpointFileName, catchpointWriter.GetCatchpoint(), catchpointWriter.GetSize())
-		return
-	})
+	err = au.saveCatchpointFile(committedRound, relCatchpointFileName, catchpointWriter.GetSize(), catchpointWriter.GetCatchpoint())
 	if err != nil {
 		au.log.Warnf("accountUpdates: generateCatchpoint: unable to save catchpoint: %v", err)
 		return
@@ -1161,13 +1172,50 @@ func catchpointRoundToPath(rnd basics.Round) string {
 }
 
 func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string, fileSize int64, catchpoint string) (err error) {
+	if au.catchpointFileHistoryLength != 0 {
+		err = au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+			err = storeCatchpoint(tx, round, fileName, catchpoint, fileSize)
+			return
+		})
+		if err != nil {
+			au.log.Warnf("accountUpdates: saveCatchpoint: unable to save catchpoint: %v", err)
+			return
+		}
+	} else {
+		err = os.Remove(fileName)
+		if err != nil {
+			au.log.Warnf("accountUpdates: saveCatchpoint: unable to remove file (%s): %v", fileName, err)
+			return
+		}
+	}
+	if au.catchpointFileHistoryLength == -1 {
+		return
+	}
+	var filesToDelete map[basics.Round]string
 	err = au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
-		err = storeCatchpoint(tx, round, fileName, catchpoint, fileSize)
+		filesToDelete, err = getOldestCatchpointFiles(tx, 2, au.catchpointFileHistoryLength)
 		return
 	})
 	if err != nil {
-		au.log.Warnf("accountUpdates: saveCatchpoint: unable to save catchpoint: %v", err)
-		return
+		return fmt.Errorf("unable to delete catchpoint file, getOldestCatchpointFiles failed : %v", err)
+	}
+	for round, fileToDelete := range filesToDelete {
+		absCatchpointFileName := filepath.Join(au.dbDirectory, fileToDelete)
+		err = os.Remove(absCatchpointFileName)
+		if err == nil || os.IsNotExist(err) {
+			// it's ok if the file doesn't exist. just remove it from the database and we'll be good to go.
+			err = nil
+		} else {
+			// we can't delete the file, abort -
+			return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
+		}
+		err = au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+			err = storeCatchpoint(tx, round, "", "", 0)
+			return
+		})
+		if err != nil {
+			return fmt.Errorf("unable to delete old catchpoint entry '%s' : %v", fileToDelete, err)
+		}
 	}
 	return
 }

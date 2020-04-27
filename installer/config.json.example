@@ -7,6 +7,8 @@
     "CadaverSizeTarget": 1073741824,
     "CatchupFailurePeerRefreshRate": 10,
     "CatchupParallelBlocks": 16,
+    "CatchpointInterval": 20000,
+    "CatchpointFileHistoryLength": 365,
     "ConnectionsRateLimitingCount": 60,
     "ConnectionsRateLimitingWindowSeconds": 1,
     "DisableOutgoingConnectionThrottling": false,
@@ -51,6 +53,5 @@
     "TxSyncTimeoutSeconds": 30,
     "PeerConnectionsUpdateInterval": 3600,
     "DNSSecurityFlags": 1,
-    "EnablePingHandler": true,
-    "CatchpointInterval": 20000
+    "EnablePingHandler": true
 }

@@ -60,7 +60,8 @@ var accountsSchema = []string{
 		round integer primary key,
 		filename text NOT NULL,
 		catchpoint text NOT NULL,
-		filesize size NOT NULL)`,
+		filesize size NOT NULL,
+		pinned integer NOT NULL)`,
 	`CREATE TABLE IF NOT EXISTS accounthashes (
 			id integer primary key,
 			data blob)`,
@@ -203,11 +204,6 @@ func writeCatchpointStateString(ctx context.Context, tx *sql.Tx, stateName strin
 	return false, err
 }
 
-/*func (cp *catchpointTracker) databaseSize(tx *sql.Tx) (size uint64, err error) {
-	err = tx.QueryRow("SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size()").Scan(&size)
-	return
-}*/
-
 func storeCatchpoint(tx *sql.Tx, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
 	_, err = tx.Exec("DELETE FROM storedcatchpoints WHERE round=?", round)
 
@@ -215,7 +211,31 @@ func storeCatchpoint(tx *sql.Tx, round basics.Round, fileName string, catchpoint
 		return
 	}
 
-	_, err = tx.Exec("INSERT INTO storedcatchpoints(round, filename, catchpoint, filesize) VALUES(?, ?, ?, ?)", round, fileName, catchpoint, fileSize)
+	_, err = tx.Exec("INSERT INTO storedcatchpoints(round, filename, catchpoint, filesize, pinned) VALUES(?, ?, ?, ?, 0)", round, fileName, catchpoint, fileSize)
+	return
+}
+
+func getOldestCatchpointFiles(tx *sql.Tx, fileCount int, filesToKeep int) (fileNames map[basics.Round]string, err error) {
+	var rows *sql.Rows
+	rows, err = tx.Query("SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?", filesToKeep, fileCount)
+
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	fileNames = make(map[basics.Round]string)
+	for rows.Next() {
+		var fileName string
+		var round basics.Round
+		err = rows.Scan(&round, &fileName)
+		if err != nil {
+			return
+		}
+		fileNames[round] = fileName
+	}
+
+	err = rows.Err()
 	return
 }
 

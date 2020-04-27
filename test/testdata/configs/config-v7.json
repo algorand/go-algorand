@@ -7,14 +7,18 @@
     "CadaverSizeTarget": 1073741824,
     "CatchupFailurePeerRefreshRate": 10,
     "CatchupParallelBlocks": 16,
+    "CatchpointInterval": 20000,
+    "CatchpointFileHistoryLength": 365,
     "ConnectionsRateLimitingWindowSeconds": 1,
     "ConnectionsRateLimitingCount": 60,
     "DeadlockDetection": 0,
     "DNSBootstrapID": "<network>.algorand.network",
+    "DNSSecurityFlags": 1,
     "EnableAgreementReporting": false,
     "EnableIncomingMessageFilter": false,
     "EnableMetricReporting": false,
     "EnableOutgoingNetworkMessageFiltering": true,
+    "EnablePingHandler": true,
     "EnableRequestLogger": false,
     "EnableTopAccountsReporting": false,
     "EndpointAddress": "127.0.0.1:0",
@@ -45,8 +49,5 @@
     "TxSyncTimeoutSeconds": 30,
     "TxSyncServeResponseSize": 1000000,
     "SuggestedFeeSlidingWindowSize":  50,
-    "PeerConnectionsUpdateInterval": 3600,
-    "DNSSecurityFlags": 1,
-    "EnablePingHandler": true,
-    "CatchpointInterval": 20000
+    "PeerConnectionsUpdateInterval": 3600
 }
