@@ -32,12 +32,14 @@ type CDTAdapter struct {
 	sessions   map[string]cdtSession
 	router     *mux.Router
 	apiAddress string
+	verbose    bool
 }
 
 // CDTAdapterParams for Setup
 type CDTAdapterParams struct {
 	router     *mux.Router
 	apiAddress string
+	verbose    bool
 }
 
 // MakeCDTAdapter creates new CDTAdapter
@@ -52,6 +54,7 @@ func MakeCDTAdapter(ctx interface{}) (a *CDTAdapter) {
 	a.sessions = make(map[string]cdtSession)
 	a.router = params.router
 	a.apiAddress = params.apiAddress
+	a.verbose = params.verbose
 
 	a.router.HandleFunc("/json/version", a.versionHandler).Methods("GET")
 	a.router.HandleFunc("/json", a.jsonHandler).Methods("GET")
@@ -68,6 +71,7 @@ func (a *CDTAdapter) SessionStarted(sid string, debugger Control, ch chan Notifi
 	defer a.mu.Unlock()
 
 	s.endpoint = a.enableWebsocketEndpoint(sid, a.apiAddress, s.websocketHandler)
+	s.verbose = a.verbose
 
 	a.sessions[sid] = *s
 }
@@ -130,7 +134,7 @@ func (a *CDTAdapter) versionHandler(w http.ResponseWriter, r *http.Request) {
 		ProtocolVersion string `json:"Protocol-Version"`
 	}
 
-	version := devtoolsVersion{Browser: "teal dbg", ProtocolVersion: "1.1"}
+	version := devtoolsVersion{Browser: "Algorand TEAL Debugger", ProtocolVersion: "1.1"}
 	enc, err := json.Marshal(version)
 	if err != nil {
 		return

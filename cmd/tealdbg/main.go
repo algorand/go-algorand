@@ -69,6 +69,7 @@ var remoteCmd = &cobra.Command{
 type cobraStringValue struct {
 	value   string
 	allowed []string
+	isSet   bool
 }
 
 func makeCobraStringValue(value string, others []string) *cobraStringValue {
@@ -84,11 +85,13 @@ func makeCobraStringValue(value string, others []string) *cobraStringValue {
 
 func (c *cobraStringValue) String() string { return c.value }
 func (c *cobraStringValue) Type() string   { return "string" }
+func (c *cobraStringValue) IsSet() bool    { return c.isSet }
 
 func (c *cobraStringValue) Set(other string) error {
 	for _, s := range c.allowed {
 		if other == s {
 			c.value = other
+			c.isSet = true
 			return nil
 		}
 	}
@@ -111,7 +114,7 @@ func (f *frontendValue) Make(router *mux.Router, appAddress string) (da DebugAda
 	case "cdt":
 		fallthrough
 	default:
-		cdt := MakeCDTAdapter(&CDTAdapterParams{router, appAddress})
+		cdt := MakeCDTAdapter(&CDTAdapterParams{router, appAddress, verbose})
 		return cdt
 	}
 }
@@ -127,9 +130,19 @@ var groupIndex int
 var balanceFile string
 var roundNumber int
 var runMode runModeValue = runModeValue{makeCobraStringValue("signature", []string{"application"})}
+var port int
+var noFirstRun bool
+var noBrowserCheck bool
+var verbose bool
 
 func init() {
 	rootCmd.PersistentFlags().VarP(&frontend, "frontend", "f", "Frontend to use: "+frontend.AllowedString())
+	rootCmd.PersistentFlags().IntVar(&port, "remote-debugging-port", 9392, "Port to listen on")
+	rootCmd.PersistentFlags().BoolVar(&noFirstRun, "no-first-run", false, "")
+	rootCmd.PersistentFlags().MarkHidden("no-first-run")
+	rootCmd.PersistentFlags().BoolVar(&noBrowserCheck, "no-default-browser-check", false, "")
+	rootCmd.PersistentFlags().MarkHidden("no-default-browser-check")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
 
 	debugCmd.Flags().StringVarP(&proto, "proto", "p", "", "Consensus protocol version for TEAL")
 	debugCmd.Flags().StringVarP(&txnFile, "txn", "t", "", "Transaction(s) to evaluate TEAL on in form of json or msgpack file")
@@ -143,27 +156,45 @@ func init() {
 }
 
 func debugRemote() {
-	ds := makeDebugServer(&frontend, nil)
+	ds := makeDebugServer(port, &frontend, nil)
 
 	ds.startRemote()
 }
 
 func debugLocal(args []string) {
 	// simple pre-invalidation
-	if len(args) == 0 {
-		log.Fatalln("No program to debug")
-	}
 	if roundNumber < 0 {
 		log.Fatalln("Invalid round")
 	}
 
-	programBlobs := make([][]byte, len(args))
-	for i, file := range args {
-		data, err := ioutil.ReadFile(file)
-		if err != nil {
-			log.Fatalf("Error program reading %s: %s", file, err)
+	// program can be set either directly
+	// or with SignedTxn.Lsig.Logic,
+	// or with BalanceRecord.AppParams.ApprovalProgram
+	if len(args) == 0 && (len(txnFile) == 0 || len(balanceFile) == 0) {
+		log.Fatalln("No program to debug: must specify program(s), or transaction(s), or a balance record(s)")
+	}
+
+	if len(args) == 0 && groupIndex != 0 {
+		log.Fatalln("Error: group-index may be only set only along with program(s)")
+	}
+
+	if len(args) == 0 && runMode.IsSet() {
+		log.Fatalln("Error: mode may be only set only along with program(s)")
+	}
+
+	// var programNames []string
+	var programBlobs [][]byte
+	if len(args) > 0 {
+		// programNames = make([]string, len(args))
+		programBlobs = make([][]byte, len(args))
+		for i, file := range args {
+			data, err := ioutil.ReadFile(file)
+			if err != nil {
+				log.Fatalf("Error program reading %s: %s", file, err)
+			}
+			// programNames[i] = file
+			programBlobs[i] = data
 		}
-		programBlobs[i] = data
 	}
 
 	var err error
@@ -184,6 +215,7 @@ func debugLocal(args []string) {
 	}
 
 	dp := DebugParams{
+		// ProgramNames: programNames,
 		ProgramBlobs: programBlobs,
 		Proto:        proto,
 		TxnBlob:      txnBlob,
@@ -193,7 +225,7 @@ func debugLocal(args []string) {
 		RunMode:      runMode.String(),
 	}
 
-	ds := makeDebugServer(&frontend, &dp)
+	ds := makeDebugServer(port, &frontend, &dp)
 
 	err = ds.startDebug()
 	if err != nil {

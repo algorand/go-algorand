@@ -288,6 +288,21 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 		}
 		state.pauseOnError.SetTo(enable)
 		response = ChromeResponse{ID: req.ID, Result: empty}
+	case "Runtime.evaluate":
+		p := req.Params.(map[string]interface{})
+		exprRaw, ok := p["expression"]
+		if !ok {
+			err = fmt.Errorf("evaluate failed: no expression")
+			return
+		}
+
+		expr := exprRaw.(string)
+		if expr == "navigator.userAgent" {
+			obj := makeStringResult("Algorand TEAL Debugger")
+			response = ChromeResponse{ID: req.ID, Result: cmdResult{obj}}
+		} else {
+			response = ChromeResponse{ID: req.ID, Result: cmdResult{}}
+		}
 	case "Runtime.callFunctionOn":
 		p := req.Params.(map[string]interface{})
 		objIDRaw, ok := p["objectId"]
@@ -384,7 +399,7 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 
 		result := make(map[string]interface{})
 		locs := make([]DebuggerLocation, 0, endLine-startLine+1)
-		for ln := startLine; ln <= endLine; ln++ {
+		for ln := startLine; ln < endLine; ln++ {
 			locs = append(locs, DebuggerLocation{ScriptID: scriptID, LineNumber: ln})
 		}
 		result["locations"] = locs

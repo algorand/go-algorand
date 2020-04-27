@@ -17,11 +17,13 @@
 package main
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
 )
@@ -51,13 +53,13 @@ func TestTxnJSONInput(t *testing.T) {
 		TxnBlob: []byte(txnSample),
 	}
 
-	txnGroup, _, err := txnGroupFromParams(&dp)
+	txnGroup, err := txnGroupFromParams(&dp)
 	a.NoError(err)
 	a.Equal(1, len(txnGroup))
 	a.Equal(basics.MicroAlgos{Raw: 1176}, txnGroup[0].Txn.Fee)
 
 	dp.TxnBlob = []byte("[" + strings.Join([]string{txnSample, txnSample}, ",") + "]")
-	txnGroup, _, err = txnGroupFromParams(&dp)
+	txnGroup, err = txnGroupFromParams(&dp)
 	a.NoError(err)
 	a.Equal(2, len(txnGroup))
 	a.Equal(basics.MicroAlgos{Raw: 1176}, txnGroup[0].Txn.Fee)
@@ -76,13 +78,13 @@ func TestTxnMessagePackInput(t *testing.T) {
 		TxnBlob: blob,
 	}
 
-	txnGroup, _, err := txnGroupFromParams(&dp)
+	txnGroup, err := txnGroupFromParams(&dp)
 	a.NoError(err)
 	a.Equal(1, len(txnGroup))
 	a.Equal(basics.MicroAlgos{Raw: 1176}, txnGroup[0].Txn.Fee)
 
 	dp.TxnBlob = append(blob, blob...)
-	txnGroup, _, err = txnGroupFromParams(&dp)
+	txnGroup, err = txnGroupFromParams(&dp)
 	a.NoError(err)
 	a.Equal(2, len(txnGroup))
 	a.Equal(basics.MicroAlgos{Raw: 1176}, txnGroup[0].Txn.Fee)
@@ -126,6 +128,7 @@ var balanceSample string = `{
 	"appp": {
 		"100": {
 			"approv": "AQE=",
+			"clearp": "AQE=",
 			"gs": {
 				"gkeyint": {
 					"tt": 2,
@@ -182,7 +185,8 @@ func makeSampleBalanceRecord(addr basics.Address, assetIdx basics.AssetIndex, ap
 	}
 	br.AppParams = map[basics.AppIndex]basics.AppParams{
 		appIdx: basics.AppParams{
-			ApprovalProgram: []byte{1, 1},
+			ApprovalProgram:   []byte{1},
+			ClearStateProgram: []byte{1, 1},
 			LocalStateSchema: basics.StateSchema{
 				NumUint:      2,
 				NumByteSlice: 3,
@@ -471,4 +475,238 @@ byte 0x676c6f62616c // global
 	pass, err = local.Run()
 	a.Error(err)
 	a.False(pass)
+}
+
+func TestDebugFromPrograms(t *testing.T) {
+	a := require.New(t)
+
+	txnBlob := []byte("[" + strings.Join([]string{string(txnSample), txnSample}, ",") + "]")
+
+	l := LocalRunner{}
+	dp := DebugParams{
+		ProgramBlobs: [][]byte{[]byte{1}},
+		TxnBlob:      []byte(txnSample),
+		GroupIndex:   1,
+	}
+
+	err := l.Setup(&dp)
+	a.Error(err)
+	a.Contains(err.Error(), "invalid group index 1 for a single transaction")
+
+	dp = DebugParams{
+		ProgramBlobs: [][]byte{[]byte{1}},
+		TxnBlob:      txnBlob,
+		GroupIndex:   3,
+	}
+
+	err = l.Setup(&dp)
+	a.Error(err)
+	a.Contains(err.Error(), "invalid group index 3 for a txn in a transaction group of 2")
+
+	dp = DebugParams{
+		ProgramBlobs: [][]byte{[]byte{1}},
+		TxnBlob:      txnBlob,
+		GroupIndex:   0,
+	}
+
+	err = l.Setup(&dp)
+	a.Error(err)
+	a.Contains(err.Error(), "unknown run mode")
+
+	dp = DebugParams{
+		ProgramBlobs: [][]byte{[]byte{1}},
+		TxnBlob:      txnBlob,
+		GroupIndex:   0,
+		RunMode:      "signature",
+	}
+
+	err = l.Setup(&dp)
+	a.NoError(err)
+	a.Equal(1, len(l.runs))
+	a.Equal(0, l.runs[0].groupIndex)
+	a.NotNil(l.runs[0].eval)
+	a.NotNil(l.runs[0].ledger)
+	a.Equal(0, l.runs[0].ledger.groupIndex)
+
+	dp = DebugParams{
+		ProgramBlobs: [][]byte{[]byte{1}, []byte{1}},
+		TxnBlob:      txnBlob,
+		GroupIndex:   0,
+		RunMode:      "signature",
+	}
+
+	err = l.Setup(&dp)
+	a.NoError(err)
+	a.Equal(2, len(l.runs))
+	a.Equal(0, l.runs[0].groupIndex)
+	a.Equal(0, l.runs[1].groupIndex)
+	a.NotNil(l.runs[0].eval)
+	a.NotNil(l.runs[0].ledger)
+	a.Equal(0, l.runs[0].ledger.groupIndex)
+
+	a.NotNil(l.runs[1].eval)
+	a.NotNil(l.runs[1].ledger)
+	a.Equal(0, l.runs[1].ledger.groupIndex)
+
+}
+
+func TestDebugFromTxn(t *testing.T) {
+	a := require.New(t)
+
+	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
+	a.NoError(err)
+	// make balance records
+	appIdx := basics.AppIndex(100)
+	brs := makeSampleBalanceRecord(sender, 0, appIdx+1)
+	balanceBlob := protocol.EncodeMsgp(&brs)
+
+	// make transaction group: app call + sample payment
+	appTxn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Header: transactions.Header{
+				Sender: sender,
+			},
+			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+				ApplicationID: appIdx,
+			},
+		},
+	}
+
+	var payTxn transactions.SignedTxn
+	err = protocol.DecodeJSON([]byte(txnSample), &payTxn)
+	a.NoError(err)
+
+	txnBlob := protocol.EncodeMsgp(&appTxn)
+	txnBlob = append(txnBlob, protocol.EncodeMsgp(&payTxn)...)
+
+	l := LocalRunner{}
+	dp := DebugParams{
+		BalanceBlob: balanceBlob,
+		TxnBlob:     txnBlob,
+	}
+
+	err = l.Setup(&dp)
+	a.Error(err)
+	a.Contains(err.Error(), "no programs found in transactions")
+	a.Equal(2, len(l.txnGroup))
+
+	// ensure clear logic sig program is supposed to be debugged
+	payTxn.Lsig.Logic = []byte{3}
+	txnBlob = protocol.EncodeMsgp(&appTxn)
+	txnBlob = append(txnBlob, protocol.EncodeMsgp(&payTxn)...)
+
+	dp = DebugParams{
+		BalanceBlob: balanceBlob,
+		TxnBlob:     txnBlob,
+		GroupIndex:  10, // must be ignored
+	}
+
+	err = l.Setup(&dp)
+	a.NoError(err)
+	a.Equal(1, len(l.runs))
+	a.Equal(1, l.runs[0].groupIndex)
+	a.NotNil(l.runs[0].eval)
+	a.Equal([]byte{3}, l.runs[0].program)
+	a.NotNil(l.runs[0].ledger)
+	a.Equal(1, l.runs[0].ledger.groupIndex)
+	a.Equal(
+		reflect.ValueOf(logic.Eval).Pointer(),
+		reflect.ValueOf(l.runs[0].eval).Pointer(),
+	)
+
+	// ensure clear approval program is supposed to be debugged
+	brs = makeSampleBalanceRecord(sender, 0, appIdx)
+	balanceBlob = protocol.EncodeMsgp(&brs)
+
+	payTxn.Lsig.Logic = nil
+	appTxn.Txn.Type = protocol.ApplicationCallTx
+	txnBlob = protocol.EncodeMsgp(&appTxn)
+	txnBlob = append(txnBlob, protocol.EncodeMsgp(&payTxn)...)
+
+	dp = DebugParams{
+		BalanceBlob: balanceBlob,
+		TxnBlob:     txnBlob,
+		GroupIndex:  10, // must be ignored
+	}
+
+	err = l.Setup(&dp)
+	a.NoError(err)
+	a.Equal(2, len(l.txnGroup))
+	a.Equal(1, len(l.runs))
+	a.Equal(0, l.runs[0].groupIndex)
+	a.NotNil(l.runs[0].eval)
+	a.Equal([]byte{1}, l.runs[0].program)
+	a.NotNil(l.runs[0].ledger)
+	a.Equal(0, l.runs[0].ledger.groupIndex)
+	a.NotEqual(
+		reflect.ValueOf(logic.Eval).Pointer(),
+		reflect.ValueOf(l.runs[0].eval).Pointer(),
+	)
+
+	// ensure clear state program is supposed to be debugged
+	appTxn.Txn.Type = protocol.ApplicationCallTx
+	appTxn.Txn.OnCompletion = transactions.ClearStateOC
+	txnBlob = protocol.EncodeMsgp(&appTxn)
+	txnBlob = append(txnBlob, protocol.EncodeMsgp(&payTxn)...)
+
+	dp = DebugParams{
+		BalanceBlob: balanceBlob,
+		TxnBlob:     txnBlob,
+		GroupIndex:  10, // must be ignored
+	}
+
+	err = l.Setup(&dp)
+	a.NoError(err)
+	a.Equal(2, len(l.txnGroup))
+	a.Equal(1, len(l.runs))
+	a.Equal(0, l.runs[0].groupIndex)
+	a.NotNil(l.runs[0].eval)
+	a.Equal([]byte{1, 1}, l.runs[0].program)
+	a.NotNil(l.runs[0].ledger)
+	a.Equal(0, l.runs[0].ledger.groupIndex)
+	a.NotEqual(
+		reflect.ValueOf(logic.Eval).Pointer(),
+		reflect.ValueOf(l.runs[0].eval).Pointer(),
+	)
+
+	// check app create txn uses approval program from the txn
+	appTxn.Txn.Type = protocol.ApplicationCallTx
+	appTxn.Txn.OnCompletion = transactions.NoOpOC
+	appTxn.Txn.ApplicationID = 0
+	appTxn.Txn.ApprovalProgram = []byte{4}
+	txnBlob = protocol.EncodeMsgp(&appTxn)
+
+	dp = DebugParams{
+		BalanceBlob: balanceBlob,
+		TxnBlob:     txnBlob,
+		GroupIndex:  10, // must be ignored
+	}
+
+	err = l.Setup(&dp)
+	a.NoError(err)
+	a.Equal(1, len(l.txnGroup))
+	a.Equal(1, len(l.runs))
+	a.Equal(0, l.runs[0].groupIndex)
+	a.NotNil(l.runs[0].eval)
+	a.Equal([]byte{4}, l.runs[0].program)
+	a.NotNil(l.runs[0].ledger)
+	a.Equal(0, l.runs[0].ledger.groupIndex)
+	a.NotEqual(
+		reflect.ValueOf(logic.Eval).Pointer(),
+		reflect.ValueOf(l.runs[0].eval).Pointer(),
+	)
+
+	// check error on no programs
+	txnBlob = protocol.EncodeMsgp(&payTxn)
+	txnBlob = append(txnBlob, protocol.EncodeMsgp(&payTxn)...)
+
+	dp = DebugParams{
+		BalanceBlob: balanceBlob,
+		TxnBlob:     txnBlob,
+		GroupIndex:  10, // must be ignored
+	}
+
+	err = l.Setup(&dp)
+	a.Error(err)
+	a.Equal(2, len(l.txnGroup))
 }
