@@ -353,7 +353,7 @@ var sendCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf(errorConstructingTX, err)
 		}
-		if (rekeyTo != basics.Address{}) {
+		if !rekeyTo.IsZero() {
 			payment.RekeyTo = rekeyTo
 		}
 
