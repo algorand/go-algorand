@@ -355,6 +355,10 @@ func BenchmarkAppGlobal16BigDiffs(b *testing.B) {
 	benchmarkFullBlocks(testCases["bench-global-16-big-diffs"], b)
 }
 
+func BenchmarkAppGlobal64MaxClone(b *testing.B) {
+	benchmarkFullBlocks(testCases["bench-global-64-max-clone"], b)
+}
+
 func BenchmarkAppInt1(b *testing.B) { benchmarkFullBlocks(testCases["int-1"], b) }
 
 func BenchmarkAppInt1ManyApps(b *testing.B) { benchmarkFullBlocks(testCases["int-1-many-apps"], b) }
@@ -386,13 +390,17 @@ func init() {
 		}
 	}
 
+	// Max clone
+	params := genAppTestParamsMaxClone(64)
+	testCases[params.name] = params
+
 	// Int 1
 	progBytes, err := logic.AssembleString(`int 1`)
 	if err != nil {
 		panic(err)
 	}
 
-	params := testParams{
+	params = testParams{
 		testType: "app",
 		name:     fmt.Sprintf("int-1"),
 		program:  progBytes,
@@ -632,6 +640,82 @@ func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
 	return testParams{
 		testType:   "app",
 		name:       fmt.Sprintf("bench-%s-%d-%s", stateType, numKeys, testDiffName),
+		schemaSize: uint64(numKeys),
+		program:    progBytes,
+	}
+}
+
+func genAppTestParamsMaxClone(numKeys int) testParams {
+	// goto flip if first key exists
+	flipBranch := `
+		int 0  // current app id
+		int 1  // key
+		itob
+		app_global_get
+		bnz flip
+	`
+
+	writePrefix := `
+		write:
+		int 0
+	`
+
+	writeBlock := `
+		int 1
+		+
+		dup
+		itob
+		dup
+		app_global_put
+	`
+
+	writeSuffix := `
+		int 1
+		return
+	`
+
+	// flip stored value's low bit
+	flipPrefix := `
+		flip:
+		btoi
+		int 1
+		^
+		itob
+		store 0
+		int 1
+		itob
+		load 0
+		app_global_put
+	`
+
+	flipSuffix := `
+		int 1
+		return
+	`
+
+	testDiffName := "max-clone"
+
+	// generate assembly
+	var progParts []string
+	progParts = append(progParts, flipBranch)
+	progParts = append(progParts, writePrefix)
+	for i := 0; i < numKeys; i++ {
+		progParts = append(progParts, writeBlock)
+	}
+	progParts = append(progParts, writeSuffix)
+	progParts = append(progParts, flipPrefix)
+	progParts = append(progParts, flipSuffix)
+	progAsm := strings.Join(progParts, "\n")
+
+	// assemble
+	progBytes, err := logic.AssembleString(progAsm)
+	if err != nil {
+		panic(err)
+	}
+
+	return testParams{
+		testType:   "app",
+		name:       fmt.Sprintf("bench-%s-%d-%s", "global", numKeys, testDiffName),
 		schemaSize: uint64(numKeys),
 		program:    progBytes,
 	}

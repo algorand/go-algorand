@@ -663,7 +663,7 @@ func initConsensusProtocols() {
 	vFuture.MaxLocalSchemaEntries = 16
 
 	// Maximum number of key/value pairs per global key/value store
-	vFuture.MaxGlobalSchemaEntries = 32
+	vFuture.MaxGlobalSchemaEntries = 64
 
 	// Maximum cost of ApprovalProgram/ClearStateProgram
 	vFuture.MaxAppProgramCost = 700
