@@ -32,9 +32,12 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	listAssetsStmt         *sql.Stmt
-	lookupStmt             *sql.Stmt
-	lookupAssetCreatorStmt *sql.Stmt
+	listAssetsStmt               *sql.Stmt
+	lookupStmt                   *sql.Stmt
+	lookupAssetCreatorStmt       *sql.Stmt
+	deleteStoredCatchpoint       *sql.Stmt
+	insertStoredCatchpoint       *sql.Stmt
+	selectOldestsCatchpointFiles *sql.Stmt
 }
 
 var accountsSchema = []string{
@@ -204,41 +207,6 @@ func writeCatchpointStateString(ctx context.Context, tx *sql.Tx, stateName strin
 	return false, err
 }
 
-func storeCatchpoint(tx *sql.Tx, round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
-	_, err = tx.Exec("DELETE FROM storedcatchpoints WHERE round=?", round)
-
-	if err != nil || (fileName == "" && catchpoint == "" && fileSize == 0) {
-		return
-	}
-
-	_, err = tx.Exec("INSERT INTO storedcatchpoints(round, filename, catchpoint, filesize, pinned) VALUES(?, ?, ?, ?, 0)", round, fileName, catchpoint, fileSize)
-	return
-}
-
-func getOldestCatchpointFiles(tx *sql.Tx, fileCount int, filesToKeep int) (fileNames map[basics.Round]string, err error) {
-	var rows *sql.Rows
-	rows, err = tx.Query("SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?", filesToKeep, fileCount)
-
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-
-	fileNames = make(map[basics.Round]string)
-	for rows.Next() {
-		var fileName string
-		var round basics.Round
-		err = rows.Scan(&round, &fileName)
-		if err != nil {
-			return
-		}
-		fileNames[round] = fileName
-	}
-
-	err = rows.Err()
-	return
-}
-
 func getCatchpoint(tx *sql.Tx, round basics.Round) (fileName string, catchpoint string, fileSize int64, err error) {
 	err = tx.QueryRow("SELECT filename, catchpoint, filesize FROM storedcatchpoints WHERE round=?", int64(round)).Scan(&fileName, &catchpoint, &fileSize)
 	return
@@ -331,6 +299,21 @@ func accountsDbInit(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
+	qs.deleteStoredCatchpoint, err = q.Prepare("DELETE FROM storedcatchpoints WHERE round=?")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.insertStoredCatchpoint, err = q.Prepare("INSERT INTO storedcatchpoints(round, filename, catchpoint, filesize, pinned) VALUES(?, ?, ?, ?, 0)")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.selectOldestsCatchpointFiles, err = q.Prepare("SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?")
+	if err != nil {
+		return nil, err
+	}
+
 	return qs, nil
 }
 
@@ -393,6 +376,43 @@ func (qs *accountsDbQueries) lookup(addr basics.Address) (data basics.AccountDat
 		return err
 	})
 
+	return
+}
+
+func (qs *accountsDbQueries) storeCatchpoint(round basics.Round, fileName string, catchpoint string, fileSize int64) (err error) {
+	err = db.Retry(func() (err error) {
+		_, err = qs.deleteStoredCatchpoint.Exec(round)
+
+		if err != nil || (fileName == "" && catchpoint == "" && fileSize == 0) {
+			return
+		}
+
+		_, err = qs.insertStoredCatchpoint.Exec(round, fileName, catchpoint, fileSize)
+		return
+	})
+	return
+}
+
+func (qs *accountsDbQueries) getOldestCatchpointFiles(fileCount int, filesToKeep int) (fileNames map[basics.Round]string, err error) {
+	var rows *sql.Rows
+	rows, err = qs.selectOldestsCatchpointFiles.Query(filesToKeep, fileCount)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	fileNames = make(map[basics.Round]string)
+	for rows.Next() {
+		var fileName string
+		var round basics.Round
+		err = rows.Scan(&round, &fileName)
+		if err != nil {
+			return
+		}
+		fileNames[round] = fileName
+	}
+
+	err = rows.Err()
 	return
 }
 

@@ -1173,10 +1173,7 @@ func catchpointRoundToPath(rnd basics.Round) string {
 
 func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string, fileSize int64, catchpoint string) (err error) {
 	if au.catchpointFileHistoryLength != 0 {
-		err = au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
-			err = storeCatchpoint(tx, round, fileName, catchpoint, fileSize)
-			return
-		})
+		err = au.accountsq.storeCatchpoint(round, fileName, catchpoint, fileSize)
 		if err != nil {
 			au.log.Warnf("accountUpdates: saveCatchpoint: unable to save catchpoint: %v", err)
 			return
@@ -1192,10 +1189,7 @@ func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string
 		return
 	}
 	var filesToDelete map[basics.Round]string
-	err = au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
-		filesToDelete, err = getOldestCatchpointFiles(tx, 2, au.catchpointFileHistoryLength)
-		return
-	})
+	filesToDelete, err = au.accountsq.getOldestCatchpointFiles(2, au.catchpointFileHistoryLength)
 	if err != nil {
 		return fmt.Errorf("unable to delete catchpoint file, getOldestCatchpointFiles failed : %v", err)
 	}
@@ -1209,10 +1203,7 @@ func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string
 			// we can't delete the file, abort -
 			return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
 		}
-		err = au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
-			err = storeCatchpoint(tx, round, "", "", 0)
-			return
-		})
+		err = au.accountsq.storeCatchpoint(round, "", "", 0)
 		if err != nil {
 			return fmt.Errorf("unable to delete old catchpoint entry '%s' : %v", fileToDelete, err)
 		}
