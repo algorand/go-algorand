@@ -25,6 +25,10 @@ then
     exit 1
 fi
 
+BRANCH=$("./scripts/compute_branch.sh")
+CHANNEL=$("./scripts/compute_branch_channel.sh" "$BRANCH")
+PKG_NAME=$("./scripts/compute_package_name.sh" "${CHANNEL:-stable}")
+
 cp -p "${DEBTMP}"/*.deb "${PKG_ROOT}/algorand_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.deb"
 popd
 
