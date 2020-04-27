@@ -219,7 +219,7 @@ CLAW1_SCRIPT="{args: [{encoding: \"int\", value: \"$XFER1\"}, {encoding: \"int\"
 CLAW2_SCRIPT="{args: [{encoding: \"int\", value: \"$XFER1\"}, {encoding: \"int\", value: \"0\"}], accounts: [\"$BOB\", \"$CREATOR\"]}"
 
 # create frozen
-APP_ID=$(${gcmd} app create --approval-prog ${DIR}/asa_approve.teal.teal --clear-prog ${DIR}/asa_clear.teal --creator $CREATOR --global-byteslices 5 --global-ints 4 --local-byteslices 0 --local-ints 2 --app-input <(jq -n "$CREATE_SCRIPT") | grep "$APP_CREATED_STR" | cut -d ' ' -f 6)
+APP_ID=$(${gcmd} app create --approval-prog ${DIR}/asa_approve.teal --clear-prog ${DIR}/asa_clear.teal --creator $CREATOR --global-byteslices 5 --global-ints 4 --local-byteslices 0 --local-ints 2 --app-input <(jq -n "$CREATE_SCRIPT") | grep "$APP_CREATED_STR" | cut -d ' ' -f 6)
 
 # delete bad manager F
 RES=$(${gcmd} app delete --app-id $APP_ID -f $CREATOR 2>&1 || true)
