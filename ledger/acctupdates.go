@@ -197,14 +197,14 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 // The close function is expected to be call in pair with loadFromDisk
 func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	var writingCatchpointRound uint64
-	// todo - figure this out.
-	//au.accountsMu.Lock()
-	//defer au.accountsMu.Unlock()
+	au.accountsMu.Lock()
+
 	au.dbs = l.trackerDB()
 	au.log = l.trackerLog()
 	au.ledger = l
 
 	if au.initAccounts == nil {
+		au.accountsMu.Unlock()
 		return fmt.Errorf("accountUpdates.loadFromDisk: initAccounts not set")
 	}
 
@@ -248,27 +248,42 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		return nil
 	})
 	if err != nil {
+		au.accountsMu.Unlock()
 		return err
 	}
 
 	au.accountsq, err = accountsDbInit(au.dbs.rdb.Handle)
 	if err != nil {
+		au.accountsMu.Unlock()
 		return err
 	}
 
 	hdr, err := l.BlockHdr(au.dbRound)
 	if err != nil {
+		au.accountsMu.Unlock()
 		return err
 	}
 	au.protos = []config.ConsensusParams{config.Consensus[hdr.CurrentProtocol]}
-
 	au.deltas = nil
 	au.assetDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
 	au.assets = make(map[basics.AssetIndex]modifiedAsset)
 	au.deltasAccum = []int{0}
+
+	// keep these channel closed if we're not generating catchpoint
+	au.catchpointWriting = make(chan struct{}, 1)
+	au.catchpointSlowWriting = make(chan struct{}, 1)
+	close(au.catchpointSlowWriting)
+	close(au.catchpointWriting)
+	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
+	au.committedOffset = make(chan deferedCommit, 1)
+	go au.commitSyncer()
+
 	loaded := au.dbRound
+	au.accountsMu.Unlock()
+
 	var writingCatchpointDigest crypto.Digest
+
 	for loaded < latest {
 		next := loaded + 1
 
@@ -289,17 +304,10 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 			writingCatchpointDigest = blk.Digest()
 		}
 	}
-	// keep these channel closed if we're not generating catchpoint
-	au.catchpointWriting = make(chan struct{}, 1)
-	au.catchpointSlowWriting = make(chan struct{}, 1)
-	close(au.catchpointSlowWriting)
-	close(au.catchpointWriting)
-	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
+
 	if writingCatchpointRound != 0 && au.catchpointInterval != 0 {
 		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest)
 	}
-	au.committedOffset = make(chan deferedCommit, 1)
-	go au.commitSyncer()
 
 	return nil
 }
@@ -1060,6 +1068,8 @@ func (au *accountUpdates) latest() basics.Round {
 }
 
 func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label string, committedRoundDigest crypto.Digest) {
+	// the retryCatchpointCreation is used to repeat the catchpoint file generation in case the node crashed / aborted during startup
+	// before the catchpoint file generation could be completed.
 	retryCatchpointCreation := false
 	au.log.Debugf("accountUpdates: generateCatchpoint: generating catchpoint for round %d", committedRound)
 	defer func() {
