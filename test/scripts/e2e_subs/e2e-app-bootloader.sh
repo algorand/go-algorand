@@ -19,8 +19,7 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 # Compile target contract (we will upgrade ApprovalProgram and
 # ClearStateProgram into this)
 ${gcmd} clerk compile ${DIR}/tealprogs/upgraded.teal -o ${TEMPDIR}/upgraded.tealc
-TARGET_HASH=$(sha256sum ${TEMPDIR}/upgraded.tealc | awk '{ print $1 }')
-UPGRADE_B64=$(cat ${TEMPDIR}/upgraded.tealc| base64 -w0)
+TARGET_HASH=$(shasum -a 256 ${TEMPDIR}/upgraded.tealc | awk '{ print $1 }')
 
 # Compile dummy, wrong contract
 ${gcmd} clerk compile ${DIR}/tealprogs/wrongupgrade.teal -o ${TEMPDIR}/wrongupgrade.tealc

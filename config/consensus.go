@@ -261,7 +261,7 @@ var MaxVoteThreshold int
 var MaxEvalDeltaAccounts int
 
 // MaxStateDeltaKeys is the largest number of key/value pairs that may appear
-// in a StateDelta, used for decoding purposes
+// in a StateDelta, used for decoding purposes.
 var MaxStateDeltaKeys int
 
 func checkSetMax(value int, curMax *int) {

@@ -219,7 +219,7 @@ func (tt TealType) String() string {
 	case TealUintType:
 		return "u"
 	}
-	return "unknown"
+	return "?"
 }
 
 // TealValue contains type information and a value, representing a value in a

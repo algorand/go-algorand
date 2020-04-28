@@ -106,12 +106,6 @@ type AccountData struct {
 	VoteLastValid   Round  `codec:"voteLst"`
 	VoteKeyDilution uint64 `codec:"voteKD"`
 
-	// SpendingKey is the address against which signatures/multisigs/logicsigs should be checked.
-	// If empty, the address of the account whose AccountData this is is used.
-	// A transaction may change an account's SpendingKey to "re-key" the account.
-	// This allows key rotation, changing the members in a multisig, etc.
-	SpendingKey Address `codec:"spend"`
-
 	// If this account created an asset, AssetParams stores
 	// the parameters defining that asset.  The params are indexed
 	// by the Index of the AssetID; the Creator is this account's address.
@@ -143,13 +137,24 @@ type AccountData struct {
 	// is expected to have copy-by-value semantics.
 	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=-"`
 
+	// SpendingKey is the address against which signatures/multisigs/logicsigs should be checked.
+	// If empty, the address of the account whose AccountData this is is used.
+	// A transaction may change an account's SpendingKey to "re-key" the account.
+	// This allows key rotation, changing the members in a multisig, etc.
+	SpendingKey Address `codec:"spend"`
+
+	// AppLocalStates stores the local states associated with any applications
+	// that this account has opted in to.
 	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=-"`
 
+	// AppParams stores the global parameters and state associated with any
+	// applications that this account has created.
 	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=-"`
 
 	// TotalAppSchema stores the sum of all of the LocalStateSchemas
-	// and GlobalStateSchemas in this account, so that we don't have
-	// to iterate over all state schemas to compute MinBalance.
+	// and GlobalStateSchemas in this account (global for applications
+	// we created local for applications we opted in to), so that we don't
+	// have to iterate over all of them to compute MinBalance.
 	TotalAppSchema StateSchema `codec:"tsch"`
 }
 
@@ -168,8 +173,8 @@ type AppLocalState struct {
 type AppParams struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApprovalProgram   []byte      `codec:"approv,allocbound=-"`
-	ClearStateProgram []byte      `codec:"clearp,allocbound=-"`
+	ApprovalProgram   []byte      `codec:"approv"`
+	ClearStateProgram []byte      `codec:"clearp"`
 	LocalStateSchema  StateSchema `codec:"lsch"`
 	GlobalStateSchema StateSchema `codec:"gsch"`
 
