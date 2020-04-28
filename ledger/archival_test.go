@@ -190,10 +190,8 @@ func TestArchivalRestart(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(maxBlocks), latest)
 	require.Equal(t, basics.Round(0), earliest)
-
 	// close and reopen the same DB, ensure latest/earliest are not changed
 	l.Close()
-
 	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()

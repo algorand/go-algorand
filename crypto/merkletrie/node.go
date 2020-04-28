@@ -225,6 +225,7 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 	}
 	if childNode.leaf {
 		pnode, nodeID = n.duplicate(cache)
+		// we are guaranteed to have other children, because our tree forbids nodes that have exactly one leaf child and no other children.
 		// we have one or more children, see if it's the first child:
 		if pnode.firstChild == key[0] {
 			// we're removing the first child.

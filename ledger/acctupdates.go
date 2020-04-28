@@ -534,7 +534,6 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	defer func() {
 		au.accountsMu.RUnlock()
 		if dc.offset != 0 {
-			au.accountsWriting.Add(1)
 			au.committedOffset <- dc
 		}
 	}()
@@ -626,6 +625,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 		dbRound:  au.dbRound,
 		lookback: lookback,
 	}
+	au.accountsWriting.Add(1)
 	return
 }
 
@@ -928,6 +928,16 @@ func (au *accountUpdates) commitSyncer() {
 			}
 			au.commitRound(committedOffset.offset, committedOffset.dbRound, committedOffset.lookback)
 		case <-au.ctx.Done():
+			// drain the pending commits queue:
+			drained := false
+			for !drained {
+				select {
+				case <-au.committedOffset:
+					au.accountsWriting.Done()
+				default:
+					drained = true
+				}
+			}
 			return
 		}
 	}

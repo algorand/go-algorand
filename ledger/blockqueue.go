@@ -44,6 +44,7 @@ type blockQueue struct {
 	mu      deadlock.Mutex
 	cond    *sync.Cond
 	running bool
+	closed  chan struct{}
 }
 
 func bqInit(l *Ledger) (*blockQueue, error) {
@@ -51,7 +52,7 @@ func bqInit(l *Ledger) (*blockQueue, error) {
 	bq.cond = sync.NewCond(&bq.mu)
 	bq.l = l
 	bq.running = true
-
+	bq.closed = make(chan struct{})
 	err := bq.l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
 		var err0 error
 		bq.lastCommitted, err0 = blockLatest(tx)
@@ -67,14 +68,20 @@ func bqInit(l *Ledger) (*blockQueue, error) {
 
 func (bq *blockQueue) close() {
 	bq.mu.Lock()
-	defer bq.mu.Unlock()
+	defer func() {
+		bq.mu.Unlock()
+		<-bq.closed
+	}()
+
 	if bq.running {
 		bq.running = false
 		bq.cond.Broadcast()
 	}
+
 }
 
 func (bq *blockQueue) syncer() {
+	defer close(bq.closed)
 	bq.mu.Lock()
 	for {
 		for bq.running && len(bq.q) == 0 {
