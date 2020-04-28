@@ -301,7 +301,7 @@ func (mtc *merkleTrieCache) commit() error {
 	// updated the hashes of these pages. this works correctly
 	// since all trie modification are done with ids that are bottom-up
 	for _, page := range sortedCreatedPages {
-		err := mtc.recalculatePageHashes(page)
+		err := mtc.calculatePageHashes(page)
 		if err != nil {
 			return err
 		}
@@ -371,8 +371,10 @@ func (mtc *merkleTrieCache) commit() error {
 	return nil
 }
 
-// recalculatePageHashes recalculate hashes of a specific page
-func (mtc *merkleTrieCache) recalculatePageHashes(page int64) (err error) {
+// calculatePageHashes calculate hashes of a specific page
+// It is vital that the hashes for all the preceding page would have
+// already been calculated for this function to work correctly.
+func (mtc *merkleTrieCache) calculatePageHashes(page int64) (err error) {
 	nodes := mtc.pageToNIDsPtr[uint64(page)]
 	for i := page * mtc.nodesPerPage; i < (page+1)*mtc.nodesPerPage; i++ {
 		if mtc.pendingCreatedNID[storedNodeIdentifier(i)] == false {
@@ -380,7 +382,7 @@ func (mtc *merkleTrieCache) recalculatePageHashes(page int64) (err error) {
 		}
 		node := nodes[storedNodeIdentifier(i)]
 		if node != nil {
-			if err = node.recalculateHash(mtc); err != nil {
+			if err = node.calculateHash(mtc); err != nil {
 				return
 			}
 		}

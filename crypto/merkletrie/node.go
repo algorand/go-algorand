@@ -180,8 +180,12 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 	return nodeID, nil
 }
 
-// recalculateHash recalculate the hash of the non-leaf nodes
-func (n *node) recalculateHash(cache *merkleTrieCache) error {
+// calculateHash calculate the hash of the non-leaf nodes
+// when this function is called, the hashes of all the child node are expected
+// to have been calculated already. This is achived by doing the following:
+// 1. all node id allocations are done in incremental monolitic order, from the bottom up.
+// 2. hash calculations are being doing in node id incremental ordering
+func (n *node) calculateHash(cache *merkleTrieCache) error {
 	if n.leaf {
 		return nil
 	}
