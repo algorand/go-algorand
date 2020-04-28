@@ -265,6 +265,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 
 	writingCatchpointRound, _, err = au.accountsq.readCatchpointStateUint64(context.Background(), "writingCatchpoint")
 	if err != nil {
+		au.accountsMu.Unlock()
 		return err
 	}
 
