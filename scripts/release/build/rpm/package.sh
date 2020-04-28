@@ -1,10 +1,4 @@
-#!/bin/bash -e
-
-# build_rpm.sh - Build a .deb package for one platform.
-#
-# Syntax:   build_rpm.sh <output directory>
-#
-# Examples: scripts/build_rpm.sh /tmp
+#!/usr/bin/env bash
 
 set -ex
 
@@ -35,7 +29,6 @@ trap 'rm -rf $TEMPDIR' 0
         -e "s,@VER@,$FULLVERSION," \
     > "$TEMPDIR/algorand.spec"
 
-#rpmbuild --define "_rpmdir ${OUTDIR}" --define "RELEASE_GENESIS_PROCESS x${RELEASE_GENESIS_PROCESS}" --define "LICENSE_FILE $REPO_DIR/COPYING" -bb "${TEMPDIR}/algorand.spec"
 rpmbuild --define "_rpmdir ${RPMTMP}" --define "RELEASE_GENESIS_PROCESS x${RELEASE_GENESIS_PROCESS}" --define "LICENSE_FILE $REPO_DIR/COPYING" -bb "${TEMPDIR}/algorand.spec"
 
 mkdir -p /root/subhome/node_pkg
