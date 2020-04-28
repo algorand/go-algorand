@@ -170,6 +170,12 @@ func (s *Server) Start() {
 		os.Exit(1)
 	}
 
+	adminAPIToken, err := tokens.GetAndValidateAPIToken(s.RootPath, tokens.AlgodAdminTokenFilename)
+	if err != nil {
+		fmt.Printf("APIToken error: %v\n", err)
+		os.Exit(1)
+	}
+
 	s.stopping = make(chan struct{})
 
 	addr := cfg.EndpointAddress
@@ -193,7 +199,7 @@ func (s *Server) Start() {
 
 	tcpListener := listener.(*net.TCPListener)
 
-	e := apiServer.NewRouter(s.log, s.node, s.stopping, apiToken, tcpListener)
+	e := apiServer.NewRouter(s.log, s.node, s.stopping, apiToken, adminAPIToken, tcpListener)
 
 	errChan := make(chan error, 1)
 	go func() {
