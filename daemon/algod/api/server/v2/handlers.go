@@ -450,5 +450,9 @@ func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr strin
 // Compile TEAL code to binary, return both binary and hash
 // (POST /v2/compile)
 func (v2 *Handlers) TealCompile(ctx echo.Context) error {
-	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
+	response := generated.PostCompileResponse {
+		Hash: "tbd",
+		Result: "tbd",
+	}
+	return ctx.JSON(http.StatusOK, response)
 }
