@@ -199,9 +199,13 @@ func (n *node) calculateHash(cache *merkleTrieCache) error {
 		if err != nil {
 			return err
 		}
-		hashAccumulator = append(hashAccumulator, byte(len(childNode.hash)+1)) // we add this string length before the actual string so it could get "decoded"; in practice, it makes a good domain separator.
-		hashAccumulator = append(hashAccumulator, i)                           // adding the first byte of the child
-		hashAccumulator = append(hashAccumulator, childNode.hash...)           // adding the reminder of the child
+		lenMod := 1
+		if !childNode.leaf {
+			lenMod = 128
+		}
+		hashAccumulator = append(hashAccumulator, byte(len(childNode.hash)+lenMod)) // we add this string length before the actual string so it could get "decoded"; in practice, it makes a good domain separator.
+		hashAccumulator = append(hashAccumulator, i)                                // adding the first byte of the child
+		hashAccumulator = append(hashAccumulator, childNode.hash...)                // adding the reminder of the child
 		if n.childrenNext[i] == i {
 			break
 		}
