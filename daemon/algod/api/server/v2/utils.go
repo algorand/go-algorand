@@ -163,26 +163,3 @@ func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
 	}
 	return output, nil
 }
-
-func decode(handle codec.Handle, input []byte, output interface{}) error {
-	//enc := codec.NewEncoderBytes(&output, handle)
-	dec := codec.NewDecoderBytes(input, handle)
-
-	err := dec.Decode(output)
-	if err != nil {
-		return fmt.Errorf("failed to decode object: %v", err)
-	}
-	return nil
-}
-
-// Uses the 'codec:' annotations to reserialize an object.
-func toCodecMap(input interface{}, output *map[string]interface{}) (err error) {
-	var encoded []byte
-	encoded, err = encode(protocol.CodecHandle, input)
-	if err != nil {
-		return
-	}
-
-	err = decode(protocol.CodecHandle, encoded, &output)
-	return
-}
