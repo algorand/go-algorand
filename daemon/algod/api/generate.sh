@@ -5,7 +5,7 @@ rootdir=`dirname $0`
 pushd ${rootdir}
 
 cd ${rootdir}/../../..
-$(GO111MODULE=on go get -u "github.com/algorand/oapi-codegen/...@v1.3.5-algorand2")
+$(GO111MODULE=on go get -u "github.com/algorand/oapi-codegen/...@v1.3.5-algorand4")
 
 popd
 
