@@ -46,8 +46,8 @@ require (
 	golang.org/x/crypto v0.0.0-20200427165652-729f1e841bcc
 	golang.org/x/net v0.0.0-20200425230154-ff2c4b7c35a0
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e // indirect
-	golang.org/x/sys v0.0.0-20200428193600-3771e69a9abf
-	golang.org/x/tools v0.0.0-20200428185508-e9a00ec82136 // indirect
+	golang.org/x/sys v0.0.0-20200428200454-593003d681fa
+	golang.org/x/tools v0.0.0-20200428211428-0c9eba77bc32 // indirect
 	google.golang.org/appengine v1.6.1 // indirect
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
 	gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2 // indirect

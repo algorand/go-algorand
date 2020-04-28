@@ -17,7 +17,9 @@
 package v2
 
 import (
+	"bytes"
 	"errors"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -451,9 +454,19 @@ func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr strin
 // Compile TEAL code to binary, return both binary and hash
 // (POST /v2/compile)
 func (v2 *Handlers) TealCompile(ctx echo.Context) error {
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(ctx.Request().Body)
+	source := buf.String()
+	program, err := logic.AssembleString(source)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	
+	pd := logic.HashProgram(program)
+	addr := basics.Address(pd)
 	response := generated.PostCompileResponse {
-		Hash: "tbd",
-		Result: "tbd",
+		Hash: addr.String(),
+		Result: base64.StdEncoding.EncodeToString(program),
 	}
 	return ctx.JSON(http.StatusOK, response)
 }
