@@ -66,6 +66,8 @@ func init() {
 	nodeCmd.AddCommand(waitCmd)
 	nodeCmd.AddCommand(createCmd)
 	nodeCmd.AddCommand(catchupCmd)
+	// Once the server-side implementation of the shutdown command is ready, we should enable this one.
+	//nodeCmd.AddCommand(shutdownCmd)
 
 	startCmd.Flags().StringVarP(&peerDial, "peer", "p", "", "Peer address to dial for initial connection")
 	startCmd.Flags().StringVarP(&listenIP, "listen", "l", "", "Endpoint / REST address to listen on")
@@ -183,6 +185,28 @@ var startCmd = &cobra.Command{
 				reportErrorf(errorNodeFailedToStart, err)
 			} else {
 				reportInfoln(infoNodeStart)
+			}
+		})
+	},
+}
+
+var shutdownCmd = &cobra.Command{
+	Use:   "shutdown",
+	Short: "Shut down the node",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		binDir, err := util.ExeDir()
+		if err != nil {
+			panic(err)
+		}
+		onDataDirs(func(dataDir string) {
+			nc := nodecontrol.MakeNodeController(binDir, dataDir)
+			err := nc.Shutdown()
+
+			if err == nil {
+				reportInfoln(infoNodeShuttingDown)
+			} else {
+				reportErrorf(errorNodeFailedToShutdown, err)
 			}
 		})
 	},

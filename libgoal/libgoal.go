@@ -478,11 +478,11 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
+
 	_, err = algod.SendRawTransaction(stx)
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
-
 	return tx, nil
 }
 
