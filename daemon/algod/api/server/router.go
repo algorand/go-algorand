@@ -71,13 +71,13 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib/middlewares"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
+	"github.com/algorand/go-algorand/util/tokens"
 )
 
 const (
-	apiV1Tag = "v1"
+	apiV1Tag = "/v1"
 )
 
 // wrapCtx passes a common context to each request without a global variable.
@@ -88,17 +88,53 @@ func wrapCtx(ctx lib.ReqContext, handler func(lib.ReqContext, echo.Context)) ech
 	}
 }
 
-// registerHandler registers a set of Routes to [router]. if [prefix] is not empty, it
-// registers the routes to a new sub-router [prefix]
-func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx lib.ReqContext) {
-	for _, route := range routes {
-		r := router.Add(route.Method, prefix+route.Path, wrapCtx(ctx, route.HandlerFunc))
-		r.Name = route.Name
+func makeAuthRoutes(ctx lib.ReqContext, apiToken string, adminAPIToken string, enableProfiler bool) AuthRoutes {
+	authRoutes := make(AuthRoutes)
+	noAuthRoutes := make(map[echo.Route]echo.HandlerFunc)
+	defaultAuthRoutes := make(map[echo.Route]echo.HandlerFunc)
+	adminAuthRoutes := make(map[echo.Route]echo.HandlerFunc)
+	authRoutes[""] = noAuthRoutes
+	authRoutes[apiToken] = defaultAuthRoutes
+	authRoutes[adminAPIToken] = adminAuthRoutes
+	for _, route := range common.Routes {
+		if route.NoAuth {
+			noAuthRoutes[echo.Route{Method: route.Method, Path: route.Path}] = wrapCtx(ctx, route.HandlerFunc)
+			continue
+		}
+		defaultAuthRoutes[echo.Route{Method: route.Method, Path: route.Path}] = wrapCtx(ctx, route.HandlerFunc)
+		adminAuthRoutes[echo.Route{Method: route.Method, Path: route.Path}] = wrapCtx(ctx, route.HandlerFunc)
 	}
+	for _, route := range routes.V1Routes {
+		defaultAuthRoutes[echo.Route{Method: route.Method, Path: apiV1Tag + route.Path}] = wrapCtx(ctx, route.HandlerFunc)
+		adminAuthRoutes[echo.Route{Method: route.Method, Path: apiV1Tag + route.Path}] = wrapCtx(ctx, route.HandlerFunc)
+	}
+
+	// pick the "regular" endpoints
+	for route, handler := range v2.GetRoutes(ctx, false) {
+		defaultAuthRoutes[route] = handler
+		adminAuthRoutes[route] = handler
+	}
+
+	// pick the "admin" endpoints
+	for route, handler := range v2.GetRoutes(ctx, true) {
+		adminAuthRoutes[route] = handler
+	}
+	if enableProfiler {
+		adminAuthRoutes[echo.Route{Method: echo.GET, Path: "/urlAuth/:token/debug/pprof/*"}] = echo.WrapHandler(http.DefaultServeMux)
+		adminAuthRoutes[echo.Route{Method: echo.GET, Path: "/debug/pprof/*"}] = echo.WrapHandler(http.DefaultServeMux)
+	}
+	return authRoutes
 }
 
 // NewRouter builds and returns a new router with our REST handlers registered.
-func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, listener net.Listener) *echo.Echo {
+func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener) *echo.Echo {
+	if err := tokens.ValidateAPIToken(apiToken); err != nil {
+		logger.Errorf("Invalid apiToken was passed to NewRouter ('%s'): %v", apiToken, err)
+	}
+	if err := tokens.ValidateAPIToken(adminAPIToken); err != nil {
+		logger.Errorf("Invalid adminAPIToken was passed to NewRouter ('%s'): %v", adminAPIToken, err)
+	}
+
 	e := echo.New()
 
 	e.Listener = listener
@@ -106,9 +142,8 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 
 	e.Pre(middleware.RemoveTrailingSlash())
 
+	authenticator := MakeAuth(logger, e)
 	e.Use(echo.WrapMiddleware(middlewares.Logger(logger)))
-	// TODO: New auth middleware - https://github.com/algorand/go-algorand/issues/863
-	e.Use(middlewares.Auth(logger, apiToken))
 	e.Use(echo.WrapMiddleware(middlewares.CORS))
 
 	// Note: Echo has builtin middleware for logging / CORS that we should investigate:
@@ -120,26 +155,8 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	// Request Context
 	ctx := lib.ReqContext{Node: node, Log: logger, Shutdown: shutdown}
 
-	// Route pprof requests to DefaultServeMux.
-	// The auth middleware removes /urlAuth/:token so that it can be routed correctly.
-	if node.Config().EnableProfiler {
-		e.GET("/debug/pprof/*", echo.WrapHandler(http.DefaultServeMux))
-		e.GET("/urlAuth/:token/debug/pprof/*", echo.WrapHandler(http.DefaultServeMux))
-	}
-
-	// Registering common routes
-	registerHandlers(e, "", common.Routes, ctx)
-
-	// Registering v1 routes
-	registerHandlers(e, apiV1Tag, routes.V1Routes, ctx)
-
-	// Registering v2 routes
-	v2Handler := v2.Handlers{
-		Node:     node,
-		Log:      logger,
-		Shutdown: shutdown,
-	}
-	generated.RegisterHandlers(e, &v2Handler)
+	// Register handles
+	authenticator.RegisterHandlers(makeAuthRoutes(ctx, apiToken, adminAPIToken, node.Config().EnableProfiler))
 
 	return e
 }
