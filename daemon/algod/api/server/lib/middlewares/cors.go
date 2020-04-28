@@ -23,6 +23,9 @@ import (
 const allowedMethods = "GET, POST, PUT, OPTIONS"
 const allowedHeaders = TokenHeader + ", Content-Type"
 
+// TokenHeader defines the http header that includes the auth token
+const TokenHeader = "X-Algo-API-Token"
+
 // CORS adds the CORS headers to every response
 func CORS(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
