@@ -283,6 +283,24 @@ type AssetHolding struct {
 	Frozen bool `json:"frozen"`
 }
 
+// Transaction TEAL signature and arguments
+// type
+// swagger:model LogicSignature
+type LogicSignature struct {
+
+	// Logic code applied to transaction
+	//
+	// required: true
+	// swagger:strfmt byte
+	Logic []byte `json:"logic"`
+
+	// Args are not signed, but checked by Logic
+	//
+	// required: false
+	// swagger:strfmt byte
+	Args [][]byte `json:"args"`
+}
+
 // Transaction contains all fields common to all transactions and serves as an envelope to all transactions
 // type
 // swagger:model Transaction
@@ -402,6 +420,11 @@ type Transaction struct {
 	// required: false
 	// swagger:strfmt byte
 	Group []byte `json:"group,omitempty"`
+
+	// Logic Signature if any
+	//
+	// required: false
+	LogicSig *LogicSignature `json:"logic_signature,omitempty"`
 }
 
 // PaymentTransactionType contains the additional fields for a payment Transaction
