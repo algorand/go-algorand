@@ -305,9 +305,33 @@
                   "schema" : {
                      "description" : "NodeStatus contains the information about a node status",
                      "properties" : {
+                        "catchpoint" : {
+                           "description" : "The current catchpoint that is being caught up to",
+                           "type" : "string"
+                        },
+                        "catchpoint-acquired-blocks" : {
+                           "description" : "The number of blocks that have already been obtained by the node as part of the catchup",
+                           "type" : "integer"
+                        },
+                        "catchpoint-processed-accounts" : {
+                           "description" : "The number of account from the current catchpoint that have been processed so far as part of the catchup",
+                           "type" : "integer"
+                        },
+                        "catchpoint-total-accounts" : {
+                           "description" : "The total number of accounts included in the current catchpoint",
+                           "type" : "integer"
+                        },
+                        "catchpoint-total-blocks" : {
+                           "description" : "The total number of blocks that are required to complete the current catchpoint catchup",
+                           "type" : "integer"
+                        },
                         "catchup-time" : {
                            "description" : "CatchupTime in nanoseconds",
                            "type" : "integer"
+                        },
+                        "last-catchpoint" : {
+                           "description" : "The last catchpoint seen by the node",
+                           "type" : "string"
                         },
                         "last-round" : {
                            "description" : "LastRound indicates the last round seen",
@@ -1507,9 +1531,33 @@
                         "schema" : {
                            "description" : "NodeStatus contains the information about a node status",
                            "properties" : {
+                              "catchpoint" : {
+                                 "description" : "The current catchpoint that is being caught up to",
+                                 "type" : "string"
+                              },
+                              "catchpoint-acquired-blocks" : {
+                                 "description" : "The number of blocks that have already been obtained by the node as part of the catchup",
+                                 "type" : "integer"
+                              },
+                              "catchpoint-processed-accounts" : {
+                                 "description" : "The number of account from the current catchpoint that have been processed so far as part of the catchup",
+                                 "type" : "integer"
+                              },
+                              "catchpoint-total-accounts" : {
+                                 "description" : "The total number of accounts included in the current catchpoint",
+                                 "type" : "integer"
+                              },
+                              "catchpoint-total-blocks" : {
+                                 "description" : "The total number of blocks that are required to complete the current catchpoint catchup",
+                                 "type" : "integer"
+                              },
                               "catchup-time" : {
                                  "description" : "CatchupTime in nanoseconds",
                                  "type" : "integer"
+                              },
+                              "last-catchpoint" : {
+                                 "description" : "The last catchpoint seen by the node",
+                                 "type" : "string"
                               },
                               "last-round" : {
                                  "description" : "LastRound indicates the last round seen",
@@ -1607,9 +1655,33 @@
                         "schema" : {
                            "description" : "NodeStatus contains the information about a node status",
                            "properties" : {
+                              "catchpoint" : {
+                                 "description" : "The current catchpoint that is being caught up to",
+                                 "type" : "string"
+                              },
+                              "catchpoint-acquired-blocks" : {
+                                 "description" : "The number of blocks that have already been obtained by the node as part of the catchup",
+                                 "type" : "integer"
+                              },
+                              "catchpoint-processed-accounts" : {
+                                 "description" : "The number of account from the current catchpoint that have been processed so far as part of the catchup",
+                                 "type" : "integer"
+                              },
+                              "catchpoint-total-accounts" : {
+                                 "description" : "The total number of accounts included in the current catchpoint",
+                                 "type" : "integer"
+                              },
+                              "catchpoint-total-blocks" : {
+                                 "description" : "The total number of blocks that are required to complete the current catchpoint catchup",
+                                 "type" : "integer"
+                              },
                               "catchup-time" : {
                                  "description" : "CatchupTime in nanoseconds",
                                  "type" : "integer"
+                              },
+                              "last-catchpoint" : {
+                                 "description" : "The last catchpoint seen by the node",
+                                 "type" : "string"
                               },
                               "last-round" : {
                                  "description" : "LastRound indicates the last round seen",

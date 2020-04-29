@@ -89,10 +89,10 @@ type NodeStatus struct {
 	// Required: false
 	CatchpointCatchupTotalBlocks uint64 `json:"catchpointCatchupTotalBlocks,omitempty"`
 
-	// CatchpointCatchupDownloadedBlocks indicates the total number of downloaded blocks
+	// CatchpointCatchupAcquiredBlocks indicates the total number of downloaded blocks
 	//
 	// Required: false
-	CatchpointCatchupDownloadedBlocks uint64 `json:"catchpointCatchupDownloadedBlocks,omitempty"`
+	CatchpointCatchupAcquiredBlocks uint64 `json:"catchpointCatchupAcquiredBlocks,omitempty"`
 }
 
 // TransactionID Description

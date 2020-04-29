@@ -44,7 +44,7 @@ type CatchpointCatchupStats struct {
 	TotalAccounts     uint64
 	ProcessedAccounts uint64
 	TotalBlocks       uint64
-	DownloadedBlocks  uint64
+	AcquiredBlocks    uint64
 	VerifiedBlocks    uint64
 	ProcessedBytes    uint64
 	StartTime         time.Time
@@ -359,7 +359,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 
 	cs.statsMu.Lock()
 	cs.stats.TotalBlocks = uint64(lookback)
-	cs.stats.DownloadedBlocks = 0
+	cs.stats.AcquiredBlocks = 0
 	cs.stats.VerifiedBlocks = 0
 	cs.statsMu.Unlock()
 
@@ -400,7 +400,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		}
 
 		cs.statsMu.Lock()
-		cs.stats.DownloadedBlocks++
+		cs.stats.AcquiredBlocks++
 		cs.statsMu.Unlock()
 
 		// validate :
@@ -408,7 +408,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			// not identical, retry download.
 			cs.log.Warnf("processStageBlocksDownload downloaded block(%d) did not match it's successor(%d) block hash %v != %v", blk.Round(), prevBlock.Round(), blk.Hash(), prevBlock.BlockHeader.Branch)
 			cs.statsMu.Lock()
-			cs.stats.DownloadedBlocks--
+			cs.stats.AcquiredBlocks--
 			cs.statsMu.Unlock()
 			continue
 		}
@@ -428,7 +428,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		if err != nil {
 			cs.log.Warnf("processStageBlocksDownload failed to store downloaded staging block for round %d", blk.Round())
 			cs.statsMu.Lock()
-			cs.stats.DownloadedBlocks--
+			cs.stats.AcquiredBlocks--
 			cs.stats.VerifiedBlocks--
 			cs.statsMu.Unlock()
 			continue

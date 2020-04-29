@@ -417,9 +417,9 @@ func makeStatusString(stat v1.NodeStatus) string {
 			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupAccounts, stat.CatchpointCatchupProcessedAccounts,
 				stat.CatchpointCatchupTotalAccounts)
 		}
-		if stat.CatchpointCatchupDownloadedBlocks+stat.CatchpointCatchupTotalBlocks > 0 {
+		if stat.CatchpointCatchupAcquiredBlocks+stat.CatchpointCatchupTotalBlocks > 0 {
 			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupBlocks, stat.CatchpointCatchupTotalBlocks,
-				stat.CatchpointCatchupDownloadedBlocks)
+				stat.CatchpointCatchupAcquiredBlocks)
 		}
 	}
 

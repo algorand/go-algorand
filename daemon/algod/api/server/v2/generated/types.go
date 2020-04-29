@@ -269,8 +269,26 @@ type CatchpointStartResponse struct {
 // NodeStatusResponse defines model for NodeStatusResponse.
 type NodeStatusResponse struct {
 
+	// The current catchpoint that is being caught up to
+	Catchpoint *string `json:"catchpoint,omitempty"`
+
+	// The number of blocks that have already been obtained by the node as part of the catchup
+	CatchpointAcquiredBlocks *uint64 `json:"catchpoint-acquired-blocks,omitempty"`
+
+	// The number of account from the current catchpoint that have been processed so far as part of the catchup
+	CatchpointProcessedAccounts *uint64 `json:"catchpoint-processed-accounts,omitempty"`
+
+	// The total number of accounts included in the current catchpoint
+	CatchpointTotalAccounts *uint64 `json:"catchpoint-total-accounts,omitempty"`
+
+	// The total number of blocks that are required to complete the current catchpoint catchup
+	CatchpointTotalBlocks *uint64 `json:"catchpoint-total-blocks,omitempty"`
+
 	// CatchupTime in nanoseconds
 	CatchupTime uint64 `json:"catchup-time"`
+
+	// The last catchpoint seen by the node
+	LastCatchpoint *string `json:"last-catchpoint,omitempty"`
 
 	// LastRound indicates the last round seen
 	LastRound uint64 `json:"last-round"`

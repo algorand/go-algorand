@@ -71,7 +71,7 @@ type StatusReport struct {
 	CatchpointCatchupTotalAccounts     uint64
 	CatchpointCatchupProcessedAccounts uint64
 	CatchpointCatchupTotalBlocks       uint64
-	CatchpointCatchupDownloadedBlocks  uint64
+	CatchpointCatchupAcquiredBlocks    uint64
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen
@@ -606,7 +606,7 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 		s.CatchpointCatchupTotalAccounts = stats.TotalAccounts
 		s.CatchpointCatchupProcessedAccounts = stats.ProcessedAccounts
 		s.CatchpointCatchupTotalBlocks = stats.TotalBlocks
-		s.CatchpointCatchupDownloadedBlocks = stats.DownloadedBlocks
+		s.CatchpointCatchupAcquiredBlocks = stats.AcquiredBlocks
 		s.CatchupTime = time.Now().Sub(stats.StartTime)
 	} else {
 		s.SynchronizingTime = node.catchupService.SynchronizingTime()

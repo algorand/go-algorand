@@ -224,14 +224,20 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 	}
 
 	response := generated.NodeStatusResponse{
-		LastRound:                 uint64(stat.LastRound),
-		LastVersion:               string(stat.LastVersion),
-		NextVersion:               string(stat.NextVersion),
-		NextVersionRound:          uint64(stat.NextVersionRound),
-		NextVersionSupported:      stat.NextVersionSupported,
-		TimeSinceLastRound:        uint64(stat.TimeSinceLastRound().Nanoseconds()),
-		CatchupTime:               uint64(stat.CatchupTime.Nanoseconds()),
-		StoppedAtUnsupportedRound: stat.StoppedAtUnsupportedRound,
+		LastRound:                   uint64(stat.LastRound),
+		LastVersion:                 string(stat.LastVersion),
+		NextVersion:                 string(stat.NextVersion),
+		NextVersionRound:            uint64(stat.NextVersionRound),
+		NextVersionSupported:        stat.NextVersionSupported,
+		TimeSinceLastRound:          uint64(stat.TimeSinceLastRound().Nanoseconds()),
+		CatchupTime:                 uint64(stat.CatchupTime.Nanoseconds()),
+		StoppedAtUnsupportedRound:   stat.StoppedAtUnsupportedRound,
+		LastCatchpoint:              &stat.LastCatchpoint,
+		Catchpoint:                  &stat.Catchpoint,
+		CatchpointTotalAccounts:     &stat.CatchpointCatchupTotalAccounts,
+		CatchpointProcessedAccounts: &stat.CatchpointCatchupProcessedAccounts,
+		CatchpointTotalBlocks:       &stat.CatchpointCatchupTotalBlocks,
+		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
 	}
 
 	return ctx.JSON(http.StatusOK, response)
