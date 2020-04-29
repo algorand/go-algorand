@@ -595,6 +595,106 @@
           "required": true
         }
       ]
+    },
+    "/v2/catchup/{catchpoint}": {
+      "put": {
+        "tags": [
+          "private"
+        ],
+        "description": "Given a catchpoint, it starts catching up to this catchpoint",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Starts a catchpoint catchup.",
+        "operationId": "StartCatchup",
+        "parameters": [
+          {
+            "$ref": "#/parameters/catchpoint"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/CatchpointStartResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "private"
+        ],
+        "description": "Given a catchpoint, it aborts catching up to this catchpoint",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Aborts a catchpoint catchup.",
+        "operationId": "AbortCatchup",
+        "parameters": [
+          {
+            "$ref": "#/parameters/catchpoint"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/CatchpointAbortResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "string",
+          "name": "catchpoint",
+          "in": "path",
+          "required": true
+        }
+      ]
     }
   },
   "definitions": {
@@ -943,6 +1043,16 @@
       "name": "before-time",
       "in": "query"
     },
+    "catchpoint": {
+      "type": "string",
+      "format": "catchpoint",
+      "pattern": "[0-9]{1,10}#[A-Z0-9]{1,53}",
+      "x-algorand-format": "Catchpoint String",
+      "description": "A catch point",
+      "name": "catchpoint",
+      "in": "path",
+      "required": true
+    },
     "currency-greater-than": {
       "type": "integer",
       "description": "Results should have an amount greater than this value. MicroAlgos are the default currency unless an asset-id is provided, in which case the asset will be used.",
@@ -1076,6 +1186,44 @@
             "description": "Optional certificate object. This is only included when the format is set to message pack.",
             "type": "object",
             "x-algorand-format": "BlockCertificate"
+          }
+        }
+      }
+    },
+    "CatchpointStartResponse":{
+      "tags": [
+        "private"
+      ],
+      "description": "(empty)",
+      "schema": {
+        "description": "An catchpoint start response.",
+        "type": "object",
+        "required": [
+          "catchup-message"
+        ],
+        "properties": {
+          "catchup-message": {
+            "description": "Catchup start response string",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "CatchpointAbortResponse":{
+      "tags": [
+        "private"
+      ],
+      "description": "(empty)",
+      "schema": {
+        "description": "An catchpoint abort response.",
+        "type": "object",
+        "required": [
+          "catchup-message"
+        ],
+        "properties": {
+          "catchup-message": {
+            "description": "Catchup abort response string",
+            "type": "string"
           }
         }
       }

@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -436,6 +437,40 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 	return ctx.JSON(http.StatusOK, response)
 }
 
+// startCatchup Given a catchpoint, it starts catching up to this catchpoint
+func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string) error {
+	_, _, err := ledger.ParseCatchpointLabel(catchpoint)
+	if err != nil {
+		return badRequest(ctx, err, errFailedToParseCatchpoint, v2.Log)
+	}
+
+	err = v2.Node.StartCatchup(catchpoint)
+	if err != nil {
+		return internalError(ctx, err, fmt.Sprintf(errFailedToStartCatchup, err), v2.Log)
+	}
+
+	return ctx.JSON(http.StatusOK, private.CatchpointStartResponse{
+		CatchupMessage: catchpoint,
+	})
+}
+
+// abortCatchup Given a catchpoint, it aborts catching up to this catchpoint
+func (v2 *Handlers) abortCatchup(ctx echo.Context, catchpoint string) error {
+	_, _, err := ledger.ParseCatchpointLabel(catchpoint)
+	if err != nil {
+		return badRequest(ctx, err, errFailedToParseCatchpoint, v2.Log)
+	}
+
+	err = v2.Node.AbortCatchup(catchpoint)
+	if err != nil {
+		return internalError(ctx, err, fmt.Sprintf(errFailedToAbortCatchup, err), v2.Log)
+	}
+
+	return ctx.JSON(http.StatusOK, private.CatchpointAbortResponse{
+		CatchupMessage: catchpoint,
+	})
+}
+
 // GetPendingTransactions returns the list of unconfirmed transactions currently in the transaction pool.
 // (GET /v2/transactions/pending)
 func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.GetPendingTransactionsParams) error {
@@ -446,4 +481,16 @@ func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.Ge
 // (GET /v2/accounts/{address}/transactions/pending)
 func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr string, params generated.GetPendingTransactionsByAddressParams) error {
 	return v2.getPendingTransactions(ctx, params.Max, params.Format, &addr)
+}
+
+// StartCatchup Given a catchpoint, it starts catching up to this catchpoint
+// (PUT /v2/catchup/{catchpoint})
+func (v2 *Handlers) StartCatchup(ctx echo.Context, catchpoint string) error {
+	return v2.startCatchup(ctx, catchpoint)
+}
+
+// AbortCatchup Given a catchpoint, it aborts catching up to this catchpoint
+// (DELETE /v2/catchup/{catchpoint})
+func (v2 *Handlers) AbortCatchup(ctx echo.Context, catchpoint string) error {
+	return v2.abortCatchup(ctx, catchpoint)
 }

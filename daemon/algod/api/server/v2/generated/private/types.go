@@ -191,6 +191,9 @@ type AssetId uint64
 // BeforeTime defines model for before-time.
 type BeforeTime time.Time
 
+// Catchpoint defines model for catchpoint.
+type Catchpoint string
+
 // CurrencyGreaterThan defines model for currency-greater-than.
 type CurrencyGreaterThan uint64
 
@@ -247,6 +250,20 @@ type BlockResponse struct {
 
 	// Optional certificate object. This is only included when the format is set to message pack.
 	Cert *map[string]interface{} `json:"cert,omitempty"`
+}
+
+// CatchpointAbortResponse defines model for CatchpointAbortResponse.
+type CatchpointAbortResponse struct {
+
+	// Catchup abort response string
+	CatchupMessage string `json:"catchup-message"`
+}
+
+// CatchpointStartResponse defines model for CatchpointStartResponse.
+type CatchpointStartResponse struct {
+
+	// Catchup start response string
+	CatchupMessage string `json:"catchup-message"`
 }
 
 // NodeStatusResponse defines model for NodeStatusResponse.
