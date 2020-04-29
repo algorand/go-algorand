@@ -292,13 +292,18 @@ type LogicSignature struct {
 	//
 	// required: true
 	// swagger:strfmt byte
-	Logic []byte `json:"logic"`
+	Logic []byte `json:"code"`
 
 	// Args are not signed, but checked by Logic
 	//
 	// required: false
 	// swagger:strfmt byte
 	Args [][]byte `json:"args"`
+
+	// Disasembled source code
+	//
+	// required: true
+	Source string `json:"source"`
 }
 
 // Transaction contains all fields common to all transactions and serves as an envelope to all transactions

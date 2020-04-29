@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -116,6 +117,7 @@ func txEncode(signedTx transactions.SignedTxn, ad transactions.ApplyData) (v1.Tr
 		res.LogicSig = new(v1.LogicSignature)
 		res.LogicSig.Args = signedTx.Lsig.Args
 		res.LogicSig.Logic = signedTx.Lsig.Logic
+		res.LogicSig.Source, _ = logic.Disassemble(signedTx.Lsig.Logic)
 	}
 
 	return res, nil
