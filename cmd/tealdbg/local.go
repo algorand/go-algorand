@@ -129,6 +129,11 @@ func balanceRecordsFromParams(dp *DebugParams) (records []basics.BalanceRecord, 
 	return
 }
 
+type evalResult struct {
+	pass bool
+	err  error
+}
+
 // evaluation is a description of a single debugger run
 type evaluation struct {
 	program      []byte
@@ -138,6 +143,7 @@ type evaluation struct {
 	groupIndex   int
 	eval         func(program []byte, ep logic.EvalParams) (bool, error)
 	ledger       *localLedger
+	result       evalResult
 }
 
 // LocalRunner runs local eval
@@ -221,8 +227,10 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 					return err
 				}
 				r.runs[i].program = program
-				r.runs[i].offsetToLine = offsets
-				r.runs[i].source = source
+				if !dp.DisableSourceMap {
+					r.runs[i].offsetToLine = offsets
+					r.runs[i].source = source
+				}
 			}
 			r.runs[i].groupIndex = groupIndex
 			r.runs[i].ledger = ledger
@@ -328,10 +336,7 @@ func (r *LocalRunner) RunAll() error {
 			Ledger:     run.ledger,
 		}
 
-		_, err := run.eval(run.program, ep)
-		if err != nil {
-			return err
-		}
+		run.result.pass, run.result.err = run.eval(run.program, ep)
 	}
 	return nil
 }

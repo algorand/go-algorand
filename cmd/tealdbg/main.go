@@ -133,6 +133,7 @@ var runMode runModeValue = runModeValue{makeCobraStringValue("signature", []stri
 var port int
 var noFirstRun bool
 var noBrowserCheck bool
+var noSourceMap bool
 var verbose bool
 
 func init() {
@@ -142,6 +143,7 @@ func init() {
 	rootCmd.PersistentFlags().MarkHidden("no-first-run")
 	rootCmd.PersistentFlags().BoolVar(&noBrowserCheck, "no-default-browser-check", false, "")
 	rootCmd.PersistentFlags().MarkHidden("no-default-browser-check")
+	rootCmd.PersistentFlags().BoolVar(&noSourceMap, "no-source-map", false, "Do not generate source maps")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
 
 	debugCmd.Flags().StringVarP(&proto, "proto", "p", "", "Consensus protocol version for TEAL")
@@ -215,20 +217,21 @@ func debugLocal(args []string) {
 	}
 
 	dp := DebugParams{
-		ProgramNames: programNames,
-		ProgramBlobs: programBlobs,
-		Proto:        proto,
-		TxnBlob:      txnBlob,
-		GroupIndex:   groupIndex,
-		BalanceBlob:  balanceBlob,
-		Round:        roundNumber,
-		RunMode:      runMode.String(),
+		ProgramNames:     programNames,
+		ProgramBlobs:     programBlobs,
+		Proto:            proto,
+		TxnBlob:          txnBlob,
+		GroupIndex:       groupIndex,
+		BalanceBlob:      balanceBlob,
+		Round:            roundNumber,
+		RunMode:          runMode.String(),
+		DisableSourceMap: noSourceMap,
 	}
 
 	ds := makeDebugServer(port, &frontend, &dp)
 
 	err = ds.startDebug()
 	if err != nil {
-		log.Fatalf("Debugging error: %s", err.Error())
+		log.Fatalf("Debug error: %s", err.Error())
 	}
 }
