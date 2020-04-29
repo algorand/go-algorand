@@ -80,16 +80,10 @@ func TestAccountsCanSendMoneyAcrossUpgradeV15toV16(t *testing.T) {
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV21toV22(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV21Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV22toV23(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV22Upgrade.json"))
 }
 
