@@ -40,6 +40,8 @@ import (
 	"github.com/algorand/go-algorand/rpcs"
 )
 
+const maxTealSourceBytes = 1e5
+
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
 	Node     *node.AlgorandFullNode
@@ -455,6 +457,7 @@ func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr strin
 // (POST /v2/compile)
 func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 	buf := new(bytes.Buffer)
+	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
 	buf.ReadFrom(ctx.Request().Body)
 	source := buf.String()
 	program, err := logic.AssembleString(source)
