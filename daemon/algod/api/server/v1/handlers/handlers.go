@@ -1297,7 +1297,7 @@ func Assets(ctx lib.ReqContext, context echo.Context) {
 	SendJSON(AssetsResponse{&result}, w, ctx.Log)
 }
 
-// ApplicationInformation is an httpHandler for route GET /v1/app/{index:[0-9]+}
+// ApplicationInformation is an httpHandler for route GET /v1/application/{index:[0-9]+}
 func ApplicationInformation(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/application/{index} ApplicationInformation
 	// ---

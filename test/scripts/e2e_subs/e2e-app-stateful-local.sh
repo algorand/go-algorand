@@ -20,7 +20,7 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs/loccheck.teal --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 --app-arg-b64 "aGVsbG8=" --clear-prog <(echo 'int 1') | grep Created | awk '{ print $6 }')
 
 # Application call with no args should fail
-EXPERROR='rejected by ApprovalProgram'
+EXPERROR='invalid ApplicationArgs index 0'
 RES=$(${gcmd} app call --app-id $APPID --from $ACCOUNT 2>&1 || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL call with no args should fail %Y%m%d_%H%M%S'

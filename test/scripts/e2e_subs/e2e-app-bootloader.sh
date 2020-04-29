@@ -55,7 +55,7 @@ ${gcmd} app update --app-id $APPID --from $ACCOUNT --approval-prog-raw ${TEMPDIR
 
 # Global state should be empty
 RES=$(${gcmd} app read --guess-format --app-id $APPID --global | jq -r .foo.bar)
-if [[ "$RES" != "" ]]; then
+if [[ "$RES" != "null" ]]; then
     date '+app-bootloader-test FAIL unexpected global state after update %Y%m%d_%H%M%S'
     false
 fi

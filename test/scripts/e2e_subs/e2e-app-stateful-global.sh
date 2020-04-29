@@ -20,18 +20,10 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs/globcheck.teal --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 --app-arg-b64 "aGVsbG8=" --clear-prog <(echo 'int 1') | grep Created | awk '{ print $6 }')
 
 # Application call with no args should fail
-EXPERROR='rejected by ApprovalProgram'
+EXPERROR='invalid ApplicationArgs index 0'
 RES=$(${gcmd} app call --app-id $APPID --from $ACCOUNT 2>&1 || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL call with no args should fail %Y%m%d_%H%M%S'
-    false
-fi
-
-# Application call with arg0 == "write" should fail before we opt in
-RES=$(${gcmd} app call --app-id $APPID --app-arg-b64 "d3JpdGU=" --from $ACCOUNT 2>&1 || true)
-EXPERROR='not opted in'
-if [[ $RES != *"${EXPERROR}"* ]]; then
-    date '+app-create-test FAIL writing state should fail if account has not opted in %Y%m%d_%H%M%S'
     false
 fi
 
