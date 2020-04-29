@@ -37,6 +37,7 @@ type Route struct {
 	Method      string
 	Path        string
 	HandlerFunc HandlerFunc
+	NoAuth      bool // routes that has the NoAuth set to true doesn't require authentication
 }
 
 // Routes contains all routes
