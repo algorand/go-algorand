@@ -283,6 +283,44 @@ type AssetHolding struct {
 	Frozen bool `json:"frozen"`
 }
 
+// MultisigSubSignature is the part of MultisigSubSignature structure
+// type
+// swagger:model MultisigSubSignature
+type MultisigSubSignature struct {
+	// Public Key
+	//
+	// required: false
+	// swagger:strfmt byte
+	PublicKey [32]byte `json:"public_key,omitempty"`
+
+	// Signature
+	//
+	// required: false
+	// swagger:strfmt byte
+	Signature [64]byte `json:"signature,omitempty"`
+}
+
+// MultisigSignature is the structure that holds multiple Subsigs
+// type
+// swagger:model MultisigSignature
+type MultisigSignature struct {
+
+	// Version
+	//
+	// required: true
+	Version uint8 `json:"version"`
+
+	// Threshold
+	//
+	// required: true
+	Threshold uint8 `json:"threshold"`
+
+	// MultisigSubSignature
+	//
+	// required: true
+	MultisigSubSignature []MultisigSubSignature `json:"subsig"`
+}
+
 // Transaction TEAL signature and arguments
 // type
 // swagger:model LogicSignature
@@ -304,6 +342,17 @@ type LogicSignature struct {
 	//
 	// required: true
 	Source string `json:"source"`
+
+	// Optional signature applied to transaction
+	//
+	// required: false
+	// swagger:strfmt byte
+	Signature [64]byte `json:"signature,omitempty"`
+
+	// Optional signature applied to transaction
+	//
+	// required: false
+	MultisigSignature MultisigSignature `json:"multi_signature,omitempty"`
 }
 
 // Transaction contains all fields common to all transactions and serves as an envelope to all transactions
