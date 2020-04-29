@@ -1017,6 +1017,16 @@
                   },
                   "description" : "Internal Error"
                },
+               "503" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "Service Temporarily Unavailable"
+               },
                "default" : {
                   "content" : {},
                   "description" : "Unknown Error"
@@ -1676,6 +1686,16 @@
                   },
                   "description" : "Internal Error"
                },
+               "503" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "Service Temporarily Unavailable"
+               },
                "default" : {
                   "content" : {},
                   "description" : "Unknown Error"
@@ -1749,6 +1769,16 @@
                   },
                   "description" : "Internal Error"
                },
+               "503" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "Service Temporarily Unavailable"
+               },
                "default" : {
                   "content" : {},
                   "description" : "Unknown Error"
@@ -1819,6 +1849,26 @@
                      }
                   },
                   "description" : "Invalid API Token"
+               },
+               "500" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "Internal Error"
+               },
+               "503" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "Service Temporarily Unavailable"
                },
                "default" : {
                   "content" : {},
@@ -1939,6 +1989,21 @@
                      }
                   },
                   "description" : "Internal Error"
+               },
+               "503" : {
+                  "content" : {
+                     "application/json" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     },
+                     "application/msgpack" : {
+                        "schema" : {
+                           "$ref" : "#/components/schemas/ErrorResponse"
+                        }
+                     }
+                  },
+                  "description" : "Service Temporarily Unavailable"
                },
                "default" : {
                   "content" : {},

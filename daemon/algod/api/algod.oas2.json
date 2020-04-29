@@ -129,6 +129,12 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
           "default": {
             "description": "Unknown Error"
           }
@@ -401,6 +407,12 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
           "default": {
             "description": "Unknown Error"
           }
@@ -462,6 +474,12 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
           "default": {
             "description": "Unknown Error"
           }
@@ -484,6 +502,18 @@
           },
           "401": {
             "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -526,6 +556,12 @@
           },
           "500": {
             "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }

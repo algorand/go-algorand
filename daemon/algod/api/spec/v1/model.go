@@ -797,11 +797,3 @@ type PendingTransactions struct {
 	// required: true
 	TotalTxns uint64 `json:"totalTxns"`
 }
-
-// CatchupResponse represents a the outcome of starting or aborting the catchup process
-// swagger:model CatchupState
-type CatchupResponse struct {
-	// Catchpoint
-	// required: true
-	Catchpoint string `json:"catchpoint"`
-}

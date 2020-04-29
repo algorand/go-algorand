@@ -249,6 +249,24 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	if stat.StoppedAtUnsupportedRound {
 		return badRequest(ctx, err, errRequestedRoundInUnsupportedRound, v2.Log)
 	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("WaitForBlock failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
+	}
+
+	latestBlkHdr, err := ledger.BlockHdr(ledger.Latest())
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingLatestBlockHeaderStatus, v2.Log)
+	}
+	if latestBlkHdr.NextProtocol != "" {
+		if _, nextProtocolSupported := config.Consensus[latestBlkHdr.NextProtocol]; !nextProtocolSupported {
+			// see if the desired protocol switch is expect to happen before or after the above point.
+			if latestBlkHdr.NextProtocolSwitchOn <= basics.Round(round+1) {
+				// we would never reach to this round, since this round would happen after the (unsupported) protocol upgrade.
+				return badRequest(ctx, err, errRequestedRoundInUnsupportedRound, v2.Log)
+			}
+		}
+	}
 
 	// Wait
 	select {
@@ -265,6 +283,15 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 // RawTransaction broadcasts a raw transaction to the network.
 // (POST /v2/transactions)
 func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
+	stat, err := v2.Node.Status()
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("RawTransaction failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
+	}
+
 	var txgroup []transactions.SignedTxn
 	dec := protocol.NewDecoder(ctx.Request().Body)
 	for {
@@ -284,7 +311,7 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	err := v2.Node.BroadcastSignedTxGroup(txgroup)
+	err = v2.Node.BroadcastSignedTxGroup(txgroup)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
@@ -300,6 +327,10 @@ func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("TransactionParams failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
 	}
 
 	gh := v2.Node.GenesisHash()
@@ -322,6 +353,16 @@ func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
 // last proto.MaxTxnLife rounds
 // (GET /v2/transactions/pending/{txid})
 func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string, params generated.PendingTransactionInformationParams) error {
+
+	stat, err := v2.Node.Status()
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("PendingTransactionInformation failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
+	}
+
 	txID := transactions.Txid{}
 	if err := txID.UnmarshalText([]byte(txid)); err != nil {
 		return badRequest(ctx, err, errNoTxnSpecified, v2.Log)
@@ -369,12 +410,22 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 	}
 
 	// We didn't find it, return a failure
-	err := errors.New(errTransactionNotFound)
+	err = errors.New(errTransactionNotFound)
 	return notFound(ctx, err, err.Error(), v2.Log)
 }
 
 // getPendingTransactions returns to the provided context a list of uncomfirmed transactions currently in the transaction pool with optional Max/Address filters.
 func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format *string, addrFilter *string) error {
+
+	stat, err := v2.Node.Status()
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("PendingTransactionInformation failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
+	}
+
 	var addrPtr *basics.Address
 
 	if addrFilter != nil {
