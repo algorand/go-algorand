@@ -417,10 +417,13 @@ func WaitForBlock(ctx lib.ReqContext, context echo.Context) {
 	//       400:
 	//         description: Bad Request
 	//         schema: {type: string}
+	//       401: { description: Invalid API Token }
 	//       500:
 	//         description: Internal Error
 	//         schema: {type: string}
-	//       401: { description: Invalid API Token }
+	//       503:
+	//         description: Service
+	//         schema: {type: string}
 	//       default: { description: Unknown Error }
 
 	w := context.Response().Writer
@@ -502,10 +505,13 @@ func RawTransaction(ctx lib.ReqContext, context echo.Context) {
 	//       400:
 	//         description: Bad Request
 	//         schema: {type: string}
+	//       401: { description: Invalid API Token }
 	//       500:
 	//         description: Internal Error
 	//         schema: {type: string}
-	//       401: { description: Invalid API Token }
+	//       503:
+	//         description: Service Unavailable
+	//         schema: {type: string}
 	//       default: { description: Unknown Error }
 
 	w := context.Response().Writer
@@ -807,6 +813,9 @@ func PendingTransactionInformation(ctx lib.ReqContext, context echo.Context) {
 	//         description: Transaction Not Found
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
+	//       503:
+	//         description: Service Unavailable
+	//         schema: {type: string}
 	//       default: { description: Unknown Error }
 
 	w := context.Response().Writer
@@ -887,10 +896,13 @@ func GetPendingTransactions(ctx lib.ReqContext, context echo.Context) {
 	//     Responses:
 	//       "200":
 	//         "$ref": '#/responses/PendingTransactionsResponse'
+	//       401: { description: Invalid API Token }
 	//       500:
 	//         description: Internal Error
 	//         schema: {type: string}
-	//       401: { description: Invalid API Token }
+	//       503:
+	//         description: Service Unavailable
+	//         schema: {type: string}
 	//       default: { description: Unknown Error }
 
 	w := context.Response().Writer
@@ -979,10 +991,13 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, context echo.Context) {
 	//     Responses:
 	//       "200":
 	//         "$ref": '#/responses/PendingTransactionsResponse'
+	//       401: { description: Invalid API Token }
 	//       500:
 	//         description: Internal Error
 	//         schema: {type: string}
-	//       401: { description: Invalid API Token }
+	//       503:
+	//         description: Service Unavailable
+	//         schema: {type: string}
 	//       default: { description: Unknown Error }
 
 	w := context.Response().Writer
@@ -1237,6 +1252,9 @@ func SuggestedFee(ctx lib.ReqContext, context echo.Context) {
 	//       "200":
 	//         "$ref": '#/responses/TransactionFeeResponse'
 	//       401: { description: Invalid API Token }
+	//       503:
+	//         description: Service Unavailable
+	//         schema: {type: string}
 	//       default: { description: Unknown Error }
 
 	w := context.Response().Writer
