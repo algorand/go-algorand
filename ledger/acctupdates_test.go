@@ -107,46 +107,64 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 		require.Error(t, err)
 	}
 
-	for rnd := base; rnd <= latest; rnd++ {
-		var totalOnline, totalOffline, totalNotPart uint64
+	roundsRanges := []struct {
+		start, end basics.Round
+	}{}
 
-		for addr, data := range accts[rnd] {
-			d, err := au.lookup(rnd, addr, false)
-			require.NoError(t, err)
-			require.Equal(t, d, data)
-
-			rewardsDelta := rewards[rnd] - d.RewardsBase
-			switch d.Status {
-			case basics.Online:
-				totalOnline += d.MicroAlgos.Raw
-				totalOnline += (d.MicroAlgos.Raw / proto.RewardUnit) * rewardsDelta
-			case basics.Offline:
-				totalOffline += d.MicroAlgos.Raw
-				totalOffline += (d.MicroAlgos.Raw / proto.RewardUnit) * rewardsDelta
-			case basics.NotParticipating:
-				totalNotPart += d.MicroAlgos.Raw
-			default:
-				t.Errorf("unknown status %v", d.Status)
-			}
+	// running the checkAcctUpdates on the entire range of base..latestRnd is too slow, and unlikely to help us
+	// to trap a regression ( might be a good to find where the regression started ). so, for
+	// performance reasons, we're going to run it againt the first and last 5 rounds, plus few rounds
+	// in between.
+	if latestRnd-base <= 10 {
+		roundsRanges = append(roundsRanges, struct{ start, end basics.Round }{base, latestRnd})
+	} else {
+		roundsRanges = append(roundsRanges, struct{ start, end basics.Round }{base, base + 5})
+		roundsRanges = append(roundsRanges, struct{ start, end basics.Round }{latestRnd - 5, latestRnd})
+		for i := base + 5; i < latestRnd-5; i += 1 + (latestRnd-base-10)/10 {
+			roundsRanges = append(roundsRanges, struct{ start, end basics.Round }{i, i + 1})
 		}
-
-		all, err := au.allBalances(rnd)
-		require.NoError(t, err)
-		require.Equal(t, all, accts[rnd])
-
-		totals, err := au.totals(rnd)
-		require.NoError(t, err)
-		require.Equal(t, totals.Online.Money.Raw, totalOnline)
-		require.Equal(t, totals.Offline.Money.Raw, totalOffline)
-		require.Equal(t, totals.NotParticipating.Money.Raw, totalNotPart)
-		require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
-		require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
-
-		d, err := au.lookup(rnd, randomAddress(), false)
-		require.NoError(t, err)
-		require.Equal(t, d, basics.AccountData{})
 	}
+	for _, roundRange := range roundsRanges {
+		for rnd := roundRange.start; rnd <= roundRange.end; rnd++ {
+			var totalOnline, totalOffline, totalNotPart uint64
 
+			for addr, data := range accts[rnd] {
+				d, err := au.lookup(rnd, addr, false)
+				require.NoError(t, err)
+				require.Equal(t, d, data)
+
+				rewardsDelta := rewards[rnd] - d.RewardsBase
+				switch d.Status {
+				case basics.Online:
+					totalOnline += d.MicroAlgos.Raw
+					totalOnline += (d.MicroAlgos.Raw / proto.RewardUnit) * rewardsDelta
+				case basics.Offline:
+					totalOffline += d.MicroAlgos.Raw
+					totalOffline += (d.MicroAlgos.Raw / proto.RewardUnit) * rewardsDelta
+				case basics.NotParticipating:
+					totalNotPart += d.MicroAlgos.Raw
+				default:
+					t.Errorf("unknown status %v", d.Status)
+				}
+			}
+
+			all, err := au.allBalances(rnd)
+			require.NoError(t, err)
+			require.Equal(t, all, accts[rnd])
+
+			totals, err := au.totals(rnd)
+			require.NoError(t, err)
+			require.Equal(t, totals.Online.Money.Raw, totalOnline)
+			require.Equal(t, totals.Offline.Money.Raw, totalOffline)
+			require.Equal(t, totals.NotParticipating.Money.Raw, totalNotPart)
+			require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
+			require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
+
+			d, err := au.lookup(rnd, randomAddress(), false)
+			require.NoError(t, err)
+			require.Equal(t, d, basics.AccountData{})
+		}
+	}
 	checkAcctUpdatesConsistency(t, au)
 }
 
