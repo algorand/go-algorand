@@ -321,6 +321,18 @@ type MultisigSignature struct {
 	MultisigSubSignature []MultisigSubSignature `json:"subsig"`
 }
 
+// Signature is the  Signature structure
+// type
+// swagger:model Signature
+type Signature struct {
+
+	// Signature
+	//
+	// required: false
+	// swagger:strfmt byte
+	Signature [64]byte `json:"signature,omitempty"`
+}
+
 // Transaction TEAL signature and arguments
 // type
 // swagger:model LogicSignature
@@ -346,13 +358,12 @@ type LogicSignature struct {
 	// Optional signature applied to transaction
 	//
 	// required: false
-	// swagger:strfmt byte
-	Signature [64]byte `json:"signature,omitempty"`
+	Signature *Signature `json:"signature,omitempty"`
 
 	// Optional signature applied to transaction
 	//
 	// required: false
-	MultisigSignature MultisigSignature `json:"multi_signature,omitempty"`
+	MultisigSignature *MultisigSignature `json:"multi_signature,omitempty"`
 }
 
 // Transaction contains all fields common to all transactions and serves as an envelope to all transactions

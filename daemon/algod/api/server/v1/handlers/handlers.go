@@ -119,10 +119,17 @@ func txEncode(signedTx transactions.SignedTxn, ad transactions.ApplyData) (v1.Tr
 		res.LogicSig.Logic = signedTx.Lsig.Logic
 		res.LogicSig.Source, _ = logic.Disassemble(signedTx.Lsig.Logic)
 
-		res.LogicSig.Signature = signedTx.Sig
+		for _, v := range signedTx.Sig {
+			if v != 0 {
+				res.LogicSig.Signature = new(v1.Signature)
+				res.LogicSig.Signature.Signature = signedTx.Sig
+				break
+			}
+		}
 
 		if len(signedTx.Msig.Subsigs) != 0 {
 
+			res.LogicSig.MultisigSignature = new(v1.MultisigSignature)
 			res.LogicSig.MultisigSignature.Version = signedTx.Msig.Version
 			res.LogicSig.MultisigSignature.Threshold = signedTx.Msig.Threshold
 
