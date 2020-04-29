@@ -855,3 +855,23 @@ err
 	require.True(t, ok)
 	require.Equal(t, 2, line)
 }
+
+func TestHasStatefulOps(t *testing.T) {
+	source := "int 1"
+	program, err := AssembleStringWithVersion(source, AssemblerDefaultVersion)
+	require.NoError(t, err)
+	has, err := HasStatefulOps(program)
+	require.NoError(t, err)
+	require.False(t, has)
+
+	source = `int 1
+int 1
+app_opted_in
+err
+`
+	program, err = AssembleStringWithVersion(source, AssemblerDefaultVersion)
+	require.NoError(t, err)
+	has, err = HasStatefulOps(program)
+	require.NoError(t, err)
+	require.True(t, has)
+}

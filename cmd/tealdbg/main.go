@@ -129,7 +129,7 @@ var txnFile string
 var groupIndex int
 var balanceFile string
 var roundNumber int
-var runMode runModeValue = runModeValue{makeCobraStringValue("signature", []string{"application"})}
+var runMode runModeValue = runModeValue{makeCobraStringValue("auto", []string{"signature", "application"})}
 var port int
 var noFirstRun bool
 var noBrowserCheck bool

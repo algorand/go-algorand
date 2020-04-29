@@ -380,7 +380,7 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	cx.program = program
 
 	if cx.Debugger != nil {
-		disasm, pcOffset, err := DisassembleInstrumented(cx.program)
+		disasm, dsInfo, err := disassembleInstrumented(cx.program)
 		if err != nil {
 			// Report disassembly error as program text
 			disasm = err.Error()
@@ -391,7 +391,7 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 		cx.debugState = DebugState{
 			ExecID:      hex.EncodeToString(hash[:]),
 			Disassembly: disasm,
-			PCOffset:    pcOffset,
+			PCOffset:    dsInfo.pcOffset,
 			GroupIndex:  cx.GroupIndex,
 			TxnGroup:    cx.TxnGroup,
 			Proto:       cx.Proto,

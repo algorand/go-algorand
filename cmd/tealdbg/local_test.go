@@ -553,7 +553,97 @@ func TestDebugFromPrograms(t *testing.T) {
 	a.NotNil(l.runs[1].eval)
 	a.NotNil(l.runs[1].ledger)
 	a.Equal(0, l.runs[1].ledger.groupIndex)
+}
 
+func TestRunMode(t *testing.T) {
+	a := require.New(t)
+
+	txnBlob := []byte("[" + strings.Join([]string{string(txnSample), txnSample}, ",") + "]")
+	l := LocalRunner{}
+
+	// check run mode auto on stateful code
+	dp := DebugParams{
+		ProgramNames: []string{"test"},
+		ProgramBlobs: [][]byte{[]byte{2, 0x20, 1, 1, 0x22, 0x22, 0x61}}, // version, intcb, int 1, int 1, app_opted_in
+		TxnBlob:      txnBlob,
+		GroupIndex:   0,
+		RunMode:      "auto",
+	}
+
+	err := l.Setup(&dp)
+	a.NoError(err)
+	a.Equal(1, len(l.runs))
+	a.Equal(0, l.runs[0].groupIndex)
+	a.NotNil(l.runs[0].eval)
+	a.NotNil(l.runs[0].ledger)
+	a.Equal(0, l.runs[0].ledger.groupIndex)
+	a.NotEqual(
+		reflect.ValueOf(logic.Eval).Pointer(),
+		reflect.ValueOf(l.runs[0].eval).Pointer(),
+	)
+
+	// check run mode auto on stateless code
+	dp = DebugParams{
+		ProgramNames: []string{"test"},
+		ProgramBlobs: [][]byte{[]byte{2, 0x20, 1, 1, 0x22}}, // version, intcb, int 1
+		TxnBlob:      txnBlob,
+		GroupIndex:   0,
+		RunMode:      "auto",
+	}
+
+	err = l.Setup(&dp)
+	a.NoError(err)
+	a.Equal(1, len(l.runs))
+	a.Equal(0, l.runs[0].groupIndex)
+	a.NotNil(l.runs[0].eval)
+	a.NotNil(l.runs[0].ledger)
+	a.Equal(0, l.runs[0].ledger.groupIndex)
+	a.Equal(
+		reflect.ValueOf(logic.Eval).Pointer(),
+		reflect.ValueOf(l.runs[0].eval).Pointer(),
+	)
+
+	// check run mode application
+	dp = DebugParams{
+		ProgramNames: []string{"test"},
+		ProgramBlobs: [][]byte{[]byte{2, 0x20, 1, 1, 0x22, 0x22, 0x61}}, // version, intcb, int 1, int 1, app_opted_in
+		TxnBlob:      txnBlob,
+		GroupIndex:   0,
+		RunMode:      "application",
+	}
+
+	err = l.Setup(&dp)
+	a.NoError(err)
+	a.Equal(1, len(l.runs))
+	a.Equal(0, l.runs[0].groupIndex)
+	a.NotNil(l.runs[0].eval)
+	a.NotNil(l.runs[0].ledger)
+	a.Equal(0, l.runs[0].ledger.groupIndex)
+	a.NotEqual(
+		reflect.ValueOf(logic.Eval).Pointer(),
+		reflect.ValueOf(l.runs[0].eval).Pointer(),
+	)
+
+	// check run mode signature
+	dp = DebugParams{
+		ProgramNames: []string{"test"},
+		ProgramBlobs: [][]byte{[]byte{2, 0x20, 1, 1, 0x22}}, // version, intcb, int 1
+		TxnBlob:      txnBlob,
+		GroupIndex:   0,
+		RunMode:      "signature",
+	}
+
+	err = l.Setup(&dp)
+	a.NoError(err)
+	a.Equal(1, len(l.runs))
+	a.Equal(0, l.runs[0].groupIndex)
+	a.NotNil(l.runs[0].eval)
+	a.NotNil(l.runs[0].ledger)
+	a.Equal(0, l.runs[0].ledger.groupIndex)
+	a.Equal(
+		reflect.ValueOf(logic.Eval).Pointer(),
+		reflect.ValueOf(l.runs[0].eval).Pointer(),
+	)
 }
 
 func TestDebugFromTxn(t *testing.T) {
