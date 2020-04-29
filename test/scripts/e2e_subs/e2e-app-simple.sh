@@ -45,7 +45,7 @@ ${gcmd} app optin --app-id $APPID --from $ACCOUNT
 ${gcmd} app clear --app-id $APPID --from $ACCOUNT
 
 # Fail to clear twice
-RES=$(${gcmd} app clear --app-id $APPID --from $ACCOUNT || true)
+RES=$(${gcmd} app clear --app-id $APPID --from $ACCOUNT 2>&1 || true)
 EXPERROR='not currently opted in'
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL clearing state twice should fail %Y%m%d_%H%M%S'

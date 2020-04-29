@@ -21,14 +21,14 @@ APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs
 
 # Application call with no args should fail
 EXPERROR='rejected by ApprovalProgram'
-RES=$(${gcmd} app call --app-id $APPID --from $ACCOUNT || true)
+RES=$(${gcmd} app call --app-id $APPID --from $ACCOUNT 2>&1 || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL call with no args should fail %Y%m%d_%H%M%S'
     false
 fi
 
 # Application call with arg0 == "write" should fail before we opt in
-RES=$(${gcmd} app call --app-id $APPID --app-arg-b64 "d3JpdGU=" --from $ACCOUNT || true)
+RES=$(${gcmd} app call --app-id $APPID --app-arg-b64 "d3JpdGU=" --from $ACCOUNT 2>&1 || true)
 EXPERROR='not opted in'
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL writing state should fail if account has not opted in %Y%m%d_%H%M%S'
@@ -57,7 +57,7 @@ ${gcmd} app call --app-id $APPID --app-arg-b64 "Y2hlY2s=" --app-arg-b64 "YmFy" -
 ${gcmd} app delete --app-id $APPID --app-arg-b64 "aGVsbG8=" --from $ACCOUNT
 
 # Check should fail since we can't find program to execute
-RES=$(${gcmd} app call --app-id $APPID --app-arg-b64 "Y2hlY2s=" --app-arg-b64 "YmFy" --from $ACCOUNT || true)
+RES=$(${gcmd} app call --app-id $APPID --app-arg-b64 "Y2hlY2s=" --app-arg-b64 "YmFy" --from $ACCOUNT 2>&1 || true)
 EXPERROR='only clearing out is supported'
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL app call should fail if app has been deleted %Y%m%d_%H%M%S'
