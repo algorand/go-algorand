@@ -220,9 +220,9 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, ctx *Context) error {
 	}
 
 	ep := logic.EvalParams{
+		Txn:        txn,
 		Proto:      &proto,
 		TxnGroup:   ctx.Group,
-		Txn:        txn,
 		GroupIndex: ctx.GroupIndex,
 	}
 	cost, err := logic.Check(lsig.Logic, ep)
@@ -282,12 +282,11 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 	}
 
 	ep := logic.EvalParams{
+		Txn:        txn,
 		Proto:      &proto,
 		TxnGroup:   ctx.Group,
-		Txn:        txn,
 		GroupIndex: ctx.GroupIndex,
 	}
-
 	pass, err := logic.Eval(txn.Lsig.Logic, ep)
 	if err != nil {
 		logicErrTotal.Inc(nil)

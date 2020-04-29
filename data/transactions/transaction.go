@@ -335,7 +335,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		// Programs may only be set for creation or update
 		if tx.ApplicationID != 0 && tx.OnCompletion != UpdateApplicationOC {
 			if len(tx.ApprovalProgram) != 0 || len(tx.ClearStateProgram) != 0 {
-				return fmt.Errorf("scripts may only be specified during application creation or update")
+				return fmt.Errorf("programs may only be specified during application creation or update")
 			}
 		}
 

@@ -27,7 +27,7 @@ import (
 type OnCompletion uint64
 
 const (
-	// NoOpOC indicates that an applicaiton transaction will simply call its
+	// NoOpOC indicates that an application transaction will simply call its
 	// ApprovalProgram
 	NoOpOC OnCompletion = 0
 
@@ -69,7 +69,7 @@ func (oc OnCompletion) String() string {
 	case DeleteApplicationOC:
 		return "delete"
 	}
-	return "unknown"
+	return "?"
 }
 
 // ApplicationCallTxnFields captures the transaction fields used for all
@@ -127,7 +127,7 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 
 // Allocate the map of LocalStates if it is nil, and return a copy. We do *not*
 // call clone on each AppLocalState -- callers must do that for any values
-// where they intend to modify a contained refernece type e.g. KeyValue.
+// where they intend to modify a contained reference type e.g. KeyValue.
 func cloneAppLocalStates(m map[basics.AppIndex]basics.AppLocalState) map[basics.AppIndex]basics.AppLocalState {
 	res := make(map[basics.AppIndex]basics.AppLocalState, len(m))
 	for k, v := range m {
@@ -148,8 +148,8 @@ func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]
 }
 
 // getAppParams fetches the creator address and AppParams for the app index,
-// if they exist. It does NOT clone the AppParams, so the returned params must
-// not be modified directly.
+// if they exist. It does *not* clone the AppParams, so the returned params
+// must not be modified directly.
 func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppParams, creator basics.Address, exists bool, err error) {
 	creator, exists, err = balances.GetAppCreator(aidx)
 	if err != nil {
@@ -169,7 +169,7 @@ func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppPar
 	params, ok := record.AppParams[aidx]
 	if !ok {
 		// This should never happen. If app exists then we should have
-		// found the creator successfully. TODO(applications) panic here?
+		// found the creator successfully.
 		err = fmt.Errorf("app %d not found in account %s", aidx, creator.String())
 		return
 	}
@@ -177,7 +177,7 @@ func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppPar
 	return
 }
 
-func applyDelta(stateDelta basics.StateDelta, kv basics.TealKeyValue) error {
+func applyDelta(kv basics.TealKeyValue, stateDelta basics.StateDelta) error {
 	if kv == nil {
 		return fmt.Errorf("cannot apply delta to nil TealKeyValue")
 	}
@@ -208,15 +208,16 @@ func applyDelta(stateDelta basics.StateDelta, kv basics.TealKeyValue) error {
 func (ac *ApplicationCallTxnFields) applyStateDeltas(evalDelta basics.EvalDelta, params basics.AppParams, creator, sender basics.Address, balances Balances, appIdx basics.AppIndex, errIfNotApplied bool) error {
 	/*
 	 * 1. Apply GlobalState delta (if any), allocating the key/value store
-	 *    if req'd
+	 *    if required.
 	 */
+
 	proto := balances.ConsensusParams()
 	if len(evalDelta.GlobalDelta) > 0 {
 		// Clone the parameters so that they are safe to modify
 		params = params.Clone()
 
 		// Allocate GlobalState if necessary. We need to do this now
-		// since an empty map will be written as nil to disk
+		// since an empty map will be read as nil from disk
 		if params.GlobalState == nil {
 			params.GlobalState = make(basics.TealKeyValue)
 		}
@@ -232,7 +233,7 @@ func (ac *ApplicationCallTxnFields) applyStateDeltas(evalDelta basics.EvalDelta,
 		}
 
 		// Apply the GlobalDelta in place on the cloned copy
-		err = applyDelta(evalDelta.GlobalDelta, params.GlobalState)
+		err = applyDelta(params.GlobalState, evalDelta.GlobalDelta)
 		if err != nil {
 			return err
 		}
@@ -293,12 +294,12 @@ func (ac *ApplicationCallTxnFields) applyStateDeltas(evalDelta basics.EvalDelta,
 		localState = localState.Clone()
 
 		// Allocate localState.KeyValue if necessary. We need to do
-		// this now since an empty map will be written as nil to disk
+		// this now since an empty map will be read as nil from disk
 		if localState.KeyValue == nil {
 			localState.KeyValue = make(basics.TealKeyValue)
 		}
 
-		err = applyDelta(delta, localState.KeyValue)
+		err = applyDelta(localState.KeyValue, delta)
 		if err != nil {
 			return err
 		}
@@ -361,7 +362,7 @@ func (ac *ApplicationCallTxnFields) applyStateDeltas(evalDelta basics.EvalDelta,
 }
 
 func (ac *ApplicationCallTxnFields) checkPrograms(steva StateEvaluator, maxCost int) error {
-	cost, err := steva.Check([]byte(ac.ApprovalProgram))
+	cost, err := steva.Check(ac.ApprovalProgram)
 	if err != nil {
 		return fmt.Errorf("check failed on ApprovalProgram: %v", err)
 	}
@@ -370,7 +371,7 @@ func (ac *ApplicationCallTxnFields) checkPrograms(steva StateEvaluator, maxCost 
 		return fmt.Errorf("ApprovalProgram too resource intensive. Cost is %d, max %d", cost, maxCost)
 	}
 
-	cost, err = steva.Check([]byte(ac.ClearStateProgram))
+	cost, err = steva.Check(ac.ClearStateProgram)
 	if err != nil {
 		return fmt.Errorf("check failed on ClearStateProgram: %v", err)
 	}
@@ -508,7 +509,7 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 			// Execute the ClearStateProgram before we've deleted the LocalState
 			// for this account. If the ClearStateProgram does not fail, apply any
 			// state deltas it generated.
-			pass, stateDeltas, err := steva.Eval([]byte(params.ClearStateProgram))
+			pass, stateDeltas, err := steva.Eval(params.ClearStateProgram)
 			if err == nil && pass {
 				// Program execution may produce some GlobalState and LocalState
 				// deltas. Apply them, provided they don't exceed the bounds set by
@@ -595,7 +596,7 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 	}
 
 	// Execute the Approval program
-	approved, stateDeltas, err := steva.Eval([]byte(params.ApprovalProgram))
+	approved, stateDeltas, err := steva.Eval(params.ApprovalProgram)
 	if err != nil {
 		return err
 	}

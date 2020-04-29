@@ -127,7 +127,7 @@ type EvalDelta struct {
 
 // Equal compares two EvalDeltas and returns whether or not they are
 // equivalent. It does not care about nilness equality of LocalDeltas,
-// because the msgpack codec will encode an empty map as nil, and we want
+// because the msgpack codec will encode/decode an empty map as nil, and we want
 // an empty generated EvalDelta to equal an empty one we decode off the wire.
 func (ed EvalDelta) Equal(o EvalDelta) bool {
 	// GlobalDeltas must be equal
@@ -150,7 +150,7 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 	return true
 }
 
-// StateSchema sets maximums on the number of each value type that may be stored
+// StateSchema sets maximums on the number of each type that may be stored
 type StateSchema struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -227,10 +227,9 @@ func (tt TealType) String() string {
 type TealValue struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Type TealType `codec:"tt"`
-
-	Bytes string `codec:"tb"`
-	Uint  uint64 `codec:"ui"`
+	Type  TealType `codec:"tt"`
+	Bytes string   `codec:"tb"`
+	Uint  uint64   `codec:"ui"`
 }
 
 // ToValueDelta creates ValueDelta from TealValue
