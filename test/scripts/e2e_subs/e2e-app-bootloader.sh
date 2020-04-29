@@ -39,6 +39,7 @@ EXPERROR='rejected by ApprovalProgram'
 RES=$(${gcmd} app call --app-id $APPID --from $ACCOUNT 2>&1 || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-bootloader-test FAIL call with no progs should fail %Y%m%d_%H%M%S'
+    false
 fi
 
 # Calling app as an update but with wrong scripts should fail
@@ -46,6 +47,7 @@ EXPERROR='rejected by ApprovalProgram'
 RES=$(${gcmd} app update --app-id $APPID --from $ACCOUNT --approval-prog-raw ${TEMPDIR}/wrongupgrade.tealc --clear-prog-raw ${TEMPDIR}/wrongupgrade.tealc 2>&1 || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-bootloader-test FAIL update call with wrong progs should fail %Y%m%d_%H%M%S'
+    false
 fi
 
 # Calling app as an update but with right scripts should succeed
@@ -55,6 +57,7 @@ ${gcmd} app update --app-id $APPID --from $ACCOUNT --approval-prog-raw ${TEMPDIR
 RES=$(${gcmd} app read --guess-format --app-id $APPID --global | jq -r .foo.bar)
 if [[ "$RES" != "" ]]; then
     date '+app-bootloader-test FAIL unexpected global state after update %Y%m%d_%H%M%S'
+    false
 fi
 
 # Calling app should succeed
@@ -64,4 +67,5 @@ ${gcmd} app call --app-id $APPID --from $ACCOUNT
 RES=$(${gcmd} app read --guess-format --app-id $APPID --global | jq -r .foo.b)
 if [[ "$RES" != "foo" ]]; then
     date '+app-bootloader-test FAIL unexpected global state after update and call %Y%m%d_%H%M%S'
+    false
 fi

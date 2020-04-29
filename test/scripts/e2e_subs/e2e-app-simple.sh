@@ -32,9 +32,10 @@ ${gcmd} app closeout --app-id $APPID --from $ACCOUNT
 
 # Fail to close out twice
 RES=$(${gcmd} app closeout --app-id $APPID --from $ACCOUNT 2>&1 || true)
-EXPERROR='account is not opted in'
+EXPERROR='is not opted in'
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL closing out twice should fail %Y%m%d_%H%M%S'
+    false
 fi
 
 # Succeed in opting into the first app again
@@ -48,4 +49,5 @@ RES=$(${gcmd} app clear --app-id $APPID --from $ACCOUNT || true)
 EXPERROR='not currently opted in'
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL clearing state twice should fail %Y%m%d_%H%M%S'
+    false
 fi

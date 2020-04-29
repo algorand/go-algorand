@@ -24,6 +24,7 @@ EXPERROR='rejected by ApprovalProgram'
 RES=$(${gcmd} app call --app-id $APPID --from $ACCOUNT || true)
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL call with no args should fail %Y%m%d_%H%M%S'
+    false
 fi
 
 # Application call with arg0 == "write" should fail before we opt in
@@ -31,6 +32,7 @@ RES=$(${gcmd} app call --app-id $APPID --app-arg-b64 "d3JpdGU=" --from $ACCOUNT 
 EXPERROR='not opted in'
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL writing state should fail if account has not opted in %Y%m%d_%H%M%S'
+    false
 fi
 
 # Should succeed to opt in with first arg hello
@@ -59,6 +61,7 @@ RES=$(${gcmd} app call --app-id $APPID --app-arg-b64 "Y2hlY2s=" --app-arg-b64 "Y
 EXPERROR='only clearing out is supported'
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL app call should fail if app has been deleted %Y%m%d_%H%M%S'
+    false
 fi
 
 # Clear should still succeed with arbitrary args
