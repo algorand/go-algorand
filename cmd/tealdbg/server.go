@@ -57,14 +57,15 @@ type DebugServer struct {
 
 // DebugParams is a container for debug parameters
 type DebugParams struct {
-	ProgramNames []string
-	ProgramBlobs [][]byte
-	Proto        string
-	TxnBlob      []byte
-	GroupIndex   int
-	BalanceBlob  []byte
-	Round        int
-	RunMode      string
+	ProgramNames     []string
+	ProgramBlobs     [][]byte
+	Proto            string
+	TxnBlob          []byte
+	GroupIndex       int
+	BalanceBlob      []byte
+	Round            int
+	RunMode          string
+	DisableSourceMap bool
 }
 
 // FrontendFactory interface for attaching debug frontends

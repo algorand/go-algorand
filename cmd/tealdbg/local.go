@@ -227,8 +227,10 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 					return err
 				}
 				r.runs[i].program = program
-				r.runs[i].offsetToLine = offsets
-				r.runs[i].source = source
+				if !dp.DisableSourceMap {
+					r.runs[i].offsetToLine = offsets
+					r.runs[i].source = source
+				}
 			}
 			r.runs[i].groupIndex = groupIndex
 			r.runs[i].ledger = ledger
