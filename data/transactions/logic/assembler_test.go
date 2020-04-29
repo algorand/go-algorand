@@ -764,3 +764,94 @@ func TestDisassembleSingleOp(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, sample, disassembled)
 }
+
+func TestAssembleOffsets(t *testing.T) {
+	source := "err"
+	program, offsets, err := AssembleStringWithVersionEx(source, AssemblerDefaultVersion)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(program))
+	require.Equal(t, 1, len(offsets))
+	// vlen
+	line, ok := offsets[0]
+	require.False(t, ok)
+	// err
+	line, ok = offsets[1]
+	require.True(t, ok)
+	require.Equal(t, 0, line)
+
+	source = `err
+// comment
+err
+`
+	program, offsets, err = AssembleStringWithVersionEx(source, AssemblerDefaultVersion)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(program))
+	require.Equal(t, 2, len(offsets))
+	// vlen
+	line, ok = offsets[0]
+	require.False(t, ok)
+	// err 1
+	line, ok = offsets[1]
+	require.True(t, ok)
+	require.Equal(t, 0, line)
+	// err 2
+	line, ok = offsets[2]
+	require.True(t, ok)
+	require.Equal(t, 2, line)
+
+	source = `err
+bnz label1
+err
+label1:
+err
+`
+	program, offsets, err = AssembleStringWithVersionEx(source, AssemblerDefaultVersion)
+	require.NoError(t, err)
+	require.Equal(t, 7, len(program))
+	require.Equal(t, 4, len(offsets))
+	// vlen
+	line, ok = offsets[0]
+	require.False(t, ok)
+	// err 1
+	line, ok = offsets[1]
+	require.True(t, ok)
+	require.Equal(t, 0, line)
+	// bnz
+	line, ok = offsets[2]
+	require.True(t, ok)
+	require.Equal(t, 1, line)
+	// bnz byte 1
+	line, ok = offsets[3]
+	require.False(t, ok)
+	// bnz byte 2
+	line, ok = offsets[4]
+	require.False(t, ok)
+	// err 2
+	line, ok = offsets[5]
+	require.True(t, ok)
+	require.Equal(t, 2, line)
+	// err 3
+	line, ok = offsets[6]
+	require.True(t, ok)
+	require.Equal(t, 4, line)
+
+	source = `int 0
+// comment
+!
+`
+	program, offsets, err = AssembleStringWithVersionEx(source, AssemblerDefaultVersion)
+	require.NoError(t, err)
+	require.Equal(t, 6, len(program))
+	require.Equal(t, 2, len(offsets))
+	// vlen
+	line, ok = offsets[0]
+	require.False(t, ok)
+	// int 0
+	line, ok = offsets[4]
+	require.True(t, ok)
+	require.Equal(t, 0, line)
+	// !
+	line, ok = offsets[5]
+	require.True(t, ok)
+	require.Equal(t, 2, line)
+}

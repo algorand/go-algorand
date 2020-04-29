@@ -182,17 +182,17 @@ func debugLocal(args []string) {
 		log.Fatalln("Error: mode may be only set only along with program(s)")
 	}
 
-	// var programNames []string
+	var programNames []string
 	var programBlobs [][]byte
 	if len(args) > 0 {
-		// programNames = make([]string, len(args))
+		programNames = make([]string, len(args))
 		programBlobs = make([][]byte, len(args))
 		for i, file := range args {
 			data, err := ioutil.ReadFile(file)
 			if err != nil {
 				log.Fatalf("Error program reading %s: %s", file, err)
 			}
-			// programNames[i] = file
+			programNames[i] = file
 			programBlobs[i] = data
 		}
 	}
@@ -215,7 +215,7 @@ func debugLocal(args []string) {
 	}
 
 	dp := DebugParams{
-		// ProgramNames: programNames,
+		ProgramNames: programNames,
 		ProgramBlobs: programBlobs,
 		Proto:        proto,
 		TxnBlob:      txnBlob,

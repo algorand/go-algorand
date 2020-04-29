@@ -1,0 +1,13 @@
+// add two integers
+int 1
+int 2
++
+// must be equal 3
+int 3
+==
+bnz ok
+// error if not equal
+err
+ok:
+// return 1
+int 1

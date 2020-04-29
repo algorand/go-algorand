@@ -35,11 +35,11 @@ import (
 
 type cdtState struct {
 	// immutable content
-	program    string
-	proto      *config.ConsensusParams
-	txnGroup   []transactions.SignedTxn
-	groupIndex int
-	globals    []v1.TealValue
+	disassembly string
+	proto       *config.ConsensusParams
+	txnGroup    []transactions.SignedTxn
+	groupIndex  int
+	globals     []v1.TealValue
 
 	// mutable program state
 	mu      deadlock.Mutex
@@ -56,8 +56,8 @@ type cdtState struct {
 	completed       atomicBool
 }
 
-func (s *cdtState) Init(program string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int, globals []v1.TealValue) {
-	s.program = program
+func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int, globals []v1.TealValue) {
+	s.disassembly = disassembly
 	s.proto = proto
 	s.txnGroup = txnGroup
 	s.groupIndex = groupIndex
@@ -550,7 +550,7 @@ func makeLocalScope(s *cdtState, preview bool) (descr []RuntimePropertyDescripto
 
 	pc := makePrimitive(fieldDesc{
 		Name:  "PC",
-		Value: strconv.Itoa(s.line.Load()),
+		Value: strconv.Itoa(s.pc.Load()),
 		Type:  "number",
 	})
 	descr = []RuntimePropertyDescriptor{

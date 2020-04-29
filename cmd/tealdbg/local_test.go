@@ -440,6 +440,7 @@ int 100
 `
 
 	ds := DebugParams{
+		ProgramNames: []string{"test"},
 		ProgramBlobs: [][]byte{[]byte(source)},
 		BalanceBlob:  balanceBlob,
 		TxnBlob:      txnBlob,
@@ -484,6 +485,7 @@ func TestDebugFromPrograms(t *testing.T) {
 
 	l := LocalRunner{}
 	dp := DebugParams{
+		ProgramNames: []string{"test"},
 		ProgramBlobs: [][]byte{[]byte{1}},
 		TxnBlob:      []byte(txnSample),
 		GroupIndex:   1,
@@ -494,6 +496,7 @@ func TestDebugFromPrograms(t *testing.T) {
 	a.Contains(err.Error(), "invalid group index 1 for a single transaction")
 
 	dp = DebugParams{
+		ProgramNames: []string{"test"},
 		ProgramBlobs: [][]byte{[]byte{1}},
 		TxnBlob:      txnBlob,
 		GroupIndex:   3,
@@ -504,6 +507,7 @@ func TestDebugFromPrograms(t *testing.T) {
 	a.Contains(err.Error(), "invalid group index 3 for a txn in a transaction group of 2")
 
 	dp = DebugParams{
+		ProgramNames: []string{"test"},
 		ProgramBlobs: [][]byte{[]byte{1}},
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
@@ -514,6 +518,7 @@ func TestDebugFromPrograms(t *testing.T) {
 	a.Contains(err.Error(), "unknown run mode")
 
 	dp = DebugParams{
+		ProgramNames: []string{"test"},
 		ProgramBlobs: [][]byte{[]byte{1}},
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
@@ -529,6 +534,7 @@ func TestDebugFromPrograms(t *testing.T) {
 	a.Equal(0, l.runs[0].ledger.groupIndex)
 
 	dp = DebugParams{
+		ProgramNames: []string{"test", "test"},
 		ProgramBlobs: [][]byte{[]byte{1}, []byte{1}},
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,

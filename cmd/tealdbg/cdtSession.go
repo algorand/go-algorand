@@ -40,10 +40,11 @@ type cdtSession struct {
 	endpoint      cdtTabDescription
 	done          chan struct{}
 
-	contextID  int
-	scriptID   string
-	scriptHash string
-	scriptURL  string
+	contextID    int
+	scriptID     string
+	scriptHash   string
+	scriptURL    string
+	sourceMapURL string
 
 	verbose bool
 }
@@ -60,6 +61,25 @@ func makeCDTSession(uuid string, debugger Control, ch chan Notification) *cdtSes
 	s.contextID = int(atomic.AddInt32(&contextCounter, 1))
 	s.scriptID = strconv.Itoa(int(atomic.AddInt32(&scriptCounter, 1)))
 	return s
+}
+
+func (s *cdtSession) sourceMapHandler(w http.ResponseWriter, r *http.Request) {
+	sm, err := s.debugger.GetSourceMap()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(sm)
+	return
+}
+
+func (s *cdtSession) sourceHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, source := s.debugger.GetSource()
+	w.Write(source)
+	return
 }
 
 func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
@@ -146,9 +166,9 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		// set pc and line to 0 to workaround Register ack
 		state.Update(0, 0, dbgState.Stack, dbgState.Scratch, "")
 
-		hash := sha256.Sum256([]byte(state.program)) // some random hash
+		hash := sha256.Sum256([]byte(state.disassembly)) // some random hash
 		s.scriptHash = hex.EncodeToString(hash[:])
-		s.scriptURL = fmt.Sprintf("file://%s.teal.js", s.scriptHash)
+		s.scriptURL = fmt.Sprintf("file://%s.teal", s.scriptHash) // some random name if not specified
 	}()
 
 	// Chrome Devtools reader
@@ -275,7 +295,7 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 			err = fmt.Errorf("getScriptSource failed: no scriptId")
 			return
 		}
-		source["scriptSource"] = state.program
+		source["scriptSource"] = state.disassembly
 		response = ChromeResponse{ID: req.ID, Result: source}
 	case "Debugger.setPauseOnExceptions":
 		p := req.Params.(map[string]interface{})
@@ -484,14 +504,15 @@ func (s *cdtSession) computeEvent(state *cdtState) (event interface{}) {
 
 func (s *cdtSession) makeScriptParsedEvent(state *cdtState) DebuggerScriptParsedEvent {
 	// {"method":"Debugger.scriptParsed","params":{"scriptId":"69","url":"internal/dtrace.js","startLine":0,"startColumn":0,"endLine":21,"endColumn":0,"executionContextId":1,"hash":"2e8fbf2f9f6aaa183be557d25f5fbc5b09fae00a","executionContextAuxData":{"isDefault":true},"isLiveEdit":false,"sourceMapURL":"","hasSourceURL":false,"isModule":false,"length":568,"stackTrace":{"callFrames":[{"functionName":"NativeModule.compile","scriptId":"7","url":"internal/bootstrap/loaders.js","lineNumber":298,"columnNumber":15}]}}}
-	progLines := strings.Count(state.program, "\n")
-	length := len(state.program)
+	progLines := strings.Count(state.disassembly, "\n")
+	length := len(state.disassembly)
 
 	evParsed := DebuggerScriptParsedEvent{
 		Method: "Debugger.scriptParsed",
 		Params: DebuggerScriptParsedParams{
 			ScriptID:           s.scriptID,
 			URL:                s.scriptURL,
+			SourceMapURL:       s.sourceMapURL,
 			StartLine:          0,
 			StartColumn:        0,
 			EndLine:            progLines,
@@ -506,7 +527,7 @@ func (s *cdtSession) makeScriptParsedEvent(state *cdtState) DebuggerScriptParsed
 }
 
 func (s *cdtSession) makeDebuggerPausedEvent(state *cdtState) DebuggerPausedEvent {
-	progLines := strings.Count(state.program, "\n")
+	progLines := strings.Count(state.disassembly, "\n")
 
 	scopeLocal := DebuggerScope{
 		Type: "local",

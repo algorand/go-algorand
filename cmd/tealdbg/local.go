@@ -131,10 +131,13 @@ func balanceRecordsFromParams(dp *DebugParams) (records []basics.BalanceRecord, 
 
 // evaluation is a description of a single debugger run
 type evaluation struct {
-	program    []byte
-	groupIndex int
-	eval       func(program []byte, ep logic.EvalParams) (bool, error)
-	ledger     *localLedger
+	program      []byte
+	source       string
+	offsetToLine map[int]int
+	name         string
+	groupIndex   int
+	eval         func(program []byte, ep logic.EvalParams) (bool, error)
+	ledger       *localLedger
 }
 
 // LocalRunner runs local eval
@@ -212,14 +215,19 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 		for i, data := range dp.ProgramBlobs {
 			r.runs[i].program = data
 			if IsTextFile(data) {
-				r.runs[i].program, err = logic.AssembleStringWithVersion(string(data), r.proto.LogicSigVersion)
+				source := string(data)
+				program, offsets, err := logic.AssembleStringWithVersionEx(source, r.proto.LogicSigVersion)
 				if err != nil {
 					return err
 				}
+				r.runs[i].program = program
+				r.runs[i].offsetToLine = offsets
+				r.runs[i].source = source
 			}
 			r.runs[i].groupIndex = groupIndex
 			r.runs[i].ledger = ledger
 			r.runs[i].eval = eval
+			r.runs[i].name = dp.ProgramNames[i]
 		}
 		return nil
 	}
@@ -309,6 +317,8 @@ func (r *LocalRunner) RunAll() error {
 	}
 
 	for _, run := range r.runs {
+		r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine)
+
 		ep := logic.EvalParams{
 			Proto:      &r.proto,
 			Debugger:   r.debugger,
@@ -347,6 +357,7 @@ func (r *LocalRunner) Run() (bool, error) {
 	// ep.Debugger = r.debugger
 	// if ep.Debugger != nil // FALSE
 	if r.debugger != nil {
+		r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine)
 		ep.Debugger = r.debugger
 	}
 

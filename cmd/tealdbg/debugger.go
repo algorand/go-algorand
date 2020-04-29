@@ -17,6 +17,9 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -46,12 +49,15 @@ type Control interface {
 	SetBreakpoint(line int) error
 	RemoveBreakpoint(line int) error
 	SetBreakpointsActive(active bool)
+	GetSourceMap() ([]byte, error)
+	GetSource() (string, []byte)
 }
 
 // Debugger is TEAL event-driven debugger
 type Debugger struct {
 	mus      deadlock.Mutex
 	sessions map[string]*session
+	programs map[string]*programMeta
 
 	mud deadlock.Mutex
 	das []DebugAdapter
@@ -61,7 +67,15 @@ type Debugger struct {
 func MakeDebugger() *Debugger {
 	d := new(Debugger)
 	d.sessions = make(map[string]*session)
+	d.programs = make(map[string]*programMeta)
 	return d
+}
+
+type programMeta struct {
+	name         string
+	program      []byte
+	source       string
+	offsetToLine map[int]int
 }
 
 type debugConfig struct {
@@ -83,8 +97,14 @@ type session struct {
 	notifications chan Notification
 
 	// program that is being debugged
-	program string
-	lines   []string
+	disassembly string
+	lines       []string
+
+	programName  string
+	program      []byte
+	source       string
+	offsetToLine map[int]int // pc to source line
+	pcOffset     map[int]int // disassembly line to pc
 
 	breakpoints []breakpoint
 	line        atomicInt
@@ -99,7 +119,7 @@ func (bs *breakpoint) NonEmpty() bool {
 	return bs.set
 }
 
-func makeSession(program string, line int) (s *session) {
+func makeSession(disassembly string, line int) (s *session) {
 	s = new(session)
 
 	// Allocate a default debugConfig (don't break)
@@ -111,8 +131,8 @@ func makeSession(program string, line int) (s *session) {
 	s.acknowledged = make(chan bool)
 	s.notifications = make(chan Notification)
 
-	s.program = program
-	s.lines = strings.Split(program, "\n")
+	s.disassembly = disassembly
+	s.lines = strings.Split(disassembly, "\n")
 	s.breakpoints = make([]breakpoint, len(s.lines))
 	s.line.Store(line)
 	return
@@ -200,6 +220,65 @@ func (s *session) SetBreakpointsActive(active bool) {
 	}
 }
 
+// GetSourceMap creates source map from source, disassembly and mappings
+func (s *session) GetSourceMap() ([]byte, error) {
+	if len(s.source) == 0 {
+		return nil, nil
+	}
+
+	type sourceMap struct {
+		Version    int      `json:"version"`
+		File       string   `json:"file"`
+		SourceRoot string   `json:"sourceRoot"`
+		Sources    []string `json:"sources"`
+		Mappings   string   `json:"mappings"`
+	}
+	lines := make([]string, len(s.lines))
+	const targetCol int = 0
+	const sourceIdx int = 0
+	sourceLine := 0
+	const sourceCol int = 0
+	prevSourceLine := 0
+
+	// the very first entry is needed by CDT
+	lines[0] = MakeSourceMapLine(targetCol, sourceIdx, 0, sourceCol)
+	for targetLine := 1; targetLine < len(s.lines); targetLine++ {
+		if pc, ok := s.pcOffset[targetLine]; ok && pc != 0 {
+			sourceLine, ok = s.offsetToLine[pc]
+			if !ok {
+				lines[targetLine] = ""
+			} else {
+				lines[targetLine] = MakeSourceMapLine(targetCol, sourceIdx, sourceLine-prevSourceLine, sourceCol)
+				prevSourceLine = sourceLine
+			}
+		} else {
+			delta := 0
+			// the very last empty line, increment by number src number by 1
+			if targetLine == len(s.lines)-1 {
+				delta = 1
+			}
+			lines[targetLine] = MakeSourceMapLine(targetCol, sourceIdx, delta, sourceCol)
+		}
+	}
+
+	sm := sourceMap{
+		Version:    3,
+		File:       s.programName + ".dis",
+		SourceRoot: "",
+		Sources:    []string{"source"}, // this is a pseudo source file name, served by debugger
+		Mappings:   strings.Join(lines, ";"),
+	}
+	data, err := json.Marshal(&sm)
+	return data, err
+}
+
+func (s *session) GetSource() (string, []byte) {
+	if len(s.source) == 0 {
+		return "", nil
+	}
+	return s.programName, []byte(s.source)
+}
+
 func (d *Debugger) getSession(sid string) (s *session, err error) {
 	d.mus.Lock()
 	defer d.mus.Unlock()
@@ -210,12 +289,20 @@ func (d *Debugger) getSession(sid string) (s *session, err error) {
 	return
 }
 
-func (d *Debugger) createSession(sid string, program string, line int) (s *session) {
+func (d *Debugger) createSession(sid string, disassembly string, line int, pcOffset map[int]int) (s *session) {
 	d.mus.Lock()
 	defer d.mus.Unlock()
 
-	s = makeSession(program, line)
+	s = makeSession(disassembly, line)
 	d.sessions[sid] = s
+	meta, ok := d.programs[sid]
+	if ok {
+		s.programName = meta.name
+		s.program = meta.program
+		s.source = meta.source
+		s.offsetToLine = meta.offsetToLine
+		s.pcOffset = pcOffset
+	}
 	return
 }
 
@@ -234,10 +321,33 @@ func (d *Debugger) AddAdapter(da DebugAdapter) {
 	d.das = append(d.das, da)
 }
 
+// hashProgram returns binary program hash
+func (d *Debugger) hashProgram(program []byte) string {
+	hash := sha256.Sum256([]byte(program))
+	return hex.EncodeToString(hash[:])
+}
+
+// SaveProgram stores program, source and offsetToLine for later use
+func (d *Debugger) SaveProgram(name string, program []byte, source string, offsetToLine map[int]int) {
+	hash := d.hashProgram(program)
+	d.mus.Lock()
+	defer d.mus.Unlock()
+	d.programs[hash] = &programMeta{
+		name,
+		program,
+		source,
+		offsetToLine,
+	}
+}
+
 // Register setups new session and notifies frontends if any
 func (d *Debugger) Register(state *logic.DebugState) error {
 	sid := state.ExecID
-	s := d.createSession(sid, state.Disassembly, state.Line)
+	pcOffset := make(map[int]int, len(state.PCOffset))
+	for _, pco := range state.PCOffset {
+		pcOffset[state.PCToLine(pco.PC)] = pco.PC
+	}
+	s := d.createSession(sid, state.Disassembly, state.Line, pcOffset)
 
 	// Store the state for this execution
 	d.mud.Lock()

@@ -71,6 +71,9 @@ type OpStream struct {
 	labels map[string]int
 
 	labelReferences []labelReference
+
+	// map opcode offsets to source line
+	offsetToLine map[int]int
 }
 
 // GetVersion returns the LogicSigVersion we're building to
@@ -91,6 +94,14 @@ func (ops *OpStream) SetLabelHere(label string) error {
 	}
 	ops.labels[label] = ops.Out.Len()
 	return nil
+}
+
+// RecordSourceLine adds an entry to pc to line mapping
+func (ops *OpStream) RecordSourceLine() {
+	if ops.offsetToLine == nil {
+		ops.offsetToLine = make(map[int]int)
+	}
+	ops.offsetToLine[ops.Out.Len()] = ops.sourceLine - 1
 }
 
 // ReferToLabel records an opcode label refence to resolve later
@@ -855,6 +866,7 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 		}
 		if asmFunc != nil {
 			ops.trace("%3d: %s\t", ops.sourceLine, opstring)
+			ops.RecordSourceLine()
 			err := asmFunc(ops, &spec, fields[1:])
 			if err != nil {
 				return err
@@ -949,6 +961,14 @@ func (ops *OpStream) Bytes() (program []byte, err error) {
 		err = fmt.Errorf("%d program bytes but %d to buffer. err=%s", outl, ol, err)
 		return
 	}
+
+	// fixup offset to line mapping
+	newOffsetToLine := make(map[int]int, len(ops.offsetToLine))
+	for o, l := range ops.offsetToLine {
+		newOffsetToLine[o+pbl] = l
+	}
+	ops.offsetToLine = newOffsetToLine
+
 	program = out
 	return
 }
@@ -970,13 +990,21 @@ func AssembleStringV2(text string) ([]byte, error) {
 
 // AssembleStringWithVersion takes an entire program in a string and assembles it to bytecode using the assembler version specified
 func AssembleStringWithVersion(text string, version uint64) ([]byte, error) {
+	program, _, err := AssembleStringWithVersionEx(text, version)
+	return program, err
+}
+
+// AssembleStringWithVersionEx takes an entire program in a string and assembles it to bytecode using the assembler version specified
+// It also returns PC to source line mapping
+func AssembleStringWithVersionEx(text string, version uint64) ([]byte, map[int]int, error) {
 	sr := strings.NewReader(text)
 	ops := OpStream{Version: version}
 	err := ops.Assemble(sr)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return ops.Bytes()
+	program, err := ops.Bytes()
+	return program, ops.offsetToLine, err
 }
 
 type disassembleState struct {
