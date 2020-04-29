@@ -57,7 +57,7 @@ type DebugServer struct {
 
 // DebugParams is a container for debug parameters
 type DebugParams struct {
-	// ProgramNames []string
+	ProgramNames []string
 	ProgramBlobs [][]byte
 	Proto        string
 	TxnBlob      []byte

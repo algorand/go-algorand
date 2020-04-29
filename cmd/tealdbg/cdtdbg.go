@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -71,6 +72,14 @@ func (a *CDTAdapter) SessionStarted(sid string, debugger Control, ch chan Notifi
 	defer a.mu.Unlock()
 
 	s.endpoint = a.enableWebsocketEndpoint(sid, a.apiAddress, s.websocketHandler)
+
+	if name, source := debugger.GetSource(); len(source) != 0 {
+		s.scriptURL = name
+		s.sourceMapURL = fmt.Sprintf("http://%s/%s/sourcemap", a.apiAddress, sid)
+		a.router.HandleFunc(fmt.Sprintf("/%s/sourcemap", sid), s.sourceMapHandler).Methods("GET")
+		a.router.HandleFunc(fmt.Sprintf("/%s/source", sid), s.sourceHandler).Methods("GET")
+	}
+
 	s.verbose = a.verbose
 
 	a.sessions[sid] = *s
@@ -80,10 +89,14 @@ func (a *CDTAdapter) SessionStarted(sid string, debugger Control, ch chan Notifi
 func (a *CDTAdapter) SessionEnded(sid string) {
 	go func() {
 		a.mu.Lock()
-		defer a.mu.Unlock()
 		s := a.sessions[sid]
+		a.mu.Unlock()
+
 		<-s.done
+
+		a.mu.Lock()
 		delete(a.sessions, sid)
+		a.mu.Unlock()
 		log.Printf("CDT session %s closed\n", sid)
 	}()
 }
@@ -102,8 +115,10 @@ func (a *CDTAdapter) WaitForCompletion() {
 }
 
 // must be called with rctx.mux locked
-func (a *CDTAdapter) enableWebsocketEndpoint(uuid string, apiAddress string, handler func(http.ResponseWriter,
-	*http.Request)) cdtTabDescription {
+func (a *CDTAdapter) enableWebsocketEndpoint(
+	uuid string, apiAddress string,
+	handler func(http.ResponseWriter, *http.Request),
+) cdtTabDescription {
 	address := apiAddress + "/" + uuid
 	desc := cdtTabDescription{
 		Description:               "",

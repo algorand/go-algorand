@@ -39,8 +39,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-
-	"github.com/satori/go.uuid"
 )
 
 // EvalMaxVersion is the max version we can interpret and run
@@ -388,9 +386,10 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 			disasm = err.Error()
 		}
 
+		hash := sha256.Sum256(cx.program)
 		// initialize DebuggerState with imutable fields
 		cx.debugState = DebugState{
-			ExecID:      uuid.NewV4().String(),
+			ExecID:      hex.EncodeToString(hash[:]),
 			Disassembly: disasm,
 			PCOffset:    pcOffset,
 			GroupIndex:  cx.GroupIndex,
