@@ -134,6 +134,8 @@ type evalResult struct {
 	err  error
 }
 
+type evalFn func(program []byte, ep logic.EvalParams) (bool, error)
+
 // evaluation is a description of a single debugger run
 type evaluation struct {
 	program      []byte
@@ -141,7 +143,7 @@ type evaluation struct {
 	offsetToLine map[int]int
 	name         string
 	groupIndex   int
-	eval         func(program []byte, ep logic.EvalParams) (bool, error)
+	eval         evalFn
 	ledger       *localLedger
 	result       evalResult
 }
@@ -160,6 +162,34 @@ func MakeLocalRunner(debugger *Debugger) *LocalRunner {
 	r := new(LocalRunner)
 	r.debugger = debugger
 	return r
+}
+
+func determineEvalMode(program []byte, mode string) (eval evalFn, err error) {
+	statefulEval := func(program []byte, ep logic.EvalParams) (bool, error) {
+		pass, _, err := logic.EvalStateful(program, ep)
+		return pass, err
+	}
+	switch mode {
+	case "signature":
+		eval = logic.Eval
+	case "application":
+		eval = statefulEval
+	case "auto":
+		var hasStateful bool
+		hasStateful, err = logic.HasStatefulOps(program)
+		if err != nil {
+			return
+		}
+		if hasStateful {
+			eval = statefulEval
+		} else {
+			eval = logic.Eval
+		}
+	default:
+		err = fmt.Errorf("unknown run mode")
+		return
+	}
+	return
 }
 
 // Setup validates input params
@@ -203,20 +233,6 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			groupIndex: groupIndex,
 		}
 
-		var eval func(program []byte, ep logic.EvalParams) (bool, error)
-		switch dp.RunMode {
-		case "signature":
-			eval = logic.Eval
-		case "application":
-			eval = func(program []byte, ep logic.EvalParams) (bool, error) {
-				pass, _, err := logic.EvalStateful(program, ep)
-				return pass, err
-			}
-		default:
-			err = fmt.Errorf("unknown run mode")
-			return
-		}
-
 		r.runs = make([]evaluation, len(dp.ProgramBlobs))
 		for i, data := range dp.ProgramBlobs {
 			r.runs[i].program = data
@@ -234,8 +250,14 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			}
 			r.runs[i].groupIndex = groupIndex
 			r.runs[i].ledger = ledger
-			r.runs[i].eval = eval
 			r.runs[i].name = dp.ProgramNames[i]
+
+			var eval evalFn
+			eval, err = determineEvalMode(r.runs[i].program, dp.RunMode)
+			if err != nil {
+				return
+			}
+			r.runs[i].eval = eval
 		}
 		return nil
 	}
