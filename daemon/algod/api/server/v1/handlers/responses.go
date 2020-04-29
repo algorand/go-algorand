@@ -225,27 +225,3 @@ type PendingTransactionsResponse struct {
 func (r PendingTransactionsResponse) getBody() interface{} {
 	return r.Body
 }
-
-// StartCatchupResponse contains the outcome of attempting to start a catchup with a given catchpoint
-//
-// swagger:response StartCatchupResponse
-type StartCatchupResponse struct {
-	// in: body
-	Body *v1.CatchupResponse
-}
-
-func (r StartCatchupResponse) getBody() interface{} {
-	return r.Body
-}
-
-// AbortCatchupResponse contains the outcome of attempting to abort a catchup of a given catchpoint
-//
-// swagger:response AbortCatchupResponse
-type AbortCatchupResponse struct {
-	// in: body
-	Body *v1.CatchupResponse
-}
-
-func (r AbortCatchupResponse) getBody() interface{} {
-	return r.Body
-}

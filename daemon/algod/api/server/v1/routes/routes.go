@@ -131,20 +131,6 @@ var V1Routes = lib.Routes{
 		HandlerFunc: handlers.Assets,
 	},
 
-	lib.Route{
-		Name:        "start-catchup",
-		Method:      "PUT",
-		Path:        "/catchup/:catchpoint",
-		HandlerFunc: handlers.StartCatchup,
-	},
-
-	lib.Route{
-		Name:        "abort-catchup",
-		Method:      "DELETE",
-		Path:        "/catchup/:catchpoint",
-		HandlerFunc: handlers.AbortCatchup,
-	},
-
 	// ----- This can only be active when indexer is live
 
 	lib.Route{
