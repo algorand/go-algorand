@@ -229,6 +229,6 @@ func debugLocal(args []string) {
 
 	err = ds.startDebug()
 	if err != nil {
-		log.Fatalf("Debugging error: %s", err.Error())
+		log.Fatalf("Debug error: %s", err.Error())
 	}
 }
