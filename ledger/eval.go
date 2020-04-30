@@ -169,6 +169,8 @@ type BlockEvaluator struct {
 	block        bookkeeping.Block
 	blockTxBytes int
 
+	blockGenerated bool // prevent repeated GenerateBlock calls
+
 	l ledgerForEvaluator
 }
 
@@ -665,9 +667,17 @@ func (eval *BlockEvaluator) finalValidation() error {
 // GenerateBlock produces a complete block from the BlockEvaluator.  This is
 // used during proposal to get an actual block that will be proposed, after
 // feeding in tentative transactions into this block evaluator.
+//
+// After a call to GenerateBlock, the BlockEvaluator can still be used to
+// accept transactions.  However, to guard against reuse, subsequent calls
+// to GenerateBlock on the same BlockEvaluator will fail.
 func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 	if !eval.generate {
 		logging.Base().Panicf("GenerateBlock() called but generate is false")
+	}
+
+	if eval.blockGenerated {
+		return nil, fmt.Errorf("GenerateBlock already called on this BlockEvaluator")
 	}
 
 	err := eval.endOfBlock()
@@ -684,7 +694,8 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 		blk:   eval.block,
 		delta: eval.state.mods,
 	}
-	eval.state = makeRoundCowState(eval.state, eval.block.BlockHeader) // XXX fix this
+	eval.blockGenerated = true
+	eval.state = makeRoundCowState(eval.state, eval.block.BlockHeader)
 	return &vb, nil
 }
 
