@@ -118,12 +118,8 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	e.HideBanner = true
 
 	e.Pre(middleware.RemoveTrailingSlash())
-	e.Use(echo.WrapMiddleware(middlewares.Logger(logger)))
-	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"*"},
-		AllowHeaders: []string{TokenHeader, "Content-Type"},
-		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodOptions},
-	}))
+	e.Use(middlewares.MakeLogger(logger))
+	e.Use(middlewares.MakeCORS(TokenHeader))
 
 	// Request Context
 	ctx := lib.ReqContext{Node: node, Log: logger, Shutdown: shutdown}
