@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"os"
 	"strconv"
+	"strings"
 	"unicode"
 
 	"github.com/spf13/cobra"
@@ -56,7 +57,7 @@ var (
 	foreignApps    []string
 	appStrAccounts []string
 
-	appB64Args       []string
+	appArgs          []string
 	appInputFilename string
 
 	fetchLocal  bool
@@ -77,7 +78,7 @@ func init() {
 	appCmd.PersistentFlags().StringVarP(&txFilename, "out", "o", "", "Dump an unsigned tx to the given file. In order to dump a signed transaction, pass -s")
 	appCmd.PersistentFlags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	appCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
-	appCmd.PersistentFlags().StringSliceVar(&appB64Args, "app-arg-b64", nil, "Base64 encoded args for application transactions")
+	appCmd.PersistentFlags().StringSliceVar(&appArgs, "app-arg", nil, "Args to encode for application transactions (all will be encoded to a byte slice). For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.")
 	appCmd.PersistentFlags().StringSliceVar(&foreignApps, "foreign-app", nil, "Indexes of other apps whose global state is read in this transaction")
 	appCmd.PersistentFlags().StringSliceVar(&appStrAccounts, "app-account", nil, "Accounts that may be accessed from application logic")
 	appCmd.PersistentFlags().StringVarP(&appInputFilename, "app-input", "i", "", "JSON file containing encoded arguments and inputs (mutually exclusive with app-arg-b64 and app-account)")
@@ -155,15 +156,6 @@ type appCallInputs struct {
 	Args        []appCallArg `json:"args"`
 }
 
-func getAppArgs() []string {
-	decoded := getB64Args(appB64Args)
-	out := make([]string, len(decoded))
-	for i, b := range decoded {
-		out[i] = string(b)
-	}
-	return out
-}
-
 func getForeignApps() []uint64 {
 	out := make([]uint64, len(foreignApps))
 	for i, app := range foreignApps {
@@ -176,7 +168,51 @@ func getForeignApps() []uint64 {
 	return out
 }
 
-func processAppInputFile() (args, accounts []string, foreignApps []uint64) {
+func parseAppInputs(inputs appCallInputs) (args [][]byte, accounts []string, foreignApps []uint64) {
+	accounts = inputs.Accounts
+	foreignApps = inputs.ForeignApps
+	args = make([][]byte, len(inputs.Args))
+	for i, arg := range inputs.Args {
+		var rawValue []byte
+		switch arg.Encoding {
+		case "str", "string":
+			rawValue = []byte(arg.Value)
+		case "int", "integer":
+			num, err := strconv.ParseUint(arg.Value, 10, 64)
+			if err != nil {
+				reportErrorf("Could not parse uint64 from string (%s) in app input JSON file: %v", arg.Value, err)
+			}
+			ibytes := make([]byte, 8)
+			binary.BigEndian.PutUint64(ibytes, num)
+			rawValue = ibytes
+		case "addr", "address":
+			addr, err := basics.UnmarshalChecksumAddress(arg.Value)
+			if err != nil {
+				reportErrorf("Could not unmarshal checksummed address from string (%s) in app input JSON file: %v", arg.Value, err)
+			}
+			rawValue = addr[:]
+		case "b32", "base32", "byte base32":
+			data, err := base32.StdEncoding.DecodeString(arg.Value)
+			if err != nil {
+				reportErrorf("Could not decode base32-encoded string (%s) in app input JSON file: %v", arg.Value, err)
+			}
+			rawValue = data
+		case "b64", "base64", "byte base64":
+			data, err := base64.StdEncoding.DecodeString(arg.Value)
+			if err != nil {
+				reportErrorf("Could not decode base64-encoded string (%s) in app input JSON file: %v", arg.Value, err)
+			}
+			rawValue = data
+		default:
+			reportErrorf("Unknown encoding in app input JSON file: %s", arg.Encoding)
+		}
+
+		args[i] = rawValue
+	}
+	return
+}
+
+func processAppInputFile() (args [][]byte, accounts []string, foreignApps []uint64) {
 	var inputs appCallInputs
 	f, err := os.Open(appInputFilename)
 	if err != nil {
@@ -189,57 +225,37 @@ func processAppInputFile() (args, accounts []string, foreignApps []uint64) {
 		reportErrorf("Could not decode app input JSON file: %v", err)
 	}
 
-	accounts = inputs.Accounts
-	foreignApps = inputs.ForeignApps
-	args = make([]string, len(inputs.Args))
-	for i, arg := range inputs.Args {
-		var rawValue string
-		switch arg.Encoding {
-		case "str", "string":
-			rawValue = arg.Value
-		case "int", "integer":
-			num, err := strconv.ParseUint(arg.Value, 10, 64)
-			if err != nil {
-				reportErrorf("Could not parse uint64 from string (%s) in app input JSON file: %v", arg.Value, err)
-			}
-			ibytes := make([]byte, 8)
-			binary.BigEndian.PutUint64(ibytes, num)
-			rawValue = string(ibytes)
-		case "addr", "address":
-			addr, err := basics.UnmarshalChecksumAddress(arg.Value)
-			if err != nil {
-				reportErrorf("Could not unmarshal checksummed address from string (%s) in app input JSON file: %v", arg.Value, err)
-			}
-			rawValue = string(addr[:])
-		case "b32", "base32", "byte base32":
-			data, err := base32.StdEncoding.DecodeString(arg.Value)
-			if err != nil {
-				reportErrorf("Could not decode base32-encoded string (%s) in app input JSON file: %v", arg.Value, err)
-			}
-			rawValue = string(data)
-		case "b64", "base64", "byte base64":
-			data, err := base64.StdEncoding.DecodeString(arg.Value)
-			if err != nil {
-				reportErrorf("Could not decode base64-encoded string (%s) in app input JSON file: %v", arg.Value, err)
-			}
-			rawValue = string(data)
-		default:
-			reportErrorf("Unknown encoding in app input JSON file: %s", arg.Encoding)
-		}
-
-		args[i] = rawValue
-	}
-	return
+	return parseAppInputs(inputs)
 }
 
-func getAppInputs() (args, accounts []string, foreignApps []uint64) {
-	if (appB64Args != nil || appStrAccounts != nil || foreignApps != nil) && appInputFilename != "" {
+func getAppInputs() (args [][]byte, accounts []string, foreignApps []uint64) {
+	if (appArgs != nil || appStrAccounts != nil || foreignApps != nil) && appInputFilename != "" {
 		reportErrorf("Cannot specify both command-line arguments/accounts and JSON input filename")
 	}
 	if appInputFilename != "" {
 		return processAppInputFile()
 	}
-	return getAppArgs(), appStrAccounts, getForeignApps()
+
+	var encodedArgs []appCallArg
+	for _, arg := range appArgs {
+		encodingValue := strings.SplitN(arg, ":", 2)
+		if len(encodingValue) != 2 {
+			reportErrorf("all arguments should be of the form 'encoding:value'")
+		}
+		encodedArg := appCallArg{
+			Encoding: encodingValue[0],
+			Value:    encodingValue[1],
+		}
+		encodedArgs = append(encodedArgs, encodedArg)
+	}
+
+	inputs := appCallInputs{
+		Accounts:    appStrAccounts,
+		ForeignApps: getForeignApps(),
+		Args:        encodedArgs,
+	}
+
+	return parseAppInputs(inputs)
 }
 
 var appCmd = &cobra.Command{
