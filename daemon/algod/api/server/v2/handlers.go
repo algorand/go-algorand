@@ -167,12 +167,12 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 // GetBlock gets the block for the given round.
 // (GET /v2/blocks/{round})
 func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.GetBlockParams) error {
-	handle, err := getCodecHandle(params.Format)
+	handle, contentType, err := getCodecHandle(params.Format)
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
 
-	// msgpack format will return the raw block bytes and attach some custom headers.
+	// msgpack format uses 'RawBlockBytes' and attaches a custom header.
 	if handle == protocol.CodecHandle {
 		blockbytes, err := rpcs.RawBlockBytes(v2.Node.Ledger(), basics.Round(round))
 		if err != nil {
@@ -180,33 +180,28 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 		}
 
 		ctx.Response().Writer.Header().Add("X-Algorand-Struct", "block-v1")
-		return ctx.Blob(http.StatusOK, "application/msgpack", blockbytes)
+		return ctx.Blob(http.StatusOK, contentType, blockbytes)
 	}
 
-	if handle == protocol.JSONHandle {
-		ledger := v2.Node.Ledger()
-		block, _, err := ledger.BlockCert(basics.Round(round))
-		if err != nil {
-			return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
-		}
-
-		// Encoding wasn't working well without embedding "real" objects.
-		response := struct {
-			Block bookkeeping.Block `json:"block"`
-		}{
-			Block: block,
-		}
-
-		data, err := encode(handle, response)
-		if err != nil {
-			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
-		}
-
-		return ctx.Blob(http.StatusOK, "application/json", data)
+	ledger := v2.Node.Ledger()
+	block, _, err := ledger.BlockCert(basics.Round(round))
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
-	// Should never get here.
-	return echo.NewHTTPError(http.StatusBadRequest, errFailedParsingFormatOption, v2.Log)
+	// Encoding wasn't working well without embedding "real" objects.
+	response := struct {
+		Block bookkeeping.Block `codec:"block"`
+	}{
+		Block: block,
+	}
+
+	data, err := encode(handle, response)
+	if err != nil {
+		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+	}
+
+	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
 // GetSupply gets the current supply reported by the ledger.
@@ -350,19 +345,19 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 
 	// Encoding wasn't working well without embedding "real" objects.
 	response := struct {
-		AssetIndex *uint64 `json:"asset-index,omitempty"`
-		CloseRewards *uint64 `json:"close-rewards,omitempty"`
-		ClosingAmount *uint64 `json:"closing-amount,omitempty"`
-		ConfirmedRound *uint64 `json:"confirmed-round,omitempty"`
-		PoolError string `json:"pool-error"`
-		ReceiverRewards *uint64 `json:"receiver-rewards,omitempty"`
-		SenderRewards *uint64 `json:"sender-rewards,omitempty"`
-		Txn transactions.SignedTxn `json:"txn"`
+		AssetIndex *uint64 `codec:"asset-index,omitempty"`
+		CloseRewards *uint64 `codec:"close-rewards,omitempty"`
+		ClosingAmount *uint64 `codec:"closing-amount,omitempty"`
+		ConfirmedRound *uint64 `codec:"confirmed-round,omitempty"`
+		PoolError string `codec:"pool-error"`
+		ReceiverRewards *uint64 `codec:"receiver-rewards,omitempty"`
+		SenderRewards *uint64 `codec:"sender-rewards,omitempty"`
+		Txn transactions.SignedTxn `codec:"txn"`
 	} {
 		Txn: txn.Txn,
 	}
 
-	handle, err := getCodecHandle(params.Format)
+	handle, contentType, err := getCodecHandle(params.Format)
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -384,15 +379,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
 
-	switch handle {
-	case protocol.CodecHandle:
-		return ctx.Blob(http.StatusOK, "application/msgpack", data)
-	case protocol.JSONHandle:
-		return ctx.Blob(http.StatusOK, "application/json", data)
-	default:
-		// Shouldn't get here...
-		return echo.NewHTTPError(http.StatusBadRequest, errFailedParsingFormatOption, v2.Log)
-	}
+	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
 // getPendingTransactions returns to the provided context a list of uncomfirmed transactions currently in the transaction pool with optional Max/Address filters.
@@ -407,7 +394,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		addrPtr = &addr
 	}
 
-	handle, err := getCodecHandle(format)
+	handle, contentType, err := getCodecHandle(format)
 	if err != nil {
 		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
 	}
@@ -453,15 +440,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 		return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
 	}
 
-	switch handle {
-	case protocol.CodecHandle:
-		return ctx.Blob(http.StatusOK, "application/msgpack", data)
-	case protocol.JSONHandle:
-		return ctx.Blob(http.StatusOK, "application/json", data)
-	default:
-		// Shouldn't get here...
-		return echo.NewHTTPError(http.StatusBadRequest, errFailedParsingFormatOption, v2.Log)
-	}
+	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
 // GetPendingTransactions returns the list of unconfirmed transactions currently in the transaction pool.

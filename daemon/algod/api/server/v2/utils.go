@@ -137,22 +137,23 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint
 	return computeAssetIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
 }
 
-func getCodecHandle(formatPtr *string) (codec.Handle, error) {
+// getCodecHandle converts a format string into the encoder + content type
+func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
 	format := "json"
 	if formatPtr != nil {
 		format = strings.ToLower(*formatPtr)
 	}
 
-	var handle codec.Handle = protocol.JSONHandle
-	if format == "json" {
-		handle = protocol.JSONHandle
-	} else if format == "msgpack" || format == "msgp" {
-		handle = protocol.CodecHandle
-	} else {
-		return nil, fmt.Errorf("invalid format: %s", format)
+	switch(format){
+	case "json":
+		return protocol.JSONHandle, "application/json", nil
+	case "msgpack":
+		fallthrough
+	case "msgp":
+		return protocol.CodecHandle, "application/msgp", nil
+	default:
+		return nil, "", fmt.Errorf("invalid format: %s", format)
 	}
-
-	return handle, nil
 }
 
 func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
