@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -45,14 +46,14 @@ type Handlers struct {
 
 // RegisterParticipationKeys registers participation keys.
 // (POST /v2/register-participation-keys/{address})
-func (v2 *Handlers) RegisterParticipationKeys(ctx echo.Context, address string, params generated.RegisterParticipationKeysParams) error {
+func (v2 *Handlers) RegisterParticipationKeys(ctx echo.Context, address string, params private.RegisterParticipationKeysParams) error {
 	// TODO: register participation keys endpoint
 	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
 }
 
 // ShutdownNode shuts down the node.
 // (POST /v2/shutdown)
-func (v2 *Handlers) ShutdownNode(ctx echo.Context, params generated.ShutdownNodeParams) error {
+func (v2 *Handlers) ShutdownNode(ctx echo.Context, params private.ShutdownNodeParams) error {
 	// TODO: shutdown endpoint
 	return ctx.String(http.StatusNotImplemented, "Endpoint not implemented.")
 }
@@ -136,11 +137,11 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 	var apiParticipation *generated.AccountParticipation
 	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
 		apiParticipation = &generated.AccountParticipation{
-			VoteParticipationKey:      byteOrNil(record.VoteID[:]),
-			SelectionParticipationKey: byteOrNil(record.SelectionID[:]),
-			VoteFirstValid:            numOrNil(uint64(record.VoteFirstValid)),
-			VoteLastValid:             numOrNil(uint64(record.VoteLastValid)),
-			VoteKeyDilution:           numOrNil(uint64(record.VoteKeyDilution)),
+			VoteParticipationKey:      record.VoteID[:],
+			SelectionParticipationKey: record.SelectionID[:],
+			VoteFirstValid:            uint64(record.VoteFirstValid),
+			VoteLastValid:             uint64(record.VoteLastValid),
+			VoteKeyDilution:           uint64(record.VoteKeyDilution),
 		}
 	}
 
