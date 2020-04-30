@@ -17,24 +17,14 @@
 package v2
 
 import (
-	//"errors"
-	//"fmt"
-	//"io"
-	//"net/http"
-	//"time"
+	"fmt"
 
-	//"github.com/labstack/echo/v4"
-
-	//"github.com/algorand/go-algorand/config"
-	//"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	//"github.com/algorand/go-algorand/logging"
-	//"github.com/algorand/go-algorand/node"
-	//"github.com/algorand/go-algorand/protocol"
-	//"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // DryrunApp holds global app state for a dryrun call.
@@ -211,4 +201,95 @@ type DryrunTxnResult struct {
 // DryrunResponse contains per-txn debug information from a dryrun.
 type DryrunResponse struct {
 	Txns []*DryrunTxnResult `json:"txns,omitempty"`
+}
+
+// unit-testable core of dryrun handler
+func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response *DryrunResponse) {
+	ledger := dryrunLedger{dr}
+	response.Txns = make([]*DryrunTxnResult, len(dr.Txns))
+	for ti, stxn := range dr.Txns {
+		ep := logic.EvalParams{
+			Txn:        &stxn,
+			Proto:      proto,
+			TxnGroup:   dr.Txns,
+			GroupIndex: ti,
+			//Logger: nil, // TODO: capture logs, send them back
+			Ledger: &ledger,
+		}
+		var result *DryrunTxnResult
+		if len(stxn.Lsig.Logic) > 0 {
+			var debug dryrunDebugReceiver
+			ep.Debugger = &debug
+			pass, err := logic.Eval(stxn.Lsig.Logic, ep)
+			result = new(DryrunTxnResult)
+			var messages []string
+			result.LogicSigTrace = debug.history
+			if pass {
+				messages = append(messages, "PASS")
+			} else {
+				messages = append(messages, "REJECT")
+			}
+			if err != nil {
+				messages = append(messages, err.Error())
+			}
+			result.LogicSigMessages = messages
+		}
+		if stxn.Txn.Type == protocol.ApplicationCallTx {
+			appid := stxn.Txn.ApplicationID
+			var app basics.AppParams
+			ok := false
+			for _, appt := range dr.Apps {
+				if appt.AppIndex == uint64(appid) {
+					app = appt.Params
+					ok = true
+					break
+				}
+			}
+			var messages []string
+			if !ok {
+				messages = make([]string, 1)
+				messages[0] = fmt.Sprintf("uploaded state did not include app id %d referenced in txn[%d]", appid, ti)
+			} else {
+				var debug dryrunDebugReceiver
+				ep.Debugger = &debug
+				var program []byte
+				messages = make([]string, 1)
+				if stxn.Txn.OnCompletion == transactions.ClearStateOC {
+					program = app.ClearStateProgram
+					messages[0] = "ClearStateProgram"
+				} else {
+					program = app.ApprovalProgram
+					messages[0] = "ApprovalProgram"
+				}
+				pass, delta, err := logic.EvalStateful(program, ep)
+				if result == nil {
+					result = new(DryrunTxnResult)
+				}
+				result.AppCallTrace = debug.history
+				result.GlobalDelta = delta.GlobalDelta
+				if len(delta.LocalDeltas) > 0 {
+					result.LocalDeltas = make(map[string]basics.StateDelta, len(delta.LocalDeltas))
+					for k, v := range delta.LocalDeltas {
+						var ldaddr basics.Address
+						if k == 0 {
+							ldaddr = stxn.Txn.Sender
+						} else {
+							ldaddr = stxn.Txn.Accounts[k-1]
+						}
+						result.LocalDeltas[ldaddr.String()] = v
+					}
+				}
+				if pass {
+					messages = append(messages, "PASS")
+				} else {
+					messages = append(messages, "REJECT")
+				}
+				if err != nil {
+					messages = append(messages, err.Error())
+				}
+			}
+			result.AppCallMessages = messages
+		}
+		response.Txns[ti] = result
+	}
 }

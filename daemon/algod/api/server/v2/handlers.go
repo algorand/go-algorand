@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -307,7 +306,6 @@ func (v2 *Handlers) TransactionDryRun(ctx echo.Context) error {
 	}
 
 	var response DryrunResponse
-	response.Txns = make([]*DryrunTxnResult, len(dr.Txns))
 
 	var proto config.ConsensusParams
 	if dr.ProtocolVersion != "" {
@@ -329,95 +327,9 @@ func (v2 *Handlers) TransactionDryRun(ctx echo.Context) error {
 		dr.Round = uint64(v2.Node.Ledger().Latest())
 	}
 
-	ledger := dryrunLedger{&dr}
-	for ti, stxn := range dr.Txns {
-		ep := logic.EvalParams{
-			Txn:        &stxn,
-			Proto:      &proto,
-			TxnGroup:   dr.Txns,
-			GroupIndex: ti,
-			//Logger: nil, // TODO: capture logs, send them back
-			Ledger: &ledger,
-		}
-		var result *DryrunTxnResult
-		if len(stxn.Lsig.Logic) > 0 {
-			var debug dryrunDebugReceiver
-			ep.Debugger = &debug
-			pass, err := logic.Eval(stxn.Lsig.Logic, ep)
-			result = new(DryrunTxnResult)
-			var messages []string
-			result.LogicSigTrace = debug.history
-			if pass {
-				messages = append(messages, "PASS")
-			} else {
-				messages = append(messages, "REJECT")
-			}
-			if err != nil {
-				messages = append(messages, err.Error())
-			}
-			result.LogicSigMessages = messages
-		}
-		if stxn.Txn.Type == protocol.ApplicationCallTx {
-			appid := stxn.Txn.ApplicationID
-			var app basics.AppParams
-			ok := false
-			for _, appt := range dr.Apps {
-				if appt.AppIndex == uint64(appid) {
-					app = appt.Params
-					ok = true
-					break
-				}
-			}
-			var messages []string
-			if !ok {
-				messages = make([]string, 1)
-				messages[0] = fmt.Sprintf("uploaded state did not include app id %d referenced in txn[%d]", appid, ti)
-			} else {
-				var debug dryrunDebugReceiver
-				ep.Debugger = &debug
-				var program []byte
-				messages = make([]string, 1)
-				if stxn.Txn.OnCompletion == transactions.ClearStateOC {
-					program = app.ClearStateProgram
-					messages[0] = "ClearStateProgram"
-				} else {
-					program = app.ApprovalProgram
-					messages[0] = "ApprovalProgram"
-				}
-				pass, delta, err := logic.EvalStateful(program, ep)
-				if result == nil {
-					result = new(DryrunTxnResult)
-				}
-				result.AppCallTrace = debug.history
-				result.GlobalDelta = delta.GlobalDelta
-				if len(delta.LocalDeltas) > 0 {
-					result.LocalDeltas = make(map[string]basics.StateDelta, len(delta.LocalDeltas))
-					for k, v := range delta.LocalDeltas {
-						var ldaddr basics.Address
-						if k == 0 {
-							ldaddr = stxn.Txn.Sender
-						} else {
-							ldaddr = stxn.Txn.Accounts[k-1]
-						}
-						result.LocalDeltas[ldaddr.String()] = v
-					}
-				}
-				if pass {
-					messages = append(messages, "PASS")
-				} else {
-					messages = append(messages, "REJECT")
-				}
-				if err != nil {
-					messages = append(messages, err.Error())
-				}
-			}
-			result.AppCallMessages = messages
-		}
-		response.Txns[ti] = result
-	}
-	//return ctx.JSON(http.StatusOK, response)
+	doDryrunRequest(&dr, &proto, &response)
 	var tightJSON codec.JsonHandle
-	// compare to go-algorand/protocol/codec.go
+	// like go-algorand/protocol/codec.go but Indent=0
 	tightJSON.ErrorIfNoField = true
 	tightJSON.ErrorIfNoArrayExpand = true
 	tightJSON.Canonical = true
