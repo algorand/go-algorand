@@ -1432,7 +1432,7 @@ func TestTxn(t *testing.T) {
 				txn.Txn.VotePK[:],
 				txn.Txn.SelectionPK[:],
 				txn.Txn.Note,
-				[]byte{0, 0, 0, 0, 0, 0, 0, 1},
+				{0, 0, 0, 0, 0, 0, 0, 1},
 				txid[:],
 				txn.Txn.Lease[:],
 				programHash[:],
@@ -2906,8 +2906,8 @@ func benchmarkExpensiveProgram(b *testing.B, source string) {
 
 func BenchmarkAddx64(b *testing.B) {
 	progs := [][]string{
-		[]string{"add long stack", addBenchmarkSource},
-		[]string{"add small stack", addBenchmark2Source},
+		{"add long stack", addBenchmarkSource},
+		{"add small stack", addBenchmark2Source},
 	}
 	for _, pp := range progs {
 		b.Run(pp[0], func(b *testing.B) {
