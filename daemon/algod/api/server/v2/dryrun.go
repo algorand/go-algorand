@@ -37,12 +37,14 @@ import (
 	//"github.com/algorand/go-algorand/rpcs"
 )
 
+// DryrunApp holds global app state for a dryrun call.
 // TODO: should become obsolete when app supported added to api v2?
 type DryrunApp struct {
 	AppIndex uint64           `codec:"i"`
 	Params   basics.AppParams `codec:"p"`
 }
 
+// DryrunLocalAppState holds per-account app state for a dryrun call.
 // TODO: should become obsolete when app supported added to api v2?
 type DryrunLocalAppState struct {
 	Account  basics.Address       `codec:"a"`
@@ -50,6 +52,8 @@ type DryrunLocalAppState struct {
 	State    basics.AppLocalState `codec:"s"`
 }
 
+// DryrunRequest is the JSON object uploaded to /v2/transactions/dryrun
+// Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.
 type DryrunRequest struct {
 	// Txns is transactions to simulate
 	Txns []transactions.SignedTxn `codec:"txns,omitempty"`
@@ -191,6 +195,7 @@ func (dl *dryrunLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIn
 	return basics.AssetParams{}, nil
 }
 
+// DryrunTxnResult contains any LogicSig or ApplicationCall program debug information and state updates from a dryrun.
 type DryrunTxnResult struct {
 	LogicSigTrace    []logic.DebugState `json:"lsig,omitempty"`
 	LogicSigMessages []string           `json:"lsigt,omitempty"`
@@ -203,6 +208,7 @@ type DryrunTxnResult struct {
 	LocalDeltas map[string]basics.StateDelta `json:"ld,omitempty"`
 }
 
+// DryrunResponse contains per-txn debug information from a dryrun.
 type DryrunResponse struct {
 	Txns []*DryrunTxnResult `json:"txns,omitempty"`
 }

@@ -295,7 +295,7 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, generated.PostTransactionsResponse{TxId: txid.String()})
 }
 
-// Provide debugging information for a transaction (or group).
+// TransactionDryRun takes transactions and additional simulated ledger state and returns debugging information.
 // (POST /v2/transactions/dryrun)
 func (v2 *Handlers) TransactionDryRun(ctx echo.Context) error {
 	req := ctx.Request()
