@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
@@ -164,12 +165,13 @@ func MakeLocalRunner(debugger *Debugger) *LocalRunner {
 	return r
 }
 
-func determineEvalMode(program []byte, mode string) (eval evalFn, err error) {
+func determineEvalMode(program []byte, modeIn string) (eval evalFn, mode string, err error) {
 	statefulEval := func(program []byte, ep logic.EvalParams) (bool, error) {
 		pass, _, err := logic.EvalStateful(program, ep)
 		return pass, err
 	}
-	switch mode {
+	mode = modeIn
+	switch modeIn {
 	case "signature":
 		eval = logic.Eval
 	case "application":
@@ -182,8 +184,10 @@ func determineEvalMode(program []byte, mode string) (eval evalFn, err error) {
 		}
 		if hasStateful {
 			eval = statefulEval
+			mode = "application"
 		} else {
 			eval = logic.Eval
+			mode = "signature"
 		}
 	default:
 		err = fmt.Errorf("unknown run mode")
@@ -253,10 +257,12 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			r.runs[i].name = dp.ProgramNames[i]
 
 			var eval evalFn
-			eval, err = determineEvalMode(r.runs[i].program, dp.RunMode)
+			var mode string
+			eval, mode, err = determineEvalMode(r.runs[i].program, dp.RunMode)
 			if err != nil {
 				return
 			}
+			log.Printf("Run mode: %s", mode)
 			r.runs[i].eval = eval
 		}
 		return nil
@@ -346,6 +352,8 @@ func (r *LocalRunner) RunAll() error {
 		return fmt.Errorf("no program to debug")
 	}
 
+	failed := 0
+	start := time.Now()
 	for _, run := range r.runs {
 		r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine)
 
@@ -359,6 +367,13 @@ func (r *LocalRunner) RunAll() error {
 		}
 
 		run.result.pass, run.result.err = run.eval(run.program, ep)
+		if run.result.err != nil {
+			failed++
+		}
+	}
+	elapsed := time.Since(start)
+	if failed == len(r.runs) && elapsed < time.Second {
+		return fmt.Errorf("all %d program(s) failed in less than a second, invocation error?", failed)
 	}
 	return nil
 }

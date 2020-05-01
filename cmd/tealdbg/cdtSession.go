@@ -447,7 +447,7 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 		result := make(map[string]interface{})
 		result["breakpointId"] = strconv.Itoa(bpLine)
 		result["locations"] = []DebuggerLocation{
-			DebuggerLocation{ScriptID: s.scriptID, LineNumber: bpLine},
+			{ScriptID: s.scriptID, LineNumber: bpLine},
 		}
 		response = ChromeResponse{ID: req.ID, Result: result}
 	case "Debugger.resume":

@@ -292,12 +292,12 @@ pop
 		check  func([]byte, EvalParams) (int, error)
 	}
 	tests := map[runMode]desc{
-		runModeSignature: desc{
+		runModeSignature: {
 			source: opcodesRunModeAny + opcodesRunModeSignature,
 			eval:   func(program []byte, ep EvalParams) (bool, error) { return Eval(program, ep) },
 			check:  func(program []byte, ep EvalParams) (int, error) { return Check(program, ep) },
 		},
-		runModeApplication: desc{
+		runModeApplication: {
 			source: opcodesRunModeAny + opcodesRunModeApplication,
 			eval: func(program []byte, ep EvalParams) (bool, error) {
 				pass, _, err := EvalStateful(program, ep)
@@ -1175,9 +1175,9 @@ int 100
 	}
 
 	tests := map[string]test{
-		"read":   test{sourceRead, 20},
-		"write":  test{sourceWrite, 13},
-		"delete": test{sourceDelete, 12},
+		"read":   {sourceRead, 20},
+		"write":  {sourceWrite, 13},
+		"delete": {sourceDelete, 12},
 	}
 	for name, test := range tests {
 		t.Run(fmt.Sprintf("test=%s", name), func(t *testing.T) {
