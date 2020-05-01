@@ -144,13 +144,13 @@ func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
 		format = strings.ToLower(*formatPtr)
 	}
 
-	switch(format){
+	switch format {
 	case "json":
 		return protocol.JSONHandle, "application/json", nil
 	case "msgpack":
 		fallthrough
 	case "msgp":
-		return protocol.CodecHandle, "application/msgp", nil
+		return protocol.CodecHandle, "application/msgpack", nil
 	default:
 		return nil, "", fmt.Errorf("invalid format: %s", format)
 	}
