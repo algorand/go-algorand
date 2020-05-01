@@ -596,9 +596,9 @@
         }
       ]
     },
-      "/v2/compile": {
+      "/v2/teal/compile": {
 	"post": {
-	  "description": "Given teal source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style).",
+	  "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style).",
         "consumes": [
           "text/plain"
         ],
@@ -612,7 +612,7 @@
         "operationId": "TealCompile",
         "parameters": [
           {
-            "description": "Teal source code to be compiled",
+            "description": "TEAL source code to be compiled",
             "name": "source",
             "in": "body",
             "required": true,
