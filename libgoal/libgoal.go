@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 
 	"github.com/algorand/go-algorand/config"
@@ -625,7 +626,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 /* Algod Wrappers */
 
 // Status returns the node status
-func (c *Client) Status() (resp v1.NodeStatus, err error) {
+func (c *Client) Status() (resp generatedV2.NodeStatusResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Status()
@@ -698,7 +699,7 @@ func (c *Client) HealthCheck() error {
 }
 
 // WaitForRound takes a round, waits until it appears and returns its status. This function blocks.
-func (c *Client) WaitForRound(round uint64) (resp v1.NodeStatus, err error) {
+func (c *Client) WaitForRound(round uint64) (resp generatedV2.NodeStatusResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.StatusAfterBlock(round)

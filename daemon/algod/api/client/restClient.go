@@ -29,6 +29,7 @@ import (
 
 	"github.com/google/go-querystring/query"
 
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -177,8 +178,8 @@ func (client RestClient) post(response interface{}, path string, request interfa
 // Status retrieves the StatusResponse from the running node
 // the StatusResponse includes data like the consensus version and current round
 // Not supported
-func (client RestClient) Status() (response v1.NodeStatus, err error) {
-	err = client.get(&response, "/v1/status", nil)
+func (client RestClient) Status() (response generatedV2.NodeStatusResponse, err error) {
+	err = client.get(&response, "/v2/status", nil)
 	return
 }
 
@@ -191,7 +192,7 @@ func (client RestClient) HealthCheck() error {
 // StatusAfterBlock waits for a block to occur then returns the StatusResponse after that block
 // blocks on the node end
 // Not supported
-func (client RestClient) StatusAfterBlock(blockNum uint64) (response v1.NodeStatus, err error) {
+func (client RestClient) StatusAfterBlock(blockNum uint64) (response generatedV2.NodeStatusResponse, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/status/wait-for-block-after/%d", blockNum), nil)
 	return
 }
