@@ -269,10 +269,10 @@ func (tk TealKeyValue) Clone() TealKeyValue {
 	return res
 }
 
-// SatisfiesSchema returns a boolean indicating whether or not a particular
+// SatisfiesSchema returns an error indicating whether or not a particular
 // TealKeyValue store meets the requirements set by a StateSchema on how
 // many values of each type are allowed
-func (tk TealKeyValue) SatisfiesSchema(schema StateSchema) bool {
+func (tk TealKeyValue) SatisfiesSchema(schema StateSchema) error {
 	// Count all of the types in the key/value store
 	var uintCount, bytesCount uint64
 	for _, value := range tk {
@@ -283,16 +283,16 @@ func (tk TealKeyValue) SatisfiesSchema(schema StateSchema) bool {
 			uintCount++
 		default:
 			// Shouldn't happen
-			return false
+			return fmt.Errorf("unknown type %v", value.Type)
 		}
 	}
 
 	// Check against the schema
 	if uintCount > schema.NumUint {
-		return false
+		return fmt.Errorf("store integer count %d exceeds schema integer count %d", uintCount, schema.NumUint)
 	}
 	if bytesCount > schema.NumByteSlice {
-		return false
+		return fmt.Errorf("store bytes count %d exceeds schema bytes count %d", bytesCount, schema.NumByteSlice)
 	}
-	return true
+	return nil
 }
