@@ -51,6 +51,24 @@ func typeEnumTableMarkdown(out io.Writer) {
 	out.Write([]byte("\n"))
 }
 
+func integerConstantsTableMarkdown(out io.Writer) {
+	fmt.Fprintf(out, "#### OnComplete\n")
+	fmt.Fprintf(out, "| Value | Constant name | Description |\n")
+	fmt.Fprintf(out, "| --- | --- | --- |\n")
+	for i, name := range logic.OnCompletionNames {
+		value := uint64(i)
+		fmt.Fprintf(out, "| %d | %s | %s |\n", value, markdownTableEscape(name), logic.OnCompletionDescription(value))
+	}
+	fmt.Fprintf(out, "\n")
+	fmt.Fprintf(out, "#### TypeEnum constants\n")
+	fmt.Fprintf(out, "| Value | Constant name | Description |\n")
+	fmt.Fprintf(out, "| --- | --- | --- |\n")
+	for i, name := range logic.TxnTypeNames {
+		fmt.Fprintf(out, "| %d | %s | %s |\n", i, markdownTableEscape(name), logic.TypeNameDescription(name))
+	}
+	out.Write([]byte("\n"))
+}
+
 func fieldTableMarkdown(out io.Writer, names []string, types []logic.StackType, extra map[string]string) {
 	fmt.Fprintf(out, "| Index | Name | Type | Notes |\n")
 	fmt.Fprintf(out, "| --- | --- | --- | --- |\n")
@@ -256,6 +274,10 @@ func main() {
 			opGroups[opname] = append(opGroups[opname], og.GroupName)
 		}
 	}
+	constants, _ := os.Create("named_integer_constants.md")
+	integerConstantsTableMarkdown(constants)
+	constants.Close()
+
 	txnfields, _ := os.Create("txn_fields.md")
 	fieldTableMarkdown(txnfields, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs)
 	txnfields.Close()

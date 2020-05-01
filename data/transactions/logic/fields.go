@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -157,6 +158,22 @@ var txnTypeIndexes map[string]int
 
 // map symbolic name to uint64 for assembleInt
 var txnTypeConstToUint64 map[string]uint64
+
+// OnCompletionValues is the values of Txn.OnCompletion, not ordered
+var OnCompletionValues = []transactions.OnCompletion{
+	transactions.NoOpOC,
+	transactions.OptInOC,
+	transactions.CloseOutOC,
+	transactions.ClearStateOC,
+	transactions.UpdateApplicationOC,
+	transactions.DeleteApplicationOC,
+}
+
+// OnCompletionNames is the string names of Txn.OnCompletion, array index is the const value
+var OnCompletionNames []string
+
+// onCompletionConstToUint64 map symbolic name to uint64 for assembleInt
+var onCompletionConstToUint64 map[string]uint64
 
 // GlobalField is an enum for `global` opcode
 type GlobalField int
@@ -354,5 +371,13 @@ func init() {
 	for tt, v := range txnTypeIndexes {
 		symbol := TypeNameDescription(tt)
 		txnTypeConstToUint64[symbol] = uint64(v)
+	}
+
+	onCompletionConstToUint64 = make(map[string]uint64, len(OnCompletionValues))
+	OnCompletionNames = make([]string, len(OnCompletionValues))
+	for _, oc := range OnCompletionValues {
+		symbol := oc.String()
+		OnCompletionNames[int(oc)] = symbol
+		onCompletionConstToUint64[symbol] = uint64(oc)
 	}
 }
