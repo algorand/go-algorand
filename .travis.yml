@@ -56,7 +56,7 @@ jobs:
       language: go
       script:
         - mule build-local
-        - scripts/travis/travis_wait.sh 120 mule build-local-integration
+        - scripts/travis/travis_wait.sh 120 mule test-local-integration
 
 
 
@@ -83,7 +83,7 @@ jobs:
       language: go
       script:
         - mule build-local
-        - scripts/travis/travis_wait.sh 120 mule build-local-integration
+        - scripts/travis/travis_wait.sh 120 mule test-local-integration
 
 
 
