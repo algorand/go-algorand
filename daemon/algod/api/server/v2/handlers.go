@@ -454,7 +454,7 @@ func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr strin
 }
 
 // Compile TEAL code to binary, return both binary and hash
-// (POST /v2/compile)
+// (POST /v2/teal/compile)
 func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 	buf := new(bytes.Buffer)
 	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
