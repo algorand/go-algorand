@@ -222,7 +222,7 @@ type ConsensusParams struct {
 	Application bool
 
 	MaxAppArgs              int
-	MaxAppArgLen            int
+	MaxAppTotalArgLen       int
 	MaxApprovalProgramLen   int
 	MaxClearStateProgramLen int
 	MaxAppTxnAccounts       int
@@ -634,7 +634,7 @@ func initConsensusProtocols() {
 	vFuture.MaximumMinimumBalance = 100100000
 
 	vFuture.MaxAppArgs = 16
-	vFuture.MaxAppArgLen = 128
+	vFuture.MaxAppTotalArgLen = 2048
 	vFuture.MaxApprovalProgramLen = 1024
 	vFuture.MaxClearStateProgramLen = 1024
 	vFuture.MaxAppKeyLen = 64
