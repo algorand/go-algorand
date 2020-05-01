@@ -42,6 +42,17 @@ type DryrunLocalAppState struct {
 	State    basics.AppLocalState `codec:"s"`
 }
 
+// DryrunSource is TEAL source text that gets uploaded, compiled, and inserted into transactions or application state
+type DryrunSource struct {
+	// FieldName is what kind of sources this is.
+	// If lsig then it goes into the transactions[this.TxnIndex].LogicSig
+	// If approv or clearp it goes into the Approval Program or Clear State Program of application[this.AppIndex]
+	FieldName string `codec:"f"` // "lsig", "approv", "clearp"
+	Source    string `codec:"text"`
+	TxnIndex  int    `codec:"ti,omitempty"`
+	AppIndex  uint64 `codec:"ai,omitempty"`
+}
+
 // DryrunRequest is the JSON object uploaded to /v2/transactions/dryrun
 // Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.
 type DryrunRequest struct {
@@ -61,6 +72,35 @@ type DryrunRequest struct {
 
 	// Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.
 	Round uint64 `codec:"round,omitempty"`
+
+	Sources []DryrunSource
+}
+
+func (dr *DryrunRequest) expandSources() error {
+	for i, s := range dr.Sources {
+		program, err := logic.AssembleString(s.Source)
+		if err != nil {
+			return fmt.Errorf("Dryrun Source[%d]: %v", i, err)
+		}
+		switch s.FieldName {
+		case "lsig":
+			dr.Txns[s.TxnIndex].Lsig.Logic = program
+		case "approv", "clearp":
+			for ai, app := range dr.Apps {
+				if app.AppIndex == s.AppIndex {
+					switch s.FieldName {
+					case "approv":
+						dr.Apps[ai].Params.ApprovalProgram = program
+					case "clearp":
+						dr.Apps[ai].Params.ClearStateProgram = program
+					}
+				}
+			}
+		default:
+			return fmt.Errorf("Dryrun Source[%d]: bad field name %#v", i, s.FieldName)
+		}
+	}
+	return nil
 }
 
 type dryrunDebugReceiver struct {
@@ -200,11 +240,17 @@ type DryrunTxnResult struct {
 
 // DryrunResponse contains per-txn debug information from a dryrun.
 type DryrunResponse struct {
-	Txns []*DryrunTxnResult `json:"txns,omitempty"`
+	Txns  []*DryrunTxnResult `json:"txns,omitempty"`
+	Error string             `json:"error,omitempty"`
 }
 
 // unit-testable core of dryrun handler
 func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response *DryrunResponse) {
+	err := dr.expandSources()
+	if err != nil {
+		response.Error = err.Error()
+		return
+	}
 	ledger := dryrunLedger{dr}
 	response.Txns = make([]*DryrunTxnResult, len(dr.Txns))
 	for ti, stxn := range dr.Txns {
