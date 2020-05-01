@@ -208,14 +208,6 @@ $(addprefix short_test_target_, $(UNIT_TEST_SOURCES)): build
 integration: build-race
 	./test/scripts/run_integration_tests.sh
 
-ci-integration: ci-build
-	export NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/bin && \
-	export PATH=$(SRCPATH)/tmp/node_pkgs/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/bin:$$PATH && \
-	export PATH=$(SRCPATH)/tmp/node_pkgs/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/tools:$$PATH && \
-	export PATH=$(SRCPATH)/tmp/node_pkgs/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/test-utils:$$PATH && \
-	export SRCROOT=$(SRCPATH) && \
-	test/scripts/e2e.sh -c $(BUILDCHANNEL) -n
-
 testall: fulltest integration
 
 # generated files we should make sure we clean
@@ -297,19 +289,9 @@ install: build
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule
 
-<<<<<<< HEAD
-ci-build: buildsrc gen
-	mkdir -p $(SRCPATH)/tmp/node_pkgs && \
-	CHANNEL=$(BUILDCHANNEL) PKG_ROOT=$(SRCPATH)/tmp/node_pkgs NO_BUILD=True VARIATIONS=$(OS_TYPE)-$(ARCH) \
-	scripts/build_packages.sh $(OS_TYPE)/$(ARCH) && \
-	mkdir -p $(SRCPATH)/tmp/node_pkgs/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/data && \
-	cp gen/devnet/genesis.json $(SRCPATH)/tmp/node_pkgs/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/data
-
 SUPPORTED_ARCHIVE_OS_ARCH = linux/amd64 linux/arm64 linux/arm darwin/amd64
 
 archive:
 	CHANNEL=$(BUILDCHANNEL) \
 	PATH=$(SRCPATH)/tmp/node_pkgs/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/bin:$${PATH} \
 	scripts/upload_version.sh $(BUILDCHANNEL) $(SRCPATH)/tmp/node_pkgs $(S3_RELEASE_BUCKET)
-=======
->>>>>>> 122455bc50c896cdd7b0cee39b0899748a9ba789
