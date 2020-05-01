@@ -273,17 +273,17 @@ var appCmd = &cobra.Command{
 
 func mustParseCreateOnCompletion() (oc transactions.OnCompletion) {
 	switch strings.ToLower(createOnCompletion) {
-	case "NoOp":
+	case "noop":
 		return transactions.NoOpOC
-	case "OptIn":
+	case "optin":
 		return transactions.OptInOC
-	case "CloseOut":
+	case "closeout":
 		return transactions.CloseOutOC
-	case "ClearState":
+	case "clearstate":
 		return transactions.ClearStateOC
-	case "UpdateApplication":
+	case "updateapplication":
 		return transactions.UpdateApplicationOC
-	case "DeleteApplication":
+	case "deleteapplication":
 		return transactions.DeleteApplicationOC
 	default:
 		reportErrorf("unknown value for createOnCompletion: %s (possible values: {NoOp, OptIn, CloseOut, ClearState, UpdateApplication, DeleteApplication})", createOnCompletion)
