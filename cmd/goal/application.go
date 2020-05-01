@@ -45,6 +45,8 @@ var (
 	approvalProgRawFile string
 	clearProgRawFile    string
 
+	createOnCompletion string
+
 	localSchemaUints      uint64
 	localSchemaByteSlices uint64
 
@@ -94,6 +96,7 @@ func init() {
 	createAppCmd.Flags().Uint64Var(&localSchemaUints, "local-ints", 0, "Maximum number of integer values that may be stored in local (per-account) key/value stores for this app. Immutable.")
 	createAppCmd.Flags().Uint64Var(&localSchemaByteSlices, "local-byteslices", 0, "Maximum number of byte slices that may be stored in local (per-account) key/value stores for this app. Immutable.")
 	createAppCmd.Flags().StringVar(&appCreator, "creator", "", "Account to create the application")
+	createAppCmd.Flags().StringVar(&createOnCompletion, "on-completion", "NoOp", "OnCompletion action for application transaction")
 
 	callAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to call app from")
 	optInAppCmd.Flags().StringVarP(&account, "from", "f", "", "Account to opt in")
@@ -268,6 +271,26 @@ var appCmd = &cobra.Command{
 	},
 }
 
+func mustParseCreateOnCompletion() (oc transactions.OnCompletion) {
+	switch createOnCompletion {
+	case "NoOp":
+		return transactions.NoOpOC
+	case "OptIn":
+		return transactions.OptInOC
+	case "CloseOut":
+		return transactions.CloseOutOC
+	case "ClearState":
+		return transactions.ClearStateOC
+	case "UpdateApplication":
+		return transactions.UpdateApplicationOC
+	case "DeleteApplication":
+		return transactions.DeleteApplicationOC
+	default:
+		reportErrorf("unknown value for createOnCompletion: %s", createOnCompletion)
+		return
+	}
+}
+
 func mustParseProgArgs() (approval []byte, clear []byte) {
 	// Ensure we don't have ambiguous or all empty args
 	if (approvalProgFile == "") == (approvalProgRawFile == "") {
@@ -314,9 +337,15 @@ var createAppCmd = &cobra.Command{
 
 		// Parse transaction parameters
 		approvalProg, clearProg := mustParseProgArgs()
+		onCompletion := mustParseCreateOnCompletion()
 		appArgs, appAccounts, foreignApps := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppCreateTx(transactions.NoOpOC, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps)
+		switch onCompletion {
+		case transactions.CloseOutOC, transactions.ClearStateOC:
+			reportWarnf("'--on-completion %s' may be ill-formed for 'goal app create'", createOnCompletion)
+		}
+
+		tx, err := client.MakeUnsignedAppCreateTx(onCompletion, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
