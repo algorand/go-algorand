@@ -60,8 +60,6 @@
 package server
 
 import (
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	"net"
 	"net/http"
 
@@ -73,6 +71,8 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib/middlewares"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/util/tokens"
