@@ -286,7 +286,7 @@ func mustParseCreateOnCompletion() (oc transactions.OnCompletion) {
 	case "deleteapplication":
 		return transactions.DeleteApplicationOC
 	default:
-		reportErrorf("unknown value for createOnCompletion: %s (possible values: {NoOp, OptIn, CloseOut, ClearState, UpdateApplication, DeleteApplication})", createOnCompletion)
+		reportErrorf("unknown value for --on-completion: %s (possible values: {NoOp, OptIn, CloseOut, ClearState, UpdateApplication, DeleteApplication})", createOnCompletion)
 		return
 	}
 }
