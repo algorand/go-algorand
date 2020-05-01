@@ -18,103 +18,103 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger"
 )
 
-type localLedger struct {
-	round      int
+type balancesAdapter struct {
 	balances   map[basics.Address]basics.AccountData
 	txnGroup   []transactions.SignedTxn
 	groupIndex int
+	proto      config.ConsensusParams
+	round      int
 }
 
-func (l *localLedger) Balance(addr basics.Address) (basics.MicroAlgos, error) {
-	br, ok := l.balances[addr]
-	if !ok {
-		return basics.MicroAlgos{}, fmt.Errorf("no such address %s", addr.String())
+const defaultNewAppIdx = 1380011588
+
+func makeAppLedger(
+	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
+	groupIndex int, proto config.ConsensusParams, round int,
+) (logic.LedgerForLogic, error) {
+
+	if groupIndex >= len(txnGroup) {
+		return nil, fmt.Errorf("invalid groupIndex %d exceed txn group length %d", groupIndex, len(txnGroup))
 	}
-	return br.MicroAlgos, nil
-}
+	txn := txnGroup[groupIndex]
 
-func (l *localLedger) Round() basics.Round {
-	return basics.Round(l.round)
-}
+	accounts := []basics.Address{txn.Txn.Sender}
+	for _, addr := range txn.Txn.Accounts {
+		accounts = append(accounts, addr)
+	}
 
-func (l *localLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error) {
-	var ap basics.AppParams
+	appIdx := txn.Txn.ApplicationID
 	if appIdx == 0 {
-		if l.groupIndex >= len(l.txnGroup) {
-			return basics.TealKeyValue{}, fmt.Errorf("can't resolve application %d", appIdx)
-		}
-		appIdx = l.txnGroup[l.groupIndex].Txn.ApplicationID
+		// presumably this is app create transaction, initialize with some value
+		appIdx = defaultNewAppIdx
 	}
 
-	allowed := false
-	if appIdx == l.txnGroup[l.groupIndex].Txn.ApplicationID {
-		allowed = true
-	} else {
-		for _, faIdx := range l.txnGroup[l.groupIndex].Txn.ForeignApps {
-			if appIdx == faIdx {
-				allowed = true
-				break
-			}
-		}
-	}
-	if !allowed {
-		return basics.TealKeyValue{}, fmt.Errorf("access to the app forbidden %d", appIdx)
+	apps := []basics.AppIndex{appIdx}
+	for _, aid := range txn.Txn.ForeignApps {
+		apps = append(apps, aid)
 	}
 
-	for _, br := range l.balances {
-		var ok bool
-		ap, ok = br.AppParams[appIdx]
-		if ok {
-			return ap.GlobalState, nil
-		}
-
+	ba := &balancesAdapter{
+		balances:   balances,
+		txnGroup:   txnGroup,
+		groupIndex: groupIndex,
+		proto:      proto,
+		round:      round,
 	}
-	return basics.TealKeyValue{}, fmt.Errorf("no such application %d", appIdx)
+
+	return ledger.MakeDebugAppLedger(ba, accounts, apps, appIdx)
 }
 
-func (l *localLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error) {
-	if appIdx == 0 {
-		if l.groupIndex >= len(l.txnGroup) {
-			return basics.TealKeyValue{}, fmt.Errorf("can't resolve application %d", appIdx)
+func (ba *balancesAdapter) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
+	br, ok := ba.balances[addr]
+	if !ok {
+		return basics.BalanceRecord{}, nil
+	}
+	return basics.BalanceRecord{Addr: addr, AccountData: br}, nil
+}
+
+func (ba *balancesAdapter) Round() basics.Round {
+	return basics.Round(ba.round)
+}
+
+func (ba *balancesAdapter) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, bool, error) {
+	for addr, br := range ba.balances {
+		if _, ok := br.AssetParams[assetIdx]; ok {
+			return addr, true, nil
 		}
-		appIdx = l.txnGroup[l.groupIndex].Txn.ApplicationID
 	}
-
-	br, ok := l.balances[addr]
-	if !ok {
-		return basics.TealKeyValue{}, fmt.Errorf("no such address %s", addr.String())
-	}
-	ls, ok := br.AppLocalStates[appIdx]
-	if !ok {
-		return basics.TealKeyValue{}, fmt.Errorf("no local state for application %d", appIdx)
-	}
-	return ls.KeyValue, nil
+	return basics.Address{}, false, nil
 }
 
-func (l *localLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {
-	br, ok := l.balances[addr]
-	if !ok {
-		return basics.AssetHolding{}, fmt.Errorf("no such address %s", addr.String())
+func (ba *balancesAdapter) GetAppCreator(appIdx basics.AppIndex) (basics.Address, bool, error) {
+	for addr, br := range ba.balances {
+		if _, ok := br.AppParams[appIdx]; ok {
+			return addr, true, nil
+		}
 	}
-	ah, ok := br.Assets[assetIdx]
-	if !ok {
-		return basics.AssetHolding{}, fmt.Errorf("no such asset %d", assetIdx)
-	}
-	return ah, nil
+	return basics.Address{}, false, nil
 }
 
-func (l *localLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error) {
-	br, ok := l.balances[addr]
-	if !ok {
-		return basics.AssetParams{}, fmt.Errorf("no such address %s", addr.String())
-	}
-	ap, ok := br.AssetParams[assetIdx]
-	if !ok {
-		return basics.AssetParams{}, fmt.Errorf("no such asset %d", assetIdx)
-	}
-	return ap, nil
+func (ba *balancesAdapter) ConsensusParams() config.ConsensusParams {
+	return ba.proto
+}
+
+func (ba *balancesAdapter) PutWithCreatables(basics.BalanceRecord, []basics.CreatableLocator, []basics.CreatableLocator) error {
+	return nil
+}
+
+func (ba *balancesAdapter) Put(basics.BalanceRecord) error {
+	return nil
+}
+
+func (ba *balancesAdapter) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards, dstRewards *basics.MicroAlgos) error {
+	return nil
 }
