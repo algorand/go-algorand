@@ -21,6 +21,7 @@ ALGO_BIN="$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH/$CHANNEL/$OS_TYPE-$ARCH/bin"
 # TODO: Should there be a default network?
 DEFAULTNETWORK=devnet
 DEFAULT_RELEASE_NETWORK=$("$REPO_DIR/scripts/compute_branch_release_network.sh" "${DEFAULTNETWORK}")
+PKG_NAME=$("$REPO_DIR/scripts/compute_package_name.sh" "${CHANNEL:-stable}")
 
 # The following need to be exported for use in ./go-algorand/installer/rpm/algorand.spec.
 export DEFAULT_NETWORK
@@ -34,7 +35,7 @@ trap 'rm -rf $RPMTMP' 0
 TEMPDIR=$(mktemp -d)
 trap 'rm -rf $TEMPDIR' 0
 < "$REPO_DIR/installer/rpm/algorand.spec" \
-    sed -e "s,@PKG_NAME@,${PKG_NAME:-algorand}," \
+    sed -e "s,@PKG_NAME@,${PKG_NAME}," \
         -e "s,@VER@,$FULLVERSION," \
     > "$TEMPDIR/algorand.spec"
 
