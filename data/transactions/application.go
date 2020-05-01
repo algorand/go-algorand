@@ -41,7 +41,7 @@ const (
 
 	// ClearStateOC is similar to CloseOutOC, but may never fail. This
 	// allows users to reclaim their minimum balance from an application
-	// thye no longer wish to opt in to.
+	// they no longer wish to opt in to.
 	ClearStateOC OnCompletion = 3
 
 	// UpdateApplicationOC indicates that an application transaction will

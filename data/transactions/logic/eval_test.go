@@ -1217,6 +1217,51 @@ int %s
 	}
 }
 
+func TestOnCompletionConstants(t *testing.T) {
+	t.Parallel()
+
+	// ensure all the OnCompetion values are in OnCompletionValues list
+	var max int = 100
+	var last int = max
+	for i := 0; i < max; i++ {
+		oc := transactions.OnCompletion(i)
+		if oc.String() == "?" {
+			last = i
+			break
+		}
+	}
+	require.Less(t, last, max, "too many OnCompletion constants, adjust max limit")
+	require.Equal(t, len(OnCompletionValues), last)
+	require.Equal(t, len(onCompletionConstToUint64), len(onCompletionDescriptions))
+	for _, v := range OnCompletionValues {
+		require.Equal(t, v.String(), OnCompletionNames[int(v)])
+	}
+
+	// check constants matching to their values
+	ep := defaultEvalParams(nil, nil)
+	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			for i := 0; i < last; i++ {
+				oc := transactions.OnCompletion(i)
+				symbol := oc.String()
+				require.Contains(t, onCompletionConstToUint64, symbol)
+				require.Equal(t, uint64(i), onCompletionConstToUint64[symbol])
+				t.Run(symbol, func(t *testing.T) {
+					text := fmt.Sprintf(`int %s
+int %s
+==
+`, symbol, oc)
+					program, err := AssembleStringWithVersion(text, v)
+					require.NoError(t, err)
+					pass, err := Eval(program, ep)
+					require.NoError(t, err)
+					require.True(t, pass)
+				})
+			}
+		})
+	}
+}
+
 const testTxnProgramTextV1 = `txn Sender
 arg 0
 ==

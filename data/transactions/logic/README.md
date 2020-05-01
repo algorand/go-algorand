@@ -50,6 +50,30 @@ Constants are loaded into the environment by two opcodes, `intcblock` and `bytec
 
 Constants are pushed onto the stack by `intc`, `intc_[0123]`, `bytec`, and `bytec_[0123]`. The assembler will handle converting `int N` or `byte N` into the appropriate form of the instruction needed.
 
+### Named Integer Constants
+
+#### OnComplete
+| Value | Constant name | Description |
+| --- | --- | --- |
+| 0 | noop | Application transaction will simply call its ApprovalProgram. |
+| 1 | optin | Application transaction will allocate some LocalState for the application in the sender's account. |
+| 2 | closeout | Application transaction will deallocate some LocalState for the application from the user's account. |
+| 3 | clearstate | Similar to CloseOutOC, but may never fail. This allows users to reclaim their minimum balance from an application they no longer wish to opt in to. |
+| 4 | update | Application transaction will update the ApprovalProgram and ClearStateProgram for the application. |
+| 5 | delete | Application transaction will delete the AppParams for the application from the creator's balance. |
+
+#### TypeEnum constants
+| Value | Constant name | Description |
+| --- | --- | --- |
+| 0 | unknown | Unknown type. Invalid transaction. |
+| 1 | pay | Payment |
+| 2 | keyreg | KeyRegistration |
+| 3 | acfg | AssetConfig |
+| 4 | axfer | AssetTransfer |
+| 5 | afrz | AssetFreeze |
+| 6 | appl | ApplicationCall |
+
+
 ## Operations
 
 Most operations work with only one type of argument, uint64 or bytes, and panic if the wrong type value is on the stack.

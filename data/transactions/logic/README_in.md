@@ -50,6 +50,10 @@ Constants are loaded into the environment by two opcodes, `intcblock` and `bytec
 
 Constants are pushed onto the stack by `intc`, `intc_[0123]`, `bytec`, and `bytec_[0123]`. The assembler will handle converting `int N` or `byte N` into the appropriate form of the instruction needed.
 
+### Named Integer Constants
+
+@@ named_integer_constants.md @@
+
 ## Operations
 
 Most operations work with only one type of argument, uint64 or bytes, and panic if the wrong type value is on the stack.
