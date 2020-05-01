@@ -99,6 +99,7 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 	}
 }
 
+// TokenHeader is the header where we put the token.
 const TokenHeader = "X-Algod-API-Token"
 
 // NewRouter builds and returns a new router with our REST handlers registered.

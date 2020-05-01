@@ -25,10 +25,12 @@ import (
 	log "github.com/algorand/go-algorand/logging"
 )
 
+// LoggerMiddleware provides some extra state to the logger middleware
 type LoggerMiddleware struct {
 	log log.Logger
 }
 
+// MakeLogger initializes the logger middleware function
 func MakeLogger(log log.Logger) echo.MiddlewareFunc {
 	logger := LoggerMiddleware{
 		log: log,

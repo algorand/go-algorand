@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package middlewares
 
 import (
@@ -26,6 +27,7 @@ import (
 
 const urlAuthFormatter = "/urlAuth/%s"
 
+// AuthMiddleware provides some data to the handler.
 type AuthMiddleware struct {
 	// Header is the token header which needs to be provided. For example 'X-Algod-API-Token'.
 	header string
@@ -94,4 +96,3 @@ func (auth *AuthMiddleware) handler(next echo.HandlerFunc) echo.HandlerFunc {
 		return echo.NewHTTPError(http.StatusUnauthorized, "Invalid API Token")
 	}
 }
-

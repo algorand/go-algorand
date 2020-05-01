@@ -28,9 +28,9 @@ var Routes = lib.Routes{
 	},
 
 	lib.Route{
-		Name:        "versions",
-		Method:      "GET",
-		Path:        "/versions",
+		Name:   "versions",
+		Method: "GET",
+		Path:   "/versions",
 	},
 
 	lib.Route{
