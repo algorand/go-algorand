@@ -77,6 +77,12 @@ func logTrace(t *testing.T, trace []logic.DebugState) {
 	}
 }
 
+func logStateDelta(t *testing.T, sd basics.StateDelta) {
+	for key, vd := range sd {
+		t.Logf("\t%v: %#v", key, vd)
+	}
+}
+
 func logResponse(t *testing.T, response *DryrunResponse) {
 	t.Log(response.Error)
 	for i, rt := range response.Txns {
@@ -100,6 +106,14 @@ func logResponse(t *testing.T, response *DryrunResponse) {
 			for _, m := range rt.AppCallMessages {
 				t.Log(m)
 			}
+		}
+		if len(rt.GlobalDelta) > 0 {
+			t.Log("Global delta")
+			logStateDelta(t, rt.GlobalDelta)
+		}
+		for addr, ld := range rt.LocalDeltas {
+			t.Logf("%s delta", addr)
+			logStateDelta(t, ld)
 		}
 	}
 }
@@ -154,6 +168,172 @@ func TestDryunLogicSigSource(t *testing.T) {
 	}
 }
 
+const globalTestSource = `// This program approves all transactions whose first arg is "hello"
+// Then, accounts can write "foo": "bar" to the GlobalState by
+// sending a transaction whose first argument is "write". Finally,
+// accounts can send the args ["check", xyz] to confirm that the
+// key at "foo" is equal to the second argument, xyz
+
+// If arg 0 is "hello"
+txna ApplicationArgs 0
+byte base64 aGVsbG8=
+==
+bnz succeed
+
+// else
+
+// If arg 0 is "write"
+txna ApplicationArgs 0
+byte base64 d3JpdGU=
+==
+bnz write
+
+// else
+
+// arg 0 must be "check"
+txna ApplicationArgs 0
+byte base64 Y2hlY2s=
+==
+
+// and arg 1 must be the value at "foo"
+// Key "foo"
+int 0
+byte base64 Zm9v
+app_global_get
+
+// Value must exist
+int 0
+==
+bnz fail
+
+// Value must equal arg
+txna ApplicationArgs 1
+==
+&&
+
+int 1
+bnz done
+
+write:
+// Write to GlobalState
+
+// Key "foo"
+byte base64 Zm9v
+
+// Value "bar"
+byte base64 YmFy
+app_global_put
+
+int 1
+bnz succeed
+
+succeed:
+int 1
+int 1
+bnz done
+
+fail:
+int 0
+
+done:
+`
+
+var globalTestProgram []byte
+
+const localStateCheckSource = `// This program approves all transactions whose first arg is "hello"
+// Then, accounts can write "foo": "bar" to their LocalState by
+// sending a transaction whose first argument is "write". Finally,
+// accounts can send the args ["check", xyz] to confirm that the
+// key at "foo" is equal to the second argument, xyz
+
+// If arg 0 is "hello"
+txna ApplicationArgs 0
+byte base64 aGVsbG8=
+==
+bnz succeed
+
+// else
+
+// If arg 0 is "write"
+txna ApplicationArgs 0
+byte base64 d3JpdGU=
+==
+bnz write
+
+// else
+
+// arg 0 must be "check"
+txna ApplicationArgs 0
+byte base64 Y2hlY2s=
+==
+
+// and arg 1 must be the value at "foo"
+// txn.Sender
+int 0
+
+// App ID (this app)
+int 0
+
+// Key "foo"
+byte base64 Zm9v
+app_local_get
+
+// Value must exist
+int 0
+==
+bnz fail
+
+// Value must equal arg
+txna ApplicationArgs 1
+==
+&&
+
+int 1
+bnz done
+
+write:
+// Write to our LocalState
+
+// txn.Sender
+int 0
+
+// Key "foo"
+byte base64 Zm9v
+
+// Value "bar"
+byte base64 YmFy
+app_local_put
+
+int 1
+bnz succeed
+
+succeed:
+int 1
+int 1
+bnz done
+
+fail:
+int 0
+int 1
+bnz done
+
+done:
+`
+
+var localStateCheckProg []byte
+
+func init() {
+	var err error
+	globalTestProgram, err = logic.AssembleString(globalTestSource)
+	if err != nil {
+		panic(err)
+	}
+	localStateCheckProg, err = logic.AssembleString(localStateCheckSource)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func TestDryunGlobal1(t *testing.T) {
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	var dr DryrunRequest
@@ -182,7 +362,7 @@ func TestDryunGlobal1(t *testing.T) {
 		DryrunApp{
 			AppIndex: 1,
 			Params: basics.AppParams{
-				ApprovalProgram: unB64("AiACAAEmBQVoZWxsbwV3cml0ZQVjaGVjawNmb28DYmFyNhoAKBJAACY2GgApEkAAFjYaACoSIitlIhJAABY2GgESECNAAA4rJwRnI0AAACMjQAABIg=="),
+				ApprovalProgram: globalTestProgram,
 				GlobalState:     app1gs,
 			},
 		},
@@ -230,9 +410,180 @@ func TestDryunGlobal2(t *testing.T) {
 		DryrunApp{
 			AppIndex: 1,
 			Params: basics.AppParams{
-				ApprovalProgram: unB64("AiACAAEmBQVoZWxsbwV3cml0ZQVjaGVjawNmb28DYmFyNhoAKBJAACY2GgApEkAAFjYaACoSIitlIhJAABY2GgESECNAAA4rJwRnI0AAACMjQAABIg=="),
+				ApprovalProgram: globalTestProgram,
 				GlobalState:     app1gs,
 			},
+		},
+	}
+	doDryrunRequest(&dr, &proto, &response)
+	if len(response.Txns) < 1 {
+		t.Error("no response txns")
+	} else if len(response.Txns[0].AppCallMessages) < 1 {
+		t.Error("no response lsig msg")
+	} else {
+		messages := response.Txns[0].AppCallMessages
+		assert.Equal(t, "PASS", messages[len(messages)-1])
+	}
+	if t.Failed() {
+		logResponse(t, &response)
+	}
+}
+
+func TestDryunLocal1(t *testing.T) {
+	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
+	var dr DryrunRequest
+	var proto config.ConsensusParams
+	var response DryrunResponse
+
+	proto.LogicSigVersion = 2
+	proto.LogicSigMaxCost = 1000
+
+	dr.Txns = []transactions.SignedTxn{
+		transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.ApplicationCallTx,
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+						[]byte("foo"),
+					},
+				},
+			},
+		},
+	}
+	dr.Apps = []DryrunApp{
+		DryrunApp{
+			AppIndex: 1,
+			Params: basics.AppParams{
+				ApprovalProgram: localStateCheckProg,
+			},
+		},
+	}
+	doDryrunRequest(&dr, &proto, &response)
+	if len(response.Txns) < 1 {
+		t.Error("no response txns")
+	} else if len(response.Txns[0].AppCallMessages) < 1 {
+		t.Error("no response lsig msg")
+	} else {
+		messages := response.Txns[0].AppCallMessages
+		assert.Equal(t, "PASS", messages[len(messages)-1])
+	}
+	ld, ok := response.Txns[0].LocalDeltas["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"]
+	if ok {
+		foo, ok := ld["foo"]
+		if ok {
+			assert.Equal(t, foo.Action, basics.SetBytesAction)
+			assert.Equal(t, foo.Bytes, "bar")
+		} else {
+			t.Error("no local delta for value foo")
+		}
+	} else {
+		t.Error("no local delta for AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ")
+	}
+	if t.Failed() {
+		logResponse(t, &response)
+	}
+}
+
+func TestDryunLocal1A(t *testing.T) {
+	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
+	var dr DryrunRequest
+	var proto config.ConsensusParams
+	var response DryrunResponse
+
+	proto.LogicSigVersion = 2
+	proto.LogicSigMaxCost = 1000
+
+	dr.Txns = []transactions.SignedTxn{
+		transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.ApplicationCallTx,
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ApplicationArgs: [][]byte{
+						[]byte("write"),
+						[]byte("foo"),
+					},
+				},
+			},
+		},
+	}
+	dr.Apps = []DryrunApp{
+		DryrunApp{
+			AppIndex: 1,
+		},
+	}
+	dr.Sources = []DryrunSource{
+		DryrunSource{
+			Source:    localStateCheckSource,
+			FieldName: "approv",
+			AppIndex:  1,
+		},
+	}
+	doDryrunRequest(&dr, &proto, &response)
+	if len(response.Txns) < 1 {
+		t.Error("no response txns")
+	} else if len(response.Txns[0].AppCallMessages) < 1 {
+		t.Error("no response lsig msg")
+	} else {
+		messages := response.Txns[0].AppCallMessages
+		assert.Equal(t, "PASS", messages[len(messages)-1])
+	}
+	ld, ok := response.Txns[0].LocalDeltas["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"]
+	if ok {
+		foo, ok := ld["foo"]
+		if ok {
+			assert.Equal(t, foo.Action, basics.SetBytesAction)
+			assert.Equal(t, foo.Bytes, "bar")
+		} else {
+			t.Error("no local delta for value foo")
+		}
+	} else {
+		t.Error("no local delta for AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ")
+	}
+	if t.Failed() {
+		logResponse(t, &response)
+	}
+}
+
+func TestDryunLocalCheck(t *testing.T) {
+	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
+	var dr DryrunRequest
+	var proto config.ConsensusParams
+	var response DryrunResponse
+
+	proto.LogicSigVersion = 2
+	proto.LogicSigMaxCost = 1000
+
+	dr.Txns = []transactions.SignedTxn{
+		transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.ApplicationCallTx,
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ApplicationArgs: [][]byte{
+						[]byte("check"),
+						[]byte("bar"),
+					},
+				},
+			},
+		},
+	}
+	dr.Apps = []DryrunApp{
+		DryrunApp{
+			AppIndex: 1,
+			Params: basics.AppParams{
+				ApprovalProgram: localStateCheckProg,
+			},
+		},
+	}
+	localv := make(map[string]basics.TealValue, 1)
+	localv["foo"] = basics.TealValue{Type: basics.TealBytesType, Bytes: "bar"}
+	dr.AccountAppStates = []DryrunLocalAppState{
+		DryrunLocalAppState{
+			AppIndex: 1,
+			State:    basics.AppLocalState{KeyValue: localv},
 		},
 	}
 	doDryrunRequest(&dr, &proto, &response)

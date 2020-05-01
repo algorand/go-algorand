@@ -1640,7 +1640,7 @@ func (cx *evalContext) getLocalStateCow(accountIdx uint64) (*keyValueCow, error)
 	idxCow, ok := cx.localStateCows[addr]
 	if !ok {
 		// No cached cow for this address. Make one.
-		localKV, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(0))
+		localKV, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(cx.Txn.Txn.ApplicationID))
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch app local state for acct %s: %v", addr, err)
 		}

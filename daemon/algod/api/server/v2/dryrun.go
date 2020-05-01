@@ -292,6 +292,9 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 				}
 			}
 			var messages []string
+			if result == nil {
+				result = new(DryrunTxnResult)
+			}
 			if !ok {
 				messages = make([]string, 1)
 				messages[0] = fmt.Sprintf("uploaded state did not include app id %d referenced in txn[%d]", appid, ti)
@@ -308,9 +311,6 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 					messages[0] = "ApprovalProgram"
 				}
 				pass, delta, err := logic.EvalStateful(program, ep)
-				if result == nil {
-					result = new(DryrunTxnResult)
-				}
 				result.AppCallTrace = debug.history
 				result.GlobalDelta = delta.GlobalDelta
 				if len(delta.LocalDeltas) > 0 {
