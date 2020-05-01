@@ -154,19 +154,19 @@ func makeSampleBalanceRecord(addr basics.Address, assetIdx basics.AssetIndex, ap
 	br.MicroAlgos = basics.MicroAlgos{Raw: 500000000}
 	br.Status = basics.Status(1)
 	br.AssetParams = map[basics.AssetIndex]basics.AssetParams{
-		assetIdx: basics.AssetParams{
+		assetIdx: {
 			Total:     100,
 			UnitName:  "tok",
 			AssetName: "asset",
 		},
 	}
 	br.Assets = map[basics.AssetIndex]basics.AssetHolding{
-		assetIdx: basics.AssetHolding{
+		assetIdx: {
 			Amount: 10,
 		},
 	}
 	br.AppLocalStates = map[basics.AppIndex]basics.AppLocalState{
-		appIdx: basics.AppLocalState{
+		appIdx: {
 			Schema: basics.StateSchema{
 				NumUint:      2,
 				NumByteSlice: 3,
@@ -184,7 +184,7 @@ func makeSampleBalanceRecord(addr basics.Address, assetIdx basics.AssetIndex, ap
 		},
 	}
 	br.AppParams = map[basics.AppIndex]basics.AppParams{
-		appIdx: basics.AppParams{
+		appIdx: {
 			ApprovalProgram:   []byte{1},
 			ClearStateProgram: []byte{1, 1},
 			LocalStateSchema: basics.StateSchema{
@@ -486,7 +486,7 @@ func TestDebugFromPrograms(t *testing.T) {
 	l := LocalRunner{}
 	dp := DebugParams{
 		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte{1}},
+		ProgramBlobs: [][]byte{{1}},
 		TxnBlob:      []byte(txnSample),
 		GroupIndex:   1,
 	}
@@ -497,7 +497,7 @@ func TestDebugFromPrograms(t *testing.T) {
 
 	dp = DebugParams{
 		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte{1}},
+		ProgramBlobs: [][]byte{{1}},
 		TxnBlob:      txnBlob,
 		GroupIndex:   3,
 	}
@@ -508,7 +508,7 @@ func TestDebugFromPrograms(t *testing.T) {
 
 	dp = DebugParams{
 		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte{1}},
+		ProgramBlobs: [][]byte{{1}},
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 	}
@@ -519,7 +519,7 @@ func TestDebugFromPrograms(t *testing.T) {
 
 	dp = DebugParams{
 		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte{1}},
+		ProgramBlobs: [][]byte{{1}},
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "signature",
@@ -535,7 +535,7 @@ func TestDebugFromPrograms(t *testing.T) {
 
 	dp = DebugParams{
 		ProgramNames: []string{"test", "test"},
-		ProgramBlobs: [][]byte{[]byte{1}, []byte{1}},
+		ProgramBlobs: [][]byte{{1}, {1}},
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "signature",
@@ -564,7 +564,7 @@ func TestRunMode(t *testing.T) {
 	// check run mode auto on stateful code
 	dp := DebugParams{
 		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte{2, 0x20, 1, 1, 0x22, 0x22, 0x61}}, // version, intcb, int 1, int 1, app_opted_in
+		ProgramBlobs: [][]byte{{2, 0x20, 1, 1, 0x22, 0x22, 0x61}}, // version, intcb, int 1, int 1, app_opted_in
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "auto",
@@ -585,7 +585,7 @@ func TestRunMode(t *testing.T) {
 	// check run mode auto on stateless code
 	dp = DebugParams{
 		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte{2, 0x20, 1, 1, 0x22}}, // version, intcb, int 1
+		ProgramBlobs: [][]byte{{2, 0x20, 1, 1, 0x22}}, // version, intcb, int 1
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "auto",
@@ -606,7 +606,7 @@ func TestRunMode(t *testing.T) {
 	// check run mode application
 	dp = DebugParams{
 		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte{2, 0x20, 1, 1, 0x22, 0x22, 0x61}}, // version, intcb, int 1, int 1, app_opted_in
+		ProgramBlobs: [][]byte{{2, 0x20, 1, 1, 0x22, 0x22, 0x61}}, // version, intcb, int 1, int 1, app_opted_in
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "application",
@@ -627,7 +627,7 @@ func TestRunMode(t *testing.T) {
 	// check run mode signature
 	dp = DebugParams{
 		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte{2, 0x20, 1, 1, 0x22}}, // version, intcb, int 1
+		ProgramBlobs: [][]byte{{2, 0x20, 1, 1, 0x22}}, // version, intcb, int 1
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "signature",
