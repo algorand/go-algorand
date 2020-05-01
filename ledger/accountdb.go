@@ -139,7 +139,8 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 	return err
 }
 
-// applies the changes.
+// applyCatchpointStagingBalances switches the staged catchpoint catchup tables onto the actual
+// tables and update the correct balance round. This is the final step in switching onto the new catchpoint round.
 func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRound basics.Round) (err error) {
 	s := "ALTER TABLE accountbase RENAME TO accountbase_old;"
 	s += "ALTER TABLE assetcreators RENAME TO assetcreators_old;"
@@ -653,6 +654,8 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 	return
 }
 
+// encodedAccountsRange returns an array containing the account data, in the same way it appear in the database
+// starting at entry startAccountIndex, and up to accountCount accounts long.
 func encodedAccountsRange(tx *sql.Tx, startAccountIndex, accountCount int) (bals []encodedBalanceRecord, err error) {
 	rows, err := tx.Query("SELECT address, data FROM accountbase ORDER BY rowid LIMIT ? OFFSET ?", accountCount, startAccountIndex)
 	if err != nil {
@@ -676,6 +679,7 @@ func encodedAccountsRange(tx *sql.Tx, startAccountIndex, accountCount int) (bals
 	return
 }
 
+// totalAccounts returns the total number of accounts
 func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
 	err = tx.QueryRowContext(ctx, "SELECT count(*) FROM accountbase").Scan(&total)
 	if err == sql.ErrNoRows {
