@@ -120,7 +120,7 @@ func randomDeltasBalanced(niter int, base map[basics.Address]basics.AccountData,
 }
 
 func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
-	r, err := accountsRound(tx)
+	r, _, err := accountsRound(tx)
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 
@@ -203,7 +203,9 @@ func TestAccountDBRound(t *testing.T) {
 	for i := 1; i < 10; i++ {
 		updates, newaccts, _ := randomDeltas(20, accts, 0)
 		accts = newaccts
-		err = accountsNewRound(tx, basics.Round(i), updates, 0, proto)
+		err = accountsNewRound(tx, updates, 0, proto)
+		require.NoError(t, err)
+		err = updateAccountsRound(tx, basics.Round(i), 0)
 		require.NoError(t, err)
 		checkAccounts(t, tx, basics.Round(i), accts)
 	}

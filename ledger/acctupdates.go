@@ -772,18 +772,22 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 		return 0, err
 	}
 
-	rnd, err := accountsRound(tx)
+	rnd, hashRound, err := accountsRound(tx)
 	if err != nil {
 		return 0, err
 	}
 
-	if au.catchpointInterval == 0 {
-		// catchpoint is disabled on this node, drop the table so that if it get enabled in the future, we would regenerate the hashes.
+	if hashRound != rnd {
+		// if the hashed round is different then the base round, something was modified, and the accounts aren't in sync
+		// with the hashes.
 		err = resetAccountHashes(tx)
 		if err != nil {
 			return 0, err
 		}
-		return rnd, nil
+		// if catchpoint is disabled on this node, we could complete the initialization right here.
+		if au.catchpointInterval == 0 {
+			return rnd, nil
+		}
 	}
 
 	// create the merkle trie for the balances
@@ -986,6 +990,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	var committedRoundDigest crypto.Digest
 
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
 			mc, err0 := makeMerkleCommitter(tx, false)
 			if err0 != nil {
@@ -1001,9 +1006,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			} else {
 				au.balancesTrie.SetCommitter(mc)
 			}
+			treeTargetRound = dbRound + basics.Round(offset)
 		}
 		for i := uint64(0); i < offset; i++ {
-			err = accountsNewRound(tx, dbRound+basics.Round(i)+1, deltas[i], roundTotals[i+1].RewardsLevel, protos[i+1])
+			err = accountsNewRound(tx, deltas[i], roundTotals[i+1].RewardsLevel, protos[i+1])
 			if err != nil {
 				return err
 			}
@@ -1013,13 +1019,14 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 				return err
 			}
 		}
-
+		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
 		return err
 	})
 
 	if err != nil {
 		au.balancesTrie = nil
 		au.log.Warnf("unable to advance account snapshot: %v", err)
+		return
 	}
 	if isCatchpointRound {
 		committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]

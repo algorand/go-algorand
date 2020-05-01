@@ -86,7 +86,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS assetcreators`,
 	`DROP TABLE IF EXISTS storedcatchpoints`,
 	`DROP TABLE IF EXISTS catchpointstate`,
-	// the accounthashes is intentionally not here.
+	`DROP TABLE IF EXISTS accounthashes`,
 }
 
 type accountDelta struct {
@@ -159,6 +159,10 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 	if err != nil {
 		return err
 	}
+	_, err = tx.Exec("INSERT OR REPLACE INTO acctrounds(id, rnd) VALUES('hashbase', ?)", balancesRound)
+	if err != nil {
+		return err
+	}
 	return
 }
 
@@ -216,7 +220,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 }
 
 func resetAccountHashes(tx *sql.Tx) (err error) {
-	_, err = tx.Exec(`DROP TABLE IF EXISTS accounthashes`)
+	_, err = tx.Exec(`DELETE FROM accounthashes`)
 	return
 }
 
@@ -227,11 +231,22 @@ func accountsReset(tx *sql.Tx) error {
 			return err
 		}
 	}
-	return resetAccountHashes(tx)
+	return nil
 }
 
-func accountsRound(tx *sql.Tx) (rnd basics.Round, err error) {
+// accountsRound returns the tracker balances round number, and the round of the hash tree
+// if the hash of the tree doesn't exists, it returns zero.
+func accountsRound(tx *sql.Tx) (rnd basics.Round, hashrnd basics.Round, err error) {
 	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&rnd)
+	if err != nil {
+		return
+	}
+
+	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='hashbase'").Scan(&hashrnd)
+	if err == sql.ErrNoRows {
+		hashrnd = basics.Round(0)
+		err = nil
+	}
 	return
 }
 
@@ -555,18 +570,7 @@ func getChangedAssetIndices(creator basics.Address, delta accountDelta) map[basi
 	return assetMods
 }
 
-func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]accountDelta, rewardsLevel uint64, proto config.ConsensusParams) (err error) {
-	var base basics.Round
-	err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&base)
-	if err != nil {
-		return
-	}
-
-	if rnd != base+1 {
-		err = fmt.Errorf("newRound %d is not immediately after base %d", rnd, base)
-		return
-	}
-
+func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, rewardsLevel uint64, proto config.ConsensusParams) (err error) {
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx, false)
 	if err != nil {
@@ -631,7 +635,17 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 		return
 	}
 
-	res, err := tx.Exec("UPDATE acctrounds SET rnd=? WHERE id='acctbase'", rnd)
+	err = accountsPutTotals(tx, totals, false)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+// updates the round number associated with the current account data.
+func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (err error) {
+	res, err := tx.Exec("UPDATE acctrounds SET rnd=? WHERE id='acctbase' AND rnd<?", rnd, rnd)
 	if err != nil {
 		return
 	}
@@ -642,15 +656,35 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 	}
 
 	if aff != 1 {
-		err = fmt.Errorf("accountsNewRound: expected to update 1 row but got %d", aff)
-		return
+		// try to figure out why we couldn't update the round number.
+		var base basics.Round
+		err = tx.QueryRow("SELECT rnd FROM acctrounds WHERE id='acctbase'").Scan(&base)
+		if err != nil {
+			return
+		}
+		if base > rnd {
+			err = fmt.Errorf("newRound %d is not after base %d", rnd, base)
+			return
+		} else if base != rnd {
+			err = fmt.Errorf("updateAccountsRound(acctbase, %d): expected to update 1 row but got %d", rnd, aff)
+			return
+		}
 	}
 
-	err = accountsPutTotals(tx, totals, false)
+	res, err = tx.Exec("INSERT OR REPLACE INTO acctrounds(id,rnd) VALUES('hashbase',?)", hashRound)
 	if err != nil {
 		return
 	}
 
+	aff, err = res.RowsAffected()
+	if err != nil {
+		return
+	}
+
+	if aff != 1 {
+		err = fmt.Errorf("updateAccountsRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
+		return
+	}
 	return
 }
 

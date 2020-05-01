@@ -256,7 +256,7 @@ func (cw *catchpointWriter) readDatabaseStep(tx *sql.Tx) (err error) {
 
 func (cw *catchpointWriter) readHeaderFromDatabase(tx *sql.Tx) (err error) {
 	var header catchpointFileHeader
-	header.BalancesRound, err = accountsRound(tx)
+	header.BalancesRound, _, err = accountsRound(tx)
 	if err != nil {
 		return
 	}
