@@ -60,7 +60,7 @@ func TestPing(t *testing.T) {
 		if lastPingRoundTripTime > 0 {
 			postPing := time.Now()
 			testTime := postPing.Sub(prePing)
-			if (lastPingRoundTripTime < testTime) && (lastPingRoundTripTime > (testTime - (2 * waitStep))) {
+			if (lastPingRoundTripTime < testTime) && (lastPingRoundTripTime > (testTime - ((time.Duration(i) * time.Second) * waitStep))) {
 				// success
 				return
 			}

@@ -55,17 +55,18 @@ verify_none_running
 #----------------------
 # Test that we can start & stop a generic node with no overrides
 echo Verifying a generic node will start using goal
-${BINDIR}/goal node start -d ${DATADIR}
+goal node start -d ${DATADIR}
 verify_at_least_one_running
 
 echo Verifying we can stop it using goal
-${BINDIR}/goal node stop -d ${DATADIR}
+goal node stop -d ${DATADIR}
 verify_none_running
 
 #----------------------
 # Test that we can start a generic node straight with no overrides
 echo Verifying a generic node will start directly
-${BINDIR}/algod -d ${DATADIR} &
+algod -d ${DATADIR} &
+sleep 1
 verify_at_least_one_running
 pkill -u $(whoami) -x algod || true
 verify_none_running
@@ -74,9 +75,11 @@ verify_none_running
 # Test that we can start a generic node against the datadir
 # but that we cannot start a second one against same datadir
 echo Verifying that the datadir algod lock works correctly
-${BINDIR}/algod -d ${DATADIR} &
+algod -d ${DATADIR} &
+sleep 1
 verify_at_least_one_running
-${BINDIR}/algod -d ${DATADIR} &
+algod -d ${DATADIR} &
+sleep 1
 verify_at_least_one_running # one should still be running
 verify_one_running # in fact, exactly one should still be running
 # clean up

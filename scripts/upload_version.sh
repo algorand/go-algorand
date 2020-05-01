@@ -24,4 +24,5 @@ DIRECTORY=$2
 BUCKET=$3
 
 export GOPATH=$(go env GOPATH)
-${GOPATH}/bin/updater send -s "${DIRECTORY}" -c "${CHANNEL}" -b "${BUCKET}"
+export PATH=${PATH}:${GOPATH}/bin
+updater send -s "${DIRECTORY}" -c "${CHANNEL}" -b "${BUCKET}"

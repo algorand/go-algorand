@@ -55,8 +55,6 @@ if [ "${PKG_ROOT}" = "" ]; then
     PKG_ROOT=${HOME}/node_pkg
 fi
 
-rm -rf ${PKG_ROOT}
-
 BASECHANNEL=${CHANNEL}
 
 echo Building ${#VARIATION_ARRAY[@]} variations

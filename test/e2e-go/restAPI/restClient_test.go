@@ -143,7 +143,7 @@ func waitForRoundOne(t *testing.T, testClient libgoal.Client) {
 	select {
 	case err := <-errchan:
 		require.NoError(t, err)
-	case <-time.After(1 * time.Minute): // Wait 1 minute (same as WaitForRound)
+	case <-time.After(2 * time.Minute): // Wait 1 minute (same as WaitForRound)
 		close(quit)
 		t.Fatalf("%s: timeout waiting for round 1", t.Name())
 	}

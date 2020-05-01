@@ -1,12 +1,15 @@
 ARG ARCH="amd64"
 
 FROM ${ARCH}/centos:7
-ENV GOLANG_VERSION 1.12
-ARG ARCH="amd64"
+
 RUN yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm && \
     yum update -y && \
-    yum install -y autoconf wget awscli git gnupg2 nfs-utils python36 sqlite3 boost-devel expect jq libtool gcc-c++ libstdc++-devel libstdc++-static rpmdevtools createrepo rpm-sign bzip2 which ShellCheck
+    yum install -y autoconf wget awscli git gnupg2 nfs-utils python3-devel sqlite3 boost-devel expect jq \
+    libtool gcc-c++ libstdc++-devel libstdc++-static rpmdevtools createrepo rpm-sign bzip2 which ShellCheck \
+    libffi-devel openssl-devel
 WORKDIR /root
+ARG ARCH="amd64"
+ENV GOLANG_VERSION 1.12.17
 RUN wget https://dl.google.com/go/go${GOLANG_VERSION}.linux-${ARCH%v*}.tar.gz \
     && tar -xvf go${GOLANG_VERSION}.linux-${ARCH%v*}.tar.gz && \
     mv go /usr/local
@@ -20,8 +23,13 @@ ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \
     BUILDCHANNEL=${BUILDCHANNEL} \
     DEFAULTNETWORK=${DEFAULTNETWORK} \
     FULLVERSION=${FULLVERSION} \
+<<<<<<< HEAD:docker/build/cicd.Dockerfile
+    PKG_ROOT=${PKG_ROOT} \
+    GOPROXY=https://gocenter.io,https://goproxy.io,direct
+=======
     GOPROXY=https://gocenter.io \
     PKG_ROOT=${PKG_ROOT}
+>>>>>>> 122455bc50c896cdd7b0cee39b0899748a9ba789:docker/build/cicd.centos.Dockerfile
 WORKDIR $GOPATH/src/github.com/algorand/go-algorand
 RUN make ci-deps && make clean
 RUN rm -rf $GOPATH/src/github.com/algorand/go-algorand && \
