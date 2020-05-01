@@ -36,10 +36,10 @@ btoi
 ==
 bz fail
 
-// If we shouldn't check params (arg 3), then skip to success
+// If we shouldn't check params (arg 3), then skip to check round
 txna ApplicationArgs 3
 btoi
-bnz success
+bnz round
 
 //
 // Params
@@ -72,6 +72,26 @@ asset_params_get AssetUnitName
 pop
 txna ApplicationArgs 5
 ==
+bz fail
+
+round:
+
+// Check round against arg 6 (arg < global Round, arg + 4 > global Round)
+txna ApplicationArgs 6
+btoi
+
+global Round
+<
+bz fail
+
+txna ApplicationArgs 6
+btoi
+
+int 4
++
+
+global Round
+>
 bz fail
 
 success:

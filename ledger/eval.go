@@ -95,7 +95,7 @@ func (cs *roundCowState) GetAppCreator(appIdx basics.AppIndex) (creator basics.A
 }
 
 func (cs *roundCowState) Round() basics.Round {
-	return cs.round
+	return cs.mods.hdr.Round
 }
 
 // wrappers for roundCowState to satisfy the (current) transactions.Balances interface
