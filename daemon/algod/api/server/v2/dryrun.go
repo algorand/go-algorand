@@ -316,11 +316,9 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 				if len(delta.LocalDeltas) > 0 {
 					result.LocalDeltas = make(map[string]basics.StateDelta, len(delta.LocalDeltas))
 					for k, v := range delta.LocalDeltas {
-						var ldaddr basics.Address
-						if k == 0 {
-							ldaddr = stxn.Txn.Sender
-						} else {
-							ldaddr = stxn.Txn.Accounts[k-1]
+						ldaddr, err := stxn.Txn.AddressByIndex(k, stxn.Txn.Sender)
+						if err != nil {
+							messages = append(messages, err.Error())
 						}
 						result.LocalDeltas[ldaddr.String()] = v
 					}

@@ -1710,7 +1710,7 @@ func (cx *evalContext) getReadOnlyGlobalState(appID uint64) (basics.TealKeyValue
 
 func (cx *evalContext) getGlobalStateCow() (*keyValueCow, error) {
 	if cx.globalStateCow == nil {
-		globalKV, err := cx.Ledger.AppGlobalState(basics.AppIndex(0))
+		globalKV, err := cx.Ledger.AppGlobalState(cx.Txn.Txn.ApplicationID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch global state: %v", err)
 		}
