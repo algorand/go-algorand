@@ -23,12 +23,6 @@ tasks:
     target: package-test-deb WORKDIR=/projects/go-algorand
 
   - task: s3.DownloadFile
-    name: gnugp
-    bucketName: algorand-devops-misc
-    objectName: tools/gnupg2.2.9_centos7_amd64.tar.bz2
-    outputDir: /projects/go-algorand
-
-  - task: s3.DownloadFile
     name: deb
     bucketName: algorand-staging
     objectName: releases/$CHANNEL/$VERSION/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb
@@ -50,7 +44,6 @@ jobs:
 
   package-test-setup:
     tasks:
-      - s3.DownloadFile.gnugp
       - s3.DownloadFile.deb
       - s3.DownloadFile.rpm
 

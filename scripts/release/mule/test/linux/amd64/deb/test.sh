@@ -46,11 +46,11 @@ CHANNEL=stable
 export CHANNEL
 
 apt-get update
-apt-get install aptly curl expect gnupg software-properties-common -y
+apt-get install expect -y
 
 "$MULE_TEST_DIR/util/mule.sh"
-"$MULE_TEST_DIR/util/gpg-fake.sh"
-"$DEB_DIR/aptly.sh"
+"$DEB_DIR/test/algorand.sh"
+expect -d "$DEB_DIR/test/algorand.exp" /var/lib/algorand "$WORKDIR/test/testdata" "$WORKDIR/test/e2e-go/cli/goal/expect"
 "$MULE_TEST_DIR/util/test_package.sh"
 
 echo
