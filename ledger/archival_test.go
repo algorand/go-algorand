@@ -584,8 +584,8 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 
 		// Special case: initAccounts reflects state after block 0,
 		// so it's OK to return minSave=0 but query block 1.
-		if minSave != wl.minQueriedBlock && minSave != 0 && wl.minQueriedBlock != 1 {
-			return minMinSave, fmt.Errorf("tracker %v: committed %d, minSave %d != minQuery %d", trackerType, rnd, minSave, wl.minQueriedBlock)
+		if minSave < wl.minQueriedBlock && minSave != 0 && wl.minQueriedBlock != 1 {
+			return minMinSave, fmt.Errorf("tracker %v: committed %d, minSave %d < minQuery %d", trackerType, rnd, minSave, wl.minQueriedBlock)
 		}
 	}
 
