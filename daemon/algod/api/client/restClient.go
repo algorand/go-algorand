@@ -193,7 +193,7 @@ func (client RestClient) HealthCheck() error {
 // blocks on the node end
 // Not supported
 func (client RestClient) StatusAfterBlock(blockNum uint64) (response generatedV2.NodeStatusResponse, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/status/wait-for-block-after/%d", blockNum), nil)
+	err = client.get(&response, fmt.Sprintf("/v2/status/wait-for-block-after/%d", blockNum), nil)
 	return
 }
 
