@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# shellcheck disable=1090
 
 # TODO: use `trap` instead of cleanup function?
 

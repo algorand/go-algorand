@@ -9,6 +9,13 @@ tasks:
     dockerFilePath: docker/build/mule.ubuntu.Dockerfile
     dependencies: docker.Version
 
+  - task: shell.docker.Ensure
+    name: rpm
+    image: algorand/mule-linux-centos
+    version: '{{ docker.Version.outputs.version }}'
+    dockerFilePath: docker/build/mule.centos.Dockerfile
+    dependencies: docker.Version
+
   - task: docker.Make
     name: package-test-deb
     docker:
@@ -21,6 +28,19 @@ tasks:
       ]
       volumes: [ /var/run/docker.sock:/var/run/docker.sock ]
     target: package-test-deb WORKDIR=/projects/go-algorand
+
+  - task: docker.Make
+    name: package-test-rpm
+    docker:
+      image: algorand/mule-linux-centos
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /projects/go-algorand
+      env: [
+        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      ]
+      volumes: [ /var/run/docker.sock:/var/run/docker.sock ]
+    target: package-test-rpm WORKDIR=/projects/go-algorand
 
   - task: s3.DownloadFile
     name: deb
@@ -41,6 +61,22 @@ jobs:
     tasks:
       - shell.docker.Ensure.deb
       - docker.Make.package-test-deb
+
+  package-test-rpm:
+    configs:
+      arch: amd64
+    tasks:
+      - shell.docker.Ensure.rpm
+      - docker.Make.package-test-rpm
+
+  package-test:
+    configs:
+      arch: amd64
+    tasks:
+      - shell.docker.Ensure.deb
+      - docker.Make.package-test-deb
+      - shell.docker.Ensure.rpm
+      - docker.Make.package-test-rpm
 
   package-test-setup:
     tasks:
