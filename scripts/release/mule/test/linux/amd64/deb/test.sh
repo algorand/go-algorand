@@ -49,8 +49,8 @@ apt-get update
 apt-get install expect -y
 
 "$MULE_TEST_DIR/util/mule.sh"
-"$DEB_DIR/test/algorand.sh"
-expect -d "$DEB_DIR/test/algorand.exp" /var/lib/algorand "$WORKDIR/test/testdata" "$WORKDIR/test/e2e-go/cli/goal/expect"
+"$DEB_DIR/test/goal.sh"
+expect -d "$DEB_DIR/test/goal.exp" /var/lib/algorand "$WORKDIR/test/testdata" "$WORKDIR/test/e2e-go/cli/goal/expect"
 "$MULE_TEST_DIR/util/test_package.sh"
 
 echo
