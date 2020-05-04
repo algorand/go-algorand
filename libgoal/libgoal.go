@@ -47,11 +47,13 @@ const DefaultKMDDataDir = nodecontrol.DefaultKMDDataDir
 
 // Client represents the entry point for all libgoal functions
 type Client struct {
-	nc           nodecontrol.NodeController
-	kmdStartArgs nodecontrol.KMDStartArgs
-	dataDir      string
-	cacheDir     string
-	consensus    config.ConsensusProtocols
+	nc                   nodecontrol.NodeController
+	kmdStartArgs         nodecontrol.KMDStartArgs
+	dataDir              string
+	cacheDir             string
+	consensus            config.ConsensusProtocols
+	algodVersionAffinity algodclient.APIVersion
+	kmdVersionAffinity   kmdclient.APIVersion
 }
 
 // ClientConfig is data to configure a Client
@@ -134,6 +136,8 @@ func (c *Client) init(config ClientConfig, clientType ClientType) error {
 	}
 	c.dataDir = dataDir
 	c.cacheDir = config.CacheDir
+	c.algodVersionAffinity = algodclient.APIVersionV1
+	c.kmdVersionAffinity = kmdclient.APIVersionV1
 
 	// Get node controller
 	nc, err := getNodeController(config.BinDir, config.AlgodDataDir)
@@ -171,6 +175,7 @@ func (c *Client) init(config ClientConfig, clientType ClientType) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -187,6 +192,7 @@ func (c *Client) ensureAlgodClient() (*algodclient.RestClient, error) {
 	if err != nil {
 		return nil, err
 	}
+	algod.SetAPIVersionAffinity(c.algodVersionAffinity)
 	return &algod, err
 }
 
@@ -810,4 +816,10 @@ func (c *Client) ConsensusParams(round uint64) (consensus config.ConsensusParams
 	}
 
 	return params, nil
+}
+
+// SetAPIVersionAffinity sets the client API version affinity of the algod client.
+func (c *Client) SetAPIVersionAffinity(algodVersionAffinity algodclient.APIVersion, kmdVersionAffinity kmdclient.APIVersion) {
+	c.algodVersionAffinity = algodVersionAffinity
+	c.kmdVersionAffinity = kmdVersionAffinity
 }
