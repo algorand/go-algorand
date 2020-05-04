@@ -1361,7 +1361,7 @@
             "summary" : "Gets the current node status."
          }
       },
-      "/v2/status/wait-for-block-after/{round}/" : {
+      "/v2/status/wait-for-block-after/{round}" : {
          "get" : {
             "description" : "Waits for a block to appear after round {round} and returns the node's status at the time.",
             "operationId" : "WaitForBlock",
