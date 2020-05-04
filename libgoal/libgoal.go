@@ -818,7 +818,7 @@ func (c *Client) ConsensusParams(round uint64) (consensus config.ConsensusParams
 	return params, nil
 }
 
-// SetAPIVersionAffinity sets the client API version affinity of the algod client.
+// SetAPIVersionAffinity sets the desired client API version affinity of the algod and kmd clients.
 func (c *Client) SetAPIVersionAffinity(algodVersionAffinity algodclient.APIVersion, kmdVersionAffinity kmdclient.APIVersion) {
 	c.algodVersionAffinity = algodVersionAffinity
 	c.kmdVersionAffinity = kmdVersionAffinity
