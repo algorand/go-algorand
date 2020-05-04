@@ -66,7 +66,7 @@ func MakeCatchpointCatchupAccessor(ledger *Ledger, log logging.Logger) *Catchpoi
 	wdb := ledger.trackerDB().wdb
 	accountsq, err := accountsDbInit(rdb.Handle, wdb.Handle)
 	if err != nil {
-		// todo : log error.
+		log.Warnf("unable to initialize account db in MakeCatchpointCatchupAccessor : %v", err)
 		return nil
 	}
 	return &CatchpointCatchupAccessor{
@@ -181,7 +181,7 @@ func (c *CatchpointCatchupAccessor) ProgressStagingBalances(ctx context.Context,
 	return nil
 }
 
-// ProgressStagingBalances deserialize the given bytes as a temporary staging balances
+// processStagingContent deserialize the given bytes as a temporary staging balances content
 func (c *CatchpointCatchupAccessor) processStagingContent(ctx context.Context, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error) {
 	if progress.SeenHeader {
 		return fmt.Errorf("content chunk already seen")
@@ -223,7 +223,7 @@ func (c *CatchpointCatchupAccessor) processStagingContent(ctx context.Context, b
 	return err
 }
 
-// ProgressStagingBalances deserialize the given bytes as a temporary staging balances
+// processStagingBalances deserialize the given bytes as a temporary staging balances
 func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error) {
 	if !progress.SeenHeader {
 		return fmt.Errorf("content chunk was missing")

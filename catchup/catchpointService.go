@@ -75,8 +75,8 @@ const (
 	maxBlockDownloadAttempts = 50
 )
 
-// MakeCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
-func MakeCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger) (*CatchpointCatchupService, error) {
+// MakeResumedCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
+func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger) (*CatchpointCatchupService, error) {
 	service := &CatchpointCatchupService{
 		stats: CatchpointCatchupStats{
 			StartTime: time.Now(),
@@ -98,6 +98,9 @@ func MakeCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNod
 
 // MakeNewCatchpointCatchupService creates a new catchpoint catchup service for a node that is not in catchpoint catchup mode
 func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger) (*CatchpointCatchupService, error) {
+	if catchpoint == "" {
+		return nil, fmt.Errorf("MakeNewCatchpointCatchupService: catchpoint is invalid")
+	}
 	service := &CatchpointCatchupService{
 		stats: CatchpointCatchupStats{
 			CatchpointLabel: catchpoint,
@@ -111,10 +114,6 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 		net:            net,
 		ledger:         l,
 	}
-	if catchpoint == "" {
-		return nil, fmt.Errorf("MakeNewCatchpointCatchupService: catchpoint is invalid")
-	}
-
 	return service, nil
 }
 
@@ -166,11 +165,16 @@ func (cs *CatchpointCatchupService) run() {
 			err = cs.abort(fmt.Errorf("unexpected catchpoint catchup stage encountered : %v", cs.stage))
 		}
 
-		if err != nil {
-			if err != cs.ctx.Err() {
+		if cs.ctx.Err() != nil {
+			if err != nil {
 				cs.log.Warnf("catchpoint catchup stage error : %v", err)
-				time.Sleep(200 * time.Millisecond)
 			}
+			continue
+		}
+
+		if err != nil {
+			cs.log.Warnf("catchpoint catchup stage error : %v", err)
+			time.Sleep(200 * time.Millisecond)
 		}
 	}
 }
@@ -240,7 +244,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 			}
 			return cs.abort(fmt.Errorf("processStageLedgerDownload failed to reset staging balances : %v", err))
 		}
-		err = ledgerFetcher.getLedger(cs.ctx, round)
+		err = ledgerFetcher.downloadLedger(cs.ctx, round)
 		if err == nil {
 			break
 		}
@@ -365,13 +369,10 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 
 	prevBlock := &topBlock
 	fetcherFactory := MakeNetworkFetcherFactory(cs.net, 10, nil)
-	attemptsCount := 0
 	blocksFetched := 1 // we already got the first block in the previous step.
 	var blk *bookkeeping.Block
 	var client FetcherClient
-	for blocksFetched <= lookback {
-		attemptsCount++
-
+	for attemptsCount := 1; blocksFetched <= lookback; attemptsCount++ {
 		if err := cs.ctx.Err(); err != nil {
 			return cs.abort(err)
 		}
@@ -380,6 +381,13 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		// check to see if the current ledger might have this block. If so, we should try this first instead of downloading anything.
 		if ledgerBlock, err := cs.ledger.Block(topBlock.Round() - basics.Round(blocksFetched)); err == nil {
 			blk = &ledgerBlock
+		} else {
+			switch err.(type) {
+			case ledger.ErrNoEntry:
+				// this is expected, ignore this one.
+			default:
+				cs.log.Warnf("processStageBlocksDownload encountered the following error when attempting to retrieve the block for round %d : %v", topBlock.Round()-basics.Round(blocksFetched), err)
+			}
 		}
 
 		if blk == nil {

@@ -56,7 +56,7 @@ func makeLedgerFetcher(net network.GossipNode, accessor *ledger.CatchpointCatchu
 	}
 }
 
-func (lf *ledgerFetcher) getLedger(ctx context.Context, round basics.Round) error {
+func (lf *ledgerFetcher) downloadLedger(ctx context.Context, round basics.Round) error {
 	if len(lf.peers) == 0 {
 		lf.peers = lf.net.GetPeers(network.PeersPhonebook)
 		if len(lf.peers) == 0 {

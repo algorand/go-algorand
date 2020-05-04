@@ -106,6 +106,7 @@ type AlgorandFullNode struct {
 	blockService             *rpcs.BlockService
 	ledgerService            *rpcs.LedgerService
 	wsFetcherService         *rpcs.WsFetcherService // to handle inbound gossip msgs for fetching over gossip
+	txPoolSyncerService      *rpcs.TxSyncer
 
 	indexer *indexer.Indexer
 
@@ -117,8 +118,6 @@ type AlgorandFullNode struct {
 
 	lastRoundTimestamp    time.Time
 	hasSyncedSinceStartup bool
-
-	txPoolSyncerService *rpcs.TxSyncer
 
 	cryptoPool                         execpool.ExecutionPool
 	lowPriorityCryptoVerificationPool  execpool.BacklogPool
@@ -268,7 +267,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 	if catchpointCatchupState != ledger.CatchpointCatchupStateInactive {
-		node.catchpointCatchupService, err = catchup.MakeCatchpointCatchupService(context.Background(), node, node.log, node.net, node.ledger.Ledger)
+		node.catchpointCatchupService, err = catchup.MakeResumedCatchpointCatchupService(context.Background(), node, node.log, node.net, node.ledger.Ledger)
 		if err != nil {
 			log.Errorf("unable to create catchpoint catchup service: %v", err)
 			return nil, err
