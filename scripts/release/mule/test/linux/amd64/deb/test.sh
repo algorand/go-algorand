@@ -42,10 +42,12 @@ CHANNEL=stable
 
 export CHANNEL
 
-apt-get update
-apt-get install expect "$WORKDIR/pkg"/*.deb -y
+mkdir -p "$WORKDIR/pkg"
+mule -f package-test.yaml package-test-setup-deb
 
-"$MULE_TEST_DIR/util/mule.sh"
+apt-get update
+apt-get install expect "$WORKDIR"/pkg/*.deb -y
+
 "$MULE_TEST_DIR/util/test_package.sh" deb
 expect -d "$MULE_TEST_DIR/$OS_TYPE/$ARCH_TYPE/deb/goal.exp" /var/lib/algorand "$WORKDIR/test/testdata" "$WORKDIR/test/e2e-go/cli/goal/expect"
 

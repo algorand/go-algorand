@@ -45,7 +45,8 @@ CHANNEL=stable
 
 export CHANNEL
 
-"$MULE_TEST_DIR/util/mule.sh"
+mkdir -p "$WORKDIR/pkg"
+mule -f package-test.yaml package-test-setup-rpm
 "$MULE_TEST_DIR/util/test_package.sh" rpm
 
 echo

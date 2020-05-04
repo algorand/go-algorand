@@ -55,6 +55,7 @@ run_images () {
     for item in ${OS_LIST[*]}
     do
         echo "[$0] Running ${item}-test..."
+
         if ! docker run --rm --name algorand -t "${item}-run-tests" bash ./scripts/release/mule/test/util/run_tests.sh -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -p "$PKG_TYPE" -r "$VERSION"
         then
             FAILED+=("$item")

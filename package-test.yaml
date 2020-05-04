@@ -70,8 +70,11 @@ jobs:
       - docker.Make.package-test-deb
       - docker.Make.package-test-rpm
 
-  package-test-setup:
+  package-test-setup-deb:
     tasks:
       - s3.DownloadFile.deb
+
+  package-test-setup-rpm:
+    tasks:
       - s3.DownloadFile.rpm
 
