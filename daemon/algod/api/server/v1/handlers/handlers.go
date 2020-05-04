@@ -598,7 +598,6 @@ func AccountInformation(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 
-	// the following has a bug : the request below is not atomic.
 	myLedger := ctx.Node.Ledger()
 	lastRound := myLedger.Latest()
 	record, err := myLedger.Lookup(lastRound, basics.Address(addr))
