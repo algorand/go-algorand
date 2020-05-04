@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=2045
 
 set -ex
 
@@ -47,7 +48,6 @@ then
     exit 1
 fi
 
-echo "[$0] Testing: algod -v"
 if [ "$PKG_TYPE" == "deb" ]
 then
     dpkg -i ./pkg/*.deb
@@ -55,21 +55,13 @@ else
     yum install ./pkg/*.rpm -y
 fi
 
-STR=$(algod -v)
-SHORT_HASH=${COMMIT_HASH:0:8}
+export BRANCH
+export COMMIT_HASH
+export CHANNEL
+export VERSION
 
-# We're looking for a line that looks like the following:
-#
-#       2.0.4.stable [rel/stable] (commit #729b125a)
-#
-# Since we're passing in the full hash, we won't using the closing paren.
-# Use a regex over the multi-line string.
-if [[ "$STR" =~ .*"$FULLVERSION.$CHANNEL [$BRANCH] (commit #$SHORT_HASH)".* ]]
-then
-    echo -e "[$0] The result of \`algod -v\` is a correct match.\n$STR"
-    exit 0
-fi
-
-echo "[$0] The result of \`algod -v\` is an incorrect match."
-exit 1
+for test in $(ls ./scripts/release/mule/test/tests/*.sh)
+do
+    bash "$test"
+done
 

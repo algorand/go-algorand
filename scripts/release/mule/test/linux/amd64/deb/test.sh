@@ -29,9 +29,6 @@ export WORKDIR
 MULE_TEST_DIR="$WORKDIR/scripts/release/mule/test"
 export MULE_TEST_DIR
 
-DEB_DIR="$MULE_TEST_DIR/$OS_TYPE/$ARCH_TYPE/deb"
-export DEB_DIR
-
 #SHA=$(git rev-parse HEAD)
 SHA=8b0be452
 export SHA
@@ -46,12 +43,11 @@ CHANNEL=stable
 export CHANNEL
 
 apt-get update
-apt-get install expect -y
+apt-get install expect "$WORKDIR/pkg"/*.deb -y
 
 "$MULE_TEST_DIR/util/mule.sh"
-"$DEB_DIR/test/goal.sh"
-expect -d "$DEB_DIR/test/goal.exp" /var/lib/algorand "$WORKDIR/test/testdata" "$WORKDIR/test/e2e-go/cli/goal/expect"
 "$MULE_TEST_DIR/util/test_package.sh" deb
+expect -d "$MULE_TEST_DIR/$OS_TYPE/$ARCH_TYPE/deb/goal.exp" /var/lib/algorand "$WORKDIR/test/testdata" "$WORKDIR/test/e2e-go/cli/goal/expect"
 
 echo
 date "+build_release end TEST stage %Y%m%d_%H%M%S"

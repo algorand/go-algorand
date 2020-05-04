@@ -20,7 +20,7 @@ else
     #  Problem: conflicting requests
     #    - nothing provides yum-cron needed by algorand-2.0.4-1.x86_64
     # (try to add '--skip-broken' to skip uninstallable packages or '--nobest' to use not only best candidate packages)
-    # smoke_test.sh: line 47: algod: command not found
+    # algod: command not found
     OS_LIST=(
         centos:7
     #    centos:8
@@ -44,7 +44,7 @@ CMD [\"/bin/bash\"]")
         # Use pattern substitution here (like sed).
         # ${parameter/pattern/substitution}
         echo -e "${TOKENIZED/\{\{OS\}\}/$item}" > Dockerfile
-        if ! docker build -t "${item}-smoke-test" .
+        if ! docker build -t "${item}-run-tests" .
         then
             FAILED+=("$item")
         fi
@@ -55,7 +55,7 @@ run_images () {
     for item in ${OS_LIST[*]}
     do
         echo "[$0] Running ${item}-test..."
-        if ! docker run --rm --name algorand -t "${item}-smoke-test" bash ./scripts/release/mule/test/util/smoke_test.sh -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -p "$PKG_TYPE" -r "$VERSION"
+        if ! docker run --rm --name algorand -t "${item}-run-tests" bash ./scripts/release/mule/test/util/run_tests.sh -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -p "$PKG_TYPE" -r "$VERSION"
         then
             FAILED+=("$item")
         fi
