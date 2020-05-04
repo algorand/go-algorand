@@ -24,7 +24,9 @@ import (
 	"github.com/algorand/go-codec/codec"
 	"github.com/labstack/echo/v4"
 
+	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -135,22 +137,23 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint
 	return computeAssetIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
 }
 
-func getCodecHandle(formatPtr *string) (codec.Handle, error) {
+// getCodecHandle converts a format string into the encoder + content type
+func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
 	format := "json"
 	if formatPtr != nil {
 		format = strings.ToLower(*formatPtr)
 	}
 
-	var handle codec.Handle = protocol.JSONHandle
-	if format == "json" {
-		handle = protocol.JSONHandle
-	} else if format == "msgpack" || format == "msgp" {
-		handle = protocol.CodecHandle
-	} else {
-		return nil, fmt.Errorf("invalid format: %s", format)
+	switch format {
+	case "json":
+		return protocol.JSONHandle, "application/json", nil
+	case "msgpack":
+		fallthrough
+	case "msgp":
+		return protocol.CodecHandle, "application/msgpack", nil
+	default:
+		return nil, "", fmt.Errorf("invalid format: %s", format)
 	}
-
-	return handle, nil
 }
 
 func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
@@ -164,25 +167,61 @@ func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
 	return output, nil
 }
 
-func decode(handle codec.Handle, input []byte, output interface{}) error {
-	//enc := codec.NewEncoderBytes(&output, handle)
-	dec := codec.NewDecoderBytes(input, handle)
+// Auth Utilities below
 
-	err := dec.Decode(output)
-	if err != nil {
-		return fmt.Errorf("failed to decode object: %v", err)
-	}
+type pathCollectingRouter struct {
+	paths map[echo.Route]echo.HandlerFunc
+}
+
+func (p *pathCollectingRouter) CONNECT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.CONNECT, Path: path}] = h
+	return nil
+}
+func (p *pathCollectingRouter) DELETE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.DELETE, Path: path}] = h
+	return nil
+}
+func (p *pathCollectingRouter) GET(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.GET, Path: path}] = h
+	return nil
+}
+func (p *pathCollectingRouter) HEAD(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.HEAD, Path: path}] = h
+	return nil
+}
+func (p *pathCollectingRouter) OPTIONS(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.OPTIONS, Path: path}] = h
+	return nil
+}
+func (p *pathCollectingRouter) PATCH(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.PATCH, Path: path}] = h
+	return nil
+}
+func (p *pathCollectingRouter) POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.POST, Path: path}] = h
+	return nil
+}
+func (p *pathCollectingRouter) PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.PUT, Path: path}] = h
+	return nil
+}
+func (p *pathCollectingRouter) TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route {
+	p.paths[echo.Route{Method: echo.TRACE, Path: path}] = h
 	return nil
 }
 
-// Uses the 'codec:' annotations to reserialize an object.
-func toCodecMap(input interface{}, output *map[string]interface{}) (err error) {
-	var encoded []byte
-	encoded, err = encode(protocol.CodecHandle, input)
-	if err != nil {
-		return
+// GetRoutes returns a map of all the routes defined in the V2 router
+func GetRoutes(ctx lib.ReqContext, privateEndpoints bool) map[echo.Route]echo.HandlerFunc {
+	handlers := &Handlers{
+		Node:     ctx.Node,
+		Log:      ctx.Log,
+		Shutdown: ctx.Shutdown,
 	}
-
-	err = decode(protocol.CodecHandle, encoded, &output)
-	return
+	collector := pathCollectingRouter{paths: make(map[echo.Route]echo.HandlerFunc)}
+	if privateEndpoints {
+		private.RegisterHandlers(&collector, handlers)
+	} else {
+		generated.RegisterHandlers(&collector, handlers)
+	}
+	return collector.paths
 }
