@@ -352,11 +352,15 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("too many application args, max %d", proto.MaxAppArgs)
 		}
 
-		// Limit length of each argument
-		for i, arg := range tx.ApplicationArgs {
-			if len(arg) > proto.MaxAppArgLen {
-				return fmt.Errorf("application arg %d too long, max len %d bytes", i, proto.MaxAppArgLen)
-			}
+		// Sum up argument lengths
+		var argSum uint64
+		for _, arg := range tx.ApplicationArgs {
+			argSum = basics.AddSaturate(argSum, uint64(len(arg)))
+		}
+
+		// Limit total length of all arguments
+		if argSum > uint64(proto.MaxAppTotalArgLen) {
+			return fmt.Errorf("application args total length too long, max len %d bytes", proto.MaxAppTotalArgLen)
 		}
 
 		// Limit number of accounts referred to in a single ApplicationCall

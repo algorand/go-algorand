@@ -17,7 +17,7 @@ gcmd="goal -w ${WALLET}"
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 
 # Succeed in creating app that approves transactions with arg[0] == 'hello'
-APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs/globcheck.teal --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 --app-arg-b64 "aGVsbG8=" --clear-prog <(echo 'int 1') | grep Created | awk '{ print $6 }')
+APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs/globcheck.teal --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 --app-arg "str:hello" --clear-prog <(echo 'int 1') | grep Created | awk '{ print $6 }')
 
 # Application call with no args should fail
 EXPERROR='invalid ApplicationArgs index 0'
@@ -28,28 +28,28 @@ if [[ $RES != *"${EXPERROR}"* ]]; then
 fi
 
 # Should succeed to opt in with first arg hello
-${gcmd} app optin --app-id $APPID --from $ACCOUNT --app-arg-b64 "aGVsbG8="
+${gcmd} app optin --app-id $APPID --from $ACCOUNT --app-arg "str:hello"
 
 # Write should now succeed
-${gcmd} app call --app-id $APPID --app-arg-b64 "d3JpdGU=" --from $ACCOUNT
+${gcmd} app call --app-id $APPID --app-arg "str:write" --from $ACCOUNT
 
 # Check should now succeed with value "bar"
-${gcmd} app call --app-id $APPID --app-arg-b64 "Y2hlY2s=" --app-arg-b64 "YmFy" --from $ACCOUNT
+${gcmd} app call --app-id $APPID --app-arg "str:check" --app-arg "str:bar" --from $ACCOUNT
 
 # Should succeed to close out with first arg hello
-${gcmd} app closeout --app-id $APPID --from $ACCOUNT --app-arg-b64 "aGVsbG8="
+${gcmd} app closeout --app-id $APPID --from $ACCOUNT --app-arg "str:hello"
 
 # Write/opt in in one tx should succeed
-${gcmd} app optin --app-id $APPID --from $ACCOUNT --app-arg-b64 "d3JpdGU="
+${gcmd} app optin --app-id $APPID --from $ACCOUNT --app-arg "str:write"
 
 # Check should still succeed
-${gcmd} app call --app-id $APPID --app-arg-b64 "Y2hlY2s=" --app-arg-b64 "YmFy" --from $ACCOUNT
+${gcmd} app call --app-id $APPID --app-arg "str:check" --app-arg "str:bar" --from $ACCOUNT
 
 # Delete application should still succeed
-${gcmd} app delete --app-id $APPID --app-arg-b64 "aGVsbG8=" --from $ACCOUNT
+${gcmd} app delete --app-id $APPID --app-arg "str:hello" --from $ACCOUNT
 
 # Check should fail since we can't find program to execute
-RES=$(${gcmd} app call --app-id $APPID --app-arg-b64 "Y2hlY2s=" --app-arg-b64 "YmFy" --from $ACCOUNT 2>&1 || true)
+RES=$(${gcmd} app call --app-id $APPID --app-arg "str:check" --app-arg "str:bar" --from $ACCOUNT 2>&1 || true)
 EXPERROR='only clearing out is supported'
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL app call should fail if app has been deleted %Y%m%d_%H%M%S'
@@ -57,4 +57,4 @@ if [[ $RES != *"${EXPERROR}"* ]]; then
 fi
 
 # Clear should still succeed with arbitrary args
-${gcmd} app clear --app-id $APPID --app-arg-b64 "YXNkZg==" --from $ACCOUNT
+${gcmd} app clear --app-id $APPID --app-arg "str:asdf" --from $ACCOUNT

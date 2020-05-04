@@ -44,7 +44,6 @@ type roundCowParent interface {
 type roundCowState struct {
 	lookupParent roundCowParent
 	commitParent *roundCowState
-	round        basics.Round
 	proto        config.ConsensusParams
 	mods         StateDelta
 }
@@ -71,7 +70,6 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader) *roundCowS
 	return &roundCowState{
 		lookupParent: b,
 		commitParent: nil,
-		round:        hdr.Round,
 		proto:        config.Consensus[hdr.CurrentProtocol],
 		mods: StateDelta{
 			accts:      make(map[basics.Address]accountDelta),

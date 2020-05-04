@@ -114,6 +114,11 @@ func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address
 	return al, nil
 }
 
+// MakeDebugAppLedger returns logic.LedgerForLogic suitable for debug or dryrun
+func MakeDebugAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex) (al logic.LedgerForLogic, err error) {
+	return newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx)
+}
+
 func (al *appLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err error) {
 	// Ensure requested address is on whitelist
 	if !al.addresses[addr] {

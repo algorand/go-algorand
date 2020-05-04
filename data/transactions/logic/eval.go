@@ -47,7 +47,7 @@ const EvalMaxVersion = LogicVersion
 // EvalMaxScratchSize is the maximum number of scratch slots.
 const EvalMaxScratchSize = 255
 
-// MaxStringSize is the limit of byte strings created by `cons`
+// MaxStringSize is the limit of byte strings created by `concat`
 const MaxStringSize = 4096
 
 // stackValue is the type for the operand stack.
@@ -1506,7 +1506,7 @@ func opConcat(cx *evalContext) {
 	b := cx.stack[last].Bytes
 	newlen := len(a) + len(b)
 	if newlen > MaxStringSize {
-		cx.err = errors.New("cons resulted in string too long")
+		cx.err = errors.New("concat resulted in string too long")
 		return
 	}
 	newvalue := make([]byte, newlen)

@@ -154,19 +154,19 @@ func makeSampleBalanceRecord(addr basics.Address, assetIdx basics.AssetIndex, ap
 	br.MicroAlgos = basics.MicroAlgos{Raw: 500000000}
 	br.Status = basics.Status(1)
 	br.AssetParams = map[basics.AssetIndex]basics.AssetParams{
-		assetIdx: basics.AssetParams{
+		assetIdx: {
 			Total:     100,
 			UnitName:  "tok",
 			AssetName: "asset",
 		},
 	}
 	br.Assets = map[basics.AssetIndex]basics.AssetHolding{
-		assetIdx: basics.AssetHolding{
+		assetIdx: {
 			Amount: 10,
 		},
 	}
 	br.AppLocalStates = map[basics.AppIndex]basics.AppLocalState{
-		appIdx: basics.AppLocalState{
+		appIdx: {
 			Schema: basics.StateSchema{
 				NumUint:      2,
 				NumByteSlice: 3,
@@ -184,7 +184,7 @@ func makeSampleBalanceRecord(addr basics.Address, assetIdx basics.AssetIndex, ap
 		},
 	}
 	br.AppParams = map[basics.AppIndex]basics.AppParams{
-		appIdx: basics.AppParams{
+		appIdx: {
 			ApprovalProgram:   []byte{1},
 			ClearStateProgram: []byte{1, 1},
 			LocalStateSchema: basics.StateSchema{
@@ -486,7 +486,7 @@ func TestDebugFromPrograms(t *testing.T) {
 	l := LocalRunner{}
 	dp := DebugParams{
 		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte{1}},
+		ProgramBlobs: [][]byte{{1}},
 		TxnBlob:      []byte(txnSample),
 		GroupIndex:   1,
 	}
@@ -497,7 +497,7 @@ func TestDebugFromPrograms(t *testing.T) {
 
 	dp = DebugParams{
 		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte{1}},
+		ProgramBlobs: [][]byte{{1}},
 		TxnBlob:      txnBlob,
 		GroupIndex:   3,
 	}
@@ -508,7 +508,7 @@ func TestDebugFromPrograms(t *testing.T) {
 
 	dp = DebugParams{
 		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte{1}},
+		ProgramBlobs: [][]byte{{1}},
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 	}
@@ -519,7 +519,7 @@ func TestDebugFromPrograms(t *testing.T) {
 
 	dp = DebugParams{
 		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte{1}},
+		ProgramBlobs: [][]byte{{1}},
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "signature",
@@ -531,11 +531,10 @@ func TestDebugFromPrograms(t *testing.T) {
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.NotNil(l.runs[0].ledger)
-	a.Equal(0, l.runs[0].ledger.groupIndex)
 
 	dp = DebugParams{
 		ProgramNames: []string{"test", "test"},
-		ProgramBlobs: [][]byte{[]byte{1}, []byte{1}},
+		ProgramBlobs: [][]byte{{1}, {1}},
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "signature",
@@ -548,11 +547,9 @@ func TestDebugFromPrograms(t *testing.T) {
 	a.Equal(0, l.runs[1].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.NotNil(l.runs[0].ledger)
-	a.Equal(0, l.runs[0].ledger.groupIndex)
 
 	a.NotNil(l.runs[1].eval)
 	a.NotNil(l.runs[1].ledger)
-	a.Equal(0, l.runs[1].ledger.groupIndex)
 }
 
 func TestRunMode(t *testing.T) {
@@ -564,7 +561,7 @@ func TestRunMode(t *testing.T) {
 	// check run mode auto on stateful code
 	dp := DebugParams{
 		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte{2, 0x20, 1, 1, 0x22, 0x22, 0x61}}, // version, intcb, int 1, int 1, app_opted_in
+		ProgramBlobs: [][]byte{{2, 0x20, 1, 1, 0x22, 0x22, 0x61}}, // version, intcb, int 1, int 1, app_opted_in
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "auto",
@@ -576,7 +573,6 @@ func TestRunMode(t *testing.T) {
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.NotNil(l.runs[0].ledger)
-	a.Equal(0, l.runs[0].ledger.groupIndex)
 	a.NotEqual(
 		reflect.ValueOf(logic.Eval).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
@@ -585,7 +581,7 @@ func TestRunMode(t *testing.T) {
 	// check run mode auto on stateless code
 	dp = DebugParams{
 		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte{2, 0x20, 1, 1, 0x22}}, // version, intcb, int 1
+		ProgramBlobs: [][]byte{{2, 0x20, 1, 1, 0x22}}, // version, intcb, int 1
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "auto",
@@ -597,7 +593,6 @@ func TestRunMode(t *testing.T) {
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.NotNil(l.runs[0].ledger)
-	a.Equal(0, l.runs[0].ledger.groupIndex)
 	a.Equal(
 		reflect.ValueOf(logic.Eval).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
@@ -606,7 +601,7 @@ func TestRunMode(t *testing.T) {
 	// check run mode application
 	dp = DebugParams{
 		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte{2, 0x20, 1, 1, 0x22, 0x22, 0x61}}, // version, intcb, int 1, int 1, app_opted_in
+		ProgramBlobs: [][]byte{{2, 0x20, 1, 1, 0x22, 0x22, 0x61}}, // version, intcb, int 1, int 1, app_opted_in
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "application",
@@ -618,7 +613,6 @@ func TestRunMode(t *testing.T) {
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.NotNil(l.runs[0].ledger)
-	a.Equal(0, l.runs[0].ledger.groupIndex)
 	a.NotEqual(
 		reflect.ValueOf(logic.Eval).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
@@ -627,7 +621,7 @@ func TestRunMode(t *testing.T) {
 	// check run mode signature
 	dp = DebugParams{
 		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte{2, 0x20, 1, 1, 0x22}}, // version, intcb, int 1
+		ProgramBlobs: [][]byte{{2, 0x20, 1, 1, 0x22}}, // version, intcb, int 1
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "signature",
@@ -639,7 +633,6 @@ func TestRunMode(t *testing.T) {
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.NotNil(l.runs[0].ledger)
-	a.Equal(0, l.runs[0].ledger.groupIndex)
 	a.Equal(
 		reflect.ValueOf(logic.Eval).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
@@ -704,7 +697,6 @@ func TestDebugFromTxn(t *testing.T) {
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{3}, l.runs[0].program)
 	a.NotNil(l.runs[0].ledger)
-	a.Equal(1, l.runs[0].ledger.groupIndex)
 	a.Equal(
 		reflect.ValueOf(logic.Eval).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
@@ -733,7 +725,6 @@ func TestDebugFromTxn(t *testing.T) {
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{1}, l.runs[0].program)
 	a.NotNil(l.runs[0].ledger)
-	a.Equal(0, l.runs[0].ledger.groupIndex)
 	a.NotEqual(
 		reflect.ValueOf(logic.Eval).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
@@ -759,7 +750,6 @@ func TestDebugFromTxn(t *testing.T) {
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{1, 1}, l.runs[0].program)
 	a.NotNil(l.runs[0].ledger)
-	a.Equal(0, l.runs[0].ledger.groupIndex)
 	a.NotEqual(
 		reflect.ValueOf(logic.Eval).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
@@ -786,7 +776,6 @@ func TestDebugFromTxn(t *testing.T) {
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{4}, l.runs[0].program)
 	a.NotNil(l.runs[0].ledger)
-	a.Equal(0, l.runs[0].ledger.groupIndex)
 	a.NotEqual(
 		reflect.ValueOf(logic.Eval).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
@@ -805,4 +794,100 @@ func TestDebugFromTxn(t *testing.T) {
 	err = l.Setup(&dp)
 	a.Error(err)
 	a.Equal(2, len(l.txnGroup))
+}
+
+func TestLocalLedger(t *testing.T) {
+	a := require.New(t)
+
+	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
+	a.NoError(err)
+	// make balance records
+	appIdx := basics.AppIndex(100)
+	assetIdx := basics.AssetIndex(50)
+	brs := makeSampleBalanceRecord(sender, assetIdx, appIdx)
+	balanceBlob := protocol.EncodeMsgp(&brs)
+
+	// make transaction group: app call + sample payment
+	appTxn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Header: transactions.Header{
+				Sender: sender,
+			},
+			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+				ApplicationID: appIdx,
+			},
+		},
+	}
+
+	var payTxn transactions.SignedTxn
+	err = protocol.DecodeJSON([]byte(txnSample), &payTxn)
+	a.NoError(err)
+
+	txnBlob := protocol.EncodeMsgp(&appTxn)
+	txnBlob = append(txnBlob, protocol.EncodeMsgp(&payTxn)...)
+
+	l := LocalRunner{}
+	dp := DebugParams{
+		ProgramNames: []string{"test"},
+		ProgramBlobs: [][]byte{{1}},
+		BalanceBlob:  balanceBlob,
+		TxnBlob:      txnBlob,
+		RunMode:      "application",
+		GroupIndex:   0,
+		Round:        100,
+	}
+
+	err = l.Setup(&dp)
+	a.NoError(err)
+	a.Equal(2, len(l.txnGroup))
+	a.Equal(1, len(l.runs))
+	a.Equal(0, l.runs[0].groupIndex)
+	a.NotNil(l.runs[0].eval)
+	a.Equal([]byte{1}, l.runs[0].program)
+	a.NotNil(l.runs[0].ledger)
+	a.NotEqual(
+		reflect.ValueOf(logic.Eval).Pointer(),
+		reflect.ValueOf(l.runs[0].eval).Pointer(),
+	)
+	ledger := l.runs[0].ledger
+	a.Equal(basics.Round(100), ledger.Round())
+
+	balance, err := ledger.Balance(sender)
+	a.NoError(err)
+	a.Equal(basics.MicroAlgos{Raw: 500000000}, balance)
+	balance, err = ledger.Balance(payTxn.Txn.Receiver)
+	a.Error(err)
+
+	holdings, err := ledger.AssetHolding(sender, assetIdx)
+	a.NoError(err)
+	a.Equal(basics.AssetHolding{Amount: 10, Frozen: false}, holdings)
+	holdings, err = ledger.AssetHolding(sender, assetIdx+1)
+	a.Error(err)
+
+	params, err := ledger.AssetParams(sender, assetIdx)
+	a.NoError(err)
+	a.Equal(uint64(100), params.Total)
+	a.Equal("tok", params.UnitName)
+	params, err = ledger.AssetParams(payTxn.Txn.Receiver, assetIdx)
+	a.Error(err)
+
+	tkv, err := ledger.AppGlobalState(0)
+	a.NoError(err)
+	a.Equal(uint64(2), tkv["gkeyint"].Uint)
+	tkv, err = ledger.AppGlobalState(appIdx)
+	a.NoError(err)
+	a.Equal("global", tkv["gkeybyte"].Bytes)
+	tkv, err = ledger.AppGlobalState(appIdx + 1)
+	a.Error(err)
+
+	tkv, err = ledger.AppLocalState(sender, 0)
+	a.NoError(err)
+	a.Equal(uint64(1), tkv["lkeyint"].Uint)
+	tkv, err = ledger.AppLocalState(sender, appIdx)
+	a.NoError(err)
+	a.Equal("local", tkv["lkeybyte"].Bytes)
+	tkv, err = ledger.AppLocalState(sender, appIdx+1)
+	a.Error(err)
+	tkv, err = ledger.AppLocalState(payTxn.Txn.Receiver, appIdx)
+	a.Error(err)
 }

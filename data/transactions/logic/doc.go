@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -234,6 +235,26 @@ func TypeNameDescription(typeName string) string {
 		}
 	}
 	return "invalid type name"
+}
+
+// see assembler.go TxnTypeNames
+// also used to parse symbolic constants for `int`
+var onCompletionDescriptions = map[transactions.OnCompletion]string{
+	transactions.NoOpOC:              "Application transaction will simply call its ApprovalProgram.",
+	transactions.OptInOC:             "Application transaction will allocate some LocalState for the application in the sender's account.",
+	transactions.CloseOutOC:          "Application transaction will deallocate some LocalState for the application from the user's account.",
+	transactions.ClearStateOC:        "Similar to CloseOutOC, but may never fail. This allows users to reclaim their minimum balance from an application they no longer wish to opt in to.",
+	transactions.UpdateApplicationOC: "Application transaction will update the ApprovalProgram and ClearStateProgram for the application.",
+	transactions.DeleteApplicationOC: "Application transaction will delete the AppParams for the application from the creator's balance.",
+}
+
+// OnCompletionDescription returns extra description about OnCompletion constants
+func OnCompletionDescription(value uint64) string {
+	desc, ok := onCompletionDescriptions[transactions.OnCompletion(value)]
+	if ok {
+		return desc
+	}
+	return "invalid constant value"
 }
 
 var txnFieldDocList = []stringString{

@@ -41,7 +41,7 @@ const (
 
 	// ClearStateOC is similar to CloseOutOC, but may never fail. This
 	// allows users to reclaim their minimum balance from an application
-	// thye no longer wish to opt in to.
+	// they no longer wish to opt in to.
 	ClearStateOC OnCompletion = 3
 
 	// UpdateApplicationOC indicates that an application transaction will
@@ -239,11 +239,12 @@ func (ac *ApplicationCallTxnFields) applyStateDeltas(evalDelta basics.EvalDelta,
 		}
 
 		// Make sure we haven't violated the GlobalStateSchema
-		if !params.GlobalState.SatisfiesSchema(params.GlobalStateSchema) {
+		err = params.GlobalState.SatisfiesSchema(params.GlobalStateSchema)
+		if err != nil {
 			if !errIfNotApplied {
 				return nil
 			}
-			return fmt.Errorf("GlobalState for app %d would use too much space", appIdx)
+			return fmt.Errorf("GlobalState for app %d would use too much space: %v", appIdx, err)
 		}
 	}
 
@@ -305,11 +306,12 @@ func (ac *ApplicationCallTxnFields) applyStateDeltas(evalDelta basics.EvalDelta,
 		}
 
 		// Make sure we haven't violated the LocalStateSchema
-		if !localState.KeyValue.SatisfiesSchema(localState.Schema) {
+		err = localState.KeyValue.SatisfiesSchema(localState.Schema)
+		if err != nil {
 			if !errIfNotApplied {
 				return nil
 			}
-			return fmt.Errorf("LocalState for %s for app %d would use too much space", addr.String(), appIdx)
+			return fmt.Errorf("LocalState for %s for app %d would use too much space: %v", addr.String(), appIdx, err)
 		}
 
 		// Stage the change to be committed after all schema checks

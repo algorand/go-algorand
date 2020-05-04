@@ -32,6 +32,21 @@ type ServerInterfaceWrapper struct {
 
 // RegisterParticipationKeys converts echo context to params.
 func (w *ServerInterfaceWrapper) RegisterParticipationKeys(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{
+		"fee":              true,
+		"key-dilution":     true,
+		"round-last-valid": true,
+		"no-wait":          true,
+	}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
 	var err error
 	// ------------- Path parameter "address" -------------
 	var address string
@@ -92,6 +107,18 @@ func (w *ServerInterfaceWrapper) RegisterParticipationKeys(ctx echo.Context) err
 
 // ShutdownNode converts echo context to params.
 func (w *ServerInterfaceWrapper) ShutdownNode(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{
+		"timeout": true,
+	}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
 	var err error
 
 	ctx.Set("api_key.Scopes", []string{""})
@@ -124,14 +151,14 @@ func RegisterHandlers(router interface {
 	POST(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
 	PUT(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
 	TRACE(path string, h echo.HandlerFunc, m ...echo.MiddlewareFunc) *echo.Route
-}, si ServerInterface) {
+}, si ServerInterface, m ...echo.MiddlewareFunc) {
 
 	wrapper := ServerInterfaceWrapper{
 		Handler: si,
 	}
 
-	router.POST("/v2/register-participation-keys/:address", wrapper.RegisterParticipationKeys)
-	router.POST("/v2/shutdown", wrapper.ShutdownNode)
+	router.POST("/v2/register-participation-keys/:address", wrapper.RegisterParticipationKeys, m...)
+	router.POST("/v2/shutdown", wrapper.ShutdownNode, m...)
 
 }
 

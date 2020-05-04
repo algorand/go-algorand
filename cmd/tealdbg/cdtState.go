@@ -27,7 +27,7 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -608,12 +608,13 @@ func makeArrayLengh(array []v1.TealValue) (descr []RuntimePropertyDescriptor) {
 }
 
 func makeStackSlice(s *cdtState, from int, to int, preview bool) (descr []RuntimePropertyDescriptor) {
-	stack := make([]v1.TealValue, len(s.stack))
-	for i := 0; i < len(stack); i++ {
-		stack[i] = s.stack[len(s.stack)-1-i]
-	}
+	// temporary disable stack reversion to see if people prefer appending to the list
+	// stack := make([]v1.TealValue, len(s.stack))
+	// for i := 0; i < len(stack); i++ {
+	// 	stack[i] = s.stack[len(s.stack)-1-i]
+	// }
 
-	stack = stack[from : to+1]
+	stack := s.stack[from : to+1]
 	fields := prepareArray(stack)
 	for _, field := range fields {
 		descr = append(descr, makePrimitive(field))

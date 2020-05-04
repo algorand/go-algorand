@@ -339,6 +339,11 @@ func assembleInt(ops *OpStream, spec *OpSpec, args []string) error {
 	if isTypeStr {
 		return ops.Uint(uint64(tt))
 	}
+	// check OnCompetion constants
+	oc, isOCStr := onCompletionConstToUint64[args[0]]
+	if isOCStr {
+		return ops.Uint(uint64(oc))
+	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
 		return err
