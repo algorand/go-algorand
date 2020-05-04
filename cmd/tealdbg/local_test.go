@@ -696,7 +696,7 @@ func TestDebugFromTxn(t *testing.T) {
 	a.Equal(1, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
 	a.Equal([]byte{3}, l.runs[0].program)
-	a.NotNil(l.runs[0].ledger)
+	a.Nil(l.runs[0].ledger)
 	a.Equal(
 		reflect.ValueOf(logic.Eval).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
