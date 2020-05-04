@@ -8,6 +8,7 @@ set -ex
 BRANCH=
 CHANNEL=
 COMMIT_HASH=
+PKG_TYPE=
 FULLVERSION=
 
 while [ "$1" != "" ]; do
@@ -23,6 +24,10 @@ while [ "$1" != "" ]; do
         -h)
             shift
             COMMIT_HASH="$1"
+            ;;
+        -p)
+            shift
+            PKG_TYPE="$1"
             ;;
         -r)
             shift
@@ -43,7 +48,7 @@ then
 fi
 
 echo "[$0] Testing: algod -v"
-if < /etc/os-release grep Ubuntu > /dev/null
+if [ "$PKG_TYPE" == "deb" ]
 then
     dpkg -i ./pkg/*.deb
 else

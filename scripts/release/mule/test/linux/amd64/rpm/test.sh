@@ -46,8 +46,8 @@ CHANNEL=stable
 export CHANNEL
 
 "$MULE_TEST_DIR/util/mule.sh"
-"$RPM_DIR/test/goal.sh"
-"$MULE_TEST_DIR/util/test_package.sh"
+#"$RPM_DIR/test/goal.sh"
+"$MULE_TEST_DIR/util/test_package.sh" rpm
 
 echo
 date "+build_release end TEST stage %Y%m%d_%H%M%S"

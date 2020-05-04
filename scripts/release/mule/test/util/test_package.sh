@@ -1,24 +1,32 @@
 #!/usr/bin/env bash
 
-# TODO: use `trap` instead of cleanup function?
-
 set -ex
 
-# TODO: The following error happens on centos:8
-#
-# Error:
-#  Problem: conflicting requests
-#    - nothing provides yum-cron needed by algorand-2.0.4-1.x86_64
-# (try to add '--skip-broken' to skip uninstallable packages or '--nobest' to use not only best candidate packages)
-# smoke_test.sh: line 47: algod: command not found
+trap cleanup 0
 
-OS_LIST=(
-    centos:7
-#    centos:8
-    fedora:28
-    ubuntu:16.04
-    ubuntu:18.04
-)
+PKG_TYPE="$1"
+OS_LIST=
+
+if [ "$PKG_TYPE" == "deb" ]
+then
+    OS_LIST=(
+        ubuntu:16.04
+        ubuntu:18.04
+    )
+else
+    # TODO: The following error happens on centos:8
+    #
+    # Error:
+    #  Problem: conflicting requests
+    #    - nothing provides yum-cron needed by algorand-2.0.4-1.x86_64
+    # (try to add '--skip-broken' to skip uninstallable packages or '--nobest' to use not only best candidate packages)
+    # smoke_test.sh: line 47: algod: command not found
+    OS_LIST=(
+        centos:7
+    #    centos:8
+        fedora:28
+    )
+fi
 
 FAILED=()
 
@@ -47,7 +55,7 @@ run_images () {
     for item in ${OS_LIST[*]}
     do
         echo "[$0] Running ${item}-test..."
-        if ! docker run --rm --name algorand -t "${item}-smoke-test" bash ./scripts/release/mule/test/util/smoke_test.sh -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -r "$VERSION"
+        if ! docker run --rm --name algorand -t "${item}-smoke-test" bash ./scripts/release/mule/test/util/smoke_test.sh -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -p "$PKG_TYPE" -r "$VERSION"
         then
             FAILED+=("$item")
         fi
@@ -70,7 +78,6 @@ check_failures() {
 
         echo
 
-        cleanup
         exit 1
     fi
 }
@@ -82,6 +89,4 @@ echo "[$0] All builds completed with no failures."
 run_images
 check_failures verified
 echo "[$0] All runs completed with no failures."
-
-cleanup
 

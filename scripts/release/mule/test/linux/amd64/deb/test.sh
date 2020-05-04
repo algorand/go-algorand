@@ -51,7 +51,7 @@ apt-get install expect -y
 "$MULE_TEST_DIR/util/mule.sh"
 "$DEB_DIR/test/goal.sh"
 expect -d "$DEB_DIR/test/goal.exp" /var/lib/algorand "$WORKDIR/test/testdata" "$WORKDIR/test/e2e-go/cli/goal/expect"
-"$MULE_TEST_DIR/util/test_package.sh"
+"$MULE_TEST_DIR/util/test_package.sh" deb
 
 echo
 date "+build_release end TEST stage %Y%m%d_%H%M%S"
