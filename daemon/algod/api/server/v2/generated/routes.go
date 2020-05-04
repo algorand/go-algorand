@@ -273,6 +273,16 @@ func (w *ServerInterfaceWrapper) RawTransaction(ctx echo.Context) error {
 
 // TransactionDryRun converts echo context to params.
 func (w *ServerInterfaceWrapper) TransactionDryRun(ctx echo.Context) error {
+
+	validQueryParams := map[string]bool{}
+
+	// Check for unknown query parameters.
+	for name, _ := range ctx.QueryParams() {
+		if _, ok := validQueryParams[name]; !ok {
+			return echo.NewHTTPError(http.StatusBadRequest, fmt.Sprintf("Unknown parameter detected: %s", name))
+		}
+	}
+
 	var err error
 
 	ctx.Set("api_key.Scopes", []string{""})
@@ -415,6 +425,7 @@ func RegisterHandlers(router interface {
 	router.GET("/v2/status", wrapper.GetStatus, m...)
 	router.GET("/v2/status/wait-for-block-after/:round/", wrapper.WaitForBlock, m...)
 	router.POST("/v2/transactions", wrapper.RawTransaction, m...)
+	router.POST("/v2/transactions/dryrun", wrapper.TransactionDryRun, m...)
 	router.GET("/v2/transactions/params", wrapper.TransactionParams, m...)
 	router.GET("/v2/transactions/pending", wrapper.GetPendingTransactions, m...)
 	router.GET("/v2/transactions/pending/:txid", wrapper.PendingTransactionInformation, m...)
