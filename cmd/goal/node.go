@@ -412,7 +412,7 @@ func makeStatusString(stat generatedV2.NodeStatusResponse) string {
 			infoNodeCatchpointCatchupStatus,
 			stat.LastRound,
 			catchupTime,
-			stat.Catchpoint)
+			*stat.Catchpoint)
 
 		if stat.CatchpointTotalAccounts != nil && (*stat.CatchpointTotalAccounts > 0) && stat.CatchpointProcessedAccounts != nil {
 			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupAccounts, *stat.CatchpointProcessedAccounts,

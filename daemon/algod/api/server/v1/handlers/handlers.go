@@ -49,20 +49,14 @@ func getNodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
 	}
 
 	return v1.NodeStatus{
-		LastRound:                          uint64(stat.LastRound),
-		LastVersion:                        string(stat.LastVersion),
-		NextVersion:                        string(stat.NextVersion),
-		NextVersionRound:                   uint64(stat.NextVersionRound),
-		NextVersionSupported:               stat.NextVersionSupported,
-		TimeSinceLastRound:                 stat.TimeSinceLastRound().Nanoseconds(),
-		CatchupTime:                        stat.CatchupTime.Nanoseconds(),
-		StoppedAtUnsupportedRound:          stat.StoppedAtUnsupportedRound,
-		LastCatchpoint:                     stat.LastCatchpoint,
-		Catchpoint:                         stat.Catchpoint,
-		CatchpointCatchupTotalAccounts:     stat.CatchpointCatchupTotalAccounts,
-		CatchpointCatchupProcessedAccounts: stat.CatchpointCatchupProcessedAccounts,
-		CatchpointCatchupTotalBlocks:       stat.CatchpointCatchupTotalBlocks,
-		CatchpointCatchupAcquiredBlocks:    stat.CatchpointCatchupAcquiredBlocks,
+		LastRound:                 uint64(stat.LastRound),
+		LastVersion:               string(stat.LastVersion),
+		NextVersion:               string(stat.NextVersion),
+		NextVersionRound:          uint64(stat.NextVersionRound),
+		NextVersionSupported:      stat.NextVersionSupported,
+		TimeSinceLastRound:        stat.TimeSinceLastRound().Nanoseconds(),
+		CatchupTime:               stat.CatchupTime.Nanoseconds(),
+		StoppedAtUnsupportedRound: stat.StoppedAtUnsupportedRound,
 	}, nil
 }
 
@@ -451,12 +445,12 @@ func WaitForBlock(ctx lib.ReqContext, context echo.Context) {
 		}
 	}
 
-	nodeStatus, err := getNodeStatus(ctx.Node)
+	internalNodeStatus, err := ctx.Node.Status()
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
-		return
 	}
-	if nodeStatus.Catchpoint != "" {
+
+	if internalNodeStatus.Catchpoint != "" {
 		// node is currently catching up to the requested catchpoint.
 		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("WaitForBlock failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
 		return
@@ -470,7 +464,7 @@ func WaitForBlock(ctx lib.ReqContext, context echo.Context) {
 	case <-ledger.Wait(basics.Round(queryRound + 1)):
 	}
 
-	nodeStatus, err = getNodeStatus(ctx.Node)
+	nodeStatus, err := getNodeStatus(ctx.Node)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
 		return
@@ -538,12 +532,12 @@ func RawTransaction(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 
-	nodeStatus, err := getNodeStatus(ctx.Node)
+	internalNodeStatus, err := ctx.Node.Status()
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
-		return
 	}
-	if nodeStatus.Catchpoint != "" {
+
+	if internalNodeStatus.Catchpoint != "" {
 		// node is currently catching up to the requested catchpoint.
 		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("RawTransaction failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
 		return
@@ -832,12 +826,11 @@ func PendingTransactionInformation(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 
-	nodeStatus, err := getNodeStatus(ctx.Node)
+	internalNodeStatus, err := ctx.Node.Status()
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
-		return
 	}
-	if nodeStatus.Catchpoint != "" {
+	if internalNodeStatus.Catchpoint != "" {
 		// node is currently catching up to the requested catchpoint.
 		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("PendingTransactionInformation failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
 		return
@@ -913,12 +906,11 @@ func GetPendingTransactions(ctx lib.ReqContext, context echo.Context) {
 		max = 0
 	}
 
-	nodeStatus, err := getNodeStatus(ctx.Node)
+	internalNodeStatus, err := ctx.Node.Status()
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
-		return
 	}
-	if nodeStatus.Catchpoint != "" {
+	if internalNodeStatus.Catchpoint != "" {
 		// node is currently catching up to the requested catchpoint.
 		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("GetPendingTransactions failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
 		return
@@ -1022,12 +1014,12 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 
-	nodeStatus, err := getNodeStatus(ctx.Node)
+	internalNodeStatus, err := ctx.Node.Status()
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
-		return
 	}
-	if nodeStatus.Catchpoint != "" {
+
+	if internalNodeStatus.Catchpoint != "" {
 		// node is currently catching up to the requested catchpoint.
 		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("GetPendingTransactionsByAddress failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
 		return
@@ -1259,12 +1251,12 @@ func SuggestedFee(ctx lib.ReqContext, context echo.Context) {
 
 	w := context.Response().Writer
 
-	nodeStatus, err := getNodeStatus(ctx.Node)
+	internalNodeStatus, err := ctx.Node.Status()
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
-		return
 	}
-	if nodeStatus.Catchpoint != "" {
+
+	if internalNodeStatus.Catchpoint != "" {
 		// node is currently catching up to the requested catchpoint.
 		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("SuggestedFee failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
 		return

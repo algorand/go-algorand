@@ -63,36 +63,6 @@ type NodeStatus struct {
 	//
 	// Required: true
 	StoppedAtUnsupportedRound bool `json:"stoppedAtUnsupportedRound"`
-
-	// LastCatchpoint indicates the node's last encountered catchpoint
-	//
-	// Required: true
-	LastCatchpoint string `json:"lastCatchpoint,omitempty"`
-
-	// Catchpoint indicates the catchpoint that the node is currently trying to retrieve
-	//
-	// Required: false
-	Catchpoint string `json:"catchpoint,omitempty"`
-
-	// CatchpointCatchupTotalAccounts indicates the total number of pending accounts to be downloaded and processed
-	//
-	// Required: false
-	CatchpointCatchupTotalAccounts uint64 `json:"catchpointCatchupTotalAccounts,omitempty"`
-
-	// CatchpointCatchupProcessedAccounts indicates the number of accounts that were downloaded and processed
-	//
-	// Required: false
-	CatchpointCatchupProcessedAccounts uint64 `json:"catchpointCatchupProcessedAccounts,omitempty"`
-
-	// CatchpointCatchupTotalBlocks indicates the total number of blocks to be downloaded
-	//
-	// Required: false
-	CatchpointCatchupTotalBlocks uint64 `json:"catchpointCatchupTotalBlocks,omitempty"`
-
-	// CatchpointCatchupAcquiredBlocks indicates the total number of downloaded blocks
-	//
-	// Required: false
-	CatchpointCatchupAcquiredBlocks uint64 `json:"catchpointCatchupAcquiredBlocks,omitempty"`
 }
 
 // TransactionID Description
