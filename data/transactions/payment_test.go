@@ -92,7 +92,7 @@ func (balances mockBalances) GetAssetCreator(assetIdx basics.AssetIndex) (basics
 	return basics.Address{}, true, nil
 }
 
-func (balances mockBalances) GetAppCreator(assetIdx basics.AppIndex) (basics.Address, bool, error) {
+func (balances mockBalances) GetAppCreator(appIdx basics.AppIndex) (basics.Address, bool, error) {
 	return basics.Address{}, true, nil
 }
 

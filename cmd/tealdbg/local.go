@@ -145,7 +145,7 @@ type evaluation struct {
 	name         string
 	groupIndex   int
 	eval         evalFn
-	ledger       *localLedger
+	ledger       logic.LedgerForLogic
 	result       evalResult
 }
 
@@ -229,12 +229,10 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			err = fmt.Errorf("invalid group index %d for a txn in a transaction group of %d", dp.GroupIndex, len(r.txnGroup))
 			return
 		}
-		groupIndex := dp.GroupIndex
-		ledger := &localLedger{
-			round:      dp.Round,
-			balances:   balances,
-			txnGroup:   r.txnGroup,
-			groupIndex: groupIndex,
+		var ledger logic.LedgerForLogic
+		ledger, err = makeAppLedger(balances, r.txnGroup, dp.GroupIndex, r.proto, dp.Round)
+		if err != nil {
+			return
 		}
 
 		r.runs = make([]evaluation, len(dp.ProgramBlobs))
@@ -252,7 +250,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 					r.runs[i].source = source
 				}
 			}
-			r.runs[i].groupIndex = groupIndex
+			r.runs[i].groupIndex = dp.GroupIndex
 			r.runs[i].ledger = ledger
 			r.runs[i].name = dp.ProgramNames[i]
 
@@ -272,18 +270,17 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 	// otherwise, if no program(s) set, check transactions for TEAL programs
 	for gi, stxn := range r.txnGroup {
 		// make a new ledger per possible execution since it requires a current group index
-		ledger := localLedger{
-			round:      dp.Round,
-			balances:   balances,
-			txnGroup:   r.txnGroup,
-			groupIndex: gi,
+		var ledger logic.LedgerForLogic
+		ledger, err = makeAppLedger(balances, r.txnGroup, gi, r.proto, dp.Round)
+		if err != nil {
+			return
 		}
 		if len(stxn.Lsig.Logic) > 0 {
 			run := evaluation{
 				program:    stxn.Lsig.Logic,
 				groupIndex: gi,
 				eval:       logic.Eval,
-				ledger:     &ledger,
+				ledger:     ledger,
 			}
 			r.runs = append(r.runs, run)
 		} else if stxn.Txn.Type == protocol.ApplicationCallTx {
@@ -298,7 +295,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 						program:    stxn.Txn.ApprovalProgram,
 						groupIndex: gi,
 						eval:       eval,
-						ledger:     &ledger,
+						ledger:     ledger,
 					}
 					r.runs = append(r.runs, run)
 				}
@@ -323,7 +320,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 								program:    program,
 								groupIndex: gi,
 								eval:       eval,
-								ledger:     &ledger,
+								ledger:     ledger,
 							}
 							r.runs = append(r.runs, run)
 							found = true
