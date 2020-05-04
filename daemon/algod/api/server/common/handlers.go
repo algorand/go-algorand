@@ -93,7 +93,7 @@ func VersionsHandler(ctx lib.ReqContext, context echo.Context) {
 	w.WriteHeader(http.StatusOK)
 	response := VersionsResponse{
 		Body: common.Version{
-			Versions:    []string{"v1"},
+			Versions:    []string{"v1", "v2"},
 			GenesisID:   ctx.Node.GenesisID(),
 			GenesisHash: gh[:],
 			Build: common.BuildVersion{
