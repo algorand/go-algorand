@@ -25,6 +25,14 @@ const (
 	timeoutSecs = 120
 )
 
+// APIVersion is used to define which server side API version would be used when making http requests to the server
+type APIVersion string
+
+const (
+	// APIVersionV1 suggests that the RestClient would use v1 calls whenever it's available for the given request.
+	APIVersionV1 APIVersion = "v1"
+)
+
 // KMDClient is the client used to interact with the kmd API over its socket
 type KMDClient struct {
 	httpClient http.Client

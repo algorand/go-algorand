@@ -29,8 +29,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
@@ -384,11 +385,11 @@ func getStatus(dataDir string) {
 	}
 }
 
-func makeStatusString(stat v1.NodeStatus) string {
+func makeStatusString(stat generatedV2.NodeStatusResponse) string {
 	lastRoundTime := fmt.Sprintf("%.1fs", time.Duration(stat.TimeSinceLastRound).Seconds())
 	catchupTime := fmt.Sprintf("%.1fs", time.Duration(stat.CatchupTime).Seconds())
 	var statusString string
-	if stat.Catchpoint == "" {
+	if stat.Catchpoint == nil || (*stat.Catchpoint) == "" {
 		statusString = fmt.Sprintf(
 			infoNodeStatus,
 			stat.LastRound,
@@ -399,8 +400,8 @@ func makeStatusString(stat v1.NodeStatus) string {
 			stat.NextVersionRound,
 			stat.NextVersionSupported)
 
-		if stat.LastCatchpoint != "" {
-			statusString = statusString + "\n" + fmt.Sprintf(nodeLastCatchpoint, stat.LastCatchpoint)
+		if stat.LastCatchpoint != nil {
+			statusString = statusString + "\n" + fmt.Sprintf(nodeLastCatchpoint, *stat.LastCatchpoint)
 		}
 
 		if stat.StoppedAtUnsupportedRound {
@@ -413,13 +414,13 @@ func makeStatusString(stat v1.NodeStatus) string {
 			catchupTime,
 			stat.Catchpoint)
 
-		if stat.CatchpointCatchupTotalAccounts > 0 {
-			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupAccounts, stat.CatchpointCatchupProcessedAccounts,
-				stat.CatchpointCatchupTotalAccounts)
+		if stat.CatchpointTotalAccounts != nil && (*stat.CatchpointTotalAccounts > 0) && stat.CatchpointProcessedAccounts != nil {
+			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupAccounts, *stat.CatchpointProcessedAccounts,
+				*stat.CatchpointTotalAccounts)
 		}
-		if stat.CatchpointCatchupAcquiredBlocks+stat.CatchpointCatchupTotalBlocks > 0 {
-			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupBlocks, stat.CatchpointCatchupTotalBlocks,
-				stat.CatchpointCatchupAcquiredBlocks)
+		if stat.CatchpointAcquiredBlocks != nil && stat.CatchpointTotalBlocks != nil && (*stat.CatchpointAcquiredBlocks+*stat.CatchpointTotalBlocks > 0) {
+			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupBlocks, *stat.CatchpointTotalBlocks,
+				*stat.CatchpointAcquiredBlocks)
 		}
 	}
 

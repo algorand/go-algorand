@@ -33,7 +33,7 @@ type ServerInterface interface {
 	// (GET /v2/status)
 	GetStatus(ctx echo.Context) error
 	// Gets the node status after waiting for the given round.
-	// (GET /v2/status/wait-for-block-after/{round}/)
+	// (GET /v2/status/wait-for-block-after/{round})
 	WaitForBlock(ctx echo.Context, round uint64) error
 	// Broadcasts a raw transaction to the network.
 	// (POST /v2/transactions)
@@ -399,7 +399,7 @@ func RegisterHandlers(router interface {
 	router.GET("/v2/blocks/:round", wrapper.GetBlock, m...)
 	router.GET("/v2/ledger/supply", wrapper.GetSupply, m...)
 	router.GET("/v2/status", wrapper.GetStatus, m...)
-	router.GET("/v2/status/wait-for-block-after/:round/", wrapper.WaitForBlock, m...)
+	router.GET("/v2/status/wait-for-block-after/:round", wrapper.WaitForBlock, m...)
 	router.POST("/v2/transactions", wrapper.RawTransaction, m...)
 	router.GET("/v2/transactions/params", wrapper.TransactionParams, m...)
 	router.GET("/v2/transactions/pending", wrapper.GetPendingTransactions, m...)
@@ -504,16 +504,16 @@ var swaggerSpec = []string{
 	"Q90gPDsCf4Kr127Te16DzR9k+J/yjL2GXyowliXsJRVPScHDnZi37Ipve31Rz36wf/DFLuilksDgUhjq",
 	"PnayeNvRyu0z6caqGtS9QEQJh7Tap4Lq0MFf0jN519yahQGEf5tDNgc9cSdDN8UV7mTp6EZTx91p4C/g",
 	"NPCnz04+SEPWVquhffUXMCf/jbaEruB+q2y3lO+Hm0VlM7WUrSf1IZFBTQqXQN6gJu1uotzdRLm7iXJ3",
-	"E+XuJsrdTZS7myi/7Jsov7xycORC/9vKerohbCuUaUI49/dkyYVNZko795RQ23kooE4Gd3P/wYX/cQ7u",
-	"kyur0FoADz+44iyNn8hfstl0ZPgdEX/6N1zBKApqpe+GggjqudLXKtg2VVCrGK6MVdKK0AyCilgHdJ9f",
-	"9XMXqu5C1V2ougtVd6HqLlTdhaq/r1D1I/YNdPZvkmCoQ3tFrLmC7borfkfdFU2AXYfXFJBjOIz6vXEX",
-	"ZL01q1QmUp19zZftRi+nuGDsU5WtNtDwMpkKSXi+i/1GsH853p4nobOeriyEFotYH5tVbKoVz1J0iFaF",
-	"G/l64f3VjfYsfBn31H46e8Salu0jvzPfocbOEv1eLNHToHz048R8ua6cLhghndyjTg3U5DnIxNuSZKqy",
-	"VbgrQ/OlvZRRKzVp7jWJ7iT1bqe82R2l3WW9u8t6d5f17i7r3V3Wu/Pcv6MO7bVrdGrG0y8/rfN+wC/f",
-	"wIGwz/sU2NbdiN2Zq92Zq92Zq2ueubpGS+mOu7sTdV/wibrfWc/876u//DZDt9tezed+Vm9vY4Q4eWcv",
-	"Rbb94o8v9+cT2U39eiK7rR9P/MQ/nRgJufve/X3uX1kTlni/D4rde1638Kfr3LXw3xJe7362efezzbuf",
-	"bd79bPPuZ5t3P9v8Zf9s86faEP88iua3efh5Y4PCS2XZc3IrH5ah1FcCxiIQh0S4d5KCxfrGyTdvMSSi",
-	"S5J9HNlco3g4meQq5flCGTsZYZTXvWKx/RLNCZ+7GXycVmpxQbcLvL36nwAAAP//Bh8HCZmgAAA=",
+	"E+XuJsrdTZS7myi/7Jsov7xycORC/9vKerohbCuUaUI49/dkyYVNZko795RQ23mkgNqF/g8u/G9zcJ9b",
+	"WYXGAnj4vRVnaPw8/o7NpiHDb4j4w7/hBkZRUCd9NxJEUM+Vvla9timCWsVwYaySVoReENTDOp77/Iqf",
+	"u0h1F6nuItVdpLqLVHeR6i5S/X1Fqh+xbaCzfZMEQx26K2K9FWzXXPE7aq5oAuw6vKaAHMNh1O+NmyDr",
+	"nVmlMpHi7Gu+bPd5OcUFY5+qbLWBhpfJVEjC813sJ4L9y/H2NAmd9XRlIXRYxNrYrGJTrXiWokO0KlzI",
+	"1wvvr260ZeHLuKb209kj1nRsH/mN+Q41dpbo92KJngblo98m5st15XTBCOnkHjVqoCbPQSbeliRTla3C",
+	"VRmaL+2ljFqpSXOtSXQjqXc55c1uKO3u6t3d1bu7q3d3V+/urt6d5/4dNWiv3aJTM55++Gmd9wN++QbO",
+	"g33eh8C27kbsjlztjlztjlxd88jVNTpKd9zdHaj7gg/U/c5a5n9f7eW3Gbrd9mo+96N6exsjxMk7eymy",
+	"7fd+fLm/nshu6scT2W39duIn/uXESMjd9+7vc/3KmrDE+31Q7N7ztoU/Xeeqhf+W8Hr3q827X23e/Wrz",
+	"7lebd7/avPvV5i/7V5s/1Yb451E0v82zzxsbFF4qy56TW/mwDKW+ETAWgTgkwrWTFCzWF06+eYshEd2R",
+	"7OPI5hbFw8kkVynPF8rYyQijvO4Ni+2XaE743M3g47RSiwu6XODt1f8EAAD//0GT+ZyYoAAA",
 }
 
 // GetSwagger returns the Swagger specification corresponding to the generated code
