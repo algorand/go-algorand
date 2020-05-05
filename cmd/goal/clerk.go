@@ -846,7 +846,11 @@ var compileCmd = &cobra.Command{
 			outblob := program
 			outname := outFilename
 			if outname == "" {
-				outname = fmt.Sprintf("%s.tok", fname)
+				if ( fname == "-" ) {
+					outname = "-"
+				} else {
+					outname = fmt.Sprintf("%s.tok", fname)
+				}
 			}
 			if signProgram {
 				dataDir := ensureSingleDataDir()
@@ -872,20 +876,27 @@ var compileCmd = &cobra.Command{
 				outblob = protocol.Encode(&ls)
 			}
 			if !noProgramOutput {
-				fout, err := os.Create(outname)
-				if err != nil {
-					reportErrorf("%s: %s\n", outname, err)
-				}
-				_, err = fout.Write(outblob)
-				if err != nil {
-					reportErrorf("%s: %s\n", outname, err)
-				}
-				err = fout.Close()
-				if err != nil {
-					reportErrorf("%s: %s\n", outname, err)
+				if outname == "-" {
+					_, err := os.Stdout.Write(outblob)
+					if err != nil {
+						reportErrorf("%s: %s\n", outname, err)
+					}
+				} else {
+					fout, err := os.Create(outname)
+					if err != nil {
+						reportErrorf("%s: %s\n", outname, err)
+					}
+					_, err = fout.Write(outblob)
+					if err != nil {
+						reportErrorf("%s: %s\n", outname, err)
+					}
+					err = fout.Close()
+					if err != nil {
+						reportErrorf("%s: %s\n", outname, err)
+					}
 				}
 			}
-			if !signProgram {
+			if !signProgram && outname != "-" {
 				pd := logic.HashProgram(program)
 				addr := basics.Address(pd)
 				fmt.Printf("%s: %s\n", fname, addr.String())
