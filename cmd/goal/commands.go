@@ -30,6 +30,9 @@ import (
 	"github.com/spf13/cobra/doc"
 	"golang.org/x/crypto/ssh/terminal"
 
+	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -367,6 +370,7 @@ func ensureGoalClient(dataDir string, clientType libgoal.ClientType) libgoal.Cli
 	if err != nil {
 		reportErrorf(errorNodeStatus, err)
 	}
+	client.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
 	return client
 }
 
