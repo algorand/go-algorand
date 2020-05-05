@@ -840,7 +840,7 @@ var compileCmd = &cobra.Command{
 			outblob := program
 			outname := outFilename
 			if outname == "" {
-				if ( fname == "-" ) {
+				if fname == "-" {
 					outname = "-"
 				} else {
 					outname = fmt.Sprintf("%s.tok", fname)
