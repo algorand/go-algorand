@@ -105,7 +105,7 @@ type Participation struct { // Round and Address fields are redundant if Partici
 	VoteKeyDilution uint64 `json:"votekd"`
 }
 
-// TealValue represents a value stored in a TEAL key/value store. It inclues
+// TealValue represents a value stored in a TEAL key/value store. It includes
 // type information to disambiguate empty values from each other.
 //
 // swagger: model TealValue
