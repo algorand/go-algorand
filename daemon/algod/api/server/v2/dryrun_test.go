@@ -479,6 +479,12 @@ func TestDryunLocal1(t *testing.T) {
 			},
 		},
 	}
+	dr.AccountAppStates = []DryrunLocalAppState{
+		DryrunLocalAppState{
+			// Account 0
+			AppIndex: 1,
+		},
+	}
 	doDryrunRequest(&dr, &proto, &response)
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
@@ -530,6 +536,12 @@ func TestDryunLocal1A(t *testing.T) {
 	}
 	dr.Apps = []DryrunApp{
 		DryrunApp{
+			AppIndex: 1,
+		},
+	}
+	dr.AccountAppStates = []DryrunLocalAppState{
+		DryrunLocalAppState{
+			// Account 0
 			AppIndex: 1,
 		},
 	}
