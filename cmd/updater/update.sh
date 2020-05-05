@@ -250,44 +250,42 @@ function check_for_update() {
     return 0
 }
 
+function download_tools_update() {
+    local TOOLS_SPECIFIC_VERSION=$1
+    echo "downloading tools update ${TOOLS_SPECIFIC_VERSION}"
+    TOOLS_TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
+    export TOOLS_CLEANUP_UPDATE_TEMP_DIR=${TOOLS_TEMPDIR}
+    trap "rm -rf ${TOOLS_CLEANUP_UPDATE_TEMP_DIR}" 0
+
+    TOOLS_TARFILE=${TOOLS_TEMPDIR}/${LATEST}.tar.gz
+
+    if ! "${SCRIPTPATH}"/updater gettools -c "${CHANNEL}" -o "${TOOLS_TARFILE}" "${BUCKET}" "${TOOLS_SPECIFIC_VERSION}"
+    then
+        echo "Error downloading tools tarfile"
+        exit 1
+    fi
+    echo "Tools tarfile downloaded to ${TOOLS_TARFILE}"
+
+    mkdir -p "${TOOLS_OUTPUT_DIR}"
+    if ! tar -xf "${TOOLS_TARFILE}" -C "${TOOLS_OUTPUT_DIR}"
+    then
+        echo "Error extracting the tools update file ${TOOLS_TARFILE}"
+        exit 1
+    fi
+    echo "Tools extracted to ${TOOLS_OUTPUT_DIR}"
+}
+
 TEMPDIR=""
 TARFILE=""
 UPDATESRCDIR=""
 
-function download_tools_update() {
-    SPECIFIC_VERSION=$1
-    echo "downloading tools update ${SPECIFIC_VERSION}"
-    TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
-    export CLEANUP_UPDATE_TEMP_DIR=${TEMPDIR}
-    trap "rm -rf ${CLEANUP_UPDATE_TEMP_DIR}" 0
-
-    TARFILE=${TEMPDIR}/${LATEST}.tar.gz
-    UPDATESRCDIR=${TEMPDIR}/a
-    mkdir "${UPDATESRCDIR}"
-
-    if ! "${SCRIPTPATH}"/updater gettools -c "${CHANNEL}" -o "${TARFILE}" "${BUCKET}" "${SPECIFIC_VERSION}"
-    then
-        echo Error downloading tools tarfile
-        exit 1
-    fi
-    echo Tools tarfile downloaded to "${TARFILE}"
-
-    if ! mkdir -p "${TOOLS_OUTPUT_DIR}" && tar -xf "${TARFILE}" -C "${TOOLS_OUTPUT_DIR}"
-    then
-        echo Error extracting the tools update file
-        exit 1
-    fi
-    echo Tools extracted to "${TOOLS_OUTPUT_DIR}"
-}
-
 function download_update() {
-
     SPECIFIC_VERSION=$1
+
     if [ "${TOOLS_OUTPUT_DIR}" != "" ]; then
         download_tools_update "${SPECIFIC_VERSION}"
     fi
 
-    SPECIFIC_VERSION=$1
     TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
     export CLEANUP_UPDATE_TEMP_DIR=${TEMPDIR}
     trap "rm -rf ${CLEANUP_UPDATE_TEMP_DIR}" 0
