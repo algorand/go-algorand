@@ -136,7 +136,7 @@ func TestDryunLogicSig(t *testing.T) {
 		// it doesn't actually care about any txn content
 	}
 	doDryrunRequest(&dr, &proto, &response)
-	assert.Equal(t, "PASS", response.Txns[0].LogicSigMessages[0])
+	checkLogicSigPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)
 	}
@@ -162,7 +162,7 @@ func TestDryunLogicSigSource(t *testing.T) {
 		},
 	}
 	doDryrunRequest(&dr, &proto, &response)
-	assert.Equal(t, "PASS", response.Txns[0].LogicSigMessages[0])
+	checkLogicSigPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)
 	}
@@ -334,6 +334,32 @@ func init() {
 	}
 }
 
+func checkLogicSigPass(t *testing.T, response *DryrunResponse) {
+	if len(response.Txns) < 1 {
+		t.Error("no response txns")
+	} else if response.Txns[0] == nil {
+		t.Error("response txns is nil")
+	} else if len(response.Txns[0].LogicSigMessages) < 1 {
+		t.Error("no response lsig msg")
+	} else {
+		messages := response.Txns[0].LogicSigMessages
+		assert.Equal(t, "PASS", messages[len(messages)-1])
+	}
+}
+
+func checkAppCallPass(t *testing.T, response *DryrunResponse) {
+	if len(response.Txns) < 1 {
+		t.Error("no response txns")
+	} else if response.Txns[0] == nil {
+		t.Error("response txns is nil")
+	} else if len(response.Txns[0].AppCallMessages) < 1 {
+		t.Error("no response app msg")
+	} else {
+		messages := response.Txns[0].AppCallMessages
+		assert.Equal(t, "PASS", messages[len(messages)-1])
+	}
+}
+
 func TestDryunGlobal1(t *testing.T) {
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	var dr DryrunRequest
@@ -368,14 +394,7 @@ func TestDryunGlobal1(t *testing.T) {
 		},
 	}
 	doDryrunRequest(&dr, &proto, &response)
-	if len(response.Txns) < 1 {
-		t.Error("no response txns")
-	} else if len(response.Txns[0].AppCallMessages) < 1 {
-		t.Error("no response lsig msg")
-	} else {
-		messages := response.Txns[0].AppCallMessages
-		assert.Equal(t, "PASS", messages[len(messages)-1])
-	}
+	checkAppCallPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)
 	}

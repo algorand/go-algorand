@@ -24,12 +24,14 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 // DryrunApp holds global app state for a dryrun call.
 // TODO: should become obsolete when app supported added to api v2?
 type DryrunApp struct {
+	Creator  basics.Address   `codec:"a"`
 	AppIndex uint64           `codec:"i"`
 	Params   basics.AppParams `codec:"p"`
 }
@@ -177,16 +179,68 @@ func (ddr *dryrunDebugReceiver) Complete(state *logic.DebugState) error {
 
 // LedgerForLogic
 type dryrunLedger struct {
-	dr *DryrunRequest
+	// inputs:
+
+	dr    *DryrunRequest
+	proto *config.ConsensusParams
+
+	// intermediate state:
+
+	// index into dr.Accounts[]
+	accountsIn map[basics.Address]int
+
+	// index into dr.Apps[]
+	accountApps map[basics.Address]int
+
+	// index into dr.AccountAppStates[]
+	accountAppStates map[basics.Address]int
+
+	// accounts that have been Put
+	accounts map[basics.Address]basics.BalanceRecord
+}
+
+func (dl *dryrunLedger) init() error {
+	dl.accounts = make(map[basics.Address]basics.BalanceRecord)
+	dl.accountsIn = make(map[basics.Address]int)
+	dl.accountApps = make(map[basics.Address]int)
+	dl.accountAppStates = make(map[basics.Address]int)
+	for i, acct := range dl.dr.Accounts {
+		xaddr, err := basics.UnmarshalChecksumAddress(acct.Address)
+		if err != nil {
+			return err
+		}
+		dl.accountsIn[xaddr] = i
+	}
+	for i, app := range dl.dr.Apps {
+		dl.accountApps[app.Creator] = i
+	}
+	for i, appState := range dl.dr.AccountAppStates {
+		dl.accountAppStates[appState.Account] = i
+	}
+	return nil
 }
 
 // LedgerForLogic
 func (dl *dryrunLedger) Balance(addr basics.Address) (basics.MicroAlgos, error) {
-	return basics.MicroAlgos{Raw: 0}, nil
+	for _, acct := range dl.dr.Accounts {
+		xaddr, err := basics.UnmarshalChecksumAddress(acct.Address)
+		if err != nil {
+			continue
+		}
+		if xaddr == addr {
+			return basics.MicroAlgos{Raw: acct.Amount}, nil
+		}
+	}
+	return basics.MicroAlgos{Raw: 0}, fmt.Errorf("no account %s", addr.String())
 }
+
+// LedgerForLogic interface
+// transactions.Balances interface
 func (dl *dryrunLedger) Round() basics.Round {
 	return basics.Round(dl.dr.Round)
 }
+
+// LedgerForLogic interface
 func (dl *dryrunLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error) {
 	for _, app := range dl.dr.Apps {
 		if app.AppIndex == uint64(appIdx) {
@@ -195,6 +249,8 @@ func (dl *dryrunLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyVa
 	}
 	return nil, nil
 }
+
+// LedgerForLogic interface
 func (dl *dryrunLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error) {
 	for _, st := range dl.dr.AccountAppStates {
 		if appIdx == st.AppIndex && addr == st.Account {
@@ -203,6 +259,8 @@ func (dl *dryrunLedger) AppLocalState(addr basics.Address, appIdx basics.AppInde
 	}
 	return nil, nil
 }
+
+// LedgerForLogic interface
 func (dl *dryrunLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {
 	for _, acct := range dl.dr.Accounts {
 		// TODO: check all address decodes when we first receive the dryrun request
@@ -218,11 +276,125 @@ func (dl *dryrunLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetI
 			}
 		}
 	}
-	return basics.AssetHolding{Amount: 0, Frozen: false}, nil
+	return basics.AssetHolding{Amount: 0, Frozen: false}, fmt.Errorf("no account %s", addr.String())
 }
+
+// LedgerForLogic interface
 func (dl *dryrunLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error) {
 	// TODO? maybe not needed for dryrun
 	return basics.AssetParams{}, nil
+}
+
+// transactions.Balances interface
+func (dl *dryrunLedger) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
+	// first check accounts from a previous Put()
+	br, ok := dl.accounts[addr]
+	if ok {
+		return br, nil
+	}
+	// check accounts from debug records uploaded
+	any := false
+	out := basics.BalanceRecord{
+		Addr: addr,
+	}
+	accti, ok := dl.accountsIn[addr]
+	if ok {
+		any = true
+		acct := dl.dr.Accounts[accti]
+		if withPendingRewards {
+			out.MicroAlgos.Raw = acct.Amount
+		} else {
+			out.MicroAlgos.Raw = acct.AmountWithoutPendingRewards
+		}
+		// TODO: more fields
+	}
+	appi, ok := dl.accountApps[addr]
+	if ok {
+		any = true
+		app := dl.dr.Apps[appi]
+		out.AppParams = make(map[basics.AppIndex]basics.AppParams)
+		out.AppParams[basics.AppIndex(app.AppIndex)] = app.Params
+	}
+	appstatei, ok := dl.accountAppStates[addr]
+	if ok {
+		any = true
+		appstate := dl.dr.AccountAppStates[appstatei]
+		out.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+		out.AppLocalStates[basics.AppIndex(appstate.AppIndex)] = appstate.State
+	}
+	if !any {
+		return basics.BalanceRecord{}, fmt.Errorf("no account for addr %s", addr.String())
+	}
+	return out, nil
+}
+
+// transactions.Balances interface
+func (dl *dryrunLedger) Put(br basics.BalanceRecord) error {
+	if dl.accounts == nil {
+		dl.accounts = make(map[basics.Address]basics.BalanceRecord)
+	}
+	dl.accounts[br.Addr] = br
+	return nil
+}
+
+// PutWithCreatables is like Put, but should be used when creating or deleting an asset or application.
+func (dl *dryrunLedger) PutWithCreatables(record basics.BalanceRecord, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) error {
+	return nil
+}
+
+// GetAssetCreator gets the address of the account whose balance record
+// contains the asset params
+func (dl *dryrunLedger) GetAssetCreator(aidx basics.AssetIndex) (basics.Address, bool, error) {
+	for _, acct := range dl.dr.Accounts {
+		if acct.CreatedAssets == nil {
+			continue
+		}
+		for _, asset := range *acct.CreatedAssets {
+			if asset.Index == uint64(aidx) {
+				addr, err := basics.UnmarshalChecksumAddress(acct.Address)
+				return addr, true, err
+			}
+		}
+	}
+	return basics.Address{}, false, fmt.Errorf("no asset %d", aidx)
+}
+
+// GetAppCreator gets the address of the account whose balance record
+// contains the app params
+func (dl *dryrunLedger) GetAppCreator(aidx basics.AppIndex) (basics.Address, bool, error) {
+	for _, app := range dl.dr.Apps {
+		if app.AppIndex == uint64(aidx) {
+			return app.Creator, true, nil
+		}
+	}
+	return basics.Address{}, false, fmt.Errorf("no app %d", aidx)
+}
+
+// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
+// TODO: Does this need to be part of the balances interface, or can it just be implemented here as a function that calls Put and Get?
+func (dl *dryrunLedger) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards *basics.MicroAlgos, dstRewards *basics.MicroAlgos) error {
+	return nil
+}
+
+// Balances correspond to a Round, which mean that they also correspond
+// to a ConsensusParams.  This returns those parameters.
+func (dl *dryrunLedger) ConsensusParams() config.ConsensusParams {
+	return *dl.proto
+}
+
+func makeAppLedger(dl *dryrunLedger, txnIndex int) (l logic.LedgerForLogic, err error) {
+	dr := dl.dr
+	accounts := make([]basics.Address, 1+len(dr.Txns[txnIndex].Txn.Accounts))
+	accounts[0] = dr.Txns[txnIndex].Txn.Sender
+	for i, addr := range dr.Txns[txnIndex].Txn.Accounts {
+		accounts[i+1] = addr
+	}
+	apps := make([]basics.AppIndex, 1+len(dr.Txns[txnIndex].Txn.ForeignApps))
+	apps[0] = dr.Txns[txnIndex].Txn.ApplicationID
+	for i, appid := range dr.Txns[txnIndex].Txn.ForeignApps {
+		apps[i+1] = appid
+	}
+	return ledger.MakeDebugAppLedger(dl, accounts, apps, dr.Txns[txnIndex].Txn.ApplicationID)
 }
 
 // DryrunTxnResult contains any LogicSig or ApplicationCall program debug information and state updates from a dryrun.
@@ -251,7 +423,12 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 		response.Error = err.Error()
 		return
 	}
-	ledger := dryrunLedger{dr}
+	dl := dryrunLedger{dr: dr, proto: proto}
+	err = dl.init()
+	if err != nil {
+		response.Error = err.Error()
+		return
+	}
 	response.Txns = make([]*DryrunTxnResult, len(dr.Txns))
 	for ti, stxn := range dr.Txns {
 		ep := logic.EvalParams{
@@ -260,7 +437,7 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 			TxnGroup:   dr.Txns,
 			GroupIndex: ti,
 			//Logger: nil, // TODO: capture logs, send them back
-			Ledger: &ledger,
+			//Ledger: l,
 		}
 		var result *DryrunTxnResult
 		if len(stxn.Lsig.Logic) > 0 {
@@ -281,6 +458,12 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 			result.LogicSigMessages = messages
 		}
 		if stxn.Txn.Type == protocol.ApplicationCallTx {
+			l, err := makeAppLedger(&dl, ti)
+			if err != nil {
+				response.Error = err.Error()
+				return
+			}
+			ep.Ledger = l
 			appid := stxn.Txn.ApplicationID
 			var app basics.AppParams
 			ok := false
