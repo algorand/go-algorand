@@ -100,7 +100,7 @@ func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx l
 }
 
 // TokenHeader is the header where we put the token.
-const TokenHeader = "X-Algod-API-Token"
+const TokenHeader = "X-Algo-API-Token"
 
 // NewRouter builds and returns a new router with our REST handlers registered.
 func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener) *echo.Echo {
