@@ -60,10 +60,10 @@ package-docker-$(OS_TYPE)-$(ARCH):
 package-test-$(OS_TYPE)-$(ARCH): package-test-deb-$(OS_TYPE)-$(ARCH) package-test-rpm-$(OS_TYPE)-$(ARCH)
 
 package-test-deb-$(OS_TYPE)-$(ARCH):
-	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/deb/test.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VERSION) $$WORKDIR
+	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/deb/test.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(VERSION)
 
 package-test-rpm-$(OS_TYPE)-$(ARCH):
-	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/rpm/test.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VERSION) $$WORKDIR
+	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/rpm/test.sh $$WORKDIR $(OS_TYPE) $(ARCH_BIT) $(VERSION)
 
 package: package-$(OS_TYPE)-$(ARCH)
 package-deb: package-deb-$(OS_TYPE)-$(ARCH)
