@@ -40,15 +40,6 @@
           "200": {
             "description": "OK."
           },
-          "401": {
-            "description": "Invalid API Token"
-          },
-          "404": {
-            "description": "Not Found",
-            "schema": {
-              "type": "string"
-            }
-          },
           "default": {
             "description": "Unknown Error"
           }
