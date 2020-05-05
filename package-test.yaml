@@ -17,7 +17,11 @@ tasks:
       workDir: /projects/go-algorand
       env: [
         AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY,
+#        CHANNEL=stable,
+#        BRANCH=rel/stable,
+#        SHA=8b0be452,
+#        VERSION=2.0.5
       ]
       volumes: [ /var/run/docker.sock:/var/run/docker.sock ]
     target: package-test-deb WORKDIR=/projects/go-algorand
@@ -30,7 +34,11 @@ tasks:
       workDir: /projects/go-algorand
       env: [
         AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY,
+#        CHANNEL=stable,
+#        BRANCH=rel/stable,
+#        SHA=8b0be452,
+#        VERSION=2.0.5
       ]
       volumes: [ /var/run/docker.sock:/var/run/docker.sock ]
     target: package-test-rpm WORKDIR=/projects/go-algorand

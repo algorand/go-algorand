@@ -1,7 +1,7 @@
 # This file is imported into go-algorand/Makefile.
 
 ARCH_BIT = $(shell uname -m)
-VERSION  = $(shell ./scripts/compute_build_number.sh -f)
+VER      = $(shell ./scripts/compute_build_number.sh -f)
 
 .PHONY: ci-clean ci-deps ci-setup ci-build package package-deb package-rpm package-$(OS_TYPE)-$(ARCH) package-deb-$(OS_TYPE)-$(ARCH) package-rpm-$(OS_TYPE)-$(ARCH)
 
@@ -60,10 +60,10 @@ package-docker-$(OS_TYPE)-$(ARCH):
 package-test-$(OS_TYPE)-$(ARCH): package-test-deb-$(OS_TYPE)-$(ARCH) package-test-rpm-$(OS_TYPE)-$(ARCH)
 
 package-test-deb-$(OS_TYPE)-$(ARCH):
-	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/deb/test.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(VERSION)
+	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/deb/test.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(VER)
 
 package-test-rpm-$(OS_TYPE)-$(ARCH):
-	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/rpm/test.sh $$WORKDIR $(OS_TYPE) $(ARCH_BIT) $(VERSION)
+	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/rpm/test.sh $$WORKDIR $(OS_TYPE) $(ARCH_BIT) $(VER)
 
 package: package-$(OS_TYPE)-$(ARCH)
 package-deb: package-deb-$(OS_TYPE)-$(ARCH)

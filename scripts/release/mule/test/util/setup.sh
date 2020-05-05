@@ -2,25 +2,14 @@
 
 PKG_TYPE="$1"
 
-# Just for testing...
-VERSION=2.0.5
-
-#SHA=$(git rev-parse HEAD)
-SHA=8b0be452
-
-#BRANCH=$(git rev-parse --abbrev-ref HEAD)
-BRANCH=rel/stable
-
-#CHANNEL=$("$WORKDIR/scripts/compute_branch_channel.sh" "$BRANCH")
-CHANNEL=stable
-
-# Needed by mule.yaml file and ./util/test_package.
-#export ARCH_BIT
-export CHANNEL
-#export OS_TYPE
-#export VERSION
+BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
 export BRANCH
+CHANNEL=${CHANNEL:-$("$WORKDIR/scripts/compute_branch_channel.sh" "$BRANCH")}
+export CHANNEL
+SHA=${SHA:-$(git rev-parse HEAD)}
 export SHA
+VERSION=${VERSION:-$FULLVERSION}
+export VERSION
 
 # To contain the downloaded packages from staging.
 mkdir -p "$WORKDIR/pkg"
