@@ -50,9 +50,9 @@ fi
 
 if [ "$PKG_TYPE" == "deb" ]
 then
-    dpkg -i ./pkg/*.deb
+    dpkg -i "$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*.deb
 else
-    yum install ./pkg/*.rpm -y
+    yum install "$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*.rpm -y
 fi
 
 export BRANCH

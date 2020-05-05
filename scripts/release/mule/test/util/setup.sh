@@ -10,10 +10,12 @@ SHA=${SHA:-$(git rev-parse HEAD)}
 export SHA
 VERSION=${VERSION:-$FULLVERSION}
 export VERSION
+USE_CACHE=${USE_CACHE:-false}
 
-# To contain the downloaded packages from staging.
-mkdir -p "$WORKDIR/pkg"
+if ! $USE_CACHE
+then
+    mule -f package-test.yaml "package-test-setup-$PKG_TYPE"
+fi
 
-mule -f package-test.yaml "package-test-setup-$PKG_TYPE"
 "$WORKDIR/scripts/release/mule/test/util/test_package.sh" "$PKG_TYPE"
 

@@ -16,6 +16,7 @@ fi
 
 . "$WORKDIR/scripts/release/mule/test/util/setup.sh" deb
 
-apt-get update && apt-get install expect "$WORKDIR"/pkg/*.deb -y
+# The tests executed by `expect` below need a running instance of `goal`.
+apt-get update && apt-get install expect "$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*.deb -y
 expect -d "$WORKDIR/scripts/release/mule/test/$OS_TYPE/$ARCH_TYPE/deb/goal.exp" /var/lib/algorand "$WORKDIR/test/testdata" "$WORKDIR/test/e2e-go/cli/goal/expect"
 
