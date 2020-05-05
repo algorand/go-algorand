@@ -19,6 +19,8 @@ BUCKET=""
 GENESIS_NETWORK_DIR=""
 GENESIS_NETWORK_DIR_SPEC=""
 SKIP_UPDATE=0
+TOOLS_OUTPUT_DIR=""
+REUSE_UPDATE=""
 
 set -o pipefail
 
@@ -87,6 +89,10 @@ while [ "$1" != "" ]; do
             ;;
         -s)
             SKIP_UPDATE=1
+            ;;
+        -gettools)
+            shift
+            TOOLS_OUTPUT_DIR=$1
             ;;
         *)
             echo "Unknown option" "$1"
@@ -249,7 +255,39 @@ TEMPDIR=""
 TARFILE=""
 UPDATESRCDIR=""
 
+function download_tools_update() {
+    SPECIFIC_VERSION=$1
+    echo "downloading tools update ${SPECIFIC_VERSION}"
+    TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
+    export CLEANUP_UPDATE_TEMP_DIR=${TEMPDIR}
+    trap "rm -rf ${CLEANUP_UPDATE_TEMP_DIR}" 0
+
+    TARFILE=${TEMPDIR}/${LATEST}.tar.gz
+    UPDATESRCDIR=${TEMPDIR}/a
+    mkdir "${UPDATESRCDIR}"
+
+    if ! "${SCRIPTPATH}"/updater gettools -c "${CHANNEL}" -o "${TARFILE}" "${BUCKET}" "${SPECIFIC_VERSION}"
+    then
+        echo Error downloading tools tarfile
+        exit 1
+    fi
+    echo Tools tarfile downloaded to "${TARFILE}"
+
+    if ! mkdir -p "${TOOLS_OUTPUT_DIR}" && tar -xf "${TARFILE}" -C "${TOOLS_OUTPUT_DIR}"
+    then
+        echo Error extracting the tools update file
+        exit 1
+    fi
+    echo Tools extracted to "${TOOLS_OUTPUT_DIR}"
+}
+
 function download_update() {
+
+    SPECIFIC_VERSION=$1
+    if [ "${TOOLS_OUTPUT_DIR}" != "" ]; then
+        download_tools_update "${SPECIFIC_VERSION}"
+    fi
+
     SPECIFIC_VERSION=$1
     TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
     export CLEANUP_UPDATE_TEMP_DIR=${TEMPDIR}
