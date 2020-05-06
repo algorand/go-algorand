@@ -517,7 +517,11 @@ func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state Catchpoin
 	return MakeCatchpointCatchupAccessor(l, l.log).GetState(ctx)
 }
 
-// GetCatchpointStream - todo ..
+// GetCatchpointStream returns an io.ReadCloser file stream from which the catchpoint file
+// for the provided round could be retrieved. If no such stream can be generated, a non-nil
+// error is returned. The io.ReadCloser and the error are mutually exclusive -
+// if error is returned, the file stream is gurenteed to be nil, and vice versa,
+// if the file stream is not nil, the error is gurenteed to be nil.
 func (l *Ledger) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
