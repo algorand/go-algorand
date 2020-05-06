@@ -259,16 +259,14 @@ function download_tools_update() {
 
     TOOLS_TARFILE=${TOOLS_TEMPDIR}/${LATEST}.tar.gz
 
-    if ! "${SCRIPTPATH}"/updater gettools -c "${CHANNEL}" -o "${TOOLS_TARFILE}" "${BUCKET}" "${TOOLS_SPECIFIC_VERSION}"
-    then
+    if ( ! "${SCRIPTPATH}"/updater gettools -c "${CHANNEL}" -o "${TOOLS_TARFILE}" "${BUCKET}" "${TOOLS_SPECIFIC_VERSION}" ) ; then
         echo "Error downloading tools tarfile"
         exit 1
     fi
     echo "Tools tarfile downloaded to ${TOOLS_TARFILE}"
 
     mkdir -p "${TOOLS_OUTPUT_DIR}"
-    if ! tar -xf "${TOOLS_TARFILE}" -C "${TOOLS_OUTPUT_DIR}"
-    then
+    if ( ! tar -xf "${TOOLS_TARFILE}" -C "${TOOLS_OUTPUT_DIR}" ) ; then
         echo "Error extracting the tools update file ${TOOLS_TARFILE}"
         exit 1
     fi
@@ -282,7 +280,7 @@ UPDATESRCDIR=""
 function download_update() {
     SPECIFIC_VERSION=$1
 
-    if [ "${TOOLS_OUTPUT_DIR}" != "" ]; then
+    if [ -n "${TOOLS_OUTPUT_DIR}" ]; then
         download_tools_update "${SPECIFIC_VERSION}"
     fi
 
