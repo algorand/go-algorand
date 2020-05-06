@@ -23,86 +23,76 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v4"
-
-	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/util/tokens"
 )
 
-// TokenHeader defines the http header that includes the auth token
-const TokenHeader = "X-Algo-API-Token"
-
 const urlAuthFormatter = "/urlAuth/%s"
-const debugRouteName = "debug"
 
-// Allowed auth bypass names
-var noneAuthRoutes = []string{"healthcheck", "swagger.json"}
+// AuthMiddleware provides some data to the handler.
+type AuthMiddleware struct {
+	// Header is the token header which needs to be provided. For example 'X-Algod-API-Token'.
+	header string
 
-// Auth takes a logger and an api token and return a middleware function
-// that satisfies the gorilla middleware interface.
-func Auth(log logging.Logger, apiToken string) func(echo.HandlerFunc) echo.HandlerFunc {
-	// Make sure no one is trying to call us with an invalid token
-	err := tokens.ValidateAPIToken(apiToken)
-	if err != nil {
-		log.Fatalf("Invalid APIToken: %v", err)
+	// Tokens is the set of tokens which can be set to allow access.
+	tokens [][]byte
+}
+
+// MakeAuth constructs the auth middleware function
+func MakeAuth(header string, tokens []string) echo.MiddlewareFunc {
+	apiTokenBytes := make([][]byte, 0)
+	for _, token := range tokens {
+		apiTokenBytes = append(apiTokenBytes, []byte(token))
 	}
 
-	apiTokenBytes := []byte(apiToken)
+	auth := AuthMiddleware{
+		header: header,
+		tokens: apiTokenBytes,
+	}
 
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(ctx echo.Context) error {
-			// OPTIONS responses never require auth
-			if ctx.Request().Method == "OPTIONS" {
-				return next(ctx)
+	return auth.handler
+}
+
+// Auth takes a logger and an array of api token and return a middleware function
+// that ensures one of the api tokens was provided.
+func (auth *AuthMiddleware) handler(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(ctx echo.Context) error {
+		// OPTIONS responses never require auth
+		if ctx.Request().Method == "OPTIONS" {
+			return next(ctx)
+		}
+
+		// Grab the apiToken from the HTTP header, or as a bearer token
+		providedToken := []byte(ctx.Request().Header.Get(auth.header))
+		if len(providedToken) == 0 {
+			// Accept tokens provided in a bearer token format.
+			authentication := strings.SplitN(ctx.Request().Header.Get("Authorization"), " ", 2)
+			if len(authentication) == 2 && strings.EqualFold("Bearer", authentication[0]) {
+				providedToken = []byte(authentication[1])
 			}
+		}
 
-			// Get the current route
-			var route string
-			for _, r := range ctx.Echo().Routes() {
-				if ctx.Path() == r.Path {
-					route = r.Path
-					break
-				}
-			}
+		// Handle debug routes with /urlAuth/:token prefix.
+		if ctx.Param("token") != "" {
+			// For debug routes, we place the apiToken in the path itself
+			providedToken = []byte(ctx.Param("token"))
 
-			// Bypass none auth names
-			for _, name := range noneAuthRoutes {
-				if len(route) > 0 && route[1:] == name {
-					return next(ctx)
-				}
-			}
+			// Internally, pprof matches exact routes and won't match our APIToken.
+			// We need to rewrite the requested path to exclude the token prefix.
+			// https://git.io/fp2NO
+			authPrefix := fmt.Sprintf(urlAuthFormatter, providedToken)
+			// /urlAuth/[token string]/debug/pprof/ => /debug/pprof/
+			newPath := strings.TrimPrefix(ctx.Request().URL.Path, authPrefix)
+			ctx.SetPath(newPath)
+			ctx.Request().URL.Path = newPath
+		}
 
-			// Grab the apiToken from the HTTP header, or as a bearer token
-			providedToken := []byte(ctx.Request().Header.Get(TokenHeader))
-			if len(providedToken) == 0 {
-				// Accept tokens provided in a bearer token format.
-				authentication := strings.SplitN(ctx.Request().Header.Get("Authorization"), " ", 2)
-				if len(authentication) == 2 && strings.EqualFold("Bearer", authentication[0]) {
-					providedToken = []byte(authentication[1])
-				}
-			}
-
-			// Handle debug routes with /urlAuth/:token prefix.
-			if ctx.Param("token") != "" {
-				// For debug routes, we place the apiToken in the path itself
-				providedToken = []byte(ctx.Param("token"))
-
-				// Internally, pprof matches exact routes and won't match our APIToken.
-				// We need to rewrite the requested path to exclude the token prefix.
-				// https://git.io/fp2NO
-				authPrefix := fmt.Sprintf(urlAuthFormatter, providedToken)
-				// /urlAuth/[token string]/debug/pprof/ => /debug/pprof/
-				newPath := strings.TrimPrefix(ctx.Request().URL.Path, authPrefix)
-				ctx.SetPath(newPath)
-				ctx.Request().URL.Path = newPath
-			}
-
-			// Check the token in constant time
-			if subtle.ConstantTimeCompare(providedToken, apiTokenBytes) == 1 {
+		// Check the tokens in constant time
+		for _, tokenBytes := range auth.tokens {
+			if subtle.ConstantTimeCompare(providedToken, tokenBytes) == 1 {
 				// Token was correct, keep serving request
 				return next(ctx)
 			}
-
-			return ctx.String(http.StatusUnauthorized, "Invalid API Token")
 		}
+
+		return echo.NewHTTPError(http.StatusUnauthorized, "Invalid API Token")
 	}
 }

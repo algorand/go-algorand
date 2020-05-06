@@ -135,22 +135,23 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint
 	return computeAssetIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
 }
 
-func getCodecHandle(formatPtr *string) (codec.Handle, error) {
+// getCodecHandle converts a format string into the encoder + content type
+func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
 	format := "json"
 	if formatPtr != nil {
 		format = strings.ToLower(*formatPtr)
 	}
 
-	var handle codec.Handle = protocol.JSONHandle
-	if format == "json" {
-		handle = protocol.JSONHandle
-	} else if format == "msgpack" || format == "msgp" {
-		handle = protocol.CodecHandle
-	} else {
-		return nil, fmt.Errorf("invalid format: %s", format)
+	switch format {
+	case "json":
+		return protocol.JSONHandle, "application/json", nil
+	case "msgpack":
+		fallthrough
+	case "msgp":
+		return protocol.CodecHandle, "application/msgpack", nil
+	default:
+		return nil, "", fmt.Errorf("invalid format: %s", format)
 	}
-
-	return handle, nil
 }
 
 func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
@@ -162,27 +163,4 @@ func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
 		return nil, fmt.Errorf("failed to encode object: %v", err)
 	}
 	return output, nil
-}
-
-func decode(handle codec.Handle, input []byte, output interface{}) error {
-	//enc := codec.NewEncoderBytes(&output, handle)
-	dec := codec.NewDecoderBytes(input, handle)
-
-	err := dec.Decode(output)
-	if err != nil {
-		return fmt.Errorf("failed to decode object: %v", err)
-	}
-	return nil
-}
-
-// Uses the 'codec:' annotations to reserialize an object.
-func toCodecMap(input interface{}, output *map[string]interface{}) (err error) {
-	var encoded []byte
-	encoded, err = encode(protocol.CodecHandle, input)
-	if err != nil {
-		return
-	}
-
-	err = decode(protocol.CodecHandle, encoded, &output)
-	return
 }

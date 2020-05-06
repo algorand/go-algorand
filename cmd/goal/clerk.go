@@ -62,6 +62,8 @@ var (
 	logicSigFile    string
 	timeStamp       int64
 	protoVersion    string
+	rekeyToAddress  string
+	signerAddress   string
 )
 
 func init() {
@@ -91,6 +93,7 @@ func init() {
 	sendCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Dump an unsigned tx to the given file. In order to dump a signed transaction, pass -s")
 	sendCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	sendCmd.Flags().StringVarP(&closeToAddress, "close-to", "c", "", "Close account and send remainder to this address")
+	sendCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
 	sendCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	sendCmd.Flags().StringVarP(&programSource, "from-program", "F", "", "Program source to use as account logic")
 	sendCmd.Flags().StringVarP(&progByteFile, "from-program-bytes", "P", "", "Program binary to use as account logic")
@@ -108,6 +111,7 @@ func init() {
 
 	signCmd.Flags().StringVarP(&txFilename, "infile", "i", "", "Partially-signed transaction file to add signature to")
 	signCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing the signed transaction")
+	signCmd.Flags().StringVarP(&signerAddress, "signer", "S", "", "Address of key to sign with, if different from transaction \"from\" address due to rekeying")
 	signCmd.Flags().StringVarP(&programSource, "program", "p", "", "Program source to use as account logic")
 	signCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
 	signCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "base64 encoded args to pass to transaction logic")
@@ -326,6 +330,17 @@ var sendCmd = &cobra.Command{
 			closeToAddressResolved = accountList.getAddressByName(closeToAddress)
 		}
 
+		// If rekeying, parse that address
+		// (we don't use accountList.getAddressByName because this address likely doesn't correspond to an account)
+		var rekeyTo basics.Address
+		if rekeyToAddress != "" {
+			var err error
+			rekeyTo, err = basics.UnmarshalChecksumAddress(rekeyToAddress)
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+		}
+
 		client := ensureFullClient(dataDir)
 		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
@@ -338,6 +353,10 @@ var sendCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf(errorConstructingTX, err)
 		}
+		if !rekeyTo.IsZero() {
+			payment.RekeyTo = rekeyTo
+		}
+
 		var stx transactions.SignedTxn
 		if lsig.Logic != nil {
 			params, err := client.SuggestedParams()
@@ -663,7 +682,7 @@ var signCmd = &cobra.Command{
 				signedTxn = uncheckedTxn
 			} else {
 				// sign the usual way
-				signedTxn, err = client.SignTransactionWithWallet(wh, pw, uncheckedTxn.Txn)
+				signedTxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, uncheckedTxn.Txn)
 				if err != nil {
 					reportErrorf(errorSigningTX, err)
 				}

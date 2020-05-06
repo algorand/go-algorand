@@ -72,12 +72,14 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
+	"github.com/algorand/go-algorand/util/tokens"
 )
 
 const (
-	apiV1Tag = "v1"
+	apiV1Tag = "/v1"
 )
 
 // wrapCtx passes a common context to each request without a global variable.
@@ -88,50 +90,53 @@ func wrapCtx(ctx lib.ReqContext, handler func(lib.ReqContext, echo.Context)) ech
 	}
 }
 
-// registerHandler registers a set of Routes to [router]. if [prefix] is not empty, it
-// registers the routes to a new sub-router [prefix]
-func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx lib.ReqContext) {
+// registerHandler registers a set of Routes to the given router.
+func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx lib.ReqContext, m ...echo.MiddlewareFunc) {
 	for _, route := range routes {
-		r := router.Add(route.Method, prefix+route.Path, wrapCtx(ctx, route.HandlerFunc))
+		r := router.Add(route.Method, prefix+route.Path, wrapCtx(ctx, route.HandlerFunc), m...)
 		r.Name = route.Name
 	}
 }
 
+// TokenHeader is the header where we put the token.
+const TokenHeader = "X-Algo-API-Token"
+
 // NewRouter builds and returns a new router with our REST handlers registered.
-func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, listener net.Listener) *echo.Echo {
+func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener) *echo.Echo {
+	if err := tokens.ValidateAPIToken(apiToken); err != nil {
+		logger.Errorf("Invalid apiToken was passed to NewRouter ('%s'): %v", apiToken, err)
+	}
+	if err := tokens.ValidateAPIToken(adminAPIToken); err != nil {
+		logger.Errorf("Invalid adminAPIToken was passed to NewRouter ('%s'): %v", adminAPIToken, err)
+	}
+	adminAuthenticator := middlewares.MakeAuth(TokenHeader, []string{adminAPIToken})
+	apiAuthenticator := middlewares.MakeAuth(TokenHeader, []string{adminAPIToken, apiToken})
+
 	e := echo.New()
 
 	e.Listener = listener
 	e.HideBanner = true
 
 	e.Pre(middleware.RemoveTrailingSlash())
-
-	e.Use(echo.WrapMiddleware(middlewares.Logger(logger)))
-	// TODO: New auth middleware - https://github.com/algorand/go-algorand/issues/863
-	e.Use(middlewares.Auth(logger, apiToken))
-	e.Use(echo.WrapMiddleware(middlewares.CORS))
-
-	// Note: Echo has builtin middleware for logging / CORS that we should investigate:
-	//e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
-	//	Format: "${remote_ip} - - ${time_rfc3339_nano} ${method} ${uri} ${protocol} ${status} ${bytes_in} ${user_agent} ${latency}\n",
-	//}))
-	//e.Use(middleware.CORS())
+	e.Use(middlewares.MakeLogger(logger))
+	e.Use(middlewares.MakeCORS(TokenHeader))
 
 	// Request Context
 	ctx := lib.ReqContext{Node: node, Log: logger, Shutdown: shutdown}
 
+	// Register handles / apply authentication middleware
+
 	// Route pprof requests to DefaultServeMux.
 	// The auth middleware removes /urlAuth/:token so that it can be routed correctly.
 	if node.Config().EnableProfiler {
-		e.GET("/debug/pprof/*", echo.WrapHandler(http.DefaultServeMux))
-		e.GET("/urlAuth/:token/debug/pprof/*", echo.WrapHandler(http.DefaultServeMux))
+		e.GET("/debug/pprof/*", echo.WrapHandler(http.DefaultServeMux), adminAuthenticator)
+		e.GET("/urlAuth/:token/debug/pprof/*", echo.WrapHandler(http.DefaultServeMux), adminAuthenticator)
 	}
-
-	// Registering common routes
+	// Registering common routes (no auth)
 	registerHandlers(e, "", common.Routes, ctx)
 
 	// Registering v1 routes
-	registerHandlers(e, apiV1Tag, routes.V1Routes, ctx)
+	registerHandlers(e, apiV1Tag, routes.V1Routes, ctx, apiAuthenticator)
 
 	// Registering v2 routes
 	v2Handler := v2.Handlers{
@@ -139,7 +144,8 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 		Log:      logger,
 		Shutdown: shutdown,
 	}
-	generated.RegisterHandlers(e, &v2Handler)
+	generated.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+	private.RegisterHandlers(e, &v2Handler, adminAuthenticator)
 
 	return e
 }

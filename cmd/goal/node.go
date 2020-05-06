@@ -28,8 +28,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/util"
@@ -61,6 +62,8 @@ func init() {
 	nodeCmd.AddCommand(pendingTxnsCmd)
 	nodeCmd.AddCommand(waitCmd)
 	nodeCmd.AddCommand(createCmd)
+	// Once the server-side implementation of the shutdown command is ready, we should enable this one.
+	//nodeCmd.AddCommand(shutdownCmd)
 
 	startCmd.Flags().StringVarP(&peerDial, "peer", "p", "", "Peer address to dial for initial connection")
 	startCmd.Flags().StringVarP(&listenIP, "listen", "l", "", "Endpoint / REST address to listen on")
@@ -133,6 +136,28 @@ var startCmd = &cobra.Command{
 				reportErrorf(errorNodeFailedToStart, err)
 			} else {
 				reportInfoln(infoNodeStart)
+			}
+		})
+	},
+}
+
+var shutdownCmd = &cobra.Command{
+	Use:   "shutdown",
+	Short: "Shut down the node",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		binDir, err := util.ExeDir()
+		if err != nil {
+			panic(err)
+		}
+		onDataDirs(func(dataDir string) {
+			nc := nodecontrol.MakeNodeController(binDir, dataDir)
+			err := nc.Shutdown()
+
+			if err == nil {
+				reportInfoln(infoNodeShuttingDown)
+			} else {
+				reportErrorf(errorNodeFailedToShutdown, err)
 			}
 		})
 	},
@@ -295,7 +320,7 @@ func getStatus(dataDir string) {
 	fmt.Printf("Genesis hash: %s\n", base64.StdEncoding.EncodeToString(vers.GenesisHash[:]))
 }
 
-func makeStatusString(stat v1.NodeStatus) string {
+func makeStatusString(stat generatedV2.NodeStatusResponse) string {
 	lastRoundTime := fmt.Sprintf("%.1fs", time.Duration(stat.TimeSinceLastRound).Seconds())
 	catchupTime := fmt.Sprintf("%.1fs", time.Duration(stat.CatchupTime).Seconds())
 	statusString := fmt.Sprintf(
