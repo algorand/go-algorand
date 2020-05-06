@@ -2,6 +2,8 @@
 
 .PHONY: ci-clean ci-deps ci-setup ci-build package package-deb package-rpm package-$(OS_TYPE)-$(ARCH) package-deb-$(OS_TYPE)-$(ARCH) package-rpm-$(OS_TYPE)-$(ARCH)
 
+VER      = $(shell ./scripts/compute_build_number.sh -f)
+
 ci-clean:
 	rm -rf tmp
 
@@ -62,10 +64,10 @@ package-docker: package-docker-$(OS_TYPE)-$(ARCH)
 package-sign-$(OS_TYPE)-$(ARCH): package-sign-deb-$(OS_TYPE)-$(ARCH) package-sign-rpm-$(OS_TYPE)-$(ARCH)
 
 package-sign-deb-$(OS_TYPE)-$(ARCH):
-	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/deb/sign.sh $(OS_TYPE) $(ARCH) $$WORKDIR
+	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(VER) deb
 
 package-sign-rpm-$(OS_TYPE)-$(ARCH):
-	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/rpm/sign.sh $(OS_TYPE) $(ARCH) $$WORKDIR
+	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(VER) rpm
 
 package-sign: package-sign-$(OS_TYPE)-$(ARCH)
 package-sign-deb: package-sign-deb-$(OS_TYPE)-$(ARCH)
