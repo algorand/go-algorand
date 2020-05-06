@@ -128,8 +128,6 @@ func (AccountTotals) CanMarshalMsg(z interface{}) bool {
 
 // MarshalMsg implements msgp.Marshaler
 func (at AccountTotals) MarshalMsg(b []byte) (o []byte, err error) {
-	//o = msgp.Require(b, msgp.Uint64Size)
-	//o = msgp.AppendUint64(o, a.Raw)
 	o, err = at.Online.MarshalMsg(b)
 	if err != nil {
 		return
