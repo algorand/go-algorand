@@ -70,6 +70,10 @@ func (bq *blockQueue) close() {
 	bq.mu.Lock()
 	defer func() {
 		bq.mu.Unlock()
+		// we want to block here until the sync go routine is done.
+		// it's not (just) for the sake of a complete cleanup, but rather
+		// to ensure that the sync goroutine isn't busy in a notifyCommit
+		// call which might be blocked inside one of the trackers.
 		<-bq.closed
 	}()
 
