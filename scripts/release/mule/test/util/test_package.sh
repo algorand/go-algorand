@@ -56,7 +56,7 @@ run_images () {
     do
         echo "[$0] Running ${item}-test..."
 
-        if ! docker run --rm --name algorand -e OS_TYPE="$OS_TYPE" -e ARCH_TYPE="$ARCH_TYPE" -e WORKDIR="$WORKDIR" --volumes-from "$HOSTNAME" -t "${item}-run-tests" bash ./scripts/release/mule/test/tests/run_tests -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -p "$PKG_TYPE" -r "$VERSION"
+        if ! docker run --rm --name algorand -e OS_TYPE="$OS_TYPE" -e ARCH_TYPE="$ARCH_TYPE" -e PKG_TYPE="$PKG_TYPE" -e WORKDIR="$WORKDIR" --volumes-from "$HOSTNAME" -t "${item}-run-tests" bash ./scripts/release/mule/test/tests/run_tests -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -r "$VERSION"
         then
             FAILED+=("$item")
         fi

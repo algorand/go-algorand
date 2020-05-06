@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-PKG_TYPE="$1"
-
 BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
 export BRANCH
 CHANNEL=${CHANNEL:-$("$WORKDIR/scripts/compute_branch_channel.sh" "$BRANCH")}

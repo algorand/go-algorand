@@ -9,7 +9,6 @@ set -ex
 BRANCH=
 CHANNEL=
 COMMIT_HASH=
-PKG_TYPE=
 FULLVERSION=
 
 while [ "$1" != "" ]; do
@@ -25,10 +24,6 @@ while [ "$1" != "" ]; do
         -h)
             shift
             COMMIT_HASH="$1"
-            ;;
-        -p)
-            shift
-            PKG_TYPE="$1"
             ;;
         -r)
             shift
@@ -50,9 +45,9 @@ fi
 
 if [ "$PKG_TYPE" == "deb" ]
 then
-    dpkg -i "$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*.deb
+    dpkg -i "$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*"$FULLVERSION"*.deb
 else
-    yum install "$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*.rpm -y
+    yum install "$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*"$FULLVERSION"*.rpm -y
 fi
 
 export BRANCH

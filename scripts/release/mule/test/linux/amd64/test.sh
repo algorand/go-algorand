@@ -8,6 +8,7 @@ export OS_TYPE="$2"
 export ARCH_TYPE="$3"
 export ARCH_BIT="$4"
 export FULLVERSION="$5"
+export PKG_TYPE="$6"
 
 if [ -z "$WORKDIR" ]
 then
@@ -15,5 +16,5 @@ then
     exit 1
 fi
 
-. "$WORKDIR/scripts/release/mule/test/util/setup.sh" rpm
+. "$WORKDIR/scripts/release/mule/test/util/setup.sh" "$PKG_TYPE"
 
