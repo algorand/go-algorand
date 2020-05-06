@@ -31,6 +31,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
@@ -184,12 +187,21 @@ func TestClientCanGetStatus(t *testing.T) {
 	statusResponse, err := testClient.Status()
 	require.NoError(t, err)
 	require.NotEmpty(t, statusResponse)
+	testClient.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
+	statusResponse2, err := testClient.Status()
+	require.NoError(t, err)
+	require.NotEmpty(t, statusResponse2)
+	require.True(t, statusResponse2.LastRound >= statusResponse.LastRound)
 }
 
 func TestClientCanGetStatusAfterBlock(t *testing.T) {
 	defer fixture.SetTestContext(t)()
 	testClient := fixture.LibGoalClient
 	statusResponse, err := testClient.WaitForRound(1)
+	require.NoError(t, err)
+	require.NotEmpty(t, statusResponse)
+	testClient.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
+	statusResponse, err = testClient.WaitForRound(statusResponse.LastRound + 1)
 	require.NoError(t, err)
 	require.NotEmpty(t, statusResponse)
 }
