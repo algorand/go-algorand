@@ -28,7 +28,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -645,6 +645,19 @@ func (c *Client) AccountInformation(account string) (resp v1.Account, err error)
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountInformation(account)
+	}
+	return
+}
+
+// AccountData takes an address and returns its basics.AccountData
+func (c *Client) AccountData(account string) (accountData basics.AccountData, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		var resp []byte
+		resp, err = algod.RawAccountInformationV2(account)
+		if err == nil {
+			err = protocol.Decode(resp, &accountData)
+		}
 	}
 	return
 }
