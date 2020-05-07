@@ -33,7 +33,7 @@ type ServerInterface interface {
 	// (GET /v2/status)
 	GetStatus(ctx echo.Context) error
 	// Gets the node status after waiting for the given round.
-	// (GET /v2/status/wait-for-block-after/{round}/)
+	// (GET /v2/status/wait-for-block-after/{round})
 	WaitForBlock(ctx echo.Context, round uint64) error
 	// Broadcasts a raw transaction to the network.
 	// (POST /v2/transactions)
@@ -399,7 +399,7 @@ func RegisterHandlers(router interface {
 	router.GET("/v2/blocks/:round", wrapper.GetBlock, m...)
 	router.GET("/v2/ledger/supply", wrapper.GetSupply, m...)
 	router.GET("/v2/status", wrapper.GetStatus, m...)
-	router.GET("/v2/status/wait-for-block-after/:round/", wrapper.WaitForBlock, m...)
+	router.GET("/v2/status/wait-for-block-after/:round", wrapper.WaitForBlock, m...)
 	router.POST("/v2/transactions", wrapper.RawTransaction, m...)
 	router.GET("/v2/transactions/params", wrapper.TransactionParams, m...)
 	router.GET("/v2/transactions/pending", wrapper.GetPendingTransactions, m...)
@@ -489,26 +489,26 @@ var swaggerSpec = []string{
 	"P9t7/PBPs2/3vt5LYf/rJ3t7/Mk+f/jk8UN49O3X+3vwcP7Nk9mj7NH+o9n+o/1vvn6SPt5/ONv/5smf",
 	"vgpnK91Gm3OL/6BmlOTw1VFygpttCMVL8VdYu3o6cmdoGOIp5Sug4CIfHYRH/xbkBAWodZ+JfzryRmy0",
 	"tLY0B9PparWatD+ZLuj8QmJVlS6nYZ1+q+KrIwYyc5EGxbIkSygsJDsu+SlsTgkMevf6h+MTdvjqaNKo",
-	"g9HBaG+yN3lI/WMlSF6K0cHoMT0irl8S3afnj6ahjDZ952OwS3yziOXVQhd1fcK1X2cfO8OR8ro7t1Mz",
-	"M77aNGYzl0FivnFfZlTWc6kDtMA1wEdZ6y6lRoeEJJi/CupNrE821gUQuwSqrosMn3xuFAUK/17y5O27",
-	"r7+9jDgXbzcOtT7a2/vEB1n3b3HFrrcTWfcFz5EkUN8R4nbw8NPt4EhS4hgFgDkBvxyPvv6UODiSyBo8",
-	"ZzSyFRj3JegXeSbVSoaRqI2rouB6TbrWtspZLWOJw+KS2k1J+VrdsPhCqye5VdrvtODN1oGSY2bqs4el",
-	"FgptBt1ZkwH6zKThlc5Aj1vdzb7WCu6w5YvDf1AG48XhP9yxgeh9Hq3l3RGaruz/CDbSff903Zxm/yIV",
-	"wfiLvQLl7txhc1NlujvDsTvDcWfPcHxiO35RZ4g5k0omkhptzoG1opadYf9gw17zaSXrE7RX8GzvlGtj",
-	"mxungNq5zfQdNQS0XfeeEaUrOq6yll/wfWZbWuW0KkIDh2JzsOnS3x6ykXQYuvtoq8XfVgO5sYXa3R1z",
-	"k7tjxh3sBubZIfgzXM7zMa3VNch8Iz3/lGfsNfxWgbEsYS8pWUkCHm5N+8im72PDF7Wk+3v7dxagl0oC",
-	"gwthqNvX8eLH9g4+PpFuzdmgbgFCSjgU1T6FU7sOOWQL0FN31nKb5+DOao5uNRjbna+9A+drP7+/fyMZ",
-	"2IBWQ/syLWCO/xt5CH22/ebTbnLcDzfLymZqJVtP6mMXg5IULpG7RUna3WS3u8lud5Pd7ia7u3eT3d1L",
-	"J0WusP1YXlzXYLcUd2Ow3N/TFRcWg72EfL6E2lZDQmg6WA36Oxf+OmrunUWrUFsAD1eMO03jJ/KX9DUV",
-	"XZ9R9acHwxVuoqBW3K7hw6WeK32tBFST1bGKIWSsklaEYjIKYm2+vrxszs4w7wzzzjDvDPPdN8yfsMrS",
-	"yb4loagWilGxUhTb1aJu7Fi0DI4392hsUZ625ow2C8elMpFI9zVftcvQTlDA2KcqW29B2UUyE5L2+S72",
-	"K1r+5fhqLwydiNnaQihIxarsVrGZVjxL0QBZFe4L6jkPl7da4bkbt+h9PvlnTUPZoa9jdLCxk/wPlfyn",
-	"gdnpx7X4alMYnLElGZhQHQklZwEy8bKbzFS2DidnNV/ZCxnVCtPmlHM0C9a7q+p2s2G7q/t2V/ftru7b",
-	"Xd23u7rvbtdvNk6R15DSDx9sAjtgiG6hH/rLboK+Mpm2aznetRzvWo6v2XJ8jQ6PHXV3DeV3uKH8f1kL",
-	"267d69Z6yydbXajpO3shsqsPht7dn9dht/XrOuxj/bjOZ/5pnYhP2jd/73M+d4NZ4vVcZLv3PI73x+uc",
-	"xfu/4n/uftZv97N+u5/12/2s3+5n/XY/63e3f9bvc5Ukv4w06sc8rLO1RPxSWfaczMrNIpT6ypiYB+I2",
-	"Ee4lImexvpHozVt0iegSPe9HNtfsHEynuUp5vlTGTkfo5XWv4Gm/RHXCF24G76eVWpzTabi3l/8TAAD/",
-	"/7RnmyFmkAAA",
+	"g9HBaG+yN3lI/WMlSF6K0cHoMT0irl8S3adL4LlFybgcj6YFGs3U+L+8Cp/4Xil8dP5oGopu03c+YrvE",
+	"eRaxLFzoua7Pw/ar8mNnZlJe9/J2KmzG16bGbObyTcy3+cuMioAu0YD2ukbPUda6eanROCFl5i+OehPr",
+	"qo31DMSujKqrKMPnpBu1gqpiL3ny9t3X315GXJG3G0dgH+3tfeJjr/u3uGLXN4qs+4LnSBKobxRxO3j4",
+	"6XZwJCnNjOLCnDq4HI++/pQ4OJLIGjxnNLIVRvcl6Bd5JtVKhpGou6ui4HpNmtm2il8t03o5KKndBJav",
+	"7A2LL7Q6mFuNAJ2Gvdk6UHLMTH1SsdRCoYWhG24yQA+b7IHSGehxqxfaV2bBHc18cfgPyne8OPyHO2QQ",
+	"vf2jtbw7cNOV/R/BRnr1n66bs+9fpCIYf7EXptydG29uqkx3Jz52Jz7u7ImPT2zHL+p8MmdSyURSW845",
+	"sFaMszPsH2zYaz6tZH3e9gqe7Z2JbWxz4xRQ87eZvqP2gbbr3jOidKHHVdbyC779bEtjnVZFaPdQbA42",
+	"Xfq7RjZSFEM3JW21+NsqJje2ULubZm5y08y4g93APDsEf4arfD6mtboGmW+k55/yjL2G3yowliXsJaU2",
+	"ScDDHWsf2fR9bPiilnR/b//OAvRSSWBwIQz1Bjte/Njewccn0q05G9RbQEgJR6jaZ3Zq1yGHbAF66k5m",
+	"bvMc3MnO0a0GY7vTuHfgNO7n9/dvJAMb0GpoX70FzPF/Iw+hK7ffqtpNjvvhZlnZTK1aqfTmkMagJIUr",
+	"525Rknb33u3uvdvde7e79+7u3Xt399JJkQtvP5YX1zXYLcXdGCz393TFhcVgLyGfL6Em10hCqLv637nw",
+	"d1dz7ytahcoCeLiP3CkaP4+/0a8p6PqEqj9qGO57EwX17XbtHi71XOlr5Z+apI5VDAFjlbQi1JJRDmvr",
+	"9eUlc3Z2eWeXd3Z5Z5fvvl3+hEWWTvItCTW1UIuKVaLYrhR1Y7+iZXC8uUdji/K0NWW0WTculYkEuq/5",
+	"ql2FdoICxj5V2XoLyi6SmZC0z3exn9zyL8dXO2HoRMzWFkI9KlZkt4rNtOJZigbIqnC5UM95uLzVAs/d",
+	"uHLv88k/a/rJDn0Zo4ONneR/qOQ/DcxOv8TFV5vC4IwtycCEykgoOQuQiZfdZKaydThmq/nKXsioVpg2",
+	"R6KjSbDexVa3mwzb3fO3u+dvd8/f7p6/3T1/d7t8s3HkvIaUfiVhE9gBQ3QL7dBfdg/0lcm0XcfxruN4",
+	"13F8zY7jazR47Ki76ye/w/3k/8s62HbdXrfWWj7Z6kJN39kLkV19LvTu/hYPu62f4mEf65d4PvPv8ER8",
+	"0r75e5/juRvMEq/nItu952m8P17nKN7/Ff9z9xuAu98A3P0G4O43AHe/Abj7DcC7/RuAn6sk+WWkUT/m",
+	"WZ2tJeKXyrLnZFZuFqHUN8bEPBC3iXCJETmL9fVFb96iS0Q37nk/srmT52A6zVXK86UydjpCL697X0/7",
+	"JaoTvnAzeD+t1OKcDsO9vfyfAAAA//+o811vk5AAAA==",
 }
 
 // GetSwagger returns the Swagger specification corresponding to the generated code
