@@ -74,7 +74,7 @@ type PreEncodedBlockCert struct {
 	Certificate codec.Raw `codec:"cert"`
 }
 
-// MakeBlockService creates a BlockService around the provider Ledger and registers it for RPC with the provided Registrar
+// MakeBlockService creates a BlockService around the provider Ledger and registers it for HTTP callback on the block serving path
 func MakeBlockService(config config.Local, ledger *data.Ledger, net network.GossipNode, genesisID string) *BlockService {
 	service := &BlockService{
 		ledger:        ledger,
@@ -90,28 +90,28 @@ func MakeBlockService(config config.Local, ledger *data.Ledger, net network.Goss
 }
 
 // Start listening to catchup requests over ws
-func (ls *BlockService) Start() {
-	if ls.enableService {
+func (bs *BlockService) Start() {
+	if bs.enableService {
 		handlers := []network.TaggedMessageHandler{
-			{Tag: protocol.UniCatchupReqTag, MessageHandler: network.HandlerFunc(ls.processIncomingMessage)},
-			{Tag: protocol.UniEnsBlockReqTag, MessageHandler: network.HandlerFunc(ls.processIncomingMessage)},
+			{Tag: protocol.UniCatchupReqTag, MessageHandler: network.HandlerFunc(bs.processIncomingMessage)},
+			{Tag: protocol.UniEnsBlockReqTag, MessageHandler: network.HandlerFunc(bs.processIncomingMessage)},
 		}
 
-		ls.net.RegisterHandlers(handlers)
+		bs.net.RegisterHandlers(handlers)
 	}
-	ls.stop = make(chan struct{})
-	go ls.ListenForCatchupReq(ls.catchupReqs, ls.stop)
+	bs.stop = make(chan struct{})
+	go bs.ListenForCatchupReq(bs.catchupReqs, bs.stop)
 }
 
 // Stop servicing catchup requests over ws
-func (ls *BlockService) Stop() {
-	close(ls.stop)
+func (bs *BlockService) Stop() {
+	close(bs.stop)
 }
 
 // ServerHTTP returns blocks
 // Either /v{version}/block/{round} or ?b={round}&v={version}
 // Uses gorilla/mux for path argument parsing.
-func (ls *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	pathVars := mux.Vars(request)
 	versionStr, hasVersionStr := pathVars["version"]
 	roundStr, hasRoundStr := pathVars["round"]
@@ -124,8 +124,8 @@ func (ls *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 		}
 	}
 	if hasGenesisID {
-		if ls.genesisID != genesisID {
-			logging.Base().Debugf("http block bad genesisID mine=%#v theirs=%#v", ls.genesisID, genesisID)
+		if bs.genesisID != genesisID {
+			logging.Base().Debugf("http block bad genesisID mine=%#v theirs=%#v", bs.genesisID, genesisID)
 			response.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -173,7 +173,7 @@ func (ls *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 		response.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	encodedBlockCert, err := RawBlockBytes(ls.ledger, basics.Round(round))
+	encodedBlockCert, err := RawBlockBytes(bs.ledger, basics.Round(round))
 	if err != nil {
 		switch err.(type) {
 		case ledger.ErrNoEntry:
@@ -211,10 +211,10 @@ type WsGetBlockOut struct {
 	BlockBytes []byte `json:"blockbytes"`
 }
 
-func (ls *BlockService) processIncomingMessage(msg network.IncomingMessage) (n network.OutgoingMessage) {
+func (bs *BlockService) processIncomingMessage(msg network.IncomingMessage) (n network.OutgoingMessage) {
 	// don't block - just stick in a slightly buffered channel if possible
 	select {
-	case ls.catchupReqs <- msg:
+	case bs.catchupReqs <- msg:
 	default:
 	}
 	// don't return outgoing message, we just unicast instead
@@ -222,13 +222,13 @@ func (ls *BlockService) processIncomingMessage(msg network.IncomingMessage) (n n
 }
 
 // ListenForCatchupReq handles catchup getblock request
-func (ls *BlockService) ListenForCatchupReq(reqs <-chan network.IncomingMessage, stop chan struct{}) {
+func (bs *BlockService) ListenForCatchupReq(reqs <-chan network.IncomingMessage, stop chan struct{}) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for {
 		select {
 		case reqMsg := <-reqs:
-			ls.handleCatchupReq(ctx, reqMsg)
+			bs.handleCatchupReq(ctx, reqMsg)
 		case <-stop:
 			return
 		}
@@ -242,7 +242,7 @@ const blockNotAvailabeErrMsg = "requested block is not available"
 const datatypeUnsupportedErrMsg = "requested data type is unsupported"
 
 // a blocking function for handling a catchup request
-func (ls *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.IncomingMessage) {
+func (bs *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.IncomingMessage) {
 	var res WsGetBlockOut
 	target := reqMsg.Sender.(network.UnicastPeer)
 	var respTopics network.Topics
@@ -250,7 +250,7 @@ func (ls *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 	if target.Version() == "1" {
 
 		defer func() {
-			ls.sendCatchupRes(ctx, target, reqMsg.Tag, res)
+			bs.sendCatchupRes(ctx, target, reqMsg.Tag, res)
 		}()
 		var req WsGetBlockRequest
 		err := protocol.DecodeReflect(reqMsg.Data, &req)
@@ -259,7 +259,7 @@ func (ls *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 			return
 		}
 		res.Round = req.Round
-		encodedBlob, err := RawBlockBytes(ls.ledger, basics.Round(req.Round))
+		encodedBlob, err := RawBlockBytes(bs.ledger, basics.Round(req.Round))
 
 		if err != nil {
 			res.Error = err.Error()
@@ -305,13 +305,13 @@ func (ls *BlockService) handleCatchupReq(ctx context.Context, reqMsg network.Inc
 				[]byte(roundNumberParseErrMsg))}
 		return
 	}
-	respTopics = topicBlockBytes(ls.ledger, basics.Round(round), string(requestType))
+	respTopics = topicBlockBytes(bs.ledger, basics.Round(round), string(requestType))
 	return
 }
 
-func (ls *BlockService) sendCatchupRes(ctx context.Context, target network.UnicastPeer, reqTag protocol.Tag, outMsg WsGetBlockOut) {
+func (bs *BlockService) sendCatchupRes(ctx context.Context, target network.UnicastPeer, reqTag protocol.Tag, outMsg WsGetBlockOut) {
 	t := reqTag.Complement()
-	logging.Base().Infof("catching down peer: %v, round %v. outcome: %v. ledger: %v", target.GetAddress(), outMsg.Round, outMsg.Error, ls.ledger.LastRound())
+	logging.Base().Infof("catching down peer: %v, round %v. outcome: %v. ledger: %v", target.GetAddress(), outMsg.Round, outMsg.Error, bs.ledger.LastRound())
 	err := target.Unicast(ctx, protocol.EncodeReflect(outMsg), t)
 	if err != nil {
 		logging.Base().Info("failed to respond to catchup req", err)

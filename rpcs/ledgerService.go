@@ -51,7 +51,7 @@ type LedgerService struct {
 	enableService bool
 }
 
-// MakeLedgerService creates a BlockService around the provider Ledger and registers it for RPC with the provided Registrar
+// MakeLedgerService creates a LedgerService around the provider Ledger and registers it with the HTTP router
 func MakeLedgerService(config config.Local, ledger *data.Ledger, net network.GossipNode, genesisID string) *LedgerService {
 	service := &LedgerService{
 		ledger:        ledger,
