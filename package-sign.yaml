@@ -3,23 +3,16 @@ tasks:
     configFilePath: scripts/configure_dev-deps.sh
 
   - task: shell.docker.Ensure
-    name: docker-ubuntu
-    image: algorand/go-algorand-docker-linux-ubuntu
+    name: docker-mule
+    image: algorand/go-algorand-ci-mule-debian
     version: '{{ docker.Version.outputs.version }}'
-    dockerFilePath: docker/build/docker.ubuntu.Dockerfile
-    dependencies: docker.Version
-
-  - task: shell.docker.Ensure
-    name: rpm
-    image: algorand/go-algorand-ci-linux-centos
-    version: '{{ docker.Version.outputs.version }}'
-    dockerFilePath: docker/build/cicd.centos.Dockerfile
+    dockerFilePath: docker/build/mule.debian.Dockerfile
     dependencies: docker.Version
 
   - task: docker.Make
     name: package-sign-deb
     docker:
-      image: algorand/go-algorand-ci-linux-ubuntu
+      image: algorand/go-algorand-ci-mule-debian
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
       env: [
@@ -34,7 +27,7 @@ tasks:
   - task: docker.Make
     name: package-sign-rpm
     docker:
-      image: algorand/go-algorand-ci-linux-ubuntu
+      image: algorand/go-algorand-ci-mule-debian
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
       env: [
@@ -47,9 +40,9 @@ tasks:
     target: package-sign-rpm WORKDIR=/projects/go-algorand
 
   - task: docker.Make
-    name: package-sign
+    name: package-sign-tarball
     docker:
-      image: algorand/go-algorand-ci-linux-ubuntu
+      image: algorand/go-algorand-ci-mule-debian
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
       env: [
@@ -59,7 +52,7 @@ tasks:
         $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
         $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
       ]
-    target: package-sign WORKDIR=/projects/go-algorand
+    target: package-sign-tarball WORKDIR=/projects/go-algorand
 
 jobs:
   package-sign:
