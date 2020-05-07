@@ -967,6 +967,70 @@
   },
   "openapi": "3.0.1",
   "paths": {
+    "/health": {
+      "get": {
+        "operationId": "HealthCheck",
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "OK."
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Returns OK if healthy.",
+        "tags": [
+          "common"
+        ]
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "Metrics",
+        "responses": {
+          "200": {
+            "content": {},
+            "description": "text with \\#-comments and key:value lines"
+          },
+          "404": {
+            "content": {},
+            "description": "metrics were compiled out"
+          }
+        },
+        "summary": "Return metrics about algod functioning.",
+        "tags": [
+          "common"
+        ]
+      }
+    },
+    "/swagger.json": {
+      "get": {
+        "description": "Returns the entire swagger spec in json.",
+        "operationId": "SwaggerJSON",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The current swagger spec"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Gets the current swagger spec.",
+        "tags": [
+          "common"
+        ]
+      }
+    },
     "/v2/accounts/{address}": {
       "get": {
         "description": "Given a specific account public key, this call returns the accounts status, balance and spendable amounts",
