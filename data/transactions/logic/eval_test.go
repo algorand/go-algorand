@@ -2383,7 +2383,7 @@ func TestShortBytecblock(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			fullprogram, err := AssembleStringWithVersion(`bytecblock 0x123456 0xababcdcd`, v)
+			fullprogram, err := AssembleStringWithVersion(`bytecblock 0x123456 0xababcdcd "test"`, v)
 			require.NoError(t, err)
 			fullprogram[2] = 50 // fake 50 elements
 			for i := 2; i < len(fullprogram); i++ {
