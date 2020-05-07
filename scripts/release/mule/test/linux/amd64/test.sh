@@ -1,14 +1,8 @@
 #!/usr/bin/env bash
-# shellcheck disable=1090
 
 set -ex
 
 export WORKDIR="$1"
-export OS_TYPE="$2"
-export ARCH_TYPE="$3"
-export ARCH_BIT="$4"
-export FULLVERSION="$5"
-export PKG_TYPE="$6"
 
 if [ -z "$WORKDIR" ]
 then
@@ -16,5 +10,22 @@ then
     exit 1
 fi
 
-. "$WORKDIR/scripts/release/mule/test/util/setup.sh" "$PKG_TYPE"
+export OS_TYPE="$2"
+export ARCH_TYPE="$3"
+export ARCH_BIT="$4"
+export VERSION=${VERSION:-$5}
+export PKG_TYPE="$6"
+BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
+export BRANCH
+CHANNEL=${CHANNEL:-$("$WORKDIR/scripts/compute_branch_channel.sh" "$BRANCH")}
+export CHANNEL
+SHA=${SHA:-$(git rev-parse HEAD)}
+export SHA
+
+if ! $USE_CACHE
+then
+    mule -f package-test.yaml "package-test-setup-$PKG_TYPE"
+fi
+
+"$WORKDIR/scripts/release/mule/test/util/test_package.sh"
 

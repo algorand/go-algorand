@@ -4,7 +4,6 @@ set -ex
 
 trap cleanup 0
 
-PKG_TYPE="$1"
 OS_LIST=
 
 if [ "$PKG_TYPE" == "deb" ]
