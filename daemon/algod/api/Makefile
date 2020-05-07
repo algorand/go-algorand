@@ -5,10 +5,10 @@ all:	server/v2/generated/types.go server/v2/generated/routes.go server/v2/genera
 generate:	oapi-codegen all
 
 server/v2/generated/types.go:	algod.oas3.yml
-	oapi-codegen -package generated -type-mappings integer=uint64 -generate types -exclude-tags=private -o ./server/v2/generated/types.go algod.oas3.yml
+	oapi-codegen -package generated -type-mappings integer=uint64 -generate types -exclude-tags=private,common -o ./server/v2/generated/types.go algod.oas3.yml
 
 server/v2/generated/routes.go:	algod.oas3.yml
-	oapi-codegen -package generated -type-mappings integer=uint64 -generate server,spec -exclude-tags=private -o ./server/v2/generated/routes.go algod.oas3.yml
+	oapi-codegen -package generated -type-mappings integer=uint64 -generate server,spec -exclude-tags=private,common -o ./server/v2/generated/routes.go algod.oas3.yml
 
 server/v2/generated/private/types.go:	algod.oas3.yml
 	oapi-codegen -package private -type-mappings integer=uint64 -generate types -include-tags=private -o ./server/v2/generated/private/types.go algod.oas3.yml
