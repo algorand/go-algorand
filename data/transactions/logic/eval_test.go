@@ -3210,3 +3210,56 @@ intc_0
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "stack overflow")
 }
+
+func TestDup(t *testing.T) {
+	t.Parallel()
+
+	text := `int 1
+dup
+==
+bnz dup_ok
+err
+dup_ok:
+int 1
+int 2
+dup2 // expected 1, 2, 1, 2
+int 2
+==
+bz error
+int 1
+==
+bz error
+int 2
+==
+bz error
+int 1
+==
+bz error
+b exit
+error:
+err
+exit:
+int 1
+`
+	ep := defaultEvalParams(nil, nil)
+
+	program, err := AssembleString(text)
+	require.NoError(t, err)
+	pass, err := Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	text = `dup2`
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+	pass, err = Eval(program, ep)
+	require.Error(t, err)
+
+	text = `int 1
+dup2
+`
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+	pass, err = Eval(program, ep)
+	require.Error(t, err)
+}

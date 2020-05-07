@@ -38,11 +38,6 @@ byte base64(aGVsbG8gd29ybGQh)
 byte b64 aGVsbG8gd29ybGQh
 byte b64(aGVsbG8gd29ybGQh)
 addr RWXCBB73XJITATVQFOI7MVUUQOL2PFDDSDUMW4H4T2SNSX4SEUOQ2MM7F4
-concat
-substring 42 99
-intc 0
-intc 1
-substring3
 ed25519verify
 txn Sender
 txn Fee
@@ -122,8 +117,6 @@ intc 1
 %
 ^
 ~
-bz there
-b there
 byte 0x4242
 btoi
 itob
@@ -139,7 +132,21 @@ store 2
 intc 0
 intc 1
 mulw
-pop  // pop extra returned element to balance the stack
+dup2
+pop
+pop
+pop
+pop
+addr RWXCBB73XJITATVQFOI7MVUUQOL2PFDDSDUMW4H4T2SNSX4SEUOQ2MM7F4
+concat
+substring 42 99
+intc 0
+intc 1
+substring3
+bz there2
+b there2
+there2:
+return
 int 1
 balance
 int 1
@@ -210,7 +217,7 @@ func TestAssemble(t *testing.T) {
 	program, err := AssembleString(bigTestAssembleNonsenseProgram)
 	require.NoError(t, err)
 	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
-	expectedBytes, _ := hex.DecodeString("022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d02424200320032013202320328292929292a50512a632223520431003101310231043105310731083109310a310b310c310d310e310f311131123113311431153118311933000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c41000d42000a2b171615400003290349483403350222231d4821056021056121052b63484821052b62482b642b65484821052b2106662b21056721072b682b6921072105700048482107210571004848361c004837001a0048")
+	expectedBytes, _ := hex.DecodeString("022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d02424200320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f311131123113311431153118311933000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4a484848482a50512a632223524100034200004321056021056121052b63484821052b62482b642b65484821052b2106662b21056721072b682b6921072105700048482107210571004848361c004837001a0048")
 	if bytes.Compare(expectedBytes, program) != 0 {
 		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
 		t.Log(hex.EncodeToString(program))
@@ -617,12 +624,12 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 
 	tests := map[uint64]string{
 		2: bigTestAssembleNonsenseProgram,
-		1: bigTestAssembleNonsenseProgram[:strings.Index(bigTestAssembleNonsenseProgram, "balance")],
+		1: bigTestAssembleNonsenseProgram[:strings.Index(bigTestAssembleNonsenseProgram, "dup2")],
 	}
 
 	for v, source := range tests {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			program, err := AssembleString(source)
+			program, err := AssembleStringWithVersion(source, v)
 			require.NoError(t, err)
 			t2, err := Disassemble(program)
 			require.NoError(t, err)
@@ -631,7 +638,7 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 				t.Log(t2)
 			}
 			require.NoError(t, err)
-			require.Equal(t, program, p2)
+			require.Equal(t, program[1:], p2[1:])
 		})
 	}
 }

@@ -509,6 +509,14 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Pushes: any, any
 - duplicate last value on stack
 
+## dup2
+
+- Opcode: 0x4a
+- Pops: *... stack*, {any A}, {any B}
+- Pushes: any, any, any, any
+- duplicate two last values on stack: A, B -> A, B, A, B
+- LogicSigVersion >= 2
+
 ## concat
 
 - Opcode: 0x50

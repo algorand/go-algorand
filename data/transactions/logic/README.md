@@ -255,6 +255,7 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | `return` | use last value on stack as success value; end |
 | `pop` | discard value X from stack |
 | `dup` | duplicate last value on stack |
+| `dup2` | duplicate two last values on stack: A, B -> A, B, A, B |
 
 ### State Access
 
