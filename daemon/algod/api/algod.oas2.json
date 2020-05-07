@@ -27,7 +27,8 @@
       "get": {
         "description": "Given a specific account public key, this call returns the accounts status, balance and spendable amounts",
         "produces": [
-          "application/json"
+          "application/json",
+          "application/msgpack"
         ],
         "schemes": [
           "http"
@@ -42,6 +43,9 @@
             "name": "address",
             "in": "path",
             "required": true
+          },
+          {
+            "$ref": "#/parameters/format"
           }
         ],
         "responses": {
@@ -77,6 +81,15 @@
           "name": "address",
           "in": "path",
           "required": true
+        },
+        {
+          "enum": [
+            "json",
+            "msgpack"
+          ],
+          "type": "string",
+          "name": "format",
+          "in": "query"
         }
       ]
     },
@@ -623,11 +636,29 @@
           "description": "specifies the amount of MicroAlgos in the account, without the pending rewards.",
           "type": "integer"
         },
+        "apps-local-state": {
+          "description": "\\[appl\\] applications local data stored in this account.\n\nNote the raw object uses `map[int] -\u003e AppLocalState` for this type.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ApplicationLocalStates"
+          }
+        },
+        "apps-total-schema": {
+          "description": "\\[tsch\\] stores the sum of all of the local schemas and global schemas in this account.\n\nNote: the raw account uses `StateSchema` for this type.",
+          "$ref": "#/definitions/ApplicationStateSchema"
+        },
         "assets": {
           "description": "\\[asset\\] assets held by this account.\n\nNote the raw object uses `map[int] -\u003e AssetHolding` for this type.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/AssetHolding"
+          }
+        },
+        "created-apps": {
+          "description": "\\[appp\\] parameters of applications created by this account including app global data.\n\nNote: the raw account uses `map[int] -\u003e AppParams` for this type.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Application"
           }
         },
         "created-assets": {
@@ -655,6 +686,10 @@
         "round": {
           "description": "The round for which this information is relevant.",
           "type": "integer"
+        },
+        "spending-key": {
+          "description": "The address against which signatures/multisigs/logicsigs should be checked",
+          "type": "string"
         },
         "status": {
           "description": "\\[onl\\] delegation status of the account's MicroAlgos\n* Offline - indicates that the associated account is delegated.\n*  Online  - indicates that the associated account used as part of the delegation pool.\n*   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.",
@@ -812,6 +847,153 @@
         "url": {
           "description": "\\[au\\] URL where more information about the asset can be retrieved.",
           "type": "string"
+        }
+      }
+    },
+    "ApplicationStateSchema": {
+      "description": "Specifies maximums on the number of each type that may be stored.",
+      "type": "object",
+      "required": [
+        "num-uint",
+        "num-byte-slice"
+      ],
+      "properties": {
+        "num-uint": {
+          "description": "\\[nui\\] num of uints.",
+          "type": "integer"
+        },
+        "num-byte-slice": {
+          "description": "\\[nbs\\] num of byte slices.",
+          "type": "integer"
+        }
+      }
+    },
+    "ApplicationLocalStates": {
+      "description": "Pair of application index and application local state",
+      "type": "object",
+      "required": [
+        "app-index",
+        "state"
+      ],
+      "properties": {
+        "app-index": {
+          "type": "integer"
+        },
+        "state": {
+          "$ref": "#/definitions/ApplicationLocalState"
+        }
+      }
+    },
+    "ApplicationLocalState": {
+      "description": "Stores local state associated with an application.",
+      "type": "object",
+      "required": [
+        "schema",
+        "key-value"
+      ],
+      "properties": {
+        "schema": {
+          "description": "\\[hsch\\] schema.",
+          "$ref": "#/definitions/ApplicationStateSchema"
+        },
+        "key-value": {
+          "description": "\\[tkv\\] storage.",
+          "$ref": "#/definitions/ApplicationKeyValueStore"
+        }
+      }
+    },
+    "ApplicationKeyValueStore": {
+      "description": "Represents a key-value store for use in an application.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/ApplicationKeyValue"
+      }
+    },
+    "ApplicationKeyValue": {
+      "description": "Represents a key-value pair in an application store.",
+      "type": "object",
+      "required": [
+        "key",
+        "value"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/definitions/ApplicationValue"
+        }
+      }
+    },
+    "ApplicationValue": {
+      "description": "Represents a value in an application store.",
+      "type": "object",
+      "required": [
+        "type",
+        "uint",
+        "bytes"
+      ],
+      "properties": {
+        "type": {
+          "description": "\\[tt\\] value type.",
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "\\[tb\\] bytes value.",
+          "type": "string"
+        },
+        "uint": {
+          "description": "\\[ui\\] uint value.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        }
+      }
+    },
+    "Application": {
+      "description": "Application index and its parameters",
+      "type": "object",
+      "required": [
+        "app-index",
+        "app-params"
+      ],
+      "properties": {
+        "app-index": {
+          "type": "integer"
+        },
+        "app-params": {
+          "$ref": "#/definitions/ApplicationParams"
+        }
+      }
+    },
+    "ApplicationParams": {
+      "description": "Stores the global information associated with an application.",
+      "type": "object",
+      "required": [
+        "approval-program",
+        "clear-state-program"
+      ],
+      "properties": {
+        "approval-program": {
+          "description": "\\[approv\\] approval program.",
+          "type": "string",
+          "format": "byte"
+        },
+        "clear-state-program": {
+          "description": "\\[clearp\\] approval program.",
+          "type": "string",
+          "format": "byte"
+        },
+        "local-state-schema": {
+          "description": "[\\lsch\\] local schema",
+          "$ref": "#/definitions/ApplicationStateSchema"
+        },
+        "global-state-schema": {
+          "description": "[\\lsch\\] global schema",
+          "$ref": "#/definitions/ApplicationStateSchema"
+        },
+        "global-state": {
+          "description": "[\\gs\\] global schema",
+          "$ref": "#/definitions/ApplicationKeyValueStore"
         }
       }
     },

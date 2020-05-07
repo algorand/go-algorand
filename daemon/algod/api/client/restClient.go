@@ -31,7 +31,7 @@ import (
 
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -292,6 +292,10 @@ type rawblockParams struct {
 	Raw uint64 `url:"raw"`
 }
 
+type rawAccountParams struct {
+	Format string `url:"format"`
+}
+
 // TransactionsByAddr returns all transactions for a PK [addr] in the [first,
 // last] rounds range.
 func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64) (response v1.TransactionList, err error) {
@@ -327,6 +331,22 @@ func (client RestClient) Applications(appIdx, max uint64) (response v1.Applicati
 // AccountInformation also gets the AccountInformationResponse associated with the passed address
 func (client RestClient) AccountInformation(address string) (response v1.Account, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s", address), nil)
+	return
+}
+
+// Blob represents arbitrary blob of data satisfying v1.RawResponse interface
+type Blob []byte
+
+// SetBytes fulfills the RawResponse interface on Blob
+func (blob *Blob) SetBytes(b []byte) {
+	*blob = b
+}
+
+// RawAccountInformationV2 gets the raw AccountData associated with the passed address
+func (client RestClient) RawAccountInformationV2(address string) (response []byte, err error) {
+	var blob Blob
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s", address), rawAccountParams{Format: "msgpack"})
+	response = blob
 	return
 }
 

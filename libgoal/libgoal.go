@@ -649,6 +649,19 @@ func (c *Client) AccountInformation(account string) (resp v1.Account, err error)
 	return
 }
 
+// AccountData takes an address and returns its basics.AccountData
+func (c *Client) AccountData(account string) (accountData basics.AccountData, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		var resp []byte
+		resp, err = algod.RawAccountInformationV2(account)
+		if err == nil {
+			err = protocol.Decode(resp, &accountData)
+		}
+	}
+	return
+}
+
 // AssetInformation takes an asset's index and returns its information
 func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error) {
 	algod, err := c.ensureAlgodClient()

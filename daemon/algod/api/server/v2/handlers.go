@@ -61,7 +61,12 @@ func (v2 *Handlers) ShutdownNode(ctx echo.Context, params private.ShutdownNodePa
 
 // AccountInformation gets account information for a given account.
 // (GET /v2/accounts/{address})
-func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
+func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params generated.AccountInformationParams) error {
+	handle, contentType, err := getCodecHandle(params.Format)
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+
 	addr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
 		return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
@@ -73,6 +78,15 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
+
+	if handle == protocol.CodecHandle {
+		data, err := encode(handle, record)
+		if err != nil {
+			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+		}
+		return ctx.Blob(http.StatusOK, contentType, data)
+	}
+
 	recordWithoutPendingRewards, err := myLedger.LookupWithoutRewards(lastRound, basics.Address(addr))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
@@ -146,6 +160,65 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 		}
 	}
 
+	convertTKV := func(tkv *basics.TealKeyValue) (converted generated.ApplicationKeyValueStore) {
+		for k, v := range *tkv {
+			converted = append(converted, generated.ApplicationKeyValue{
+				Key: k,
+				Value: generated.ApplicationValue{
+					Type:  uint64(v.Type),
+					Bytes: v.Bytes,
+					Uint:  v.Uint,
+				},
+			})
+		}
+		return
+	}
+
+	createdApps := make([]generated.Application, 0, len(record.AppParams))
+	if len(record.AppParams) > 0 {
+		for appIdx, appParams := range record.AppParams {
+			globalState := convertTKV(&appParams.GlobalState)
+			createdApps = append(createdApps, generated.Application{
+				AppIndex: uint64(appIdx),
+				AppParams: generated.ApplicationParams{
+					ApprovalProgram:   appParams.ApprovalProgram,
+					ClearStateProgram: appParams.ClearStateProgram,
+					GlobalState:       &globalState,
+					LocalStateSchema: &generated.ApplicationStateSchema{
+						NumByteSlice: appParams.LocalStateSchema.NumByteSlice,
+						NumUint:      appParams.LocalStateSchema.NumUint,
+					},
+					GlobalStateSchema: &generated.ApplicationStateSchema{
+						NumByteSlice: appParams.GlobalStateSchema.NumByteSlice,
+						NumUint:      appParams.GlobalStateSchema.NumUint,
+					},
+				},
+			})
+		}
+	}
+
+	appsLocalState := make([]generated.ApplicationLocalStates, 0, len(record.AppLocalStates))
+	if len(record.AppLocalStates) > 0 {
+		for appIdx, state := range record.AppLocalStates {
+			localState := convertTKV(&state.KeyValue)
+			appsLocalState = append(appsLocalState, generated.ApplicationLocalStates{
+				AppIndex: uint64(appIdx),
+				State: generated.ApplicationLocalState{
+					KeyValue: localState,
+					Schema: generated.ApplicationStateSchema{
+						NumByteSlice: state.Schema.NumByteSlice,
+						NumUint:      state.Schema.NumUint,
+					},
+				},
+			})
+		}
+	}
+
+	totalAppSchema := generated.ApplicationStateSchema{
+		NumByteSlice: record.TotalAppSchema.NumByteSlice,
+		NumUint:      record.TotalAppSchema.NumUint,
+	}
+
 	response := generated.AccountResponse{
 		Type:                        nil,
 		Round:                       uint64(lastRound),
@@ -159,6 +232,10 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 		Participation:               apiParticipation,
 		CreatedAssets:               &createdAssets,
 		Assets:                      &assets,
+		SpendingKey:                 addrOrNil(record.SpendingKey),
+		CreatedApps:                 &createdApps,
+		AppsLocalState:              &appsLocalState,
+		AppsTotalSchema:             &totalAppSchema,
 	}
 
 	return ctx.JSON(http.StatusOK, response)
@@ -345,15 +422,15 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 
 	// Encoding wasn't working well without embedding "real" objects.
 	response := struct {
-		AssetIndex *uint64 `codec:"asset-index,omitempty"`
-		CloseRewards *uint64 `codec:"close-rewards,omitempty"`
-		ClosingAmount *uint64 `codec:"closing-amount,omitempty"`
-		ConfirmedRound *uint64 `codec:"confirmed-round,omitempty"`
-		PoolError string `codec:"pool-error"`
-		ReceiverRewards *uint64 `codec:"receiver-rewards,omitempty"`
-		SenderRewards *uint64 `codec:"sender-rewards,omitempty"`
-		Txn transactions.SignedTxn `codec:"txn"`
-	} {
+		AssetIndex      *uint64                `codec:"asset-index,omitempty"`
+		CloseRewards    *uint64                `codec:"close-rewards,omitempty"`
+		ClosingAmount   *uint64                `codec:"closing-amount,omitempty"`
+		ConfirmedRound  *uint64                `codec:"confirmed-round,omitempty"`
+		PoolError       string                 `codec:"pool-error"`
+		ReceiverRewards *uint64                `codec:"receiver-rewards,omitempty"`
+		SenderRewards   *uint64                `codec:"sender-rewards,omitempty"`
+		Txn             transactions.SignedTxn `codec:"txn"`
+	}{
 		Txn: txn.Txn,
 	}
 
@@ -428,10 +505,10 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 
 	// Encoding wasn't working well without embedding "real" objects.
 	response := struct {
-		TopTransactions []transactions.SignedTxn `json:"top-transactions"`
-		TotalTransactions uint64 `json:"total-transactions"`
-	} {
-		TopTransactions: txnArray,
+		TopTransactions   []transactions.SignedTxn `json:"top-transactions"`
+		TotalTransactions uint64                   `json:"total-transactions"`
+	}{
+		TopTransactions:   txnArray,
 		TotalTransactions: uint64(len(txnArray)),
 	}
 

@@ -496,10 +496,27 @@
             "description": "specifies the amount of MicroAlgos in the account, without the pending rewards.",
             "type": "integer"
           },
+          "apps-local-state": {
+            "description": "\\[appl\\] applications local data stored in this account.\n\nNote the raw object uses `map[int] -> AppLocalState` for this type.",
+            "items": {
+              "$ref": "#/components/schemas/ApplicationLocalStates"
+            },
+            "type": "array"
+          },
+          "apps-total-schema": {
+            "$ref": "#/components/schemas/ApplicationStateSchema"
+          },
           "assets": {
             "description": "\\[asset\\] assets held by this account.\n\nNote the raw object uses `map[int] -> AssetHolding` for this type.",
             "items": {
               "$ref": "#/components/schemas/AssetHolding"
+            },
+            "type": "array"
+          },
+          "created-apps": {
+            "description": "\\[appp\\] parameters of applications created by this account including app global data.\n\nNote: the raw account uses `map[int] -> AppParams` for this type.",
+            "items": {
+              "$ref": "#/components/schemas/Application"
             },
             "type": "array"
           },
@@ -528,6 +545,10 @@
           "round": {
             "description": "The round for which this information is relevant.",
             "type": "integer"
+          },
+          "spending-key": {
+            "description": "The address against which signatures/multisigs/logicsigs should be checked",
+            "type": "string"
           },
           "status": {
             "description": "\\[onl\\] delegation status of the account's MicroAlgos\n* Offline - indicates that the associated account is delegated.\n*  Online  - indicates that the associated account used as part of the delegation pool.\n*   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.",
@@ -588,6 +609,150 @@
           "vote-key-dilution",
           "vote-last-valid",
           "vote-participation-key"
+        ],
+        "type": "object"
+      },
+      "Application": {
+        "description": "Application index and its parameters",
+        "properties": {
+          "app-index": {
+            "type": "integer"
+          },
+          "app-params": {
+            "$ref": "#/components/schemas/ApplicationParams"
+          }
+        },
+        "required": [
+          "app-index",
+          "app-params"
+        ],
+        "type": "object"
+      },
+      "ApplicationKeyValue": {
+        "description": "Represents a key-value pair in an application store.",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/ApplicationValue"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object"
+      },
+      "ApplicationKeyValueStore": {
+        "description": "Represents a key-value store for use in an application.",
+        "items": {
+          "$ref": "#/components/schemas/ApplicationKeyValue"
+        },
+        "type": "array"
+      },
+      "ApplicationLocalState": {
+        "description": "Stores local state associated with an application.",
+        "properties": {
+          "key-value": {
+            "$ref": "#/components/schemas/ApplicationKeyValueStore"
+          },
+          "schema": {
+            "$ref": "#/components/schemas/ApplicationStateSchema"
+          }
+        },
+        "required": [
+          "key-value",
+          "schema"
+        ],
+        "type": "object"
+      },
+      "ApplicationLocalStates": {
+        "description": "Pair of application index and application local state",
+        "properties": {
+          "app-index": {
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/components/schemas/ApplicationLocalState"
+          }
+        },
+        "required": [
+          "app-index",
+          "state"
+        ],
+        "type": "object"
+      },
+      "ApplicationParams": {
+        "description": "Stores the global information associated with an application.",
+        "properties": {
+          "approval-program": {
+            "description": "\\[approv\\] approval program.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "clear-state-program": {
+            "description": "\\[clearp\\] approval program.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string"
+          },
+          "global-state": {
+            "$ref": "#/components/schemas/ApplicationKeyValueStore"
+          },
+          "global-state-schema": {
+            "$ref": "#/components/schemas/ApplicationStateSchema"
+          },
+          "local-state-schema": {
+            "$ref": "#/components/schemas/ApplicationStateSchema"
+          }
+        },
+        "required": [
+          "approval-program",
+          "clear-state-program"
+        ],
+        "type": "object"
+      },
+      "ApplicationStateSchema": {
+        "description": "Specifies maximums on the number of each type that may be stored.",
+        "properties": {
+          "num-byte-slice": {
+            "description": "\\[nbs\\] num of byte slices.",
+            "type": "integer"
+          },
+          "num-uint": {
+            "description": "\\[nui\\] num of uints.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "num-byte-slice",
+          "num-uint"
+        ],
+        "type": "object"
+      },
+      "ApplicationValue": {
+        "description": "Represents a value in an application store.",
+        "properties": {
+          "bytes": {
+            "description": "\\[tb\\] bytes value.",
+            "type": "string"
+          },
+          "type": {
+            "description": "\\[tt\\] value type.",
+            "type": "integer"
+          },
+          "uint": {
+            "description": "\\[ui\\] uint value.",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "required": [
+          "bytes",
+          "type",
+          "uint"
         ],
         "type": "object"
       },
@@ -808,6 +973,18 @@
         "operationId": "AccountInformation",
         "parameters": [
           {
+            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "msgpack"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "description": "An account public key",
             "in": "path",
             "name": "address",
@@ -825,6 +1002,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/Account"
                 }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
               }
             },
             "description": "(empty)"
@@ -832,6 +1014,11 @@
           "400": {
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -845,6 +1032,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             },
             "description": "Invalid API Token"
@@ -852,6 +1044,11 @@
           "500": {
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
