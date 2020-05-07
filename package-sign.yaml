@@ -3,7 +3,7 @@ tasks:
     configFilePath: scripts/configure_dev-deps.sh
 
   - task: shell.docker.Ensure
-    name: docker-mule
+    name: mule-debian
     image: algorand/go-algorand-ci-mule-debian
     version: '{{ docker.Version.outputs.version }}'
     dockerFilePath: docker/build/mule.debian.Dockerfile
@@ -46,7 +46,7 @@ tasks:
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
       env: [
-        VERSION=2.0.5
+        VERSION=2.0.71217
       ]
       volumes: [
         $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
@@ -59,7 +59,8 @@ jobs:
     configs:
       arch: amd64
     tasks:
-      - shell.docker.Ensure.deb
+      - shell.docker.Ensure.mule-debian
       - docker.Make.package-sign-deb
       - docker.Make.package-sign-rpm
+      - docker.Make.package-sign-tarball
 
