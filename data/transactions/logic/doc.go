@@ -96,18 +96,18 @@ var opDocList = []stringString{
 	{"concat", "pop two byte strings A and B and join them, push the result"},
 	{"substring", "pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to but not including M, push the substring result"},
 	{"substring3", "pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result"},
-	{"balance", "get balance for the requested account A in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction"},
-	{"app_opted_in", "check if account A opted in for the application B => {0 or 1}"},
-	{"app_local_gets", "read from account's A from local state of the current application key B  => value"},
-	{"app_local_get", "read from account's A from local state of the application B key C  => {0 or 1 (top), value}"},
+	{"balance", "get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction"},
+	{"app_opted_in", "check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1}"},
+	{"app_local_gets", "read from account specified by Txn.Accounts[A] from local state of the current application key B  => value"},
+	{"app_local_get", "read from account specified by Txn.Accounts[A] from local state of the application B key C  => {0 or 1 (top), value}"},
 	{"app_global_gets", "read key A from global state of a current application => value"},
 	{"app_global_get", "read from application A global state key B => {0 or 1 (top), value}"},
-	{"app_local_put", "write to account's A to local state of a current application key B with value C"},
+	{"app_local_put", "write to account specified by Txn.Accounts[A] to local state of a current application key B with value C"},
 	{"app_global_put", "write key A and value B to global state of the current application"},
-	{"app_local_del", "delete from account's A local state key B of the current application"},
+	{"app_local_del", "delete from account specified by Txn.Accounts[A] local state key B of the current application"},
 	{"app_global_del", "delete key A from a global state of the current application"},
-	{"asset_holding_get", "read from account's A and asset B holding field X (imm arg)  => {0 or 1 (top), value}"},
-	{"asset_params_get", "read from account's A and asset B params field X (imm arg)  => {0 or 1 (top), value}"},
+	{"asset_holding_get", "read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg)  => {0 or 1 (top), value}"},
+	{"asset_params_get", "read from account specified by Txn.Accounts[A] and asset B params field X (imm arg)  => {0 or 1 (top), value}"},
 }
 
 var opDocByName map[string]string
@@ -206,6 +206,31 @@ var opCostByName map[string]int
 // OpCost returns the relative cost score for an op
 func OpCost(opName string) int {
 	return opsByName[LogicVersion][opName].opSize.cost
+}
+
+// OpAllCosts returns an array of the relative cost score for an op by version.
+// If all the costs are the same the array is single entry
+// otherwise it has costs by op version
+func OpAllCosts(opName string) []int {
+	cost := opsByName[LogicVersion][opName].opSize.cost
+	costs := make([]int, LogicVersion+1)
+	isDifferent := false
+	for v := 1; v <= LogicVersion; v++ {
+		costs[v] = opsByName[v][opName].opSize.cost
+		if costs[v] > 0 && costs[v] != cost {
+			isDifferent = true
+		}
+	}
+	if !isDifferent {
+		return []int{cost}
+	}
+
+	return costs
+}
+
+// OpAllVersions returns all opcode versions
+func OpAllVersions(opName string) []int {
+	return []int{}
 }
 
 var opSizeByName map[string]int
