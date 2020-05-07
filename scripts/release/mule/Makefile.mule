@@ -1,8 +1,9 @@
 # This file is imported into go-algorand/Makefile.
 
-.PHONY: ci-clean ci-deps ci-setup ci-build package package-deb package-rpm package-$(OS_TYPE)-$(ARCH) package-deb-$(OS_TYPE)-$(ARCH) package-rpm-$(OS_TYPE)-$(ARCH)
-
+ARCH_BIT = $(shell uname -m)
 VER      = $(shell ./scripts/compute_build_number.sh -f)
+
+.PHONY: ci-clean ci-deps ci-setup ci-build package package-deb package-rpm package-$(OS_TYPE)-$(ARCH) package-deb-$(OS_TYPE)-$(ARCH) package-rpm-$(OS_TYPE)-$(ARCH)
 
 ci-clean:
 	rm -rf tmp
@@ -56,9 +57,14 @@ package-rpm-$(OS_TYPE)-$(ARCH):
 package-docker-$(OS_TYPE)-$(ARCH):
 	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/docker/package.sh $(OS_TYPE) $(ARCH) $$WORKDIR
 
-package: package-$(OS_TYPE)-$(ARCH)
-package-deb: package-deb-$(OS_TYPE)-$(ARCH)
-package-rpm: package-rpm-$(OS_TYPE)-$(ARCH)
+package-test-$(OS_TYPE)-$(ARCH): package-test-deb-$(OS_TYPE)-$(ARCH) package-test-rpm-$(OS_TYPE)-$(ARCH)
+
+package-test-deb-$(OS_TYPE)-$(ARCH):
+	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/test.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) deb
+
+package-test-rpm-$(OS_TYPE)-$(ARCH):
+	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/test.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) rpm
+
 package-docker: package-docker-$(OS_TYPE)-$(ARCH)
 
 package-sign-$(OS_TYPE)-$(ARCH): package-sign-deb-$(OS_TYPE)-$(ARCH) package-sign-rpm-$(OS_TYPE)-$(ARCH)
@@ -68,8 +74,4 @@ package-sign-deb-$(OS_TYPE)-$(ARCH):
 
 package-sign-rpm-$(OS_TYPE)-$(ARCH):
 	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(VER) rpm
-
-package-sign: package-sign-$(OS_TYPE)-$(ARCH)
-package-sign-deb: package-sign-deb-$(OS_TYPE)-$(ARCH)
-package-sign-rpm: package-sign-rpm-$(OS_TYPE)-$(ARCH)
 
