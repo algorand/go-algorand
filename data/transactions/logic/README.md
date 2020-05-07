@@ -260,18 +260,18 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 
 | Op | Description |
 | --- | --- |
-| `balance` | get balance for the requested account A in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction |
-| `app_opted_in` | check if account A opted in for the application B => {0 or 1} |
-| `app_local_gets` | read from account's A from local state of the current application key B  => value |
-| `app_local_get` | read from account's A from local state of the application B key C  => {0 or 1 (top), value} |
+| `balance` | get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction |
+| `app_opted_in` | check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1} |
+| `app_local_gets` | read from account specified by Txn.Accounts[A] from local state of the current application key B  => value |
+| `app_local_get` | read from account specified by Txn.Accounts[A] from local state of the application B key C  => {0 or 1 (top), value} |
 | `app_global_gets` | read key A from global state of a current application => value |
 | `app_global_get` | read from application A global state key B => {0 or 1 (top), value} |
-| `app_local_put` | write to account's A to local state of a current application key B with value C |
+| `app_local_put` | write to account specified by Txn.Accounts[A] to local state of a current application key B with value C |
 | `app_global_put` | write key A and value B to global state of the current application |
-| `app_local_del` | delete from account's A local state key B of the current application |
+| `app_local_del` | delete from account specified by Txn.Accounts[A] local state key B of the current application |
 | `app_global_del` | delete key A from a global state of the current application |
-| `asset_holding_get` | read from account's A and asset B holding field X (imm arg)  => {0 or 1 (top), value} |
-| `asset_params_get` | read from account's A and asset B params field X (imm arg)  => {0 or 1 (top), value} |
+| `asset_holding_get` | read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg)  => {0 or 1 (top), value} |
+| `asset_params_get` | read from account specified by Txn.Accounts[A] and asset B params field X (imm arg)  => {0 or 1 (top), value} |
 
 # Assembler Syntax
 
