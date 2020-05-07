@@ -71,14 +71,24 @@ const topPageTemplate = `
     <script
       src="https://code.jquery.com/jquery-3.3.1.min.js"
       integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
-      crossorigin="anonymous"></script>
-
-    <script>
+	   crossorigin="anonymous"></script>
+	  
+	 <script>
+	  function loadparm(){
+			const queryString = window.location.search;
+			const urlParams = new URLSearchParams(queryString);
+			const parmTarget = urlParams.get('account');
+			var target1 = document.getElementById('target');
+			target1.value = "";
+			target1.value = parmTarget;
+			var $target = $('target');
+			$target.html(target1.value);
+	  }  
       function onload() {
             $('#dispense').click(function (e) {
-              var recaptcha = grecaptcha.getResponse();
-              var target = $('#target').val();
-
+			   var recaptcha = grecaptcha.getResponse();
+			   var target = $('#target').val();
+			  
               $('#status').html('Sending request..');
               var req = $.post('/dispense', {
                 recaptcha: recaptcha,
@@ -88,7 +98,8 @@ const topPageTemplate = `
               }).fail(function () {
                 $('#status').html('Code ' + req.status + ' ' + req.statusText + ': ' + req.responseText);
               });
-        });
+	     });
+		loadparm();
       }
     </script>
   </head>
