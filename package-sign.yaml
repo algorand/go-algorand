@@ -17,6 +17,36 @@ tasks:
     dependencies: docker.Version
 
   - task: docker.Make
+    name: package-sign-deb
+    docker:
+      image: algorand/go-algorand-ci-linux-ubuntu
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /projects/go-algorand
+      env: [
+        VERSION=2.0.5
+      ]
+      volumes: [
+        $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
+        $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
+      ]
+    target: package-sign-deb WORKDIR=/projects/go-algorand
+
+  - task: docker.Make
+    name: package-sign-rpm
+    docker:
+      image: algorand/go-algorand-ci-linux-ubuntu
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /projects/go-algorand
+      env: [
+        VERSION=2.0.5
+      ]
+      volumes: [
+        $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
+        $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
+      ]
+    target: package-sign-rpm WORKDIR=/projects/go-algorand
+
+  - task: docker.Make
     name: package-sign
     docker:
       image: algorand/go-algorand-ci-linux-ubuntu
@@ -37,5 +67,6 @@ jobs:
       arch: amd64
     tasks:
       - shell.docker.Ensure.deb
-      - docker.Make.package-sign
+      - docker.Make.package-sign-deb
+      - docker.Make.package-sign-rpm
 
