@@ -48,24 +48,6 @@ tasks:
     target: package-deb WORKDIR=/projects/go-algorand
 
   - task: docker.Make
-    name: package-sign
-    docker:
-      image: algorand/go-algorand-ci-linux-ubuntu
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
-      env: [
-        VERSION=2.0.5
-      ]
-      volumes: [
-        $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
-        $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx,
-        #        $HOME/.gnupg/trustdb.gpg:/root/.gnupg/trustdb.gpg
-        #        /var/run/docker.sock:/var/run/docker.sock,
-        #        /run/user/1001/gnupg/S.gpg-agent:/root/S.gpg-agent
-      ]
-    target: package-sign WORKDIR=/projects/go-algorand
-
-  - task: docker.Make
     name: docker-image
     docker:
       image: algorand/go-algorand-docker-linux-ubuntu
@@ -83,13 +65,6 @@ jobs:
       - docker.Make.rpm
       - shell.docker.Ensure.deb
       - docker.Make.deb
-
-  package-sign:
-    configs:
-      arch: amd64
-    tasks:
-      - shell.docker.Ensure.deb
-      - docker.Make.package-sign
 
   package-docker:
     configs:
