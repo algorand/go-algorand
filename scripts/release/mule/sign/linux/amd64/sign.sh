@@ -55,8 +55,8 @@ fi
 
 cd "$PKG_DIR"
 
-# Remove any previously-generated hashes and signatures.
-rm -f hashes*"$VERSION"* ./*"$VERSION"*."$PKG_TYPE".sig
+# Remove any previously-generated signatures.
+rm -f ./*"$VERSION"*."$PKG_TYPE".sig
 
 for item in *"$VERSION"*."$PKG_TYPE"
 do
@@ -64,8 +64,8 @@ do
 done
 
 HASHFILE="hashes_${CHANNEL}_${OS_TYPE}_${ARCH_TYPE}_${VERSION}_${PKG_TYPE}"
-rm -f "$HASHFILE"
-touch "$HASHFILE"
+# Remove any previously-generated hashes.
+rm -f "$HASHFILE"*
 
 {
     md5sum ./*"$VERSION"*."$PKG_TYPE" ;
