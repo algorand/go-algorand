@@ -64,8 +64,8 @@ package-sign-rpm:
 package-sign-tarball:
 	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(VER) tar.gz
 
-package-source:
-	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/sign.sh $(OS_TYPE) $(ARCH) $$WORKDIR
+package-sign-source:
+	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(VER) source
 
 package-test-deb:
 	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/test.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) deb
