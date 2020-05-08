@@ -21,6 +21,7 @@ PKG_TYPE="$5"
 
 BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
 CHANNEL=${CHANNEL:-$("$WORKDIR/scripts/compute_branch_channel.sh" "$BRANCH")}
+PKG_DIR="$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH"
 SIGNING_KEY_ADDR=dev@algorand.com
 
 # TODO
@@ -29,15 +30,20 @@ SIGNING_KEY_ADDR=dev@algorand.com
 #    mule -f package-test.yaml "package-test-setup-$PKG_TYPE"
 #fi
 
-if [ "$PKG_TYPE" == "rpm" ]
+GPG_HOME_DIR=$(gpgconf --list-dirs | grep homedir | awk -F: '{ print $2 }')
+chmod 400 "$GPG_HOME_DIR"
+
+if [ "$PKG_TYPE" == "source" ]
+then
+    git archive --prefix="algorand-$FULLVERSION/" "$BRANCH" | gzip > "$PKG_DIR/algorand_${CHANNEL}_source_${VERSION}.tar.gz"
+    PKG_TYPE="tar.gz"
+elif [ "$PKG_TYPE" == "rpm" ]
 then
     SIGNING_KEY_ADDR=rpm@algorand.com
 fi
 
-GPG_HOME_DIR=$(gpgconf --list-dirs | grep homedir | awk -F: '{ print $2 }')
-chmod 400 "$GPG_HOME_DIR"
+cd "$PKG_DIR"
 
-cd "$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH"
 for item in *"$VERSION"*."$PKG_TYPE"
 do
     gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$item"
