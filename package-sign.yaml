@@ -15,6 +15,10 @@ tasks:
       image: algorand/go-algorand-ci-mule-debian
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
+      env: [
+        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      ]
       volumes: [
         $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
         $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
@@ -27,6 +31,10 @@ tasks:
       image: algorand/go-algorand-ci-mule-debian
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
+      env: [
+        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      ]
       volumes: [
         $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
         $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
@@ -39,6 +47,10 @@ tasks:
       image: algorand/go-algorand-ci-mule-debian
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
+      env: [
+        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      ]
       volumes: [
         $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
         $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
@@ -57,6 +69,25 @@ tasks:
       ]
     target: package-sign-source WORKDIR=/projects/go-algorand
 
+  - task: s3.DownloadFile
+    name: deb
+    bucketName: algorand-staging
+    objectName: releases/$CHANNEL/$VERSION/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb
+    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
+
+  - task: s3.DownloadFile
+    name: rpm
+    bucketName: algorand-staging
+    objectName: releases/$CHANNEL/$VERSION/algorand-${VERSION}-1.${ARCH_BIT}.rpm
+    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
+
+  - task: s3.DownloadFiles
+    name: tarball
+    bucketName: algorand-staging
+    prefix: releases/$CHANNEL/$VERSION
+    suffix: tar.gz
+    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
+
 jobs:
   package-sign:
     configs:
@@ -67,4 +98,16 @@ jobs:
       - docker.Make.package-sign-rpm
       - docker.Make.package-sign-tarball
       - docker.Make.package-sign-source
+
+  package-sign-setup-deb:
+    tasks:
+      - s3.DownloadFile.deb
+
+  package-sign-setup-rpm:
+    tasks:
+      - s3.DownloadFile.rpm
+
+  package-sign-setup-tarball:
+    tasks:
+      - s3.DownloadFiles.tarball
 
