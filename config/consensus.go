@@ -572,6 +572,7 @@ func initConsensusProtocols() {
 	// but not yet released in a production protocol version.
 	vFuture := v23
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	vFuture.SupportRekeying = true
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
