@@ -46,39 +46,30 @@ ci-build: ci-setup buildsrc gen
 		 NO_BUILD=True VARIATIONS=$(OS_TYPE)/$(ARCH) \
 		 scripts/build_packages.sh $(OS_TYPE)/$(ARCH)
 
-package-deb-$(OS_TYPE)-$(ARCH):
+package-deb:
 	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/deb/package.sh $(OS_TYPE) $(ARCH) $$WORKDIR
 
-package-rpm-$(OS_TYPE)-$(ARCH):
-	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/rpm/package.sh $(OS_TYPE) $(ARCH) $$WORKDIR
-
-package-docker-$(OS_TYPE)-$(ARCH):
+package-docker:
 	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/docker/package.sh $(OS_TYPE) $(ARCH) $$WORKDIR
 
-package-sign-deb-$(OS_TYPE)-$(ARCH):
+package-rpm:
+	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/rpm/package.sh $(OS_TYPE) $(ARCH) $$WORKDIR
+
+package-sign-deb:
 	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(VER) deb
 
-package-sign-rpm-$(OS_TYPE)-$(ARCH):
+package-sign-rpm:
 	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(VER) rpm
 
-package-sign-tarball-$(OS_TYPE)-$(ARCH):
+package-sign-tarball:
 	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(VER) tar.gz
 
-package-test-deb-$(OS_TYPE)-$(ARCH):
+package-source:
+	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/sign.sh $(OS_TYPE) $(ARCH) $$WORKDIR
+
+package-test-deb:
 	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/test.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) deb
 
-package-test-rpm-$(OS_TYPE)-$(ARCH):
+package-test-rpm:
 	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/test.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) rpm
-
-package-deb: package-deb-$(OS_TYPE)-$(ARCH)
-package-rpm: package-rpm-$(OS_TYPE)-$(ARCH)
-
-package-docker: package-docker-$(OS_TYPE)-$(ARCH)
-
-package-sign-deb: package-sign-deb-$(OS_TYPE)-$(ARCH)
-package-sign-rpm: package-sign-rpm-$(OS_TYPE)-$(ARCH)
-package-sign-tarball: package-sign-tarball-$(OS_TYPE)-$(ARCH)
-
-package-test-deb: package-sign-deb-$(OS_TYPE)-$(ARCH)
-package-test-rpm: package-sign-rpm-$(OS_TYPE)-$(ARCH)
 
