@@ -23,6 +23,79 @@
   "host": "localhost",
   "basePath": "/",
   "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "common"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Returns OK if healthy.",
+        "operationId": "HealthCheck",
+        "responses": {
+          "200": {
+            "description": "OK."
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": [
+          "common"
+        ],
+        "produces": [
+          "text/plain"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Return metrics about algod functioning.",
+        "operationId": "Metrics",
+        "responses": {
+          "200": {
+            "description": "text with \\#-comments and key:value lines"
+          },
+          "404": {
+            "description": "metrics were compiled out"
+          }
+        }
+      }
+    },
+    "/swagger.json": {
+      "get": {
+        "description": "Returns the entire swagger spec in json.",
+        "tags": [
+          "common"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Gets the current swagger spec.",
+        "operationId": "SwaggerJSON",
+        "responses": {
+          "200": {
+            "description": "The current swagger spec",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/accounts/{address}": {
       "get": {
         "description": "Given a specific account public key, this call returns the accounts status, balance and spendable amounts",
@@ -358,7 +431,7 @@
         }
       }
     },
-    "/v2/status/wait-for-block-after/{round}/": {
+    "/v2/status/wait-for-block-after/{round}": {
       "get": {
         "description": "Waits for a block to appear after round {round} and returns the node's status at the time.",
         "produces": [

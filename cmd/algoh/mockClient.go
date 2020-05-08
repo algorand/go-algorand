@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 )
 
@@ -27,10 +28,10 @@ import (
 // Helpers to initialize mockClient //
 //////////////////////////////////////
 
-func makeNodeStatuses(blocks ...uint64) (ret []v1.NodeStatus) {
-	ret = make([]v1.NodeStatus, 0, len(blocks))
+func makeNodeStatuses(blocks ...uint64) (ret []generatedV2.NodeStatusResponse) {
+	ret = make([]generatedV2.NodeStatusResponse, 0, len(blocks))
 	for _, block := range blocks {
-		ret = append(ret, v1.NodeStatus{LastRound: block})
+		ret = append(ret, generatedV2.NodeStatusResponse{LastRound: block})
 	}
 	return ret
 }
@@ -50,12 +51,12 @@ type mockClient struct {
 	BlockCalls         map[uint64]int
 	GetGoRoutinesCalls int
 	error              []error
-	status             []v1.NodeStatus
+	status             []generatedV2.NodeStatusResponse
 	routine            []string
 	block              map[uint64]v1.Block
 }
 
-func makeMockClient(error []error, status []v1.NodeStatus, block map[uint64]v1.Block, routine []string) mockClient {
+func makeMockClient(error []error, status []generatedV2.NodeStatusResponse, block map[uint64]v1.Block, routine []string) mockClient {
 	return mockClient{
 		BlockCalls: make(map[uint64]int),
 		error:      error,
@@ -77,7 +78,7 @@ func (c *mockClient) nextError() (e error) {
 	return
 }
 
-func (c *mockClient) Status() (s v1.NodeStatus, e error) {
+func (c *mockClient) Status() (s generatedV2.NodeStatusResponse, e error) {
 	c.StatusCalls++
 	s = c.status[0]
 	// Repeat last status...
