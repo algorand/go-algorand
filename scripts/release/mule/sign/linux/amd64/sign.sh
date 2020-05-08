@@ -44,6 +44,9 @@ fi
 
 cd "$PKG_DIR"
 
+# Remove any previously-generated hashes and signatures.
+rm -f hashes*"$VERSION"* ./*"$VERSION"*."$PKG_TYPE".sig
+
 for item in *"$VERSION"*."$PKG_TYPE"
 do
     gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$item"

@@ -6,7 +6,7 @@ tasks:
     name: mule-debian
     image: algorand/go-algorand-ci-mule-debian
     version: '{{ docker.Version.outputs.version }}'
-    dockerFilePath: docker/build/mule.debian.Dockerfile
+    dockerFilePath: docker/build/mule.go.debian.Dockerfile
     dependencies: docker.Version
 
   - task: docker.Make
@@ -15,9 +15,6 @@ tasks:
       image: algorand/go-algorand-ci-mule-debian
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
-      env: [
-        VERSION=2.0.5
-      ]
       volumes: [
         $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
         $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
@@ -30,9 +27,6 @@ tasks:
       image: algorand/go-algorand-ci-mule-debian
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
-      env: [
-        VERSION=2.0.5
-      ]
       volumes: [
         $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
         $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
@@ -45,9 +39,6 @@ tasks:
       image: algorand/go-algorand-ci-mule-debian
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
-      env: [
-        VERSION=2.0.71217
-      ]
       volumes: [
         $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
         $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
@@ -60,9 +51,6 @@ tasks:
       image: algorand/go-algorand-ci-mule-debian
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
-      env: [
-        VERSION=2.0.71217
-      ]
       volumes: [
         $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
         $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
