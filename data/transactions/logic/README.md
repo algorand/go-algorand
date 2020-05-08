@@ -255,6 +255,7 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | `return` | use last value on stack as success value; end |
 | `pop` | discard value X from stack |
 | `dup` | duplicate last value on stack |
+| `dup2` | duplicate two last values on stack: A, B -> A, B, A, B |
 
 ### State Access
 
@@ -294,13 +295,15 @@ byte b32 AAAA...
 byte base32(AAAA...)
 byte b32(AAAA...)
 byte 0x0123456789abcdef...
+byte "\x01\x02"
+byte "string literal"
 ```
 
 `int` constants may be `0x` prefixed for hex, `0` prefixed for octal, or decimal numbers.
 
 `intcblock` may be explictly assembled. It will conflict with the assembler gathering `int` pseudo-ops into a `intcblock` program prefix, but may be used if code only has explicit `intc` references. `intcblock` should be followed by space separated int constants all on one line.
 
-`bytecblock` may be explicitly assembled. It will conflict with the assembler if there are any `byte` pseudo-ops but may be used if only explicit `bytec` references are used. `bytecblock` should be followed with byte constants all on one line, either 'encoding value' pairs (`b64 AAA...`) or 0x prefix or function-style values (`base64(...)`).
+`bytecblock` may be explicitly assembled. It will conflict with the assembler if there are any `byte` pseudo-ops but may be used if only explicit `bytec` references are used. `bytecblock` should be followed with byte constants all on one line, either 'encoding value' pairs (`b64 AAA...`) or 0x prefix or function-style values (`base64(...)`) or string literal values.
 
 ## Labels and Branches
 
