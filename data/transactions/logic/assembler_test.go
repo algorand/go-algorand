@@ -466,8 +466,137 @@ func TestAssembleBytes(t *testing.T) {
 				s := hex.EncodeToString(program)
 				require.Equal(t, mutateProgVersion(v, "0126010661626364656628"), s)
 			}
+
 		})
 	}
+}
+
+func TestAssembleBytesString(t *testing.T) {
+	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			text := `byte "foo bar"`
+			_, err := AssembleStringWithVersion(text, v)
+			require.NoError(t, err)
+
+			text = `byte "foo bar // not a comment"`
+			_, err = AssembleStringWithVersion(text, v)
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestFieldsFromLine(t *testing.T) {
+	line := "op arg"
+	fields := fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "arg", fields[1])
+
+	line = "op arg // test"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "arg", fields[1])
+
+	line = "op base64 ABC//=="
+	fields = fieldsFromLine(line)
+	require.Equal(t, 3, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "base64", fields[1])
+	require.Equal(t, "ABC//==", fields[2])
+
+	line = "op base64 ABC/=="
+	fields = fieldsFromLine(line)
+	require.Equal(t, 3, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "base64", fields[1])
+	require.Equal(t, "ABC/==", fields[2])
+
+	line = "op base64 ABC/== /"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 4, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "base64", fields[1])
+	require.Equal(t, "ABC/==", fields[2])
+	require.Equal(t, "/", fields[3])
+
+	line = `op "test"`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test"`, fields[1])
+
+	line = `op "test1 test2"`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2"`, fields[1])
+
+	line = `op "test1 test2" // comment`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2"`, fields[1])
+
+	line = `op "test1 test2 // not a comment"`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2 // not a comment"`, fields[1])
+
+	line = `op "test1 test2 // not a comment" // comment`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2 // not a comment"`, fields[1])
+
+	line = `op "test1 test2 // not a comment" // comment`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2 // not a comment"`, fields[1])
+
+	line = `op "test1 test2" //`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2"`, fields[1])
+
+	line = `op "test1 test2"//`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2"`, fields[1])
+
+	line = `op "test1 test2` // non-terminated string literal
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2`, fields[1])
+
+	line = `op "test1 test2\"` // non-terminated string literal
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2\"`, fields[1])
+
+	line = `op \"test1 test2\"` // not a string literal
+	fields = fieldsFromLine(line)
+	require.Equal(t, 3, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `\"test1`, fields[1])
+	require.Equal(t, `test2\"`, fields[2])
+
+	line = `"test1 test2"`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 1, len(fields))
+	require.Equal(t, `"test1 test2"`, fields[0])
+
+	line = `\"test1 test2"`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, `\"test1`, fields[0])
+	require.Equal(t, `test2"`, fields[1])
 }
 
 func TestAssembleRejectNegJump(t *testing.T) {
@@ -909,6 +1038,12 @@ func TestStringLiteralParsing(t *testing.T) {
 	s = `"test\n\t\""`
 	e = []byte(`test
 	"`)
+	result, err = parseStringLiteral(s)
+	require.NoError(t, err)
+	require.Equal(t, e, result)
+
+	s = `"test 123"`
+	e = []byte(`test 123`)
 	result, err = parseStringLiteral(s)
 	require.NoError(t, err)
 	require.Equal(t, e, result)

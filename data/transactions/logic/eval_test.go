@@ -3263,3 +3263,29 @@ dup2
 	pass, err = Eval(program, ep)
 	require.Error(t, err)
 }
+
+func TestStringLiteral(t *testing.T) {
+	t.Parallel()
+
+	text := `byte "foo bar"
+byte b64(Zm9vIGJhcg==)
+==
+`
+	ep := defaultEvalParams(nil, nil)
+
+	program, err := AssembleString(text)
+	require.NoError(t, err)
+	pass, err := Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	text = `byte "foo bar // not a comment"
+byte b64(Zm9vIGJhciAvLyBub3QgYSBjb21tZW50)
+==
+`
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+}

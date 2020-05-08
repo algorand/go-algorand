@@ -862,16 +862,66 @@ func typecheck(expected, got StackType) bool {
 	return expected == got
 }
 
-func filterFieldsForLineComment(fields []string) []string {
-	prevField := ""
-	for i, s := range fields {
-		if strings.HasPrefix(s, "//") {
-			if prevField != "base64" && prevField != "b64" {
-				return fields[:i]
-			}
-		}
-		prevField = s
+var spaces = [256]uint8{'\t': 1, ' ': 1}
+
+func fieldsFromLine(line string) []string {
+	var fields []string
+
+	i := 0
+	for i < len(line) && spaces[line[i]] != 0 {
+		i++
 	}
+
+	start := i
+	inString := false
+	inBase64 := false
+	for i < len(line) {
+		if spaces[line[i]] == 0 { // if not space
+			switch line[i] {
+			case '"': // is a string literal?
+				if !inString {
+					if i == 0 || i > 0 && spaces[line[i-1]] != 0 {
+						inString = true
+					}
+				} else {
+					if line[i-1] != '\\' { // if not escape symbol
+						inString = false
+					}
+				}
+			case '/': // is a comment?
+				if i < len(line)-1 && line[i+1] == '/' && !inBase64 && !inString {
+					if start != i { // if a comment without whitespace
+						fields = append(fields, line[start:i])
+					}
+					return fields
+				}
+			default:
+			}
+			i++
+			continue
+		}
+		if !inString {
+			field := line[start:i]
+			if field == "base64" || field == "b64" {
+				inBase64 = true
+			}
+			fields = append(fields, line[start:i])
+		}
+		i++
+
+		if !inString {
+			for i < len(line) && spaces[line[i]] != 0 {
+				i++
+			}
+			start = i
+		}
+	}
+
+	// add rest of the string if any
+	if start < len(line) {
+		fields = append(fields, line[start:i])
+	}
+
 	return fields
 }
 
@@ -924,8 +974,7 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 			ops.trace("%d: // line\n", ops.sourceLine)
 			continue
 		}
-		fields := strings.Fields(line)
-		fields = filterFieldsForLineComment(fields)
+		fields := fieldsFromLine(line)
 		if len(fields) == 0 {
 			ops.trace("%d: no fields\n", ops.sourceLine)
 			continue
