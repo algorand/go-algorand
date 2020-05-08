@@ -54,6 +54,21 @@ tasks:
       ]
     target: package-sign-tarball WORKDIR=/projects/go-algorand
 
+  - task: docker.Make
+    name: package-sign-source
+    docker:
+      image: algorand/go-algorand-ci-mule-debian
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /projects/go-algorand
+      env: [
+        VERSION=2.0.71217
+      ]
+      volumes: [
+        $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
+        $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
+      ]
+    target: package-sign-source WORKDIR=/projects/go-algorand
+
 jobs:
   package-sign:
     configs:
@@ -63,4 +78,5 @@ jobs:
       - docker.Make.package-sign-deb
       - docker.Make.package-sign-rpm
       - docker.Make.package-sign-tarball
+      - docker.Make.package-sign-source
 

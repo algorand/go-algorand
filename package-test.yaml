@@ -6,7 +6,7 @@ tasks:
     name: package
     image: algorand/mule-linux-ubuntu
     version: '{{ docker.Version.outputs.version }}'
-    dockerFilePath: docker/build/mule.debian.Dockerfile
+    dockerFilePath: docker/build/mule.go.debian.Dockerfile
     dependencies: docker.Version
 
   - task: docker.Make
