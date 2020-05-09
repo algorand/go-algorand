@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -825,7 +824,7 @@ func disassembleFile(fname, outname string) {
 	if outname == "" {
 		os.Stdout.Write([]byte(text))
 	} else {
-		err = ioutil.WriteFile(outname, []byte(text), 0666)
+		err = writeFile(outname, []byte(text), 0666)
 		if err != nil {
 			reportErrorf("%s: %s\n", outname, err)
 		}
@@ -846,7 +845,11 @@ var compileCmd = &cobra.Command{
 			outblob := program
 			outname := outFilename
 			if outname == "" {
-				outname = fmt.Sprintf("%s.tok", fname)
+				if fname == stdinFileNameValue {
+					outname = stdoutFilenameValue
+				} else {
+					outname = fmt.Sprintf("%s.tok", fname)
+				}
 			}
 			if signProgram {
 				dataDir := ensureSingleDataDir()
@@ -872,20 +875,12 @@ var compileCmd = &cobra.Command{
 				outblob = protocol.Encode(&ls)
 			}
 			if !noProgramOutput {
-				fout, err := os.Create(outname)
-				if err != nil {
-					reportErrorf("%s: %s\n", outname, err)
-				}
-				_, err = fout.Write(outblob)
-				if err != nil {
-					reportErrorf("%s: %s\n", outname, err)
-				}
-				err = fout.Close()
+				err := writeFile(outname, outblob, 0666)
 				if err != nil {
 					reportErrorf("%s: %s\n", outname, err)
 				}
 			}
-			if !signProgram {
+			if !signProgram && outname != stdoutFilenameValue {
 				pd := logic.HashProgram(program)
 				addr := basics.Address(pd)
 				fmt.Printf("%s: %s\n", fname, addr.String())
