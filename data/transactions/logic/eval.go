@@ -102,6 +102,7 @@ func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 type LedgerForLogic interface {
 	Balance(addr basics.Address) (basics.MicroAlgos, error)
 	Round() basics.Round
+	LatestTimestamp() int64
 	AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error)
 	AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error)
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
@@ -1382,6 +1383,19 @@ func (cx *evalContext) getRound() (rnd uint64, err error) {
 	return uint64(cx.Ledger.Round()), nil
 }
 
+func (cx *evalContext) getLatestTimestamp() (timestamp uint64, err error) {
+	if cx.Ledger == nil {
+		err = fmt.Errorf("ledger not available")
+		return
+	}
+	ts := cx.Ledger.LatestTimestamp()
+	if ts < 0 {
+		err = fmt.Errorf("latest timestamp %d < 0", ts)
+		return
+	}
+	return uint64(ts), nil
+}
+
 var zeroAddress basics.Address
 
 func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err error) {
@@ -1403,6 +1417,12 @@ func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err
 			err = errors.New("global Round not allowed in current mode")
 		} else {
 			sv.Uint, err = cx.getRound()
+		}
+	case LatestTimestamp:
+		if (cx.runModeFlags & runModeApplication) == 0 {
+			sv.Uint = 0
+		} else {
+			sv.Uint, err = cx.getLatestTimestamp()
 		}
 	default:
 		err = fmt.Errorf("invalid global[%d]", field)

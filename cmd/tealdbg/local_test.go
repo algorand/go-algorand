@@ -326,6 +326,10 @@ func TestDebugEnvironment(t *testing.T) {
 	source := `global Round
 int 222
 ==
+global LatestTimestamp
+int 333
+==
+&&
 global GroupSize
 int 2
 ==
@@ -440,14 +444,15 @@ int 100
 `
 
 	ds := DebugParams{
-		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{[]byte(source)},
-		BalanceBlob:  balanceBlob,
-		TxnBlob:      txnBlob,
-		Proto:        "future",
-		Round:        222,
-		GroupIndex:   0,
-		RunMode:      "application",
+		ProgramNames:    []string{"test"},
+		ProgramBlobs:    [][]byte{[]byte(source)},
+		BalanceBlob:     balanceBlob,
+		TxnBlob:         txnBlob,
+		Proto:           "future",
+		Round:           222,
+		LatestTimestamp: 333,
+		GroupIndex:      0,
+		RunMode:         "application",
 	}
 
 	local := MakeLocalRunner(nil) // no debugger
@@ -828,13 +833,14 @@ func TestLocalLedger(t *testing.T) {
 
 	l := LocalRunner{}
 	dp := DebugParams{
-		ProgramNames: []string{"test"},
-		ProgramBlobs: [][]byte{{1}},
-		BalanceBlob:  balanceBlob,
-		TxnBlob:      txnBlob,
-		RunMode:      "application",
-		GroupIndex:   0,
-		Round:        100,
+		ProgramNames:    []string{"test"},
+		ProgramBlobs:    [][]byte{{1}},
+		BalanceBlob:     balanceBlob,
+		TxnBlob:         txnBlob,
+		RunMode:         "application",
+		GroupIndex:      0,
+		Round:           100,
+		LatestTimestamp: 333,
 	}
 
 	err = l.Setup(&dp)
@@ -851,6 +857,7 @@ func TestLocalLedger(t *testing.T) {
 	)
 	ledger := l.runs[0].ledger
 	a.Equal(basics.Round(100), ledger.Round())
+	a.Equal(333, ledger.LatestTimestamp())
 
 	balance, err := ledger.Balance(sender)
 	a.NoError(err)

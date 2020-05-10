@@ -324,6 +324,7 @@ var globalFieldDocList = []stringString{
 	{"ZeroAddress", "32 byte address of all zero bytes"},
 	{"GroupSize", "Number of transactions in this atomic transaction group. At least 1."},
 	{"Round", "Current round number"},
+	{"LatestTimestamp", "Last confirmed block UNIX timestamp. Fails if negative"},
 }
 
 // GlobalFieldDocs are notes on fields available in `global`

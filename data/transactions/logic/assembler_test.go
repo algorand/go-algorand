@@ -782,6 +782,7 @@ global ZeroAddress
 global GroupSize
 global LogicSigVersion
 global Round
+global LatestTimestamp
 txn Sender
 txn Fee
 bnz label1

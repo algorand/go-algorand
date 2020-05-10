@@ -108,6 +108,10 @@ func (l *testLedger) Round() basics.Round {
 	return basics.Round(rand.Uint64())
 }
 
+func (l *testLedger) LatestTimestamp() int64 {
+	return int64(rand.Uint64())
+}
+
 func (l *testLedger) Balance(addr basics.Address) (amount basics.MicroAlgos, err error) {
 	if l.balances == nil {
 		err = fmt.Errorf("empty ledger")
@@ -2510,4 +2514,32 @@ int 1
 	pass, _, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
+}
+
+func TestLatestTimestamp(t *testing.T) {
+	source := `global LatestTimestamp
+int 1
+>=
+`
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{},
+	)
+	program, err := AssembleString(source)
+	require.NoError(t, err)
+
+	ep := defaultEvalParams(nil, nil)
+	_, err = CheckStateful(program, ep)
+	require.NoError(t, err)
+	_, _, err = EvalStateful(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "ledger not available")
+
+	ep.Ledger = ledger
+	pass, _, err := EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.False(t, pass)
 }

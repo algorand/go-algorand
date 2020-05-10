@@ -505,6 +505,7 @@ func (eval *BlockEvaluator) prepareAppEvaluators(txgroup []transactions.SignedTx
 				TxnGroup:   groupNoAD,
 				GroupIndex: i,
 			},
+			latestTimestamp: eval.prevHeader.TimeStamp,
 		}
 
 		res[i] = &steva

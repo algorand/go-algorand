@@ -217,6 +217,7 @@ Global fields are fields that are common to all the transactions in the group. I
 | 4 | GroupSize | uint64 | Number of transactions in this atomic transaction group. At least 1. |
 | 5 | LogicSigVersion | uint64 |  |
 | 6 | Round | uint64 | Current round number |
+| 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative |
 
 
 **Asset Fields**

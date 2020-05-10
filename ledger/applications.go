@@ -29,15 +29,17 @@ import (
 // Eval. These pass the initialized LedgerForLogic (appLedger) to the TEAL
 // interpreter.
 type appTealEvaluator struct {
-	evalParams logic.EvalParams
+	evalParams      logic.EvalParams
+	latestTimestamp int64
 }
 
 // appLedger implements logic.LedgerForLogic
 type appLedger struct {
-	addresses map[basics.Address]bool
-	apps      map[basics.AppIndex]bool
-	balances  transactions.Balances
-	appIdx    basics.AppIndex
+	addresses       map[basics.Address]bool
+	apps            map[basics.AppIndex]bool
+	balances        transactions.Balances
+	appIdx          basics.AppIndex
+	latestTimestamp int64
 }
 
 // Eval evaluates a stateful TEAL program for an application. InitLedger must
@@ -67,7 +69,7 @@ func (ae *appTealEvaluator) Check(program []byte) (cost int, err error) {
 // fetch global state for (which requires looking up the creator's balance
 // record).
 func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex) error {
-	ledger, err := newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx)
+	ledger, err := newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, ae.latestTimestamp)
 	if err != nil {
 		return err
 	}
@@ -76,7 +78,7 @@ func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, acctWhite
 	return nil
 }
 
-func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex) (al *appLedger, err error) {
+func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, latestTimestamp int64) (al *appLedger, err error) {
 	if balances == nil {
 		err = fmt.Errorf("cannot create appLedger with nil balances")
 		return
@@ -102,6 +104,7 @@ func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address
 	al.balances = balances
 	al.addresses = make(map[basics.Address]bool, len(acctWhitelist))
 	al.apps = make(map[basics.AppIndex]bool, len(appGlobalWhitelist))
+	al.latestTimestamp = latestTimestamp
 
 	for _, addr := range acctWhitelist {
 		al.addresses[addr] = true
@@ -115,8 +118,8 @@ func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address
 }
 
 // MakeDebugAppLedger returns logic.LedgerForLogic suitable for debug or dryrun
-func MakeDebugAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex) (al logic.LedgerForLogic, err error) {
-	return newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx)
+func MakeDebugAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, latestTimestamp int64) (al logic.LedgerForLogic, err error) {
+	return newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, latestTimestamp)
 }
 
 func (al *appLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err error) {
@@ -263,4 +266,8 @@ func (al *appLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex
 
 func (al *appLedger) Round() basics.Round {
 	return al.balances.Round()
+}
+
+func (al *appLedger) LatestTimestamp() int64 {
+	return al.latestTimestamp
 }

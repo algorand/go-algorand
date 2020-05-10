@@ -193,6 +193,8 @@ const (
 	LogicSigVersion
 	// Round basics.Round
 	Round
+	// LatestTimestamp uint64
+	LatestTimestamp
 
 	invalidGlobalField
 )
@@ -213,6 +215,7 @@ var globalFieldTypeList = []globalFieldType{
 	{GroupSize, StackUint64},
 	{LogicSigVersion, StackUint64},
 	{Round, StackUint64},
+	{LatestTimestamp, StackUint64},
 }
 
 // GlobalFieldTypes is StackUint64 StackBytes in parallel with GlobalFieldNames
