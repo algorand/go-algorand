@@ -279,3 +279,11 @@ func (al *appLedger) Round() basics.Round {
 func (al *appLedger) LatestTimestamp() int64 {
 	return al.AppTealGlobals.LatestTimestamp
 }
+
+func (al *appLedger) LatestTimestamp() int64 {
+	return al.latestTimestamp
+}
+
+func (al *appLedger) LatestTimestamp() int64 {
+	return al.latestTimestamp
+}
