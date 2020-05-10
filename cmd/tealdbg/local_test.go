@@ -857,7 +857,7 @@ func TestLocalLedger(t *testing.T) {
 	)
 	ledger := l.runs[0].ledger
 	a.Equal(basics.Round(100), ledger.Round())
-	a.Equal(333, ledger.LatestTimestamp())
+	a.Equal(int64(333), ledger.LatestTimestamp())
 
 	balance, err := ledger.Balance(sender)
 	a.NoError(err)
