@@ -43,6 +43,7 @@ const (
 	errExistingPartKey             = "Account already has a participation key valid at least until roundLastValid (%d) - current is %d"
 	errorSeedConversion            = "Got private key for account %s, but was unable to convert to seed: %s"
 	errorMnemonicConversion        = "Got seed for account %s, but was unable to convert to mnemonic: %s"
+	errorNoDefaultAccount          = "Account not specified and no default account set. set one with 'goal account -f'"
 
 	// KMD
 	infoKMDStopped        = "Stopped kmd"

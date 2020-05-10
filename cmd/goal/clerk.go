@@ -850,21 +850,14 @@ var compileCmd = &cobra.Command{
 			}
 			if signProgram {
 				dataDir := ensureSingleDataDir()
-				accountList := makeAccountsList(dataDir)
 				client := ensureKmdClient(dataDir)
 				wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 
-				// Check if from was specified, else use default
+				matchedAccount := getAccount(dataDir, nil, account)
 				if account == "" {
-					account = accountList.getDefaultAccount()
-					if account == "" {
-						reportErrorln("no default account set. set one with 'goal account -f' or specify an account with '-a'.")
-					}
-					fmt.Printf("will use default account: %v\n", account)
+					fmt.Printf("will use default account: %v\n", matchedAccount)
 				}
-				signingAddressResolved := accountList.getAddressByName(account)
-
-				signature, err := client.SignProgramWithWallet(wh, pw, signingAddressResolved, program)
+				signature, err := client.SignProgramWithWallet(wh, pw, matchedAccount, program)
 				if err != nil {
 					reportErrorf(errorSigningTX, err)
 				}

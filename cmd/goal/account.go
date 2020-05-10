@@ -273,7 +273,7 @@ var renameCmd = &cobra.Command{
 }
 
 var newCmd = &cobra.Command{
-	Use:   "new",
+	Use:   "new [account alias]",
 	Short: "Create a new account",
 	Long:  `Coordinates the creation of a new account with KMD. The name specified here is stored in a local configuration file and is only used by goal when working against that specific node instance.`,
 	Args:  cobra.RangeArgs(0, 1),
@@ -328,6 +328,7 @@ var deleteCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		accountList := makeAccountsList(dataDir)
+		accountAddress = getAccount(dataDir, accountList, accountAddress)
 
 		client := ensureKmdClient(dataDir)
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
@@ -392,6 +393,7 @@ var deleteMultisigCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		accountList := makeAccountsList(dataDir)
+		accountAddress = getAccount(dataDir, accountList, accountAddress)
 
 		client := ensureKmdClient(dataDir)
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
@@ -414,6 +416,7 @@ var infoMultisigCmd = &cobra.Command{
 		dataDir := ensureSingleDataDir()
 		client := ensureKmdClient(dataDir)
 		wh := ensureWalletHandle(dataDir, walletName)
+		accountAddress = getAccount(dataDir, nil, accountAddress)
 
 		multisigInfo, err := client.LookupMultisigAccount(wh, accountAddress)
 		if err != nil {
@@ -520,12 +523,9 @@ var balanceCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		accountList := makeAccountsList(dataDir)
-		if accountAddress == "" {
-			accountAddress = accountList.getDefaultAccount()
-		}
+		accountAddress = getAccount(dataDir, nil, accountAddress)
 
-		response, err := client.AccountInformation(accountList.getAddressByName(accountAddress))
+		response, err := client.AccountInformation(accountAddress)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -542,11 +542,8 @@ var rewardsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
-		accountList := makeAccountsList(dataDir)
-		if accountAddress == "" {
-			accountAddress = accountList.getDefaultAccount()
-		}
-		response, err := client.AccountInformation(accountList.getAddressByName(accountAddress))
+		accountAddress = getAccount(dataDir, nil, accountAddress)
+		response, err := client.AccountInformation(accountAddress)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
@@ -596,10 +593,7 @@ var changeOnlineCmd = &cobra.Command{
 				accountAddress = part.Parent.String()
 			}
 		} else {
-			if accountAddress == "" {
-				accountAddress = accountList.getDefaultAccount()
-			}
-			accountAddress = accountList.getAddressByName(accountAddress)
+			accountAddress = getAccount(dataDir, accountList, accountAddress)
 		}
 
 		firstTxRound, lastTxRound, err := client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
@@ -656,6 +650,7 @@ var addParticipationKeyCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
+		accountAddress = getAccount(dataDir, nil, accountAddress)
 
 		if partKeyOutDir != "" && !util.IsDir(partKeyOutDir) {
 			reportErrorf(errorDirectoryNotExist, partKeyOutDir)
@@ -710,6 +705,7 @@ var renewParticipationKeyCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
+		accountAddress = getAccount(dataDir, nil, accountAddress)
 
 		client := ensureAlgodClient(dataDir)
 
@@ -966,6 +962,7 @@ var exportCmd = &cobra.Command{
 		wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 		passwordString := string(pw)
 
+		accountAddress = getAccount(dataDir, nil, accountAddress)
 		response, err := client.ExportKey(wh, passwordString, accountAddress)
 
 		if err != nil {
@@ -1134,6 +1131,7 @@ var markNonparticipatingCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf(errorConstructingTX, err)
 		}
+		accountAddress = getAccount(dataDir, nil, accountAddress)
 		utx, err := client.MakeUnsignedBecomeNonparticipatingTx(accountAddress, firstTxRound, lastTxRound, transactionFee)
 		if err != nil {
 			reportErrorf(errorConstructingTX, err)
