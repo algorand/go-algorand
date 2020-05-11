@@ -12,7 +12,7 @@ ci-deps:
 ci-setup:
 	mkdir -p $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)
 
-ci-test: #ci-build
+ci-test: ci-build
 ifeq ($(ARCH), amd64)
 	RACE=-race
 else
@@ -22,7 +22,7 @@ endif
 		go test $(GOTAGS) -timeout 2000s $(RACE) $$PACKAGE_DIRECTORY; \
 	done
 
-ci-integration: #ci-build
+ci-integration: ci-build
 	export NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/bin && \
 	export PATH=$(SRCPATH)/tmp/node_pkgs/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/bin:$$PATH && \
 	export PATH=$(SRCPATH)/tmp/node_pkgs/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/tools:$$PATH && \
