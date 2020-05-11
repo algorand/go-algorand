@@ -16,7 +16,9 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Pops: *... stack*, []byte
 - Pushes: []byte
 - SHA256 hash of value X, yields [32]byte
-- **Cost**: 35
+- **Cost**:
+   - 7 (LogicSigVersion = 1)
+   - 35 (LogicSigVersion = 2)
 
 ## keccak256
 
@@ -24,7 +26,9 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Pops: *... stack*, []byte
 - Pushes: []byte
 - Keccak256 hash of value X, yields [32]byte
-- **Cost**: 130
+- **Cost**:
+   - 26 (LogicSigVersion = 1)
+   - 130 (LogicSigVersion = 2)
 
 ## sha512_256
 
@@ -32,7 +36,9 @@ Ops have a 'cost' of 1 unless otherwise specified.
 - Pops: *... stack*, []byte
 - Pushes: []byte
 - SHA512_256 hash of value X, yields [32]byte
-- **Cost**: 45
+- **Cost**:
+   - 9 (LogicSigVersion = 1)
+   - 45 (LogicSigVersion = 2)
 
 ## ed25519verify
 
@@ -503,6 +509,14 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Pushes: any, any
 - duplicate last value on stack
 
+## dup2
+
+- Opcode: 0x4a
+- Pops: *... stack*, {any A}, {any B}
+- Pushes: any, any, any, any
+- duplicate two last values on stack: A, B -> A, B, A, B
+- LogicSigVersion >= 2
+
 ## concat
 
 - Opcode: 0x50
@@ -534,7 +548,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Opcode: 0x60
 - Pops: *... stack*, uint64
 - Pushes: uint64
-- get balance for the requested account A in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction
+- get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -543,7 +557,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Opcode: 0x61
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64
-- check if account A opted in for the application B => {0 or 1}
+- check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1}
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -554,7 +568,7 @@ params: account index, application id (top of the stack on opcode entry)
 - Opcode: 0x62
 - Pops: *... stack*, {uint64 A}, {[]byte B}
 - Pushes: any
-- read from account's A from local state of the current application key B  => value
+- read from account specified by Txn.Accounts[A] from local state of the current application key B  => value
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -565,7 +579,7 @@ params: account index, state key. Return: value. The value is zero if the key do
 - Opcode: 0x63
 - Pops: *... stack*, {uint64 A}, {uint64 B}, {[]byte C}
 - Pushes: uint64, any
-- read from account's A from local state of the application B key C  => {0 or 1 (top), value}
+- read from account specified by Txn.Accounts[A] from local state of the application B key C  => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -598,7 +612,7 @@ params: application id, state key. Return: value
 - Opcode: 0x66
 - Pops: *... stack*, {uint64 A}, {[]byte B}, {any C}
 - Pushes: _None_
-- write to account's A to local state of a current application key B with value C
+- write to account specified by Txn.Accounts[A] to local state of a current application key B with value C
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -618,7 +632,7 @@ params: account index, state key, value
 - Opcode: 0x68
 - Pops: *... stack*, {uint64 A}, {[]byte B}
 - Pushes: _None_
-- delete from account's A local state key B of the current application
+- delete from account specified by Txn.Accounts[A] local state key B of the current application
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -640,7 +654,7 @@ params: state key
 - Opcode: 0x70 {uint8 asset holding field index}
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64, any
-- read from account's A and asset B holding field X (imm arg)  => {0 or 1 (top), value}
+- read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg)  => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -659,7 +673,7 @@ params: account index, asset id. Return: did_exist flag, value
 - Opcode: 0x71 {uint8 asset params field index}
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64, any
-- read from account's A and asset B params field X (imm arg)  => {0 or 1 (top), value}
+- read from account specified by Txn.Accounts[A] and asset B params field X (imm arg)  => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
 

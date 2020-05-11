@@ -38,11 +38,6 @@ byte base64(aGVsbG8gd29ybGQh)
 byte b64 aGVsbG8gd29ybGQh
 byte b64(aGVsbG8gd29ybGQh)
 addr RWXCBB73XJITATVQFOI7MVUUQOL2PFDDSDUMW4H4T2SNSX4SEUOQ2MM7F4
-concat
-substring 42 99
-intc 0
-intc 1
-substring3
 ed25519verify
 txn Sender
 txn Fee
@@ -122,8 +117,6 @@ intc 1
 %
 ^
 ~
-bz there
-b there
 byte 0x4242
 btoi
 itob
@@ -139,18 +132,32 @@ store 2
 intc 0
 intc 1
 mulw
-pop  // pop extra returned element to balance the stack
+dup2
+pop
+pop
+pop
+pop
+addr RWXCBB73XJITATVQFOI7MVUUQOL2PFDDSDUMW4H4T2SNSX4SEUOQ2MM7F4
+concat
+substring 42 99
+intc 0
+intc 1
+substring3
+bz there2
+b there2
+there2:
+return
 int 1
 balance
 int 1
 app_opted_in
 int 1
-byte 0x4242
+byte "test"
 app_local_get
 pop
 pop
 int 1
-byte 0x4242
+byte "\x42\x42"
 app_local_gets
 pop
 byte 0x4242
@@ -210,7 +217,7 @@ func TestAssemble(t *testing.T) {
 	program, err := AssembleString(bigTestAssembleNonsenseProgram)
 	require.NoError(t, err)
 	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
-	expectedBytes, _ := hex.DecodeString("022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026040212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d02424200320032013202320328292929292a50512a632223520431003101310231043105310731083109310a310b310c310d310e310f311131123113311431153118311933000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c41000d42000a2b171615400003290349483403350222231d4821056021056121052b63484821052b62482b642b65484821052b2106662b21056721072b682b6921072105700048482107210571004848361c004837001a0048")
+	expectedBytes, _ := hex.DecodeString("022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f311131123113311431153118311933000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b6921072105700048482107210571004848361c004837001a0048")
 	if bytes.Compare(expectedBytes, program) != 0 {
 		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
 		t.Log(hex.EncodeToString(program))
@@ -448,6 +455,8 @@ func TestAssembleBytes(t *testing.T) {
 		"byte b64(YWJjZGVm)",
 		"byte base64(YWJjZGVm)",
 		"byte 0x616263646566",
+		`byte "\x61\x62\x63\x64\x65\x66"`,
+		`byte "abcdef"`,
 	}
 	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
@@ -457,8 +466,224 @@ func TestAssembleBytes(t *testing.T) {
 				s := hex.EncodeToString(program)
 				require.Equal(t, mutateProgVersion(v, "0126010661626364656628"), s)
 			}
+
 		})
 	}
+}
+
+func TestAssembleBytesString(t *testing.T) {
+	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			text := `byte "foo bar"`
+			_, err := AssembleStringWithVersion(text, v)
+			require.NoError(t, err)
+
+			text = `byte "foo bar // not a comment"`
+			_, err = AssembleStringWithVersion(text, v)
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestFieldsFromLine(t *testing.T) {
+	line := "op arg"
+	fields := fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "arg", fields[1])
+
+	line = "op arg // test"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "arg", fields[1])
+
+	line = "op base64 ABC//=="
+	fields = fieldsFromLine(line)
+	require.Equal(t, 3, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "base64", fields[1])
+	require.Equal(t, "ABC//==", fields[2])
+
+	line = "op base64 ABC/=="
+	fields = fieldsFromLine(line)
+	require.Equal(t, 3, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "base64", fields[1])
+	require.Equal(t, "ABC/==", fields[2])
+
+	line = "op base64 ABC/== /"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 4, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "base64", fields[1])
+	require.Equal(t, "ABC/==", fields[2])
+	require.Equal(t, "/", fields[3])
+
+	line = "op base64 ABC/== //"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 3, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "base64", fields[1])
+	require.Equal(t, "ABC/==", fields[2])
+
+	line = "op base64 ABC//== //"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 3, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "base64", fields[1])
+	require.Equal(t, "ABC//==", fields[2])
+
+	line = "op b64 ABC//== //"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 3, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "b64", fields[1])
+	require.Equal(t, "ABC//==", fields[2])
+
+	line = "op b64(ABC//==) // comment"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "b64(ABC//==)", fields[1])
+
+	line = "op base64(ABC//==) // comment"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "base64(ABC//==)", fields[1])
+
+	line = "op b64(ABC/==) // comment"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "b64(ABC/==)", fields[1])
+
+	line = "op base64(ABC/==) // comment"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "base64(ABC/==)", fields[1])
+
+	line = "base64(ABC//==)"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 1, len(fields))
+	require.Equal(t, "base64(ABC//==)", fields[0])
+
+	line = "b(ABC//==)"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 1, len(fields))
+	require.Equal(t, "b(ABC", fields[0])
+
+	line = "b(ABC//==) //"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 1, len(fields))
+	require.Equal(t, "b(ABC", fields[0])
+
+	line = "b(ABC ==) //"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "b(ABC", fields[0])
+	require.Equal(t, "==)", fields[1])
+
+	line = "op base64 ABC)"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 3, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "base64", fields[1])
+	require.Equal(t, "ABC)", fields[2])
+
+	line = "op base64 ABC) // comment"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 3, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "base64", fields[1])
+	require.Equal(t, "ABC)", fields[2])
+
+	line = "op base64 ABC//) // comment"
+	fields = fieldsFromLine(line)
+	require.Equal(t, 3, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, "base64", fields[1])
+	require.Equal(t, "ABC//)", fields[2])
+
+	line = `op "test"`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test"`, fields[1])
+
+	line = `op "test1 test2"`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2"`, fields[1])
+
+	line = `op "test1 test2" // comment`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2"`, fields[1])
+
+	line = `op "test1 test2 // not a comment"`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2 // not a comment"`, fields[1])
+
+	line = `op "test1 test2 // not a comment" // comment`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2 // not a comment"`, fields[1])
+
+	line = `op "test1 test2 // not a comment" // comment`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2 // not a comment"`, fields[1])
+
+	line = `op "test1 test2" //`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2"`, fields[1])
+
+	line = `op "test1 test2"//`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2"`, fields[1])
+
+	line = `op "test1 test2` // non-terminated string literal
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2`, fields[1])
+
+	line = `op "test1 test2\"` // non-terminated string literal
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `"test1 test2\"`, fields[1])
+
+	line = `op \"test1 test2\"` // not a string literal
+	fields = fieldsFromLine(line)
+	require.Equal(t, 3, len(fields))
+	require.Equal(t, "op", fields[0])
+	require.Equal(t, `\"test1`, fields[1])
+	require.Equal(t, `test2\"`, fields[2])
+
+	line = `"test1 test2"`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 1, len(fields))
+	require.Equal(t, `"test1 test2"`, fields[0])
+
+	line = `\"test1 test2"`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 2, len(fields))
+	require.Equal(t, `\"test1`, fields[0])
+	require.Equal(t, `test2"`, fields[1])
 }
 
 func TestAssembleRejectNegJump(t *testing.T) {
@@ -617,12 +842,12 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 
 	tests := map[uint64]string{
 		2: bigTestAssembleNonsenseProgram,
-		1: bigTestAssembleNonsenseProgram[:strings.Index(bigTestAssembleNonsenseProgram, "balance")],
+		1: bigTestAssembleNonsenseProgram[:strings.Index(bigTestAssembleNonsenseProgram, "dup2")],
 	}
 
 	for v, source := range tests {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			program, err := AssembleString(source)
+			program, err := AssembleStringWithVersion(source, v)
 			require.NoError(t, err)
 			t2, err := Disassemble(program)
 			require.NoError(t, err)
@@ -631,7 +856,7 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 				t.Log(t2)
 			}
 			require.NoError(t, err)
-			require.Equal(t, program, p2)
+			require.Equal(t, program[1:], p2[1:])
 		})
 	}
 }
@@ -874,4 +1099,73 @@ err
 	has, err = HasStatefulOps(program)
 	require.NoError(t, err)
 	require.True(t, has)
+}
+
+func TestStringLiteralParsing(t *testing.T) {
+	s := `"test"`
+	e := []byte(`test`)
+	result, err := parseStringLiteral(s)
+	require.NoError(t, err)
+	require.Equal(t, e, result)
+
+	s = `"test\n"`
+	e = []byte(`test
+`)
+	result, err = parseStringLiteral(s)
+	require.NoError(t, err)
+	require.Equal(t, e, result)
+
+	s = `"test\x0a"`
+	e = []byte(`test
+`)
+	result, err = parseStringLiteral(s)
+	require.NoError(t, err)
+	require.Equal(t, e, result)
+
+	s = `"test\n\t\""`
+	e = []byte(`test
+	"`)
+	result, err = parseStringLiteral(s)
+	require.NoError(t, err)
+	require.Equal(t, e, result)
+
+	s = `"test 123"`
+	e = []byte(`test 123`)
+	result, err = parseStringLiteral(s)
+	require.NoError(t, err)
+	require.Equal(t, e, result)
+
+	s = `"\x74\x65\x73\x74\x31\x32\x33"`
+	e = []byte(`test123`)
+	result, err = parseStringLiteral(s)
+	require.NoError(t, err)
+	require.Equal(t, e, result)
+
+	s = `"test`
+	result, err = parseStringLiteral(s)
+	require.EqualError(t, err, "no quotes")
+
+	s = `test`
+	result, err = parseStringLiteral(s)
+	require.EqualError(t, err, "no quotes")
+
+	s = `test"`
+	result, err = parseStringLiteral(s)
+	require.EqualError(t, err, "no quotes")
+
+	s = `"test\"`
+	result, err = parseStringLiteral(s)
+	require.EqualError(t, err, "non-terminated escape seq")
+
+	s = `"test\x\"`
+	result, err = parseStringLiteral(s)
+	require.EqualError(t, err, "escape seq inside hex number")
+
+	s = `"test\a"`
+	result, err = parseStringLiteral(s)
+	require.EqualError(t, err, "invalid escape seq \\a")
+
+	s = `"test\x10\x1"`
+	result, err = parseStringLiteral(s)
+	require.EqualError(t, err, "non-terminated hex seq")
 }

@@ -573,6 +573,10 @@ func (cx *evalContext) step() {
 			if len(spec.Returns) > 1 {
 				num = len(spec.Returns)
 			}
+			if len(cx.stack) < num {
+				cx.err = fmt.Errorf("stack underflow: expected %d, have %d", num, len(cx.stack))
+				return
+			}
 			for i := 1; i <= num; i++ {
 				stackString += fmt.Sprintf("(%s) ", cx.stack[len(cx.stack)-i].String())
 			}
@@ -1117,6 +1121,12 @@ func opDup(cx *evalContext) {
 	last := len(cx.stack) - 1
 	sv := cx.stack[last]
 	cx.stack = append(cx.stack, sv)
+}
+
+func opDup2(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	cx.stack = append(cx.stack, cx.stack[prev:]...)
 }
 
 func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, field uint64) (sv stackValue, err error) {

@@ -432,6 +432,9 @@ func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
 			return
 		}
 		consumed = 2
+	} else if len(arg) > 2 && arg[0] == '"' && arg[len(arg)-1] == '"' {
+		val, err = parseStringLiteral(arg)
+		consumed = 1
 	} else {
 		err = fmt.Errorf("byte arg did not parse: %v", arg)
 		return
@@ -439,9 +442,78 @@ func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
 	return
 }
 
+func parseStringLiteral(input string) (result []byte, err error) {
+	start := 0
+	end := len(input) - 1
+	if input[start] != '"' || input[end] != '"' {
+		return nil, fmt.Errorf("no quotes")
+	}
+	start++
+
+	escapeSeq := false
+	hexSeq := false
+	result = make([]byte, 0, end-start+1)
+
+	// skip first and last quotes
+	pos := start
+	for pos < end {
+		char := input[pos]
+		if char == '\\' && !escapeSeq {
+			if hexSeq {
+				return nil, fmt.Errorf("escape seq inside hex number")
+			}
+			escapeSeq = true
+			pos++
+			continue
+		}
+		if escapeSeq {
+			escapeSeq = false
+			switch char {
+			case 'n':
+				char = '\n'
+			case 'r':
+				char = '\r'
+			case 't':
+				char = '\t'
+			case '\\':
+				char = '\\'
+			case '"':
+				char = '"'
+			case 'x':
+				hexSeq = true
+				pos++
+				continue
+			default:
+				return nil, fmt.Errorf("invalid escape seq \\%c", char)
+			}
+		}
+		if hexSeq {
+			hexSeq = false
+			if pos >= len(input)-2 { // count a closing quote
+				return nil, fmt.Errorf("non-terminated hex seq")
+			}
+			num, err := strconv.ParseUint(input[pos:pos+2], 16, 8)
+			if err != nil {
+				return nil, err
+			}
+			char = uint8(num)
+			pos++
+		}
+
+		result = append(result, char)
+		pos++
+	}
+	if escapeSeq || hexSeq {
+		return nil, fmt.Errorf("non-terminated escape seq")
+	}
+
+	return
+}
+
 // byte {base64,b64,base32,b32}(...)
 // byte {base64,b64,base32,b32} ...
 // byte 0x....
+// byte "this is a string\n"
 func assembleByte(ops *OpStream, spec *OpSpec, args []string) error {
 	var val []byte
 	var err error
@@ -790,16 +862,77 @@ func typecheck(expected, got StackType) bool {
 	return expected == got
 }
 
-func filterFieldsForLineComment(fields []string) []string {
-	prevField := ""
-	for i, s := range fields {
-		if strings.HasPrefix(s, "//") {
-			if prevField != "base64" && prevField != "b64" {
-				return fields[:i]
+var spaces = [256]uint8{'\t': 1, ' ': 1}
+
+func fieldsFromLine(line string) []string {
+	var fields []string
+
+	i := 0
+	for i < len(line) && spaces[line[i]] != 0 {
+		i++
+	}
+
+	start := i
+	inString := false
+	inBase64 := false
+	for i < len(line) {
+		if spaces[line[i]] == 0 { // if not space
+			switch line[i] {
+			case '"': // is a string literal?
+				if !inString {
+					if i == 0 || i > 0 && spaces[line[i-1]] != 0 {
+						inString = true
+					}
+				} else {
+					if line[i-1] != '\\' { // if not escape symbol
+						inString = false
+					}
+				}
+			case '/': // is a comment?
+				if i < len(line)-1 && line[i+1] == '/' && !inBase64 && !inString {
+					if start != i { // if a comment without whitespace
+						fields = append(fields, line[start:i])
+					}
+					return fields
+				}
+			case '(': // is base64( seq?
+				prefix := line[start:i]
+				if prefix == "base64" || prefix == "b64" {
+					inBase64 = true
+				}
+			case ')': // is ) as base64( completion
+				if inBase64 {
+					inBase64 = false
+				}
+			default:
+			}
+			i++
+			continue
+		}
+		if !inString {
+			field := line[start:i]
+			fields = append(fields, field)
+			if field == "base64" || field == "b64" {
+				inBase64 = true
+			} else if inBase64 {
+				inBase64 = false
 			}
 		}
-		prevField = s
+		i++
+
+		if !inString {
+			for i < len(line) && spaces[line[i]] != 0 {
+				i++
+			}
+			start = i
+		}
 	}
+
+	// add rest of the string if any
+	if start < len(line) {
+		fields = append(fields, line[start:i])
+	}
+
 	return fields
 }
 
@@ -852,8 +985,7 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 			ops.trace("%d: // line\n", ops.sourceLine)
 			continue
 		}
-		fields := strings.Fields(line)
-		fields = filterFieldsForLineComment(fields)
+		fields := fieldsFromLine(line)
 		if len(fields) == 0 {
 			ops.trace("%d: no fields\n", ops.sourceLine)
 			continue

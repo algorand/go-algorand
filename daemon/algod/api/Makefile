@@ -1,10 +1,14 @@
+# `make all` or just `make` should be appropriate for dev work
 all:	server/v2/generated/types.go server/v2/generated/routes.go server/v2/generated/private/types.go server/v2/generated/private/routes.go
 
+# `make generate` should be able to replace old `generate.sh` script and be appropriate for build system use
+generate:	oapi-codegen all
+
 server/v2/generated/types.go:	algod.oas3.yml
-	oapi-codegen -package generated -type-mappings integer=uint64 -generate types -exclude-tags=private -o ./server/v2/generated/types.go algod.oas3.yml
+	oapi-codegen -package generated -type-mappings integer=uint64 -generate types -exclude-tags=private,common -o ./server/v2/generated/types.go algod.oas3.yml
 
 server/v2/generated/routes.go:	algod.oas3.yml
-	oapi-codegen -package generated -type-mappings integer=uint64 -generate server,spec -exclude-tags=private -o ./server/v2/generated/routes.go algod.oas3.yml
+	oapi-codegen -package generated -type-mappings integer=uint64 -generate server,spec -exclude-tags=private,common -o ./server/v2/generated/routes.go algod.oas3.yml
 
 server/v2/generated/private/types.go:	algod.oas3.yml
 	oapi-codegen -package private -type-mappings integer=uint64 -generate types -include-tags=private -o ./server/v2/generated/private/types.go algod.oas3.yml

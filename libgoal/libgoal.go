@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 
 	"github.com/algorand/go-algorand/config"
@@ -46,11 +47,13 @@ const DefaultKMDDataDir = nodecontrol.DefaultKMDDataDir
 
 // Client represents the entry point for all libgoal functions
 type Client struct {
-	nc           nodecontrol.NodeController
-	kmdStartArgs nodecontrol.KMDStartArgs
-	dataDir      string
-	cacheDir     string
-	consensus    config.ConsensusProtocols
+	nc                   nodecontrol.NodeController
+	kmdStartArgs         nodecontrol.KMDStartArgs
+	dataDir              string
+	cacheDir             string
+	consensus            config.ConsensusProtocols
+	algodVersionAffinity algodclient.APIVersion
+	kmdVersionAffinity   kmdclient.APIVersion
 }
 
 // ClientConfig is data to configure a Client
@@ -133,6 +136,8 @@ func (c *Client) init(config ClientConfig, clientType ClientType) error {
 	}
 	c.dataDir = dataDir
 	c.cacheDir = config.CacheDir
+	c.algodVersionAffinity = algodclient.APIVersionV1
+	c.kmdVersionAffinity = kmdclient.APIVersionV1
 
 	// Get node controller
 	nc, err := getNodeController(config.BinDir, config.AlgodDataDir)
@@ -170,6 +175,7 @@ func (c *Client) init(config ClientConfig, clientType ClientType) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -186,6 +192,7 @@ func (c *Client) ensureAlgodClient() (*algodclient.RestClient, error) {
 	if err != nil {
 		return nil, err
 	}
+	algod.SetAPIVersionAffinity(c.algodVersionAffinity)
 	return &algod, err
 }
 
@@ -625,7 +632,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 /* Algod Wrappers */
 
 // Status returns the node status
-func (c *Client) Status() (resp v1.NodeStatus, err error) {
+func (c *Client) Status() (resp generatedV2.NodeStatusResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Status()
@@ -638,6 +645,19 @@ func (c *Client) AccountInformation(account string) (resp v1.Account, err error)
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AccountInformation(account)
+	}
+	return
+}
+
+// AccountData takes an address and returns its basics.AccountData
+func (c *Client) AccountData(account string) (accountData basics.AccountData, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		var resp []byte
+		resp, err = algod.RawAccountInformationV2(account)
+		if err == nil {
+			err = protocol.Decode(resp, &accountData)
+		}
 	}
 	return
 }
@@ -707,7 +727,7 @@ func (c *Client) HealthCheck() error {
 }
 
 // WaitForRound takes a round, waits until it appears and returns its status. This function blocks.
-func (c *Client) WaitForRound(round uint64) (resp v1.NodeStatus, err error) {
+func (c *Client) WaitForRound(round uint64) (resp generatedV2.NodeStatusResponse, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.StatusAfterBlock(round)
@@ -818,4 +838,10 @@ func (c *Client) ConsensusParams(round uint64) (consensus config.ConsensusParams
 	}
 
 	return params, nil
+}
+
+// SetAPIVersionAffinity sets the desired client API version affinity of the algod and kmd clients.
+func (c *Client) SetAPIVersionAffinity(algodVersionAffinity algodclient.APIVersion, kmdVersionAffinity kmdclient.APIVersion) {
+	c.algodVersionAffinity = algodVersionAffinity
+	c.kmdVersionAffinity = kmdVersionAffinity
 }

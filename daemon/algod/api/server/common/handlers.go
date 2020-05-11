@@ -60,10 +60,6 @@ func HealthCheck(ctx lib.ReqContext, context echo.Context) {
 	//     Responses:
 	//       200:
 	//         description: OK.
-	//       404:
-	//         description: Not Found
-	//         schema: {type: string}
-	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
 	w := context.Response().Writer
 	w.WriteHeader(http.StatusOK)

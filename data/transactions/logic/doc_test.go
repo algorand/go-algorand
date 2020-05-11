@@ -89,6 +89,16 @@ func TestOpCost(t *testing.T) {
 	require.Equal(t, 1, c)
 	c = OpCost("sha256")
 	require.True(t, c > 1)
+
+	a := OpAllCosts("+")
+	require.Equal(t, 1, len(a))
+	require.Equal(t, 1, a[0])
+
+	a = OpAllCosts("sha256")
+	require.True(t, len(a) > 1)
+	for v := 1; v <= LogicVersion; v++ {
+		require.True(t, a[v] > 1)
+	}
 }
 
 func TestOpSize(t *testing.T) {

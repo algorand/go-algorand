@@ -255,23 +255,24 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | `return` | use last value on stack as success value; end |
 | `pop` | discard value X from stack |
 | `dup` | duplicate last value on stack |
+| `dup2` | duplicate two last values on stack: A, B -> A, B, A, B |
 
 ### State Access
 
 | Op | Description |
 | --- | --- |
-| `balance` | get balance for the requested account A in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction |
-| `app_opted_in` | check if account A opted in for the application B => {0 or 1} |
-| `app_local_gets` | read from account's A from local state of the current application key B  => value |
-| `app_local_get` | read from account's A from local state of the application B key C  => {0 or 1 (top), value} |
+| `balance` | get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction |
+| `app_opted_in` | check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1} |
+| `app_local_gets` | read from account specified by Txn.Accounts[A] from local state of the current application key B  => value |
+| `app_local_get` | read from account specified by Txn.Accounts[A] from local state of the application B key C  => {0 or 1 (top), value} |
 | `app_global_gets` | read key A from global state of a current application => value |
 | `app_global_get` | read from application A global state key B => {0 or 1 (top), value} |
-| `app_local_put` | write to account's A to local state of a current application key B with value C |
+| `app_local_put` | write to account specified by Txn.Accounts[A] to local state of a current application key B with value C |
 | `app_global_put` | write key A and value B to global state of the current application |
-| `app_local_del` | delete from account's A local state key B of the current application |
+| `app_local_del` | delete from account specified by Txn.Accounts[A] local state key B of the current application |
 | `app_global_del` | delete key A from a global state of the current application |
-| `asset_holding_get` | read from account's A and asset B holding field X (imm arg)  => {0 or 1 (top), value} |
-| `asset_params_get` | read from account's A and asset B params field X (imm arg)  => {0 or 1 (top), value} |
+| `asset_holding_get` | read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg)  => {0 or 1 (top), value} |
+| `asset_params_get` | read from account specified by Txn.Accounts[A] and asset B params field X (imm arg)  => {0 or 1 (top), value} |
 
 # Assembler Syntax
 
@@ -294,13 +295,15 @@ byte b32 AAAA...
 byte base32(AAAA...)
 byte b32(AAAA...)
 byte 0x0123456789abcdef...
+byte "\x01\x02"
+byte "string literal"
 ```
 
 `int` constants may be `0x` prefixed for hex, `0` prefixed for octal, or decimal numbers.
 
 `intcblock` may be explictly assembled. It will conflict with the assembler gathering `int` pseudo-ops into a `intcblock` program prefix, but may be used if code only has explicit `intc` references. `intcblock` should be followed by space separated int constants all on one line.
 
-`bytecblock` may be explicitly assembled. It will conflict with the assembler if there are any `byte` pseudo-ops but may be used if only explicit `bytec` references are used. `bytecblock` should be followed with byte constants all on one line, either 'encoding value' pairs (`b64 AAA...`) or 0x prefix or function-style values (`base64(...)`).
+`bytecblock` may be explicitly assembled. It will conflict with the assembler if there are any `byte` pseudo-ops but may be used if only explicit `bytec` references are used. `bytecblock` should be followed with byte constants all on one line, either 'encoding value' pairs (`b64 AAA...`) or 0x prefix or function-style values (`base64(...)`) or string literal values.
 
 ## Labels and Branches
 

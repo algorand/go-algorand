@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -171,45 +172,55 @@ func getForeignApps() []uint64 {
 	return out
 }
 
+func parseAppArg(arg appCallArg) (rawValue []byte, parseErr error) {
+	switch arg.Encoding {
+	case "str", "string":
+		rawValue = []byte(arg.Value)
+	case "int", "integer":
+		num, err := strconv.ParseUint(arg.Value, 10, 64)
+		if err != nil {
+			parseErr = fmt.Errorf("Could not parse uint64 from string (%s): %v", arg.Value, err)
+			return
+		}
+		ibytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(ibytes, num)
+		rawValue = ibytes
+	case "addr", "address":
+		addr, err := basics.UnmarshalChecksumAddress(arg.Value)
+		if err != nil {
+			parseErr = fmt.Errorf("Could not unmarshal checksummed address from string (%s): %v", arg.Value, err)
+			return
+		}
+		rawValue = addr[:]
+	case "b32", "base32", "byte base32":
+		data, err := base32.StdEncoding.DecodeString(arg.Value)
+		if err != nil {
+			parseErr = fmt.Errorf("Could not decode base32-encoded string (%s): %v", arg.Value, err)
+			return
+		}
+		rawValue = data
+	case "b64", "base64", "byte base64":
+		data, err := base64.StdEncoding.DecodeString(arg.Value)
+		if err != nil {
+			parseErr = fmt.Errorf("Could not decode base64-encoded string (%s): %v", arg.Value, err)
+			return
+		}
+		rawValue = data
+	default:
+		parseErr = fmt.Errorf("Unknown encoding: %s", arg.Encoding)
+	}
+	return
+}
+
 func parseAppInputs(inputs appCallInputs) (args [][]byte, accounts []string, foreignApps []uint64) {
 	accounts = inputs.Accounts
 	foreignApps = inputs.ForeignApps
 	args = make([][]byte, len(inputs.Args))
 	for i, arg := range inputs.Args {
-		var rawValue []byte
-		switch arg.Encoding {
-		case "str", "string":
-			rawValue = []byte(arg.Value)
-		case "int", "integer":
-			num, err := strconv.ParseUint(arg.Value, 10, 64)
-			if err != nil {
-				reportErrorf("Could not parse uint64 from string (%s) in app input JSON file: %v", arg.Value, err)
-			}
-			ibytes := make([]byte, 8)
-			binary.BigEndian.PutUint64(ibytes, num)
-			rawValue = ibytes
-		case "addr", "address":
-			addr, err := basics.UnmarshalChecksumAddress(arg.Value)
-			if err != nil {
-				reportErrorf("Could not unmarshal checksummed address from string (%s) in app input JSON file: %v", arg.Value, err)
-			}
-			rawValue = addr[:]
-		case "b32", "base32", "byte base32":
-			data, err := base32.StdEncoding.DecodeString(arg.Value)
-			if err != nil {
-				reportErrorf("Could not decode base32-encoded string (%s) in app input JSON file: %v", arg.Value, err)
-			}
-			rawValue = data
-		case "b64", "base64", "byte base64":
-			data, err := base64.StdEncoding.DecodeString(arg.Value)
-			if err != nil {
-				reportErrorf("Could not decode base64-encoded string (%s) in app input JSON file: %v", arg.Value, err)
-			}
-			rawValue = data
-		default:
-			reportErrorf("Unknown encoding in app input JSON file: %s", arg.Encoding)
+		rawValue, err := parseAppArg(arg)
+		if err != nil {
+			reportErrorf("Could not decode input at index %d: %v", i, err)
 		}
-
 		args[i] = rawValue
 	}
 	return

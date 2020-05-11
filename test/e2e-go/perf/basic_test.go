@@ -26,9 +26,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
@@ -122,7 +123,7 @@ func doBenchTemplate(b *testing.B, template string, moneynode string) {
 	// goroutines to talk to algod and kmd.
 	http.DefaultTransport.(*http.Transport).MaxIdleConnsPerHost = 100
 
-	var status v1.NodeStatus
+	var status generatedV2.NodeStatusResponse
 
 	b.Run(template, func(b *testing.B) {
 		for i := 0; i < b.N; i++ {

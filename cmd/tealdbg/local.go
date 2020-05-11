@@ -270,20 +270,19 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 	// otherwise, if no program(s) set, check transactions for TEAL programs
 	for gi, stxn := range r.txnGroup {
 		// make a new ledger per possible execution since it requires a current group index
-		var ledger logic.LedgerForLogic
-		ledger, err = makeAppLedger(balances, r.txnGroup, gi, r.proto, dp.Round)
-		if err != nil {
-			return
-		}
 		if len(stxn.Lsig.Logic) > 0 {
 			run := evaluation{
 				program:    stxn.Lsig.Logic,
 				groupIndex: gi,
 				eval:       logic.Eval,
-				ledger:     ledger,
 			}
 			r.runs = append(r.runs, run)
 		} else if stxn.Txn.Type == protocol.ApplicationCallTx {
+			var ledger logic.LedgerForLogic
+			ledger, err = makeAppLedger(balances, r.txnGroup, gi, r.proto, dp.Round)
+			if err != nil {
+				return
+			}
 			eval := func(program []byte, ep logic.EvalParams) (bool, error) {
 				pass, _, err := logic.EvalStateful(program, ep)
 				return pass, err

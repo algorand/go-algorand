@@ -630,6 +630,9 @@ func initConsensusProtocols() {
 	// Enable application support
 	vFuture.Application = true
 
+	// Enable rekeying
+	vFuture.SupportRekeying = true
+
 	// 100.1 Algos (MinBalance for creating 1,000 assets)
 	vFuture.MaximumMinimumBalance = 100100000
 
@@ -673,7 +676,6 @@ func initConsensusProtocols() {
 
 	// Maximum number of apps a single account can opt into
 	vFuture.MaxAppsOptedIn = 10
-
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 

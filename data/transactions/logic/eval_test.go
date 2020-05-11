@@ -2383,7 +2383,7 @@ func TestShortBytecblock(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			fullprogram, err := AssembleStringWithVersion(`bytecblock 0x123456 0xababcdcd`, v)
+			fullprogram, err := AssembleStringWithVersion(`bytecblock 0x123456 0xababcdcd "test"`, v)
 			require.NoError(t, err)
 			fullprogram[2] = 50 // fake 50 elements
 			for i := 2; i < len(fullprogram); i++ {
@@ -3209,4 +3209,83 @@ intc_0
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "stack overflow")
+}
+
+func TestDup(t *testing.T) {
+	t.Parallel()
+
+	text := `int 1
+dup
+==
+bnz dup_ok
+err
+dup_ok:
+int 1
+int 2
+dup2 // expected 1, 2, 1, 2
+int 2
+==
+bz error
+int 1
+==
+bz error
+int 2
+==
+bz error
+int 1
+==
+bz error
+b exit
+error:
+err
+exit:
+int 1
+`
+	ep := defaultEvalParams(nil, nil)
+
+	program, err := AssembleString(text)
+	require.NoError(t, err)
+	pass, err := Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	text = `dup2`
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+	pass, err = Eval(program, ep)
+	require.Error(t, err)
+
+	text = `int 1
+dup2
+`
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+	pass, err = Eval(program, ep)
+	require.Error(t, err)
+}
+
+func TestStringLiteral(t *testing.T) {
+	t.Parallel()
+
+	text := `byte "foo bar"
+byte b64(Zm9vIGJhcg==)
+==
+`
+	ep := defaultEvalParams(nil, nil)
+
+	program, err := AssembleString(text)
+	require.NoError(t, err)
+	pass, err := Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	text = `byte "foo bar // not a comment"
+byte b64(Zm9vIGJhciAvLyBub3QgYSBjb21tZW50)
+==
+`
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
 }
