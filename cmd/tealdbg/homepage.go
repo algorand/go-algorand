@@ -192,6 +192,8 @@ var homepage string = `
 
         <script>
             var sessions = {};
+            const TealBytesType = 1;
+            const TealUintType = 2;
             function addExec(state) {
                 var template = document.getElementById("exectemplate");
                 template = template.content.firstElementChild;
@@ -215,11 +217,11 @@ var homepage string = `
                     lineno.innerText = i;
                     lineno.innerText = lineno.innerText.padStart(4, '0');
 
-                    type.innerText = values[i]["t"];
-                    if (values[i]["t"] === "u") {
-                        value.innerText = values[i]["u"] || 0;
+                    type.innerText = values[i].type == TealUintType ? "u": "b";
+                    if (values[i].type === TealUintType) {
+                        value.innerText = values[i].uint || 0;
                     } else {
-                        value.innerText = values[i]["b"] || "";
+                        value.innerText = values[i].bytes || "";
                     }
                 }
             }
