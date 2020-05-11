@@ -895,6 +895,15 @@ func fieldsFromLine(line string) []string {
 					}
 					return fields
 				}
+			case '(': // is base64( seq?
+				prefix := line[start:i]
+				if prefix == "base64" || prefix == "b64" {
+					inBase64 = true
+				}
+			case ')': // is ) as base64( completion
+				if inBase64 {
+					inBase64 = false
+				}
 			default:
 			}
 			i++
@@ -902,10 +911,12 @@ func fieldsFromLine(line string) []string {
 		}
 		if !inString {
 			field := line[start:i]
+			fields = append(fields, field)
 			if field == "base64" || field == "b64" {
 				inBase64 = true
+			} else if inBase64 {
+				inBase64 = false
 			}
-			fields = append(fields, line[start:i])
 		}
 		i++
 
