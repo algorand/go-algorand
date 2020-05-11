@@ -1415,7 +1415,11 @@ func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err
 	case LogicSigVersion:
 		sv.Uint = cx.Proto.LogicSigVersion
 	case Round:
-		sv.Uint, err = cx.getRound()
+		if (cx.runModeFlags & runModeApplication) == 0 {
+			err = errors.New("global Round not allowed in current mode")
+		} else {
+			sv.Uint, err = cx.getRound()
+		}
 	default:
 		err = fmt.Errorf("invalid global[%d]", field)
 	}

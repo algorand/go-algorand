@@ -2498,11 +2498,9 @@ int 1
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
-	// TODO this should fail not just because ledger is not available, but
-	// also because it is in stateless mode.
 	pass, err := Eval(program, ep)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "ledger not available")
+	require.Contains(t, err.Error(), "not allowed in current mode")
 
 	ep.Ledger = ledger
 	pass, _, err = EvalStateful(program, ep)
