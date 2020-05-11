@@ -558,7 +558,7 @@
       "post": {
         "consumes": [
           "application/x-msgpack",
-	  "application/json"
+          "application/json"
         ],
         "produces": [
           "application/json"
@@ -582,8 +582,8 @@
         ],
         "responses": {
           "200": {
-	    "description": "debugging json",
-	    "schema": { "type": "object" }
+            "description": "debugging json",
+            "schema": { "type": "object" }
           },
           "400": {
             "description": "Bad Request",
