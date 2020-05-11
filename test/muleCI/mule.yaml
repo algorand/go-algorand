@@ -1,65 +1,102 @@
 tasks:
-  - task: docker.Shell
-    name: amd64
+  - task: docker.Version
+    configFilePath: scripts/configure_dev-deps.sh
+  - task: shell.docker.Ensure
+    image: algorand/go-algorand-ci-linux
+    version: '{{ docker.Version.outputs.version }}'
+    dockerFilePath: docker/build/cicd.Dockerfile
+    dependencies: docker.Version
+  - task: docker.Make
+    name: build
     docker:
-      shell: sh
-      image: amd64/alpine
-      version: latest
-    command: uname -a
-  - task: docker.Shell
-    name: arm64
+      image: algorand/go-algorand-ci-linux
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /go/src/github.com/algorand/go-algorand
+    target: ci-build
+  - task: docker.Make
+    name: fulltest
     docker:
-      shell: sh
-      image: arm64v8/alpine
-      version: latest
-    command: uname -a
-  - task: docker.Shell
-    name: arm32
+      image: algorand/go-algorand-ci-linux
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /go/src/github.com/algorand/go-algorand
+    target: fulltest -j4
+  - task: docker.Make
+    name: shorttest
     docker:
-      shell: sh
-      image: arm32v6/alpine
-      version: latest
-    command: uname -a
+      image: algorand/go-algorand-ci-linux
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /go/src/github.com/algorand/go-algorand
+    target: shorttest -j4
+  - task: docker.Make
+    name: integration-test
+    docker:
+      image: algorand/go-algorand-ci-linux
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /go/src/github.com/algorand/go-algorand
+    target: ci-integration -j4
+  - task: shell.Make
+    name: deps
+    target: ci-deps
+  - task: shell.Make
+    name: build
+    target: ci-build
+  - task: shell.Make
+    name: fulltest
+    target: fulltest -j4
+  - task: shell.Make
+    name: shorttest
+    target: shorttest -j3
+  - task: shell.Make
+    name: integration-test
+    target: ci-integration -j4
+  - task: shell.Make
+    name: archive
+    target: archive
 
 jobs:
-  # Linux amd64 jobs
-  build-linux-amd64:
-    tasks:
-      - docker.Shell.amd64
-  package-linux-amd64:
-    tasks:
-      - docker.Shell.amd64
-  test-linux-amd64:
-    tasks:
-      - docker.Shell.amd64
-  archive-linux-amd64:
-    tasks:
-      - docker.Shell.amd64
-
   # Linux arm64 jobs
   build-linux-arm64:
+    configs:
+      arch: arm64v8
+      docker:
+        env:
+          - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
+          - TRAVIS_BRANCH=${TRAVIS_BRANCH}
+          - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
     tasks:
-      - docker.Shell.arm64
-  package-linux-arm64:
+      - shell.docker.Ensure
+      - docker.Make.build
+  test-linux-arm64-fulltest:
+    configs:
+      arch: arm64v8
+      docker:
+        env:
+          - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
+          - TRAVIS_BRANCH=${TRAVIS_BRANCH}
+          - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
     tasks:
-      - docker.Shell.arm64
-  test-linux-arm64:
+      - shell.docker.Ensure
+      - docker.Make.fulltest
+  test-linux-arm64-shorttest:
+    configs:
+      arch: arm64v8
+      docker:
+        env:
+          - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
+          - TRAVIS_BRANCH=${TRAVIS_BRANCH}
+          - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
     tasks:
-      - docker.Shell.arm64
-  archive-linux-arm64:
+      - shell.docker.Ensure
+      - docker.Make.shorttest
+  test-linux-arm64-integration:
+    configs:
+      arch: arm64v8
+      docker:
+        env:
+          - SHORTTEST=${SHORTTEST}
+          - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
+          - TRAVIS_BRANCH=${TRAVIS_BRANCH}
+          - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
     tasks:
-      - docker.Shell.arm64
-
-  # Linux arm32 jobs
-  build-linux-arm32:
-    tasks:
-      - docker.Shell.arm32
-  package-linux-arm32:
-    tasks:
-      - docker.Shell.arm32
-  test-linux-arm32:
-    tasks:
-      - docker.Shell.arm32
-  archive-linux-arm32:
-    tasks:
-      - docker.Shell.arm32
+      - shell.docker.Ensure
+      - docker.Make.integration-test
