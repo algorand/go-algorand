@@ -17,6 +17,7 @@
 package v2
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -257,7 +258,7 @@ func (dl *dryrunLedger) AppLocalState(addr basics.Address, appIdx basics.AppInde
 			return st.State.KeyValue, nil
 		}
 	}
-	return nil, nil
+	return make(basics.TealKeyValue), nil
 }
 
 // LedgerForLogic interface
@@ -282,7 +283,7 @@ func (dl *dryrunLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetI
 // LedgerForLogic interface
 func (dl *dryrunLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error) {
 	// TODO? maybe not needed for dryrun
-	return basics.AssetParams{}, nil
+	return basics.AssetParams{}, errors.New("dryrun LedgerForLogic AssetParams unimplemented")
 }
 
 // transactions.Balances interface
