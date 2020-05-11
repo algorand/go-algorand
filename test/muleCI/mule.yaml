@@ -67,15 +67,15 @@ jobs:
 #    tasks:
 #      - shell.docker.Ensure
 #      - docker.Make.fulltest
-  test-linux-arm64-shorttest:
-    configs:
-      arch: arm64v8
-    tasks:
-      - shell.docker.Ensure
-      - docker.Make.shorttest
-#  test-linux-arm64-integration:
+#  test-linux-arm64-shorttest:
 #    configs:
 #      arch: arm64v8
 #    tasks:
 #      - shell.docker.Ensure
 #      - docker.Make.integration-test
+  test-linux-arm64-integration:
+    configs:
+      arch: arm64v8
+    tasks:
+      - shell.docker.Ensure
+      - docker.Make.integration-test
