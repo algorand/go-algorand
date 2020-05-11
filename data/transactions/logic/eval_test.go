@@ -1101,7 +1101,7 @@ txn CloseRemainderTo
 //int 2069
 //==
 //&&
-//global Round
+//global Round // Tested in TestRound
 //int 999999
 //==
 &&
@@ -1111,10 +1111,6 @@ int 1
 &&
 global LogicSigVersion // TODO: stricter checking on field vs version
 int 2
-==
-&&
-global Round
-int 0
 ==
 &&`
 
