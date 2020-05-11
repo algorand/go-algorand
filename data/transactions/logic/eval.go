@@ -1650,7 +1650,7 @@ func (cx *evalContext) getLocalStateCow(accountIdx uint64) (*keyValueCow, error)
 	idxCow, ok := cx.localStateCows[addr]
 	if !ok {
 		// No cached cow for this address. Make one.
-		localKV, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(0))
+		localKV, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(cx.Txn.Txn.ApplicationID))
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch app local state for acct %s: %v", addr, err)
 		}
@@ -1720,7 +1720,7 @@ func (cx *evalContext) getReadOnlyGlobalState(appID uint64) (basics.TealKeyValue
 
 func (cx *evalContext) getGlobalStateCow() (*keyValueCow, error) {
 	if cx.globalStateCow == nil {
-		globalKV, err := cx.Ledger.AppGlobalState(basics.AppIndex(0))
+		globalKV, err := cx.Ledger.AppGlobalState(cx.Txn.Txn.ApplicationID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch global state: %v", err)
 		}

@@ -481,6 +481,9 @@ type GetBlockParams struct {
 	Format *string `json:"format,omitempty"`
 }
 
+// TransactionDryRunJSONBody defines parameters for TransactionDryRun.
+type TransactionDryRunJSONBody string
+
 // GetPendingTransactionsParams defines parameters for GetPendingTransactions.
 type GetPendingTransactionsParams struct {
 
@@ -497,3 +500,6 @@ type PendingTransactionInformationParams struct {
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
 }
+
+// TransactionDryRunRequestBody defines body for TransactionDryRun for application/json ContentType.
+type TransactionDryRunJSONRequestBody TransactionDryRunJSONBody
