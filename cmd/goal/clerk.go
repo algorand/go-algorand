@@ -20,7 +20,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -838,7 +837,7 @@ func disassembleFile(fname, outname string) {
 	if outname == "" {
 		os.Stdout.Write([]byte(text))
 	} else {
-		err = ioutil.WriteFile(outname, []byte(text), 0666)
+		err = writeFile(outname, []byte(text), 0666)
 		if err != nil {
 			reportErrorf("%s: %s\n", outname, err)
 		}
@@ -859,8 +858,8 @@ var compileCmd = &cobra.Command{
 			outblob := program
 			outname := outFilename
 			if outname == "" {
-				if fname == "-" {
-					outname = "-"
+				if fname == stdinFileNameValue {
+					outname = stdoutFilenameValue
 				} else {
 					outname = fmt.Sprintf("%s.tok", fname)
 				}
@@ -889,27 +888,12 @@ var compileCmd = &cobra.Command{
 				outblob = protocol.Encode(&ls)
 			}
 			if !noProgramOutput {
-				if outname == "-" {
-					_, err := os.Stdout.Write(outblob)
-					if err != nil {
-						reportErrorf("%s: %s\n", outname, err)
-					}
-				} else {
-					fout, err := os.Create(outname)
-					if err != nil {
-						reportErrorf("%s: %s\n", outname, err)
-					}
-					_, err = fout.Write(outblob)
-					if err != nil {
-						reportErrorf("%s: %s\n", outname, err)
-					}
-					err = fout.Close()
-					if err != nil {
-						reportErrorf("%s: %s\n", outname, err)
-					}
+				err := writeFile(outname, outblob, 0666)
+				if err != nil {
+					reportErrorf("%s: %s\n", outname, err)
 				}
 			}
-			if !signProgram && outname != "-" {
+			if !signProgram && outname != stdoutFilenameValue {
 				pd := logic.HashProgram(program)
 				addr := basics.Address(pd)
 				fmt.Printf("%s: %s\n", fname, addr.String())
