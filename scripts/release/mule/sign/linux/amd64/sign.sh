@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-set -ex
+set -exo pipefail
 
 echo
 date "+build_release begin SIGN stage %Y%m%d_%H%M%S"
 echo
 
-WORKDIR="$1"
+WORKDIR="$6"
 
 if [ -z "$WORKDIR" ]
 then
@@ -14,11 +14,11 @@ then
     exit 1
 fi
 
-OS_TYPE="$2"
-ARCH_TYPE="$3"
-ARCH_BIT="$4"
-VERSION=${VERSION:-$5}
-PKG_TYPE="$6"
+OS_TYPE="$1"
+ARCH_TYPE="$2"
+ARCH_BIT="$3"
+VERSION=${VERSION:-$4}
+PKG_TYPE="$5"
 
 BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
 CHANNEL=${CHANNEL:-$("$WORKDIR/scripts/compute_branch_channel.sh" "$BRANCH")}

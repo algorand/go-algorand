@@ -56,16 +56,16 @@ package-rpm:
 	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/rpm/package.sh $(OS_TYPE) $(ARCH) $$WORKDIR
 
 package-sign-deb:
-	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) deb
+	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) deb $$WORKDIR
 
 package-sign-rpm:
-	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) rpm
+	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) rpm $$WORKDIR
 
 package-sign-tarball:
-	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) tar.gz
+	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) tar.gz $$WORKDIR
 
 package-sign-source:
-	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) source
+	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) source $$WORKDIR
 
 package-test-deb:
 	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/test.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) deb
