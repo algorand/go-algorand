@@ -1,0 +1,65 @@
+tasks:
+  - task: docker.Shell
+    name: amd64
+    docker:
+      shell: sh
+      image: amd64/alpine
+      version: latest
+    command: uname -a
+  - task: docker.Shell
+    name: arm64
+    docker:
+      shell: sh
+      image: arm64v8/alpine
+      version: latest
+    command: uname -a
+  - task: docker.Shell
+    name: arm32
+    docker:
+      shell: sh
+      image: arm32v6/alpine
+      version: latest
+    command: uname -a
+
+jobs:
+  # Linux amd64 jobs
+  build-linux-amd64:
+    tasks:
+      - docker.Shell.amd64
+  package-linux-amd64:
+    tasks:
+      - docker.Shell.amd64
+  test-linux-amd64:
+    tasks:
+      - docker.Shell.amd64
+  archive-linux-amd64:
+    tasks:
+      - docker.Shell.amd64
+
+  # Linux arm64 jobs
+  build-linux-arm64:
+    tasks:
+      - docker.Shell.arm64
+  package-linux-arm64:
+    tasks:
+      - docker.Shell.arm64
+  test-linux-arm64:
+    tasks:
+      - docker.Shell.arm64
+  archive-linux-arm64:
+    tasks:
+      - docker.Shell.arm64
+
+  # Linux arm32 jobs
+  build-linux-arm32:
+    tasks:
+      - docker.Shell.arm32
+  package-linux-arm32:
+    tasks:
+      - docker.Shell.arm32
+  test-linux-arm32:
+    tasks:
+      - docker.Shell.arm32
+  archive-linux-arm32:
+    tasks:
+      - docker.Shell.arm32
