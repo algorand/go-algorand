@@ -214,13 +214,35 @@ var opsByOpcode [LogicVersion + 1][256]OpSpec
 var opsByName [LogicVersion + 1]map[string]OpSpec
 
 func init() {
-	for v := uint64(0); v <= EvalMaxVersion; v++ {
+	// First, initialize baseline v1 opcodes.
+	// Zero (empty) version is an alias for TEAL v1 opcodes and needed for compatibility with v1 code.
+	opsByName[0] = make(map[string]OpSpec, 256)
+	opsByName[1] = make(map[string]OpSpec, 256)
+	for _, oi := range OpSpecs {
+		if oi.Version == 1 {
+			opsByOpcode[0][oi.Opcode] = oi
+			opsByName[0][oi.Name] = oi
+
+			opsByOpcode[1][oi.Opcode] = oi
+			opsByName[1][oi.Name] = oi
+		}
+	}
+	// Start from v2 TEAL and higher,
+	// copy lower version opcodes and overwrite matching version
+	for v := uint64(2); v <= EvalMaxVersion; v++ {
 		opsByName[v] = make(map[string]OpSpec, 256)
 
-		// for compatibility reason treat zero (empty) version as version 1
-		// higher version includes all opcodes from lower one
+		// Copy opcodes from lower version
+		for opName, oi := range opsByName[v-1] {
+			opsByName[v][opName] = oi
+		}
+		for op, oi := range opsByOpcode[v-1] {
+			opsByOpcode[v][op] = oi
+		}
+
+		// Update tables with opcodes from the current version
 		for _, oi := range OpSpecs {
-			if oi.Version <= v || v == 0 && oi.Version == 1 {
+			if oi.Version == v {
 				opsByOpcode[v][oi.Opcode] = oi
 				opsByName[v][oi.Name] = oi
 			}
