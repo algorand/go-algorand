@@ -58,45 +58,24 @@ jobs:
   build-linux-arm64:
     configs:
       arch: arm64v8
-      docker:
-        env:
-          - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
-          - TRAVIS_BRANCH=${TRAVIS_BRANCH}
-          - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
     tasks:
       - shell.docker.Ensure
       - docker.Make.build
-  test-linux-arm64-fulltest:
-    configs:
-      arch: arm64v8
-      docker:
-        env:
-          - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
-          - TRAVIS_BRANCH=${TRAVIS_BRANCH}
-          - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
-    tasks:
-      - shell.docker.Ensure
-      - docker.Make.fulltest
-  test-linux-arm64-shorttest:
-    configs:
-      arch: arm64v8
-      docker:
-        env:
-          - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
-          - TRAVIS_BRANCH=${TRAVIS_BRANCH}
-          - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
-    tasks:
-      - shell.docker.Ensure
-      - docker.Make.shorttest
-  test-linux-arm64-integration:
-    configs:
-      arch: arm64v8
-      docker:
-        env:
-          - SHORTTEST=${SHORTTEST}
-          - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
-          - TRAVIS_BRANCH=${TRAVIS_BRANCH}
-          - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
-    tasks:
-      - shell.docker.Ensure
-      - docker.Make.integration-test
+#  test-linux-arm64-fulltest:
+#    configs:
+#      arch: arm64v8
+#    tasks:
+#      - shell.docker.Ensure
+#      - docker.Make.fulltest
+#  test-linux-arm64-shorttest:
+#    configs:
+#      arch: arm64v8
+#    tasks:
+#      - shell.docker.Ensure
+#      - docker.Make.shorttest
+#  test-linux-arm64-integration:
+#    configs:
+#      arch: arm64v8
+#    tasks:
+#      - shell.docker.Ensure
+#      - docker.Make.integration-test
