@@ -27,7 +27,7 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -39,12 +39,12 @@ type cdtState struct {
 	proto       *config.ConsensusParams
 	txnGroup    []transactions.SignedTxn
 	groupIndex  int
-	globals     []v1.TealValue
+	globals     []v2.TealValue
 
 	// mutable program state
 	mu      deadlock.Mutex
-	stack   []v1.TealValue
-	scratch []v1.TealValue
+	stack   []v2.TealValue
+	scratch []v2.TealValue
 	pc      atomicInt
 	line    atomicInt
 	err     atomicString
@@ -56,7 +56,7 @@ type cdtState struct {
 	completed       atomicBool
 }
 
-func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int, globals []v1.TealValue) {
+func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int, globals []v2.TealValue) {
 	s.disassembly = disassembly
 	s.proto = proto
 	s.txnGroup = txnGroup
@@ -64,7 +64,7 @@ func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGr
 	s.globals = globals
 }
 
-func (s *cdtState) Update(pc int, line int, stack []v1.TealValue, scratch []v1.TealValue, err string) {
+func (s *cdtState) Update(pc int, line int, stack []v2.TealValue, scratch []v2.TealValue, err string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pc.Store(pc)
@@ -189,7 +189,7 @@ func (s *cdtState) packRanges(objID string, argsRaw []interface{}) (result Runti
 }
 
 func (s *cdtState) buildFragment(objID string, argsRaw []interface{}) RuntimeRemoteObject {
-	var source []v1.TealValue
+	var source []v2.TealValue
 	switch objID {
 	case stackObjID:
 		source = s.stack
@@ -291,7 +291,7 @@ type fieldDesc struct {
 	Type  string
 }
 
-func prepareGlobals(globals []v1.TealValue) []fieldDesc {
+func prepareGlobals(globals []v2.TealValue) []fieldDesc {
 	result := make([]fieldDesc, 0, len(logic.GlobalFieldNames))
 	if len(globals) != len(logic.GlobalFieldNames) {
 		desc := fieldDesc{
@@ -332,10 +332,10 @@ func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
 	return result
 }
 
-func tealValueToFieldDesc(name string, tv v1.TealValue) fieldDesc {
+func tealValueToFieldDesc(name string, tv v2.TealValue) fieldDesc {
 	var value string
 	var valType string
-	if tv.Type == "b" {
+	if tv.Type == uint64(basics.TealBytesType) {
 		valType = "string"
 		data, err := base64.StdEncoding.DecodeString(tv.Bytes)
 		if err != nil {
@@ -360,7 +360,7 @@ func tealValueToFieldDesc(name string, tv v1.TealValue) fieldDesc {
 	return fieldDesc{name, value, valType}
 }
 
-func prepareArray(array []v1.TealValue) []fieldDesc {
+func prepareArray(array []v2.TealValue) []fieldDesc {
 	result := make([]fieldDesc, 0, len(logic.TxnFieldNames))
 	for i := 0; i < len(array); i++ {
 		tv := array[i]
@@ -411,7 +411,7 @@ func makeGtxnPreview(txnGroup []transactions.SignedTxn) RuntimeObjectPreview {
 
 const maxArrayPreviewLength = 20
 
-func makeArrayPreview(array []v1.TealValue) RuntimeObjectPreview {
+func makeArrayPreview(array []v2.TealValue) RuntimeObjectPreview {
 	var prop []RuntimePropertyPreview
 	fields := prepareArray(array)
 
@@ -437,7 +437,7 @@ func makeArrayPreview(array []v1.TealValue) RuntimeObjectPreview {
 	return p
 }
 
-func makeGlobalsPreview(globals []v1.TealValue) RuntimeObjectPreview {
+func makeGlobalsPreview(globals []v2.TealValue) RuntimeObjectPreview {
 	var prop []RuntimePropertyPreview
 	fields := prepareGlobals(globals)
 
@@ -601,7 +601,7 @@ func makeTxnGroup(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor)
 	return
 }
 
-func makeArrayLengh(array []v1.TealValue) (descr []RuntimePropertyDescriptor) {
+func makeArrayLengh(array []v2.TealValue) (descr []RuntimePropertyDescriptor) {
 	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(array)), Type: "number"}
 	descr = append(descr, makePrimitive(field))
 	return
@@ -609,7 +609,7 @@ func makeArrayLengh(array []v1.TealValue) (descr []RuntimePropertyDescriptor) {
 
 func makeStackSlice(s *cdtState, from int, to int, preview bool) (descr []RuntimePropertyDescriptor) {
 	// temporary disable stack reversion to see if people prefer appending to the list
-	// stack := make([]v1.TealValue, len(s.stack))
+	// stack := make([]v2.TealValue, len(s.stack))
 	// for i := 0; i < len(stack); i++ {
 	// 	stack[i] = s.stack[len(s.stack)-1-i]
 	// }
