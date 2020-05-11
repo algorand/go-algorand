@@ -262,6 +262,16 @@ func (ac *ApplicationCallTxnFields) applyStateDeltas(evalDelta basics.EvalDelta,
 			return err
 		}
 
+		// Ensure this is not a duplicate address in case we were
+		// passed an invalid EvalDelta
+		_, ok := changes[addr]
+		if ok {
+			if !errIfNotApplied {
+				return nil
+			}
+			return fmt.Errorf("duplicate LocalState delta for %s", addr.String())
+		}
+
 		// Skip over empty deltas, because we shouldn't fail because of
 		// a zero-delta on an account that hasn't opted in
 		if len(delta) == 0 {
