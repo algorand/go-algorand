@@ -42,155 +42,157 @@ ERR_APP_REJ_STR3='- would result negative'
 ### Basic reading, creation, deletion, transfers, and freezing
 
 # create
-
 APP_ID=$(${gcmd} app interact execute --header ${DIR}/asa.json --from $CREATOR --approval-prog ${DIR}/asa_approve.teal --clear-prog ${DIR}/asa_clear.teal create --manager $CREATOR --reserve $CREATOR --freezer $CREATOR --clawback $CREATOR --supply $SUPPLY | grep "$APP_CREATED_STR" | cut -d ' ' -f 6)
 
+qcmd="${gcmd} app interact query --header ${DIR}/asa.json --app-id $APP_ID"
+xcmd="${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID"
+
 # read global
-RES=$(${gcmd} app interact query --header ${DIR}/asa.json --app-id $APP_ID total-supply)
+RES=$(${qcmd} total-supply)
 if [[ $RES != $SUPPLY ]]; then
     date "+assets-app FAIL expected supply to be set to $SUPPLY %Y%m%d_%H%M%S"
     false
 fi
 
-RES=$(${gcmd} app interact query --header ${DIR}/asa.json --app-id $APP_ID creator-balance)
+RES=$(${qcmd} creator-balance)
 if [[ $RES != $SUPPLY ]]; then
     date "+assets-app FAIL expected creator to begin with $SUPPLY %Y%m%d_%H%M%S"
     false
 fi
 
 # read alice F
-RES=$(${gcmd} app interact query --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE balance 2>&1 || true)
+RES=$(${qcmd} --from $ALICE balance 2>&1 || true)
 if [[ $RES != *"$ERR_APP_OI_STR1"* ]]; then
     date '+assets-app FAIL expected read of non-opted in account to fail %Y%m%d_%H%M%S'
     false
 fi
 
 # optin alice
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE opt-in
+${xcmd} --from $ALICE opt-in
 
 # read alice
-RES=$(${gcmd} app interact query --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE balance)
+RES=$(${qcmd} --from $ALICE balance)
 if [[ $RES != '0' ]]; then
     date '+assets-app FAIL expected opted-in account to start with no balance %Y%m%d_%H%M%S'
     false
 fi
 
-RES=$(${gcmd} app interact query --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE frozen)
+RES=$(${qcmd} --from $ALICE frozen)
 if [[ $RES != '0' ]]; then
     date '+assets-app FAIL expected opted-in account to be non-frozen %Y%m%d_%H%M%S'
     false
 fi
 
 # xfer0 creator -> bob F
-RES=$(${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $CREATOR transfer --receiver $BOB --amount $XFER1 2>&1 || true)
+RES=$(${xcmd} --from $CREATOR transfer --receiver $BOB --amount $XFER1 2>&1 || true)
 if [[ $RES != *"$ERR_APP_OI_STR2"* ]]; then
     date '+assets-app FAIL transfer succeeded on account which has not opted in %Y%m%d_%H%M%S'
     false
 fi
     
 # xfer1 (2) creator -> alice
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $CREATOR transfer --receiver $ALICE --amount $XFER1
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $CREATOR transfer --receiver $ALICE --amount $XFER1
+${xcmd} --from $CREATOR transfer --receiver $ALICE --amount $XFER1
+${xcmd} --from $CREATOR transfer --receiver $ALICE --amount $XFER1
 
 # read alice
-RES=$(${gcmd} app interact query --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE balance)
+RES=$(${qcmd} --from $ALICE balance)
 if [[ $RES != $(( $XFER1 + $XFER1 )) ]]; then
     date "+assets-app FAIL transfer recipient does not have $XFER1 %Y%m%d_%H%M%S"
     false
 fi
 
 # destroy F
-RES=$(${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $CREATOR destroy 2>&1 || true)
+RES=$(${xcmd} --from $CREATOR destroy 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR1"* ]]; then
     date "+assets-app FAIL should not be able to destroy asset while outstanding holdings exist %Y%m%d_%H%M%S"
     false
 fi
 
 # freeze
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $CREATOR freeze --frozen 1 --target $ALICE
+${xcmd} --from $CREATOR freeze --frozen 1 --target $ALICE
 
 # xfer2 alice -> creator F
-RES=$(${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE transfer --receiver $CREATOR --amount $XFER2 2>&1 || true)
+RES=$(${xcmd} --from $ALICE transfer --receiver $CREATOR --amount $XFER2 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR2"* ]]; then
     date "+assets-app FAIL frozen account should not be able to send %Y%m%d_%H%M%S"
     false
 fi
 
 # xfer1 creator -> alice F
-RES=$(${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $CREATOR transfer --receiver $ALICE --amount $XFER1 2>&1 || true)
+RES=$(${xcmd} --from $CREATOR transfer --receiver $ALICE --amount $XFER1 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR2"* ]]; then
     date "+assets-app FAIL frozen account should not be able to receive %Y%m%d_%H%M%S"
     false
 fi
 
 # unfreeze
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $CREATOR freeze --frozen 0 --target $ALICE
+${xcmd} --from $CREATOR freeze --frozen 0 --target $ALICE
 
 # xfer1 creator -> alice
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $CREATOR transfer --receiver $ALICE --amount $XFER1
+${xcmd} --from $CREATOR transfer --receiver $ALICE --amount $XFER1
 
 # xfer5 alice |-> alice F
-RES=$(${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE close-out --close-to $ALICE 2>&1 || true)
+RES=$(${xcmd} --from $ALICE close-out --close-to $ALICE 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR1"* ]]; then
     date "+assets-app FAIL closing to self not permitted %Y%m%d_%H%M%S"
     false
 fi
 
 # optin bob
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $BOB opt-in
+${xcmd} --from $BOB opt-in
 
 # xfer3 alice -> bob overdraw F
-RES=$(${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE transfer --receiver $BOB --amount $XFER3 2>&1 || true)
+RES=$(${xcmd} --from $ALICE transfer --receiver $BOB --amount $XFER3 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR3"* ]]; then
     date "+assets-app FAIL overdraws are not permitted %Y%m%d_%H%M%S"
     false
 fi
 
 # xfer4 alice -> creator |-> bob
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE close-out --receiver $CREATOR --amount $XFER4 --close-to $BOB
+${xcmd} --from $ALICE close-out --receiver $CREATOR --amount $XFER4 --close-to $BOB
 
 # xfer5 bob |-> alice F
-RES=$(${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $BOB close-out --close-to $ALICE 2>&1 || true)
+RES=$(${xcmd} --from $BOB close-out --close-to $ALICE 2>&1 || true)
 if [[ $RES != *"$ERR_APP_OI_STR2"* ]]; then
     date "+assets-app FAIL transfer succeeded on account which has closed out %Y%m%d_%H%M%S"
     false
 fi
 
 # optin alice
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE opt-in
+${xcmd} --from $ALICE opt-in
 
 # xfer5 bob |-> alice
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $BOB close-out --close-to $ALICE
+${xcmd} --from $BOB close-out --close-to $ALICE
 
 # clear alice
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE clear
+${xcmd} --from $ALICE clear
 
 # clear alice F
-RES=$(${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE clear 2>&1 || true)
+RES=$(${xcmd} --from $ALICE clear 2>&1 || true)
 if [[ $RES != *"$ERR_APP_OI_STR3"* ]]; then
     date "+assets-app FAIL should not be able to clear asset holding twice %Y%m%d_%H%M%S"
     false
 fi
 
 # destroy
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $CREATOR destroy
+${xcmd} --from $CREATOR destroy
 
 # destroy F
-RES=$(${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $CREATOR destroy 2>&1 || true)
+RES=$(${xcmd} --from $CREATOR destroy 2>&1 || true)
 if [[ $RES != *"$ERR_APP_CL_STR"* ]]; then
     date '+assets-app FAIL second deletion of application should fail %Y%m%d_%H%M%S'
     false
 fi
 
 # optin alice F
-RES=$(${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE opt-in 2>&1 || true)
+RES=$(${xcmd} --from $ALICE opt-in 2>&1 || true)
 if [[ $RES != *"$ERR_APP_CL_STR"* ]]; then
     date '+assets-app FAIL optin of deleted application should fail %Y%m%d_%H%M%S'
     false
 fi
 
 # read global F
-RES=$(${gcmd} app interact query --header ${DIR}/asa.json --app-id $APP_ID total-supply 2>&1 || true)
+RES=$(${qcmd} total-supply 2>&1 || true)
 if [[ $RES != *"$ERR_APP_NE_STR"* ]]; then
     date '+assets-app FAIL read global of deleted application should fail %Y%m%d_%H%M%S'
     false
@@ -201,77 +203,80 @@ fi
 # create frozen
 APP_ID=$(${gcmd} app interact execute --header ${DIR}/asa.json --from $CREATOR --approval-prog ${DIR}/asa_approve.teal --clear-prog ${DIR}/asa_clear.teal create --manager $MANAGER --reserve $CREATOR --freezer $MANAGER --clawback $MANAGER --supply $SUPPLY --default-frozen 1 | grep "$APP_CREATED_STR" | cut -d ' ' -f 6)
 
+qcmd="${gcmd} app interact query --header ${DIR}/asa.json --app-id $APP_ID"
+xcmd="${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID"
+
 # destroy bad manager F
-RES=$(${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $CREATOR destroy 2>&1 || true)
+RES=$(${xcmd} --from $CREATOR destroy 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR1"* ]]; then
     date "+assets-app FAIL non-manager should not be able to delete asset %Y%m%d_%H%M%S"
     false
 fi
 
 # optin alice
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE opt-in
+${xcmd} --from $ALICE opt-in
 
 # xfer1 F
-RES=$(${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $CREATOR transfer --receiver $ALICE --amount $XFER1 2>&1 || true)
+RES=$(${xcmd} --from $CREATOR transfer --receiver $ALICE --amount $XFER1 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR2"* ]]; then
     date "+assets-app FAIL frozen account should not be able to receive %Y%m%d_%H%M%S"
     false
 fi
 
 # bad unfreeze F
-RES=$(${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE freeze --frozen 0 --target $ALICE 2>&1 || true)
+RES=$(${xcmd} --from $ALICE freeze --frozen 0 --target $ALICE 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR1"* ]]; then
     date "+assets-app FAIL non-freezer should not be able to unfreeze account %Y%m%d_%H%M%S"
     false
 fi
 
 # set freezer alice
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $MANAGER reconfigure --manager $MANAGER --reserve $CREATOR --freezer $ALICE --clawback $MANAGER
+${xcmd} --from $MANAGER reconfigure --manager $MANAGER --reserve $CREATOR --freezer $ALICE --clawback $MANAGER
 
 # unfreeze
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE freeze --frozen 0 --target $ALICE
+${xcmd} --from $ALICE freeze --frozen 0 --target $ALICE
 
 # xfer1
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $CREATOR transfer --receiver $ALICE --amount $XFER1
+${xcmd} --from $CREATOR transfer --receiver $ALICE --amount $XFER1
 
 # freeze
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE freeze --frozen 1 --target $ALICE
+${xcmd} --from $ALICE freeze --frozen 1 --target $ALICE
 
 # xfer1 F
-RES=$(${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $CREATOR transfer --receiver $ALICE --amount $XFER1 2>&1 || true)
+RES=$(${xcmd} --from $CREATOR transfer --receiver $ALICE --amount $XFER1 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR2"* ]]; then
     date "+assets-app FAIL re-frozen account should not be able to receive %Y%m%d_%H%M%S"
     false
 fi
 
 # closeout F
-RES=$(${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE close-out --close-to $CREATOR 2>&1 || true)
+RES=$(${xcmd} --from $ALICE close-out --close-to $CREATOR 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR2"* ]]; then
     date "+assets-app FAIL frozen account should not be able to closeout w/o clear %Y%m%d_%H%M%S"
     false
 fi
 
 # clear alice
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $ALICE clear
+${xcmd} --from $ALICE clear
 
 # optin bob
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $BOB opt-in
+${xcmd} --from $BOB opt-in
 
 # clawback transfer
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $MANAGER clawback --sender $CREATOR --receiver $BOB --amount $XFER1
+${xcmd} --from $MANAGER clawback --sender $CREATOR --receiver $BOB --amount $XFER1
 
 # destroy F
-RES=$(${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $MANAGER destroy 2>&1 || true)
+RES=$(${xcmd} --from $MANAGER destroy 2>&1 || true)
 if [[ $RES != *"$ERR_APP_REJ_STR1"* ]]; then
     date "+assets-app FAIL should not be able to delete asset while outstanding holdings exist %Y%m%d_%H%M%S"
     false
 fi
 
 # clawback
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $MANAGER clawback --sender $BOB --receiver $CREATOR --amount $XFER1
+${xcmd} --from $MANAGER clawback --sender $BOB --receiver $CREATOR --amount $XFER1
 
 # destroy
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $MANAGER destroy
+${xcmd} --from $MANAGER destroy
 
 # clear bob
-${gcmd} app interact execute --header ${DIR}/asa.json --app-id $APP_ID --from $BOB clear
+${xcmd} --from $BOB clear

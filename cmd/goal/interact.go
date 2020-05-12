@@ -317,7 +317,7 @@ var appExecuteCmd = &cobra.Command{
 			var callArg appCallArg
 			callArg.Encoding = arg.Kind
 
-			if !procFlags.Changed(arg.Name) {
+			if !procFlags.Changed(arg.Name) && arg.Default != "" {
 				callArg.Value = arg.Default
 			} else {
 				v := procArgs[arg.Name]
@@ -379,12 +379,12 @@ var appExecuteCmd = &cobra.Command{
 			}
 		}
 
-		localSchema := header.Query.Local.ToStateSchema()
-		globalSchema := header.Query.Global.ToStateSchema()
-
+		var localSchema, globalSchema basics.StateSchema
 		var approvalProg, clearProg []byte
 		if appIdx == 0 {
 			approvalProg, clearProg = mustParseProgArgs()
+			localSchema = header.Query.Local.ToStateSchema()
+			globalSchema = header.Query.Global.ToStateSchema()
 		}
 		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, onCompletion, approvalProg, clearProg, globalSchema, localSchema)
 		if err != nil {
