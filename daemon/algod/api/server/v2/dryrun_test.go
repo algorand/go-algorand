@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -40,16 +40,16 @@ func unB64(x string) []byte {
 	return out
 }
 
-func tvStr(tv v1.TealValue) string {
-	if tv.Type == "b" {
+func tvStr(tv generated.TealValue) string {
+	if tv.Type == uint64(basics.TealBytesType) {
 		return tv.Bytes
-	} else if tv.Type == "u" {
+	} else if tv.Type == uint64(basics.TealUintType) {
 		return strconv.FormatUint(tv.Uint, 10)
 	}
 	return "UNKNOWN TEAL VALUE"
 }
 
-func dbStack(stack []v1.TealValue) string {
+func dbStack(stack []generated.TealValue) string {
 	parts := make([]string, len(stack))
 	for i, sv := range stack {
 		parts[i] = tvStr(sv)
