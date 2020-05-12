@@ -13,10 +13,6 @@ gcmd="goal -w ${WALLET}"
 
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
-#ZERO_ADDRESS=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ
-#LEASE=YmxhaCBibGFoIGxlYXNlIHdoYXRldmVyIGJsYWghISE=
-
-#${gcmd} clerk send -a 10000000 -f ${ACCOUNT} -t ${ACCOUNTB}
 
 algokey generate > ${TEMPDIR}/rekey
 mnemonic=$(grep 'Private key mnemonic:' < ${TEMPDIR}/rekey | sed 's/Private key mnemonic: //')
