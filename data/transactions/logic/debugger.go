@@ -18,17 +18,14 @@ package logic
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
@@ -58,52 +55,19 @@ type PCOffset struct {
 // DebugState is a representation of the evaluation context that we encode
 // to json and send to tealdbg
 type DebugState struct {
-	// fields set once on Register
 	ExecID      string                   `json:"execid"`
 	Disassembly string                   `json:"disasm"`
 	PCOffset    []PCOffset               `json:"pctooffset"`
 	TxnGroup    []transactions.SignedTxn `json:"txngroup"`
 	GroupIndex  int                      `json:"gindex"`
 	Proto       *config.ConsensusParams  `json:"proto"`
-	Globals     []v2.TealValue           `json:"globals"`
+	Globals     []v1.TealValue           `json:"globals"`
 
-	// fields updated every step
 	PC      int            `json:"pc"`
 	Line    int            `json:"line"`
-	Stack   []v2.TealValue `json:"stack"`
-	Scratch []v2.TealValue `json:"scratch"`
+	Stack   []v1.TealValue `json:"stack"`
+	Scratch []v1.TealValue `json:"scratch"`
 	Error   string         `json:"error"`
-}
-
-func makeDebugState(cx *evalContext) DebugState {
-	disasm, dsInfo, err := disassembleInstrumented(cx.program)
-	if err != nil {
-		// Report disassembly error as program text
-		disasm = err.Error()
-	}
-
-	hash := sha256.Sum256(cx.program)
-	// initialize DebuggerState with immutable fields
-	ds := DebugState{
-		ExecID:      hex.EncodeToString(hash[:]),
-		Disassembly: disasm,
-		PCOffset:    dsInfo.pcOffset,
-		GroupIndex:  cx.GroupIndex,
-		TxnGroup:    cx.TxnGroup,
-		Proto:       cx.Proto,
-	}
-
-	globals := make([]v2.TealValue, len(GlobalFieldNames))
-	for fieldIdx := range GlobalFieldNames {
-		sv, err := cx.globalFieldToStack(GlobalField(fieldIdx))
-		if err != nil {
-			sv = stackValue{Bytes: []byte(err.Error())}
-		}
-		globals[fieldIdx] = stackValueToV2TealValue(&sv)
-	}
-	cx.debugState.Globals = globals
-
-	return ds
 }
 
 // LineToPC converts line to pc
@@ -149,10 +113,22 @@ func (d *DebugState) PCToLine(pc int) int {
 	return len(strings.Split(d.Disassembly[:offset], "\n")) - one
 }
 
-func stackValueToV2TealValue(sv *stackValue) v2.TealValue {
+func (cx *evalContext) setDebugStateGlobals() {
+	globals := make([]v1.TealValue, len(GlobalFieldNames))
+	for fieldIdx := range GlobalFieldNames {
+		sv, err := cx.globalFieldToStack(GlobalField(fieldIdx))
+		if err != nil {
+			sv = stackValue{Bytes: []byte(err.Error())}
+		}
+		globals[fieldIdx] = stackValueToV1TealValue(&sv)
+	}
+	cx.debugState.Globals = globals
+}
+
+func stackValueToV1TealValue(sv *stackValue) v1.TealValue {
 	tv := sv.toTealValue()
-	return v2.TealValue{
-		Type:  uint64(tv.Type),
+	return v1.TealValue{
+		Type:  tv.Type.String(),
 		Bytes: base64.StdEncoding.EncodeToString([]byte(tv.Bytes)),
 		Uint:  tv.Uint,
 	}
@@ -168,14 +144,14 @@ func (cx *evalContext) refreshDebugState() *DebugState {
 		ds.Error = cx.err.Error()
 	}
 
-	stack := make([]v2.TealValue, len(cx.stack), len(cx.stack))
+	stack := make([]v1.TealValue, len(cx.stack), len(cx.stack))
 	for i, sv := range cx.stack {
-		stack[i] = stackValueToV2TealValue(&sv)
+		stack[i] = stackValueToV1TealValue(&sv)
 	}
 
-	scratch := make([]v2.TealValue, len(cx.scratch), len(cx.scratch))
+	scratch := make([]v1.TealValue, len(cx.scratch), len(cx.scratch))
 	for i, sv := range cx.scratch {
-		scratch[i] = stackValueToV2TealValue(&sv)
+		scratch[i] = stackValueToV1TealValue(&sv)
 	}
 
 	ds.Stack = stack

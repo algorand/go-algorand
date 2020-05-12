@@ -94,19 +94,28 @@ type AccountParticipation struct {
 
 // Application defines model for Application.
 type Application struct {
-
-	// \[appidx\] application index.
 	AppIndex uint64 `json:"app-index"`
 
 	// Stores the global information associated with an application.
 	AppParams ApplicationParams `json:"app-params"`
 }
 
+// ApplicationKeyValue defines model for ApplicationKeyValue.
+type ApplicationKeyValue struct {
+	Key string `json:"key"`
+
+	// Represents a value in an application store.
+	Value ApplicationValue `json:"value"`
+}
+
+// ApplicationKeyValueStore defines model for ApplicationKeyValueStore.
+type ApplicationKeyValueStore []ApplicationKeyValue
+
 // ApplicationLocalState defines model for ApplicationLocalState.
 type ApplicationLocalState struct {
 
 	// Represents a key-value store for use in an application.
-	KeyValue TealKeyValueStore `json:"key-value"`
+	KeyValue ApplicationKeyValueStore `json:"key-value"`
 
 	// Specifies maximums on the number of each type that may be stored.
 	Schema ApplicationStateSchema `json:"schema"`
@@ -130,7 +139,7 @@ type ApplicationParams struct {
 	ClearStateProgram []byte `json:"clear-state-program"`
 
 	// Represents a key-value store for use in an application.
-	GlobalState *TealKeyValueStore `json:"global-state,omitempty"`
+	GlobalState *ApplicationKeyValueStore `json:"global-state,omitempty"`
 
 	// Specifies maximums on the number of each type that may be stored.
 	GlobalStateSchema *ApplicationStateSchema `json:"global-state-schema,omitempty"`
@@ -147,6 +156,19 @@ type ApplicationStateSchema struct {
 
 	// \[nui\] num of uints.
 	NumUint uint64 `json:"num-uint"`
+}
+
+// ApplicationValue defines model for ApplicationValue.
+type ApplicationValue struct {
+
+	// \[tb\] bytes value.
+	Bytes string `json:"bytes"`
+
+	// \[tt\] value type.
+	Type uint64 `json:"type"`
+
+	// \[ui\] uint value.
+	Uint uint64 `json:"uint"`
 }
 
 // Asset defines model for Asset.
@@ -224,30 +246,6 @@ type AssetParams struct {
 type ErrorResponse struct {
 	Data    *string `json:"data,omitempty"`
 	Message string  `json:"message"`
-}
-
-// TealKeyValue defines model for TealKeyValue.
-type TealKeyValue struct {
-	Key string `json:"key"`
-
-	// Represents a TEAL value.
-	Value TealValue `json:"value"`
-}
-
-// TealKeyValueStore defines model for TealKeyValueStore.
-type TealKeyValueStore []TealKeyValue
-
-// TealValue defines model for TealValue.
-type TealValue struct {
-
-	// \[tb\] bytes value.
-	Bytes string `json:"bytes"`
-
-	// \[tt\] value type.
-	Type uint64 `json:"type"`
-
-	// \[ui\] uint value.
-	Uint uint64 `json:"uint"`
 }
 
 // Version defines model for Version.

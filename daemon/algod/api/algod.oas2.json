@@ -1026,18 +1026,18 @@
         },
         "key-value": {
           "description": "\\[tkv\\] storage.",
-          "$ref": "#/definitions/TealKeyValueStore"
+          "$ref": "#/definitions/ApplicationKeyValueStore"
         }
       }
     },
-    "TealKeyValueStore": {
+    "ApplicationKeyValueStore": {
       "description": "Represents a key-value store for use in an application.",
       "type": "array",
       "items": {
-        "$ref": "#/definitions/TealKeyValue"
+        "$ref": "#/definitions/ApplicationKeyValue"
       }
     },
-    "TealKeyValue": {
+    "ApplicationKeyValue": {
       "description": "Represents a key-value pair in an application store.",
       "type": "object",
       "required": [
@@ -1049,12 +1049,12 @@
           "type": "string"
         },
         "value": {
-          "$ref": "#/definitions/TealValue"
+          "$ref": "#/definitions/ApplicationValue"
         }
       }
     },
-    "TealValue": {
-      "description": "Represents a TEAL value.",
+    "ApplicationValue": {
+      "description": "Represents a value in an application store.",
       "type": "object",
       "required": [
         "type",
@@ -1086,11 +1086,9 @@
       ],
       "properties": {
         "app-index": {
-          "description": "\\[appidx\\] application index.",
           "type": "integer"
         },
         "app-params": {
-          "description": "\\[appparams\\] application parameters.",
           "$ref": "#/definitions/ApplicationParams"
         }
       }
@@ -1123,7 +1121,7 @@
         },
         "global-state": {
           "description": "[\\gs\\] global schema",
-          "$ref": "#/definitions/TealKeyValueStore"
+          "$ref": "#/definitions/ApplicationKeyValueStore"
         }
       }
     },

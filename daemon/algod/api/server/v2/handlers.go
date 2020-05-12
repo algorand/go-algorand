@@ -161,11 +161,11 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		}
 	}
 
-	convertTKV := func(tkv *basics.TealKeyValue) (converted generated.TealKeyValueStore) {
+	convertTKV := func(tkv *basics.TealKeyValue) (converted generated.ApplicationKeyValueStore) {
 		for k, v := range *tkv {
-			converted = append(converted, generated.TealKeyValue{
+			converted = append(converted, generated.ApplicationKeyValue{
 				Key: k,
-				Value: generated.TealValue{
+				Value: generated.ApplicationValue{
 					Type:  uint64(v.Type),
 					Bytes: v.Bytes,
 					Uint:  v.Uint,
