@@ -348,6 +348,7 @@ pop
 			ep := defaultEvalParams(&sb, &txn)
 			ep.TxnGroup = txgroup
 			ep.Ledger = ledger
+			ep.Txn.Txn.ApplicationID = 100
 			_, err = test.check(program, ep)
 			require.NoError(t, err)
 			_, err = test.eval(program, ep)
@@ -616,6 +617,7 @@ int 1
 	txgroup := makeSampleTxnGroup(txn)
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &txn
+	ep.Txn.Txn.ApplicationID = 100
 	ep.TxnGroup = txgroup
 	cost, err := CheckStateful(program, ep)
 	require.NoError(t, err)
@@ -1190,6 +1192,7 @@ int 100
 			txn := makeSampleTxn()
 			ep := defaultEvalParams(nil, nil)
 			ep.Txn = &txn
+			ep.Txn.Txn.ApplicationID = 100
 			cost, err := CheckStateful(program, ep)
 			require.NoError(t, err)
 			require.True(t, cost < 1000)
@@ -2364,6 +2367,7 @@ func TestReturnTypes(t *testing.T) {
 	txgroup := makeSampleTxnGroup(txn)
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
+	ep.Txn.Txn.ApplicationID = 1
 	txn.Lsig.Args = [][]byte{
 		[]byte("aoeu"),
 		[]byte("aoeu"),
