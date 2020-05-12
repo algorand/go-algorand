@@ -24,22 +24,30 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
+// TODO remove round from balances
+
+// AppTealGlobals contains data accessible by the "global" opcode.
+type AppTealGlobals struct {
+	CurrentRound    basics.Round
+	LatestTimestamp int64
+}
+
 // appTealEvaluator implements transactions.StateEvaluator. When applying an
 // ApplicationCall transaction, InitLedger is called, followed by Check and/or
 // Eval. These pass the initialized LedgerForLogic (appLedger) to the TEAL
 // interpreter.
 type appTealEvaluator struct {
-	evalParams      logic.EvalParams
-	latestTimestamp int64
+	evalParams logic.EvalParams
+	AppTealGlobals
 }
 
 // appLedger implements logic.LedgerForLogic
 type appLedger struct {
-	addresses       map[basics.Address]bool
-	apps            map[basics.AppIndex]bool
-	balances        transactions.Balances
-	appIdx          basics.AppIndex
-	latestTimestamp int64
+	addresses map[basics.Address]bool
+	apps      map[basics.AppIndex]bool
+	balances  transactions.Balances
+	appIdx    basics.AppIndex
+	AppTealGlobals
 }
 
 // Eval evaluates a stateful TEAL program for an application. InitLedger must
@@ -69,7 +77,7 @@ func (ae *appTealEvaluator) Check(program []byte) (cost int, err error) {
 // fetch global state for (which requires looking up the creator's balance
 // record).
 func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex) error {
-	ledger, err := newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, ae.latestTimestamp)
+	ledger, err := newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, ae.AppTealGlobals)
 	if err != nil {
 		return err
 	}
@@ -78,7 +86,7 @@ func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, acctWhite
 	return nil
 }
 
-func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, latestTimestamp int64) (al *appLedger, err error) {
+func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, globals AppTealGlobals) (al *appLedger, err error) {
 	if balances == nil {
 		err = fmt.Errorf("cannot create appLedger with nil balances")
 		return
@@ -104,7 +112,7 @@ func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address
 	al.balances = balances
 	al.addresses = make(map[basics.Address]bool, len(acctWhitelist))
 	al.apps = make(map[basics.AppIndex]bool, len(appGlobalWhitelist))
-	al.latestTimestamp = latestTimestamp
+	al.AppTealGlobals = globals
 
 	for _, addr := range acctWhitelist {
 		al.addresses[addr] = true
@@ -118,8 +126,8 @@ func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address
 }
 
 // MakeDebugAppLedger returns logic.LedgerForLogic suitable for debug or dryrun
-func MakeDebugAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, latestTimestamp int64) (al logic.LedgerForLogic, err error) {
-	return newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, latestTimestamp)
+func MakeDebugAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, globals AppTealGlobals) (al logic.LedgerForLogic, err error) {
+	return newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, globals)
 }
 
 func (al *appLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err error) {
@@ -265,9 +273,9 @@ func (al *appLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex
 }
 
 func (al *appLedger) Round() basics.Round {
-	return al.balances.Round()
+	return al.CurrentRound
 }
 
 func (al *appLedger) LatestTimestamp() int64 {
-	return al.latestTimestamp
+	return al.AppTealGlobals.LatestTimestamp
 }

@@ -505,7 +505,10 @@ func (eval *BlockEvaluator) prepareAppEvaluators(txgroup []transactions.SignedTx
 				TxnGroup:   groupNoAD,
 				GroupIndex: i,
 			},
-			latestTimestamp: eval.prevHeader.TimeStamp,
+			AppTealGlobals: AppTealGlobals{
+				CurrentRound:    eval.prevHeader.Round + 1,
+				LatestTimestamp: eval.prevHeader.TimeStamp,
+			},
 		}
 
 		res[i] = &steva

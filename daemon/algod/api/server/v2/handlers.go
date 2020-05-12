@@ -391,6 +391,16 @@ func (v2 *Handlers) TransactionDryRun(ctx echo.Context) error {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
+	// fetch previous block header just once to prevent racing with network
+	var hdr bookkeeping.BlockHeader
+	if dr.ProtocolVersion == "" || dr.Round == 0 || dr.LatestTimestamp == 0 {
+		actualLedger := v2.Node.Ledger()
+		hdr, err = actualLedger.BlockHdr(actualLedger.Latest())
+		if err != nil {
+			return internalError(ctx, err, "current block error", v2.Log)
+		}
+	}
+
 	var response DryrunResponse
 
 	var proto config.ConsensusParams
@@ -401,16 +411,15 @@ func (v2 *Handlers) TransactionDryRun(ctx echo.Context) error {
 			return badRequest(ctx, nil, "invalid protocol version", v2.Log)
 		}
 	} else {
-		actualLedger := v2.Node.Ledger()
-		block, err := actualLedger.BlockHdr(actualLedger.Latest())
-		if err != nil {
-			return internalError(ctx, err, "current block error", v2.Log)
-		}
-		proto = config.Consensus[block.CurrentProtocol]
+		proto = config.Consensus[hdr.CurrentProtocol]
 	}
 
 	if dr.Round == 0 {
-		dr.Round = uint64(v2.Node.Ledger().Latest())
+		dr.Round = uint64(hdr.Round + 1)
+	}
+
+	if dr.LatestTimestamp == 0 {
+		dr.LatestTimestamp = hdr.TimeStamp
 	}
 
 	doDryrunRequest(&dr, &proto, &response)

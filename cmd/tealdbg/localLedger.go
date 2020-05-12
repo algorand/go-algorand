@@ -70,7 +70,7 @@ func makeAppLedger(
 		round:      round,
 	}
 
-	return ledger.MakeDebugAppLedger(ba, accounts, apps, appIdx, latestTimestamp)
+	return ledger.MakeDebugAppLedger(ba, accounts, apps, appIdx, ledger.AppTealGlobals{CurrentRound: basics.Round(round), LatestTimestamp: latestTimestamp})
 }
 
 func (ba *balancesAdapter) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
