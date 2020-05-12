@@ -383,30 +383,10 @@ var appExecuteCmd = &cobra.Command{
 		globalSchema := header.Query.Global.ToStateSchema()
 
 		var approvalProg, clearProg []byte
-		var tx transactions.Transaction
-		var err error
 		if appIdx == 0 {
 			approvalProg, clearProg = mustParseProgArgs()
-			tx, err = client.MakeUnsignedAppCreateTx(onCompletion, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps)
-		} else {
-			switch onCompletion {
-			case transactions.NoOpOC:
-				tx, err = client.MakeUnsignedAppNoOpTx(appIdx, appArgs, appAccounts, foreignApps)
-			case transactions.OptInOC:
-				tx, err = client.MakeUnsignedAppOptInTx(appIdx, appArgs, appAccounts, foreignApps)
-			case transactions.CloseOutOC:
-				tx, err = client.MakeUnsignedAppCloseOutTx(appIdx, appArgs, appAccounts, foreignApps)
-			case transactions.ClearStateOC:
-				tx, err = client.MakeUnsignedAppClearStateTx(appIdx, appArgs, appAccounts, foreignApps)
-			case transactions.UpdateApplicationOC:
-				approvalProg, clearProg = mustParseProgArgs()
-				tx, err = client.MakeUnsignedAppUpdateTx(appIdx, appArgs, appAccounts, foreignApps, approvalProg, clearProg)
-			case transactions.DeleteApplicationOC:
-				tx, err = client.MakeUnsignedAppDeleteTx(appIdx, appArgs, appAccounts, foreignApps)
-			default:
-				reportErrorf("Unknown onCompletion value %s", onCompletion)
-			}
 		}
+		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, onCompletion, approvalProg, clearProg, globalSchema, localSchema)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
