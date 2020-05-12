@@ -55,13 +55,13 @@ UNFREEZE_SCRIPT="{args: [{encoding: \"int\", value: \"0\"}], accounts: [\"$ALICE
 APP_ID=$(${gcmd} app create --approval-prog ${DIR}/asa_approve.teal --clear-prog ${DIR}/asa_clear.teal --creator $CREATOR --global-byteslices 5 --global-ints 4 --local-byteslices 0 --local-ints 2 --app-input <(jq -n "$CREATE_SCRIPT") | grep "$APP_CREATED_STR" | cut -d ' ' -f 6)
 
 # read global
-RES=$(${gcmd} app read --guess-format --app-id $APP_ID --global | jq -r .tt.u)
+RES=$(${gcmd} app read --guess-format --app-id $APP_ID --global | jq -r .tt.ui)
 if [[ $RES != $SUPPLY ]]; then
     date "+assets-app FAIL expected supply to be set to $SUPPLY %Y%m%d_%H%M%S"
     false
 fi
 
-RES=$(${gcmd} app read --guess-format --app-id $APP_ID --global | jq -r .bl.u)
+RES=$(${gcmd} app read --guess-format --app-id $APP_ID --global | jq -r .bl.ui)
 if [[ $RES != $SUPPLY ]]; then
     date "+assets-app FAIL expected creator to begin with $SUPPLY %Y%m%d_%H%M%S"
     false
@@ -78,13 +78,13 @@ fi
 ${gcmd} app optin --app-id $APP_ID -f $ALICE
 
 # read alice
-RES=$(${gcmd} app read --guess-format --app-id $APP_ID --local -f $ALICE | jq .bl.u)
+RES=$(${gcmd} app read --guess-format --app-id $APP_ID --local -f $ALICE | jq .bl.ui)
 if [[ $RES != 'null' ]]; then
     date '+assets-app FAIL expected opted-in account to start with no balance %Y%m%d_%H%M%S'
     false
 fi
 
-RES=$(${gcmd} app read --guess-format --app-id $APP_ID --local -f $ALICE | jq .fz.u)
+RES=$(${gcmd} app read --guess-format --app-id $APP_ID --local -f $ALICE | jq .fz.ui)
 if [[ $RES != 'null' ]]; then
     date '+assets-app FAIL expected opted-in account to be non-frozen %Y%m%d_%H%M%S'
     false
@@ -102,7 +102,7 @@ ${gcmd} app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER1_SCRIPT
 ${gcmd} app call --app-id $APP_ID -f $CREATOR --app-input <(jq -n "$XFER1_SCRIPT")
 
 # read alice
-RES=$(${gcmd} app read --guess-format --app-id $APP_ID --local -f $ALICE | jq .bl.u)
+RES=$(${gcmd} app read --guess-format --app-id $APP_ID --local -f $ALICE | jq .bl.ui)
 if [[ $RES != $(( $XFER1 + $XFER1 )) ]]; then
     date "+assets-app FAIL transfer recipient does not have $XFER1 %Y%m%d_%H%M%S"
     false

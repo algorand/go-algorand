@@ -54,7 +54,7 @@ fi
 ${gcmd} app update --app-id $APPID --from $ACCOUNT --approval-prog-raw ${TEMPDIR}/upgraded.tealc --clear-prog-raw ${TEMPDIR}/upgraded.tealc
 
 # Global state should be empty
-RES=$(${gcmd} app read --guess-format --app-id $APPID --global | jq -r .foo.bar)
+RES=$(${gcmd} app read --guess-format --app-id $APPID --global | jq -r .foo.tb)
 if [[ "$RES" != "null" ]]; then
     date '+app-bootloader-test FAIL unexpected global state after update %Y%m%d_%H%M%S'
     false
@@ -64,7 +64,7 @@ fi
 ${gcmd} app call --app-id $APPID --from $ACCOUNT
 
 # Global state should now have 'foo': 'foo' key
-RES=$(${gcmd} app read --guess-format --app-id $APPID --global | jq -r .foo.b)
+RES=$(${gcmd} app read --guess-format --app-id $APPID --global | jq -r .foo.tb)
 if [[ "$RES" != "foo" ]]; then
     date '+app-bootloader-test FAIL unexpected global state after update and call %Y%m%d_%H%M%S'
     false

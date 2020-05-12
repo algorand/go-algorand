@@ -20,7 +20,6 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -33,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 var (
@@ -149,14 +149,14 @@ func init() {
 }
 
 type appCallArg struct {
-	Encoding string `json:"encoding"`
-	Value    string `json:"value"`
+	Encoding string `codec:"encoding"`
+	Value    string `codec:"value"`
 }
 
 type appCallInputs struct {
-	Accounts    []string     `json:"accounts"`
-	ForeignApps []uint64     `json:"foreignapps"`
-	Args        []appCallArg `json:"args"`
+	Accounts    []string     `codec:"accounts"`
+	ForeignApps []uint64     `codec:"foreignapps"`
+	Args        []appCallArg `codec:"args"`
 }
 
 func getForeignApps() []uint64 {
@@ -232,7 +232,7 @@ func processAppInputFile() (args [][]byte, accounts []string, foreignApps []uint
 		reportErrorf("Could not open app input JSON file: %v", err)
 	}
 
-	dec := json.NewDecoder(f)
+	dec := protocol.NewJSONDecoder(f)
 	err = dec.Decode(&inputs)
 	if err != nil {
 		reportErrorf("Could not decode app input JSON file: %v", err)
@@ -833,18 +833,13 @@ func printable(str string) bool {
 }
 
 func heuristicFormatStr(str string) string {
-	decoded, err := base64.StdEncoding.DecodeString(str)
-	if err != nil {
-		reportErrorf("Fatal error: could not decode base64-encoded string: %s", str)
+	if printable(str) {
+		return str
 	}
 
-	if printable(string(decoded)) {
-		return string(decoded)
-	}
-
-	if len(decoded) == 32 {
+	if len(str) == 32 {
 		var addr basics.Address
-		copy(addr[:], decoded)
+		copy(addr[:], []byte(str))
 		return addr.String()
 	}
 
@@ -909,10 +904,7 @@ var readStateAppCmd = &cobra.Command{
 			}
 
 			// Encode local state to json, print, and exit
-			enc, err := json.MarshalIndent(kv, "", "  ")
-			if err != nil {
-				reportErrorf(errorMarshalingState, err)
-			}
+			enc := protocol.EncodeJSON(kv)
 
 			// Print to stdout
 			os.Stdout.Write(enc)
@@ -920,12 +912,19 @@ var readStateAppCmd = &cobra.Command{
 		}
 
 		if fetchGlobal {
-			// Fetching global state. Get application information
-			ad, err := client.AccountData(account)
+			// Fetching global state. Get application creator
+			info, err := client.ApplicationInformation(appIdx)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
 
+			// Get creator information
+			ad, err := client.AccountData(info.Creator)
+			if err != nil {
+				reportErrorf(errorRequestFail, err)
+			}
+
+			// Get app params
 			params, ok := ad.AppParams[basics.AppIndex(appIdx)]
 			if !ok {
 				reportErrorf(errorNoSuchApplication, appIdx)
@@ -937,10 +936,7 @@ var readStateAppCmd = &cobra.Command{
 			}
 
 			// Encode global state to json, print, and exit
-			enc, err := json.MarshalIndent(kv, "", "  ")
-			if err != nil {
-				reportErrorf(errorMarshalingState, err)
-			}
+			enc := protocol.EncodeJSON(kv)
 
 			// Print to stdout
 			os.Stdout.Write(enc)
