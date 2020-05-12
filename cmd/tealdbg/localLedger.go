@@ -32,6 +32,9 @@ type balancesAdapter struct {
 	groupIndex int
 	proto      config.ConsensusParams
 	round      int
+	// accounts   []basics.Address
+	// apps       []basics.AppIndex
+	// appIdx     basics.AppIndex
 }
 
 const defaultNewAppIdx = 1380011588
@@ -39,10 +42,10 @@ const defaultNewAppIdx = 1380011588
 func makeAppLedger(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
 	groupIndex int, proto config.ConsensusParams, round int, latestTimestamp int64,
-) (logic.LedgerForLogic, error) {
+) (logic.LedgerForLogic, appState, error) {
 
 	if groupIndex >= len(txnGroup) {
-		return nil, fmt.Errorf("invalid groupIndex %d exceed txn group length %d", groupIndex, len(txnGroup))
+		return nil, appState{}, fmt.Errorf("invalid groupIndex %d exceed txn group length %d", groupIndex, len(txnGroup))
 	}
 	txn := txnGroup[groupIndex]
 
@@ -70,7 +73,26 @@ func makeAppLedger(
 		round:      round,
 	}
 
-	return ledger.MakeDebugAppLedger(ba, accounts, apps, appIdx, ledger.AppTealGlobals{CurrentRound: basics.Round(round), LatestTimestamp: latestTimestamp})
+	states := makeAppState()
+	states.appIdx = appIdx
+	for _, aid := range apps {
+		for addr, ad := range balances {
+			if params, ok := ad.AppParams[aid]; ok {
+				states.global[aid] = params.GlobalState
+			}
+			if local, ok := ad.AppLocalStates[aid]; ok {
+				ls, ok := states.locals[addr]
+				if !ok {
+					ls = make(map[basics.AppIndex]basics.TealKeyValue)
+				}
+				ls[aid] = local.KeyValue
+				states.locals[addr] = ls
+			}
+		}
+	}
+
+	ledger, err := ledger.MakeDebugAppLedger(ba, accounts, apps, appIdx, ledger.AppTealGlobals{CurrentRound: basics.Round(round), LatestTimestamp: latestTimestamp})
+	return ledger, states, err
 }
 
 func (ba *balancesAdapter) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {

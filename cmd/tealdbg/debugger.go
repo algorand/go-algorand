@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
@@ -49,8 +50,10 @@ type Control interface {
 	SetBreakpoint(line int) error
 	RemoveBreakpoint(line int) error
 	SetBreakpointsActive(active bool)
+
 	GetSourceMap() ([]byte, error)
 	GetSource() (string, []byte)
+	GetStates(changes *logic.AppStateChage) appState
 }
 
 // Debugger is TEAL event-driven debugger
@@ -76,6 +79,7 @@ type programMeta struct {
 	program      []byte
 	source       string
 	offsetToLine map[int]int
+	states       appState
 }
 
 type debugConfig struct {
@@ -108,6 +112,8 @@ type session struct {
 
 	breakpoints []breakpoint
 	line        atomicInt
+
+	states appState
 }
 
 type breakpoint struct {
@@ -279,6 +285,52 @@ func (s *session) GetSource() (string, []byte) {
 	return s.programName, []byte(s.source)
 }
 
+func (s *session) GetStates(changes *logic.AppStateChage) appState {
+	if changes == nil {
+		return s.states
+	}
+
+	newStates := s.states.clone()
+	appIdx := newStates.appIdx
+
+	applyDelta := func(sd basics.StateDelta, tkv basics.TealKeyValue) {
+		for key, delta := range sd {
+			switch delta.Action {
+			case basics.SetUintAction:
+				tkv[key] = basics.TealValue{Type: basics.TealUintType, Uint: delta.Uint}
+			case basics.SetBytesAction:
+				tkv[key] = basics.TealValue{Type: basics.TealBytesType, Bytes: delta.Bytes}
+			case basics.DeleteAction:
+				delete(tkv, key)
+			}
+		}
+	}
+
+	if len(changes.GlobalStateChanges) > 0 {
+		tkv, ok := newStates.global[appIdx]
+		if !ok {
+			tkv = make(basics.TealKeyValue)
+		}
+		applyDelta(changes.GlobalStateChanges, tkv)
+		newStates.global[appIdx] = tkv
+	}
+
+	for addr, delta := range changes.LocalStateChanges {
+		local, ok := newStates.locals[addr]
+		if !ok {
+			local = make(map[basics.AppIndex]basics.TealKeyValue)
+		}
+		tkv, ok := local[appIdx]
+		if !ok {
+			tkv = make(basics.TealKeyValue)
+		}
+		applyDelta(delta, tkv)
+		newStates.locals[addr] = local
+	}
+
+	return newStates
+}
+
 func (d *Debugger) getSession(sid string) (s *session, err error) {
 	d.mus.Lock()
 	defer d.mus.Unlock()
@@ -302,6 +354,7 @@ func (d *Debugger) createSession(sid string, disassembly string, line int, pcOff
 		s.source = meta.source
 		s.offsetToLine = meta.offsetToLine
 		s.pcOffset = pcOffset
+		s.states = meta.states
 	}
 	return
 }
@@ -328,7 +381,10 @@ func (d *Debugger) hashProgram(program []byte) string {
 }
 
 // SaveProgram stores program, source and offsetToLine for later use
-func (d *Debugger) SaveProgram(name string, program []byte, source string, offsetToLine map[int]int) {
+func (d *Debugger) SaveProgram(
+	name string, program []byte, source string, offsetToLine map[int]int,
+	states appState,
+) {
 	hash := d.hashProgram(program)
 	d.mus.Lock()
 	defer d.mus.Unlock()
@@ -337,6 +393,7 @@ func (d *Debugger) SaveProgram(name string, program []byte, source string, offse
 		program,
 		source,
 		offsetToLine,
+		states,
 	}
 }
 

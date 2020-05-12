@@ -48,12 +48,23 @@ type cdtState struct {
 	pc      atomicInt
 	line    atomicInt
 	err     atomicString
+	appState
 
 	// debugger states
 	lastAction      atomicString
 	pauseOnError    atomicBool
 	pauseOnCompeted atomicBool
 	completed       atomicBool
+}
+
+type cdtStateUpdate struct {
+	stack   []v2.TealValue
+	scratch []v2.TealValue
+	pc      int
+	line    int
+	err     string
+
+	appState
 }
 
 func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int, globals []v2.TealValue) {
@@ -64,14 +75,15 @@ func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGr
 	s.globals = globals
 }
 
-func (s *cdtState) Update(pc int, line int, stack []v2.TealValue, scratch []v2.TealValue, err string) {
+func (s *cdtState) Update(state cdtStateUpdate) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.pc.Store(pc)
-	s.line.Store(line)
-	s.stack = stack
-	s.scratch = scratch
-	s.err.Store(err)
+	s.pc.Store(state.pc)
+	s.line.Store(state.line)
+	s.err.Store(state.err)
+	s.stack = state.stack
+	s.scratch = state.scratch
+	s.appState = state.appState
 }
 
 const localScopeObjID = "localScopeObjId"

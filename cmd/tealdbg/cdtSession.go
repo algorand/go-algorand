@@ -45,6 +45,7 @@ type cdtSession struct {
 	scriptHash   string
 	scriptURL    string
 	sourceMapURL string
+	states       appState
 
 	verbose bool
 }
@@ -164,7 +165,11 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		state.Init(dbgState.Disassembly, dbgState.Proto, dbgState.TxnGroup, dbgState.GroupIndex, dbgState.Globals)
 		// mutable
 		// set pc and line to 0 to workaround Register ack
-		state.Update(0, 0, dbgState.Stack, dbgState.Scratch, "")
+		state.Update(cdtStateUpdate{
+			dbgState.Stack, dbgState.Scratch,
+			0, 0, "",
+			s.debugger.GetStates(nil),
+		})
 
 		hash := sha256.Sum256([]byte(state.disassembly)) // some random hash
 		s.scriptHash = hex.EncodeToString(hash[:])
@@ -236,7 +241,13 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			case <-cdtUpdatedCh:
 				dbgStateMu.Lock()
-				state.Update(dbgState.PC, dbgState.Line, dbgState.Stack, dbgState.Scratch, dbgState.Error)
+
+				appState := s.debugger.GetStates(&dbgState.AppStateChage)
+				state.Update(cdtStateUpdate{
+					dbgState.Stack, dbgState.Scratch,
+					dbgState.PC, dbgState.Line, dbgState.Error,
+					appState,
+				})
 				dbgStateMu.Unlock()
 
 				event := s.computeEvent(&state)
