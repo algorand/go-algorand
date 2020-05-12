@@ -22,8 +22,7 @@ CHANNEL=$("$REPO_DIR/scripts/compute_branch_channel.sh" "$BRANCH")
 BASE="$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH"
 mkdir -p "$BASE/$CHANNEL/$OS_TYPE-$ARCH/bin"
 ALGO_BIN="$BASE/$CHANNEL/$OS_TYPE-$ARCH/bin"
-mkdir -p "$BASE/pkg"
-OUTDIR="$BASE/pkg"
+OUTDIR="$BASE"
 PKG_NAME=$("$REPO_DIR/scripts/compute_package_name.sh" "${CHANNEL:-stable}")
 
 echo "Building debian package for '${OS} - ${ARCH}'"

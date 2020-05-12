@@ -41,6 +41,5 @@ trap 'rm -rf $TEMPDIR' 0
 
 rpmbuild --buildroot "$HOME/foo" --define "_rpmdir $RPMTMP" --define "RELEASE_GENESIS_PROCESS x$RELEASE_GENESIS_PROCESS" --define "LICENSE_FILE ./COPYING" -bb "$TEMPDIR/algorand.spec"
 
-mkdir -p "$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH/pkg"
-cp -p "$RPMTMP"/*/*.rpm "$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH/pkg"
+cp -p "$RPMTMP"/*/*.rpm "$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH"
 

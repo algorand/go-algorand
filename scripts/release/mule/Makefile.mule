@@ -1,7 +1,7 @@
 # This file is imported into go-algorand/Makefile.
 
-ARCH_BIT = $(shell uname -m)
-VER      = $(shell ./scripts/compute_build_number.sh -f)
+ARCH_BIT   = $(shell uname -m)
+VER        = $(shell ./scripts/compute_build_number.sh -f)
 
 .PHONY: ci-clean ci-deps ci-setup ci-build package package-deb package-rpm package-$(OS_TYPE)-$(ARCH) package-deb-$(OS_TYPE)-$(ARCH) package-rpm-$(OS_TYPE)-$(ARCH)
 
@@ -46,30 +46,19 @@ ci-build: ci-setup buildsrc gen
 		 NO_BUILD=True VARIATIONS=$(OS_TYPE)/$(ARCH) \
 		 scripts/build_packages.sh $(OS_TYPE)/$(ARCH)
 
-package-deb:
-	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/deb/package.sh $(OS_TYPE) $(ARCH) $$WORKDIR
+# Builds targets from the sub-directories of ./scripts/release/mule/, such as `mule-package`, `mule-sign`, `mule-test`.
+# https://scene-si.org/2019/12/04/make-dynamic-makefile-targets/
+mule = $(shell ls -d scripts/release/mule/*/ | awk 'BEGIN { FS="/" ; OFS="-" } { print $$3, $$4 }')
 
-package-docker:
-	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/docker/package.sh $(OS_TYPE) $(ARCH) $$WORKDIR
+mule-package-%: PKG_TYPE=$*
+mule-package-%:
+	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/$(PKG_TYPE)/package.sh $(OS_TYPE) $(ARCH) $$WORKDIR
 
-package-rpm:
-	scripts/release/mule/package/$(OS_TYPE)/$(ARCH)/rpm/package.sh $(OS_TYPE) $(ARCH) $$WORKDIR
+mule-sign-%: PKG_TYPE=$*
+mule-sign-%:
+	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) $(PKG_TYPE) $$WORKDIR
 
-package-sign-deb:
-	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) deb $$WORKDIR
-
-package-sign-rpm:
-	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) rpm $$WORKDIR
-
-package-sign-tarball:
-	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) tar.gz $$WORKDIR
-
-package-sign-source:
-	scripts/release/mule/sign/$(OS_TYPE)/$(ARCH)/sign.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) source $$WORKDIR
-
-package-test-deb:
-	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/test.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) deb
-
-package-test-rpm:
-	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/test.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) rpm
+mule-test-%: PKG_TYPE=$*
+mule-test-%:
+	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/test.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) $(PKG_TYPE) $$WORKDIR
 
