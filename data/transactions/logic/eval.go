@@ -1420,7 +1420,7 @@ func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err
 		}
 	case LatestTimestamp:
 		if (cx.runModeFlags & runModeApplication) == 0 {
-			sv.Uint = 0
+			err = errors.New("global LatestTimestamp not allowed in current mode")
 		} else {
 			sv.Uint, err = cx.getLatestTimestamp()
 		}
