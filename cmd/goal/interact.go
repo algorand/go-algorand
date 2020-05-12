@@ -126,10 +126,11 @@ func (proc appInteractProc) pseudo() bool {
 }
 
 type appInteractArg struct {
-	Name   string `json:"name"`
-	Kind   string `json:"kind"`
-	Help   string `json:"help"`
-	Pseudo bool   `json:"pseudo"`
+	Name    string `json:"name"`
+	Kind    string `json:"kind"`
+	Help    string `json:"help"`
+	Pseudo  bool   `json:"pseudo"`
+	Default string `json:"default"`
 }
 
 func (arg appInteractArg) kind() string {
@@ -163,10 +164,16 @@ type appInteractSchemaEntry struct {
 	Key      string `json:"key"`
 	Kind     string `json:"kind"`
 	Help     string `json:"help"`
+	Size     int    `json:"size"`
 	Explicit bool   `json:"explicit"`
+
+	Map appInteractMap `json:"map"` // TODO support for queries
 }
 
 func (entry appInteractSchemaEntry) kind() string {
+	if entry.Map.Kind != "" {
+		return fmt.Sprintf("map %s -> %s", entry.Kind, entry.Map.Kind)
+	}
 	return entry.Kind
 }
 
@@ -176,6 +183,11 @@ func (entry appInteractSchemaEntry) help() string {
 
 func (entry appInteractSchemaEntry) pseudo() bool {
 	return false
+}
+
+type appInteractMap struct {
+	Kind   string `json:"kind"`
+	Prefix string `json:"prefix"`
 }
 
 func (sch appInteractSchema) EntryList() string {
@@ -194,12 +206,19 @@ func (sch appInteractSchema) EntryNames() (names []string) {
 }
 
 func (sch appInteractSchema) ToStateSchema() (schema basics.StateSchema) {
-	for _, arg := range sch {
-		switch arg.Kind {
+	for name, entry := range sch {
+		size := uint64(1)
+		if entry.Map.Kind != "" {
+			if entry.Size < 0 {
+				reportErrorf("entry %s size %d < 0", name, entry.Size)
+			}
+			size = uint64(entry.Size)
+		}
+		switch entry.Kind {
 		case "int", "integer":
-			schema.NumUint += 1
+			schema.NumUint += size
 		default:
-			schema.NumByteSlice += 1
+			schema.NumByteSlice += size
 		}
 	}
 	return
@@ -298,17 +317,21 @@ var appExecuteCmd = &cobra.Command{
 			var callArg appCallArg
 			callArg.Encoding = arg.Kind
 
-			v := procArgs[arg.Name]
-			s, ok := v.(*string)
-			if ok {
-				callArg.Value = *s
+			if !procFlags.Changed(arg.Name) {
+				callArg.Value = arg.Default
 			} else {
-				i, ok := v.(*uint64)
+				v := procArgs[arg.Name]
+				s, ok := v.(*string)
 				if ok {
-					// TODO this decodes and re-encodes redundantly
-					callArg.Value = strconv.FormatUint(*i, 10)
+					callArg.Value = *s
 				} else {
-					reportErrorf("Could not re-encode key %s", arg.Name)
+					i, ok := v.(*uint64)
+					if ok {
+						// TODO this decodes and re-encodes redundantly
+						callArg.Value = strconv.FormatUint(*i, 10)
+					} else {
+						reportErrorf("Could not re-encode key %s", arg.Name)
+					}
 				}
 			}
 			inputs.Args = append(inputs.Args, callArg)
@@ -356,13 +379,14 @@ var appExecuteCmd = &cobra.Command{
 			}
 		}
 
+		localSchema := header.Query.Local.ToStateSchema()
+		globalSchema := header.Query.Global.ToStateSchema()
+
 		var approvalProg, clearProg []byte
 		var tx transactions.Transaction
 		var err error
 		if appIdx == 0 {
 			approvalProg, clearProg = mustParseProgArgs()
-			localSchema := header.Query.Local.ToStateSchema()
-			globalSchema := header.Query.Global.ToStateSchema()
 			tx, err = client.MakeUnsignedAppCreateTx(onCompletion, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps)
 		} else {
 			switch onCompletion {
@@ -415,7 +439,7 @@ var appExecuteCmd = &cobra.Command{
 			}
 
 			if appIdx == 0 {
-				reportInfof("Attempting to create app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
+				reportInfof("Attempting to create app (global ints %d, global blobs %d, local ints %d, local blobs %d, approval size %d, hash %v; clear size %d, hash %v)", globalSchema.NumUint, globalSchema.NumByteSlice, localSchema.NumUint, localSchema.NumByteSlice, len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
 			} else if onCompletion == transactions.UpdateApplicationOC {
 				reportInfof("Attempting to update app (approval size %d, hash %v; clear size %d, hash %v)", len(approvalProg), crypto.HashObj(logic.Program(approvalProg)), len(clearProg), crypto.HashObj(logic.Program(clearProg)))
 			}
