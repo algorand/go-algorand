@@ -96,7 +96,7 @@ var objectDescMap = map[string]objectDescFn{
 	tealErrorID:      makeTealError,
 }
 
-func (s *cdtState) getObjectDescriptor(objID string, preview bool) (descr []RuntimePropertyDescriptor, err error) {
+func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []RuntimePropertyDescriptor, err error) {
 	maker, ok := objectDescMap[objID]
 	if !ok {
 		if idx, ok := decodeGroupTxnID(objID); ok {
@@ -110,9 +110,9 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (descr []Runt
 		} else if parentObjID, ok := decodeArrayLength(objID); ok {
 			switch parentObjID {
 			case stackObjID:
-				return makeArrayLengh(s.stack), nil
+				return makeArrayLength(s.stack), nil
 			case scratchObjID:
-				return makeArrayLengh(s.scratch), nil
+				return makeArrayLength(s.scratch), nil
 			default:
 			}
 		} else if parentObjID, from, to, ok := decodeArraySlice(objID); ok {
@@ -511,20 +511,20 @@ func decodeArraySlice(objID string) (string, int, int, bool) {
 	return "", 0, 0, false
 }
 
-func makeGlobalScope(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
+func makeGlobalScope(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
 	globals := makeObject("globals", globalsObjID)
 	if preview {
 		globalsPreview := makeGlobalsPreview(s.globals)
 		globals.Value.Preview = &globalsPreview
 	}
 
-	descr = []RuntimePropertyDescriptor{
+	desc = []RuntimePropertyDescriptor{
 		globals,
 	}
-	return descr
+	return desc
 }
 
-func makeLocalScope(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
+func makeLocalScope(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
 	txn := makeObject("txn", txnObjID)
 	gtxn := makeArray("gtxn", len(s.txnGroup), gtxnObjID)
 	stack := makeArray("stack", len(s.stack), stackObjID)
@@ -553,7 +553,7 @@ func makeLocalScope(s *cdtState, preview bool) (descr []RuntimePropertyDescripto
 		Value: strconv.Itoa(s.pc.Load()),
 		Type:  "number",
 	})
-	descr = []RuntimePropertyDescriptor{
+	desc = []RuntimePropertyDescriptor{
 		pc,
 		txn,
 		gtxn,
@@ -561,33 +561,33 @@ func makeLocalScope(s *cdtState, preview bool) (descr []RuntimePropertyDescripto
 		scratch,
 	}
 
-	return descr
+	return desc
 }
 
-func makeGlobals(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
+func makeGlobals(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
 	fields := prepareGlobals(s.globals)
 	for _, field := range fields {
-		descr = append(descr, makePrimitive(field))
+		desc = append(desc, makePrimitive(field))
 	}
 	return
 }
 
-func makeTxn(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
+func makeTxn(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
 	if len(s.txnGroup) > 0 && s.groupIndex < len(s.txnGroup) && s.groupIndex >= 0 {
 		return makeTxnImpl(&s.txnGroup[s.groupIndex].Txn, s.groupIndex, preview)
 	}
 	return
 }
 
-func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (descr []RuntimePropertyDescriptor) {
+func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (desc []RuntimePropertyDescriptor) {
 	fields := prepareTxn(txn, groupIndex)
 	for _, field := range fields {
-		descr = append(descr, makePrimitive(field))
+		desc = append(desc, makePrimitive(field))
 	}
 	return
 }
 
-func makeTxnGroup(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
+func makeTxnGroup(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
 	if len(s.txnGroup) > 0 {
 		for i := 0; i < len(s.txnGroup); i++ {
 			item := makeObject(strconv.Itoa(i), encodeGroupTxnID(i))
@@ -595,19 +595,19 @@ func makeTxnGroup(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor)
 				txnPreview := makeTxnPreview(s.txnGroup, i)
 				item.Value.Preview = &txnPreview
 			}
-			descr = append(descr, item)
+			desc = append(desc, item)
 		}
 	}
 	return
 }
 
-func makeArrayLengh(array []v2.TealValue) (descr []RuntimePropertyDescriptor) {
+func makeArrayLength(array []v2.TealValue) (desc []RuntimePropertyDescriptor) {
 	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(array)), Type: "number"}
-	descr = append(descr, makePrimitive(field))
+	desc = append(desc, makePrimitive(field))
 	return
 }
 
-func makeStackSlice(s *cdtState, from int, to int, preview bool) (descr []RuntimePropertyDescriptor) {
+func makeStackSlice(s *cdtState, from int, to int, preview bool) (desc []RuntimePropertyDescriptor) {
 	// temporary disable stack reversion to see if people prefer appending to the list
 	// stack := make([]v2.TealValue, len(s.stack))
 	// for i := 0; i < len(stack); i++ {
@@ -617,36 +617,36 @@ func makeStackSlice(s *cdtState, from int, to int, preview bool) (descr []Runtim
 	stack := s.stack[from : to+1]
 	fields := prepareArray(stack)
 	for _, field := range fields {
-		descr = append(descr, makePrimitive(field))
+		desc = append(desc, makePrimitive(field))
 	}
 	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(s.stack)), Type: "number"}
-	descr = append(descr, makePrimitive(field))
+	desc = append(desc, makePrimitive(field))
 	return
 }
 
-func makeStack(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
+func makeStack(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
 	return makeStackSlice(s, 0, len(s.stack)-1, preview)
 }
 
-func makeScratchSlice(s *cdtState, from int, to int, preview bool) (descr []RuntimePropertyDescriptor) {
+func makeScratchSlice(s *cdtState, from int, to int, preview bool) (desc []RuntimePropertyDescriptor) {
 	scratch := s.scratch[from : to+1]
 	fields := prepareArray(scratch)
 	for _, field := range fields {
-		descr = append(descr, makePrimitive(field))
+		desc = append(desc, makePrimitive(field))
 	}
 	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(scratch)), Type: "number"}
-	descr = append(descr, makePrimitive(field))
+	desc = append(desc, makePrimitive(field))
 	return
 }
 
-func makeScratch(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
+func makeScratch(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
 	return makeScratchSlice(s, 0, len(s.scratch)-1, preview)
 }
 
-func makeTealError(s *cdtState, preview bool) (descr []RuntimePropertyDescriptor) {
+func makeTealError(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
 	if lastError := s.err.Load(); len(lastError) != 0 {
 		field := fieldDesc{Name: "message", Value: lastError, Type: "string"}
-		descr = append(descr, makePrimitive(field))
+		desc = append(desc, makePrimitive(field))
 	}
 	return
 }

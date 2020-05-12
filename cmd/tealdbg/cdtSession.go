@@ -110,7 +110,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	cdtUpdatedCh := make(chan interface{}, 1)
 
 	closed := make(chan struct{})
-	registred := make(chan struct{})
+	registered := make(chan struct{})
 
 	var dbgStateMu deadlock.Mutex
 	var dbgState logic.DebugState
@@ -128,9 +128,9 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 
 				switch notification.Event {
 				case "registered":
-					// no mutex, the access already synchronized by "registred" chan
+					// no mutex, the access already synchronized by "registered" chan
 					dbgState = notification.DebugState
-					registred <- struct{}{}
+					registered <- struct{}{}
 				case "completed":
 					// if completed we still want to see updated state
 					state.completed.SetTo(true)
@@ -153,8 +153,8 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// wait until initial "registred" event
-	<-registred
+	// wait until initial "registered" event
+	<-registered
 
 	func() {
 		dbgStateMu.Lock()
@@ -367,8 +367,8 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 			preview = previewRaw.(bool)
 		}
 
-		var descr []RuntimePropertyDescriptor
-		descr, err = state.getObjectDescriptor(objID, preview)
+		var desc []RuntimePropertyDescriptor
+		desc, err = state.getObjectDescriptor(objID, preview)
 		if err != nil {
 			err = fmt.Errorf("getObjectDescriptor error: " + err.Error())
 			return
@@ -376,15 +376,15 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 
 		if s.verbose {
 			var data []byte
-			data, err = json.Marshal(descr)
+			data, err = json.Marshal(desc)
 			if err != nil {
 				err = fmt.Errorf("getObjectDescriptor json error: " + err.Error())
 				return
 			}
-			log.Printf("Descr object: %s", string(data))
+			log.Printf("Desc object: %s", string(data))
 		}
 
-		response = ChromeResponse{ID: req.ID, Result: cmdResult{descr}}
+		response = ChromeResponse{ID: req.ID, Result: cmdResult{desc}}
 	case "Debugger.setBreakpointsActive":
 		p := req.Params.(map[string]interface{})
 		activeRaw, ok := p["active"]

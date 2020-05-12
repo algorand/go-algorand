@@ -85,7 +85,7 @@ type debugConfig struct {
 
 type session struct {
 	mu deadlock.Mutex
-	// Reply to registration/update when bool received on acknolwedgement
+	// Reply to registration/update when bool received on acknowledgement
 	// channel, allowing program execution to continue
 	acknowledged chan bool
 
@@ -373,7 +373,7 @@ func (d *Debugger) Register(state *logic.DebugState) error {
 	return nil
 }
 
-// Update process state update nofifications: pauses or continues as needed
+// Update process state update notifications: pauses or continues as needed
 func (d *Debugger) Update(state *logic.DebugState) error {
 	sid := state.ExecID
 	s, err := d.getSession(sid)
@@ -383,7 +383,7 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 	s.line.Store(state.Line)
 
 	go func() {
-		// Check if we are triggered and acknolwedge asynchronously
+		// Check if we are triggered and acknowledge asynchronously
 		cfg := s.debugConfig
 		if cfg.BreakAtLine != -1 {
 			if cfg.BreakAtLine == 0 || state.Line == cfg.BreakAtLine {
@@ -394,7 +394,7 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 				s.acknowledged <- true
 			}
 		} else {
-			// User won't send acknowledement, so we will
+			// User won't send acknowledgment, so we will
 			s.acknowledged <- true
 		}
 	}()
