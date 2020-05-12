@@ -30,7 +30,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -856,16 +855,16 @@ func heuristicFormatKey(key string) string {
 	return heuristicFormatStr(key)
 }
 
-func heuristicFormatVal(val v1.TealValue) v1.TealValue {
-	if val.Type == "u" {
+func heuristicFormatVal(val basics.TealValue) basics.TealValue {
+	if val.Type == basics.TealUintType {
 		return val
 	}
 	val.Bytes = heuristicFormatStr(val.Bytes)
 	return val
 }
 
-func heuristicFormat(state map[string]v1.TealValue) map[string]v1.TealValue {
-	result := make(map[string]v1.TealValue)
+func heuristicFormat(state map[string]basics.TealValue) map[string]basics.TealValue {
+	result := make(map[string]basics.TealValue)
 	for k, v := range state {
 		result[heuristicFormatKey(k)] = heuristicFormatVal(v)
 	}
@@ -893,13 +892,13 @@ var readStateAppCmd = &cobra.Command{
 
 		if fetchLocal {
 			// Fetching local state. Get account information
-			response, err := client.AccountInformation(account)
+			ad, err := client.AccountData(account)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
 
 			// Get application local state
-			local, ok := response.AppLocalStates[appIdx]
+			local, ok := ad.AppLocalStates[basics.AppIndex(appIdx)]
 			if !ok {
 				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
 			}
@@ -922,9 +921,14 @@ var readStateAppCmd = &cobra.Command{
 
 		if fetchGlobal {
 			// Fetching global state. Get application information
-			params, err := client.ApplicationInformation(appIdx)
+			ad, err := client.AccountData(account)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
+			}
+
+			params, ok := ad.AppParams[basics.AppIndex(appIdx)]
+			if !ok {
+				reportErrorf(errorNoSuchApplication, appIdx)
 			}
 
 			kv := params.GlobalState

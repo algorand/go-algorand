@@ -616,6 +616,7 @@
         "description": "Application index and its parameters",
         "properties": {
           "app-index": {
+            "description": "\\[appidx\\] application index.",
             "type": "integer"
           },
           "app-params": {
@@ -628,34 +629,11 @@
         ],
         "type": "object"
       },
-      "ApplicationKeyValue": {
-        "description": "Represents a key-value pair in an application store.",
-        "properties": {
-          "key": {
-            "type": "string"
-          },
-          "value": {
-            "$ref": "#/components/schemas/ApplicationValue"
-          }
-        },
-        "required": [
-          "key",
-          "value"
-        ],
-        "type": "object"
-      },
-      "ApplicationKeyValueStore": {
-        "description": "Represents a key-value store for use in an application.",
-        "items": {
-          "$ref": "#/components/schemas/ApplicationKeyValue"
-        },
-        "type": "array"
-      },
       "ApplicationLocalState": {
         "description": "Stores local state associated with an application.",
         "properties": {
           "key-value": {
-            "$ref": "#/components/schemas/ApplicationKeyValueStore"
+            "$ref": "#/components/schemas/TealKeyValueStore"
           },
           "schema": {
             "$ref": "#/components/schemas/ApplicationStateSchema"
@@ -699,7 +677,7 @@
             "type": "string"
           },
           "global-state": {
-            "$ref": "#/components/schemas/ApplicationKeyValueStore"
+            "$ref": "#/components/schemas/TealKeyValueStore"
           },
           "global-state-schema": {
             "$ref": "#/components/schemas/ApplicationStateSchema"
@@ -729,30 +707,6 @@
         "required": [
           "num-byte-slice",
           "num-uint"
-        ],
-        "type": "object"
-      },
-      "ApplicationValue": {
-        "description": "Represents a value in an application store.",
-        "properties": {
-          "bytes": {
-            "description": "\\[tb\\] bytes value.",
-            "type": "string"
-          },
-          "type": {
-            "description": "\\[tt\\] value type.",
-            "type": "integer"
-          },
-          "uint": {
-            "description": "\\[ui\\] uint value.",
-            "type": "integer",
-            "x-algorand-format": "uint64"
-          }
-        },
-        "required": [
-          "bytes",
-          "type",
-          "uint"
         ],
         "type": "object"
       },
@@ -878,6 +832,53 @@
         },
         "required": [
           "message"
+        ],
+        "type": "object"
+      },
+      "TealKeyValue": {
+        "description": "Represents a key-value pair in an application store.",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/TealValue"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object"
+      },
+      "TealKeyValueStore": {
+        "description": "Represents a key-value store for use in an application.",
+        "items": {
+          "$ref": "#/components/schemas/TealKeyValue"
+        },
+        "type": "array"
+      },
+      "TealValue": {
+        "description": "Represents a TEAL value.",
+        "properties": {
+          "bytes": {
+            "description": "\\[tb\\] bytes value.",
+            "type": "string"
+          },
+          "type": {
+            "description": "\\[tt\\] value type.",
+            "type": "integer"
+          },
+          "uint": {
+            "description": "\\[ui\\] uint value.",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "required": [
+          "bytes",
+          "type",
+          "uint"
         ],
         "type": "object"
       },
