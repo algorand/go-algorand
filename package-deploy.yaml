@@ -21,6 +21,22 @@ tasks:
       ]
     target: package-deploy WORKDIR=/projects/go-algorand
 
+  - task: docker.Make
+    name: package-deploy
+    docker:
+      image: algorand/mule-linux-ubuntu
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /projects/go-algorand
+      env: [
+        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      ]
+    target: package-deploy WORKDIR=/projects/go-algorand
+
+  - task: shell.Make
+    name: generate-releases-page
+    target: foo
+
   - task: s3.BucketCopy
     name: deploy
     bucketSrc: ben-test-2.0.3
@@ -33,6 +49,10 @@ jobs:
     configs:
       arch: amd64
     tasks:
-      #      - shell.docker.Ensure.deploy
+      - shell.docker.Ensure.deploy
+        #      - s3.BucketCopy.deploy
+
+  package-deploy-setup-copy:
+    tasks:
       - s3.BucketCopy.deploy
 
