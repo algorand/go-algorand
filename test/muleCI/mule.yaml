@@ -55,12 +55,6 @@ tasks:
 
 jobs:
   # Linux arm64 jobs
-  build-linux-arm64:
-    configs:
-      arch: arm64v8
-    tasks:
-      - shell.docker.Ensure
-      - docker.Make.build
   test-linux-arm64-integration:
     configs:
       arch: arm64v8
@@ -70,31 +64,21 @@ jobs:
 
   # Linux amd64 jobs
   build-linux-amd64:
-    configs:
-      arch: amd64
-    tasks:
-      - shell.docker.Ensure
-      - docker.Make.build
-  test-linux-amd64-fulltest:
-    configs:
-      arch: amd64
-    tasks:
-      - shell.docker.Ensure
-      - docker.Make.fulltest
   test-linux-amd64-integration:
     configs:
       arch: amd64
     tasks:
       - shell.docker.Ensure
       - docker.Make.integration-test
+  test-linux-amd64-fulltest:
+    configs:
+      arch: amd64
+    tasks:
+      - shell.docker.Ensure
+      - docker.Make.fulltest
 
   # Linux arm jobs
   build-linux-arm:
-    configs:
-      arch: arm32v6
-      target: ci-build
-    tasks:
-      - docker.Make
   test-linux-arm-integration:
     configs:
       arch: arm32v6
