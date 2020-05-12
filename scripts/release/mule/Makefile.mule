@@ -73,3 +73,9 @@ package-test-deb:
 package-test-rpm:
 	scripts/release/mule/test/$(OS_TYPE)/$(ARCH)/test.sh $$WORKDIR $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) rpm
 
+mule-deploy:
+	scripts/release/mule/deploy/$(OS_TYPE)/$(ARCH)/deploy.sh $(OS_TYPE) $(ARCH) $$WORKDIR
+
+mule-deploy-generate-releases-page:
+	cd scripts/release/mule/deploy/generate_releases_page && ./generate_releases_page
+

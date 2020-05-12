@@ -4,38 +4,26 @@ tasks:
 
   - task: shell.docker.Ensure
     name: deploy
-    image: algorand/mule-linux-ubuntu
+    image: algorand/mule-linux-debian
     version: '{{ docker.Version.outputs.version }}'
-    dockerFilePath: docker/build/mule.ubuntu.Dockerfile
+    dockerFilePath: docker/build/mule.go.debian.Dockerfile
     dependencies: docker.Version
 
   - task: docker.Make
     name: package-deploy
     docker:
-      image: algorand/mule-linux-ubuntu
+      image: algorand/mule-linux-debian
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
       env: [
         AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
         AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
       ]
-    target: package-deploy WORKDIR=/projects/go-algorand
-
-  - task: docker.Make
-    name: package-deploy
-    docker:
-      image: algorand/mule-linux-ubuntu
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
-      env: [
-        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-      ]
-    target: package-deploy WORKDIR=/projects/go-algorand
+    target: mule-deploy WORKDIR=/projects/go-algorand
 
   - task: shell.Make
     name: generate-releases-page
-    target: foo
+    target: mule-deploy-generate-releases-page
 
   - task: s3.BucketCopy
     name: deploy
@@ -50,7 +38,11 @@ jobs:
       arch: amd64
     tasks:
       - shell.docker.Ensure.deploy
-        #      - s3.BucketCopy.deploy
+      - docker.Make.package-deploy
+
+  package-deploy-setup-generate-releases-page:
+    tasks:
+      - shell.Make.generate-releases-page
 
   package-deploy-setup-copy:
     tasks:
