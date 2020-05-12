@@ -263,7 +263,7 @@ func (pe PanicError) Error() string {
 }
 
 var errLoopDetected = errors.New("loop detected")
-var errCostTooHigh = errors.New("LogicSigMaxCost exceeded")
+var errCostTooHigh = errors.New("LogicSigMaxCost exceded")
 var errLogicSignNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
@@ -304,7 +304,7 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 }
 
 // Eval checks to see if a transaction passes logic
-// A program passes successfully if it finishes with one int element on the stack that is non-zero.
+// A program passes succesfully if it finishes with one int element on the stack that is non-zero.
 func Eval(program []byte, params EvalParams) (pass bool, err error) {
 	var cx evalContext
 	cx.EvalParams = params
@@ -312,8 +312,8 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 	return eval(program, &cx)
 }
 
-// eval implementation
-// A program passes successfully if it finishes with one int element on the stack that is non-zero.
+// eval impelementation
+// A program passes succesfully if it finishes with one int element on the stack that is non-zero.
 func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	defer func() {
 		if x := recover(); x != nil {
@@ -380,7 +380,23 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	cx.program = program
 
 	if cx.Debugger != nil {
-		cx.debugState = makeDebugState(cx)
+		disasm, dsInfo, err := disassembleInstrumented(cx.program)
+		if err != nil {
+			// Report disassembly error as program text
+			disasm = err.Error()
+		}
+
+		hash := sha256.Sum256(cx.program)
+		// initialize DebuggerState with imutable fields
+		cx.debugState = DebugState{
+			ExecID:      hex.EncodeToString(hash[:]),
+			Disassembly: disasm,
+			PCOffset:    dsInfo.pcOffset,
+			GroupIndex:  cx.GroupIndex,
+			TxnGroup:    cx.TxnGroup,
+			Proto:       cx.Proto,
+		}
+		cx.setDebugStateGlobals()
 		cx.Debugger.Register(cx.refreshDebugState())
 	}
 
