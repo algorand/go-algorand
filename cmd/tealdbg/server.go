@@ -64,6 +64,7 @@ type DebugParams struct {
 	GroupIndex       int
 	BalanceBlob      []byte
 	Round            int
+	LatestTimestamp  int64
 	RunMode          string
 	DisableSourceMap bool
 }

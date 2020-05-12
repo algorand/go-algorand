@@ -129,6 +129,7 @@ var txnFile string
 var groupIndex int
 var balanceFile string
 var roundNumber int
+var timestamp int64
 var runMode runModeValue = runModeValue{makeCobraStringValue("auto", []string{"signature", "application"})}
 var port int
 var noFirstRun bool
@@ -151,6 +152,7 @@ func init() {
 	debugCmd.Flags().IntVarP(&groupIndex, "group-index", "g", 0, "Transaction index in a txn group")
 	debugCmd.Flags().StringVarP(&balanceFile, "balance", "b", "", "Balance records to evaluate stateful TEAL on in form of json or msgpack file")
 	debugCmd.Flags().IntVarP(&roundNumber, "round", "r", 1095518031, "Ledger round number to evaluate stateful TEAL on")
+	debugCmd.Flags().Int64VarP(&timestamp, "latest-timestamp", "l", 0, "Latest confirmed timestamp to evaluate stateful TEAL on")
 	debugCmd.Flags().VarP(&runMode, "mode", "m", "TEAL evaluation mode: "+runMode.AllowedString())
 
 	rootCmd.AddCommand(debugCmd)
@@ -224,6 +226,7 @@ func debugLocal(args []string) {
 		GroupIndex:       groupIndex,
 		BalanceBlob:      balanceBlob,
 		Round:            roundNumber,
+		LatestTimestamp:  timestamp,
 		RunMode:          runMode.String(),
 		DisableSourceMap: noSourceMap,
 	}

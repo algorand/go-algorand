@@ -76,6 +76,9 @@ type DryrunRequest struct {
 	// Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.
 	Round uint64 `codec:"round,omitempty"`
 
+	// LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.
+	LatestTimestamp int64 `codec:"latest,omitempty"`
+
 	Sources []DryrunSource
 }
 
@@ -395,7 +398,11 @@ func makeAppLedger(dl *dryrunLedger, txnIndex int) (l logic.LedgerForLogic, err 
 	for i, appid := range dr.Txns[txnIndex].Txn.ForeignApps {
 		apps[i+1] = appid
 	}
-	return ledger.MakeDebugAppLedger(dl, accounts, apps, dr.Txns[txnIndex].Txn.ApplicationID)
+	globals := ledger.AppTealGlobals{
+		CurrentRound:    basics.Round(dl.dr.Round),
+		LatestTimestamp: dl.dr.LatestTimestamp,
+	}
+	return ledger.MakeDebugAppLedger(dl, accounts, apps, dr.Txns[txnIndex].Txn.ApplicationID, globals)
 }
 
 // DryrunTxnResult contains any LogicSig or ApplicationCall program debug information and state updates from a dryrun.

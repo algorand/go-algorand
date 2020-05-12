@@ -1104,6 +1104,10 @@ txn CloseRemainderTo
 //global Round // Tested in TestRound
 //int 999999
 //==
+//&&
+//global LatestTimestamp // Tested in TestLatestTimestamp
+//int 999999
+//==
 &&
 global GroupSize
 int 1

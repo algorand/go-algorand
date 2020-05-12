@@ -38,7 +38,7 @@ const defaultNewAppIdx = 1380011588
 
 func makeAppLedger(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
-	groupIndex int, proto config.ConsensusParams, round int,
+	groupIndex int, proto config.ConsensusParams, round int, latestTimestamp int64,
 ) (logic.LedgerForLogic, error) {
 
 	if groupIndex >= len(txnGroup) {
@@ -70,7 +70,7 @@ func makeAppLedger(
 		round:      round,
 	}
 
-	return ledger.MakeDebugAppLedger(ba, accounts, apps, appIdx)
+	return ledger.MakeDebugAppLedger(ba, accounts, apps, appIdx, ledger.AppTealGlobals{CurrentRound: basics.Round(round), LatestTimestamp: latestTimestamp})
 }
 
 func (ba *balancesAdapter) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {

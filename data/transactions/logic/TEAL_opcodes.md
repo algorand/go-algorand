@@ -415,6 +415,7 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 | 4 | GroupSize | uint64 | Number of transactions in this atomic transaction group. At least 1. |
 | 5 | LogicSigVersion | uint64 |  |
 | 6 | Round | uint64 | Current round number |
+| 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative |
 
 
 ## gtxn

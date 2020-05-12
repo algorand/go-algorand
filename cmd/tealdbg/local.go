@@ -230,7 +230,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			return
 		}
 		var ledger logic.LedgerForLogic
-		ledger, err = makeAppLedger(balances, r.txnGroup, dp.GroupIndex, r.proto, dp.Round)
+		ledger, err = makeAppLedger(balances, r.txnGroup, dp.GroupIndex, r.proto, dp.Round, dp.LatestTimestamp)
 		if err != nil {
 			return
 		}
@@ -279,7 +279,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			r.runs = append(r.runs, run)
 		} else if stxn.Txn.Type == protocol.ApplicationCallTx {
 			var ledger logic.LedgerForLogic
-			ledger, err = makeAppLedger(balances, r.txnGroup, gi, r.proto, dp.Round)
+			ledger, err = makeAppLedger(balances, r.txnGroup, gi, r.proto, dp.Round, dp.LatestTimestamp)
 			if err != nil {
 				return
 			}

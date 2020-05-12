@@ -64,12 +64,13 @@ func _() {
 	_ = x[GroupSize-4]
 	_ = x[LogicSigVersion-5]
 	_ = x[Round-6]
-	_ = x[invalidGlobalField-7]
+	_ = x[LatestTimestamp-7]
+	_ = x[invalidGlobalField-8]
 }
 
-const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeLogicSigVersionRoundinvalidGlobalField"
+const _GlobalField_name = "MinTxnFeeMinBalanceMaxTxnLifeZeroAddressGroupSizeLogicSigVersionRoundLatestTimestampinvalidGlobalField"
 
-var _GlobalField_index = [...]uint8{0, 9, 19, 29, 40, 49, 64, 69, 87}
+var _GlobalField_index = [...]uint8{0, 9, 19, 29, 40, 49, 64, 69, 84, 102}
 
 func (i GlobalField) String() string {
 	if i < 0 || i >= GlobalField(len(_GlobalField_index)-1) {
