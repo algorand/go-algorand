@@ -309,15 +309,9 @@ var sendCmd = &cobra.Command{
 			fromAddressResolved = pha.String()
 			programArgs = getProgramArgs()
 		} else {
-			// Check if from was specified, else use default
-			if account == "" {
-				account = accountList.getDefaultAccount()
-			}
-
-			// Resolving friendly names
-			fromAddressResolved = accountList.getAddressByName(account)
+			fromAddressResolved = getAccount(dataDir, accountList, account)
 		}
-		toAddressResolved := accountList.getAddressByName(toAddress)
+		toAddressResolved := getAccount(dataDir, accountList, toAddress)
 
 		// Parse notes and lease fields
 		noteBytes := parseNoteField(cmd)
@@ -326,7 +320,7 @@ var sendCmd = &cobra.Command{
 		// If closing an account, resolve that address as well
 		var closeToAddressResolved string
 		if closeToAddress != "" {
-			closeToAddressResolved = accountList.getAddressByName(closeToAddress)
+			closeToAddressResolved = getAccount(dataDir, accountList, closeToAddress)
 		}
 
 		// If rekeying, parse that address
@@ -853,21 +847,14 @@ var compileCmd = &cobra.Command{
 			}
 			if signProgram {
 				dataDir := ensureSingleDataDir()
-				accountList := makeAccountsList(dataDir)
 				client := ensureKmdClient(dataDir)
 				wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 
-				// Check if from was specified, else use default
+				matchedAccount := getAccount(dataDir, nil, account)
 				if account == "" {
-					account = accountList.getDefaultAccount()
-					if account == "" {
-						reportErrorln("no default account set. set one with 'goal account -f' or specify an account with '-a'.")
-					}
-					fmt.Printf("will use default account: %v\n", account)
+					fmt.Printf("will use default account: %v\n", matchedAccount)
 				}
-				signingAddressResolved := accountList.getAddressByName(account)
-
-				signature, err := client.SignProgramWithWallet(wh, pw, signingAddressResolved, program)
+				signature, err := client.SignProgramWithWallet(wh, pw, matchedAccount, program)
 				if err != nil {
 					reportErrorf(errorSigningTX, err)
 				}

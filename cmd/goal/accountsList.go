@@ -29,6 +29,26 @@ import (
 	"github.com/algorand/go-algorand/libgoal"
 )
 
+// getAccount is a simple helper which returns the default account (if passed an empty string), an account address
+// as-is, or an account address for an account alias.
+// If an AccountsList instance is available it can be passed instead of a data directory to avoid reloading.
+// If not available, the data directory can be set and accountList set to nil.
+// Note: It is a hard error if no account is specified, and no default account is defined.
+// No validation of the account address itself is performed.
+func getAccount(dataDir string, accountList *AccountsList, accountAddress string) string {
+	if accountList == nil {
+		accountList = makeAccountsList(dataDir)
+	}
+	if accountAddress == "" {
+		accountAddress = accountList.getDefaultAccount()
+		if accountAddress == "" {
+			reportErrorln(errorNoDefaultAccount)
+		}
+	}
+
+	return accountList.getAddressByName(accountAddress)
+}
+
 // AccountsList holds a mapping between the account's address, its friendly name and whether it's a default one.
 type AccountsList struct {
 	Accounts        map[string]string
