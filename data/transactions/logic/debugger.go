@@ -28,6 +28,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
@@ -72,6 +73,15 @@ type DebugState struct {
 	Stack   []v2.TealValue `json:"stack"`
 	Scratch []v2.TealValue `json:"scratch"`
 	Error   string         `json:"error"`
+
+	// global/local state changes are updated every step. Stateful TEAL only.
+	AppStateChage
+}
+
+// AppStateChage encapsulates global and local app state changes
+type AppStateChage struct {
+	GlobalStateChanges basics.StateDelta                    `json:"gsch"`
+	LocalStateChanges  map[basics.Address]basics.StateDelta `json:"lsch"`
 }
 
 func makeDebugState(cx *evalContext) DebugState {
@@ -101,6 +111,17 @@ func makeDebugState(cx *evalContext) DebugState {
 		globals[fieldIdx] = stackValueToV2TealValue(&sv)
 	}
 	cx.debugState.Globals = globals
+
+	// pre-allocate state maps
+	if (cx.runModeFlags & runModeApplication) != 0 {
+		ds.GlobalStateChanges = make(basics.StateDelta)
+
+		// allocate maximum possible slots in the hashmap even if Txn.Accounts might have duplicate entries
+		locals := 1 + len(cx.Txn.Txn.Accounts) // sender + referenced accounts
+		ds.LocalStateChanges = make(map[basics.Address]basics.StateDelta, locals)
+
+		// do not pre-allocate ds.LocalStateChanges[addr] since it initialized during update
+	}
 
 	return ds
 }
@@ -179,6 +200,21 @@ func (cx *evalContext) refreshDebugState() *DebugState {
 
 	ds.Stack = stack
 	ds.Scratch = scratch
+
+	if (cx.runModeFlags & runModeApplication) != 0 {
+		if cx.globalStateCow != nil {
+			for k, v := range cx.globalStateCow.delta {
+				ds.GlobalStateChanges[k] = v
+			}
+		}
+		for addr, cow := range cx.localStateCows {
+			delta := make(basics.StateDelta)
+			for k, v := range cow.cow.delta {
+				delta[k] = v
+			}
+			ds.LocalStateChanges[addr] = delta
+		}
+	}
 
 	return ds
 }

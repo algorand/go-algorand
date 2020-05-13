@@ -17,7 +17,6 @@
 package v2
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/algorand/go-algorand/config"
@@ -181,7 +180,6 @@ func (ddr *dryrunDebugReceiver) Complete(state *logic.DebugState) error {
 	return ddr.Update(state)
 }
 
-// LedgerForLogic
 type dryrunLedger struct {
 	// inputs:
 
@@ -224,69 +222,9 @@ func (dl *dryrunLedger) init() error {
 	return nil
 }
 
-// LedgerForLogic
-func (dl *dryrunLedger) Balance(addr basics.Address) (basics.MicroAlgos, error) {
-	for _, acct := range dl.dr.Accounts {
-		xaddr, err := basics.UnmarshalChecksumAddress(acct.Address)
-		if err != nil {
-			continue
-		}
-		if xaddr == addr {
-			return basics.MicroAlgos{Raw: acct.Amount}, nil
-		}
-	}
-	return basics.MicroAlgos{Raw: 0}, fmt.Errorf("no account %s", addr.String())
-}
-
-// LedgerForLogic interface
 // transactions.Balances interface
 func (dl *dryrunLedger) Round() basics.Round {
 	return basics.Round(dl.dr.Round)
-}
-
-// LedgerForLogic interface
-func (dl *dryrunLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error) {
-	for _, app := range dl.dr.Apps {
-		if app.AppIndex == uint64(appIdx) {
-			return app.Params.GlobalState, nil
-		}
-	}
-	return nil, nil
-}
-
-// LedgerForLogic interface
-func (dl *dryrunLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error) {
-	for _, st := range dl.dr.AccountAppStates {
-		if appIdx == st.AppIndex && addr == st.Account {
-			return st.State.KeyValue, nil
-		}
-	}
-	return make(basics.TealKeyValue), nil
-}
-
-// LedgerForLogic interface
-func (dl *dryrunLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {
-	for _, acct := range dl.dr.Accounts {
-		// TODO: check all address decodes when we first receive the dryrun request
-		xaddr, err := basics.UnmarshalChecksumAddress(acct.Address)
-		if err != nil {
-			continue
-		}
-		if xaddr == addr {
-			for _, ah := range *acct.Assets {
-				if ah.AssetId == uint64(assetIdx) {
-					return basics.AssetHolding{Amount: ah.Amount, Frozen: ah.IsFrozen}, nil
-				}
-			}
-		}
-	}
-	return basics.AssetHolding{Amount: 0, Frozen: false}, fmt.Errorf("no account %s", addr.String())
-}
-
-// LedgerForLogic interface
-func (dl *dryrunLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error) {
-	// TODO? maybe not needed for dryrun
-	return basics.AssetParams{}, errors.New("dryrun LedgerForLogic AssetParams unimplemented")
 }
 
 // transactions.Balances interface

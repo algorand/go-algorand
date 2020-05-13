@@ -25,6 +25,7 @@
 1. Run the debugger
     ```
     $ tealdbg debug myprog.teal
+    $ tealdbg debug samples/calls_count.teal --balance samples/calls_count_balance.json --txn samples/calls_count_txn.json --proto=future
     ```
     It prints out the URL to follow: `chrome-devtools://devtools/bundled/js_app.html?...`
 2. Open the URL in Google Chrome.
@@ -112,7 +113,7 @@ Balance records are used for setting environment for stateful TEAL execution and
 $ tealdbg debug myprog.teal --balance samples/balances.json
 ```
 
-Balance records are JSON or MessagePack serialized instances of `basics.BalanceRecord`
+Balance records are JSON or MessagePack (`goal account dump` compatible) serialized instances of `basics.BalanceRecord`
 
 Sample balance record in JSON format:
 ```json

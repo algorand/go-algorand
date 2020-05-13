@@ -137,6 +137,32 @@ type evalResult struct {
 
 type evalFn func(program []byte, ep logic.EvalParams) (bool, error)
 
+type appState struct {
+	appIdx basics.AppIndex
+	global map[basics.AppIndex]basics.TealKeyValue
+	locals map[basics.Address]map[basics.AppIndex]basics.TealKeyValue
+}
+
+func (a *appState) clone() (b appState) {
+	b.appIdx = a.appIdx
+	b.global = make(map[basics.AppIndex]basics.TealKeyValue, len(a.global))
+	for aid, tkv := range a.global {
+		b.global[aid] = tkv.Clone()
+	}
+	b.locals = make(map[basics.Address]map[basics.AppIndex]basics.TealKeyValue, len(a.locals))
+	for addr, local := range a.locals {
+		b.locals[addr] = make(map[basics.AppIndex]basics.TealKeyValue, len(local))
+		for aid, tkv := range local {
+			b.locals[addr][aid] = tkv.Clone()
+		}
+	}
+	return
+}
+
+func (a *appState) empty() bool {
+	return a.appIdx == 0 && len(a.global) == 0 && len(a.locals) == 0
+}
+
 // evaluation is a description of a single debugger run
 type evaluation struct {
 	program      []byte
@@ -147,6 +173,7 @@ type evaluation struct {
 	eval         evalFn
 	ledger       logic.LedgerForLogic
 	result       evalResult
+	states       appState
 }
 
 // LocalRunner runs local eval
@@ -156,6 +183,12 @@ type LocalRunner struct {
 	protoName string
 	txnGroup  []transactions.SignedTxn
 	runs      []evaluation
+}
+
+func makeAppState() (states appState) {
+	states.global = make(map[basics.AppIndex]basics.TealKeyValue)
+	states.locals = make(map[basics.Address]map[basics.AppIndex]basics.TealKeyValue)
+	return
 }
 
 // MakeLocalRunner creates LocalRunner
@@ -229,11 +262,6 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			err = fmt.Errorf("invalid group index %d for a txn in a transaction group of %d", dp.GroupIndex, len(r.txnGroup))
 			return
 		}
-		var ledger logic.LedgerForLogic
-		ledger, err = makeAppLedger(balances, r.txnGroup, dp.GroupIndex, r.proto, dp.Round, dp.LatestTimestamp)
-		if err != nil {
-			return
-		}
 
 		r.runs = make([]evaluation, len(dp.ProgramBlobs))
 		for i, data := range dp.ProgramBlobs {
@@ -251,7 +279,6 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 				}
 			}
 			r.runs[i].groupIndex = dp.GroupIndex
-			r.runs[i].ledger = ledger
 			r.runs[i].name = dp.ProgramNames[i]
 
 			var eval evalFn
@@ -260,8 +287,23 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			if err != nil {
 				return
 			}
-			log.Printf("Run mode: %s", mode)
 			r.runs[i].eval = eval
+
+			log.Printf("Run mode: %s", mode)
+			if mode == "application" {
+				var ledger logic.LedgerForLogic
+				var states appState
+				ledger, states, err = makeAppLedger(
+					balances, r.txnGroup, dp.GroupIndex,
+					r.proto, dp.Round, dp.LatestTimestamp, dp.AppID,
+				)
+				if err != nil {
+					return
+				}
+
+				r.runs[i].ledger = ledger
+				r.runs[i].states = states
+			}
 		}
 		return nil
 	}
@@ -279,7 +321,11 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			r.runs = append(r.runs, run)
 		} else if stxn.Txn.Type == protocol.ApplicationCallTx {
 			var ledger logic.LedgerForLogic
-			ledger, err = makeAppLedger(balances, r.txnGroup, gi, r.proto, dp.Round, dp.LatestTimestamp)
+			var states appState
+			ledger, states, err = makeAppLedger(
+				balances, r.txnGroup, gi,
+				r.proto, dp.Round, dp.LatestTimestamp, dp.AppID,
+			)
 			if err != nil {
 				return
 			}
@@ -295,6 +341,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 						groupIndex: gi,
 						eval:       eval,
 						ledger:     ledger,
+						states:     states,
 					}
 					r.runs = append(r.runs, run)
 				}
@@ -351,7 +398,7 @@ func (r *LocalRunner) RunAll() error {
 	failed := 0
 	start := time.Now()
 	for _, run := range r.runs {
-		r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine)
+		r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine, run.states)
 
 		ep := logic.EvalParams{
 			Proto:      &r.proto,
@@ -395,7 +442,7 @@ func (r *LocalRunner) Run() (bool, error) {
 	// ep.Debugger = r.debugger
 	// if ep.Debugger != nil // FALSE
 	if r.debugger != nil {
-		r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine)
+		r.debugger.SaveProgram(run.name, run.program, run.source, run.offsetToLine, run.states)
 		ep.Debugger = r.debugger
 	}
 
