@@ -416,63 +416,179 @@ func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender bas
 	return ac.Accounts[accountIdx-1], nil
 }
 
-func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, steva StateEvaluator, spec SpecialAddresses, ad *ApplyData, txnCounter uint64) error {
-	// Keep track of the application ID we're working on
-	appIdx := ac.ApplicationID
+// createApplication writes a new AppParams entry and returns application ID
+func (ac *ApplicationCallTxnFields) createApplication(
+	balances Balances, creator basics.Address, txnCounter uint64,
+) (appIdx basics.AppIndex, err error) {
 
-	// Specifying an application ID of 0 indicates application creation
-	if ac.ApplicationID == 0 {
-		// Fetch the creator's (sender's) balance record
-		record, err := balances.Get(header.Sender, false)
-		if err != nil {
-			return err
-		}
-
-		// Make sure the creator isn't already at the app creation max
-		maxAppsCreated := balances.ConsensusParams().MaxAppsCreated
-		if len(record.AppParams) >= maxAppsCreated {
-			return fmt.Errorf("cannot create app for %s: max created apps per acct is %d", header.Sender.String(), maxAppsCreated)
-		}
-
-		// Clone app params, so that we have a copy that is safe to modify
-		record.AppParams = cloneAppParams(record.AppParams)
-
-		// Allocate the new app params (+ 1 to match Assets Idx namespace)
-		appIdx = basics.AppIndex(txnCounter + 1)
-		record.AppParams[appIdx] = basics.AppParams{
-			ApprovalProgram:   ac.ApprovalProgram,
-			ClearStateProgram: ac.ClearStateProgram,
-			LocalStateSchema:  ac.LocalStateSchema,
-			GlobalStateSchema: ac.GlobalStateSchema,
-		}
-
-		// Update the cached TotalStateSchema for this account, used
-		// when computing MinBalance, since the creator has to store
-		// the global state
-		totalSchema := record.TotalAppSchema
-		totalSchema = totalSchema.AddSchema(ac.GlobalStateSchema)
-		record.TotalAppSchema = totalSchema
-
-		// Tell the cow what app we created
-		created := []basics.CreatableLocator{
-			basics.CreatableLocator{
-				Creator: header.Sender,
-				Type:    basics.AppCreatable,
-				Index:   basics.CreatableIndex(appIdx),
-			},
-		}
-
-		// Write back to the creator's balance record and continue
-		err = balances.PutWithCreatables(record, created, nil)
-		if err != nil {
-			return err
-		}
+	// Fetch the creator's (sender's) balance record
+	record, err := balances.Get(creator, false)
+	if err != nil {
+		return
 	}
+
+	// Make sure the creator isn't already at the app creation max
+	maxAppsCreated := balances.ConsensusParams().MaxAppsCreated
+	if len(record.AppParams) >= maxAppsCreated {
+		err = fmt.Errorf("cannot create app for %s: max created apps per acct is %d", creator.String(), maxAppsCreated)
+		return
+	}
+
+	// Clone app params, so that we have a copy that is safe to modify
+	record.AppParams = cloneAppParams(record.AppParams)
+
+	// Allocate the new app params (+ 1 to match Assets Idx namespace)
+	appIdx = basics.AppIndex(txnCounter + 1)
+	record.AppParams[appIdx] = basics.AppParams{
+		ApprovalProgram:   ac.ApprovalProgram,
+		ClearStateProgram: ac.ClearStateProgram,
+		LocalStateSchema:  ac.LocalStateSchema,
+		GlobalStateSchema: ac.GlobalStateSchema,
+	}
+
+	// Update the cached TotalStateSchema for this account, used
+	// when computing MinBalance, since the creator has to store
+	// the global state
+	totalSchema := record.TotalAppSchema
+	totalSchema = totalSchema.AddSchema(ac.GlobalStateSchema)
+	record.TotalAppSchema = totalSchema
+
+	// Tell the cow what app we created
+	created := []basics.CreatableLocator{
+		{
+			Creator: creator,
+			Type:    basics.AppCreatable,
+			Index:   basics.CreatableIndex(appIdx),
+		},
+	}
+
+	// Write back to the creator's balance record and continue
+	err = balances.PutWithCreatables(record, created, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	return
+}
+
+func (ac *ApplicationCallTxnFields) applyClearState(
+	balances Balances, sender basics.Address, appIdx basics.AppIndex,
+	ad *ApplyData, steva StateEvaluator,
+) error {
 
 	// Fetch the application parameters, if they exist
 	params, creator, exists, err := getAppParams(balances, appIdx)
 	if err != nil {
 		return err
+	}
+
+	record, err := balances.Get(sender, false)
+	if err != nil {
+		return err
+	}
+
+	// Ensure sender actually has LocalState allocated for this app.
+	// Can't clear out if not currently opted in
+	_, ok := record.AppLocalStates[appIdx]
+	if !ok {
+		return fmt.Errorf("cannot clear state for app %d: account %s is not currently opted in", appIdx, sender.String())
+	}
+
+	// If the application still exists...
+	if exists {
+		// Execute the ClearStateProgram before we've deleted the LocalState
+		// for this account. If the ClearStateProgram does not fail, apply any
+		// state deltas it generated.
+		pass, stateDeltas, err := steva.Eval(params.ClearStateProgram)
+		if err == nil && pass {
+			// Program execution may produce some GlobalState and LocalState
+			// deltas. Apply them, provided they don't exceed the bounds set by
+			// the GlobalStateSchema and LocalStateSchema. If they do exceed
+			// those bounds, then don't fail, but also don't apply the changes.
+			failIfNotApplied := false
+			err = ac.applyStateDeltas(stateDeltas, params, creator, sender,
+				balances, appIdx, failIfNotApplied)
+			if err != nil {
+				return err
+			}
+
+			// Fill in applyData, so that consumers don't have to implement a
+			// stateful TEAL interpreter to apply state changes
+			ad.EvalDelta = stateDeltas
+		} else {
+			// Ignore errors and rejections from the ClearStateProgram
+		}
+	}
+
+	// Fetch the (potentially updated) sender record
+	record, err = balances.Get(sender, false)
+	if err != nil {
+		return err
+	}
+
+	// Update the TotalAppSchema used for MinBalance calculation,
+	// since the sender no longer has to store LocalState
+	totalSchema := record.TotalAppSchema
+	localSchema := record.AppLocalStates[appIdx].Schema
+	totalSchema = totalSchema.SubSchema(localSchema)
+	record.TotalAppSchema = totalSchema
+
+	// Deallocate the AppLocalState and finish
+	record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
+	delete(record.AppLocalStates, appIdx)
+
+	return balances.Put(record)
+}
+
+func applyOptIn(balances Balances, sender basics.Address, appIdx basics.AppIndex, params basics.AppParams) error {
+	record, err := balances.Get(sender, false)
+	if err != nil {
+		return err
+	}
+
+	// If the user has already opted in, fail
+	_, ok := record.AppLocalStates[appIdx]
+	if ok {
+		return fmt.Errorf("account %s has already opted in to app %d", sender.String(), appIdx)
+	}
+
+	// Make sure the user isn't already at the app opt-in max
+	maxAppsOptedIn := balances.ConsensusParams().MaxAppsOptedIn
+	if len(record.AppLocalStates) >= maxAppsOptedIn {
+		return fmt.Errorf("cannot opt in app %d for %s: max opted-in apps per acct is %d", appIdx, sender.String(), maxAppsOptedIn)
+	}
+
+	// If the user hasn't opted in yet, allocate LocalState for the app
+	record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
+	record.AppLocalStates[appIdx] = basics.AppLocalState{
+		Schema: params.LocalStateSchema,
+	}
+
+	// Update the TotalAppSchema used for MinBalance calculation,
+	// since the sender must now store LocalState
+	totalSchema := record.TotalAppSchema
+	totalSchema = totalSchema.AddSchema(params.LocalStateSchema)
+	record.TotalAppSchema = totalSchema
+
+	return balances.Put(record)
+}
+
+func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData, txnCounter uint64, steva StateEvaluator) (err error) {
+	// Keep track of the application ID we're working on
+	appIdx := ac.ApplicationID
+
+	// this is not the case in the current code but still probably better to check
+	if ad == nil {
+		err = fmt.Errorf("cannot use empty apply delta")
+		return
+	}
+
+	// Specifying an application ID of 0 indicates application creation
+	if ac.ApplicationID == 0 {
+		appIdx, err = ac.createApplication(balances, header.Sender, txnCounter)
+		if err != nil {
+			return
+		}
 	}
 
 	// Initialize our TEAL evaluation context. Internally, this manages
@@ -504,62 +620,13 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 	// ApprovalProgram, since clearing out is always allowed. We only
 	// execute the ClearStateProgram, whose failures are ignored.
 	if ac.OnCompletion == ClearStateOC {
-		record, err := balances.Get(header.Sender, false)
-		if err != nil {
-			return err
-		}
+		return ac.applyClearState(balances, header.Sender, appIdx, ad, steva)
+	}
 
-		// Ensure sender actually has LocalState allocated for this app.
-		// Can't clear out if not currently opted in
-		_, ok := record.AppLocalStates[appIdx]
-		if !ok {
-			return fmt.Errorf("cannot clear state for app %d: account %s is not currently opted in", appIdx, header.Sender.String())
-		}
-
-		// If the application still exists...
-		if exists {
-			// Execute the ClearStateProgram before we've deleted the LocalState
-			// for this account. If the ClearStateProgram does not fail, apply any
-			// state deltas it generated.
-			pass, stateDeltas, err := steva.Eval(params.ClearStateProgram)
-			if err == nil && pass {
-				// Program execution may produce some GlobalState and LocalState
-				// deltas. Apply them, provided they don't exceed the bounds set by
-				// the GlobalStateSchema and LocalStateSchema. If they do exceed
-				// those bounds, then don't fail, but also don't apply the changes.
-				failIfNotApplied := false
-				err = ac.applyStateDeltas(stateDeltas, params, creator, header.Sender,
-					balances, appIdx, failIfNotApplied)
-				if err != nil {
-					return err
-				}
-
-				// Fill in applyData, so that consumers don't have to implement a
-				// stateful TEAL interpreter to apply state changes
-				ad.EvalDelta = stateDeltas
-			} else {
-				// Ignore errors and rejections from the ClearStateProgram
-			}
-		}
-
-		// Fetch the (potentially updated) sender record
-		record, err = balances.Get(header.Sender, false)
-		if err != nil {
-			return err
-		}
-
-		// Update the TotalAppSchema used for MinBalance calculation,
-		// since the sender no longer has to store LocalState
-		totalSchema := record.TotalAppSchema
-		localSchema := record.AppLocalStates[appIdx].Schema
-		totalSchema = totalSchema.SubSchema(localSchema)
-		record.TotalAppSchema = totalSchema
-
-		// Deallocate the AppLocalState and finish
-		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
-		delete(record.AppLocalStates, appIdx)
-
-		return balances.Put(record)
+	// Fetch the application parameters, if they exist
+	params, creator, exists, err := getAppParams(balances, appIdx)
+	if err != nil {
+		return err
 	}
 
 	// Past this point, the AppParams must exist. NoOp, OptIn, CloseOut,
@@ -572,36 +639,7 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 	// LocalState allocated prior to TEAL execution, so that it may be
 	// initialized in the same transaction.
 	if ac.OnCompletion == OptInOC {
-		record, err := balances.Get(header.Sender, false)
-		if err != nil {
-			return err
-		}
-
-		// If the user has already opted in, fail
-		_, ok := record.AppLocalStates[appIdx]
-		if ok {
-			return fmt.Errorf("account %s has already opted in to app %d", header.Sender.String(), appIdx)
-		}
-
-		// Make sure the user isn't already at the app opt-in max
-		maxAppsOptedIn := balances.ConsensusParams().MaxAppsOptedIn
-		if len(record.AppLocalStates) >= maxAppsOptedIn {
-			return fmt.Errorf("cannot opt in app %d for %s: max opted-in apps per acct is %d", appIdx, header.Sender.String(), maxAppsOptedIn)
-		}
-
-		// If the user hasn't opted in yet, allocate LocalState for the app
-		record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
-		record.AppLocalStates[appIdx] = basics.AppLocalState{
-			Schema: params.LocalStateSchema,
-		}
-
-		// Update the TotalAppSchema used for MinBalance calculation,
-		// since the sender must now store LocalState
-		totalSchema := record.TotalAppSchema
-		totalSchema = totalSchema.AddSchema(params.LocalStateSchema)
-		record.TotalAppSchema = totalSchema
-
-		err = balances.Put(record)
+		err = applyOptIn(balances, header.Sender, appIdx, params)
 		if err != nil {
 			return err
 		}
@@ -626,10 +664,6 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 	if err != nil {
 		return err
 	}
-
-	// Fill in applyData, so that consumers don't have to implement a
-	// stateful TEAL interpreter to apply state changes
-	ad.EvalDelta = stateDeltas
 
 	switch ac.OnCompletion {
 	case NoOpOC:
@@ -721,6 +755,10 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, stev
 	default:
 		return fmt.Errorf("invalid application action")
 	}
+
+	// Fill in applyData, so that consumers don't have to implement a
+	// stateful TEAL interpreter to apply state changes
+	ad.EvalDelta = stateDeltas
 
 	return nil
 }
