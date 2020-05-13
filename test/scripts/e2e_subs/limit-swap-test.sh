@@ -33,7 +33,7 @@ ACCOUNT_ALGO_TRADER=$(${gcmd} clerk compile ${TEMPDIR}/limit-order-a.teal -o ${T
 # setup trader with Algos
 ${gcmd} clerk send --amount 100000000 --from ${ACCOUNT} --to ${ACCOUNT_ALGO_TRADER}
 
-goal node wait
+goal node wait --waittime 30
 
 ${gcmd} clerk send -a 0 -t ${ZERO_ADDRESS} -c ${ACCOUNT} --from-program ${TEMPDIR}/limit-order-a.teal
 
@@ -68,7 +68,7 @@ ${gcmd} asset send --assetid ${ASSET_ID} -f ${ACCOUNT} -t ${ACCOUNT_ASSET_TRADER
 
 ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 while [ $ROUND -lt $TIMEOUT_ROUND ]; do
-    goal node wait
+    goal node wait --waittime 30
     ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 done
 
