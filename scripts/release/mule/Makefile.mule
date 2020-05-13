@@ -79,3 +79,9 @@ mule-deploy:
 mule-deploy-generate-releases-page:
 	cd scripts/release/mule/deploy/generate_releases_page && ./generate_releases_page
 
+mule-deploy-deb:
+		scripts/release/mule/deploy/$(OS_TYPE)/$(ARCH)/deb/repo.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) deb $$WORKDIR
+
+mule-deploy-rpm:
+		scripts/release/mule/deploy/$(OS_TYPE)/$(ARCH)/rpm/repo.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) rpm $$WORKDIR
+

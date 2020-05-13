@@ -10,20 +10,51 @@ tasks:
     dependencies: docker.Version
 
   - task: docker.Make
-    name: package-deploy
+    name: generate-releases-page
     docker:
       image: algorand/mule-linux-debian
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
       env: [
         AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY,
+        USE_CACHE=false,
+        CHANNEL=stable,
+        VERSION=2.0.5
       ]
-    target: mule-deploy WORKDIR=/projects/go-algorand
+    target: mule-deploy-generate-releases-page WORKDIR=/projects/go-algorand
 
-  - task: shell.Make
-    name: generate-releases-page
-    target: mule-deploy-generate-releases-page
+  - task: docker.Make
+    name: deb
+    docker:
+      image: algorand/mule-linux-debian
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /projects/go-algorand
+      env: [
+        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY,
+        USE_CACHE=false,
+        CHANNEL=stable,
+        VERSION=2.0.5
+      ]
+      volumes: [
+        $HOME:/root/subhome,
+        $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
+        $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
+      ]
+    target: mule-deploy-deb WORKDIR=/projects/go-algorand
+
+  - task: s3.DownloadFile
+    name: deb
+    bucketName: algorand-staging
+    objectName: releases/$CHANNEL/$VERSION/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb
+    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
+
+  - task: s3.DownloadFile
+    name: rpm
+    bucketName: algorand-staging
+    objectName: releases/$CHANNEL/$VERSION/algorand-${VERSION}-1.${ARCH_BIT}.rpm
+    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
 
   - task: s3.BucketCopy
     name: deploy
@@ -38,13 +69,19 @@ jobs:
       arch: amd64
     tasks:
       - shell.docker.Ensure.deploy
-      - docker.Make.package-deploy
-
-  package-deploy-setup-generate-releases-page:
-    tasks:
-      - shell.Make.generate-releases-page
+      - docker.Make.generate-releases-page
+      - docker.Make.deb
+        #      - docker.Make.package-deploy-rpm
 
   package-deploy-setup-copy:
     tasks:
       - s3.BucketCopy.deploy
+
+  package-deploy-setup-deb:
+    tasks:
+      - s3.DownloadFile.deb
+
+  package-deploy-setup-rpm:
+    tasks:
+      - s3.DownloadFile.rpm
 
