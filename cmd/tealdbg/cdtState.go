@@ -94,6 +94,8 @@ const gtxnObjID = "gtxnObjID"
 const stackObjID = "stackObjID"
 const scratchObjID = "scratchObjID"
 const tealErrorID = "tealErrorID"
+const appGlobalObjID = "appGlobalObjID"
+const appLocalsObjID = "appLocalsObjID"
 
 type objectDescFn func(s *cdtState, preview bool) []RuntimePropertyDescriptor
 
@@ -106,6 +108,8 @@ var objectDescMap = map[string]objectDescFn{
 	stackObjID:       makeStack,
 	scratchObjID:     makeScratch,
 	tealErrorID:      makeTealError,
+	appGlobalObjID:   makeAppGlobalState,
+	appLocalsObjID:   makeAppLocalsState,
 }
 
 func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []RuntimePropertyDescriptor, err error) {
@@ -135,6 +139,12 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []Runti
 				return makeScratchSlice(s, from, to, preview), nil
 			default:
 			}
+		} else if appID, ok := decodeAppGlobalAppID(objID); ok {
+			return makeAppGlobalKV(s, appID), nil
+		} else if addr, appID, ok := decodeAppLocalsAppID(objID); ok {
+			return makeAppLocalsKV(s, addr, appID), nil
+		} else if addr, ok := decodeAppLocalsAddr(objID); ok {
+			return makeAppLocalState(s, addr), nil
 		}
 		// might be nested object in array, parse and call
 		err = fmt.Errorf("unk object id: %s", objID)
@@ -513,6 +523,51 @@ func decodeArraySlice(objID string) (string, int, int, bool) {
 	return "", 0, 0, false
 }
 
+var appGlobalObjIDPrefix = fmt.Sprintf("%s_", appGlobalObjID)
+
+func encodeAppGlobalAppID(key string) string {
+	return appGlobalObjIDPrefix + key
+}
+
+func decodeAppGlobalAppID(objID string) (uint64, bool) {
+	if strings.HasPrefix(objID, appGlobalObjIDPrefix) {
+		if val, err := strconv.ParseInt(objID[len(appGlobalObjIDPrefix):], 10, 32); err == nil {
+			return uint64(val), true
+		}
+	}
+	return 0, false
+}
+
+var appLocalsObjIDPrefix = fmt.Sprintf("%s_", appLocalsObjID)
+
+func encodeAppLocalsAddr(addr string) string {
+	return appLocalsObjIDPrefix + addr
+}
+
+func decodeAppLocalsAddr(objID string) (string, bool) {
+	if strings.HasPrefix(objID, appLocalsObjIDPrefix) {
+		return objID[len(appLocalsObjIDPrefix):], true
+	}
+	return "", false
+}
+
+var appLocalAppIDPrefix = fmt.Sprintf("%s__", appLocalsObjID)
+
+func encodeAppLocalsAppID(addr string, appID string) string {
+	return fmt.Sprintf("%s%s_%s", appLocalAppIDPrefix, addr, appID)
+}
+
+func decodeAppLocalsAppID(objID string) (string, uint64, bool) {
+	if strings.HasPrefix(objID, appLocalAppIDPrefix) {
+		encoded := objID[len(appLocalAppIDPrefix):]
+		parts := strings.Split(encoded, "_")
+		if val, err := strconv.ParseInt(parts[1], 10, 32); err == nil {
+			return parts[0], uint64(val), true
+		}
+	}
+	return "", 0, false
+}
+
 func makeGlobalScope(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
 	globals := makeObject("globals", globalsObjID)
 	if preview {
@@ -563,6 +618,18 @@ func makeLocalScope(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor
 		scratch,
 	}
 
+	if !s.appState.empty() {
+		var global, local RuntimePropertyDescriptor
+		if len(s.appState.global) > 0 {
+			global = makeObject("appGlobal", appGlobalObjID)
+			desc = append(desc, global)
+		}
+		if len(s.appState.locals) > 0 {
+			local = makeObject("appLocals", appLocalsObjID)
+			desc = append(desc, local)
+		}
+	}
+
 	return desc
 }
 
@@ -599,6 +666,72 @@ func makeTxnGroup(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) 
 			}
 			desc = append(desc, item)
 		}
+	}
+	return
+}
+
+func makeAppGlobalState(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
+	for key := range s.appState.global {
+		s := strconv.Itoa(int(key))
+		item := makeObject(s, encodeAppGlobalAppID(s))
+		desc = append(desc, item)
+	}
+	return
+}
+
+func makeAppLocalsState(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
+	for addr := range s.appState.locals {
+		a := addr.String()
+		item := makeObject(a, encodeAppLocalsAddr(a))
+		desc = append(desc, item)
+	}
+	return
+}
+
+func makeAppLocalState(s *cdtState, addr string) (desc []RuntimePropertyDescriptor) {
+	a, err := basics.UnmarshalChecksumAddress(addr)
+	if err != nil {
+		return
+	}
+
+	if state, ok := s.appState.locals[a]; ok {
+		for key := range state {
+			s := strconv.Itoa(int(key))
+			item := makeObject(s, encodeAppLocalsAppID(addr, s))
+			desc = append(desc, item)
+		}
+	}
+	return
+}
+
+func makeAppGlobalKV(s *cdtState, appID uint64) (desc []RuntimePropertyDescriptor) {
+	if tkv, ok := s.appState.global[basics.AppIndex(appID)]; ok {
+		return tkvToRpd(tkv)
+	}
+	return
+}
+
+func makeAppLocalsKV(s *cdtState, addr string, appID uint64) (desc []RuntimePropertyDescriptor) {
+	a, err := basics.UnmarshalChecksumAddress(addr)
+	if err != nil {
+		return
+	}
+
+	state, ok := s.appState.locals[a]
+	if !ok {
+		return
+	}
+
+	if tkv, ok := state[basics.AppIndex(appID)]; ok {
+		return tkvToRpd(tkv)
+	}
+	return
+}
+
+func tkvToRpd(tkv basics.TealKeyValue) (desc []RuntimePropertyDescriptor) {
+	for key, value := range tkv {
+		field := tealValueToFieldDesc(key, v2.TealValue{Type: uint64(value.Type), Uint: value.Uint, Bytes: value.Bytes})
+		desc = append(desc, makePrimitive(field))
 	}
 	return
 }

@@ -307,8 +307,8 @@ func (s *session) GetStates(changes *logic.AppStateChage) appState {
 	}
 
 	if len(changes.GlobalStateChanges) > 0 {
-		tkv, ok := newStates.global[appIdx]
-		if !ok {
+		tkv := newStates.global[appIdx]
+		if tkv == nil {
 			tkv = make(basics.TealKeyValue)
 		}
 		applyDelta(changes.GlobalStateChanges, tkv)
@@ -316,15 +316,16 @@ func (s *session) GetStates(changes *logic.AppStateChage) appState {
 	}
 
 	for addr, delta := range changes.LocalStateChanges {
-		local, ok := newStates.locals[addr]
-		if !ok {
+		local := newStates.locals[addr]
+		if local == nil {
 			local = make(map[basics.AppIndex]basics.TealKeyValue)
 		}
-		tkv, ok := local[appIdx]
-		if !ok {
+		tkv := local[appIdx]
+		if tkv == nil {
 			tkv = make(basics.TealKeyValue)
 		}
 		applyDelta(delta, tkv)
+		local[appIdx] = tkv
 		newStates.locals[addr] = local
 	}
 

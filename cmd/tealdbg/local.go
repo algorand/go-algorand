@@ -159,6 +159,10 @@ func (a *appState) clone() (b appState) {
 	return
 }
 
+func (a *appState) empty() bool {
+	return a.appIdx == 0 && len(a.global) == 0 && len(a.locals) == 0
+}
+
 // evaluation is a description of a single debugger run
 type evaluation struct {
 	program      []byte
@@ -258,12 +262,6 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			err = fmt.Errorf("invalid group index %d for a txn in a transaction group of %d", dp.GroupIndex, len(r.txnGroup))
 			return
 		}
-		var ledger logic.LedgerForLogic
-		var states appState
-		ledger, states, err = makeAppLedger(balances, r.txnGroup, dp.GroupIndex, r.proto, dp.Round, dp.LatestTimestamp)
-		if err != nil {
-			return
-		}
 
 		r.runs = make([]evaluation, len(dp.ProgramBlobs))
 		for i, data := range dp.ProgramBlobs {
@@ -293,6 +291,16 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 
 			log.Printf("Run mode: %s", mode)
 			if mode == "application" {
+				var ledger logic.LedgerForLogic
+				var states appState
+				ledger, states, err = makeAppLedger(
+					balances, r.txnGroup, dp.GroupIndex,
+					r.proto, dp.Round, dp.LatestTimestamp, dp.AppID,
+				)
+				if err != nil {
+					return
+				}
+
 				r.runs[i].ledger = ledger
 				r.runs[i].states = states
 			}
@@ -314,7 +322,10 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 		} else if stxn.Txn.Type == protocol.ApplicationCallTx {
 			var ledger logic.LedgerForLogic
 			var states appState
-			ledger, states, err = makeAppLedger(balances, r.txnGroup, gi, r.proto, dp.Round, dp.LatestTimestamp)
+			ledger, states, err = makeAppLedger(
+				balances, r.txnGroup, gi,
+				r.proto, dp.Round, dp.LatestTimestamp, dp.AppID,
+			)
 			if err != nil {
 				return
 			}

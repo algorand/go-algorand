@@ -37,11 +37,9 @@ type balancesAdapter struct {
 	// appIdx     basics.AppIndex
 }
 
-const defaultNewAppIdx = 1380011588
-
 func makeAppLedger(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
-	groupIndex int, proto config.ConsensusParams, round int, latestTimestamp int64,
+	groupIndex int, proto config.ConsensusParams, round int, latestTimestamp int64, appIdxIn int,
 ) (logic.LedgerForLogic, appState, error) {
 
 	if groupIndex >= len(txnGroup) {
@@ -57,7 +55,7 @@ func makeAppLedger(
 	appIdx := txn.Txn.ApplicationID
 	if appIdx == 0 {
 		// presumably this is app create transaction, initialize with some value
-		appIdx = defaultNewAppIdx
+		appIdx = basics.AppIndex(appIdxIn)
 	}
 
 	apps := []basics.AppIndex{appIdx}

@@ -67,6 +67,7 @@ type DebugParams struct {
 	LatestTimestamp  int64
 	RunMode          string
 	DisableSourceMap bool
+	AppID            int
 }
 
 // FrontendFactory interface for attaching debug frontends

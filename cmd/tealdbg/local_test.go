@@ -516,6 +516,7 @@ func TestDebugFromPrograms(t *testing.T) {
 		ProgramBlobs: [][]byte{{1}},
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
+		AppID:        100,
 	}
 
 	err = l.Setup(&dp)
@@ -570,6 +571,7 @@ func TestRunMode(t *testing.T) {
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "auto",
+		AppID:        100,
 	}
 
 	err := l.Setup(&dp)
@@ -590,6 +592,7 @@ func TestRunMode(t *testing.T) {
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "auto",
+		AppID:        100,
 	}
 
 	err = l.Setup(&dp)
@@ -610,6 +613,7 @@ func TestRunMode(t *testing.T) {
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "application",
+		AppID:        100,
 	}
 
 	err = l.Setup(&dp)
@@ -771,6 +775,7 @@ func TestDebugFromTxn(t *testing.T) {
 		BalanceBlob: balanceBlob,
 		TxnBlob:     txnBlob,
 		GroupIndex:  10, // must be ignored
+		AppID:       100,
 	}
 
 	err = l.Setup(&dp)

@@ -136,6 +136,7 @@ var noFirstRun bool
 var noBrowserCheck bool
 var noSourceMap bool
 var verbose bool
+var appID int
 
 func init() {
 	rootCmd.PersistentFlags().VarP(&frontend, "frontend", "f", "Frontend to use: "+frontend.AllowedString())
@@ -151,6 +152,7 @@ func init() {
 	debugCmd.Flags().StringVarP(&txnFile, "txn", "t", "", "Transaction(s) to evaluate TEAL on in form of json or msgpack file")
 	debugCmd.Flags().IntVarP(&groupIndex, "group-index", "g", 0, "Transaction index in a txn group")
 	debugCmd.Flags().StringVarP(&balanceFile, "balance", "b", "", "Balance records to evaluate stateful TEAL on in form of json or msgpack file")
+	debugCmd.Flags().IntVarP(&appID, "app-id", "a", 1380011588, "Application ID for stateful TEAL if not set in transaction(s)")
 	debugCmd.Flags().IntVarP(&roundNumber, "round", "r", 1095518031, "Ledger round number to evaluate stateful TEAL on")
 	debugCmd.Flags().Int64VarP(&timestamp, "latest-timestamp", "l", 0, "Latest confirmed timestamp to evaluate stateful TEAL on")
 	debugCmd.Flags().VarP(&runMode, "mode", "m", "TEAL evaluation mode: "+runMode.AllowedString())
@@ -227,6 +229,7 @@ func debugLocal(args []string) {
 		BalanceBlob:      balanceBlob,
 		Round:            roundNumber,
 		LatestTimestamp:  timestamp,
+		AppID:            appID,
 		RunMode:          runMode.String(),
 		DisableSourceMap: noSourceMap,
 	}
