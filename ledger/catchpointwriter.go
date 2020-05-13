@@ -124,14 +124,8 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 	}
 
 	// have we timed-out / canceled by that point ?
-	select {
-	case <-ctx.Done():
-		err = ctx.Err()
-		if err == context.DeadlineExceeded {
-			return true, nil
-		}
+	if more, err = hasContextDeadlineExceeded(ctx); more == true || err != nil {
 		return
-	default:
 	}
 
 	if cw.fileHeader == nil {
@@ -142,14 +136,8 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 	}
 
 	// have we timed-out / canceled by that point ?
-	select {
-	case <-ctx.Done():
-		err = ctx.Err()
-		if err == context.DeadlineExceeded {
-			return true, nil
-		}
+	if more, err = hasContextDeadlineExceeded(ctx); more == true || err != nil {
 		return
-	default:
 	}
 
 	if !cw.headerWritten {
@@ -171,14 +159,8 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 
 	for {
 		// have we timed-out / canceled by that point ?
-		select {
-		case <-ctx.Done():
-			err = ctx.Err()
-			if err == context.DeadlineExceeded {
-				return true, nil
-			}
+		if more, err = hasContextDeadlineExceeded(ctx); more == true || err != nil {
 			return
-		default:
 		}
 
 		if len(cw.balancesChunk) == 0 {
@@ -189,14 +171,8 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 		}
 
 		// have we timed-out / canceled by that point ?
-		select {
-		case <-ctx.Done():
-			err = ctx.Err()
-			if err == context.DeadlineExceeded {
-				return true, nil
-			}
+		if more, err = hasContextDeadlineExceeded(ctx); more == true || err != nil {
 			return
-		default:
 		}
 
 		// write to disk.
@@ -231,17 +207,6 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 				return false, nil
 			}
 			cw.balancesChunk = nil
-		}
-
-		// have we timed-out / canceled by that point ?
-		select {
-		case <-ctx.Done():
-			err = ctx.Err()
-			if err == context.DeadlineExceeded {
-				return true, nil
-			}
-			return
-		default:
 		}
 	}
 }
@@ -296,4 +261,23 @@ func (cw *catchpointWriter) GetCatchpoint() string {
 		return cw.fileHeader.Catchpoint
 	}
 	return ""
+}
+
+// hasContextDeadlineExceeded examine the given context and see if it was canceled or timed-out.
+// if it has timed out, the function returns contextExceeded=true and contextError = nil.
+// if it's a non-timeout error, the functions returns contextExceeded=false and contextError = error.
+// otherwise, the function returns the contextExceeded=false and contextError = nil.
+func hasContextDeadlineExceeded(ctx context.Context) (contextExceeded bool, contextError error) {
+	// have we timed-out / canceled by that point ?
+	select {
+	case <-ctx.Done():
+		contextError = ctx.Err()
+		if contextError == context.DeadlineExceeded {
+			contextExceeded = true
+			contextError = nil
+			return
+		}
+	default:
+	}
+	return
 }

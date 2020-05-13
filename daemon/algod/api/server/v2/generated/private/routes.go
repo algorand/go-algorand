@@ -21,7 +21,7 @@ type ServerInterface interface {
 	// (DELETE /v2/catchup/{catchpoint})
 	AbortCatchup(ctx echo.Context, catchpoint string) error
 	// Starts a catchpoint catchup.
-	// (PUT /v2/catchup/{catchpoint})
+	// (POST /v2/catchup/{catchpoint})
 	StartCatchup(ctx echo.Context, catchpoint string) error
 
 	// (POST /v2/register-participation-keys/{address})
@@ -220,7 +220,7 @@ func RegisterHandlers(router interface {
 	}
 
 	router.DELETE("/v2/catchup/:catchpoint", wrapper.AbortCatchup, m...)
-	router.PUT("/v2/catchup/:catchpoint", wrapper.StartCatchup, m...)
+	router.POST("/v2/catchup/:catchpoint", wrapper.StartCatchup, m...)
 	router.POST("/v2/register-participation-keys/:address", wrapper.RegisterParticipationKeys, m...)
 	router.POST("/v2/shutdown", wrapper.ShutdownNode, m...)
 
@@ -316,15 +316,15 @@ var swaggerSpec = []string{
 	"U+FPN4/noSo3f+cjtrtdY92Q2RcamgXuNeD8HWU6Wxv55zzzd837ujsnmznYyKUb2r+b6dTWTa+ejfsV",
 	"xTE4rMJ03zjWtD3LkKa46kX91rD9TcO3/0+/AHbV+y7C46Oj396402Otp/ekxC7vputZRuB+yTP2Bn6u",
 	"wFgH+/jTwT6TlLtHM8OcGb2bTj7/lKc/k6gKPGfnGFBpRgtaWYihZPwgr6XayDATr76qKLjeBi03HZsR",
-	"HhiTgeUrQ69RtLjhFiZXd9NJWdmDTQ99UuDepoe+k/Cb6flUpufX/QGJ30zPr9T0nDvbcLjp8V5RDtkK",
-	"9Nz1zjfOUigdD+upXSdtUipjxz189oCSFhI2D/2DXbdtpDbPVPNwxrmovg00JL881NnAwL3xm3baQP4C",
-	"W7PP2l2sgf3YfBD6R0rRlxm3MGVKsx95nrd+o+/6BW90NvJ16bpT5tBPS9/dTWNoLQFCwYAKA/75F1r9",
-	"awiVfUeDTjf8jL100mPqd5l1J/4SRr8w6RqW2wbOi+Dx0dFRrAW6j7MLuDzGVKDZqCSHG8iHrB5Dolfg",
-	"3/U9ttFvZwz7MtoBZETqwudL61aN0c/TdZsN7oPdSyU/s2zDhX933epad18oKYQNX250rxN9kre+QuJf",
-	"+0twy90fA/3Qm+7X95zrboexM+vKZmojxw0XdYDw3JdQqKhRx81WsbBBbalmLHyTLN+Gb0kyTt+qVpXt",
-	"fuI19Oz1Xq36D/kuYCUkASAtJyiuVshbmXj/8YqhETz3mL1y3/ro2b3ol+4cjnG9jyn9h8rS4X7ITh6G",
-	"3s/O33NUBfT53IeDEqLcMAfQe4Ya+XVe99pEB/vJhtjo/J29FQ5qKzFGfKhTYm+vkJxUxfEsavI8J/N5",
-	"rlKer5Wx8wmak24OqD14VVPqXeBroNjd1d3/BgAA//9cYlnBS2EAAA==",
+	"HhiTgeUrQ69RtLjhFiZX9NzJ2INtD31T4N62hz6U8Jvt+VS259f9BYnfbM+v1PacO9twuO3xblEO2Qr0",
+	"3DXPN95SqB0PC6pdL23MgHmnnT2grIWEzUP/YtdtGynOM9W8nHE+qu8DDdkvD3U2MHBv/KadPpC/wNbs",
+	"s3YXa2A/Nl+E/pFy9GXGLUyZ0uxHnuet3+jDfsEdnY18XrpulTn029J3d9MYWkuAUDGgyoB//4VW/xpC",
+	"ad/RoNMOP2MvnfSY+mFm3Yq/hNFPTLqO5baB8yJ4fHR0FOuB7uPsIi6PMVVoNirJ4QbyIavHkOhV+Hd9",
+	"kG304xnDxox2BBmRuvD90rpXY/T7dN1ug/tg91LJzyzbcOEfXrfa1t0nSgphw6cb3fNEn+Wtr5D45/4S",
+	"3HL310A/9Kb79b3nutth7My6spnayHHDRS0gPPc1FKpq1IGzVSxsUFuqGQsfJcu34WOSjNPHqlVlu994",
+	"DU17vWer/ku+C1gJSQBIywmKKxbyViref71iaATPPWav3Mc+enYv+qk7h2Nc72NK/6GydLgfspOHofmz",
+	"8/ccVQF9PvfloIQoN0wC9N6hRn6d18020cF+tiE2On9nb4WD2sqMER/qnNjbKyQnlXE8i5pEz8l8nquU",
+	"52tl7HyC5qSbBGoPXtWUehf4Gih2d3X3vwEAAP//XJ4Tf0xhAAA=",
 }
 
 // GetSwagger returns the Swagger specification corresponding to the generated code

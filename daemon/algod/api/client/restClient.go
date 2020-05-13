@@ -394,7 +394,7 @@ func (client RestClient) AbortCatchup(catchpointLabel string) (response privateV
 
 // Catchup start catching up to the give catchpoint label
 func (client RestClient) Catchup(catchpointLabel string) (response privateV2.CatchpointStartResponse, err error) {
-	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "PUT", false, true)
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "POST", false, true)
 	return
 }
 

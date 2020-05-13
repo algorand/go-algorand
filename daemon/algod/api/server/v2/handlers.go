@@ -548,7 +548,7 @@ func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr strin
 }
 
 // StartCatchup Given a catchpoint, it starts catching up to this catchpoint
-// (PUT /v2/catchup/{catchpoint})
+// (POST /v2/catchup/{catchpoint})
 func (v2 *Handlers) StartCatchup(ctx echo.Context, catchpoint string) error {
 	return v2.startCatchup(ctx, catchpoint)
 }

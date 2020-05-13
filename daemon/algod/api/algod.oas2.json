@@ -706,7 +706,7 @@
       ]
     },
     "/v2/catchup/{catchpoint}": {
-      "put": {
+      "post": {
         "tags": [
           "private"
         ],
