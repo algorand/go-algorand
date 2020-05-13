@@ -148,7 +148,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 	}
 
 	response := generated.AccountResponse{
-		Type:                        nil,
+		SigType:                     nil,
 		Round:                       uint64(lastRound),
 		Address:                     addr.String(),
 		Amount:                      amount.Raw,

@@ -44,17 +44,17 @@ type Account struct {
 	// The round for which this information is relevant.
 	Round uint64 `json:"round"`
 
+	// Indicates what type of signature is used by this account, must be one of:
+	// * sig
+	// * msig
+	// * lsig
+	SigType *string `json:"sig-type,omitempty"`
+
 	// \[onl\] delegation status of the account's MicroAlgos
 	// * Offline - indicates that the associated account is delegated.
 	// *  Online  - indicates that the associated account used as part of the delegation pool.
 	// *   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.
 	Status string `json:"status"`
-
-	// Indicates what type of signature is used by this account, must be one of:
-	// * sig
-	// * msig
-	// * lsig
-	Type *string `json:"type,omitempty"`
 }
 
 // AccountParticipation defines model for AccountParticipation.
