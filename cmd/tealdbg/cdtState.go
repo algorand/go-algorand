@@ -382,18 +382,35 @@ func prepareArray(array []v2.TealValue) []fieldDesc {
 	return result
 }
 
+func makePreview(fields []fieldDesc) (prop []RuntimePropertyPreview) {
+	for _, field := range fields {
+		v := RuntimePropertyPreview{
+			Name:  field.Name,
+			Value: field.Value,
+			Type:  field.Type,
+		}
+		prop = append(prop, v)
+	}
+	return
+}
+
+func makeIntPreview(n int) (prop []RuntimePropertyPreview) {
+	for i := 0; i < n; i++ {
+		v := RuntimePropertyPreview{
+			Name:  strconv.Itoa(i),
+			Value: "Object",
+			Type:  "object",
+		}
+		prop = append(prop, v)
+	}
+	return
+}
+
 func makeTxnPreview(txnGroup []transactions.SignedTxn, groupIndex int) RuntimeObjectPreview {
 	var prop []RuntimePropertyPreview
 	if len(txnGroup) > 0 {
 		fields := prepareTxn(&txnGroup[groupIndex].Txn, groupIndex)
-		for _, field := range fields {
-			v := RuntimePropertyPreview{
-				Name:  field.Name,
-				Value: field.Value,
-				Type:  field.Type,
-			}
-			prop = append(prop, v)
-		}
+		prop = makePreview(fields)
 	}
 
 	p := RuntimeObjectPreview{Type: "object", Overflow: true, Properties: prop}
@@ -401,17 +418,7 @@ func makeTxnPreview(txnGroup []transactions.SignedTxn, groupIndex int) RuntimeOb
 }
 
 func makeGtxnPreview(txnGroup []transactions.SignedTxn) RuntimeObjectPreview {
-	var prop []RuntimePropertyPreview
-	if len(txnGroup) > 0 {
-		for i := 0; i < len(txnGroup); i++ {
-			v := RuntimePropertyPreview{
-				Name:  strconv.Itoa(i),
-				Value: "Object",
-				Type:  "object",
-			}
-			prop = append(prop, v)
-		}
-	}
+	prop := makeIntPreview(len(txnGroup))
 	p := RuntimeObjectPreview{
 		Type:        "object",
 		Subtype:     "array",
@@ -424,21 +431,13 @@ func makeGtxnPreview(txnGroup []transactions.SignedTxn) RuntimeObjectPreview {
 const maxArrayPreviewLength = 20
 
 func makeArrayPreview(array []v2.TealValue) RuntimeObjectPreview {
-	var prop []RuntimePropertyPreview
 	fields := prepareArray(array)
 
 	length := len(fields)
 	if length > maxArrayPreviewLength {
 		length = maxArrayPreviewLength
 	}
-	for _, field := range fields[:length] {
-		v := RuntimePropertyPreview{
-			Name:  field.Name,
-			Value: field.Value,
-			Type:  field.Type,
-		}
-		prop = append(prop, v)
-	}
+	prop := makePreview(fields[:length])
 
 	p := RuntimeObjectPreview{
 		Type:        "object",
@@ -450,17 +449,8 @@ func makeArrayPreview(array []v2.TealValue) RuntimeObjectPreview {
 }
 
 func makeGlobalsPreview(globals []v2.TealValue) RuntimeObjectPreview {
-	var prop []RuntimePropertyPreview
 	fields := prepareGlobals(globals)
-
-	for _, field := range fields {
-		v := RuntimePropertyPreview{
-			Name:  field.Name,
-			Value: field.Value,
-			Type:  field.Type,
-		}
-		prop = append(prop, v)
-	}
+	prop := makePreview(fields)
 
 	p := RuntimeObjectPreview{
 		Type:        "object",
