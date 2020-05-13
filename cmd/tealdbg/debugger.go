@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
@@ -49,8 +50,10 @@ type Control interface {
 	SetBreakpoint(line int) error
 	RemoveBreakpoint(line int) error
 	SetBreakpointsActive(active bool)
+
 	GetSourceMap() ([]byte, error)
 	GetSource() (string, []byte)
+	GetStates(changes *logic.AppStateChage) appState
 }
 
 // Debugger is TEAL event-driven debugger
@@ -76,6 +79,7 @@ type programMeta struct {
 	program      []byte
 	source       string
 	offsetToLine map[int]int
+	states       appState
 }
 
 type debugConfig struct {
@@ -85,7 +89,7 @@ type debugConfig struct {
 
 type session struct {
 	mu deadlock.Mutex
-	// Reply to registration/update when bool received on acknolwedgement
+	// Reply to registration/update when bool received on acknowledgement
 	// channel, allowing program execution to continue
 	acknowledged chan bool
 
@@ -108,6 +112,8 @@ type session struct {
 
 	breakpoints []breakpoint
 	line        atomicInt
+
+	states appState
 }
 
 type breakpoint struct {
@@ -279,6 +285,53 @@ func (s *session) GetSource() (string, []byte) {
 	return s.programName, []byte(s.source)
 }
 
+func (s *session) GetStates(changes *logic.AppStateChage) appState {
+	if changes == nil {
+		return s.states
+	}
+
+	newStates := s.states.clone()
+	appIdx := newStates.appIdx
+
+	applyDelta := func(sd basics.StateDelta, tkv basics.TealKeyValue) {
+		for key, delta := range sd {
+			switch delta.Action {
+			case basics.SetUintAction:
+				tkv[key] = basics.TealValue{Type: basics.TealUintType, Uint: delta.Uint}
+			case basics.SetBytesAction:
+				tkv[key] = basics.TealValue{Type: basics.TealBytesType, Bytes: delta.Bytes}
+			case basics.DeleteAction:
+				delete(tkv, key)
+			}
+		}
+	}
+
+	if len(changes.GlobalStateChanges) > 0 {
+		tkv := newStates.global[appIdx]
+		if tkv == nil {
+			tkv = make(basics.TealKeyValue)
+		}
+		applyDelta(changes.GlobalStateChanges, tkv)
+		newStates.global[appIdx] = tkv
+	}
+
+	for addr, delta := range changes.LocalStateChanges {
+		local := newStates.locals[addr]
+		if local == nil {
+			local = make(map[basics.AppIndex]basics.TealKeyValue)
+		}
+		tkv := local[appIdx]
+		if tkv == nil {
+			tkv = make(basics.TealKeyValue)
+		}
+		applyDelta(delta, tkv)
+		local[appIdx] = tkv
+		newStates.locals[addr] = local
+	}
+
+	return newStates
+}
+
 func (d *Debugger) getSession(sid string) (s *session, err error) {
 	d.mus.Lock()
 	defer d.mus.Unlock()
@@ -302,6 +355,7 @@ func (d *Debugger) createSession(sid string, disassembly string, line int, pcOff
 		s.source = meta.source
 		s.offsetToLine = meta.offsetToLine
 		s.pcOffset = pcOffset
+		s.states = meta.states
 	}
 	return
 }
@@ -328,7 +382,10 @@ func (d *Debugger) hashProgram(program []byte) string {
 }
 
 // SaveProgram stores program, source and offsetToLine for later use
-func (d *Debugger) SaveProgram(name string, program []byte, source string, offsetToLine map[int]int) {
+func (d *Debugger) SaveProgram(
+	name string, program []byte, source string, offsetToLine map[int]int,
+	states appState,
+) {
 	hash := d.hashProgram(program)
 	d.mus.Lock()
 	defer d.mus.Unlock()
@@ -337,6 +394,7 @@ func (d *Debugger) SaveProgram(name string, program []byte, source string, offse
 		program,
 		source,
 		offsetToLine,
+		states,
 	}
 }
 
@@ -373,7 +431,7 @@ func (d *Debugger) Register(state *logic.DebugState) error {
 	return nil
 }
 
-// Update process state update nofifications: pauses or continues as needed
+// Update process state update notifications: pauses or continues as needed
 func (d *Debugger) Update(state *logic.DebugState) error {
 	sid := state.ExecID
 	s, err := d.getSession(sid)
@@ -383,7 +441,7 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 	s.line.Store(state.Line)
 
 	go func() {
-		// Check if we are triggered and acknolwedge asynchronously
+		// Check if we are triggered and acknowledge asynchronously
 		cfg := s.debugConfig
 		if cfg.BreakAtLine != -1 {
 			if cfg.BreakAtLine == 0 || state.Line == cfg.BreakAtLine {
@@ -394,7 +452,7 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 				s.acknowledged <- true
 			}
 		} else {
-			// User won't send acknowledement, so we will
+			// User won't send acknowledgment, so we will
 			s.acknowledged <- true
 		}
 	}()

@@ -516,6 +516,7 @@ func TestDebugFromPrograms(t *testing.T) {
 		ProgramBlobs: [][]byte{{1}},
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
+		AppID:        100,
 	}
 
 	err = l.Setup(&dp)
@@ -535,7 +536,7 @@ func TestDebugFromPrograms(t *testing.T) {
 	a.Equal(1, len(l.runs))
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
-	a.NotNil(l.runs[0].ledger)
+	a.Nil(l.runs[0].ledger)
 
 	dp = DebugParams{
 		ProgramNames: []string{"test", "test"},
@@ -551,10 +552,10 @@ func TestDebugFromPrograms(t *testing.T) {
 	a.Equal(0, l.runs[0].groupIndex)
 	a.Equal(0, l.runs[1].groupIndex)
 	a.NotNil(l.runs[0].eval)
-	a.NotNil(l.runs[0].ledger)
+	a.Nil(l.runs[0].ledger)
 
 	a.NotNil(l.runs[1].eval)
-	a.NotNil(l.runs[1].ledger)
+	a.Nil(l.runs[1].ledger)
 }
 
 func TestRunMode(t *testing.T) {
@@ -570,6 +571,7 @@ func TestRunMode(t *testing.T) {
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "auto",
+		AppID:        100,
 	}
 
 	err := l.Setup(&dp)
@@ -590,6 +592,7 @@ func TestRunMode(t *testing.T) {
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "auto",
+		AppID:        100,
 	}
 
 	err = l.Setup(&dp)
@@ -597,7 +600,7 @@ func TestRunMode(t *testing.T) {
 	a.Equal(1, len(l.runs))
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
-	a.NotNil(l.runs[0].ledger)
+	a.Nil(l.runs[0].ledger)
 	a.Equal(
 		reflect.ValueOf(logic.Eval).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
@@ -610,6 +613,7 @@ func TestRunMode(t *testing.T) {
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "application",
+		AppID:        100,
 	}
 
 	err = l.Setup(&dp)
@@ -637,7 +641,7 @@ func TestRunMode(t *testing.T) {
 	a.Equal(1, len(l.runs))
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
-	a.NotNil(l.runs[0].ledger)
+	a.Nil(l.runs[0].ledger)
 	a.Equal(
 		reflect.ValueOf(logic.Eval).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
@@ -771,6 +775,7 @@ func TestDebugFromTxn(t *testing.T) {
 		BalanceBlob: balanceBlob,
 		TxnBlob:     txnBlob,
 		GroupIndex:  10, // must be ignored
+		AppID:       100,
 	}
 
 	err = l.Setup(&dp)
