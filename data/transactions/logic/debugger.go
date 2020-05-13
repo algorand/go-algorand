@@ -116,6 +116,7 @@ func makeDebugState(cx *evalContext) DebugState {
 	if (cx.runModeFlags & runModeApplication) != 0 {
 		ds.GlobalStateChanges = make(basics.StateDelta)
 
+		// allocate maximum possible slots in the hashmap even if Txn.Accounts might have duplicate entries
 		locals := 1 + len(cx.Txn.Txn.Accounts) // sender + referenced accounts
 		ds.LocalStateChanges = make(map[basics.Address]basics.StateDelta, locals)
 
