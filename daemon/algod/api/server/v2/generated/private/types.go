@@ -57,6 +57,12 @@ type Account struct {
 	// The round for which this information is relevant.
 	Round uint64 `json:"round"`
 
+	// Indicates what type of signature is used by this account, must be one of:
+	// * sig
+	// * msig
+	// * lsig
+	SigType *string `json:"sig-type,omitempty"`
+
 	// The address against which signatures/multisigs/logicsigs should be checked
 	SpendingKey *string `json:"spending-key,omitempty"`
 
@@ -65,12 +71,6 @@ type Account struct {
 	// *  Online  - indicates that the associated account used as part of the delegation pool.
 	// *   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.
 	Status string `json:"status"`
-
-	// Indicates what type of signature is used by this account, must be one of:
-	// * sig
-	// * msig
-	// * lsig
-	Type *string `json:"type,omitempty"`
 }
 
 // AccountParticipation defines model for AccountParticipation.
