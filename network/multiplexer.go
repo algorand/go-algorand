@@ -85,7 +85,7 @@ func (m *Multiplexer) RegisterHandlers(dispatch []TaggedMessageHandler) {
 	m.msgHandlers.Store(mp)
 }
 
-// ClearHandlers deregisters all the existing message handlers other then the one provided in the excludeTags list
+// ClearHandlers deregisters all the existing message handlers other than the one provided in the excludeTags list
 func (m *Multiplexer) ClearHandlers(excludeTags []Tag) {
 	if len(excludeTags) == 0 {
 		m.msgHandlers.Store(make(map[Tag]MessageHandler))

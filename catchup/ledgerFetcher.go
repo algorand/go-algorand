@@ -60,7 +60,7 @@ func (lf *ledgerFetcher) downloadLedger(ctx context.Context, round basics.Round)
 	if len(lf.peers) == 0 {
 		lf.peers = lf.net.GetPeers(network.PeersPhonebook)
 		if len(lf.peers) == 0 {
-			return fmt.Errorf("no peers are available")
+			return fmt.Errorf("downloadLedger : no peers are available")
 		}
 	}
 	// use the first one -
@@ -68,7 +68,7 @@ func (lf *ledgerFetcher) downloadLedger(ctx context.Context, round basics.Round)
 		peer, ok := lf.peers[0].(network.HTTPPeer)
 		lf.peers = lf.peers[1:]
 		if !ok {
-			return fmt.Errorf("non-HTTPPeer encountered")
+			return fmt.Errorf("downloadLedger : non-HTTPPeer encountered")
 		}
 		return lf.getPeerLedger(ctx, peer, round)
 
@@ -109,12 +109,12 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 	// response content type is what we'd like it to be.
 	contentTypes := response.Header["Content-Type"]
 	if len(contentTypes) != 1 {
-		err = fmt.Errorf("http ledger fetcher invalid content type count %d", len(contentTypes))
+		err = fmt.Errorf("getPeerLedger : http ledger fetcher invalid content type count %d", len(contentTypes))
 		return err
 	}
 
 	if contentTypes[0] != rpcs.LedgerResponseContentType {
-		err = fmt.Errorf("http ledger fetcher response has an invalid content type : %s", contentTypes[0])
+		err = fmt.Errorf("getPeerLedger : http ledger fetcher response has an invalid content type : %s", contentTypes[0])
 		return err
 	}
 

@@ -266,7 +266,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	return nil
 }
 
-// processStageLedgerDownload is the third catchpoint catchup stage. It downloads the latest block and verify that against the previously downloaded ledger.
+// processStageLastestBlockDownload is the third catchpoint catchup stage. It downloads the latest block and verify that against the previously downloaded ledger.
 func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err error) {
 	blockRound, err := cs.ledgerAccessor.GetCatchupBlockRound(cs.ctx)
 	if err != nil {
@@ -348,7 +348,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 	return nil
 }
 
-// processStageLedgerDownload is the fourth catchpoint catchup stage. It downloads all the reminder of the blocks, verifying each one of them against it's predecessor.
+// processStageBlocksDownload is the fourth catchpoint catchup stage. It downloads all the reminder of the blocks, verifying each one of them against it's predecessor.
 func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	topBlock, err := cs.ledgerAccessor.EnsureFirstBlock(cs.ctx)
 	if err != nil {

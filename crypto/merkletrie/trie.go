@@ -233,7 +233,7 @@ func (mt *Trie) Evict(commit bool) (int, error) {
 
 // serialize serializes the trie root
 func (mt *Trie) serialize() []byte {
-	serializedBuffer := make([]byte, (8+1)*4) // allocate the worst-case scenario for the trie header.
+	serializedBuffer := make([]byte, (8+1)*5) // allocate the worst-case scenario for the trie header.
 	version := binary.PutUvarint(serializedBuffer[:], MerkleTreeVersion)
 	root := binary.PutUvarint(serializedBuffer[version:], uint64(mt.root))
 	next := binary.PutUvarint(serializedBuffer[version+root:], uint64(mt.nextNodeID))
