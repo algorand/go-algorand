@@ -63,16 +63,12 @@ func (lf *ledgerFetcher) downloadLedger(ctx context.Context, round basics.Round)
 			return fmt.Errorf("downloadLedger : no peers are available")
 		}
 	}
-	// use the first one -
-	for {
-		peer, ok := lf.peers[0].(network.HTTPPeer)
-		lf.peers = lf.peers[1:]
-		if !ok {
-			return fmt.Errorf("downloadLedger : non-HTTPPeer encountered")
-		}
-		return lf.getPeerLedger(ctx, peer, round)
-
+	peer, ok := lf.peers[0].(network.HTTPPeer)
+	lf.peers = lf.peers[1:]
+	if !ok {
+		return fmt.Errorf("downloadLedger : non-HTTPPeer encountered")
 	}
+	return lf.getPeerLedger(ctx, peer, round)
 }
 
 func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPeer, round basics.Round) error {
