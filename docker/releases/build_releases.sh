@@ -3,15 +3,20 @@
 # Need to log in to Docker desktop before docker push will succeed.
 # e.g. `docker login`
 # Login name is "algorand".
+#
+# To build and push to docker hub the latest release:
+#   ./build_releases.sh
+#   ./build_releases.sh --tagname 2.0.6
 
 GREEN_FG=$(tput setaf 2 2>/dev/null)
 RED_FG=$(tput setaf 1 2>/dev/null)
 END_FG_COLOR=$(tput sgr0 2>/dev/null)
 
 # These are reasonable defaults.
-NETWORK=mainnet
-NAME=stable
 DEPLOY=true
+NAME=stable
+NETWORK=mainnet
+TAGNAME=latest
 
 while [ "$1" != "" ]; do
     case "$1" in
@@ -25,6 +30,10 @@ while [ "$1" != "" ]; do
             ;;
         --no-deploy)
             DEPLOY=false
+            ;;
+        --tagname)
+            shift
+            TAGNAME="$1"
             ;;
         *)
             echo "Unknown option" "$1"
@@ -55,9 +64,9 @@ build_image () {
     WORKDIR /root/node
 EOF
 
-    if ! echo "$DOCKERFILE" | docker build -t algorand/"$NAME":latest -
+    if ! echo "$DOCKERFILE" | docker build -t "algorand/$NAME:$TAGNAME" -
     then
-        echo -e "\n$RED_FG[$0]$END_FG_COLOR The algorand/$NAME:latest image could not be built."
+        echo -e "\n$RED_FG[$0]$END_FG_COLOR The algorand/$NAME:$TAGNAME image could not be built."
         exit 1
     fi
 }
@@ -66,7 +75,7 @@ build_image
 
 if $DEPLOY
 then
-    if ! docker push algorand/"$NAME":latest
+    if ! docker push "algorand/$NAME:$TAGNAME"
     then
         echo -e "\n$RED_FG[$0]$END_FG_COLOR \`docker push\` failed."
         exit 1
