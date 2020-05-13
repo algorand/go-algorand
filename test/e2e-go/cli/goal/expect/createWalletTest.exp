@@ -137,7 +137,7 @@ if { [catch {
         # Create a new account under the recovered wallet to retrieve preexisting account
         set RECOVERED_ACCOUNT_ADDRESS [::AlgorandGoal::CreateAccountForWallet $RECOVERED_WALLET_NAME $NEW_WALLET_PASSWORD $TEST_PRIMARY_NODE_DIR]
         puts "Recovered Account Address: $RECOVERED_ACCOUNT_ADDRESS"
-        ::AlgorandGoal::VerifyAccount $WALLET_NAME $WALLET_PASSWORD $RECOVERED_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR
+        ::AlgorandGoal::VerifyAccount $RECOVERED_WALLET_NAME $NEW_WALLET_PASSWORD $RECOVERED_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR
 
         if { $RECOVERED_ACCOUNT_ADDRESS != $ACCOUNT_ADDRESS } {
            ::AlgorandGoal::Abort "Expected recovered account address $ACCOUNT_ADDRESS, but found $RECOVERED_ACCOUNT_ADDRESS"
