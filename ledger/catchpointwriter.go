@@ -255,7 +255,7 @@ func (cw *catchpointWriter) GetBalancesRound() basics.Round {
 	return basics.Round(0)
 }
 
-// GetRound returns the catchpoint string to which this catchpoint file was generated for.
+// GetCatchpoint returns the catchpoint string to which this catchpoint file was generated for.
 func (cw *catchpointWriter) GetCatchpoint() string {
 	if cw.fileHeader != nil {
 		return cw.fileHeader.Catchpoint

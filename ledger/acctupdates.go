@@ -1184,6 +1184,10 @@ func catchpointRoundToPath(rnd basics.Round) string {
 	return outStr
 }
 
+// saveCatchpointFile stores the provided fileName as the stored catchpoint for the given round.
+// after a successfull insert operation to the database, it would delete up to 2 old entries, as needed.
+// deleting 2 entries while inserting single entry allow us to adjust the size of the backing storage and have the
+// database and storage realign.
 func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string, fileSize int64, catchpoint string) (err error) {
 	if au.catchpointFileHistoryLength != 0 {
 		err = au.accountsq.storeCatchpoint(context.Background(), round, fileName, catchpoint, fileSize)
