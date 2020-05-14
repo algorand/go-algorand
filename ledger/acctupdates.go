@@ -758,7 +758,7 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
 	// recent updated to be in-cache, and "older" nodes will be left alone.
 	for i, rewards := 3, accountData.RewardsBase; i >= 0; i, rewards = i-1, rewards>>8 {
-		hash[i] = byte(accountData.RewardsBase & 0x255)
+		hash[i] = byte(rewards & 0x255)
 	}
 	entryHash := crypto.Hash(append(addr[:], encodedAccountData[:]...))
 	copy(hash[4:], entryHash[:])
