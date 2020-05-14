@@ -156,7 +156,7 @@ func TestGroupTransactionsDifferentSizes(t *testing.T) {
 
 		// wait for the txids and check balances
 		_, curRound := fixture.GetBalanceAndRound(account0)
-		confirmed := fixture.WaitForAllTxnsToConfirm(curRound+5, txids)
+		confirmed := fixture.WaitForAllTxnsToConfirm(curRound+10, txids)
 		a.True(confirmed, "txgroup")
 
 		for i, acct := range accts {
