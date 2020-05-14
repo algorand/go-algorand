@@ -75,9 +75,9 @@ const topPageTemplate = `
 	  
 	 <script>
 	  function loadparm(){
-			const queryString = window.location.search;
-			const urlParams = new URLSearchParams(queryString);
-			$('#target').val(urlParams.get('account'));
+            const queryString = window.location.search;
+            const urlParams = new URLSearchParams(queryString);
+            $('#target').val(urlParams.get('account'));
 	  }  
       function onload() {
             $('#dispense').click(function (e) {
@@ -93,9 +93,8 @@ const topPageTemplate = `
               }).fail(function () {
                 $('#status').html('Code ' + req.status + ' ' + req.statusText + ': ' + req.responseText);
               });
-		 });
-		 
-		loadparm();
+		 });		 
+            loadparm();
       }
     </script>
   </head>
