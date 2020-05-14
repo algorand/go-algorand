@@ -94,7 +94,7 @@ const topPageTemplate = `
                 $('#status').html('Code ' + req.status + ' ' + req.statusText + ': ' + req.responseText);
               });
 		 });		 
-            loadparm();
+         loadparm();
       }
     </script>
   </head>
