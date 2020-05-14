@@ -95,7 +95,7 @@ func (sd StateDelta) Equal(o StateDelta) bool {
 // consensus parameters' maximum lengths
 func (sd StateDelta) Valid(proto *config.ConsensusParams) error {
 	for key, delta := range sd {
-		if len(key) > proto.MaxAppKeyLen {
+		if len(key) > proto.MaxAppKeyLen || proto.MaxAppKeyLen == 0 {
 			return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), proto.MaxAppKeyLen)
 		}
 		switch delta.Action {
