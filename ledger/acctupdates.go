@@ -704,7 +704,7 @@ func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser
 	})
 	if err != nil && err != sql.ErrNoRows {
 		// we had some sql error.
-		return nil, fmt.Errorf("catchpointTracker: getCatchpointStream: unable to lookup catchpoint %d: %v", round, err)
+		return nil, fmt.Errorf("accountUpdates: getCatchpointStream: unable to lookup catchpoint %d: %v", round, err)
 	}
 	if dbFileName != "" {
 		catchpointPath := filepath.Join(au.dbDirectory, dbFileName)
@@ -718,14 +718,14 @@ func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser
 			// delete it from the database.
 			err := au.saveCatchpointFile(round, "", 0, "")
 			if err != nil {
-				au.log.Warnf("catchpointTracker: getCatchpointStream: unable to delete missing catchpoint entry: %v", err)
+				au.log.Warnf("accountUpdates: getCatchpointStream: unable to delete missing catchpoint entry: %v", err)
 				return nil, err
 			}
 
 			return nil, ErrNoEntry{}
 		}
 		// it's some other error.
-		return nil, fmt.Errorf("catchpointTracker: getCatchpointStream: unable to open catchpoint file '%s' %v", catchpointPath, err)
+		return nil, fmt.Errorf("accountUpdates: getCatchpointStream: unable to open catchpoint file '%s' %v", catchpointPath, err)
 	}
 
 	// if the database doesn't know about that round, see if we have that file anyway:
@@ -742,7 +742,7 @@ func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser
 
 		err = au.saveCatchpointFile(round, fileName, fileInfo.Size(), "")
 		if err != nil {
-			au.log.Warnf("catchpointTracker: getCatchpointStream: unable to save missing catchpoint entry: %v", err)
+			au.log.Warnf("accountUpdates: getCatchpointStream: unable to save missing catchpoint entry: %v", err)
 			err = nil
 		}
 		return file, nil
