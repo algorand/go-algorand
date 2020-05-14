@@ -347,7 +347,7 @@ var appExecuteCmd = &cobra.Command{
 				var err error
 				addr, err = basics.UnmarshalChecksumAddress(s)
 				if err != nil {
-					reportErrorf("Could not unmarshal address %s", addr)
+					reportErrorf("Could not unmarshal address for %s (%s): %v", account.Name, s, err)
 				}
 			}
 			inputs.Accounts = append(inputs.Accounts, addr.String())
