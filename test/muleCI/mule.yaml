@@ -53,6 +53,18 @@ tasks:
     name: archive
     target: archive
 
+  - task: s3.UploadFiles
+    name: bin-cache
+    bucketName: go-algorand-ci-cache
+    prefix: ${JENKINS_JOB_CACHE_ID}/
+    globSpec:
+      - tmp/**
+  - task: s3.DownloadFiles
+    name: bin-cache
+    bucketName: go-algorand-ci-cache
+    prefix: ${JENKINS_JOB_CACHE_ID}/
+    outputDir: tmp
+
 jobs:
   # Linux arm64 jobs
   build-linux-arm64:
@@ -60,13 +72,21 @@ jobs:
       arch: arm64v8
     tasks:
       - shell.docker.Ensure
-      - docker.Make.integration-test
+      - docker.Make.shorttest
+      - s3.UploadFiles.bin-cache
 
-   # Linux amd64 jobs
-  build-linux-amd64:
-    configs:
-      arch: amd64
-    tasks:
-      - shell.docker.Ensure
-      - docker.Make.integration-test
+#  test-linux-arm64:
+#    configs:
+#      arch: arm64v8
+#    tasks:
+#      - shell.docker.Ensure
+#      - docker.Make.integration-test
+#
+#   # Linux amd64 jobs
+#  build-linux-amd64:
+#    configs:
+#      arch: amd64
+#    tasks:
+#      - shell.docker.Ensure
+#      - docker.Make.shorttest
 
