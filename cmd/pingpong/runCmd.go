@@ -225,20 +225,20 @@ var runCmd = &cobra.Command{
 		if logicProg != "" {
 			cfg.Program, err = ioutil.ReadFile(logicProg)
 			if err != nil {
-				reportErrorf("Error opening logic program: %v\n", err)
+				log.Errorf("Error opening logic program: %v\n", err)
 			}
 		}
 
 		if groupSize > 0 && groupSize <= 16 {
 			cfg.GroupSize = groupSize
 		} else {
-			reportErrorf("Invalid group size: %v\n", groupSize)
+			log.Errorf("Invalid group size: %v\n", groupSize)
 		}
 
 		if numAsset <= 1000 {
 			cfg.NumAsset = numAsset
 		} else {
-			reportErrorf("Invalid number of asset: %d, (valid number: 1 - 1000)\n", numAsset)
+			log.Errorf("Invalid number of asset: %d, (valid number: 1 - 1000)\n", numAsset)
 		}
 
 		reportInfof("Preparing to initialize PingPong with config:\n")
@@ -247,7 +247,7 @@ var runCmd = &cobra.Command{
 		// Initialize accounts if necessary
 		accounts, assetParams, cfg, err := pingpong.PrepareAccounts(ac, cfg)
 		if err != nil {
-			reportErrorf("Error preparing accounts for transfers: %v\n", err)
+			log.Errorf("Error preparing accounts for transfers: %v\n", err)
 		}
 
 		if saveConfig {
