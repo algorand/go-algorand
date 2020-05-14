@@ -39,7 +39,7 @@ cat<<EOF|python - > ${TEMPDIR}/pbound
 print(((${ROUND} // ${PERIOD}) * ${PERIOD}) + ${PERIOD})
 EOF
 PBOUND=$(cat ${TEMPDIR}/pbound)
-while [ ${ROUND} != ${PBOUND} ]; do
+while [ ${ROUND} -lt ${PBOUND} ]; do
     goal node wait --waittime 30
     ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 done
