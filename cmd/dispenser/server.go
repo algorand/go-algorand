@@ -81,8 +81,8 @@ const topPageTemplate = `
 	  }  
       function onload() {
             $('#dispense').click(function (e) {
-			   var recaptcha = grecaptcha.getResponse();
-			   var target = $('#target').val();
+               var recaptcha = grecaptcha.getResponse();
+               var target = $('#target').val();
 			  
               $('#status').html('Sending request..');
               var req = $.post('/dispense', {
