@@ -72,7 +72,7 @@ jobs:
       arch: arm64v8
     tasks:
       - shell.docker.Ensure
-      - docker.Make.shorttest
+      - docker.Make.build
       - s3.UploadFiles.bin-cache
 
 #  test-linux-arm64:
