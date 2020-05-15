@@ -107,6 +107,7 @@ type LedgerForLogic interface {
 	AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error)
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error)
+	ApplicationID() basics.AppIndex
 }
 
 // EvalParams contains data that comes into condition evaluation.
@@ -122,9 +123,6 @@ type EvalParams struct {
 
 	// GroupIndex should point to Txn within TxnGroup
 	GroupIndex int
-
-	// AppID must be nonzero for Eval in ApplicationCall transactions
-	AppID basics.AppIndex
 
 	Logger logging.Logger
 
@@ -280,12 +278,6 @@ func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.Ev
 	cx.appEvalDelta = basics.EvalDelta{
 		GlobalDelta: make(basics.StateDelta),
 		LocalDeltas: make(map[uint64]basics.StateDelta, len(params.Txn.Txn.Accounts)+1),
-	}
-
-	// If a nonzero application ID is part of the transaction, set the
-	// context's application ID accordingly
-	if cx.Txn.Txn.ApplicationID != 0 {
-		cx.AppID = cx.Txn.Txn.ApplicationID
 	}
 
 	// Allocate global delta cow lazily to avoid ledger lookups
@@ -1680,7 +1672,7 @@ func (cx *evalContext) appReadLocalKey(appID uint64, accountIdx uint64, key stri
 	// If this is for the application mentioned in the transaction header,
 	// return the result from a LocalState cow, since we may have written
 	// to it
-	if appID == 0 || appID == uint64(cx.AppID) {
+	if appID == 0 || appID == uint64(cx.Ledger.ApplicationID()) {
 		kvCow, err := cx.getLocalStateCow(accountIdx)
 		if err != nil {
 			return basics.TealValue{}, false, err
@@ -1746,7 +1738,7 @@ func (cx *evalContext) appReadGlobalKey(appID uint64, key string) (basics.TealVa
 	// If this is for the application mentioned in the transaction header,
 	// return the result from a GlobalState cow, since we may have written
 	// to it
-	if appID == 0 || appID == uint64(cx.AppID) {
+	if appID == 0 || appID == uint64(cx.Ledger.ApplicationID()) {
 		kvCow, err := cx.getGlobalStateCow()
 		if err != nil {
 			return basics.TealValue{}, false, err
@@ -1810,10 +1802,6 @@ func opAppGetLocalState(cx *evalContext) {
 	key := cx.stack[last].Bytes
 	appID := cx.stack[prev].Uint
 	accountIdx := cx.stack[pprev].Uint
-
-	if appID != 0 && appID == uint64(cx.AppID) {
-		appID = 0 // 0 is an alias for the current app
-	}
 
 	result, ok, err := opAppGetLocalStateImpl(cx, appID, key, accountIdx)
 	if err != nil {

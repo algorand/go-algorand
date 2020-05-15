@@ -83,7 +83,6 @@ func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, acctWhite
 	}
 
 	ae.evalParams.Ledger = ledger
-	ae.evalParams.AppID = appIdx
 	return nil
 }
 
@@ -279,4 +278,8 @@ func (al *appLedger) Round() basics.Round {
 
 func (al *appLedger) LatestTimestamp() int64 {
 	return al.AppTealGlobals.LatestTimestamp
+}
+
+func (al *appLedger) ApplicationID() basics.AppIndex {
+	return al.appIdx
 }

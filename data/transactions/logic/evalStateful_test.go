@@ -170,6 +170,10 @@ func (l *testLedger) AssetParams(addr basics.Address, assetID basics.AssetIndex)
 	return basics.AssetParams{}, fmt.Errorf("no such address")
 }
 
+func (l *testLedger) ApplicationID() basics.AppIndex {
+	return basics.AppIndex(l.appID)
+}
+
 func TestEvalModes(t *testing.T) {
 	t.Parallel()
 	// ed25519verify and err are tested separately below
