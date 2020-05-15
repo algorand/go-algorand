@@ -116,7 +116,11 @@ func (mt *Trie) RootHash() (crypto.Digest, error) {
 	if err != nil {
 		return crypto.Digest{}, err
 	}
-	return crypto.Hash(pnode.hash), nil
+
+	if pnode.leaf {
+		return crypto.Hash(append([]byte{0}, pnode.hash...)), nil
+	}
+	return crypto.Hash(append([]byte{1}, pnode.hash...)), nil
 }
 
 // Add adds the given hash to the trie.
