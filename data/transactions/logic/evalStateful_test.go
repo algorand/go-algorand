@@ -849,7 +849,7 @@ pop
 `
 	// check that even during application creation (Txn.ApplicationID == 0)
 	// we will use the the kvCow if the exact application ID (100) is
-	// specified in the transcation
+	// specified in the transaction
 	program, err = AssembleString(text)
 	require.NoError(t, err)
 
