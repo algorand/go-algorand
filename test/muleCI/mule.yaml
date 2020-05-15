@@ -75,6 +75,14 @@ jobs:
       - docker.Make.build
       - s3.UploadFiles.bin-cache
 
+  test-linux-arm64:
+    configs:
+      arch: arm64v8
+    tasks:
+      - shell.docker.Ensure
+      - s3.DownloadFiles.bin-cache
+      - docker.Make.integration-test
+
 #  test-linux-arm64:
 #    configs:
 #      arch: arm64v8
