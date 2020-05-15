@@ -83,6 +83,7 @@ func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, acctWhite
 	}
 
 	ae.evalParams.Ledger = ledger
+	ae.evalParams.AppID = appIdx
 	return nil
 }
 
