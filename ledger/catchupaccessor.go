@@ -184,7 +184,7 @@ func (c *CatchpointCatchupAccessor) ProgressStagingBalances(ctx context.Context,
 // processStagingContent deserialize the given bytes as a temporary staging balances content
 func (c *CatchpointCatchupAccessor) processStagingContent(ctx context.Context, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error) {
 	if progress.SeenHeader {
-		return fmt.Errorf("content chunk already seen")
+		return fmt.Errorf("CatchpointCatchupAccessor::processStagingContent: content chunk already seen")
 	}
 	var fileHeader catchpointFileHeader
 	err = protocol.DecodeReflect(bytes, &fileHeader)
@@ -192,7 +192,7 @@ func (c *CatchpointCatchupAccessor) processStagingContent(ctx context.Context, b
 		return err
 	}
 	if fileHeader.Version != catchpointFileVersion {
-		return fmt.Errorf("unable to process catchpoint - version %d is not supported", fileHeader.Version)
+		return fmt.Errorf("CatchpointCatchupAccessor::processStagingContent: unable to process catchpoint - version %d is not supported", fileHeader.Version)
 	}
 
 	// the following fields are now going to be ignored. We should add these to the database and validate these
@@ -202,15 +202,15 @@ func (c *CatchpointCatchupAccessor) processStagingContent(ctx context.Context, b
 	err = wdb.Atomic(func(tx *sql.Tx) (err error) {
 		sq, err := accountsDbInit(tx, tx)
 		if err != nil {
-			return fmt.Errorf("unable to initialize accountsDbInit: %v", err)
+			return fmt.Errorf("CatchpointCatchupAccessor::processStagingContent: unable to initialize accountsDbInit: %v", err)
 		}
 		_, err = sq.writeCatchpointStateUint64(ctx, "catchpointCatchupBlockRound", uint64(fileHeader.BlocksRound))
 		if err != nil {
-			return fmt.Errorf("unable to write catchpoint catchup state 'catchpointCatchupBlockRound': %v", err)
+			return fmt.Errorf("CatchpointCatchupAccessor::processStagingContent: unable to write catchpoint catchup state 'catchpointCatchupBlockRound': %v", err)
 		}
 		_, err = sq.writeCatchpointStateUint64(ctx, "catchpointCatchupBalancesRound", uint64(fileHeader.BalancesRound))
 		if err != nil {
-			return fmt.Errorf("unable to write catchpoint catchup state 'catchpointCatchupBalancesRound': %v", err)
+			return fmt.Errorf("CatchpointCatchupAccessor::processStagingContent: unable to write catchpoint catchup state 'catchpointCatchupBalancesRound': %v", err)
 		}
 		err = accountsPutTotals(tx, fileHeader.Totals, true)
 		return
@@ -226,7 +226,7 @@ func (c *CatchpointCatchupAccessor) processStagingContent(ctx context.Context, b
 // processStagingBalances deserialize the given bytes as a temporary staging balances
 func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error) {
 	if !progress.SeenHeader {
-		return fmt.Errorf("content chunk was missing")
+		return fmt.Errorf("CatchpointCatchupAccessor::processStagingBalances: content chunk was missing")
 	}
 	var balances catchpointFileBalancesChunk
 	err = protocol.DecodeReflect(bytes, &balances)
@@ -273,7 +273,7 @@ func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, 
 			hash := accountHashBuilder(addr, accountData, balance.AccountData)
 			added, err := trie.Add(hash)
 			if !added {
-				return fmt.Errorf("The provided catchpoint file contained the same account more than once. Account address %#v, account data %#v", addr, accountData)
+				return fmt.Errorf("CatchpointCatchupAccessor::processStagingBalances: The provided catchpoint file contained the same account more than once. Account address %#v, account data %#v", addr, accountData)
 			}
 			if err != nil {
 				return err
