@@ -22,6 +22,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/gorilla/mux"
 
@@ -37,7 +39,6 @@ import (
 const LedgerResponseContentType = "application/x-algorand-ledger-v2.1"
 
 const ledgerServerMaxBodyLength = 512 // we don't really pass meaningful content here, so 512 bytes should be a safe limit
-//const blockServerCatchupRequestBufferSize = 10
 
 // LedgerServiceLedgerPath is the path to register LedgerService as a handler for when using gorilla/mux
 // e.g. .Handle(LedgerServiceLedgerPath, &ls)
@@ -45,10 +46,13 @@ const LedgerServiceLedgerPath = "/v{version:[0-9.]+}/{genesisID}/ledger/{round:[
 
 // LedgerService represents the Ledger RPC API
 type LedgerService struct {
+	// running is non-zero once the service is running, and zero when it's not running. it needs to be at a 32-bit aligned address for RasPI support.
+	running       int32
 	ledger        *data.Ledger
 	genesisID     string
 	net           network.GossipNode
 	enableService bool
+	stopping      sync.WaitGroup
 }
 
 // MakeLedgerService creates a LedgerService around the provider Ledger and registers it with the HTTP router
@@ -59,6 +63,7 @@ func MakeLedgerService(config config.Local, ledger *data.Ledger, net network.Gos
 		net:           net,
 		enableService: config.EnableLedgerService,
 	}
+	// the underlying gorilla/mux doesn't support "unregister", so we're forced to implement it ourselves.
 	if service.enableService {
 		net.RegisterHTTPHandler(LedgerServiceLedgerPath, service)
 	}
@@ -67,16 +72,29 @@ func MakeLedgerService(config config.Local, ledger *data.Ledger, net network.Gos
 
 // Start listening to catchup requests
 func (ls *LedgerService) Start() {
+	if ls.enableService {
+		atomic.StoreInt32(&ls.running, 1)
+	}
 }
 
 // Stop servicing catchup requests
 func (ls *LedgerService) Stop() {
+	if ls.enableService {
+		atomic.StoreInt32(&ls.running, 0)
+		ls.stopping.Wait()
+	}
 }
 
 // ServerHTTP returns blocks
 // Either /v{version}/block/{round} or ?b={round}&v={version}
 // Uses gorilla/mux for path argument parsing.
 func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	ls.stopping.Add(1)
+	defer ls.stopping.Done()
+	if atomic.AddInt32(&ls.running, 0) == 0 {
+		response.WriteHeader(http.StatusNotFound)
+		return
+	}
 	pathVars := mux.Vars(request)
 	versionStr, hasVersionStr := pathVars["version"]
 	roundStr, hasRoundStr := pathVars["round"]
