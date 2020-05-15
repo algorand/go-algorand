@@ -5,6 +5,7 @@ If you are interested in contributing to the project, we welcome and thank you. 
 The [Algorand GitHub Organization](https://github.com/algorand) has all of our open source projects, and dependencies which we fork and use in those projects. This contribution guide applies to all of these.
 
 Some of our most active projects include:
+* [go-algorand](https://github.com/algorand/go-algorand) - Algorand node software (this repository)
 * [go-algorand-sdk](https://github.com/algorand/go-algorand-sdk) - Golang SDK
 * [java-algorand-sdk](https://github.com/algorand/java-algorand-sdk) - Java SDK
 * [js-algorand-sdk](https://github.com/algorand/js-algorand-sdk) - JavaScript SDK
