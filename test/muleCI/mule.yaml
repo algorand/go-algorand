@@ -58,7 +58,7 @@ tasks:
     bucketName: go-algorand-ci-cache
     prefix: ${JENKINS_JOB_CACHE_ID}/
     globSpec:
-      - tmp/**
+      - tmp/node_pkgs/**
   - task: s3.DownloadFiles
     name: bin-cache
     bucketName: go-algorand-ci-cache
