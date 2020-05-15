@@ -277,6 +277,9 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	sb := strings.Builder{}
 	ep := defaultEvalParams(&sb, &txn)
 	ep.TxnGroup = txgroup
+
+	// ensure v1 program runs well on latest TEAL evaluator
+	require.Equal(t, uint8(1), program[0])
 	cost, err := Check(program, ep)
 	require.NoError(t, err)
 	require.Equal(t, 2140, cost)
@@ -301,4 +304,18 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, pass)
 
+	// ensure v0 program runs well on latest TEAL evaluator
+	program[0] = 0
+	sig = c.Sign(Msg{
+		ProgramHash: crypto.HashObj(Program(program)),
+		Data:        data[:],
+	})
+	txn.Lsig.Logic = program
+	txn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], txn.Txn.Sender[:], txn.Txn.Note}
+	cost, err = Check(program, ep)
+	require.NoError(t, err)
+	require.Equal(t, 2140, cost)
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
 }
