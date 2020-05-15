@@ -63,6 +63,7 @@ tasks:
     name: bin-cache
     bucketName: go-algorand-ci-cache
     prefix: ${JENKINS_JOB_CACHE_ID}/
+    suffix: 
     outputDir: tmp
 
 jobs:
