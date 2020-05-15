@@ -36,17 +36,20 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 	cfg = initCfg
 	accounts, cfg, err = ensureAccounts(ac, cfg)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "ensure accounts failed %v\n", err)
 		return
 	}
 
 	err = fundAccounts(accounts, ac, cfg)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
 		return
 	}
 
 	if cfg.NumAsset > 0 {
 		assetParams, err = prepareAssets(accounts, ac, cfg)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "fund prepare assets failed %v\n", err)
 			return
 		}
 	}
@@ -54,6 +57,7 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 	// we need to fund Accounts again since prepareAssets spends
 	err = fundAccounts(accounts, ac, cfg)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "fund accounts after prepare assets failed %v\n", err)
 		return
 	}
 
@@ -87,6 +91,7 @@ func refreshAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpCo
 	for addr := range accounts {
 		amount, err := client.GetBalance(addr)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "error refreshAccounts: %v\n", err)
 			return err
 		}
 
@@ -140,6 +145,7 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 
 	for {
 		if ctx.Err() != nil {
+			fmt.Fprintf(os.Stderr, "error bad context in RunPingPong: %v\n", ctx.Err())
 			break
 		}
 		startTime := time.Now()
@@ -233,6 +239,7 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetPara
 			txn, consErr := constructTxn(from, to, fee, amt, assetID, client, cfg)
 			if consErr != nil {
 				err = consErr
+				fmt.Fprintf(os.Stderr, "constructTxn failed: %v\n", err)
 				return
 			}
 
@@ -248,6 +255,7 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetPara
 			stxn, signErr := signTxn(from, txn, client, cfg)
 			if signErr != nil {
 				err = signErr
+				fmt.Fprintf(os.Stderr, "signTxn failed: %v\n", err)
 				return
 			}
 
@@ -268,6 +276,7 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetPara
 					fromBalanceChange += int64(amt)
 				}
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "group tx failed: %v\n", err)
 					return
 				}
 				txGroup = append(txGroup, txn)
@@ -324,6 +333,7 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetPara
 			accounts[to] = uint64(toBalanceChange + int64(accounts[to]))
 		}
 		if sendErr != nil {
+			fmt.Fprintf(os.Stderr, "error sending TransactionGroup: %v\n", sendErr)
 			err = sendErr
 			return
 		}
@@ -363,6 +373,7 @@ func constructTxn(from, to string, fee, amt, assetID uint64, client libgoal.Clie
 	} else { // Construct asset transaction
 		txn, err = client.MakeUnsignedAssetSendTx(assetID, amt, to, "", "")
 		if err != nil {
+			fmt.Fprintf(os.Stdout, "error making unsigned asset send tx %v\n", err)
 			return
 		}
 		txn.Note = noteField[:]
@@ -374,6 +385,7 @@ func constructTxn(from, to string, fee, amt, assetID uint64, client libgoal.Clie
 
 	}
 	if err != nil {
+		fmt.Fprintf(os.Stdout, "error constructing transaction %v\n", err)
 		return
 	}
 	// adjust transaction duration for 5 rounds. That would prevent it from getting stuck in the transaction pool for too long.
