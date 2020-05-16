@@ -67,6 +67,9 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) error {
 	srcFunds := accounts[cfg.SrcAccount]
 
+	startTime := time.Now()
+	var totalSent uint64
+
 	// Fee of 0 will make cause the function to use the suggested one by network
 	fee := uint64(0)
 	minFund := cfg.MinAccountFunds + (cfg.MaxAmt+cfg.MaxFee)*cfg.TxnPerSec*uint64(math.Ceil(cfg.RefreshTime.Seconds()))
@@ -82,6 +85,15 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 				return err
 			}
 			accounts[addr] = minFund
+
+			totalSent++
+			localTimeDelta := time.Now().Sub(startTime)
+			currentTps := float64(totalSent) / localTimeDelta.Seconds()
+			if currentTps > float64(cfg.TxnPerSec) {
+				sleepSec := float64(totalSent)/float64(cfg.TxnPerSec) - localTimeDelta.Seconds()
+				sleepTime := time.Duration(int64(math.Round(sleepSec*1000))) * time.Millisecond
+				time.Sleep(sleepTime)
+			}
 		}
 	}
 	return nil
