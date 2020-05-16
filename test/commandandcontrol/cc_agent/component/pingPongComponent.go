@@ -132,11 +132,11 @@ func (componentInstance *PingPongComponentInstance) startPingPong(cfg *pingpong.
 			break
 		} else {
 			log.Warnf("problem[%d] preparing accounts for transfers: %v\n, retrying", i, err)
-			time.Sleep(time.Second * 2)
+			time.Sleep(time.Second * 4)
 		}
 	}
 	if err != nil {
-		log.Errorf("Error preparing accounts for transfers: %v\n", err)
+		log.Warnf("Error preparing accounts for transfers: %v\n", err)
 		//		return
 	}
 
