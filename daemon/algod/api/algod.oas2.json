@@ -786,7 +786,7 @@
           "description": "\\[onl\\] delegation status of the account's MicroAlgos\n* Offline - indicates that the associated account is delegated.\n*  Online  - indicates that the associated account used as part of the delegation pool.\n*   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.",
           "type": "string"
         },
-        "type": {
+        "sig-type": {
           "description": "Indicates what type of signature is used by this account, must be one of:\n* sig\n* msig\n* lsig",
           "type": "string",
           "enum": [
@@ -861,7 +861,8 @@
       "properties": {
         "amount": {
           "description": "\\[a\\] number of units held.",
-          "type": "integer"
+           "type": "integer",
+           "x-algorand-format": "uint64"
         },
         "asset-id": {
           "description": "Asset ID of the holding.",
@@ -1030,7 +1031,6 @@
     },
     "address": {
       "type": "string",
-      "x-algorand-format": "RFC3339 String",
       "description": "Only include transactions with this address in one of the transaction fields.",
       "name": "address",
       "in": "query"
@@ -1131,7 +1131,8 @@
       "type": "string",
       "description": "Specifies a prefix which must be contained in the note field.",
       "name": "note-prefix",
-      "in": "query"
+      "in": "query",
+      "x-algorand-format": "base64"
     },
     "round": {
       "type": "integer",
