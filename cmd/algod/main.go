@@ -36,8 +36,9 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/tools/network"
+	toolsnet "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/tokens"
 )
@@ -248,6 +249,20 @@ func main() {
 		if cfg.GossipFanout > len(peerOverrideArray) {
 			cfg.GossipFanout = len(peerOverrideArray)
 		}
+
+		// make sure that the format of each entry is valid:
+		stagingArray := []string{}
+		for _, peer := range peerOverrideArray {
+			url, err := network.ParseHostOrURL(peer)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Provided command line parameter '%s' is not a valid host:port pair\n", peer)
+				os.Exit(1)
+				return
+			}
+			stagingArray = append(stagingArray, url.Host)
+		}
+		peerOverrideArray = stagingArray
+
 	}
 
 	// Apply the default deadlock setting before starting the server.
@@ -303,7 +318,7 @@ func main() {
 
 		// If the telemetry URI is not set, periodically check SRV records for new telemetry URI
 		if remoteTelemetryEnabled && log.GetTelemetryURI() == "" {
-			network.StartTelemetryURIUpdateService(time.Minute, cfg, s.Genesis.Network, log, done)
+			toolsnet.StartTelemetryURIUpdateService(time.Minute, cfg, s.Genesis.Network, log, done)
 		}
 
 		currentVersion := config.GetCurrentVersion()
