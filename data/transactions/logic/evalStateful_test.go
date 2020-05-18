@@ -170,6 +170,10 @@ func (l *testLedger) AssetParams(addr basics.Address, assetID basics.AssetIndex)
 	return basics.AssetParams{}, fmt.Errorf("no such address")
 }
 
+func (l *testLedger) ApplicationID() basics.AppIndex {
+	return basics.AppIndex(l.appID)
+}
+
 func TestEvalModes(t *testing.T) {
 	t.Parallel()
 	// ed25519verify and err are tested separately below
@@ -828,6 +832,28 @@ int 0
 	require.NoError(t, err)
 
 	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+	pass, _, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	text = `
+byte 0x41414141
+int 4141
+app_global_put
+int 100
+byte 0x41414141
+app_global_get
+int 4141
+==
+pop
+`
+	// check that even during application creation (Txn.ApplicationID == 0)
+	// we will use the the kvCow if the exact application ID (100) is
+	// specified in the transaction
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+
+	ep.Txn.Txn.ApplicationID = 0
 	pass, _, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
