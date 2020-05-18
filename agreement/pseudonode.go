@@ -118,20 +118,31 @@ type pseudonodeVerifier struct {
 //msgp:ignore verifiedCryptoResults
 type verifiedCryptoResults []asyncVerifyVoteResponse
 
-func makePseudonode(factory BlockFactory, validator BlockValidator, keys KeyManager, ledger Ledger, voteVerifier *AsyncVoteVerifier, log serviceLogger, monitor *coserviceMonitor) pseudonode {
+// pseudonodeParams struct provide the parameters required to create a pseudonode
+type pseudonodeParams struct {
+	factory      BlockFactory
+	validator    BlockValidator
+	keys         KeyManager
+	ledger       Ledger
+	voteVerifier *AsyncVoteVerifier
+	log          serviceLogger
+	monitor      *coserviceMonitor
+}
+
+func makePseudonode(params pseudonodeParams) pseudonode {
 	pn := asyncPseudonode{
-		factory:   factory,
-		validator: validator,
-		keys:      keys,
-		ledger:    ledger,
-		log:       log,
+		factory:   params.factory,
+		validator: params.validator,
+		keys:      params.keys,
+		ledger:    params.ledger,
+		log:       params.log,
 		quit:      make(chan struct{}),
 		closeWg:   &sync.WaitGroup{},
-		monitor:   monitor,
+		monitor:   params.monitor,
 	}
 
-	pn.proposalsVerifier = pn.makePseudonodeVerifier(voteVerifier)
-	pn.votesVerifier = pn.makePseudonodeVerifier(voteVerifier)
+	pn.proposalsVerifier = pn.makePseudonodeVerifier(params.voteVerifier)
+	pn.votesVerifier = pn.makePseudonodeVerifier(params.voteVerifier)
 	return pn
 }
 
