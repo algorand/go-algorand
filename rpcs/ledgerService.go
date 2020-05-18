@@ -18,6 +18,7 @@ package rpcs
 
 import (
 	"compress/gzip"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -85,8 +86,8 @@ func (ls *LedgerService) Stop() {
 	}
 }
 
-// ServerHTTP returns blocks
-// Either /v{version}/block/{round} or ?b={round}&v={version}
+// ServerHTTP returns ledgers for a particular round
+// Either /v{version}/{genesisID}/ledger/{round} or ?r={round}&v={version}
 // Uses gorilla/mux for path argument parsing.
 func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	ls.stopping.Add(1)
@@ -101,8 +102,9 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 	genesisID, hasGenesisID := pathVars["genesisID"]
 	if hasVersionStr {
 		if versionStr != "1" {
-			logging.Base().Debug("http ledger bad version", versionStr)
+			logging.Base().Debugf("http ledger bad version '%s'", versionStr)
 			response.WriteHeader(http.StatusBadRequest)
+			response.Write([]byte(fmt.Sprintf("unsupported version '%s'", versionStr)))
 			return
 		}
 	}
@@ -110,26 +112,30 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		if ls.genesisID != genesisID {
 			logging.Base().Debugf("http ledger bad genesisID mine=%#v theirs=%#v", ls.genesisID, genesisID)
 			response.WriteHeader(http.StatusBadRequest)
+			response.Write([]byte(fmt.Sprintf("mismatching genesisID '%s'", genesisID)))
 			return
 		}
 	} else {
 		logging.Base().Debug("http ledger no genesisID")
 		response.WriteHeader(http.StatusBadRequest)
+		response.Write([]byte("missing genesisID"))
 		return
 	}
 	if (!hasVersionStr) || (!hasRoundStr) {
-		// try query arg ?b={round}
+		// try query arg ?r={round}
 		request.Body = http.MaxBytesReader(response, request.Body, ledgerServerMaxBodyLength)
 		err := request.ParseForm()
 		if err != nil {
-			logging.Base().Debug("http ledger parse form err", err)
+			logging.Base().Debugf("http ledger parse form err : %v", err)
 			response.WriteHeader(http.StatusBadRequest)
+			response.Write([]byte(fmt.Sprintf("unable to parse form body : %v", err)))
 			return
 		}
-		roundStrs, ok := request.Form["b"]
+		roundStrs, ok := request.Form["r"]
 		if !ok || len(roundStrs) != 1 {
-			logging.Base().Debug("http ledger bad block id form arg")
+			logging.Base().Debugf("http ledger bad round number form arg '%s'", roundStrs)
 			response.WriteHeader(http.StatusBadRequest)
+			response.Write([]byte("invalid round number specified in 'r' form argument"))
 			return
 		}
 		roundStr = roundStrs[0]
@@ -137,13 +143,15 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		if ok {
 			if len(versionStrs) == 1 {
 				if versionStrs[0] != "1" {
-					logging.Base().Debug("http ledger bad version", versionStr)
+					logging.Base().Debugf("http ledger bad version '%s'", versionStr)
 					response.WriteHeader(http.StatusBadRequest)
+					response.Write([]byte(fmt.Sprintf("unsupported version specified '%s'", versionStrs[0])))
 					return
 				}
 			} else {
-				logging.Base().Debug("http ledger wrong number of v args", len(versionStrs))
+				logging.Base().Debugf("http ledger wrong number of v=%d args", len(versionStrs))
 				response.WriteHeader(http.StatusBadRequest)
+				response.Write([]byte(fmt.Sprintf("invalid number of version specified %d", len(versionStrs))))
 				return
 			}
 		} else {
@@ -152,8 +160,9 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 	}
 	round, err := strconv.ParseUint(roundStr, 36, 64)
 	if err != nil {
-		logging.Base().Debug("http ledger round parse fail", roundStr, err)
+		logging.Base().Debugf("http ledger round parse fail ('%s'): %v", roundStr, err)
 		response.WriteHeader(http.StatusBadRequest)
+		response.Write([]byte(fmt.Sprintf("specified round number could not be parsed using base 36 : %v", err)))
 		return
 	}
 	cs, err := ls.ledger.GetCatchpointStream(basics.Round(round))
@@ -162,11 +171,13 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		case ledger.ErrNoEntry:
 			// entry cound not be found.
 			response.WriteHeader(http.StatusNotFound)
+			response.Write([]byte(fmt.Sprintf("catchpoint file for round %d is not available", round)))
 			return
 		default:
 			// unexpected error.
 			logging.Base().Warnf("ServeHTTP : failed to retrieve catchpoint %d %v", round, err)
 			response.WriteHeader(http.StatusInternalServerError)
+			response.Write([]byte(fmt.Sprintf("catchpoint file for round %d could not be retrieved due to internal error : %v", round, err)))
 			return
 		}
 	}
@@ -181,6 +192,8 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 	decompressedGzip, err := gzip.NewReader(cs)
 	if err != nil {
 		logging.Base().Warnf("ServeHTTP : failed to decompress catchpoint %d %v", round, err)
+		response.WriteHeader(http.StatusInternalServerError)
+		response.Write([]byte(fmt.Sprintf("catchpoint file for round %d could not be decompressed due to internal error : %v", round, err)))
 		return
 	}
 	defer decompressedGzip.Close()
