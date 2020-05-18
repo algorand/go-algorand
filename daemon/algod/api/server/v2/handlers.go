@@ -460,7 +460,7 @@ func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr strin
 	return v2.getPendingTransactions(ctx, params.Max, params.Format, &addr)
 }
 
-// Compile TEAL code to binary, return both binary and hash
+// TealCompile compiles TEAL code to binary, return both binary and hash
 // (POST /v2/teal/compile)
 func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 	buf := new(bytes.Buffer)
