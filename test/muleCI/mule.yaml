@@ -3,47 +3,47 @@ tasks:
   - task: stash.Stash
     name: linux-amd64
     bucketName: go-algorand-ci-cache
-    stash_id: ${JENKINS_JOB_CACHE_ID}/linux-amd64
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
     globSpec: tmp/node_pkgs/**
   - task: stash.Stash
     name: darwin-amd64
     bucketName: go-algorand-ci-cache
-    stash_id: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
+    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
     globSpec: tmp/node_pkgs/**
   - task: stash.Stash
     name: linux-arm64
     bucketName: go-algorand-ci-cache
-    stash_id: ${JENKINS_JOB_CACHE_ID}/linux-arm64
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm64
     globSpec: tmp/node_pkgs/**
   - task: stash.Stash
     name: linux-arm32
     bucketName: go-algorand-ci-cache
-    stash_id: ${JENKINS_JOB_CACHE_ID}/linux-arm32
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm32
     globSpec: tmp/node_pkgs/**
 
   # Unstash tasks
   - task: stash.Unstash
     name: linux-arm64
     bucketName: go-algorand-ci-cache
-    stash_id: ${JENKINS_JOB_CACHE_ID}/linux-arm64
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm64
   - task: stash.Stash
     name: linux-amd64
     bucketName: go-algorand-ci-cache
-    stash_id: ${JENKINS_JOB_CACHE_ID}/linux-amd64
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
     globSpec: tmp/node_pkgs/**
   - task: stash.Unstash
     name: linux-amd64
     bucketName: go-algorand-ci-cache
-    stash_id: ${JENKINS_JOB_CACHE_ID}/linux-amd64
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
   - task: stash.Stash
     name: linux-arm32
     bucketName: go-algorand-ci-cache
-    stash_id: ${JENKINS_JOB_CACHE_ID}/linux-arm32
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm32
     globSpec: tmp/node_pkgs/**
   - task: stash.Unstash
     name: linux-arm32
     bucketName: go-algorand-ci-cache
-    stash_id: ${JENKINS_JOB_CACHE_ID}/linux-arm32
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm32
 
   # Docker tasks
   - task: docker.Version
@@ -77,6 +77,8 @@ tasks:
   - task: docker.Make
     name: integration-test
     docker:
+      env:
+        - SHORTTEST=-short
       image: algorand/go-algorand-ci-linux
       version: '{{ docker.Version.outputs.version }}'
       workDir: /go/src/github.com/algorand/go-algorand
