@@ -53,7 +53,7 @@ func (logger *LoggerMiddleware) handler(next echo.HandlerFunc) echo.HandlerFunc 
 			ctx.Error(err)
 		}
 
-		logger.log.Infof("%s %s %s [%v] \"%s %s %s\" %d %d \"%s\" %s",
+		logger.log.Infof("%s %s %s [%v] \"%s %s %s\" %d %s \"%s\" %s",
 			req.RemoteAddr,
 			"-",
 			"-",

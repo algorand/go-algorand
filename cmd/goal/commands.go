@@ -60,6 +60,7 @@ func init() {
 	rootCmd.Flags().BoolVarP(&versionCheck, "version", "v", false, "Display and write current build version and exit")
 	rootCmd.AddCommand(licenseCmd)
 	rootCmd.AddCommand(reportCmd)
+	rootCmd.AddCommand(protoCmd)
 
 	// account.go
 	rootCmd.AddCommand(accountCmd)
@@ -217,6 +218,16 @@ var reportCmd = &cobra.Command{
 		}
 		fmt.Println()
 		onDataDirs(getStatus)
+	},
+}
+
+var protoCmd = &cobra.Command{
+	Use:   "protocols",
+	Short: "",
+	Long:  "Dump standard consensus protocols as json to stdout.",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		os.Stdout.Write(protocol.EncodeJSON(config.Consensus))
 	},
 }
 
