@@ -181,7 +181,7 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 
 		time.Sleep(time.Second)
 
-		if time.Now().After(startTime.Add(2 * time.Minute)) {
+		if time.Now().After(startTime.Add(3 * time.Minute)) {
 			a.Fail("upgrade taking too long")
 		}
 	}
