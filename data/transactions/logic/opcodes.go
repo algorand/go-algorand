@@ -213,6 +213,12 @@ func OpcodesByVersion(version uint64) []OpSpec {
 var opsByOpcode [LogicVersion + 1][256]OpSpec
 var opsByName [LogicVersion + 1]map[string]OpSpec
 
+// Migration from TEAL v1 to TEAL v2.
+// TEAL v1 allowed execution of program with version 0.
+// With TEAL v2 opcode versions are introduced and they are bound to every opcode.
+// There is no opcodes with version 0 so that TEAL v2 evaluator rejects any program with version 0.
+// To preserve backward compatibility version 0 array is populated with TEAL v1 opcodes
+// with the version overwritten to 0.
 func init() {
 	// First, initialize baseline v1 opcodes.
 	// Zero (empty) version is an alias for TEAL v1 opcodes and needed for compatibility with v1 code.
@@ -220,8 +226,10 @@ func init() {
 	opsByName[1] = make(map[string]OpSpec, 256)
 	for _, oi := range OpSpecs {
 		if oi.Version == 1 {
-			opsByOpcode[0][oi.Opcode] = oi
-			opsByName[0][oi.Name] = oi
+			cp := oi
+			cp.Version = 0
+			opsByOpcode[0][oi.Opcode] = cp
+			opsByName[0][oi.Name] = cp
 
 			opsByOpcode[1][oi.Opcode] = oi
 			opsByName[1][oi.Name] = oi
