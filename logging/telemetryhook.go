@@ -108,6 +108,7 @@ func (hook *asyncTelemetryHook) appendEntry(entry *logrus.Entry) bool {
 	if len(hook.pending) >= hook.maxQueueDepth {
 		hook.pending = hook.pending[1:]
 		hook.wg.Done()
+		telemetryDrops.Inc(nil)
 	}
 	hook.pending = append(hook.pending, entry)
 
