@@ -251,18 +251,15 @@ func main() {
 		}
 
 		// make sure that the format of each entry is valid:
-		stagingArray := []string{}
-		for _, peer := range peerOverrideArray {
+		for idx, peer := range peerOverrideArray {
 			url, err := network.ParseHostOrURL(peer)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Provided command line parameter '%s' is not a valid host:port pair\n", peer)
 				os.Exit(1)
 				return
 			}
-			stagingArray = append(stagingArray, url.Host)
+			peerOverrideArray[idx] = url.Host
 		}
-		peerOverrideArray = stagingArray
-
 	}
 
 	// Apply the default deadlock setting before starting the server.
