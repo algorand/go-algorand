@@ -36,10 +36,8 @@ import (
 var errNoLedgerForRound = errors.New("No ledger available for given round")
 
 const (
-	// maxEncodedAccountSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
-	maxEncodedAccountSize = 64 * 1024
 	// maxCatchpointFileChunkSize is a rough estimate for the worst-case scenario we're going to have of all the accounts data per a single catchpoint file chunk.
-	maxCatchpointFileChunkSize = ledger.BalancesPerCatchpointFileChunk * maxEncodedAccountSize
+	maxCatchpointFileChunkSize = ledger.BalancesPerCatchpointFileChunk * ledger.MaxEncodedAccountDataSize
 )
 
 type ledgerFetcherReporter interface {

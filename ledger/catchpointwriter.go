@@ -35,12 +35,17 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-// BalancesPerCatchpointFileChunk defines the number of accounts that would be stored in each chunk in the catchpoint file.
-// note that the last chunk would typically be less than this number.
-const BalancesPerCatchpointFileChunk = 512
+const (
+	// BalancesPerCatchpointFileChunk defines the number of accounts that would be stored in each chunk in the catchpoint file.
+	// note that the last chunk would typically be less than this number.
+	BalancesPerCatchpointFileChunk = 512
 
-// catchpointFileVersion is the catchpoint file version
-const catchpointFileVersion = uint64(0200)
+	// catchpointFileVersion is the catchpoint file version
+	catchpointFileVersion = uint64(0200)
+
+	// MaxEncodedAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
+	MaxEncodedAccountDataSize = 64 * 1024
+)
 
 // catchpointWriter is the struct managing the persistance of accounts data into the catchpoint file.
 // it's designed to work in a step fashion : a caller will call the WriteStep method in a loop until
@@ -67,8 +72,8 @@ type catchpointWriter struct {
 
 type encodedBalanceRecord struct {
 	_struct     struct{}  `codec:",omitempty,omitemptyarray"`
-	Address     []byte    `codec:"pk"`
-	AccountData codec.Raw `codec:"ad"`
+	Address     []byte    `codec:"pk,allocbound=crypto.DigestSize"`
+	AccountData codec.Raw `codec:"ad,allocbound=MaxEncodedAccountDataSize"`
 }
 
 type catchpointFileHeader struct {
