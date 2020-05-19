@@ -94,8 +94,8 @@ type Header struct {
 	// lease, no other transaction specifying this lease can be confirmed.
 	Lease [32]byte `codec:"lx"`
 
-	// RekeyTo, if nonzero, sets the sender's EffectiveAddr to the given address
-	// If the RekeyTo address is the sender's actual address, the EffectiveAddr is set to zero
+	// RekeyTo, if nonzero, sets the sender's AuthAddr to the given address
+	// If the RekeyTo address is the sender's actual address, the AuthAddr is set to zero
 	// This allows "re-keying" a long-lived account -- rotating the signing key, changing
 	// membership of a multisig account, etc.
 	RekeyTo basics.Address `codec:"rekey"`
@@ -433,19 +433,19 @@ func (tx Transaction) Apply(balances Balances, spec SpecialAddresses, ctr uint64
 		return
 	}
 
-	// rekeying: update balrecord.EffectiveAddr to tx.RekeyTo if provided
+	// rekeying: update balrecord.AuthAddr to tx.RekeyTo if provided
 	if (tx.RekeyTo != basics.Address{}) {
 		var record basics.BalanceRecord
 		record, err = balances.Get(tx.Sender, false)
 		if err != nil {
 			return
 		}
-		// Special case: rekeying to the account's actual address just sets balrecord.EffectiveAddr to 0
+		// Special case: rekeying to the account's actual address just sets balrecord.AuthAddr to 0
 		// This saves 32 bytes in your balance record if you want to go back to using your original key
 		if tx.RekeyTo == tx.Sender {
-			record.EffectiveAddr = basics.Address{}
+			record.AuthAddr = basics.Address{}
 		} else {
-			record.EffectiveAddr = tx.RekeyTo
+			record.AuthAddr = tx.RekeyTo
 		}
 
 		err = balances.Put(record)
