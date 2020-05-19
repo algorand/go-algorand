@@ -44,6 +44,9 @@ const (
 	balancesFlushInterval = 5 * time.Second
 	// pendingDeltasFlushThreshold is the deltas count threshold above we flush the pending balances regardless of the flush interval.
 	pendingDeltasFlushThreshold = 128
+	// trieRebuildAccountChunkSize defines the number of accounts that would get read at a single chunk
+	// before added to the trie during trie construction
+	trieRebuildAccountChunkSize = 512
 )
 
 // trieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory.
@@ -809,7 +812,7 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 	if rootHash.IsZero() {
 		accountIdx := 0
 		for {
-			bal, err := encodedAccountsRange(tx, accountIdx, balancesChunkReadSize)
+			bal, err := encodedAccountsRange(tx, accountIdx, trieRebuildAccountChunkSize)
 			if err != nil {
 				return rnd, err
 			}
@@ -841,10 +844,10 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 			if err != nil {
 				return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
 			}
-			if len(bal) < balancesChunkReadSize {
+			if len(bal) < trieRebuildAccountChunkSize {
 				break
 			}
-			accountIdx += balancesChunkReadSize
+			accountIdx += trieRebuildAccountChunkSize
 		}
 	}
 	au.balancesTrie = trie

@@ -228,10 +228,15 @@ func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, 
 	if !progress.SeenHeader {
 		return fmt.Errorf("CatchpointCatchupAccessor::processStagingBalances: content chunk was missing")
 	}
+
 	var balances catchpointFileBalancesChunk
 	err = protocol.DecodeReflect(bytes, &balances)
 	if err != nil {
 		return err
+	}
+
+	if len(balances.Balances) == 0 {
+		return fmt.Errorf("processStagingBalances received a chunk with no accounts")
 	}
 
 	wdb := c.ledger.trackerDB().wdb
@@ -246,12 +251,12 @@ func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, 
 			return err
 		}
 
-		err = writeCatchpointStagingBalances(ctx, tx, balances)
+		err = writeCatchpointStagingBalances(ctx, tx, balances.Balances)
 		if err != nil {
 			return
 		}
 
-		for _, balance := range balances {
+		for _, balance := range balances.Balances {
 			var accountData basics.AccountData
 			err = protocol.Decode(balance.AccountData, &accountData)
 			if err != nil {
@@ -286,7 +291,7 @@ func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, 
 		return
 	})
 	if err == nil {
-		progress.ProcessedAccounts += uint64(len(balances))
+		progress.ProcessedAccounts += uint64(len(balances.Balances))
 		progress.ProcessedBytes += uint64(len(bytes))
 	}
 	return err

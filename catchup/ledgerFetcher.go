@@ -35,6 +35,13 @@ import (
 
 var errNoLedgerForRound = errors.New("No ledger available for given round")
 
+const (
+	// maxEncodedAccountSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
+	maxEncodedAccountSize = 64 * 1024
+	// maxCatchpointFileChunkSize is a rough estimate for the worst-case scenario we're going to have of all the accounts data per a single catchpoint file chunk.
+	maxCatchpointFileChunkSize = ledger.BalancesPerCatchpointFileChunk * maxEncodedAccountSize
+)
+
 type ledgerFetcherReporter interface {
 	updateLedgerFetcherProgress(*ledger.CatchpointCatchupAccessorProgress)
 }
@@ -123,6 +130,9 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 				return nil
 			}
 			return err
+		}
+		if header.Size > maxCatchpointFileChunkSize {
+			return fmt.Errorf("getPeerLedger received a tar header with data size of %d", header.Size)
 		}
 		balancesBlockBytes := make([]byte, header.Size)
 		readComplete := int64(0)

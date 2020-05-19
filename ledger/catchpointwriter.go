@@ -35,9 +35,9 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-// balancesChunkReadSize defines the number of accounts that would be stored in each chunk in the catchpoint file.
+// BalancesPerCatchpointFileChunk defines the number of accounts that would be stored in each chunk in the catchpoint file.
 // note that the last chunk would typically be less than this number.
-const balancesChunkReadSize = 512
+const BalancesPerCatchpointFileChunk = 512
 
 // catchpointFileVersion is the catchpoint file version
 const catchpointFileVersion = uint64(0200)
@@ -83,7 +83,10 @@ type catchpointFileHeader struct {
 	BlockHeaderDigest crypto.Digest `codec:"blockHeaderDigest"`
 }
 
-type catchpointFileBalancesChunk []encodedBalanceRecord
+type catchpointFileBalancesChunk struct {
+	_struct  struct{}               `codec:",omitempty,omitemptyarray"`
+	Balances []encodedBalanceRecord `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
+}
 
 func makeCatchpointWriter(filePath string, dbr db.Accessor, blocksRound basics.Round, blockHeaderDigest crypto.Digest, label string) *catchpointWriter {
 	return &catchpointWriter{
@@ -163,7 +166,7 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 			return
 		}
 
-		if len(cw.balancesChunk) == 0 {
+		if len(cw.balancesChunk.Balances) == 0 {
 			err = cw.dbr.Atomic(cw.readDatabaseStep)
 			if err != nil {
 				return
@@ -176,7 +179,7 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 		}
 
 		// write to disk.
-		if len(cw.balancesChunk) > 0 {
+		if len(cw.balancesChunk.Balances) > 0 {
 			cw.balancesChunkNum++
 			encodedChunk := protocol.EncodeReflect(cw.balancesChunk)
 			err = cw.tar.WriteHeader(&tar.Header{
@@ -184,6 +187,7 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 				Mode: 0600,
 				Size: int64(len(encodedChunk)),
 			})
+
 			if err != nil {
 				return
 			}
@@ -192,11 +196,11 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 				return
 			}
 
-			if len(cw.balancesChunk) < balancesChunkReadSize || cw.balancesChunkNum == cw.fileHeader.TotalChunks {
+			if len(cw.balancesChunk.Balances) < BalancesPerCatchpointFileChunk || cw.balancesChunkNum == cw.fileHeader.TotalChunks {
 				cw.tar.Close()
 				cw.gzip.Close()
 				cw.file.Close()
-				cw.balancesChunk = nil
+				cw.balancesChunk.Balances = nil
 				cw.file = nil
 				var fileInfo os.FileInfo
 				fileInfo, err = os.Stat(cw.filePath)
@@ -206,15 +210,15 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 				cw.writtenBytes = fileInfo.Size()
 				return false, nil
 			}
-			cw.balancesChunk = nil
+			cw.balancesChunk.Balances = nil
 		}
 	}
 }
 
 func (cw *catchpointWriter) readDatabaseStep(tx *sql.Tx) (err error) {
-	cw.balancesChunk, err = encodedAccountsRange(tx, cw.balancesOffset, balancesChunkReadSize)
+	cw.balancesChunk.Balances, err = encodedAccountsRange(tx, cw.balancesOffset, BalancesPerCatchpointFileChunk)
 	if err == nil {
-		cw.balancesOffset += balancesChunkReadSize
+		cw.balancesOffset += BalancesPerCatchpointFileChunk
 	}
 	return
 }
@@ -233,7 +237,7 @@ func (cw *catchpointWriter) readHeaderFromDatabase(tx *sql.Tx) (err error) {
 	if err != nil {
 		return
 	}
-	header.TotalChunks = (header.TotalAccounts + balancesChunkReadSize - 1) / balancesChunkReadSize
+	header.TotalChunks = (header.TotalAccounts + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk
 	header.BlocksRound = cw.blocksRound
 	header.Catchpoint = cw.label
 	header.Version = catchpointFileVersion
