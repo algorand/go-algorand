@@ -131,7 +131,7 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 			}
 			return err
 		}
-		if header.Size > maxCatchpointFileChunkSize {
+		if header.Size > maxCatchpointFileChunkSize || header.Size < 1 {
 			return fmt.Errorf("getPeerLedger received a tar header with data size of %d", header.Size)
 		}
 		balancesBlockBytes := make([]byte, header.Size)
