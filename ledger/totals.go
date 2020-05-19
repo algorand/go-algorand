@@ -17,7 +17,6 @@
 package ledger
 
 import (
-	//"github.com/algorand/go-codec/codec"
 	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/config"
@@ -171,7 +170,7 @@ func (at *AccountTotals) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // MarshalMsg implements msgp.Marshaler
 func (ac AlgoCount) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(o, msgp.Uint64Size*2)
+	o = msgp.Require(b, msgp.Uint64Size*2)
 	o = msgp.AppendUint64(o, ac.Money.Raw)
 	o = msgp.AppendUint64(o, ac.RewardUnits)
 	return
