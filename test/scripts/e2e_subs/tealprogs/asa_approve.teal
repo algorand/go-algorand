@@ -1,5 +1,5 @@
 txn NumAppArgs
-int 7
+int 6
 ==
 bnz if0
 txn ApplicationID
@@ -474,18 +474,18 @@ int 1
 bnz if_end42
 if41:
 byte base64 Y3I=
-txna ApplicationArgs 4
+txn Sender
 app_global_put
 byte base64 dHQ=
-txna ApplicationArgs 5
+txna ApplicationArgs 4
 btoi
 app_global_put
 byte base64 Ymw=
-txna ApplicationArgs 5
+txna ApplicationArgs 4
 btoi
 app_global_put
 byte base64 ZGY=
-txna ApplicationArgs 6
+txna ApplicationArgs 5
 btoi
 app_global_put
 if_end42:

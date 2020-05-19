@@ -281,8 +281,8 @@ var appCmd = &cobra.Command{
 	},
 }
 
-func mustParseCreateOnCompletion() (oc transactions.OnCompletion) {
-	switch strings.ToLower(createOnCompletion) {
+func mustParseOnCompletion(ocString string) (oc transactions.OnCompletion) {
+	switch strings.ToLower(ocString) {
 	case "noop":
 		return transactions.NoOpOC
 	case "optin":
@@ -296,7 +296,7 @@ func mustParseCreateOnCompletion() (oc transactions.OnCompletion) {
 	case "deleteapplication":
 		return transactions.DeleteApplicationOC
 	default:
-		reportErrorf("unknown value for --on-completion: %s (possible values: {NoOp, OptIn, CloseOut, ClearState, UpdateApplication, DeleteApplication})", createOnCompletion)
+		reportErrorf("unknown value for --on-completion: %s (possible values: {NoOp, OptIn, CloseOut, ClearState, UpdateApplication, DeleteApplication})", ocString)
 		return
 	}
 }
@@ -347,7 +347,7 @@ var createAppCmd = &cobra.Command{
 
 		// Parse transaction parameters
 		approvalProg, clearProg := mustParseProgArgs()
-		onCompletion := mustParseCreateOnCompletion()
+		onCompletion := mustParseOnCompletion(createOnCompletion)
 		appArgs, appAccounts, foreignApps := getAppInputs()
 
 		switch onCompletion {
