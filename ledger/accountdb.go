@@ -94,6 +94,7 @@ type accountDelta struct {
 	new basics.AccountData
 }
 
+// catchpointState is used to store catchpoint related varaibles into the catchpointstate table.
 type catchpointState string
 
 const (
