@@ -79,9 +79,9 @@ func MakeCatchpointCatchupAccessor(ledger *Ledger, log logging.Logger) *Catchpoi
 // GetState returns the current state of the catchpoint catchup
 func (c *CatchpointCatchupAccessor) GetState(ctx context.Context) (state CatchpointCatchupState, err error) {
 	var istate uint64
-	istate, _, err = c.accountsq.readCatchpointStateUint64(ctx, "catchpointCatchupState")
+	istate, _, err = c.accountsq.readCatchpointStateUint64(ctx, catchpointStateCatchupState)
 	if err != nil {
-		return 0, fmt.Errorf("unable to read catchpoint catchup state 'catchpointCatchupState': %v", err)
+		return 0, fmt.Errorf("unable to read catchpoint catchup state '%s': %v", catchpointStateCatchupState, err)
 	}
 	state = CatchpointCatchupState(istate)
 	return
@@ -92,18 +92,18 @@ func (c *CatchpointCatchupAccessor) SetState(ctx context.Context, state Catchpoi
 	if state < CatchpointCatchupStateInactive || state > catchpointCatchupStateLast {
 		return fmt.Errorf("invalid catchpoint catchup state provided : %d", state)
 	}
-	_, err = c.accountsq.writeCatchpointStateUint64(ctx, "catchpointCatchupState", uint64(state))
+	_, err = c.accountsq.writeCatchpointStateUint64(ctx, catchpointStateCatchupState, uint64(state))
 	if err != nil {
-		return fmt.Errorf("unable to write catchpoint catchup state 'catchpointCatchupState': %v", err)
+		return fmt.Errorf("unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupState, err)
 	}
 	return
 }
 
 // GetLabel returns the current catchpoint catchup label
 func (c *CatchpointCatchupAccessor) GetLabel(ctx context.Context) (label string, err error) {
-	label, _, err = c.accountsq.readCatchpointStateString(ctx, "catchpointCatchupLabel")
+	label, _, err = c.accountsq.readCatchpointStateString(ctx, catchpointStateCatchupLabel)
 	if err != nil {
-		return "", fmt.Errorf("unable to read catchpoint catchup state 'catchpointCatchupLabel': %v", err)
+		return "", fmt.Errorf("unable to read catchpoint catchup state '%s': %v", catchpointStateCatchupLabel, err)
 	}
 	return
 }
@@ -115,9 +115,9 @@ func (c *CatchpointCatchupAccessor) SetLabel(ctx context.Context, label string) 
 	if err != nil {
 		return
 	}
-	_, err = c.accountsq.writeCatchpointStateString(ctx, "catchpointCatchupLabel", label)
+	_, err = c.accountsq.writeCatchpointStateString(ctx, catchpointStateCatchupLabel, label)
 	if err != nil {
-		return fmt.Errorf("unable to write catchpoint catchup state 'catchpointCatchupLabel': %v", err)
+		return fmt.Errorf("unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupLabel, err)
 	}
 	return
 }
@@ -135,23 +135,23 @@ func (c *CatchpointCatchupAccessor) ResetStagingBalances(ctx context.Context, ne
 			if err != nil {
 				return fmt.Errorf("unable to initialize accountsDbInit: %v", err)
 			}
-			_, err = sq.writeCatchpointStateUint64(ctx, "catchpointCatchupBalancesRound", 0)
+			_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupBalancesRound, 0)
 			if err != nil {
 				return err
 			}
 
-			_, err = sq.writeCatchpointStateUint64(ctx, "catchpointCatchupBlockRound", 0)
+			_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupBlockRound, 0)
 			if err != nil {
 				return err
 			}
 
-			_, err = sq.writeCatchpointStateString(ctx, "catchpointCatchupLabel", "")
+			_, err = sq.writeCatchpointStateString(ctx, catchpointStateCatchupLabel, "")
 			if err != nil {
 				return err
 			}
-			_, err = sq.writeCatchpointStateUint64(ctx, "catchpointCatchupState", 0)
+			_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupState, 0)
 			if err != nil {
-				return fmt.Errorf("unable to write catchpoint catchup state 'catchpointCatchupState': %v", err)
+				return fmt.Errorf("unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupState, err)
 			}
 		}
 		return
@@ -204,13 +204,13 @@ func (c *CatchpointCatchupAccessor) processStagingContent(ctx context.Context, b
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessor::processStagingContent: unable to initialize accountsDbInit: %v", err)
 		}
-		_, err = sq.writeCatchpointStateUint64(ctx, "catchpointCatchupBlockRound", uint64(fileHeader.BlocksRound))
+		_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupBlockRound, uint64(fileHeader.BlocksRound))
 		if err != nil {
-			return fmt.Errorf("CatchpointCatchupAccessor::processStagingContent: unable to write catchpoint catchup state 'catchpointCatchupBlockRound': %v", err)
+			return fmt.Errorf("CatchpointCatchupAccessor::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupBlockRound, err)
 		}
-		_, err = sq.writeCatchpointStateUint64(ctx, "catchpointCatchupBalancesRound", uint64(fileHeader.BalancesRound))
+		_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupBalancesRound, uint64(fileHeader.BalancesRound))
 		if err != nil {
-			return fmt.Errorf("CatchpointCatchupAccessor::processStagingContent: unable to write catchpoint catchup state 'catchpointCatchupBalancesRound': %v", err)
+			return fmt.Errorf("CatchpointCatchupAccessor::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupBalancesRound, err)
 		}
 		err = accountsPutTotals(tx, fileHeader.Totals, true)
 		return
@@ -295,9 +295,9 @@ func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, 
 // GetCatchupBlockRound returns the latest block round matching the current catchpoint
 func (c *CatchpointCatchupAccessor) GetCatchupBlockRound(ctx context.Context) (round basics.Round, err error) {
 	var iRound uint64
-	iRound, _, err = c.accountsq.readCatchpointStateUint64(ctx, "catchpointCatchupBlockRound")
+	iRound, _, err = c.accountsq.readCatchpointStateUint64(ctx, catchpointStateCatchupBlockRound)
 	if err != nil {
-		return 0, fmt.Errorf("unable to read catchpoint catchup state 'catchpointCatchupBlockRound': %v", err)
+		return 0, fmt.Errorf("unable to read catchpoint catchup state '%s': %v", catchpointStateCatchupBlockRound, err)
 	}
 	return basics.Round(iRound), nil
 }
@@ -310,15 +310,15 @@ func (c *CatchpointCatchupAccessor) VerifyCatchpoint(ctx context.Context, blk *b
 	var totals AccountTotals
 	var catchpointLabel string
 
-	catchpointLabel, _, err = c.accountsq.readCatchpointStateString(ctx, "catchpointCatchupLabel")
+	catchpointLabel, _, err = c.accountsq.readCatchpointStateString(ctx, catchpointStateCatchupLabel)
 	if err != nil {
-		return fmt.Errorf("unable to read catchpoint catchup state 'catchpointCatchupLabel': %v", err)
+		return fmt.Errorf("unable to read catchpoint catchup state '%s': %v", catchpointStateCatchupLabel, err)
 	}
 
 	var iRound uint64
-	iRound, _, err = c.accountsq.readCatchpointStateUint64(ctx, "catchpointCatchupBlockRound")
+	iRound, _, err = c.accountsq.readCatchpointStateUint64(ctx, catchpointStateCatchupBlockRound)
 	if err != nil {
-		return fmt.Errorf("unable to read catchpoint catchup state 'catchpointCatchupBlockRound': %v", err)
+		return fmt.Errorf("unable to read catchpoint catchup state '%s': %v", catchpointStateCatchupBlockRound, err)
 	}
 	blockRound = basics.Round(iRound)
 
@@ -439,7 +439,7 @@ func (c *CatchpointCatchupAccessor) FinishBlalances(ctx context.Context) (err er
 			return fmt.Errorf("unable to initialize accountsDbInit: %v", err)
 		}
 
-		balancesRound, _, err = sq.readCatchpointStateUint64(ctx, "catchpointCatchupBalancesRound")
+		balancesRound, _, err = sq.readCatchpointStateUint64(ctx, catchpointStateCatchupBalancesRound)
 		if err != nil {
 			return err
 		}
@@ -464,24 +464,24 @@ func (c *CatchpointCatchupAccessor) FinishBlalances(ctx context.Context) (err er
 			return err
 		}
 
-		_, err = sq.writeCatchpointStateUint64(ctx, "catchpointCatchupBalancesRound", 0)
+		_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupBalancesRound, 0)
 		if err != nil {
 			return err
 		}
 
-		_, err = sq.writeCatchpointStateUint64(ctx, "catchpointCatchupBlockRound", 0)
+		_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupBlockRound, 0)
 		if err != nil {
 			return err
 		}
 
-		_, err = sq.writeCatchpointStateString(ctx, "catchpointCatchupLabel", "")
+		_, err = sq.writeCatchpointStateString(ctx, catchpointStateCatchupLabel, "")
 		if err != nil {
 			return err
 		}
 
-		_, err = sq.writeCatchpointStateUint64(ctx, "catchpointCatchupState", 0)
+		_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupState, 0)
 		if err != nil {
-			return fmt.Errorf("unable to write catchpoint catchup state 'catchpointCatchupState': %v", err)
+			return fmt.Errorf("unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupState, err)
 		}
 
 		return

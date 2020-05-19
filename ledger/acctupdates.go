@@ -257,13 +257,13 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		return err
 	}
 
-	au.lastCatchpointLabel, _, err = au.accountsq.readCatchpointStateString(context.Background(), "lastCatchpoint")
+	au.lastCatchpointLabel, _, err = au.accountsq.readCatchpointStateString(context.Background(), catchpointStateLastCatchpoint)
 	if err != nil {
 		au.accountsMu.Unlock()
 		return err
 	}
 
-	writingCatchpointRound, _, err = au.accountsq.readCatchpointStateUint64(context.Background(), "writingCatchpoint")
+	writingCatchpointRound, _, err = au.accountsq.readCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint)
 	if err != nil {
 		au.accountsMu.Unlock()
 		return err
@@ -901,7 +901,7 @@ func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound, balances
 	cpLabel := makeCatchpointLabel(committedRound, ledgerBlockDigest, balancesHash, totals)
 	label = cpLabel.String()
 
-	_, err = au.accountsq.writeCatchpointStateString(context.Background(), "lastCatchpoint", label)
+	_, err = au.accountsq.writeCatchpointStateString(context.Background(), catchpointStateLastCatchpoint, label)
 	if err == nil {
 		au.lastCatchpointLabel = label
 	}
@@ -1108,16 +1108,16 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	defer func() {
 		if !retryCatchpointCreation {
 			// clear the writingCatchpoint flag
-			_, err := au.accountsq.writeCatchpointStateUint64(context.Background(), "writingCatchpoint", uint64(0))
+			_, err := au.accountsq.writeCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint, uint64(0))
 			if err != nil {
-				au.log.Warnf("accountUpdates: generateCatchpoint unable to clear catchpoint state 'writingCatchpoint' for round %d: %v", committedRound, err)
+				au.log.Warnf("accountUpdates: generateCatchpoint unable to clear catchpoint state '%s' for round %d: %v", catchpointStateWritingCatchpoint, committedRound, err)
 			}
 		}
 	}()
 
-	_, err := au.accountsq.writeCatchpointStateUint64(context.Background(), "writingCatchpoint", uint64(committedRound))
+	_, err := au.accountsq.writeCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint, uint64(committedRound))
 	if err != nil {
-		au.log.Warnf("accountUpdates: generateCatchpoint unable to write catchpoint state 'writingCatchpoint' for round %d: %v", committedRound, err)
+		au.log.Warnf("accountUpdates: generateCatchpoint unable to write catchpoint state '%s' for round %d: %v", catchpointStateWritingCatchpoint, committedRound, err)
 		return
 	}
 

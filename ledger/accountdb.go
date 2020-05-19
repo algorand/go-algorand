@@ -94,6 +94,26 @@ type accountDelta struct {
 	new basics.AccountData
 }
 
+type catchpointState string
+
+const (
+	// catchpointStateLastCatchpoint is written by a node once a catchpoint label is created for a round
+	catchpointStateLastCatchpoint = catchpointState("lastCatchpoint")
+	// catchpointStateWritingCatchpoint is written by a node while a catchpoint file is being created. It gets deleted once the file
+	// creation is complete, and used as a way to record the fact that we've started generating the catchpoint file for that particular
+	// round.
+	catchpointStateWritingCatchpoint = catchpointState("writingCatchpoint")
+	// catchpointCatchupState is the state of the catchup process. The variable is stored only during the catchpoint catchup process, and removed afterward.
+	catchpointStateCatchupState = catchpointState("catchpointCatchupState")
+	// catchpointStateCatchupLabel is the label to which the currently catchpoint catchup process is trying to catchup to.
+	catchpointStateCatchupLabel = catchpointState("catchpointCatchupLabel")
+	// catchpointCatchupBlockRound is the block round that is associated with the current running catchpoint catchup.
+	catchpointStateCatchupBlockRound = catchpointState("catchpointCatchupBlockRound")
+	// catchpointStateCatchupBalancesRound is the balance round that is associated with the current running catchpoint catchup. Typically it would be
+	// equal to catchpointStateCatchupBlockRound - 320.
+	catchpointStateCatchupBalancesRound = catchpointState("catchpointCatchupBalancesRound")
+)
+
 func writeCatchpointStagingAssets(ctx context.Context, tx *sql.Tx, addr []byte, assetIdx basics.AssetIndex) error {
 	_, err := tx.ExecContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator) VALUES(?, ?)", assetIdx, addr)
 	if err != nil {
@@ -413,7 +433,7 @@ func (qs *accountsDbQueries) getOldestCatchpointFiles(ctx context.Context, fileC
 	return
 }
 
-func (qs *accountsDbQueries) readCatchpointStateUint64(ctx context.Context, stateName string) (rnd uint64, def bool, err error) {
+func (qs *accountsDbQueries) readCatchpointStateUint64(ctx context.Context, stateName catchpointState) (rnd uint64, def bool, err error) {
 	var val sql.NullInt64
 	err = db.Retry(func() (err error) {
 		err = qs.selectCatchpointStateUint64.QueryRowContext(ctx, stateName).Scan(&val)
@@ -428,7 +448,7 @@ func (qs *accountsDbQueries) readCatchpointStateUint64(ctx context.Context, stat
 	return uint64(val.Int64), def, err
 }
 
-func (qs *accountsDbQueries) writeCatchpointStateUint64(ctx context.Context, stateName string, setValue uint64) (cleared bool, err error) {
+func (qs *accountsDbQueries) writeCatchpointStateUint64(ctx context.Context, stateName catchpointState, setValue uint64) (cleared bool, err error) {
 	err = db.Retry(func() (err error) {
 		if setValue == 0 {
 			_, err = qs.deleteCatchpointState.ExecContext(ctx, stateName)
@@ -445,7 +465,7 @@ func (qs *accountsDbQueries) writeCatchpointStateUint64(ctx context.Context, sta
 
 }
 
-func (qs *accountsDbQueries) readCatchpointStateString(ctx context.Context, stateName string) (str string, def bool, err error) {
+func (qs *accountsDbQueries) readCatchpointStateString(ctx context.Context, stateName catchpointState) (str string, def bool, err error) {
 	var val sql.NullString
 	err = db.Retry(func() (err error) {
 		err = qs.selectCatchpointStateString.QueryRowContext(ctx, stateName).Scan(&val)
@@ -460,7 +480,7 @@ func (qs *accountsDbQueries) readCatchpointStateString(ctx context.Context, stat
 	return val.String, def, err
 }
 
-func (qs *accountsDbQueries) writeCatchpointStateString(ctx context.Context, stateName string, setValue string) (cleared bool, err error) {
+func (qs *accountsDbQueries) writeCatchpointStateString(ctx context.Context, stateName catchpointState, setValue string) (cleared bool, err error) {
 	err = db.Retry(func() (err error) {
 		if setValue == "" {
 			_, err = qs.deleteCatchpointState.ExecContext(ctx, stateName)
