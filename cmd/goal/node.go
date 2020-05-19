@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/tokens"
@@ -155,6 +156,9 @@ var startCmd = &cobra.Command{
 	Short: "Inititialize the specified Algorand node.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
+		if !verifyPeerDialArg() {
+			return
+		}
 		binDir, err := util.ExeDir()
 		if err != nil {
 			panic(err)
@@ -255,6 +259,9 @@ var restartCmd = &cobra.Command{
 	Short: "Stop, and then start, the specified Algorand node.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
+		if !verifyPeerDialArg() {
+			return
+		}
 		binDir, err := util.ExeDir()
 		if err != nil {
 			panic(err)
@@ -635,4 +642,23 @@ func catchup(dataDir string, args []string) {
 	if err != nil {
 		reportErrorf(errorNodeStatus, err)
 	}
+}
+
+// verifyPeerDialArg verifies that the peers provided in peerDial are valid peers.
+func verifyPeerDialArg() bool {
+	if peerDial == "" {
+		return true
+	}
+
+	// make sure that the format of each entry is valid:
+	for _, peer := range strings.Split(peerDial, ";") {
+		_, err := network.ParseHostOrURL(peer)
+		if err != nil {
+			reportErrorf("Provided peer '%s' is not a valid peer address : %v", peer, err)
+			return false
+		}
+
+	}
+	return true
+
 }
