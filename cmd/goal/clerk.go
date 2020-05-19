@@ -92,7 +92,7 @@ func init() {
 	sendCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Dump an unsigned tx to the given file. In order to dump a signed transaction, pass -s")
 	sendCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	sendCmd.Flags().StringVarP(&closeToAddress, "close-to", "c", "", "Close account and send remainder to this address")
-	sendCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
+	sendCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given effective address. (Future transactions from this account will need to be signed with the new key.)")
 	sendCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	sendCmd.Flags().StringVarP(&programSource, "from-program", "F", "", "Program source to use as account logic")
 	sendCmd.Flags().StringVarP(&progByteFile, "from-program-bytes", "P", "", "Program binary to use as account logic")
