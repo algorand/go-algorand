@@ -305,7 +305,17 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		// check block protocol version support.
 		if _, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
 			cs.log.Warnf("processStageLastestBlockDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol)
-			return cs.abort(fmt.Errorf("processStageLastestBlockDownload detected unsupported protocol version in block %d : %v", blk.Round(), blk.BlockHeader.CurrentProtocol))
+			// try again.
+			blk = nil
+			continue
+		}
+
+		// check to see that the block header and the block payset aligns
+		if !blk.ContentsMatchHeader() {
+			cs.log.Warnf("processStageLastestBlockDownload: downloaded block content does not match downloaded block header")
+			// try again.
+			blk = nil
+			continue
 		}
 
 		// verify that the catchpoint is valid.
@@ -407,38 +417,38 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			client.Close()
 		}
 
-		cs.statsMu.Lock()
-		cs.stats.AcquiredBlocks++
-		cs.statsMu.Unlock()
+		cs.updateBlockRetrievalStatistics(1, 0)
 
 		// validate :
 		if prevBlock.BlockHeader.Branch != blk.Hash() {
 			// not identical, retry download.
 			cs.log.Warnf("processStageBlocksDownload downloaded block(%d) did not match it's successor(%d) block hash %v != %v", blk.Round(), prevBlock.Round(), blk.Hash(), prevBlock.BlockHeader.Branch)
-			cs.statsMu.Lock()
-			cs.stats.AcquiredBlocks--
-			cs.statsMu.Unlock()
+			cs.updateBlockRetrievalStatistics(-1, 0)
 			continue
 		}
 
 		// check block protocol version support.
 		if _, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
 			cs.log.Warnf("processStageBlocksDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol)
-			return cs.abort(fmt.Errorf("processStageBlocksDownload detected unsupported protocol version in block %d : %v", blk.Round(), blk.BlockHeader.CurrentProtocol))
+			cs.updateBlockRetrievalStatistics(-1, 0)
+			continue
 		}
 
-		cs.statsMu.Lock()
-		cs.stats.VerifiedBlocks++
-		cs.statsMu.Unlock()
+		// check to see that the block header and the block payset aligns
+		if !blk.ContentsMatchHeader() {
+			cs.log.Warnf("processStageBlocksDownload: downloaded block content does not match downloaded block header")
+			// try again.
+			cs.updateBlockRetrievalStatistics(-1, 0)
+			continue
+		}
+
+		cs.updateBlockRetrievalStatistics(0, 1)
 
 		// all good, persist and move on.
 		err = cs.ledgerAccessor.StoreBlock(cs.ctx, blk)
 		if err != nil {
 			cs.log.Warnf("processStageBlocksDownload failed to store downloaded staging block for round %d", blk.Round())
-			cs.statsMu.Lock()
-			cs.stats.AcquiredBlocks--
-			cs.stats.VerifiedBlocks--
-			cs.statsMu.Unlock()
+			cs.updateBlockRetrievalStatistics(-1, -1)
 			continue
 		}
 		prevBlock = blk
@@ -513,4 +523,12 @@ func (cs *CatchpointCatchupService) GetStatistics() (out CatchpointCatchupStats)
 	defer cs.statsMu.Unlock()
 	out = cs.stats
 	return
+}
+
+// updateBlockRetrievalStatistics updates the blocks retrieval statistics by applying the provided deltas
+func (cs *CatchpointCatchupService) updateBlockRetrievalStatistics(aquiredBlocksDelta, verifiedBlocksDelta int64) {
+	cs.statsMu.Lock()
+	defer cs.statsMu.Unlock()
+	cs.stats.AcquiredBlocks = uint64(int64(cs.stats.AcquiredBlocks) + aquiredBlocksDelta)
+	cs.stats.VerifiedBlocks = uint64(int64(cs.stats.VerifiedBlocks) + verifiedBlocksDelta)
 }
