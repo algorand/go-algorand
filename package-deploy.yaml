@@ -38,17 +38,22 @@ tasks:
       ]
     target: mule-deploy-deb WORKDIR=/projects/go-algorand
 
-  - task: s3.DownloadFile
+  - task: s3.Download
     name: deb
     bucketName: algorand-staging
     objectName: releases/$CHANNEL/$VERSION/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb
     outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
 
-  - task: s3.DownloadFile
+  - task: s3.Download
     name: rpm
     bucketName: algorand-staging
     objectName: releases/$CHANNEL/$VERSION/algorand-${VERSION}-1.${ARCH_BIT}.rpm
     outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
+
+  - task: s3.Upload
+    name: releases-page
+    bucketName: ben-test-2.0.3
+    fileName: /projects/go-algorand/scripts/release/mule/deploy/generate_releases_page/foo.html
 
   - task: s3.BucketCopy
     name: deploy
@@ -65,7 +70,7 @@ jobs:
       - shell.docker.Ensure.deploy
       - docker.Make.generate-releases-page
       - docker.Make.deb
-      - docker.Make.package-deploy-rpm
+        #      - docker.Make.package-deploy-rpm
 
   package-deploy-setup-copy:
     tasks:
@@ -73,9 +78,13 @@ jobs:
 
   package-deploy-setup-deb:
     tasks:
-      - s3.DownloadFile.deb
+      - s3.Download.deb
 
   package-deploy-setup-rpm:
     tasks:
-      - s3.DownloadFile.rpm
+      - s3.Download.rpm
+
+  package-deploy-releases-page:
+    tasks:
+      - s3.Upload.releases-page
 

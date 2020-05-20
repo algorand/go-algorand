@@ -1,12 +1,8 @@
 #!/usr/bin/env bash
 
-set -exo pipefail
+set -ex
 
-echo
-date "+build_release begin DEPLOY stage %Y%m%d_%H%M%S"
-echo
-
-WORKDIR="$3"
+WORKDIR="$1"
 
 if [ -z "$WORKDIR" ]
 then
@@ -14,16 +10,8 @@ then
     exit 1
 fi
 
-#OS_TYPE="$1"
-#ARCH_TYPE="$2"
-
-#BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
-#CHANNEL=${CHANNEL:-$("$WORKDIR/scripts/compute_branch_channel.sh" "$BRANCH")}
-#PKG_DIR="$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
-
-mule -f package-deploy.yaml package-deploy-setup-generate-releases-page
-
-echo
-date "+build_release end DEPLOY stage %Y%m%d_%H%M%S"
-echo
+pushd "$WORKDIR/scripts/release/mule/deploy/generate_releases_page"
+./generate_releases_page >| foo.html
+popd
+mule -f package-deploy.yaml package-deploy-releases-page
 
