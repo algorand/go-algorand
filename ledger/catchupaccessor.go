@@ -424,7 +424,7 @@ func (c *CatchpointCatchupAccessor) CompleteCatchup(ctx context.Context) (err er
 	if err != nil {
 		return err
 	}
-	err = c.FinishBlalances(ctx)
+	err = c.finishBalances(ctx)
 	if err != nil {
 		return err
 	}
@@ -432,8 +432,8 @@ func (c *CatchpointCatchupAccessor) CompleteCatchup(ctx context.Context) (err er
 	return c.ledger.reloadLedger()
 }
 
-// FinishBlalances concludes the catchup of the balances(tracker) database.
-func (c *CatchpointCatchupAccessor) FinishBlalances(ctx context.Context) (err error) {
+// finishBalances concludes the catchup of the balances(tracker) database.
+func (c *CatchpointCatchupAccessor) finishBalances(ctx context.Context) (err error) {
 	wdb := c.ledger.trackerDB().wdb
 	err = wdb.Atomic(func(tx *sql.Tx) (err error) {
 		var balancesRound uint64
