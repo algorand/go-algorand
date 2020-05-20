@@ -89,6 +89,7 @@ func ParseCatchpointLabel(label string) (round basics.Round, hash crypto.Digest,
 		return
 	}
 	if len(hashBytes) > crypto.DigestSize {
+		err = ErrCatchpointParsingFailed
 		return
 	}
 	copy(hash[:], hashBytes[:])
