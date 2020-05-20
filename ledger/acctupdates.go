@@ -982,6 +982,15 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	au.accountsMu.RUnlock()
 
+	// in committedUpTo, we expect that this function we close the catchpointWriting when
+	// it's on a catchpoint round and it's an archival ledger. Doing this in a defered function
+	// here would prevent us from "forgetting" to close that channel later on.
+	defer func() {
+		if isCatchpointRound && au.archivalLedger {
+			close(au.catchpointWriting)
+		}
+	}()
+
 	for i := uint64(0); i < offset; i++ {
 		for addr := range deltas[i] {
 			flushcount[addr] = flushcount[addr] + 1
@@ -1093,10 +1102,9 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.lastFlushTime = flushTime
 	au.accountsMu.Unlock()
 
-	if isCatchpointRound && au.archivalLedger {
+	if isCatchpointRound && au.archivalLedger && catchpointLabel != "" {
 		// start generating the catchpoint on a separate goroutine.
 		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest)
-		close(au.catchpointWriting)
 	}
 
 }
