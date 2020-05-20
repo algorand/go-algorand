@@ -26,11 +26,6 @@ PKG_DIR="$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 SIGNING_KEY_ADDR=dev@algorand.com
 
 chmod 400 "$HOME/.gnupg"
-#ls -al "$HOME/.gnupg"
-#gpg --import < "$HOME/keys/signingkey.gpg"
-#ls -al "$HOME/.gnupg"
-echo wat | gpg -u "$SIGNING_KEY_ADDR" --clearsign
-#gpg --version
 
 if ! $USE_CACHE
 then
@@ -43,7 +38,7 @@ then
     mule -f package-deploy.yaml package-deploy-setup-deb
 fi
 
-apt-get install aptly gnupg2 -y
+apt-get install aptly -y
 
 cat <<EOF>"${HOME}/.aptly.conf"
 {

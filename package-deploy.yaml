@@ -4,38 +4,32 @@ tasks:
 
   - task: shell.docker.Ensure
     name: deploy
-    image: algorand/mule-linux-debian
+    image: algorand/mule-linux-ubuntu
     version: '{{ docker.Version.outputs.version }}'
-    dockerFilePath: docker/build/mule.go.debian.Dockerfile
+    dockerFilePath: docker/build/docker.ubuntu.Dockerfile
     dependencies: docker.Version
 
   - task: docker.Make
     name: generate-releases-page
     docker:
-      image: algorand/mule-linux-debian
+      image: algorand/mule-linux-ubuntu
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
       env: [
         AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY,
-        USE_CACHE=false,
-        CHANNEL=stable,
-        VERSION=2.0.5
+        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
       ]
     target: mule-deploy-generate-releases-page WORKDIR=/projects/go-algorand
 
   - task: docker.Make
     name: deb
     docker:
-      image: algorand/mule-linux-debian
+      image: algorand/mule-linux-ubuntu
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
       env: [
         AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY,
-        USE_CACHE=false,
-        CHANNEL=stable,
-        VERSION=2.0.5
+        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
       ]
       volumes: [
         $HOME/packages:/root/packages,
@@ -69,9 +63,9 @@ jobs:
       arch: amd64
     tasks:
       - shell.docker.Ensure.deploy
-        #      - docker.Make.generate-releases-page
+      - docker.Make.generate-releases-page
       - docker.Make.deb
-        #      - docker.Make.package-deploy-rpm
+      - docker.Make.package-deploy-rpm
 
   package-deploy-setup-copy:
     tasks:
