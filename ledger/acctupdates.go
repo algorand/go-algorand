@@ -746,7 +746,6 @@ func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser
 		err = au.saveCatchpointFile(round, fileName, fileInfo.Size(), "")
 		if err != nil {
 			au.log.Warnf("accountUpdates: getCatchpointStream: unable to save missing catchpoint entry: %v", err)
-			err = nil
 		}
 		return file, nil
 	}
@@ -1034,6 +1033,9 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	if isCatchpointRound {
 		committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
 		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, dbRound+basics.Round(offset), committedRoundDigest)
+		if err != nil {
+			au.log.Warnf("commitRound : unable to create a catchpoint label: %v", err)
+		}
 	}
 	if au.balancesTrie != nil {
 		_, err = au.balancesTrie.Evict(false)
