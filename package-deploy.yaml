@@ -38,7 +38,7 @@ tasks:
         VERSION=2.0.5
       ]
       volumes: [
-        $HOME:/root/subhome,
+        $HOME/packages:/root/packages,
         $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
         $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
       ]
@@ -69,7 +69,7 @@ jobs:
       arch: amd64
     tasks:
       - shell.docker.Ensure.deploy
-      - docker.Make.generate-releases-page
+        #      - docker.Make.generate-releases-page
       - docker.Make.deb
         #      - docker.Make.package-deploy-rpm
 
