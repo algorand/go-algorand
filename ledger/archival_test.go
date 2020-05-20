@@ -551,29 +551,38 @@ func TestArchivalFromNonArchival(t *testing.T) {
 
 func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Round, error) {
 	minMinSave := rnd
+	var minSave basics.Round
+	var cleanTracker ledgerTracker
+	var trackerType reflect.Type
 	for _, trk := range wl.l.trackers.trackers {
 		wl.l.trackerMu.RLock()
 		if au, ok := trk.(*accountUpdates); ok {
 			au.waitAccountsWriting()
-		}
-		minSave := trk.committedUpTo(rnd)
-		if au, ok := trk.(*accountUpdates); ok {
+			minSave = trk.committedUpTo(rnd)
 			au.waitAccountsWriting()
-		}
-		wl.l.trackerMu.RUnlock()
-		if minSave < minMinSave {
-			minMinSave = minSave
-		}
-		wl.minQueriedBlock = rnd
+			wl.l.trackerMu.RUnlock()
+			if minSave < minMinSave {
+				minMinSave = minSave
+			}
+			wl.minQueriedBlock = rnd
 
-		trackerType := reflect.TypeOf(trk).Elem()
-		cleanTracker := reflect.New(trackerType).Interface().(ledgerTracker)
-		if trackerType.String() == "ledger.accountUpdates" {
-			au := cleanTracker.(*accountUpdates)
+			trackerType = reflect.TypeOf(trk).Elem()
+			cleanTracker = reflect.New(trackerType).Interface().(ledgerTracker)
+
+			au = cleanTracker.(*accountUpdates)
 			cfg := config.GetDefaultLocal()
 			cfg.Archival = true
 			au.initialize(cfg, "", au.initProto, wl.l.accts.initAccounts)
+		} else {
+			minSave = trk.committedUpTo(rnd)
+			wl.l.trackerMu.RUnlock()
+			if minSave < minMinSave {
+				minMinSave = minSave
+			}
+			wl.minQueriedBlock = rnd
 
+			trackerType = reflect.TypeOf(trk).Elem()
+			cleanTracker = reflect.New(trackerType).Interface().(ledgerTracker)
 		}
 
 		cleanTracker.close()
@@ -584,8 +593,8 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 
 		// Special case: initAccounts reflects state after block 0,
 		// so it's OK to return minSave=0 but query block 1.
-		if minSave < wl.minQueriedBlock && minSave != 0 && wl.minQueriedBlock != 1 {
-			return minMinSave, fmt.Errorf("tracker %v: committed %d, minSave %d < minQuery %d", trackerType, rnd, minSave, wl.minQueriedBlock)
+		if minSave > wl.minQueriedBlock && minSave != 0 && wl.minQueriedBlock != 1 {
+			return minMinSave, fmt.Errorf("tracker %v: committed %d, minSave %d > minQuery %d", trackerType, rnd, minSave, wl.minQueriedBlock)
 		}
 	}
 
