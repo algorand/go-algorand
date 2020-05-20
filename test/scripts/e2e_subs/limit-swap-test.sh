@@ -42,8 +42,8 @@ echo "closeout part b, asset trader"
 # quick expiration, test closeout
 
 ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
-TIMEOUT_ROUND=$((${ROUND} + 6))
-SETUP_ROUND=$((${ROUND} + 5))
+TIMEOUT_ROUND=$((${ROUND} + 8))
+SETUP_ROUND=$((${ROUND} + 7))
 
 sed s/TMPL_ASSET/${ASSET_ID}/g < ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/limit-order-b.teal.tmpl | sed s/TMPL_SWAPN/137/g | sed s/TMPL_SWAPD/31337/g | sed s/TMPL_TIMEOUT/${TIMEOUT_ROUND}/g | sed s/TMPL_OWN/${ACCOUNT}/g | sed s/TMPL_FEE/100000/g | sed s/TMPL_MINTRD/10000/g > ${TEMPDIR}/limit-order-b.teal
 
