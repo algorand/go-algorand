@@ -511,6 +511,18 @@ func RawTransaction(ctx lib.ReqContext, context echo.Context) {
 	w := context.Response().Writer
 	r := context.Request()
 
+	stat, err := ctx.Node.Status()
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+		return
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("RawTransaction failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
+		return
+	}
+	proto := config.Consensus[stat.LastVersion]
+
 	var txgroup []transactions.SignedTxn
 	dec := protocol.NewDecoder(r.Body)
 	for {
@@ -524,22 +536,17 @@ func RawTransaction(ctx lib.ReqContext, context echo.Context) {
 			return
 		}
 		txgroup = append(txgroup, st)
+
+		if len(txgroup) > proto.MaxTxGroupSize {
+			err := fmt.Errorf("max group size is %d", proto.MaxTxGroupSize)
+			lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
+			return
+		}
 	}
 
 	if len(txgroup) == 0 {
 		err := errors.New("empty txgroup")
 		lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
-		return
-	}
-
-	internalNodeStatus, err := ctx.Node.Status()
-	if err != nil {
-		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
-	}
-
-	if internalNodeStatus.Catchpoint != "" {
-		// node is currently catching up to the requested catchpoint.
-		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("RawTransaction failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
 		return
 	}
 

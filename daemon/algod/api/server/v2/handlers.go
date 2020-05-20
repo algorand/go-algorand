@@ -306,6 +306,7 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 		// node is currently catching up to the requested catchpoint.
 		return serviceUnavailable(ctx, fmt.Errorf("RawTransaction failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
 	}
+	proto := config.Consensus[stat.LastVersion]
 
 	var txgroup []transactions.SignedTxn
 	dec := protocol.NewDecoder(ctx.Request().Body)
@@ -319,6 +320,11 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
 		txgroup = append(txgroup, st)
+
+		if len(txgroup) > proto.MaxTxGroupSize {
+			err := fmt.Errorf("max group size is %d", proto.MaxTxGroupSize)
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
 	}
 
 	if len(txgroup) == 0 {
