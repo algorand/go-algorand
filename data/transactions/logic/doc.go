@@ -17,6 +17,8 @@
 package logic
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -322,13 +324,34 @@ var globalFieldDocList = []stringString{
 	{"MinBalance", "micro Algos"},
 	{"MaxTxnLife", "rounds"},
 	{"ZeroAddress", "32 byte address of all zero bytes"},
-	{"GroupSize", "Number of transactions in this atomic transaction group. At least 1."},
+	{"GroupSize", "Number of transactions in this atomic transaction group. At least 1"},
+	{"LogicSigVersion", "Maximum supported TEAL version"},
 	{"Round", "Current round number"},
 	{"LatestTimestamp", "Last confirmed block UNIX timestamp. Fails if negative"},
 }
 
+// globalFieldDocs are notes on fields available in `global`
+var globalFieldDocs map[string]string
+
 // GlobalFieldDocs are notes on fields available in `global`
-var GlobalFieldDocs map[string]string
+func GlobalFieldDocs() map[string]string {
+	result := make(map[string]string, len(globalFieldDocs))
+	for name, doc := range globalFieldDocs {
+		if extra := globalFieldSpecByName.getExtraFor(name); len(extra) > 0 {
+			if len(doc) == 0 {
+				doc = extra
+			} else {
+				sep := ". "
+				if doc[len(doc)-1] == '.' {
+					sep = " "
+				}
+				doc = fmt.Sprintf("%s%s%s", doc, sep, extra)
+			}
+		}
+		result[name] = doc
+	}
+	return result
+}
 
 var assetHoldingFieldDocList = []stringString{
 	{"AssetBalance", "Amount of the asset unit held by this account"},
@@ -357,7 +380,7 @@ var AssetParamsFieldDocs map[string]string
 
 func init() {
 	TxnFieldDocs = stringStringListToMap(txnFieldDocList)
-	GlobalFieldDocs = stringStringListToMap(globalFieldDocList)
+	globalFieldDocs = stringStringListToMap(globalFieldDocList)
 	AssetHoldingFieldDocs = stringStringListToMap(assetHoldingFieldDocList)
 	AssetParamsFieldDocs = stringStringListToMap(assetParamsFieldDocList)
 }

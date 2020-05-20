@@ -202,26 +202,39 @@ const (
 // GlobalFieldNames are arguments to the 'global' opcode
 var GlobalFieldNames []string
 
-type globalFieldType struct {
-	gfield GlobalField
-	ftype  StackType
-}
-
-var globalFieldTypeList = []globalFieldType{
-	{MinTxnFee, StackUint64},
-	{MinBalance, StackUint64},
-	{MaxTxnLife, StackUint64},
-	{ZeroAddress, StackBytes},
-	{GroupSize, StackUint64},
-	{LogicSigVersion, StackUint64},
-	{Round, StackUint64},
-	{LatestTimestamp, StackUint64},
-}
-
 // GlobalFieldTypes is StackUint64 StackBytes in parallel with GlobalFieldNames
 var GlobalFieldTypes []StackType
 
-var globalFields map[string]uint
+type globalFieldSpec struct {
+	gfield  GlobalField
+	ftype   StackType
+	mode    runMode
+	version uint64
+}
+
+var globalFieldSpecs = []globalFieldSpec{
+	{MinTxnFee, StackUint64, modeAny, 0}, // version 0 is the same as TEAL v1 (initial TEAL release)
+	{MinBalance, StackUint64, modeAny, 0},
+	{MaxTxnLife, StackUint64, modeAny, 0},
+	{ZeroAddress, StackBytes, modeAny, 0},
+	{GroupSize, StackUint64, modeAny, 0},
+	{LogicSigVersion, StackUint64, modeAny, 2},
+	{Round, StackUint64, runModeApplication, 2},
+	{LatestTimestamp, StackUint64, runModeApplication, 2},
+}
+
+// GlobalFieldSpecByField maps GlobalField to spec
+var globalFieldSpecByField map[GlobalField]globalFieldSpec
+var globalFieldSpecByName gfNameSpecMap
+
+type gfNameSpecMap map[string]globalFieldSpec
+
+func (s gfNameSpecMap) getExtraFor(name string) (extra string) {
+	if s[name].version > 1 {
+		extra = "LogicSigVersion >= 2."
+	}
+	return
+}
 
 // AssetHoldingField is an enum for `asset_holding_get` opcode
 type AssetHoldingField int
@@ -331,12 +344,14 @@ func init() {
 		GlobalFieldNames[int(i)] = i.String()
 	}
 	GlobalFieldTypes = make([]StackType, len(GlobalFieldNames))
-	for _, ft := range globalFieldTypeList {
-		GlobalFieldTypes[int(ft.gfield)] = ft.ftype
+	globalFieldSpecByField = make(map[GlobalField]globalFieldSpec, len(GlobalFieldNames))
+	for _, s := range globalFieldSpecs {
+		GlobalFieldTypes[int(s.gfield)] = s.ftype
+		globalFieldSpecByField[s.gfield] = s
 	}
-	globalFields = make(map[string]uint)
+	globalFieldSpecByName = make(gfNameSpecMap, len(GlobalFieldNames))
 	for i, gfn := range GlobalFieldNames {
-		globalFields[gfn] = uint(i)
+		globalFieldSpecByName[gfn] = globalFieldSpecByField[GlobalField(i)]
 	}
 
 	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))

@@ -1414,17 +1414,9 @@ func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err
 	case LogicSigVersion:
 		sv.Uint = cx.Proto.LogicSigVersion
 	case Round:
-		if (cx.runModeFlags & runModeApplication) == 0 {
-			err = errors.New("global Round not allowed in current mode")
-		} else {
-			sv.Uint, err = cx.getRound()
-		}
+		sv.Uint, err = cx.getRound()
 	case LatestTimestamp:
-		if (cx.runModeFlags & runModeApplication) == 0 {
-			err = errors.New("global LatestTimestamp not allowed in current mode")
-		} else {
-			sv.Uint, err = cx.getLatestTimestamp()
-		}
+		sv.Uint, err = cx.getLatestTimestamp()
 	default:
 		err = fmt.Errorf("invalid global[%d]", field)
 	}
@@ -1434,6 +1426,16 @@ func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err
 func opGlobal(cx *evalContext) {
 	gindex := uint64(cx.program[cx.pc+1])
 	globalField := GlobalField(gindex)
+	fs, ok := globalFieldSpecByField[globalField]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid global[%d]", globalField)
+		return
+	}
+	if (cx.runModeFlags & fs.mode) == 0 {
+		cx.err = fmt.Errorf("global[%d] not allowed in current mode", globalField)
+		return
+	}
+
 	sv, err := cx.globalFieldToStack(globalField)
 	if err != nil {
 		cx.err = err

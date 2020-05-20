@@ -775,10 +775,11 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return errors.New("global expects one argument")
 	}
-	val, ok := globalFields[args[0]]
-	if !ok {
+	fs, ok := globalFieldSpecByName[args[0]]
+	if !ok || fs.version > ops.Version {
 		return fmt.Errorf("global unknown arg %v", args[0])
 	}
+	val := fs.gfield
 	return ops.Global(uint64(val))
 }
 

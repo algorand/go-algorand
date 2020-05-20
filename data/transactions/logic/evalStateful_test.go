@@ -105,11 +105,11 @@ func (l *testLedger) setHolding(addr basics.Address, assetID uint64, holding bas
 }
 
 func (l *testLedger) Round() basics.Round {
-	return basics.Round(rand.Uint64())
+	return basics.Round(rand.Uint32() + 1)
 }
 
 func (l *testLedger) LatestTimestamp() int64 {
-	return int64(rand.Uint64())
+	return int64(rand.Uint32() + 1)
 }
 
 func (l *testLedger) Balance(addr basics.Address) (amount basics.MicroAlgos, err error) {

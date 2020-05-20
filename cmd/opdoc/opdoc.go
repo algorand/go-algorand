@@ -87,7 +87,7 @@ func transactionFieldsMarkdown(out io.Writer) {
 
 func globalFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`global` Fields:\n\n")
-	fieldTableMarkdown(out, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs)
+	fieldTableMarkdown(out, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs())
 }
 
 func assetHoldingFieldsMarkdown(out io.Writer) {
@@ -292,7 +292,7 @@ func main() {
 	txnfields.Close()
 
 	globalfields, _ := os.Create("global_fields.md")
-	fieldTableMarkdown(globalfields, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs)
+	fieldTableMarkdown(globalfields, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs())
 	globalfields.Close()
 
 	assetholding, _ := os.Create("asset_holding_fields.md")

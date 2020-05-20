@@ -1082,7 +1082,7 @@ int 9
 	}
 }
 
-const globalTestProgram = `global MinTxnFee
+const globalV1TestProgram = `global MinTxnFee
 int 123
 ==
 global MinBalance
@@ -1096,40 +1096,62 @@ int 999
 global ZeroAddress
 txn CloseRemainderTo
 ==
-//&&
-//global TimeStamp
-//int 2069
-//==
-//&&
-//global Round // Tested in TestRound
-//int 999999
-//==
-//&&
-//global LatestTimestamp // Tested in TestLatestTimestamp
-//int 999999
-//==
 &&
 global GroupSize
 int 1
 ==
 &&
-global LogicSigVersion // TODO: stricter checking on field vs version
+`
+
+const globalV2TestProgram = `global LogicSigVersion
 int 2
 ==
-&&`
+&&
+global Round
+int 0
+>
+&&
+global LatestTimestamp
+int 0
+>
+&&
+`
 
 func TestGlobal(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+	type desc struct {
+		lastField GlobalField
+		program   string
+		eval      func([]byte, EvalParams) (bool, error)
+		check     func([]byte, EvalParams) (int, error)
+	}
+	tests := map[uint64]desc{
+		0: {GroupSize, globalV1TestProgram, Eval, Check},
+		1: {GroupSize, globalV1TestProgram, Eval, Check},
+		2: {
+			LatestTimestamp, globalV1TestProgram + globalV2TestProgram,
+			func(p []byte, ep EvalParams) (bool, error) {
+				pass, _, err := EvalStateful(p, ep)
+				return pass, err
+			},
+			func(program []byte, ep EvalParams) (int, error) { return CheckStateful(program, ep) },
+		},
+	}
+	ledger := makeTestLedger(nil)
+	for v := uint64(0); v <= AssemblerDefaultVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
-			for _, globalField := range GlobalFieldNames {
-				if !strings.Contains(globalTestProgram, globalField) {
+			last := tests[v].lastField
+			testProgram := tests[v].program
+			check := tests[v].check
+			eval := tests[v].eval
+			for _, globalField := range GlobalFieldNames[:last] {
+				if !strings.Contains(testProgram, globalField) {
 					t.Errorf("TestGlobal missing field %v", globalField)
 				}
 			}
-			program, err := AssembleStringWithVersion(globalTestProgram, v)
+			program, err := AssembleStringWithVersion(testProgram, v)
 			require.NoError(t, err)
-			cost, err := Check(program, defaultEvalParams(nil, nil))
+			cost, err := check(program, defaultEvalParams(nil, nil))
 			require.NoError(t, err)
 			require.True(t, cost < 1000)
 			var txn transactions.SignedTxn
@@ -1150,7 +1172,8 @@ func TestGlobal(t *testing.T) {
 			ep := defaultEvalParams(&sb, &txn)
 			ep.TxnGroup = txgroup
 			ep.Proto = &proto
-			pass, err := Eval(program, ep)
+			ep.Ledger = ledger
+			pass, err := eval(program, ep)
 			if !pass {
 				t.Log(hex.EncodeToString(program))
 				t.Log(sb.String())

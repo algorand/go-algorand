@@ -755,7 +755,7 @@ func TestAssembleDisassemble(t *testing.T) {
 	// Specifically constructed program text that should be recreated by Disassemble()
 	// TODO: disassemble to int/byte psuedo-ops instead of raw intcblock/bytecblock/intc/bytec
 	t.Parallel()
-	text := `// version 1
+	text := `// version 2
 intcblock 0 1 2 3 4 5
 bytecblock 0xcafed00d 0x1337 0x2001 0xdeadbeef 0x70077007
 intc_1
@@ -829,7 +829,7 @@ gtxn 12 Fee
 			t.Errorf("TestAssembleDisassemble missing field txn %v", txnField)
 		}
 	}
-	program, err := AssembleStringV1(text)
+	program, err := AssembleString(text)
 	require.NoError(t, err)
 	t2, err := Disassemble(program)
 	require.Equal(t, text, t2)
