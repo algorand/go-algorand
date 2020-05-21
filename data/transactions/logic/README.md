@@ -192,14 +192,14 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 21 | AssetCloseTo | []byte | 32 byte address |
 | 22 | GroupIndex | uint64 | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1. |
 | 23 | TxID | []byte | The computed ID for this transaction. 32 bytes. |
-| 24 | ApplicationID | uint64 | ApplicationID from ApplicationCall transaction |
-| 25 | OnCompletion | uint64 | ApplicationCall transaction on completion action |
-| 26 | ApplicationArgs | []byte | Arguments passed to the application in the ApplicationCall transaction |
-| 27 | NumAppArgs | uint64 | Number of ApplicationArgs |
-| 28 | Accounts | []byte | Accounts listed in the ApplicationCall transaction |
-| 29 | NumAccounts | uint64 | Number of Accounts |
-| 30 | ApprovalProgram | []byte | Approval program |
-| 31 | ClearStateProgram | []byte | Clear state program |
+| 24 | ApplicationID | uint64 | ApplicationID from ApplicationCall transaction. LogicSigVersion >= 2. |
+| 25 | OnCompletion | uint64 | ApplicationCall transaction on completion action. LogicSigVersion >= 2. |
+| 26 | ApplicationArgs | []byte | Arguments passed to the application in the ApplicationCall transaction. LogicSigVersion >= 2. |
+| 27 | NumAppArgs | uint64 | Number of ApplicationArgs. LogicSigVersion >= 2. |
+| 28 | Accounts | []byte | Accounts listed in the ApplicationCall transaction. LogicSigVersion >= 2. |
+| 29 | NumAccounts | uint64 | Number of Accounts. LogicSigVersion >= 2. |
+| 30 | ApprovalProgram | []byte | Approval program. LogicSigVersion >= 2. |
+| 31 | ClearStateProgram | []byte | Clear state program. LogicSigVersion >= 2. |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
@@ -214,10 +214,10 @@ Global fields are fields that are common to all the transactions in the group. I
 | 1 | MinBalance | uint64 | micro Algos |
 | 2 | MaxTxnLife | uint64 | rounds |
 | 3 | ZeroAddress | []byte | 32 byte address of all zero bytes |
-| 4 | GroupSize | uint64 | Number of transactions in this atomic transaction group. At least 1. |
-| 5 | LogicSigVersion | uint64 |  |
-| 6 | Round | uint64 | Current round number |
-| 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative |
+| 4 | GroupSize | uint64 | Number of transactions in this atomic transaction group. At least 1 |
+| 5 | LogicSigVersion | uint64 | Maximum supported TEAL version. LogicSigVersion >= 2. |
+| 6 | Round | uint64 | Current round number. LogicSigVersion >= 2. |
+| 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative. LogicSigVersion >= 2. |
 
 
 **Asset Fields**
