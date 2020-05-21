@@ -751,7 +751,7 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 	err := ac.apply(h, &b, spec, nil, txnCounter, &steva)
 	a.Error(err)
-	a.Contains(err.Error(), "cannot use empty apply delta")
+	a.Contains(err.Error(), "cannot use empty ApplyData")
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 

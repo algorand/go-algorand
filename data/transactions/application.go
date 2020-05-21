@@ -523,6 +523,7 @@ func (ac *ApplicationCallTxnFields) applyClearState(
 	// Fetch the (potentially updated) sender record
 	record, err = balances.Get(sender, false)
 	if err != nil {
+		ad.EvalDelta = basics.EvalDelta{}
 		return err
 	}
 
@@ -537,7 +538,11 @@ func (ac *ApplicationCallTxnFields) applyClearState(
 	record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
 	delete(record.AppLocalStates, appIdx)
 
-	return balances.Put(record)
+	err = balances.Put(record)
+	if err != nil {
+		ad.EvalDelta = basics.EvalDelta{}
+	}
+	return err
 }
 
 func applyOptIn(balances Balances, sender basics.Address, appIdx basics.AppIndex, params basics.AppParams) error {
@@ -579,7 +584,7 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 
 	// this is not the case in the current code but still probably better to check
 	if ad == nil {
-		err = fmt.Errorf("cannot use empty apply delta")
+		err = fmt.Errorf("cannot use empty ApplyData")
 		return
 	}
 
