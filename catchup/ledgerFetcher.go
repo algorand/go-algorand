@@ -168,6 +168,9 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 			lf.reporter.updateLedgerFetcherProgress(&downloadProgress)
 		}
 		if err = watchdogReader.Reset(); err != nil {
+			if err == io.EOF {
+				return nil
+			}
 			err = fmt.Errorf("getPeerLedger received the following error while reading the catchpoint file : %v", err)
 			return err
 		}

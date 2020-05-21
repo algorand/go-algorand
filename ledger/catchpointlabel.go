@@ -60,10 +60,10 @@ func (l CatchpointLabel) String() string {
 
 // Hash return the hash portion of this catchpoint label
 func (l CatchpointLabel) Hash() crypto.Digest {
-	buffer := make([]byte, 2*crypto.DigestSize+256)
+	encodedTotals := protocol.EncodeReflect(&l.totals)
+	buffer := make([]byte, 2*crypto.DigestSize+len(encodedTotals))
 	copy(buffer[:], l.ledgerRoundBlockHash[:])
 	copy(buffer[crypto.DigestSize:], l.balancesMerkleRoot[:])
-	encodedTotals := protocol.EncodeReflect(&l.totals)
 	copy(buffer[crypto.DigestSize*2:], encodedTotals)
 	return crypto.Hash(buffer[:crypto.DigestSize*2+len(encodedTotals)])
 }
