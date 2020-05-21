@@ -305,17 +305,25 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		// check block protocol version support.
 		if _, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
 			cs.log.Warnf("processStageLastestBlockDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol)
-			// try again.
-			blk = nil
-			continue
+
+			if attemptsCount <= maxBlockDownloadAttempts {
+				// try again.
+				blk = nil
+				continue
+			}
+			return cs.abort(fmt.Errorf("processStageLastestBlockDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol))
 		}
 
 		// check to see that the block header and the block payset aligns
 		if !blk.ContentsMatchHeader() {
 			cs.log.Warnf("processStageLastestBlockDownload: downloaded block content does not match downloaded block header")
-			// try again.
-			blk = nil
-			continue
+
+			if attemptsCount <= maxBlockDownloadAttempts {
+				// try again.
+				blk = nil
+				continue
+			}
+			return cs.abort(fmt.Errorf("processStageLastestBlockDownload: downloaded block content does not match downloaded block header"))
 		}
 
 		// verify that the catchpoint is valid.
@@ -424,14 +432,22 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			// not identical, retry download.
 			cs.log.Warnf("processStageBlocksDownload downloaded block(%d) did not match it's successor(%d) block hash %v != %v", blk.Round(), prevBlock.Round(), blk.Hash(), prevBlock.BlockHeader.Branch)
 			cs.updateBlockRetrievalStatistics(-1, 0)
-			continue
+			if attemptsCount <= maxBlockDownloadAttempts {
+				// try again.
+				continue
+			}
+			return cs.abort(fmt.Errorf("processStageBlocksDownload downloaded block(%d) did not match it's successor(%d) block hash %v != %v", blk.Round(), prevBlock.Round(), blk.Hash(), prevBlock.BlockHeader.Branch))
 		}
 
 		// check block protocol version support.
 		if _, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
 			cs.log.Warnf("processStageBlocksDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol)
 			cs.updateBlockRetrievalStatistics(-1, 0)
-			continue
+			if attemptsCount <= maxBlockDownloadAttempts {
+				// try again.
+				continue
+			}
+			return cs.abort(fmt.Errorf("processStageBlocksDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol))
 		}
 
 		// check to see that the block header and the block payset aligns
@@ -439,7 +455,11 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			cs.log.Warnf("processStageBlocksDownload: downloaded block content does not match downloaded block header")
 			// try again.
 			cs.updateBlockRetrievalStatistics(-1, 0)
-			continue
+			if attemptsCount <= maxBlockDownloadAttempts {
+				// try again.
+				continue
+			}
+			return cs.abort(fmt.Errorf("processStageBlocksDownload: downloaded block content does not match downloaded block header"))
 		}
 
 		cs.updateBlockRetrievalStatistics(0, 1)
@@ -449,7 +469,11 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		if err != nil {
 			cs.log.Warnf("processStageBlocksDownload failed to store downloaded staging block for round %d", blk.Round())
 			cs.updateBlockRetrievalStatistics(-1, -1)
-			continue
+			if attemptsCount <= maxBlockDownloadAttempts {
+				// try again.
+				continue
+			}
+			return cs.abort(fmt.Errorf("processStageBlocksDownload failed to store downloaded staging block for round %d", blk.Round()))
 		}
 		prevBlock = blk
 		blocksFetched++
