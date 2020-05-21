@@ -137,11 +137,11 @@ type AccountData struct {
 	// is expected to have copy-by-value semantics.
 	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=-"`
 
-	// SpendingKey is the address against which signatures/multisigs/logicsigs should be checked.
+	// AuthAddr is the address against which signatures/multisigs/logicsigs should be checked.
 	// If empty, the address of the account whose AccountData this is is used.
-	// A transaction may change an account's SpendingKey to "re-key" the account.
+	// A transaction may change an account's AuthAddr to "re-key" the account.
 	// This allows key rotation, changing the members in a multisig, etc.
-	SpendingKey Address `codec:"spend"`
+	AuthAddr Address `codec:"spend"`
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption
