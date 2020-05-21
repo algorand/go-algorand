@@ -972,6 +972,23 @@ func TestTxnBadField(t *testing.T) {
 	require.Error(t, err)
 	require.False(t, pass)
 	isNotPanic(t, err)
+
+	// test txn does not accept ApplicationArgs and Accounts
+	txnOpcode := opsByName[LogicVersion]["txn"].Opcode
+	txnaOpcode := opsByName[LogicVersion]["txna"].Opcode
+
+	fields := []TxnField{ApplicationArgs, Accounts}
+	for _, field := range fields {
+		source := fmt.Sprintf("txn %s 0", field.String())
+		program, err = AssembleString(source)
+		require.NoError(t, err)
+		require.Equal(t, txnaOpcode, program[1])
+		program[1] = txnOpcode
+		pass, err = Eval(program, defaultEvalParams(&sb, &txn))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), fmt.Sprintf("invalid txn field %d", field))
+		require.False(t, pass)
+	}
 }
 
 func TestGtxnBadIndex(t *testing.T) {
@@ -1020,6 +1037,23 @@ func TestGtxnBadField(t *testing.T) {
 	require.Error(t, err)
 	require.False(t, pass)
 	isNotPanic(t, err)
+
+	// test gtxn does not accept ApplicationArgs and Accounts
+	txnOpcode := opsByName[LogicVersion]["txn"].Opcode
+	txnaOpcode := opsByName[LogicVersion]["txna"].Opcode
+
+	fields := []TxnField{ApplicationArgs, Accounts}
+	for _, field := range fields {
+		source := fmt.Sprintf("txn %s 0", field.String())
+		program, err = AssembleString(source)
+		require.NoError(t, err)
+		require.Equal(t, txnaOpcode, program[1])
+		program[1] = txnOpcode
+		pass, err = Eval(program, defaultEvalParams(&sb, &txn))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), fmt.Sprintf("invalid txn field %d", field))
+		require.False(t, pass)
+	}
 }
 
 func TestGlobalBadField(t *testing.T) {
