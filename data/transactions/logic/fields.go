@@ -97,50 +97,63 @@ const (
 
 // TxnFieldNames are arguments to the 'txn' and 'txnById' opcodes
 var TxnFieldNames []string
-var txnFields map[string]uint
-
-type txnFieldType struct {
-	field TxnField
-	ftype StackType
-}
-
-var txnFieldTypePairs = []txnFieldType{
-	{Sender, StackBytes},
-	{Fee, StackUint64},
-	{FirstValid, StackUint64},
-	{FirstValidTime, StackUint64},
-	{LastValid, StackUint64},
-	{Note, StackBytes},
-	{Lease, StackBytes},
-	{Receiver, StackBytes},
-	{Amount, StackUint64},
-	{CloseRemainderTo, StackBytes},
-	{VotePK, StackBytes},
-	{SelectionPK, StackBytes},
-	{VoteFirst, StackUint64},
-	{VoteLast, StackUint64},
-	{VoteKeyDilution, StackUint64},
-	{Type, StackBytes},
-	{TypeEnum, StackUint64},
-	{XferAsset, StackUint64},
-	{AssetAmount, StackUint64},
-	{AssetSender, StackBytes},
-	{AssetReceiver, StackBytes},
-	{AssetCloseTo, StackBytes},
-	{GroupIndex, StackUint64},
-	{TxID, StackBytes},
-	{ApplicationID, StackUint64},
-	{OnCompletion, StackUint64},
-	{ApplicationArgs, StackBytes},
-	{NumAppArgs, StackUint64},
-	{Accounts, StackBytes},
-	{NumAccounts, StackUint64},
-	{ApprovalProgram, StackBytes},
-	{ClearStateProgram, StackBytes},
-}
 
 // TxnFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
 var TxnFieldTypes []StackType
+
+var txnFieldSpecByField map[TxnField]txnFieldSpec
+var txnFieldSpecByName tfNameSpecMap
+
+// simple interface used by doc generator for fields versioning
+type tfNameSpecMap map[string]txnFieldSpec
+
+func (s tfNameSpecMap) getExtraFor(name string) (extra string) {
+	if s[name].version > 1 {
+		extra = "LogicSigVersion >= 2."
+	}
+	return
+}
+
+type txnFieldSpec struct {
+	field   TxnField
+	ftype   StackType
+	version uint64
+}
+
+var txnFieldSpecs = []txnFieldSpec{
+	{Sender, StackBytes, 0},
+	{Fee, StackUint64, 0},
+	{FirstValid, StackUint64, 0},
+	{FirstValidTime, StackUint64, 0},
+	{LastValid, StackUint64, 0},
+	{Note, StackBytes, 0},
+	{Lease, StackBytes, 0},
+	{Receiver, StackBytes, 0},
+	{Amount, StackUint64, 0},
+	{CloseRemainderTo, StackBytes, 0},
+	{VotePK, StackBytes, 0},
+	{SelectionPK, StackBytes, 0},
+	{VoteFirst, StackUint64, 0},
+	{VoteLast, StackUint64, 0},
+	{VoteKeyDilution, StackUint64, 0},
+	{Type, StackBytes, 0},
+	{TypeEnum, StackUint64, 0},
+	{XferAsset, StackUint64, 0},
+	{AssetAmount, StackUint64, 0},
+	{AssetSender, StackBytes, 0},
+	{AssetReceiver, StackBytes, 0},
+	{AssetCloseTo, StackBytes, 0},
+	{GroupIndex, StackUint64, 0},
+	{TxID, StackBytes, 0},
+	{ApplicationID, StackUint64, 2},
+	{OnCompletion, StackUint64, 2},
+	{ApplicationArgs, StackBytes, 2},
+	{NumAppArgs, StackUint64, 2},
+	{Accounts, StackBytes, 2},
+	{NumAccounts, StackUint64, 2},
+	{ApprovalProgram, StackBytes, 2},
+	{ClearStateProgram, StackBytes, 2},
+}
 
 // TxnTypeNames is the values of Txn.Type in enum order
 var TxnTypeNames = []string{
@@ -227,6 +240,7 @@ var globalFieldSpecs = []globalFieldSpec{
 var globalFieldSpecByField map[GlobalField]globalFieldSpec
 var globalFieldSpecByName gfNameSpecMap
 
+// simple interface used by doc generator for fields versioning
 type gfNameSpecMap map[string]globalFieldSpec
 
 func (s gfNameSpecMap) getExtraFor(name string) (extra string) {
@@ -326,17 +340,18 @@ func init() {
 	for fi := Sender; fi < invalidTxnField; fi++ {
 		TxnFieldNames[fi] = fi.String()
 	}
-	txnFields = make(map[string]uint)
-	for i, tfn := range TxnFieldNames {
-		txnFields[tfn] = uint(i)
-	}
-
 	TxnFieldTypes = make([]StackType, int(invalidTxnField))
-	for i, ft := range txnFieldTypePairs {
-		if int(ft.field) != i {
+	txnFieldSpecByField = make(map[TxnField]txnFieldSpec, len(TxnFieldNames))
+	for i, s := range txnFieldSpecs {
+		if int(s.field) != i {
 			panic("txnFieldTypePairs disjoint with TxnField enum")
 		}
-		TxnFieldTypes[i] = ft.ftype
+		TxnFieldTypes[i] = s.ftype
+		txnFieldSpecByField[s.field] = s
+	}
+	txnFieldSpecByName = make(tfNameSpecMap, len(TxnFieldNames))
+	for i, tfn := range TxnFieldNames {
+		txnFieldSpecByName[tfn] = txnFieldSpecByField[TxnField(i)]
 	}
 
 	GlobalFieldNames = make([]string, int(invalidGlobalField))

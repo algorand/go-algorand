@@ -317,7 +317,12 @@ var txnFieldDocList = []stringString{
 }
 
 // TxnFieldDocs are notes on fields available by `txn` and `gtxn`
-var TxnFieldDocs map[string]string
+var txnFieldDocs map[string]string
+
+// TxnFieldDocs are notes on fields available by `txn` and `gtxn` with extra versioning info if any
+func TxnFieldDocs() map[string]string {
+	return fieldsDocWithExtra(txnFieldDocs, txnFieldSpecByName)
+}
 
 var globalFieldDocList = []stringString{
 	{"MinTxnFee", "micro Algos"},
@@ -333,11 +338,19 @@ var globalFieldDocList = []stringString{
 // globalFieldDocs are notes on fields available in `global`
 var globalFieldDocs map[string]string
 
-// GlobalFieldDocs are notes on fields available in `global`
+// GlobalFieldDocs are notes on fields available in `global` with extra versioning info if any
 func GlobalFieldDocs() map[string]string {
-	result := make(map[string]string, len(globalFieldDocs))
-	for name, doc := range globalFieldDocs {
-		if extra := globalFieldSpecByName.getExtraFor(name); len(extra) > 0 {
+	return fieldsDocWithExtra(globalFieldDocs, globalFieldSpecByName)
+}
+
+type extractor interface {
+	getExtraFor(string) string
+}
+
+func fieldsDocWithExtra(source map[string]string, ex extractor) map[string]string {
+	result := make(map[string]string, len(source))
+	for name, doc := range source {
+		if extra := ex.getExtraFor(name); len(extra) > 0 {
 			if len(doc) == 0 {
 				doc = extra
 			} else {
@@ -379,7 +392,7 @@ var assetParamsFieldDocList = []stringString{
 var AssetParamsFieldDocs map[string]string
 
 func init() {
-	TxnFieldDocs = stringStringListToMap(txnFieldDocList)
+	txnFieldDocs = stringStringListToMap(txnFieldDocList)
 	globalFieldDocs = stringStringListToMap(globalFieldDocList)
 	AssetHoldingFieldDocs = stringStringListToMap(assetHoldingFieldDocList)
 	AssetParamsFieldDocs = stringStringListToMap(assetParamsFieldDocList)

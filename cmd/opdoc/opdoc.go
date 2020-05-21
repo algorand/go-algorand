@@ -82,7 +82,7 @@ func fieldTableMarkdown(out io.Writer, names []string, types []logic.StackType, 
 
 func transactionFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`txn` Fields:\n\n")
-	fieldTableMarkdown(out, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs)
+	fieldTableMarkdown(out, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs())
 }
 
 func globalFieldsMarkdown(out io.Writer) {
@@ -288,7 +288,7 @@ func main() {
 	constants.Close()
 
 	txnfields, _ := os.Create("txn_fields.md")
-	fieldTableMarkdown(txnfields, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs)
+	fieldTableMarkdown(txnfields, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs())
 	txnfields.Close()
 
 	globalfields, _ := os.Create("global_fields.md")

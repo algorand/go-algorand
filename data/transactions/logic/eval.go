@@ -1182,7 +1182,7 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field 
 // TxnFieldToTealValue is a thin wrapper for txnFieldToStack for external use
 func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field TxnField) (basics.TealValue, error) {
 	cx := evalContext{EvalParams: EvalParams{GroupIndex: groupIndex}}
-	sv, err := cx.txnFieldToStack(txn, uint64(field), 0, groupIndex)
+	sv, err := cx.txnFieldToStack(txn, field, 0, groupIndex)
 	return sv.toTealValue(), err
 }
 
@@ -1202,9 +1202,9 @@ func (cx *evalContext) getTxID(txn *transactions.Transaction, groupIndex int) tr
 	return txid
 }
 
-func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint64, arrayFieldIdx uint64, groupIndex int) (sv stackValue, err error) {
+func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnField, arrayFieldIdx uint64, groupIndex int) (sv stackValue, err error) {
 	err = nil
-	switch TxnField(field) {
+	switch field {
 	case Sender:
 		sv.Bytes = txn.Sender[:]
 	case Fee:
@@ -1298,7 +1298,12 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 }
 
 func opTxn(cx *evalContext) {
-	field := uint64(cx.program[cx.pc+1])
+	field := TxnField(uint64(cx.program[cx.pc+1]))
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
 	var sv stackValue
 	var err error
 	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, 0, cx.GroupIndex)
@@ -1311,13 +1316,18 @@ func opTxn(cx *evalContext) {
 }
 
 func opTxna(cx *evalContext) {
-	field := uint64(cx.program[cx.pc+1])
-	var sv stackValue
-	var err error
-	if field != uint64(ApplicationArgs) && field != uint64(Accounts) {
+	field := TxnField(uint64(cx.program[cx.pc+1]))
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	if field != ApplicationArgs && field != Accounts {
 		cx.err = fmt.Errorf("txna unsupported field %d", field)
 		return
 	}
+	var sv stackValue
+	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+2])
 	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
 	if err != nil {
@@ -1335,7 +1345,12 @@ func opGtxn(cx *evalContext) {
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := uint64(cx.program[cx.pc+2])
+	field := TxnField(uint64(cx.program[cx.pc+2]))
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
 	var sv stackValue
 	var err error
 	if TxnField(field) == GroupIndex {
@@ -1359,13 +1374,18 @@ func opGtxna(cx *evalContext) {
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := uint64(cx.program[cx.pc+2])
-	var sv stackValue
-	var err error
+	field := TxnField(uint64(cx.program[cx.pc+2]))
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
 	if TxnField(field) != ApplicationArgs && TxnField(field) != Accounts {
 		cx.err = fmt.Errorf("gtxna unsupported field %d", field)
 		return
 	}
+	var sv stackValue
+	var err error
 	arrayFieldIdx := uint64(cx.program[cx.pc+3])
 	sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
 	if err != nil {
