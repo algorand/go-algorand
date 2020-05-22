@@ -117,8 +117,12 @@ func TestWrongProtoVersion(t *testing.T) {
 			proto.LogicSigVersion = 0
 			ep := defaultEvalParams(&sb, &txn)
 			ep.Proto = &proto
+			_, err = Check(program, ep)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "LogicSig not supported")
 			pass, err := Eval(program, ep)
 			require.Error(t, err)
+			require.Contains(t, err.Error(), "LogicSig not supported")
 			require.False(t, pass)
 		})
 	}
@@ -1768,6 +1772,12 @@ txna ApplicationArgs 0
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "txna unsupported field")
 
+	// modify txn field to unknown one
+	program[2] = 99
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid txn field 99")
+
 	// modify txn array index
 	program[2] = saved
 	saved = program[3]
@@ -1822,6 +1832,12 @@ txna ApplicationArgs 0
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gtxna unsupported field")
+
+	// modify gtxn field to unknown one
+	program[3] = 99
+	_, err = Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid txn field 99")
 
 	// modify gtxn array index
 	program[3] = saved
@@ -2052,6 +2068,21 @@ len`, 2)
 	require.False(t, pass)
 	require.Error(t, err)
 	isNotPanic(t, err)
+
+	// fails at runtime
+	program, err = assembleStringWithTrace(t, `byte 0xf000000000000000
+int 4
+int 0xFFFFFFFFFFFFFFFE
+substring3
+len`, 2)
+	require.NoError(t, err)
+	cost, err = Check(program, defaultEvalParams(nil, nil))
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	pass, err = Eval(program, defaultEvalParams(nil, nil))
+	require.False(t, pass)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "substring range beyond length of string")
 }
 
 func TestSubstringRange(t *testing.T) {
