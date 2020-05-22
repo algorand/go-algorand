@@ -901,6 +901,8 @@ func opItob(cx *evalContext) {
 	last := len(cx.stack) - 1
 	ibytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(ibytes, cx.stack[last].Uint)
+	// cx.stack[last].Uint is not cleared out as optimization
+	// stackValue.argType() checks Bytes field first
 	cx.stack[last].Bytes = ibytes
 }
 

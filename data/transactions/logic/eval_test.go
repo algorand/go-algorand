@@ -1850,6 +1850,59 @@ txn Sender
 	require.True(t, pass)
 }
 
+// check empty values in ApplicationArgs and Account
+func TestTxnaEmptyValues(t *testing.T) {
+	t.Parallel()
+	source := `txna ApplicationArgs 0
+btoi
+int 0
+==
+`
+	program, err := AssembleString(source)
+	require.NoError(t, err)
+
+	var txn transactions.SignedTxn
+	txn.Txn.ApplicationArgs = make([][]byte, 1)
+	txn.Txn.ApplicationArgs[0] = []byte("")
+	txgroup := make([]transactions.SignedTxn, 1)
+	txgroup[0] = txn
+	ep := defaultEvalParams(nil, &txn)
+	ep.TxnGroup = txgroup
+	pass, err := Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+	txn.Txn.ApplicationArgs[0] = nil
+	txgroup[0] = txn
+	ep.TxnGroup = txgroup
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	source2 := `txna Accounts 1
+global ZeroAddress
+==
+`
+	program2, err := AssembleString(source2)
+	require.NoError(t, err)
+
+	var txn2 transactions.SignedTxn
+	txn2.Txn.Accounts = make([]basics.Address, 1)
+	txn2.Txn.Accounts[0] = basics.Address{}
+	txgroup2 := make([]transactions.SignedTxn, 1)
+	txgroup2[0] = txn2
+	ep2 := defaultEvalParams(nil, &txn2)
+	ep2.TxnGroup = txgroup2
+	pass, err = Eval(program2, ep2)
+	require.NoError(t, err)
+	require.True(t, pass)
+	txn2.Txn.Accounts = make([]basics.Address, 1)
+	txgroup2[0] = txn
+	ep2.TxnGroup = txgroup2
+	pass, err = Eval(program2, ep2)
+	require.NoError(t, err)
+	require.True(t, pass)
+}
+
 func TestBitOps(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
@@ -3345,4 +3398,17 @@ byte b64(Zm9vIGJhciAvLyBub3QgYSBjb21tZW50)
 	pass, err = Eval(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
+}
+
+func TestArgType(t *testing.T) {
+	t.Parallel()
+
+	var sv stackValue
+	require.Equal(t, StackUint64, sv.argType())
+	sv.Bytes = []byte("")
+	require.Equal(t, StackBytes, sv.argType())
+	sv.Uint = 1
+	require.Equal(t, StackBytes, sv.argType())
+	sv.Bytes = nil
+	require.Equal(t, StackUint64, sv.argType())
 }
