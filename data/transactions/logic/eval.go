@@ -265,7 +265,6 @@ func (pe PanicError) Error() string {
 }
 
 var errLoopDetected = errors.New("loop detected")
-var errCostTooHigh = errors.New("LogicSigMaxCost exceeded")
 var errLogicSignNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
@@ -395,9 +394,6 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 		cx.stepCount++
 		if cx.stepCount > len(cx.program) {
 			return false, errLoopDetected
-		}
-		if uint64(cx.cost) > cx.EvalParams.Proto.LogicSigMaxCost {
-			return false, errCostTooHigh
 		}
 	}
 	if cx.err != nil {
