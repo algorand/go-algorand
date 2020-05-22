@@ -178,13 +178,13 @@ jobs:
       - docker.Make.integration-test
 
   # Linux arm64 jobs
-  build-linux-arm32:
-    configs:
-      arch: arm32v6
-    tasks:
-      - shell.docker.Ensure.alpine
-      - docker.Make.build
-      - stash.Stash.linux-arm32
+  #build-linux-arm32:
+  #  configs:
+  #    arch: arm32v6
+  #  tasks:
+  #    - shell.docker.Ensure.alpine
+  #    - docker.Make.build
+  #    - stash.Stash.linux-arm32
   
   # Archive jobs
   archive-linux-amd64:
