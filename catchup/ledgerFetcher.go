@@ -38,7 +38,7 @@ var errNoLedgerForRound = errors.New("No ledger available for given round")
 
 const (
 	// maxCatchpointFileChunkSize is a rough estimate for the worst-case scenario we're going to have of all the accounts data per a single catchpoint file chunk.
-	maxCatchpointFileChunkSize = ledger.BalancesPerCatchpointFileChunk * ledger.MaxEncodedAccountDataSize
+	maxCatchpointFileChunkSize = ledger.BalancesPerCatchpointFileChunk * basics.MaxEncodedAccountDataSize
 	// maxCatchpointFileDownloadDuration is the maximum time we would wait for download an entire catchpoint file
 	maxCatchpointFileDownloadDuration = 45 * time.Minute
 	// expectedWorstDownloadSpeedBytesPerSecond defines the worst case-scenario download speed we expect to get while downloading a catchpoint file

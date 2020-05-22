@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -87,4 +88,61 @@ func TestWithUpdatedRewardsPanics(t *testing.T) {
 		b := a.WithUpdatedRewards(proto, 100)
 		require.Equal(t, 100*a.MicroAlgos.RewardUnits(proto)-1, b.RewardedMicroAlgos.Raw)
 	})
+}
+
+func makeString(len int) string {
+	s := ""
+	for i := 0; i < len; i++ {
+		s += string(byte(i))
+	}
+	return s
+}
+
+func TestEncodedAccountDataSize(t *testing.T) {
+	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
+	vrfSecrets := crypto.GenerateVRFSecrets()
+	ad := AccountData{
+		Status:             NotParticipating,
+		MicroAlgos:         MicroAlgos{},
+		RewardsBase:        0x1234123412341234,
+		RewardedMicroAlgos: MicroAlgos{},
+		VoteID:             oneTimeSecrets.OneTimeSignatureVerifier,
+		SelectionID:        vrfSecrets.PK,
+		VoteFirstValid:     Round(0x1234123412341234),
+		VoteLastValid:      Round(0x1234123412341234),
+		VoteKeyDilution:    0x1234123412341234,
+		AssetParams:        make(map[AssetIndex]AssetParams),
+		Assets:             make(map[AssetIndex]AssetHolding),
+		SpendingKey:        Address(crypto.Hash([]byte{1, 2, 3, 4})),
+	}
+	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	for assetCreatorAssets := 0; assetCreatorAssets < currentConsensusParams.MaxAssetsPerAccount; assetCreatorAssets++ {
+		ap := AssetParams{
+			Total:         0x1234123412341234,
+			Decimals:      0x12341234,
+			DefaultFrozen: true,
+			UnitName:      makeString(currentConsensusParams.MaxAssetUnitNameBytes),
+			AssetName:     makeString(currentConsensusParams.MaxAssetNameBytes),
+			URL:           makeString(currentConsensusParams.MaxAssetURLBytes),
+			Manager:       Address(crypto.Hash([]byte{1, byte(assetCreatorAssets)})),
+			Reserve:       Address(crypto.Hash([]byte{2, byte(assetCreatorAssets)})),
+			Freeze:        Address(crypto.Hash([]byte{3, byte(assetCreatorAssets)})),
+			Clawback:      Address(crypto.Hash([]byte{4, byte(assetCreatorAssets)})),
+		}
+		copy(ap.MetadataHash[:], makeString(32))
+		ad.AssetParams[AssetIndex(0x1234123412341234-assetCreatorAssets)] = ap
+	}
+
+	for assetHolderAssets := 0; assetHolderAssets < currentConsensusParams.MaxAssetsPerAccount; assetHolderAssets++ {
+		ah := AssetHolding{
+			Amount: 0x1234123412341234,
+			Frozen: true,
+		}
+		ad.Assets[AssetIndex(0x1234123412341234-assetHolderAssets)] = ah
+	}
+
+	encoded, err := ad.MarshalMsg(nil)
+	require.NoError(t, err)
+	require.Equal(t, MaxEncodedAccountDataSize, len(encoded))
 }

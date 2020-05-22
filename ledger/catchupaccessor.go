@@ -273,12 +273,10 @@ func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, 
 				}
 			}
 
-			var addr basics.Address
-			copy(addr[:], balance.Address)
-			hash := accountHashBuilder(addr, accountData, balance.AccountData)
+			hash := accountHashBuilder(balance.Address, accountData, balance.AccountData)
 			added, err := trie.Add(hash)
 			if !added {
-				return fmt.Errorf("CatchpointCatchupAccessor::processStagingBalances: The provided catchpoint file contained the same account more than once. Account address %#v, account data %#v", addr, accountData)
+				return fmt.Errorf("CatchpointCatchupAccessor::processStagingBalances: The provided catchpoint file contained the same account more than once. Account address %#v, account data %#v", balance.Address, accountData)
 			}
 			if err != nil {
 				return err

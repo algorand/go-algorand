@@ -115,8 +115,8 @@ const (
 	catchpointStateCatchupBalancesRound = catchpointState("catchpointCatchupBalancesRound")
 )
 
-func writeCatchpointStagingAssets(ctx context.Context, tx *sql.Tx, addr []byte, assetIdx basics.AssetIndex) error {
-	_, err := tx.ExecContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator) VALUES(?, ?)", assetIdx, addr)
+func writeCatchpointStagingAssets(ctx context.Context, tx *sql.Tx, addr basics.Address, assetIdx basics.AssetIndex) error {
+	_, err := tx.ExecContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator) VALUES(?, ?)", assetIdx, addr[:])
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []enco
 	}
 
 	for _, balance := range bals {
-		result, err := insertStmt.ExecContext(ctx, balance.Address, balance.AccountData)
+		result, err := insertStmt.ExecContext(ctx, balance.Address[:], balance.AccountData)
 		if err != nil {
 			return err
 		}
@@ -719,6 +719,7 @@ func encodedAccountsRange(tx *sql.Tx, startAccountIndex, accountCount int) (bals
 	defer rows.Close()
 
 	bals = make([]encodedBalanceRecord, 0, accountCount)
+	var addr basics.Address
 	for rows.Next() {
 		var addrbuf []byte
 		var buf []byte
@@ -727,7 +728,14 @@ func encodedAccountsRange(tx *sql.Tx, startAccountIndex, accountCount int) (bals
 			return
 		}
 
-		bals = append(bals, encodedBalanceRecord{Address: addrbuf, AccountData: buf})
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return
+		}
+
+		copy(addr[:], addrbuf)
+
+		bals = append(bals, encodedBalanceRecord{Address: addr, AccountData: buf})
 	}
 
 	err = rows.Err()

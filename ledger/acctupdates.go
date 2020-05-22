@@ -820,15 +820,12 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 				break
 			}
 			for _, balance := range bal {
-				addrBytes, accountBytes := balance.Address, balance.AccountData
-				var addr basics.Address
-				copy(addr[:], addrBytes)
 				var accountData basics.AccountData
-				err = protocol.Decode(accountBytes, &accountData)
+				err = protocol.Decode(balance.AccountData, &accountData)
 				if err != nil {
 					return rnd, err
 				}
-				hash := accountHashBuilder(addr, accountData, accountBytes)
+				hash := accountHashBuilder(balance.Address, accountData, balance.AccountData)
 				added, err := trie.Add(hash)
 				if err != nil {
 					return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)

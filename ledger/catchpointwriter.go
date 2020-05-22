@@ -42,9 +42,6 @@ const (
 
 	// catchpointFileVersion is the catchpoint file version
 	catchpointFileVersion = uint64(0200)
-
-	// MaxEncodedAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
-	MaxEncodedAccountDataSize = 64 * 1024
 )
 
 // catchpointWriter is the struct managing the persistance of accounts data into the catchpoint file.
@@ -71,13 +68,15 @@ type catchpointWriter struct {
 }
 
 type encodedBalanceRecord struct {
-	_struct     struct{}  `codec:",omitempty,omitemptyarray"`
-	Address     []byte    `codec:"pk,allocbound=crypto.DigestSize"`
-	AccountData codec.Raw `codec:"ad,allocbound=MaxEncodedAccountDataSize"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Address     basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
+	AccountData codec.Raw      `codec:"ad,allocbound=basics.MaxEncodedAccountDataSize"`
 }
 
 type catchpointFileHeader struct {
-	_struct           struct{}      `codec:",omitempty,omitemptyarray"`
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	Version           uint64        `codec:"version"`
 	BalancesRound     basics.Round  `codec:"balancesRound"`
 	BlocksRound       basics.Round  `codec:"blocksRound"`

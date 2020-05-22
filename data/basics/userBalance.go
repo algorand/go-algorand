@@ -35,6 +35,10 @@ const (
 	Online
 	// NotParticipating indicates that the associated account is neither a delegator nor a delegate. Currently it is reserved for the incentive pool.
 	NotParticipating
+
+	// MaxEncodedAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
+	// this number is verified by the TestEncodedAccountDataSize function.
+	MaxEncodedAccountDataSize = 324205
 )
 
 func (s Status) String() string {
