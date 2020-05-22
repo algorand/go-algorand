@@ -2724,11 +2724,38 @@ int 1`, v)
 			program[6] = 0xff // clobber the branch offset
 			_, err = Check(program, defaultEvalParams(nil, nil))
 			require.Error(t, err)
-			require.True(t, strings.Contains(err.Error(), "too large"))
+			require.Contains(t, err.Error(), "too large")
 			pass, err := Eval(program, defaultEvalParams(nil, nil))
 			require.Error(t, err)
+			require.Contains(t, err.Error(), "too large")
 			require.False(t, pass)
 			isNotPanic(t, err)
+		})
+	}
+	branches := []string{
+		"bz done",
+		"b done",
+	}
+	template := `int 0
+%s
+done:
+int 1
+`
+	ep := defaultEvalParams(nil, nil)
+	for _, line := range branches {
+		t.Run(fmt.Sprintf("branch=%s", line), func(t *testing.T) {
+			source := fmt.Sprintf(template, line)
+			program, err := AssembleString(source)
+			require.NoError(t, err)
+			program[7] = 0xff // clobber the branch offset
+			program[8] = 0xff // clobber the branch offset
+			_, err = Check(program, ep)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "too large")
+			pass, err := Eval(program, ep)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "too large")
+			require.False(t, pass)
 		})
 	}
 }
