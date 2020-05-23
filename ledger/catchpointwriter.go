@@ -27,7 +27,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/algorand/go-codec/codec"
+	"github.com/algorand/msgp/msgp"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
@@ -71,7 +71,7 @@ type encodedBalanceRecord struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Address     basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
-	AccountData codec.Raw      `codec:"ad,allocbound=basics.MaxEncodedAccountDataSize"`
+	AccountData msgp.Raw       `codec:"ad,allocbound=basics.MaxEncodedAccountDataSize"`
 }
 
 type catchpointFileHeader struct {
@@ -148,7 +148,7 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 	}
 
 	if !cw.headerWritten {
-		encodedHeader := protocol.EncodeReflect(*cw.fileHeader)
+		encodedHeader := protocol.Encode(cw.fileHeader)
 		err = cw.tar.WriteHeader(&tar.Header{
 			Name: "content.msgpack",
 			Mode: 0600,
@@ -185,7 +185,7 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 		// write to disk.
 		if len(cw.balancesChunk.Balances) > 0 {
 			cw.balancesChunkNum++
-			encodedChunk := protocol.EncodeReflect(cw.balancesChunk)
+			encodedChunk := protocol.Encode(&cw.balancesChunk)
 			err = cw.tar.WriteHeader(&tar.Header{
 				Name: fmt.Sprintf("balances.%d.%d.msgpack", cw.balancesChunkNum, cw.fileHeader.TotalChunks),
 				Mode: 0600,

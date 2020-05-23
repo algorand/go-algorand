@@ -17,8 +17,6 @@
 package ledger
 
 import (
-	"github.com/algorand/msgp/msgp"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
@@ -121,71 +119,4 @@ func (at *AccountTotals) RewardUnits() uint64 {
 		logging.Base().Panicf("AccountTotals.RewardUnits(): overflow %v + %v", at.Online, at.Offline)
 	}
 	return res
-}
-
-// CanMarshalMsg implements msgp.Marshaler
-func (AccountTotals) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(AccountTotals)
-	return ok
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (at AccountTotals) MarshalMsg(b []byte) (o []byte, err error) {
-	o, err = at.Online.MarshalMsg(b)
-	if err != nil {
-		return
-	}
-	o, err = at.Offline.MarshalMsg(o)
-	if err != nil {
-		return
-	}
-	o, err = at.NotParticipating.MarshalMsg(o)
-	if err != nil {
-		return
-	}
-	o = msgp.Require(o, msgp.Uint64Size)
-	o = msgp.AppendUint64(o, at.RewardsLevel)
-	return
-}
-
-// CanUnmarshalMsg implements msgp.Unmarshaler
-func (*AccountTotals) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*AccountTotals)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (at *AccountTotals) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	bts, err = at.Online.UnmarshalMsg(bts)
-	if err != nil {
-		return bts, err
-	}
-	bts, err = at.Offline.UnmarshalMsg(bts)
-	if err != nil {
-		return bts, err
-	}
-	bts, err = at.NotParticipating.UnmarshalMsg(bts)
-	if err != nil {
-		return bts, err
-	}
-	at.RewardsLevel, o, err = msgp.ReadUint64Bytes(bts)
-	return
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (ac AlgoCount) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, msgp.Uint64Size*2)
-	o = msgp.AppendUint64(o, ac.Money.Raw)
-	o = msgp.AppendUint64(o, ac.RewardUnits)
-	return
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (ac *AlgoCount) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	ac.Money.Raw, o, err = msgp.ReadUint64Bytes(bts)
-	if err != nil {
-		return o, err
-	}
-	ac.RewardUnits, o, err = msgp.ReadUint64Bytes(o)
-	return
 }

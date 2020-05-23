@@ -42,7 +42,7 @@ type CatchpointCatchupAccessor struct {
 }
 
 // CatchpointCatchupState is the state of the current catchpoint catchup process
-type CatchpointCatchupState int
+type CatchpointCatchupState int32
 
 const (
 	// CatchpointCatchupStateInactive is the common state for the catchpoint catchup - not active.
@@ -187,7 +187,7 @@ func (c *CatchpointCatchupAccessor) processStagingContent(ctx context.Context, b
 		return fmt.Errorf("CatchpointCatchupAccessor::processStagingContent: content chunk already seen")
 	}
 	var fileHeader catchpointFileHeader
-	err = protocol.DecodeReflect(bytes, &fileHeader)
+	err = protocol.Decode(bytes, &fileHeader)
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func (c *CatchpointCatchupAccessor) processStagingBalances(ctx context.Context, 
 	}
 
 	var balances catchpointFileBalancesChunk
-	err = protocol.DecodeReflect(bytes, &balances)
+	err = protocol.Decode(bytes, &balances)
 	if err != nil {
 		return err
 	}
