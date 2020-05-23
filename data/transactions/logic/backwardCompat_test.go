@@ -27,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
-	// "github.com/algorand/go-algorand/protocol"
 )
 
 // This test ensures a program compiled with by pre-TEAL v2 go-algorand

@@ -3470,3 +3470,85 @@ func TestArgType(t *testing.T) {
 	sv.Bytes = nil
 	require.Equal(t, StackUint64, sv.argType())
 }
+
+// check all v2 opcodes: allowed in v2 and not allowed in v1 and v0
+func TestAllowedOpcodesV2(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]string{
+		"txna":              "txna Accounts 0",
+		"gtxna":             "gtxna 0 ApplicationArgs 0",
+		"bz":                "bz l\nl:",
+		"b":                 "b l\nl:",
+		"return":            "int 1\nreturn",
+		"dup2":              "dup2",
+		"concat":            "byte 0x41\ndup\nconcat",
+		"substring":         "byte 0x41\nsubstring 0 1",
+		"substring3":        "byte 0x41\ndup\ndup\nsubstring3",
+		"balance":           "int 1\nbalance",
+		"app_opted_in":      "int 0\ndup\napp_opted_in",
+		"app_local_gets":    "int 0\nbyte 0x41\napp_local_gets",
+		"app_local_get":     "int 0\ndup\nbyte 0x41\napp_local_get",
+		"app_global_gets":   "int 0\nbyte 0x41\napp_global_gets",
+		"app_global_get":    "int 0\nbyte 0x41\napp_global_get",
+		"app_local_put":     "int 0\ndup\nbyte 0x41\napp_local_put",
+		"app_global_put":    "byte 0x41\ndup\napp_global_put",
+		"app_local_del":     "int 0\nbyte 0x41\napp_local_del",
+		"app_global_del":    "byte 0x41\napp_global_del",
+		"asset_holding_get": "asset_holding_get AssetBalance",
+		"asset_params_get":  "asset_params_get AssetTotal",
+	}
+
+	excluded := map[string]bool{
+		"sha256":     true,
+		"keccak256":  true,
+		"sha512_256": true,
+		"txn":        true,
+		"gtxn":       true,
+	}
+
+	ep := defaultEvalParams(nil, nil)
+
+	cnt := 0
+	for _, spec := range OpSpecs {
+		if spec.Version > 1 && !excluded[spec.Name] {
+			source, ok := tests[spec.Name]
+			require.True(t, ok, fmt.Sprintf("Missed opcode in the test: %s", spec.Name))
+			program, err := AssembleString(source)
+			require.NoError(t, err, source)
+			// all opcodes allowed in stateful mode so use CheckStateful/EvalStateful
+			_, err = CheckStateful(program, ep)
+			require.NoError(t, err, source)
+			_, _, err = EvalStateful(program, ep)
+			if spec.Name != "return" {
+				// "return" opcode is always succeed so ignore it
+				require.Error(t, err, source)
+				require.NotContains(t, err.Error(), "illegal opcode")
+			}
+
+			for v := byte(0); v <= 1; v++ {
+				program[0] = v
+				_, err = Check(program, ep)
+				require.Error(t, err, source)
+				require.True(t,
+					strings.Contains(err.Error(), "illegal opcode") ||
+						strings.Contains(err.Error(), "pc did not advance"),
+				)
+				_, err = CheckStateful(program, ep)
+				require.Error(t, err, source)
+				require.True(t,
+					strings.Contains(err.Error(), "illegal opcode") ||
+						strings.Contains(err.Error(), "pc did not advance"),
+				)
+				_, err = Eval(program, ep)
+				require.Error(t, err, source)
+				require.Contains(t, err.Error(), "illegal opcode")
+				_, _, err = EvalStateful(program, ep)
+				require.Error(t, err, source)
+				require.Contains(t, err.Error(), "illegal opcode")
+			}
+			cnt++
+		}
+	}
+	require.Equal(t, len(tests), cnt)
+}

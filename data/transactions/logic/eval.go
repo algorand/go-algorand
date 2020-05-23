@@ -506,16 +506,13 @@ func (cx *evalContext) step() {
 	opcode := cx.program[cx.pc]
 	spec := &opsByOpcode[cx.version][opcode]
 
+	// this check also ensures TEAL versioning: v2 opcodes are not in opsByOpcode[1] array
 	if spec.op == nil {
 		cx.err = fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 		return
 	}
 	if (cx.runModeFlags & spec.Modes) == 0 {
 		cx.err = fmt.Errorf("%s not allowed in current mode", spec.Name)
-		return
-	}
-	if spec.Version > cx.version {
-		cx.err = fmt.Errorf("%s not allowed in program version %d", spec.Name, cx.version)
 		return
 	}
 	argsTypes := spec.Args
