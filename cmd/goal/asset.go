@@ -620,11 +620,7 @@ var infoAssetCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 
-		if params.ReserveAddr == "" {
-			params.ReserveAddr = params.Creator
-		}
-
-		reserve, err := client.AccountInformation(params.ReserveAddr)
+		reserve, err := client.AccountInformation(params.Creator)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
