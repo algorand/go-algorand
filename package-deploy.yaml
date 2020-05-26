@@ -1,0 +1,132 @@
+tasks:
+  - task: docker.Version
+    configFilePath: scripts/configure_dev-deps.sh
+
+  - task: shell.docker.Ensure
+    name: deb
+    image: algorand/mule-linux-ubuntu
+    version: '{{ docker.Version.outputs.version }}'
+    dockerFilePath: docker/build/docker.ubuntu.Dockerfile
+    dependencies: docker.Version
+
+  - task: shell.docker.Ensure
+    name: rpm
+    image: algorand/mule-linux-centos
+    version: '{{ docker.Version.outputs.version }}'
+    dockerFilePath: docker/build/mule.go.centos.Dockerfile
+    dependencies: docker.Version
+
+  - task: docker.Make
+    name: generate-releases-page
+    docker:
+      image: algorand/mule-linux-ubuntu
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /projects/go-algorand
+      env: [
+        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      ]
+    target: mule-deploy-generate_releases_page WORKDIR=/projects/go-algorand
+
+  - task: docker.Make
+    name: deb
+    docker:
+      image: algorand/mule-linux-ubuntu
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /projects/go-algorand
+      env: [
+        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      ]
+      volumes: [
+        $HOME/packages:/root/packages,
+        $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
+        $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
+      ]
+    target: mule-deploy-deb WORKDIR=/projects/go-algorand
+
+  - task: docker.Make
+    name: rpm
+    docker:
+      image: algorand/mule-linux-centos
+      version: '{{ docker.Version.outputs.version }}'
+      workDir: /projects/go-algorand
+      env: [
+        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      ]
+      volumes: [
+        $HOME/packages:/root/packages,
+        $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
+        $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
+      ]
+    target: mule-deploy-rpm WORKDIR=/projects/go-algorand
+
+  - task: s3.DownloadFile
+    name: deb
+    bucketName: algorand-staging
+    objectName: releases/$CHANNEL/$VERSION/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb
+    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
+
+  - task: s3.DownloadFile
+    name: rpm
+    bucketName: algorand-staging
+    objectName: releases/$CHANNEL/$VERSION/algorand-${VERSION}-1.${ARCH_BIT}.rpm
+    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
+
+  - task: s3.DownloadFile
+    name: gnupg
+    bucketName: algorand-devops-misc
+    objectName: tools/gnupg2.2.9_centos7_amd64.tar.bz2
+    outputDir: /root
+
+  - task: s3.UploadFile
+    name: releases-page
+    bucketName: algorand-releases
+    fileName: /tmp/index.html
+
+  - task: s3.BucketCopy
+    name: deploy-dev-deb-repo
+    src: s3://algorand-staging/releases/${CHANNEL}/${VERSION}
+    dest: s3://algorand-dev-deb-repo/releases/${CHANNEL}/${VERSION}
+
+  - task: s3.BucketCopy
+    name: deploy-rpm-repo
+    src: /root/rpmrepo
+    dest: s3://algorand-releases/rpm/${CHANNEL}/${VERSION}
+
+jobs:
+  package-deploy:
+    configs:
+      arch: amd64
+    tasks:
+      - shell.docker.Ensure.deb
+      - shell.docker.Ensure.rpm
+      - docker.Make.generate-releases-page
+      - docker.Make.deb
+      - docker.Make.rpm
+
+  package-deploy-setup-copy:
+    tasks:
+      - s3.BucketCopy.deploy-dev-deb-repo
+
+  package-deploy-setup-deb:
+    tasks:
+      - s3.DownloadFile.deb
+
+  package-deploy-setup-rpm:
+    tasks:
+      - s3.DownloadFile.rpm
+
+  package-deploy-setup-gnupg:
+    tasks:
+      - s3.DownloadFile.gnupg
+
+  package-deploy-releases-page:
+    tasks:
+      - s3.UploadFile.releases-page
+
+  package-deploy-rpm-repo:
+    tasks:
+      - s3.UploadFile.rpm-repo
+
