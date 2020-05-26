@@ -122,7 +122,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	AssetParams map[AssetIndex]AssetParams `codec:"apar,allocbound=-"`
+	AssetParams map[AssetIndex]AssetParams `codec:"apar,allocbound=config.Consensus[protocol.ConsensusCurrentVersion].MaxAssetsPerAccount"`
 
 	// Assets is the set of assets that can be held by this
 	// account.  Assets (i.e., slots in this map) are explicitly
@@ -139,7 +139,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=-"`
+	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=config.Consensus[protocol.ConsensusCurrentVersion].MaxAssetsPerAccount"`
 
 	// SpendingKey is the address against which signatures/multisigs/logicsigs should be checked.
 	// If empty, the address of the account whose AccountData this is is used.
