@@ -384,9 +384,14 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	}
 
 	// pick the lookback with the greater of either MaxTxnLife or MaxBalLookback
-	lookback := int(config.Consensus[topBlock.CurrentProtocol].MaxTxnLife)
-	if lookback < int(config.Consensus[topBlock.CurrentProtocol].MaxBalLookback) {
-		lookback = int(config.Consensus[topBlock.CurrentProtocol].MaxBalLookback)
+	lookback := config.Consensus[topBlock.CurrentProtocol].MaxTxnLife
+	if lookback < config.Consensus[topBlock.CurrentProtocol].MaxBalLookback {
+		lookback = config.Consensus[topBlock.CurrentProtocol].MaxBalLookback
+	}
+	// in case the effective lookback is going before our rounds count, trim it there.
+	// ( a catchpoint is generated starting round MaxBalLookback, and this is a possible in any round in the range of MaxBalLookback..MaxTxnLife)
+	if lookback >= uint64(topBlock.Round()) {
+		lookback = uint64(topBlock.Round() - 1)
 	}
 
 	cs.statsMu.Lock()
@@ -397,10 +402,10 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 
 	prevBlock := &topBlock
 	fetcherFactory := MakeNetworkFetcherFactory(cs.net, 10, nil)
-	blocksFetched := 1 // we already got the first block in the previous step.
+	blocksFetched := uint64(1) // we already got the first block in the previous step.
 	var blk *bookkeeping.Block
 	var client FetcherClient
-	for attemptsCount := 1; blocksFetched <= lookback; attemptsCount++ {
+	for attemptsCount := uint64(1); blocksFetched <= lookback; attemptsCount++ {
 		if err := cs.ctx.Err(); err != nil {
 			return cs.abort(err)
 		}
