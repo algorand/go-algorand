@@ -113,7 +113,7 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		VoteKeyDilution:    0x1234123412341234,
 		AssetParams:        make(map[AssetIndex]AssetParams),
 		Assets:             make(map[AssetIndex]AssetHolding),
-		SpendingKey:        Address(crypto.Hash([]byte{1, 2, 3, 4})),
+		AuthAddr:           Address(crypto.Hash([]byte{1, 2, 3, 4})),
 	}
 	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
 
