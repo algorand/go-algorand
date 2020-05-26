@@ -136,6 +136,9 @@ func (d *DebugState) LineToPC(line int) int {
 	}
 
 	lines := strings.Split(d.Disassembly, "\n")
+	if line > len(lines) {
+		return 0
+	}
 	offset := len(strings.Join(lines[:line], "\n"))
 
 	for i := 0; i < len(d.PCOffset); i++ {
@@ -166,6 +169,9 @@ func (d *DebugState) PCToLine(pc int) int {
 	if offset == 0 {
 		offset = d.PCOffset[len(d.PCOffset)-1].Offset
 		one = 0
+	}
+	if offset > len(d.Disassembly) {
+		return 0
 	}
 
 	return len(strings.Split(d.Disassembly[:offset], "\n")) - one
