@@ -24,12 +24,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
 )
 
 // DebuggerHook functions are called by eval function during TEAL program execution
@@ -238,6 +240,15 @@ func (dbg *WebDebuggerHook) postState(state *DebugState, endpoint string) error 
 
 // Register sends state to remote debugger
 func (dbg *WebDebuggerHook) Register(state *DebugState) error {
+	u, err := url.Parse(dbg.URL)
+	if err != nil {
+		logging.Base().Errorf("Failed to parse url: %s", err.Error())
+	}
+	h := u.Hostname()
+	// check for 127.0.0/8 ?
+	if h != "localhost" && h != "127.0.0.1" && h != "::1" {
+		logging.Base().Warnf("Unsecured communication with non-local debugger: %s", h)
+	}
 	return dbg.postState(state, "exec/register")
 }
 
