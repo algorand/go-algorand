@@ -34,6 +34,9 @@ type msgpMarshalUnmarshal interface {
 	msgp.Unmarshaler
 }
 
+var rawMsgpType = reflect.TypeOf(msgp.Raw{})
+var errSkipRawMsgpTesting = fmt.Errorf("skipping msgp.Raw serializing, since it won't be the same across go-codec and msgp")
+
 func oneOf(n int) bool {
 	return (rand.Int() % n) == 0
 }
@@ -76,7 +79,9 @@ func randomizeValue(v reflect.Value) error {
 				// unexported
 				continue
 			}
-
+			if rawMsgpType == f.Type {
+				return errSkipRawMsgpTesting
+			}
 			err := randomizeValue(v.Field(i))
 			if err != nil {
 				return err
@@ -205,6 +210,11 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 func RunEncodingTest(t *testing.T, template msgpMarshalUnmarshal) {
 	for i := 0; i < 1000; i++ {
 		err := EncodingTest(template)
+		if err == errSkipRawMsgpTesting {
+			// we want to skip the serilization test in this case.
+			t.Skip()
+			return
+		}
 		require.NoError(t, err)
 	}
 }
