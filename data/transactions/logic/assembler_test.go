@@ -410,6 +410,7 @@ func TestOpBytes(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := OpStream{Version: v}
 			err := ops.ByteLiteral([]byte("abcdef"))
+			require.NoError(t, err)
 			program, err := ops.Bytes()
 			require.NoError(t, err)
 			s := hex.EncodeToString(program)
@@ -912,7 +913,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 
 	program[0] = 0x01 // version
 	program[1] = 0xFF // first opcode
-	out, err = Disassemble(program)
+	_, err = Disassemble(program)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid opcode")
 
@@ -1002,6 +1003,7 @@ func TestAssembleOffsets(t *testing.T) {
 	// vlen
 	line, ok := offsets[0]
 	require.False(t, ok)
+	require.Equal(t, 0, line)
 	// err
 	line, ok = offsets[1]
 	require.True(t, ok)
@@ -1018,6 +1020,7 @@ err
 	// vlen
 	line, ok = offsets[0]
 	require.False(t, ok)
+	require.Equal(t, 0, line)
 	// err 1
 	line, ok = offsets[1]
 	require.True(t, ok)
@@ -1040,6 +1043,7 @@ err
 	// vlen
 	line, ok = offsets[0]
 	require.False(t, ok)
+	require.Equal(t, 0, line)
 	// err 1
 	line, ok = offsets[1]
 	require.True(t, ok)
@@ -1051,9 +1055,11 @@ err
 	// bnz byte 1
 	line, ok = offsets[3]
 	require.False(t, ok)
+	require.Equal(t, 0, line)
 	// bnz byte 2
 	line, ok = offsets[4]
 	require.False(t, ok)
+	require.Equal(t, 0, line)
 	// err 2
 	line, ok = offsets[5]
 	require.True(t, ok)
@@ -1074,6 +1080,7 @@ err
 	// vlen
 	line, ok = offsets[0]
 	require.False(t, ok)
+	require.Equal(t, 0, line)
 	// int 0
 	line, ok = offsets[4]
 	require.True(t, ok)
@@ -1147,28 +1154,35 @@ func TestStringLiteralParsing(t *testing.T) {
 	s = `"test`
 	result, err = parseStringLiteral(s)
 	require.EqualError(t, err, "no quotes")
+	require.Nil(t, result)
 
 	s = `test`
 	result, err = parseStringLiteral(s)
 	require.EqualError(t, err, "no quotes")
+	require.Nil(t, result)
 
 	s = `test"`
 	result, err = parseStringLiteral(s)
 	require.EqualError(t, err, "no quotes")
+	require.Nil(t, result)
 
 	s = `"test\"`
 	result, err = parseStringLiteral(s)
 	require.EqualError(t, err, "non-terminated escape seq")
+	require.Nil(t, result)
 
 	s = `"test\x\"`
 	result, err = parseStringLiteral(s)
 	require.EqualError(t, err, "escape seq inside hex number")
+	require.Nil(t, result)
 
 	s = `"test\a"`
 	result, err = parseStringLiteral(s)
 	require.EqualError(t, err, "invalid escape seq \\a")
+	require.Nil(t, result)
 
 	s = `"test\x10\x1"`
 	result, err = parseStringLiteral(s)
 	require.EqualError(t, err, "non-terminated hex seq")
+	require.Nil(t, result)
 }

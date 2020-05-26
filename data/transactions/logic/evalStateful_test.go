@@ -493,6 +493,7 @@ int 1
 	pass, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to fetch balance")
+	require.False(t, pass)
 
 	ep.Ledger = makeTestLedger(
 		map[basics.Address]uint64{
@@ -1162,6 +1163,7 @@ int 1
 	pass, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot compare ([]byte == uint64)")
+	require.False(t, pass)
 }
 
 func TestAppLocalReadWriteDeleteErrors(t *testing.T) {
@@ -2535,6 +2537,7 @@ int 1
 	pass, err := Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not allowed in current mode")
+	require.False(t, pass)
 
 	ep.Ledger = ledger
 	pass, _, err = EvalStateful(program, ep)
@@ -2563,6 +2566,7 @@ int 1
 	pass, err := Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not allowed in current mode")
+	require.False(t, pass)
 
 	ep.Ledger = ledger
 	pass, _, err = EvalStateful(program, ep)

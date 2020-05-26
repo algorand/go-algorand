@@ -340,10 +340,12 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		program, err := AssembleStringWithVersion(text, 0)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "global unknown arg")
+		require.Nil(t, program)
 
 		program, err = AssembleStringWithVersion(text, 1)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "global unknown arg")
+		require.Nil(t, program)
 
 		program, err = AssembleString(text)
 		require.NoError(t, err)
@@ -406,10 +408,12 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			program, err := AssembleStringWithVersion(text, 0)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "txn unknown arg")
+			require.Nil(t, program)
 
 			program, err = AssembleStringWithVersion(text, 1)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "txn unknown arg")
+			require.Nil(t, program)
 
 			program, err = AssembleString(text)
 			require.NoError(t, err)

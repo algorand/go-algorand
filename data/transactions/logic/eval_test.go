@@ -889,7 +889,7 @@ func TestArgTooFar(t *testing.T) {
 btoi`, v)
 			require.NoError(t, err)
 			cost, err := Check(program, defaultEvalParams(nil, nil))
-			//require.Error(t, err)
+			require.NoError(t, err)
 			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			var txn transactions.SignedTxn
@@ -914,7 +914,7 @@ func TestIntcTooFar(t *testing.T) {
 			program, err := AssembleStringWithVersion(`intc_1`, v)
 			require.NoError(t, err)
 			cost, err := Check(program, defaultEvalParams(nil, nil))
-			//require.Error(t, err)
+			require.NoError(t, err)
 			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			var txn transactions.SignedTxn
@@ -940,7 +940,7 @@ func TestBytecTooFar(t *testing.T) {
 btoi`, v)
 			require.NoError(t, err)
 			cost, err := Check(program, defaultEvalParams(nil, nil))
-			//require.Error(t, err)
+			require.NoError(t, err)
 			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			var txn transactions.SignedTxn
@@ -962,7 +962,7 @@ func TestTxnBadField(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x31, 0x7f}
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	//require.Error(t, err)
+	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	var txn transactions.SignedTxn
@@ -999,7 +999,7 @@ func TestGtxnBadIndex(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x1, 0x01}
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	//require.Error(t, err)
+	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	var txn transactions.SignedTxn
@@ -1023,7 +1023,7 @@ func TestGtxnBadField(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x0, 0x7f}
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	//require.Error(t, err)
+	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	var txn transactions.SignedTxn
@@ -1065,6 +1065,7 @@ func TestGlobalBadField(t *testing.T) {
 	program := []byte{0x01, 0x32, 0x7f}
 	cost, err := Check(program, defaultEvalParams(nil, nil))
 	require.True(t, cost < 1000)
+	require.NoError(t, err)
 	sb := strings.Builder{}
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
@@ -1793,6 +1794,7 @@ txna ApplicationArgs 0
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid ApplicationArgs index")
+	program[6] = saved
 
 	// check special case: Account 0 == Sender
 	// even without any additional context
@@ -1846,6 +1848,7 @@ txna ApplicationArgs 0
 	_, err = Eval(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid Accounts index")
+	program[4] = saved
 
 	// check special case: Account 0 == Sender
 	// even without any additional context
@@ -2048,6 +2051,7 @@ func TestSubstringFlop(t *testing.T) {
 substring 4 2
 len`, 2)
 	require.Error(t, err)
+	require.Nil(t, program)
 
 	// fails at runtime
 	program, err = assembleStringWithTrace(t, `byte 0xf000000000000000
@@ -2393,7 +2397,7 @@ int 1`, v)
 			require.NoError(t, err)
 			program = append(program, 0x12) // ==
 			cost, err := Check(program, defaultEvalParams(nil, nil))
-			//require.Error(t, err) // Check should know the type stack was wrong
+			require.NoError(t, err) // TODO: Check should know the type stack was wrong
 			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(program, defaultEvalParams(&sb, nil))
@@ -2416,7 +2420,7 @@ int 1`, v)
 			require.NoError(t, err)
 			program = append(program, 0x13) // !=
 			cost, err := Check(program, defaultEvalParams(nil, nil))
-			//require.Error(t, err) // Check should know the type stack was wrong
+			require.NoError(t, err) // TODO: Check should know the type stack was wrong
 			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			pass, err := Eval(program, defaultEvalParams(&sb, nil))
@@ -3422,6 +3426,7 @@ int 1
 	require.NoError(t, err)
 	pass, err = Eval(program, ep)
 	require.Error(t, err)
+	require.False(t, pass)
 
 	text = `int 1
 dup2
@@ -3430,6 +3435,7 @@ dup2
 	require.NoError(t, err)
 	pass, err = Eval(program, ep)
 	require.Error(t, err)
+	require.False(t, pass)
 }
 
 func TestStringLiteral(t *testing.T) {
