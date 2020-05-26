@@ -340,6 +340,16 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed when calling VerifyCatchpoint : %v", err))
 		}
 
+		err = cs.ledgerAccessor.StoreBalancesRound(cs.ctx, blk)
+		if err != nil {
+			if attemptsCount <= maxBlockDownloadAttempts {
+				// try again.
+				blk = nil
+				continue
+			}
+			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed when calling StoreBalancesRound : %v", err))
+		}
+
 		err = cs.ledgerAccessor.StoreFirstBlock(cs.ctx, blk)
 		if err != nil {
 			if attemptsCount <= maxBlockDownloadAttempts {

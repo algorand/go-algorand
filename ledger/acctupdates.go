@@ -851,7 +851,7 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 	return rnd, nil
 }
 
-func (au *accountUpdates) accountsUpdateBalaces(accountsDeltas map[basics.Address]accountDelta) (err error) {
+func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Address]accountDelta) (err error) {
 	if au.catchpointInterval == 0 {
 		return nil
 	}
@@ -1023,7 +1023,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 				return err
 			}
 
-			err = au.accountsUpdateBalaces(deltas[i])
+			err = au.accountsUpdateBalances(deltas[i])
 			if err != nil {
 				return err
 			}

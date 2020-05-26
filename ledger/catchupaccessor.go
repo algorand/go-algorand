@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
@@ -195,9 +196,9 @@ func (c *CatchpointCatchupAccessor) processStagingContent(ctx context.Context, b
 		return fmt.Errorf("CatchpointCatchupAccessor::processStagingContent: unable to process catchpoint - version %d is not supported", fileHeader.Version)
 	}
 
-	// the following fields are now going to be ignored. We should add these to the database and validate these
+	// the following fields are now going to be ignored. We could add these to the database and validate these
 	// later on:
-	// TotalAccounts, TotalAccounts, Catchpoint, BlockHeaderDigest
+	// TotalAccounts, TotalAccounts, Catchpoint, BlockHeaderDigest, BalancesRound
 	wdb := c.ledger.trackerDB().wdb
 	err = wdb.Atomic(func(tx *sql.Tx) (err error) {
 		sq, err := accountsDbInit(tx, tx)
@@ -207,10 +208,6 @@ func (c *CatchpointCatchupAccessor) processStagingContent(ctx context.Context, b
 		_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupBlockRound, uint64(fileHeader.BlocksRound))
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessor::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupBlockRound, err)
-		}
-		_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupBalancesRound, uint64(fileHeader.BalancesRound))
-		if err != nil {
-			return fmt.Errorf("CatchpointCatchupAccessor::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupBalancesRound, err)
 		}
 		err = accountsPutTotals(tx, fileHeader.Totals, true)
 		return
@@ -361,6 +358,24 @@ func (c *CatchpointCatchupAccessor) VerifyCatchpoint(ctx context.Context, blk *b
 		return fmt.Errorf("catchpoint hash mismatch; expected %s, calculated %s", catchpointLabel, catchpointLabelMaker.String())
 	}
 	return nil
+}
+
+// StoreBalancesRound calculates the balances round based on the first block and the associated consensus parametets, and
+// store that to the database
+func (c *CatchpointCatchupAccessor) StoreBalancesRound(ctx context.Context, blk *bookkeeping.Block) (err error) {
+	// calculate the balances round and store it. It *should* be identical to the one in the catchpoint file header, but we don't want to
+	// trust the one in the catchpoint file header, so we'll calculate it ourselves.
+	balancesRound := blk.Round() - basics.Round(config.Consensus[blk.CurrentProtocol].MaxBalLookback)
+	wdb := c.ledger.trackerDB().wdb
+	err = wdb.Atomic(func(tx *sql.Tx) (err error) {
+		sq, err := accountsDbInit(tx, tx)
+		_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupBalancesRound, uint64(balancesRound))
+		if err != nil {
+			return fmt.Errorf("CatchpointCatchupAccessor::StoreBalancesRound: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupBalancesRound, err)
+		}
+		return
+	})
+	return
 }
 
 // StoreFirstBlock stores a single block to the blocks database.
