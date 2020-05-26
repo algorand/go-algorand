@@ -724,6 +724,27 @@ byte 0x414c474f
 	require.NoError(t, err)
 	require.True(t, pass)
 
+	// check reading state of other app
+	ledger.newApp(txn.Txn.Sender, 101)
+	ledger.newApp(txn.Txn.Sender, 100)
+	text = `int 0  // account idx
+int 101 // app id
+txn ApplicationArgs 0
+app_local_get
+bnz exist
+err
+exist:
+byte 0x414c474f
+==`
+
+	program, err = AssembleString(text)
+	require.NoError(t, err)
+
+	ledger.balances[txn.Txn.Sender].apps[101][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+	pass, _, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
 	// check app_local_gets
 	text = `int 0  // account idx
 txn ApplicationArgs 0
@@ -1837,6 +1858,60 @@ byte 0x414c474f
 
 	require.Equal(t, 1, ledger.globalCount)
 	require.Equal(t, 0, ledger.localCount)
+}
+
+func TestAppGlobalReadOtherApp(t *testing.T) {
+	t.Parallel()
+	source := `int 101
+byte "mykey1"
+app_global_get
+bz ok1
+err
+ok1:
+pop
+int 101
+byte "mykey"
+app_global_get
+bnz ok2
+err
+ok2:
+byte "myval"
+==
+`
+	ep := defaultEvalParams(nil, nil)
+	txn := makeSampleTxn()
+	txn.Txn.ApplicationID = 100
+	ep.Txn = &txn
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{
+			txn.Txn.Sender: 1,
+		},
+	)
+	ep.Ledger = ledger
+	ledger.newApp(txn.Txn.Sender, 100)
+
+	program, err := AssembleString(source)
+	require.NoError(t, err)
+	cost, err := CheckStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, cost < 1000)
+	pass, delta, err := EvalStateful(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to fetch global state for app 101: no such app")
+	require.False(t, pass)
+	require.Equal(t, 0, len(delta.GlobalDelta))
+	require.Equal(t, 0, len(delta.LocalDeltas))
+
+	ledger.newApp(txn.Txn.Receiver, 101)
+	ledger.newApp(txn.Txn.Receiver, 100) // this keeps current app id = 100
+	algoValue := basics.TealValue{Type: basics.TealBytesType, Bytes: "myval"}
+	ledger.applications[101]["mykey"] = algoValue
+
+	pass, delta, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+	require.Equal(t, 0, len(delta.GlobalDelta))
+	require.Equal(t, 0, len(delta.LocalDeltas))
 }
 
 func TestAppGlobalDelete(t *testing.T) {
