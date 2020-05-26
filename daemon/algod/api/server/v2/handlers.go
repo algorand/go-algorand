@@ -147,7 +147,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 	}
 
 	response := generated.AccountResponse{
-		Type:                        nil,
+		SigType:                     nil,
 		Round:                       uint64(lastRound),
 		Address:                     addr.String(),
 		Amount:                      amount.Raw,
@@ -273,6 +273,12 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 // RawTransaction broadcasts a raw transaction to the network.
 // (POST /v2/transactions)
 func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
+	stat, err := v2.Node.Status()
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	}
+	proto := config.Consensus[stat.LastVersion]
+
 	var txgroup []transactions.SignedTxn
 	dec := protocol.NewDecoder(ctx.Request().Body)
 	for {
@@ -285,6 +291,11 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
 		txgroup = append(txgroup, st)
+
+		if len(txgroup) > proto.MaxTxGroupSize {
+			err := fmt.Errorf("max group size is %d", proto.MaxTxGroupSize)
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
 	}
 
 	if len(txgroup) == 0 {
@@ -292,7 +303,7 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	err := v2.Node.BroadcastSignedTxGroup(txgroup)
+	err = v2.Node.BroadcastSignedTxGroup(txgroup)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
