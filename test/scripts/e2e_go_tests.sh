@@ -83,9 +83,9 @@ cd ${SRCROOT}/test/e2e-go
 EXECUTE_TESTS_INDIVIDUALLY="false"
 ARCHTYPE=$("${SRCROOT}/scripts/archtype.sh")
 echo "ARCHTYPE:    ${ARCHTYPE}"
-if [[ "${ARCHTYPE}" = arm* ]]; then
-    EXECUTE_TESTS_INDIVIDUALLY="true"
-fi
+#if [[ "${ARCHTYPE}" = arm* ]]; then
+#    EXECUTE_TESTS_INDIVIDUALLY="true"
+#fi
 
 echo "EXECUTE_TEST_INDIVIDUALLY = ${EXECUTE_TESTS_INDIVIDUALLY}"
 
