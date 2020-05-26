@@ -22,8 +22,9 @@ import (
 	"math/rand"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/msgp/msgp"
 	"github.com/stretchr/testify/require"
@@ -68,7 +69,7 @@ func parseStructTags(structTag string) map[string]string {
 	return tagsMap
 }
 
-var printWarningOnce sync.Mutex
+var printWarningOnce deadlock.Mutex
 var warningMessages map[string]bool
 
 func printWarning(warnMsg string) {
