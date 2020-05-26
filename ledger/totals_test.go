@@ -27,10 +27,10 @@ import (
 )
 
 func TestAccountTotalsCanMarshalMsg(t *testing.T) {
-	var at AccountTotals
+	var at *AccountTotals
 	require.True(t, at.CanMarshalMsg(interface{}(at)))
 	require.False(t, at.CanMarshalMsg(interface{}(t)))
-	require.True(t, at.CanUnmarshalMsg(interface{}(&at)))
+	require.True(t, at.CanUnmarshalMsg(interface{}(at)))
 	require.False(t, at.CanUnmarshalMsg(interface{}(t)))
 }
 func TestAccountTotalsMarshalMsg(t *testing.T) {
