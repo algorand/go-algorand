@@ -367,6 +367,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 								groupIndex: gi,
 								eval:       eval,
 								ledger:     ledger,
+								states:     states,
 							}
 							r.runs = append(r.runs, run)
 							found = true
