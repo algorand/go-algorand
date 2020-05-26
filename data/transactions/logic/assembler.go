@@ -684,6 +684,12 @@ func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func disSubstring(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 2
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	start := uint(dis.program[dis.pc+1])
 	end := uint(dis.program[dis.pc+2])
 	dis.nextpc = dis.pc + 3
@@ -1337,6 +1343,12 @@ func disIntcblock(dis *disassembleState, spec *OpSpec) {
 }
 
 func disIntc(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 2
 	_, dis.err = fmt.Fprintf(dis.out, "intc %d\n", dis.program[dis.pc+1])
 }
@@ -1361,16 +1373,34 @@ func disBytecblock(dis *disassembleState, spec *OpSpec) {
 }
 
 func disBytec(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 2
 	_, dis.err = fmt.Fprintf(dis.out, "bytec %d\n", dis.program[dis.pc+1])
 }
 
 func disArg(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 2
 	_, dis.err = fmt.Fprintf(dis.out, "arg %d\n", dis.program[dis.pc+1])
 }
 
 func disTxn(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 2
 	txarg := dis.program[dis.pc+1]
 	if int(txarg) >= len(TxnFieldNames) {
@@ -1381,6 +1411,12 @@ func disTxn(dis *disassembleState, spec *OpSpec) {
 }
 
 func disTxna(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 2
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 3
 	txarg := dis.program[dis.pc+1]
 	if int(txarg) >= len(TxnFieldNames) {
@@ -1392,6 +1428,12 @@ func disTxna(dis *disassembleState, spec *OpSpec) {
 }
 
 func disGtxn(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 2
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 3
 	gi := dis.program[dis.pc+1]
 	txarg := dis.program[dis.pc+2]
@@ -1403,6 +1445,12 @@ func disGtxn(dis *disassembleState, spec *OpSpec) {
 }
 
 func disGtxna(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 3
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 4
 	gi := dis.program[dis.pc+1]
 	txarg := dis.program[dis.pc+2]
@@ -1415,6 +1463,12 @@ func disGtxna(dis *disassembleState, spec *OpSpec) {
 }
 
 func disGlobal(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 2
 	garg := dis.program[dis.pc+1]
 	if int(garg) >= len(GlobalFieldNames) {
@@ -1425,6 +1479,13 @@ func disGlobal(dis *disassembleState, spec *OpSpec) {
 }
 
 func disBranch(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 2
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
+
 	dis.nextpc = dis.pc + 3
 	offset := (uint(dis.program[dis.pc+1]) << 8) | uint(dis.program[dis.pc+2])
 	target := int(offset) + dis.pc + 3
@@ -1438,18 +1499,36 @@ func disBranch(dis *disassembleState, spec *OpSpec) {
 }
 
 func disLoad(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	n := uint(dis.program[dis.pc+1])
 	dis.nextpc = dis.pc + 2
 	_, dis.err = fmt.Fprintf(dis.out, "load %d\n", n)
 }
 
 func disStore(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	n := uint(dis.program[dis.pc+1])
 	dis.nextpc = dis.pc + 2
 	_, dis.err = fmt.Fprintf(dis.out, "store %d\n", n)
 }
 
 func disAssetHolding(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 2
 	arg := dis.program[dis.pc+1]
 	if int(arg) >= len(AssetHoldingFieldNames) {
@@ -1460,6 +1539,12 @@ func disAssetHolding(dis *disassembleState, spec *OpSpec) {
 }
 
 func disAssetParams(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 2
 	arg := dis.program[dis.pc+1]
 	if int(arg) >= len(AssetParamsFieldNames) {

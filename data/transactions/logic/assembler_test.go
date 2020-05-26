@@ -932,6 +932,46 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	_, err = Disassemble(program)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset params arg index")
+
+	source = "int 0\nint 0\nasset_params_get AssetTotal"
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	_, err = Disassemble(program)
+	require.NoError(t, err)
+	program = program[0 : len(program)-1]
+	_, err = Disassemble(program)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unexpected asset_params_get opcode end: missing 1 bytes")
+
+	source = "gtxna 0 Accounts 0"
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	_, err = Disassemble(program)
+	require.NoError(t, err)
+	program = program[0 : len(program)-2]
+	_, err = Disassemble(program)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unexpected gtxna opcode end: missing 2 bytes")
+
+	source = "txna Accounts 0"
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	_, err = Disassemble(program)
+	require.NoError(t, err)
+	program = program[0 : len(program)-1]
+	_, err = Disassemble(program)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unexpected txna opcode end: missing 1 bytes")
+
+	source = "byte 0x4141\nsubstring 0 1"
+	program, err = AssembleString(source)
+	require.NoError(t, err)
+	_, err = Disassemble(program)
+	require.NoError(t, err)
+	program = program[0 : len(program)-1]
+	_, err = Disassemble(program)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unexpected substring opcode end: missing 1 bytes")
 }
 
 func TestAssembleVersions(t *testing.T) {
