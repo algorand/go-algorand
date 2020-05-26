@@ -71,12 +71,12 @@ var accountsSchema = []string{
 		filesize size NOT NULL,
 		pinned integer NOT NULL)`,
 	`CREATE TABLE IF NOT EXISTS accounthashes (
-			id integer primary key,
-			data blob)`,
+		id integer primary key,
+		data blob)`,
 	`CREATE TABLE IF NOT EXISTS catchpointstate (
-			id string primary key,
-			intval integer,
-			strval text)`,
+		id string primary key,
+		intval integer,
+		strval text)`,
 }
 
 var accountsResetExprs = []string{
