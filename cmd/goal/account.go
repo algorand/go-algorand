@@ -546,16 +546,21 @@ var dumpCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
+		rawAddress, err := basics.UnmarshalChecksumAddress(accountAddress)
+		if err != nil {
+			reportErrorf(errorParseAddr, err)
+		}
 		accountData, err := client.AccountData(accountAddress)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 
+		br := basics.BalanceRecord{Addr: rawAddress, AccountData: accountData}
 		if len(dumpOutFile) > 0 {
-			data := protocol.Encode(&accountData)
+			data := protocol.Encode(&br)
 			writeFile(dumpOutFile, data, 0644)
 		} else {
-			data := protocol.EncodeJSON(&accountData)
+			data := protocol.EncodeJSON(&br)
 			fmt.Println(string(data))
 		}
 	},

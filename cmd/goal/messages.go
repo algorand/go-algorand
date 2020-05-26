@@ -23,6 +23,7 @@ const (
 	errorRequestFail         = "Error processing command: %s"
 	errorGenesisIDFail       = "Error determining kmd folder (%s). Ensure the node is running in %s."
 	errorDirectoryNotExist   = "Specified directory '%s' does not exist."
+	errorParseAddr           = "Failed to parse addr: %v"
 
 	// Account
 	infoNoAccounts                 = "Did not find any account. Please import or create a new one."
