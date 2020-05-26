@@ -889,7 +889,7 @@ func TestArgTooFar(t *testing.T) {
 btoi`, v)
 			require.NoError(t, err)
 			cost, err := Check(program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
+			require.NoError(t, err)  // TODO: Check should know the type stack was wrong
 			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			var txn transactions.SignedTxn
@@ -914,7 +914,7 @@ func TestIntcTooFar(t *testing.T) {
 			program, err := AssembleStringWithVersion(`intc_1`, v)
 			require.NoError(t, err)
 			cost, err := Check(program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
+			require.NoError(t, err)  // TODO: Check should know the type stack was wrong
 			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			var txn transactions.SignedTxn
@@ -940,7 +940,7 @@ func TestBytecTooFar(t *testing.T) {
 btoi`, v)
 			require.NoError(t, err)
 			cost, err := Check(program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)
+			require.NoError(t, err)  // TODO: Check should know the type stack was wrong
 			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			var txn transactions.SignedTxn
@@ -962,7 +962,7 @@ func TestTxnBadField(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x31, 0x7f}
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)
+	require.NoError(t, err)  // TODO: Check should know the type stack was wrong
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	var txn transactions.SignedTxn
@@ -999,7 +999,7 @@ func TestGtxnBadIndex(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x1, 0x01}
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)
+	require.NoError(t, err)  // TODO: Check should know the type stack was wrong
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	var txn transactions.SignedTxn
@@ -1023,7 +1023,7 @@ func TestGtxnBadField(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x0, 0x7f}
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)
+	require.NoError(t, err)  // TODO: Check should know the type stack was wrong
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	var txn transactions.SignedTxn
@@ -1065,7 +1065,7 @@ func TestGlobalBadField(t *testing.T) {
 	program := []byte{0x01, 0x32, 0x7f}
 	cost, err := Check(program, defaultEvalParams(nil, nil))
 	require.True(t, cost < 1000)
-	require.NoError(t, err)
+	require.NoError(t, err) // Check does not validates opcode args
 	sb := strings.Builder{}
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
