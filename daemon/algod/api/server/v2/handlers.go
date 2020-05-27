@@ -17,7 +17,9 @@
 package v2
 
 import (
+	"bytes"
 	"errors"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,11 +34,14 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 )
+
+const maxTealSourceBytes = 1e5
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
@@ -464,4 +469,25 @@ func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.Ge
 // (GET /v2/accounts/{address}/transactions/pending)
 func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr string, params generated.GetPendingTransactionsByAddressParams) error {
 	return v2.getPendingTransactions(ctx, params.Max, params.Format, &addr)
+}
+
+// TealCompile compiles TEAL code to binary, return both binary and hash
+// (POST /v2/teal/compile)
+func (v2 *Handlers) TealCompile(ctx echo.Context) error {
+	buf := new(bytes.Buffer)
+	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
+	buf.ReadFrom(ctx.Request().Body)
+	source := buf.String()
+	program, err := logic.AssembleString(source)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+	
+	pd := logic.HashProgram(program)
+	addr := basics.Address(pd)
+	response := generated.PostCompileResponse {
+		Hash: addr.String(),
+		Result: base64.StdEncoding.EncodeToString(program),
+	}
+	return ctx.JSON(http.StatusOK, response)
 }

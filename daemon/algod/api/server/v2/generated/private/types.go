@@ -315,6 +315,16 @@ type PendingTransactionsResponse struct {
 	TotalTransactions uint64 `json:"total-transactions"`
 }
 
+// PostCompileResponse defines model for PostCompileResponse.
+type PostCompileResponse struct {
+
+	// base32 SHA512_256 of program bytes (Address style)
+	Hash string `json:"hash"`
+
+	// base64 encoded program bytes
+	Result string `json:"result"`
+}
+
 // PostTransactionsResponse defines model for PostTransactionsResponse.
 type PostTransactionsResponse struct {
 
