@@ -382,6 +382,30 @@
         },
         "description": "A potentially truncated list of transactions currently in the node's transaction pool. You can compute whether or not the list is truncated if the number of elements in the **top-transactions** array is fewer than **total-transactions**."
       },
+      "PostCompileResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "hash": {
+                  "description": "base32 SHA512_256 of program bytes (Address style)",
+                  "type": "string"
+                },
+                "result": {
+                  "description": "base64 encoded program bytes",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "hash",
+                "result"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Teal compile Result"
+      },
       "PostTransactionsResponse": {
         "content": {
           "application/json": {
@@ -1534,6 +1558,85 @@
           }
         },
         "summary": "Gets the node status after waiting for the given round."
+      }
+    },
+    "/v2/teal/compile": {
+      "post": {
+        "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style).",
+        "operationId": "TealCompile",
+        "requestBody": {
+          "content": {
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "TEAL source code to be compiled",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "hash": {
+                      "description": "base32 SHA512_256 of program bytes (Address style)",
+                      "type": "string"
+                    },
+                    "result": {
+                      "description": "base64 encoded program bytes",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "hash",
+                    "result"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Teal compile Result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - Teal Compile Error"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Compile TEAL source code to binary, produce its hash",
+        "x-codegen-request-body-name": "source"
       }
     },
     "/v2/transactions": {
