@@ -83,6 +83,7 @@ for var in "${VARIATION_ARRAY[@]}"; do
         PKG_NAME=${OS}-${ARCH}
 
         PLATFORM_ROOT=${PKG_ROOT}/${CHANNEL}/${PKG_NAME}
+        rm -rf ${PLATFORM_ROOT}
         mkdir -p ${PLATFORM_ROOT}
         scripts/build_package.sh ${OS} ${ARCH} ${PLATFORM_ROOT}
 
