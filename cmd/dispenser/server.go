@@ -93,7 +93,7 @@ const topPageTemplate = `
               }).fail(function () {
                 $('#status').html('Code ' + req.status + ' ' + req.statusText + ': ' + req.responseText);
               });
-		 });		 
+         });		 
          loadparm();
       }
     </script>
