@@ -210,61 +210,13 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 // The close function is expected to be call in pair with loadFromDisk
 func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	var writingCatchpointRound uint64
-	au.accountsMu.Lock()
+	lastBalancesRound, lastestBlockRound, err := au.initializeFromDisk(l)
 
-	au.dbs = l.trackerDB()
-	au.log = l.trackerLog()
-	au.ledger = l
-
-	if au.initAccounts == nil {
-		au.accountsMu.Unlock()
-		return fmt.Errorf("accountUpdates.loadFromDisk: initAccounts not set")
-	}
-
-	latest := l.Latest()
-	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) error {
-		var err0 error
-		au.dbRound, err0 = au.accountsInitialize(tx)
-		if err0 != nil {
-			return err0
-		}
-		// Check for blocks DB and tracker DB un-sync
-		if au.dbRound > latest {
-			au.log.Warnf("resetting accounts DB (on round %v, but blocks DB's latest is %v)", au.dbRound, latest)
-			err0 = accountsReset(tx)
-			if err0 != nil {
-				return err0
-			}
-			au.dbRound, err0 = au.accountsInitialize(tx)
-			if err0 != nil {
-				return err0
-			}
-		}
-
-		totals, err0 := accountsTotals(tx, false)
-		if err0 != nil {
-			return err0
-		}
-
-		au.roundTotals = []AccountTotals{totals}
-		return nil
-	})
 	if err != nil {
-		au.accountsMu.Unlock()
 		return err
 	}
 
-	au.accountsq, err = accountsDbInit(au.dbs.rdb.Handle, au.dbs.wdb.Handle)
-	if err != nil {
-		au.accountsMu.Unlock()
-		return err
-	}
-
-	au.lastCatchpointLabel, _, err = au.accountsq.readCatchpointStateString(context.Background(), catchpointStateLastCatchpoint)
-	if err != nil {
-		au.accountsMu.Unlock()
-		return err
-	}
+	var writingCatchpointDigest crypto.Digest
 
 	writingCatchpointRound, _, err = au.accountsq.readCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint)
 	if err != nil {
@@ -272,52 +224,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		return err
 	}
 
-	hdr, err := l.BlockHdr(au.dbRound)
-	if err != nil {
-		au.accountsMu.Unlock()
-		return err
-	}
-	au.protos = []config.ConsensusParams{config.Consensus[hdr.CurrentProtocol]}
-	au.deltas = nil
-	au.assetDeltas = nil
-	au.accounts = make(map[basics.Address]modifiedAccount)
-	au.assets = make(map[basics.AssetIndex]modifiedAsset)
-	au.deltasAccum = []int{0}
-
-	// keep these channel closed if we're not generating catchpoint
-	au.catchpointWriting = make(chan struct{}, 1)
-	au.catchpointSlowWriting = make(chan struct{}, 1)
-	close(au.catchpointSlowWriting)
-	close(au.catchpointWriting)
-	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
-	au.committedOffset = make(chan deferedCommit, 1)
-	go au.commitSyncer()
-
-	loaded := au.dbRound
-	au.accountsMu.Unlock()
-
-	var writingCatchpointDigest crypto.Digest
-
-	for loaded < latest {
-		next := loaded + 1
-
-		blk, err := l.Block(next)
-		if err != nil {
-			return err
-		}
-
-		delta, err := l.trackerEvalVerified(blk)
-		if err != nil {
-			return err
-		}
-
-		au.newBlock(blk, delta)
-		loaded = next
-
-		if next == basics.Round(writingCatchpointRound) {
-			writingCatchpointDigest = blk.Digest()
-		}
-	}
+	writingCatchpointDigest, err = au.initializeCaches(lastBalancesRound, lastestBlockRound, basics.Round(writingCatchpointRound))
 
 	if writingCatchpointRound != 0 && au.catchpointInterval != 0 {
 		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest)
@@ -753,6 +660,116 @@ func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser
 }
 
 // functions below this line are all internal functions
+
+// initializeCaches fills up the accountUpdates cache with the most recent ~320 blocks
+func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound, writingCatchpointRound basics.Round) (catchpointBlockDigest crypto.Digest, err error) {
+	var blk bookkeeping.Block
+	var delta StateDelta
+
+	for lastBalancesRound < lastestBlockRound {
+		next := lastBalancesRound + 1
+
+		blk, err = au.ledger.Block(next)
+		if err != nil {
+			return
+		}
+
+		delta, err = au.ledger.trackerEvalVerified(blk)
+		if err != nil {
+			return
+		}
+
+		au.newBlock(blk, delta)
+		lastBalancesRound = next
+
+		if next == basics.Round(writingCatchpointRound) {
+			catchpointBlockDigest = blk.Digest()
+		}
+	}
+	return
+}
+
+// initializeFromDisk performs the atomic operation of loading the accounts data information from disk
+// and preparing the accountUpdates for operation, including initlizating the commitSyncer goroutine.
+func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRound, lastestBlockRound basics.Round, err error) {
+	au.accountsMu.Lock()
+	defer au.accountsMu.Unlock()
+
+	au.dbs = l.trackerDB()
+	au.log = l.trackerLog()
+	au.ledger = l
+
+	if au.initAccounts == nil {
+		err = fmt.Errorf("accountUpdates.loadFromDisk: initAccounts not set")
+		return
+	}
+
+	lastestBlockRound = l.Latest()
+	err = au.dbs.wdb.Atomic(func(tx *sql.Tx) error {
+		var err0 error
+		au.dbRound, err0 = au.accountsInitialize(tx)
+		if err0 != nil {
+			return err0
+		}
+		// Check for blocks DB and tracker DB un-sync
+		if au.dbRound > lastestBlockRound {
+			au.log.Warnf("resetting accounts DB (on round %v, but blocks DB's latest is %v)", au.dbRound, lastestBlockRound)
+			err0 = accountsReset(tx)
+			if err0 != nil {
+				return err0
+			}
+			au.dbRound, err0 = au.accountsInitialize(tx)
+			if err0 != nil {
+				return err0
+			}
+		}
+
+		totals, err0 := accountsTotals(tx, false)
+		if err0 != nil {
+			return err0
+		}
+
+		au.roundTotals = []AccountTotals{totals}
+		return nil
+	})
+	if err != nil {
+		return
+	}
+
+	au.accountsq, err = accountsDbInit(au.dbs.rdb.Handle, au.dbs.wdb.Handle)
+	if err != nil {
+		return
+	}
+
+	au.lastCatchpointLabel, _, err = au.accountsq.readCatchpointStateString(context.Background(), catchpointStateLastCatchpoint)
+	if err != nil {
+		return
+	}
+
+	hdr, err := l.BlockHdr(au.dbRound)
+	if err != nil {
+		return
+	}
+	au.protos = []config.ConsensusParams{config.Consensus[hdr.CurrentProtocol]}
+	au.deltas = nil
+	au.assetDeltas = nil
+	au.accounts = make(map[basics.Address]modifiedAccount)
+	au.assets = make(map[basics.AssetIndex]modifiedAsset)
+	au.deltasAccum = []int{0}
+
+	// keep these channel closed if we're not generating catchpoint
+	au.catchpointWriting = make(chan struct{}, 1)
+	au.catchpointSlowWriting = make(chan struct{}, 1)
+	close(au.catchpointSlowWriting)
+	close(au.catchpointWriting)
+	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
+	au.committedOffset = make(chan deferedCommit, 1)
+	go au.commitSyncer()
+
+	lastBalancesRound = au.dbRound
+
+	return
+}
 
 // accountHashBuilder calculates the hash key used for the trie by combining the account address and the account data
 func accountHashBuilder(addr basics.Address, accountData basics.AccountData, encodedAccountData []byte) []byte {
