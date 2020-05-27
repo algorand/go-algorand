@@ -293,9 +293,15 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			if mode == "application" {
 				var ledger logic.LedgerForLogic
 				var states appState
+				txn := r.txnGroup[dp.GroupIndex]
+				appIdx := txn.Txn.ApplicationID
+				if appIdx == 0 {
+					appIdx = basics.AppIndex(dp.AppID)
+				}
+
 				ledger, states, err = makeAppLedger(
 					balances, r.txnGroup, dp.GroupIndex,
-					r.proto, dp.Round, dp.LatestTimestamp, dp.AppID,
+					r.proto, dp.Round, dp.LatestTimestamp, appIdx,
 				)
 				if err != nil {
 					return
@@ -322,13 +328,6 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 		} else if stxn.Txn.Type == protocol.ApplicationCallTx {
 			var ledger logic.LedgerForLogic
 			var states appState
-			ledger, states, err = makeAppLedger(
-				balances, r.txnGroup, gi,
-				r.proto, dp.Round, dp.LatestTimestamp, dp.AppID,
-			)
-			if err != nil {
-				return
-			}
 			eval := func(program []byte, ep logic.EvalParams) (bool, error) {
 				pass, _, err := logic.EvalStateful(program, ep)
 				return pass, err
@@ -336,6 +335,14 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			appIdx := stxn.Txn.ApplicationID
 			if appIdx == 0 { // app create, use ApprovalProgram from the transaction
 				if len(stxn.Txn.ApprovalProgram) > 0 {
+					appIdx = basics.AppIndex(dp.AppID)
+					ledger, states, err = makeAppLedger(
+						balances, r.txnGroup, gi,
+						r.proto, dp.Round, dp.LatestTimestamp, appIdx,
+					)
+					if err != nil {
+						return
+					}
 					run := evaluation{
 						program:    stxn.Txn.ApprovalProgram,
 						groupIndex: gi,
@@ -360,6 +367,13 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 							}
 							if len(program) == 0 {
 								err = fmt.Errorf("empty program found for app idx %d", appIdx)
+								return
+							}
+							ledger, states, err = makeAppLedger(
+								balances, r.txnGroup, gi,
+								r.proto, dp.Round, dp.LatestTimestamp, appIdx,
+							)
+							if err != nil {
 								return
 							}
 							run := evaluation{

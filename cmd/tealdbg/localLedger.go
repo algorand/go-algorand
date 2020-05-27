@@ -39,7 +39,7 @@ type balancesAdapter struct {
 
 func makeAppLedger(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
-	groupIndex int, proto config.ConsensusParams, round int, latestTimestamp int64, appIdxIn int,
+	groupIndex int, proto config.ConsensusParams, round int, latestTimestamp int64, appIdx basics.AppIndex,
 ) (logic.LedgerForLogic, appState, error) {
 
 	if groupIndex >= len(txnGroup) {
@@ -50,12 +50,6 @@ func makeAppLedger(
 	accounts := []basics.Address{txn.Txn.Sender}
 	for _, addr := range txn.Txn.Accounts {
 		accounts = append(accounts, addr)
-	}
-
-	appIdx := txn.Txn.ApplicationID
-	if appIdx == 0 {
-		// presumably this is app create transaction, initialize with some value
-		appIdx = basics.AppIndex(appIdxIn)
 	}
 
 	apps := []basics.AppIndex{appIdx}
