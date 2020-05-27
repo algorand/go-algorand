@@ -62,28 +62,25 @@ tasks:
       ]
     target: mule-deploy-rpm WORKDIR=/projects/go-algorand
 
-  - task: s3.DownloadFile
+  - task: s3.BucketCopy
     name: deb
-    bucketName: algorand-staging
-    objectName: releases/$CHANNEL/$VERSION/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb
-    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
+    src: s3://algorand-staging/releases/$CHANNEL/$VERSION/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb
+    dest: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
 
-  - task: s3.DownloadFile
+  - task: s3.BucketCopy
     name: rpm
-    bucketName: algorand-staging
-    objectName: releases/$CHANNEL/$VERSION/algorand-${VERSION}-1.${ARCH_BIT}.rpm
-    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
+    src: s3://algorand-staging/releases/$CHANNEL/$VERSION/algorand-${VERSION}-1.${ARCH_BIT}.rpm
+    dest: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
 
-  - task: s3.DownloadFile
+  - task: s3.BucketCopy
     name: gnupg
-    bucketName: algorand-devops-misc
-    objectName: tools/gnupg2.2.9_centos7_amd64.tar.bz2
-    outputDir: /root
+    src: s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2
+    dest: /root
 
-  - task: s3.UploadFile
+  - task: s3.BucketCopy
     name: releases-page
-    bucketName: algorand-releases
-    fileName: /tmp/index.html
+    src: /tmp/index.html
+    dest: s3://algorand-releases
 
   - task: s3.BucketCopy
     name: deploy-dev-deb-repo
@@ -112,21 +109,21 @@ jobs:
 
   package-deploy-setup-deb:
     tasks:
-      - s3.DownloadFile.deb
+      - s3.BucketCopy.deb
 
   package-deploy-setup-rpm:
     tasks:
-      - s3.DownloadFile.rpm
+      - s3.BucketCopy.rpm
 
   package-deploy-setup-gnupg:
     tasks:
-      - s3.DownloadFile.gnupg
+      - s3.BucketCopy.gnupg
 
   package-deploy-releases-page:
     tasks:
-      - s3.UploadFile.releases-page
+      - s3.BucketCopy.releases-page
 
   package-deploy-rpm-repo:
     tasks:
-      - s3.UploadFile.rpm-repo
+      - s3.BucketCopy.rpm-repo
 
