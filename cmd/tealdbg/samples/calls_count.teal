@@ -1,7 +1,7 @@
 // a simple global and local calls counter app
 byte "counter"
 dup
-app_global_gets
+app_global_get
 int 1
 +
 app_global_put  // update the counter
@@ -14,7 +14,7 @@ opted_in:
 int 0
 byte "counter"
 dup2
-app_local_gets
+app_local_get
 int 1  // increment
 +
 app_local_put

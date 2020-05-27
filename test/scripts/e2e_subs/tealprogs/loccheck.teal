@@ -34,7 +34,7 @@ int 0
 
 // Key "foo"
 byte base64 Zm9v
-app_local_get
+app_local_get_ex
 
 // Value must exist
 int 0

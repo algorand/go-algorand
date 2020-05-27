@@ -269,12 +269,12 @@ app_global_put
 intc_0
 intc 6
 bytec_0
-app_local_get
+app_local_get_ex
 pop
 &&
 int 0
 bytec_0
-app_global_get
+app_global_get_ex
 pop
 &&
 intc_0
@@ -408,9 +408,9 @@ pop
 	newOpcodeCalls := []string{
 		"int 0\nbalance",
 		"int 0\nint 0\napp_opted_in",
-		"int 0\nint 0\nbyte 0x01\napp_local_get",
-		"byte 0x01\napp_global_gets",
-		"int 0\nbyte 0x01\napp_global_get",
+		"int 0\nint 0\nbyte 0x01\napp_local_get_ex",
+		"byte 0x01\napp_global_get",
+		"int 0\nbyte 0x01\napp_global_get_ex",
 		"int 1\nbyte 0x01\nbyte 0x01\napp_local_put",
 		"byte 0x01\nint 0\napp_global_put",
 		"int 0\nbyte 0x01\napp_local_del",
@@ -609,7 +609,7 @@ func TestAppReadLocalState(t *testing.T) {
 	text := `int 2  // account idx
 int 100 // app id
 txn ApplicationArgs 0
-app_local_get
+app_local_get_ex
 bnz exist
 int 0
 ==
@@ -648,7 +648,7 @@ int 1
 	text = `int 1  // account idx
 int 100 // app id
 txn ApplicationArgs 0
-app_local_get
+app_local_get_ex
 bnz exist
 int 0
 ==
@@ -685,7 +685,7 @@ int 1`
 	text = `int 1  // account idx
 int 100 // app id
 txn ApplicationArgs 0
-app_local_get
+app_local_get_ex
 bnz exist
 err
 exist:
@@ -709,7 +709,7 @@ byte 0x414c474f
 	text = `int 0  // account idx
 int 100 // app id
 txn ApplicationArgs 0
-app_local_get
+app_local_get_ex
 bnz exist
 err
 exist:
@@ -730,7 +730,7 @@ byte 0x414c474f
 	text = `int 0  // account idx
 int 101 // app id
 txn ApplicationArgs 0
-app_local_get
+app_local_get_ex
 bnz exist
 err
 exist:
@@ -745,10 +745,10 @@ byte 0x414c474f
 	require.NoError(t, err)
 	require.True(t, pass)
 
-	// check app_local_gets
+	// check app_local_get
 	text = `int 0  // account idx
 txn ApplicationArgs 0
-app_local_gets
+app_local_get
 byte 0x414c474f
 ==`
 
@@ -760,10 +760,10 @@ byte 0x414c474f
 	require.NoError(t, err)
 	require.True(t, pass)
 
-	// check app_local_gets default value
+	// check app_local_get default value
 	text = `int 0  // account idx
 byte 0x414c474f
-app_local_gets
+app_local_get
 int 0
 ==`
 
@@ -781,7 +781,7 @@ func TestAppReadGlobalState(t *testing.T) {
 
 	text := `int 0
 txn ApplicationArgs 0
-app_global_get
+app_global_get_ex
 bnz exist
 err
 exist:
@@ -789,7 +789,7 @@ byte 0x414c474f
 ==
 int 100
 txn ApplicationArgs 0
-app_global_get
+app_global_get_ex
 bnz exist1
 err
 exist1:
@@ -797,7 +797,7 @@ byte 0x414c474f
 ==
 &&
 txn ApplicationArgs 0
-app_global_gets
+app_global_get
 byte 0x414c474f
 ==
 &&
@@ -844,9 +844,9 @@ byte 0x414c474f
 	require.NoError(t, err)
 	require.True(t, pass)
 
-	// check app_local_gets default value
+	// check app_local_get default value
 	text = `byte 0x414c474f55
-app_global_gets
+app_global_get
 int 0
 ==`
 
@@ -864,7 +864,7 @@ int 4141
 app_global_put
 int 100
 byte 0x41414141
-app_global_get
+app_global_get_ex
 int 4141
 ==
 pop
@@ -1193,7 +1193,7 @@ func TestAppLocalReadWriteDeleteErrors(t *testing.T) {
 	sourceRead := `int 0  // account idx (txn.Sender)
 int 100                   // app id
 byte 0x414c474f           // key "ALGO"
-app_local_get
+app_local_get_ex
 !
 bnz error
 int 0x77
@@ -1201,7 +1201,7 @@ int 0x77
 int 0
 int 100
 byte 0x414c474f41         // ALGOA
-app_local_get
+app_local_get_ex
 !
 bnz error
 int 1
@@ -1321,7 +1321,7 @@ app_local_put
 int 0                // account
 int 100              // app id
 byte 0x414c474f41    // key "ALGOA"
-app_local_get
+app_local_get_ex
 bnz exist
 err
 exist:
@@ -1330,7 +1330,7 @@ byte 0x414c474f
 int 0                // account
 int 100              // app id
 byte 0x414c474f      // key "ALGO"
-app_local_get
+app_local_get_ex
 bnz exist2
 err
 exist2:
@@ -1368,7 +1368,7 @@ app_local_put
 int 0                 // account
 int 100               // app id
 byte 0x414c474f       // key
-app_local_get
+app_local_get_ex
 bnz exist
 err
 exist:
@@ -1398,7 +1398,7 @@ int 0x77
 	source = `int 0  // account
 int 100              // app id
 byte 0x414c474f      // key
-app_local_get
+app_local_get_ex
 bnz exist
 err
 exist:
@@ -1409,7 +1409,7 @@ app_local_put
 int 0                // account
 int 100              // app id
 byte 0x414c474f      // key
-app_local_get
+app_local_get_ex
 bnz exist2
 err
 exist2:
@@ -1460,7 +1460,7 @@ app_local_put
 int 0                // account
 int 100              // app id
 byte 0x414c474f      // key "ALGO"
-app_local_get
+app_local_get_ex
 bnz exist
 err
 exist:
@@ -1488,7 +1488,7 @@ int 0x78
 	source = `int 0  // account
 int 100              // app id
 byte 0x414c474f      // key "ALGO"
-app_local_get
+app_local_get_ex
 bnz exist
 err
 exist:
@@ -1572,7 +1572,7 @@ func TestAppGlobalReadWriteDeleteErrors(t *testing.T) {
 
 	sourceRead := `int 0
 byte 0x414c474f  // key "ALGO"
-app_global_get
+app_global_get_ex
 bnz ok
 err
 ok:
@@ -1580,7 +1580,7 @@ int 0x77
 ==
 `
 	sourceReadSimple := `byte 0x414c474f  // key "ALGO"
-app_global_gets
+app_global_get
 int 0x77
 ==
 `
@@ -1656,13 +1656,13 @@ byte 0x414c474f    // value
 app_global_put
 // check simple
 byte 0x414c474f41  // key "ALGOA"
-app_global_gets
+app_global_get
 byte 0x414c474f
 ==
 // check generic with alias
 int 0 // current app id alias
 byte 0x414c474f41  // key "ALGOA"
-app_global_get
+app_global_get_ex
 bnz ok
 err
 ok:
@@ -1672,7 +1672,7 @@ byte 0x414c474f
 // check generic with exact app id
 int 100 // current app id
 byte 0x414c474f41  // key "ALGOA"
-app_global_get
+app_global_get_ex
 bnz ok1
 err
 ok1:
@@ -1681,14 +1681,14 @@ byte 0x414c474f
 &&
 // check simple
 byte 0x414c474f
-app_global_gets
+app_global_get
 int 0x77
 ==
 &&
 // check generic with alias
 int 0 // current app id
 byte 0x414c474f
-app_global_get
+app_global_get_ex
 bnz ok2
 err
 ok2:
@@ -1698,7 +1698,7 @@ int 0x77
 // check generic with exact app id
 int 100 // current app id
 byte 0x414c474f
-app_global_get
+app_global_get_ex
 bnz ok3
 err
 ok3:
@@ -1745,7 +1745,7 @@ int 0x77
 int 0x77						// value
 app_global_put
 byte 0x414c474f
-app_global_gets
+app_global_get
 int 0x77
 ==
 `
@@ -1768,7 +1768,7 @@ int 0x77
 	// write existing value after read
 	source = `int 0
 byte 0x414c474f
-app_global_get
+app_global_get_ex
 bnz ok
 err
 ok:
@@ -1777,7 +1777,7 @@ byte 0x414c474f
 int 0x77
 app_global_put
 byte 0x414c474f
-app_global_gets
+app_global_get
 int 0x77
 ==
 `
@@ -1797,7 +1797,7 @@ int 0x77
 	// write new values after and before read
 	source = `int 0
 byte 0x414c474f
-app_global_get
+app_global_get_ex
 bnz ok
 err
 ok:
@@ -1807,7 +1807,7 @@ int 0x78
 app_global_put
 int 0
 byte 0x414c474f
-app_global_get
+app_global_get_ex
 bnz ok2
 err
 ok2:
@@ -1818,7 +1818,7 @@ byte 0x414c474f
 app_global_put
 int 0
 byte 0x414c474f41
-app_global_get
+app_global_get_ex
 bnz ok3
 err
 ok3:
@@ -1864,14 +1864,14 @@ func TestAppGlobalReadOtherApp(t *testing.T) {
 	t.Parallel()
 	source := `int 101
 byte "mykey1"
-app_global_get
+app_global_get_ex
 bz ok1
 err
 ok1:
 pop
 int 101
 byte "mykey"
-app_global_get
+app_global_get_ex
 bnz ok2
 err
 ok2:
@@ -1930,11 +1930,11 @@ byte 0x414c474f41
 app_global_del
 int 0
 byte 0x414c474f
-app_global_get
+app_global_get_ex
 bnz error
 int 0
 byte 0x414c474f41
-app_global_get
+app_global_get_ex
 bnz error
 ==
 bnz ok
@@ -1986,7 +1986,7 @@ int 1
 app_global_del
 int 100
 byte 0x414c474f
-app_global_get
+app_global_get_ex
 ==  // two zeros
 `
 
@@ -2015,7 +2015,7 @@ app_global_get
 app_global_del
 int 0
 byte 0x414c474f41
-app_global_get
+app_global_get_ex
 ==  // two zeros
 byte 0x414c474f41
 int 0x78
@@ -2143,12 +2143,12 @@ app_local_del
 int 0
 int 0
 byte 0x414c474f
-app_local_get
+app_local_get_ex
 bnz error
 int 1
 int 100
 byte 0x414c474f41
-app_local_get
+app_local_get_ex
 bnz error
 ==
 bnz ok
@@ -2207,7 +2207,7 @@ app_local_del
 int 0
 int 100
 byte 0x414c474f
-app_local_get
+app_local_get_ex
 ==  // two zeros
 `
 
@@ -2241,7 +2241,7 @@ app_local_del
 int 0
 int 0
 byte 0x414c474f41
-app_local_get
+app_local_get_ex
 ==  // two zeros
 int 0
 byte 0x414c474f41

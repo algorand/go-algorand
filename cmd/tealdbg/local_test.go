@@ -378,14 +378,14 @@ int 1
 &&
 int 1
 byte 0x6c6b6579696e74 // lkeyint
-app_local_gets
+app_local_get
 int 1
 ==
 &&
 int 0
 int 100
 byte 0x6c6b657962797465 // lkeybyte
-app_local_get
+app_local_get_ex
 bnz ok
 err
 ok:
@@ -393,13 +393,13 @@ byte 0x6c6f63616c // local
 ==
 &&
 byte 0x676b6579696e74 // gkeyint
-app_global_gets
+app_global_get
 int 2
 ==
 &&
 int 200
 byte 0x676b657962797465 // gkeybyte
-app_global_get
+app_global_get_ex
 bnz ok2
 err
 ok2:
@@ -489,7 +489,7 @@ int 1
 	source = `
 int 300
 byte 0x676b657962797465 // gkeybyte
-app_global_get
+app_global_get_ex
 bnz ok
 err
 ok:

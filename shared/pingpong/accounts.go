@@ -311,7 +311,7 @@ func genMaxClone(numKeys int) []byte {
 		int 0  // current app id
 		int 1  // key
 		itob
-		app_global_get
+		app_global_get_ex
 		bnz flip
 	`
 

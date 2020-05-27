@@ -6,7 +6,7 @@ btoi
 byte base64 Zm9v
 
 // Get value
-app_global_get
+app_global_get_ex
 
 // Should exist
 bz fail

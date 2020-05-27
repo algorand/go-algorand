@@ -564,7 +564,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 
 params: account index, application id (top of the stack on opcode entry)
 
-## app_local_gets
+## app_local_get
 
 - Opcode: 0x62
 - Pops: *... stack*, {uint64 A}, {[]byte B}
@@ -575,7 +575,7 @@ params: account index, application id (top of the stack on opcode entry)
 
 params: account index, state key. Return: value. The value is zero if the key does ont exist
 
-## app_local_get
+## app_local_get_ex
 
 - Opcode: 0x63
 - Pops: *... stack*, {uint64 A}, {uint64 B}, {[]byte C}
@@ -586,7 +586,7 @@ params: account index, state key. Return: value. The value is zero if the key do
 
 params: account index, application id, state key. Return: did_exist flag (top of the stack), value
 
-## app_global_gets
+## app_global_get
 
 - Opcode: 0x64
 - Pops: *... stack*, []byte
@@ -597,7 +597,7 @@ params: account index, application id, state key. Return: did_exist flag (top of
 
 params: state key. Return: value. The value is zero if the key does ont exist
 
-## app_global_get
+## app_global_get_ex
 
 - Opcode: 0x65
 - Pops: *... stack*, {uint64 A}, {[]byte B}

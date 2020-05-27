@@ -509,7 +509,7 @@ func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
 			int 0
 			int 1
 			itob
-			app_local_get
+			app_local_get_ex
 			bnz delete
 		`
 
@@ -563,7 +563,7 @@ func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
 			int 0  // current app id
 			int 1  // key
 			itob
-			app_global_get
+			app_global_get_ex
 			bnz delete
 		`
 
@@ -651,7 +651,7 @@ func genAppTestParamsMaxClone(numKeys int) testParams {
 		int 0  // current app id
 		int 1  // key
 		itob
-		app_global_get
+		app_global_get_ex
 		bnz flip
 	`
 
@@ -724,11 +724,11 @@ func genAppTestParamsMaxClone(numKeys int) testParams {
 const asaClearAsm = `
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_gets
+app_global_get
 int 0
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 +
 app_global_put
@@ -770,13 +770,13 @@ bnz unless7
 // cannot modify frozen asset
 txn Sender
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if9
 int 0
 int 0
 byte base64 Zno=
-app_local_get
+app_local_get_ex
 pop
 int 1
 ==
@@ -784,7 +784,7 @@ int 1
 bnz if_end10
 if9:
 byte base64 Zno=
-app_global_gets
+app_global_get
 int 1
 ==
 if_end10:
@@ -794,7 +794,7 @@ err
 assert8:
 txn Sender
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if11
 int 0
@@ -802,7 +802,7 @@ byte base64 Ymw=
 int 0
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 load 1
 -
@@ -812,7 +812,7 @@ bnz if_end12
 if11:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_gets
+app_global_get
 load 1
 -
 app_global_put
@@ -825,13 +825,13 @@ bnz unless13
 // cannot modify frozen asset
 txna Accounts 1
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if15
 int 1
 int 0
 byte base64 Zno=
-app_local_get
+app_local_get_ex
 pop
 int 1
 ==
@@ -839,7 +839,7 @@ int 1
 bnz if_end16
 if15:
 byte base64 Zno=
-app_global_gets
+app_global_get
 int 1
 ==
 if_end16:
@@ -849,7 +849,7 @@ err
 assert14:
 txna Accounts 1
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if17
 int 1
@@ -857,7 +857,7 @@ byte base64 Ymw=
 int 1
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 load 1
 +
@@ -867,7 +867,7 @@ bnz if_end18
 if17:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_gets
+app_global_get
 load 1
 +
 app_global_put
@@ -880,7 +880,7 @@ bnz unless19
 int 0
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 store 2
 load 2
@@ -890,13 +890,13 @@ bnz unless20
 // cannot modify frozen asset
 txn Sender
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if22
 int 0
 int 0
 byte base64 Zno=
-app_local_get
+app_local_get_ex
 pop
 int 1
 ==
@@ -904,7 +904,7 @@ int 1
 bnz if_end23
 if22:
 byte base64 Zno=
-app_global_gets
+app_global_get
 int 1
 ==
 if_end23:
@@ -914,7 +914,7 @@ err
 assert21:
 txn Sender
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if24
 int 0
@@ -922,7 +922,7 @@ byte base64 Ymw=
 int 0
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 load 2
 -
@@ -932,7 +932,7 @@ bnz if_end25
 if24:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_gets
+app_global_get
 load 2
 -
 app_global_put
@@ -945,13 +945,13 @@ bnz unless26
 // cannot modify frozen asset
 txna Accounts 2
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if28
 int 2
 int 0
 byte base64 Zno=
-app_local_get
+app_local_get_ex
 pop
 int 1
 ==
@@ -959,7 +959,7 @@ int 1
 bnz if_end29
 if28:
 byte base64 Zno=
-app_global_gets
+app_global_get
 int 1
 ==
 if_end29:
@@ -969,7 +969,7 @@ err
 assert27:
 txna Accounts 2
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if30
 int 2
@@ -977,7 +977,7 @@ byte base64 Ymw=
 int 2
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 load 2
 +
@@ -987,7 +987,7 @@ bnz if_end31
 if30:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_gets
+app_global_get
 load 2
 +
 app_global_put
@@ -1011,7 +1011,7 @@ int 2
 int 0
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 int 0
 ==
@@ -1038,7 +1038,7 @@ btoi
 store 0
 txna Accounts 1
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if34
 int 1
@@ -1046,7 +1046,7 @@ byte base64 Ymw=
 int 1
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 load 0
 -
@@ -1056,14 +1056,14 @@ bnz if_end35
 if34:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_gets
+app_global_get
 load 0
 -
 app_global_put
 if_end35:
 txna Accounts 2
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if36
 int 2
@@ -1071,7 +1071,7 @@ byte base64 Ymw=
 int 2
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 load 0
 +
@@ -1081,7 +1081,7 @@ bnz if_end37
 if36:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_gets
+app_global_get
 load 0
 +
 app_global_put
@@ -1095,7 +1095,7 @@ int 0
 &&
 txn Sender
 byte base64 Y2w=
-app_global_gets
+app_global_get
 ==
 &&
 int 1
@@ -1104,7 +1104,7 @@ cond5:
 // freeze asset holding
 txna Accounts 1
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if38
 int 1
@@ -1129,7 +1129,7 @@ int 0
 &&
 txn Sender
 byte base64 ZnI=
-app_global_gets
+app_global_get
 ==
 &&
 int 1
@@ -1145,7 +1145,7 @@ bnz when40
 int 0
 byte base64 Zno=
 byte base64 ZGY=
-app_global_gets
+app_global_get
 app_local_put
 when40:
 txn NumAppArgs
@@ -1156,13 +1156,13 @@ int 5
 ==
 txn Sender
 byte base64 bW4=
-app_global_gets
+app_global_get
 ==
 &&
 byte base64 dHQ=
-app_global_gets
+app_global_get
 byte base64 Ymw=
-app_global_gets
+app_global_get
 ==
 &&
 txn OnCompletion
@@ -1170,7 +1170,7 @@ int 1
 ==
 txn Sender
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 !
 &&
@@ -1187,13 +1187,13 @@ int 0
 bnz if41
 txn Sender
 byte base64 bW4=
-app_global_gets
+app_global_get
 ==
 txna ApplicationArgs 0
 global ZeroAddress
 ==
 byte base64 bW4=
-app_global_gets
+app_global_get
 global ZeroAddress
 ==
 !
@@ -1203,7 +1203,7 @@ txna ApplicationArgs 1
 global ZeroAddress
 ==
 byte base64 cnY=
-app_global_gets
+app_global_get
 global ZeroAddress
 ==
 !
@@ -1213,7 +1213,7 @@ txna ApplicationArgs 2
 global ZeroAddress
 ==
 byte base64 ZnI=
-app_global_gets
+app_global_get
 global ZeroAddress
 ==
 !
@@ -1223,7 +1223,7 @@ txna ApplicationArgs 3
 global ZeroAddress
 ==
 byte base64 Y2w=
-app_global_gets
+app_global_get
 global ZeroAddress
 ==
 !

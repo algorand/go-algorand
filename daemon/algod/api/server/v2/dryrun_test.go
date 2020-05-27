@@ -199,7 +199,7 @@ byte base64 Y2hlY2s=
 // Key "foo"
 int 0
 byte base64 Zm9v
-app_global_get
+app_global_get_ex
 
 // Value must exist
 int 0
@@ -276,7 +276,7 @@ int 0
 
 // Key "foo"
 byte base64 Zm9v
-app_local_get
+app_local_get_ex
 
 // Value must exist
 int 0

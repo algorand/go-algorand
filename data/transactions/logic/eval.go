@@ -1793,7 +1793,7 @@ func (cx *evalContext) appDeleteGlobalKey(key string) error {
 	return nil
 }
 
-func opAppGetLocalStateSimple(cx *evalContext) {
+func opAppGetLocalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // state key
 	prev := last - 1          // account offset
 
@@ -1811,7 +1811,7 @@ func opAppGetLocalStateSimple(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opAppGetLocalState(cx *evalContext) {
+func opAppGetLocalStateEx(cx *evalContext) {
 	last := len(cx.stack) - 1 // state key
 	prev := last - 1          // app id
 	pprev := prev - 1         // account offset
@@ -1871,7 +1871,7 @@ func opAppGetGlobalStateImpl(cx *evalContext, appID uint64, key []byte) (result 
 	return
 }
 
-func opAppGetGlobalStateSimple(cx *evalContext) {
+func opAppGetGlobalState(cx *evalContext) {
 	last := len(cx.stack) - 1 // state key
 
 	key := cx.stack[last].Bytes
@@ -1886,7 +1886,7 @@ func opAppGetGlobalStateSimple(cx *evalContext) {
 	cx.stack[last] = result
 }
 
-func opAppGetGlobalState(cx *evalContext) {
+func opAppGetGlobalStateEx(cx *evalContext) {
 	last := len(cx.stack) - 1 // state key
 	prev := last - 1
 

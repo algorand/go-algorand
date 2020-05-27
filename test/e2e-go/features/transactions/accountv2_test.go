@@ -81,7 +81,7 @@ func TestAccountInformationV2(t *testing.T) {
 	counter := `// a simple global and local calls counter app
 byte b64 Y291bnRlcg== // counter
 dup
-app_global_gets
+app_global_get
 int 1
 +
 app_global_put  // update the counter
@@ -95,7 +95,7 @@ int 0  // account idx for app_local_put
 byte b64 Y291bnRlcg== // counter
 int 0
 byte b64 Y291bnRlcg==
-app_local_gets
+app_local_get
 int 1  // increment
 +
 app_local_put

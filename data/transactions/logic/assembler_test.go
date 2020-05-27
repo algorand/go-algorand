@@ -151,17 +151,17 @@ int 1
 app_opted_in
 int 1
 byte "test"
-app_local_get
+app_local_get_ex
 pop
 pop
 int 1
 byte "\x42\x42"
-app_local_gets
+app_local_get
 pop
 byte 0x4242
-app_global_gets
-byte 0x4242
 app_global_get
+byte 0x4242
+app_global_get_ex
 pop
 pop
 int 1
