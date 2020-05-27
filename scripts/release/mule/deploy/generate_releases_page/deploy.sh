@@ -11,7 +11,7 @@ then
 fi
 
 pushd "$WORKDIR/scripts/release/mule/deploy/generate_releases_page"
-./generate_releases_page >| /tmp/index.html
+./generate_releases_page.py >| /tmp/index.html
 popd
 mule -f package-deploy.yaml package-deploy-releases-page
 
