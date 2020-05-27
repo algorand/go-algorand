@@ -440,7 +440,6 @@ ok4:
 int 100
 ==
 &&
-
 `
 
 	ds := DebugParams{
@@ -462,6 +461,29 @@ int 100
 	pass, err := local.Run()
 	a.NoError(err)
 	a.True(pass)
+
+	// check relaxed - opted in for both
+	source = `int 1
+int 100
+app_opted_in
+int 1
+==
+int 1
+int 200
+app_opted_in
+int 1
+==
+&&
+`
+	ds.Painless = true
+	ds.ProgramBlobs = [][]byte{[]byte(source)}
+	err = local.Setup(&ds)
+	a.NoError(err)
+
+	pass, err = local.Run()
+	a.NoError(err)
+	a.True(pass)
+	ds.Painless = false
 
 	// check ForeignApp
 	source = `

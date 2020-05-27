@@ -136,6 +136,7 @@ var noFirstRun bool
 var noBrowserCheck bool
 var noSourceMap bool
 var verbose bool
+var painless bool
 var appID int
 
 func init() {
@@ -156,6 +157,7 @@ func init() {
 	debugCmd.Flags().IntVarP(&roundNumber, "round", "r", 1095518031, "Ledger round number to evaluate stateful TEAL on")
 	debugCmd.Flags().Int64VarP(&timestamp, "latest-timestamp", "l", 0, "Latest confirmed timestamp to evaluate stateful TEAL on")
 	debugCmd.Flags().VarP(&runMode, "mode", "m", "TEAL evaluation mode: "+runMode.AllowedString())
+	debugCmd.Flags().BoolVar(&painless, "painless", false, "Automatically create balance record for all accounts and applications")
 
 	rootCmd.AddCommand(debugCmd)
 	rootCmd.AddCommand(remoteCmd)
@@ -229,9 +231,10 @@ func debugLocal(args []string) {
 		BalanceBlob:      balanceBlob,
 		Round:            roundNumber,
 		LatestTimestamp:  timestamp,
-		AppID:            appID,
 		RunMode:          runMode.String(),
 		DisableSourceMap: noSourceMap,
+		AppID:            appID,
+		Painless:         painless,
 	}
 
 	ds := makeDebugServer(port, &frontend, &dp)

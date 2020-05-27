@@ -68,6 +68,7 @@ type DebugParams struct {
 	RunMode          string
 	DisableSourceMap bool
 	AppID            int
+	Painless         bool
 }
 
 // FrontendFactory interface for attaching debug frontends

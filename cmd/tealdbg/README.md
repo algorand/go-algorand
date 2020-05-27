@@ -26,6 +26,7 @@
     ```
     $ tealdbg debug myprog.teal
     $ tealdbg debug samples/calls_count.teal --balance samples/calls_count_balance.json --txn samples/calls_count_txn.json --proto=future
+    $ tealdbg debug samples/calls_count.teal --proto=future --painless
     ```
     It prints out the URL to follow: `chrome-devtools://devtools/bundled/js_app.html?...`
 2. Open the URL in Google Chrome.
@@ -146,6 +147,10 @@ Sample balance record in JSON format:
   }
 }
 ```
+
+If default/empty local and global state are OK for the application, the use `--painless` CLI option
+to automatically create necessary balance records for the application(s) so that `app_` opcodes
+do not fail due to absent data in ledger.
 
 ### Execution mode
 
