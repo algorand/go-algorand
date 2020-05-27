@@ -705,6 +705,59 @@
         }
       ]
     },
+    "/v2/teal/compile": {
+      "post": {
+        "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style).",
+        "consumes": [
+          "text/plain"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Compile TEAL source code to binary, produce its hash",
+        "operationId": "TealCompile",
+        "parameters": [
+          {
+            "description": "TEAL source code to be compiled",
+            "name": "source",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/PostCompileResponse"
+          },
+          "400": {
+            "description": "Bad Request - Teal Compile Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/v2/catchup/{catchpoint}": {
       "post": {
         "tags": [
@@ -741,7 +794,7 @@
             }
           },
           "500": {
-            "description": "Internal Server Error",
+            "description": "Internal Error",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -786,7 +839,7 @@
             }
           },
           "500": {
-            "description": "Internal Server Error",
+            "description": "Internal Error",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -1566,6 +1619,26 @@
           }
         },
         "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+      }
+    },
+    "PostCompileResponse": {
+      "description": "Teal compile Result",
+      "schema": {
+        "type": "object",
+        "required": [
+            "hash",
+            "result"
+        ],
+        "properties": {
+          "hash": {
+            "description": "base32 SHA512_256 of program bytes (Address style)",
+            "type": "string"
+          },
+	      "result": {
+	        "description": "base64 encoded program bytes",
+          "type": "string"
+	        }
+        }
       }
     }
   },
