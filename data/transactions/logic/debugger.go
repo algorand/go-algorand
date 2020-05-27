@@ -112,7 +112,7 @@ func makeDebugState(cx *evalContext) DebugState {
 		}
 		globals[fieldIdx] = stackValueToV2TealValue(&sv)
 	}
-	cx.debugState.Globals = globals
+	ds.Globals = globals
 
 	// pre-allocate state maps
 	if (cx.runModeFlags & runModeApplication) != 0 {
