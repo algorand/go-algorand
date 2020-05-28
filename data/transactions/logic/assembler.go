@@ -996,6 +996,11 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 			ops.trace("%d: // line\n", ops.sourceLine)
 			continue
 		}
+		if strings.HasPrefix(line, "#pragma") {
+			// all pragmas must be be already processed in advance
+			ops.trace("%d: #pragma line\n", ops.sourceLine)
+			continue
+		}
 		fields := fieldsFromLine(line)
 		if len(fields) == 0 {
 			ops.trace("%d: no fields\n", ops.sourceLine)
@@ -1066,6 +1071,7 @@ func (ops *OpStream) resolveLabels() (err error) {
 
 // AssemblerDefaultVersion what version of code do we emit by default
 const AssemblerDefaultVersion = LogicVersion
+const assemblerNoVersion = (^uint64(0))
 
 // Bytes returns the finished program bytes
 func (ops *OpStream) Bytes() (program []byte, err error) {
@@ -1123,7 +1129,7 @@ func (ops *OpStream) Bytes() (program []byte, err error) {
 
 // AssembleString takes an entire program in a string and assembles it to bytecode using AssemblerDefaultVersion
 func AssembleString(text string) ([]byte, error) {
-	return AssembleStringWithVersion(text, AssemblerDefaultVersion)
+	return AssembleStringWithVersion(text, assemblerNoVersion)
 }
 
 // AssembleStringV1 takes an entire program in a string and assembles it to bytecode using TEAL v1
@@ -1142,17 +1148,96 @@ func AssembleStringWithVersion(text string, version uint64) ([]byte, error) {
 	return program, err
 }
 
-// AssembleStringWithVersionEx takes an entire program in a string and assembles it to bytecode using the assembler version specified
-// It also returns PC to source line mapping
+// AssembleStringWithVersionEx takes an entire program in a string and assembles it to bytecode
+// using the assembler version specified.
+// If version is zero it uses #pragma version or fallbacks to AssemblerDefaultVersion.
+// It also returns PC to source line mapping.
 func AssembleStringWithVersionEx(text string, version uint64) ([]byte, map[int]int, error) {
 	sr := strings.NewReader(text)
+	ps := PragmaStream{}
+	err := ps.Process(sr)
+	if err != nil {
+		return nil, nil, err
+	}
+	// If version not set yet then set either default or #pragma version.
+	// We have to use assemblerNoVersion as a marker for non-specified version
+	// because version 0 is valid version for TEAL v1
+	if version == assemblerNoVersion {
+		if ps.Version != 0 {
+			version = ps.Version
+		} else {
+			version = AssemblerDefaultVersion
+		}
+	} else if ps.Version != 0 && version != ps.Version {
+		err = fmt.Errorf("version mismatch: assembling v%d with v%d assembler", ps.Version, version)
+		return nil, nil, err
+	} else {
+		// otherwise the passed version matches the pragma and we are ok
+	}
+
+	sr = strings.NewReader(text)
 	ops := OpStream{Version: version}
-	err := ops.Assemble(sr)
+	err = ops.Assemble(sr)
 	if err != nil {
 		return nil, nil, err
 	}
 	program, err := ops.Bytes()
 	return program, ops.offsetToLine, err
+}
+
+// PragmaStream represents all parsed pragmas from the program
+type PragmaStream struct {
+	Version uint64
+}
+
+// Process all pragmas in the input stream
+func (ps *PragmaStream) Process(fin io.Reader) (err error) {
+	scanner := bufio.NewScanner(fin)
+	sourceLine := 0
+	for scanner.Scan() {
+		sourceLine++
+		line := scanner.Text()
+		if len(line) == 0 || !strings.HasPrefix(line, "#pragma") {
+			continue
+		}
+
+		fields := strings.Split(line, " ")
+		if fields[0] != "#pragma" {
+			err = fmt.Errorf("invalid syntax: %s", fields[0])
+			return
+		}
+		if len(fields) < 2 {
+			err = fmt.Errorf("empty pragma")
+			return
+		}
+		key := fields[1]
+		switch key {
+		case "version":
+			if len(fields) < 3 {
+				err = fmt.Errorf("no version value")
+				return
+			}
+			value := fields[2]
+			var ver uint64
+			if sourceLine != 1 {
+				err = fmt.Errorf("#pragma version is only allowed on 1st line")
+				return
+			}
+			ver, err = strconv.ParseUint(value, 0, 64)
+			if err != nil {
+				return
+			}
+			if ver < 1 || ver > AssemblerDefaultVersion {
+				err = fmt.Errorf("unsupported version: %d", ver)
+				return
+			}
+			ps.Version = ver
+		default:
+			err = fmt.Errorf("unsupported pragma directive: %s", key)
+			return
+		}
+	}
+	return
 }
 
 type disassembleState struct {
