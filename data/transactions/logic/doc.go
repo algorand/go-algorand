@@ -231,11 +231,6 @@ func OpAllCosts(opName string) []int {
 	return costs
 }
 
-// OpAllVersions returns all opcode versions
-func OpAllVersions(opName string) []int {
-	return []int{}
-}
-
 var opSizeByName map[string]int
 
 // OpSize returns the number of bytes for an op. 0 for variable.
