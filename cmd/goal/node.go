@@ -19,7 +19,6 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -32,7 +31,6 @@ import (
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/nodecontrol"
@@ -54,7 +52,6 @@ var newNodeArchival bool
 var newNodeIndexer bool
 var newNodeRelay string
 var watchMillisecond uint64
-var abortCatchup bool
 
 func init() {
 	nodeCmd.AddCommand(startCmd)
@@ -67,7 +64,6 @@ func init() {
 	nodeCmd.AddCommand(pendingTxnsCmd)
 	nodeCmd.AddCommand(waitCmd)
 	nodeCmd.AddCommand(createCmd)
-	nodeCmd.AddCommand(catchupCmd)
 	// Once the server-side implementation of the shutdown command is ready, we should enable this one.
 	//nodeCmd.AddCommand(shutdownCmd)
 
@@ -99,8 +95,6 @@ func init() {
 	waitCmd.Flags().Uint32VarP(&waitSec, "waittime", "w", 5, "Time (in seconds) to wait for node to make progress")
 	statusCmd.Flags().Uint64VarP(&watchMillisecond, "watch", "w", 0, "Time (in milliseconds) between two successive status updates")
 
-	catchupCmd.Flags().BoolVarP(&abortCatchup, "abort", "x", false, "Aborts the current catchup process")
-
 }
 
 var nodeCmd = &cobra.Command{
@@ -112,43 +106,6 @@ var nodeCmd = &cobra.Command{
 		//Fall back
 		cmd.HelpFunc()(cmd, args)
 	},
-}
-
-var catchupCmd = &cobra.Command{
-	Use:     "catchup",
-	Short:   "Catchup the Algorand node to a specific catchpoint",
-	Long:    "Catchup allows making large jumps over round ranges without the need to incremently validate each individual round.",
-	Example: "goal node catchup 6500000#1234567890ABCDEF01234567890ABCDEF0\tStart catching up to round 6500000 with the provided catchpoint\ngoal node catchup --abort\t\t\t\t\tAbort the current catchup",
-	Args:    catchpointCmdArgument,
-	Run: func(cmd *cobra.Command, args []string) {
-		if abortCatchup == false && len(args) == 0 {
-			fmt.Println(errorCatchpointLabelMissing)
-			os.Exit(1)
-		}
-		onDataDirs(func(datadir string) { catchup(datadir, args) })
-	},
-}
-
-func catchpointCmdArgument(cmd *cobra.Command, args []string) error {
-	catchpointsCount := 0
-	for _, arg := range args {
-		_, _, err := ledger.ParseCatchpointLabel(arg)
-		switch err {
-		case nil:
-			if catchpointsCount > 0 {
-				return errors.New(errorTooManyCatchpointLabels)
-			}
-			catchpointsCount++
-			continue
-		case ledger.ErrCatchpointParsingFailed:
-			// this isn't a valid catchpoint label.
-			// return a nice formatted error
-			return errors.New(errorCatchpointLabelParsingFailed)
-		default:
-			return err
-		}
-	}
-	return nil
 }
 
 var startCmd = &cobra.Command{
@@ -627,21 +584,6 @@ var createCmd = &cobra.Command{
 			reportErrorf(errorNodeCreation, err)
 		}
 	},
-}
-
-func catchup(dataDir string, args []string) {
-	client := ensureAlgodClient(ensureSingleDataDir())
-	if abortCatchup {
-		err := client.AbortCatchup()
-		if err != nil {
-			reportErrorf(errorNodeStatus, err)
-		}
-		return
-	}
-	err := client.Catchup(args[0])
-	if err != nil {
-		reportErrorf(errorNodeStatus, err)
-	}
 }
 
 // verifyPeerDialArg verifies that the peers provided in peerDial are valid peers.
