@@ -19,6 +19,7 @@ package config
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -246,7 +247,7 @@ func TestConfigMigrate(t *testing.T) {
 	t.Skip()
 	a := require.New(t)
 
-	c0, err := loadWithoutDefaults(defaultLocalV0)
+	c0, err := loadWithoutDefaults(getVersionedDefaultLocalConfig(0))
 	a.NoError(err)
 	c0, err = migrate(c0)
 	a.NoError(err)
@@ -256,13 +257,13 @@ func TestConfigMigrate(t *testing.T) {
 	a.Equal(defaultLocal, c0)
 	a.Equal(defaultLocal, cLatest)
 
-	cLatest.Version = configVersion + 1
+	cLatest.Version = getLatestConfigVersion() + 1
 	_, err = migrate(cLatest)
 	a.Error(err)
 
 	// Ensure we don't migrate values that aren't the default old version
-	c0Modified := defaultLocalV0
-	c0Modified.BaseLoggerDebugLevel = defaultLocalV0.BaseLoggerDebugLevel + 1
+	c0Modified := getVersionedDefaultLocalConfig(0)
+	c0Modified.BaseLoggerDebugLevel = getVersionedDefaultLocalConfig(0).BaseLoggerDebugLevel + 1
 	c0Modified, err = migrate(c0Modified)
 	a.NoError(err)
 	a.NotEqual(defaultLocal, c0Modified)
@@ -305,7 +306,7 @@ func TestConfigMigrateFromDisk(t *testing.T) {
 	a.NoError(err)
 	a.Equal(defaultLocal, modified)
 
-	cNext := Local{Version: configVersion + 1}
+	cNext := Local{Version: getLatestConfigVersion() + 1}
 	_, err = migrate(cNext)
 	a.Error(err)
 }
@@ -314,53 +315,23 @@ func TestConfigMigrateFromDisk(t *testing.T) {
 func TestConfigInvariant(t *testing.T) {
 	a := require.New(t)
 
-	a.Equal(uint32(6), configVersion, "If you bump Config Version, please update this test (and consider if you should be adding more)")
-
 	ourPath, err := os.Getwd()
 	a.NoError(err)
 	configsPath := filepath.Join(ourPath, "../test/testdata/configs")
 
-	c0 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v0.json"), &c0)
-	a.NoError(err)
-	a.Equal(defaultLocalV0, c0)
-
-	c1 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v1.json"), &c1)
-	a.NoError(err)
-	a.Equal(defaultLocalV1, c1)
-
-	c2 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v2.json"), &c2)
-	a.NoError(err)
-	a.Equal(defaultLocalV2, c2)
-
-	c3 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v3.json"), &c3)
-	a.NoError(err)
-	a.Equal(defaultLocalV3, c3)
-
-	c4 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v4.json"), &c4)
-	a.NoError(err)
-	a.Equal(defaultLocalV4, c4)
-
-	c5 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v5.json"), &c5)
-	a.NoError(err)
-	a.Equal(defaultLocalV5, c5)
-
-	c6 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v6.json"), &c6)
-	a.NoError(err)
-	a.Equal(defaultLocalV6, c6)
+	for configVersion := uint32(0); configVersion <= getLatestConfigVersion(); configVersion++ {
+		c := Local{}
+		err = codecs.LoadObjectFromFile(filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion)), &c)
+		a.NoError(err)
+		a.Equal(getVersionedDefaultLocalConfig(configVersion), c)
+	}
 }
 
 func TestConfigLatestVersion(t *testing.T) {
 	a := require.New(t)
 
 	// Make sure current version is correct for the assigned defaultLocal
-	a.Equal(configVersion, defaultLocal.Version)
+	a.Equal(getLatestConfigVersion(), defaultLocal.Version)
 }
 
 func TestConsensusUpgrades(t *testing.T) {
@@ -476,5 +447,24 @@ func TestLocal_DNSBootstrap(t *testing.T) {
 				t.Errorf("Local.DNSBootstrap() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+var _ = fmt.Printf
+
+func TestLocalStructTags(t *testing.T) {
+	localType := reflect.TypeOf(Local{})
+	for fieldNum := 0; fieldNum < localType.NumField(); fieldNum++ {
+		field := localType.Field(fieldNum)
+		if field.Tag == "" {
+			require.Failf(t, "Field is missing versioning information", "Field Name: %s", field.Name)
+		}
+	}
+}
+
+func TestGetVersionedDefaultLocalConfig(t *testing.T) {
+	for i := uint32(0); i < getLatestConfigVersion(); i++ {
+		localVersion := getVersionedDefaultLocalConfig(i)
+		require.Equal(t, uint32(i), localVersion.Version)
 	}
 }
