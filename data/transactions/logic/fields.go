@@ -21,7 +21,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AssetHoldingField -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AssetHoldingField,OnCompletionConstType -output=fields_string.go
 
 // TxnField is an enum type for `txn` and `gtxn`
 type TxnField int
@@ -172,15 +172,25 @@ var txnTypeIndexes map[string]int
 // map symbolic name to uint64 for assembleInt
 var txnTypeConstToUint64 map[string]uint64
 
-// OnCompletionValues is the values of Txn.OnCompletion, not ordered
-var OnCompletionValues = []transactions.OnCompletion{
-	transactions.NoOpOC,
-	transactions.OptInOC,
-	transactions.CloseOutOC,
-	transactions.ClearStateOC,
-	transactions.UpdateApplicationOC,
-	transactions.DeleteApplicationOC,
-}
+// OnCompletionConstType is the same as transactions.OnCompletion
+type OnCompletionConstType transactions.OnCompletion
+
+const (
+	// NoOp = transactions.NoOpOC
+	NoOp OnCompletionConstType = OnCompletionConstType(transactions.NoOpOC)
+	// OptIn = transactions.OptInOC
+	OptIn OnCompletionConstType = OnCompletionConstType(transactions.OptInOC)
+	// CloseOut = transactions.CloseOutOC
+	CloseOut OnCompletionConstType = OnCompletionConstType(transactions.CloseOutOC)
+	// ClearState = transactions.ClearStateOC
+	ClearState OnCompletionConstType = OnCompletionConstType(transactions.ClearStateOC)
+	// UpdateApplication = transactions.UpdateApplicationOC
+	UpdateApplication OnCompletionConstType = OnCompletionConstType(transactions.UpdateApplicationOC)
+	// DeleteApplication = transactions.DeleteApplicationOC
+	DeleteApplication OnCompletionConstType = OnCompletionConstType(transactions.DeleteApplicationOC)
+	// end of constants
+	invalidOnCompletionConst OnCompletionConstType = DeleteApplication + 1
+)
 
 // OnCompletionNames is the string names of Txn.OnCompletion, array index is the const value
 var OnCompletionNames []string
@@ -406,11 +416,11 @@ func init() {
 		txnTypeConstToUint64[symbol] = uint64(v)
 	}
 
-	onCompletionConstToUint64 = make(map[string]uint64, len(OnCompletionValues))
-	OnCompletionNames = make([]string, len(OnCompletionValues))
-	for _, oc := range OnCompletionValues {
+	OnCompletionNames = make([]string, int(invalidOnCompletionConst))
+	onCompletionConstToUint64 = make(map[string]uint64, len(OnCompletionNames))
+	for oc := NoOp; oc < invalidOnCompletionConst; oc++ {
 		symbol := oc.String()
-		OnCompletionNames[int(oc)] = symbol
+		OnCompletionNames[oc] = symbol
 		onCompletionConstToUint64[symbol] = uint64(oc)
 	}
 }

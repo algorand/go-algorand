@@ -889,7 +889,7 @@ func TestArgTooFar(t *testing.T) {
 btoi`, v)
 			require.NoError(t, err)
 			cost, err := Check(program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)  // TODO: Check should know the type stack was wrong
+			require.NoError(t, err) // TODO: Check should know the type stack was wrong
 			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			var txn transactions.SignedTxn
@@ -914,7 +914,7 @@ func TestIntcTooFar(t *testing.T) {
 			program, err := AssembleStringWithVersion(`intc_1`, v)
 			require.NoError(t, err)
 			cost, err := Check(program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)  // TODO: Check should know the type stack was wrong
+			require.NoError(t, err) // TODO: Check should know the type stack was wrong
 			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			var txn transactions.SignedTxn
@@ -940,7 +940,7 @@ func TestBytecTooFar(t *testing.T) {
 btoi`, v)
 			require.NoError(t, err)
 			cost, err := Check(program, defaultEvalParams(nil, nil))
-			require.NoError(t, err)  // TODO: Check should know the type stack was wrong
+			require.NoError(t, err) // TODO: Check should know the type stack was wrong
 			require.True(t, cost < 1000)
 			sb := strings.Builder{}
 			var txn transactions.SignedTxn
@@ -962,7 +962,7 @@ func TestTxnBadField(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x31, 0x7f}
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)  // TODO: Check should know the type stack was wrong
+	require.NoError(t, err) // TODO: Check should know the type stack was wrong
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	var txn transactions.SignedTxn
@@ -999,7 +999,7 @@ func TestGtxnBadIndex(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x1, 0x01}
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)  // TODO: Check should know the type stack was wrong
+	require.NoError(t, err) // TODO: Check should know the type stack was wrong
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	var txn transactions.SignedTxn
@@ -1023,7 +1023,7 @@ func TestGtxnBadField(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x0, 0x7f}
 	cost, err := Check(program, defaultEvalParams(nil, nil))
-	require.NoError(t, err)  // TODO: Check should know the type stack was wrong
+	require.NoError(t, err) // TODO: Check should know the type stack was wrong
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
 	var txn transactions.SignedTxn
@@ -1293,9 +1293,9 @@ func TestOnCompletionConstants(t *testing.T) {
 		}
 	}
 	require.Less(t, last, max, "too many OnCompletion constants, adjust max limit")
-	require.Equal(t, len(OnCompletionValues), last)
+	require.Equal(t, int(invalidOnCompletionConst), last)
 	require.Equal(t, len(onCompletionConstToUint64), len(onCompletionDescriptions))
-	for _, v := range OnCompletionValues {
+	for v := NoOp; v < invalidOnCompletionConst; v++ {
 		require.Equal(t, v.String(), OnCompletionNames[int(v)])
 	}
 
@@ -1304,7 +1304,7 @@ func TestOnCompletionConstants(t *testing.T) {
 	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			for i := 0; i < last; i++ {
-				oc := transactions.OnCompletion(i)
+				oc := OnCompletionConstType(i)
 				symbol := oc.String()
 				require.Contains(t, onCompletionConstToUint64, symbol)
 				require.Equal(t, uint64(i), onCompletionConstToUint64[symbol])
@@ -3493,10 +3493,10 @@ func TestAllowedOpcodesV2(t *testing.T) {
 		"substring3":        "byte 0x41\ndup\ndup\nsubstring3",
 		"balance":           "int 1\nbalance",
 		"app_opted_in":      "int 0\ndup\napp_opted_in",
-		"app_local_get":    "int 0\nbyte 0x41\napp_local_get",
-		"app_local_get_ex":     "int 0\ndup\nbyte 0x41\napp_local_get_ex",
-		"app_global_get":   "int 0\nbyte 0x41\napp_global_get",
-		"app_global_get_ex":    "int 0\nbyte 0x41\napp_global_get_ex",
+		"app_local_get":     "int 0\nbyte 0x41\napp_local_get",
+		"app_local_get_ex":  "int 0\ndup\nbyte 0x41\napp_local_get_ex",
+		"app_global_get":    "int 0\nbyte 0x41\napp_global_get",
+		"app_global_get_ex": "int 0\nbyte 0x41\napp_global_get_ex",
 		"app_local_put":     "int 0\ndup\nbyte 0x41\napp_local_put",
 		"app_global_put":    "byte 0x41\ndup\napp_global_put",
 		"app_local_del":     "int 0\nbyte 0x41\napp_local_del",

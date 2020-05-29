@@ -55,12 +55,12 @@ Constants are pushed onto the stack by `intc`, `intc_[0123]`, `bytec`, and `byte
 #### OnComplete
 | Value | Constant name | Description |
 | --- | --- | --- |
-| 0 | noop | Application transaction will simply call its ApprovalProgram. |
-| 1 | optin | Application transaction will allocate some LocalState for the application in the sender's account. |
-| 2 | closeout | Application transaction will deallocate some LocalState for the application from the user's account. |
-| 3 | clearstate | Similar to CloseOutOC, but may never fail. This allows users to reclaim their minimum balance from an application they no longer wish to opt in to. |
-| 4 | update | Application transaction will update the ApprovalProgram and ClearStateProgram for the application. |
-| 5 | delete | Application transaction will delete the AppParams for the application from the creator's balance. |
+| 0 | NoOp | Application transaction will simply call its ApprovalProgram. |
+| 1 | OptIn | Application transaction will allocate some LocalState for the application in the sender's account. |
+| 2 | CloseOut | Application transaction will deallocate some LocalState for the application from the user's account. |
+| 3 | ClearState | Similar to CloseOutOC, but may never fail. This allows users to reclaim their minimum balance from an application they no longer wish to opt in to. |
+| 4 | UpdateApplication | Application transaction will update the ApprovalProgram and ClearStateProgram for the application. |
+| 5 | DeleteApplication | Application transaction will delete the AppParams for the application from the creator's balance. |
 
 #### TypeEnum constants
 | Value | Constant name | Description |
