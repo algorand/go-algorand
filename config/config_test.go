@@ -276,35 +276,13 @@ func TestConfigMigrateFromDisk(t *testing.T) {
 	a.NoError(err)
 	configsPath := filepath.Join(ourPath, "../test/testdata/configs")
 
-	c0, err := loadConfigFromFile(filepath.Join(configsPath, "config-v0.json"))
-	a.NoError(err)
-	modified, err := migrate(c0)
-	a.NoError(err)
-	a.Equal(defaultLocal, modified)
-
-	c1, err := loadConfigFromFile(filepath.Join(configsPath, "config-v1.json"))
-	a.NoError(err)
-	modified, err = migrate(c1)
-	a.NoError(err)
-	a.Equal(defaultLocal, modified)
-
-	c2, err := loadConfigFromFile(filepath.Join(configsPath, "config-v2.json"))
-	a.NoError(err)
-	modified, err = migrate(c2)
-	a.NoError(err)
-	a.Equal(defaultLocal, modified)
-
-	c3, err := loadConfigFromFile(filepath.Join(configsPath, "config-v3.json"))
-	a.NoError(err)
-	modified, err = migrate(c3)
-	a.NoError(err)
-	a.Equal(defaultLocal, modified)
-
-	c4, err := loadConfigFromFile(filepath.Join(configsPath, "config-v4.json"))
-	a.NoError(err)
-	modified, err = migrate(c4)
-	a.NoError(err)
-	a.Equal(defaultLocal, modified)
+	for configVersion := uint32(0); configVersion <= getLatestConfigVersion(); configVersion++ {
+		c, err := loadConfigFromFile(filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion)))
+		a.NoError(err)
+		modified, err := migrate(c)
+		a.NoError(err)
+		a.Equal(defaultLocal, modified)
+	}
 
 	cNext := Local{Version: getLatestConfigVersion() + 1}
 	_, err = migrate(cNext)
