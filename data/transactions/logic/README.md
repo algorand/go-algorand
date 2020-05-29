@@ -264,10 +264,10 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | --- | --- |
 | `balance` | get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction |
 | `app_opted_in` | check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1} |
-| `app_local_gets` | read from account specified by Txn.Accounts[A] from local state of the current application key B  => value |
-| `app_local_get` | read from account specified by Txn.Accounts[A] from local state of the application B key C  => {0 or 1 (top), value} |
-| `app_global_gets` | read key A from global state of a current application => value |
-| `app_global_get` | read from application A global state key B => {0 or 1 (top), value} |
+| `app_local_get` | read from account specified by Txn.Accounts[A] from local state of the current application key B  => value |
+| `app_local_get_ex` | read from account specified by Txn.Accounts[A] from local state of the application B key C  => {0 or 1 (top), value} |
+| `app_global_get` | read key A from global state of a current application => value |
+| `app_global_get_ex` | read from application A global state key B => {0 or 1 (top), value} |
 | `app_local_put` | write to account specified by Txn.Accounts[A] to local state of a current application key B with value C |
 | `app_global_put` | write key A and value B to global state of the current application |
 | `app_local_del` | delete from account specified by Txn.Accounts[A] local state key B of the current application |
