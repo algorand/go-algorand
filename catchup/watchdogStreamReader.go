@@ -70,7 +70,7 @@ func makeWatchdogStreamReader(underlayingReader io.Reader, readSize uint64, read
 
 func (r *watchdogStreamReader) Reset() error {
 	r.readerMu.Lock()
-	if r.readError != nil {
+	if r.readError != nil && len(r.stageBuffer) == 0 {
 		defer r.readerMu.Unlock()
 		return r.readError
 	}
@@ -101,7 +101,7 @@ func (r *watchdogStreamReader) Read(p []byte) (n int, err error) {
 		copy(p, r.stageBuffer)
 		r.stageBuffer = r.stageBuffer[n:]
 	}
-	if n < len(p) || len(p) == 0 {
+	if n < len(p) || (len(p) == 0 && len(r.stageBuffer) == 0) {
 		err = r.readError
 	}
 	return

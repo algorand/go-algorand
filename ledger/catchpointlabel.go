@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -55,6 +56,7 @@ func (l CatchpointLabel) String() string {
 	hash := l.Hash()
 	encodedHash := base32Encoder.EncodeToString(hash[:])
 	out := fmt.Sprintf("%d#%s", l.ledgerRound, encodedHash)
+	logging.Base().Infof("Creating a catchpoint label %s for round=%d, block digest=%s, accounts digest=%s", out, l.ledgerRound, l.ledgerRoundBlockHash, l.balancesMerkleRoot)
 	return out
 }
 
