@@ -265,8 +265,8 @@ var runCmd = &cobra.Command{
 			if err == nil {
 				break
 			} else {
-				log.Warnf("problem[%d] preparing accounts for transfers: %v\n, retrying", i, err)
-				time.Sleep(time.Second * 4)
+				log.Errorf("problem[%d] preparing accounts for transfers: %v\n, retrying", i, err)
+				reportErrorf("Error Preparing to run PingPong with config:\n")
 			}
 		}
 		if err != nil {

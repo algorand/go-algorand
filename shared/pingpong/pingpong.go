@@ -40,24 +40,49 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 		return
 	}
 
-	err = fundAccounts(accounts, ac, cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
-		return
-	}
-
 	if cfg.NumAsset > 0 {
-		assetParams, err = prepareAssets(accounts, ac, cfg)
+
+		wallet, walletErr := ac.GetUnencryptedWalletHandle()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "unable to access wallet %v\n", walletErr)
+			err = walletErr
+			return
+		}
+		fmt.Printf("Generating %v new accounts for asset transfer test\n", cfg.NumPartAccounts)
+		// create new accounts for asset testing
+		assetAccounts := make(map[string]uint64)
+		assetAccounts, err = generateAccounts(ac, assetAccounts, cfg.NumPartAccounts, wallet)
+
+		// add the new accounts
+		for k, v := range assetAccounts {
+			accounts[k] = v
+		}
+
+		err = fundAccounts(accounts, ac, cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
+			return
+		}
+
+		assetParams, err = prepareAssets(assetAccounts, ac, cfg)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "fund prepare assets failed %v\n", err)
 			return
 		}
+
+		for k := range accounts {
+			if k != cfg.SrcAccount {
+				delete(accounts, k)
+			}
+		}
+		for k := range assetAccounts {
+			accounts[k] = assetAccounts[k]
+		}
 	}
 
-	// we need to fund Accounts again since prepareAssets spends
 	err = fundAccounts(accounts, ac, cfg)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "fund accounts after prepare assets failed %v\n", err)
+		fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
 		return
 	}
 
@@ -72,12 +97,16 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 
 	// Fee of 0 will make cause the function to use the suggested one by network
 	fee := uint64(0)
-	minFund := cfg.MinAccountFunds + (cfg.MaxAmt+cfg.MaxFee)*cfg.TxnPerSec*uint64(math.Ceil(cfg.RefreshTime.Seconds()))
+	minFund := (cfg.MinAccountFunds * uint64(cfg.NumAsset+1)) +
+		(cfg.MinAccountFunds * uint64(cfg.NumAsset) * uint64(cfg.NumPartAccounts)) +
+		(cfg.MaxAmt+cfg.MaxFee)*cfg.TxnPerSec*uint64(math.Ceil(cfg.RefreshTime.Seconds()))
+	fmt.Printf("adjusting account balance to %d\n", minFund)
 	for addr, balance := range accounts {
+		fmt.Printf("adjusting balance of account %v\n", addr)
 		if balance < minFund {
 			toSend := minFund - balance
 			if srcFunds <= toSend {
-				return fmt.Errorf("source account has insufficient funds %d - needs %d", srcFunds, toSend)
+				return fmt.Errorf("source account %s has insufficient funds %d - needs %d", cfg.SrcAccount, srcFunds, toSend)
 			}
 			srcFunds -= toSend
 			_, err := client.SendPaymentFromUnencryptedWallet(cfg.SrcAccount, addr, fee, toSend, nil)
@@ -87,13 +116,7 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 			accounts[addr] = minFund
 
 			totalSent++
-			localTimeDelta := time.Now().Sub(startTime)
-			currentTps := float64(totalSent) / localTimeDelta.Seconds()
-			if currentTps > float64(cfg.TxnPerSec) {
-				sleepSec := float64(totalSent)/float64(cfg.TxnPerSec) - localTimeDelta.Seconds()
-				sleepTime := time.Duration(int64(math.Round(sleepSec*1000))) * time.Millisecond
-				time.Sleep(sleepTime)
-			}
+			throttleTransactionRate(startTime, cfg, totalSent)
 		}
 	}
 	return nil
@@ -155,6 +178,10 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 	restTime := cfg.RestTime
 	refreshTime := time.Now().Add(cfg.RefreshTime)
 
+	for addr := range accounts {
+		fmt.Printf("**** participant account %v\n", addr)
+	}
+
 	for {
 		if ctx.Err() != nil {
 			fmt.Fprintf(os.Stderr, "error bad context in RunPingPong: %v\n", ctx.Err())
@@ -165,6 +192,7 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 
 		var totalSent, totalSucceeded uint64
 		for !time.Now().After(stopTime) {
+
 			fromList := listSufficientAccounts(accounts, cfg.MinAccountFunds+(cfg.MaxAmt+cfg.MaxFee)*2, cfg.SrcAccount)
 			toList := listSufficientAccounts(accounts, 0, cfg.SrcAccount)
 
@@ -184,14 +212,9 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 				refreshTime = refreshTime.Add(cfg.RefreshTime)
 			}
 
-			localTimeDelta := time.Now().Sub(startTime)
-			currentTps := float64(totalSent) / localTimeDelta.Seconds()
-			if currentTps > float64(cfg.TxnPerSec) {
-				sleepSec := float64(totalSent)/float64(cfg.TxnPerSec) - localTimeDelta.Seconds()
-				sleepTime := time.Duration(int64(math.Round(sleepSec*1000))) * time.Millisecond
-				time.Sleep(sleepTime)
-			}
+			throttleTransactionRate(startTime, cfg, totalSent)
 		}
+
 		timeDelta := time.Now().Sub(startTime)
 		fmt.Fprintf(os.Stdout, "Sent %d transactions (%d attempted) in %d seconds\n", totalSucceeded, totalSent, int(math.Round(timeDelta.Seconds())))
 		if cfg.RestTime > 0 {
@@ -204,8 +227,10 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetParams map[uint64]v1.AssetParams, client libgoal.Client, cfg PpConfig) (sentCount, successCount uint64, err error) {
 	amt := cfg.MaxAmt
 	fee := cfg.MaxFee
+	fmt.Fprintf(os.Stdout, "sendFromTo \n")
 	if cfg.NumAsset > 0 && len(assetParams) <= 0 {
 		fmt.Fprintf(os.Stdout, "Skipping sendFromTo, no assest params.\n")
+		time.Sleep(time.Second)
 		return
 	}
 	for i, from := range fromList {
