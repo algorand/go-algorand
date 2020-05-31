@@ -91,7 +91,7 @@ var defaultLocalV7 = Local{
 	PeerConnectionsUpdateInterval:         3600,
 	DNSSecurityFlags:                      0x01,
 	EnablePingHandler:                     true,
-	CatchpointInterval:                    20000, // added in V7
+	CatchpointInterval:                    10000, // added in V7
 	CatchpointFileHistoryLength:           365,   // add in V7
 	EnableLedgerService:                   false, // added in V7
 	EnableBlockService:                    false, // added in V7

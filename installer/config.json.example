@@ -7,7 +7,7 @@
     "CadaverSizeTarget": 1073741824,
     "CatchupFailurePeerRefreshRate": 10,
     "CatchupParallelBlocks": 16,
-    "CatchpointInterval": 20000,
+    "CatchpointInterval": 10000,
     "CatchpointFileHistoryLength": 365,
     "ConnectionsRateLimitingCount": 60,
     "ConnectionsRateLimitingWindowSeconds": 1,
