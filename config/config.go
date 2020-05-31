@@ -46,6 +46,16 @@ const Mainnet protocol.NetworkID = "mainnet"
 const GenesisJSONFile = "genesis.json"
 
 // Local holds the per-node-instance configuration settings for the protocol.
+// !!! WARNING !!!
+//
+// These versioned struct tags need to be maintained CAREFULLY and treated
+// like UNIVERSAL CONSTANTS - they should not be modified once committed.
+//
+// New fields may be added to the Local struct, along with a version tag
+// denoting a new version. When doing so, also update the
+// installer/config.json.example and test/testdata/configs/config-v{n}.json
+//
+// !!! WARNING !!!
 type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value

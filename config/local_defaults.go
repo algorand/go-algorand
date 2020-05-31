@@ -24,20 +24,6 @@ import (
 
 var defaultLocal = getVersionedDefaultLocalConfig(getLatestConfigVersion())
 
-// !!! WARNING !!!
-//
-// These versioned structures need to be maintained CAREFULLY and treated
-// like UNIVERSAL CONSTANTS - they should not be modified once committed.
-//
-// New fields may be added to the current defaultLocalV# and should
-// also be added to installer/config.json.example and
-// test/testdata/configs/config-v{n}.json
-//
-// Changing a default value requires creating a new defaultLocalV# instance,
-// bump the version number (configVersion), and add appropriate migration and tests.
-//
-// !!! WARNING !!!
-
 func migrate(cfg Local) (newCfg Local, err error) {
 	newCfg = cfg
 	latestConfigVersion := getLatestConfigVersion()
@@ -61,6 +47,21 @@ func migrate(cfg Local) (newCfg Local, err error) {
 				continue
 			}
 			if nextVersionDefaultValue == "" {
+				switch reflect.ValueOf(&defaultCurrentConfig).Elem().FieldByName(field.Name).Kind() {
+				case reflect.Map:
+					// if the current implementation have a nil value, use the same value as
+					// the default one ( i.e. empty map rather than nil map)
+					if reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).Len() == 0 {
+						reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).Set(reflect.MakeMap(field.Type))
+					}
+				case reflect.Array:
+					// if the current implementation have a nil value, use the same value as
+					// the default one ( i.e. empty slice rather than nil slice)
+					if reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).Len() == 0 {
+						reflect.ValueOf(&newCfg).Elem().FieldByName(field.Name).Set(reflect.MakeSlice(field.Type, 0, 0))
+					}
+				default:
+				}
 				continue
 			}
 			// we have found a field that has a new value for this new version. See if the current configuration value for that
@@ -102,10 +103,6 @@ func migrate(cfg Local) (newCfg Local, err error) {
 			}
 		}
 	}
-
-	if newCfg.PriorityPeers == nil && newCfg.Version >= 4 {
-		newCfg.PriorityPeers = map[string]bool{}
-	}
 	return
 }
 
@@ -141,6 +138,14 @@ func getVersionedDefaultLocalConfig(version uint32) (local Local) {
 			continue
 		}
 		if versionDefaultValue == "" {
+			// set the default field value in case it's a map/array so we won't have nil ones.
+			switch reflect.ValueOf(&local).Elem().FieldByName(field.Name).Kind() {
+			case reflect.Map:
+				reflect.ValueOf(&local).Elem().FieldByName(field.Name).Set(reflect.MakeMap(field.Type))
+			case reflect.Array:
+				reflect.ValueOf(&local).Elem().FieldByName(field.Name).Set(reflect.MakeSlice(field.Type, 0, 0))
+			default:
+			}
 			continue
 		}
 		switch reflect.ValueOf(&local).Elem().FieldByName(field.Name).Kind() {
@@ -185,9 +190,6 @@ func getVersionedDefaultLocalConfig(version uint32) (local Local) {
 		default:
 			panic(fmt.Sprintf("unsupported data type (%s) encountered when reflecting on config.Local datatype %s", reflect.ValueOf(&local).Elem().FieldByName(field.Name).Kind(), field.Name))
 		}
-	}
-	if version == 4 {
-		local.PriorityPeers = map[string]bool{}
 	}
 	return
 }
