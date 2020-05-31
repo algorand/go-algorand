@@ -32,7 +32,7 @@ import (
 var base32Encoder = base32.StdEncoding.WithPadding(base32.NoPadding)
 
 // ErrCatchpointParsingFailed is used when we attempt to parse and catchpoint label and failing doing so.
-var ErrCatchpointParsingFailed = errors.New("catchpoing parsing failed")
+var ErrCatchpointParsingFailed = errors.New("catchpoint parsing failed")
 
 // CatchpointLabel represent a single catchpoint label. It will "assemble" a label based on the components
 type CatchpointLabel struct {
