@@ -106,7 +106,7 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 	// Fee of 0 will make cause the function to use the suggested one by network
 	fee := uint64(0)
 	minFund := (cfg.MinAccountFunds) +
-		(cfg.MinAccountFunds * uint64(cfg.NumAsset) * uint64(cfg.NumPartAccounts)) + // accounts*assets
+		(cfg.MinAccountFunds * uint64(cfg.NumAsset) * (uint64(cfg.NumPartAccounts) + uint64(2))) + // accounts*assets
 		(cfg.MaxAmt+cfg.MaxFee)*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts) + // asset creations
 		(cfg.MaxAmt+cfg.MaxFee)*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts) + // asset opt-ins
 		(cfg.MaxAmt+cfg.MaxFee)*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts)*uint64(cfg.NumPartAccounts) + // asset distributions

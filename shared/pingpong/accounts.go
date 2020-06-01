@@ -257,10 +257,10 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 		assetParams = addrAccount.AssetParams
 		fmt.Printf("Distributing  %d assets\n", len(assetParams))
 
-		// Opt-in Accounts for each asset
+		// Distribute assets to each account
 		for k := range assetParams {
 
-			fmt.Printf("Distributing %+v assets  \n", k)
+			fmt.Printf("Distributing asset %v \n", k)
 
 			assetAmt := assetParams[k].Total / uint64(len(accounts))
 			for addr2 := range accounts {
