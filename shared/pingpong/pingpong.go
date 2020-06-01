@@ -49,15 +49,23 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 			return
 		}
 		fmt.Printf("Generating %v new accounts for asset transfer test\n", cfg.NumPartAccounts)
+		// remove existing accounts except for src account
+		for k := range accounts {
+			if k != cfg.SrcAccount {
+				delete(accounts, k)
+			}
+		}
 		// create new accounts for asset testing
 		assetAccounts := make(map[string]uint64)
-		assetAccounts, err = generateAccounts(ac, assetAccounts, cfg.NumPartAccounts, wallet)
+		assetAccounts, err = generateAccounts(ac, assetAccounts, cfg.NumPartAccounts-1, wallet)
 
-		// add the new accounts
-		for k, v := range assetAccounts {
-			accounts[k] = v
+		for addr := range assetAccounts {
+			fmt.Printf("**** generated account %v\n", addr)
 		}
 
+		for k := range assetAccounts {
+			accounts[k] = assetAccounts[k]
+		}
 		err = fundAccounts(accounts, ac, cfg)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
@@ -70,14 +78,14 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 			return
 		}
 
-		for k := range accounts {
-			if k != cfg.SrcAccount {
-				delete(accounts, k)
-			}
-		}
 		for k := range assetAccounts {
 			accounts[k] = assetAccounts[k]
 		}
+
+	}
+
+	for addr := range accounts {
+		fmt.Printf("**** participant account %v\n", addr)
 	}
 
 	err = fundAccounts(accounts, ac, cfg)
@@ -97,8 +105,11 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 
 	// Fee of 0 will make cause the function to use the suggested one by network
 	fee := uint64(0)
-	minFund := (cfg.MinAccountFunds * uint64(cfg.NumAsset+1)) +
-		(cfg.MinAccountFunds * uint64(cfg.NumAsset) * uint64(cfg.NumPartAccounts)) +
+	minFund := (cfg.MinAccountFunds) +
+		(cfg.MinAccountFunds * uint64(cfg.NumAsset) * uint64(cfg.NumPartAccounts)) + // accounts*assets
+		(cfg.MaxAmt+cfg.MaxFee)*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts) + // asset creations
+		(cfg.MaxAmt+cfg.MaxFee)*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts) + // asset opt-ins
+		(cfg.MaxAmt+cfg.MaxFee)*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts)*uint64(cfg.NumPartAccounts) + // asset distributions
 		(cfg.MaxAmt+cfg.MaxFee)*cfg.TxnPerSec*uint64(math.Ceil(cfg.RefreshTime.Seconds()))
 	fmt.Printf("adjusting account balance to %d\n", minFund)
 	for addr, balance := range accounts {

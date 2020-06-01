@@ -113,19 +113,16 @@ func throttleTransactionRate(startTime time.Time, cfg PpConfig, totalSent uint64
 	}
 }
 
+// Prepare assets for asset transaction testing
+// Step 1) Create X assets for each of the participant accounts
+// Step 2) For each participant account, opt-in to assets of all other participant accounts
+// Step 3) Evenly distribute the assets across all participant accounts
 func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (assetParams map[uint64]v1.AssetParams, err error) {
 
 	var startTime = time.Now()
 	var totalSent uint64 = 0
 
-	if err != nil {
-		return
-	}
-
-	for addr := range accounts {
-		fmt.Printf("**** participant account %v\n", addr)
-	}
-
+	// 1) Create X assets for each of the participant accounts
 	for addr := range accounts {
 		addrAccount, addrErr := client.AccountInformation(addr)
 		if addrErr != nil {
@@ -138,8 +135,6 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 
 		fmt.Printf("Creating %v create asset transaction for account %v \n", toCreate, addr)
 		fmt.Printf("cfg.NumAsset %v, addrAccount.AssetParams %v\n", cfg.NumAsset, addrAccount.AssetParams)
-
-		signedTxns := make([]*transactions.SignedTxn, toCreate)
 
 		// create assets in srcAccount
 		for i := 0; i < toCreate; i++ {
@@ -166,38 +161,14 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 				return
 			}
 
-			var hWallet []byte
-			hWallet, err = client.GetUnencryptedWalletHandle()
+			_, err = signAndBroadcastTransaction(accounts, addr, tx, client, cfg)
 			if err != nil {
-				fmt.Printf("Failed to get wallet handle\n")
+				fmt.Fprintf(os.Stderr, "signing and broadcasting asset creation failed with error %v\n", err)
 				return
-			}
-			signedTxn, signErr := client.SignTransactionWithWallet(hWallet, nil, tx)
-			if signErr != nil {
-				fmt.Printf("Cannot sign asset creation txn\n")
-				err = signErr
-				return
-			}
-
-			signedTxns[i] = &signedTxn
-
-			if !cfg.Quiet {
-				fmt.Printf("Create a new asset: supply=%d \n", totalSupply)
-			}
-			accounts[addr] -= tx.Fee.Raw
-
-			fmt.Printf("Broadcasting create asset transactions for account %v\n", addr)
-
-			txid, broadcastErr := client.BroadcastTransaction(*signedTxns[i])
-			if broadcastErr != nil {
-				fmt.Printf("Cannot broadcast asset creation txn error: %v", broadcastErr)
-			} else if !cfg.Quiet {
-				fmt.Printf("Broadcast asset creation:  txid=%s\n", txid)
 			}
 
 			totalSent++
 			throttleTransactionRate(startTime, cfg, totalSent)
-
 		}
 
 		account, accountErr := client.AccountInformation(addr)
@@ -209,19 +180,11 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 
 		assetParams = account.AssetParams
 		fmt.Printf("Configured  %d assets %+v\n", len(assetParams), assetParams)
-
 	}
 
-	for addr := range accounts {
-		fmt.Printf("**** participant account %v\n", addr)
-	}
 	time.Sleep(time.Second * 10)
-	err = fundAccounts(accounts, client, cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
-		return
-	}
 
+	// 2) For each participant account, opt-in to assets of all other participant accounts
 	for addr := range accounts {
 		fmt.Printf("Opting in assets from account %v\n", addr)
 		addrAccount, addrErr := client.AccountInformation(addr)
@@ -239,16 +202,16 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 			fmt.Printf("optin asset %+v\n", k)
 
 			for addr2 := range accounts {
-				fmt.Printf("Opting in assets to account %v \n", addr2)
-				addrAccount2, addrErr2 := client.AccountInformation(addr2)
-				if addrErr2 != nil {
-					fmt.Printf("Cannot lookup source account\n")
-					err = addrErr2
-					return
-				}
-				// if addr already opened this asset, skip
-				if _, ok := addrAccount2.Assets[k]; !ok {
-					// init asset k in addr
+				if addr != addr2 {
+					fmt.Printf("Opting in assets to account %v \n", addr2)
+					_, addrErr2 := client.AccountInformation(addr2)
+					if addrErr2 != nil {
+						fmt.Printf("Cannot lookup optin account\n")
+						err = addrErr2
+						return
+					}
+
+					// opt-in asset k for addr
 					tx, sendErr := client.MakeUnsignedAssetSendTx(k, 0, addr2, "", "")
 					if sendErr != nil {
 						fmt.Printf("Cannot initiate asset optin %v in account %v\n", k, addr2)
@@ -262,30 +225,10 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 						return
 					}
 
-					var hWallet []byte
-					hWallet, err = client.GetUnencryptedWalletHandle()
+					_, err = signAndBroadcastTransaction(accounts, addr2, tx, client, cfg)
 					if err != nil {
-						fmt.Printf("Failed to get wallet handle\n")
+						fmt.Fprintf(os.Stderr, "signing and broadcasting asset optin failed with error %v\n", err)
 						return
-					}
-					signedTxn, signErr := client.SignTransactionWithWallet(hWallet, nil, tx)
-					if signErr != nil {
-						fmt.Printf("Cannot sign asset optin %v init txn in account %v\n", k, addr2)
-						err = signErr
-						return
-					}
-
-					_, broadcastErr := client.BroadcastTransaction(signedTxn)
-					if broadcastErr != nil {
-						fmt.Printf("Cannot broadcast asset optin %v in account %v\n", k, addr2)
-						fmt.Printf("error %v \n", broadcastErr)
-						err = broadcastErr
-						return
-					} else {
-						if !cfg.Quiet {
-							fmt.Printf("Init asset %v in account %v\n", k, addr2)
-						}
-						accounts[addr2] -= tx.Fee.Raw
 					}
 
 					totalSent++
@@ -295,18 +238,13 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 			}
 		}
 	}
-	time.Sleep(time.Second * 10)
 
 	for addr := range accounts {
 		fmt.Printf("**** participant account %v\n", addr)
 	}
 	time.Sleep(time.Second * 10)
-	err = fundAccounts(accounts, client, cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
-		return
-	}
 
+	// Step 3) Evenly distribute the assets across all participant accounts
 	for addr := range accounts {
 		fmt.Printf("Distributing assets from account %v\n", addr)
 		addrAccount, addrErr := client.AccountInformation(addr)
@@ -317,7 +255,7 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 		}
 
 		assetParams = addrAccount.AssetParams
-		fmt.Printf("Distributing assets %+v\n", assetParams)
+		fmt.Printf("Distributing  %d assets\n", len(assetParams))
 
 		// Opt-in Accounts for each asset
 		for k := range assetParams {
@@ -336,39 +274,39 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 						err = sendErr
 						return
 					}
-					stxn, signErr := signTxn(cfg.SrcAccount, tx, client, cfg)
-					if signErr != nil {
-						fmt.Printf("Cannot sign asset %v init fund txn in account %v\n", k, addr)
-						err = signErr
+
+					_, err = signAndBroadcastTransaction(accounts, addr, tx, client, cfg)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "signing and broadcasting asset distribution failed with error %v\n", err)
 						return
-					}
-					_, broadcastErr := client.BroadcastTransaction(stxn)
-					if broadcastErr != nil {
-						fmt.Printf("Cannot broadcast asset transfer %v from account %v to account %v\n", k, addr, addr2)
-						fmt.Printf("error %v \n", broadcastErr)
-						err = signErr
-						return
-					} else {
-						if !cfg.Quiet {
-							fmt.Printf("Transfer %d asset %d to account %s\n", assetAmt, k, addr)
-						}
-						accounts[addr] -= tx.Fee.Raw
 					}
 
 					totalSent++
 					throttleTransactionRate(startTime, cfg, totalSent)
 				}
 			}
-
 		}
+	}
+	time.Sleep(time.Second * 10)
+	return
+}
 
-		err = fundAccounts(accounts, client, cfg)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
-			return
+func signAndBroadcastTransaction(accounts map[string]uint64, sender string, tx transactions.Transaction, client libgoal.Client, cfg PpConfig) (txId string, err error) {
+	var signedTx transactions.SignedTxn
+	signedTx, err = signTxn(sender, tx, client, cfg)
+	if err != nil {
+		fmt.Printf("Cannot sign trx %+v with account %v\nerror %v\n", tx, sender, err)
+		return
+	}
+	txId, err = client.BroadcastTransaction(signedTx)
+	if err != nil {
+		fmt.Printf("Cannot broadcast transaction %+v\nerror %v \n", signedTx, err)
+		return
+	} else {
+		if !cfg.Quiet {
+			fmt.Printf("Broadcast transaction %v\n", txId)
 		}
-
-		time.Sleep(time.Second * 10)
+		accounts[sender] -= tx.Fee.Raw
 	}
 	return
 }

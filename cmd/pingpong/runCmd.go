@@ -29,7 +29,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/shared/pingpong"
 )
@@ -246,39 +245,20 @@ var runCmd = &cobra.Command{
 		cfg.Dump(os.Stdout)
 
 		// Initialize accounts if necessary
-		//accounts, assetParams, cfg, err := pingpong.PrepareAccounts(ac, cfg)
-		//if err != nil {
-		//	reportErrorf("Error preparing accounts for transfers: %v\n", err)
-		//}
-		//
-		//if saveConfig {
-		//	cfg.Save(cfgPath)
-		//}
-
-		var accounts map[string]uint64
-		var assetParams map[uint64]v1.AssetParams
-		var resultCfg pingpong.PpConfig
-
-		// Initialize accounts if necessary, this may take several attempts while previous transactions to settle
-		for i := 0; i < 20; i++ {
-			accounts, assetParams, resultCfg, err = pingpong.PrepareAccounts(ac, cfg)
-			if err == nil {
-				break
-			} else {
-				log.Errorf("problem[%d] preparing accounts for transfers: %v\n, retrying", i, err)
-				reportErrorf("Error Preparing to run PingPong with config:\n")
-			}
-		}
+		accounts, assetParams, cfg, err := pingpong.PrepareAccounts(ac, cfg)
 		if err != nil {
-			log.Warnf("Error preparing accounts for transfers: %v\n", err)
-			//		return
+			reportErrorf("Error preparing accounts for transfers: %v\n", err)
+		}
+
+		if saveConfig {
+			cfg.Save(cfgPath)
 		}
 
 		reportInfof("Preparing to run PingPong with config:\n")
 		cfg.Dump(os.Stdout)
 
 		// Kick off the real processing
-		pingpong.RunPingPong(context.Background(), ac, accounts, assetParams, resultCfg)
+		pingpong.RunPingPong(context.Background(), ac, accounts, assetParams, cfg)
 	},
 }
 
