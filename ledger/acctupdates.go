@@ -900,28 +900,18 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Addre
 	return
 }
 
-func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound, balancesRound basics.Round, ledgerBlockDigest crypto.Digest) (label string, err error) {
-	var totals AccountTotals
+func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Round, totals AccountTotals, ledgerBlockDigest crypto.Digest) (label string, err error) {
 	var balancesHash crypto.Digest
-	var offset uint64
 
-	offset, err = au.roundOffset(balancesRound)
-	if err != nil {
-		return
-	}
-
-	totals = au.roundTotals[offset]
 	balancesHash, err = au.balancesTrie.RootHash()
 	if err != nil {
 		return
 	}
+
 	cpLabel := makeCatchpointLabel(committedRound, ledgerBlockDigest, balancesHash, totals)
 	label = cpLabel.String()
 
 	_, err = au.accountsq.writeCatchpointStateString(context.Background(), catchpointStateLastCatchpoint, label)
-	if err == nil {
-		au.lastCatchpointLabel = label
-	}
 	return
 }
 
@@ -968,7 +958,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	defer au.accountsWriting.Done()
 	au.accountsMu.RLock()
 
-	// adjust teh offset according to what happend meanwhile..
+	// adjust the offset according to what happend meanwhile..
 	offset -= uint64(au.dbRound - dbRound)
 	dbRound = au.dbRound
 
@@ -976,7 +966,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	flushTime := time.Now()
 	isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+dbRound))) % au.catchpointInterval))
 
-	// create a copy of thej deltas, reward levels and protos for the range we're going to flush.
+	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]map[basics.Address]accountDelta, offset, offset)
 	roundTotals := make([]AccountTotals, offset+1, offset+1)
 	protos := make([]config.ConsensusParams, offset+1, offset+1)
@@ -993,6 +983,12 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		for aidx := range au.assetDeltas[i] {
 			assetFlushcount[aidx] = assetFlushcount[aidx] + 1
 		}
+	}
+
+	var committedRoundDigest crypto.Digest
+
+	if isCatchpointRound {
+		committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
 	}
 
 	au.accountsMu.RUnlock()
@@ -1013,7 +1009,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	}
 
 	var catchpointLabel string
-	var committedRoundDigest crypto.Digest
 
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
@@ -1055,8 +1050,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		return
 	}
 	if isCatchpointRound {
-		committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
-		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, dbRound+basics.Round(offset), committedRoundDigest)
+		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, roundTotals[offset], committedRoundDigest)
 		if err != nil {
 			au.log.Warnf("commitRound : unable to create a catchpoint label: %v", err)
 		}
@@ -1069,6 +1063,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	}
 
 	au.accountsMu.Lock()
+	if isCatchpointRound && catchpointLabel != "" {
+		au.lastCatchpointLabel = catchpointLabel
+	}
+
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
 	for addr, cnt := range flushcount {
