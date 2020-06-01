@@ -71,19 +71,20 @@ const topPageTemplate = `
     <script
       src="https://code.jquery.com/jquery-3.3.1.min.js"
       integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
-	   crossorigin="anonymous"></script>
-	  
-	 <script>
-	  function loadparm(){
+      crossorigin="anonymous"></script>
+
+         <script>
+          function loadparam() {
             const queryString = window.location.search;
             const urlParams = new URLSearchParams(queryString);
             $('#target').val(urlParams.get('account'));
-	  }  
-      function onload() {
+          }
+          function onload() {
+            loadparam();
             $('#dispense').click(function (e) {
-               var recaptcha = grecaptcha.getResponse();
-               var target = $('#target').val();
-			  
+              var recaptcha = grecaptcha.getResponse();
+              var target = $('#target').val();
+
               $('#status').html('Sending request..');
               var req = $.post('/dispense', {
                 recaptcha: recaptcha,
@@ -93,8 +94,7 @@ const topPageTemplate = `
               }).fail(function () {
                 $('#status').html('Code ' + req.status + ' ' + req.statusText + ': ' + req.responseText);
               });
-         });		 
-         loadparm();
+         });
       }
     </script>
   </head>
