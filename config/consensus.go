@@ -214,6 +214,9 @@ type ConsensusParams struct {
 	// whether to use the old buggy Credential.lowestOutput function
 	// TODO(upgrade): Please remove as soon as the upgrade goes through
 	UseBuggyProposalLowestOutput bool
+
+	// SupportRekeying indicates support for account rekeying (the RekeyTo and AuthAddr fields)
+	SupportRekeying bool
 }
 
 // ConsensusProtocols defines a set of supported protocol versions and their
@@ -553,8 +556,6 @@ func initConsensusProtocols() {
 	v22.MinUpgradeWaitRounds = 10000
 	v22.MaxUpgradeWaitRounds = 150000
 	Consensus[protocol.ConsensusV22] = v22
-	// v21 can be upgraded to v22.
-	v21.ApprovedUpgrades[protocol.ConsensusV22] = 0
 
 	// v23 is an upgrade which fixes the behavior of leases so that
 	// it conforms with the intended spec.
@@ -564,11 +565,14 @@ func initConsensusProtocols() {
 	Consensus[protocol.ConsensusV23] = v23
 	// v22 can be upgraded to v23.
 	v22.ApprovedUpgrades[protocol.ConsensusV23] = 10000
+	// v21 can be upgraded to v23.
+	v21.ApprovedUpgrades[protocol.ConsensusV23] = 0
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
 	vFuture := v23
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	vFuture.SupportRekeying = true
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
