@@ -126,11 +126,6 @@ func TestNewAppLedger(t *testing.T) {
 	a.Contains(err.Error(), "cannot create appLedger for appIdx 0")
 
 	appIdx := basics.AppIndex(1)
-	_, err = newAppLedger(&b, acc, app, appIdx, AppTealGlobals{})
-	a.Error(err)
-	a.Contains(err.Error(), "cannot whitelist appIdx 0")
-
-	app = []basics.AppIndex{1}
 	l, err := newAppLedger(&b, acc, app, appIdx, AppTealGlobals{})
 	a.NoError(err)
 	a.NotNil(l)

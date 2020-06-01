@@ -119,10 +119,6 @@ func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address
 	}
 
 	for _, aidx := range appGlobalWhitelist {
-		if aidx == 0 {
-			err = fmt.Errorf("cannot whitelist appIdx 0")
-			return
-		}
 		al.apps[aidx] = true
 	}
 
