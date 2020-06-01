@@ -398,12 +398,6 @@ func (client RestClient) Catchup(catchpointLabel string) (response privateV2.Cat
 	return
 }
 
-// RawBlock gets the encoded, raw msgpack block for the given round
-func (client RestClient) RawBlock(round uint64) (response v1.RawBlock, err error) {
-	err = client.getRaw(&response, fmt.Sprintf("/block/%d", round), rawblockParams{1})
-	return
-}
-
 // GetGoRoutines gets a dump of the goroutines from pprof
 // Not supported
 func (client RestClient) GetGoRoutines(ctx context.Context) (goRoutines string, err error) {

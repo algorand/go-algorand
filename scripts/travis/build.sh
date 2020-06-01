@@ -69,13 +69,6 @@ if [ "${OS}-${ARCH}" = "linux-arm" ]; then
 fi
 
 if [ "${MAKE_DEBUG_OPTION}" != "" ]; then
-    # Force re-generation of msgpack encoders/decoders with msgp.  If this re-generated code
-    # does not match the checked-in code, some structs may have been added or updated without
-    # refreshing the generated codecs.  The enlistment check below will error out, if so.
-    # we want to have that only on system where we have some debugging abilities. Platforms that do not support
-    # debugging ( i.e. arm ) are also usually under powered and making this extra step
-    # would be very costly there.
-    make msgp
     make build build-race
 else
     make build
