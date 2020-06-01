@@ -762,6 +762,7 @@ func (wn *WebsocketNetwork) innerStop() {
 // Stop closes network connections and stops threads.
 // Stop blocks until all activity on this node is done.
 func (wn *WebsocketNetwork) Stop() {
+	wn.handlers.ClearHandlers([]Tag{})
 	wn.innerStop()
 	var listenAddr string
 	if wn.listener != nil {
@@ -787,7 +788,8 @@ func (wn *WebsocketNetwork) RegisterHandlers(dispatch []TaggedMessageHandler) {
 
 // ClearHandlers deregisters all the existing message handlers.
 func (wn *WebsocketNetwork) ClearHandlers() {
-	wn.handlers.ClearHandlers()
+	// exclude the internal handlers. These would get cleared out when Stop is called.
+	wn.handlers.ClearHandlers([]Tag{protocol.PingTag, protocol.PingReplyTag, protocol.NetPrioResponseTag})
 }
 
 func (wn *WebsocketNetwork) setHeaders(header http.Header) {
