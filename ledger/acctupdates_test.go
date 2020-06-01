@@ -38,7 +38,7 @@ type mockLedgerForTracker struct {
 	log    logging.Logger
 }
 
-func makeMockLedgerForTracker(t *testing.T) *mockLedgerForTracker {
+func makeMockLedgerForTracker(t testing.TB) *mockLedgerForTracker {
 	dbs := dbOpenTest(t)
 	dblogger := logging.TestingLog(t)
 	dbs.rdb.SetLogger(dblogger)
@@ -81,6 +81,10 @@ func (ml *mockLedgerForTracker) trackerDB() dbPair {
 	return ml.dbs
 }
 
+func (ml *mockLedgerForTracker) blockDB() dbPair {
+	return dbPair{}
+}
+
 func (ml *mockLedgerForTracker) trackerLog() logging.Logger {
 	return ml.log
 }
@@ -103,46 +107,64 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 		require.Error(t, err)
 	}
 
-	for rnd := base; rnd <= latest; rnd++ {
-		var totalOnline, totalOffline, totalNotPart uint64
+	roundsRanges := []struct {
+		start, end basics.Round
+	}{}
 
-		for addr, data := range accts[rnd] {
-			d, err := au.lookup(rnd, addr, false)
-			require.NoError(t, err)
-			require.Equal(t, d, data)
-
-			rewardsDelta := rewards[rnd] - d.RewardsBase
-			switch d.Status {
-			case basics.Online:
-				totalOnline += d.MicroAlgos.Raw
-				totalOnline += (d.MicroAlgos.Raw / proto.RewardUnit) * rewardsDelta
-			case basics.Offline:
-				totalOffline += d.MicroAlgos.Raw
-				totalOffline += (d.MicroAlgos.Raw / proto.RewardUnit) * rewardsDelta
-			case basics.NotParticipating:
-				totalNotPart += d.MicroAlgos.Raw
-			default:
-				t.Errorf("unknown status %v", d.Status)
-			}
+	// running the checkAcctUpdates on the entire range of base..latestRnd is too slow, and unlikely to help us
+	// to trap a regression ( might be a good to find where the regression started ). so, for
+	// performance reasons, we're going to run it againt the first and last 5 rounds, plus few rounds
+	// in between.
+	if latestRnd-base <= 10 {
+		roundsRanges = append(roundsRanges, struct{ start, end basics.Round }{base, latestRnd})
+	} else {
+		roundsRanges = append(roundsRanges, struct{ start, end basics.Round }{base, base + 5})
+		roundsRanges = append(roundsRanges, struct{ start, end basics.Round }{latestRnd - 5, latestRnd})
+		for i := base + 5; i < latestRnd-5; i += 1 + (latestRnd-base-10)/10 {
+			roundsRanges = append(roundsRanges, struct{ start, end basics.Round }{i, i + 1})
 		}
-
-		all, err := au.allBalances(rnd)
-		require.NoError(t, err)
-		require.Equal(t, all, accts[rnd])
-
-		totals, err := au.totals(rnd)
-		require.NoError(t, err)
-		require.Equal(t, totals.Online.Money.Raw, totalOnline)
-		require.Equal(t, totals.Offline.Money.Raw, totalOffline)
-		require.Equal(t, totals.NotParticipating.Money.Raw, totalNotPart)
-		require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
-		require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
-
-		d, err := au.lookup(rnd, randomAddress(), false)
-		require.NoError(t, err)
-		require.Equal(t, d, basics.AccountData{})
 	}
+	for _, roundRange := range roundsRanges {
+		for rnd := roundRange.start; rnd <= roundRange.end; rnd++ {
+			var totalOnline, totalOffline, totalNotPart uint64
 
+			for addr, data := range accts[rnd] {
+				d, err := au.lookup(rnd, addr, false)
+				require.NoError(t, err)
+				require.Equal(t, d, data)
+
+				rewardsDelta := rewards[rnd] - d.RewardsBase
+				switch d.Status {
+				case basics.Online:
+					totalOnline += d.MicroAlgos.Raw
+					totalOnline += (d.MicroAlgos.Raw / proto.RewardUnit) * rewardsDelta
+				case basics.Offline:
+					totalOffline += d.MicroAlgos.Raw
+					totalOffline += (d.MicroAlgos.Raw / proto.RewardUnit) * rewardsDelta
+				case basics.NotParticipating:
+					totalNotPart += d.MicroAlgos.Raw
+				default:
+					t.Errorf("unknown status %v", d.Status)
+				}
+			}
+
+			all, err := au.allBalances(rnd)
+			require.NoError(t, err)
+			require.Equal(t, all, accts[rnd])
+
+			totals, err := au.totals(rnd)
+			require.NoError(t, err)
+			require.Equal(t, totals.Online.Money.Raw, totalOnline)
+			require.Equal(t, totals.Offline.Money.Raw, totalOffline)
+			require.Equal(t, totals.NotParticipating.Money.Raw, totalNotPart)
+			require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
+			require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
+
+			d, err := au.lookup(rnd, randomAddress(), false)
+			require.NoError(t, err)
+			require.Equal(t, d, basics.AccountData{})
+		}
+	}
 	checkAcctUpdatesConsistency(t, au)
 }
 
@@ -184,7 +206,10 @@ func TestAcctUpdates(t *testing.T) {
 	sinkdata.Status = basics.NotParticipating
 	accts[0][testSinkAddr] = sinkdata
 
-	au := &accountUpdates{initAccounts: accts[0], initProto: proto}
+	au := &accountUpdates{}
+	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
+	defer au.close()
+
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
 
@@ -234,6 +259,138 @@ func TestAcctUpdates(t *testing.T) {
 		au.lastFlushTime = time.Time{}
 
 		au.committedUpTo(basics.Round(proto.MaxBalLookback) + i)
+		au.waitAccountsWriting()
 		checkAcctUpdates(t, au, i, basics.Round(proto.MaxBalLookback+14), accts, rewardsLevels, proto)
 	}
+}
+
+func BenchmarkBalancesChanges(b *testing.B) {
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		b.Skip("This test is too slow on ARM and causes travis builds to time out")
+	}
+	if b.N < 100 {
+		b.N = 50
+	}
+	protocolVersion := protocol.ConsensusVersion("BenchmarkBalancesChanges-test-protocol-version")
+	testProtocol := config.Consensus[protocol.ConsensusCurrentVersion]
+	testProtocol.MaxBalLookback = 25
+	config.Consensus[protocolVersion] = testProtocol
+	defer func() {
+		delete(config.Consensus, protocolVersion)
+	}()
+
+	proto := config.Consensus[protocolVersion]
+
+	ml := makeMockLedgerForTracker(b)
+	defer ml.close()
+	initialRounds := uint64(1)
+	ml.blocks = randomInitChain(protocolVersion, int(initialRounds))
+	accountsCount := 5000
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount)}
+	rewardsLevels := []uint64{0}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	au := &accountUpdates{}
+	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
+	err := au.loadFromDisk(ml)
+	require.NoError(b, err)
+	defer au.close()
+
+	// cover initialRounds genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < int(initialRounds); i++ {
+		accts = append(accts, accts[0])
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+
+	for i := basics.Round(initialRounds); i < basics.Round(proto.MaxBalLookback+uint64(b.N)); i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		accountChanges := 0
+		if i <= basics.Round(initialRounds)+basics.Round(b.N) {
+			accountChanges = accountsCount - 2 - int(basics.Round(proto.MaxBalLookback+uint64(b.N))+i)
+		}
+
+		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
+		prevTotals, err := au.totals(basics.Round(i - 1))
+		require.NoError(b, err)
+
+		oldPool := accts[i-1][testPoolAddr]
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates[testPoolAddr] = accountDelta{old: oldPool, new: newPool}
+		totals[testPoolAddr] = newPool
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = protocolVersion
+
+		au.newBlock(blk, StateDelta{
+			accts: updates,
+			hdr:   &blk.BlockHeader,
+		})
+		accts = append(accts, totals)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+	for i := proto.MaxBalLookback; i < proto.MaxBalLookback+initialRounds; i++ {
+		// Clear the timer to ensure a flush
+		au.lastFlushTime = time.Time{}
+		au.committedUpTo(basics.Round(i))
+	}
+	au.waitAccountsWriting()
+	b.ResetTimer()
+	startTime := time.Now()
+	for i := proto.MaxBalLookback + initialRounds; i < proto.MaxBalLookback+uint64(b.N); i++ {
+		// Clear the timer to ensure a flush
+		au.lastFlushTime = time.Time{}
+		au.committedUpTo(basics.Round(i))
+	}
+	au.waitAccountsWriting()
+	deltaTime := time.Now().Sub(startTime)
+	if deltaTime > time.Second {
+		return
+	}
+	// we want to fake the N to reflect the time it took us, if we were to wait an entire second.
+	singleIterationTime := deltaTime / time.Duration((uint64(b.N) - initialRounds))
+	b.N = int(time.Second / singleIterationTime)
+	// and now, wait for the reminder of the second.
+	time.Sleep(time.Second - deltaTime)
+
+}
+
+func BenchmarkCalibrateNodesPerPage(b *testing.B) {
+	b.Skip("This benchmark was used to tune up the NodesPerPage; it's not really usefull otherwise")
+	defaultNodesPerPage := merkleCommitterNodesPerPage
+	for nodesPerPage := 32; nodesPerPage < 300; nodesPerPage++ {
+		b.Run(fmt.Sprintf("Test_merkleCommitterNodesPerPage_%d", nodesPerPage), func(b *testing.B) {
+			merkleCommitterNodesPerPage = int64(nodesPerPage)
+			BenchmarkBalancesChanges(b)
+		})
+	}
+	merkleCommitterNodesPerPage = defaultNodesPerPage
+}
+
+func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
+	//b.Skip("This benchmark was used to tune up the trieCachedNodesCount; it's not really usefull otherwise")
+	defaultTrieCachedNodesCount := trieCachedNodesCount
+	for cacheSize := 3000; cacheSize < 50000; cacheSize += 1000 {
+		b.Run(fmt.Sprintf("Test_cacheSize_%d", cacheSize), func(b *testing.B) {
+			trieCachedNodesCount = cacheSize
+			BenchmarkBalancesChanges(b)
+		})
+	}
+	trieCachedNodesCount = defaultTrieCachedNodesCount
 }
