@@ -130,7 +130,6 @@ func OpenLedger(
 
 	err = l.reloadLedger()
 	if err != nil {
-		err = fmt.Errorf("OpenLedger.bqInit %v", err)
 		return nil, err
 	}
 
