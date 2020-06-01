@@ -18,7 +18,6 @@ package partitionrecovery
 
 import (
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 

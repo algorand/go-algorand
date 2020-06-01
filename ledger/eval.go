@@ -542,7 +542,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		if dup {
 			return TransactionInLedgerError{txid}
 		}
-	}
 
 		// Does the address that authorized the transaction actually match whatever address the sender has rekeyed to?
 		// i.e., the sig/lsig/msig was checked against the txn.Authorizer() address, but does this match the sender's balrecord.AuthAddr?
