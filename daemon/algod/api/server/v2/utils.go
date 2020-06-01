@@ -43,6 +43,10 @@ func badRequest(ctx echo.Context, internal error, external string, log logging.L
 	return returnError(ctx, http.StatusBadRequest, internal, external, log)
 }
 
+func serviceUnavailable(ctx echo.Context, internal error, external string, log logging.Logger) error {
+	return returnError(ctx, http.StatusServiceUnavailable, internal, external, log)
+}
+
 func internalError(ctx echo.Context, internal error, external string, log logging.Logger) error {
 	return returnError(ctx, http.StatusInternalServerError, internal, external, log)
 }

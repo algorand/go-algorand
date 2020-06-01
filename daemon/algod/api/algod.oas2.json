@@ -202,6 +202,12 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
           "default": {
             "description": "Unknown Error"
           }
@@ -474,6 +480,12 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
           "default": {
             "description": "Unknown Error"
           }
@@ -535,6 +547,12 @@
               "$ref": "#/definitions/ErrorResponse"
             }
           },
+          "503": {
+            "description": "Service Temporarily Unavailable",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
           "default": {
             "description": "Unknown Error"
           }
@@ -557,6 +575,18 @@
           },
           "401": {
             "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -599,6 +629,12 @@
           },
           "500": {
             "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "503": {
+            "description": "Service Temporarily Unavailable",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -669,9 +705,9 @@
         }
       ]
     },
-      "/v2/teal/compile": {
-	"post": {
-	  "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style).",
+    "/v2/teal/compile": {
+      "post": {
+        "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style).",
         "consumes": [
           "text/plain"
         ],
@@ -721,7 +757,107 @@
           }
         }
       }
-    }   
+    },
+    "/v2/catchup/{catchpoint}": {
+      "post": {
+        "tags": [
+          "private"
+        ],
+        "description": "Given a catchpoint, it starts catching up to this catchpoint",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Starts a catchpoint catchup.",
+        "operationId": "StartCatchup",
+        "parameters": [
+          {
+            "$ref": "#/parameters/catchpoint"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/CatchpointStartResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "private"
+        ],
+        "description": "Given a catchpoint, it aborts catching up to this catchpoint",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Aborts a catchpoint catchup.",
+        "operationId": "AbortCatchup",
+        "parameters": [
+          {
+            "$ref": "#/parameters/catchpoint"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/CatchpointAbortResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "string",
+          "name": "catchpoint",
+          "in": "path",
+          "required": true
+        }
+      ]
+    }
   },
   "definitions": {
     "Account": {
@@ -1069,6 +1205,16 @@
       "name": "before-time",
       "in": "query"
     },
+    "catchpoint": {
+      "type": "string",
+      "format": "catchpoint",
+      "pattern": "[0-9]{1,10}#[A-Z0-9]{1,53}",
+      "x-algorand-format": "Catchpoint String",
+      "description": "A catch point",
+      "name": "catchpoint",
+      "in": "path",
+      "required": true
+    },
     "currency-greater-than": {
       "type": "integer",
       "description": "Results should have an amount greater than this value. MicroAlgos are the default currency unless an asset-id is provided, in which case the asset will be used.",
@@ -1207,6 +1353,44 @@
         }
       }
     },
+    "CatchpointStartResponse":{
+      "tags": [
+        "private"
+      ],
+      "description": "(empty)",
+      "schema": {
+        "description": "An catchpoint start response.",
+        "type": "object",
+        "required": [
+          "catchup-message"
+        ],
+        "properties": {
+          "catchup-message": {
+            "description": "Catchup start response string",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "CatchpointAbortResponse":{
+      "tags": [
+        "private"
+      ],
+      "description": "(empty)",
+      "schema": {
+        "description": "An catchpoint abort response.",
+        "type": "object",
+        "required": [
+          "catchup-message"
+        ],
+        "properties": {
+          "catchup-message": {
+            "description": "Catchup abort response string",
+            "type": "string"
+          }
+        }
+      }
+    },
     "NodeStatusResponse": {
       "description": "(empty)",
       "schema": {
@@ -1253,6 +1437,30 @@
           },
           "time-since-last-round": {
             "description": "TimeSinceLastRound in nanoseconds",
+            "type": "integer"
+          },
+          "last-catchpoint": {
+            "description": "The last catchpoint seen by the node",
+            "type": "string"
+          },
+          "catchpoint": {
+            "description": "The current catchpoint that is being caught up to",
+            "type": "string"
+          },
+          "catchpoint-total-accounts": {
+            "description": "The total number of accounts included in the current catchpoint",
+            "type": "integer"
+          },
+          "catchpoint-processed-accounts": {
+            "description": "The number of account from the current catchpoint that have been processed so far as part of the catchup",
+            "type": "integer"
+          },
+          "catchpoint-total-blocks": {
+            "description": "The total number of blocks that are required to complete the current catchpoint catchup",
+            "type": "integer"
+          },
+          "catchpoint-acquired-blocks": {
+            "description": "The number of blocks that have already been obtained by the node as part of the catchup",
             "type": "integer"
           }
         }
@@ -1419,17 +1627,17 @@
         "type": "object",
         "required": [
             "hash",
-	    "result"
+            "result"
         ],
         "properties": {
           "hash": {
             "description": "base32 SHA512_256 of program bytes (Address style)",
             "type": "string"
           },
-	  "result":{
-	    "description": "base64 encoded program bytes",
-            "type": "string"
-	  }
+	      "result": {
+	        "description": "base64 encoded program bytes",
+          "type": "string"
+	        }
         }
       }
     }
