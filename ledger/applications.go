@@ -201,7 +201,7 @@ func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) 
 
 	// Ensure requested address is on whitelist
 	if !al.addresses[addr] {
-		return nil, fmt.Errorf("cannot access localstate for %s, not sender or in txn.Addresses", addr.String())
+		return nil, fmt.Errorf("cannot access local state for %s, not sender or in txn.Addresses", addr.String())
 	}
 
 	// Don't fetch with pending rewards here since we are only returning
@@ -273,7 +273,7 @@ func (al *appLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex
 }
 
 func (al *appLedger) Round() basics.Round {
-	return al.CurrentRound
+	return al.AppTealGlobals.CurrentRound
 }
 
 func (al *appLedger) LatestTimestamp() int64 {
