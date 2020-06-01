@@ -118,6 +118,15 @@ for bin in "${bin_files[@]}"; do
     if [ $? -ne 0 ]; then exit 1; fi
 done
 
+echo "Staging test util package files"
+TEST_UTILS_ROOT=${PKG_ROOT}/test-utils
+bin_files=("auctionbank" "algotmpl" "COPYING")
+mkdir -p ${TEST_UTILS_ROOT}
+for bin in "${bin_files[@]}"; do
+    cp ${GOPATHBIN}/${bin} ${TEST_UTILS_ROOT}
+    if [ $? -ne 0 ]; then exit 1; fi
+done
+
 cp "scripts/sysctl.sh" ${TOOLS_ROOT}
 if [ $? -ne 0 ]; then exit 1; fi
 
