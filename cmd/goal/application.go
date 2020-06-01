@@ -117,6 +117,15 @@ func init() {
 	readStateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 	updateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 
+	// Add common transaction flags to all txn-generating app commands
+	addTxnFlags(createAppCmd)
+	addTxnFlags(deleteAppCmd)
+	addTxnFlags(updateAppCmd)
+	addTxnFlags(callAppCmd)
+	addTxnFlags(optInAppCmd)
+	addTxnFlags(closeOutAppCmd)
+	addTxnFlags(clearAppCmd)
+
 	readStateAppCmd.Flags().BoolVar(&fetchLocal, "local", false, "Fetch account-specific state for this application. `--from` address is required when using this flag")
 	readStateAppCmd.Flags().BoolVar(&fetchGlobal, "global", false, "Fetch global state for this application.")
 	readStateAppCmd.Flags().BoolVar(&guessFormat, "guess-format", false, "Format application state using heuristics to guess data encoding.")
