@@ -31,6 +31,12 @@ var ErrWatchdogStreamReaderTimerElapsed = fmt.Errorf("watchdog stream reader tim
 // ErrWatchdogStreamReaderReaderReachedDataLimit is returned when watchdogStreamReader was asked to read beyond the designated data limits
 var ErrWatchdogStreamReaderReaderReachedDataLimit = fmt.Errorf("watchdog stream reader reached data limit")
 
+// watchdogStreamReader is a glorified io.Reader base structure, which adds two fail safes for the default io.Reader:
+// 1. It allows to limit the amount of data being read from the stream between two subsequent Reset calls.
+// 2. It allows to limit the amount of time being spent reading and/or waiting for data from the reader between two subsequent Reset calls.
+// The intended usage is to attach it directly to a http.Response.Body and to perform the reading from the watchdogStreamReader directly.
+// If data is being pulled as expected, the caller could extend the timeout and or data limits. This is particulary usefull when providing
+// the input stream to components which wouldn't time-limit or data-limit the data, and could end up exhusting the host computer resources.
 type watchdogStreamReader struct {
 	// watchdog configuration
 	underlayingReader io.Reader     // the underlaying data source
@@ -42,14 +48,15 @@ type watchdogStreamReader struct {
 	readError   error  // the outgoing reported error ( either coming from the underlaying data source or self-generated )
 	totalRead   uint64 // the total amount of bytes read from the data source so far.
 
-	maxDataSize   uint64 // the current high threshold for data reader
-	readerClose   chan struct{}
-	tickerClose   chan struct{}
-	readerRequest chan struct{}
-	readerMu      deadlock.Mutex
-	readerCond    *sync.Cond
+	maxDataSize   uint64         // the current high threshold for data reader
+	readerClose   chan struct{}  // channel used to signal the shutting down of the reader goroutine
+	tickerClose   chan struct{}  // channel used to signal the shutting down of the ticker goroutine
+	readerRequest chan struct{}  // channel used to signal the reader goroutine that it needs to go and attempt to read from the underlying reader
+	readerMu      deadlock.Mutex // syncronization mutex for the reader goroutine
+	readerCond    *sync.Cond     // conditional check variable for the reader goroutine
 }
 
+// makeWatchdogStreamReader creates a watchdogStreamReader and initialize it.
 func makeWatchdogStreamReader(underlayingReader io.Reader, readSize uint64, readaheadSize uint64, readaheadDuration time.Duration) *watchdogStreamReader {
 	reader := &watchdogStreamReader{
 		underlayingReader: underlayingReader,
@@ -68,6 +75,7 @@ func makeWatchdogStreamReader(underlayingReader io.Reader, readSize uint64, read
 	return reader
 }
 
+// Reset extends the time and data limits by another "block", as well as return an error code if the data stream has reached to it's end.
 func (r *watchdogStreamReader) Reset() error {
 	r.readerMu.Lock()
 	if r.readError != nil && len(r.stageBuffer) == 0 {
@@ -81,6 +89,7 @@ func (r *watchdogStreamReader) Reset() error {
 	return nil
 }
 
+// Read reads from the attached data stream, and abort prematurally in case we've exceeed the data size or time allowed for the read to complete.
 func (r *watchdogStreamReader) Read(p []byte) (n int, err error) {
 	r.readerMu.Lock()
 	defer r.readerMu.Unlock()
@@ -107,6 +116,8 @@ func (r *watchdogStreamReader) Read(p []byte) (n int, err error) {
 	return
 }
 
+// ticker is the internal watchdogStreamReader goroutine which tracks the timeout operations. It operates on a single deadline at a time, and abort when it's done.
+// the Reset would create a new ticker goroutine as needed.
 func (r *watchdogStreamReader) ticker() {
 	timerCh := time.After(r.readaheadDuration)
 	select {
@@ -123,6 +134,7 @@ func (r *watchdogStreamReader) ticker() {
 	}
 }
 
+// puller is the internal watchdogStreamReader goroutine which pulls that data from the associated incoming data stream and store it in the staging buffer.
 func (r *watchdogStreamReader) puller() {
 	var n int
 	for err := error(nil); err == nil; {
@@ -149,6 +161,7 @@ func (r *watchdogStreamReader) puller() {
 	}
 }
 
+// Close shuts down the watchdogStreamReader and signal it's internal goroutines to be shut down.
 func (r *watchdogStreamReader) Close() {
 	// signal the puller goroutine to shut down
 	close(r.readerClose)
