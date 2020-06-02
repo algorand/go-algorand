@@ -83,30 +83,6 @@ func (status StatusReport) TimeSinceLastRound() time.Duration {
 	return time.Since(status.LastRoundTimestamp)
 }
 
-// Interface represents node fns.
-type Interface interface {
-	Ledger() *data.Ledger
-	Status() (s StatusReport, err error)
-	GenesisID() string
-	GenesisHash() crypto.Digest
-	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
-	GetPendingTransaction(txID transactions.Txid) (res TxnWithStatus, found bool)
-	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
-	SuggestedFee() basics.MicroAlgos
-	StartCatchup(catchpoint string) error
-	AbortCatchup(catchpoint string) error
-	Config() config.Local
-	Start()
-	ListeningAddress() (string, bool)
-	Stop()
-	ListTxns(addr basics.Address, minRound basics.Round, maxRound basics.Round) ([]TxnWithStatus, error)
-	GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (TxnWithStatus, bool)
-	PoolStats() PoolStats
-	IsArchival() bool
-	Indexer() (*indexer.Indexer, error)
-	GetTransactionByID(txid transactions.Txid, rnd basics.Round) (TxnWithStatus, error)
-}
-
 // AlgorandFullNode specifies and implements a full Algorand node.
 type AlgorandFullNode struct {
 	nodeContextData
