@@ -59,11 +59,11 @@ func (m MockNode) SuggestedFee() basics.MicroAlgos {
 }
 
 func (m MockNode) StartCatchup(catchpoint string) error {
-	return fmt.Errorf("start catchup not implemented")
+	return nil
 }
 
 func (m MockNode) AbortCatchup(catchpoint string) error {
-	return fmt.Errorf("abort catchup not implemented")
+	return nil
 }
 
 // unused by handlers:
