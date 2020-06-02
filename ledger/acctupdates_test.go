@@ -19,6 +19,7 @@ package ledger
 import (
 	"fmt"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
@@ -305,6 +306,8 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 
 	checkAcctUpdates(t, au, 0, 9, accts, rewardsLevels, proto)
 
+	wg := sync.WaitGroup{}
+
 	for i := basics.Round(10); i < basics.Round(proto.MaxBalLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
@@ -334,11 +337,13 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
 
-		//checkAcctUpdates(t, au, 0, i, accts, rewardsLevels, proto)
+		wg.Add(1)
 		go func(round basics.Round) {
+			defer wg.Done()
 			au.committedUpTo(round)
 		}(i)
 	}
+	wg.Wait()
 }
 
 func BenchmarkBalancesChanges(b *testing.B) {

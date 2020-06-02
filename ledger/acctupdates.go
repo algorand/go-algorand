@@ -958,6 +958,21 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	defer au.accountsWriting.Done()
 	au.accountsMu.RLock()
 
+	// we can exit right away, as this is the result of mis-ordered call to committedUpTo.
+	if au.dbRound < dbRound || offset < uint64(au.dbRound-dbRound) {
+		// if this is an archival ledger, we might need to close the catchpointWriting channel
+		if au.archivalLedger {
+			// determine if this was a catchpoint round
+			isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+dbRound))) % au.catchpointInterval))
+			if isCatchpointRound {
+				// it was a catchpoint round, so close the channel.
+				close(au.catchpointWriting)
+			}
+		}
+		au.accountsMu.RUnlock()
+		return
+	}
+
 	// adjust the offset according to what happend meanwhile..
 	offset -= uint64(au.dbRound - dbRound)
 	dbRound = au.dbRound
