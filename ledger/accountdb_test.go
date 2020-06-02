@@ -67,16 +67,23 @@ func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewards
 	updates = make(map[basics.Address]accountDelta)
 	totals = make(map[basics.Address]basics.AccountData)
 
+	// copy base -> totals
 	for addr, data := range base {
 		totals[addr] = data
 	}
 
 	// Change some existing accounts
-	for i := 0; i < len(base)/2 && i < niter; i++ {
+	{
+		i := 0
 		for addr, old := range base {
+			if i >= len(base)/2 || i >= niter {
+				break
+			}
+
 			if addr == testPoolAddr {
 				continue
 			}
+			i++
 
 			new := randomAccountData(rewardsLevel)
 			updates[addr] = accountDelta{old: old, new: new}
@@ -113,11 +120,11 @@ func randomDeltasBalanced(niter int, base map[basics.Address]basics.AccountData,
 }
 
 func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
-	r, err := accountsRound(tx)
+	r, _, err := accountsRound(tx)
 	require.NoError(t, err)
 	require.Equal(t, r, rnd)
 
-	aq, err := accountsDbInit(tx)
+	aq, err := accountsDbInit(tx, tx)
 	require.NoError(t, err)
 
 	var totalOnline, totalOffline, totalNotPart uint64
@@ -143,7 +150,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.NoError(t, err)
 	require.Equal(t, all, accts)
 
-	totals, err := accountsTotals(tx)
+	totals, err := accountsTotals(tx, false)
 	require.NoError(t, err)
 	require.Equal(t, totals.Online.Money.Raw, totalOnline)
 	require.Equal(t, totals.Offline.Money.Raw, totalOffline)
@@ -196,8 +203,78 @@ func TestAccountDBRound(t *testing.T) {
 	for i := 1; i < 10; i++ {
 		updates, newaccts, _ := randomDeltas(20, accts, 0)
 		accts = newaccts
-		err = accountsNewRound(tx, basics.Round(i), updates, 0, proto)
+		err = accountsNewRound(tx, updates, 0, proto)
+		require.NoError(t, err)
+		err = updateAccountsRound(tx, basics.Round(i), 0)
 		require.NoError(t, err)
 		checkAccounts(t, tx, basics.Round(i), accts)
 	}
+}
+
+func BenchmarkReadingAllBalances(b *testing.B) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	//b.N = 50000
+	dbs := dbOpenTest(b)
+	setDbLogging(b, dbs)
+	defer dbs.close()
+
+	tx, err := dbs.wdb.Handle.Begin()
+	require.NoError(b, err)
+
+	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
+	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
+	updates := map[basics.Address]basics.AccountData{}
+
+	for i := 0; i < b.N; i++ {
+		addr := randomAddress()
+		updates[addr] = basics.AccountData{
+			MicroAlgos:         basics.MicroAlgos{Raw: 0x000ffffffffffffff},
+			Status:             basics.NotParticipating,
+			RewardsBase:        uint64(i),
+			RewardedMicroAlgos: basics.MicroAlgos{Raw: 0x000ffffffffffffff},
+			VoteID:             secrets.OneTimeSignatureVerifier,
+			SelectionID:        pubVrfKey,
+			VoteFirstValid:     basics.Round(0x000ffffffffffffff),
+			VoteLastValid:      basics.Round(0x000ffffffffffffff),
+			VoteKeyDilution:    0x000ffffffffffffff,
+			AssetParams: map[basics.AssetIndex]basics.AssetParams{
+				0x000ffffffffffffff: basics.AssetParams{
+					Total:         0x000ffffffffffffff,
+					Decimals:      0x2ffffff,
+					DefaultFrozen: true,
+					UnitName:      "12345678",
+					AssetName:     "12345678901234567890123456789012",
+					URL:           "12345678901234567890123456789012",
+					MetadataHash:  pubVrfKey,
+					Manager:       addr,
+					Reserve:       addr,
+					Freeze:        addr,
+					Clawback:      addr,
+				},
+			},
+			Assets: map[basics.AssetIndex]basics.AssetHolding{
+				0x000ffffffffffffff: basics.AssetHolding{
+					Amount: 0x000ffffffffffffff,
+					Frozen: true,
+				},
+			},
+		}
+	}
+	accountsInit(tx, updates, proto)
+	tx.Commit()
+	tx, err = dbs.rdb.Handle.Begin()
+	require.NoError(b, err)
+
+	b.ResetTimer()
+	// read all the balances in the database.
+	bal, err2 := accountsAll(tx)
+	require.NoError(b, err2)
+	tx.Commit()
+
+	prevHash := crypto.Digest{}
+	for _, accountBalance := range bal {
+		encodedAccountBalance := protocol.Encode(&accountBalance)
+		prevHash = crypto.Hash(append(encodedAccountBalance, ([]byte(prevHash[:]))...))
+	}
+	require.Equal(b, b.N, len(bal))
 }

@@ -60,79 +60,92 @@
 package server
 
 import (
-	"fmt"
+	"net"
 	"net/http"
 
-	"github.com/gorilla/mux"
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/server/common"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib/middlewares"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/routes"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
+	"github.com/algorand/go-algorand/util/tokens"
 )
 
 const (
-	apiV1Tag              = "v1"
-	debugRouteName        = "debug"
-	pprofEndpointPrefix   = "/debug/pprof/"
-	urlAuthEndpointPrefix = "/urlAuth/{apiToken:[0-9a-f]+}"
+	apiV1Tag = "/v1"
 )
 
-// wrapCtx is used to pass common context to each request without using any
-// global variables.
-func wrapCtx(ctx lib.ReqContext, handler func(lib.ReqContext, http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		handler(ctx, w, r)
+// wrapCtx passes a common context to each request without a global variable.
+func wrapCtx(ctx lib.ReqContext, handler func(lib.ReqContext, echo.Context)) echo.HandlerFunc {
+	return func(context echo.Context) error {
+		handler(ctx, context)
+		return nil
 	}
 }
 
-// registerHandler registers a set of Routes to [router]. if [prefix] is not empty, it
-// registers the routes to a new sub-router [prefix]
-func registerHandlers(router *mux.Router, prefix string, routes lib.Routes, ctx lib.ReqContext) {
-	if prefix != "" {
-		router = router.PathPrefix(fmt.Sprintf("/%s", prefix)).Subrouter()
-	}
-
+// registerHandler registers a set of Routes to the given router.
+func registerHandlers(router *echo.Echo, prefix string, routes lib.Routes, ctx lib.ReqContext, m ...echo.MiddlewareFunc) {
 	for _, route := range routes {
-		r := router.NewRoute()
-		if route.Path != "" {
-			r = r.Path(route.Path)
-		}
-		r = r.Name(route.Name)
-		r = r.Methods(route.Method)
-		r.HandlerFunc(wrapCtx(ctx, route.HandlerFunc))
+		r := router.Add(route.Method, prefix+route.Path, wrapCtx(ctx, route.HandlerFunc), m...)
+		r.Name = route.Name
 	}
 }
 
-// NewRouter builds and returns a new router from routes
-func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string) *mux.Router {
-	router := mux.NewRouter().StrictSlash(true)
+// TokenHeader is the header where we put the token.
+const TokenHeader = "X-Algo-API-Token"
 
-	// Middleware
-	router.Use(middlewares.Logger(logger))
-	router.Use(middlewares.Auth(logger, apiToken))
-	router.Use(middlewares.CORS)
+// NewRouter builds and returns a new router with our REST handlers registered.
+func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-chan struct{}, apiToken string, adminAPIToken string, listener net.Listener) *echo.Echo {
+	if err := tokens.ValidateAPIToken(apiToken); err != nil {
+		logger.Errorf("Invalid apiToken was passed to NewRouter ('%s'): %v", apiToken, err)
+	}
+	if err := tokens.ValidateAPIToken(adminAPIToken); err != nil {
+		logger.Errorf("Invalid adminAPIToken was passed to NewRouter ('%s'): %v", adminAPIToken, err)
+	}
+	adminAuthenticator := middlewares.MakeAuth(TokenHeader, []string{adminAPIToken})
+	apiAuthenticator := middlewares.MakeAuth(TokenHeader, []string{adminAPIToken, apiToken})
+
+	e := echo.New()
+
+	e.Listener = listener
+	e.HideBanner = true
+
+	e.Pre(middleware.RemoveTrailingSlash())
+	e.Use(middlewares.MakeLogger(logger))
+	e.Use(middlewares.MakeCORS(TokenHeader))
 
 	// Request Context
 	ctx := lib.ReqContext{Node: node, Log: logger, Shutdown: shutdown}
 
-	// Route pprof requests
+	// Register handles / apply authentication middleware
+
+	// Route pprof requests to DefaultServeMux.
+	// The auth middleware removes /urlAuth/:token so that it can be routed correctly.
 	if node.Config().EnableProfiler {
-		// Registers /debug/pprof handler under root path and under /urlAuth path
-		// to support header or url-provided token.
-		router.PathPrefix(pprofEndpointPrefix).Handler(http.DefaultServeMux)
-
-		urlAuthRouter := router.PathPrefix(urlAuthEndpointPrefix)
-		urlAuthRouter.PathPrefix(pprofEndpointPrefix).Handler(http.DefaultServeMux).Name(debugRouteName)
+		e.GET("/debug/pprof/*", echo.WrapHandler(http.DefaultServeMux), adminAuthenticator)
+		e.GET("/urlAuth/:token/debug/pprof/*", echo.WrapHandler(http.DefaultServeMux), adminAuthenticator)
 	}
-
-	// Registering common routes
-	registerHandlers(router, "", common.Routes, ctx)
+	// Registering common routes (no auth)
+	registerHandlers(e, "", common.Routes, ctx)
 
 	// Registering v1 routes
-	registerHandlers(router, apiV1Tag, routes.Routes, ctx)
+	registerHandlers(e, apiV1Tag, routes.V1Routes, ctx, apiAuthenticator)
 
-	return router
+	// Registering v2 routes
+	v2Handler := v2.Handlers{
+		Node:     node,
+		Log:      logger,
+		Shutdown: shutdown,
+	}
+	generated.RegisterHandlers(e, &v2Handler, apiAuthenticator)
+	private.RegisterHandlers(e, &v2Handler, adminAuthenticator)
+
+	return e
 }
