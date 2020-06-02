@@ -764,7 +764,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	close(au.catchpointWriting)
 	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
 	au.committedOffset = make(chan deferedCommit, 1)
-	go au.commitSyncer()
+	go au.commitSyncer(au.committedOffset)
 
 	lastBalancesRound = au.dbRound
 
@@ -930,10 +930,10 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 	return off, nil
 }
 
-func (au *accountUpdates) commitSyncer() {
+func (au *accountUpdates) commitSyncer(deferedCommits chan deferedCommit) {
 	for {
 		select {
-		case committedOffset, ok := <-au.committedOffset:
+		case committedOffset, ok := <-deferedCommits:
 			if !ok {
 				return
 			}
@@ -943,7 +943,7 @@ func (au *accountUpdates) commitSyncer() {
 			drained := false
 			for !drained {
 				select {
-				case <-au.committedOffset:
+				case <-deferedCommits:
 					au.accountsWriting.Done()
 				default:
 					drained = true
