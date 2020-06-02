@@ -500,7 +500,7 @@ func (eval *BlockEvaluator) prepareAppEvaluators(txgroup []transactions.SignedTx
 		// transactions.StateEvaluator) for use in ApplicationCall transactions.
 		steva := appTealEvaluator{
 			evalParams: logic.EvalParams{
-				Txn:        &txn.SignedTxn,
+				Txn:        &groupNoAD[i],
 				Proto:      &eval.proto,
 				TxnGroup:   groupNoAD,
 				GroupIndex: i,
