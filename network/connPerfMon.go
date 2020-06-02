@@ -307,7 +307,7 @@ func (pm *connectionPerformanceMonitor) pruneOldMessages(now int64) {
 	oldestMessage := now - int64(pmMaxMessageWaitTime)
 	prunedBucketsCount := 0
 	for bucketIdx, currentMsgBucket := range pm.pendingMessagesBuckets {
-		if currentMsgBucket.endTime >= oldestMessage {
+		if currentMsgBucket.endTime > oldestMessage {
 			pm.pendingMessagesBuckets[bucketIdx-prunedBucketsCount] = currentMsgBucket
 			continue
 		}
@@ -340,9 +340,8 @@ func (pm *connectionPerformanceMonitor) accumulateMessage(msg *IncomingMessage, 
 			msgBucket = currentMsgBucket
 			break
 		}
-		if msg.Received >= currentMsgBucket.startTime && msg.Received < currentMsgBucket.endTime {
+		if msg.Received >= currentMsgBucket.startTime && msg.Received <= currentMsgBucket.endTime {
 			msgBucket = currentMsgBucket
-			break
 		}
 	}
 	if pendingMsg == nil {

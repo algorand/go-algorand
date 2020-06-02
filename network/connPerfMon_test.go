@@ -96,6 +96,8 @@ func TestConnMonitorStageTiming(t *testing.T) {
 	stageNotifyCalls := make([]int, 5)
 	startTestTime := time.Now().UnixNano()
 	perfMonitor := makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag})
+	// measure measuring overhead.
+	measuringOverhead := time.Now().Sub(time.Now())
 	perfMonitor.Reset(peers)
 	for msgIdx, msg := range msgPool {
 		msg.Received += startTestTime
@@ -111,10 +113,13 @@ func TestConnMonitorStageTiming(t *testing.T) {
 		}
 	}
 	for i := 0; i < len(stageTimings); i++ {
+		if stageNotifyCalls[i] == 0 {
+			continue
+		}
 		fmt.Printf("ConnectionPerformanceMonitor stage %d had %d calls with avarage of %dns and total of %dns\n",
 			i,
 			stageNotifyCalls[i],
-			int64(stageTimings[i])/int64(stageNotifyCalls[i]+1),
+			int64(stageTimings[i])/int64(stageNotifyCalls[i])-int64(measuringOverhead),
 			stageTimings[i])
 	}
 
