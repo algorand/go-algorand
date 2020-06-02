@@ -1,19 +1,26 @@
 package test
 
 import (
+	"fmt"
+	"math/rand"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
+	"github.com/algorand/go-algorand/node/indexer"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
-	"math/rand"
-	"strconv"
-	"testing"
 )
 
 type mockNode struct {
@@ -31,7 +38,8 @@ func (m mockNode) Ledger() *data.Ledger {
 
 func (m mockNode) Status() (s node.StatusReport, err error) {
 	s = node.StatusReport{
-		LastRound: basics.Round(1),
+		LastRound:   basics.Round(1),
+		LastVersion: protocol.ConsensusCurrentVersion,
 	}
 	return
 }
@@ -54,8 +62,7 @@ func (m mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWit
 }
 
 func (m mockNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
-	stxns := make([]transactions.SignedTxn, 1)
-	return stxns, nil
+	return nil, nil
 }
 
 func (m mockNode) SuggestedFee() basics.MicroAlgos {
@@ -63,19 +70,58 @@ func (m mockNode) SuggestedFee() basics.MicroAlgos {
 }
 
 // unused by handlers:
-//Config() config.Local
-//Start()
-//ListeningAddress() (string, bool)
-//Stop()
-//ListTxns(addr basics.Address, minRound basics.Round, maxRound basics.Round) ([]TxnWithStatus, error)
-//GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (TxnWithStatus, bool)
-//PoolStats() PoolStats
-//IsArchival() bool
-//OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta)
-//Uint64() uint64
-//Indexer() (*indexer.Indexer, error)
-//GetTransactionByID(txid transactions.Txid, rnd basics.Round) (TxnWithStatus, error)
-//AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error)
+func (m mockNode) Config() config.Local {
+	return config.GetDefaultLocal()
+}
+func (m mockNode) Start() {}
+
+func (m mockNode) ListeningAddress() (string, bool) {
+	return "mock listening addresses not implemented", false
+}
+
+func (m mockNode) Stop() {}
+
+func (m mockNode) ListTxns(addr basics.Address, minRound basics.Round, maxRound basics.Round) ([]node.TxnWithStatus, error) {
+	return nil, fmt.Errorf("listtxns not implemented")
+}
+
+func (m mockNode) GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (node.TxnWithStatus, bool) {
+	return node.TxnWithStatus{}, false
+}
+
+func (m mockNode) PoolStats() node.PoolStats {
+	return node.PoolStats{}
+}
+
+func (m mockNode) IsArchival() bool {
+	return false
+}
+
+func (m mockNode) OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta) {}
+
+func (m mockNode) Uint64() uint64 {
+	return 1
+}
+
+func (m mockNode) Indexer() (*indexer.Indexer, error) {
+	return nil, fmt.Errorf("indexer not implemented")
+}
+
+func (m mockNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (node.TxnWithStatus, error) {
+	return node.TxnWithStatus{}, fmt.Errorf("get transaction by id not implemented")
+}
+
+func (m mockNode) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
+	return nil, fmt.Errorf("assemble block not implemented")
+}
+
+func (m mockNode) StartCatchup(catchpoint string) error {
+	return fmt.Errorf("start catchup not implemented")
+}
+
+func (m mockNode) AbortCatchup(catchpoint string) error {
+	return fmt.Errorf("abort catchup not implemented")
+}
 
 ////// mock ledger testing environment follows
 
@@ -153,8 +199,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 
 	// generate test transactions
 	const inMem = true
-	const archival = true
-	ledger, err := data.LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusCurrentVersion, bootstrap, genesisID, genesisHash, nil, archival)
+	ledger, err := data.LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusCurrentVersion, bootstrap, genesisID, genesisHash, nil, config.GetDefaultLocal())
 	if err != nil {
 		panic(err)
 	}
@@ -188,7 +233,6 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 
 		amt := basics.MicroAlgos{Raw: uint64(gen.Int() % xferMax)}
 		fee := basics.MicroAlgos{Raw: uint64(gen.Int()%maxFee) + proto.MinTxnFee}
-
 		t := transactions.Transaction{
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
@@ -206,11 +250,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 		}
 
 		rand.Read(t.Note)
-		//if reallySignTxs {
 		tx[i] = t.Sign(roots[send].Secrets())
-		//} else {
-		//	tx[i] = transactions.SignedTxn{Transaction: t, Sig: crypto.Signature{}}
-		//}
 
 		sbal := bal[saddr]
 		sbal.MicroAlgos.Raw -= fee.Raw
@@ -225,6 +265,5 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 		rbal.MicroAlgos.Raw += amt.Raw
 		bal[raddr] = rbal
 	}
-
 	return ledger, roots, parts, tx, release
 }
