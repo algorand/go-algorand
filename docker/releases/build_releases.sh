@@ -5,8 +5,17 @@
 # Login name is "algorand".
 #
 # To build and push to docker hub the latest release:
+#
+# For mainnet:
 #   ./build_releases.sh
 #   ./build_releases.sh --tagname 2.0.6
+#
+# For testnet:
+#   ./build_releases.sh --network testnet
+#
+# For betanet:
+#   ./build_releases.sh --network betanet
+#
 
 GREEN_FG=$(tput setaf 2 2>/dev/null)
 RED_FG=$(tput setaf 1 2>/dev/null)
@@ -14,7 +23,7 @@ END_FG_COLOR=$(tput sgr0 2>/dev/null)
 
 # These are reasonable defaults.
 DEPLOY=true
-NAME=stable
+IMAGE_NAME=stable
 NETWORK=mainnet
 TAGNAME=latest
 
@@ -22,7 +31,7 @@ while [ "$1" != "" ]; do
     case "$1" in
         --name)
             shift
-            NAME="${1-stable}"
+            IMAGE_NAME="${1-stable}"
             ;;
         --network)
             shift
@@ -43,15 +52,19 @@ while [ "$1" != "" ]; do
     shift
 done
 
-if [[ ! "$NETWORK" =~ ^mainnet$|^testnet$ ]]
+if [[ ! "$NETWORK" =~ ^mainnet$|^testnet|^betanet$ ]]
 then
-    echo "$RED_FG[$0]$END_FG_COLOR Network values must be either \`mainnet\` or \`testnet\`."
+    echo "$RED_FG[$0]$END_FG_COLOR Network values must be either \`mainnet\`, \`testnet\` or \`betanet\`."
     exit 1
-fi
-
-if [ "$NAME" == "testnet" ]
+elif [ "$NETWORK" != "mainnet" ]
 then
-    NETWORK="-g $1"
+    if [ "$NETWORK" == "betanet" ]
+    then
+        CHANNEL=beta
+    fi
+
+    IMAGE_NAME="$NETWORK"
+    NETWORK="-g $NETWORK"
 fi
 
 build_image () {
@@ -60,13 +73,13 @@ build_image () {
 
     RUN apt-get update && apt-get install -y ca-certificates curl --no-install-recommends && \
         curl --silent -L https://github.com/algorand/go-algorand-doc/blob/master/downloads/installers/linux_amd64/install_master_linux-amd64.tar.gz?raw=true | tar xzf - && \
-        ./update.sh -c stable -n -p ~/node -d ~/node/data -i $NETWORK
+        ./update.sh -c $CHANNEL -n -p ~/node -d ~/node/data -i $NETWORK
     WORKDIR /root/node
 EOF
 
-    if ! echo "$DOCKERFILE" | docker build -t "algorand/$NAME:$TAGNAME" -
+    if ! echo "$DOCKERFILE" | docker build -t "algorand/$IMAGE_NAME:$TAGNAME" -
     then
-        echo -e "\n$RED_FG[$0]$END_FG_COLOR The algorand/$NAME:$TAGNAME image could not be built."
+        echo -e "\n$RED_FG[$0]$END_FG_COLOR The algorand/$IMAGE_NAME:$TAGNAME image could not be built."
         exit 1
     fi
 }
@@ -75,7 +88,7 @@ build_image
 
 if $DEPLOY
 then
-    if ! docker push "algorand/$NAME:$TAGNAME"
+    if ! docker push "algorand/$IMAGE_NAME:$TAGNAME"
     then
         echo -e "\n$RED_FG[$0]$END_FG_COLOR \`docker push\` failed."
         exit 1
