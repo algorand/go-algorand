@@ -19,6 +19,7 @@ package ledger
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/mattn/go-sqlite3"
 
@@ -133,9 +134,11 @@ func blockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agr
 		return
 	}
 
-	err = protocol.Decode(certbuf, &cert)
-	if err != nil {
-		return
+	if certbuf != nil {
+		err = protocol.Decode(certbuf, &cert)
+		if err != nil {
+			return
+		}
 	}
 
 	return
@@ -224,4 +227,113 @@ func blockForgetBefore(tx *sql.Tx, rnd basics.Round) error {
 
 	_, err = tx.Exec("DELETE FROM blocks WHERE rnd<?", rnd)
 	return err
+}
+
+func blockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block) error {
+	// delete the old catchpointblocks table, if there is such.
+	for _, stmt := range blockResetExprs {
+		stmt = strings.Replace(stmt, "blocks", "catchpointblocks", 1)
+		_, err := tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+
+	// create the catchpointblocks table
+	for _, stmt := range blockSchema {
+		stmt = strings.Replace(stmt, "blocks", "catchpointblocks", 1)
+		_, err := tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+
+	// insert the top entry to the blocks table.
+	_, err := tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata) VALUES (?, ?, ?, ?)",
+		blk.Round(),
+		blk.CurrentProtocol,
+		protocol.Encode(&blk.BlockHeader),
+		protocol.Encode(&blk),
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func blockCompleteCatchup(tx *sql.Tx) (err error) {
+	_, err = tx.Exec("ALTER TABLE blocks RENAME TO blocks_old")
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec("ALTER TABLE catchpointblocks RENAME TO blocks")
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec("DROP TABLE IF EXISTS blocks_old")
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func blockAbortCatchup(tx *sql.Tx) error {
+	// delete the old catchpointblocks table, if there is such.
+	for _, stmt := range blockResetExprs {
+		stmt = strings.Replace(stmt, "blocks", "catchpointblocks", 1)
+		_, err := tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func blockPutStaging(tx *sql.Tx, blk bookkeeping.Block) (err error) {
+	// insert the new entry
+	_, err = tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata) VALUES (?, ?, ?, ?)",
+		blk.Round(),
+		blk.CurrentProtocol,
+		protocol.Encode(&blk.BlockHeader),
+		protocol.Encode(&blk),
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func blockEnsureSingleBlock(tx *sql.Tx) (blk bookkeeping.Block, err error) {
+	// delete all the blocks that aren't the latest one.
+	var max sql.NullInt64
+	err = tx.QueryRow("SELECT MAX(rnd) FROM catchpointblocks").Scan(&max)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			err = ErrNoEntry{}
+		}
+		return bookkeeping.Block{}, err
+	}
+	if !max.Valid {
+		return bookkeeping.Block{}, ErrNoEntry{}
+	}
+	round := basics.Round(max.Int64)
+
+	_, err = tx.Exec("DELETE FROM catchpointblocks WHERE rnd<?", round)
+
+	if err != nil {
+		return bookkeeping.Block{}, err
+	}
+
+	var buf []byte
+	err = tx.QueryRow("SELECT blkdata FROM catchpointblocks WHERE rnd=?", round).Scan(&buf)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			err = ErrNoEntry{Round: round}
+		}
+		return
+	}
+
+	err = protocol.Decode(buf, &blk)
+
+	return blk, err
 }

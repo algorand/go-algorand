@@ -90,16 +90,15 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 		net:                   net,
 	}
 
-	net.RegisterHandlers([]network.TaggedMessageHandler{
-		network.TaggedMessageHandler{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
-	})
-
 	handler.ctx, handler.ctxCancel = context.WithCancel(context.Background())
 	return handler
 }
 
 // Start enables the processing of incoming messages at the transaction handler
 func (handler *TxHandler) Start() {
+	handler.net.RegisterHandlers([]network.TaggedMessageHandler{
+		network.TaggedMessageHandler{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
+	})
 	handler.backlogWg.Add(1)
 	go handler.backlogWorker()
 }

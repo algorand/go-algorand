@@ -29,6 +29,9 @@ import (
 
 	"github.com/google/go-querystring/query"
 
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	privateV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
+
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -36,35 +39,47 @@ import (
 )
 
 const (
-	authHeader           = "X-Algo-API-Token"
-	healthCheckEndpoint  = "/health"
-	apiVersionPathPrefix = "/v1"
-	maxRawResponseBytes  = 50e6
+	authHeader          = "X-Algo-API-Token"
+	healthCheckEndpoint = "/health"
+	maxRawResponseBytes = 50e6
 )
 
-// unversionedPaths ais a set of paths that should not be prefixed by the API version
-var unversionedPaths = map[string]bool{
-	"/versions": true,
-	"/health":   true,
-}
+// APIVersion is used to define which server side API version would be used when making http requests to the server
+type APIVersion string
+
+const (
+	// APIVersionV1 suggests that the RestClient would use v1 calls whenever it's available for the given request.
+	APIVersionV1 APIVersion = "v1"
+	// APIVersionV2 suggests that the RestClient would use v2 calls whenever it's available for the given request.
+	APIVersionV2 APIVersion = "v2"
+)
 
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
-	"/transactions": true,
+	"/v1/transactions": true,
 }
 
 // RestClient manages the REST interface for a calling user.
 type RestClient struct {
-	serverURL url.URL
-	apiToken  string
+	serverURL       url.URL
+	apiToken        string
+	versionAffinity APIVersion
 }
 
 // MakeRestClient is the factory for constructing a RestClient for a given endpoint
 func MakeRestClient(url url.URL, apiToken string) RestClient {
 	return RestClient{
-		serverURL: url,
-		apiToken:  apiToken,
+		serverURL:       url,
+		apiToken:        apiToken,
+		versionAffinity: APIVersionV1,
 	}
+}
+
+// SetAPIVersionAffinity sets the client affinity to use a specific version of the API
+func (client *RestClient) SetAPIVersionAffinity(affinity APIVersion) (previousAffinity APIVersion) {
+	previousAffinity = client.versionAffinity
+	client.versionAffinity = affinity
+	return
 }
 
 // extractError checks if the response signifies an error (for now, StatusCode != 200).
@@ -92,11 +107,6 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 	var err error
 	queryURL := client.serverURL
 	queryURL.Path = path
-
-	// Handle version prefix
-	if !unversionedPaths[path] {
-		queryURL.Path = strings.Join([]string{apiVersionPathPrefix, path}, "")
-	}
 
 	var req *http.Request
 	var body io.Reader
@@ -189,8 +199,17 @@ func (client RestClient) post(response interface{}, path string, request interfa
 // Status retrieves the StatusResponse from the running node
 // the StatusResponse includes data like the consensus version and current round
 // Not supported
-func (client RestClient) Status() (response v1.NodeStatus, err error) {
-	err = client.get(&response, "/status", nil)
+func (client RestClient) Status() (response generatedV2.NodeStatusResponse, err error) {
+	switch client.versionAffinity {
+	case APIVersionV2:
+		err = client.get(&response, "/v2/status", nil)
+	default:
+		var nodeStatus v1.NodeStatus
+		err = client.get(&nodeStatus, "/v1/status", nil)
+		if err == nil {
+			response = fillNodeStatusResponse(nodeStatus)
+		}
+	}
 	return
 }
 
@@ -200,11 +219,34 @@ func (client RestClient) HealthCheck() error {
 	return client.get(nil, "/health", nil)
 }
 
+func fillNodeStatusResponse(nodeStatus v1.NodeStatus) generatedV2.NodeStatusResponse {
+	return generatedV2.NodeStatusResponse{
+		LastRound:                 nodeStatus.LastRound,
+		LastVersion:               nodeStatus.LastVersion,
+		NextVersion:               nodeStatus.NextVersion,
+		NextVersionRound:          nodeStatus.NextVersionRound,
+		NextVersionSupported:      nodeStatus.NextVersionSupported,
+		TimeSinceLastRound:        uint64(nodeStatus.TimeSinceLastRound),
+		CatchupTime:               uint64(nodeStatus.CatchupTime),
+		StoppedAtUnsupportedRound: nodeStatus.StoppedAtUnsupportedRound,
+	}
+}
+
 // StatusAfterBlock waits for a block to occur then returns the StatusResponse after that block
 // blocks on the node end
 // Not supported
-func (client RestClient) StatusAfterBlock(blockNum uint64) (response v1.NodeStatus, err error) {
-	err = client.get(&response, fmt.Sprintf("/status/wait-for-block-after/%d", blockNum), nil)
+func (client RestClient) StatusAfterBlock(blockNum uint64) (response generatedV2.NodeStatusResponse, err error) {
+	switch client.versionAffinity {
+	case APIVersionV2:
+		err = client.get(&response, fmt.Sprintf("/v2/status/wait-for-block-after/%d", blockNum), nil)
+	default:
+		var nodeStatus v1.NodeStatus
+		err = client.get(&nodeStatus, fmt.Sprintf("/v1/status/wait-for-block-after/%d", blockNum), nil)
+		if err == nil {
+			response = fillNodeStatusResponse(nodeStatus)
+		}
+	}
+
 	return
 }
 
@@ -215,7 +257,7 @@ type pendingTransactionsParams struct {
 // GetPendingTransactions asks algod for a snapshot of current pending txns on the node, bounded by maxTxns.
 // If maxTxns = 0, fetches as many transactions as possible.
 func (client RestClient) GetPendingTransactions(maxTxns uint64) (response v1.PendingTransactions, err error) {
-	err = client.get(&response, fmt.Sprintf("/transactions/pending"), pendingTransactionsParams{maxTxns})
+	err = client.get(&response, fmt.Sprintf("/v1/transactions/pending"), pendingTransactionsParams{maxTxns})
 	return
 }
 
@@ -228,7 +270,7 @@ func (client RestClient) Versions() (response common.Version, err error) {
 
 // LedgerSupply gets the supply details for the specified node's Ledger
 func (client RestClient) LedgerSupply() (response v1.Supply, err error) {
-	err = client.get(&response, "/ledger/supply", nil)
+	err = client.get(&response, "/v1/ledger/supply", nil)
 	return
 }
 
@@ -250,32 +292,32 @@ type rawblockParams struct {
 // TransactionsByAddr returns all transactions for a PK [addr] in the [first,
 // last] rounds range.
 func (client RestClient) TransactionsByAddr(addr string, first, last, max uint64) (response v1.TransactionList, err error) {
-	err = client.get(&response, fmt.Sprintf("/account/%s/transactions", addr), transactionsByAddrParams{first, last, max})
+	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transactions", addr), transactionsByAddrParams{first, last, max})
 	return
 }
 
 // AssetInformation gets the AssetInformationResponse associated with the passed asset index
 func (client RestClient) AssetInformation(index uint64) (response v1.AssetParams, err error) {
-	err = client.get(&response, fmt.Sprintf("/asset/%d", index), nil)
+	err = client.get(&response, fmt.Sprintf("/v1/asset/%d", index), nil)
 	return
 }
 
 // Assets gets up to max assets with maximum asset index assetIdx
 func (client RestClient) Assets(assetIdx, max uint64) (response v1.AssetList, err error) {
-	err = client.get(&response, "/assets", assetsParams{assetIdx, max})
+	err = client.get(&response, "/v1/assets", assetsParams{assetIdx, max})
 	return
 }
 
 // AccountInformation also gets the AccountInformationResponse associated with the passed address
 func (client RestClient) AccountInformation(address string) (response v1.Account, err error) {
-	err = client.get(&response, fmt.Sprintf("/account/%s", address), nil)
+	err = client.get(&response, fmt.Sprintf("/v1/account/%s", address), nil)
 	return
 }
 
 // TransactionInformation gets information about a specific transaction involving a specific account
 func (client RestClient) TransactionInformation(accountAddress, transactionID string) (response v1.Transaction, err error) {
 	transactionID = stripTransaction(transactionID)
-	err = client.get(&response, fmt.Sprintf("/account/%s/transaction/%s", accountAddress, transactionID), nil)
+	err = client.get(&response, fmt.Sprintf("/v1/account/%s/transaction/%s", accountAddress, transactionID), nil)
 	return
 }
 
@@ -290,25 +332,25 @@ func (client RestClient) TransactionInformation(accountAddress, transactionID st
 // node no longer remembers it, and this will return an error.
 func (client RestClient) PendingTransactionInformation(transactionID string) (response v1.Transaction, err error) {
 	transactionID = stripTransaction(transactionID)
-	err = client.get(&response, fmt.Sprintf("/transactions/pending/%s", transactionID), nil)
+	err = client.get(&response, fmt.Sprintf("/v1/transactions/pending/%s", transactionID), nil)
 	return
 }
 
 // SuggestedFee gets the recommended transaction fee from the node
 func (client RestClient) SuggestedFee() (response v1.TransactionFee, err error) {
-	err = client.get(&response, "/transactions/fee", nil)
+	err = client.get(&response, "/v1/transactions/fee", nil)
 	return
 }
 
 // SuggestedParams gets the suggested transaction parameters
 func (client RestClient) SuggestedParams() (response v1.TransactionParams, err error) {
-	err = client.get(&response, "/transactions/params", nil)
+	err = client.get(&response, "/v1/transactions/params", nil)
 	return
 }
 
 // SendRawTransaction gets a SignedTxn and broadcasts it to the network
 func (client RestClient) SendRawTransaction(txn transactions.SignedTxn) (response v1.TransactionID, err error) {
-	err = client.post(&response, "/transactions", protocol.Encode(&txn))
+	err = client.post(&response, "/v1/transactions", protocol.Encode(&txn))
 	return
 }
 
@@ -322,18 +364,37 @@ func (client RestClient) SendRawTransactionGroup(txgroup []transactions.SignedTx
 	}
 
 	var response v1.TransactionID
-	return client.post(&response, "/transactions", enc)
+	return client.post(&response, "/v1/transactions", enc)
 }
 
 // Block gets the block info for the given round
 func (client RestClient) Block(round uint64) (response v1.Block, err error) {
-	err = client.get(&response, fmt.Sprintf("/block/%d", round), nil)
+	err = client.get(&response, fmt.Sprintf("/v1/block/%d", round), nil)
 	return
 }
 
 // RawBlock gets the encoded, raw msgpack block for the given round
 func (client RestClient) RawBlock(round uint64) (response v1.RawBlock, err error) {
-	err = client.getRaw(&response, fmt.Sprintf("/block/%d", round), rawblockParams{1})
+	err = client.getRaw(&response, fmt.Sprintf("/v1/block/%d", round), rawblockParams{1})
+	return
+}
+
+// Shutdown requests the node to shut itself down
+func (client RestClient) Shutdown() (err error) {
+	response := 1
+	err = client.post(&response, "/v2/shutdown", nil)
+	return
+}
+
+// AbortCatchup aborts the currently running catchup
+func (client RestClient) AbortCatchup(catchpointLabel string) (response privateV2.CatchpointAbortResponse, err error) {
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "DELETE", false, true)
+	return
+}
+
+// Catchup start catching up to the give catchpoint label
+func (client RestClient) Catchup(catchpointLabel string) (response privateV2.CatchpointStartResponse, err error) {
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "POST", false, true)
 	return
 }
 

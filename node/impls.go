@@ -18,19 +18,13 @@ package node
 
 import (
 	"context"
-	"fmt"
-	"time"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/catchup"
 	"github.com/algorand/go-algorand/data"
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/pools"
-	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/util/execpool"
 )
@@ -65,78 +59,6 @@ func (i blockValidatorImpl) Validate(ctx context.Context, e bookkeeping.Block) (
 	}
 
 	return validatedBlock{vb: lvb}, nil
-}
-
-type blockFactoryImpl struct {
-	l                *data.Ledger
-	tp               *pools.TransactionPool
-	logStats         bool
-	verificationPool execpool.BacklogPool
-}
-
-func makeBlockFactory(l *data.Ledger, tp *pools.TransactionPool, logStats bool, executionPool execpool.BacklogPool) *blockFactoryImpl {
-	bf := &blockFactoryImpl{
-		l:                l,
-		tp:               tp,
-		logStats:         logStats,
-		verificationPool: executionPool,
-	}
-	return bf
-}
-
-// AssembleBlock implements Ledger.AssembleBlock.
-func (i *blockFactoryImpl) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
-	start := time.Now()
-	prev, err := i.l.BlockHdr(round - 1)
-	if err != nil {
-		return nil, fmt.Errorf("could not make proposals at round %d: could not read block from ledger: %v", round, err)
-	}
-
-	newEmptyBlk := bookkeeping.MakeBlock(prev)
-
-	eval, err := i.l.StartEvaluator(newEmptyBlk.BlockHeader)
-	if err != nil {
-		return nil, fmt.Errorf("could not make proposals at round %d: could not start evaluator: %v", round, err)
-	}
-
-	var stats telemetryspec.AssembleBlockMetrics
-	stats.AssembleBlockStats = i.l.AssemblePayset(i.tp, eval, deadline)
-
-	// Measure time here because we want to know how close to deadline we are
-	dt := time.Now().Sub(start)
-	stats.AssembleBlockStats.Nanoseconds = dt.Nanoseconds()
-
-	lvb, err := eval.GenerateBlock()
-	if err != nil {
-		return nil, fmt.Errorf("could not make proposals at round %d: could not finish evaluator: %v", round, err)
-	}
-
-	if i.logStats {
-		var details struct {
-			Round uint64
-		}
-		details.Round = uint64(round)
-		logging.Base().Metrics(telemetryspec.Transaction, stats, details)
-	}
-
-	return validatedBlock{vb: lvb}, nil
-}
-
-// validatedBlock satisfies agreement.ValidatedBlock
-type validatedBlock struct {
-	vb *ledger.ValidatedBlock
-}
-
-// WithSeed satisfies the agreement.ValidatedBlock interface.
-func (vb validatedBlock) WithSeed(s committee.Seed) agreement.ValidatedBlock {
-	lvb := vb.vb.WithSeed(s)
-	return validatedBlock{vb: &lvb}
-}
-
-// Block satisfies the agreement.ValidatedBlock interface.
-func (vb validatedBlock) Block() bookkeeping.Block {
-	blk := vb.vb.Block()
-	return blk
 }
 
 // agreementLedger implements the agreement.Ledger interface.

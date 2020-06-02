@@ -36,8 +36,9 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/tools/network"
+	toolsnet "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/util/metrics"
 	"github.com/algorand/go-algorand/util/tokens"
 )
@@ -215,6 +216,17 @@ func main() {
 		fmt.Printf("No REST API Token found. Generated token: %s\n", apiToken)
 	}
 
+	// Generate a admin REST API token if one was not provided
+	adminAPIToken, wroteNewToken, err := tokens.ValidateOrGenerateAPIToken(s.RootPath, tokens.AlgodAdminTokenFilename)
+
+	if err != nil {
+		log.Fatalf("Admin API token error: %v", err)
+	}
+
+	if wroteNewToken {
+		fmt.Printf("No Admin REST API Token found. Generated token: %s\n", adminAPIToken)
+	}
+
 	// Allow overriding default listening address
 	if *listenIP != "" {
 		cfg.EndpointAddress = *listenIP
@@ -236,6 +248,17 @@ func main() {
 		// the network stack declares itself to be ready.
 		if cfg.GossipFanout > len(peerOverrideArray) {
 			cfg.GossipFanout = len(peerOverrideArray)
+		}
+
+		// make sure that the format of each entry is valid:
+		for idx, peer := range peerOverrideArray {
+			url, err := network.ParseHostOrURL(peer)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Provided command line parameter '%s' is not a valid host:port pair\n", peer)
+				os.Exit(1)
+				return
+			}
+			peerOverrideArray[idx] = url.Host
 		}
 	}
 
@@ -292,7 +315,7 @@ func main() {
 
 		// If the telemetry URI is not set, periodically check SRV records for new telemetry URI
 		if remoteTelemetryEnabled && log.GetTelemetryURI() == "" {
-			network.StartTelemetryURIUpdateService(time.Minute, cfg, s.Genesis.Network, log, done)
+			toolsnet.StartTelemetryURIUpdateService(time.Minute, cfg, s.Genesis.Network, log, done)
 		}
 
 		currentVersion := config.GetCurrentVersion()

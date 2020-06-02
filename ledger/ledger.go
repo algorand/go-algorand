@@ -20,6 +20,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/algorand/go-deadlock"
@@ -54,6 +55,10 @@ type Ledger struct {
 	// genesisHash stores the genesis hash for this ledger.
 	genesisHash crypto.Digest
 
+	genesisAccounts map[basics.Address]basics.AccountData
+
+	genesisProto config.ConsensusParams
+
 	// State-machine trackers
 	accts    accountUpdates
 	txTail   txTail
@@ -80,13 +85,15 @@ type InitState struct {
 // genesisInitState.Accounts specify the initial blocks and accounts to use if the
 // database wasn't initialized before.
 func OpenLedger(
-	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState InitState, isArchival bool,
+	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState InitState, cfg config.Local,
 ) (*Ledger, error) {
 	var err error
 	l := &Ledger{
-		log:         log,
-		archival:    isArchival,
-		genesisHash: genesisInitState.GenesisHash,
+		log:             log,
+		archival:        cfg.Archival,
+		genesisHash:     genesisInitState.GenesisHash,
+		genesisAccounts: genesisInitState.Accounts,
+		genesisProto:    config.Consensus[genesisInitState.Block.CurrentProtocol],
 	}
 
 	l.headerCache.maxEntries = 10
@@ -108,41 +115,66 @@ func OpenLedger(
 	l.blockDBs.wdb.SetLogger(log)
 
 	err = l.blockDBs.wdb.Atomic(func(tx *sql.Tx) error {
-		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, isArchival)
+		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
 	})
 	if err != nil {
 		err = fmt.Errorf("OpenLedger.initBlocksDB %v", err)
 		return nil, err
 	}
 
-	l.blockQ, err = bqInit(l)
+	if l.genesisAccounts == nil {
+		l.genesisAccounts = make(map[basics.Address]basics.AccountData)
+	}
+
+	l.accts.initialize(cfg, dbPathPrefix, l.genesisProto, l.genesisAccounts)
+
+	err = l.reloadLedger()
 	if err != nil {
-		err = fmt.Errorf("OpenLedger.bqInit %v", err)
 		return nil, err
 	}
 
-	// Accounts are special because they get an initialization argument (initAccounts).
-	initAccounts := genesisInitState.Accounts
-	if initAccounts == nil {
-		initAccounts = make(map[basics.Address]basics.AccountData)
+	return l, nil
+}
+
+func (l *Ledger) reloadLedger() error {
+	// close first.
+	l.trackers.close()
+	if l.blockQ != nil {
+		l.blockQ.close()
+		l.blockQ = nil
 	}
 
-	l.accts.initProto = config.Consensus[genesisInitState.Block.CurrentProtocol]
-	l.accts.initAccounts = initAccounts
+	// reload.
+	var err error
+	l.blockQ, err = bqInit(l)
+	if err != nil {
+		err = fmt.Errorf("reloadLedger.bqInit %v", err)
+		return err
+	}
 
-	l.trackers.register(&l.accts)
-	l.trackers.register(&l.txTail)
-	l.trackers.register(&l.bulletin)
-	l.trackers.register(&l.notifier)
-	l.trackers.register(&l.time)
-	l.trackers.register(&l.metrics)
+	l.trackers.register(&l.accts)    // update the balances
+	l.trackers.register(&l.time)     // tracks the block timestamps
+	l.trackers.register(&l.txTail)   // update the transaction tail, tracking the recent 1000 txn
+	l.trackers.register(&l.bulletin) // provide closed channel signaling support for completed rounds
+	l.trackers.register(&l.notifier) // send OnNewBlocks to subscribers
+	l.trackers.register(&l.metrics)  // provides metrics reporting support
 
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {
-		err = fmt.Errorf("OpenLedger.loadFromDisk %v", err)
-		return nil, err
+		err = fmt.Errorf("reloadLedger.loadFromDisk %v", err)
+		return err
 	}
 
+	// Check that the genesis hash, if present, matches.
+	err = l.verifyMatchingGenesisHash()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// verifyMatchingGenesisHash tests to see that the latest block header pointing to the same genesis hash provided in genesisHash.
+func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	// Check that the genesis hash, if present, matches.
 	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
 		latest, err := blockLatest(tx)
@@ -156,20 +188,15 @@ func OpenLedger(
 		}
 
 		params := config.Consensus[hdr.CurrentProtocol]
-		if params.SupportGenesisHash && hdr.GenesisHash != genesisInitState.GenesisHash {
+		if params.SupportGenesisHash && hdr.GenesisHash != l.genesisHash {
 			return fmt.Errorf(
 				"latest block %d genesis hash %v does not match expected genesis hash %v",
-				latest, hdr.GenesisHash, genesisInitState.GenesisHash,
+				latest, hdr.GenesisHash, l.genesisHash,
 			)
 		}
-
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return l, nil
+	return
 }
 
 func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs dbPair, err error) {
@@ -249,13 +276,18 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 // Close reclaims resources used by the ledger (namely, the database connection
 // and goroutines used by trackers).
 func (l *Ledger) Close() {
-	l.trackerDBs.close()
-	l.blockDBs.close()
-	l.trackers.close()
+	// we shut the the blockqueue first, since it's sync goroutine dispatches calls
+	// back to the trackers.
 	if l.blockQ != nil {
 		l.blockQ.close()
 		l.blockQ = nil
 	}
+	// then, we shut down the trackers and their corresponding goroutines.
+	l.trackers.close()
+
+	// last, we close the underlaying database connections.
+	l.blockDBs.close()
+	l.trackerDBs.close()
 }
 
 // RegisterBlockListeners registers listeners that will be called when a
@@ -278,6 +310,14 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 	}
 
 	return minToSave
+}
+
+// GetLastCatchpointLabel returns the latest catchpoint label that was written to the
+// database.
+func (l *Ledger) GetLastCatchpointLabel() string {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.getLastCatchpointLabel()
 }
 
 // GetAssetCreatorForRound looks up the asset creator given the numerical asset
@@ -403,6 +443,7 @@ func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreem
 // is returned if this is not the expected next block number.
 func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
+
 	updates, err := l.eval(context.Background(), blk, false, nil, nil)
 	if err != nil {
 		return err
@@ -430,7 +471,6 @@ func (l *Ledger) AddValidatedBlock(vb ValidatedBlock, cert agreement.Certificate
 	if err != nil {
 		return err
 	}
-
 	l.trackers.newBlock(vb.blk, vb.delta)
 	return nil
 }
@@ -472,9 +512,30 @@ func (l *Ledger) GenesisHash() crypto.Digest {
 	return l.genesisHash
 }
 
+// GetCatchpointCatchupState returns the current state of the catchpoint catchup.
+func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state CatchpointCatchupState, err error) {
+	return MakeCatchpointCatchupAccessor(l, l.log).GetState(ctx)
+}
+
+// GetCatchpointStream returns an io.ReadCloser file stream from which the catchpoint file
+// for the provided round could be retrieved. If no such stream can be generated, a non-nil
+// error is returned. The io.ReadCloser and the error are mutually exclusive -
+// if error is returned, the file stream is gurenteed to be nil, and vice versa,
+// if the file stream is not nil, the error is gurenteed to be nil.
+func (l *Ledger) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.getCatchpointStream(round)
+}
+
 // ledgerForTracker methods
 func (l *Ledger) trackerDB() dbPair {
 	return l.trackerDBs
+}
+
+// ledgerForTracker methods
+func (l *Ledger) blockDB() dbPair {
+	return l.blockDBs
 }
 
 func (l *Ledger) trackerLog() logging.Logger {
