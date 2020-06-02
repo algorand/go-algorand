@@ -83,6 +83,32 @@ func (status StatusReport) TimeSinceLastRound() time.Duration {
 	return time.Since(status.LastRoundTimestamp)
 }
 
+// NodeInterface represents node fns.
+type NodeInterface interface {
+	Ledger() *data.Ledger                                                         // used by handlers; ledger is in turn used extensively, so that might need mocking too?
+	Status() (s StatusReport, err error)                                          // used by handlers
+	GenesisID() string                                                            // used by handlers
+	GenesisHash() crypto.Digest                                                   // used by handlers
+	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error                // used by handlers
+	GetPendingTransaction(txID transactions.Txid) (res TxnWithStatus, found bool) // used by handlers
+	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)                    // used by handlers
+	SuggestedFee() basics.MicroAlgos                                              // used by handlers
+	// unused by handlers:
+	Config() config.Local
+	Start()
+	ListeningAddress() (string, bool)
+	Stop()
+	ListTxns(addr basics.Address, minRound basics.Round, maxRound basics.Round) ([]TxnWithStatus, error)
+	GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (TxnWithStatus, bool)
+	PoolStats() PoolStats
+	IsArchival() bool
+	OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta)
+	Uint64() uint64
+	Indexer() (*indexer.Indexer, error)
+	GetTransactionByID(txid transactions.Txid, rnd basics.Round) (TxnWithStatus, error)
+	AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error)
+}
+
 // AlgorandFullNode specifies and implements a full Algorand node.
 type AlgorandFullNode struct {
 	nodeContextData
