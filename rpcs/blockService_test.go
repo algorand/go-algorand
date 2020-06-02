@@ -54,7 +54,7 @@ func TestHandleCatchupReqNegative(t *testing.T) {
 		Sender: &mockUnicastPeer{},
 		Data:   nil, // topics
 	}
-	ls := LedgerService{
+	ls := BlockService{
 		ledger: nil,
 	}
 

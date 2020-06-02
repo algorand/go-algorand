@@ -25,11 +25,13 @@ import (
 // AlgoCount represents a total of algos of a certain class
 // of accounts (split up by their Status value).
 type AlgoCount struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	// Sum of algos of all accounts in this class.
-	Money basics.MicroAlgos
+	Money basics.MicroAlgos `codec:"mon"`
 
 	// Total number of whole reward units in accounts.
-	RewardUnits uint64
+	RewardUnits uint64 `codec:"rwd"`
 }
 
 func (ac *AlgoCount) applyRewards(rewardsPerUnit uint64, ot *basics.OverflowTracker) {
@@ -40,12 +42,14 @@ func (ac *AlgoCount) applyRewards(rewardsPerUnit uint64, ot *basics.OverflowTrac
 // AccountTotals represents the totals of algos in the system
 // grouped by different account status values.
 type AccountTotals struct {
-	Online           AlgoCount
-	Offline          AlgoCount
-	NotParticipating AlgoCount
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Online           AlgoCount `codec:"online"`
+	Offline          AlgoCount `codec:"offline"`
+	NotParticipating AlgoCount `codec:"notpart"`
 
 	// Total number of algos received per reward unit since genesis
-	RewardsLevel uint64
+	RewardsLevel uint64 `codec:"rwdlvl"`
 }
 
 func (at *AccountTotals) statusField(status basics.Status) *AlgoCount {
