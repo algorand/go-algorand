@@ -83,8 +83,8 @@ func (status StatusReport) TimeSinceLastRound() time.Duration {
 	return time.Since(status.LastRoundTimestamp)
 }
 
-// NodeInterface represents node fns.
-type NodeInterface interface {
+// Interface represents node fns.
+type Interface interface {
 	Ledger() *data.Ledger                                                         // used by handlers; ledger is in turn used extensively, so that might need mocking too?
 	Status() (s StatusReport, err error)                                          // used by handlers
 	GenesisID() string                                                            // used by handlers
