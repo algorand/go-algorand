@@ -1389,6 +1389,6 @@ substring 1 3
 	require.NoError(t, err)
 	require.Equal(t, program2, program)
 
-	program2, err = AssembleString("#pragma unk")
+	_, err = AssembleString("#pragma unk")
 	require.Error(t, err)
 }

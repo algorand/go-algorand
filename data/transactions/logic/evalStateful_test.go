@@ -59,11 +59,8 @@ func makeBalanceRecord(addr basics.Address, balance uint64) balanceRecord {
 func makeTestLedger(balances map[basics.Address]uint64) *testLedger {
 	l := new(testLedger)
 	l.balances = make(map[basics.Address]balanceRecord)
-	if balances != nil {
-		for addr, balance := range balances {
-			l.balances[addr] = makeBalanceRecord(addr, balance)
-
-		}
+	for addr, balance := range balances {
+		l.balances[addr] = makeBalanceRecord(addr, balance)
 	}
 	l.applications = make(map[basics.AppIndex]map[string]basics.TealValue)
 	return l

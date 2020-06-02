@@ -203,8 +203,6 @@ var OpGroupList = []OpGroup{
 	{"State Access", []string{"balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
 }
 
-var opCostByName map[string]int
-
 // OpCost returns the relative cost score for an op
 func OpCost(opName string) int {
 	return opsByName[LogicVersion][opName].opSize.cost
@@ -229,8 +227,6 @@ func OpAllCosts(opName string) []int {
 
 	return costs
 }
-
-var opSizeByName map[string]int
 
 // OpSize returns the number of bytes for an op. 0 for variable.
 func OpSize(opName string) int {
