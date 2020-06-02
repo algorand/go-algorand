@@ -102,7 +102,6 @@ func TestGetStatus(t *testing.T) {
 }
 
 func TestGetStatusAfterBlock(t *testing.T) {
-	t.Skip("skipping for now as this waits up to a minute")
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 	err := handler.WaitForBlock(c, 0)
