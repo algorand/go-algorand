@@ -286,31 +286,33 @@ func TestPrepareAppEvaluators(t *testing.T) {
 		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}},
 	}
 
-	for _, testCase := range cases {
-		res := eval.prepareAppEvaluators(testCase.group)
-		require.Equal(t, len(res), len(testCase.group))
+	for i, testCase := range cases {
+		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			res := eval.prepareAppEvaluators(testCase.group)
+			require.Equal(t, len(res), len(testCase.group))
 
-		// Compute the expected transaction group without ApplyData for
-		// the test case
-		expGroupNoAD := make([]transactions.SignedTxn, len(testCase.group))
-		for j := range testCase.group {
-			expGroupNoAD[j] = testCase.group[j].SignedTxn
-		}
-
-		// Ensure non app calls have a nil evaluator, and that non-nil
-		// evaluators point to the right transactions and values
-		for i, present := range testCase.expected {
-			if present {
-				require.NotNil(t, res[i])
-				require.Equal(t, res[i].evalParams.GroupIndex, i)
-				require.Equal(t, res[i].evalParams.TxnGroup, expGroupNoAD)
-				require.Equal(t, *res[i].evalParams.Proto, eval.proto)
-				require.Equal(t, *res[i].evalParams.Txn, testCase.group[i].SignedTxn)
-				require.Equal(t, res[i].AppTealGlobals.CurrentRound, eval.prevHeader.Round+1)
-				require.Equal(t, res[i].AppTealGlobals.LatestTimestamp, eval.prevHeader.TimeStamp)
-			} else {
-				require.Nil(t, res[i])
+			// Compute the expected transaction group without ApplyData for
+			// the test case
+			expGroupNoAD := make([]transactions.SignedTxn, len(testCase.group))
+			for j := range testCase.group {
+				expGroupNoAD[j] = testCase.group[j].SignedTxn
 			}
-		}
+
+			// Ensure non app calls have a nil evaluator, and that non-nil
+			// evaluators point to the right transactions and values
+			for j, present := range testCase.expected {
+				if present {
+					require.NotNil(t, res[j])
+					require.Equal(t, res[j].evalParams.GroupIndex, j)
+					require.Equal(t, res[j].evalParams.TxnGroup, expGroupNoAD)
+					require.Equal(t, *res[j].evalParams.Proto, eval.proto)
+					require.Equal(t, *res[j].evalParams.Txn, testCase.group[j].SignedTxn)
+					require.Equal(t, res[j].AppTealGlobals.CurrentRound, eval.prevHeader.Round+1)
+					require.Equal(t, res[j].AppTealGlobals.LatestTimestamp, eval.prevHeader.TimeStamp)
+				} else {
+					require.Nil(t, res[j])
+				}
+			}
+		})
 	}
 }
