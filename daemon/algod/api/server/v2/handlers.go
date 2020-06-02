@@ -46,7 +46,7 @@ const maxTealSourceBytes = 1e5
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
-	Node     node.NodeInterface
+	Node     node.Interface
 	Log      logging.Logger
 	Shutdown <-chan struct{}
 }
