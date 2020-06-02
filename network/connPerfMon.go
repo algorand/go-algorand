@@ -153,7 +153,6 @@ func (pm *connectionPerformanceMonitor) ComparePeers(peers []Peer) bool {
 func (pm *connectionPerformanceMonitor) Reset(peers []Peer) {
 	pm.Lock()
 	defer pm.Unlock()
-	//pm.pendingMessages = make(map[crypto.Digest]*pmMessage, 0)
 	pm.monitoredConnections = make(map[Peer]bool, len(peers))
 	pm.peerLastMsgTime = make(map[Peer]int64, len(peers))
 	pm.connectionDelay = make(map[Peer]int64, len(peers))
@@ -334,21 +333,20 @@ func (pm *connectionPerformanceMonitor) accumulateMessage(msg *IncomingMessage, 
 	var msgBucket *pmPendingMessageBucket
 	var pendingMsg *pmMessage
 	var msgFound bool
-	for _, currentMsgBucket := range pm.pendingMessagesBuckets {
+	// try to find the message. It's more likely to be found in the most recent bucket, so start there and go backward.
+	for bucketIndex := range pm.pendingMessagesBuckets {
+		currentMsgBucket := pm.pendingMessagesBuckets[len(pm.pendingMessagesBuckets)-1-bucketIndex]
 		if pendingMsg, msgFound = currentMsgBucket.messages[msgDigest]; msgFound {
+			msgBucket = currentMsgBucket
+			break
+		}
+		if msg.Received >= currentMsgBucket.startTime && msg.Received < currentMsgBucket.endTime {
 			msgBucket = currentMsgBucket
 			break
 		}
 	}
 	if pendingMsg == nil {
 		if newMessages {
-			// find if we have a bucket for it.
-			for _, currentMsgBucket := range pm.pendingMessagesBuckets {
-				if msg.Received >= currentMsgBucket.startTime && msg.Received < currentMsgBucket.endTime {
-					msgBucket = currentMsgBucket
-					break
-				}
-			}
 			if msgBucket == nil {
 				// no bucket was found. create one.
 				msgBucket = &pmPendingMessageBucket{
