@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
+	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -46,9 +47,23 @@ const maxTealSourceBytes = 1e5
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
-	Node     node.Interface
+	Node     NodeInterface
 	Log      logging.Logger
 	Shutdown <-chan struct{}
+}
+
+// Interface represents node fns.
+type NodeInterface interface {
+	Ledger() *data.Ledger
+	Status() (s node.StatusReport, err error)
+	GenesisID() string
+	GenesisHash() crypto.Digest
+	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
+	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
+	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
+	SuggestedFee() basics.MicroAlgos
+	StartCatchup(catchpoint string) error
+	AbortCatchup(catchpoint string) error
 }
 
 // RegisterParticipationKeys registers participation keys.
