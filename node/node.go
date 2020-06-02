@@ -107,6 +107,8 @@ type NodeInterface interface {
 	Indexer() (*indexer.Indexer, error)
 	GetTransactionByID(txid transactions.Txid, rnd basics.Round) (TxnWithStatus, error)
 	AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error)
+	StartCatchup(catchpoint string) error
+	AbortCatchup(catchpoint string) error
 }
 
 // AlgorandFullNode specifies and implements a full Algorand node.
