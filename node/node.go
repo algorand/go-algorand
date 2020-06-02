@@ -910,14 +910,14 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		node.log.Infof("Indexer is not available - %v", err)
 	}
 
-	node.cancelCtx()
+	// Set up a context we can use to cancel goroutines on Stop()
+	node.ctx, node.cancelCtx = context.WithCancel(context.Background())
 
 	node.startMonitoringRoutines()
+
 	// at this point, the catchpoint catchup is done ( either successfully or not.. )
 	node.catchpointCatchupService = nil
 
-	// Set up a context we can use to cancel goroutines on Stop()
-	node.ctx, node.cancelCtx = context.WithCancel(context.Background())
 	return node.ctx
 
 }
