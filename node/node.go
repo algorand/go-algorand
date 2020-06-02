@@ -85,15 +85,14 @@ func (status StatusReport) TimeSinceLastRound() time.Duration {
 
 // Interface represents node fns.
 type Interface interface {
-	Ledger() *data.Ledger                                                         // used by handlers; ledger is in turn used extensively, so that might need mocking too?
-	Status() (s StatusReport, err error)                                          // used by handlers
-	GenesisID() string                                                            // used by handlers
-	GenesisHash() crypto.Digest                                                   // used by handlers
-	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error                // used by handlers
-	GetPendingTransaction(txID transactions.Txid) (res TxnWithStatus, found bool) // used by handlers
-	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)                    // used by handlers
-	SuggestedFee() basics.MicroAlgos                                              // used by handlers
-	// unused by handlers:
+	Ledger() *data.Ledger
+	Status() (s StatusReport, err error)
+	GenesisID() string
+	GenesisHash() crypto.Digest
+	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
+	GetPendingTransaction(txID transactions.Txid) (res TxnWithStatus, found bool)
+	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
+	SuggestedFee() basics.MicroAlgos
 	Config() config.Local
 	Start()
 	ListeningAddress() (string, bool)
