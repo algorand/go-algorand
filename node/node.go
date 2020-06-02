@@ -93,6 +93,8 @@ type Interface interface {
 	GetPendingTransaction(txID transactions.Txid) (res TxnWithStatus, found bool)
 	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
 	SuggestedFee() basics.MicroAlgos
+	StartCatchup(catchpoint string) error
+	AbortCatchup(catchpoint string) error
 	Config() config.Local
 	Start()
 	ListeningAddress() (string, bool)
@@ -101,13 +103,8 @@ type Interface interface {
 	GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (TxnWithStatus, bool)
 	PoolStats() PoolStats
 	IsArchival() bool
-	OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta)
-	Uint64() uint64
 	Indexer() (*indexer.Indexer, error)
 	GetTransactionByID(txid transactions.Txid, rnd basics.Round) (TxnWithStatus, error)
-	AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error)
-	StartCatchup(catchpoint string) error
-	AbortCatchup(catchpoint string) error
 }
 
 // AlgorandFullNode specifies and implements a full Algorand node.
