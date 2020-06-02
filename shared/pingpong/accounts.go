@@ -175,9 +175,19 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 			totalSent++
 			throttleTransactionRate(startTime, cfg, totalSent)
 		}
+		account, accountErr := client.AccountInformation(addr)
+		if accountErr != nil {
+			fmt.Printf("Cannot lookup source account %v\n", addr)
+			err = accountErr
+			return
+		}
+
+		assetParams := account.AssetParams
+		fmt.Printf("Configured  %d assets %+v\n", len(assetParams), assetParams)
+
 	}
 
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second * 15)
 
 	// 2) For each participant account, opt-in to assets of all other participant accounts
 	for addr := range accounts {
@@ -232,7 +242,7 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 			}
 		}
 	}
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second * 15)
 
 	// Step 3) Evenly distribute the assets across all participant accounts
 	for addr := range accounts {
