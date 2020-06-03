@@ -130,7 +130,6 @@ func TestGetStatus(t *testing.T) {
 }
 
 func TestGetStatusAfterBlock(t *testing.T) {
-	t.Skip("temporary skipping for local testing, should not make it into PR")
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 	err := handler.WaitForBlock(c, 0)
