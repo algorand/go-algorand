@@ -65,6 +65,16 @@ func accountInformationTest(t *testing.T, address string, expectedCode int) {
 	err := handler.AccountInformation(c, address)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
+	if expectedCode != 200 {
+		// response will be known-bad, so don't bother validating response
+		return
+	}
+	expectedResponse := generatedV2.AccountResponse{}
+	actualResponse := generatedV2.AccountResponse{}
+	decoder := protocol.NewDecoderBytes(rec.Body.Bytes())
+	err = decoder.Decode(&actualResponse)
+	require.NoError(t, err)
+	require.Equal(t, expectedResponse, actualResponse)
 }
 
 func TestAccountInformation(t *testing.T) {
