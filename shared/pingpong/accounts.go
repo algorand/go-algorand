@@ -395,17 +395,8 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 	for i := 0; i < toCreate; i++ {
 		var tx transactions.Transaction
 
-		var prog []byte
-		switch cfg.AppProgOps {
-		case 10:
-			prog = genMaxClone(16)
-		case 200:
-			prog = genMaxClone(32)
-		case 696:
-			prog = genMaxClone(64)
-		default:
-			panic("unexpected AppProgOps")
-		}
+		// generate app program with roughly some number of operations
+		prog := genBigNoOp(cfg.AppProgOps)
 
 		globSchema := basics.StateSchema{NumByteSlice: 64}
 		locSchema := basics.StateSchema{}
