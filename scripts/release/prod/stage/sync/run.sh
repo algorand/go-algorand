@@ -12,7 +12,7 @@ fi
 
 RSTAMP=$(./scripts/release/prod/reverse_hex_timestamp)
 
-if ! aws s3 sync --exclude="*" --include="*$VERSION*" "s3://algorand-builds/channel/$CHANNEL" "s3://algorand-dev-deb-repo/releases/$CHANNEL/${RSTAMP}_${VERSION}"; then
+if ! aws s3 sync --exclude="*" --include="*$VERSION*" "s3://algorand-staging/releases/$CHANNEL/$VERSION/" "s3://algorand-dev-deb-repo/releases/$CHANNEL/${RSTAMP}_${VERSION}"; then
     echo There was a problem syncing the staging and production buckets!
     exit 1
 fi
