@@ -7,6 +7,168 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
+// The following msgp objects are implemented in this file:
+// Certificate
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
+// bundle
+//    |-----> (*) MarshalMsg
+//    |-----> (*) CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> (*) Msgsize
+//    |-----> (*) MsgIsZero
+//
+// equivocationVote
+//         |-----> (*) MarshalMsg
+//         |-----> (*) CanMarshalMsg
+//         |-----> (*) UnmarshalMsg
+//         |-----> (*) CanUnmarshalMsg
+//         |-----> (*) Msgsize
+//         |-----> (*) MsgIsZero
+//
+// equivocationVoteAuthenticator
+//               |-----> (*) MarshalMsg
+//               |-----> (*) CanMarshalMsg
+//               |-----> (*) UnmarshalMsg
+//               |-----> (*) CanUnmarshalMsg
+//               |-----> (*) Msgsize
+//               |-----> (*) MsgIsZero
+//
+// period
+//    |-----> MarshalMsg
+//    |-----> CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> Msgsize
+//    |-----> MsgIsZero
+//
+// proposal
+//     |-----> (*) MarshalMsg
+//     |-----> (*) CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> (*) Msgsize
+//     |-----> (*) MsgIsZero
+//
+// proposalValue
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
+//
+// proposerSeed
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
+//
+// rawVote
+//    |-----> (*) MarshalMsg
+//    |-----> (*) CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> (*) Msgsize
+//    |-----> (*) MsgIsZero
+//
+// seedInput
+//     |-----> (*) MarshalMsg
+//     |-----> (*) CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> (*) Msgsize
+//     |-----> (*) MsgIsZero
+//
+// selector
+//     |-----> (*) MarshalMsg
+//     |-----> (*) CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> (*) Msgsize
+//     |-----> (*) MsgIsZero
+//
+// serializableErrorUnderlying
+//              |-----> MarshalMsg
+//              |-----> CanMarshalMsg
+//              |-----> (*) UnmarshalMsg
+//              |-----> (*) CanUnmarshalMsg
+//              |-----> Msgsize
+//              |-----> MsgIsZero
+//
+// step
+//   |-----> MarshalMsg
+//   |-----> CanMarshalMsg
+//   |-----> (*) UnmarshalMsg
+//   |-----> (*) CanUnmarshalMsg
+//   |-----> Msgsize
+//   |-----> MsgIsZero
+//
+// transmittedPayload
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//
+// unauthenticatedBundle
+//           |-----> (*) MarshalMsg
+//           |-----> (*) CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> (*) Msgsize
+//           |-----> (*) MsgIsZero
+//
+// unauthenticatedEquivocationVote
+//                |-----> (*) MarshalMsg
+//                |-----> (*) CanMarshalMsg
+//                |-----> (*) UnmarshalMsg
+//                |-----> (*) CanUnmarshalMsg
+//                |-----> (*) Msgsize
+//                |-----> (*) MsgIsZero
+//
+// unauthenticatedProposal
+//            |-----> (*) MarshalMsg
+//            |-----> (*) CanMarshalMsg
+//            |-----> (*) UnmarshalMsg
+//            |-----> (*) CanUnmarshalMsg
+//            |-----> (*) Msgsize
+//            |-----> (*) MsgIsZero
+//
+// unauthenticatedVote
+//          |-----> (*) MarshalMsg
+//          |-----> (*) CanMarshalMsg
+//          |-----> (*) UnmarshalMsg
+//          |-----> (*) CanUnmarshalMsg
+//          |-----> (*) Msgsize
+//          |-----> (*) MsgIsZero
+//
+// vote
+//   |-----> (*) MarshalMsg
+//   |-----> (*) CanMarshalMsg
+//   |-----> (*) UnmarshalMsg
+//   |-----> (*) CanUnmarshalMsg
+//   |-----> (*) Msgsize
+//   |-----> (*) MsgIsZero
+//
+// voteAuthenticator
+//         |-----> (*) MarshalMsg
+//         |-----> (*) CanMarshalMsg
+//         |-----> (*) UnmarshalMsg
+//         |-----> (*) CanUnmarshalMsg
+//         |-----> (*) Msgsize
+//         |-----> (*) MsgIsZero
+//
+
 // MarshalMsg implements msgp.Marshaler
 func (z *Certificate) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
