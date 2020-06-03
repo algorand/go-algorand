@@ -39,6 +39,9 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
+// ordinarily mockNode would live in `components/mocks`
+// but doing this would create an import cycle, as mockNode needs
+// package `data` and package `node`, which themselves import `mocks`
 type mockNode struct {
 	ledger    *data.Ledger
 	genesisID string
