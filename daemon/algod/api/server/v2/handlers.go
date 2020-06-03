@@ -52,7 +52,7 @@ type Handlers struct {
 	Shutdown <-chan struct{}
 }
 
-// Interface represents node fns.
+// NodeInterface represents node fns used by the handlers.
 type NodeInterface interface {
 	Ledger() *data.Ledger
 	Status() (s node.StatusReport, err error)
