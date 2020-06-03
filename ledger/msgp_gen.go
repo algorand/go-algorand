@@ -7,14 +7,6 @@ import (
 )
 
 // The following msgp objects are implemented in this file:
-// encodedBalanceRecord
-//           |-----> (*) MarshalMsg
-//           |-----> (*) CanMarshalMsg
-//           |-----> (*) UnmarshalMsg
-//           |-----> (*) CanUnmarshalMsg
-//           |-----> (*) Msgsize
-//           |-----> (*) MsgIsZero
-//
 // AccountTotals
 //       |-----> (*) MarshalMsg
 //       |-----> (*) CanMarshalMsg
@@ -62,6 +54,14 @@ import (
 //        |-----> (*) CanUnmarshalMsg
 //        |-----> Msgsize
 //        |-----> MsgIsZero
+//
+// encodedBalanceRecord
+//           |-----> (*) MarshalMsg
+//           |-----> (*) CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> (*) Msgsize
+//           |-----> (*) MsgIsZero
 //
 
 // MarshalMsg implements msgp.Marshaler
