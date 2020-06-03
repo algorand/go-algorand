@@ -135,11 +135,11 @@ func (m mockNode) AssembleBlock(round basics.Round, deadline time.Time) (agreeme
 }
 
 func (m mockNode) StartCatchup(catchpoint string) error {
-	return fmt.Errorf("start catchup not implemented")
+	return nil
 }
 
 func (m mockNode) AbortCatchup(catchpoint string) error {
-	return fmt.Errorf("abort catchup not implemented")
+	return nil
 }
 
 ////// mock ledger testing environment follows
