@@ -17,25 +17,126 @@
 package test
 
 import (
+	"fmt"
 	"math/rand"
 	"strconv"
 	"testing"
+	"time"
 
-	"github.com/algorand/go-algorand/components/mocks"
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/node"
+	"github.com/algorand/go-algorand/node/indexer"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
 
-func makeMockNode(ledger *data.Ledger, genesisID string) mocks.MockNode {
-	mockNode := mocks.MakeMockNode(ledger, genesisID)
-	return mockNode
+type mockNode struct {
+	ledger    *data.Ledger
+	genesisID string
+}
+
+func makeMockNode(ledger *data.Ledger, genesisID string) mockNode {
+	return mockNode{ledger: ledger, genesisID: genesisID}
+}
+
+func (m mockNode) Ledger() *data.Ledger {
+	return m.ledger
+}
+
+func (m mockNode) Status() (s node.StatusReport, err error) {
+	s = node.StatusReport{
+		LastRound:   basics.Round(1),
+		LastVersion: protocol.ConsensusCurrentVersion,
+	}
+	return
+}
+func (m mockNode) GenesisID() string {
+	return m.genesisID
+}
+
+func (m mockNode) GenesisHash() crypto.Digest {
+	return m.ledger.GenesisHash()
+}
+
+func (m mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {
+	return nil
+}
+
+func (m mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {
+	res = node.TxnWithStatus{}
+	found = true
+	return
+}
+
+func (m mockNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
+	return nil, nil
+}
+
+func (m mockNode) SuggestedFee() basics.MicroAlgos {
+	return basics.MicroAlgos{Raw: 1}
+}
+
+// unused by handlers:
+func (m mockNode) Config() config.Local {
+	return config.GetDefaultLocal()
+}
+func (m mockNode) Start() {}
+
+func (m mockNode) ListeningAddress() (string, bool) {
+	return "mock listening addresses not implemented", false
+}
+
+func (m mockNode) Stop() {}
+
+func (m mockNode) ListTxns(addr basics.Address, minRound basics.Round, maxRound basics.Round) ([]node.TxnWithStatus, error) {
+	return nil, fmt.Errorf("listtxns not implemented")
+}
+
+func (m mockNode) GetTransaction(addr basics.Address, txID transactions.Txid, minRound basics.Round, maxRound basics.Round) (node.TxnWithStatus, bool) {
+	return node.TxnWithStatus{}, false
+}
+
+func (m mockNode) PoolStats() node.PoolStats {
+	return node.PoolStats{}
+}
+
+func (m mockNode) IsArchival() bool {
+	return false
+}
+
+func (m mockNode) OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta) {}
+
+func (m mockNode) Uint64() uint64 {
+	return 1
+}
+
+func (m mockNode) Indexer() (*indexer.Indexer, error) {
+	return nil, fmt.Errorf("indexer not implemented")
+}
+
+func (m mockNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (node.TxnWithStatus, error) {
+	return node.TxnWithStatus{}, fmt.Errorf("get transaction by id not implemented")
+}
+
+func (m mockNode) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
+	return nil, fmt.Errorf("assemble block not implemented")
+}
+
+func (m mockNode) StartCatchup(catchpoint string) error {
+	return fmt.Errorf("start catchup not implemented")
+}
+
+func (m mockNode) AbortCatchup(catchpoint string) error {
+	return fmt.Errorf("abort catchup not implemented")
 }
 
 ////// mock ledger testing environment follows
