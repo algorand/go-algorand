@@ -17,7 +17,7 @@
 package data
 
 import (
-	"errorf"
+	"fmt"
 	"math/rand"
 	"strconv"
 	"testing"
