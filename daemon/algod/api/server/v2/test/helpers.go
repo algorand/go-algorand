@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
@@ -38,6 +39,34 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
+
+var cannedStatusReportGolden = node.StatusReport{
+	LastRound:                          basics.Round(1),
+	LastVersion:                        protocol.ConsensusCurrentVersion,
+	NextVersion:                        protocol.ConsensusCurrentVersion,
+	NextVersionRound:                   basics.Round(1),
+	NextVersionSupported:               true,
+	StoppedAtUnsupportedRound:          true,
+	Catchpoint:                         "",
+	CatchpointCatchupAcquiredBlocks:    0,
+	CatchpointCatchupProcessedAccounts: 0,
+	CatchpointCatchupTotalAccounts:     0,
+	CatchpointCatchupTotalBlocks:       0,
+	LastCatchpoint:                     "",
+}
+
+var poolAddrRewardBaseGolden = uint64(0)
+var poolAddrAssetsGolden = make([]generatedV2.AssetHolding, 0)
+var poolAddrCreatedAssetsGolden = make([]generatedV2.Asset, 0)
+var poolAddrResponseGolden = generatedV2.AccountResponse{
+	Address:                     poolAddr.String(),
+	Amount:                      50000000000,
+	AmountWithoutPendingRewards: 50000000000,
+	Assets:                      &poolAddrAssetsGolden,
+	CreatedAssets:               &poolAddrCreatedAssetsGolden,
+	RewardBase:                  &poolAddrRewardBaseGolden,
+	Status:                      "Not Participating",
+}
 
 // ordinarily mockNode would live in `components/mocks`
 // but doing this would create an import cycle, as mockNode needs
@@ -56,10 +85,7 @@ func (m mockNode) Ledger() *data.Ledger {
 }
 
 func (m mockNode) Status() (s node.StatusReport, err error) {
-	s = node.StatusReport{
-		LastRound:   basics.Round(1),
-		LastVersion: protocol.ConsensusCurrentVersion,
-	}
+	s = cannedStatusReportGolden
 	return
 }
 func (m mockNode) GenesisID() string {
