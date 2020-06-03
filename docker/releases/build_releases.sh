@@ -52,7 +52,7 @@ while [ "$1" != "" ]; do
     shift
 done
 
-if [[ ! "$NETWORK" =~ ^mainnet$|^testnet|^betanet$ ]]
+if [[ ! "$NETWORK" =~ ^mainnet$|^testnet$|^betanet$ ]]
 then
     echo "$RED_FG[$0]$END_FG_COLOR Network values must be either \`mainnet\`, \`testnet\` or \`betanet\`."
     exit 1
