@@ -17,6 +17,7 @@
 package data
 
 import (
+	"errorf"
 	"math/rand"
 	"strconv"
 	"testing"
@@ -125,10 +126,10 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*L
 
 	tx := make([]transactions.SignedTxn, TXs)
 	latest := ledger.Latest()
-	bal, err := ledger.AllBalances(latest)
-	if err != nil {
-		panic(err)
+	if latest != 0 {
+		panic(fmt.Errorf("newly created ledger doesn't start on round 0"))
 	}
+	bal := bootstrap.balances
 
 	for i := 0; i < TXs; i++ {
 		send := gen.Int() % P
