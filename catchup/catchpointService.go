@@ -64,6 +64,8 @@ type CatchpointCatchupService struct {
 	newService     bool // indicates whether this service was created after the node was running ( i.e. true ) or the node just started to find that it was previously perfoming catchup
 	net            network.GossipNode
 	ledger         *ledger.Ledger
+	// lastBlockHeader is the latest block we have before going into catchpoint catchup mode. We use it to serve the node status requests instead of going to the ledger.
+	lastBlockHeader bookkeeping.BlockHeader
 }
 
 const (
@@ -76,8 +78,8 @@ const (
 )
 
 // MakeResumedCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
-func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger) (*CatchpointCatchupService, error) {
-	service := &CatchpointCatchupService{
+func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger) (service *CatchpointCatchupService, err error) {
+	service = &CatchpointCatchupService{
 		stats: CatchpointCatchupStats{
 			StartTime: time.Now(),
 		},
@@ -88,7 +90,11 @@ func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCat
 		net:            net,
 		ledger:         l,
 	}
-	err := service.loadStateVariables(ctx)
+	service.lastBlockHeader, err = l.BlockHdr(l.Latest())
+	if err != nil {
+		return nil, err
+	}
+	err = service.loadStateVariables(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -97,11 +103,11 @@ func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCat
 }
 
 // MakeNewCatchpointCatchupService creates a new catchpoint catchup service for a node that is not in catchpoint catchup mode
-func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger) (*CatchpointCatchupService, error) {
+func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger) (service *CatchpointCatchupService, err error) {
 	if catchpoint == "" {
 		return nil, fmt.Errorf("MakeNewCatchpointCatchupService: catchpoint is invalid")
 	}
-	service := &CatchpointCatchupService{
+	service = &CatchpointCatchupService{
 		stats: CatchpointCatchupStats{
 			CatchpointLabel: catchpoint,
 			StartTime:       time.Now(),
@@ -113,6 +119,10 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 		newService:     true,
 		net:            net,
 		ledger:         l,
+	}
+	service.lastBlockHeader, err = l.BlockHdr(l.Latest())
+	if err != nil {
+		return nil, err
 	}
 	return service, nil
 }
@@ -570,4 +580,9 @@ func (cs *CatchpointCatchupService) updateBlockRetrievalStatistics(aquiredBlocks
 	defer cs.statsMu.Unlock()
 	cs.stats.AcquiredBlocks = uint64(int64(cs.stats.AcquiredBlocks) + aquiredBlocksDelta)
 	cs.stats.VerifiedBlocks = uint64(int64(cs.stats.VerifiedBlocks) + verifiedBlocksDelta)
+}
+
+// GetLatestBlockHeader returns the last block header that was available at the time the catchpoint catchup service started
+func (cs *CatchpointCatchupService) GetLatestBlockHeader() bookkeeping.BlockHeader {
+	return cs.lastBlockHeader
 }
