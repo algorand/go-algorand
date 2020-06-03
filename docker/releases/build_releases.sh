@@ -22,6 +22,7 @@ RED_FG=$(tput setaf 1 2>/dev/null)
 END_FG_COLOR=$(tput sgr0 2>/dev/null)
 
 # These are reasonable defaults.
+CHANNEL=stable
 DEPLOY=true
 IMAGE_NAME=stable
 NETWORK=mainnet
