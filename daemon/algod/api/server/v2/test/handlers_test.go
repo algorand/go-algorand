@@ -65,10 +65,17 @@ func accountInformationTest(t *testing.T, address string, expectedCode int) {
 	err := handler.AccountInformation(c, address)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
+	if address == poolAddr.String() {
+		expectedResponse := poolAddrResponseGolden
+		actualResponse := generatedV2.AccountResponse{}
+		err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResponse)
+		require.NoError(t, err)
+		require.Equal(t, expectedResponse, actualResponse)
+	}
 }
 
 func TestAccountInformation(t *testing.T) {
-	accountInformationTest(t, "ALGORANDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIN5DNAU", 200)
+	accountInformationTest(t, poolAddr.String(), 200)
 	accountInformationTest(t, "malformed", 400)
 }
 
@@ -95,14 +102,34 @@ func TestGetSupply(t *testing.T) {
 }
 
 func TestGetStatus(t *testing.T) {
-	handler, c, _, _, _, releasefunc := setupTestForMethodGet(t)
+	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 	err := handler.GetStatus(c)
 	require.NoError(t, err)
+	stat := cannedStatusReportGolden
+	expectedResult := generatedV2.NodeStatusResponse{
+		LastRound:                   uint64(stat.LastRound),
+		LastVersion:                 string(stat.LastVersion),
+		NextVersion:                 string(stat.NextVersion),
+		NextVersionRound:            uint64(stat.NextVersionRound),
+		NextVersionSupported:        stat.NextVersionSupported,
+		TimeSinceLastRound:          uint64(stat.TimeSinceLastRound().Nanoseconds()),
+		CatchupTime:                 uint64(stat.CatchupTime.Nanoseconds()),
+		StoppedAtUnsupportedRound:   stat.StoppedAtUnsupportedRound,
+		LastCatchpoint:              &stat.LastCatchpoint,
+		Catchpoint:                  &stat.Catchpoint,
+		CatchpointTotalAccounts:     &stat.CatchpointCatchupTotalAccounts,
+		CatchpointProcessedAccounts: &stat.CatchpointCatchupProcessedAccounts,
+		CatchpointTotalBlocks:       &stat.CatchpointCatchupTotalBlocks,
+		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
+	}
+	actualResult := generatedV2.NodeStatusResponse{}
+	err = protocol.DecodeJSON(rec.Body.Bytes(), &actualResult)
+	require.NoError(t, err)
+	require.Equal(t, expectedResult, actualResult)
 }
 
 func TestGetStatusAfterBlock(t *testing.T) {
-	t.Skip("temporary skipping for local testing, should not make it into PR")
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
 	err := handler.WaitForBlock(c, 0)
