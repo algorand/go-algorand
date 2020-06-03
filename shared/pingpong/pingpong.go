@@ -63,7 +63,7 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 		assetAccounts, err = generateAccounts(ac, assetAccounts, cfg.NumPartAccounts-1, wallet)
 
 		for addr := range assetAccounts {
-			fmt.Printf("**** generated account %v\n", addr)
+			fmt.Printf("generated account %v\n", addr)
 		}
 
 		for k := range assetAccounts {
@@ -77,7 +77,7 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 
 		assetParams, err = prepareAssets(assetAccounts, ac, cfg)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "fund prepare assets failed %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "prepare assets failed %v\n", err)
 			return
 		}
 
@@ -116,7 +116,7 @@ func computeAccountMinBalance(cfg PpConfig) (requiredBalance uint64) {
 	// add cost of transactions
 	requiredBalance += (cfg.MaxAmt + cfg.MaxFee) * 2 * cfg.TxnPerSec * uint64(math.Ceil(cfg.RefreshTime.Seconds()))
 
-	// override computed value if greater
+	// override computed value if less than configured value
 	if cfg.MinAccountFunds > requiredBalance {
 		requiredBalance = cfg.MinAccountFunds
 	}
@@ -213,10 +213,6 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 	restTime := cfg.RestTime
 	refreshTime := time.Now().Add(cfg.RefreshTime)
 
-	for addr := range accounts {
-		fmt.Printf("**** participant account %v\n", addr)
-	}
-
 	for {
 		if ctx.Err() != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "error bad context in RunPingPong: %v\n", ctx.Err())
@@ -262,12 +258,6 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetParams map[uint64]v1.AssetParams, client libgoal.Client, cfg PpConfig) (sentCount, successCount uint64, err error) {
 	amt := cfg.MaxAmt
 	fee := cfg.MaxFee
-	_, _ = fmt.Fprintf(os.Stdout, "sendFromTo \n")
-	if cfg.NumAsset > 0 && len(assetParams) <= 0 {
-		_, _ = fmt.Fprintf(os.Stdout, "Skipping sendFromTo, no assest params.\n")
-		time.Sleep(time.Second)
-		return
-	}
 	for i, from := range fromList {
 		if cfg.RandomizeAmt {
 			amt = rand.Uint64()%cfg.MaxAmt + 1
@@ -405,8 +395,9 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetPara
 			accounts[to] = uint64(toBalanceChange + int64(accounts[to]))
 		}
 		if sendErr != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "error sending TransactionGroup: %v\n", sendErr)
+			_, _ = fmt.Fprintf(os.Stderr, "error sending Transaction, sleeping .5 seconds: %v\n", sendErr)
 			err = sendErr
+			time.Sleep(500 * time.Millisecond)
 			return
 		}
 		if cfg.DelayBetweenTxn > 0 {

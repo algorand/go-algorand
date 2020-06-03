@@ -126,18 +126,18 @@ func (componentInstance *PingPongComponentInstance) startPingPong(cfg *pingpong.
 	var resultCfg pingpong.PpConfig
 
 	// Initialize accounts if necessary, this may take several attempts while previous transactions to settle
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 10; i++ {
 		accounts, assetParams, resultCfg, err = pingpong.PrepareAccounts(ac, *cfg)
 		if err == nil {
 			break
 		} else {
 			log.Warnf("problem[%d] preparing accounts for transfers: %v\n, retrying", i, err)
-			time.Sleep(time.Second * 4)
+			time.Sleep(time.Second * 2)
 		}
 	}
 	if err != nil {
-		log.Warnf("Error preparing accounts for transfers: %v\n", err)
-		//		return
+		log.Errorf("Error preparing accounts for transfers: %v\n", err)
+		return
 	}
 
 	log.Infof("Preparing to run PingPong with config: %+v\n", cfg)

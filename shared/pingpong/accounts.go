@@ -107,6 +107,7 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 	return
 }
 
+// throttle transaction rate
 func throttleTransactionRate(startTime time.Time, cfg PpConfig, totalSent uint64) {
 	localTimeDelta := time.Now().Sub(startTime)
 	currentTps := float64(totalSent) / localTimeDelta.Seconds()
@@ -226,7 +227,7 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 
 					tx, err = client.FillUnsignedTxTemplate(addr2, 0, 0, cfg.MaxFee, tx)
 					if err != nil {
-						fmt.Printf("Cannot fill asset optin %v init txn in account %v\n", k, addr2)
+						fmt.Printf("Cannot fill asset optin %v in account %v\n", k, addr2)
 						return
 					}
 
