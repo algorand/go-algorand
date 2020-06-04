@@ -567,6 +567,11 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AppLocalStates")
 				return
 			}
+			if zb0020 > encodedMaxAppLocalStates {
+				err = msgp.ErrOverflow(uint64(zb0020), uint64(encodedMaxAppLocalStates))
+				err = msgp.WrapError(err, "struct-from-array", "AppLocalStates")
+				return
+			}
 			if zb0021 {
 				(*z).AppLocalStates = nil
 			} else if (*z).AppLocalStates == nil {
@@ -595,6 +600,11 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0023 bool
 			zb0022, zb0023, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "AppParams")
+				return
+			}
+			if zb0022 > encodedMaxAppParams {
+				err = msgp.ErrOverflow(uint64(zb0022), uint64(encodedMaxAppParams))
 				err = msgp.WrapError(err, "struct-from-array", "AppParams")
 				return
 			}
@@ -927,6 +937,11 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AppLocalStates")
 					return
 				}
+				if zb0035 > encodedMaxAppLocalStates {
+					err = msgp.ErrOverflow(uint64(zb0035), uint64(encodedMaxAppLocalStates))
+					err = msgp.WrapError(err, "AppLocalStates")
+					return
+				}
 				if zb0036 {
 					(*z).AppLocalStates = nil
 				} else if (*z).AppLocalStates == nil {
@@ -953,6 +968,11 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0038 bool
 				zb0037, zb0038, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
+					err = msgp.WrapError(err, "AppParams")
+					return
+				}
+				if zb0037 > encodedMaxAppParams {
+					err = msgp.ErrOverflow(uint64(zb0037), uint64(encodedMaxAppParams))
 					err = msgp.WrapError(err, "AppParams")
 					return
 				}
@@ -1353,8 +1373,8 @@ func (z *AppLocalState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "KeyValue")
 				return
 			}
-			if zb0007 > 4096 {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(4096))
+			if zb0007 > encodedMaxKeyValueEntries {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(encodedMaxKeyValueEntries))
 				err = msgp.WrapError(err, "struct-from-array", "KeyValue")
 				return
 			}
@@ -1481,8 +1501,8 @@ func (z *AppLocalState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "KeyValue")
 					return
 				}
-				if zb0011 > 4096 {
-					err = msgp.ErrOverflow(uint64(zb0011), uint64(4096))
+				if zb0011 > encodedMaxKeyValueEntries {
+					err = msgp.ErrOverflow(uint64(zb0011), uint64(encodedMaxKeyValueEntries))
 					err = msgp.WrapError(err, "KeyValue")
 					return
 				}
@@ -1851,8 +1871,8 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "GlobalState")
 				return
 			}
-			if zb0009 > 4096 {
-				err = msgp.ErrOverflow(uint64(zb0009), uint64(4096))
+			if zb0009 > encodedMaxKeyValueEntries {
+				err = msgp.ErrOverflow(uint64(zb0009), uint64(encodedMaxKeyValueEntries))
 				err = msgp.WrapError(err, "struct-from-array", "GlobalState")
 				return
 			}
@@ -2061,8 +2081,8 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "GlobalState")
 					return
 				}
-				if zb0015 > 4096 {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(4096))
+				if zb0015 > encodedMaxKeyValueEntries {
+					err = msgp.ErrOverflow(uint64(zb0015), uint64(encodedMaxKeyValueEntries))
 					err = msgp.WrapError(err, "GlobalState")
 					return
 				}
@@ -3228,6 +3248,11 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AppLocalStates")
 				return
 			}
+			if zb0020 > encodedMaxAppLocalStates {
+				err = msgp.ErrOverflow(uint64(zb0020), uint64(encodedMaxAppLocalStates))
+				err = msgp.WrapError(err, "struct-from-array", "AppLocalStates")
+				return
+			}
 			if zb0021 {
 				(*z).AccountData.AppLocalStates = nil
 			} else if (*z).AccountData.AppLocalStates == nil {
@@ -3256,6 +3281,11 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			var zb0023 bool
 			zb0022, zb0023, bts, err = msgp.ReadMapHeaderBytes(bts)
 			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "AppParams")
+				return
+			}
+			if zb0022 > encodedMaxAppParams {
+				err = msgp.ErrOverflow(uint64(zb0022), uint64(encodedMaxAppParams))
 				err = msgp.WrapError(err, "struct-from-array", "AppParams")
 				return
 			}
@@ -3594,6 +3624,11 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AppLocalStates")
 					return
 				}
+				if zb0035 > encodedMaxAppLocalStates {
+					err = msgp.ErrOverflow(uint64(zb0035), uint64(encodedMaxAppLocalStates))
+					err = msgp.WrapError(err, "AppLocalStates")
+					return
+				}
 				if zb0036 {
 					(*z).AccountData.AppLocalStates = nil
 				} else if (*z).AccountData.AppLocalStates == nil {
@@ -3620,6 +3655,11 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0038 bool
 				zb0037, zb0038, bts, err = msgp.ReadMapHeaderBytes(bts)
 				if err != nil {
+					err = msgp.WrapError(err, "AppParams")
+					return
+				}
+				if zb0037 > encodedMaxAppParams {
+					err = msgp.ErrOverflow(uint64(zb0037), uint64(encodedMaxAppParams))
 					err = msgp.WrapError(err, "AppParams")
 					return
 				}
@@ -4691,8 +4731,8 @@ func (z *TealKeyValue) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0003 > 4096 {
-		err = msgp.ErrOverflow(uint64(zb0003), uint64(4096))
+	if zb0003 > encodedMaxKeyValueEntries {
+		err = msgp.ErrOverflow(uint64(zb0003), uint64(encodedMaxKeyValueEntries))
 		err = msgp.WrapError(err)
 		return
 	}

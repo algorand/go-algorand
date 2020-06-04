@@ -147,11 +147,23 @@ func TestEncodedAccountDataSize(t *testing.T) {
 	require.Equal(t, MaxEncodedAccountDataSize, len(encoded))
 }
 
-func TestEncodedAccountAssetsAllocationBound(t *testing.T) {
+func TestEncodedAccountAllocationBounds(t *testing.T) {
 	// ensure that all the supported protocols have MaxAssetsPerAccount less or equal to the encodedMaxAssetsPerAccount.
 	for protoVer, proto := range config.Consensus {
 		if proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount {
 			require.Failf(t, "proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount", "protocol version = %s", protoVer)
+		}
+		if proto.MaxAppsCreated > encodedMaxAppParams {
+			require.Failf(t, "proto.MaxAppsCreated > encodedMaxAppParams", "protocol version = %s", protoVer)
+		}
+		if proto.MaxAppsOptedIn > encodedMaxAppLocalStates {
+			require.Failf(t, "proto.MaxAppsOptedIn > encodedMaxAppLocalStates", "protocol version = %s", protoVer)
+		}
+		if proto.MaxLocalSchemaEntries > encodedMaxKeyValueEntries {
+			require.Failf(t, "proto.MaxLocalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
+		}
+		if proto.MaxGlobalSchemaEntries > encodedMaxKeyValueEntries {
+			require.Failf(t, "proto.MaxGlobalSchemaEntries > encodedMaxKeyValueEntries", "protocol version = %s", protoVer)
 		}
 	}
 }
