@@ -151,8 +151,8 @@ func (b *testBalances) PutWithCreatables(record basics.BalanceRecord, newCreatab
 	return nil
 }
 
-func (b *testBalances) GetAssetCreator(aidx basics.AssetIndex) (basics.Address, bool, error) {
-	return basics.Address{}, false, nil
+func (b *testBalances) GetAssetCreator(aidx basics.AssetIndex) (basics.Address, error) {
+	return basics.Address{}, nil
 }
 
 func (b *testBalances) GetAppCreator(aidx basics.AppIndex) (basics.Address, bool, error) {

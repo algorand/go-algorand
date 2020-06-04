@@ -38,8 +38,8 @@ func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards b
 	return balances.addrs[addr], nil
 }
 
-func (balances keyregTestBalances) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, bool, error) {
-	return basics.Address{}, true, nil
+func (balances keyregTestBalances) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+	return basics.Address{}, nil
 }
 
 func (balances keyregTestBalances) GetAppCreator(appIdx basics.AppIndex) (basics.Address, bool, error) {
