@@ -467,6 +467,11 @@ func constructTxn(from, to string, fee, amt, aidx uint64, client libgoal.Client,
 		if !cfg.Quiet {
 			_, _ = fmt.Fprintf(os.Stdout, "Sending %d asset %d: %s -> %s\n", amt, aidx, from, to)
 		}
+	} else {
+		txn, err = client.ConstructPayment(from, to, fee, amt, noteField[:], "", lease, 0, 0)
+		if !cfg.Quiet {
+			_, _ = fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, to)
+		}
 	}
 
 	if err != nil {
