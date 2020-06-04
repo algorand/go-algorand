@@ -6,24 +6,6 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
-// The following msgp objects are implemented in this file:
-// netPrioResponse
-//        |-----> (*) MarshalMsg
-//        |-----> (*) CanMarshalMsg
-//        |-----> (*) UnmarshalMsg
-//        |-----> (*) CanUnmarshalMsg
-//        |-----> (*) Msgsize
-//        |-----> (*) MsgIsZero
-//
-// netPrioResponseSigned
-//           |-----> (*) MarshalMsg
-//           |-----> (*) CanMarshalMsg
-//           |-----> (*) UnmarshalMsg
-//           |-----> (*) CanUnmarshalMsg
-//           |-----> (*) Msgsize
-//           |-----> (*) MsgIsZero
-//
-
 // MarshalMsg implements msgp.Marshaler
 func (z *netPrioResponse) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())

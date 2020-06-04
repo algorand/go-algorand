@@ -33,7 +33,7 @@ import (
 	privateV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -285,8 +285,17 @@ type assetsParams struct {
 	Max      uint64 `url:"max"`
 }
 
+type appsParams struct {
+	AppIdx uint64 `url:"appIdx"`
+	Max    uint64 `url:"max"`
+}
+
 type rawblockParams struct {
 	Raw uint64 `url:"raw"`
+}
+
+type rawAccountParams struct {
+	Format string `url:"format"`
 }
 
 // TransactionsByAddr returns all transactions for a PK [addr] in the [first,
@@ -302,15 +311,44 @@ func (client RestClient) AssetInformation(index uint64) (response v1.AssetParams
 	return
 }
 
+// ApplicationInformation gets the ApplicationInformationResponse associated
+// with the passed application index
+func (client RestClient) ApplicationInformation(index uint64) (response v1.AppParams, err error) {
+	err = client.get(&response, fmt.Sprintf("/v1/application/%d", index), nil)
+	return
+}
+
 // Assets gets up to max assets with maximum asset index assetIdx
 func (client RestClient) Assets(assetIdx, max uint64) (response v1.AssetList, err error) {
 	err = client.get(&response, "/v1/assets", assetsParams{assetIdx, max})
 	return
 }
 
+// Applications gets up to max applications with maximum application index appIdx
+func (client RestClient) Applications(appIdx, max uint64) (response v1.ApplicationList, err error) {
+	err = client.get(&response, "/v1/applications", appsParams{appIdx, max})
+	return
+}
+
 // AccountInformation also gets the AccountInformationResponse associated with the passed address
 func (client RestClient) AccountInformation(address string) (response v1.Account, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s", address), nil)
+	return
+}
+
+// Blob represents arbitrary blob of data satisfying v1.RawResponse interface
+type Blob []byte
+
+// SetBytes fulfills the RawResponse interface on Blob
+func (blob *Blob) SetBytes(b []byte) {
+	*blob = b
+}
+
+// RawAccountInformationV2 gets the raw AccountData associated with the passed address
+func (client RestClient) RawAccountInformationV2(address string) (response []byte, err error) {
+	var blob Blob
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s", address), rawAccountParams{Format: "msgpack"})
+	response = blob
 	return
 }
 

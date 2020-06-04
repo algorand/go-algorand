@@ -17,6 +17,7 @@
 package basics
 
 import (
+	"errors"
 	"reflect"
 
 	"github.com/algorand/go-algorand/config"
@@ -58,6 +59,21 @@ func (s Status) String() string {
 		return "Not Participating"
 	}
 	return ""
+}
+
+// UnmarshalStatus decodes string status value back to Status constant
+func UnmarshalStatus(value string) (s Status, err error) {
+	switch value {
+	case "Offline":
+		s = Offline
+	case "Online":
+		s = Online
+	case "Not Participating":
+		s = NotParticipating
+	default:
+		err = errors.New("invalid status value: " + value)
+	}
+	return
 }
 
 // AccountData contains the data associated with a given address.
@@ -153,6 +169,63 @@ type AccountData struct {
 	// A transaction may change an account's AuthAddr to "re-key" the account.
 	// This allows key rotation, changing the members in a multisig, etc.
 	AuthAddr Address `codec:"spend"`
+
+	// AppLocalStates stores the local states associated with any applications
+	// that this account has opted in to.
+	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=-"`
+
+	// AppParams stores the global parameters and state associated with any
+	// applications that this account has created.
+	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=-"`
+
+	// TotalAppSchema stores the sum of all of the LocalStateSchemas
+	// and GlobalStateSchemas in this account (global for applications
+	// we created local for applications we opted in to), so that we don't
+	// have to iterate over all of them to compute MinBalance.
+	TotalAppSchema StateSchema `codec:"tsch"`
+}
+
+// AppLocalState stores the LocalState associated with an application. It also
+// stores a cached copy of the application's LocalStateSchema so that
+// MinBalance requirements may be computed 1. without looking up the
+// AppParams and 2. even if the application has been deleted
+type AppLocalState struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Schema   StateSchema  `codec:"hsch"`
+	KeyValue TealKeyValue `codec:"tkv"`
+}
+
+// AppParams stores the global information associated with an application
+type AppParams struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	ApprovalProgram   []byte      `codec:"approv"`
+	ClearStateProgram []byte      `codec:"clearp"`
+	LocalStateSchema  StateSchema `codec:"lsch"`
+	GlobalStateSchema StateSchema `codec:"gsch"`
+
+	GlobalState TealKeyValue `codec:"gs,allocbound=-"`
+}
+
+// Clone returns a copy of some AppParams that may be modified without
+// affecting the original
+func (ap *AppParams) Clone() (res AppParams) {
+	res = *ap
+	res.ApprovalProgram = make([]byte, len(ap.ApprovalProgram))
+	copy(res.ApprovalProgram, ap.ApprovalProgram)
+	res.ClearStateProgram = make([]byte, len(ap.ClearStateProgram))
+	copy(res.ClearStateProgram, ap.ClearStateProgram)
+	res.GlobalState = ap.GlobalState.Clone()
+	return
+}
+
+// Clone returns a copy of some AppLocalState that may be modified without
+// affecting the original
+func (al *AppLocalState) Clone() (res AppLocalState) {
+	res = *al
+	res.KeyValue = al.KeyValue.Clone()
+	return
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption
@@ -181,12 +254,35 @@ type BalanceDetail struct {
 // up the creator of the asset, whose balance record contains the AssetParams
 type AssetIndex uint64
 
-// AssetLocator stores both the asset creator, whose balance record contains
-// the asset parameters, and the asset index, which is the key into those
-// parameters
-type AssetLocator struct {
+// AppIndex is the unique integer index of an application that can be used to
+// look up the creator of the application, whose balance record contains the
+// AppParams
+type AppIndex uint64
+
+// CreatableIndex represents either an AssetIndex or AppIndex, which come from
+// the same namespace of indices as each other (both assets and apps are
+// "creatables")
+type CreatableIndex uint64
+
+// CreatableType is an enum representing whether or not a given creatable is an
+// application or an asset
+type CreatableType uint64
+
+const (
+	// AssetCreatable is the CreatableType corresponding to assets
+	AssetCreatable CreatableType = 0
+
+	// AppCreatable is the CreatableType corresponds to apps
+	AppCreatable CreatableType = 1
+)
+
+// CreatableLocator stores both the creator, whose balance record contains
+// the asset/app parameters, and the creatable index, which is the key into
+// those parameters
+type CreatableLocator struct {
+	Type    CreatableType
 	Creator Address
-	Index   AssetIndex
+	Index   CreatableIndex
 }
 
 // AssetHolding describes an asset held by an account.
@@ -278,6 +374,36 @@ func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLev
 	}
 
 	return u
+}
+
+// MinBalance computes the minimum balance requirements for an account based on
+// some consensus parameters. MinBalance should correspond roughly to how much
+// storage the account is allowed to store on disk.
+func (u AccountData) MinBalance(proto *config.ConsensusParams) (res MicroAlgos) {
+	var min uint64
+
+	// First, base MinBalance
+	min = proto.MinBalance
+
+	// MinBalance for each Asset
+	assetCost := MulSaturate(proto.MinBalance, uint64(len(u.Assets)))
+	min = AddSaturate(min, assetCost)
+
+	// Base MinBalance for each created application
+	appCreationCost := MulSaturate(proto.AppFlatParamsMinBalance, uint64(len(u.AppParams)))
+	min = AddSaturate(min, appCreationCost)
+
+	// Base MinBalance for each opted in application
+	appOptInCost := MulSaturate(proto.AppFlatOptInMinBalance, uint64(len(u.AppLocalStates)))
+	min = AddSaturate(min, appOptInCost)
+
+	// MinBalance for state usage measured by LocalStateSchemas and
+	// GlobalStateSchemas
+	schemaCost := u.TotalAppSchema.MinBalance(proto)
+	min = AddSaturate(min, schemaCost.Raw)
+
+	res.Raw = min
+	return res
 }
 
 // VotingStake returns the amount of MicroAlgos associated with the user's account

@@ -217,6 +217,31 @@ type ConsensusParams struct {
 
 	// SupportRekeying indicates support for account rekeying (the RekeyTo and AuthAddr fields)
 	SupportRekeying bool
+
+	// application support
+	Application bool
+
+	MaxAppArgs              int
+	MaxAppTotalArgLen       int
+	MaxApprovalProgramLen   int
+	MaxClearStateProgramLen int
+	MaxAppTxnAccounts       int
+	MaxAppTxnForeignApps    int
+	MaxAppProgramCost       int
+	MaxAppKeyLen            int
+	MaxAppBytesValueLen     int
+	MaxAppsCreated          int
+	MaxAppsOptedIn          int
+
+	AppFlatParamsMinBalance  uint64
+	AppFlatOptInMinBalance   uint64
+	SchemaMinBalancePerEntry uint64
+	SchemaUintMinBalance     uint64
+	SchemaBytesMinBalance    uint64
+	MaxLocalSchemaEntries    uint64
+	MaxGlobalSchemaEntries   uint64
+
+	MaximumMinimumBalance uint64
 }
 
 // ConsensusProtocols defines a set of supported protocol versions and their
@@ -231,10 +256,38 @@ var Consensus ConsensusProtocols
 // consensus protocols, used for decoding purposes.
 var MaxVoteThreshold int
 
-func maybeMaxVoteThreshold(t uint64) {
-	if int(t) > MaxVoteThreshold {
-		MaxVoteThreshold = int(t)
+// MaxEvalDeltaAccounts is the largest number of accounts that may appear in
+// an eval delta, used for decoding purposes.
+var MaxEvalDeltaAccounts int
+
+// MaxStateDeltaKeys is the largest number of key/value pairs that may appear
+// in a StateDelta, used for decoding purposes.
+var MaxStateDeltaKeys int
+
+func checkSetMax(value int, curMax *int) {
+	if value > *curMax {
+		*curMax = value
 	}
+}
+
+// checkSetAllocBounds sets some global variables used during msgpack decoding
+// to enforce memory allocation limits. The values should be generous to
+// prevent correctness bugs, but not so large that DoS attacks are trivial
+func checkSetAllocBounds(p ConsensusParams) {
+	checkSetMax(int(p.SoftCommitteeThreshold), &MaxVoteThreshold)
+	checkSetMax(int(p.CertCommitteeThreshold), &MaxVoteThreshold)
+	checkSetMax(int(p.NextCommitteeThreshold), &MaxVoteThreshold)
+	checkSetMax(int(p.LateCommitteeThreshold), &MaxVoteThreshold)
+	checkSetMax(int(p.RedoCommitteeThreshold), &MaxVoteThreshold)
+	checkSetMax(int(p.DownCommitteeThreshold), &MaxVoteThreshold)
+
+	// These bounds could be tighter, but since these values are just to
+	// prevent DoS, setting them to be the maximum number of allowed
+	// executed TEAL instructions should be fine (order of ~1000)
+	checkSetMax(p.MaxApprovalProgramLen, &MaxStateDeltaKeys)
+	checkSetMax(p.MaxClearStateProgramLen, &MaxStateDeltaKeys)
+	checkSetMax(p.MaxApprovalProgramLen, &MaxEvalDeltaAccounts)
+	checkSetMax(p.MaxClearStateProgramLen, &MaxEvalDeltaAccounts)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -572,7 +625,57 @@ func initConsensusProtocols() {
 	// but not yet released in a production protocol version.
 	vFuture := v23
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	vFuture.LogicSigVersion = 2
+
+	// Enable application support
+	vFuture.Application = true
+
+	// Enable rekeying
 	vFuture.SupportRekeying = true
+
+	// 100.1 Algos (MinBalance for creating 1,000 assets)
+	vFuture.MaximumMinimumBalance = 100100000
+
+	vFuture.MaxAppArgs = 16
+	vFuture.MaxAppTotalArgLen = 2048
+	vFuture.MaxApprovalProgramLen = 1024
+	vFuture.MaxClearStateProgramLen = 1024
+	vFuture.MaxAppKeyLen = 64
+	vFuture.MaxAppBytesValueLen = 64
+
+	// 0.1 Algos (Same min balance cost as an Asset)
+	vFuture.AppFlatParamsMinBalance = 100000
+	vFuture.AppFlatOptInMinBalance = 100000
+
+	// Can look up Sender + 4 other balance records per Application txn
+	vFuture.MaxAppTxnAccounts = 4
+
+	// Can look up 2 other app creator balance records to see global state
+	vFuture.MaxAppTxnForeignApps = 2
+
+	// 64 byte keys @ ~333 microAlgos/byte + delta
+	vFuture.SchemaMinBalancePerEntry = 25000
+
+	// 9 bytes @ ~333 microAlgos/byte + delta
+	vFuture.SchemaUintMinBalance = 3500
+
+	// 64 byte values @ ~333 microAlgos/byte + delta
+	vFuture.SchemaBytesMinBalance = 25000
+
+	// Maximum number of key/value pairs per local key/value store
+	vFuture.MaxLocalSchemaEntries = 16
+
+	// Maximum number of key/value pairs per global key/value store
+	vFuture.MaxGlobalSchemaEntries = 64
+
+	// Maximum cost of ApprovalProgram/ClearStateProgram
+	vFuture.MaxAppProgramCost = 700
+
+	// Maximum number of apps a single account can create
+	vFuture.MaxAppsCreated = 10
+
+	// Maximum number of apps a single account can opt into
+	vFuture.MaxAppsOptedIn = 10
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
@@ -603,12 +706,8 @@ func init() {
 		Protocol.SmallLambda = time.Duration(algoSmallLambda) * time.Millisecond
 	}
 
+	// Set allocation limits
 	for _, p := range Consensus {
-		maybeMaxVoteThreshold(p.SoftCommitteeThreshold)
-		maybeMaxVoteThreshold(p.CertCommitteeThreshold)
-		maybeMaxVoteThreshold(p.NextCommitteeThreshold)
-		maybeMaxVoteThreshold(p.LateCommitteeThreshold)
-		maybeMaxVoteThreshold(p.RedoCommitteeThreshold)
-		maybeMaxVoteThreshold(p.DownCommitteeThreshold)
+		checkSetAllocBounds(p)
 	}
 }

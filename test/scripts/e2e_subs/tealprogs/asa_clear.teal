@@ -1,0 +1,9 @@
+byte base64 Ymw=
+byte base64 Ymw=
+app_global_get
+int 0
+byte base64 Ymw=
+app_local_get
++
+app_global_put
+int 1

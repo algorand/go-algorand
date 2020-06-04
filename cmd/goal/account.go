@@ -60,6 +60,7 @@ var (
 	partKeyDeleteInput bool
 	importDefault      bool
 	mnemonic           string
+	dumpOutFile        string
 )
 
 func init() {
@@ -87,6 +88,8 @@ func init() {
 	accountCmd.AddCommand(renewAllParticipationKeyCmd)
 
 	accountCmd.AddCommand(partkeyInfoCmd)
+
+	accountCmd.AddCommand(dumpCmd)
 
 	// Wallet to be used for the account operation
 	accountCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
@@ -191,6 +194,10 @@ func init() {
 	markNonparticipatingCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	markNonparticipatingCmd.Flags().MarkDeprecated("firstRound", "use --firstvalid instead")
 	markNonparticipatingCmd.Flags().MarkDeprecated("validRounds", "use --validrounds instead")
+
+	dumpCmd.Flags().StringVarP(&dumpOutFile, "outfile", "o", "", "Save balance record to specified output file")
+	dumpCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
+	balanceCmd.MarkFlagRequired("address")
 }
 
 func scLeaseBytes(cmd *cobra.Command) (leaseBytes [32]byte) {
@@ -528,6 +535,34 @@ var balanceCmd = &cobra.Command{
 		}
 
 		fmt.Printf("%v microAlgos\n", response.Amount)
+	},
+}
+
+var dumpCmd = &cobra.Command{
+	Use:   "dump",
+	Short: "Dump the balance record for the specified account",
+	Long:  `Dump the balance record for the specified account to terminal as JSON or to a file as MessagePack.`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		dataDir := ensureSingleDataDir()
+		client := ensureAlgodClient(dataDir)
+		rawAddress, err := basics.UnmarshalChecksumAddress(accountAddress)
+		if err != nil {
+			reportErrorf(errorParseAddr, err)
+		}
+		accountData, err := client.AccountData(accountAddress)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+
+		br := basics.BalanceRecord{Addr: rawAddress, AccountData: accountData}
+		if len(dumpOutFile) > 0 {
+			data := protocol.Encode(&br)
+			writeFile(dumpOutFile, data, 0644)
+		} else {
+			data := protocol.EncodeJSON(&br)
+			fmt.Println(string(data))
+		}
 	},
 }
 

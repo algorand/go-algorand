@@ -290,7 +290,7 @@ func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewa
 	return au.accountsq.lookup(addr)
 }
 
-func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) ([]basics.AssetLocator, error) {
+func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 
@@ -306,14 +306,14 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 	sort.Slice(keys, func(i, j int) bool { return keys[i] > keys[j] })
 
 	// Check for assets that haven't been synced to disk yet.
-	var unsyncedAssets []basics.AssetLocator
+	var unsyncedAssets []basics.CreatableLocator
 	deletedAssets := make(map[basics.AssetIndex]bool)
 	for _, aidx := range keys {
 		delta := au.assets[aidx]
 		if delta.created {
 			// Created asset that only exists in memory
-			unsyncedAssets = append(unsyncedAssets, basics.AssetLocator{
-				Index:   aidx,
+			unsyncedAssets = append(unsyncedAssets, basics.CreatableLocator{
+				Index:   basics.CreatableIndex(aidx),
 				Creator: delta.creator,
 			})
 		} else {
@@ -324,7 +324,7 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 
 	// Check in-memory created assets, which will always be newer than anything
 	// in the database
-	var res []basics.AssetLocator
+	var res []basics.CreatableLocator
 	for _, loc := range unsyncedAssets {
 		if uint64(len(res)) == maxResults {
 			return res, nil
@@ -348,7 +348,7 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 		}
 
 		// Asset was deleted
-		if _, ok := deletedAssets[loc.Index]; ok {
+		if _, ok := deletedAssets[basics.AssetIndex(loc.Index)]; ok {
 			continue
 		}
 
