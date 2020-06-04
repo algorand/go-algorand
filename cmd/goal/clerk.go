@@ -92,7 +92,7 @@ func init() {
 	sendCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Dump an unsigned tx to the given file. In order to dump a signed transaction, pass -s")
 	sendCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	sendCmd.Flags().StringVarP(&closeToAddress, "close-to", "c", "", "Close account and send remainder to this address")
-	sendCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
+	sendCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given authorization address. (Future transactions from this account will need to be signed with the new key.)")
 	sendCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	sendCmd.Flags().StringVarP(&programSource, "from-program", "F", "", "Program source to use as account logic")
 	sendCmd.Flags().StringVarP(&progByteFile, "from-program-bytes", "P", "", "Program binary to use as account logic")
@@ -213,12 +213,12 @@ func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletNa
 	return writeFile(filename, protocol.Encode(&stxn), 0600)
 }
 
-func getB64Args(args []string) [][]byte {
-	if len(args) == 0 {
+func getProgramArgs() [][]byte {
+	if len(argB64Strings) == 0 {
 		return nil
 	}
-	programArgs := make([][]byte, len(args))
-	for i, argstr := range args {
+	programArgs := make([][]byte, len(argB64Strings))
+	for i, argstr := range argB64Strings {
 		if argstr == "" {
 			programArgs[i] = []byte{}
 			continue
@@ -230,11 +230,6 @@ func getB64Args(args []string) [][]byte {
 		}
 	}
 	return programArgs
-
-}
-
-func getProgramArgs() [][]byte {
-	return getB64Args(argB64Strings)
 }
 
 func parseNoteField(cmd *cobra.Command) []byte {
@@ -788,14 +783,6 @@ var splitCmd = &cobra.Command{
 	},
 }
 
-func mustReadFile(fname string) []byte {
-	contents, err := readFile(fname)
-	if err != nil {
-		reportErrorf("%s: %s\n", fname, err)
-	}
-	return contents
-}
-
 func assembleFile(fname string) (program []byte) {
 	text, err := readFile(fname)
 	if err != nil {
@@ -944,10 +931,10 @@ var dryrunCmd = &cobra.Command{
 			sb := strings.Builder{}
 			ep = logic.EvalParams{
 				Txn:        &txn,
-				GroupIndex: i,
 				Proto:      &params,
 				Trace:      &sb,
 				TxnGroup:   txgroup,
+				GroupIndex: i,
 			}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			// TODO: optionally include `inspect` output here?
