@@ -85,7 +85,7 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 		fmt.Printf("Located Source Account: %s -> %v\n", cfg.SrcAccount, accounts[cfg.SrcAccount])
 	}
 
-	// Only reuse existing accounts for not asset testing.
+	// Only reuse existing accounts for non asset testing.
 	// For asset testing, new participant accounts will be created since accounts are limited to 1000 assets.
 	if cfg.NumAsset == 0 {
 
