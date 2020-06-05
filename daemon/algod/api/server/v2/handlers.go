@@ -67,12 +67,7 @@ func (v2 *Handlers) ShutdownNode(ctx echo.Context, params private.ShutdownNodePa
 
 // AccountInformation gets account information for a given account.
 // (GET /v2/accounts/{address})
-func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params generated.AccountInformationParams) error {
-	handle, contentType, err := getCodecHandle(params.Format)
-	if err != nil {
-		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
-	}
-
+func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 	addr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
 		return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
@@ -84,15 +79,6 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
-
-	if handle == protocol.CodecHandle {
-		data, err := encode(handle, record)
-		if err != nil {
-			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
-		}
-		return ctx.Blob(http.StatusOK, contentType, data)
-	}
-
 	recordWithoutPendingRewards, err := myLedger.LookupWithoutRewards(lastRound, basics.Address(addr))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
@@ -359,12 +345,6 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	// For backwards compatibility, return txid of first tx in group
 	txid := txgroup[0].ID()
 	return ctx.JSON(http.StatusOK, generated.PostTransactionsResponse{TxId: txid.String()})
-}
-
-// TransactionDryRun takes transactions and additional simulated ledger state and returns debugging information.
-// (POST /v2/transactions/dryrun)
-func (v2 *Handlers) TransactionDryRun(ctx echo.Context) error {
-	return errors.New("not implemented")
 }
 
 // TransactionParams returns the suggested parameters for constructing a new transaction.

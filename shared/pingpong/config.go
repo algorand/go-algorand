@@ -52,8 +52,6 @@ type PpConfig struct {
 	GroupSize       uint32
 	NumAsset        uint32
 	MinAccountAsset uint64
-	NumApp          uint32
-	AppProgOps      uint32
 }
 
 // DefaultConfig object for Ping Pong

@@ -19,23 +19,10 @@ type Account struct {
 	// specifies the amount of MicroAlgos in the account, without the pending rewards.
 	AmountWithoutPendingRewards uint64 `json:"amount-without-pending-rewards"`
 
-	// \[appl\] applications local data stored in this account.
-	//
-	// Note the raw object uses `map[int] -> AppLocalState` for this type.
-	AppsLocalState *[]ApplicationLocalStates `json:"apps-local-state,omitempty"`
-
-	// Specifies maximums on the number of each type that may be stored.
-	AppsTotalSchema *ApplicationStateSchema `json:"apps-total-schema,omitempty"`
-
 	// \[asset\] assets held by this account.
 	//
 	// Note the raw object uses `map[int] -> AssetHolding` for this type.
 	Assets *[]AssetHolding `json:"assets,omitempty"`
-
-	// \[appp\] parameters of applications created by this account including app global data.
-	//
-	// Note: the raw account uses `map[int] -> AppParams` for this type.
-	CreatedApps *[]Application `json:"created-apps,omitempty"`
 
 	// \[apar\] parameters of assets created by this account.
 	//
@@ -63,9 +50,6 @@ type Account struct {
 	// * lsig
 	SigType *string `json:"sig-type,omitempty"`
 
-	// The address against which signatures/multisigs/logicsigs should be checked
-	SpendingKey *string `json:"spending-key,omitempty"`
-
 	// \[onl\] delegation status of the account's MicroAlgos
 	// * Offline - indicates that the associated account is delegated.
 	// *  Online  - indicates that the associated account used as part of the delegation pool.
@@ -90,63 +74,6 @@ type AccountParticipation struct {
 
 	// \[vote\] root participation public key (if any) currently registered for this round.
 	VoteParticipationKey []byte `json:"vote-participation-key"`
-}
-
-// Application defines model for Application.
-type Application struct {
-
-	// \[appidx\] application index.
-	AppIndex uint64 `json:"app-index"`
-
-	// Stores the global information associated with an application.
-	AppParams ApplicationParams `json:"app-params"`
-}
-
-// ApplicationLocalState defines model for ApplicationLocalState.
-type ApplicationLocalState struct {
-
-	// Represents a key-value store for use in an application.
-	KeyValue TealKeyValueStore `json:"key-value"`
-
-	// Specifies maximums on the number of each type that may be stored.
-	Schema ApplicationStateSchema `json:"schema"`
-}
-
-// ApplicationLocalStates defines model for ApplicationLocalStates.
-type ApplicationLocalStates struct {
-	AppIndex uint64 `json:"app-index"`
-
-	// Stores local state associated with an application.
-	State ApplicationLocalState `json:"state"`
-}
-
-// ApplicationParams defines model for ApplicationParams.
-type ApplicationParams struct {
-
-	// \[approv\] approval program.
-	ApprovalProgram []byte `json:"approval-program"`
-
-	// \[clearp\] approval program.
-	ClearStateProgram []byte `json:"clear-state-program"`
-
-	// Represents a key-value store for use in an application.
-	GlobalState *TealKeyValueStore `json:"global-state,omitempty"`
-
-	// Specifies maximums on the number of each type that may be stored.
-	GlobalStateSchema *ApplicationStateSchema `json:"global-state-schema,omitempty"`
-
-	// Specifies maximums on the number of each type that may be stored.
-	LocalStateSchema *ApplicationStateSchema `json:"local-state-schema,omitempty"`
-}
-
-// ApplicationStateSchema defines model for ApplicationStateSchema.
-type ApplicationStateSchema struct {
-
-	// \[nbs\] num of byte slices.
-	NumByteSlice uint64 `json:"num-byte-slice"`
-
-	// \[nui\] num of uints.
-	NumUint uint64 `json:"num-uint"`
 }
 
 // Asset defines model for Asset.
@@ -224,30 +151,6 @@ type AssetParams struct {
 type ErrorResponse struct {
 	Data    *string `json:"data,omitempty"`
 	Message string  `json:"message"`
-}
-
-// TealKeyValue defines model for TealKeyValue.
-type TealKeyValue struct {
-	Key string `json:"key"`
-
-	// Represents a TEAL value.
-	Value TealValue `json:"value"`
-}
-
-// TealKeyValueStore defines model for TealKeyValueStore.
-type TealKeyValueStore []TealKeyValue
-
-// TealValue defines model for TealValue.
-type TealValue struct {
-
-	// \[tb\] bytes value.
-	Bytes string `json:"bytes"`
-
-	// \[tt\] value type.
-	Type uint64 `json:"type"`
-
-	// \[ui\] uint value.
-	Uint uint64 `json:"uint"`
 }
 
 // Version defines model for Version.
@@ -504,13 +407,6 @@ type TransactionParametersResponse struct {
 	MinFee uint64 `json:"min-fee"`
 }
 
-// AccountInformationParams defines parameters for AccountInformation.
-type AccountInformationParams struct {
-
-	// Configures whether the response object is JSON or MessagePack encoded.
-	Format *string `json:"format,omitempty"`
-}
-
 // GetPendingTransactionsByAddressParams defines parameters for GetPendingTransactionsByAddress.
 type GetPendingTransactionsByAddressParams struct {
 
@@ -528,9 +424,6 @@ type GetBlockParams struct {
 	Format *string `json:"format,omitempty"`
 }
 
-// TransactionDryRunJSONBody defines parameters for TransactionDryRun.
-type TransactionDryRunJSONBody string
-
 // GetPendingTransactionsParams defines parameters for GetPendingTransactions.
 type GetPendingTransactionsParams struct {
 
@@ -547,6 +440,3 @@ type PendingTransactionInformationParams struct {
 	// Configures whether the response object is JSON or MessagePack encoded.
 	Format *string `json:"format,omitempty"`
 }
-
-// TransactionDryRunRequestBody defines body for TransactionDryRun for application/json ContentType.
-type TransactionDryRunJSONRequestBody TransactionDryRunJSONBody

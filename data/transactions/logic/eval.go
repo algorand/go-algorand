@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -128,9 +128,6 @@ type EvalParams struct {
 
 	Ledger LedgerForLogic
 
-	// optional debugger
-	Debugger DebuggerHook
-
 	// determines eval mode: runModeSignature or runModeApplication
 	runModeFlags runMode
 }
@@ -213,9 +210,6 @@ type evalContext struct {
 	localStateCows       map[basics.Address]*indexedCow
 	readOnlyLocalStates  map[ckey]basics.TealKeyValue
 	appEvalDelta         basics.EvalDelta
-
-	// Stores state & disassembly for the optional debugger
-	debugState DebugState
 }
 
 // StackType describes the type of a value on the operand stack
@@ -332,13 +326,6 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 		}
 	}()
 
-	defer func() {
-		// Ensure we update the debugger before exiting
-		if cx.Debugger != nil {
-			cx.Debugger.Complete(cx.refreshDebugState())
-		}
-	}()
-
 	if (cx.EvalParams.Proto == nil) || (cx.EvalParams.Proto.LogicSigVersion == 0) {
 		err = errLogicSignNotSupported
 		return
@@ -380,16 +367,7 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
 
-	if cx.Debugger != nil {
-		cx.debugState = makeDebugState(cx)
-		cx.Debugger.Register(cx.refreshDebugState())
-	}
-
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
-		if cx.Debugger != nil {
-			cx.Debugger.Update(cx.refreshDebugState())
-		}
-
 		cx.step()
 		cx.stepCount++
 		if cx.stepCount > len(cx.program) {
