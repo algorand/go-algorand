@@ -1639,13 +1639,6 @@ func disAssetParams(dis *disassembleState, spec *OpSpec) {
 	_, dis.err = fmt.Fprintf(dis.out, "asset_params_get %s\n", AssetParamsFieldNames[arg])
 }
 
-// PCOffset stores the mapping from a program counter value to an offset in the
-// disassembly of the bytecode
-type PCOffset struct {
-	PC     int `json:"pc"`
-	Offset int `json:"offset"`
-}
-
 type disInfo struct {
 	pcOffset       []PCOffset
 	hasStatefulOps bool
