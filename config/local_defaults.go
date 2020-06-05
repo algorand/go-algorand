@@ -22,14 +22,85 @@ import (
 	"strconv"
 )
 
-//xxgo:generate $GOROOT/bin/go run ./defaults_gen/defaults_gen.go
+//go:generate $GOROOT/bin/go run ./defaults_gen/defaults_gen.go
+//go:generate $GOROOT/bin/go fmt local_defaults.go
 
 // The following defaultLocal is auto-generated. !! DO NOT EDIT !!
-var defaultLocalX = Local{}
+// if you want to make changes to this structure, make the changes to the Local structure in config.go and run "make generate" which would automatically
+// update this one.
+var defaultLocal = Local{
+	Version:                               7,
+	AnnounceParticipationKey:              true,
+	Archival:                              false,
+	BaseLoggerDebugLevel:                  4,
+	BroadcastConnectionsLimit:             -1,
+	CadaverSizeTarget:                     1073741824,
+	CatchpointFileHistoryLength:           365,
+	CatchpointInterval:                    10000,
+	CatchupFailurePeerRefreshRate:         10,
+	CatchupParallelBlocks:                 16,
+	ConnectionsRateLimitingCount:          60,
+	ConnectionsRateLimitingWindowSeconds:  1,
+	DNSBootstrapID:                        "<network>.algorand.network",
+	DNSSecurityFlags:                      1,
+	DeadlockDetection:                     0,
+	DisableOutgoingConnectionThrottling:   false,
+	EnableAgreementReporting:              false,
+	EnableAgreementTimeMetrics:            false,
+	EnableAssembleStats:                   false,
+	EnableBlockService:                    false,
+	EnableIncomingMessageFilter:           false,
+	EnableLedgerService:                   false,
+	EnableMetricReporting:                 false,
+	EnableOutgoingNetworkMessageFiltering: true,
+	EnablePingHandler:                     true,
+	EnableProcessBlockStats:               false,
+	EnableProfiler:                        false,
+	EnableRequestLogger:                   false,
+	EnableTopAccountsReporting:            false,
+	EndpointAddress:                       "127.0.0.1:0",
+	FallbackDNSResolverAddress:            "",
+	ForceRelayMessages:                    false,
+	GossipFanout:                          4,
+	IncomingConnectionsLimit:              10000,
+	IncomingMessageFilterBucketCount:      5,
+	IncomingMessageFilterBucketSize:       512,
+	IsIndexerActive:                       false,
+	LogArchiveMaxAge:                      "",
+	LogArchiveName:                        "node.archive.log",
+	LogSizeLimit:                          1073741824,
+	MaxConnectionsPerIP:                   30,
+	NetAddress:                            "",
+	NetworkProtocolVersion:                "",
+	NodeExporterListenAddress:             ":9100",
+	NodeExporterPath:                      "./node_exporter",
+	OutgoingMessageFilterBucketCount:      3,
+	OutgoingMessageFilterBucketSize:       128,
+	PeerConnectionsUpdateInterval:         3600,
+	PeerPingPeriodSeconds:                 0,
+	PriorityPeers:                         map[string]bool{},
+	PublicAddress:                         "",
+	ReconnectTime:                         60000000000,
+	ReservedFDs:                           256,
+	RestReadTimeoutSeconds:                15,
+	RestWriteTimeoutSeconds:               120,
+	RunHosted:                             false,
+	SuggestedFeeBlockHistory:              3,
+	SuggestedFeeSlidingWindowSize:         50,
+	TLSCertFile:                           "",
+	TLSKeyFile:                            "",
+	TelemetryToLog:                        true,
+	TxPoolExponentialIncreaseFactor:       2,
+	TxPoolSize:                            15000,
+	TxSyncIntervalSeconds:                 60,
+	TxSyncServeResponseSize:               1000000,
+	TxSyncTimeoutSeconds:                  30,
+	UseXForwardedForAddressField:          "",
+}
 
-var defaultLocal = getVersionedDefaultLocalConfig(getLatestConfigVersion())
-
-var AutoDefaultLocal = getVersionedDefaultLocalConfig(getLatestConfigVersion())
+// AutogenLocal - this variable is the "input" for the config default generator which automatically updates the above defaultLocal varaible.
+// it's implemented in ./config/defaults_gen.go, and should be the only "consumer" of this exported variable
+var AutogenLocal = getVersionedDefaultLocalConfig(getLatestConfigVersion())
 
 func migrate(cfg Local) (newCfg Local, err error) {
 	newCfg = cfg
