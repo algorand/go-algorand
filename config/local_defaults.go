@@ -29,7 +29,7 @@ import (
 // if you want to make changes to this structure, make the changes to the Local structure in config.go and run "make generate" which would automatically
 // update this one.
 var defaultLocal = Local{
-	Version:                               7,
+	Version:                               8,
 	AnnounceParticipationKey:              true,
 	Archival:                              false,
 	BaseLoggerDebugLevel:                  4,
@@ -49,6 +49,7 @@ var defaultLocal = Local{
 	EnableAgreementTimeMetrics:            false,
 	EnableAssembleStats:                   false,
 	EnableBlockService:                    false,
+	EnableGossipBlockService:              true,
 	EnableIncomingMessageFilter:           false,
 	EnableLedgerService:                   false,
 	EnableMetricReporting:                 false,

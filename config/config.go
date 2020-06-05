@@ -60,7 +60,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
@@ -301,6 +301,10 @@ type Local struct {
 	// EnableBlockService enables the block serving service. The functionality of this depends on NetAddress, which must also be provided.
 	// This functionality is required for the catchup.
 	EnableBlockService bool `version[7]:"false"`
+
+	// EnableGossipBlockService enables the block serving service over the gossip network. The functionality of this depends on NetAddress, which must also be provided.
+	// This functionality is required for the relays to perform catchup from nodes.
+	EnableGossipBlockService bool `version[8]:"true"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
