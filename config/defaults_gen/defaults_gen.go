@@ -29,6 +29,7 @@ import (
 
 const localDefaultsFileName = "./local_defaults.go"
 const exampleFileName = "../installer/config.json.example"
+const defaultLocalVariableDeclaration = "var defaultLocal"
 
 func main() {
 	localDefaultsBytes, err := ioutil.ReadFile(localDefaultsFileName)
@@ -38,14 +39,14 @@ func main() {
 	}
 
 	// find start location of localDefault
-	startIdx := bytes.Index(localDefaultsBytes, []byte("var defaultLocal"))
+	startIdx := bytes.Index(localDefaultsBytes, []byte(defaultLocalVariableDeclaration))
 	if startIdx == -1 {
-		fmt.Printf("Unable to find `var defaultLocalX` in local_defaults.go file.")
+		fmt.Printf("Unable to find `%s` in local_defaults.go file.", defaultLocalVariableDeclaration)
 		os.Exit(1)
 	}
 	endIdx := bytes.Index(localDefaultsBytes[startIdx:], []byte("\n\n"))
 	if startIdx == -1 {
-		fmt.Printf("Unable to find empty line after `var defaultLocalX` in local_defaults.go file.")
+		fmt.Printf("Unable to find empty line after `%s` in local_defaults.go file.", defaultLocalVariableDeclaration)
 		os.Exit(1)
 	}
 	endIdx += startIdx
@@ -95,7 +96,7 @@ func prettyPrint(c config.Local, format string) (out string) {
 	sort.Sort(byFieldName(fields))
 
 	if format == "go" {
-		out = "var defaultLocal = Local{\n"
+		out = fmt.Sprintf("%s = Local{\n", defaultLocalVariableDeclaration)
 	} else {
 		out = "{\n"
 	}
