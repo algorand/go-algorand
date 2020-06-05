@@ -153,7 +153,7 @@ func catchpointCmdArgument(cmd *cobra.Command, args []string) error {
 
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Inititialize the specified Algorand node.",
+	Short: "Initialize the specified Algorand node.",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		if !verifyPeerDialArg() {

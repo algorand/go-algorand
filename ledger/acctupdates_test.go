@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"database/sql"
 	"fmt"
 	"runtime"
 	"sync"
@@ -88,6 +89,36 @@ func (ml *mockLedgerForTracker) blockDB() dbPair {
 
 func (ml *mockLedgerForTracker) trackerLog() logging.Logger {
 	return ml.log
+}
+
+// this function used to be in acctupdates.go, but we were never using it for production purposes. This
+// function has a conceptual flaw in that it attempts to load the entire balances into memory. This might
+// not work if we have large number of balances. On these unit testing, however, it's not the case, and it's
+// safe to call it.
+func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address]basics.AccountData, err error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	offsetLimit, err := au.roundOffset(rnd)
+
+	if err != nil {
+		return
+	}
+
+	err = au.dbs.rdb.Atomic(func(tx *sql.Tx) error {
+		var err0 error
+		bals, err0 = accountsAll(tx)
+		return err0
+	})
+	if err != nil {
+		return
+	}
+
+	for offset := uint64(0); offset < offsetLimit; offset++ {
+		for addr, delta := range au.deltas[offset] {
+			bals[addr] = delta.new
+		}
+	}
+	return
 }
 
 func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, latestRnd basics.Round, accts []map[basics.Address]basics.AccountData, rewards []uint64, proto config.ConsensusParams) {
