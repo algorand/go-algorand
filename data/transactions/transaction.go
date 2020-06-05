@@ -370,12 +370,12 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is %d", proto.MaxAppTxnForeignApps)
 		}
 
-		if len(tx.ApprovalProgram) > proto.MaxApprovalProgramLen {
-			return fmt.Errorf("approval program too long. max len %d bytes", proto.MaxApprovalProgramLen)
+		if len(tx.ApprovalProgram) > proto.MaxAppProgramLen {
+			return fmt.Errorf("approval program too long. max len %d bytes", proto.MaxAppProgramLen)
 		}
 
-		if len(tx.ClearStateProgram) > proto.MaxClearStateProgramLen {
-			return fmt.Errorf("clear state program too long. max len %d bytes", proto.MaxClearStateProgramLen)
+		if len(tx.ClearStateProgram) > proto.MaxAppProgramLen {
+			return fmt.Errorf("clear state program too long. max len %d bytes", proto.MaxAppProgramLen)
 		}
 
 		if tx.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {
