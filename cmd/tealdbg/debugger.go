@@ -32,8 +32,8 @@ import (
 // Notification is sent to the client over their websocket connection
 // on each new TEAL execution/update/complation
 type Notification struct {
-	Event      string           `json:"event"`
-	DebugState logic.DebugState `json:"state"`
+	Event      string           `codec:"event"`
+	DebugState logic.DebugState `codec:"state"`
 }
 
 // DebugAdapter represents debugger frontend (i.e. CDT, webpage, VSCode, etc)

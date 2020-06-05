@@ -17,13 +17,13 @@
 package main
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 
 	"github.com/gorilla/mux"
 
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // RemoteHookAdapter provides HTTP transport for WebDebuggerHook
@@ -46,7 +46,7 @@ func (rha *RemoteHookAdapter) Setup(router *mux.Router) {
 }
 
 func (rha *RemoteHookAdapter) decodeState(body io.Reader) (state logic.DebugState, err error) {
-	dec := json.NewDecoder(body)
+	dec := protocol.NewJSONDecoder(body)
 	err = dec.Decode(&state)
 	return
 }

@@ -217,11 +217,11 @@ var homepage string = `
                     lineno.innerText = i;
                     lineno.innerText = lineno.innerText.padStart(4, '0');
 
-                    type.innerText = values[i].type == TealUintType ? "u": "b";
-                    if (values[i].type === TealUintType) {
-                        value.innerText = values[i].uint || 0;
+                    type.innerText = values[i].tt == TealUintType ? "u": "b";
+                    if (values[i].tt === TealUintType) {
+                        value.innerText = values[i].ui || 0;
                     } else {
-                        value.innerText = values[i].bytes || "";
+                        value.innerText = values[i].tb || "";
                     }
                 }
             }

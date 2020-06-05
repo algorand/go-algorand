@@ -205,6 +205,11 @@ func NewEncoder(w io.Writer) *codec.Encoder {
 	return codec.NewEncoder(w, CodecHandle)
 }
 
+// NewJSONEncoder returns an encoder object writing bytes into [w].
+func NewJSONEncoder(w io.Writer) *codec.Encoder {
+	return codec.NewEncoder(w, JSONHandle)
+}
+
 // NewDecoder returns a decoder object reading bytes from [r].
 func NewDecoder(r io.Reader) Decoder {
 	return codec.NewDecoder(r, CodecHandle)

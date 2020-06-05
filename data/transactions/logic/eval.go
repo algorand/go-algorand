@@ -382,12 +382,16 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 
 	if cx.Debugger != nil {
 		cx.debugState = makeDebugState(cx)
-		cx.Debugger.Register(cx.refreshDebugState())
+		if err = cx.Debugger.Register(cx.refreshDebugState()); err != nil {
+			return
+		}
 	}
 
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
 		if cx.Debugger != nil {
-			cx.Debugger.Update(cx.refreshDebugState())
+			if err = cx.Debugger.Update(cx.refreshDebugState()); err != nil {
+				return
+			}
 		}
 
 		cx.step()
