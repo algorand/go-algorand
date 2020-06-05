@@ -428,15 +428,39 @@ func TestLocal_DNSBootstrap(t *testing.T) {
 	}
 }
 
-var _ = fmt.Printf
-
 func TestLocalStructTags(t *testing.T) {
 	localType := reflect.TypeOf(Local{})
+
+	versionField, ok := localType.FieldByName("Version")
+	require.True(t, true, ok)
+	ver := 0
+	versionTags := make(map[string]bool)
+	for {
+		_, has := versionField.Tag.Lookup(fmt.Sprintf("version[%d]", ver))
+		if !has {
+			break
+		}
+		versionTags[fmt.Sprintf("version[%d]", ver)] = true
+		ver++
+	}
+
 	for fieldNum := 0; fieldNum < localType.NumField(); fieldNum++ {
 		field := localType.Field(fieldNum)
 		if field.Tag == "" {
 			require.Failf(t, "Field is missing versioning information", "Field Name: %s", field.Name)
 		}
+		if field.Name == "Version" {
+			continue
+		}
+		// check to see if we have at least a single version from the versions tags above.
+		foundTag := false
+		for ver := range versionTags {
+			if _, found := field.Tag.Lookup(ver); found {
+				foundTag = true
+				break
+			}
+		}
+		require.True(t, foundTag)
 	}
 }
 
@@ -445,4 +469,23 @@ func TestGetVersionedDefaultLocalConfig(t *testing.T) {
 		localVersion := getVersionedDefaultLocalConfig(i)
 		require.Equal(t, uint32(i), localVersion.Version)
 	}
+}
+
+// TestLocalVersionField - ensures the Version contains only versions tags, the versions are all contiguous, and that no non-version tags are included there.
+func TestLocalVersionField(t *testing.T) {
+	localType := reflect.TypeOf(Local{})
+	field, ok := localType.FieldByName("Version")
+	require.True(t, true, ok)
+	ver := 0
+	expectedTag := ""
+	for {
+		val, has := field.Tag.Lookup(fmt.Sprintf("version[%d]", ver))
+		if !has {
+			break
+		}
+		expectedTag = fmt.Sprintf("%sversion[%d]:\"%s\" ", expectedTag, ver, val)
+		ver++
+	}
+	expectedTag = expectedTag[:len(expectedTag)-1]
+	require.Equal(t, expectedTag, string(field.Tag))
 }

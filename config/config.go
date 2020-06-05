@@ -53,13 +53,13 @@ const GenesisJSONFile = "genesis.json"
 //
 // New fields may be added to the Local struct, along with a version tag
 // denoting a new version. When doing so, also update the
-// installer/config.json.example and test/testdata/configs/config-v{n}.json
+// test/testdata/configs/config-v{n}.json and call "make generate" to regenerate the constants.
 //
 // !!! WARNING !!!
 type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
-	// for an existing parameter.
+	// for an existing parameter. This field tag must be updated any time we add a new version.
 	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7"`
 
 	// environmental (may be overridden)
