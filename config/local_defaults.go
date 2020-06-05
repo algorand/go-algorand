@@ -22,7 +22,14 @@ import (
 	"strconv"
 )
 
+//xxgo:generate $GOROOT/bin/go run ./defaults_gen/defaults_gen.go
+
+// The following defaultLocal is auto-generated. !! DO NOT EDIT !!
+var defaultLocalX = Local{}
+
 var defaultLocal = getVersionedDefaultLocalConfig(getLatestConfigVersion())
+
+var AutoDefaultLocal = getVersionedDefaultLocalConfig(getLatestConfigVersion())
 
 func migrate(cfg Local) (newCfg Local, err error) {
 	newCfg = cfg
