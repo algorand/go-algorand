@@ -156,6 +156,10 @@ func prettyPrint(c config.Local, format string) (out string) {
 			panic(fmt.Sprintf("unsupported data type (%s) encountered when reflecting on config.Local datatype %s", field.Type.Kind(), field.Name))
 		}
 	}
-	out = out + "}"
+	if format == "go" {
+		out = out + "}"
+	} else {
+		out = out + "}\n"
+	}
 	return
 }
