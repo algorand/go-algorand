@@ -21,17 +21,16 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // DebuggerHook functions are called by eval function during TEAL program execution
@@ -53,28 +52,28 @@ type WebDebuggerHook struct {
 // PCOffset stores the mapping from a program counter value to an offset in the
 // disassembly of the bytecode
 type PCOffset struct {
-	PC     int `json:"pc"`
-	Offset int `json:"offset"`
+	PC     int `codec:"pc"`
+	Offset int `codec:"offset"`
 }
 
 // DebugState is a representation of the evaluation context that we encode
 // to json and send to tealdbg
 type DebugState struct {
 	// fields set once on Register
-	ExecID      string                   `json:"execid"`
-	Disassembly string                   `json:"disasm"`
-	PCOffset    []PCOffset               `json:"pctooffset"`
-	TxnGroup    []transactions.SignedTxn `json:"txngroup"`
-	GroupIndex  int                      `json:"gindex"`
-	Proto       *config.ConsensusParams  `json:"proto"`
-	Globals     []v2.TealValue           `json:"globals"`
+	ExecID      string                   `codec:"execid"`
+	Disassembly string                   `codec:"disasm"`
+	PCOffset    []PCOffset               `codec:"pctooffset"`
+	TxnGroup    []transactions.SignedTxn `codec:"txngroup"`
+	GroupIndex  int                      `codec:"gindex"`
+	Proto       *config.ConsensusParams  `codec:"proto"`
+	Globals     []basics.TealValue       `codec:"globals"`
 
 	// fields updated every step
-	PC      int            `json:"pc"`
-	Line    int            `json:"line"`
-	Stack   []v2.TealValue `json:"stack"`
-	Scratch []v2.TealValue `json:"scratch"`
-	Error   string         `json:"error"`
+	PC      int                `codec:"pc"`
+	Line    int                `codec:"line"`
+	Stack   []basics.TealValue `codec:"stack"`
+	Scratch []basics.TealValue `codec:"scratch"`
+	Error   string             `codec:"error"`
 
 	// global/local state changes are updated every step. Stateful TEAL only.
 	AppStateChage
@@ -82,8 +81,8 @@ type DebugState struct {
 
 // AppStateChage encapsulates global and local app state changes
 type AppStateChage struct {
-	GlobalStateChanges basics.StateDelta                    `json:"gsch"`
-	LocalStateChanges  map[basics.Address]basics.StateDelta `json:"lsch"`
+	GlobalStateChanges basics.StateDelta                    `codec:"gsch"`
+	LocalStateChanges  map[basics.Address]basics.StateDelta `codec:"lsch"`
 }
 
 func makeDebugState(cx *evalContext) DebugState {
@@ -104,13 +103,13 @@ func makeDebugState(cx *evalContext) DebugState {
 		Proto:       cx.Proto,
 	}
 
-	globals := make([]v2.TealValue, len(GlobalFieldNames))
+	globals := make([]basics.TealValue, len(GlobalFieldNames))
 	for fieldIdx := range GlobalFieldNames {
 		sv, err := cx.globalFieldToStack(GlobalField(fieldIdx))
 		if err != nil {
 			sv = stackValue{Bytes: []byte(err.Error())}
 		}
-		globals[fieldIdx] = stackValueToV2TealValue(&sv)
+		globals[fieldIdx] = stackValueToTealValue(&sv)
 	}
 	ds.Globals = globals
 
@@ -177,10 +176,10 @@ func (d *DebugState) PCToLine(pc int) int {
 	return len(strings.Split(d.Disassembly[:offset], "\n")) - one
 }
 
-func stackValueToV2TealValue(sv *stackValue) v2.TealValue {
+func stackValueToTealValue(sv *stackValue) basics.TealValue {
 	tv := sv.toTealValue()
-	return v2.TealValue{
-		Type:  uint64(tv.Type),
+	return basics.TealValue{
+		Type:  tv.Type,
 		Bytes: base64.StdEncoding.EncodeToString([]byte(tv.Bytes)),
 		Uint:  tv.Uint,
 	}
@@ -196,14 +195,14 @@ func (cx *evalContext) refreshDebugState() *DebugState {
 		ds.Error = cx.err.Error()
 	}
 
-	stack := make([]v2.TealValue, len(cx.stack), len(cx.stack))
+	stack := make([]basics.TealValue, len(cx.stack), len(cx.stack))
 	for i, sv := range cx.stack {
-		stack[i] = stackValueToV2TealValue(&sv)
+		stack[i] = stackValueToTealValue(&sv)
 	}
 
-	scratch := make([]v2.TealValue, len(cx.scratch), len(cx.scratch))
+	scratch := make([]basics.TealValue, len(cx.scratch), len(cx.scratch))
 	for i, sv := range cx.scratch {
-		scratch[i] = stackValueToV2TealValue(&sv)
+		scratch[i] = stackValueToTealValue(&sv)
 	}
 
 	ds.Stack = stack
@@ -228,19 +227,23 @@ func (cx *evalContext) refreshDebugState() *DebugState {
 }
 
 func (dbg *WebDebuggerHook) postState(state *DebugState, endpoint string) error {
-	enc, err := json.Marshal(state)
+	var body bytes.Buffer
+	enc := protocol.NewJSONEncoder(&body)
+	err := enc.Encode(state)
 	if err != nil {
 		return err
 	}
 
-	body := bytes.NewBuffer(enc)
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/%s", dbg.URL, endpoint), body)
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/%s", dbg.URL, endpoint), &body)
 	if err != nil {
 		return err
 	}
 
 	httpClient := &http.Client{}
-	_, err = httpClient.Do(req)
+	r, err := httpClient.Do(req)
+	if err == nil && r.StatusCode != 200 {
+		err = fmt.Errorf("bad response: %d", r.StatusCode)
+	}
 	return err
 }
 

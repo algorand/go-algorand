@@ -27,7 +27,6 @@ import (
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -39,12 +38,12 @@ type cdtState struct {
 	proto       *config.ConsensusParams
 	txnGroup    []transactions.SignedTxn
 	groupIndex  int
-	globals     []v2.TealValue
+	globals     []basics.TealValue
 
 	// mutable program state
 	mu      deadlock.Mutex
-	stack   []v2.TealValue
-	scratch []v2.TealValue
+	stack   []basics.TealValue
+	scratch []basics.TealValue
 	pc      atomicInt
 	line    atomicInt
 	err     atomicString
@@ -58,8 +57,8 @@ type cdtState struct {
 }
 
 type cdtStateUpdate struct {
-	stack   []v2.TealValue
-	scratch []v2.TealValue
+	stack   []basics.TealValue
+	scratch []basics.TealValue
 	pc      int
 	line    int
 	err     string
@@ -67,7 +66,7 @@ type cdtStateUpdate struct {
 	appState
 }
 
-func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int, globals []v2.TealValue) {
+func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int, globals []basics.TealValue) {
 	s.disassembly = disassembly
 	s.proto = proto
 	s.txnGroup = txnGroup
@@ -211,7 +210,7 @@ func (s *cdtState) packRanges(objID string, argsRaw []interface{}) (result Runti
 }
 
 func (s *cdtState) buildFragment(objID string, argsRaw []interface{}) RuntimeRemoteObject {
-	var source []v2.TealValue
+	var source []basics.TealValue
 	switch objID {
 	case stackObjID:
 		source = s.stack
@@ -313,7 +312,7 @@ type fieldDesc struct {
 	Type  string
 }
 
-func prepareGlobals(globals []v2.TealValue) []fieldDesc {
+func prepareGlobals(globals []basics.TealValue) []fieldDesc {
 	result := make([]fieldDesc, 0, len(logic.GlobalFieldNames))
 	if len(globals) != len(logic.GlobalFieldNames) {
 		desc := fieldDesc{
@@ -354,10 +353,10 @@ func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
 	return result
 }
 
-func tealValueToFieldDesc(name string, tv v2.TealValue) fieldDesc {
+func tealValueToFieldDesc(name string, tv basics.TealValue) fieldDesc {
 	var value string
 	var valType string
-	if tv.Type == uint64(basics.TealBytesType) {
+	if tv.Type == basics.TealBytesType {
 		valType = "string"
 		data, err := base64.StdEncoding.DecodeString(tv.Bytes)
 		if err != nil {
@@ -382,7 +381,7 @@ func tealValueToFieldDesc(name string, tv v2.TealValue) fieldDesc {
 	return fieldDesc{name, value, valType}
 }
 
-func prepareArray(array []v2.TealValue) []fieldDesc {
+func prepareArray(array []basics.TealValue) []fieldDesc {
 	result := make([]fieldDesc, 0, len(logic.TxnFieldNames))
 	for i := 0; i < len(array); i++ {
 		tv := array[i]
@@ -440,7 +439,7 @@ func makeGtxnPreview(txnGroup []transactions.SignedTxn) RuntimeObjectPreview {
 
 const maxArrayPreviewLength = 20
 
-func makeArrayPreview(array []v2.TealValue) RuntimeObjectPreview {
+func makeArrayPreview(array []basics.TealValue) RuntimeObjectPreview {
 	fields := prepareArray(array)
 
 	length := len(fields)
@@ -458,7 +457,7 @@ func makeArrayPreview(array []v2.TealValue) RuntimeObjectPreview {
 	return p
 }
 
-func makeGlobalsPreview(globals []v2.TealValue) RuntimeObjectPreview {
+func makeGlobalsPreview(globals []basics.TealValue) RuntimeObjectPreview {
 	fields := prepareGlobals(globals)
 	prop := makePreview(fields)
 
@@ -730,13 +729,13 @@ func makeAppLocalsKV(s *cdtState, addr string, appID uint64) (desc []RuntimeProp
 
 func tkvToRpd(tkv basics.TealKeyValue) (desc []RuntimePropertyDescriptor) {
 	for key, value := range tkv {
-		field := tealValueToFieldDesc(key, v2.TealValue{Type: uint64(value.Type), Uint: value.Uint, Bytes: value.Bytes})
+		field := tealValueToFieldDesc(key, basics.TealValue{Type: value.Type, Uint: value.Uint, Bytes: value.Bytes})
 		desc = append(desc, makePrimitive(field))
 	}
 	return
 }
 
-func makeArrayLength(array []v2.TealValue) (desc []RuntimePropertyDescriptor) {
+func makeArrayLength(array []basics.TealValue) (desc []RuntimePropertyDescriptor) {
 	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(array)), Type: "number"}
 	desc = append(desc, makePrimitive(field))
 	return
