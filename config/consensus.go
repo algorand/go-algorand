@@ -221,26 +221,75 @@ type ConsensusParams struct {
 	// application support
 	Application bool
 
-	MaxAppArgs              int
-	MaxAppTotalArgLen       int
-	MaxApprovalProgramLen   int
-	MaxClearStateProgramLen int
-	MaxAppTxnAccounts       int
-	MaxAppTxnForeignApps    int
-	MaxAppProgramCost       int
-	MaxAppKeyLen            int
-	MaxAppBytesValueLen     int
-	MaxAppsCreated          int
-	MaxAppsOptedIn          int
+	// max number of ApplicationArgs for an ApplicationCall transaction
+	MaxAppArgs int
 
-	AppFlatParamsMinBalance  uint64
-	AppFlatOptInMinBalance   uint64
+	// max sum([len(arg) for arg in txn.ApplicationArgs])
+	MaxAppTotalArgLen int
+
+	// maximum length of application approval program or clear state
+	// program in bytes
+	MaxAppProgramLen int
+
+	// maximum number of accounts in the ApplicationCall Accounts field.
+	// this determines, in part, the maximum number of balance records
+	// accessed by a single transaction
+	MaxAppTxnAccounts int
+
+	// maximum number of app ids in the ApplicationCall ForeignApps field.
+	// these are the only applications besides the called application for
+	// which global state may be read in the transaction
+	MaxAppTxnForeignApps int
+
+	// maximum cost of application approval program or clear state program
+	MaxAppProgramCost int
+
+	// maximum length of a key used in an application's global or local
+	// key/value store
+	MaxAppKeyLen int
+
+	// maximum length of a bytes value used in an application's global or
+	// local key/value store
+	MaxAppBytesValueLen int
+
+	// maximum number of applications a single account can create and store
+	// AppParams for at once
+	MaxAppsCreated int
+
+	// maximum number of applications a single account can opt in to and
+	// store AppLocalState for at once
+	MaxAppsOptedIn int
+
+	// flat MinBalance requirement for creating a single application and
+	// storing its AppParams
+	AppFlatParamsMinBalance uint64
+
+	// flat MinBalance requirement for opting in to a single application
+	// and storing its AppLocalState
+	AppFlatOptInMinBalance uint64
+
+	// MinBalance requirement per key/value entry in LocalState or
+	// GlobalState key/value stores, regardless of value type
 	SchemaMinBalancePerEntry uint64
-	SchemaUintMinBalance     uint64
-	SchemaBytesMinBalance    uint64
-	MaxLocalSchemaEntries    uint64
-	MaxGlobalSchemaEntries   uint64
 
+	// MinBalance requirement (in addition to SchemaMinBalancePerEntry) for
+	// integer values stored in LocalState or GlobalState key/value stores
+	SchemaUintMinBalance uint64
+
+	// MinBalance requirement (in addition to SchemaMinBalancePerEntry) for
+	// []byte values stored in LocalState or GlobalState key/value stores
+	SchemaBytesMinBalance uint64
+
+	// maximum number of total key/value pairs allowed by a given
+	// LocalStateSchema (and therefore allowed in LocalState)
+	MaxLocalSchemaEntries uint64
+
+	// maximum number of total key/value pairs allowed by a given
+	// GlobalStateSchema (and therefore allowed in GlobalState)
+	MaxGlobalSchemaEntries uint64
+
+	// maximum total minimum balance requirement for an account, used
+	// to limit the maximum size of a single balance record
 	MaximumMinimumBalance uint64
 }
 
@@ -284,10 +333,8 @@ func checkSetAllocBounds(p ConsensusParams) {
 	// These bounds could be tighter, but since these values are just to
 	// prevent DoS, setting them to be the maximum number of allowed
 	// executed TEAL instructions should be fine (order of ~1000)
-	checkSetMax(p.MaxApprovalProgramLen, &MaxStateDeltaKeys)
-	checkSetMax(p.MaxClearStateProgramLen, &MaxStateDeltaKeys)
-	checkSetMax(p.MaxApprovalProgramLen, &MaxEvalDeltaAccounts)
-	checkSetMax(p.MaxClearStateProgramLen, &MaxEvalDeltaAccounts)
+	checkSetMax(p.MaxAppProgramLen, &MaxStateDeltaKeys)
+	checkSetMax(p.MaxAppProgramLen, &MaxEvalDeltaAccounts)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -638,8 +685,7 @@ func initConsensusProtocols() {
 
 	vFuture.MaxAppArgs = 16
 	vFuture.MaxAppTotalArgLen = 2048
-	vFuture.MaxApprovalProgramLen = 1024
-	vFuture.MaxClearStateProgramLen = 1024
+	vFuture.MaxAppProgramLen = 1024
 	vFuture.MaxAppKeyLen = 64
 	vFuture.MaxAppBytesValueLen = 64
 
