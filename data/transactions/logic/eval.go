@@ -335,7 +335,10 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	defer func() {
 		// Ensure we update the debugger before exiting
 		if cx.Debugger != nil {
-			cx.Debugger.Complete(cx.refreshDebugState())
+			errDbg := cx.Debugger.Complete(cx.refreshDebugState())
+			if err == nil {
+				err = errDbg
+			}
 		}
 	}()
 
