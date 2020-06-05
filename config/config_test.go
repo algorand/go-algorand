@@ -434,13 +434,13 @@ func TestLocalStructTags(t *testing.T) {
 	versionField, ok := localType.FieldByName("Version")
 	require.True(t, true, ok)
 	ver := 0
-	versionTags := make(map[string]bool)
+	versionTags := []string{}
 	for {
 		_, has := versionField.Tag.Lookup(fmt.Sprintf("version[%d]", ver))
 		if !has {
 			break
 		}
-		versionTags[fmt.Sprintf("version[%d]", ver)] = true
+		versionTags = append(versionTags, fmt.Sprintf("version[%d]", ver))
 		ver++
 	}
 
@@ -454,13 +454,16 @@ func TestLocalStructTags(t *testing.T) {
 		}
 		// check to see if we have at least a single version from the versions tags above.
 		foundTag := false
-		for ver := range versionTags {
-			if _, found := field.Tag.Lookup(ver); found {
+		expectedTag := ""
+		for _, ver := range versionTags {
+			if val, found := field.Tag.Lookup(ver); found {
 				foundTag = true
-				break
+				expectedTag = expectedTag + ver + ":\"" + val + "\" "
 			}
 		}
 		require.True(t, foundTag)
+		expectedTag = expectedTag[:len(expectedTag)-1]
+		require.Equal(t, expectedTag, string(field.Tag))
 	}
 }
 
