@@ -100,7 +100,7 @@ func prettyPrint(c config.Local, format string) (out string) {
 		out = "{\n"
 	}
 
-	for _, field := range fields {
+	for fieldIdx, field := range fields {
 		switch field.Type.Kind() {
 		case reflect.Bool:
 			v := reflect.ValueOf(&c).Elem().FieldByName(field.Name).Bool()
@@ -154,6 +154,11 @@ func prettyPrint(c config.Local, format string) (out string) {
 			}
 		default:
 			panic(fmt.Sprintf("unsupported data type (%s) encountered when reflecting on config.Local datatype %s", field.Type.Kind(), field.Name))
+		}
+		if format != "go" {
+			if fieldIdx == len(fields)-1 {
+				out = out[:len(out)-2] + "\n"
+			}
 		}
 	}
 	if format == "go" {
