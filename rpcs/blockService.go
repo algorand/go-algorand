@@ -50,12 +50,13 @@ const BlockServiceBlockPath = "/v{version:[0-9.]+}/{genesisID}/block/{round:[0-9
 
 // BlockService represents the Block RPC API
 type BlockService struct {
-	ledger        *data.Ledger
-	genesisID     string
-	catchupReqs   chan network.IncomingMessage
-	stop          chan struct{}
-	net           network.GossipNode
-	enableService bool
+	ledger                  *data.Ledger
+	genesisID               string
+	catchupReqs             chan network.IncomingMessage
+	stop                    chan struct{}
+	net                     network.GossipNode
+	enableService           bool
+	enableServiceOverGossip bool
 }
 
 // EncodedBlockCert defines how GetBlockBytes encodes a block and its certificate
@@ -77,11 +78,12 @@ type PreEncodedBlockCert struct {
 // MakeBlockService creates a BlockService around the provider Ledger and registers it for HTTP callback on the block serving path
 func MakeBlockService(config config.Local, ledger *data.Ledger, net network.GossipNode, genesisID string) *BlockService {
 	service := &BlockService{
-		ledger:        ledger,
-		genesisID:     genesisID,
-		catchupReqs:   make(chan network.IncomingMessage, config.CatchupParallelBlocks*blockServerCatchupRequestBufferSize),
-		net:           net,
-		enableService: config.EnableBlockService,
+		ledger:                  ledger,
+		genesisID:               genesisID,
+		catchupReqs:             make(chan network.IncomingMessage, config.CatchupParallelBlocks*blockServerCatchupRequestBufferSize),
+		net:                     net,
+		enableService:           config.EnableBlockService,
+		enableServiceOverGossip: config.EnableGossipBlockService,
 	}
 	if service.enableService {
 		net.RegisterHTTPHandler(BlockServiceBlockPath, service)
@@ -91,7 +93,7 @@ func MakeBlockService(config config.Local, ledger *data.Ledger, net network.Goss
 
 // Start listening to catchup requests over ws
 func (bs *BlockService) Start() {
-	if bs.enableService {
+	if bs.enableServiceOverGossip {
 		handlers := []network.TaggedMessageHandler{
 			{Tag: protocol.UniCatchupReqTag, MessageHandler: network.HandlerFunc(bs.processIncomingMessage)},
 			{Tag: protocol.UniEnsBlockReqTag, MessageHandler: network.HandlerFunc(bs.processIncomingMessage)},
