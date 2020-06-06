@@ -290,33 +290,6 @@ func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewa
 	return au.accountsq.lookup(addr)
 }
 
-func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address]basics.AccountData, err error) {
-	au.accountsMu.RLock()
-
-	offsetLimit, err := au.roundOffset(rnd)
-	au.accountsMu.RUnlock()
-	if err != nil {
-		return
-	}
-
-	err = au.dbs.rdb.Atomic(func(tx *sql.Tx) error {
-		var err0 error
-		bals, err0 = accountsAll(tx)
-		return err0
-	})
-	if err != nil {
-		return
-	}
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-	for offset := uint64(0); offset < offsetLimit; offset++ {
-		for addr, delta := range au.deltas[offset] {
-			bals[addr] = delta.new
-		}
-	}
-	return
-}
-
 func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) ([]basics.AssetLocator, error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()

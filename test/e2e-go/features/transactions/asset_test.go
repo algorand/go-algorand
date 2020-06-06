@@ -792,13 +792,13 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.Error(err)
-	a.True(strings.Contains(err.Error(), "underflow on subtracting 11 from sender amount"))
+	a.True(strings.Contains(err.Error(), "underflow on subtracting 11 from sender amount 10"))
 
 	// Should not be able to clawback more than is available
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, account0, "", extra)
 	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
 	a.Error(err)
-	a.True(strings.Contains(err.Error(), "underflow on subtracting 11 from sender amount"))
+	a.True(strings.Contains(err.Error(), "underflow on subtracting 11 from sender amount 10"))
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 10, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
