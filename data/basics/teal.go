@@ -84,7 +84,14 @@ func (sd StateDelta) Equal(o StateDelta) bool {
 	}
 	// All keys and deltas should be the same
 	for k, v := range sd {
-		if o[k] != v {
+		// Other StateDelta must contain key
+		ov, ok := o[k]
+		if !ok {
+			return false
+		}
+
+		// Other StateDelta must have same value for key
+		if ov != v {
 			return false
 		}
 	}
@@ -142,6 +149,13 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 
 	// All keys and local StateDeltas should be the same
 	for k, v := range ed.LocalDeltas {
+		// Other LocalDelta must have value for key
+		ov, ok := o.LocalDeltas[k]
+		if !ok {
+			return false
+		}
+
+		// Other LocalDelta must have same value for key
 		if !o.LocalDeltas[k].Equal(v) {
 			return false
 		}
