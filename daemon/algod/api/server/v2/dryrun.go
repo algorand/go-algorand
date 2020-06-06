@@ -119,7 +119,7 @@ func (ddr *dryrunDebugReceiver) updateScratch() {
 	lasti := len(ddr.history) - 1
 
 	for i, sv := range ddr.history[lasti].Scratch {
-		if sv.Type != uint64(basics.TealUintType) || sv.Uint != 0 {
+		if sv.Type != basics.TealUintType || sv.Uint != 0 {
 			any = true
 			maxActive = i
 		}
@@ -130,7 +130,7 @@ func (ddr *dryrunDebugReceiver) updateScratch() {
 		}
 		for i := len(ddr.scratchActive); i <= maxActive; i++ {
 			sv := ddr.history[lasti].Scratch[i]
-			active := sv.Type != uint64(basics.TealUintType) || sv.Uint != 0
+			active := sv.Type != basics.TealUintType || sv.Uint != 0
 			ddr.scratchActive = append(ddr.scratchActive, active)
 		}
 	} else {
