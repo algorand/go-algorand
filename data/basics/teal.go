@@ -156,7 +156,7 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 		}
 
 		// Other LocalDelta must have same value for key
-		if !o.LocalDeltas[k].Equal(v) {
+		if !ov.Equal(v) {
 			return false
 		}
 	}
