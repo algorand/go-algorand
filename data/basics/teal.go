@@ -113,7 +113,7 @@ func (sd StateDelta) Valid(proto *config.ConsensusParams) error {
 		case SetUintAction:
 		case DeleteAction:
 		default:
-			return fmt.Errorf("unknown delta action")
+			return fmt.Errorf("unknown delta action: %v", delta.Action)
 		}
 	}
 	return nil
