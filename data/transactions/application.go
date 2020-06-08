@@ -22,6 +22,26 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
+const (
+	// encodedMaxApplicationArgs sets the allocation bound for the maximum
+	// number of ApplicationArgs that a transaction decoded off of the wire
+	// can contain. Its value is verified against consensus parameters in
+	// TestEncodedAppTxnAllocationBounds
+	encodedMaxApplicationArgs = 16
+
+	// encodedMaxAccounts sets the allocation bound for the maximum number
+	// of Accounts that a transaction decoded off of the wire can contain.
+	// Its value is verified against consensus parameters in
+	// TestEncodedAppTxnAllocationBounds
+	encodedMaxAccounts = 4
+
+	// encodedMaxForeignApps sets the allocation bound for the maximum
+	// number of ForeignApps that a transaction decoded off of the wire can
+	// contain. Its value is verified against consensus parameters in
+	// TestEncodedAppTxnAllocationBounds
+	encodedMaxForeignApps = 2
+)
+
 // OnCompletion is an enum representing some layer 1 side effect that an
 // ApplicationCall transaction will have if it is included in a block.
 type OnCompletion uint64
@@ -79,9 +99,9 @@ type ApplicationCallTxnFields struct {
 
 	ApplicationID   basics.AppIndex   `codec:"apid"`
 	OnCompletion    OnCompletion      `codec:"apan"`
-	ApplicationArgs [][]byte          `codec:"apaa,allocbound=256"`
-	Accounts        []basics.Address  `codec:"apat,allocbound=256"`
-	ForeignApps     []basics.AppIndex `codec:"apfa,allocbound=256"`
+	ApplicationArgs [][]byte          `codec:"apaa,allocbound=encodedMaxApplicationArgs"`
+	Accounts        []basics.Address  `codec:"apat,allocbound=encodedMaxAccounts"`
+	ForeignApps     []basics.AppIndex `codec:"apfa,allocbound=encodedMaxForeignApps"`
 
 	LocalStateSchema  basics.StateSchema `codec:"apls"`
 	GlobalStateSchema basics.StateSchema `codec:"apgs"`
