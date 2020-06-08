@@ -1,8 +1,8 @@
-GOPATH		:= $(shell go env GOPATH)
+export GOPATH		:= $(shell go env GOPATH)
 GOPATH1		:= $(firstword $(subst :, ,$(GOPATH)))
-export GOPATH
-GO111MODULE	:= on
-export GO111MODULE
+export GO111MODULE	:= on
+export GOPROXY := https://gocenter.io
+
 UNAME		:= $(shell uname)
 SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)
@@ -52,7 +52,7 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 UNIT_TEST_SOURCES := $(sort $(shell GO111MODULE=off go list ./... | grep -v /go-algorand/test/ ))
 ALGOD_API_PACKAGES := $(sort $(shell GO111MODULE=off cd daemon/algod/api; go list ./... ))
 
-MSGP_GENERATE	:= ./protocol ./crypto ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./auction ./agreement ./rpcs ./node
+MSGP_GENERATE	:= ./protocol ./crypto ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./auction ./agreement ./rpcs ./node ./ledger
 
 default: build
 
@@ -60,6 +60,7 @@ default: build
 
 fmt:
 	go fmt ./...
+	./scripts/check_license.sh -i
 
 fix: build
 	$(GOPATH1)/bin/algofix */
@@ -73,13 +74,10 @@ lint: deps
 vet:
 	go vet ./...
 
-check_license:
-	./scripts/check_license.sh
-
 check_shell:
 	find . -type f -name "*.sh" -exec shellcheck {} +
 
-sanity: vet fix lint fmt check_license
+sanity: vet fix lint fmt
 
 cover:
 	go test $(GOTAGS) -coverprofile=cover.out $(UNIT_TEST_SOURCES)
@@ -276,14 +274,8 @@ dump: $(addprefix gen/,$(addsuffix /genesis.dump, $(NETWORKS)))
 install: build
 	scripts/dev_install.sh -p $(GOPATH1)/bin
 
-.PHONY: default fmt vet lint check_license check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN
+.PHONY: default fmt vet lint check_shell sanity cover prof deps build test fulltest shorttest clean cleango deploy node_exporter install %gen gen NONGO_BIN
 
-### TARGETS FOR CICD PROCESS
+###### TARGETS FOR CICD PROCESS ######
+include ./scripts/release/mule/Makefile.mule
 
-ci-deps:
-	scripts/configure_dev-deps.sh && \
-	scripts/check_deps.sh
-
-ci-build: buildsrc gen
-	mkdir -p $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH) && \
-	PKG_ROOT=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH) NO_BUILD=True VARIATIONS=$(OS_TYPE)/$(ARCH) scripts/build_packages.sh $(OS_TYPE)/$(ARCH)

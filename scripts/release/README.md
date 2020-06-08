@@ -1,11 +1,15 @@
+# Baseline Build Release Pipeline
+
+This pipeline is the first iteration of the automation of the build release.  This is a monolithic build release pipeline.  Future pipelines will use the [`mule` automation framework] to break this up into individual tasks.
+
 ## Shared Directory Structure Pattern
 
 The `release/` directory will have a structure that looks like the following:
 
         release/
             build/
-            test/
             prod/
+            test/
             ...
             common/
                 # scripts common to all builds {.sh,.md,Dockerfile,etc}
@@ -46,19 +50,54 @@ This section briefly describes the expected outcomes of the current build pipeli
 
 1. build
 
-    The result of running this job will be to put the build artifacts and their detached signatures in the staging `algorand-builds` bucket.
+    1. Build (compile) the binaries in a Centos 7 docker container that will then be used by both `deb` and `rpm` packaging.
 
-    In addition, the build logs will be placed into the AWS S3 bucket`algorand-builds/build-logs/channel`.
+    1. Docker containers will package `deb` and `rpm` artifacts inside of Ubuntu 18.04 and Centos 7, respectively.
+
+    1. Jenkins will then pause to wait for [the only manual part of the build/package/test phase], which is to forward the `gpg-agent` that establishes a direct between the local machine that contains the signing keys and the remote ec2 instance.
+
+    1. Once the signatures have been verified, the all the build artificats (tarballs, `rpm` and `deb` packages, signatures) to an `s3` bucket.  Included in the bucket are the build logs.
 
 1. test
 
-    Download the `deb` and `rpm` packages from staging and test.
+    Download the `deb` and `rpm` packages from staging and test and locally.
+
+    This will spin up a local python server that will host both an `APT` repository and a `YUM` repository in Ubuntu 18.04 and Centos 7 docker containers, respectively.
+
+    Each package is downloaded in the respective environment and the following tests are done:
+
+    - The signatures are correct.
+    - The packages are built from the correct branch and channel and are the correct version.  This done by running `algod -v`.
+        + This is done for the following docker containers:
+            - centos:7
+            - fedora:28
+            - ubuntu:16.04
+            - ubuntu:18.04
+
+    - Creates a test network using `goal`.
+    - et. al.
+
+    > Centos 7 needs the GPG 2.2.9 version which is downloaded from `s3://algorand-devops-misc/tools/`.
 
 1. prod
 
-    Copy the build artifacts and their detached signatures from `algorand-builds` to the production `algorand-dev-deb-repo` bucket.  The [releases page] links to this location.
+    Copy the build artifacts and their detached signatures from the staging bucket to the production `algorand-dev-deb-repo` bucket.  The [releases page] links to this location.
+
+    This is done via the AWS cli tool (`awscli`):
+
+        `aws s3 sync s3://{SOURCE} s3://{DESTINATION}`
+
+    In addition, the releases page (located on s3 in the root of the `algorand-releases` bucket), is updated automatically by [running a python script] (although, this does need some more work to be fully automated).
+
+    > Note that the [`reverse_hex_timestamp`] script is used to create a bucket name so that it will always be the first available folder in the `algorand-dev-deb-repo` bucket.  This is used by the just-mentioned python release page script to ensure that it always grabs the most-recent build.
+    >
+    > For example:
+    >
+    >   `fa16c3cb5_2.0.13`
 
     In addition, local snapshots are used by Debian-based (`aptly`) and RHEL-based tooling to deploy the respective packages to `algorand-releases`.  These are the packages which can then by downloaded by `apt` and `yum`.
+
+    There are now two distributions: `stable` and `beta`.  Both distros contain multiple versions of the following packages, respectively: `algorand` and `algorand-beta`.
 
 ## Jenkins Release Build
 
@@ -76,11 +115,9 @@ The only thing that is not automated is pre-setting the `gpg-agent` with the pas
 
 To complete this step, you will need to do the following:
 
-1. Download the `ReleaseBuildInstanceKey.pem` certificate from the appropriate Jenkins workspace and `chmod 400` on it or GPG will complain.  Move this to the `$GOPATH/src/github/algorand/go-algorand/scripts/release/controller` directory.
-1. Get the instance name from AWS, i.e., `https://us-west-1.console.aws.amazon.com/ec2/home?region=us-west-1#Instances:sort=instanceState` or from the Jenkins workspace (`scripts/release/tmp/instance`).
-1. Change to the `$GOPATH/src/github/algorand/go-algorand/scripts/release/controller` directory and execute `./socket.sh`, passing it the ec2 instance name:
+1. Change to the `$GOPATH/src/github/algorand/go-algorand/scripts/release/` directory and execute `./forward_gpg_agent.sh`:
 
-        ./socket ec2-13-57-188-227.us-west-1.compute.amazonaws.com
+        ./forward_gpg_agent.sh
 
 1. At the prompt, input the GPG passphrase (**Don't do this in a public space!!**).
 1. You should now be logged into the remote machine!
@@ -138,6 +175,10 @@ The failure is saying that there is no terminal attached to the session and so n
 
 > Note that it is not necessary to set a terminal to successfully enable remote signing!  Do not attempt to "fix" this by setting the `GPG_TTY` environment variable!!
 
+[`mule` automation framework]: https://github.com/algorand/mule
+[the only manual part of the build/package/test phase]: #setting-up-the-forwarded-connection
 [this explanation]: https://stackoverflow.com/questions/30058030/how-to-use-gpg-signing-key-on-a-remote-server
 [releases page]: https://releases.algorand.com/
+[running a python script]:https://github.com/algorand/go-algorand-ci/blob/master/scripts/downloads_page.py
+[`reverse_hex_timestamp`]: https://github.com/algorand/go-algorand/blob/master/scripts/release/prod/reverse_hex_timestamp
 

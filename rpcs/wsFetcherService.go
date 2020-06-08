@@ -35,6 +35,7 @@ type WsFetcherService struct {
 	log             logging.Logger
 	mu              deadlock.RWMutex
 	pendingRequests map[string]chan WsGetBlockOut
+	net             network.GossipNode
 }
 
 // Constant strings used as keys for topics
@@ -176,15 +177,26 @@ func (fs *WsFetcherService) RequestBlock(ctx context.Context, target network.Uni
 	return wsBlockOut, nil
 }
 
-// RegisterWsFetcherService creates and returns a WsFetcherService that services gossip fetcher responses
-func RegisterWsFetcherService(log logging.Logger, registrar Registrar) *WsFetcherService {
-	service := new(WsFetcherService)
-	service.log = log
-	service.pendingRequests = make(map[string]chan WsGetBlockOut)
-	handlers := []network.TaggedMessageHandler{
-		{Tag: protocol.UniCatchupResTag, MessageHandler: network.HandlerFunc(service.handleNetworkMsg)},  // handles the response for a block catchup request
-		{Tag: protocol.UniEnsBlockResTag, MessageHandler: network.HandlerFunc(service.handleNetworkMsg)}, // handles the response for a block ensure digest request
+// MakeWsFetcherService creates and returns a WsFetcherService that services gossip fetcher responses
+func MakeWsFetcherService(log logging.Logger, net network.GossipNode) *WsFetcherService {
+	service := &WsFetcherService{
+		log:             log,
+		pendingRequests: make(map[string]chan WsGetBlockOut),
+		net:             net,
 	}
-	registrar.RegisterHandlers(handlers)
 	return service
+}
+
+// Start starts the WsFetcherService
+func (fs *WsFetcherService) Start() {
+	handlers := []network.TaggedMessageHandler{
+		{Tag: protocol.UniCatchupResTag, MessageHandler: network.HandlerFunc(fs.handleNetworkMsg)},  // handles the response for a block catchup request
+		{Tag: protocol.UniEnsBlockResTag, MessageHandler: network.HandlerFunc(fs.handleNetworkMsg)}, // handles the response for a block ensure digest request
+	}
+	fs.net.RegisterHandlers(handlers)
+}
+
+// Stop stops the WsFetcherService
+func (fs *WsFetcherService) Stop() {
+
 }

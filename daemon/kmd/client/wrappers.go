@@ -197,11 +197,12 @@ func (kcl KMDClient) ExportMasterDerivationKey(walletHandle []byte, walletPasswo
 }
 
 // SignTransaction wraps kmdapi.APIV1POSTTransactionSignRequest
-func (kcl KMDClient) SignTransaction(walletHandle, pw []byte, tx transactions.Transaction) (resp kmdapi.APIV1POSTTransactionSignResponse, err error) {
+func (kcl KMDClient) SignTransaction(walletHandle, pw []byte, pk crypto.PublicKey, tx transactions.Transaction) (resp kmdapi.APIV1POSTTransactionSignResponse, err error) {
 	txBytes := protocol.Encode(&tx)
 	req := kmdapi.APIV1POSTTransactionSignRequest{
 		WalletHandleToken: string(walletHandle),
 		WalletPassword:    string(pw),
+		PublicKey:         pk,
 		Transaction:       txBytes,
 	}
 	err = kcl.DoV1Request(req, &resp)
