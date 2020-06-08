@@ -66,23 +66,34 @@ type demux struct {
 	log logging.Logger
 }
 
+// demuxParams contains the parameters required to initliaze a new demux object
+type demuxParams struct {
+	net               Network
+	ledger            LedgerReader
+	validator         BlockValidator
+	voteVerifier      *AsyncVoteVerifier
+	processingMonitor EventsProcessingMonitor
+	log               logging.Logger
+	monitor           *coserviceMonitor
+}
+
 // makeDemux initializes the goroutines needed to process external events, setting up the appropriate channels.
 //
 // It must be called before other methods are called.
-func makeDemux(net Network, ledger LedgerReader, validator BlockValidator, voteVerifier *AsyncVoteVerifier, processingMonitor EventsProcessingMonitor, log logging.Logger) (d *demux) {
+func makeDemux(params demuxParams) (d *demux) {
 	d = new(demux)
-	d.crypto = makeCryptoVerifier(ledger, validator, voteVerifier, log)
-	d.log = log
-	d.ledger = ledger
+	d.crypto = makeCryptoVerifier(params.ledger, params.validator, params.voteVerifier, params.log)
+	d.log = params.log
+	d.ledger = params.ledger
+	d.monitor = params.monitor
+	d.queue = make([]<-chan externalEvent, 0)
+	d.processingMonitor = params.processingMonitor
 
 	tokenizerCtx, cancelTokenizers := context.WithCancel(context.Background())
-	d.rawVotes = d.tokenizeMessages(tokenizerCtx, net, protocol.AgreementVoteTag, decodeVote)
-	d.rawProposals = d.tokenizeMessages(tokenizerCtx, net, protocol.ProposalPayloadTag, decodeProposal)
-	d.rawBundles = d.tokenizeMessages(tokenizerCtx, net, protocol.VoteBundleTag, decodeBundle)
+	d.rawVotes = d.tokenizeMessages(tokenizerCtx, params.net, protocol.AgreementVoteTag, decodeVote)
+	d.rawProposals = d.tokenizeMessages(tokenizerCtx, params.net, protocol.ProposalPayloadTag, decodeProposal)
+	d.rawBundles = d.tokenizeMessages(tokenizerCtx, params.net, protocol.VoteBundleTag, decodeBundle)
 	d.cancelTokenizers = cancelTokenizers
-
-	d.queue = make([]<-chan externalEvent, 0)
-	d.processingMonitor = processingMonitor
 
 	return d
 }

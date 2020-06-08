@@ -63,13 +63,16 @@ func WrapNetwork(net network.GossipNode, log logging.Logger) agreement.Network {
 	i.net = net
 	i.log = log
 
+	return i
+}
+
+func (i *networkImpl) Start() {
 	handlers := []network.TaggedMessageHandler{
 		{Tag: protocol.AgreementVoteTag, MessageHandler: network.HandlerFunc(i.processVoteMessage)},
 		{Tag: protocol.ProposalPayloadTag, MessageHandler: network.HandlerFunc(i.processProposalMessage)},
 		{Tag: protocol.VoteBundleTag, MessageHandler: network.HandlerFunc(i.processBundleMessage)},
 	}
-	net.RegisterHandlers(handlers)
-	return i
+	i.net.RegisterHandlers(handlers)
 }
 
 func messageMetadataFromHandle(h agreement.MessageHandle) *messageMetadata {

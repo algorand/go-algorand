@@ -10,13 +10,8 @@
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 OS=$("${SCRIPTPATH}/../ostype.sh")
-ARCH=$("${SCRIPTPATH}/../archtype.sh")
 if [[ "${OS}" == "darwin" ]]; then
     # do not run these on darwin
-    exit;
-fi;
-if [[ "${ARCH}" == "arm64" ]]; then
-    # do not run these on arm64
     exit;
 fi;
 

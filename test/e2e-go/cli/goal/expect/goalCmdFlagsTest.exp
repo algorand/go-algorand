@@ -21,6 +21,18 @@ proc TestGoalCommandLineFlags { CMD EXPECTED_RE } {
 
 if { [catch {
 
+    TestGoalCommandLineFlags "goal node start -p :xxx:445" ".*is not a valid peer address.*"
+    TestGoalCommandLineFlags "goal node start -p {http://1.2.3.4:5050;:xxx:445}" ".*is not a valid peer address.*"
+    TestGoalCommandLineFlags "goal node start -p http://1.2.3.4:5050" "^Data directory not specified.*"
+    TestGoalCommandLineFlags "goal node start -p {http://1.2.3.4:5050;5.6.7.8}" "^Data directory not specified.*"
+
+} EXCEPTION ] } {
+    puts "ERROR in Goal Start Validity test: $EXCEPTION"
+    exit 1
+}
+
+if { [catch {
+
     TestGoalCommandLineFlags "goal asset create --decimals 0 --validrounds 0 --creator ABC --total 100" ".*can not be zero.*"
     TestGoalCommandLineFlags "goal asset create --decimals 0 --validrounds 1 --lastvalid 1 --creator ABC --total 100" "Only one of .* can be specified"
 

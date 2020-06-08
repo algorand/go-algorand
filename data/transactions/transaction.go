@@ -93,6 +93,12 @@ type Header struct {
 	// the LastValid round passes.  While this transaction possesses the
 	// lease, no other transaction specifying this lease can be confirmed.
 	Lease [32]byte `codec:"lx"`
+
+	// RekeyTo, if nonzero, sets the sender's AuthAddr to the given address
+	// If the RekeyTo address is the sender's actual address, the AuthAddr is set to zero
+	// This allows "re-keying" a long-lived account -- rotating the signing key, changing
+	// membership of a multisig account, etc.
+	RekeyTo basics.Address `codec:"rekey"`
 }
 
 // Transaction describes a transaction that can appear in a block.
@@ -161,6 +167,10 @@ func (tx Transaction) Sign(secrets *crypto.SignatureSecrets) SignedTxn {
 		Txn: tx,
 		Sig: sig,
 	}
+	// Set the AuthAddr if the signing key doesn't match the transaction sender
+	if basics.Address(secrets.SignatureVerifier) != tx.Sender {
+		s.AuthAddr = basics.Address(secrets.SignatureVerifier)
+	}
 	return s
 }
 
@@ -215,8 +225,8 @@ func (tx Header) Alive(tc TxnContext) error {
 }
 
 // MatchAddress checks if the transaction touches a given address.
-func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses, proto config.ConsensusParams) bool {
-	for _, candidate := range tx.RelevantAddrs(spec, proto) {
+func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses) bool {
+	for _, candidate := range tx.RelevantAddrs(spec) {
 		if addr == candidate {
 			return true
 		}
@@ -323,7 +333,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		// this check is just to be safe, but reaching here seems impossible, since it requires computing a preimage of rwpool
 		return fmt.Errorf("transaction from incentive pool is invalid")
 	}
-	if tx.Sender == (basics.Address{}) {
+	if tx.Sender.IsZero() {
 		return fmt.Errorf("transaction cannot have zero sender")
 	}
 	if !proto.SupportTransactionLeases && (tx.Lease != [32]byte{}) {
@@ -331,6 +341,9 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	}
 	if !proto.SupportTxGroups && (tx.Group != crypto.Digest{}) {
 		return fmt.Errorf("transaction has group but groups not yet enabled")
+	}
+	if !proto.SupportRekeying && (tx.RekeyTo != basics.Address{}) {
+		return fmt.Errorf("transaction has RekeyTo set but rekeying not yet enabled")
 	}
 	return nil
 }
@@ -352,19 +365,22 @@ func (tx Header) Last() basics.Round {
 
 // RelevantAddrs returns the addresses whose balance records this transaction will need to access.
 // The header's default is to return just the sender and the fee sink.
-func (tx Transaction) RelevantAddrs(spec SpecialAddresses, proto config.ConsensusParams) []basics.Address {
+func (tx Transaction) RelevantAddrs(spec SpecialAddresses) []basics.Address {
 	addrs := []basics.Address{tx.Sender, spec.FeeSink}
 
 	switch tx.Type {
 	case protocol.PaymentTx:
 		addrs = append(addrs, tx.PaymentTxnFields.Receiver)
-		if tx.PaymentTxnFields.CloseRemainderTo != (basics.Address{}) {
+		if !tx.PaymentTxnFields.CloseRemainderTo.IsZero() {
 			addrs = append(addrs, tx.PaymentTxnFields.CloseRemainderTo)
 		}
 	case protocol.AssetTransferTx:
 		addrs = append(addrs, tx.AssetTransferTxnFields.AssetReceiver)
-		if tx.AssetTransferTxnFields.AssetCloseTo != (basics.Address{}) {
+		if !tx.AssetTransferTxnFields.AssetCloseTo.IsZero() {
 			addrs = append(addrs, tx.AssetTransferTxnFields.AssetCloseTo)
+		}
+		if !tx.AssetTransferTxnFields.AssetSender.IsZero() {
+			addrs = append(addrs, tx.AssetTransferTxnFields.AssetSender)
 		}
 	}
 
@@ -396,11 +412,14 @@ func (tx Transaction) GetReceiverAddress() basics.Address {
 
 // EstimateEncodedSize returns the estimated encoded size of the transaction including the signature.
 // This function is to be used for calculating the fee
+// Note that it may be an underestimate if the transaction is signed in an unusual way
+// (e.g., with an authaddr or via multisig or logicsig)
 func (tx Transaction) EstimateEncodedSize() int {
-	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
-	keys := crypto.GenerateSignatureSecrets(seed)
-	stx := tx.Sign(keys)
+	// Make a signedtxn with a nonzero signature and encode it
+	stx := SignedTxn{
+		Txn: tx,
+		Sig: crypto.Signature{1},
+	}
 	return stx.GetEncodedLength()
 }
 
@@ -412,6 +431,27 @@ func (tx Transaction) Apply(balances Balances, spec SpecialAddresses, ctr uint64
 	err = balances.Move(tx.Sender, spec.FeeSink, tx.Fee, &ad.SenderRewards, nil)
 	if err != nil {
 		return
+	}
+
+	// rekeying: update balrecord.AuthAddr to tx.RekeyTo if provided
+	if (tx.RekeyTo != basics.Address{}) {
+		var record basics.BalanceRecord
+		record, err = balances.Get(tx.Sender, false)
+		if err != nil {
+			return
+		}
+		// Special case: rekeying to the account's actual address just sets balrecord.AuthAddr to 0
+		// This saves 32 bytes in your balance record if you want to go back to using your original key
+		if tx.RekeyTo == tx.Sender {
+			record.AuthAddr = basics.Address{}
+		} else {
+			record.AuthAddr = tx.RekeyTo
+		}
+
+		err = balances.Put(record)
+		if err != nil {
+			return
+		}
 	}
 
 	switch tx.Type {

@@ -119,14 +119,21 @@ func (c *cadaver) trySetup() bool {
 		c.out.Close()
 		err := os.Rename(c.filename(), c.filename()+".archive")
 		if err != nil {
-			logging.Base().Error(err)
-			c.failed = err
-			return false
+			if os.IsNotExist(err) {
+				// we can't rename the cadaver file since it doesn't exists.
+				// this typically happens when it being externally deleted, and could happen
+				// far before we close the handle above.
+				logging.Base().Info(err)
+			} else {
+				logging.Base().Warn(err)
+				c.failed = err
+				return false
+			}
 		}
 
 		err = c.init()
 		if err != nil {
-			logging.Base().Error(err)
+			logging.Base().Warn(err)
 			c.failed = err
 			return false
 		}

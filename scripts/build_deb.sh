@@ -3,13 +3,13 @@
 
 # build_deb.sh - Build a .deb package for one platform.
 #
-# Syntax:   build_deb.sh <arch> <output directory>
+# Syntax:   build_deb.sh <arch> <output directory> <channel>
 #
 # Examples: scripts/build_deb.sh amd64
 
 set -e
-if [ ! "$#" -eq 2 ]; then
-    echo "Syntax: build_deb.sh <arch> <output directory>"
+if [ "$#" -lt 2 ]; then
+    echo "Syntax: build_deb.sh <arch> <output directory> <channel>"
     exit 1
 fi
 
@@ -20,8 +20,10 @@ if [ "$EUID" != "0" ]; then
 fi
 
 OS=linux
-ARCH=$1
+ARCH="$1"
 OUTDIR="$2"
+CHANNEL=${CHANNEL:-$3}
+PKG_NAME=$(./scripts/compute_package_name.sh "${CHANNEL:-stable}")
 
 GOPATH=$(go env GOPATH)
 export GOPATH
@@ -103,7 +105,9 @@ done
 unattended_upgrades_files=("51algorand-upgrades")
 mkdir -p "${PKG_ROOT}/etc/apt/apt.conf.d"
 for f in "${unattended_upgrades_files[@]}"; do
-    cp "installer/${f}" "${PKG_ROOT}/etc/apt/apt.conf.d"
+    < "installer/${f}" \
+      sed -e "s,@CHANNEL@,${CHANNEL}," \
+      > "${PKG_ROOT}/etc/apt/apt.conf.d/${f}"
 done
 
 # files should not be group writable but directories should be
@@ -111,13 +115,14 @@ chmod -R g-w "${PKG_ROOT}/var/lib/algorand"
 find "${PKG_ROOT}/var/lib/algorand" -type d | xargs chmod g+w
 
 mkdir -p "${PKG_ROOT}/DEBIAN"
-debian_files=("control" "postinst" "prerm" "postrm" "conffiles")
+debian_files=("control" "preinst" "postinst" "prerm" "postrm" "conffiles")
 for ctl in "${debian_files[@]}"; do
     # Copy first, to preserve permissions, then overwrite to fill in template.
     cp -a "installer/debian/${ctl}" "${PKG_ROOT}/DEBIAN/${ctl}"
-    < installer/debian/"${ctl}" \
-      sed -e s,@ARCH@,"${ARCH}", \
-          -e s,@VER@,"${VER}", \
+    < "installer/debian/${ctl}" \
+      sed -e "s,@ARCH@,${ARCH}," \
+          -e "s,@VER@,${VER}," \
+          -e "s,@PKG_NAME@,${PKG_NAME}," \
       > "${PKG_ROOT}/DEBIAN/${ctl}"
 done
 # TODO: make `Files:` segments for vendor/... and crypto/libsodium-fork, but reasonably this should be understood to cover all _our_ files and copied in packages continue to be licenced under their own terms
