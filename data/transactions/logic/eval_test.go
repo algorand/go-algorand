@@ -22,6 +22,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -1287,7 +1288,8 @@ func TestOnCompletionConstants(t *testing.T) {
 	var last int = max
 	for i := 0; i < max; i++ {
 		oc := transactions.OnCompletion(i)
-		if oc.String() == "?" {
+		unknownStringer := "OnCompletion(" + strconv.FormatInt(int64(i), 10) + ")"
+		if oc.String() == unknownStringer {
 			last = i
 			break
 		}
@@ -1295,6 +1297,7 @@ func TestOnCompletionConstants(t *testing.T) {
 	require.Less(t, last, max, "too many OnCompletion constants, adjust max limit")
 	require.Equal(t, int(invalidOnCompletionConst), last)
 	require.Equal(t, len(onCompletionConstToUint64), len(onCompletionDescriptions))
+	require.Equal(t, len(OnCompletionNames), last)
 	for v := NoOp; v < invalidOnCompletionConst; v++ {
 		require.Equal(t, v.String(), OnCompletionNames[int(v)])
 	}
