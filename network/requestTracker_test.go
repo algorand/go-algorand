@@ -78,7 +78,7 @@ func TestRateLimiting(t *testing.T) {
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    defaultConfig,
-		phonebook: MakePhonebook(1, 1),
+		phonebook: MakePhonebook(1,1),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}

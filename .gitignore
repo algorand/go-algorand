@@ -61,5 +61,3 @@ data/transactions/logic/*.md
 # Folder for collecting release assets
 assets
 
-# test binaries
-*.test

@@ -43,13 +43,11 @@ require (
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/stretchr/testify v1.5.1
-	github.com/yuin/goldmark v1.1.32 // indirect
-	golang.org/x/crypto v0.0.0-20200602180216-279210d13fed
+	golang.org/x/crypto v0.0.0-20200510223506-06a226fb4e37
 	golang.org/x/mod v0.3.0 // indirect
-	golang.org/x/net v0.0.0-20200602114024-627f9648deb9
-	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a // indirect
-	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980
-	golang.org/x/tools v0.0.0-20200604174948-dcff9671f623 // indirect
+	golang.org/x/net v0.0.0-20200513185701-a91f0712d120
+	golang.org/x/sys v0.0.0-20200515095857-1151b9dac4a9
+	golang.org/x/tools v0.0.0-20200518195306-39aadb5b76f2 // indirect
 	google.golang.org/appengine v1.6.1 // indirect
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
 	gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2 // indirect
