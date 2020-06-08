@@ -542,13 +542,13 @@ func (ac *ApplicationCallTxnFields) applyClearState(
 		} else {
 			// Ignore errors and rejections from the ClearStateProgram
 		}
-	}
 
-	// Fetch the (potentially updated) sender record
-	record, err = balances.Get(sender, false)
-	if err != nil {
-		ad.EvalDelta = basics.EvalDelta{}
-		return err
+		// Fetch the (potentially updated) sender record
+		record, err = balances.Get(sender, false)
+		if err != nil {
+			ad.EvalDelta = basics.EvalDelta{}
+			return err
+		}
 	}
 
 	// Update the TotalAppSchema used for MinBalance calculation,
