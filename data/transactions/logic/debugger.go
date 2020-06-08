@@ -234,7 +234,13 @@ func (dbg *WebDebuggerHook) postState(state *DebugState, endpoint string) error 
 		return err
 	}
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/%s", dbg.URL, endpoint), &body)
+	u, err := url.Parse(dbg.URL)
+	if err != nil {
+		return err
+	}
+	u.Path = endpoint
+
+	req, err := http.NewRequest(http.MethodPost, u.String(), &body)
 	if err != nil {
 		return err
 	}
@@ -244,6 +250,7 @@ func (dbg *WebDebuggerHook) postState(state *DebugState, endpoint string) error 
 	if err == nil && r.StatusCode != 200 {
 		err = fmt.Errorf("bad response: %d", r.StatusCode)
 	}
+	r.Body.Close()
 	return err
 }
 
