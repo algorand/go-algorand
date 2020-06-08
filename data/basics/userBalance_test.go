@@ -148,7 +148,8 @@ func TestEncodedAccountDataSize(t *testing.T) {
 }
 
 func TestEncodedAccountAllocationBounds(t *testing.T) {
-	// ensure that all the supported protocols have MaxAssetsPerAccount less or equal to the encodedMaxAssetsPerAccount.
+	// ensure that all the supported protocols have value limits less or
+	// equal to their corresponding codec allocbounds
 	for protoVer, proto := range config.Consensus {
 		if proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount {
 			require.Failf(t, "proto.MaxAssetsPerAccount > encodedMaxAssetsPerAccount", "protocol version = %s", protoVer)
