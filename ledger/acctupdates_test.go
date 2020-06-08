@@ -43,6 +43,7 @@ type mockLedgerForTracker struct {
 func makeMockLedgerForTracker(t testing.TB) *mockLedgerForTracker {
 	dbs := dbOpenTest(t)
 	dblogger := logging.TestingLog(t)
+	dblogger.SetLevel(logging.Info)
 	dbs.rdb.SetLogger(dblogger)
 	dbs.wdb.SetLogger(dblogger)
 	return &mockLedgerForTracker{dbs: dbs, log: dblogger}
@@ -506,4 +507,87 @@ func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
 		})
 	}
 	trieCachedNodesCount = defaultTrieCachedNodesCount
+}
+
+func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		t.Skip("This test is too slow on ARM and causes travis builds to time out")
+	}
+	// create new protocol version, which has lower back balance.
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLargeAccountCountCatchpointGeneration")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 32
+	protoParams.SeedLookback = 2
+	protoParams.SeedRefreshInterval = 8
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	ml := makeMockLedgerForTracker(t)
+	defer ml.close()
+	ml.blocks = randomInitChain(testProtocolVersion, 10)
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(100000)}
+	rewardsLevels := []uint64{0}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	au := &accountUpdates{}
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	conf.Archival = true
+	au.initialize(conf, ".", protoParams, accts[0])
+	defer au.close()
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+
+	// cover 10 genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < 10; i++ {
+		accts = append(accts, accts[0])
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+
+	for i := basics.Round(10); i < basics.Round(protoParams.MaxBalLookback+5); i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		updates, totals := randomDeltasBalanced(1, accts[i-1], rewardLevel)
+
+		prevTotals, err := au.totals(basics.Round(i - 1))
+		require.NoError(t, err)
+
+		oldPool := accts[i-1][testPoolAddr]
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates[testPoolAddr] = accountDelta{old: oldPool, new: newPool}
+		totals[testPoolAddr] = newPool
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = testProtocolVersion
+
+		au.newBlock(blk, StateDelta{
+			accts: updates,
+			hdr:   &blk.BlockHeader,
+		})
+		accts = append(accts, totals)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+
+		au.committedUpTo(i)
+		if i%2 == 1 {
+			au.waitAccountsWriting()
+		}
+	}
 }
