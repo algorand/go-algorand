@@ -247,10 +247,12 @@ func (dbg *WebDebuggerHook) postState(state *DebugState, endpoint string) error 
 
 	httpClient := &http.Client{}
 	r, err := httpClient.Do(req)
-	if err == nil && r.StatusCode != 200 {
-		err = fmt.Errorf("bad response: %d", r.StatusCode)
+	if err == nil {
+		if r.StatusCode != 200 {
+			err = fmt.Errorf("bad response: %d", r.StatusCode)
+		}
+		r.Body.Close()
 	}
-	r.Body.Close()
 	return err
 }
 
