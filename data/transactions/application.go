@@ -44,6 +44,7 @@ const (
 
 // OnCompletion is an enum representing some layer 1 side effect that an
 // ApplicationCall transaction will have if it is included in a block.
+//go:generate stringer -type=OnCompletion -output=application_string.go
 type OnCompletion uint64
 
 const (
@@ -73,24 +74,6 @@ const (
 	// record
 	DeleteApplicationOC OnCompletion = 5
 )
-
-func (oc OnCompletion) String() string {
-	switch oc {
-	case NoOpOC:
-		return "noop"
-	case OptInOC:
-		return "optin"
-	case CloseOutOC:
-		return "closeout"
-	case ClearStateOC:
-		return "clearstate"
-	case UpdateApplicationOC:
-		return "update"
-	case DeleteApplicationOC:
-		return "delete"
-	}
-	return "?"
-}
 
 // ApplicationCallTxnFields captures the transaction fields used for all
 // interactions with applications
