@@ -165,7 +165,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pushes: uint64
 - converts bytes X as big endian to uint64
 
-`btoi` panics if the input is longer than 8 bytes
+`btoi` panics if the input is longer than 8 bytes.
 
 ## %
 
@@ -351,7 +351,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 0 | Sender | []byte | 32 byte address |
 | 1 | Fee | uint64 | micro-Algos |
 | 2 | FirstValid | uint64 | round number |
-| 3 | FirstValidTime | uint64 | Causes program to fail; reserved for future use. |
+| 3 | FirstValidTime | uint64 | Causes program to fail; reserved for future use |
 | 4 | LastValid | uint64 | round number |
 | 5 | Note | []byte |  |
 | 6 | Lease | []byte |  |
@@ -370,7 +370,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 19 | AssetSender | []byte | 32 byte address. Causes clawback of all value of asset from AssetSender if Sender is the Clawback address of the asset. |
 | 20 | AssetReceiver | []byte | 32 byte address |
 | 21 | AssetCloseTo | []byte | 32 byte address |
-| 22 | GroupIndex | uint64 | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1. |
+| 22 | GroupIndex | uint64 | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1 |
 | 23 | TxID | []byte | The computed ID for this transaction. 32 bytes. |
 | 24 | ApplicationID | uint64 | ApplicationID from ApplicationCall transaction. LogicSigVersion >= 2. |
 | 25 | OnCompletion | uint64 | ApplicationCall transaction on completion action. LogicSigVersion >= 2. |
@@ -386,7 +386,7 @@ TypeEnum mapping:
 
 | Index | "Type" string | Description |
 | --- | --- | --- |
-| 0 | unknown | Unknown type. Invalid transaction. |
+| 0 | unknown | Unknown type. Invalid transaction |
 | 1 | pay | Payment |
 | 2 | keyreg | KeyRegistration |
 | 3 | acfg | AssetConfig |
@@ -425,7 +425,7 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 - Pushes: any
 - push field to the stack from a transaction in the current transaction group
 
-for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`
+for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.
 
 ## load
 
@@ -476,7 +476,7 @@ At LogicSigVersion 2 it became allowed to branch to the end of the program exact
 - branch if value X is zero
 - LogicSigVersion >= 2
 
-See `bnz` for details on how branches work
+See `bnz` for details on how branches work.
 
 ## b
 
@@ -526,7 +526,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - pop two byte strings A and B and join them, push the result
 - LogicSigVersion >= 2
 
-`concat` panics if the result would be greater than 4096 bytes
+`concat` panics if the result would be greater than 4096 bytes.
 
 ## substring
 
@@ -562,7 +562,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, application id (top of the stack on opcode entry)
+params: account index, application id (top of the stack on opcode entry).
 
 ## app_local_get
 
@@ -573,7 +573,7 @@ params: account index, application id (top of the stack on opcode entry)
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, state key. Return: value. The value is zero if the key does ont exist
+params: account index, state key. Return: value. The value is zero if the key does ont exist.
 
 ## app_local_get_ex
 
@@ -584,7 +584,7 @@ params: account index, state key. Return: value. The value is zero if the key do
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, application id, state key. Return: did_exist flag (top of the stack), value
+params: account index, application id, state key. Return: did_exist flag (top of the stack), value.
 
 ## app_global_get
 
@@ -595,7 +595,7 @@ params: account index, application id, state key. Return: did_exist flag (top of
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: state key. Return: value. The value is zero if the key does ont exist
+params: state key. Return: value. The value is zero if the key does ont exist.
 
 ## app_global_get_ex
 
@@ -606,7 +606,7 @@ params: state key. Return: value. The value is zero if the key does ont exist
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: application id, state key. Return: value
+params: application id, state key. Return: value.
 
 ## app_local_put
 
@@ -617,7 +617,7 @@ params: application id, state key. Return: value
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, state key, value
+params: account index, state key, value.
 
 ## app_global_put
 
@@ -637,7 +637,7 @@ params: account index, state key, value
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, state key
+params: account index, state key.
 
 ## app_global_del
 
@@ -648,7 +648,7 @@ params: account index, state key
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: state key
+params: state key.
 
 ## asset_holding_get
 
@@ -667,7 +667,7 @@ params: state key
 | 1 | AssetFrozen | uint64 | Is the asset frozen or not |
 
 
-params: account index, asset id. Return: did_exist flag, value
+params: account index, asset id. Return: did_exist flag, value.
 
 ## asset_params_get
 
@@ -695,4 +695,4 @@ params: account index, asset id. Return: did_exist flag, value
 | 10 | AssetClawback | []byte | Clawback address |
 
 
-params: account index, asset id. Return: did_exist flag, value
+params: account index, asset id. Return: did_exist flag, value.
