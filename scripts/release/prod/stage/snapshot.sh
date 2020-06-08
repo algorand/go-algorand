@@ -17,7 +17,7 @@ echo
 DEBS_DIR="$HOME/packages/deb/$CHANNEL"
 DEB="algorand_${CHANNEL}_linux-amd64_${VERSION}.deb"
 
-aws s3 cp "s3://algorand-builds/channel/$CHANNEL/$DEB" .
+aws s3 cp "s3://algorand-staging/releases/$CHANNEL/$VERSION/$DEB" .
 mv "$DEB" "$DEBS_DIR"
 
 aptly repo add algorand "$DEBS_DIR"
