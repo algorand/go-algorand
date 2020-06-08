@@ -336,8 +336,8 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs")
 				return
 			}
-			if zb0007 > 256 {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(256))
+			if zb0007 > encodedMaxApplicationArgs {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(encodedMaxApplicationArgs))
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs")
 				return
 			}
@@ -365,8 +365,8 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 				err = msgp.WrapError(err, "struct-from-array", "Accounts")
 				return
 			}
-			if zb0009 > 256 {
-				err = msgp.ErrOverflow(uint64(zb0009), uint64(256))
+			if zb0009 > encodedMaxAccounts {
+				err = msgp.ErrOverflow(uint64(zb0009), uint64(encodedMaxAccounts))
 				err = msgp.WrapError(err, "struct-from-array", "Accounts")
 				return
 			}
@@ -394,8 +394,8 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 				err = msgp.WrapError(err, "struct-from-array", "ForeignApps")
 				return
 			}
-			if zb0011 > 256 {
-				err = msgp.ErrOverflow(uint64(zb0011), uint64(256))
+			if zb0011 > encodedMaxForeignApps {
+				err = msgp.ErrOverflow(uint64(zb0011), uint64(encodedMaxForeignApps))
 				err = msgp.WrapError(err, "struct-from-array", "ForeignApps")
 				return
 			}
@@ -493,8 +493,8 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
-				if zb0014 > 256 {
-					err = msgp.ErrOverflow(uint64(zb0014), uint64(256))
+				if zb0014 > encodedMaxApplicationArgs {
+					err = msgp.ErrOverflow(uint64(zb0014), uint64(encodedMaxApplicationArgs))
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
@@ -520,8 +520,8 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
-				if zb0016 > 256 {
-					err = msgp.ErrOverflow(uint64(zb0016), uint64(256))
+				if zb0016 > encodedMaxAccounts {
+					err = msgp.ErrOverflow(uint64(zb0016), uint64(encodedMaxAccounts))
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
@@ -547,8 +547,8 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
-				if zb0018 > 256 {
-					err = msgp.ErrOverflow(uint64(zb0018), uint64(256))
+				if zb0018 > encodedMaxForeignApps {
+					err = msgp.ErrOverflow(uint64(zb0018), uint64(encodedMaxForeignApps))
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
@@ -4260,8 +4260,8 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs")
 				return
 			}
-			if zb0008 > 256 {
-				err = msgp.ErrOverflow(uint64(zb0008), uint64(256))
+			if zb0008 > encodedMaxApplicationArgs {
+				err = msgp.ErrOverflow(uint64(zb0008), uint64(encodedMaxApplicationArgs))
 				err = msgp.WrapError(err, "struct-from-array", "ApplicationArgs")
 				return
 			}
@@ -4289,8 +4289,8 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Accounts")
 				return
 			}
-			if zb0010 > 256 {
-				err = msgp.ErrOverflow(uint64(zb0010), uint64(256))
+			if zb0010 > encodedMaxAccounts {
+				err = msgp.ErrOverflow(uint64(zb0010), uint64(encodedMaxAccounts))
 				err = msgp.WrapError(err, "struct-from-array", "Accounts")
 				return
 			}
@@ -4318,8 +4318,8 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "ForeignApps")
 				return
 			}
-			if zb0012 > 256 {
-				err = msgp.ErrOverflow(uint64(zb0012), uint64(256))
+			if zb0012 > encodedMaxForeignApps {
+				err = msgp.ErrOverflow(uint64(zb0012), uint64(encodedMaxForeignApps))
 				err = msgp.WrapError(err, "struct-from-array", "ForeignApps")
 				return
 			}
@@ -4597,8 +4597,8 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
-				if zb0015 > 256 {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(256))
+				if zb0015 > encodedMaxApplicationArgs {
+					err = msgp.ErrOverflow(uint64(zb0015), uint64(encodedMaxApplicationArgs))
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
@@ -4624,8 +4624,8 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
-				if zb0017 > 256 {
-					err = msgp.ErrOverflow(uint64(zb0017), uint64(256))
+				if zb0017 > encodedMaxAccounts {
+					err = msgp.ErrOverflow(uint64(zb0017), uint64(encodedMaxAccounts))
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
@@ -4651,8 +4651,8 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
-				if zb0019 > 256 {
-					err = msgp.ErrOverflow(uint64(zb0019), uint64(256))
+				if zb0019 > encodedMaxForeignApps {
+					err = msgp.ErrOverflow(uint64(zb0019), uint64(encodedMaxForeignApps))
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
