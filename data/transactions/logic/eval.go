@@ -1612,7 +1612,7 @@ func opBalance(cx *evalContext) {
 
 	microAlgos, err := cx.Ledger.Balance(addr)
 	if err != nil {
-		cx.err = fmt.Errorf("failed to fetch balance of %s: %s", addr, err.Error())
+		cx.err = fmt.Errorf("failed to fetch balance of %v: %s", addr, err.Error())
 		return
 	}
 
@@ -1660,7 +1660,7 @@ func (cx *evalContext) getReadOnlyLocalState(appID uint64, accountIdx uint64) (b
 		var err error
 		localKV, err = cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch app local state for acct %s, app %d: %v", addr, appID, err)
+			return nil, fmt.Errorf("failed to fetch app local state for acct %v, app %d: %v", addr, appID, err)
 		}
 		cx.readOnlyLocalStates[kvIdx] = localKV
 	}
@@ -1681,7 +1681,7 @@ func (cx *evalContext) getLocalStateCow(accountIdx uint64) (*keyValueCow, error)
 		// No cached cow for this address. Make one.
 		localKV, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(cx.Txn.Txn.ApplicationID))
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch app local state for acct %s: %v", addr, err)
+			return nil, fmt.Errorf("failed to fetch app local state for acct %v: %v", addr, err)
 		}
 
 		localDelta := make(basics.StateDelta)
