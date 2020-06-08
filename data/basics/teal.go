@@ -137,11 +137,6 @@ type EvalDelta struct {
 // because the msgpack codec will encode/decode an empty map as nil, and we want
 // an empty generated EvalDelta to equal an empty one we decode off the wire.
 func (ed EvalDelta) Equal(o EvalDelta) bool {
-	// GlobalDeltas must be equal
-	if !ed.GlobalDelta.Equal(o.GlobalDelta) {
-		return false
-	}
-
 	// LocalDeltas length should be the same
 	if len(ed.LocalDeltas) != len(o.LocalDeltas) {
 		return false
@@ -159,6 +154,11 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 		if !ov.Equal(v) {
 			return false
 		}
+	}
+
+	// GlobalDeltas must be equal
+	if !ed.GlobalDelta.Equal(o.GlobalDelta) {
+		return false
 	}
 
 	return true
