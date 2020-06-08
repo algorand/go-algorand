@@ -102,7 +102,7 @@ func main() {
 		}()
 	})
 
-	r.HandleFunc(rpcs.LedgerServiceBlockPath, func(w http.ResponseWriter, r *http.Request) {
+	r.HandleFunc(rpcs.BlockServiceBlockPath, func(w http.ResponseWriter, r *http.Request) {
 		pathVars := mux.Vars(r)
 		versionStr := pathVars["version"]
 		roundStr := pathVars["round"]

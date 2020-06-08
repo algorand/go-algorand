@@ -65,8 +65,8 @@ func createTelemetryConfig() TelemetryConfig {
 		MinLogLevel:        logrus.WarnLevel,
 		ReportHistoryLevel: logrus.WarnLevel,
 		// These credentials are here intentionally. Not a bug.
-		UserName:           "telemetry-v9",
-		Password:           "oq%$FA1TOJ!yYeMEcJ7D688eEOE#MGCu",
+		UserName: "telemetry-v9",
+		Password: "oq%$FA1TOJ!yYeMEcJ7D688eEOE#MGCu",
 	}
 }
 

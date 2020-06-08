@@ -254,7 +254,7 @@ func (cred Credential) LowestOutputDigest() crypto.Digest {
 	if len(lbytes) > len(out) {
 		panic("Cred lowest output too long")
 	}
-	copy(out[len(out) - len(lbytes):], lbytes)
+	copy(out[len(out)-len(lbytes):], lbytes)
 	return out
 }
 
