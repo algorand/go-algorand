@@ -368,7 +368,10 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, cx.EvalParams.Proto.LogicSigVersion)
 		return false, cx.err
 	}
-	if cx.EvalParams.Txn.Txn.RekeyTo != (basics.Address{}) { // Currently no TEAL version knows about the RekeyTo field, but this may change in a future TEAL version
+
+	// Currently no TEAL version knows about the RekeyTo field, but this
+	// may change in a future TEAL version
+	if !cx.EvalParams.Txn.Txn.RekeyTo.IsZero() {
 		cx.err = fmt.Errorf("program version %d doesn't allow transactions with nonzero RekeyTo field", version)
 		return false, cx.err
 	}
