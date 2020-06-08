@@ -57,11 +57,11 @@ var accountsSchema = []string{
 		creator blob)`,
 }
 
+// TODO: Post applications, rename assetcreators -> creatables and rename
+// 'asset' column -> 'creatable'
 var creatablesMigration = []string{
-	`ALTER TABLE assetcreators RENAME TO creatables`,
-	`ALTER TABLE creatables RENAME COLUMN asset TO creatable`,
-	`ALTER TABLE creatables ADD COLUMN ctype INTEGER DEFAULT 0`,
-	`CREATE INDEX creatable_ctype_idx ON creatables (creatable, ctype)`,
+	`ALTER TABLE assetcreators ADD COLUMN ctype INTEGER DEFAULT 0`,
+	`CREATE INDEX assetcreators_ctype_idx ON assetcreators (asset, ctype)`,
 }
 
 var accountsResetExprs = []string{
@@ -69,7 +69,6 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS accounttotals`,
 	`DROP TABLE IF EXISTS accountbase`,
 	`DROP TABLE IF EXISTS assetcreators`,
-	`DROP TABLE IF EXISTS creatables`,
 }
 
 type accountDelta struct {
@@ -92,7 +91,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 
 	// Run creatables migration if it hasn't run yet
 	var creatableMigrated bool
-	err := tx.QueryRow("SELECT 1 FROM sqlite_master WHERE type='table' AND name='creatables'").Scan(&creatableMigrated)
+	err := tx.QueryRow("SELECT 1 FROM sqlite_master WHERE type='index' AND name='assetcreators_ctype_idx'").Scan(&creatableMigrated)
 	if err == sql.ErrNoRows {
 		// Run migration
 		for _, migrateCmd := range creatablesMigration {
@@ -159,7 +158,7 @@ func accountsDbInit(q db.Queryable) (*accountsDbQueries, error) {
 	var err error
 	qs := &accountsDbQueries{}
 
-	qs.listCreatablesStmt, err = q.Prepare("SELECT creatable, creator, ctype FROM creatables WHERE creatable <= ? AND ctype = ? ORDER BY creatable desc LIMIT ?")
+	qs.listCreatablesStmt, err = q.Prepare("SELECT asset, creator, ctype FROM assetcreators WHERE asset <= ? AND ctype = ? ORDER BY asset desc LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +168,7 @@ func accountsDbInit(q db.Queryable) (*accountsDbQueries, error) {
 		return nil, err
 	}
 
-	qs.lookupCreatorStmt, err = q.Prepare("SELECT creator FROM creatables WHERE creatable = ? AND ctype = ?")
+	qs.lookupCreatorStmt, err = q.Prepare("SELECT creator FROM assetcreators WHERE asset = ? AND ctype = ?")
 	if err != nil {
 		return nil, err
 	}
@@ -333,13 +332,13 @@ func accountsNewRound(tx *sql.Tx, rnd basics.Round, updates map[basics.Address]a
 	}
 	defer replaceStmt.Close()
 
-	insertCreatableIdxStmt, err := tx.Prepare("INSERT INTO creatables (creatable, creator, ctype) VALUES (?, ?, ?)")
+	insertCreatableIdxStmt, err := tx.Prepare("INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)")
 	if err != nil {
 		return
 	}
 	defer insertCreatableIdxStmt.Close()
 
-	deleteCreatableIdxStmt, err := tx.Prepare("DELETE FROM creatables WHERE creatable=? AND ctype=?")
+	deleteCreatableIdxStmt, err := tx.Prepare("DELETE FROM assetcreators WHERE asset=? AND ctype=?")
 	if err != nil {
 		return
 	}
