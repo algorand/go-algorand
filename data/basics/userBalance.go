@@ -286,6 +286,9 @@ type CreatableType uint64
 
 const (
 	// AssetCreatable is the CreatableType corresponding to assets
+	// This value must be 0 to align with the applications database
+	// upgrade. At migration time, we set the default 'ctype' column of the
+	// creators table to 0 so that existing assets have the correct type.
 	AssetCreatable CreatableType = 0
 
 	// AppCreatable is the CreatableType corresponds to apps
