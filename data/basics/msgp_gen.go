@@ -10,6 +10,184 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
+// The following msgp objects are implemented in this file:
+// AccountData
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
+// Address
+//    |-----> (*) MarshalMsg
+//    |-----> (*) CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> (*) Msgsize
+//    |-----> (*) MsgIsZero
+//
+// AppIndex
+//     |-----> MarshalMsg
+//     |-----> CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> Msgsize
+//     |-----> MsgIsZero
+//
+// AppLocalState
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
+//
+// AppParams
+//     |-----> (*) MarshalMsg
+//     |-----> (*) CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> (*) Msgsize
+//     |-----> (*) MsgIsZero
+//
+// AssetHolding
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
+//
+// AssetIndex
+//      |-----> MarshalMsg
+//      |-----> CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> Msgsize
+//      |-----> MsgIsZero
+//
+// AssetParams
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
+// BalanceRecord
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
+//
+// CreatableIndex
+//        |-----> MarshalMsg
+//        |-----> CanMarshalMsg
+//        |-----> (*) UnmarshalMsg
+//        |-----> (*) CanUnmarshalMsg
+//        |-----> Msgsize
+//        |-----> MsgIsZero
+//
+// CreatableType
+//       |-----> MarshalMsg
+//       |-----> CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> Msgsize
+//       |-----> MsgIsZero
+//
+// DeltaAction
+//      |-----> MarshalMsg
+//      |-----> CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> Msgsize
+//      |-----> MsgIsZero
+//
+// EvalDelta
+//     |-----> (*) MarshalMsg
+//     |-----> (*) CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> (*) Msgsize
+//     |-----> (*) MsgIsZero
+//
+// Round
+//   |-----> MarshalMsg
+//   |-----> CanMarshalMsg
+//   |-----> (*) UnmarshalMsg
+//   |-----> (*) CanUnmarshalMsg
+//   |-----> Msgsize
+//   |-----> MsgIsZero
+//
+// RoundInterval
+//       |-----> MarshalMsg
+//       |-----> CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> Msgsize
+//       |-----> MsgIsZero
+//
+// StateDelta
+//      |-----> MarshalMsg
+//      |-----> CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> Msgsize
+//      |-----> MsgIsZero
+//
+// StateSchema
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
+// Status
+//    |-----> MarshalMsg
+//    |-----> CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> Msgsize
+//    |-----> MsgIsZero
+//
+// TealKeyValue
+//       |-----> MarshalMsg
+//       |-----> CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> Msgsize
+//       |-----> MsgIsZero
+//
+// TealType
+//     |-----> MarshalMsg
+//     |-----> CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> Msgsize
+//     |-----> MsgIsZero
+//
+// TealValue
+//     |-----> (*) MarshalMsg
+//     |-----> (*) CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> (*) Msgsize
+//     |-----> (*) MsgIsZero
+//
+// ValueDelta
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
+
 // MarshalMsg implements msgp.Marshaler
 func (z *AccountData) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
