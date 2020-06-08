@@ -65,7 +65,7 @@ Constants are pushed onto the stack by `intc`, `intc_[0123]`, `bytec`, and `byte
 #### TypeEnum constants
 | Value | Constant name | Description |
 | --- | --- | --- |
-| 0 | unknown | Unknown type. Invalid transaction. |
+| 0 | unknown | Unknown type. Invalid transaction |
 | 1 | pay | Payment |
 | 2 | keyreg | KeyRegistration |
 | 3 | acfg | AssetConfig |
@@ -171,7 +171,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 0 | Sender | []byte | 32 byte address |
 | 1 | Fee | uint64 | micro-Algos |
 | 2 | FirstValid | uint64 | round number |
-| 3 | FirstValidTime | uint64 | Causes program to fail; reserved for future use. |
+| 3 | FirstValidTime | uint64 | Causes program to fail; reserved for future use |
 | 4 | LastValid | uint64 | round number |
 | 5 | Note | []byte |  |
 | 6 | Lease | []byte |  |
@@ -190,7 +190,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 19 | AssetSender | []byte | 32 byte address. Causes clawback of all value of asset from AssetSender if Sender is the Clawback address of the asset. |
 | 20 | AssetReceiver | []byte | 32 byte address |
 | 21 | AssetCloseTo | []byte | 32 byte address |
-| 22 | GroupIndex | uint64 | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1. |
+| 22 | GroupIndex | uint64 | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1 |
 | 23 | TxID | []byte | The computed ID for this transaction. 32 bytes. |
 | 24 | ApplicationID | uint64 | ApplicationID from ApplicationCall transaction. LogicSigVersion >= 2. |
 | 25 | OnCompletion | uint64 | ApplicationCall transaction on completion action. LogicSigVersion >= 2. |
