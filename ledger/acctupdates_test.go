@@ -19,6 +19,7 @@ package ledger
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"runtime"
 	"sync"
 	"testing"
@@ -522,6 +523,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	config.Consensus[testProtocolVersion] = protoParams
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
+		os.RemoveAll("./catchpoints")
 	}()
 
 	ml := makeMockLedgerForTracker(t)
