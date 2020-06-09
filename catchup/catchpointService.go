@@ -58,7 +58,7 @@ type CatchpointCatchupService struct {
 	ctx            context.Context
 	cancelCtxFunc  context.CancelFunc
 	running        sync.WaitGroup
-	ledgerAccessor *ledger.CatchpointCatchupAccessor
+	ledgerAccessor ledger.CatchpointCatchupAccessor
 	stage          ledger.CatchpointCatchupState
 	log            logging.Logger
 	newService     bool // indicates whether this service was created after the node was running ( i.e. true ) or the node just started to find that it was previously perfoming catchup
