@@ -30,6 +30,11 @@ type GenesisBalances struct {
 	timestamp   int64
 }
 
+// Balances returns the balances field of GenesisBalances
+func (gb GenesisBalances) Balances() map[basics.Address]basics.AccountData {
+	return gb.balances
+}
+
 // MakeGenesisBalances returns the information needed to bootstrap the ledger based on the current time
 func MakeGenesisBalances(balances map[basics.Address]basics.AccountData, feeSink, rewardsPool basics.Address) GenesisBalances {
 	return MakeTimestampedGenesisBalances(balances, feeSink, rewardsPool, time.Now().Unix())
