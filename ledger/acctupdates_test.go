@@ -510,6 +510,9 @@ func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
 	trieCachedNodesCount = defaultTrieCachedNodesCount
 }
 
+// TestLargeAccountCountCatchpointGeneration creates a ledger containing a large set of accounts ( i.e. 100K accounts )
+// and attempts to have the accountUpdates create the associated catchpoint. It's designed precisly around setting an
+// environment which would quickly ( i.e. after 32 rounds ) would start producing catchpoints.
 func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
