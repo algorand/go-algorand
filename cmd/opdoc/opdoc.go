@@ -307,4 +307,10 @@ func main() {
 	enc := json.NewEncoder(langspecjs)
 	enc.Encode(buildLanguageSpec(opGroups))
 	langspecjs.Close()
+
+	tealtm, _ := os.Create("teal.tmLanguage.json")
+	enc = json.NewEncoder(tealtm)
+	enc.SetIndent("", "  ")
+	enc.Encode(buildSyntaxHighlight())
+	tealtm.Close()
 }
