@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
-# If enlistment isn't clean, it's 'dev'
-CWD=$(cd "$(dirname "$0")" && pwd -P)
+# If workspace isn't clean, it's 'dev'.
 
 if [ "$1" = "master" ]; then
     echo "master"

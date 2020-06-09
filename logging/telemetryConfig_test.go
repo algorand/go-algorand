@@ -34,8 +34,8 @@ func Test_loadTelemetryConfig(t *testing.T) {
 		MinLogLevel:        4,
 		ReportHistoryLevel: 4,
 		// These credentials are here intentionally. Not a bug.
-		UserName:           "telemetry-v9",
-		Password:           "oq%$FA1TOJ!yYeMEcJ7D688eEOE#MGCu",
+		UserName: "telemetry-v9",
+		Password: "oq%$FA1TOJ!yYeMEcJ7D688eEOE#MGCu",
 	}
 
 	a := require.New(t)
