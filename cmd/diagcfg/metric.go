@@ -17,18 +17,13 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/tools/network"
-	"github.com/algorand/go-algorand/tools/network/cloudflare"
 )
 
 var (
