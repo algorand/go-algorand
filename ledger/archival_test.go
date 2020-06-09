@@ -258,7 +258,7 @@ func makeUnsignedApplicationCallTx(appIdx uint64, onCompletion transactions.OnCo
 
 	// If creating, set programs
 	if appIdx == 0 {
-		testprog := `
+		testprog := `#pragma version 2
 			// Write global["foo"] = "bar"
 			byte base64 Zm9v
 			byte base64 YmFy

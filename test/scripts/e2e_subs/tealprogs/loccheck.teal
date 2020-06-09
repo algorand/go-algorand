@@ -1,3 +1,4 @@
+#pragma version 2
 // This program approves all transactions whose first arg is "hello"
 // Then, accounts can write "foo": "bar" to their LocalState by
 // sending a transaction whose first argument is "write". Finally,

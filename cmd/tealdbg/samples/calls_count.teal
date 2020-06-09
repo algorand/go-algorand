@@ -1,3 +1,4 @@
+#pragma version 2
 // a simple global and local calls counter app
 byte "counter"
 dup

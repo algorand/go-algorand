@@ -18,17 +18,18 @@ package pingpong
 
 import (
 	"fmt"
+	"math"
+	"os"
+	"sort"
+	"strings"
+	"time"
+
 	"github.com/algorand/go-algorand/crypto"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
-	"math"
-	"os"
-	"sort"
-	"strings"
-	"time"
 )
 
 func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, cfg PpConfig, err error) {
@@ -402,7 +403,7 @@ func genMaxClone(numKeys int) []byte {
 	`
 
 	// generate assembly
-	var progParts []string
+	progParts := []string{"#pragma version 2"}
 	progParts = append(progParts, flipBranch)
 	progParts = append(progParts, writePrefix)
 	for i := 0; i < numKeys; i++ {
