@@ -343,17 +343,17 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		// check V1 assembler fails
 		program, err := AssembleStringWithVersion(text, 0)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "global unknown arg")
+		require.Contains(t, err.Error(), "available in version 2")
 		require.Nil(t, program)
 
 		program, err = AssembleStringWithVersion(text, 1)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "global unknown arg")
+		require.Contains(t, err.Error(), "available in version 2")
 		require.Nil(t, program)
 
 		program, err = AssembleString(text)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "global unknown arg")
+		require.Contains(t, err.Error(), "available in version 2")
 		require.Nil(t, program)
 
 		program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
@@ -416,17 +416,17 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			// check V1 assembler fails
 			program, err := AssembleStringWithVersion(text, 0)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "txn unknown arg")
+			require.Contains(t, err.Error(), "available in version 2")
 			require.Nil(t, program)
 
 			program, err = AssembleStringWithVersion(text, 1)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "txn unknown arg")
+			require.Contains(t, err.Error(), "available in version 2")
 			require.Nil(t, program)
 
 			program, err = AssembleString(text)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "txn unknown arg")
+			require.Contains(t, err.Error(), "available in version 2")
 			require.Nil(t, program)
 
 			program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)

@@ -701,8 +701,11 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 		return errors.New("txn expects one argument")
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
-	if !ok || fs.version > ops.Version {
+	if !ok {
 		return fmt.Errorf("txn unknown arg %s", args[0])
+	}
+	if fs.version > ops.Version {
+		return fmt.Errorf("txn %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	val := fs.field
 	return ops.Txn(uint64(val))
@@ -724,8 +727,11 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 		return errors.New("txna expects two arguments")
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
-	if !ok || fs.version > ops.Version || fs.field != ApplicationArgs && fs.field != Accounts {
+	if !ok || fs.field != ApplicationArgs && fs.field != Accounts {
 		return fmt.Errorf("txna unknown arg %s", args[0])
+	}
+	if fs.version > ops.Version {
+		return fmt.Errorf("txna %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[1], 0, 64)
 	if err != nil {
@@ -744,8 +750,11 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 		return err
 	}
 	fs, ok := txnFieldSpecByName[args[1]]
-	if !ok || fs.version > ops.Version {
-		return fmt.Errorf("gtxn unknown arg %s", args[0])
+	if !ok {
+		return fmt.Errorf("gtxn unknown arg %s", args[1])
+	}
+	if fs.version > ops.Version {
+		return fmt.Errorf("gtxn %s available in version %d. Missed #pragma version?", args[1], fs.version)
 	}
 	val := fs.field
 	return ops.Gtxn(gtid, uint64(val))
@@ -770,8 +779,11 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 		return err
 	}
 	fs, ok := txnFieldSpecByName[args[1]]
-	if !ok || fs.version > ops.Version || fs.field != ApplicationArgs && fs.field != Accounts {
-		return fmt.Errorf("gtxna unknown arg %s", args[0])
+	if !ok || fs.field != ApplicationArgs && fs.field != Accounts {
+		return fmt.Errorf("gtxna unknown arg %s", args[1])
+	}
+	if fs.version > ops.Version {
+		return fmt.Errorf("gtxna %s available in version %d. Missed #pragma version?", args[1], fs.version)
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[2], 0, 64)
 	if err != nil {
@@ -786,8 +798,11 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 		return errors.New("global expects one argument")
 	}
 	fs, ok := globalFieldSpecByName[args[0]]
-	if !ok || fs.version > ops.Version {
+	if !ok {
 		return fmt.Errorf("global unknown arg %v", args[0])
+	}
+	if fs.version > ops.Version {
+		return fmt.Errorf("global %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	val := fs.gfield
 	return ops.Global(uint64(val))
