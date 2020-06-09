@@ -981,8 +981,8 @@ func (ops *OpStream) checkArgs(spec OpSpec) error {
 	return nil
 }
 
-// Assemble reads text from an input and accumulates the program
-func (ops *OpStream) Assemble(fin io.Reader) error {
+// assemble reads text from an input and accumulates the program
+func (ops *OpStream) assemble(fin io.Reader) error {
 	scanner := bufio.NewScanner(fin)
 	ops.sourceLine = 0
 	for scanner.Scan() {
@@ -1070,7 +1070,13 @@ func (ops *OpStream) resolveLabels() (err error) {
 }
 
 // AssemblerDefaultVersion what version of code do we emit by default
-const AssemblerDefaultVersion = LogicVersion
+// AssemblerDefaultVersion is set to 1 by puprose
+// to prevent accidental building of v1 official templates with version 2
+// because these templates are not aware of rekeying.
+const AssemblerDefaultVersion = 1
+
+// AssemblerMaxVersion is a maximum supported assembler version
+const AssemblerMaxVersion = LogicVersion
 const assemblerNoVersion = (^uint64(0))
 
 // Bytes returns the finished program bytes
@@ -1150,7 +1156,7 @@ func AssembleStringWithVersion(text string, version uint64) ([]byte, error) {
 
 // AssembleStringWithVersionEx takes an entire program in a string and assembles it to bytecode
 // using the assembler version specified.
-// If version is zero it uses #pragma version or fallbacks to AssemblerDefaultVersion.
+// If version is assemblerNoVersion it uses #pragma version or fallbacks to AssemblerDefaultVersion.
 // It also returns PC to source line mapping.
 func AssembleStringWithVersionEx(text string, version uint64) ([]byte, map[int]int, error) {
 	sr := strings.NewReader(text)
@@ -1177,7 +1183,7 @@ func AssembleStringWithVersionEx(text string, version uint64) ([]byte, map[int]i
 
 	sr = strings.NewReader(text)
 	ops := OpStream{Version: version}
-	err = ops.Assemble(sr)
+	err = ops.assemble(sr)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1227,7 +1233,7 @@ func (ps *PragmaStream) Process(fin io.Reader) (err error) {
 			if err != nil {
 				return
 			}
-			if ver < 1 || ver > AssemblerDefaultVersion {
+			if ver < 1 || ver > AssemblerMaxVersion {
 				err = fmt.Errorf("unsupported version: %d", ver)
 				return
 			}

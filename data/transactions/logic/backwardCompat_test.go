@@ -261,8 +261,12 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	program, err := hex.DecodeString(programTEALv1)
 	require.NoError(t, err)
 
-	// ensure old program is the same as a new one except TEAL version byte
-	program2, err := AssembleString(sourceTEALv1)
+	// ensure old program is the same as a new one when assembling without version
+	program1, err := AssembleString(sourceTEALv1)
+	require.NoError(t, err)
+	require.Equal(t, program, program1)
+	// ensure the old program is the same as a new one except TEAL version byte
+	program2, err := AssembleStringWithVersion(sourceTEALv1, AssemblerMaxVersion)
 	require.NoError(t, err)
 	require.Equal(t, program[1:], program2[1:])
 
@@ -348,6 +352,11 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		require.Nil(t, program)
 
 		program, err = AssembleString(text)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "global unknown arg")
+		require.Nil(t, program)
+
+		program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 		require.NoError(t, err)
 
 		proto := config.Consensus[protocol.ConsensusV23]
@@ -416,6 +425,11 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			require.Nil(t, program)
 
 			program, err = AssembleString(text)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "txn unknown arg")
+			require.Nil(t, program)
+
+			program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 			require.NoError(t, err)
 
 			proto := config.Consensus[protocol.ConsensusV23]
