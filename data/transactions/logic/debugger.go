@@ -215,7 +215,7 @@ func (cx *evalContext) refreshDebugState() *DebugState {
 			}
 		}
 		for addr, cow := range cx.localStateCows {
-			delta := make(basics.StateDelta)
+			delta := make(basics.StateDelta, len(cow.cow.delta))
 			for k, v := range cow.cow.delta {
 				delta[k] = v
 			}
