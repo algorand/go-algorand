@@ -192,6 +192,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 		for _, acc := range accessors {
 			acc.Close()
 		}
+
 	}
 
 	// generate accounts
@@ -244,17 +245,19 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 
 	// generate test transactions
 	const inMem = true
-	ledger, err := data.LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusCurrentVersion, bootstrap, genesisID, genesisHash, nil, config.GetDefaultLocal())
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledger, err := data.LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusCurrentVersion, bootstrap, genesisID, genesisHash, nil, cfg)
 	if err != nil {
 		panic(err)
 	}
 
 	tx := make([]transactions.SignedTxn, TXs)
 	latest := ledger.Latest()
-	bal, err := ledger.AllBalances(latest)
-	if err != nil {
-		panic(err)
+	if latest != 0 {
+		panic(fmt.Errorf("newly created ledger doesn't start on round 0"))
 	}
+	bal := bootstrap.Balances()
 
 	for i := 0; i < TXs; i++ {
 		send := gen.Int() % P
@@ -278,6 +281,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 
 		amt := basics.MicroAlgos{Raw: uint64(gen.Int() % xferMax)}
 		fee := basics.MicroAlgos{Raw: uint64(gen.Int()%maxFee) + proto.MinTxnFee}
+
 		t := transactions.Transaction{
 			Type: protocol.PaymentTx,
 			Header: transactions.Header{
@@ -310,5 +314,6 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*d
 		rbal.MicroAlgos.Raw += amt.Raw
 		bal[raddr] = rbal
 	}
+
 	return ledger, roots, parts, tx, release
 }
