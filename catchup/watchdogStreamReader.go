@@ -56,7 +56,7 @@ type watchdogStreamReader struct {
 	readerCond    *sync.Cond     // conditional check variable for the reader goroutine
 }
 
-// makeWatchdogStreamReader creates a watchdogStreamReader and initialize it.
+// makeWatchdogStreamReader creates a watchdogStreamReader and initializes it.
 func makeWatchdogStreamReader(underlayingReader io.Reader, readSize uint64, readaheadSize uint64, readaheadDuration time.Duration) *watchdogStreamReader {
 	reader := &watchdogStreamReader{
 		underlayingReader: underlayingReader,
@@ -75,7 +75,7 @@ func makeWatchdogStreamReader(underlayingReader io.Reader, readSize uint64, read
 	return reader
 }
 
-// Reset extends the time and data limits by another "block", as well as return an error code if the data stream has reached to it's end.
+// Reset extends the time and data limits by another "block", as well as returns an error code if the data stream has reached to it's end.
 func (r *watchdogStreamReader) Reset() error {
 	r.readerMu.Lock()
 	if r.readError != nil && len(r.stageBuffer) == 0 {
@@ -89,7 +89,7 @@ func (r *watchdogStreamReader) Reset() error {
 	return nil
 }
 
-// Read reads from the attached data stream, and abort prematurally in case we've exceeed the data size or time allowed for the read to complete.
+// Read reads from the attached data stream, and aborts prematurally in case we've exceeed the data size or time allowed for the read to complete.
 func (r *watchdogStreamReader) Read(p []byte) (n int, err error) {
 	r.readerMu.Lock()
 	defer r.readerMu.Unlock()
@@ -116,7 +116,7 @@ func (r *watchdogStreamReader) Read(p []byte) (n int, err error) {
 	return
 }
 
-// ticker is the internal watchdogStreamReader goroutine which tracks the timeout operations. It operates on a single deadline at a time, and abort when it's done.
+// ticker is the internal watchdogStreamReader goroutine which tracks the timeout operations. It operates on a single deadline at a time, and aborts when it's done.
 // the Reset would create a new ticker goroutine as needed.
 func (r *watchdogStreamReader) ticker() {
 	timerCh := time.After(r.readaheadDuration)
@@ -134,7 +134,7 @@ func (r *watchdogStreamReader) ticker() {
 	}
 }
 
-// puller is the internal watchdogStreamReader goroutine which pulls that data from the associated incoming data stream and store it in the staging buffer.
+// puller is the internal watchdogStreamReader goroutine which pulls that data from the associated incoming data stream and stores it in the staging buffer.
 func (r *watchdogStreamReader) puller() {
 	var n int
 	for err := error(nil); err == nil; {
@@ -161,7 +161,7 @@ func (r *watchdogStreamReader) puller() {
 	}
 }
 
-// Close shuts down the watchdogStreamReader and signal it's internal goroutines to be shut down.
+// Close shuts down the watchdogStreamReader and signals it's internal goroutines to be shut down.
 func (r *watchdogStreamReader) Close() {
 	// signal the puller goroutine to shut down
 	close(r.readerClose)
