@@ -106,6 +106,14 @@ func buildSyntaxHighlight() *tmLanguage {
 				Name:  "constant.numeric.teal",
 				Match: "\\b([0-9]+)\\b",
 			},
+			{
+				Name:  "constant.numeric.teal",
+				Match: "\\b(?<=int\\s+)(0x[0-9]+)\\b",
+			},
+			{
+				Name:  "string.quoted.double.teal",
+				Match: "\\b(?<=byte\\s+)(0x[0-9]+)\\b",
+			},
 		},
 	}
 	var allNamedFields []string
@@ -125,7 +133,18 @@ func buildSyntaxHighlight() *tmLanguage {
 		Patterns: []pattern{
 			{
 				Name:  "support.function.teal",
-				Match: "\\b(base64|b64)\\b",
+				Match: "\\b(base64|b64|base32|b32)(?:\\(|\\s+)([a-zA-Z0-9\\+\\/\\=]+)(?:\\)|\\s?|$)",
+				Captures: map[string]pattern{
+					"1": {Name: "support.function.teal"},
+					"2": {Name: "string.quoted.triple.teal"},
+				},
+			},
+			{
+				Match: "^(addr)\\s+([A-Z2-7\\=]+)",
+				Captures: map[string]pattern{
+					"1": {Name: "keyword.other.teal"},
+					"2": {Name: "string.unquoted.teal"},
+				},
 			},
 		},
 	}
@@ -137,7 +156,7 @@ func buildSyntaxHighlight() *tmLanguage {
 				Match: fmt.Sprintf("^(%s)\\b", strings.Join(opgroup.Ops, "|")),
 			})
 		case "Loading Values":
-			loading := []string{"int", "byte"}
+			loading := []string{"int", "byte", "addr"}
 			loading = append(loading, opgroup.Ops...)
 			keywords.Patterns = append(keywords.Patterns, pattern{
 				Name:  "keyword.other.teal",
