@@ -200,6 +200,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 29 | NumAccounts | uint64 | Number of Accounts. LogicSigVersion >= 2. |
 | 30 | ApprovalProgram | []byte | Approval program. LogicSigVersion >= 2. |
 | 31 | ClearStateProgram | []byte | Clear state program. LogicSigVersion >= 2. |
+| 32 | RekeyTo | []byte | Sender's new AuthAddr. LogicSigVersion >= 2. |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.

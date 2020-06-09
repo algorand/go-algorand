@@ -380,6 +380,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 29 | NumAccounts | uint64 | Number of Accounts. LogicSigVersion >= 2. |
 | 30 | ApprovalProgram | []byte | Approval program. LogicSigVersion >= 2. |
 | 31 | ClearStateProgram | []byte | Clear state program. LogicSigVersion >= 2. |
+| 32 | RekeyTo | []byte | Sender's new AuthAddr. LogicSigVersion >= 2. |
 
 
 TypeEnum mapping:

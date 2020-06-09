@@ -1433,7 +1433,7 @@ byte 0x706179
 ==
 &&
 txn NumAppArgs
-int 1
+int 2
 ==
 &&
 txna Accounts 0
@@ -1456,6 +1456,10 @@ txn ClearStateProgram
 concat
 sha512_256
 arg 10
+==
+&&
+txn RekeyTo
+txna ApplicationArgs 1
 ==
 &&
 `
@@ -1486,8 +1490,11 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.ApplicationID = basics.AppIndex(123)
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Receiver
-	txn.Txn.ApplicationArgs = make([][]byte, 1)
-	txn.Txn.ApplicationArgs[0] = []byte(protocol.PaymentTx)
+	txn.Txn.ApplicationArgs = [][]byte{
+		[]byte(protocol.PaymentTx),
+		[]byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui05"),
+	}
+	copy(txn.Txn.RekeyTo[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui05"))
 	return txn
 }
 
@@ -1694,7 +1701,7 @@ byte 0x706179
 ==
 &&
 gtxn 0 NumAppArgs
-int 1
+int 2
 ==
 &&
 gtxna 0 Accounts 0

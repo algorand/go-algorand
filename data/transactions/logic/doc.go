@@ -304,6 +304,7 @@ var txnFieldDocList = []stringString{
 	{"NumAccounts", "Number of Accounts"},
 	{"ApprovalProgram", "Approval program"},
 	{"ClearStateProgram", "Clear state program"},
+	{"RekeyTo", "Sender's new AuthAddr"},
 }
 
 // TxnFieldDocs are notes on fields available by `txn` and `gtxn`
