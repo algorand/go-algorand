@@ -17,7 +17,6 @@
 package basics
 
 import (
-	"errors"
 	"reflect"
 
 	"github.com/algorand/go-algorand/config"
@@ -75,21 +74,6 @@ func (s Status) String() string {
 		return "Not Participating"
 	}
 	return ""
-}
-
-// UnmarshalStatus decodes string status value back to Status constant
-func UnmarshalStatus(value string) (s Status, err error) {
-	switch value {
-	case "Offline":
-		s = Offline
-	case "Online":
-		s = Online
-	case "Not Participating":
-		s = NotParticipating
-	default:
-		err = errors.New("invalid status value: " + value)
-	}
-	return
 }
 
 // AccountData contains the data associated with a given address.
