@@ -282,3 +282,26 @@ type PeerConnectionDetails struct {
 	// MessageDelay is the avarage relative message delay. Not being used for incoming connection.
 	MessageDelay int64 `json:",omitempty"`
 }
+
+// CatchpointGenerationEvent event
+const CatchpointGenerationEvent Event = "CatchpointGeneration"
+
+// CatchpointGenerationEventDetails is generated once a catchpoint file is being created, and provide
+// some statistics about that event.
+type CatchpointGenerationEventDetails struct {
+	// WritingDuration is the total elapsed time it took to write the catchpoint file.
+	WritingDuration uint64
+	// CPUTime is the single-core time spent waiting to the catchpoint file to be written.
+	// this time excludes all the sleeping time taken, and represent the actual time it would
+	// take if we were doing the writing on a dedicated process
+	CPUTime uint64
+	// BalancesWriteDuration is the time duration it took to write the balances portion
+	// ( i.e. update the account balances + update the trie )
+	BalancesWriteTime uint64
+	// AccountsCount is the number of accounts that were written into the generated catchpoint file
+	AccountsCount uint64
+	// FileSize is the size of the catchpoint file, in bytes.
+	FileSize uint64
+	// CatchpointLabel is the catchpoint label for which the catchpoint file was generated.
+	CatchpointLabel string
+}
