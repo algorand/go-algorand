@@ -134,7 +134,9 @@ func TestGetStatusAfterBlock(t *testing.T) {
 	defer releasefunc()
 	err := handler.WaitForBlock(c, 0)
 	require.NoError(t, err)
-	require.Equal(t, 200, rec.Code)
+	// Expect 400 - the test ledger will always cause "errRequestedRoundInUnsupportedRound",
+	// as it has not participated in agreement to build blockheaders
+	require.Equal(t, 400, rec.Code)
 }
 
 func TestGetTransactionParams(t *testing.T) {
