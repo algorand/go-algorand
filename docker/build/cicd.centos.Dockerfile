@@ -8,7 +8,7 @@ RUN yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.n
     libtool gcc-c++ libstdc++-devel libstdc++-static rpmdevtools createrepo rpm-sign bzip2 which ShellCheck \
     libffi-devel openssl-devel
 WORKDIR /root
-ARG ARCH="amd64"
+ARG ARCH
 ENV GOLANG_VERSION 1.12.17
 RUN wget https://dl.google.com/go/go${GOLANG_VERSION}.linux-${ARCH%v*}.tar.gz \
     && tar -xvf go${GOLANG_VERSION}.linux-${ARCH%v*}.tar.gz && \
@@ -31,4 +31,3 @@ RUN rm -rf $GOPATH/src/github.com/algorand/go-algorand && \
     mkdir -p $GOPATH/src/github.com/algorand/go-algorand
 RUN echo "vm.max_map_count = 262144" >> /etc/sysctl.conf
 CMD ["/bin/bash"]
-
