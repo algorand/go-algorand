@@ -179,6 +179,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Permission error on accessing telemetry config: %v", err)
 			os.Exit(1)
 		}
+		fmt.Fprintln(os.Stdout, "Telemetry configured from file:", telemetryConfig.FilePath)
 
 		telemetryConfig.SendToLog = telemetryConfig.SendToLog || cfg.TelemetryToLog
 
