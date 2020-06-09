@@ -583,23 +583,25 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 
 // Status returns a StatusReport structure reporting our status as Active and with our ledger's LastRound
 func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
-	s.LastRound = node.ledger.Latest()
-	b, err := node.ledger.BlockHdr(s.LastRound)
-	if err != nil {
-		return
-	}
-
 	node.mu.Lock()
 	defer node.mu.Unlock()
 
-	s.LastVersion = b.CurrentProtocol
-	s.NextVersion, s.NextVersionRound, s.NextVersionSupported = b.NextVersionInfo()
-
 	s.LastRoundTimestamp = node.lastRoundTimestamp
 	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
-	s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
-	s.LastCatchpoint = node.ledger.GetLastCatchpointLabel()
+
 	if node.catchpointCatchupService != nil {
+		// we're in catchpoint catchup mode.
+		lastBlockHeader := node.catchpointCatchupService.GetLatestBlockHeader()
+		s.LastRound = lastBlockHeader.Round
+		s.LastVersion = lastBlockHeader.CurrentProtocol
+		s.NextVersion, s.NextVersionRound, s.NextVersionSupported = lastBlockHeader.NextVersionInfo()
+		s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
+
+		// for now, I'm leaving this commented out. Once we refactor some of the ledger locking mechanisms, we
+		// should be able to make this call work.
+		//s.LastCatchpoint = node.ledger.GetLastCatchpointLabel()
+
+		// report back the catchpoint catchup progress statistics
 		stats := node.catchpointCatchupService.GetStatistics()
 		s.Catchpoint = stats.CatchpointLabel
 		s.CatchpointCatchupTotalAccounts = stats.TotalAccounts
@@ -608,6 +610,18 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 		s.CatchpointCatchupAcquiredBlocks = stats.AcquiredBlocks
 		s.CatchupTime = time.Now().Sub(stats.StartTime)
 	} else {
+		// we're not in catchpoint catchup mode
+		var b bookkeeping.BlockHeader
+		s.LastRound = node.ledger.Latest()
+		b, err = node.ledger.BlockHdr(s.LastRound)
+		if err != nil {
+			return
+		}
+		s.LastVersion = b.CurrentProtocol
+		s.NextVersion, s.NextVersionRound, s.NextVersionSupported = b.NextVersionInfo()
+
+		s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
+		s.LastCatchpoint = node.ledger.GetLastCatchpointLabel()
 		s.SynchronizingTime = node.catchupService.SynchronizingTime()
 		s.CatchupTime = node.catchupService.SynchronizingTime()
 	}

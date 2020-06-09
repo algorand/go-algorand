@@ -16,7 +16,7 @@
 
 package agreement
 
-//go:generate dbgen -i agree.sql -p agreement -n agree -o agreeInstall.go
+//go:generate dbgen -i agree.sql -p agreement -n agree -o agreeInstall.go -h ../scripts/LICENSE_HEADER
 import (
 	"context"
 	"time"
