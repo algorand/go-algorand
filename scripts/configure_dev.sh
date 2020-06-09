@@ -9,11 +9,13 @@ Options:
     -f        Force dependencies to be installed (May overwrite existing files)
 "
 
+SKIP_GO_DEPS=false
+FORCE=false
 while getopts ":sfh" opt; do
   case ${opt} in
-    s ) SKIP_GO_DEPS="True"
+    s ) SKIP_GO_DEPS=true
       ;;
-    f ) FORCE="True"
+    f ) FORCE=true
       ;;
     h ) echo "${HELP}"
         exit 0
@@ -29,7 +31,7 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 OS=$("$SCRIPTPATH"/ostype.sh)
 
 function install_or_upgrade {
-    if [[ ${FORCE} == "True" ]]; then
+    if ${FORCE} ; then
         BREW_FORCE="-f"
     fi
     if brew ls --versions "$1" >/dev/null; then
@@ -61,7 +63,7 @@ elif [ "${OS}" = "darwin" ]; then
     install_or_upgrade python3
 fi
 
-if [[ ${SKIP_GO_DEPS} == "True" ]]; then
+if ${SKIP_GO_DEPS} ; then
     exit 0
 fi
 

@@ -2,7 +2,7 @@
 
 set -ex
 
-export WORKDIR="$1"
+export WORKDIR="$6"
 
 if [ -z "$WORKDIR" ]
 then
@@ -10,11 +10,11 @@ then
     exit 1
 fi
 
-export OS_TYPE="$2"
-export ARCH_TYPE="$3"
-export ARCH_BIT="$4"
-export VERSION=${VERSION:-$5}
-export PKG_TYPE="$6"
+export OS_TYPE="$1"
+export ARCH_TYPE="$2"
+export ARCH_BIT="$3"
+export VERSION=${VERSION:-$4}
+export PKG_TYPE="$5"
 BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
 export BRANCH
 CHANNEL=${CHANNEL:-$("$WORKDIR/scripts/compute_branch_channel.sh" "$BRANCH")}

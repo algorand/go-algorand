@@ -23,12 +23,12 @@ Options:
     -c        Channel of build you are building binaries with this script
     -n        Run tests without building binaries (Binaries are expected in PATH)
 "
-
+NO_BUILD=false
 while getopts ":c:nh" opt; do
   case ${opt} in
     c ) CHANNEL=$OPTARG
       ;;
-    n ) NO_BUILD="True"
+    n ) NO_BUILD=true
         GO_TEST_ARGS="-norace"
       ;;
     h ) echo "${HELP}"
@@ -63,7 +63,7 @@ echo Killing all instances and installing current build
 
 pkill -u $(whoami) -x algod || true
 
-if [[ ! ${NO_BUILD} == "True" ]]; then
+if ! ${NO_BUILD} ; then
     ./scripts/local_install.sh -c ${CHANNEL} -p ${BINDIR} -d ${DATADIR}
     export PATH=${BINDIR}:${PATH}
 fi

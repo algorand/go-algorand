@@ -494,6 +494,13 @@ func RawTransaction(ctx lib.ReqContext, context echo.Context) {
 	w := context.Response().Writer
 	r := context.Request()
 
+	stat, err := ctx.Node.Status()
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+		return
+	}
+	proto := config.Consensus[stat.LastVersion]
+
 	var txgroup []transactions.SignedTxn
 	dec := protocol.NewDecoder(r.Body)
 	for {
@@ -507,6 +514,12 @@ func RawTransaction(ctx lib.ReqContext, context echo.Context) {
 			return
 		}
 		txgroup = append(txgroup, st)
+
+		if len(txgroup) > proto.MaxTxGroupSize {
+			err := fmt.Errorf("max group size is %d", proto.MaxTxGroupSize)
+			lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
+			return
+		}
 	}
 
 	if len(txgroup) == 0 {
@@ -515,7 +528,7 @@ func RawTransaction(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 
-	err := ctx.Node.BroadcastSignedTxGroup(txgroup)
+	err = ctx.Node.BroadcastSignedTxGroup(txgroup)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
 		return
