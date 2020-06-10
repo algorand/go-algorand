@@ -1576,15 +1576,13 @@ func opSubstring(cx *evalContext) {
 	cx.nextpc = cx.pc + 3
 }
 
-const maxInt = int((^uint(0)) >> 1)
-
 func opSubstring3(cx *evalContext) {
 	last := len(cx.stack) - 1 // end
 	prev := last - 1          // start
 	pprev := prev - 1         // bytes
 	start := cx.stack[prev].Uint
 	end := cx.stack[last].Uint
-	if start > uint64(maxInt) || end > uint64(maxInt) {
+	if start > math.MaxInt32 || end > math.MaxInt32 {
 		cx.err = errors.New("substring range beyond length of string")
 		return
 	}
