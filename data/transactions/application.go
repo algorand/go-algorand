@@ -288,10 +288,12 @@ func (ac *ApplicationCallTxnFields) applyEvalDelta(evalDelta basics.EvalDelta, p
 			return fmt.Errorf("duplicate LocalState delta for %s", addr.String())
 		}
 
-		// Skip over empty deltas, because we shouldn't fail because of
-		// a zero-delta on an account that hasn't opted in
+		// Zero-length deltas are not allowed. We should never produce them from Eval.
 		if len(delta) == 0 {
-			continue
+			if !errIfNotApplied {
+				return nil
+			}
+			return fmt.Errorf("got zero-length delta for %s, not allowed", addr.String())
 		}
 
 		// Check that the local state delta isn't breaking any rules regarding

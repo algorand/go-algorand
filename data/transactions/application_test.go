@@ -614,7 +614,7 @@ func TestAppCallApplyLocalsStateDeltas(t *testing.T) {
 	// empty delta
 	ac.Accounts = append(ac.Accounts, sender, sender)
 	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
-	a.NoError(err)
+	a.Error(err)
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 
