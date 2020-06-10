@@ -63,6 +63,7 @@ func buildSyntaxHighlight() *tmLanguage {
 			{Include: "#literals"},
 			{Include: "#labels"},
 			{Include: "#keywords"},
+			{Include: "#pragmas"},
 		},
 		Repository: map[string]pattern{},
 	}
@@ -85,6 +86,10 @@ func buildSyntaxHighlight() *tmLanguage {
 			Name:  "constant.character.escape.teal",
 			Match: "\\\\(x[0-9A-Fa-f]{2}|.|$)",
 		}},
+	}
+	tm.Repository["pragmas"] = pattern{
+		Name:  "support.function.teal",
+		Match: "^#pragma\\b.*$",
 	}
 	tm.Repository["labels"] = pattern{
 		Patterns: []pattern{
@@ -132,10 +137,9 @@ func buildSyntaxHighlight() *tmLanguage {
 	keywords := pattern{
 		Patterns: []pattern{
 			{
-				Name:  "support.function.teal",
 				Match: "\\b(base64|b64|base32|b32)(?:\\(|\\s+)([a-zA-Z0-9\\+\\/\\=]+)(?:\\)|\\s?|$)",
 				Captures: map[string]pattern{
-					"1": {Name: "support.function.teal"},
+					"1": {Name: "support.class.teal"},
 					"2": {Name: "string.quoted.triple.teal"},
 				},
 			},
