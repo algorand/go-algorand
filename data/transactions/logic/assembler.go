@@ -146,6 +146,9 @@ func (ops *OpStream) Intc(constIndex uint) error {
 		ops.Out.WriteByte(0x21) // intc
 		ops.Out.WriteByte(uint8(constIndex))
 	}
+	if constIndex >= uint(len(ops.intc)) {
+		return fmt.Errorf("intc %d is not defined", constIndex)
+	}
 	ops.tpush(StackUint64)
 	return nil
 }
