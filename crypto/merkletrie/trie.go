@@ -1,0 +1,286 @@
+// Copyright (C) 2019-2020 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
+package merkletrie
+
+import (
+	"encoding/binary"
+	"errors"
+
+	"github.com/algorand/go-algorand/crypto"
+)
+
+const (
+	// MerkleTreeVersion is the version of the encoded trie. If we ever want to make changes and want to have upgrade path,
+	// this would give us the ability to do so.
+	MerkleTreeVersion = uint64(0x1000000010000000)
+	// NodePageVersion is the version of the encoded node. If we ever want to make changes and want to have upgrade path,
+	// this would give us the ability to do so.
+	NodePageVersion = uint64(0x1000000010000000)
+)
+
+// ErrRootPageDecodingFailuire is returned if the decoding the root page has failed.
+var ErrRootPageDecodingFailuire = errors.New("error encountered while decoding root page")
+
+// ErrMismatchingElementLength is returned when an element is being added/removed from the trie that doesn't align with the trie's previous elements length
+var ErrMismatchingElementLength = errors.New("mismatching element length")
+
+// ErrMismatchingPageSize is returned when you try to provide an existing trie a committer with a different page size than it was originally created with.
+var ErrMismatchingPageSize = errors.New("mismatching page size")
+
+// ErrUnableToEvictPendingCommits is returned if the tree was modified and Evict was called with commit=false
+var ErrUnableToEvictPendingCommits = errors.New("unable to evict as pending commits available")
+
+// Trie is a merkle trie intended to efficiently calculate the merkle root of
+// unordered elements
+type Trie struct {
+	root          storedNodeIdentifier
+	nextNodeID    storedNodeIdentifier
+	cache         *merkleTrieCache
+	elementLength int
+}
+
+// Stats structure is a helper for finding underlaying statistics about the trie
+type Stats struct {
+	nodesCount uint
+	leafCount  uint
+	depth      int
+	size       int
+}
+
+// MakeTrie creates a merkle trie
+func MakeTrie(committer Committer, cachedNodesCount int) (*Trie, error) {
+	mt := &Trie{
+		root:       storedNodeIdentifierNull,
+		cache:      &merkleTrieCache{},
+		nextNodeID: storedNodeIdentifierBase,
+	}
+	if committer == nil {
+		committer = &InMemoryCommitter{}
+	} else {
+		rootBytes, err := committer.LoadPage(storedNodeIdentifierNull)
+		if err == nil {
+			if rootBytes != nil {
+				var pageSize int64
+				pageSize, err = mt.deserialize(rootBytes)
+				if err != nil {
+					return nil, err
+				}
+				if pageSize != committer.GetNodesCountPerPage() {
+					return nil, ErrMismatchingPageSize
+				}
+			}
+		} else {
+			return nil, err
+		}
+	}
+
+	mt.cache.initialize(mt, committer, cachedNodesCount)
+	return mt, nil
+}
+
+// SetCommitter set the provided committter as the current committer, and return the old one.
+func (mt *Trie) SetCommitter(committer Committer) (prevCommitter Committer) {
+	if committer.GetNodesCountPerPage() != mt.cache.committer.GetNodesCountPerPage() {
+		panic("committer has to retain the name page size")
+	}
+	prevCommitter = mt.cache.committer
+	mt.cache.committer = committer
+	return
+}
+
+// RootHash returns the root hash of all the elements in the trie
+func (mt *Trie) RootHash() (crypto.Digest, error) {
+	if mt.root == storedNodeIdentifierNull {
+		return crypto.Digest{}, nil
+	}
+	if mt.cache.modified {
+		if err := mt.Commit(); err != nil {
+			return crypto.Digest{}, err
+		}
+	}
+	pnode, err := mt.cache.getNode(mt.root)
+	if err != nil {
+		return crypto.Digest{}, err
+	}
+
+	if pnode.leaf {
+		return crypto.Hash(append([]byte{0}, pnode.hash...)), nil
+	}
+	return crypto.Hash(append([]byte{1}, pnode.hash...)), nil
+}
+
+// Add adds the given hash to the trie.
+// returns false if the item already exists.
+func (mt *Trie) Add(d []byte) (bool, error) {
+	if mt.root == storedNodeIdentifierNull {
+		// first item added to the tree.
+		var pnode *node
+		mt.cache.beginTransaction()
+		pnode, mt.root = mt.cache.allocateNewNode()
+		mt.cache.commitTransaction()
+		pnode.leaf = true
+		pnode.hash = d
+		mt.elementLength = len(d)
+		return true, nil
+	}
+	if len(d) != mt.elementLength {
+		return false, ErrMismatchingElementLength
+	}
+	pnode, err := mt.cache.getNode(mt.root)
+	if err != nil {
+		return false, err
+	}
+	found, err := pnode.find(mt.cache, d[:])
+	if found || (err != nil) {
+		return false, err
+	}
+	mt.cache.beginTransaction()
+	var updatedRoot storedNodeIdentifier
+	updatedRoot, err = pnode.add(mt.cache, d[:], make([]byte, 0, len(d)))
+	if err != nil {
+		mt.cache.rollbackTransaction()
+		return false, err
+	}
+	mt.cache.deleteNode(mt.root)
+	mt.root = updatedRoot
+	mt.cache.commitTransaction()
+	return true, nil
+}
+
+// Delete deletes the given hash to the trie, if such element exists.
+// if no such element exists, return false
+func (mt *Trie) Delete(d []byte) (bool, error) {
+	if mt.root == storedNodeIdentifierNull {
+		return false, nil
+	}
+	if len(d) != mt.elementLength {
+		return false, ErrMismatchingElementLength
+	}
+	pnode, err := mt.cache.getNode(mt.root)
+	if err != nil {
+		return false, err
+	}
+	found, err := pnode.find(mt.cache, d[:])
+	if !found || err != nil {
+		return false, err
+	}
+	mt.cache.beginTransaction()
+	if pnode.leaf {
+		// remove the root.
+		mt.cache.deleteNode(mt.root)
+		mt.root = storedNodeIdentifierNull
+		mt.cache.commitTransaction()
+		mt.elementLength = 0
+		return true, nil
+	}
+	var updatedRoot storedNodeIdentifier
+	updatedRoot, err = pnode.remove(mt.cache, d[:], make([]byte, 0, len(d)))
+	if err != nil {
+		mt.cache.rollbackTransaction()
+		return false, err
+	}
+	mt.cache.deleteNode(mt.root)
+	mt.cache.commitTransaction()
+	mt.root = updatedRoot
+	return true, nil
+}
+
+// GetStats return statistics about the merkle trie
+func (mt *Trie) GetStats() (stats Stats, err error) {
+	if mt.root == storedNodeIdentifierNull {
+		return Stats{}, nil
+	}
+	pnode, err := mt.cache.getNode(mt.root)
+	if err != nil {
+		return Stats{}, err
+	}
+	err = pnode.stats(mt.cache, &stats, 1)
+	return
+}
+
+// Commit stores the existings trie using the committer.
+func (mt *Trie) Commit() error {
+	bytes := mt.serialize()
+	mt.cache.committer.StorePage(storedNodeIdentifierNull, bytes)
+	return mt.cache.commit()
+}
+
+// Evict removes elements from the cache that are no longer needed.
+func (mt *Trie) Evict(commit bool) (int, error) {
+	if commit {
+		if mt.cache.modified {
+			if err := mt.Commit(); err != nil {
+				return 0, err
+			}
+		}
+	} else {
+		if mt.cache.modified {
+			return 0, ErrUnableToEvictPendingCommits
+		}
+	}
+	return mt.cache.evict(), nil
+}
+
+// serialize serializes the trie root
+func (mt *Trie) serialize() []byte {
+	serializedBuffer := make([]byte, 5*binary.MaxVarintLen64) // allocate the worst-case scenario for the trie header.
+	version := binary.PutUvarint(serializedBuffer[:], MerkleTreeVersion)
+	root := binary.PutUvarint(serializedBuffer[version:], uint64(mt.root))
+	next := binary.PutUvarint(serializedBuffer[version+root:], uint64(mt.nextNodeID))
+	elementLength := binary.PutUvarint(serializedBuffer[version+root+next:], uint64(mt.elementLength))
+	pageSizeLength := binary.PutUvarint(serializedBuffer[version+root+next+elementLength:], uint64(mt.cache.committer.GetNodesCountPerPage()))
+	return serializedBuffer[:version+root+next+elementLength+pageSizeLength]
+}
+
+// serialize serializes the trie root
+func (mt *Trie) deserialize(bytes []byte) (int64, error) {
+	version, versionLen := binary.Uvarint(bytes[:])
+	if versionLen <= 0 {
+		return 0, ErrRootPageDecodingFailuire
+	}
+	if version != MerkleTreeVersion {
+		return 0, ErrRootPageDecodingFailuire
+	}
+	root, rootLen := binary.Uvarint(bytes[versionLen:])
+	if rootLen <= 0 {
+		return 0, ErrRootPageDecodingFailuire
+	}
+	nextNodeID, nextNodeIDLen := binary.Uvarint(bytes[versionLen+rootLen:])
+	if nextNodeIDLen <= 0 {
+		return 0, ErrRootPageDecodingFailuire
+	}
+	elemLength, elemLengthLength := binary.Uvarint(bytes[versionLen+rootLen+nextNodeIDLen:])
+	if elemLengthLength <= 0 {
+		return 0, ErrRootPageDecodingFailuire
+	}
+	pageSize, pageSizeLength := binary.Uvarint(bytes[versionLen+rootLen+nextNodeIDLen+elemLengthLength:])
+	if pageSizeLength <= 0 {
+		return 0, ErrRootPageDecodingFailuire
+	}
+	mt.root = storedNodeIdentifier(root)
+	mt.nextNodeID = storedNodeIdentifier(nextNodeID)
+	mt.elementLength = int(elemLength)
+	return int64(pageSize), nil
+}
+
+// reset is used to reset the trie to a given root & nextID. It's used exclusively as part of the
+// transaction rollback recovery in case no persistence could be established.
+func (mt *Trie) reset(root, nextID storedNodeIdentifier) {
+	mt.root = root
+	mt.nextNodeID = nextID
+	mt.cache.initialize(mt, mt.cache.committer, mt.cache.cachedNodeCount)
+}
