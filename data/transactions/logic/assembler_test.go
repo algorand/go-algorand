@@ -1401,7 +1401,7 @@ len
 func TestAssembleConstants(t *testing.T) {
 	t.Parallel()
 
-	for v := uint64(1); v <= LogicVersion; v++ {
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			_, err := AssembleStringWithVersion("intc 1", v)
 			require.Error(t, err)
