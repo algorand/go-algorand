@@ -58,7 +58,7 @@ Constants are pushed onto the stack by `intc`, `intc_[0123]`, `bytec`, and `byte
 | 0 | NoOp | Application transaction will simply call its ApprovalProgram. |
 | 1 | OptIn | Application transaction will allocate some LocalState for the application in the sender's account. |
 | 2 | CloseOut | Application transaction will deallocate some LocalState for the application from the user's account. |
-| 3 | ClearState | Similar to CloseOutOC, but may never fail. This allows users to reclaim their minimum balance from an application they no longer wish to opt in to. |
+| 3 | ClearState | Similar to CloseOut, but may never fail. This allows users to reclaim their minimum balance from an application they no longer wish to opt in to. |
 | 4 | UpdateApplication | Application transaction will update the ApprovalProgram and ClearStateProgram for the application. |
 | 5 | DeleteApplication | Application transaction will delete the AppParams for the application from the creator's balance. |
 
@@ -264,16 +264,16 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | --- | --- |
 | `balance` | get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction |
 | `app_opted_in` | check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1} |
-| `app_local_get` | read from account specified by Txn.Accounts[A] from local state of the current application key B  => value |
-| `app_local_get_ex` | read from account specified by Txn.Accounts[A] from local state of the application B key C  => {0 or 1 (top), value} |
+| `app_local_get` | read from account specified by Txn.Accounts[A] from local state of the current application key B => value |
+| `app_local_get_ex` | read from account specified by Txn.Accounts[A] from local state of the application B key C => {0 or 1 (top), value} |
 | `app_global_get` | read key A from global state of a current application => value |
 | `app_global_get_ex` | read from application A global state key B => {0 or 1 (top), value} |
 | `app_local_put` | write to account specified by Txn.Accounts[A] to local state of a current application key B with value C |
 | `app_global_put` | write key A and value B to global state of the current application |
 | `app_local_del` | delete from account specified by Txn.Accounts[A] local state key B of the current application |
 | `app_global_del` | delete key A from a global state of the current application |
-| `asset_holding_get` | read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg)  => {0 or 1 (top), value} |
-| `asset_params_get` | read from account specified by Txn.Accounts[A] and asset B params field X (imm arg)  => {0 or 1 (top), value} |
+| `asset_holding_get` | read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value} |
+| `asset_params_get` | read from account specified by Txn.Accounts[A] and asset B params field X (imm arg) => {0 or 1 (top), value} |
 
 # Assembler Syntax
 

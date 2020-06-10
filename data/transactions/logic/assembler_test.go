@@ -1392,3 +1392,25 @@ substring 1 3
 	_, err = AssembleString("#pragma unk")
 	require.Error(t, err)
 }
+
+func TestAssembleConstants(t *testing.T) {
+	t.Parallel()
+
+	for v := uint64(1); v <= LogicVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			_, err := AssembleStringWithVersion("intc 1", v)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "intc 1 is not defined")
+
+			_, err = AssembleStringWithVersion("intcblock 1 2\nintc 1", v)
+			require.NoError(t, err)
+
+			_, err = AssembleStringWithVersion("bytec 1", v)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "bytec 1 is not defined")
+
+			_, err = AssembleStringWithVersion("bytecblock 0x01 0x02\nbytec 1", v)
+			require.NoError(t, err)
+		})
+	}
+}
