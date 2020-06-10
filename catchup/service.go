@@ -152,15 +152,18 @@ func (s *Service) SynchronizingTime() time.Duration {
 
 // function scope to make a bunch of defer statements better
 func (s *Service) innerFetch(fetcher Fetcher, r basics.Round) (blk *bookkeeping.Block, cert *agreement.Certificate, rpcc FetcherClient, err error) {
+	ctx, cf := context.WithCancel(s.ctx)
+	defer cf()
 	stopWaitingForLedgerRound := make(chan struct{})
 	defer close(stopWaitingForLedgerRound)
 	go func() {
 		select {
 		case <-stopWaitingForLedgerRound:
 		case <-s.ledger.Wait(r):
+			cf()
 		}
 	}()
-	return fetcher.FetchBlock(s.ctx, r)
+	return fetcher.FetchBlock(ctx, r)
 }
 
 // fetchAndWrite fetches a block, checks the cert, and writes it to the ledger. Cert checking and ledger writing both wait for the ledger to advance if necessary.
