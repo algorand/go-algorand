@@ -277,8 +277,9 @@ func (ac *ApplicationCallTxnFields) applyEvalDelta(evalDelta basics.EvalDelta, p
 			return err
 		}
 
-		// Ensure this is not a duplicate address in case we were
-		// passed an invalid EvalDelta
+		// Ensure we did not already receive a non-empty LocalState
+		// delta for this address, in case the caller passed us an
+		// invalid EvalDelta
 		_, ok := changes[addr]
 		if ok {
 			if !errIfNotApplied {
