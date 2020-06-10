@@ -298,6 +298,12 @@ type Local struct {
 
 	// CatchupGossipBlockFetchTimeoutSec controls how long the gossip query for fetching a block from a relay would take before giving up and trying another relay.
 	CatchupGossipBlockFetchTimeoutSec int
+
+	// CatchupLedgerDownloadRetryAttempts controls the number of attempt the ledger fetching would be attempted before giving up catching up to the provided catchpoint.
+	CatchupLedgerDownloadRetryAttempts int
+
+	// CatchupLedgerDownloadRetryAttempts controls the number of attempt the block fetching would be attempted before giving up catching up to the provided catchpoint.
+	CatchupBlockDownloadRetryAttempts int
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

@@ -52,5 +52,7 @@
     "SuggestedFeeSlidingWindowSize":  50,
     "PeerConnectionsUpdateInterval": 3600,
     "CatchupHTTPBlockFetchTimeoutSec": 4,
-    "CatchupGossipBlockFetchTimeoutSec": 4
+    "CatchupGossipBlockFetchTimeoutSec": 4,
+    "CatchupBlockDownloadRetryAttempts": 1000,
+    "CatchupLedgerDownloadRetryAttempts": 50
 }

@@ -96,8 +96,10 @@ var defaultLocalV9 = Local{
 	EnableLedgerService:                   false,
 	EnableBlockService:                    false,
 	EnableGossipBlockService:              true,
-	CatchupHTTPBlockFetchTimeoutSec:       4, // added in V9
-	CatchupGossipBlockFetchTimeoutSec:     4, // added in V9
+	CatchupHTTPBlockFetchTimeoutSec:       4,    // added in V9
+	CatchupGossipBlockFetchTimeoutSec:     4,    // added in V9
+	CatchupLedgerDownloadRetryAttempts:    50,   // added in V9
+	CatchupBlockDownloadRetryAttempts:     1000, // added in V9
 	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
 }
 
@@ -637,6 +639,15 @@ func migrate(cfg Local) (newCfg Local, err error) {
 		if newCfg.CatchupGossipBlockFetchTimeoutSec == defaultLocalV8.CatchupGossipBlockFetchTimeoutSec {
 			newCfg.CatchupGossipBlockFetchTimeoutSec = defaultLocalV9.CatchupGossipBlockFetchTimeoutSec
 		}
+
+		if newCfg.CatchupLedgerDownloadRetryAttempts == defaultLocalV8.CatchupLedgerDownloadRetryAttempts {
+			newCfg.CatchupLedgerDownloadRetryAttempts = defaultLocalV9.CatchupLedgerDownloadRetryAttempts
+		}
+
+		if newCfg.CatchupBlockDownloadRetryAttempts == defaultLocalV8.CatchupBlockDownloadRetryAttempts {
+			newCfg.CatchupBlockDownloadRetryAttempts = defaultLocalV9.CatchupBlockDownloadRetryAttempts
+		}
+
 		newCfg.Version = 9
 	}
 
