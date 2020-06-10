@@ -64,6 +64,14 @@ import (
 //     |-----> (*) Msgsize
 //     |-----> (*) MsgIsZero
 //
+// LogicSigArg
+//      |-----> MarshalMsg
+//      |-----> CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> Msgsize
+//      |-----> MsgIsZero
+//
 // MinFeeError
 //      |-----> MarshalMsg
 //      |-----> CanMarshalMsg
@@ -1022,6 +1030,16 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
+			var zb0004 int
+			zb0004, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Note")
+				return
+			}
+			if zb0004 > 1000 {
+				err = msgp.ErrOverflow(uint64(zb0004), 1000)
+				return
+			}
 			(*z).Note, bts, err = msgp.ReadBytesBytes(bts, (*z).Note)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Note")
@@ -1116,6 +1134,16 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "note":
+				var zb0005 int
+				zb0005, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Note")
+					return
+				}
+				if zb0005 > 1000 {
+					err = msgp.ErrOverflow(uint64(zb0005), 1000)
+					return
+				}
 				(*z).Note, bts, err = msgp.ReadBytesBytes(bts, (*z).Note)
 				if err != nil {
 					err = msgp.WrapError(err, "Note")
@@ -1451,7 +1479,7 @@ func (z *LogicSig) MarshalMsg(b []byte) (o []byte, err error) {
 				o = msgp.AppendArrayHeader(o, uint32(len((*z).Args)))
 			}
 			for zb0001 := range (*z).Args {
-				o = msgp.AppendBytes(o, (*z).Args[zb0001])
+				o = msgp.AppendBytes(o, []byte((*z).Args[zb0001]))
 			}
 		}
 		if (zb0002Mask & 0x4) == 0 { // if not empty
@@ -1501,6 +1529,16 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
+			var zb0004 int
+			zb0004, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Logic")
+				return
+			}
+			if zb0004 > 1000 {
+				err = msgp.ErrOverflow(uint64(zb0004), 1000)
+				return
+			}
 			(*z).Logic, bts, err = msgp.ReadBytesBytes(bts, (*z).Logic)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Logic")
@@ -1525,30 +1563,44 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
-			var zb0004 int
-			var zb0005 bool
-			zb0004, zb0005, bts, err = msgp.ReadArrayHeaderBytes(bts)
+			var zb0005 int
+			var zb0006 bool
+			zb0005, zb0006, bts, err = msgp.ReadArrayHeaderBytes(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Args")
 				return
 			}
-			if zb0004 > EvalMaxArgs {
-				err = msgp.ErrOverflow(uint64(zb0004), uint64(EvalMaxArgs))
+			if zb0005 > EvalMaxArgs {
+				err = msgp.ErrOverflow(uint64(zb0005), uint64(EvalMaxArgs))
 				err = msgp.WrapError(err, "struct-from-array", "Args")
 				return
 			}
-			if zb0005 {
+			if zb0006 {
 				(*z).Args = nil
-			} else if (*z).Args != nil && cap((*z).Args) >= zb0004 {
-				(*z).Args = ((*z).Args)[:zb0004]
+			} else if (*z).Args != nil && cap((*z).Args) >= zb0005 {
+				(*z).Args = ((*z).Args)[:zb0005]
 			} else {
-				(*z).Args = make([][]byte, zb0004)
+				(*z).Args = make([]LogicSigArg, zb0005)
 			}
 			for zb0001 := range (*z).Args {
-				(*z).Args[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z).Args[zb0001])
-				if err != nil {
-					err = msgp.WrapError(err, "struct-from-array", "Args", zb0001)
-					return
+				{
+					var zb0007 []byte
+					var zb0008 int
+					zb0008, err = msgp.ReadBytesBytesHeader(bts)
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Args", zb0001)
+						return
+					}
+					if zb0008 > 1000 {
+						err = msgp.ErrOverflow(uint64(zb0008), 1000)
+						return
+					}
+					zb0007, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).Args[zb0001]))
+					if err != nil {
+						err = msgp.WrapError(err, "struct-from-array", "Args", zb0001)
+						return
+					}
+					(*z).Args[zb0001] = LogicSigArg(zb0007)
 				}
 			}
 		}
@@ -1576,6 +1628,16 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 			switch string(field) {
 			case "l":
+				var zb0009 int
+				zb0009, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Logic")
+					return
+				}
+				if zb0009 > 1000 {
+					err = msgp.ErrOverflow(uint64(zb0009), 1000)
+					return
+				}
 				(*z).Logic, bts, err = msgp.ReadBytesBytes(bts, (*z).Logic)
 				if err != nil {
 					err = msgp.WrapError(err, "Logic")
@@ -1594,30 +1656,44 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "arg":
-				var zb0006 int
-				var zb0007 bool
-				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0010 int
+				var zb0011 bool
+				zb0010, zb0011, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Args")
 					return
 				}
-				if zb0006 > EvalMaxArgs {
-					err = msgp.ErrOverflow(uint64(zb0006), uint64(EvalMaxArgs))
+				if zb0010 > EvalMaxArgs {
+					err = msgp.ErrOverflow(uint64(zb0010), uint64(EvalMaxArgs))
 					err = msgp.WrapError(err, "Args")
 					return
 				}
-				if zb0007 {
+				if zb0011 {
 					(*z).Args = nil
-				} else if (*z).Args != nil && cap((*z).Args) >= zb0006 {
-					(*z).Args = ((*z).Args)[:zb0006]
+				} else if (*z).Args != nil && cap((*z).Args) >= zb0010 {
+					(*z).Args = ((*z).Args)[:zb0010]
 				} else {
-					(*z).Args = make([][]byte, zb0006)
+					(*z).Args = make([]LogicSigArg, zb0010)
 				}
 				for zb0001 := range (*z).Args {
-					(*z).Args[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z).Args[zb0001])
-					if err != nil {
-						err = msgp.WrapError(err, "Args", zb0001)
-						return
+					{
+						var zb0012 []byte
+						var zb0013 int
+						zb0013, err = msgp.ReadBytesBytesHeader(bts)
+						if err != nil {
+							err = msgp.WrapError(err, "Args", zb0001)
+							return
+						}
+						if zb0013 > 1000 {
+							err = msgp.ErrOverflow(uint64(zb0013), 1000)
+							return
+						}
+						zb0012, bts, err = msgp.ReadBytesBytes(bts, []byte((*z).Args[zb0001]))
+						if err != nil {
+							err = msgp.WrapError(err, "Args", zb0001)
+							return
+						}
+						(*z).Args[zb0001] = LogicSigArg(zb0012)
 					}
 				}
 			default:
@@ -1642,7 +1718,7 @@ func (_ *LogicSig) CanUnmarshalMsg(z interface{}) bool {
 func (z *LogicSig) Msgsize() (s int) {
 	s = 1 + 2 + msgp.BytesPrefixSize + len((*z).Logic) + 4 + (*z).Sig.Msgsize() + 5 + (*z).Msig.Msgsize() + 4 + msgp.ArrayHeaderSize
 	for zb0001 := range (*z).Args {
-		s += msgp.BytesPrefixSize + len((*z).Args[zb0001])
+		s += msgp.BytesPrefixSize + len([]byte((*z).Args[zb0001]))
 	}
 	return
 }
@@ -1650,6 +1726,62 @@ func (z *LogicSig) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *LogicSig) MsgIsZero() bool {
 	return (len((*z).Logic) == 0) && ((*z).Sig.MsgIsZero()) && ((*z).Msig.MsgIsZero()) && (len((*z).Args) == 0)
+}
+
+// MarshalMsg implements msgp.Marshaler
+func (z LogicSigArg) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	o = msgp.AppendBytes(o, []byte(z))
+	return
+}
+
+func (_ LogicSigArg) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(LogicSigArg)
+	if !ok {
+		_, ok = (z).(*LogicSigArg)
+	}
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *LogicSigArg) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	{
+		var zb0001 []byte
+		var zb0002 int
+		zb0002, err = msgp.ReadBytesBytesHeader(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 > 1000 {
+			err = msgp.ErrOverflow(uint64(zb0002), 1000)
+			return
+		}
+		zb0001, bts, err = msgp.ReadBytesBytes(bts, []byte((*z)))
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		(*z) = LogicSigArg(zb0001)
+	}
+	o = bts
+	return
+}
+
+func (_ *LogicSigArg) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*LogicSigArg)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z LogicSigArg) Msgsize() (s int) {
+	s = msgp.BytesPrefixSize + len([]byte(z))
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z LogicSigArg) MsgIsZero() bool {
+	return len(z) == 0
 }
 
 // MarshalMsg implements msgp.Marshaler
@@ -3290,6 +3422,16 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0002 > 0 {
 			zb0002--
+			var zb0004 int
+			zb0004, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Note")
+				return
+			}
+			if zb0004 > 1000 {
+				err = msgp.ErrOverflow(uint64(zb0004), 1000)
+				return
+			}
 			(*z).Header.Note, bts, err = msgp.ReadBytesBytes(bts, (*z).Header.Note)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "Note")
@@ -3542,6 +3684,16 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "note":
+				var zb0005 int
+				zb0005, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Note")
+					return
+				}
+				if zb0005 > 1000 {
+					err = msgp.ErrOverflow(uint64(zb0005), 1000)
+					return
+				}
 				(*z).Header.Note, bts, err = msgp.ReadBytesBytes(bts, (*z).Header.Note)
 				if err != nil {
 					err = msgp.WrapError(err, "Note")

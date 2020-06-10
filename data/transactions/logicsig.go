@@ -25,6 +25,11 @@ import (
 // EvalMaxArgs is the maximum number of arguments to an LSig
 const EvalMaxArgs = 255
 
+//LogicSigArg is a single LogicSig argument
+//msgp:allocbound LogicSigArg 1000
+// todo - replace with LogicSigMaxSize
+type LogicSigArg []byte
+
 // LogicSig contains logic for validating a transaction.
 // LogicSig is signed by an account, allowing delegation of operations.
 // OR
@@ -33,13 +38,13 @@ type LogicSig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Logic signed by Sig or Msig, OR hashed to be the Address of an account.
-	Logic []byte `codec:"l"`
+	Logic []byte `codec:"l,allocbound=1000"` // todo - replace with LogicSigMaxSize
 
 	Sig  crypto.Signature   `codec:"sig"`
 	Msig crypto.MultisigSig `codec:"msig"`
 
 	// Args are not signed, but checked by Logic
-	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs"`
+	Args []LogicSigArg `codec:"arg,allocbound=EvalMaxArgs"`
 }
 
 // Blank returns true if there is no content in this LogicSig
