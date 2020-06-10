@@ -55,7 +55,12 @@ type HTTPFetcher struct {
 
 // MakeHTTPFetcher wraps an HTTPPeer so that we can get blocks from it
 func MakeHTTPFetcher(log logging.Logger, peer network.HTTPPeer, net network.GossipNode) (fc FetcherClient) {
-	fc = &HTTPFetcher{peer, peer.GetAddress(), net, peer.GetHTTPClient(), log}
+	fc = &HTTPFetcher{
+		peer:    peer,
+		rootURL: peer.GetAddress(),
+		net:     net,
+		client:  peer.GetHTTPClient(),
+		log:     log}
 	return
 }
 
@@ -105,8 +110,8 @@ func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data 
 
 	// TODO: Temporarily allow old and new content types so we have time for lazy upgrades
 	// Remove this 'old' string after next release.
-	const ledgerResponseContentTypeOld = "application/algorand-block-v1"
-	if contentTypes[0] != rpcs.LedgerResponseContentType && contentTypes[0] != ledgerResponseContentTypeOld {
+	const blockResponseContentTypeOld = "application/algorand-block-v1"
+	if contentTypes[0] != rpcs.BlockResponseContentType && contentTypes[0] != blockResponseContentTypeOld {
 		hf.log.Warnf("http block fetcher response has an invalid content type : %s", contentTypes[0])
 		response.Body.Close()
 		return nil, fmt.Errorf("http block fetcher invalid content type '%s'", contentTypes[0])
