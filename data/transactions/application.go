@@ -180,7 +180,7 @@ func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppPar
 	return
 }
 
-func applyDelta(kv basics.TealKeyValue, stateDelta basics.StateDelta) error {
+func applyStateDelta(kv basics.TealKeyValue, stateDelta basics.StateDelta) error {
 	if kv == nil {
 		return fmt.Errorf("cannot apply delta to nil TealKeyValue")
 	}
@@ -209,10 +209,18 @@ func applyDelta(kv basics.TealKeyValue, stateDelta basics.StateDelta) error {
 	return nil
 }
 
-// applyStateDeltas applies a basics.EvalDelta to the app's global key/value
+// applyEvalDelta applies a basics.EvalDelta to the app's global key/value
 // store as well as a set of local key/value stores. If this function returns
 // an error, the transaction must not be committed.
-func (ac *ApplicationCallTxnFields) applyStateDeltas(evalDelta basics.EvalDelta, params basics.AppParams, creator, sender basics.Address, balances Balances, appIdx basics.AppIndex, errIfNotApplied bool) error {
+//
+// The errIfNotApplied parameter is set to false when applying the results of a
+// ClearState program. ClearState programs are not allowed to reject
+// transactions for any reason. So if the ClearState program passes,
+// but returns an invalid evalDelta that we cannot apply (e.g. because it would
+// violate a schema), then errIfNotApplied = false instructs applyEvalDelta to
+// return a nil error. For system errors (e.g. failing to fetch or write a
+// balance record), applyEvalDelta will always return a non-nil error.
+func (ac *ApplicationCallTxnFields) applyEvalDelta(evalDelta basics.EvalDelta, params basics.AppParams, creator, sender basics.Address, balances Balances, appIdx basics.AppIndex, errIfNotApplied bool) error {
 	/*
 	 * 1. Apply GlobalState delta (if any), allocating the key/value store
 	 *    if required.
@@ -240,7 +248,7 @@ func (ac *ApplicationCallTxnFields) applyStateDeltas(evalDelta basics.EvalDelta,
 		}
 
 		// Apply the GlobalDelta in place on the cloned copy
-		err = applyDelta(params.GlobalState, evalDelta.GlobalDelta)
+		err = applyStateDelta(params.GlobalState, evalDelta.GlobalDelta)
 		if err != nil {
 			return err
 		}
@@ -317,7 +325,7 @@ func (ac *ApplicationCallTxnFields) applyStateDeltas(evalDelta basics.EvalDelta,
 			localState.KeyValue = make(basics.TealKeyValue)
 		}
 
-		err = applyDelta(localState.KeyValue, delta)
+		err = applyStateDelta(localState.KeyValue, delta)
 		if err != nil {
 			return err
 		}
@@ -482,7 +490,6 @@ func (ac *ApplicationCallTxnFields) applyClearState(
 	balances Balances, sender basics.Address, appIdx basics.AppIndex,
 	ad *ApplyData, steva StateEvaluator,
 ) error {
-
 	// Fetch the application parameters, if they exist
 	params, creator, exists, err := getAppParams(balances, appIdx)
 	if err != nil {
@@ -506,14 +513,14 @@ func (ac *ApplicationCallTxnFields) applyClearState(
 		// Execute the ClearStateProgram before we've deleted the LocalState
 		// for this account. If the ClearStateProgram does not fail, apply any
 		// state deltas it generated.
-		pass, stateDeltas, err := steva.Eval(params.ClearStateProgram)
+		pass, evalDelta, err := steva.Eval(params.ClearStateProgram)
 		if err == nil && pass {
 			// Program execution may produce some GlobalState and LocalState
 			// deltas. Apply them, provided they don't exceed the bounds set by
 			// the GlobalStateSchema and LocalStateSchema. If they do exceed
 			// those bounds, then don't fail, but also don't apply the changes.
 			failIfNotApplied := false
-			err = ac.applyStateDeltas(stateDeltas, params, creator, sender,
+			err = ac.applyEvalDelta(evalDelta, params, creator, sender,
 				balances, appIdx, failIfNotApplied)
 			if err != nil {
 				return err
@@ -521,7 +528,7 @@ func (ac *ApplicationCallTxnFields) applyClearState(
 
 			// Fill in applyData, so that consumers don't have to implement a
 			// stateful TEAL interpreter to apply state changes
-			ad.EvalDelta = stateDeltas
+			ad.EvalDelta = evalDelta
 		} else {
 			// Ignore errors and rejections from the ClearStateProgram
 		}
@@ -545,11 +552,7 @@ func (ac *ApplicationCallTxnFields) applyClearState(
 	record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
 	delete(record.AppLocalStates, appIdx)
 
-	err = balances.Put(record)
-	if err != nil {
-		ad.EvalDelta = basics.EvalDelta{}
-	}
-	return err
+	return balances.Put(record)
 }
 
 func applyOptIn(balances Balances, sender basics.Address, appIdx basics.AppIndex, params basics.AppParams) error {
@@ -586,6 +589,14 @@ func applyOptIn(balances Balances, sender basics.Address, appIdx basics.AppIndex
 }
 
 func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec SpecialAddresses, ad *ApplyData, txnCounter uint64, steva StateEvaluator) (err error) {
+	defer func() {
+		// If we are returning a non-nil error, then don't return a
+		// non-empty EvalDelta. Not required for correctness.
+		if err != nil && ad != nil {
+			ad.EvalDelta = basics.EvalDelta{}
+		}
+	}()
+
 	// Keep track of the application ID we're working on
 	appIdx := ac.ApplicationID
 
@@ -658,7 +669,7 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 	}
 
 	// Execute the Approval program
-	approved, stateDeltas, err := steva.Eval(params.ApprovalProgram)
+	approved, evalDelta, err := steva.Eval(params.ApprovalProgram)
 	if err != nil {
 		return err
 	}
@@ -671,7 +682,7 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 	// the bounds set by the GlobalStateSchema and LocalStateSchema.
 	// If they would exceed those bounds, then fail.
 	failIfNotApplied := true
-	err = ac.applyStateDeltas(stateDeltas, params, creator, header.Sender,
+	err = ac.applyEvalDelta(evalDelta, params, creator, header.Sender,
 		balances, appIdx, failIfNotApplied)
 	if err != nil {
 		return err
@@ -770,7 +781,7 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 
 	// Fill in applyData, so that consumers don't have to implement a
 	// stateful TEAL interpreter to apply state changes
-	ad.EvalDelta = stateDeltas
+	ad.EvalDelta = evalDelta
 
 	return nil
 }
