@@ -66,6 +66,7 @@ type CatchpointCatchupService struct {
 	ledger         *ledger.Ledger
 	// lastBlockHeader is the latest block we have before going into catchpoint catchup mode. We use it to serve the node status requests instead of going to the ledger.
 	lastBlockHeader bookkeeping.BlockHeader
+	config          config.Local
 }
 
 const (
@@ -78,7 +79,7 @@ const (
 )
 
 // MakeResumedCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
-func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger) (service *CatchpointCatchupService, err error) {
+func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger, cfg config.Local) (service *CatchpointCatchupService, err error) {
 	service = &CatchpointCatchupService{
 		stats: CatchpointCatchupStats{
 			StartTime: time.Now(),
@@ -89,6 +90,7 @@ func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCat
 		newService:     false,
 		net:            net,
 		ledger:         l,
+		config:         cfg,
 	}
 	service.lastBlockHeader, err = l.BlockHdr(l.Latest())
 	if err != nil {
@@ -103,7 +105,7 @@ func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCat
 }
 
 // MakeNewCatchpointCatchupService creates a new catchpoint catchup service for a node that is not in catchpoint catchup mode
-func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger) (service *CatchpointCatchupService, err error) {
+func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger, cfg config.Local) (service *CatchpointCatchupService, err error) {
 	if catchpoint == "" {
 		return nil, fmt.Errorf("MakeNewCatchpointCatchupService: catchpoint is invalid")
 	}
@@ -119,6 +121,7 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 		newService:     true,
 		net:            net,
 		ledger:         l,
+		config:         cfg,
 	}
 	service.lastBlockHeader, err = l.BlockHdr(l.Latest())
 	if err != nil {
@@ -283,7 +286,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed to retrieve catchup block round : %v", err))
 	}
 
-	fetcherFactory := MakeNetworkFetcherFactory(cs.net, 10, nil)
+	fetcherFactory := MakeNetworkFetcherFactory(cs.net, 10, nil, &cs.config)
 	attemptsCount := 0
 	var blk *bookkeeping.Block
 	var client FetcherClient
@@ -411,7 +414,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	cs.statsMu.Unlock()
 
 	prevBlock := &topBlock
-	fetcherFactory := MakeNetworkFetcherFactory(cs.net, 10, nil)
+	fetcherFactory := MakeNetworkFetcherFactory(cs.net, 10, nil, &cs.config)
 	blocksFetched := uint64(1) // we already got the first block in the previous step.
 	var blk *bookkeeping.Block
 	var client FetcherClient

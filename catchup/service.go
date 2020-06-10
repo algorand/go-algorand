@@ -102,12 +102,12 @@ func MakeService(log logging.Logger, config config.Local, net network.GossipNode
 	s = &Service{}
 
 	s.cfg = config
-	s.fetcherFactory = MakeNetworkFetcherFactory(net, catchupPeersForSync, wsf)
+	s.fetcherFactory = MakeNetworkFetcherFactory(net, catchupPeersForSync, wsf, &config)
 	s.ledger = ledger
 	s.net = net
 	s.auth = auth
 	s.unmatchedPendingCertificates = unmatchedPendingCertificates
-	s.latestRoundFetcherFactory = MakeNetworkFetcherFactory(net, blockQueryPeerLimit, wsf)
+	s.latestRoundFetcherFactory = MakeNetworkFetcherFactory(net, blockQueryPeerLimit, wsf, &config)
 	s.log = log.With("Context", "sync")
 	s.parallelBlocks = config.CatchupParallelBlocks
 	s.deadlineTimeout = agreement.DeadlineTimeout()
@@ -152,18 +152,15 @@ func (s *Service) SynchronizingTime() time.Duration {
 
 // function scope to make a bunch of defer statements better
 func (s *Service) innerFetch(fetcher Fetcher, r basics.Round) (blk *bookkeeping.Block, cert *agreement.Certificate, rpcc FetcherClient, err error) {
-	ctx, cf := context.WithTimeout(s.ctx, DefaultFetchTimeout)
-	defer cf()
 	stopWaitingForLedgerRound := make(chan struct{})
 	defer close(stopWaitingForLedgerRound)
 	go func() {
 		select {
 		case <-stopWaitingForLedgerRound:
 		case <-s.ledger.Wait(r):
-			cf()
 		}
 	}()
-	return fetcher.FetchBlock(ctx, r)
+	return fetcher.FetchBlock(s.ctx, r)
 }
 
 // fetchAndWrite fetches a block, checks the cert, and writes it to the ledger. Cert checking and ledger writing both wait for the ledger to advance if necessary.

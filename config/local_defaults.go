@@ -21,9 +21,9 @@ import (
 	"time"
 )
 
-var defaultLocal = defaultLocalV8
+var defaultLocal = defaultLocalV9
 
-const configVersion = uint32(8)
+const configVersion = uint32(9)
 
 // !!! WARNING !!!
 //
@@ -38,6 +38,68 @@ const configVersion = uint32(8)
 // bump the version number (configVersion), and add appropriate migration and tests.
 //
 // !!! WARNING !!!
+
+var defaultLocalV9 = Local{
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
+	Version:                               9,
+	Archival:                              false,
+	BaseLoggerDebugLevel:                  4,
+	BroadcastConnectionsLimit:             -1,
+	AnnounceParticipationKey:              true,
+	PriorityPeers:                         map[string]bool{},
+	CadaverSizeTarget:                     1073741824,
+	CatchupFailurePeerRefreshRate:         10,
+	CatchupParallelBlocks:                 16,
+	ConnectionsRateLimitingCount:          60,
+	ConnectionsRateLimitingWindowSeconds:  1,
+	DeadlockDetection:                     0,
+	DNSBootstrapID:                        "<network>.algorand.network",
+	EnableAgreementReporting:              false,
+	EnableAgreementTimeMetrics:            false,
+	EnableIncomingMessageFilter:           false,
+	EnableMetricReporting:                 false,
+	EnableOutgoingNetworkMessageFiltering: true,
+	EnableRequestLogger:                   false,
+	EnableTopAccountsReporting:            false,
+	EndpointAddress:                       "127.0.0.1:0",
+	GossipFanout:                          4,
+	IncomingConnectionsLimit:              10000,
+	IncomingMessageFilterBucketCount:      5,
+	IncomingMessageFilterBucketSize:       512,
+	LogArchiveName:                        "node.archive.log",
+	LogArchiveMaxAge:                      "",
+	LogSizeLimit:                          1073741824,
+	MaxConnectionsPerIP:                   30,
+	NetAddress:                            "",
+	NodeExporterListenAddress:             ":9100",
+	NodeExporterPath:                      "./node_exporter",
+	OutgoingMessageFilterBucketCount:      3,
+	OutgoingMessageFilterBucketSize:       128,
+	ReconnectTime:                         1 * time.Minute,
+	ReservedFDs:                           256,
+	RestReadTimeoutSeconds:                15,
+	RestWriteTimeoutSeconds:               120,
+	RunHosted:                             false,
+	SuggestedFeeBlockHistory:              3,
+	SuggestedFeeSlidingWindowSize:         50,
+	TelemetryToLog:                        true,
+	TxPoolExponentialIncreaseFactor:       2,
+	TxPoolSize:                            15000,
+	TxSyncIntervalSeconds:                 60,
+	TxSyncTimeoutSeconds:                  30,
+	TxSyncServeResponseSize:               1000000,
+	PeerConnectionsUpdateInterval:         3600,
+	DNSSecurityFlags:                      0x01,
+	EnablePingHandler:                     true,
+	CatchpointInterval:                    10000,
+	CatchpointFileHistoryLength:           365,
+	EnableLedgerService:                   false,
+	EnableBlockService:                    false,
+	EnableGossipBlockService:              true,
+	CatchupHTTPBlockFetchTimeoutSec:       4, // added in V9
+	CatchupGossipBlockFetchTimeoutSec:     4, // added in V9
+	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
+}
 
 var defaultLocalV8 = Local{
 	// DO NOT MODIFY VALUES - New values may be added carefully - See WARNING at top of file
@@ -564,6 +626,18 @@ func migrate(cfg Local) (newCfg Local, err error) {
 		}
 
 		newCfg.Version = 8
+	}
+
+	// Migrate 8 -> 9
+	if newCfg.Version == 8 {
+		if newCfg.CatchupHTTPBlockFetchTimeoutSec == defaultLocalV8.CatchupHTTPBlockFetchTimeoutSec {
+			newCfg.CatchupHTTPBlockFetchTimeoutSec = defaultLocalV9.CatchupHTTPBlockFetchTimeoutSec
+		}
+
+		if newCfg.CatchupGossipBlockFetchTimeoutSec == defaultLocalV8.CatchupGossipBlockFetchTimeoutSec {
+			newCfg.CatchupGossipBlockFetchTimeoutSec = defaultLocalV9.CatchupGossipBlockFetchTimeoutSec
+		}
+		newCfg.Version = 9
 	}
 
 	if newCfg.Version != configVersion {
