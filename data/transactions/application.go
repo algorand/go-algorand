@@ -288,7 +288,8 @@ func (ac *ApplicationCallTxnFields) applyEvalDelta(evalDelta basics.EvalDelta, p
 			return fmt.Errorf("duplicate LocalState delta for %s", addr.String())
 		}
 
-		// Zero-length deltas are not allowed. We should never produce them from Eval.
+		// Zero-length LocalState deltas are not allowed. We should never produce
+		// them from Eval.
 		if len(delta) == 0 {
 			if !errIfNotApplied {
 				return nil
