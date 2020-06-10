@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"database/sql"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -29,6 +30,13 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
+
+func dbOpenTest(t testing.TB) dbPair {
+	fn := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	dbs, err := dbOpen(fn, true)
+	require.NoError(t, err)
+	return dbs
+}
 
 func randomBlock(r basics.Round) blockEntry {
 	b := bookkeeping.Block{}
@@ -101,7 +109,7 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []blockEntry) {
 	require.Error(t, err)
 }
 
-func setDbLogging(t *testing.T, dbs dbPair) {
+func setDbLogging(t testing.TB, dbs dbPair) {
 	dblogger := logging.TestingLog(t)
 	dbs.rdb.SetLogger(dblogger)
 	dbs.wdb.SetLogger(dblogger)

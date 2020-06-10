@@ -2,7 +2,18 @@
 
 If you are interested in contributing to the project, we welcome and thank you. We want to make the best decentralized and effective blockchain platform available and we appreciate your willingness to help us.
 
-The algorand project is composed of several repositories on GitHub. Specifically we have repositories for the main node software,the JavaScript SDK, the Go SDK, and  the Java SDK. Additionally we have repositories for projects we forked like go-codec that make up some of the main dependencies for a node. Each of these will follow similar guidelines on how to contribute. The main difference between these concerns code formatting and deploying changes to production.
+The [Algorand GitHub Organization](https://github.com/algorand) has all of our open source projects, and dependencies which we fork and use in those projects. This contribution guide applies to all of these.
+
+Some of our most active projects include:
+* [go-algorand](https://github.com/algorand/go-algorand) - Algorand node software (this repository)
+* [go-algorand-sdk](https://github.com/algorand/go-algorand-sdk) - Golang SDK
+* [java-algorand-sdk](https://github.com/algorand/java-algorand-sdk) - Java SDK
+* [js-algorand-sdk](https://github.com/algorand/js-algorand-sdk) - JavaScript SDK
+* [indexer](https://github.com/algorand/indexer) - Blockchain analytics database
+* [ledger-app-algorand](https://github.com/algorand/ledger-app-algorand) - Ledger hardware wallet application
+* [mule](https://github.com/algorand/mule) - Continuous Integration automation tool
+* [py-algorand-sdk](https://github.com/algorand/py-algorand-sdk) - Python SDK
+* [sandbox](https://github.com/algorand/sandbox) - Algorand node quickstart tool
 
 # Filing Issues
 
@@ -24,7 +35,9 @@ If you have any questions, don't hesitate to contact us at security@algorand.com
 
 # Contribution Model
 
-For each of our repositories we use the same model for contributing code. Developers wanting to contribute must create pull requests. This process is described in the GitHub [Creating a pull request from a fork](https://help.github.com/en/articles/creating-a-pull-request-from-a-fork) documentation. Each pull request should be initiated against the master branch in the Algorand repository.  After a pull request is submitted the core development team will review the submission and communicate with the developer using the comments sections of the PR. After the submission is reviewed and approved, it will be merged into the master branch of the source. These changes will be merged to our release branch on the next viable release date. For the SDKs, this may be immediate. Changes to the node software may take more time as we must ensure and verify the security, as well as apply protocol upgrades in an orderly way.
+For each of our repositories we use the same model for contributing code. Developers wanting to contribute must create pull requests. This process is described in the GitHub [Creating a pull request from a fork](https://help.github.com/en/articles/creating-a-pull-request-from-a-fork) documentation. Each pull request should be initiated against the `master` branch in the Algorand repository.  After a pull request is submitted the core development team will review the submission and communicate with the developer using the comments sections of the PR. After the submission is reviewed and approved, it will be merged into the `master` branch of the source. These changes will be merged to our release branch on the next viable release date. For the SDKs, this may be immediate. Changes to the node software may take more time as we must ensure and verify the security, as well as apply protocol upgrades in an orderly way.
+
+Note: some of our projects are using gitflow, for these you will open pull requests against the `develop` branch.
 
 Again, if you have a patch for a critical security vulnerability, please use our [vulnerability disclosure form][vuln_url] instead of creating a PR.  We'll follow up with you on distributing the patch before we merge it.
 
