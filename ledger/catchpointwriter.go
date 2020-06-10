@@ -263,6 +263,14 @@ func (cw *catchpointWriter) GetBalancesRound() basics.Round {
 	return basics.Round(0)
 }
 
+// GetBalancesCount returns the number of balances written to this catchpoint file.
+func (cw *catchpointWriter) GetTotalAccounts() uint64 {
+	if cw.fileHeader != nil {
+		return cw.fileHeader.TotalAccounts
+	}
+	return 0
+}
+
 // GetCatchpoint returns the catchpoint string to which this catchpoint file was generated for.
 func (cw *catchpointWriter) GetCatchpoint() string {
 	if cw.fileHeader != nil {
