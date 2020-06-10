@@ -617,7 +617,7 @@ func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
 	}
 
 	// generate assembly
-	var progParts []string
+	progParts := []string{"#pragma version 2"}
 	progParts = append(progParts, deleteBranch)
 	progParts = append(progParts, writePrefix)
 	for i := 0; i < numKeys; i++ {
@@ -696,7 +696,7 @@ func genAppTestParamsMaxClone(numKeys int) testParams {
 	testDiffName := "max-clone"
 
 	// generate assembly
-	var progParts []string
+	progParts := []string{"#pragma version 2"}
 	progParts = append(progParts, flipBranch)
 	progParts = append(progParts, writePrefix)
 	for i := 0; i < numKeys; i++ {
@@ -721,7 +721,7 @@ func genAppTestParamsMaxClone(numKeys int) testParams {
 	}
 }
 
-const asaClearAsm = `
+const asaClearAsm = `#pragma version 2
 byte base64 Ymw=
 byte base64 Ymw=
 app_global_get
@@ -735,7 +735,7 @@ app_global_put
 int 1
 `
 
-const asaAppovalAsm = `
+const asaAppovalAsm = `#pragma version 2
 txn NumAppArgs
 int 7
 ==

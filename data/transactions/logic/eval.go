@@ -369,13 +369,6 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 		return false, cx.err
 	}
 
-	// Currently no TEAL version knows about the RekeyTo field, but this
-	// may change in a future TEAL version
-	if !cx.EvalParams.Txn.Txn.RekeyTo.IsZero() {
-		cx.err = fmt.Errorf("program version %d doesn't allow transactions with nonzero RekeyTo field", version)
-		return false, cx.err
-	}
-
 	// TODO: if EvalMaxVersion > version, ensure that inaccessible
 	// fields as of the program's version are zero or other
 	// default value so that no one is hiding unexpected
@@ -1289,6 +1282,8 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case ClearStateProgram:
 		sv.Bytes = make([]byte, len(txn.ClearStateProgram))
 		copy(sv.Bytes, txn.ClearStateProgram)
+	case RekeyTo:
+		sv.Bytes = txn.RekeyTo[:]
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 		return

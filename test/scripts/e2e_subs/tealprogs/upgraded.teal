@@ -1,3 +1,4 @@
+#pragma version 2
 // Key is "foo"
 byte base64 Zm9v
 

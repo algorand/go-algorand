@@ -91,6 +91,8 @@ const (
 	ApprovalProgram
 	// ClearStateProgram []byte
 	ClearStateProgram
+	// RekeyTo basics.Address
+	RekeyTo
 
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
@@ -153,6 +155,7 @@ var txnFieldSpecs = []txnFieldSpec{
 	{NumAccounts, StackUint64, 2},
 	{ApprovalProgram, StackBytes, 2},
 	{ClearStateProgram, StackBytes, 2},
+	{RekeyTo, StackBytes, 2},
 }
 
 // TxnTypeNames is the values of Txn.Type in enum order

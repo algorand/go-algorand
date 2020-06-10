@@ -200,6 +200,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 29 | NumAccounts | uint64 | Number of Accounts. LogicSigVersion >= 2. |
 | 30 | ApprovalProgram | []byte | Approval program. LogicSigVersion >= 2. |
 | 31 | ClearStateProgram | []byte | Clear state program. LogicSigVersion >= 2. |
+| 32 | RekeyTo | []byte | Sender's new AuthAddr. LogicSigVersion >= 2. |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
@@ -279,6 +280,9 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 
 The assembler parses line by line. Ops that just use the stack appear on a line by themselves. Ops that take arguments are the op and then whitespace and then any argument or arguments.
 
+The first line may contain a special version pragma `#pragma version X`.
+By default the assembler generates TEAL v1. So that all TEAL v2 programs must start with `#pragma version 2`
+
 "`//`" prefixes a line comment.
 
 ## Constants and Pseudo-Ops
@@ -334,9 +338,9 @@ A '[proto-buf style variable length unsigned int](https://developers.google.com/
 Current design and implementation limitations to be aware of.
 
 * TEAL cannot create or change a transaction, only approve or reject.
-* TEAL cannot lookup balances of Algos or other assets. (Standard transaction accounting will apply after TEAL has run and authorized a transaction. A TEAL-approved transaction could still be invalid by other accounting rules just as a standard signed transaction could be invalid. e.g. I can't give away money I don't have.)
+* Stateless TEAL cannot lookup balances of Algos or other assets. (Standard transaction accounting will apply after TEAL has run and authorized a transaction. A TEAL-approved transaction could still be invalid by other accounting rules just as a standard signed transaction could be invalid. e.g. I can't give away money I don't have.)
 * TEAL cannot access information in previous blocks. TEAL cannot access most information in other transactions in the current block. (TEAL can access fields of the transaction it is attached to and the transactions in an atomic transaction group.)
 * TEAL cannot know exactly what round the current transaction will commit in (but it is somewhere in FirstValid through LastValid).
 * TEAL cannot know exactly what time its transaction is committed.
-* TEAL cannot loop. Its branch instruction `bnz` "branch if not zero" can only branch forward so as to skip some code.
+* TEAL cannot loop. Its branch instructions `bnz` "branch if not zero", `bz` "branch if zero" and `b` "branch" can only branch forward so as to skip some code.
 * TEAL cannot recurse. There is no subroutine jump operation.

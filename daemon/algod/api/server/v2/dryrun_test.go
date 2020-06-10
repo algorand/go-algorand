@@ -167,7 +167,8 @@ func TestDryunLogicSigSource(t *testing.T) {
 	}
 }
 
-const globalTestSource = `// This program approves all transactions whose first arg is "hello"
+const globalTestSource = `#pragma version 2
+// This program approves all transactions whose first arg is "hello"
 // Then, accounts can write "foo": "bar" to the GlobalState by
 // sending a transaction whose first argument is "write". Finally,
 // accounts can send the args ["check", xyz] to confirm that the
@@ -239,7 +240,8 @@ done:
 
 var globalTestProgram []byte
 
-const localStateCheckSource = `// This program approves all transactions whose first arg is "hello"
+const localStateCheckSource = `#pragma version 2
+// This program approves all transactions whose first arg is "hello"
 // Then, accounts can write "foo": "bar" to their LocalState by
 // sending a transaction whose first argument is "write". Finally,
 // accounts can send the args ["check", xyz] to confirm that the

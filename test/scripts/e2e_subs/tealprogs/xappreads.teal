@@ -1,3 +1,4 @@
+#pragma version 2
 // Fetch app idx we want to read global state from
 txna ApplicationArgs 0
 btoi

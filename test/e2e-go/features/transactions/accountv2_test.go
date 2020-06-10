@@ -78,7 +78,8 @@ func TestAccountInformationV2(t *testing.T) {
 	a.Zero(len(ad.AppParams))
 	a.Equal(basics.MicroAlgos{Raw: 10000000000}, ad.MicroAlgos)
 
-	counter := `// a simple global and local calls counter app
+	counter := `#pragma version 2
+// a simple global and local calls counter app
 byte b64 Y291bnRlcg== // counter
 dup
 app_global_get

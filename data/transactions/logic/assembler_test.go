@@ -194,6 +194,7 @@ txn NumAppArgs
 txn NumAccounts
 txn ApprovalProgram
 txn ClearStateProgram
+txn RekeyTo
 `
 
 // Check that assembly output is stable across time.
@@ -216,10 +217,10 @@ func TestAssemble(t *testing.T) {
 			t.Errorf("test should contain op %v", spec.Name)
 		}
 	}
-	program, err := AssembleString(bigTestAssembleNonsenseProgram)
+	program, err := AssembleStringWithVersion(bigTestAssembleNonsenseProgram, AssemblerMaxVersion)
 	require.NoError(t, err)
 	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
-	expectedBytes, _ := hex.DecodeString("022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b6921072105700048482107210571004848361c0037001a0031183119311b311d311e311f")
+	expectedBytes, _ := hex.DecodeString("022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b6921072105700048482107210571004848361c0037001a0031183119311b311d311e311f3120")
 	if bytes.Compare(expectedBytes, program) != 0 {
 		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
 		t.Log(hex.EncodeToString(program))
@@ -234,7 +235,7 @@ pop
 gtxn 0 ApplicationArgs 0 // alias to gtxn
 pop
 `
-	prog1, err := AssembleString(source1)
+	prog1, err := AssembleStringWithVersion(source1, AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	source2 := `txna Accounts 0
@@ -242,7 +243,7 @@ pop
 gtxna 0 ApplicationArgs 0
 pop
 `
-	prog2, err := AssembleString(source2)
+	prog2, err := AssembleStringWithVersion(source2, AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	require.Equal(t, prog1, prog2)
@@ -250,37 +251,37 @@ pop
 
 func TestAssembleTxna(t *testing.T) {
 	source := `txna Accounts 256`
-	_, err := AssembleString(source)
+	_, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "txna cannot look up beyond index 255")
 
 	source = `txna ApplicationArgs 256`
-	_, err = AssembleString(source)
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "txna cannot look up beyond index 255")
 
 	source = `txna Sender 256`
-	_, err = AssembleString(source)
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "txna unknown arg")
 
 	source = `gtxna 0 Accounts 256`
-	_, err = AssembleString(source)
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gtxna cannot look up beyond index 255")
 
 	source = `gtxna 0 ApplicationArgs 256`
-	_, err = AssembleString(source)
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gtxna cannot look up beyond index 255")
 
 	source = `gtxna 256 Accounts 0`
-	_, err = AssembleString(source)
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gtxna cannot look up beyond index 255")
 
 	source = `gtxna 0 Sender 256`
-	_, err = AssembleString(source)
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gtxna unknown arg")
 
@@ -295,12 +296,12 @@ func TestAssembleTxna(t *testing.T) {
 	require.Contains(t, err.Error(), "txn expects one or two arguments")
 
 	source = `txna Accounts 0 1`
-	_, err = AssembleString(source)
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "txna expects two arguments")
 
 	source = `txna Accounts a`
-	_, err = AssembleString(source)
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "strconv.ParseUint")
 
@@ -315,17 +316,17 @@ func TestAssembleTxna(t *testing.T) {
 	require.Contains(t, err.Error(), "gtxn expects two or three arguments")
 
 	source = `gtxna 0 Accounts 1 2`
-	_, err = AssembleString(source)
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "gtxna expects three arguments")
 
 	source = `gtxna a Accounts 0`
-	_, err = AssembleString(source)
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "strconv.ParseUint")
 
 	source = `gtxna 0 Accounts a`
-	_, err = AssembleString(source)
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "strconv.ParseUint")
 
@@ -347,12 +348,12 @@ func TestAssembleTxna(t *testing.T) {
 
 func TestAssembleGlobal(t *testing.T) {
 	source := `global`
-	_, err := AssembleString(source)
+	_, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "global expects one argument")
 
 	source = `global a`
-	_, err = AssembleString(source)
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "global unknown arg")
 }
@@ -363,7 +364,7 @@ int 1
 +
 // comment
 `
-	_, err := AssembleString(source)
+	_, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "wanted type uint64 got []byte")
 }
@@ -374,7 +375,7 @@ func mutateProgVersion(version uint64, prog string) string {
 }
 
 func TestOpUint(t *testing.T) {
-	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := OpStream{Version: v}
 			err := ops.Uint(0xcafebabe)
@@ -390,7 +391,7 @@ func TestOpUint(t *testing.T) {
 
 func TestOpUint64(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			t.Parallel()
 			ops := OpStream{Version: v}
@@ -406,7 +407,7 @@ func TestOpUint64(t *testing.T) {
 
 func TestOpBytes(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			ops := OpStream{Version: v}
 			err := ops.ByteLiteral([]byte("abcdef"))
@@ -421,7 +422,7 @@ func TestOpBytes(t *testing.T) {
 
 func TestAssembleInt(t *testing.T) {
 	t.Parallel()
-	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			text := "int 0xcafebabe"
 			program, err := AssembleStringWithVersion(text, v)
@@ -461,7 +462,7 @@ func TestAssembleBytes(t *testing.T) {
 		`byte "\x61\x62\x63\x64\x65\x66"`,
 		`byte "abcdef"`,
 	}
-	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			for _, vi := range variations {
 				program, err := AssembleStringWithVersion(vi, v)
@@ -475,7 +476,7 @@ func TestAssembleBytes(t *testing.T) {
 }
 
 func TestAssembleBytesString(t *testing.T) {
-	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			text := `byte "foo bar"`
 			_, err := AssembleStringWithVersion(text, v)
@@ -694,7 +695,7 @@ func TestAssembleRejectNegJump(t *testing.T) {
 	text := `wat:
 int 1
 bnz wat`
-	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			program, err := AssembleStringWithVersion(text, v)
 			require.Error(t, err)
@@ -717,7 +718,7 @@ byte b64 //GWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz+8=
 byte b64 avGWRM+yy3BCavBDXO/FYTNZ6o2Jai5edsMCBdDEz//=
 ==
 ||`
-	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			program, err := AssembleStringWithVersion(text, v)
 			require.NoError(t, err)
@@ -731,7 +732,7 @@ func TestAssembleRejectUnkLabel(t *testing.T) {
 	t.Parallel()
 	text := `int 1
 bnz nowhere`
-	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			program, err := AssembleStringWithVersion(text, v)
 			require.Error(t, err)
@@ -746,11 +747,11 @@ intc 0
 intc 0
 bnz done
 done:`
-	program, err := AssembleString(text)
+	program, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 	require.Equal(t, 9, len(program))
 	expectedProgBytes := []byte("\x01\x20\x01\x01\x22\x22\x40\x00\x00")
-	expectedProgBytes[0] = byte(AssemblerDefaultVersion)
+	expectedProgBytes[0] = byte(AssemblerMaxVersion)
 	require.Equal(t, expectedProgBytes, program)
 }
 
@@ -820,6 +821,7 @@ txn Accounts
 txn NumAccounts
 txn ApprovalProgram
 txn ClearStateProgram
+txn RekeyTo
 gtxn 12 Fee
 `
 	for _, globalField := range GlobalFieldNames {
@@ -832,7 +834,7 @@ gtxn 12 Fee
 			t.Errorf("TestAssembleDisassemble missing field txn %v", txnField)
 		}
 	}
-	program, err := AssembleString(text)
+	program, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 	t2, err := Disassemble(program)
 	require.Equal(t, text, t2)
@@ -867,7 +869,7 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 
 func TestAssembleDisassembleErrors(t *testing.T) {
 	source := `txn Sender`
-	program, err := AssembleString(source)
+	program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	program[2] = 0x50 // txn field
 	_, err = Disassemble(program)
@@ -875,7 +877,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "invalid txn arg index")
 
 	source = `txna Accounts 0`
-	program, err = AssembleString(source)
+	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	program[2] = 0x50 // txn field
 	_, err = Disassemble(program)
@@ -883,7 +885,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "invalid txn arg index")
 
 	source = `gtxn 0 Sender`
-	program, err = AssembleString(source)
+	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	program[3] = 0x50 // txn field
 	_, err = Disassemble(program)
@@ -891,7 +893,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "invalid txn arg index")
 
 	source = `gtxna 0 Accounts 0`
-	program, err = AssembleString(source)
+	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	program[3] = 0x50 // txn field
 	_, err = Disassemble(program)
@@ -899,7 +901,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "invalid txn arg index")
 
 	source = `global MinTxnFee`
-	program, err = AssembleString(source)
+	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	program[2] = 0x50 // txn field
 	_, err = Disassemble(program)
@@ -918,7 +920,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "invalid opcode")
 
 	source = "int 0\nint 0\nasset_holding_get AssetFrozen"
-	program, err = AssembleString(source)
+	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	program[7] = 0x50 // holding field
 	_, err = Disassemble(program)
@@ -926,7 +928,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "invalid asset holding arg index")
 
 	source = "int 0\nint 0\nasset_params_get AssetTotal"
-	program, err = AssembleString(source)
+	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	program[7] = 0x50 // params field
 	_, err = Disassemble(program)
@@ -934,7 +936,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "invalid asset params arg index")
 
 	source = "int 0\nint 0\nasset_params_get AssetTotal"
-	program, err = AssembleString(source)
+	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	_, err = Disassemble(program)
 	require.NoError(t, err)
@@ -944,7 +946,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "unexpected asset_params_get opcode end: missing 1 bytes")
 
 	source = "gtxna 0 Accounts 0"
-	program, err = AssembleString(source)
+	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	_, err = Disassemble(program)
 	require.NoError(t, err)
@@ -954,7 +956,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "unexpected gtxna opcode end: missing 2 bytes")
 
 	source = "txna Accounts 0"
-	program, err = AssembleString(source)
+	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	_, err = Disassemble(program)
 	require.NoError(t, err)
@@ -964,7 +966,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "unexpected txna opcode end: missing 1 bytes")
 
 	source = "byte 0x4141\nsubstring 0 1"
-	program, err = AssembleString(source)
+	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	_, err = Disassemble(program)
 	require.NoError(t, err)
@@ -978,7 +980,7 @@ func TestAssembleVersions(t *testing.T) {
 	text := `int 1
 txna Accounts 0
 `
-	_, err := AssembleString(text)
+	_, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	_, err = AssembleStringV2(text)
@@ -996,29 +998,29 @@ func TestAssembleBalance(t *testing.T) {
 balance
 int 1
 ==`
-	_, err := AssembleString(text)
+	_, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "balance arg 0 wanted type uint64 got []byte")
 }
 
 func TestAssembleAsset(t *testing.T) {
 	source := "int 0\nint 0\nasset_holding_get ABC 1"
-	_, err := AssembleString(source)
+	_, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "asset_holding_get expects one argument")
 
 	source = "int 0\nint 0\nasset_holding_get ABC"
-	_, err = AssembleString(source)
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "asset_holding_get unknown arg")
 
 	source = "int 0\nint 0\nasset_params_get ABC 1"
-	_, err = AssembleString(source)
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "asset_params_get expects one argument")
 
 	source = "int 0\nint 0\nasset_params_get ABC"
-	_, err = AssembleString(source)
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "asset_params_get unknown arg")
 }
@@ -1026,7 +1028,7 @@ func TestAssembleAsset(t *testing.T) {
 func TestDisassembleSingleOp(t *testing.T) {
 	// test ensures no double arg_0 entries in disassebly listing
 	sample := "// version 2\narg_0\n"
-	program, err := AssembleString(sample)
+	program, err := AssembleStringWithVersion(sample, AssemblerMaxVersion)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(program))
 	disassembled, err := Disassemble(program)
@@ -1036,7 +1038,7 @@ func TestDisassembleSingleOp(t *testing.T) {
 
 func TestAssembleOffsets(t *testing.T) {
 	source := "err"
-	program, offsets, err := AssembleStringWithVersionEx(source, AssemblerDefaultVersion)
+	program, offsets, err := AssembleStringWithVersionEx(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(program))
 	require.Equal(t, 1, len(offsets))
@@ -1053,7 +1055,7 @@ func TestAssembleOffsets(t *testing.T) {
 // comment
 err
 `
-	program, offsets, err = AssembleStringWithVersionEx(source, AssemblerDefaultVersion)
+	program, offsets, err = AssembleStringWithVersionEx(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(program))
 	require.Equal(t, 2, len(offsets))
@@ -1076,7 +1078,7 @@ err
 label1:
 err
 `
-	program, offsets, err = AssembleStringWithVersionEx(source, AssemblerDefaultVersion)
+	program, offsets, err = AssembleStringWithVersionEx(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	require.Equal(t, 7, len(program))
 	require.Equal(t, 4, len(offsets))
@@ -1113,7 +1115,7 @@ err
 // comment
 !
 `
-	program, offsets, err = AssembleStringWithVersionEx(source, AssemblerDefaultVersion)
+	program, offsets, err = AssembleStringWithVersionEx(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	require.Equal(t, 6, len(program))
 	require.Equal(t, 2, len(offsets))
@@ -1133,7 +1135,7 @@ err
 
 func TestHasStatefulOps(t *testing.T) {
 	source := "int 1"
-	program, err := AssembleStringWithVersion(source, AssemblerDefaultVersion)
+	program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	has, err := HasStatefulOps(program)
 	require.NoError(t, err)
@@ -1144,7 +1146,7 @@ int 1
 app_opted_in
 err
 `
-	program, err = AssembleStringWithVersion(source, AssemblerDefaultVersion)
+	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	has, err = HasStatefulOps(program)
 	require.NoError(t, err)
@@ -1228,7 +1230,7 @@ func TestStringLiteralParsing(t *testing.T) {
 }
 
 func TestPragmaStream(t *testing.T) {
-	for v := uint64(1); v <= AssemblerDefaultVersion; v++ {
+	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		text := fmt.Sprintf("#pragma version %d", v)
 		sr := strings.NewReader(text)
 		ps := PragmaStream{}
@@ -1340,50 +1342,53 @@ func TestAssemblePragmaVersion(t *testing.T) {
 	text := `#pragma version 1
 int 1
 `
-	program, _, err := AssembleStringWithVersionEx(text, 1)
+	program, err := AssembleStringWithVersion(text, 1)
 	require.NoError(t, err)
 	program1, err := AssembleStringV1("int 1")
 	require.NoError(t, err)
 	require.Equal(t, program1, program)
 
-	_, _, err = AssembleStringWithVersionEx(text, 0)
+	_, err = AssembleStringWithVersion(text, 0)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "version mismatch")
 
-	_, _, err = AssembleStringWithVersionEx(text, 2)
+	_, err = AssembleStringWithVersion(text, 2)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "version mismatch")
 
-	program, _, err = AssembleStringWithVersionEx(text, assemblerNoVersion)
+	program, err = AssembleStringWithVersion(text, assemblerNoVersion)
 	require.NoError(t, err)
 	require.Equal(t, program1, program)
 
 	text = `#pragma version 2
 int 1
 `
-	program, _, err = AssembleStringWithVersionEx(text, 2)
+	program, err = AssembleStringWithVersion(text, 2)
 	require.NoError(t, err)
 	program2, err := AssembleStringV2("int 1")
 	require.NoError(t, err)
 	require.Equal(t, program2, program)
 
-	_, _, err = AssembleStringWithVersionEx(text, 0)
+	_, err = AssembleStringWithVersion(text, 0)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "version mismatch")
 
-	_, _, err = AssembleStringWithVersionEx(text, 1)
+	_, err = AssembleStringWithVersion(text, 1)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "version mismatch")
 
-	program, _, err = AssembleStringWithVersionEx(text, assemblerNoVersion)
+	program, err = AssembleStringWithVersion(text, assemblerNoVersion)
 	require.NoError(t, err)
 	require.Equal(t, program2, program)
 
-	// check if no version it defaults to the latest one
+	// check if no version it defaults to TEAL v1
 	text = `byte "test"
-substring 1 3
+len
 `
-	program, _, err = AssembleStringWithVersionEx(text, assemblerNoVersion)
+	program, err = AssembleStringWithVersion(text, assemblerNoVersion)
+	require.NoError(t, err)
+	program1, err = AssembleStringV1(text)
+	require.Equal(t, program1, program)
 	require.NoError(t, err)
 	program2, err = AssembleString(text)
 	require.NoError(t, err)
