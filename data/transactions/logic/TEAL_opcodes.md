@@ -476,7 +476,7 @@ At LogicSigVersion 2 it became allowed to branch to the end of the program exact
 - branch if value X is zero
 - LogicSigVersion >= 2
 
-See `bnz` for details on how branches work.
+See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.
 
 ## b
 
@@ -562,29 +562,29 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, application id (top of the stack on opcode entry).
+params: account index, application id (top of the stack on opcode entry). Return: 1 if opted in and 0 otherwise.
 
 ## app_local_get
 
 - Opcode: 0x62
 - Pops: *... stack*, {uint64 A}, {[]byte B}
 - Pushes: any
-- read from account specified by Txn.Accounts[A] from local state of the current application key B  => value
+- read from account specified by Txn.Accounts[A] from local state of the current application key B => value
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, state key. Return: value. The value is zero if the key does ont exist.
+params: account index, state key. Return: value. The value is zero if the key does not exist.
 
 ## app_local_get_ex
 
 - Opcode: 0x63
 - Pops: *... stack*, {uint64 A}, {uint64 B}, {[]byte C}
 - Pushes: uint64, any
-- read from account specified by Txn.Accounts[A] from local state of the application B key C  => {0 or 1 (top), value}
+- read from account specified by Txn.Accounts[A] from local state of the application B key C => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, application id, state key. Return: did_exist flag (top of the stack), value.
+params: account index, application id, state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value.
 
 ## app_global_get
 
@@ -595,7 +595,7 @@ params: account index, application id, state key. Return: did_exist flag (top of
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: state key. Return: value. The value is zero if the key does ont exist.
+params: state key. Return: value. The value is zero if the key does not exist.
 
 ## app_global_get_ex
 
@@ -655,7 +655,7 @@ params: state key.
 - Opcode: 0x70 {uint8 asset holding field index}
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64, any
-- read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg)  => {0 or 1 (top), value}
+- read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -667,14 +667,14 @@ params: state key.
 | 1 | AssetFrozen | uint64 | Is the asset frozen or not |
 
 
-params: account index, asset id. Return: did_exist flag, value.
+params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherwise), value.
 
 ## asset_params_get
 
 - Opcode: 0x71 {uint8 asset params field index}
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64, any
-- read from account specified by Txn.Accounts[A] and asset B params field X (imm arg)  => {0 or 1 (top), value}
+- read from account specified by Txn.Accounts[A] and asset B params field X (imm arg) => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -695,4 +695,4 @@ params: account index, asset id. Return: did_exist flag, value.
 | 10 | AssetClawback | []byte | Clawback address |
 
 
-params: account index, asset id. Return: did_exist flag, value.
+params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherwise), value.

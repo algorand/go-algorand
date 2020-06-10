@@ -100,16 +100,16 @@ var opDocList = []stringString{
 	{"substring3", "pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result"},
 	{"balance", "get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction"},
 	{"app_opted_in", "check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1}"},
-	{"app_local_get", "read from account specified by Txn.Accounts[A] from local state of the current application key B  => value"},
-	{"app_local_get_ex", "read from account specified by Txn.Accounts[A] from local state of the application B key C  => {0 or 1 (top), value}"},
+	{"app_local_get", "read from account specified by Txn.Accounts[A] from local state of the current application key B => value"},
+	{"app_local_get_ex", "read from account specified by Txn.Accounts[A] from local state of the application B key C => {0 or 1 (top), value}"},
 	{"app_global_get", "read key A from global state of a current application => value"},
 	{"app_global_get_ex", "read from application A global state key B => {0 or 1 (top), value}"},
 	{"app_local_put", "write to account specified by Txn.Accounts[A] to local state of a current application key B with value C"},
 	{"app_global_put", "write key A and value B to global state of the current application"},
 	{"app_local_del", "delete from account specified by Txn.Accounts[A] local state key B of the current application"},
 	{"app_global_del", "delete key A from a global state of the current application"},
-	{"asset_holding_get", "read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg)  => {0 or 1 (top), value}"},
-	{"asset_params_get", "read from account specified by Txn.Accounts[A] and asset B params field X (imm arg)  => {0 or 1 (top), value}"},
+	{"asset_holding_get", "read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value}"},
+	{"asset_params_get", "read from account specified by Txn.Accounts[A] and asset B params field X (imm arg) => {0 or 1 (top), value}"},
 }
 
 var opDocByName map[string]string
@@ -157,7 +157,7 @@ func OpImmediateNote(opName string) string {
 var opDocExtraList = []stringString{
 	{"ed25519verify", "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack."},
 	{"bnz", "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are currently limited to forward branches only, 0-0x7fff. A future expansion might make this a signed 16 bit integer allowing for backward branches and looping.\n\nAt LogicSigVersion 2 it became allowed to branch to the end of the program exactly after the last instruction, removing the need for a last instruction or no-op as a branch target at the end. Branching beyond that may still fail the program."},
-	{"bz", "See `bnz` for details on how branches work."},
+	{"bz", "See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`."},
 	{"b", "See `bnz` for details on how branches work. `b` always jumps to the offset."},
 	{"intcblock", "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script."},
 	{"bytecblock", "`bytecblock` loads the following program bytes into an array of byte string constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script."},
@@ -166,16 +166,16 @@ var opDocExtraList = []stringString{
 	{"gtxn", "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`."},
 	{"btoi", "`btoi` panics if the input is longer than 8 bytes."},
 	{"concat", "`concat` panics if the result would be greater than 4096 bytes."},
-	{"app_opted_in", "params: account index, application id (top of the stack on opcode entry)."},
-	{"app_local_get", "params: account index, state key. Return: value. The value is zero if the key does ont exist."},
-	{"app_local_get_ex", "params: account index, application id, state key. Return: did_exist flag (top of the stack), value."},
+	{"app_opted_in", "params: account index, application id (top of the stack on opcode entry). Return: 1 if opted in and 0 otherwise."},
+	{"app_local_get", "params: account index, state key. Return: value. The value is zero if the key does not exist."},
+	{"app_local_get_ex", "params: account index, application id, state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value."},
 	{"app_global_get_ex", "params: application id, state key. Return: value."},
-	{"app_global_get", "params: state key. Return: value. The value is zero if the key does ont exist."},
+	{"app_global_get", "params: state key. Return: value. The value is zero if the key does not exist."},
 	{"app_local_put", "params: account index, state key, value."},
 	{"app_local_del", "params: account index, state key."},
 	{"app_global_del", "params: state key."},
-	{"asset_holding_get", "params: account index, asset id. Return: did_exist flag, value."},
-	{"asset_params_get", "params: account index, asset id. Return: did_exist flag, value."},
+	{"asset_holding_get", "params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherwise), value."},
+	{"asset_params_get", "params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherwise), value."},
 }
 
 var opDocExtras map[string]string
@@ -261,7 +261,7 @@ var onCompletionDescriptions = map[OnCompletionConstType]string{
 	NoOp:              "Application transaction will simply call its ApprovalProgram.",
 	OptIn:             "Application transaction will allocate some LocalState for the application in the sender's account.",
 	CloseOut:          "Application transaction will deallocate some LocalState for the application from the user's account.",
-	ClearState:        "Similar to CloseOutOC, but may never fail. This allows users to reclaim their minimum balance from an application they no longer wish to opt in to.",
+	ClearState:        "Similar to CloseOut, but may never fail. This allows users to reclaim their minimum balance from an application they no longer wish to opt in to.",
 	UpdateApplication: "Application transaction will update the ApprovalProgram and ClearStateProgram for the application.",
 	DeleteApplication: "Application transaction will delete the AppParams for the application from the creator's balance.",
 }
