@@ -28,6 +28,7 @@ import (
 
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -301,6 +302,9 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int) {
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name())
+	cfg := config.GetDefaultLocal()
+	cfg.EnableTealService = true
+	mockNode.config = cfg
 	handler := v2.Handlers{
 		Node:     &mockNode,
 		Log:      logging.Base(),
