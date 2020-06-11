@@ -76,7 +76,7 @@ func accountInformationTest(t *testing.T, address string, expectedCode int) {
 
 func TestAccountInformation(t *testing.T) {
 	accountInformationTest(t, poolAddr.String(), 200)
-	accountInformationTest(t, "malformed", 400)
+	accountInformationTest(t, "bad account", 400)
 }
 
 func getBlockTest(t *testing.T, blockNum uint64, format string, expectedCode int) {
@@ -91,7 +91,7 @@ func TestGetBlock(t *testing.T) {
 	getBlockTest(t, 0, "json", 200)
 	getBlockTest(t, 0, "msgpack", 200)
 	getBlockTest(t, 1, "json", 500)
-	getBlockTest(t, 0, "malformed", 400)
+	getBlockTest(t, 0, "bad format", 400)
 }
 
 func TestGetSupply(t *testing.T) {
@@ -150,7 +150,7 @@ func TestGetTransactionParams(t *testing.T) {
 func pendingTransactionInformationTest(t *testing.T, txidToUse int, format string, expectedCode int) {
 	handler, c, rec, _, stxns, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
-	txid := "badtxid"
+	txid := "bad txid"
 	if txidToUse >= 0 {
 		txid = stxns[txidToUse].ID().String()
 	}
@@ -260,7 +260,7 @@ func startCatchupTest(t *testing.T, catchpoint string, expectedCode int) {
 func TestStartCatchup(t *testing.T) {
 	goodCatchPoint := "5894690#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA"
 	startCatchupTest(t, goodCatchPoint, 200)
-	badCatchPoint := "this is an invalid catchpoint"
+	badCatchPoint := "bad catchpoint"
 	startCatchupTest(t, badCatchPoint, 400)
 }
 
@@ -289,7 +289,7 @@ func abortCatchupTest(t *testing.T, catchpoint string, expectedCode int) {
 func TestAbortCatchup(t *testing.T) {
 	goodCatchPoint := "5894690#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA"
 	abortCatchupTest(t, goodCatchPoint, 200)
-	badCatchPoint := "this is an invalid catchpoint"
+	badCatchPoint := "bad catchpoint"
 	abortCatchupTest(t, badCatchPoint, 400)
 }
 
@@ -320,7 +320,7 @@ func TestTealCompile(t *testing.T) {
 	goodProgram := `int 1`
 	goodProgramBytes := []byte(goodProgram)
 	tealCompileTest(t, goodProgramBytes, 200)
-	badProgram := "this is incorrect TEAL"
+	badProgram := "bad program"
 	badProgramBytes := []byte(badProgram)
 	tealCompileTest(t, badProgramBytes, 400)
 }
