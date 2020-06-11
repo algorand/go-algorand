@@ -133,7 +133,8 @@ func getAllClientsSelectedForRound(t *testing.T, fetcher *NetworkFetcher, round 
 
 func TestSelectValidRemote(t *testing.T) {
 	network := makeMockClientAggregator(t, false, false)
-	factory := MakeNetworkFetcherFactory(network, numberOfPeers, nil)
+	cfg := config.GetDefaultLocal()
+	factory := MakeNetworkFetcherFactory(network, numberOfPeers, nil, &cfg)
 	factory.log = logging.TestingLog(t)
 	fetcher := factory.New()
 	require.Equal(t, numberOfPeers, len(fetcher.(*NetworkFetcher).peers))
@@ -600,7 +601,8 @@ func TestGetBlockHTTP(t *testing.T) {
 	net.addPeer(rootURL)
 	_, ok := net.GetPeers(network.PeersConnectedOut)[0].(network.HTTPPeer)
 	require.True(t, ok)
-	factory := MakeNetworkFetcherFactory(net, numberOfPeers, nil)
+	cfg := config.GetDefaultLocal()
+	factory := MakeNetworkFetcherFactory(net, numberOfPeers, nil, &cfg)
 	factory.log = logging.TestingLog(t)
 	fetcher := factory.New()
 	// we have one peer, the HTTP block server
@@ -713,7 +715,7 @@ func TestGetBlockMocked(t *testing.T) {
 	require.NoError(t, ledgerA.AddBlock(b, agreement.Certificate{Round: next}))
 
 	// B tries to fetch block
-	factory := MakeNetworkFetcherFactory(nodeB, 10, nil)
+	factory := MakeNetworkFetcherFactory(nodeB, 10, nil, &cfg)
 	factory.log = logging.TestingLog(t)
 	nodeBRPC := factory.New()
 	ctx, cf := context.WithTimeout(context.Background(), time.Second)
@@ -763,7 +765,7 @@ func TestGetFutureBlock(t *testing.T) {
 	rpcs.MakeBlockService(config.GetDefaultLocal(), ledgerA, nodeA, "test genesisID")
 
 	// B tries to fetch block 4
-	factory := MakeNetworkFetcherFactory(nodeB, 10, nil)
+	factory := MakeNetworkFetcherFactory(nodeB, 10, nil, &cfg)
 	factory.log = logging.TestingLog(t)
 	nodeBRPC := factory.New()
 	ctx, cf := context.WithTimeout(context.Background(), time.Second)
@@ -869,6 +871,8 @@ func TestGetBlockWS(t *testing.T) {
 		return
 	}
 
+	cfg := config.GetDefaultLocal()
+
 	versions := []string{"1", "2.1"}
 	for _, version := range versions { // range network.SupportedProtocolVersions {
 
@@ -888,7 +892,7 @@ func TestGetBlockWS(t *testing.T) {
 
 		_, ok := net.GetPeers(network.PeersConnectedIn)[0].(network.UnicastPeer)
 		require.True(t, ok)
-		factory := MakeNetworkFetcherFactory(net, numberOfPeers, fs)
+		factory := MakeNetworkFetcherFactory(net, numberOfPeers, fs, &cfg)
 		factory.log = logging.TestingLog(t)
 		fetcher := factory.NewOverGossip(protocol.UniCatchupReqTag)
 		// we have one peer, the Ws block server
