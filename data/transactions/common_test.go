@@ -78,7 +78,7 @@ func (b BalanceMap) Put(record basics.BalanceRecord) error {
 // set up a BalanceMap for a transaction containing only the transactions RelevantAddrs.
 func makeTestBalancesForTransaction(tx Transaction) BalanceMap {
 	bals := make(BalanceMap)
-	for _, addr := range tx.RelevantAddrs(SpecialAddresses{RewardsPool: poolAddr}, config.Consensus[protocol.ConsensusCurrentVersion]) {
+	for _, addr := range tx.RelevantAddrs(SpecialAddresses{RewardsPool: poolAddr}) {
 		bals[addr] = basics.BalanceRecord{Addr: addr}
 	}
 	return bals

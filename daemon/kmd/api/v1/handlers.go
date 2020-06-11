@@ -843,7 +843,7 @@ func postTransactionSignHandler(ctx reqContext, w http.ResponseWriter, r *http.R
 	}
 
 	// Sign the transaction
-	stx, err := wallet.SignTransaction(tx, []byte(req.WalletPassword))
+	stx, err := wallet.SignTransaction(tx, req.PublicKey, []byte(req.WalletPassword))
 	if err != nil {
 		errorResponse(w, http.StatusBadRequest, err)
 		return
