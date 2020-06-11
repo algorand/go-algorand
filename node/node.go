@@ -267,7 +267,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 	if catchpointCatchupState != ledger.CatchpointCatchupStateInactive {
-		node.catchpointCatchupService, err = catchup.MakeResumedCatchpointCatchupService(context.Background(), node, node.log, node.net, node.ledger.Ledger)
+		node.catchpointCatchupService, err = catchup.MakeResumedCatchpointCatchupService(context.Background(), node, node.log, node.net, node.ledger.Ledger, node.config)
 		if err != nil {
 			log.Errorf("unable to create catchpoint catchup service: %v", err)
 			return nil, err
@@ -851,7 +851,7 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 		return fmt.Errorf("unable to start catchpoint catchup for '%s' - already catching up '%s'", catchpoint, stats.CatchpointLabel)
 	}
 	var err error
-	node.catchpointCatchupService, err = catchup.MakeNewCatchpointCatchupService(catchpoint, node, node.log, node.net, node.ledger.Ledger)
+	node.catchpointCatchupService, err = catchup.MakeNewCatchpointCatchupService(catchpoint, node, node.log, node.net, node.ledger.Ledger, node.config)
 	if err != nil {
 		node.log.Warnf("unable to create catchpoint catchup service : %v", err)
 		return err
