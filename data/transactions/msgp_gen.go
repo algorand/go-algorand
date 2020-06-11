@@ -1030,7 +1030,7 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			if zb0004 > config.MaxTxnNoteBytes {
-				err = msgp.ErrOverflow(uint64(zb0004), config.MaxTxnNoteBytes)
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(config.MaxTxnNoteBytes))
 				return
 			}
 			(*z).Note, bts, err = msgp.ReadBytesBytes(bts, (*z).Note)
@@ -1134,7 +1134,7 @@ func (z *Header) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 				if zb0005 > config.MaxTxnNoteBytes {
-					err = msgp.ErrOverflow(uint64(zb0005), config.MaxTxnNoteBytes)
+					err = msgp.ErrOverflow(uint64(zb0005), uint64(config.MaxTxnNoteBytes))
 					return
 				}
 				(*z).Note, bts, err = msgp.ReadBytesBytes(bts, (*z).Note)
@@ -1529,7 +1529,7 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			if zb0004 > config.MaxLogicSigMaxSize {
-				err = msgp.ErrOverflow(uint64(zb0004), config.MaxLogicSigMaxSize)
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(config.MaxLogicSigMaxSize))
 				return
 			}
 			(*z).Logic, bts, err = msgp.ReadBytesBytes(bts, (*z).Logic)
@@ -1583,7 +1583,7 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 				if zb0007 > config.MaxLogicSigMaxSize {
-					err = msgp.ErrOverflow(uint64(zb0007), config.MaxLogicSigMaxSize)
+					err = msgp.ErrOverflow(uint64(zb0007), uint64(config.MaxLogicSigMaxSize))
 					return
 				}
 				(*z).Args[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z).Args[zb0001])
@@ -1624,7 +1624,7 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 				if zb0008 > config.MaxLogicSigMaxSize {
-					err = msgp.ErrOverflow(uint64(zb0008), config.MaxLogicSigMaxSize)
+					err = msgp.ErrOverflow(uint64(zb0008), uint64(config.MaxLogicSigMaxSize))
 					return
 				}
 				(*z).Logic, bts, err = msgp.ReadBytesBytes(bts, (*z).Logic)
@@ -1672,7 +1672,7 @@ func (z *LogicSig) UnmarshalMsg(bts []byte) (o []byte, err error) {
 						return
 					}
 					if zb0011 > config.MaxLogicSigMaxSize {
-						err = msgp.ErrOverflow(uint64(zb0011), config.MaxLogicSigMaxSize)
+						err = msgp.ErrOverflow(uint64(zb0011), uint64(config.MaxLogicSigMaxSize))
 						return
 					}
 					(*z).Args[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z).Args[zb0001])
@@ -3358,7 +3358,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 			if zb0004 > config.MaxTxnNoteBytes {
-				err = msgp.ErrOverflow(uint64(zb0004), config.MaxTxnNoteBytes)
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(config.MaxTxnNoteBytes))
 				return
 			}
 			(*z).Header.Note, bts, err = msgp.ReadBytesBytes(bts, (*z).Header.Note)
@@ -3620,7 +3620,7 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 				if zb0005 > config.MaxTxnNoteBytes {
-					err = msgp.ErrOverflow(uint64(zb0005), config.MaxTxnNoteBytes)
+					err = msgp.ErrOverflow(uint64(zb0005), uint64(config.MaxTxnNoteBytes))
 					return
 				}
 				(*z).Header.Note, bts, err = msgp.ReadBytesBytes(bts, (*z).Header.Note)
