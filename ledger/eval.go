@@ -81,6 +81,14 @@ func (cs *roundCowState) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Add
 	return cs.getAssetCreator(assetIdx)
 }
 
+func (cs *roundCowState) GetAppCreator(appIdx basics.AppIndex) (basics.Address, bool, error) {
+	return basics.Address{}, false, errors.New("applications not implemented")
+}
+
+func (cs *roundCowState) PutWithCreatables(record basics.BalanceRecord, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) error {
+	return errors.New("applications not implemented")
+}
+
 // wrappers for roundCowState to satisfy the (current) transactions.Balances interface
 func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
 	acctdata, err := cs.lookup(addr)
@@ -564,7 +572,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := txn.Txn.Apply(cow, spec, cow.txnCounter())
+	applyData, err := txn.Txn.Apply(cow, nil, spec, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
@@ -573,11 +581,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	// If we are validating and generating, we have no ApplyData yet.
 	if eval.validate && !eval.generate {
 		if eval.proto.ApplyData {
-			if ad != applyData {
+			if !ad.Equal(applyData) {
 				return fmt.Errorf("transaction %v: applyData mismatch: %v != %v", txid, ad, applyData)
 			}
 		} else {
-			if ad != (transactions.ApplyData{}) {
+			if !ad.Equal(transactions.ApplyData{}) {
 				return fmt.Errorf("transaction %v: applyData not supported", txid)
 			}
 		}

@@ -332,7 +332,7 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 	return qs, nil
 }
 
-func (qs *accountsDbQueries) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.AssetLocator, err error) {
+func (qs *accountsDbQueries) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
 	err = db.Retry(func() error {
 		// Query for assets in range
 		rows, err := qs.listAssetsStmt.Query(maxAssetIdx, maxResults)
@@ -341,9 +341,9 @@ func (qs *accountsDbQueries) listAssets(maxAssetIdx basics.AssetIndex, maxResult
 		}
 		defer rows.Close()
 
-		// For each row, copy into a new AssetLocator and append to results
+		// For each row, copy into a new CreatableLocator and append to results
 		var buf []byte
-		var al basics.AssetLocator
+		var al basics.CreatableLocator
 		for rows.Next() {
 			err := rows.Scan(&al.Index, &buf)
 			if err != nil {

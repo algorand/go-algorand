@@ -29,7 +29,16 @@ A program can either authorize some delegated action on a normal private key sig
 
 The TEAL bytecode plus the length of any Args must add up to less than 1000 bytes (consensus parameter LogicSigMaxSize). Each TEAL op has an associated cost estimate and the program cost estimate must total less than 20000 (consensus parameter LogicSigMaxCost). Most ops have an estimated cost of 1, but a few slow crypto ops are much higher.
 
+## Execution modes
 
+Starting from version 2 TEAL evaluator can run programs in two modes:
+1. Signature verification (stateless)
+2. Application run (stateful)
+
+Differences between modes include:
+1. Max program length (consensus parameters LogicSigMaxSize, MaxApprovalProgramLen and MaxClearStateProgramLen)
+2. Max program cost (consensus parameters LogicSigMaxCost, MaxAppProgramCost)
+3. Opcodes availability. For example, all stateful operations are only available in stateful mode. Refer to [opcodes document](TEAL_opcodes.md) for details.
 
 ## Constants
 
@@ -40,6 +49,30 @@ The assembler will hide most of this, allowing simple use of `int 1234` and `byt
 Constants are loaded into the environment by two opcodes, `intcblock` and `bytecblock`. Both of these use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint), reproduced [here](#varuint). The `intcblock` opcode is followed by a varuint specifying the length of the array and then that number of varuint. The `bytecblock` opcode is followed by a varuint array length then that number of pairs of (varuint, bytes) length prefixed byte strings. This should efficiently load 32 and 64 byte constants which will be common as addresses, hashes, and signatures.
 
 Constants are pushed onto the stack by `intc`, `intc_[0123]`, `bytec`, and `bytec_[0123]`. The assembler will handle converting `int N` or `byte N` into the appropriate form of the instruction needed.
+
+### Named Integer Constants
+
+#### OnComplete
+| Value | Constant name | Description |
+| --- | --- | --- |
+| 0 | NoOp | Application transaction will simply call its ApprovalProgram. |
+| 1 | OptIn | Application transaction will allocate some LocalState for the application in the sender's account. |
+| 2 | CloseOut | Application transaction will deallocate some LocalState for the application from the user's account. |
+| 3 | ClearState | Similar to CloseOut, but may never fail. This allows users to reclaim their minimum balance from an application they no longer wish to opt in to. |
+| 4 | UpdateApplication | Application transaction will update the ApprovalProgram and ClearStateProgram for the application. |
+| 5 | DeleteApplication | Application transaction will delete the AppParams for the application from the creator's balance. |
+
+#### TypeEnum constants
+| Value | Constant name | Description |
+| --- | --- | --- |
+| 0 | unknown | Unknown type. Invalid transaction |
+| 1 | pay | Payment |
+| 2 | keyreg | KeyRegistration |
+| 3 | acfg | AssetConfig |
+| 4 | axfer | AssetTransfer |
+| 5 | afrz | AssetFreeze |
+| 6 | appl | ApplicationCall |
+
 
 ## Operations
 
@@ -94,6 +127,9 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `^` | A bitwise-xor B |
 | `~` | bitwise invert value X |
 | `mulw` | A times B out to 128-bit long result as low (top) and high uint64 values on the stack |
+| `concat` | pop two byte strings A and B and join them, push the result |
+| `substring` | pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to but not including M, push the substring result |
+| `substring3` | pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result |
 
 ### Loading Values
 
@@ -122,6 +158,8 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | `arg_3` | push Args[3] to stack |
 | `txn` | push field from current transaction to stack |
 | `gtxn` | push field to the stack from a transaction in the current transaction group |
+| `txna` | push value of an array field from current transaction to stack |
+| `gtxna` | push value of a field to the stack from a transaction in the current transaction group |
 | `global` | push value from globals to stack |
 | `load` | copy a value from scratch space to the stack |
 | `store` | pop a value from the stack and store to scratch space |
@@ -133,7 +171,7 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 0 | Sender | []byte | 32 byte address |
 | 1 | Fee | uint64 | micro-Algos |
 | 2 | FirstValid | uint64 | round number |
-| 3 | FirstValidTime | uint64 | Causes program to fail; reserved for future use. |
+| 3 | FirstValidTime | uint64 | Causes program to fail; reserved for future use |
 | 4 | LastValid | uint64 | round number |
 | 5 | Note | []byte |  |
 | 6 | Lease | []byte |  |
@@ -152,8 +190,16 @@ Some of these have immediate data in the byte or bytes after the opcode.
 | 19 | AssetSender | []byte | 32 byte address. Causes clawback of all value of asset from AssetSender if Sender is the Clawback address of the asset. |
 | 20 | AssetReceiver | []byte | 32 byte address |
 | 21 | AssetCloseTo | []byte | 32 byte address |
-| 22 | GroupIndex | uint64 | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1. |
+| 22 | GroupIndex | uint64 | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1 |
 | 23 | TxID | []byte | The computed ID for this transaction. 32 bytes. |
+| 24 | ApplicationID | uint64 | ApplicationID from ApplicationCall transaction. LogicSigVersion >= 2. |
+| 25 | OnCompletion | uint64 | ApplicationCall transaction on completion action. LogicSigVersion >= 2. |
+| 26 | ApplicationArgs | []byte | Arguments passed to the application in the ApplicationCall transaction. LogicSigVersion >= 2. |
+| 27 | NumAppArgs | uint64 | Number of ApplicationArgs. LogicSigVersion >= 2. |
+| 28 | Accounts | []byte | Accounts listed in the ApplicationCall transaction. LogicSigVersion >= 2. |
+| 29 | NumAccounts | uint64 | Number of Accounts. LogicSigVersion >= 2. |
+| 30 | ApprovalProgram | []byte | Approval program. LogicSigVersion >= 2. |
+| 31 | ClearStateProgram | []byte | Clear state program. LogicSigVersion >= 2. |
 
 
 Additional details in the [opcodes document](TEAL_opcodes.md#txn) on the `txn` op.
@@ -168,8 +214,35 @@ Global fields are fields that are common to all the transactions in the group. I
 | 1 | MinBalance | uint64 | micro Algos |
 | 2 | MaxTxnLife | uint64 | rounds |
 | 3 | ZeroAddress | []byte | 32 byte address of all zero bytes |
-| 4 | GroupSize | uint64 | Number of transactions in this atomic transaction group. At least 1. |
+| 4 | GroupSize | uint64 | Number of transactions in this atomic transaction group. At least 1 |
+| 5 | LogicSigVersion | uint64 | Maximum supported TEAL version. LogicSigVersion >= 2. |
+| 6 | Round | uint64 | Current round number. LogicSigVersion >= 2. |
+| 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative. LogicSigVersion >= 2. |
 
+
+**Asset Fields**
+
+Asset fields include `AssetHolding` and `AssetParam` fields that are used in `asset_read_*` opcodes
+
+| Index | Name | Type | Notes |
+| --- | --- | --- | --- |
+| 0 | AssetBalance | uint64 | Amount of the asset unit held by this account |
+| 1 | AssetFrozen | uint64 | Is the asset frozen or not |
+
+
+| Index | Name | Type | Notes |
+| --- | --- | --- | --- |
+| 0 | AssetTotal | uint64 | Total number of units of this asset |
+| 1 | AssetDecimals | uint64 | See AssetParams.Decimals |
+| 2 | AssetDefaultFrozen | uint64 | Frozen by default or not |
+| 3 | AssetUnitName | []byte | Asset unit name |
+| 4 | AssetAssetName | []byte | Asset name |
+| 5 | AssetURL | []byte | URL with additional info about the asset |
+| 6 | AssetMetadataHash | []byte | Arbitrary commitment |
+| 7 | AssetManager | []byte | Manager commitment |
+| 8 | AssetReserve | []byte | Reserve address |
+| 9 | AssetFreeze | []byte | Freeze address |
+| 10 | AssetClawback | []byte | Clawback address |
 
 
 ### Flow Control
@@ -178,8 +251,29 @@ Global fields are fields that are common to all the transactions in the group. I
 | --- | --- |
 | `err` | Error. Panic immediately. This is primarily a fencepost against accidental zero bytes getting compiled into programs. |
 | `bnz` | branch if value X is not zero |
+| `bz` | branch if value X is zero |
+| `b` | branch unconditionally to offset |
+| `return` | use last value on stack as success value; end |
 | `pop` | discard value X from stack |
 | `dup` | duplicate last value on stack |
+| `dup2` | duplicate two last values on stack: A, B -> A, B, A, B |
+
+### State Access
+
+| Op | Description |
+| --- | --- |
+| `balance` | get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction |
+| `app_opted_in` | check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1} |
+| `app_local_get` | read from account specified by Txn.Accounts[A] from local state of the current application key B => value |
+| `app_local_get_ex` | read from account specified by Txn.Accounts[A] from local state of the application B key C => {0 or 1 (top), value} |
+| `app_global_get` | read key A from global state of a current application => value |
+| `app_global_get_ex` | read from application A global state key B => {0 or 1 (top), value} |
+| `app_local_put` | write to account specified by Txn.Accounts[A] to local state of a current application key B with value C |
+| `app_global_put` | write key A and value B to global state of the current application |
+| `app_local_del` | delete from account specified by Txn.Accounts[A] local state key B of the current application |
+| `app_global_del` | delete key A from a global state of the current application |
+| `asset_holding_get` | read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value} |
+| `asset_params_get` | read from account specified by Txn.Accounts[A] and asset B params field X (imm arg) => {0 or 1 (top), value} |
 
 # Assembler Syntax
 
@@ -202,13 +296,15 @@ byte b32 AAAA...
 byte base32(AAAA...)
 byte b32(AAAA...)
 byte 0x0123456789abcdef...
+byte "\x01\x02"
+byte "string literal"
 ```
 
 `int` constants may be `0x` prefixed for hex, `0` prefixed for octal, or decimal numbers.
 
 `intcblock` may be explictly assembled. It will conflict with the assembler gathering `int` pseudo-ops into a `intcblock` program prefix, but may be used if code only has explicit `intc` references. `intcblock` should be followed by space separated int constants all on one line.
 
-`bytecblock` may be explicitly assembled. It will conflict with the assembler if there are any `byte` pseudo-ops but may be used if only explicit `bytec` references are used. `bytecblock` should be followed with byte constants all on one line, either 'encoding value' pairs (`b64 AAA...`) or 0x prefix or function-style values (`base64(...)`).
+`bytecblock` may be explicitly assembled. It will conflict with the assembler if there are any `byte` pseudo-ops but may be used if only explicit `bytec` references are used. `bytecblock` should be followed with byte constants all on one line, either 'encoding value' pairs (`b64 AAA...`) or 0x prefix or function-style values (`base64(...)`) or string literal values.
 
 ## Labels and Branches
 
