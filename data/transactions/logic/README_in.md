@@ -29,7 +29,16 @@ A program can either authorize some delegated action on a normal private key sig
 
 The TEAL bytecode plus the length of any Args must add up to less than 1000 bytes (consensus parameter LogicSigMaxSize). Each TEAL op has an associated cost estimate and the program cost estimate must total less than 20000 (consensus parameter LogicSigMaxCost). Most ops have an estimated cost of 1, but a few slow crypto ops are much higher.
 
+## Execution modes
 
+Starting from version 2 TEAL evaluator can run programs in two modes:
+1. Signature verification (stateless)
+2. Application run (stateful)
+
+Differences between modes include:
+1. Max program length (consensus parameters LogicSigMaxSize, MaxApprovalProgramLen and MaxClearStateProgramLen)
+2. Max program cost (consensus parameters LogicSigMaxCost, MaxAppProgramCost)
+3. Opcodes availability. For example, all stateful operations are only available in stateful mode. Refer to [opcodes document](TEAL_opcodes.md) for details.
 
 ## Constants
 
@@ -40,6 +49,10 @@ The assembler will hide most of this, allowing simple use of `int 1234` and `byt
 Constants are loaded into the environment by two opcodes, `intcblock` and `bytecblock`. Both of these use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint), reproduced [here](#varuint). The `intcblock` opcode is followed by a varuint specifying the length of the array and then that number of varuint. The `bytecblock` opcode is followed by a varuint array length then that number of pairs of (varuint, bytes) length prefixed byte strings. This should efficiently load 32 and 64 byte constants which will be common as addresses, hashes, and signatures.
 
 Constants are pushed onto the stack by `intc`, `intc_[0123]`, `bytec`, and `bytec_[0123]`. The assembler will handle converting `int N` or `byte N` into the appropriate form of the instruction needed.
+
+### Named Integer Constants
+
+@@ named_integer_constants.md @@
 
 ## Operations
 
@@ -88,10 +101,21 @@ Global fields are fields that are common to all the transactions in the group. I
 
 @@ global_fields.md @@
 
+**Asset Fields**
+
+Asset fields include `AssetHolding` and `AssetParam` fields that are used in `asset_read_*` opcodes
+
+@@ asset_holding_fields.md @@
+
+@@ asset_params_fields.md @@
 
 ### Flow Control
 
 @@ Flow_Control.md @@
+
+### State Access
+
+@@ State_Access.md @@
 
 # Assembler Syntax
 
@@ -114,13 +138,15 @@ byte b32 AAAA...
 byte base32(AAAA...)
 byte b32(AAAA...)
 byte 0x0123456789abcdef...
+byte "\x01\x02"
+byte "string literal"
 ```
 
 `int` constants may be `0x` prefixed for hex, `0` prefixed for octal, or decimal numbers.
 
 `intcblock` may be explictly assembled. It will conflict with the assembler gathering `int` pseudo-ops into a `intcblock` program prefix, but may be used if code only has explicit `intc` references. `intcblock` should be followed by space separated int constants all on one line.
 
-`bytecblock` may be explicitly assembled. It will conflict with the assembler if there are any `byte` pseudo-ops but may be used if only explicit `bytec` references are used. `bytecblock` should be followed with byte constants all on one line, either 'encoding value' pairs (`b64 AAA...`) or 0x prefix or function-style values (`base64(...)`).
+`bytecblock` may be explicitly assembled. It will conflict with the assembler if there are any `byte` pseudo-ops but may be used if only explicit `bytec` references are used. `bytecblock` should be followed with byte constants all on one line, either 'encoding value' pairs (`b64 AAA...`) or 0x prefix or function-style values (`base64(...)`) or string literal values.
 
 ## Labels and Branches
 
