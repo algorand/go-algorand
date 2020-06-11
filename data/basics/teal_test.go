@@ -34,17 +34,17 @@ func TestStateDeltaValid(t *testing.T) {
 	sd := StateDelta{"key": ValueDelta{Action: SetBytesAction, Bytes: "val"}}
 	err := sd.Valid(&protoPreF)
 	a.Error(err)
-	a.Contains(err.Error(), "key too long")
+	a.Contains(err.Error(), "proto.MaxAppKeyLen is 0")
 
 	sd = StateDelta{"": ValueDelta{Action: SetUintAction, Uint: 1}}
 	err = sd.Valid(&protoPreF)
 	a.Error(err)
-	a.Contains(err.Error(), "key too long")
+	a.Contains(err.Error(), "proto.MaxAppKeyLen is 0")
 
 	sd = StateDelta{"": ValueDelta{Action: SetBytesAction, Bytes: ""}}
 	err = sd.Valid(&protoPreF)
 	a.Error(err)
-	a.Contains(err.Error(), "key too long")
+	a.Contains(err.Error(), "proto.MaxAppKeyLen is 0")
 
 	// test proto with applications
 	sd = StateDelta{"key": ValueDelta{Action: SetBytesAction, Bytes: "val"}}
