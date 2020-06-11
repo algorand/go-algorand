@@ -1,8 +1,16 @@
+<<<<<<< HEAD
 # Algod Expect Utility Package
+=======
+# Algorand Goal Expect Utility Package
+>>>>>>> f3e2d341fccd903ae6f40ef4e6e0fff81508c3a7
 namespace eval ::Algod {
 
   # Export Procedures
   namespace export Info
+<<<<<<< HEAD
+=======
+  #namespace export Abort
+>>>>>>> f3e2d341fccd903ae6f40ef4e6e0fff81508c3a7
   namespace export ReadTelemetry
 
   # My Variables
