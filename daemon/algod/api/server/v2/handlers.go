@@ -54,6 +54,7 @@ type Handlers struct {
 
 // NodeInterface represents node fns used by the handlers.
 type NodeInterface interface {
+	Config() config.Local
 	Ledger() *data.Ledger
 	Status() (s node.StatusReport, err error)
 	GenesisID() string
