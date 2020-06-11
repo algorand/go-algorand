@@ -44,6 +44,5 @@ proc ::Algod::ReadTelemetry { TEST_ALGO_DIR } {
         }
     } EXCEPTION] } {
         puts "ERROR in ReadTelemetry: $EXCEPTION"
-        exit 1
     }
 }
