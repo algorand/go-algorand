@@ -13,7 +13,7 @@ if { [catch {
 
     set TIME_STAMP [clock seconds]
 
-    exec mkdir $TEST_ALGO_DIR
+    exec mkdir -p $TEST_ALGO_DIR
     exec rm -f $TEST_ALGO_DIR/logging.config
     ::Algod::ReadTelemetry $TEST_ALGO_DIR
     exec rm -d -r -f $TEST_ALGO_DIR
@@ -23,4 +23,5 @@ if { [catch {
 } EXCEPTION ] } {
     puts "ERROR in algod test: $EXCEPTION"
     exec rm -d -r -f $TEST_ALGO_DIR
+    exit 1
 }
