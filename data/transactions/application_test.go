@@ -247,12 +247,12 @@ func TestAppCallApplyDelta(t *testing.T) {
 
 	var tkv basics.TealKeyValue
 	var sd basics.StateDelta
-	err := applyDelta(tkv, sd)
+	err := applyStateDelta(tkv, sd)
 	a.Error(err)
 	a.Contains(err.Error(), "cannot apply delta to nil TealKeyValue")
 
 	tkv = basics.TealKeyValue{}
-	err = applyDelta(tkv, sd)
+	err = applyStateDelta(tkv, sd)
 	a.NoError(err)
 	a.True(len(tkv) == 0)
 
@@ -263,7 +263,7 @@ func TestAppCallApplyDelta(t *testing.T) {
 		},
 	}
 
-	err = applyDelta(tkv, sd)
+	err = applyStateDelta(tkv, sd)
 	a.Error(err)
 	a.Contains(err.Error(), "unknown delta action")
 
@@ -273,7 +273,7 @@ func TestAppCallApplyDelta(t *testing.T) {
 			Uint:   1,
 		},
 	}
-	err = applyDelta(tkv, sd)
+	err = applyStateDelta(tkv, sd)
 	a.NoError(err)
 	a.True(len(tkv) == 1)
 	a.Equal(uint64(1), tkv["test"].Uint)
@@ -284,7 +284,7 @@ func TestAppCallApplyDelta(t *testing.T) {
 			Action: basics.DeleteAction,
 		},
 	}
-	err = applyDelta(tkv, sd)
+	err = applyStateDelta(tkv, sd)
 	a.NoError(err)
 	a.True(len(tkv) == 0)
 
@@ -294,7 +294,7 @@ func TestAppCallApplyDelta(t *testing.T) {
 			Action: basics.SetBytesAction,
 		},
 	}
-	err = applyDelta(tkv, sd)
+	err = applyStateDelta(tkv, sd)
 	a.NoError(err)
 	a.True(len(tkv) == 1)
 	a.Equal(basics.TealBytesType, tkv["test"].Type)
@@ -308,7 +308,7 @@ func TestAppCallApplyDelta(t *testing.T) {
 			Uint:   1,
 		},
 	}
-	err = applyDelta(tkv, sd)
+	err = applyStateDelta(tkv, sd)
 	a.NoError(err)
 	a.True(len(tkv) == 1)
 	a.Equal(basics.TealBytesType, tkv["test"].Type)
@@ -436,13 +436,13 @@ func TestAppCallApplyGlobalStateDeltas(t *testing.T) {
 	var errIfNotApplied = false
 
 	// check empty input
-	err := ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err := ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.NoError(err)
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 
 	errIfNotApplied = true
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.NoError(err)
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
@@ -453,13 +453,13 @@ func TestAppCallApplyGlobalStateDeltas(t *testing.T) {
 	// check global on unsupported proto
 	b.SetProto(protocol.ConsensusV23)
 	errIfNotApplied = false
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.NoError(err)
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 
 	errIfNotApplied = true
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.Error(err)
 	a.Contains(err.Error(), "cannot apply GlobalState delta")
 	a.Equal(0, b.put)
@@ -468,13 +468,13 @@ func TestAppCallApplyGlobalStateDeltas(t *testing.T) {
 	// check global on supported proto
 	b.SetProto(protocol.ConsensusFuture)
 	errIfNotApplied = false
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.NoError(err)
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 
 	errIfNotApplied = true
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.Error(err)
 	a.Contains(err.Error(), fmt.Sprintf("GlobalState for app %d would use too much space", appIdx))
 	a.Equal(0, b.put)
@@ -483,7 +483,7 @@ func TestAppCallApplyGlobalStateDeltas(t *testing.T) {
 	// check Action=Delete delta on empty params
 	errIfNotApplied = false
 	ed.GlobalDelta["uint"] = basics.ValueDelta{Action: basics.DeleteAction}
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.Error(err)
 	a.Contains(err.Error(), "balance not found")
 	a.Equal(0, b.put)
@@ -496,7 +496,7 @@ func TestAppCallApplyGlobalStateDeltas(t *testing.T) {
 	creator = getRandomAddress(a)
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	a.Equal(0, b.putWith)
@@ -520,14 +520,14 @@ func TestAppCallApplyGlobalStateDeltas(t *testing.T) {
 	// now check errors with non-default values
 	b.SetProto(protocol.ConsensusV23)
 	ed.GlobalDelta["uint"] = basics.ValueDelta{Action: basics.SetUintAction, Uint: 1}
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.NoError(err)
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 	a.Equal(basics.AccountData{}, b.balances[creator])
 
 	errIfNotApplied = true
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.Error(err)
 	a.Contains(err.Error(), "cannot apply GlobalState delta")
 	a.Equal(0, b.put)
@@ -535,7 +535,7 @@ func TestAppCallApplyGlobalStateDeltas(t *testing.T) {
 	a.Equal(basics.AccountData{}, b.balances[creator])
 
 	b.SetProto(protocol.ConsensusFuture)
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.Error(err)
 	a.Contains(err.Error(), fmt.Sprintf("GlobalState for app %d would use too much space: store integer count", appIdx))
 	a.Equal(0, b.put)
@@ -545,7 +545,7 @@ func TestAppCallApplyGlobalStateDeltas(t *testing.T) {
 	// try illformed delta
 	params.GlobalStateSchema = basics.StateSchema{NumUint: 1}
 	ed.GlobalDelta["bytes"] = basics.ValueDelta{Action: basics.SetBytesAction, Uint: 1}
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.Error(err)
 	a.Contains(err.Error(), fmt.Sprintf("GlobalState for app %d would use too much space: store bytes count", appIdx))
 	a.Equal(0, b.put)
@@ -557,7 +557,7 @@ func TestAppCallApplyGlobalStateDeltas(t *testing.T) {
 	br := basics.AccountData{AppParams: map[basics.AppIndex]basics.AppParams{appIdx: params}}
 	cp := basics.AccountData{AppParams: map[basics.AppIndex]basics.AppParams{appIdx: params}}
 	b.balances[creator] = cp
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	pad, ok = b.putBalances[creator]
@@ -589,13 +589,13 @@ func TestAppCallApplyLocalsStateDeltas(t *testing.T) {
 	b.balances = make(map[basics.Address]basics.AccountData)
 	ed.LocalDeltas = make(map[uint64]basics.StateDelta)
 
-	err := ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err := ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.NoError(err)
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 
 	errIfNotApplied = true
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.NoError(err)
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
@@ -604,17 +604,17 @@ func TestAppCallApplyLocalsStateDeltas(t *testing.T) {
 
 	// non-existing account
 	errIfNotApplied = false
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.Error(err)
 
 	errIfNotApplied = true
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.Error(err)
 
 	// empty delta
 	ac.Accounts = append(ac.Accounts, sender, sender)
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
-	a.NoError(err)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	a.Error(err)
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 
@@ -624,14 +624,14 @@ func TestAppCallApplyLocalsStateDeltas(t *testing.T) {
 	ed.LocalDeltas[1] = basics.StateDelta{"bytes": basics.ValueDelta{Action: basics.DeleteAction}}
 	b.balances[sender] = basics.AccountData{}
 	errIfNotApplied = false
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.NoError(err)
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 	a.Equal(basics.AccountData{}, b.balances[sender])
 	// not opted in
 	errIfNotApplied = true
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.Error(err)
 	a.Contains(err.Error(), "acct has not opted in to app")
 	a.Equal(0, b.put)
@@ -646,7 +646,7 @@ func TestAppCallApplyLocalsStateDeltas(t *testing.T) {
 		AppLocalStates: cp,
 	}
 	errIfNotApplied = true
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.Error(err)
 	a.Contains(err.Error(), "duplicate LocalState delta")
 	a.Equal(0, b.put)
@@ -663,7 +663,7 @@ func TestAppCallApplyLocalsStateDeltas(t *testing.T) {
 		"bytes": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "value"},
 	}
 	delete(ed.LocalDeltas, 1)
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.Error(err)
 	a.Contains(err.Error(), "would use too much space")
 	a.Equal(0, b.put)
@@ -678,7 +678,7 @@ func TestAppCallApplyLocalsStateDeltas(t *testing.T) {
 		Schema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
 	}}
 	b.balances[sender] = basics.AccountData{AppLocalStates: cp}
-	err = ac.applyStateDeltas(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
+	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx, errIfNotApplied)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	a.Equal(0, b.putWith)
