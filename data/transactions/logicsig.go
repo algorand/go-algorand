@@ -33,13 +33,13 @@ type LogicSig struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	// Logic signed by Sig or Msig, OR hashed to be the Address of an account.
-	Logic []byte `codec:"l"`
+	Logic []byte `codec:"l,allocbound=config.MaxLogicSigMaxSize"`
 
 	Sig  crypto.Signature   `codec:"sig"`
 	Msig crypto.MultisigSig `codec:"msig"`
 
 	// Args are not signed, but checked by Logic
-	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs"`
+	Args [][]byte `codec:"arg,allocbound=EvalMaxArgs,allocbound=config.MaxLogicSigMaxSize"`
 }
 
 // Blank returns true if there is no content in this LogicSig

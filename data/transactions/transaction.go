@@ -94,7 +94,7 @@ type Header struct {
 	Fee         basics.MicroAlgos `codec:"fee"`
 	FirstValid  basics.Round      `codec:"fv"`
 	LastValid   basics.Round      `codec:"lv"`
-	Note        []byte            `codec:"note"` // Uniqueness or app-level data about txn
+	Note        []byte            `codec:"note,allocbound=config.MaxTxnNoteBytes"` // Uniqueness or app-level data about txn
 	GenesisID   string            `codec:"gen"`
 	GenesisHash crypto.Digest     `codec:"gh"`
 
