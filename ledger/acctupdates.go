@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -227,7 +228,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	writingCatchpointDigest, err = au.initializeCaches(lastBalancesRound, lastestBlockRound, basics.Round(writingCatchpointRound))
 
 	if writingCatchpointRound != 0 && au.catchpointInterval != 0 {
-		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest)
+		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest, time.Duration(0))
 	}
 
 	return nil
@@ -873,17 +874,9 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Addre
 	return
 }
 
-func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Round, totals AccountTotals, ledgerBlockDigest crypto.Digest) (label string, err error) {
-	var balancesHash crypto.Digest
-
-	balancesHash, err = au.balancesTrie.RootHash()
-	if err != nil {
-		return
-	}
-
-	cpLabel := makeCatchpointLabel(committedRound, ledgerBlockDigest, balancesHash, totals)
+func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Round, totals AccountTotals, ledgerBlockDigest crypto.Digest, trieBalancesHash crypto.Digest) (label string, err error) {
+	cpLabel := makeCatchpointLabel(committedRound, ledgerBlockDigest, trieBalancesHash, totals)
 	label = cpLabel.String()
-
 	_, err = au.accountsq.writeCatchpointStateString(context.Background(), catchpointStateLastCatchpoint, label)
 	return
 }
@@ -997,7 +990,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	}
 
 	var catchpointLabel string
-
+	beforeUpdatingBalancesTime := time.Now()
+	var trieBalancesHash crypto.Digest
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
@@ -1029,6 +1023,12 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			}
 		}
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
+		if isCatchpointRound {
+			trieBalancesHash, err = au.balancesTrie.RootHash()
+			if err != nil {
+				return
+			}
+		}
 		return err
 	})
 
@@ -1038,7 +1038,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		return
 	}
 	if isCatchpointRound {
-		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, roundTotals[offset], committedRoundDigest)
+		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, roundTotals[offset], committedRoundDigest, trieBalancesHash)
 		if err != nil {
 			au.log.Warnf("commitRound : unable to create a catchpoint label: %v", err)
 		}
@@ -1054,6 +1054,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	if isCatchpointRound && catchpointLabel != "" {
 		au.lastCatchpointLabel = catchpointLabel
 	}
+	updatingBalancesDuration := time.Now().Sub(beforeUpdatingBalancesTime)
 
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
@@ -1101,11 +1102,12 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.assetDeltas = au.assetDeltas[offset:]
 	au.dbRound = newBase
 	au.lastFlushTime = flushTime
+
 	au.accountsMu.Unlock()
 
 	if isCatchpointRound && au.archivalLedger && catchpointLabel != "" {
 		// start generating the catchpoint on a separate goroutine.
-		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest)
+		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest, updatingBalancesDuration)
 	}
 
 }
@@ -1114,7 +1116,12 @@ func (au *accountUpdates) latest() basics.Round {
 	return au.dbRound + basics.Round(len(au.deltas))
 }
 
-func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label string, committedRoundDigest crypto.Digest) {
+func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label string, committedRoundDigest crypto.Digest, updatingBalancesDuration time.Duration) {
+	beforeGeneratingCatchpointTime := time.Now()
+	catchpointGenerationStats := telemetryspec.CatchpointGenerationEventDetails{
+		BalancesWriteTime: uint64(updatingBalancesDuration.Nanoseconds()),
+	}
+
 	// the retryCatchpointCreation is used to repeat the catchpoint file generation in case the node crashed / aborted during startup
 	// before the catchpoint file generation could be completed.
 	retryCatchpointCreation := false
@@ -1152,7 +1159,10 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	}
 	for more {
 		stepCtx, stepCancelFunction := context.WithTimeout(au.ctx, chunkExecutionDuration)
+		writeStepStartTime := time.Now()
 		more, err = catchpointWriter.WriteStep(stepCtx)
+		// accumulate the actual time we've spent writing in this step.
+		catchpointGenerationStats.CPUTime += uint64(time.Now().Sub(writeStepStartTime).Nanoseconds())
 		stepCancelFunction()
 		if more && err == nil {
 			// we just wrote some data, but there is more to be written.
@@ -1185,6 +1195,18 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 		au.log.Warnf("accountUpdates: generateCatchpoint: unable to save catchpoint: %v", err)
 		return
 	}
+	catchpointGenerationStats.FileSize = uint64(catchpointWriter.GetSize())
+	catchpointGenerationStats.WritingDuration = uint64(time.Now().Sub(beforeGeneratingCatchpointTime).Nanoseconds())
+	catchpointGenerationStats.AccountsCount = catchpointWriter.GetTotalAccounts()
+	catchpointGenerationStats.CatchpointLabel = catchpointWriter.GetCatchpoint()
+	au.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointGenerationEvent, catchpointGenerationStats)
+	au.log.With("writingDuration", catchpointGenerationStats.WritingDuration).
+		With("CPUTime", catchpointGenerationStats.CPUTime).
+		With("balancesWriteTime", catchpointGenerationStats.BalancesWriteTime).
+		With("accountsCount", catchpointGenerationStats.AccountsCount).
+		With("fileSize", catchpointGenerationStats.FileSize).
+		With("catchpointLabel", catchpointGenerationStats.CatchpointLabel).
+		Infof("Catchpoint file was generated")
 }
 
 func catchpointRoundToPath(rnd basics.Round) string {
