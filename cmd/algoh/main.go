@@ -50,9 +50,7 @@ var telemetryOverride = flag.String("t", "", `Override telemetry setting if supp
 var peerOverride = flag.String("p", "", "Override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)")
 var listenIP = flag.String("l", "", "Override config.EndpointAddress (REST listening address) with ip:port")
 var seed = flag.String("seed", "", "input to math/rand.Seed()")
-var branchCheck = flag.Bool("b", false, "Display the git branch behind the build")
-var channelCheck = flag.Bool("c", false, "Display and release channel behind the build")
-var initAndExit = flag.Bool("x", false, "Initialize the ledger and exit")
+var genesisFile = flag.String("g", "", "Genesis configuration file")
 
 const algodFileName = "algod"
 const goalFileName = "goal"
