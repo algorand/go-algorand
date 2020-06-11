@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	dataDir          string
+	dataDir string
 )
 
 func init() {
@@ -37,7 +37,6 @@ func init() {
 
 	// override the data directory, if provided in the command.
 	metricCmd.PersistentFlags().StringVarP(&dataDir, "dataDir", "d", os.ExpandEnv("$ALGORAND_DATA"), "Data directory")
-
 
 }
 
@@ -105,7 +104,7 @@ func metricEnableDisable(enable bool) {
 	if err != nil {
 		fmt.Printf(metricSaveConfigFailed, fmt.Sprintf("%v", err))
 	}
-	
+
 	return
 }
 
