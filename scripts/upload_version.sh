@@ -23,6 +23,6 @@ CHANNEL=$1
 DIRECTORY=$2
 BUCKET=$3
 
-export GOPATH=$(go env GOPATH)
-export PATH=${PATH}:${GOPATH}/bin
+export GOPATH1=$(go env GOPATH | cut -d':' -f1 )
+export PATH=${PATH}:${GOPATH1}/bin
 updater send -s "${DIRECTORY}" -c "${CHANNEL}" -b "${BUCKET}"

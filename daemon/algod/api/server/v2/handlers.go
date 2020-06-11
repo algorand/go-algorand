@@ -18,8 +18,8 @@ package v2
 
 import (
 	"bytes"
-	"errors"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -237,14 +238,20 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 	}
 
 	response := generated.NodeStatusResponse{
-		LastRound:                 uint64(stat.LastRound),
-		LastVersion:               string(stat.LastVersion),
-		NextVersion:               string(stat.NextVersion),
-		NextVersionRound:          uint64(stat.NextVersionRound),
-		NextVersionSupported:      stat.NextVersionSupported,
-		TimeSinceLastRound:        uint64(stat.TimeSinceLastRound().Nanoseconds()),
-		CatchupTime:               uint64(stat.CatchupTime.Nanoseconds()),
-		StoppedAtUnsupportedRound: stat.StoppedAtUnsupportedRound,
+		LastRound:                   uint64(stat.LastRound),
+		LastVersion:                 string(stat.LastVersion),
+		NextVersion:                 string(stat.NextVersion),
+		NextVersionRound:            uint64(stat.NextVersionRound),
+		NextVersionSupported:        stat.NextVersionSupported,
+		TimeSinceLastRound:          uint64(stat.TimeSinceLastRound().Nanoseconds()),
+		CatchupTime:                 uint64(stat.CatchupTime.Nanoseconds()),
+		StoppedAtUnsupportedRound:   stat.StoppedAtUnsupportedRound,
+		LastCatchpoint:              &stat.LastCatchpoint,
+		Catchpoint:                  &stat.Catchpoint,
+		CatchpointTotalAccounts:     &stat.CatchpointCatchupTotalAccounts,
+		CatchpointProcessedAccounts: &stat.CatchpointCatchupProcessedAccounts,
+		CatchpointTotalBlocks:       &stat.CatchpointCatchupTotalBlocks,
+		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
 	}
 
 	return ctx.JSON(http.StatusOK, response)
@@ -261,6 +268,24 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	}
 	if stat.StoppedAtUnsupportedRound {
 		return badRequest(ctx, err, errRequestedRoundInUnsupportedRound, v2.Log)
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("WaitForBlock failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
+	}
+
+	latestBlkHdr, err := ledger.BlockHdr(ledger.Latest())
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingLatestBlockHeaderStatus, v2.Log)
+	}
+	if latestBlkHdr.NextProtocol != "" {
+		if _, nextProtocolSupported := config.Consensus[latestBlkHdr.NextProtocol]; !nextProtocolSupported {
+			// see if the desired protocol switch is expect to happen before or after the above point.
+			if latestBlkHdr.NextProtocolSwitchOn <= basics.Round(round+1) {
+				// we would never reach to this round, since this round would happen after the (unsupported) protocol upgrade.
+				return badRequest(ctx, err, errRequestedRoundInUnsupportedRound, v2.Log)
+			}
+		}
 	}
 
 	// Wait
@@ -281,6 +306,10 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("RawTransaction failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
 	}
 	proto := config.Consensus[stat.LastVersion]
 
@@ -325,6 +354,10 @@ func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
 	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("TransactionParams failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
+	}
 
 	gh := v2.Node.GenesisHash()
 	proto := config.Consensus[stat.LastVersion]
@@ -346,6 +379,16 @@ func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
 // last proto.MaxTxnLife rounds
 // (GET /v2/transactions/pending/{txid})
 func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string, params generated.PendingTransactionInformationParams) error {
+
+	stat, err := v2.Node.Status()
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("PendingTransactionInformation failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
+	}
+
 	txID := transactions.Txid{}
 	if err := txID.UnmarshalText([]byte(txid)); err != nil {
 		return badRequest(ctx, err, errNoTxnSpecified, v2.Log)
@@ -400,6 +443,16 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 
 // getPendingTransactions returns to the provided context a list of uncomfirmed transactions currently in the transaction pool with optional Max/Address filters.
 func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format *string, addrFilter *string) error {
+
+	stat, err := v2.Node.Status()
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("PendingTransactionInformation failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
+	}
+
 	var addrPtr *basics.Address
 
 	if addrFilter != nil {
@@ -459,6 +512,40 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
+// startCatchup Given a catchpoint, it starts catching up to this catchpoint
+func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string) error {
+	_, _, err := ledger.ParseCatchpointLabel(catchpoint)
+	if err != nil {
+		return badRequest(ctx, err, errFailedToParseCatchpoint, v2.Log)
+	}
+
+	err = v2.Node.StartCatchup(catchpoint)
+	if err != nil {
+		return internalError(ctx, err, fmt.Sprintf(errFailedToStartCatchup, err), v2.Log)
+	}
+
+	return ctx.JSON(http.StatusOK, private.CatchpointStartResponse{
+		CatchupMessage: catchpoint,
+	})
+}
+
+// abortCatchup Given a catchpoint, it aborts catching up to this catchpoint
+func (v2 *Handlers) abortCatchup(ctx echo.Context, catchpoint string) error {
+	_, _, err := ledger.ParseCatchpointLabel(catchpoint)
+	if err != nil {
+		return badRequest(ctx, err, errFailedToParseCatchpoint, v2.Log)
+	}
+
+	err = v2.Node.AbortCatchup(catchpoint)
+	if err != nil {
+		return internalError(ctx, err, fmt.Sprintf(errFailedToAbortCatchup, err), v2.Log)
+	}
+
+	return ctx.JSON(http.StatusOK, private.CatchpointAbortResponse{
+		CatchupMessage: catchpoint,
+	})
+}
+
 // GetPendingTransactions returns the list of unconfirmed transactions currently in the transaction pool.
 // (GET /v2/transactions/pending)
 func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.GetPendingTransactionsParams) error {
@@ -469,6 +556,18 @@ func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.Ge
 // (GET /v2/accounts/{address}/transactions/pending)
 func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr string, params generated.GetPendingTransactionsByAddressParams) error {
 	return v2.getPendingTransactions(ctx, params.Max, params.Format, &addr)
+}
+
+// StartCatchup Given a catchpoint, it starts catching up to this catchpoint
+// (POST /v2/catchup/{catchpoint})
+func (v2 *Handlers) StartCatchup(ctx echo.Context, catchpoint string) error {
+	return v2.startCatchup(ctx, catchpoint)
+}
+
+// AbortCatchup Given a catchpoint, it aborts catching up to this catchpoint
+// (DELETE /v2/catchup/{catchpoint})
+func (v2 *Handlers) AbortCatchup(ctx echo.Context, catchpoint string) error {
+	return v2.abortCatchup(ctx, catchpoint)
 }
 
 // TealCompile compiles TEAL code to binary, return both binary and hash
@@ -482,11 +581,11 @@ func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-	
+
 	pd := logic.HashProgram(program)
 	addr := basics.Address(pd)
-	response := generated.PostCompileResponse {
-		Hash: addr.String(),
+	response := generated.PostCompileResponse{
+		Hash:   addr.String(),
 		Result: base64.StdEncoding.EncodeToString(program),
 	}
 	return ctx.JSON(http.StatusOK, response)

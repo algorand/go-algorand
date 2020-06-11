@@ -81,9 +81,10 @@ func mockLedger(t TestingT, initAccounts map[basics.Address]basics.AccountData, 
 	}
 	fn := fmt.Sprintf("/tmp/%s.%d.sqlite3", t.Name(), crypto.RandUint64())
 	const inMem = true
-	const archival = true
 	genesisInitState := ledger.InitState{Block: initBlock, Accounts: initAccounts, GenesisHash: hash}
-	l, err := ledger.OpenLedger(logging.Base(), fn, true, genesisInitState, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := ledger.OpenLedger(logging.Base(), fn, true, genesisInitState, cfg)
 	require.NoError(t, err)
 	return l
 }
