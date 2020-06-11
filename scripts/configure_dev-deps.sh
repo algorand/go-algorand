@@ -20,8 +20,8 @@ function install_go_module {
     else
      	OUTPUT=$(cd && GO111MODULE=on go get "$1@${VERSION}" 2>&1)
     fi
-    if [ "${OUTPUT}" != "" ]; then
-        echo "error: executing \"go get -u $1\" failed : ${OUTPUT}"
+    if [ $? != 0 ]; then
+        echo "error: executing \"go get $1\" failed : ${OUTPUT}"
         exit 1
     fi
 }
