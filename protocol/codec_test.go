@@ -17,6 +17,8 @@
 package protocol
 
 import (
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -140,4 +142,35 @@ func TestEncodeEmbedded(t *testing.T) {
 
 	require.NoError(t, Decode(Encode(&x), &y))
 	require.Equal(t, x, y)
+}
+
+func TestEncodeJSON(t *testing.T) {
+	type ar []string
+	type mp struct {
+		Map map[int]ar `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
+	}
+
+	var v mp
+	v.Map = make(map[int]ar)
+	v.Map[0] = []string{"test0"}
+	v.Map[1] = []string{"test1"}
+
+	nonStrict := EncodeJSON(&v)
+	strings.Contains(string(nonStrict), `0:`)
+	strings.Contains(string(nonStrict), `1:`)
+
+	strict := EncodeJSONStrict(&v)
+	strings.Contains(string(strict), `"0":`)
+	strings.Contains(string(strict), `"1":`)
+
+	var nsv mp
+	err := DecodeJSON(nonStrict, &nsv)
+	require.NoError(t, err)
+
+	var sv mp
+	err = DecodeJSON(nonStrict, &sv)
+	require.NoError(t, err)
+
+	require.True(t, reflect.DeepEqual(v, nsv))
+	require.True(t, reflect.DeepEqual(v, sv))
 }

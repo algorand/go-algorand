@@ -18,17 +18,16 @@ package middlewares
 
 import (
 	"net/http"
+
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
-const allowedMethods = "GET, POST, PUT, OPTIONS"
-const allowedHeaders = TokenHeader + ", Content-Type"
-
-// CORS adds the CORS headers to every response
-func CORS(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Headers", allowedHeaders)
-		w.Header().Set("Access-Control-Allow-Methods", allowedMethods)
-		h.ServeHTTP(w, r)
+// MakeCORS sets up CORS with a token header.
+func MakeCORS(tokenHeader string) echo.MiddlewareFunc {
+	return middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"*"},
+		AllowHeaders: []string{tokenHeader, "Content-Type"},
+		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodOptions},
 	})
 }

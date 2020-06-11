@@ -83,6 +83,7 @@ func (bn *blockNotifier) close() {
 func (bn *blockNotifier) loadFromDisk(l ledgerForTracker) error {
 	bn.cond = sync.NewCond(&bn.mu)
 	bn.running = true
+	bn.pendingBlocks = nil
 
 	go bn.worker()
 	return nil
@@ -98,7 +99,6 @@ func (bn *blockNotifier) register(listeners []BlockListener) {
 func (bn *blockNotifier) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	bn.mu.Lock()
 	defer bn.mu.Unlock()
-
 	bn.pendingBlocks = append(bn.pendingBlocks, blockDeltaPair{block: blk, delta: delta})
 	bn.cond.Broadcast()
 }

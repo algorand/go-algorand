@@ -26,11 +26,9 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
-	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -95,7 +93,7 @@ func makeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 func LoadLedger(
 	log logging.Logger, dbFilenamePrefix string, memory bool,
 	genesisProto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest,
-	blockListeners []ledger.BlockListener, isArchival bool,
+	blockListeners []ledger.BlockListener, cfg config.Local,
 ) (*Ledger, error) {
 	if genesisBal.balances == nil {
 		genesisBal.balances = make(map[basics.Address]basics.AccountData)
@@ -123,7 +121,7 @@ func LoadLedger(
 	}
 	l.log.Debugf("Initializing Ledger(%s)", dbFilenamePrefix)
 
-	ll, err := ledger.OpenLedger(log, dbFilenamePrefix, memory, genesisInitState, isArchival)
+	ll, err := ledger.OpenLedger(log, dbFilenamePrefix, memory, genesisInitState, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +141,6 @@ func (l *Ledger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.
 		FeeSink:     blk.FeeSink,
 		RewardsPool: blk.RewardsPool,
 	}
-	proto := config.Consensus[blk.CurrentProtocol]
 
 	var res []transactions.SignedTxnWithAD
 	payset, err := blk.DecodePaysetFlat()
@@ -151,7 +148,7 @@ func (l *Ledger) AddressTxns(id basics.Address, r basics.Round) ([]transactions.
 		return nil, err
 	}
 	for _, tx := range payset {
-		if tx.Txn.MatchAddress(id, spec, proto) {
+		if tx.Txn.MatchAddress(id, spec) {
 			res = append(res, tx)
 		}
 	}
@@ -313,94 +310,4 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 		// If there was an error add a short delay before the next attempt.
 		time.Sleep(100 * time.Millisecond)
 	}
-}
-
-// AssemblePayset adds transactions to a BlockEvaluator.
-func (l *Ledger) AssemblePayset(pool *pools.TransactionPool, eval *ledger.BlockEvaluator, deadline time.Time) (stats telemetryspec.AssembleBlockStats) {
-	pending := pool.Pending()
-	stats.StartCount = len(pending)
-	stats.StopReason = telemetryspec.AssembleBlockEmpty
-	first := true
-	totalFees := uint64(0)
-
-	// retrieve a list of all the previously known txid in the current round. We want to retrieve it here so we could avoid
-	// exercising the ledger read lock.
-	prevRoundTxIds := l.GetRoundTxIds(l.Latest())
-
-	for len(pending) > 0 {
-		txgroup := pending[0]
-		pending = pending[1:]
-
-		if len(txgroup) == 0 {
-			stats.InvalidCount++
-			continue
-		}
-
-		// if we already had this tx in the previous round, and haven't removed it yet from the txpool, that's fine.
-		// just skip that one.
-		if prevRoundTxIds[txgroup[0].ID()] {
-			stats.EarlyCommittedCount++
-			continue
-		}
-
-		if time.Now().After(deadline) {
-			stats.StopReason = telemetryspec.AssembleBlockTimeout
-			break
-		}
-
-		txgroupad := make([]transactions.SignedTxnWithAD, len(txgroup))
-		for i, tx := range txgroup {
-			txgroupad[i].SignedTxn = tx
-		}
-		err := eval.TransactionGroup(txgroupad)
-		if err == ledger.ErrNoSpace {
-			stats.StopReason = telemetryspec.AssembleBlockFull
-			break
-		}
-		if err != nil {
-			// GOAL2-255: Don't warn for common case of txn already being in ledger
-			switch err.(type) {
-			case ledger.TransactionInLedgerError:
-				stats.CommittedCount++
-			case transactions.MinFeeError:
-				stats.InvalidCount++
-				logging.Base().Infof("Cannot add pending transaction to block: %v", err)
-			default:
-				stats.InvalidCount++
-				logging.Base().Warnf("Cannot add pending transaction to block: %v", err)
-			}
-		} else {
-			for _, txn := range txgroup {
-				fee := txn.Txn.Fee.Raw
-				encodedLen := txn.GetEncodedLength()
-
-				stats.IncludedCount++
-				totalFees += fee
-
-				if first {
-					first = false
-					stats.MinFee = fee
-					stats.MaxFee = fee
-					stats.MinLength = encodedLen
-					stats.MaxLength = encodedLen
-				} else {
-					if fee < stats.MinFee {
-						stats.MinFee = fee
-					} else if fee > stats.MaxFee {
-						stats.MaxFee = fee
-					}
-					if encodedLen < stats.MinLength {
-						stats.MinLength = encodedLen
-					} else if encodedLen > stats.MaxLength {
-						stats.MaxLength = encodedLen
-					}
-				}
-				stats.TotalLength += uint64(encodedLen)
-			}
-		}
-	}
-	if stats.IncludedCount != 0 {
-		stats.AverageFee = totalFees / uint64(stats.IncludedCount)
-	}
-	return
 }

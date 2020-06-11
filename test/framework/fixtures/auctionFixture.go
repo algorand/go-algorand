@@ -35,11 +35,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+
 	"github.com/algorand/go-algorand/auction"
 	auctionClient "github.com/algorand/go-algorand/auction/client"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/client"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -964,7 +965,7 @@ func (f *AuctionFixture) CrossVerifyEndOfAuction(params auction.Params, outcome 
 }
 
 // WaitForNextRound is a utility function to wait for next round
-func (f *AuctionFixture) WaitForNextRound() (newAlgodStatus v1.NodeStatus, err error) {
+func (f *AuctionFixture) WaitForNextRound() (newAlgodStatus generatedV2.NodeStatusResponse, err error) {
 	// get the algod rest client
 	algodRestClient := f.GetAlgodRestClient()
 	algodStatus, err := algodRestClient.Status()
