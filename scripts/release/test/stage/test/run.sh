@@ -12,7 +12,7 @@ CHANNEL=$(sed -n 's/.*CHANNEL=\(.*\)/\1/p' <<< "$BUILD_ENV")
 RELEASE=$(sed -n 's/.*FULLVERSION=\(.*\)/\1/p' <<< "$BUILD_ENV")
 
 rm -rf ./*.deb ./*.rpm
-python3 scripts/get_current_installers.py "s3://algorand-builds/channel/$CHANNEL/$RELEASE"
+python3 scripts/get_current_installers.py "s3://algorand-staging/releases/$CHANNEL/$RELEASE"
 
 # Copy previous installers into ~.
 scp -i ReleaseBuildInstanceKey.pem -o StrictHostKeyChecking=no ./*.deb ubuntu@"$INSTANCE":
