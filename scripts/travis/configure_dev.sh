@@ -14,11 +14,13 @@ if [ "${OS}" = "linux" ]; then
         if [ "$?" != "0" ]; then
             echo "Go cannot be found; downloading..."
             # go is not installed ?
-            wget -q https://dl.google.com/go/go1.12.9.linux-arm64.tar.gz
+	    # e.g. https://dl.google.com/go/go1.13.5.linux-amd64.tar.gz
+	    GO_TARBALL=go1.13.5.linux-amd64.tar.gz
+            wget -q https://dl.google.com/go/${GO_TARBALL}
             if [ "$?" = "0" ]; then   
                 set -e
-                sudo tar -C /usr/local -xzf ./go1.12.9.linux-arm64.tar.gz
-                rm -f ./go1.12.9.linux-arm64.tar.gz
+                sudo tar -C /usr/local -xzf ${GO_TARBALL}
+                rm -f ${GO_TARBALL}
                 sudo ln -s /usr/local/go/bin/go /usr/local/bin/go
                 sudo ln -s /usr/local/go/bin/godoc /usr/local/bin/godoc
                 sudo ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt
@@ -38,11 +40,12 @@ if [ "${OS}" = "linux" ]; then
         if [ "$?" != "0" ]; then
             echo "Go cannot be found; downloading..."
             # go is not installed ?
-            wget -q https://dl.google.com/go/go1.12.9.linux-armv6l.tar.gz
+	    GO_TARBALL=go1.13.5.linux-armv6l.tar.gz
+            wget -q https://dl.google.com/go/${GO_TARBALL}
             if [ "$?" = "0" ]; then
                 set -e
-                sudo tar -C /usr/local -xzf ./go1.12.9.linux-armv6l.tar.gz
-                rm -f ./go1.12.9.linux-armv6l.tar.gz
+                sudo tar -C /usr/local -xzf ./${GO_TARBALL}
+                rm -f ./${GO_TARBALL}
                 sudo ln -s /usr/local/go/bin/go /usr/local/bin/go
                 sudo ln -s /usr/local/go/bin/godoc /usr/local/bin/godoc
                 sudo ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt
