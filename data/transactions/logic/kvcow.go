@@ -48,7 +48,8 @@ func (kvc *keyValueCow) read(key string) (value basics.TealValue, ok bool) {
 func (kvc *keyValueCow) write(key string, value basics.TealValue) {
 	// If the value being written is identical to the underlying key/value,
 	// then ensure there is no delta entry for the key.
-	if value == kvc.base[key] {
+	baseValue, ok := kvc.base[key]
+	if ok && value == baseValue {
 		delete(kvc.delta, key)
 	} else {
 		// Otherwise, update the delta with the new value.
