@@ -101,6 +101,16 @@ func (payment PaymentTxnFields) apply(header Header, balances Balances, spec Spe
 			return fmt.Errorf("cannot close: %d outstanding created assets", len(rec.AssetParams))
 		}
 
+		// Confirm that there is no application-related state remaining
+		if len(rec.AppLocalStates) > 0 {
+			return fmt.Errorf("cannot close: %d outstanding applications opted in. Please opt out or clear them", len(rec.AppLocalStates))
+		}
+
+		// Can't have created apps remaining either
+		if len(rec.AppParams) > 0 {
+			return fmt.Errorf("cannot close: %d outstanding created applications", len(rec.AppParams))
+		}
+
 		// Clear out entire account record, to allow the DB to GC it
 		rec.AccountData = basics.AccountData{}
 		err = balances.Put(rec)
