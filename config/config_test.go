@@ -293,73 +293,16 @@ func TestConfigMigrateFromDisk(t *testing.T) {
 func TestConfigInvariant(t *testing.T) {
 	a := require.New(t)
 
-<<<<<<< HEAD
-=======
-	a.Equal(uint32(9), configVersion, "If you bump Config Version, please update this test (and consider if you should be adding more)")
-
->>>>>>> master
 	ourPath, err := os.Getwd()
 	a.NoError(err)
 	configsPath := filepath.Join(ourPath, "../test/testdata/configs")
 
-<<<<<<< HEAD
 	for configVersion := uint32(0); configVersion <= getLatestConfigVersion(); configVersion++ {
 		c := Local{}
 		err = codecs.LoadObjectFromFile(filepath.Join(configsPath, fmt.Sprintf("config-v%d.json", configVersion)), &c)
 		a.NoError(err)
 		a.Equal(getVersionedDefaultLocalConfig(configVersion), c)
 	}
-=======
-	c0 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v0.json"), &c0)
-	a.NoError(err)
-	a.Equal(defaultLocalV0, c0)
-
-	c1 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v1.json"), &c1)
-	a.NoError(err)
-	a.Equal(defaultLocalV1, c1)
-
-	c2 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v2.json"), &c2)
-	a.NoError(err)
-	a.Equal(defaultLocalV2, c2)
-
-	c3 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v3.json"), &c3)
-	a.NoError(err)
-	a.Equal(defaultLocalV3, c3)
-
-	c4 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v4.json"), &c4)
-	a.NoError(err)
-	a.Equal(defaultLocalV4, c4)
-
-	c5 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v5.json"), &c5)
-	a.NoError(err)
-	a.Equal(defaultLocalV5, c5)
-
-	c6 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v6.json"), &c6)
-	a.NoError(err)
-	a.Equal(defaultLocalV6, c6)
-
-	c7 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v7.json"), &c7)
-	a.NoError(err)
-	a.Equal(defaultLocalV7, c7)
-
-	c8 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v8.json"), &c8)
-	a.NoError(err)
-	a.Equal(defaultLocalV8, c8)
-
-	c9 := Local{}
-	err = codecs.LoadObjectFromFile(filepath.Join(configsPath, "config-v9.json"), &c9)
-	a.NoError(err)
-	a.Equal(defaultLocalV9, c9)
->>>>>>> master
 }
 
 func TestConfigLatestVersion(t *testing.T) {

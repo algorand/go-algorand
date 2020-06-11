@@ -29,7 +29,7 @@ import (
 // if you want to make changes to this structure, make the changes to the Local structure in config.go and run "make generate" which would automatically
 // update this one.
 var defaultLocal = Local{
-	Version:                               8,
+	Version:                               9,
 	AnnounceParticipationKey:              true,
 	Archival:                              false,
 	BaseLoggerDebugLevel:                  4,
@@ -37,11 +37,11 @@ var defaultLocal = Local{
 	CadaverSizeTarget:                     1073741824,
 	CatchpointFileHistoryLength:           365,
 	CatchpointInterval:                    10000,
-	CatchupBlockDownloadRetryAttempts:     0,
+	CatchupBlockDownloadRetryAttempts:     1000,
 	CatchupFailurePeerRefreshRate:         10,
-	CatchupGossipBlockFetchTimeoutSec:     0,
-	CatchupHTTPBlockFetchTimeoutSec:       0,
-	CatchupLedgerDownloadRetryAttempts:    0,
+	CatchupGossipBlockFetchTimeoutSec:     4,
+	CatchupHTTPBlockFetchTimeoutSec:       4,
+	CatchupLedgerDownloadRetryAttempts:    50,
 	CatchupParallelBlocks:                 16,
 	ConnectionsRateLimitingCount:          60,
 	ConnectionsRateLimitingWindowSeconds:  1,
