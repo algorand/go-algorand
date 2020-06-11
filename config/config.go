@@ -289,9 +289,9 @@ type Local struct {
 	// This functionality is required for the catchup.
 	EnableBlockService bool
 
-	// EnableTealCompile enables teal compile API endpoint in algod.
+	// EnableTealService enables teal/compile, teal/dryrun, and teal/tealsign API endpoints.
 	// This functionlity is disabled by default.
-	EnableTealCompile bool
+	EnableTealService bool
 	
 	// EnableGossipBlockService enables the block serving service over the gossip network. The functionality of this depends on NetAddress, which must also be provided.
 	// This functionality is required for the relays to perform catchup from nodes.

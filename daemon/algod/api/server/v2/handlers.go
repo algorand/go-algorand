@@ -590,7 +590,7 @@ func (v2 *Handlers) AbortCatchup(ctx echo.Context, catchpoint string) error {
 // (POST /v2/teal/compile)
 func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 	// return early if teal compile is not allowed in node config
-	if (! v2.Node.Config().EnableTealCompile) {
+	if (! v2.Node.Config().EnableTealService) {
 		return ctx.String(http.StatusLocked, "/teal/compile disabled by node config.")
 	}
 	
