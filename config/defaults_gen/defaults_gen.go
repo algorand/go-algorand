@@ -17,57 +17,59 @@
 package main
 
 import (
-	"bytes"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"reflect"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 )
 
-const localDefaultsFileName = "./local_defaults.go"
-const exampleFileName = "../installer/config.json.example"
 const defaultLocalVariableDeclaration = "var defaultLocal"
 
+var outputfilename = flag.String("o", "", "Name of the file where the generated datastructure would go to.")
+var packageName = flag.String("p", "", "Name of the package.")
+var headerFileName = flag.String("h", "", "Name of the header filename")
+var jsonExampleFileName = flag.String("j", "", "Name of the json example file")
+
 func main() {
-	localDefaultsBytes, err := ioutil.ReadFile(localDefaultsFileName)
-	if err != nil {
-		fmt.Printf("Unable to load file %s : %v", localDefaultsFileName, err)
+
+	flag.Parse()
+	if *outputfilename == "" || *packageName == "" || *headerFileName == "" || *jsonExampleFileName == "" {
+		fmt.Printf("one or more of the required input arguments was not provided\n")
 		os.Exit(1)
+		return
 	}
 
-	// find start location of localDefault
-	startIdx := bytes.Index(localDefaultsBytes, []byte(defaultLocalVariableDeclaration))
-	if startIdx == -1 {
-		fmt.Printf("Unable to find `%s` in local_defaults.go file.", defaultLocalVariableDeclaration)
+	localDefaultsBytes, err := ioutil.ReadFile(*headerFileName)
+	if err != nil {
+		fmt.Printf("Unable to load file %s : %v", *headerFileName, err)
 		os.Exit(1)
 	}
-	endIdx := bytes.Index(localDefaultsBytes[startIdx:], []byte("\n\n"))
-	if startIdx == -1 {
-		fmt.Printf("Unable to find empty line after `%s` in local_defaults.go file.", defaultLocalVariableDeclaration)
-		os.Exit(1)
-	}
-	endIdx += startIdx
+	localDefaultsBytes = []byte(strings.Replace(string(localDefaultsBytes), "{DATE_Y}", fmt.Sprintf("%d", time.Now().Year()), 1))
+
+	// add the package name:
+	localDefaultsBytes = append(localDefaultsBytes, []byte(fmt.Sprintf("\npackage %s\n\n", *packageName))...)
 
 	autoDefaultsBytes := []byte(prettyPrint(config.AutogenLocal, "go"))
 
-	outBuf := make([]byte, len(localDefaultsBytes)-(endIdx-startIdx)+len(autoDefaultsBytes))
-	copy(outBuf[:], localDefaultsBytes[:startIdx])
-	copy(outBuf[startIdx:], autoDefaultsBytes)
-	copy(outBuf[startIdx+len(autoDefaultsBytes):], localDefaultsBytes[endIdx:])
-	err = ioutil.WriteFile(localDefaultsFileName, outBuf, 0644)
+	localDefaultsBytes = append(localDefaultsBytes, autoDefaultsBytes...)
+
+	err = ioutil.WriteFile(*outputfilename, localDefaultsBytes, 0644)
 	if err != nil {
-		fmt.Printf("Unable to write file %s : %v", localDefaultsFileName, err)
+		fmt.Printf("Unable to write file %s : %v", *outputfilename, err)
 		os.Exit(1)
 	}
 
 	// generate an update json for the example as well.
 	autoDefaultsBytes = []byte(prettyPrint(config.AutogenLocal, "json"))
-	err = ioutil.WriteFile(exampleFileName, autoDefaultsBytes, 0644)
+	err = ioutil.WriteFile(*jsonExampleFileName, autoDefaultsBytes, 0644)
 	if err != nil {
-		fmt.Printf("Unable to write file %s : %v", exampleFileName, err)
+		fmt.Printf("Unable to write file %s : %v", *jsonExampleFileName, err)
 		os.Exit(1)
 	}
 }
