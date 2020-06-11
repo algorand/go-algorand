@@ -66,19 +66,11 @@ type CatchpointCatchupService struct {
 	ledger         *ledger.Ledger
 	// lastBlockHeader is the latest block we have before going into catchpoint catchup mode. We use it to serve the node status requests instead of going to the ledger.
 	lastBlockHeader bookkeeping.BlockHeader
+	config          config.Local
 }
 
-const (
-	// maxLedgerDownloadAttempts is the number of attempts the catchpoint file will be downloaded and verified. Once we pass that number of attempts
-	// the catchpoint catchup is considered to be a failuire, and the node would resume to work as before.
-	maxLedgerDownloadAttempts = 50
-	// maxBlockDownloadAttempts is the number of block download attempts failuires allows while downloading the blocks. Once we pass that number of attempts
-	// the catchpoint catchup is considered to be a failuire, and the node would resume to work as before.
-	maxBlockDownloadAttempts = 50
-)
-
 // MakeResumedCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
-func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger) (service *CatchpointCatchupService, err error) {
+func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger, cfg config.Local) (service *CatchpointCatchupService, err error) {
 	service = &CatchpointCatchupService{
 		stats: CatchpointCatchupStats{
 			StartTime: time.Now(),
@@ -89,6 +81,7 @@ func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCat
 		newService:     false,
 		net:            net,
 		ledger:         l,
+		config:         cfg,
 	}
 	service.lastBlockHeader, err = l.BlockHdr(l.Latest())
 	if err != nil {
@@ -103,7 +96,7 @@ func MakeResumedCatchpointCatchupService(ctx context.Context, node CatchpointCat
 }
 
 // MakeNewCatchpointCatchupService creates a new catchpoint catchup service for a node that is not in catchpoint catchup mode
-func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger) (service *CatchpointCatchupService, err error) {
+func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNodeServices, log logging.Logger, net network.GossipNode, l *ledger.Ledger, cfg config.Local) (service *CatchpointCatchupService, err error) {
 	if catchpoint == "" {
 		return nil, fmt.Errorf("MakeNewCatchpointCatchupService: catchpoint is invalid")
 	}
@@ -119,6 +112,7 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 		newService:     true,
 		net:            net,
 		ledger:         l,
+		config:         cfg,
 	}
 	service.lastBlockHeader, err = l.BlockHdr(l.Latest())
 	if err != nil {
@@ -262,7 +256,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 			return cs.abort(err) // we want to keep it with the context error.
 		}
 
-		if attemptsCount >= maxLedgerDownloadAttempts {
+		if attemptsCount >= cs.config.CatchupLedgerDownloadRetryAttempts {
 			err = fmt.Errorf("catchpoint catchup exceeded number of attempts to retrieve ledger")
 			return cs.abort(err)
 		}
@@ -283,7 +277,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed to retrieve catchup block round : %v", err))
 	}
 
-	fetcherFactory := MakeNetworkFetcherFactory(cs.net, 10, nil)
+	fetcherFactory := MakeNetworkFetcherFactory(cs.net, 10, nil, &cs.config)
 	attemptsCount := 0
 	var blk *bookkeeping.Block
 	var client FetcherClient
@@ -301,7 +295,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 				if err == cs.ctx.Err() {
 					return cs.abort(err)
 				}
-				if attemptsCount <= maxBlockDownloadAttempts {
+				if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 					// try again.
 					blk = nil
 					continue
@@ -316,7 +310,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		if _, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
 			cs.log.Warnf("processStageLastestBlockDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol)
 
-			if attemptsCount <= maxBlockDownloadAttempts {
+			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 				// try again.
 				blk = nil
 				continue
@@ -328,7 +322,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		if !blk.ContentsMatchHeader() {
 			cs.log.Warnf("processStageLastestBlockDownload: downloaded block content does not match downloaded block header")
 
-			if attemptsCount <= maxBlockDownloadAttempts {
+			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 				// try again.
 				blk = nil
 				continue
@@ -342,7 +336,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 			if err == cs.ctx.Err() {
 				return cs.abort(err)
 			}
-			if attemptsCount <= maxBlockDownloadAttempts {
+			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 				// try again.
 				blk = nil
 				continue
@@ -352,7 +346,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 
 		err = cs.ledgerAccessor.StoreBalancesRound(cs.ctx, blk)
 		if err != nil {
-			if attemptsCount <= maxBlockDownloadAttempts {
+			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 				// try again.
 				blk = nil
 				continue
@@ -362,7 +356,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 
 		err = cs.ledgerAccessor.StoreFirstBlock(cs.ctx, blk)
 		if err != nil {
-			if attemptsCount <= maxBlockDownloadAttempts {
+			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 				// try again.
 				blk = nil
 				continue
@@ -372,7 +366,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 
 		err = cs.updateStage(ledger.CatchpointCatchupStateBlocksDownload)
 		if err != nil {
-			if attemptsCount <= maxBlockDownloadAttempts {
+			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 				// try again.
 				blk = nil
 				continue
@@ -411,7 +405,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	cs.statsMu.Unlock()
 
 	prevBlock := &topBlock
-	fetcherFactory := MakeNetworkFetcherFactory(cs.net, 10, nil)
+	fetcherFactory := MakeNetworkFetcherFactory(cs.net, 10, nil, &cs.config)
 	blocksFetched := uint64(1) // we already got the first block in the previous step.
 	var blk *bookkeeping.Block
 	var client FetcherClient
@@ -440,7 +434,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 				if err == cs.ctx.Err() {
 					return cs.abort(err)
 				}
-				if attemptsCount <= maxBlockDownloadAttempts {
+				if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 					// try again.
 					continue
 				}
@@ -457,7 +451,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			// not identical, retry download.
 			cs.log.Warnf("processStageBlocksDownload downloaded block(%d) did not match it's successor(%d) block hash %v != %v", blk.Round(), prevBlock.Round(), blk.Hash(), prevBlock.BlockHeader.Branch)
 			cs.updateBlockRetrievalStatistics(-1, 0)
-			if attemptsCount <= maxBlockDownloadAttempts {
+			if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 				// try again.
 				continue
 			}
@@ -468,7 +462,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		if _, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
 			cs.log.Warnf("processStageBlocksDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol)
 			cs.updateBlockRetrievalStatistics(-1, 0)
-			if attemptsCount <= maxBlockDownloadAttempts {
+			if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 				// try again.
 				continue
 			}
@@ -480,7 +474,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			cs.log.Warnf("processStageBlocksDownload: downloaded block content does not match downloaded block header")
 			// try again.
 			cs.updateBlockRetrievalStatistics(-1, 0)
-			if attemptsCount <= maxBlockDownloadAttempts {
+			if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 				// try again.
 				continue
 			}
@@ -494,7 +488,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		if err != nil {
 			cs.log.Warnf("processStageBlocksDownload failed to store downloaded staging block for round %d", blk.Round())
 			cs.updateBlockRetrievalStatistics(-1, -1)
-			if attemptsCount <= maxBlockDownloadAttempts {
+			if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 				// try again.
 				continue
 			}

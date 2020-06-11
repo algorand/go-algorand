@@ -21,11 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"time"
 
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
@@ -33,9 +33,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
 )
-
-// DefaultFetchTimeout is the default time a fetcher should wait for a block
-const DefaultFetchTimeout = 20 * time.Second // TODO this should be in config
 
 // Fetcher queries the current block of the network, and fetches agreed-upon blocks
 type Fetcher interface {
@@ -65,6 +62,7 @@ type NetworkFetcherFactory struct {
 	net       network.GossipNode
 	peerLimit int
 	fs        *rpcs.WsFetcherService
+	cfg       *config.Local
 
 	log logging.Logger
 }
@@ -72,7 +70,7 @@ type NetworkFetcherFactory struct {
 func (factory NetworkFetcherFactory) makeHTTPFetcherFromPeer(log logging.Logger, peer network.Peer) FetcherClient {
 	hp, ok := peer.(network.HTTPPeer)
 	if ok {
-		return MakeHTTPFetcher(log, hp, factory.net)
+		return MakeHTTPFetcher(log, hp, factory.net, factory.cfg)
 	}
 	log.Errorf("%T %#v is not HTTPPeer", peer, peer)
 	return nil
@@ -80,12 +78,13 @@ func (factory NetworkFetcherFactory) makeHTTPFetcherFromPeer(log logging.Logger,
 
 // MakeNetworkFetcherFactory returns a network fetcher factory, that associates fetchers with no more than peerLimit peers from the aggregator.
 // WSClientSource can be nil, if no network exists to create clients from (defaults to http clients)
-func MakeNetworkFetcherFactory(net network.GossipNode, peerLimit int, fs *rpcs.WsFetcherService) NetworkFetcherFactory {
+func MakeNetworkFetcherFactory(net network.GossipNode, peerLimit int, fs *rpcs.WsFetcherService, cfg *config.Local) NetworkFetcherFactory {
 	var factory NetworkFetcherFactory
 	factory.net = net
 	factory.peerLimit = peerLimit
 	factory.log = logging.Base()
 	factory.fs = fs
+	factory.cfg = cfg
 	return factory
 }
 
@@ -132,7 +131,7 @@ func (factory NetworkFetcherFactory) NewOverGossip(tag protocol.Tag) Fetcher {
 		factory.log.Info("WsFetcherService not available; fetch over gossip disabled")
 		return factory.New()
 	}
-	f := MakeWsFetcher(factory.log, tag, gossipPeers, factory.fs)
+	f := MakeWsFetcher(factory.log, tag, gossipPeers, factory.fs, factory.cfg)
 	return &ComposedFetcher{fetchers: []Fetcher{factory.New(), f}}
 }
 
