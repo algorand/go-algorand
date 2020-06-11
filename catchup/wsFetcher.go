@@ -19,10 +19,12 @@ package catchup
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
@@ -42,6 +44,7 @@ type WsFetcher struct {
 
 	f       *NetworkFetcher
 	clients map[network.Peer]*wsFetcherClient
+	config  *config.Local
 
 	// service
 	service *rpcs.WsFetcherService
@@ -54,10 +57,11 @@ type WsFetcher struct {
 // MakeWsFetcher creates a fetcher that fetches over the gossip network.
 // It instantiates a NetworkFetcher under the hood, registers as a handler for the given message tag,
 // and demuxes messages appropriately to the corresponding fetcher clients.
-func MakeWsFetcher(log logging.Logger, tag protocol.Tag, peers []network.Peer, service *rpcs.WsFetcherService) Fetcher {
+func MakeWsFetcher(log logging.Logger, tag protocol.Tag, peers []network.Peer, service *rpcs.WsFetcherService, cfg *config.Local) Fetcher {
 	f := &WsFetcher{
-		log: log,
-		tag: tag,
+		log:    log,
+		tag:    tag,
+		config: cfg,
 	}
 	f.clients = make(map[network.Peer]*wsFetcherClient)
 	p := make([]FetcherClient, len(peers))
@@ -67,6 +71,7 @@ func MakeWsFetcher(log logging.Logger, tag protocol.Tag, peers []network.Peer, s
 			tag:         f.tag,
 			pendingCtxs: make(map[context.Context]context.CancelFunc),
 			service:     service,
+			config:      cfg,
 		}
 		p[i] = fc
 		f.clients[peer] = fc
@@ -107,6 +112,7 @@ type wsFetcherClient struct {
 	tag         protocol.Tag                           // the tag that is associated with the request/
 	service     *rpcs.WsFetcherService                 // the fetcher service. This is where we perform the actual request and waiting for the response.
 	pendingCtxs map[context.Context]context.CancelFunc // a map of all the current pending contexts.
+	config      *config.Local
 
 	closed bool // a flag indicating that the fetcher will not perform additional block retrivals.
 
@@ -120,7 +126,8 @@ func (w *wsFetcherClient) GetBlockBytes(ctx context.Context, r basics.Round) ([]
 	if w.closed {
 		return nil, fmt.Errorf("wsFetcherClient(%d): shutdown", r)
 	}
-	childCtx, cancelFunc := context.WithCancel(ctx)
+
+	childCtx, cancelFunc := context.WithTimeout(ctx, time.Duration(w.config.CatchupGossipBlockFetchTimeoutSec)*time.Second)
 	w.pendingCtxs[childCtx] = cancelFunc
 	w.mu.Unlock()
 
