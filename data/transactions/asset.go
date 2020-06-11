@@ -213,11 +213,11 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 		return fmt.Errorf("asset %v frozen in %v", asset, addr)
 	}
 
-	var overflowed bool
-	sndHolding.Amount, overflowed = basics.OSub(sndHolding.Amount, amount)
+	newAmount, overflowed := basics.OSub(sndHolding.Amount, amount)
 	if overflowed {
 		return fmt.Errorf("underflow on subtracting %d from sender amount %d", amount, sndHolding.Amount)
 	}
+	sndHolding.Amount = newAmount
 
 	snd.Assets[asset] = sndHolding
 	return balances.Put(snd)
