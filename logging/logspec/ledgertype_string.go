@@ -4,6 +4,14 @@ package logspec
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[WroteBlock-0]
+	_ = x[numLedgerTypes-1]
+}
+
 const _LedgerType_name = "WroteBlocknumLedgerTypes"
 
 var _LedgerType_index = [...]uint8{0, 10, 24}
