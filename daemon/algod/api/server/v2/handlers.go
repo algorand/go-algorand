@@ -573,6 +573,11 @@ func (v2 *Handlers) AbortCatchup(ctx echo.Context, catchpoint string) error {
 // TealCompile compiles TEAL code to binary, return both binary and hash
 // (POST /v2/teal/compile)
 func (v2 *Handlers) TealCompile(ctx echo.Context) error {
+	// return early if teal compile is not allowed in node config
+	if (! v2.Node.Config().EnableTealCompile) {
+		return ctx.String(http.StatusLocked, "/teal/compile disabled by node config.")
+	}
+	
 	buf := new(bytes.Buffer)
 	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
 	buf.ReadFrom(ctx.Request().Body)

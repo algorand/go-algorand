@@ -288,6 +288,11 @@ type Local struct {
 	// EnableBlockService enables the block serving service. The functionality of this depends on NetAddress, which must also be provided.
 	// This functionality is required for the catchup.
 	EnableBlockService bool
+
+	// EnableTealCompile enables teal compile API endpoint in algod
+	// This functionlity is disabled by default
+	EnableTealCompile bool
+	
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
