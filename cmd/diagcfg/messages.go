@@ -25,8 +25,6 @@ const (
 	metricConfigReadingFailed               = "Failed to read configuration file : %s\n"
 	metricReportingStatus                   = "Metric reporting is %s\n"
 	metricSaveConfigFailed                  = "Metric configuration file could not be saved : %s\n"
-	metricFailedSetDNS                      = "Failed to store DNS : %s\n"
-	metricCloudflareCredentialMissing       = "Cloudflare credentials are missing; Please configure environment variables CLOUDFLARE_ZONE_ID, CLOUDFLARE_EMAIL and CLOUDFLARE_AUTH_KEY"
 	metricDataDirectoryEmpty                = "no data directory was specified. Please use either -d or set environment variable ALGORAND_DATA"
 
 	telemetryConfigReadError = "Could not read telemetry config: %s\n"
