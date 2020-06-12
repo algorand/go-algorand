@@ -52,24 +52,36 @@ type CatchpointCatchupStats struct {
 
 // CatchpointCatchupService represents the catchpoint catchup service.
 type CatchpointCatchupService struct {
-	stats          CatchpointCatchupStats
-	statsMu        deadlock.Mutex
-	node           CatchpointCatchupNodeServices
-	ctx            context.Context
-	cancelCtxFunc  context.CancelFunc
-	running        sync.WaitGroup
+	// stats is the statistics object, updated async while downloading the ledger
+	stats CatchpointCatchupStats
+	// statsMu syncronizes access to stats, as we could attempt to update it while querying for it's current state
+	statsMu deadlock.Mutex
+	node    CatchpointCatchupNodeServices
+	// ctx is the node cancelation context, used when the node is being stopped.
+	ctx           context.Context
+	cancelCtxFunc context.CancelFunc
+	// running is a waitgroup counting the running goroutine(1), and allow us to exit cleanly.
+	running sync.WaitGroup
+	// ledgerAccessor is the ledger accessor used to perform ledger-level operation on the database
 	ledgerAccessor ledger.CatchpointCatchupAccessor
-	stage          ledger.CatchpointCatchupState
-	log            logging.Logger
+	// stage is the current stage of the catchpoint catchup process
+	stage ledger.CatchpointCatchupState
+	// log is the logger object
+	log logging.Logger
 	// newService indicates whether this service was created after the node was running ( i.e. true ) or the node just started to find that it was previously perfoming catchup
 	newService bool
-	net        network.GossipNode
-	ledger     *ledger.Ledger
+	// net is the underlaying network module
+	net network.GossipNode
+	// ledger points to the ledger object
+	ledger *ledger.Ledger
 	// lastBlockHeader is the latest block we have before going into catchpoint catchup mode. We use it to serve the node status requests instead of going to the ledger.
 	lastBlockHeader bookkeeping.BlockHeader
-	config          config.Local
-	abortCtx        context.Context
-	abortCtxFunc    context.CancelFunc
+	// config is a copy of the node configuration
+	config config.Local
+	// abortCtx used as a syncronized flag to let us know when the user asked us to abort the catchpoint catchup process. note that it's not being used when we decided to abort
+	// the catchup due to an internal issue ( such as exceeding number of retries )
+	abortCtx     context.Context
+	abortCtxFunc context.CancelFunc
 }
 
 // MakeResumedCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
