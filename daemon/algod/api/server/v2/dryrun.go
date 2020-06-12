@@ -61,13 +61,10 @@ type DryrunRequest struct {
 	// Txns is transactions to simulate
 	Txns []transactions.SignedTxn `codec:"txns,omitempty"`
 
-	// Accounts
 	// Optional, useful for testing Application Call txns.
 	Accounts []generated.Account `codec:"accounts,omitempty"`
 
 	Apps []DryrunApp `codec:"apps,omitempty"`
-
-	AccountAppStates []DryrunLocalAppState `codec:"applocal,omitempty"`
 
 	// ProtocolVersion specifies a specific version string to operate under, otherwise whatever the current protocol of the network this algod is running in.
 	ProtocolVersion string `codec:"proto,omitempty"`
@@ -194,9 +191,6 @@ type dryrunLedger struct {
 	// index into dr.Apps[]
 	accountApps map[basics.Address]int
 
-	// index into dr.AccountAppStates[]
-	accountAppStates map[basics.Address]int
-
 	// accounts that have been Put
 	accounts map[basics.Address]basics.BalanceRecord
 }
@@ -205,7 +199,6 @@ func (dl *dryrunLedger) init() error {
 	dl.accounts = make(map[basics.Address]basics.BalanceRecord)
 	dl.accountsIn = make(map[basics.Address]int)
 	dl.accountApps = make(map[basics.Address]int)
-	dl.accountAppStates = make(map[basics.Address]int)
 	for i, acct := range dl.dr.Accounts {
 		xaddr, err := basics.UnmarshalChecksumAddress(acct.Address)
 		if err != nil {
@@ -215,9 +208,6 @@ func (dl *dryrunLedger) init() error {
 	}
 	for i, app := range dl.dr.Apps {
 		dl.accountApps[app.Creator] = i
-	}
-	for i, appState := range dl.dr.AccountAppStates {
-		dl.accountAppStates[appState.Account] = i
 	}
 	return nil
 }
@@ -243,12 +233,15 @@ func (dl *dryrunLedger) Get(addr basics.Address, withPendingRewards bool) (basic
 	if ok {
 		any = true
 		acct := dl.dr.Accounts[accti]
+		var err error
+		if out.AccountData, err = AccountToAccountData(&acct); err != nil {
+			return basics.BalanceRecord{}, err
+		}
 		if withPendingRewards {
 			out.MicroAlgos.Raw = acct.Amount
 		} else {
 			out.MicroAlgos.Raw = acct.AmountWithoutPendingRewards
 		}
-		// TODO: more fields
 	}
 	appi, ok := dl.accountApps[addr]
 	if ok {
@@ -256,13 +249,6 @@ func (dl *dryrunLedger) Get(addr basics.Address, withPendingRewards bool) (basic
 		app := dl.dr.Apps[appi]
 		out.AppParams = make(map[basics.AppIndex]basics.AppParams)
 		out.AppParams[basics.AppIndex(app.AppIndex)] = app.Params
-	}
-	appstatei, ok := dl.accountAppStates[addr]
-	if ok {
-		any = true
-		appstate := dl.dr.AccountAppStates[appstatei]
-		out.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
-		out.AppLocalStates[basics.AppIndex(appstate.AppIndex)] = appstate.State
 	}
 	if !any {
 		return basics.BalanceRecord{}, fmt.Errorf("no account for addr %s", addr.String())

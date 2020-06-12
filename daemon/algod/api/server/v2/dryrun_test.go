@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -459,7 +460,7 @@ func TestDryunLocal1(t *testing.T) {
 	proto.LogicSigMaxCost = 1000
 
 	dr.Txns = []transactions.SignedTxn{
-		transactions.SignedTxn{
+		{
 			Txn: transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -473,17 +474,17 @@ func TestDryunLocal1(t *testing.T) {
 		},
 	}
 	dr.Apps = []DryrunApp{
-		DryrunApp{
+		{
 			AppIndex: 1,
 			Params: basics.AppParams{
 				ApprovalProgram: localStateCheckProg,
 			},
 		},
 	}
-	dr.AccountAppStates = []DryrunLocalAppState{
-		DryrunLocalAppState{
-			// Account 0
-			AppIndex: 1,
+	dr.Accounts = []generated.Account{
+		{
+			Address:        basics.Address{}.String(),
+			AppsLocalState: &[]generated.ApplicationLocalStates{{AppIndex: 1}},
 		},
 	}
 	doDryrunRequest(&dr, &proto, &response)
@@ -522,7 +523,7 @@ func TestDryunLocal1A(t *testing.T) {
 	proto.LogicSigMaxCost = 1000
 
 	dr.Txns = []transactions.SignedTxn{
-		transactions.SignedTxn{
+		{
 			Txn: transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -536,18 +537,19 @@ func TestDryunLocal1A(t *testing.T) {
 		},
 	}
 	dr.Apps = []DryrunApp{
-		DryrunApp{
+		{
 			AppIndex: 1,
 		},
 	}
-	dr.AccountAppStates = []DryrunLocalAppState{
-		DryrunLocalAppState{
-			// Account 0
-			AppIndex: 1,
+	dr.Accounts = []generated.Account{
+		{
+			Address:        basics.Address{}.String(),
+			AppsLocalState: &[]generated.ApplicationLocalStates{{AppIndex: 1}},
 		},
 	}
+
 	dr.Sources = []DryrunSource{
-		DryrunSource{
+		{
 			Source:    localStateCheckSource,
 			FieldName: "approv",
 			AppIndex:  1,
@@ -589,7 +591,7 @@ func TestDryunLocalCheck(t *testing.T) {
 	proto.LogicSigMaxCost = 1000
 
 	dr.Txns = []transactions.SignedTxn{
-		transactions.SignedTxn{
+		{
 			Txn: transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -603,21 +605,33 @@ func TestDryunLocalCheck(t *testing.T) {
 		},
 	}
 	dr.Apps = []DryrunApp{
-		DryrunApp{
+		{
 			AppIndex: 1,
 			Params: basics.AppParams{
 				ApprovalProgram: localStateCheckProg,
 			},
 		},
 	}
-	localv := make(map[string]basics.TealValue, 1)
-	localv["foo"] = basics.TealValue{Type: basics.TealBytesType, Bytes: "bar"}
-	dr.AccountAppStates = []DryrunLocalAppState{
-		DryrunLocalAppState{
-			AppIndex: 1,
-			State:    basics.AppLocalState{KeyValue: localv},
+	localv := make(generated.TealKeyValueStore, 1)
+	localv[0] = generated.TealKeyValue{
+		Key:   "foo",
+		Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
+	}
+
+	dr.Accounts = []generated.Account{
+		{
+			Address: basics.Address{}.String(),
+			AppsLocalState: &[]generated.ApplicationLocalStates{
+				{
+					AppIndex: 1,
+					State: generated.ApplicationLocalState{
+						KeyValue: localv,
+					},
+				},
+			},
 		},
 	}
+
 	doDryrunRequest(&dr, &proto, &response)
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
