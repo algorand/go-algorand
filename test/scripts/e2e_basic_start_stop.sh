@@ -15,12 +15,16 @@ function update_running_count() {
 }
 
 function verify_at_least_one_running() {
-    update_running_count
-    if [ ${RUNNING_COUNT} -eq 0 ]; then
-        echo "algod expected to be running but it isn't"
-        exit 1
-    fi
-    return 0
+    # Starting up can take some time, so wait at least 2 seconds
+    for TRIES in 1 2 3 4 5; do
+        update_running_count
+        if [ ${RUNNING_COUNT} -ge 1 ]; then
+            return 0
+        fi
+        sleep .4
+    done
+    echo "at least one algod expected to be running but ${RUNNING_COUNT} are running"
+    exit 1
 }
 
 function verify_none_running() {
@@ -37,7 +41,7 @@ function verify_none_running() {
 }
 
 function verify_one_running() {
-    # Shutting down can take some time, so retry up to 2 seconds
+    # Starting up can take some time, so retry up to 2 seconds
     for TRIES in 1 2 3 4 5; do
         update_running_count
         if [ ${RUNNING_COUNT} -eq 1 ]; then
@@ -66,7 +70,6 @@ verify_none_running
 # Test that we can start a generic node straight with no overrides
 echo Verifying a generic node will start directly
 algod -d ${DATADIR} &
-sleep 1
 verify_at_least_one_running
 pkill -u $(whoami) -x algod || true
 verify_none_running
@@ -76,10 +79,8 @@ verify_none_running
 # but that we cannot start a second one against same datadir
 echo Verifying that the datadir algod lock works correctly
 algod -d ${DATADIR} &
-sleep 1
 verify_at_least_one_running
 algod -d ${DATADIR} &
-sleep 1
 verify_at_least_one_running # one should still be running
 verify_one_running # in fact, exactly one should still be running
 # clean up
