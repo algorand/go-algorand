@@ -197,13 +197,13 @@ test: build
 
 fulltest: build-race
 	for PACKAGE_DIRECTORY in $(UNIT_TEST_SOURCES) ; do \
-		go test $(GOTAGS) -timeout 2000s -race $$PACKAGE_DIRECTORY; \
+		go test $(GOTAGS) -timeout 2500s -race $$PACKAGE_DIRECTORY; \
 	done
 
 shorttest: build-race $(addprefix short_test_target_, $(UNIT_TEST_SOURCES))
 
 $(addprefix short_test_target_, $(UNIT_TEST_SOURCES)): build
-	@go test $(GOTAGS) -short -timeout 2000s -race $(subst short_test_target_,,$@)
+	@go test $(GOTAGS) -short -timeout 2500s -race $(subst short_test_target_,,$@)
 
 integration: build-race
 	./test/scripts/run_integration_tests.sh
