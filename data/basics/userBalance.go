@@ -200,8 +200,8 @@ type AppLocalState struct {
 type AppParams struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApprovalProgram   []byte      `codec:"approv"`
-	ClearStateProgram []byte      `codec:"clearp"`
+	ApprovalProgram   []byte      `codec:"approv,allocbound=config.MaxAppProgramLen"`
+	ClearStateProgram []byte      `codec:"clearp,allocbound=config.MaxAppProgramLen"`
 	LocalStateSchema  StateSchema `codec:"lsch"`
 	GlobalStateSchema StateSchema `codec:"gsch"`
 
