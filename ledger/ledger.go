@@ -204,6 +204,22 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs 
 	// state in a single SQLite db file.
 	var trackerDBFilename string
 	var blockDBFilename string
+	
+	// if !dbMem {
+	// 	commonDBFilename := dbPathPrefix + ".sqlite"
+	// 	_, err = os.Stat(commonDBFilename)
+	// 	if !os.IsNotExist(err) {
+	// 		// before launch, we used to have both blocks and tracker
+	// 		// state in a single SQLite db file. We don't have that anymore,
+	// 		// and we want to fail when that's the case.
+	// 		err = fmt.Errorf("A single ledger database file '%s' was detected. This is no longer supported by current binary", commonDBFilename)
+	// 		return
+	// 	}
+	// }
+
+	// trackerDBFilename = dbPathPrefix + ".tracker.sqlite"	
+	// blockDBFilename = dbPathPrefix + ".block.sqlite"
+
 
 	commonDBFilename := dbPathPrefix + ".sqlite"
 	if !dbMem {
