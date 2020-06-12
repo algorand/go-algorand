@@ -63,6 +63,7 @@ jobs:
           - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
           - TRAVIS_BRANCH=${TRAVIS_BRANCH}
           - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
+          - S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
     tasks:
       - shell.docker.Ensure
       - docker.Make.build
@@ -74,6 +75,7 @@ jobs:
           - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
           - TRAVIS_BRANCH=${TRAVIS_BRANCH}
           - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
+          - S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
     tasks:
       - shell.docker.Ensure
       - docker.Make.fulltest
@@ -85,6 +87,7 @@ jobs:
           - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
           - TRAVIS_BRANCH=${TRAVIS_BRANCH}
           - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
+          - S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
     tasks:
       - shell.docker.Ensure
       - docker.Make.shorttest
@@ -97,6 +100,7 @@ jobs:
           - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
           - TRAVIS_BRANCH=${TRAVIS_BRANCH}
           - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
+          - S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
     tasks:
       - shell.docker.Ensure
       - docker.Make.integration-test
@@ -112,6 +116,7 @@ jobs:
           - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
           - TRAVIS_BRANCH=${TRAVIS_BRANCH}
           - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
+          - S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
     tasks:
       - shell.docker.Ensure
       - docker.Make.build
@@ -123,6 +128,7 @@ jobs:
           - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
           - TRAVIS_BRANCH=${TRAVIS_BRANCH}
           - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
+          - S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
     tasks:
       - shell.docker.Ensure
       - docker.Make.fulltest
@@ -134,6 +140,7 @@ jobs:
           - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
           - TRAVIS_BRANCH=${TRAVIS_BRANCH}
           - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
+          - S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
     tasks:
       - shell.docker.Ensure
       - docker.Make.shorttest
@@ -146,6 +153,7 @@ jobs:
           - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
           - TRAVIS_BRANCH=${TRAVIS_BRANCH}
           - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
+          - S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
     tasks:
       - shell.docker.Ensure
       - docker.Make.integration-test
