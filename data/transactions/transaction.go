@@ -55,11 +55,18 @@ type Balances interface {
 	// A non-nil error means the lookup is impossible (e.g., if the database doesn't have necessary state anymore)
 	Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error)
 
+	Put(basics.BalanceRecord) error
+
+	// PutWithCreatables is like Put, but should be used when creating or deleting an asset or application.
+	PutWithCreatables(record basics.BalanceRecord, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) error
+
 	// GetAssetCreator gets the address of the account whose balance record
 	// contains the asset params
 	GetAssetCreator(aidx basics.AssetIndex) (basics.Address, error)
 
-	Put(basics.BalanceRecord) error
+	// GetAppCreator gets the address of the account whose balance record
+	// contains the app params
+	GetAppCreator(aidx basics.AppIndex) (basics.Address, bool, error)
 
 	// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
 	// TODO: Does this need to be part of the balances interface, or can it just be implemented here as a function that calls Put and Get?
@@ -70,6 +77,15 @@ type Balances interface {
 	ConsensusParams() config.ConsensusParams
 }
 
+// StateEvaluator is an interface that provides some Stateful TEAL
+// functionality that may be passed through to Apply from ledger, avoiding a
+// circular dependency between the logic and transactions packages
+type StateEvaluator interface {
+	Eval(program []byte) (pass bool, stateDelta basics.EvalDelta, err error)
+	Check(program []byte) (cost int, err error)
+	InitLedger(balances Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex) error
+}
+
 // Header captures the fields common to every transaction type.
 type Header struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -78,7 +94,7 @@ type Header struct {
 	Fee         basics.MicroAlgos `codec:"fee"`
 	FirstValid  basics.Round      `codec:"fv"`
 	LastValid   basics.Round      `codec:"lv"`
-	Note        []byte            `codec:"note"` // Uniqueness or app-level data about txn
+	Note        []byte            `codec:"note,allocbound=config.MaxTxnNoteBytes"` // Uniqueness or app-level data about txn
 	GenesisID   string            `codec:"gen"`
 	GenesisHash crypto.Digest     `codec:"gh"`
 
@@ -117,6 +133,7 @@ type Transaction struct {
 	AssetConfigTxnFields
 	AssetTransferTxnFields
 	AssetFreezeTxnFields
+	ApplicationCallTxnFields
 }
 
 // ApplyData contains information about the transaction's execution.
@@ -130,6 +147,28 @@ type ApplyData struct {
 	SenderRewards   basics.MicroAlgos `codec:"rs"`
 	ReceiverRewards basics.MicroAlgos `codec:"rr"`
 	CloseRewards    basics.MicroAlgos `codec:"rc"`
+	EvalDelta       basics.EvalDelta  `codec:"dt"`
+}
+
+// Equal returns true if two ApplyDatas are equal, ignoring nilness equality on
+// EvalDelta's internal deltas (see EvalDelta.Equal for more information)
+func (ad ApplyData) Equal(o ApplyData) bool {
+	if ad.ClosingAmount != o.ClosingAmount {
+		return false
+	}
+	if ad.SenderRewards != o.SenderRewards {
+		return false
+	}
+	if ad.ReceiverRewards != o.ReceiverRewards {
+		return false
+	}
+	if ad.CloseRewards != o.CloseRewards {
+		return false
+	}
+	if !ad.EvalDelta.Equal(o.EvalDelta) {
+		return false
+	}
+	return true
 }
 
 // TxGroup describes a group of transactions that must appear
@@ -273,7 +312,79 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		if !proto.Asset {
 			return fmt.Errorf("asset transaction not supported")
 		}
+	case protocol.ApplicationCallTx:
+		if !proto.Application {
+			return fmt.Errorf("application transaction not supported")
+		}
 
+		// Ensure requested action is valid
+		switch tx.OnCompletion {
+		case NoOpOC:
+		case OptInOC:
+		case CloseOutOC:
+		case ClearStateOC:
+		case UpdateApplicationOC:
+		case DeleteApplicationOC:
+		default:
+			return fmt.Errorf("invalid application OnCompletion")
+		}
+
+		// Programs may only be set for creation or update
+		if tx.ApplicationID != 0 && tx.OnCompletion != UpdateApplicationOC {
+			if len(tx.ApprovalProgram) != 0 || len(tx.ClearStateProgram) != 0 {
+				return fmt.Errorf("programs may only be specified during application creation or update")
+			}
+		}
+
+		// Schemas may only be set during application creation
+		if tx.ApplicationID != 0 {
+			if tx.LocalStateSchema != (basics.StateSchema{}) ||
+				tx.GlobalStateSchema != (basics.StateSchema{}) {
+				return fmt.Errorf("local and global state schemas are immutable")
+			}
+		}
+
+		// Limit total number of arguments
+		if len(tx.ApplicationArgs) > proto.MaxAppArgs {
+			return fmt.Errorf("too many application args, max %d", proto.MaxAppArgs)
+		}
+
+		// Sum up argument lengths
+		var argSum uint64
+		for _, arg := range tx.ApplicationArgs {
+			argSum = basics.AddSaturate(argSum, uint64(len(arg)))
+		}
+
+		// Limit total length of all arguments
+		if argSum > uint64(proto.MaxAppTotalArgLen) {
+			return fmt.Errorf("application args total length too long, max len %d bytes", proto.MaxAppTotalArgLen)
+		}
+
+		// Limit number of accounts referred to in a single ApplicationCall
+		if len(tx.Accounts) > proto.MaxAppTxnAccounts {
+			return fmt.Errorf("tx.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts)
+		}
+
+		// Limit number of other app global states referred to
+		if len(tx.ForeignApps) > proto.MaxAppTxnForeignApps {
+			return fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is %d", proto.MaxAppTxnForeignApps)
+		}
+
+		if len(tx.ApprovalProgram) > proto.MaxAppProgramLen {
+			return fmt.Errorf("approval program too long. max len %d bytes", proto.MaxAppProgramLen)
+		}
+
+		if len(tx.ClearStateProgram) > proto.MaxAppProgramLen {
+			return fmt.Errorf("clear state program too long. max len %d bytes", proto.MaxAppProgramLen)
+		}
+
+		if tx.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {
+			return fmt.Errorf("tx.LocalStateSchema too large, max number of keys is %d", proto.MaxLocalSchemaEntries)
+		}
+
+		if tx.GlobalStateSchema.NumEntries() > proto.MaxGlobalSchemaEntries {
+			return fmt.Errorf("tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxGlobalSchemaEntries)
+		}
 	default:
 		return fmt.Errorf("unknown tx type %v", tx.Type)
 	}
@@ -297,6 +408,10 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 	if tx.AssetFreezeTxnFields != (AssetFreezeTxnFields{}) {
 		nonZeroFields[protocol.AssetFreezeTx] = true
+	}
+
+	if !tx.ApplicationCallTxnFields.Empty() {
+		nonZeroFields[protocol.ApplicationCallTx] = true
 	}
 
 	for t, nonZero := range nonZeroFields {
@@ -424,7 +539,7 @@ func (tx Transaction) EstimateEncodedSize() int {
 }
 
 // Apply changes the balances according to this transaction.
-func (tx Transaction) Apply(balances Balances, spec SpecialAddresses, ctr uint64) (ad ApplyData, err error) {
+func (tx Transaction) Apply(balances Balances, steva StateEvaluator, spec SpecialAddresses, ctr uint64) (ad ApplyData, err error) {
 	params := balances.ConsensusParams()
 
 	// move fee to pool
@@ -469,6 +584,9 @@ func (tx Transaction) Apply(balances Balances, spec SpecialAddresses, ctr uint64
 
 	case protocol.AssetFreezeTx:
 		err = tx.AssetFreezeTxnFields.apply(tx.Header, balances, spec, &ad)
+
+	case protocol.ApplicationCallTx:
+		err = tx.ApplicationCallTxnFields.apply(tx.Header, balances, spec, &ad, ctr, steva)
 
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)

@@ -23,7 +23,9 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -50,17 +52,19 @@ type HTTPFetcher struct {
 
 	client *http.Client
 
-	log logging.Logger
+	log    logging.Logger
+	config *config.Local
 }
 
 // MakeHTTPFetcher wraps an HTTPPeer so that we can get blocks from it
-func MakeHTTPFetcher(log logging.Logger, peer network.HTTPPeer, net network.GossipNode) (fc FetcherClient) {
+func MakeHTTPFetcher(log logging.Logger, peer network.HTTPPeer, net network.GossipNode, cfg *config.Local) (fc FetcherClient) {
 	fc = &HTTPFetcher{
 		peer:    peer,
 		rootURL: peer.GetAddress(),
 		net:     net,
 		client:  peer.GetHTTPClient(),
-		log:     log}
+		log:     log,
+		config:  cfg}
 	return
 }
 
@@ -78,7 +82,9 @@ func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data 
 	if err != nil {
 		return nil, err
 	}
-	request = request.WithContext(ctx)
+	requestCtx, requestCancel := context.WithTimeout(ctx, time.Duration(hf.config.CatchupHTTPBlockFetchTimeoutSec)*time.Second)
+	defer requestCancel()
+	request = request.WithContext(requestCtx)
 	network.SetUserAgentHeader(request.Header)
 	response, err := hf.client.Do(request)
 	if err != nil {

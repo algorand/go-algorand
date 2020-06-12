@@ -292,6 +292,18 @@ type Local struct {
 	// EnableGossipBlockService enables the block serving service over the gossip network. The functionality of this depends on NetAddress, which must also be provided.
 	// This functionality is required for the relays to perform catchup from nodes.
 	EnableGossipBlockService bool
+
+	// CatchupHTTPBlockFetchTimeoutSec controls how long the http query for fetching a block from a relay would take before giving up and trying another relay.
+	CatchupHTTPBlockFetchTimeoutSec int
+
+	// CatchupGossipBlockFetchTimeoutSec controls how long the gossip query for fetching a block from a relay would take before giving up and trying another relay.
+	CatchupGossipBlockFetchTimeoutSec int
+
+	// CatchupLedgerDownloadRetryAttempts controls the number of attempt the ledger fetching would be attempted before giving up catching up to the provided catchpoint.
+	CatchupLedgerDownloadRetryAttempts int
+
+	// CatchupLedgerDownloadRetryAttempts controls the number of attempt the block fetching would be attempted before giving up catching up to the provided catchpoint.
+	CatchupBlockDownloadRetryAttempts int
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
