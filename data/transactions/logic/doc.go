@@ -64,6 +64,7 @@ var opDocList = []stringString{
 	{"^", "A bitwise-xor B"},
 	{"~", "bitwise invert value X"},
 	{"mulw", "A times B out to 128-bit long result as low (top) and high uint64 values on the stack"},
+	{"plusw", "A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack"},
 	{"intcblock", "load block of uint64 constants"},
 	{"intc", "push value from uint64 constants to stack by index into constants"},
 	{"intc_0", "push constant 0 from intcblock to stack"},
@@ -162,6 +163,7 @@ var opDocExtraList = []stringString{
 	{"intcblock", "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script."},
 	{"bytecblock", "`bytecblock` loads the following program bytes into an array of byte string constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script."},
 	{"*", "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`."},
+	{"+", "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `plusw`."},
 	{"txn", "FirstValidTime causes the program to fail. The field is reserved for future use."},
 	{"gtxn", "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`."},
 	{"btoi", "`btoi` panics if the input is longer than 8 bytes."},
@@ -197,7 +199,7 @@ type OpGroup struct {
 
 // OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
-	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "concat", "substring", "substring3"}},
+	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "plusw", "concat", "substring", "substring3"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2"}},
 	{"State Access", []string{"balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},

@@ -678,6 +678,42 @@ int 1                   // ret 1
 	}
 }
 
+func TestPlusw(t *testing.T) {
+	t.Parallel()
+	// add two numbers, ensure sum is 0x42 and carry is 0x1
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			program, err := AssembleStringWithVersion(`int 0xFFFFFFFFFFFFFFFF
+int 0x43
+plusw
+int 0x42  // compare low (top of the stack)
+==
+bnz continue
+err
+continue:
+int 1                   // compare high
+==
+bnz done
+err
+done:
+int 1                   // ret 1
+`, v)
+			require.NoError(t, err)
+			cost, err := Check(program, defaultEvalParams(nil, nil))
+			require.NoError(t, err)
+			require.True(t, cost < 1000)
+			sb := strings.Builder{}
+			pass, err := Eval(program, defaultEvalParams(&sb, nil))
+			if !pass {
+				t.Log(hex.EncodeToString(program))
+				t.Log(sb.String())
+			}
+			require.True(t, pass)
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestDivZero(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -3497,6 +3533,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 		"bz":                "bz l\nl:",
 		"b":                 "b l\nl:",
 		"return":            "int 1\nreturn",
+		"plusw":             "int 0\nint 1\nplusw",
 		"dup2":              "dup2",
 		"concat":            "byte 0x41\ndup\nconcat",
 		"substring":         "byte 0x41\nsubstring 0 1",
