@@ -7,7 +7,7 @@ UNAME		:= $(shell uname)
 SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
-S3_RELEASE_BUCKET = algorand-builds
+S3_RELEASE_BUCKET = $$S3_RELEASE_BUCKET
 
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
