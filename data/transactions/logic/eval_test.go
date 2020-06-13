@@ -678,6 +678,25 @@ int 1                   // ret 1
 	}
 }
 
+func TestPluswImpl(t *testing.T) {
+	t.Parallel()
+	carry, sum := opPluswImpl(1, 2)
+	require.Equal(t, uint64(0), carry)
+	require.Equal(t, uint64(3), sum)
+
+	carry, sum = opPluswImpl(0xFFFFFFFFFFFFFFFD, 0x45)
+	require.Equal(t, uint64(1), carry)
+	require.Equal(t, uint64(0x42), sum)
+
+	carry, sum = opPluswImpl(0, 0)
+	require.Equal(t, uint64(0), carry)
+	require.Equal(t, uint64(0), sum)
+
+	carry, sum = opPluswImpl((1<<64)-1, (1<<64)-1)
+	require.Equal(t, uint64(1), carry)
+	require.Equal(t, uint64((1<<64)-2), sum)
+}
+
 func TestPlusw(t *testing.T) {
 	t.Parallel()
 	// add two numbers, ensure sum is 0x42 and carry is 0x1
@@ -686,12 +705,12 @@ func TestPlusw(t *testing.T) {
 			program, err := AssembleStringWithVersion(`int 0xFFFFFFFFFFFFFFFF
 int 0x43
 plusw
-int 0x42  // compare low (top of the stack)
+int 0x42  // compare sum (top of the stack)
 ==
 bnz continue
 err
 continue:
-int 1                   // compare high
+int 1                   // compare carry
 ==
 bnz done
 err
