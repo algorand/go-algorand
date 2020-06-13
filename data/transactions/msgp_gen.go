@@ -433,6 +433,16 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0004 > 0 {
 			zb0004--
+			var zb0013 int
+			zb0013, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
+				return
+			}
+			if zb0013 > config.MaxAppProgramLen {
+				err = msgp.ErrOverflow(uint64(zb0013), uint64(config.MaxAppProgramLen))
+				return
+			}
 			(*z).ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApprovalProgram)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
@@ -441,6 +451,16 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 		}
 		if zb0004 > 0 {
 			zb0004--
+			var zb0014 int
+			zb0014, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
+				return
+			}
+			if zb0014 > config.MaxAppProgramLen {
+				err = msgp.ErrOverflow(uint64(zb0014), uint64(config.MaxAppProgramLen))
+				return
+			}
 			(*z).ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ClearStateProgram)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
@@ -478,33 +498,33 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 				}
 			case "apan":
 				{
-					var zb0013 uint64
-					zb0013, bts, err = msgp.ReadUint64Bytes(bts)
+					var zb0015 uint64
+					zb0015, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "OnCompletion")
 						return
 					}
-					(*z).OnCompletion = OnCompletion(zb0013)
+					(*z).OnCompletion = OnCompletion(zb0015)
 				}
 			case "apaa":
-				var zb0014 int
-				var zb0015 bool
-				zb0014, zb0015, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0016 int
+				var zb0017 bool
+				zb0016, zb0017, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
-				if zb0014 > encodedMaxApplicationArgs {
-					err = msgp.ErrOverflow(uint64(zb0014), uint64(encodedMaxApplicationArgs))
+				if zb0016 > encodedMaxApplicationArgs {
+					err = msgp.ErrOverflow(uint64(zb0016), uint64(encodedMaxApplicationArgs))
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
-				if zb0015 {
+				if zb0017 {
 					(*z).ApplicationArgs = nil
-				} else if (*z).ApplicationArgs != nil && cap((*z).ApplicationArgs) >= zb0014 {
-					(*z).ApplicationArgs = ((*z).ApplicationArgs)[:zb0014]
+				} else if (*z).ApplicationArgs != nil && cap((*z).ApplicationArgs) >= zb0016 {
+					(*z).ApplicationArgs = ((*z).ApplicationArgs)[:zb0016]
 				} else {
-					(*z).ApplicationArgs = make([][]byte, zb0014)
+					(*z).ApplicationArgs = make([][]byte, zb0016)
 				}
 				for zb0001 := range (*z).ApplicationArgs {
 					(*z).ApplicationArgs[zb0001], bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationArgs[zb0001])
@@ -514,24 +534,24 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 					}
 				}
 			case "apat":
-				var zb0016 int
-				var zb0017 bool
-				zb0016, zb0017, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0018 int
+				var zb0019 bool
+				zb0018, zb0019, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
-				if zb0016 > encodedMaxAccounts {
-					err = msgp.ErrOverflow(uint64(zb0016), uint64(encodedMaxAccounts))
+				if zb0018 > encodedMaxAccounts {
+					err = msgp.ErrOverflow(uint64(zb0018), uint64(encodedMaxAccounts))
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
-				if zb0017 {
+				if zb0019 {
 					(*z).Accounts = nil
-				} else if (*z).Accounts != nil && cap((*z).Accounts) >= zb0016 {
-					(*z).Accounts = ((*z).Accounts)[:zb0016]
+				} else if (*z).Accounts != nil && cap((*z).Accounts) >= zb0018 {
+					(*z).Accounts = ((*z).Accounts)[:zb0018]
 				} else {
-					(*z).Accounts = make([]basics.Address, zb0016)
+					(*z).Accounts = make([]basics.Address, zb0018)
 				}
 				for zb0002 := range (*z).Accounts {
 					bts, err = (*z).Accounts[zb0002].UnmarshalMsg(bts)
@@ -541,24 +561,24 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 					}
 				}
 			case "apfa":
-				var zb0018 int
-				var zb0019 bool
-				zb0018, zb0019, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0020 int
+				var zb0021 bool
+				zb0020, zb0021, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
-				if zb0018 > encodedMaxForeignApps {
-					err = msgp.ErrOverflow(uint64(zb0018), uint64(encodedMaxForeignApps))
+				if zb0020 > encodedMaxForeignApps {
+					err = msgp.ErrOverflow(uint64(zb0020), uint64(encodedMaxForeignApps))
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
-				if zb0019 {
+				if zb0021 {
 					(*z).ForeignApps = nil
-				} else if (*z).ForeignApps != nil && cap((*z).ForeignApps) >= zb0018 {
-					(*z).ForeignApps = ((*z).ForeignApps)[:zb0018]
+				} else if (*z).ForeignApps != nil && cap((*z).ForeignApps) >= zb0020 {
+					(*z).ForeignApps = ((*z).ForeignApps)[:zb0020]
 				} else {
-					(*z).ForeignApps = make([]basics.AppIndex, zb0018)
+					(*z).ForeignApps = make([]basics.AppIndex, zb0020)
 				}
 				for zb0003 := range (*z).ForeignApps {
 					bts, err = (*z).ForeignApps[zb0003].UnmarshalMsg(bts)
@@ -580,12 +600,32 @@ func (z *ApplicationCallTxnFields) UnmarshalMsg(bts []byte) (o []byte, err error
 					return
 				}
 			case "apap":
+				var zb0022 int
+				zb0022, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "ApprovalProgram")
+					return
+				}
+				if zb0022 > config.MaxAppProgramLen {
+					err = msgp.ErrOverflow(uint64(zb0022), uint64(config.MaxAppProgramLen))
+					return
+				}
 				(*z).ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApprovalProgram)
 				if err != nil {
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
 			case "apsu":
+				var zb0023 int
+				zb0023, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "ClearStateProgram")
+					return
+				}
+				if zb0023 > config.MaxAppProgramLen {
+					err = msgp.ErrOverflow(uint64(zb0023), uint64(config.MaxAppProgramLen))
+					return
+				}
 				(*z).ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ClearStateProgram)
 				if err != nil {
 					err = msgp.WrapError(err, "ClearStateProgram")
@@ -4427,6 +4467,16 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0005 > 0 {
 			zb0005--
+			var zb0015 int
+			zb0015, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
+				return
+			}
+			if zb0015 > config.MaxAppProgramLen {
+				err = msgp.ErrOverflow(uint64(zb0015), uint64(config.MaxAppProgramLen))
+				return
+			}
 			(*z).ApplicationCallTxnFields.ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ApprovalProgram)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ApprovalProgram")
@@ -4435,6 +4485,16 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		}
 		if zb0005 > 0 {
 			zb0005--
+			var zb0016 int
+			zb0016, err = msgp.ReadBytesBytesHeader(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
+				return
+			}
+			if zb0016 > config.MaxAppProgramLen {
+				err = msgp.ErrOverflow(uint64(zb0016), uint64(config.MaxAppProgramLen))
+				return
+			}
 			(*z).ApplicationCallTxnFields.ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ClearStateProgram)
 			if err != nil {
 				err = msgp.WrapError(err, "struct-from-array", "ClearStateProgram")
@@ -4495,14 +4555,14 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "note":
-				var zb0015 int
-				zb0015, err = msgp.ReadBytesBytesHeader(bts)
+				var zb0017 int
+				zb0017, err = msgp.ReadBytesBytesHeader(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Note")
 					return
 				}
-				if zb0015 > config.MaxTxnNoteBytes {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(config.MaxTxnNoteBytes))
+				if zb0017 > config.MaxTxnNoteBytes {
+					err = msgp.ErrOverflow(uint64(zb0017), uint64(config.MaxTxnNoteBytes))
 					return
 				}
 				(*z).Header.Note, bts, err = msgp.ReadBytesBytes(bts, (*z).Header.Note)
@@ -4662,33 +4722,33 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				}
 			case "apan":
 				{
-					var zb0016 uint64
-					zb0016, bts, err = msgp.ReadUint64Bytes(bts)
+					var zb0018 uint64
+					zb0018, bts, err = msgp.ReadUint64Bytes(bts)
 					if err != nil {
 						err = msgp.WrapError(err, "OnCompletion")
 						return
 					}
-					(*z).ApplicationCallTxnFields.OnCompletion = OnCompletion(zb0016)
+					(*z).ApplicationCallTxnFields.OnCompletion = OnCompletion(zb0018)
 				}
 			case "apaa":
-				var zb0017 int
-				var zb0018 bool
-				zb0017, zb0018, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0019 int
+				var zb0020 bool
+				zb0019, zb0020, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
-				if zb0017 > encodedMaxApplicationArgs {
-					err = msgp.ErrOverflow(uint64(zb0017), uint64(encodedMaxApplicationArgs))
+				if zb0019 > encodedMaxApplicationArgs {
+					err = msgp.ErrOverflow(uint64(zb0019), uint64(encodedMaxApplicationArgs))
 					err = msgp.WrapError(err, "ApplicationArgs")
 					return
 				}
-				if zb0018 {
+				if zb0020 {
 					(*z).ApplicationCallTxnFields.ApplicationArgs = nil
-				} else if (*z).ApplicationCallTxnFields.ApplicationArgs != nil && cap((*z).ApplicationCallTxnFields.ApplicationArgs) >= zb0017 {
-					(*z).ApplicationCallTxnFields.ApplicationArgs = ((*z).ApplicationCallTxnFields.ApplicationArgs)[:zb0017]
+				} else if (*z).ApplicationCallTxnFields.ApplicationArgs != nil && cap((*z).ApplicationCallTxnFields.ApplicationArgs) >= zb0019 {
+					(*z).ApplicationCallTxnFields.ApplicationArgs = ((*z).ApplicationCallTxnFields.ApplicationArgs)[:zb0019]
 				} else {
-					(*z).ApplicationCallTxnFields.ApplicationArgs = make([][]byte, zb0017)
+					(*z).ApplicationCallTxnFields.ApplicationArgs = make([][]byte, zb0019)
 				}
 				for zb0002 := range (*z).ApplicationCallTxnFields.ApplicationArgs {
 					(*z).ApplicationCallTxnFields.ApplicationArgs[zb0002], bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ApplicationArgs[zb0002])
@@ -4698,24 +4758,24 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "apat":
-				var zb0019 int
-				var zb0020 bool
-				zb0019, zb0020, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0021 int
+				var zb0022 bool
+				zb0021, zb0022, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
-				if zb0019 > encodedMaxAccounts {
-					err = msgp.ErrOverflow(uint64(zb0019), uint64(encodedMaxAccounts))
+				if zb0021 > encodedMaxAccounts {
+					err = msgp.ErrOverflow(uint64(zb0021), uint64(encodedMaxAccounts))
 					err = msgp.WrapError(err, "Accounts")
 					return
 				}
-				if zb0020 {
+				if zb0022 {
 					(*z).ApplicationCallTxnFields.Accounts = nil
-				} else if (*z).ApplicationCallTxnFields.Accounts != nil && cap((*z).ApplicationCallTxnFields.Accounts) >= zb0019 {
-					(*z).ApplicationCallTxnFields.Accounts = ((*z).ApplicationCallTxnFields.Accounts)[:zb0019]
+				} else if (*z).ApplicationCallTxnFields.Accounts != nil && cap((*z).ApplicationCallTxnFields.Accounts) >= zb0021 {
+					(*z).ApplicationCallTxnFields.Accounts = ((*z).ApplicationCallTxnFields.Accounts)[:zb0021]
 				} else {
-					(*z).ApplicationCallTxnFields.Accounts = make([]basics.Address, zb0019)
+					(*z).ApplicationCallTxnFields.Accounts = make([]basics.Address, zb0021)
 				}
 				for zb0003 := range (*z).ApplicationCallTxnFields.Accounts {
 					bts, err = (*z).ApplicationCallTxnFields.Accounts[zb0003].UnmarshalMsg(bts)
@@ -4725,24 +4785,24 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					}
 				}
 			case "apfa":
-				var zb0021 int
-				var zb0022 bool
-				zb0021, zb0022, bts, err = msgp.ReadArrayHeaderBytes(bts)
+				var zb0023 int
+				var zb0024 bool
+				zb0023, zb0024, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
-				if zb0021 > encodedMaxForeignApps {
-					err = msgp.ErrOverflow(uint64(zb0021), uint64(encodedMaxForeignApps))
+				if zb0023 > encodedMaxForeignApps {
+					err = msgp.ErrOverflow(uint64(zb0023), uint64(encodedMaxForeignApps))
 					err = msgp.WrapError(err, "ForeignApps")
 					return
 				}
-				if zb0022 {
+				if zb0024 {
 					(*z).ApplicationCallTxnFields.ForeignApps = nil
-				} else if (*z).ApplicationCallTxnFields.ForeignApps != nil && cap((*z).ApplicationCallTxnFields.ForeignApps) >= zb0021 {
-					(*z).ApplicationCallTxnFields.ForeignApps = ((*z).ApplicationCallTxnFields.ForeignApps)[:zb0021]
+				} else if (*z).ApplicationCallTxnFields.ForeignApps != nil && cap((*z).ApplicationCallTxnFields.ForeignApps) >= zb0023 {
+					(*z).ApplicationCallTxnFields.ForeignApps = ((*z).ApplicationCallTxnFields.ForeignApps)[:zb0023]
 				} else {
-					(*z).ApplicationCallTxnFields.ForeignApps = make([]basics.AppIndex, zb0021)
+					(*z).ApplicationCallTxnFields.ForeignApps = make([]basics.AppIndex, zb0023)
 				}
 				for zb0004 := range (*z).ApplicationCallTxnFields.ForeignApps {
 					bts, err = (*z).ApplicationCallTxnFields.ForeignApps[zb0004].UnmarshalMsg(bts)
@@ -4764,12 +4824,32 @@ func (z *Transaction) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					return
 				}
 			case "apap":
+				var zb0025 int
+				zb0025, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "ApprovalProgram")
+					return
+				}
+				if zb0025 > config.MaxAppProgramLen {
+					err = msgp.ErrOverflow(uint64(zb0025), uint64(config.MaxAppProgramLen))
+					return
+				}
 				(*z).ApplicationCallTxnFields.ApprovalProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ApprovalProgram)
 				if err != nil {
 					err = msgp.WrapError(err, "ApprovalProgram")
 					return
 				}
 			case "apsu":
+				var zb0026 int
+				zb0026, err = msgp.ReadBytesBytesHeader(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "ClearStateProgram")
+					return
+				}
+				if zb0026 > config.MaxAppProgramLen {
+					err = msgp.ErrOverflow(uint64(zb0026), uint64(config.MaxAppProgramLen))
+					return
+				}
 				(*z).ApplicationCallTxnFields.ClearStateProgram, bts, err = msgp.ReadBytesBytes(bts, (*z).ApplicationCallTxnFields.ClearStateProgram)
 				if err != nil {
 					err = msgp.WrapError(err, "ClearStateProgram")
@@ -4876,6 +4956,11 @@ func (z *TxGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "TxGroupHashes")
 				return
 			}
+			if zb0004 > config.MaxTxGroupSize {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(config.MaxTxGroupSize))
+				err = msgp.WrapError(err, "struct-from-array", "TxGroupHashes")
+				return
+			}
 			if zb0005 {
 				(*z).TxGroupHashes = nil
 			} else if (*z).TxGroupHashes != nil && cap((*z).TxGroupHashes) >= zb0004 {
@@ -4919,6 +5004,11 @@ func (z *TxGroup) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0007 bool
 				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
+					err = msgp.WrapError(err, "TxGroupHashes")
+					return
+				}
+				if zb0006 > config.MaxTxGroupSize {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(config.MaxTxGroupSize))
 					err = msgp.WrapError(err, "TxGroupHashes")
 					return
 				}
