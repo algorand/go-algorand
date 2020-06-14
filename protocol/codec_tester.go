@@ -20,6 +20,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"os"
+	"path"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -84,20 +87,74 @@ func printWarning(warnMsg string) {
 	}
 }
 
-func checkBoundsLimitingTag(objType string, datapath string, structTag string) {
+var testedDatatypesForAllocBound = map[string]bool{}
+var testedDatatypesForAllocBoundMu = deadlock.Mutex{}
+
+func checkBoundsLimitingTag(val reflect.Value, datapath string, structTag string) (hasAllocBound bool) {
 	if structTag == "" {
 		return
 	}
+
+	testedDatatypesForAllocBoundMu.Lock()
+	defer testedDatatypesForAllocBoundMu.Unlock()
+	// make sure we test each datatype only once.
+	if val.Type().Name() == "" {
+		if testedDatatypesForAllocBound[datapath] {
+			hasAllocBound = true
+			return
+		}
+		testedDatatypesForAllocBound[datapath] = true
+	} else {
+		if testedDatatypesForAllocBound[val.Type().Name()] {
+			hasAllocBound = true
+			return
+		}
+		testedDatatypesForAllocBound[val.Type().Name()] = true
+	}
+
+	var objType string
+	if val.Kind() == reflect.Slice {
+		objType = "slice"
+	} else if val.Kind() == reflect.Map {
+		objType = "map"
+	}
+
 	tagsMap := parseStructTags(structTag)
 
-	if _, have := tagsMap["allocbound"]; !have {
-		printWarning(fmt.Sprintf("%s %s does not have an allocbound defined", objType, datapath))
-		return
-	}
 	if tagsMap["allocbound"] == "-" {
 		printWarning(fmt.Sprintf("%s %s have an unbounded allocbound defined", objType, datapath))
 		return
 	}
+	if _, have := tagsMap["allocbound"]; have {
+		hasAllocBound = true
+		return
+	}
+
+	if val.Type().Name() != "" {
+		// does any of the go files in the package directroy has the msgp:allocbound defined for that datatype ?
+		gopath := os.Getenv("GOPATH")
+		packageFilesPath := path.Join(gopath, "src", val.Type().PkgPath())
+		packageFiles := []string{}
+		filepath.Walk(packageFilesPath, func(path string, info os.FileInfo, err error) error {
+			if filepath.Ext(path) == ".go" {
+				packageFiles = append(packageFiles, path)
+			}
+			return nil
+		})
+		for _, packageFile := range packageFiles {
+			fileBytes, err := ioutil.ReadFile(packageFile)
+			if err != nil {
+				continue
+			}
+			if strings.Index(string(fileBytes), fmt.Sprintf("msgp:allocbound %s", val.Type().Name())) != -1 {
+				// message pack alloc bound definition was found.
+				hasAllocBound = true
+				return
+			}
+		}
+	}
+	printWarning(fmt.Sprintf("%s %s does not have an allocbound defined - %s", objType, datapath, val.Type().PkgPath()))
+	return
 }
 
 func randomizeValue(v reflect.Value, datapath string, tag string) error {
@@ -144,8 +201,11 @@ func randomizeValue(v reflect.Value, datapath string, tag string) error {
 			}
 		}
 	case reflect.Slice:
-		checkBoundsLimitingTag("slice", datapath, tag)
+		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
 		l := rand.Int() % 32
+		if hasAllocBound {
+			l = 1
+		}
 		s := reflect.MakeSlice(v.Type(), l, l)
 		for i := 0; i < l; i++ {
 			err := randomizeValue(s.Index(i), fmt.Sprintf("%s/%d", datapath, i), "")
@@ -157,10 +217,13 @@ func randomizeValue(v reflect.Value, datapath string, tag string) error {
 	case reflect.Bool:
 		v.SetBool(rand.Uint32()%2 == 0)
 	case reflect.Map:
-		checkBoundsLimitingTag("map", datapath, tag)
+		hasAllocBound := checkBoundsLimitingTag(v, datapath, tag)
 		mt := v.Type()
 		v.Set(reflect.MakeMap(mt))
 		l := rand.Int() % 32
+		if hasAllocBound {
+			l = 1
+		}
 		for i := 0; i < l; i++ {
 			mk := reflect.New(mt.Key())
 			err := randomizeValue(mk.Elem(), fmt.Sprintf("%s/%d", datapath, i), "")
