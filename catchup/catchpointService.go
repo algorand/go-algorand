@@ -146,6 +146,9 @@ func (cs *CatchpointCatchupService) Start(ctx context.Context) {
 
 // Abort aborts the catchpoint catchup process
 func (cs *CatchpointCatchupService) Abort() {
+	// In order to abort the catchpoint catchup process, we need to first set the flag of abortCtxFunc, and follow that by canceling the main context.
+	// The order of these calls is crucial : The various stages are blocked on the main context. When that one expires, it uses the abort context to determine
+	// if the cancelation meaning that we want to shut down the process, or aborting the catchpoint catchup completly.
 	cs.abortCtxFunc()
 	cs.cancelCtxFunc()
 }
