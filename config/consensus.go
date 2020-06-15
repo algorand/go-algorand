@@ -313,6 +313,22 @@ var MaxEvalDeltaAccounts int
 // in a StateDelta, used for decoding purposes.
 var MaxStateDeltaKeys int
 
+// MaxLogicSigMaxSize is the largest logical signature appear in any of the supported
+// protocols, used for decoding purposes.
+var MaxLogicSigMaxSize int
+
+// MaxTxnNoteBytes is the largest supported nodes field array size supported by any
+// of the consensus protocols. used for decoding purposes.
+var MaxTxnNoteBytes int
+
+// MaxTxGroupSize is the largest supported number of transactions per transaction group supported by any
+// of the consensus protocols. used for decoding purposes.
+var MaxTxGroupSize int
+
+// MaxAppProgramLen is the largest supported app program size supported by any
+// of the consensus protocols. used for decoding purposes.
+var MaxAppProgramLen int
+
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -335,6 +351,11 @@ func checkSetAllocBounds(p ConsensusParams) {
 	// executed TEAL instructions should be fine (order of ~1000)
 	checkSetMax(p.MaxAppProgramLen, &MaxStateDeltaKeys)
 	checkSetMax(p.MaxAppProgramLen, &MaxEvalDeltaAccounts)
+
+	checkSetMax(p.MaxAppProgramLen, &MaxAppProgramLen)
+	checkSetMax(int(p.LogicSigMaxSize), &MaxLogicSigMaxSize)
+	checkSetMax(p.MaxTxnNoteBytes, &MaxTxnNoteBytes)
+	checkSetMax(p.MaxTxGroupSize, &MaxTxGroupSize)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -399,6 +420,10 @@ func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 	}
 	if newConsensus != nil {
 		Consensus = newConsensus
+		// Set allocation limits
+		for _, p := range Consensus {
+			checkSetAllocBounds(p)
+		}
 	}
 	return nil
 }

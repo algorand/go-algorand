@@ -94,7 +94,7 @@ type Header struct {
 	Fee         basics.MicroAlgos `codec:"fee"`
 	FirstValid  basics.Round      `codec:"fv"`
 	LastValid   basics.Round      `codec:"lv"`
-	Note        []byte            `codec:"note"` // Uniqueness or app-level data about txn
+	Note        []byte            `codec:"note,allocbound=config.MaxTxnNoteBytes"` // Uniqueness or app-level data about txn
 	GenesisID   string            `codec:"gen"`
 	GenesisHash crypto.Digest     `codec:"gh"`
 
@@ -180,7 +180,7 @@ type TxGroup struct {
 	// together, sequentially, in a block in order for the group to be
 	// valid.  Each hash in the list is a hash of a transaction with
 	// the `Group` field omitted.
-	TxGroupHashes []crypto.Digest `codec:"txlist,allocbound=-"`
+	TxGroupHashes []crypto.Digest `codec:"txlist,allocbound=config.MaxTxGroupSize"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
