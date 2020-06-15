@@ -502,6 +502,13 @@ func nilToEmpty(x []byte) []byte {
 	return x
 }
 
+func boolToUint(x bool) uint64 {
+	if x {
+		return 1
+	}
+	return 0
+}
+
 // MaxStackDepth should move to consensus params
 const MaxStackDepth = 1000
 
@@ -1134,11 +1141,7 @@ func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, fie
 	case AssetBalance:
 		sv.Uint = holding.Amount
 	case AssetFrozen:
-		if holding.Frozen {
-			sv.Uint = 1
-		} else {
-			sv.Uint = 0
-		}
+		sv.Uint = boolToUint(holding.Frozen)
 	default:
 		err = fmt.Errorf("invalid asset holding field %d", field)
 		return
@@ -1159,14 +1162,10 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field 
 	case AssetDecimals:
 		sv.Uint = uint64(params.Decimals)
 	case AssetDefaultFrozen:
-		if params.DefaultFrozen {
-			sv.Uint = 1
-		} else {
-			sv.Uint = 0
-		}
+		sv.Uint = boolToUint(params.DefaultFrozen)
 	case AssetUnitName:
 		sv.Bytes = []byte(params.UnitName)
-	case AssetAssetName:
+	case AssetName:
 		sv.Bytes = []byte(params.AssetName)
 	case AssetURL:
 		sv.Bytes = []byte(params.URL)
@@ -1275,8 +1274,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 			err = fmt.Errorf("invalid ApplicationArgs index %d", arrayFieldIdx)
 			return
 		}
-		sv.Bytes = make([]byte, len(txn.ApplicationArgs[arrayFieldIdx]))
-		copy(sv.Bytes, txn.ApplicationArgs[arrayFieldIdx])
+		sv.Bytes = nilToEmpty(txn.ApplicationArgs[arrayFieldIdx])
 	case NumAppArgs:
 		sv.Uint = uint64(len(txn.ApplicationArgs))
 	case Accounts:
@@ -1293,13 +1291,41 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case NumAccounts:
 		sv.Uint = uint64(len(txn.Accounts))
 	case ApprovalProgram:
-		sv.Bytes = make([]byte, len(txn.ApprovalProgram))
-		copy(sv.Bytes, txn.ApprovalProgram)
+		sv.Bytes = nilToEmpty(txn.ApprovalProgram)
 	case ClearStateProgram:
-		sv.Bytes = make([]byte, len(txn.ClearStateProgram))
-		copy(sv.Bytes, txn.ClearStateProgram)
+		sv.Bytes = nilToEmpty(txn.ClearStateProgram)
 	case RekeyTo:
 		sv.Bytes = txn.RekeyTo[:]
+	case ConfigAsset:
+		sv.Uint = uint64(txn.ConfigAsset)
+	case ConfigAssetTotal:
+		sv.Uint = uint64(txn.AssetParams.Total)
+	case ConfigAssetDecimals:
+		sv.Uint = uint64(txn.AssetParams.Decimals)
+	case ConfigAssetDefaultFrozen:
+		sv.Uint = boolToUint(txn.AssetParams.DefaultFrozen)
+	case ConfigAssetUnitName:
+		sv.Bytes = nilToEmpty([]byte(txn.AssetParams.UnitName))
+	case ConfigAssetName:
+		sv.Bytes = nilToEmpty([]byte(txn.AssetParams.AssetName))
+	case ConfigAssetURL:
+		sv.Bytes = nilToEmpty([]byte(txn.AssetParams.URL))
+	case ConfigAssetMetadataHash:
+		sv.Bytes = nilToEmpty(txn.AssetParams.MetadataHash[:])
+	case ConfigAssetManager:
+		sv.Bytes = txn.AssetParams.Manager[:]
+	case ConfigAssetReserve:
+		sv.Bytes = txn.AssetParams.Reserve[:]
+	case ConfigAssetFreeze:
+		sv.Bytes = txn.AssetParams.Freeze[:]
+	case ConfigAssetClawback:
+		sv.Bytes = txn.AssetParams.Clawback[:]
+	case FreezeAsset:
+		sv.Uint = uint64(txn.FreezeAsset)
+	case FreezeAssetAccount:
+		sv.Bytes = txn.FreezeAccount[:]
+	case FreezeAssetFrozen:
+		sv.Uint = boolToUint(txn.AssetFrozen)
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 		return
