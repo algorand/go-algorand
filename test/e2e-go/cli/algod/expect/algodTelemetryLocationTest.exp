@@ -32,7 +32,6 @@ if { [catch {
 } EXCEPTION ] } {
     puts "ERROR in algod test: $EXCEPTION"
 
-    ::Algod::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
     exec rm -d -r -f $TEST_ALGO_DIR
     exit 1
 }
