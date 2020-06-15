@@ -449,6 +449,8 @@ func TestLocalStructTags(t *testing.T) {
 		if field.Tag == "" {
 			require.Failf(t, "Field is missing versioning information", "Field Name: %s", field.Name)
 		}
+		// the field named "Version" is tested separatly in TestLocalVersionField, so we'll be skipping
+		// it on this test.
 		if field.Name == "Version" {
 			continue
 		}
