@@ -4,6 +4,39 @@ package logspec
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[RoundConcluded-0]
+	_ = x[PeriodConcluded-1]
+	_ = x[StepTimeout-2]
+	_ = x[RoundStart-3]
+	_ = x[RoundInterrupted-4]
+	_ = x[RoundWaiting-5]
+	_ = x[ThresholdReached-6]
+	_ = x[BlockAssembled-7]
+	_ = x[BlockCommittable-8]
+	_ = x[ProposalAssembled-9]
+	_ = x[ProposalBroadcast-10]
+	_ = x[ProposalFrozen-11]
+	_ = x[ProposalAccepted-12]
+	_ = x[ProposalRejected-13]
+	_ = x[BlockRejected-14]
+	_ = x[BlockResent-15]
+	_ = x[BlockPipelined-16]
+	_ = x[VoteAttest-17]
+	_ = x[VoteBroadcast-18]
+	_ = x[VoteAccepted-19]
+	_ = x[VoteRejected-20]
+	_ = x[BundleBroadcast-21]
+	_ = x[BundleAccepted-22]
+	_ = x[BundleRejected-23]
+	_ = x[Restored-24]
+	_ = x[Persisted-25]
+	_ = x[numAgreementTypes-26]
+}
+
 const _AgreementType_name = "RoundConcludedPeriodConcludedStepTimeoutRoundStartRoundInterruptedRoundWaitingThresholdReachedBlockAssembledBlockCommittableProposalAssembledProposalBroadcastProposalFrozenProposalAcceptedProposalRejectedBlockRejectedBlockResentBlockPipelinedVoteAttestVoteBroadcastVoteAcceptedVoteRejectedBundleBroadcastBundleAcceptedBundleRejectedRestoredPersistednumAgreementTypes"
 
 var _AgreementType_index = [...]uint16{0, 14, 29, 40, 50, 66, 78, 94, 108, 124, 141, 158, 172, 188, 204, 217, 228, 242, 252, 265, 277, 289, 304, 318, 332, 340, 349, 366}
