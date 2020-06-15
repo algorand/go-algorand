@@ -568,7 +568,8 @@ func (cs *CatchpointCatchupService) abort(originatingErr error) error {
 	}
 	cs.updateNodeCatchupMode(false)
 	// we want to abort the catchpoint catchup process, and the node already reverted to normal operation.
-	// at this point, all we need to do is to abort the run function.
+	// as part of the returning to normal operation, we've re-created our context. This context need to be
+	// canceled so that when we go back to run(), we would exit from there right away.
 	cs.cancelCtxFunc()
 	return outError
 }
