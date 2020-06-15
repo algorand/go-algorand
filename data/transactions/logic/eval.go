@@ -1275,8 +1275,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 			err = fmt.Errorf("invalid ApplicationArgs index %d", arrayFieldIdx)
 			return
 		}
-		sv.Bytes = make([]byte, len(txn.ApplicationArgs[arrayFieldIdx]))
-		copy(sv.Bytes, txn.ApplicationArgs[arrayFieldIdx])
+		sv.Bytes = nilToEmpty(txn.ApplicationArgs[arrayFieldIdx])
 	case NumAppArgs:
 		sv.Uint = uint64(len(txn.ApplicationArgs))
 	case Accounts:
@@ -1293,11 +1292,9 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case NumAccounts:
 		sv.Uint = uint64(len(txn.Accounts))
 	case ApprovalProgram:
-		sv.Bytes = make([]byte, len(txn.ApprovalProgram))
-		copy(sv.Bytes, txn.ApprovalProgram)
+		sv.Bytes = nilToEmpty(txn.ApprovalProgram)
 	case ClearStateProgram:
-		sv.Bytes = make([]byte, len(txn.ClearStateProgram))
-		copy(sv.Bytes, txn.ClearStateProgram)
+		sv.Bytes = nilToEmpty(txn.ClearStateProgram)
 	case RekeyTo:
 		sv.Bytes = txn.RekeyTo[:]
 	default:
