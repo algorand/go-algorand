@@ -85,6 +85,8 @@ jobs:
     - stage: build_release
       os: linux
       name: Ubuntu AMD64 Build
+      before_script:
+        - sudo sysctl -w vm.max_map_count=262144
       script:
         - ./scripts/travis/build_test.sh
     - # same stage, parallel job
