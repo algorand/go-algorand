@@ -56,7 +56,7 @@ func init() {
 	signProgramCmd.Flags().StringVarP(&outFilename, "lsig-out", "o", "", "File to write partial Lsig to")
 	signProgramCmd.MarkFlagRequired("address")
 
-	mergeSigCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Output file for merged transactions")
+	mergeSigCmd.Flags().StringVarP(&outFilename, "out", "o", "", "Output file for merged transactions")
 	mergeSigCmd.MarkFlagRequired("out")
 }
 
@@ -287,9 +287,9 @@ var mergeSigCmd = &cobra.Command{
 			mergedData = append(mergedData, protocol.Encode(&txn)...)
 		}
 
-		err := writeFile(txFilename, mergedData, 0600)
+		err := writeFile(outFilename, mergedData, 0600)
 		if err != nil {
-			reportErrorf(fileWriteError, txFilename, err)
+			reportErrorf(fileWriteError, outFilename, err)
 		}
 	},
 }

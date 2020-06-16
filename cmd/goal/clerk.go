@@ -89,7 +89,7 @@ func init() {
 	sendCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
 	sendCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	sendCmd.Flags().StringVarP(&lease, "lease", "x", "", "Lease value (base64, optional): no transaction may also acquire this lease until lastvalid")
-	sendCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Dump an unsigned tx to the given file. In order to dump a signed transaction, pass -s")
+	sendCmd.Flags().StringVarP(&outFilename, "out", "o", "", "Dump an unsigned tx to the given file. In order to dump a signed transaction, pass -s")
 	sendCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	sendCmd.Flags().StringVarP(&closeToAddress, "close-to", "c", "", "Close account and send remainder to this address")
 	sendCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given authorization address. (Future transactions from this account will need to be signed with the new key.)")
@@ -273,7 +273,7 @@ var sendCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		// -s is invalid without -o
-		if txFilename == "" && sign {
+		if outFilename == "" && sign {
 			reportErrorln(soFlagError)
 		}
 
@@ -370,7 +370,7 @@ var sendCmd = &cobra.Command{
 			}
 			err = verify.LogicSigSanityCheck(&uncheckedTxn, &verify.Context{Params: verify.Params{CurrProto: proto}})
 			if err != nil {
-				reportErrorf("%s: txn[0] error %s", txFilename, err)
+				reportErrorf("%s: txn[0] error %s", outFilename, err)
 			}
 			stx = uncheckedTxn
 		} else if program != nil {
@@ -382,14 +382,14 @@ var sendCmd = &cobra.Command{
 				},
 			}
 		} else {
-			signTx := sign || (txFilename == "")
+			signTx := sign || (outFilename == "")
 			stx, err = createSignedTransaction(client, signTx, dataDir, walletName, payment)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
 		}
 
-		if txFilename == "" {
+		if outFilename == "" {
 			// Broadcast the tx
 			txid, err := client.BroadcastTransaction(stx)
 
@@ -410,7 +410,7 @@ var sendCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeFile(txFilename, protocol.Encode(&stx), 0600)
+			err = writeFile(outFilename, protocol.Encode(&stx), 0600)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
