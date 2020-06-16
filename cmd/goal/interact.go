@@ -28,7 +28,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -602,7 +602,7 @@ var appExecuteCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -637,7 +637,7 @@ var appExecuteCmd = &cobra.Command{
 			}
 		} else {
 			// Broadcast or write transaction to file
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}

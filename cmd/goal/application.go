@@ -382,7 +382,7 @@ var createAppCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -413,7 +413,7 @@ var createAppCmd = &cobra.Command{
 			}
 		} else {
 			// Broadcast or write transaction to file
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -455,7 +455,7 @@ var updateAppCmd = &cobra.Command{
 		}
 
 		// Broadcast or write transaction to file
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -482,7 +482,7 @@ var updateAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -523,7 +523,7 @@ var optInAppCmd = &cobra.Command{
 		}
 
 		// Broadcast or write transaction to file
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -550,7 +550,7 @@ var optInAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -591,7 +591,7 @@ var closeOutAppCmd = &cobra.Command{
 		}
 
 		// Broadcast or write transaction to file
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -618,7 +618,7 @@ var closeOutAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -659,7 +659,7 @@ var clearAppCmd = &cobra.Command{
 		}
 
 		// Broadcast or write transaction to file
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -686,7 +686,7 @@ var clearAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -727,7 +727,7 @@ var callAppCmd = &cobra.Command{
 		}
 
 		// Broadcast or write transaction to file
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -754,7 +754,7 @@ var callAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -795,7 +795,7 @@ var deleteAppCmd = &cobra.Command{
 		}
 
 		// Broadcast or write transaction to file
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -822,7 +822,7 @@ var deleteAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
