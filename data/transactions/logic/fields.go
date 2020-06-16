@@ -203,6 +203,21 @@ var txnFieldSpecs = []txnFieldSpec{
 	{FreezeAssetFrozen, StackUint64, 2},
 }
 
+// TxnaFieldNames are arguments to the 'txna' opcode
+// It is a subset of txn transaction fields so initialized here in-place
+var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String()}
+
+// TxnaFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
+var TxnaFieldTypes = []StackType{
+	txnaFieldSpecByField[ApplicationArgs].ftype,
+	txnaFieldSpecByField[Accounts].ftype,
+}
+
+var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
+	ApplicationArgs: {ApplicationArgs, StackBytes, 2},
+	Accounts:        {Accounts, StackBytes, 2},
+}
+
 // TxnTypeNames is the values of Txn.Type in enum order
 var TxnTypeNames = []string{
 	string(protocol.UnknownTx),
@@ -314,7 +329,7 @@ type AssetHoldingField int
 const (
 	// AssetBalance AssetHolding.Amount
 	AssetBalance AssetHoldingField = iota
-	// AssetIsFrozen AssetHolding.Frozen
+	// AssetFrozen AssetHolding.Frozen
 	AssetFrozen
 	invalidAssetHoldingField
 )
