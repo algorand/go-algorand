@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -383,6 +384,7 @@ var createAppCmd = &cobra.Command{
 		}
 
 		if outFilename == "" {
+			// Broadcast
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -412,10 +414,20 @@ var createAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			// Broadcast or write transaction to file
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-			if err != nil {
-				reportErrorf(err.Error())
+			if dumpForDryrun {
+				// Write dryrun data to file
+				proto, _ := getProto(protoVersion)
+				dr, err := libgoal.MakeDryrunState(client, tx, []transactions.SignedTxn{}, string(proto))
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				writeFile(outFilename, protocol.EncodeJSON(&dr), 0600)
+			} else {
+				// Write transaction to file
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
 			}
 		}
 	},

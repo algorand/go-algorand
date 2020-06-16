@@ -334,6 +334,12 @@ func (client RestClient) AccountInformation(address string) (response v1.Account
 	return
 }
 
+// AccountInformationV2 gets the AccountData associated with the passed address
+func (client RestClient) AccountInformationV2(address string) (response generatedV2.Account, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), nil)
+	return
+}
+
 // Blob represents arbitrary blob of data satisfying v1.RawResponse interface
 type Blob []byte
 

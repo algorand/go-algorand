@@ -22,13 +22,14 @@ import (
 	"path/filepath"
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -649,6 +650,15 @@ func (c *Client) AccountInformation(account string) (resp v1.Account, err error)
 	return
 }
 
+// AccountInformationV2 takes an address and returns its information
+func (c *Client) AccountInformationV2(account string) (resp generatedV2.Account, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AccountInformationV2(account)
+	}
+	return
+}
+
 // AccountData takes an address and returns its basics.AccountData
 func (c *Client) AccountData(account string) (accountData basics.AccountData, err error) {
 	algod, err := c.ensureAlgodClient()
@@ -844,4 +854,84 @@ func (c *Client) ConsensusParams(round uint64) (consensus config.ConsensusParams
 func (c *Client) SetAPIVersionAffinity(algodVersionAffinity algodclient.APIVersion, kmdVersionAffinity kmdclient.APIVersion) {
 	c.algodVersionAffinity = algodVersionAffinity
 	c.kmdVersionAffinity = kmdVersionAffinity
+}
+
+func convertAppParams(paramsIn *v1.AppParams) (appParams basics.AppParams) {
+	appParams.ApprovalProgram = []byte(paramsIn.ApprovalProgram)
+	appParams.ClearStateProgram = []byte(paramsIn.ClearStateProgram)
+	appParams.GlobalStateSchema = basics.StateSchema{
+		NumUint:      paramsIn.GlobalStateSchema.NumUint,
+		NumByteSlice: paramsIn.GlobalStateSchema.NumByteSlice,
+	}
+	appParams.LocalStateSchema = basics.StateSchema{
+		NumUint:      paramsIn.LocalStateSchema.NumUint,
+		NumByteSlice: paramsIn.LocalStateSchema.NumByteSlice,
+	}
+	appParams.GlobalState = make(map[string]basics.TealValue, len(paramsIn.GlobalState))
+	for k, v := range paramsIn.GlobalState {
+		appParams.GlobalState[k] = basics.TealValue{
+			Type:  basics.TealTypeFromString(v.Type),
+			Uint:  v.Uint,
+			Bytes: v.Bytes,
+		}
+	}
+	return
+}
+
+// MakeDryrunState function creates DryrunRequest data structure and serializes it into a file
+func MakeDryrunState(client Client, tx transactions.Transaction, other []transactions.SignedTxn, proto string) (dr v2.DryrunRequest, err error) {
+	txns := []transactions.SignedTxn{{Txn: tx}}
+	txns = append(txns, other...)
+	dr.Txns = txns
+
+	if tx.Type == protocol.ApplicationCallTx {
+		apps := append(tx.ForeignApps, tx.ApplicationID)
+		for _, appIdx := range apps {
+			var appParams basics.AppParams
+			var creator basics.Address
+			// if app create txn then use params from the txn
+			if appIdx == 0 {
+				appParams.ApprovalProgram = tx.ApprovalProgram
+				appParams.ClearStateProgram = tx.ClearStateProgram
+				appParams.GlobalStateSchema = tx.GlobalStateSchema
+				appParams.LocalStateSchema = tx.LocalStateSchema
+				creator = tx.Sender
+			} else {
+				// otherwise need to fetch app state
+				var params v1.AppParams
+				if params, err = client.ApplicationInformation(uint64(tx.ApplicationID)); err != nil {
+					return
+				}
+				appParams = convertAppParams(&params)
+				if creator, err = basics.UnmarshalChecksumAddress(params.Creator); err != nil {
+					return
+				}
+			}
+			dr.Apps = append(dr.Apps, v2.DryrunApp{
+				Creator:  creator,
+				AppIndex: uint64(appIdx),
+				Params:   appParams,
+			})
+		}
+
+		accounts := append(tx.Accounts, tx.Sender)
+		for _, acc := range accounts {
+			var info generatedV2.Account
+			if info, err = client.AccountInformationV2(acc.String()); err != nil {
+				return
+			}
+			dr.Accounts = append(dr.Accounts, info)
+		}
+
+		dr.ProtocolVersion = proto
+		if dr.Round, err = client.CurrentRound(); err != nil {
+			return
+		}
+		var b v1.Block
+		if b, err = client.Block(dr.Round); err != nil {
+			return
+		}
+		dr.LatestTimestamp = b.Timestamp
+	}
+	return
 }
