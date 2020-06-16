@@ -1342,7 +1342,12 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 func opTxn(cx *evalContext) {
 	field := TxnField(uint64(cx.program[cx.pc+1]))
 	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version || field == ApplicationArgs || field == Accounts {
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if ok {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
@@ -1364,7 +1369,8 @@ func opTxna(cx *evalContext) {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
-	if field != ApplicationArgs && field != Accounts {
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
 		cx.err = fmt.Errorf("txna unsupported field %d", field)
 		return
 	}
@@ -1389,7 +1395,12 @@ func opGtxn(cx *evalContext) {
 	tx := &cx.TxnGroup[gtxid].Txn
 	field := TxnField(uint64(cx.program[cx.pc+2]))
 	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version || field == ApplicationArgs || field == Accounts {
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if ok {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
@@ -1422,7 +1433,8 @@ func opGtxna(cx *evalContext) {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
-	if TxnField(field) != ApplicationArgs && TxnField(field) != Accounts {
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
 		cx.err = fmt.Errorf("gtxna unsupported field %d", field)
 		return
 	}
