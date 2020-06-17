@@ -17,6 +17,7 @@
 package v2
 
 import (
+	"bytes"
 	"encoding/base64"
 	"strconv"
 	"strings"
@@ -656,6 +657,65 @@ func TestDryrunLocalCheck(t *testing.T) {
 	if t.Failed() {
 		logResponse(t, &response)
 	}
+}
+func TestDryrunEncodeDecode(t *testing.T) {
+	t.Parallel()
+
+	var dr DryrunRequest
+	dr.Txns = []transactions.SignedTxn{
+		{
+			Txn: transactions.Transaction{
+				Type: protocol.ApplicationCallTx,
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID: 1,
+					ApplicationArgs: [][]byte{
+						[]byte("check"),
+						[]byte("bar"),
+					},
+				},
+			},
+		},
+	}
+	dr.Apps = []DryrunApp{
+		{
+			AppIndex: 1,
+			Params: basics.AppParams{
+				ApprovalProgram: localStateCheckProg,
+			},
+		},
+	}
+	localv := make(generated.TealKeyValueStore, 1)
+	localv[0] = generated.TealKeyValue{
+		Key:   "foo",
+		Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
+	}
+
+	dr.Accounts = []generated.Account{
+		{
+			Address: basics.Address{}.String(),
+			AppsLocalState: &[]generated.ApplicationLocalStates{
+				{
+					AppIndex: 1,
+					State: generated.ApplicationLocalState{
+						KeyValue: localv,
+					},
+				},
+			},
+		},
+	}
+
+	encoded := protocol.EncodeJSON(&dr)
+	var decoded DryrunRequest
+	err := protocol.DecodeJSON(encoded, &decoded)
+	require.NoError(t, err)
+	require.Equal(t, dr, decoded)
+
+	buf := bytes.NewBuffer(encoded)
+	dec := protocol.NewJSONDecoder(buf)
+	decoded = DryrunRequest{}
+	err = dec.Decode(&decoded)
+	require.NoError(t, err)
+	require.Equal(t, dr, decoded)
 }
 
 func TestDryrunMakeLedger(t *testing.T) {

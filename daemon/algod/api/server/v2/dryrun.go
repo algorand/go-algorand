@@ -59,21 +59,21 @@ type DryrunSource struct {
 // Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.
 type DryrunRequest struct {
 	// Txns is transactions to simulate
-	Txns []transactions.SignedTxn `codec:"txns,omitempty"`
+	Txns []transactions.SignedTxn `json:"txns,omitempty"`
 
 	// Optional, useful for testing Application Call txns.
-	Accounts []generated.Account `codec:"accounts,omitempty"`
+	Accounts []generated.Account `json:"accounts,omitempty"`
 
-	Apps []DryrunApp `codec:"apps,omitempty"`
+	Apps []DryrunApp `json:"apps,omitempty"`
 
 	// ProtocolVersion specifies a specific version string to operate under, otherwise whatever the current protocol of the network this algod is running in.
-	ProtocolVersion string `codec:"proto,omitempty"`
+	ProtocolVersion string `json:"proto,omitempty"`
 
 	// Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.
-	Round uint64 `codec:"round,omitempty"`
+	Round uint64 `json:"round,omitempty"`
 
 	// LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.
-	LatestTimestamp int64 `codec:"latest,omitempty"`
+	LatestTimestamp int64 `json:"latest,omitempty"`
 
 	Sources []DryrunSource
 }
