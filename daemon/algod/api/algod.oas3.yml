@@ -604,6 +604,11 @@
             },
             "type": "array"
           },
+          "auth-addr": {
+            "description": "\\[spend\\] the address against which signing should be checked. If empty, the address of the current account is used. This field can be updated in any transaction by setting the RekeyTo field.",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
           "created-assets": {
             "description": "\\[apar\\] parameters of assets created by this account.\n\nNote: the raw account uses `map[int] -> Asset` for this type.",
             "items": {
