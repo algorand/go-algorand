@@ -24,7 +24,6 @@ import (
 
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
-
 )
 
 type deadManWatcher struct {
