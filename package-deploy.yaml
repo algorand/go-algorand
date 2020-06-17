@@ -65,12 +65,12 @@ tasks:
   - task: s3.BucketCopy
     name: deb
     src: s3://algorand-staging/releases/$CHANNEL/$VERSION/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb
-    dest: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
+    dest: /projects/go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE
 
   - task: s3.BucketCopy
     name: rpm
     src: s3://algorand-staging/releases/$CHANNEL/$VERSION/algorand-${VERSION}-1.${ARCH_BIT}.rpm
-    dest: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
+    dest: /projects/go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE
 
   - task: s3.BucketCopy
     name: gnupg
@@ -84,13 +84,13 @@ tasks:
 
   - task: s3.BucketCopy
     name: deploy-dev-deb-repo
-    src: s3://algorand-staging/releases/${CHANNEL}/${VERSION}
-    dest: s3://algorand-dev-deb-repo/releases/${CHANNEL}/${VERSION}
+    src: s3://algorand-staging/releases/$CHANNEL/$VERSION
+    dest: s3://algorand-dev-deb-repo/releases/$CHANNEL/$VERSION
 
   - task: s3.BucketCopy
     name: deploy-rpm-repo
     src: /root/rpmrepo
-    dest: s3://algorand-releases/rpm/${CHANNEL}/${VERSION}
+    dest: s3://algorand-releases/rpm/stable
 
 jobs:
   package-deploy:
@@ -125,5 +125,5 @@ jobs:
 
   package-deploy-rpm-repo:
     tasks:
-      - s3.BucketCopy.rpm-repo
+      - s3.BucketCopy.deploy-rpm-repo
 
