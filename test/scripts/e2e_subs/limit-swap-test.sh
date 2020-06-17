@@ -68,7 +68,7 @@ ${gcmd} asset send --assetid ${ASSET_ID} -f ${ACCOUNT} -t ${ACCOUNT_ASSET_TRADER
 
 ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 while [ $ROUND -lt $TIMEOUT_ROUND ]; do
-    goal node wait
+    goal node wait --waittime 30
     ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 done
 
