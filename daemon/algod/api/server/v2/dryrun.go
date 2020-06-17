@@ -310,23 +310,22 @@ func (dl *dryrunLedger) ConsensusParams() config.ConsensusParams {
 	return *dl.proto
 }
 
-func makeAppLedger(dl *dryrunLedger, txnIndex int) (l logic.LedgerForLogic, err error) {
-	dr := dl.dr
-	accounts := make([]basics.Address, 1+len(dr.Txns[txnIndex].Txn.Accounts))
-	accounts[0] = dr.Txns[txnIndex].Txn.Sender
-	for i, addr := range dr.Txns[txnIndex].Txn.Accounts {
+func makeAppLedger(dl *dryrunLedger, txn *transactions.Transaction, appIdx basics.AppIndex) (l logic.LedgerForLogic, err error) {
+	accounts := make([]basics.Address, 1+len(txn.Accounts))
+	accounts[0] = txn.Sender
+	for i, addr := range txn.Accounts {
 		accounts[i+1] = addr
 	}
-	apps := make([]basics.AppIndex, 1+len(dr.Txns[txnIndex].Txn.ForeignApps))
-	apps[0] = dr.Txns[txnIndex].Txn.ApplicationID
-	for i, appid := range dr.Txns[txnIndex].Txn.ForeignApps {
+	apps := make([]basics.AppIndex, 1+len(txn.ForeignApps))
+	apps[0] = appIdx
+	for i, appid := range txn.ForeignApps {
 		apps[i+1] = appid
 	}
 	globals := ledger.AppTealGlobals{
 		CurrentRound:    basics.Round(dl.dr.Round),
 		LatestTimestamp: dl.dr.LatestTimestamp,
 	}
-	return ledger.MakeDebugAppLedger(dl, accounts, apps, dr.Txns[txnIndex].Txn.ApplicationID, globals)
+	return ledger.MakeDebugAppLedger(dl, accounts, apps, appIdx, globals)
 }
 
 // DryrunTxnResult contains any LogicSig or ApplicationCall program debug information and state updates from a dryrun.
@@ -369,7 +368,6 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 			TxnGroup:   dr.Txns,
 			GroupIndex: ti,
 			//Logger: nil, // TODO: capture logs, send them back
-			//Ledger: l,
 		}
 		var result *DryrunTxnResult
 		if len(stxn.Lsig.Logic) > 0 {
@@ -390,17 +388,25 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 			result.LogicSigMessages = messages
 		}
 		if stxn.Txn.Type == protocol.ApplicationCallTx {
-			l, err := makeAppLedger(&dl, ti)
+			appIdx := stxn.Txn.ApplicationID
+			if appIdx == 0 {
+				creator := stxn.Txn.Sender
+				// check and use the first entry in dr.Apps
+				if len(dr.Apps) > 0 && dr.Apps[0].Creator == creator {
+					appIdx = basics.AppIndex(dr.Apps[0].AppIndex)
+				}
+			}
+
+			l, err := makeAppLedger(&dl, &stxn.Txn, appIdx)
 			if err != nil {
 				response.Error = err.Error()
 				return
 			}
 			ep.Ledger = l
-			appid := stxn.Txn.ApplicationID
 			var app basics.AppParams
 			ok := false
 			for _, appt := range dr.Apps {
-				if appt.AppIndex == uint64(appid) {
+				if appt.AppIndex == uint64(appIdx) {
 					app = appt.Params
 					ok = true
 					break
@@ -412,7 +418,7 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 			}
 			if !ok {
 				messages = make([]string, 1)
-				messages[0] = fmt.Sprintf("uploaded state did not include app id %d referenced in txn[%d]", appid, ti)
+				messages[0] = fmt.Sprintf("uploaded state did not include app id %d referenced in txn[%d]", appIdx, ti)
 			} else {
 				var debug dryrunDebugReceiver
 				ep.Debugger = &debug

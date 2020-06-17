@@ -878,6 +878,8 @@ func convertAppParams(paramsIn *v1.AppParams) (appParams basics.AppParams) {
 	return
 }
 
+const defaultAppIdx = 1380011588
+
 // MakeDryrunState function creates DryrunRequest data structure and serializes it into a file
 func MakeDryrunState(client Client, tx transactions.Transaction, other []transactions.SignedTxn, proto string) (dr v2.DryrunRequest, err error) {
 	txns := []transactions.SignedTxn{{Txn: tx}}
@@ -885,7 +887,8 @@ func MakeDryrunState(client Client, tx transactions.Transaction, other []transac
 	dr.Txns = txns
 
 	if tx.Type == protocol.ApplicationCallTx {
-		apps := append(tx.ForeignApps, tx.ApplicationID)
+		apps := []basics.AppIndex{tx.ApplicationID}
+		apps = append(apps, tx.ForeignApps...)
 		for _, appIdx := range apps {
 			var appParams basics.AppParams
 			var creator basics.Address
@@ -896,6 +899,8 @@ func MakeDryrunState(client Client, tx transactions.Transaction, other []transac
 				appParams.GlobalStateSchema = tx.GlobalStateSchema
 				appParams.LocalStateSchema = tx.LocalStateSchema
 				creator = tx.Sender
+				// zero is not acceptable by ledger in dryrun/debugger
+				appIdx = defaultAppIdx
 			} else {
 				// otherwise need to fetch app state
 				var params v1.AppParams

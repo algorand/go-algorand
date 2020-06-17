@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
@@ -118,8 +119,10 @@ func logResponse(t *testing.T, response *DryrunResponse) {
 	}
 }
 
-func TestDryunLogicSig(t *testing.T) {
+func TestDryrunLogicSig(t *testing.T) {
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
+	t.Parallel()
+
 	var dr DryrunRequest
 	var proto config.ConsensusParams
 	var response DryrunResponse
@@ -128,7 +131,7 @@ func TestDryunLogicSig(t *testing.T) {
 	proto.LogicSigMaxCost = 1000
 
 	dr.Txns = []transactions.SignedTxn{
-		transactions.SignedTxn{
+		{
 			Lsig: transactions.LogicSig{
 				Logic: unB64("AiABASI="),
 			},
@@ -142,8 +145,10 @@ func TestDryunLogicSig(t *testing.T) {
 	}
 }
 
-func TestDryunLogicSigSource(t *testing.T) {
+func TestDryrunLogicSigSource(t *testing.T) {
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
+	t.Parallel()
+
 	var dr DryrunRequest
 	var proto config.ConsensusParams
 	var response DryrunResponse
@@ -151,11 +156,9 @@ func TestDryunLogicSigSource(t *testing.T) {
 	proto.LogicSigVersion = 2
 	proto.LogicSigMaxCost = 1000
 
-	dr.Txns = []transactions.SignedTxn{
-		transactions.SignedTxn{},
-	}
+	dr.Txns = []transactions.SignedTxn{{}}
 	dr.Sources = []DryrunSource{
-		DryrunSource{
+		{
 			Source:    "int 1",
 			FieldName: "lsig",
 			TxnIndex:  0,
@@ -362,8 +365,10 @@ func checkAppCallPass(t *testing.T, response *DryrunResponse) {
 	}
 }
 
-func TestDryunGlobal1(t *testing.T) {
+func TestDryrunGlobal1(t *testing.T) {
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
+	t.Parallel()
+
 	var dr DryrunRequest
 	var proto config.ConsensusParams
 	var response DryrunResponse
@@ -372,7 +377,7 @@ func TestDryunGlobal1(t *testing.T) {
 	proto.LogicSigMaxCost = 1000
 
 	dr.Txns = []transactions.SignedTxn{
-		transactions.SignedTxn{
+		{
 			Txn: transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -387,7 +392,7 @@ func TestDryunGlobal1(t *testing.T) {
 	app1gs := make(map[string]basics.TealValue)
 	app1gs["foo"] = basics.TealValue{Type: basics.TealBytesType, Bytes: "bar"}
 	dr.Apps = []DryrunApp{
-		DryrunApp{
+		{
 			AppIndex: 1,
 			Params: basics.AppParams{
 				ApprovalProgram: globalTestProgram,
@@ -402,8 +407,10 @@ func TestDryunGlobal1(t *testing.T) {
 	}
 }
 
-func TestDryunGlobal2(t *testing.T) {
+func TestDryrunGlobal2(t *testing.T) {
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
+	t.Parallel()
+
 	var dr DryrunRequest
 	var proto config.ConsensusParams
 	var response DryrunResponse
@@ -412,7 +419,7 @@ func TestDryunGlobal2(t *testing.T) {
 	proto.LogicSigMaxCost = 1000
 
 	dr.Txns = []transactions.SignedTxn{
-		transactions.SignedTxn{
+		{
 			Txn: transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
@@ -428,7 +435,7 @@ func TestDryunGlobal2(t *testing.T) {
 	app1gs := make(map[string]basics.TealValue)
 	app1gs["foo"] = basics.TealValue{Type: basics.TealBytesType, Bytes: "bar"}
 	dr.Apps = []DryrunApp{
-		DryrunApp{
+		{
 			AppIndex: 1,
 			Params: basics.AppParams{
 				ApprovalProgram: globalTestProgram,
@@ -450,8 +457,10 @@ func TestDryunGlobal2(t *testing.T) {
 	}
 }
 
-func TestDryunLocal1(t *testing.T) {
+func TestDryrunLocal1(t *testing.T) {
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
+	t.Parallel()
+
 	var dr DryrunRequest
 	var proto config.ConsensusParams
 	var response DryrunResponse
@@ -513,8 +522,10 @@ func TestDryunLocal1(t *testing.T) {
 	}
 }
 
-func TestDryunLocal1A(t *testing.T) {
+func TestDryrunLocal1A(t *testing.T) {
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
+	t.Parallel()
+
 	var dr DryrunRequest
 	var proto config.ConsensusParams
 	var response DryrunResponse
@@ -581,8 +592,9 @@ func TestDryunLocal1A(t *testing.T) {
 	}
 }
 
-func TestDryunLocalCheck(t *testing.T) {
+func TestDryrunLocalCheck(t *testing.T) {
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
+	t.Parallel()
 	var dr DryrunRequest
 	var proto config.ConsensusParams
 	var response DryrunResponse
@@ -644,4 +656,47 @@ func TestDryunLocalCheck(t *testing.T) {
 	if t.Failed() {
 		logResponse(t, &response)
 	}
+}
+
+func TestDryrunMakeLedger(t *testing.T) {
+	t.Parallel()
+
+	var dr DryrunRequest
+	var proto config.ConsensusParams
+
+	proto.LogicSigVersion = 2
+	proto.LogicSigMaxCost = 1000
+
+	sender, err := basics.UnmarshalChecksumAddress("UAPJE355K7BG7RQVMTZOW7QW4ICZJEIC3RZGYG5LSHZ65K6LCNFPJDSR7M")
+	require.NoError(t, err)
+
+	dr.Txns = []transactions.SignedTxn{
+		{
+			Txn: transactions.Transaction{
+				Header: transactions.Header{Sender: sender},
+				Type:   protocol.ApplicationCallTx,
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID: 0,
+					ApplicationArgs: [][]byte{
+						[]byte("check"),
+						[]byte("bar"),
+					},
+				},
+			},
+		},
+	}
+	dr.Apps = []DryrunApp{
+		{
+			AppIndex: 1,
+			Creator:  sender,
+			Params: basics.AppParams{
+				ApprovalProgram: localStateCheckProg,
+			},
+		},
+	}
+	dl := dryrunLedger{dr: &dr, proto: &proto}
+	err = dl.init()
+	require.NoError(t, err)
+	_, err = makeAppLedger(&dl, &dr.Txns[0].Txn, 1)
+	require.NoError(t, err)
 }
