@@ -730,7 +730,11 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 		return errors.New("txna expects two arguments")
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
-	if !ok || fs.field != ApplicationArgs && fs.field != Accounts {
+	if !ok {
+		return fmt.Errorf("txna unknown arg %s", args[0])
+	}
+	_, ok = txnaFieldSpecByField[fs.field]
+	if !ok {
 		return fmt.Errorf("txna unknown arg %s", args[0])
 	}
 	if fs.version > ops.Version {
@@ -782,7 +786,11 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 		return err
 	}
 	fs, ok := txnFieldSpecByName[args[1]]
-	if !ok || fs.field != ApplicationArgs && fs.field != Accounts {
+	if !ok {
+		return fmt.Errorf("gtxna unknown arg %s", args[1])
+	}
+	_, ok = txnaFieldSpecByField[fs.field]
+	if !ok {
 		return fmt.Errorf("gtxna unknown arg %s", args[1])
 	}
 	if fs.version > ops.Version {

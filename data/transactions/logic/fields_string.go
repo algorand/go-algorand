@@ -41,12 +41,27 @@ func _() {
 	_ = x[ApprovalProgram-30]
 	_ = x[ClearStateProgram-31]
 	_ = x[RekeyTo-32]
-	_ = x[invalidTxnField-33]
+	_ = x[ConfigAsset-33]
+	_ = x[ConfigAssetTotal-34]
+	_ = x[ConfigAssetDecimals-35]
+	_ = x[ConfigAssetDefaultFrozen-36]
+	_ = x[ConfigAssetUnitName-37]
+	_ = x[ConfigAssetName-38]
+	_ = x[ConfigAssetURL-39]
+	_ = x[ConfigAssetMetadataHash-40]
+	_ = x[ConfigAssetManager-41]
+	_ = x[ConfigAssetReserve-42]
+	_ = x[ConfigAssetFreeze-43]
+	_ = x[ConfigAssetClawback-44]
+	_ = x[FreezeAsset-45]
+	_ = x[FreezeAssetAccount-46]
+	_ = x[FreezeAssetFrozen-47]
+	_ = x[invalidTxnField-48]
 }
 
-const _TxnField_name = "SenderFeeFirstValidFirstValidTimeLastValidNoteLeaseReceiverAmountCloseRemainderToVotePKSelectionPKVoteFirstVoteLastVoteKeyDilutionTypeTypeEnumXferAssetAssetAmountAssetSenderAssetReceiverAssetCloseToGroupIndexTxIDApplicationIDOnCompletionApplicationArgsNumAppArgsAccountsNumAccountsApprovalProgramClearStateProgramRekeyToinvalidTxnField"
+const _TxnField_name = "SenderFeeFirstValidFirstValidTimeLastValidNoteLeaseReceiverAmountCloseRemainderToVotePKSelectionPKVoteFirstVoteLastVoteKeyDilutionTypeTypeEnumXferAssetAssetAmountAssetSenderAssetReceiverAssetCloseToGroupIndexTxIDApplicationIDOnCompletionApplicationArgsNumAppArgsAccountsNumAccountsApprovalProgramClearStateProgramRekeyToConfigAssetConfigAssetTotalConfigAssetDecimalsConfigAssetDefaultFrozenConfigAssetUnitNameConfigAssetNameConfigAssetURLConfigAssetMetadataHashConfigAssetManagerConfigAssetReserveConfigAssetFreezeConfigAssetClawbackFreezeAssetFreezeAssetAccountFreezeAssetFrozeninvalidTxnField"
 
-var _TxnField_index = [...]uint16{0, 6, 9, 19, 33, 42, 46, 51, 59, 65, 81, 87, 98, 107, 115, 130, 134, 142, 151, 162, 173, 186, 198, 208, 212, 225, 237, 252, 262, 270, 281, 296, 313, 320, 335}
+var _TxnField_index = [...]uint16{0, 6, 9, 19, 33, 42, 46, 51, 59, 65, 81, 87, 98, 107, 115, 130, 134, 142, 151, 162, 173, 186, 198, 208, 212, 225, 237, 252, 262, 270, 281, 296, 313, 320, 331, 347, 366, 390, 409, 424, 438, 461, 479, 497, 514, 533, 544, 562, 579, 594}
 
 func (i TxnField) String() string {
 	if i < 0 || i >= TxnField(len(_TxnField_index)-1) {
@@ -87,7 +102,7 @@ func _() {
 	_ = x[AssetDecimals-1]
 	_ = x[AssetDefaultFrozen-2]
 	_ = x[AssetUnitName-3]
-	_ = x[AssetAssetName-4]
+	_ = x[AssetName-4]
 	_ = x[AssetURL-5]
 	_ = x[AssetMetadataHash-6]
 	_ = x[AssetManager-7]
@@ -97,9 +112,9 @@ func _() {
 	_ = x[invalidAssetParamsField-11]
 }
 
-const _AssetParamsField_name = "AssetTotalAssetDecimalsAssetDefaultFrozenAssetUnitNameAssetAssetNameAssetURLAssetMetadataHashAssetManagerAssetReserveAssetFreezeAssetClawbackinvalidAssetParamsField"
+const _AssetParamsField_name = "AssetTotalAssetDecimalsAssetDefaultFrozenAssetUnitNameAssetNameAssetURLAssetMetadataHashAssetManagerAssetReserveAssetFreezeAssetClawbackinvalidAssetParamsField"
 
-var _AssetParamsField_index = [...]uint8{0, 10, 23, 41, 54, 68, 76, 93, 105, 117, 128, 141, 164}
+var _AssetParamsField_index = [...]uint8{0, 10, 23, 41, 54, 63, 71, 88, 100, 112, 123, 136, 159}
 
 func (i AssetParamsField) String() string {
 	if i < 0 || i >= AssetParamsField(len(_AssetParamsField_index)-1) {

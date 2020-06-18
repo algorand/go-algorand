@@ -678,6 +678,61 @@ int 1                   // ret 1
 	}
 }
 
+func TestPluswImpl(t *testing.T) {
+	t.Parallel()
+	carry, sum := opPluswImpl(1, 2)
+	require.Equal(t, uint64(0), carry)
+	require.Equal(t, uint64(3), sum)
+
+	carry, sum = opPluswImpl(0xFFFFFFFFFFFFFFFD, 0x45)
+	require.Equal(t, uint64(1), carry)
+	require.Equal(t, uint64(0x42), sum)
+
+	carry, sum = opPluswImpl(0, 0)
+	require.Equal(t, uint64(0), carry)
+	require.Equal(t, uint64(0), sum)
+
+	carry, sum = opPluswImpl((1<<64)-1, (1<<64)-1)
+	require.Equal(t, uint64(1), carry)
+	require.Equal(t, uint64((1<<64)-2), sum)
+}
+
+func TestPlusw(t *testing.T) {
+	t.Parallel()
+	// add two numbers, ensure sum is 0x42 and carry is 0x1
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			program, err := AssembleStringWithVersion(`int 0xFFFFFFFFFFFFFFFF
+int 0x43
+plusw
+int 0x42  // compare sum (top of the stack)
+==
+bnz continue
+err
+continue:
+int 1                   // compare carry
+==
+bnz done
+err
+done:
+int 1                   // ret 1
+`, v)
+			require.NoError(t, err)
+			cost, err := Check(program, defaultEvalParams(nil, nil))
+			require.NoError(t, err)
+			require.True(t, cost < 1000)
+			sb := strings.Builder{}
+			pass, err := Eval(program, defaultEvalParams(&sb, nil))
+			if !pass {
+				t.Log(hex.EncodeToString(program))
+				t.Log(sb.String())
+			}
+			require.True(t, pass)
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestDivZero(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
@@ -1433,7 +1488,7 @@ byte 0x706179
 ==
 &&
 txn NumAppArgs
-int 2
+int 8
 ==
 &&
 txna Accounts 0
@@ -1460,6 +1515,66 @@ arg 10
 &&
 txn RekeyTo
 txna ApplicationArgs 1
+==
+&&
+txn ConfigAsset
+int 33
+==
+&&
+txn ConfigAssetTotal
+int 100
+==
+&&
+txn ConfigAssetDecimals
+int 2
+==
+&&
+txn ConfigAssetDefaultFrozen
+int 1
+==
+&&
+txn ConfigAssetUnitName
+byte "tok"
+==
+&&
+txn ConfigAssetName
+byte "a_super_coin"
+==
+&&
+txn ConfigAssetURL
+byte "http://algorand.com"
+==
+&&
+txn ConfigAssetMetadataHash
+txna ApplicationArgs 2
+==
+&&
+txn ConfigAssetManager
+txna ApplicationArgs 3
+==
+&&
+txn ConfigAssetReserve
+txna ApplicationArgs 4
+==
+&&
+txn ConfigAssetFreeze
+txna ApplicationArgs 5
+==
+&&
+txn ConfigAssetClawback
+txna ApplicationArgs 6
+==
+&&
+txn FreezeAsset
+int 34
+==
+&&
+txn FreezeAssetAccount
+txna ApplicationArgs 7
+==
+&&
+txn FreezeAssetFrozen
+int 1
 ==
 &&
 `
@@ -1490,11 +1605,40 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.ApplicationID = basics.AppIndex(123)
 	txn.Txn.Accounts = make([]basics.Address, 1)
 	txn.Txn.Accounts[0] = txn.Txn.Receiver
+	rekeyToAddr := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui05")
+	metadata := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeuiHH")
+	managerAddr := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui06")
+	reserveAddr := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui07")
+	freezeAddr := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui08")
+	clawbackAddr := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui09")
+	freezeAccAddr := []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui10")
 	txn.Txn.ApplicationArgs = [][]byte{
 		[]byte(protocol.PaymentTx),
-		[]byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui05"),
+		rekeyToAddr,
+		metadata,
+		managerAddr,
+		reserveAddr,
+		freezeAddr,
+		clawbackAddr,
+		freezeAccAddr,
 	}
-	copy(txn.Txn.RekeyTo[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui05"))
+	copy(txn.Txn.RekeyTo[:], rekeyToAddr)
+	txn.Txn.ConfigAsset = 33
+	txn.Txn.AssetParams.Total = 100
+	txn.Txn.AssetParams.Decimals = 2
+	txn.Txn.AssetParams.DefaultFrozen = true
+	txn.Txn.AssetParams.UnitName = "tok"
+	txn.Txn.AssetParams.AssetName = "a_super_coin"
+	txn.Txn.AssetParams.URL = "http://algorand.com"
+	txn.Txn.AssetParams.UnitName = "tok"
+	copy(txn.Txn.AssetParams.MetadataHash[:], metadata)
+	copy(txn.Txn.AssetParams.Manager[:], managerAddr)
+	copy(txn.Txn.AssetParams.Reserve[:], reserveAddr)
+	copy(txn.Txn.AssetParams.Freeze[:], freezeAddr)
+	copy(txn.Txn.AssetParams.Clawback[:], clawbackAddr)
+	txn.Txn.FreezeAsset = 34
+	copy(txn.Txn.FreezeAccount[:], freezeAccAddr)
+	txn.Txn.AssetFrozen = true
 	return txn
 }
 
@@ -1701,7 +1845,7 @@ byte 0x706179
 ==
 &&
 gtxn 0 NumAppArgs
-int 2
+int 8
 ==
 &&
 gtxna 0 Accounts 0
@@ -3497,6 +3641,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 		"bz":                "bz l\nl:",
 		"b":                 "b l\nl:",
 		"return":            "int 1\nreturn",
+		"plusw":             "int 0\nint 1\nplusw",
 		"dup2":              "dup2",
 		"concat":            "byte 0x41\ndup\nconcat",
 		"substring":         "byte 0x41\nsubstring 0 1",

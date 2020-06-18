@@ -927,7 +927,7 @@ byte 0x414c474f
 &&
 int 1
 int 55
-asset_params_get AssetAssetName
+asset_params_get AssetName
 !
 bnz error
 len

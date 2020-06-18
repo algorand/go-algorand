@@ -502,6 +502,13 @@ func nilToEmpty(x []byte) []byte {
 	return x
 }
 
+func boolToUint(x bool) uint64 {
+	if x {
+		return 1
+	}
+	return 0
+}
+
 // MaxStackDepth should move to consensus params
 const MaxStackDepth = 1000
 
@@ -680,6 +687,22 @@ func opPlus(cx *evalContext) {
 		return
 	}
 	cx.stack = cx.stack[:last]
+}
+
+func opPluswImpl(x, y uint64) (carry uint64, sum uint64) {
+	sum = x + y
+	if sum < x {
+		carry = 1
+	}
+	return
+}
+
+func opPlusw(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	carry, sum := opPluswImpl(cx.stack[prev].Uint, cx.stack[last].Uint)
+	cx.stack[prev].Uint = carry
+	cx.stack[last].Uint = sum
 }
 
 func opMinus(cx *evalContext) {
@@ -1118,11 +1141,7 @@ func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, fie
 	case AssetBalance:
 		sv.Uint = holding.Amount
 	case AssetFrozen:
-		if holding.Frozen {
-			sv.Uint = 1
-		} else {
-			sv.Uint = 0
-		}
+		sv.Uint = boolToUint(holding.Frozen)
 	default:
 		err = fmt.Errorf("invalid asset holding field %d", field)
 		return
@@ -1143,14 +1162,10 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field 
 	case AssetDecimals:
 		sv.Uint = uint64(params.Decimals)
 	case AssetDefaultFrozen:
-		if params.DefaultFrozen {
-			sv.Uint = 1
-		} else {
-			sv.Uint = 0
-		}
+		sv.Uint = boolToUint(params.DefaultFrozen)
 	case AssetUnitName:
 		sv.Bytes = []byte(params.UnitName)
-	case AssetAssetName:
+	case AssetName:
 		sv.Bytes = []byte(params.AssetName)
 	case AssetURL:
 		sv.Bytes = []byte(params.URL)
@@ -1259,8 +1274,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 			err = fmt.Errorf("invalid ApplicationArgs index %d", arrayFieldIdx)
 			return
 		}
-		sv.Bytes = make([]byte, len(txn.ApplicationArgs[arrayFieldIdx]))
-		copy(sv.Bytes, txn.ApplicationArgs[arrayFieldIdx])
+		sv.Bytes = nilToEmpty(txn.ApplicationArgs[arrayFieldIdx])
 	case NumAppArgs:
 		sv.Uint = uint64(len(txn.ApplicationArgs))
 	case Accounts:
@@ -1277,13 +1291,41 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case NumAccounts:
 		sv.Uint = uint64(len(txn.Accounts))
 	case ApprovalProgram:
-		sv.Bytes = make([]byte, len(txn.ApprovalProgram))
-		copy(sv.Bytes, txn.ApprovalProgram)
+		sv.Bytes = nilToEmpty(txn.ApprovalProgram)
 	case ClearStateProgram:
-		sv.Bytes = make([]byte, len(txn.ClearStateProgram))
-		copy(sv.Bytes, txn.ClearStateProgram)
+		sv.Bytes = nilToEmpty(txn.ClearStateProgram)
 	case RekeyTo:
 		sv.Bytes = txn.RekeyTo[:]
+	case ConfigAsset:
+		sv.Uint = uint64(txn.ConfigAsset)
+	case ConfigAssetTotal:
+		sv.Uint = uint64(txn.AssetParams.Total)
+	case ConfigAssetDecimals:
+		sv.Uint = uint64(txn.AssetParams.Decimals)
+	case ConfigAssetDefaultFrozen:
+		sv.Uint = boolToUint(txn.AssetParams.DefaultFrozen)
+	case ConfigAssetUnitName:
+		sv.Bytes = nilToEmpty([]byte(txn.AssetParams.UnitName))
+	case ConfigAssetName:
+		sv.Bytes = nilToEmpty([]byte(txn.AssetParams.AssetName))
+	case ConfigAssetURL:
+		sv.Bytes = nilToEmpty([]byte(txn.AssetParams.URL))
+	case ConfigAssetMetadataHash:
+		sv.Bytes = nilToEmpty(txn.AssetParams.MetadataHash[:])
+	case ConfigAssetManager:
+		sv.Bytes = txn.AssetParams.Manager[:]
+	case ConfigAssetReserve:
+		sv.Bytes = txn.AssetParams.Reserve[:]
+	case ConfigAssetFreeze:
+		sv.Bytes = txn.AssetParams.Freeze[:]
+	case ConfigAssetClawback:
+		sv.Bytes = txn.AssetParams.Clawback[:]
+	case FreezeAsset:
+		sv.Uint = uint64(txn.FreezeAsset)
+	case FreezeAssetAccount:
+		sv.Bytes = txn.FreezeAccount[:]
+	case FreezeAssetFrozen:
+		sv.Uint = boolToUint(txn.AssetFrozen)
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 		return
@@ -1300,7 +1342,12 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 func opTxn(cx *evalContext) {
 	field := TxnField(uint64(cx.program[cx.pc+1]))
 	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version || field == ApplicationArgs || field == Accounts {
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if ok {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
@@ -1322,7 +1369,8 @@ func opTxna(cx *evalContext) {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
-	if field != ApplicationArgs && field != Accounts {
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
 		cx.err = fmt.Errorf("txna unsupported field %d", field)
 		return
 	}
@@ -1347,7 +1395,12 @@ func opGtxn(cx *evalContext) {
 	tx := &cx.TxnGroup[gtxid].Txn
 	field := TxnField(uint64(cx.program[cx.pc+2]))
 	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version || field == ApplicationArgs || field == Accounts {
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if ok {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
@@ -1380,7 +1433,8 @@ func opGtxna(cx *evalContext) {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
-	if TxnField(field) != ApplicationArgs && TxnField(field) != Accounts {
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
 		cx.err = fmt.Errorf("gtxna unsupported field %d", field)
 		return
 	}

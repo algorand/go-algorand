@@ -144,7 +144,7 @@ func TestOpcodesVersioningV2(t *testing.T) {
 	require.Equal(t, cntv2, len(opsByName[2]))
 
 	// hardcode and ensure amount of new v2 opcodes
-	newOpcodes := 21
+	newOpcodes := 22
 	overwritten := 5 // sha256, keccak256, sha512_256, txn, gtxn
 	require.Equal(t, newOpcodes+overwritten, cntAdded)
 

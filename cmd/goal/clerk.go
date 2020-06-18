@@ -42,16 +42,9 @@ var (
 	toAddress       string
 	account         string
 	amount          uint64
-	fee             uint64
 	txFilename      string
-	outFilename     string
 	rejectsFilename string
-	noteBase64      string
-	noteText        string
-	lease           string
-	sign            bool
 	closeToAddress  string
-	noWaitAfterSend bool
 	noProgramOutput bool
 	signProgram     bool
 	programSource   string
@@ -82,15 +75,6 @@ func init() {
 	sendCmd.Flags().StringVarP(&account, "from", "f", "", "Account address to send the money from (If not specified, uses default account)")
 	sendCmd.Flags().StringVarP(&toAddress, "to", "t", "", "Address to send to money to (required)")
 	sendCmd.Flags().Uint64VarP(&amount, "amount", "a", 0, "The amount to be transferred (required), in microAlgos")
-	sendCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
-	sendCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
-	sendCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
-	sendCmd.Flags().Uint64VarP(&numValidRounds, "validrounds", "v", 0, "The validity period for the transaction, used to calculate lastvalid")
-	sendCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
-	sendCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
-	sendCmd.Flags().StringVarP(&lease, "lease", "x", "", "Lease value (base64, optional): no transaction may also acquire this lease until lastvalid")
-	sendCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Dump an unsigned tx to the given file. In order to dump a signed transaction, pass -s")
-	sendCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	sendCmd.Flags().StringVarP(&closeToAddress, "close-to", "c", "", "Close account and send remainder to this address")
 	sendCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given authorization address. (Future transactions from this account will need to be signed with the new key.)")
 	sendCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
@@ -101,6 +85,9 @@ func init() {
 
 	sendCmd.MarkFlagRequired("to")
 	sendCmd.MarkFlagRequired("amount")
+
+	// Add common transaction flags
+	addTxnFlags(sendCmd)
 
 	// rawsend flags
 	rawsendCmd.Flags().StringVarP(&txFilename, "filename", "f", "", "Filename of file containing raw transactions")
@@ -394,7 +381,7 @@ var sendCmd = &cobra.Command{
 			}
 		}
 
-		if txFilename == "" {
+		if outFilename == "" {
 			// Broadcast the tx
 			txid, err := client.BroadcastTransaction(stx)
 
@@ -415,7 +402,7 @@ var sendCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeFile(txFilename, protocol.Encode(&stx), 0600)
+			err = writeFile(outFilename, protocol.Encode(&stx), 0600)
 			if err != nil {
 				reportErrorf(err.Error())
 			}

@@ -195,13 +195,32 @@ txn NumAccounts
 txn ApprovalProgram
 txn ClearStateProgram
 txn RekeyTo
+int 0
+int 1
+plusw
+txn ConfigAsset
+txn ConfigAssetTotal
+txn ConfigAssetDecimals
+txn ConfigAssetDefaultFrozen
+txn ConfigAssetUnitName
+txn ConfigAssetName
+txn ConfigAssetURL
+txn ConfigAssetMetadataHash
+txn ConfigAssetManager
+txn ConfigAssetReserve
+txn ConfigAssetFreeze
+txn ConfigAssetClawback
+txn FreezeAsset
+txn FreezeAssetAccount
+txn FreezeAssetFrozen
 `
 
 // Check that assembly output is stable across time.
 func TestAssemble(t *testing.T) {
 	// UPDATE PROCEDURE:
 	// Run test. It should pass. If test is not passing, do not change this test, fix the assembler first.
-	// Extend this test program text. It is preferrable to append instructions to the end so that the program byte hex is visually similar and also simply extended by some new bytes.
+	// Extend this test program text. Append instructions to the end so that the program byte hex is visually similar and also simply extended by some new bytes,
+	// and so that version-dependent tests pass.
 	// Copy hex string from failing test output into source.
 	// Run test. It should pass.
 	//
@@ -220,7 +239,7 @@ func TestAssemble(t *testing.T) {
 	program, err := AssembleStringWithVersion(bigTestAssembleNonsenseProgram, AssemblerMaxVersion)
 	require.NoError(t, err)
 	// check that compilation is stable over time and we assemble to the same bytes this month that we did last month.
-	expectedBytes, _ := hex.DecodeString("022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b6921072105700048482107210571004848361c0037001a0031183119311b311d311e311f3120")
+	expectedBytes, _ := hex.DecodeString("022008b7a60cf8acd19181cf959a12f8acd19181cf951af8acd19181cf15f8acd191810f01020026050212340c68656c6c6f20776f726c6421208dae2087fbba51304eb02b91f656948397a7946390e8cb70fc9ea4d95f92251d024242047465737400320032013202320328292929292a0431003101310231043105310731083109310a310b310c310d310e310f3111311231133114311533000033000133000233000433000533000733000833000933000a33000b33000c33000d33000e33000f3300113300123300133300143300152d2e0102222324252104082209240a220b230c240d250e230f23102311231223132314181b1c2b171615400003290349483403350222231d4a484848482a50512a63222352410003420000432105602105612105270463484821052b62482b642b65484821052b2106662b21056721072b682b6921072105700048482107210571004848361c0037001a0031183119311b311d311e311f3120210721051e312131223123312431253126312731283129312a312b312c312d312e312f")
 	if bytes.Compare(expectedBytes, program) != 0 {
 		// this print is for convenience if the program has been changed. the hex string can be copy pasted back in as a new expected result.
 		t.Log(hex.EncodeToString(program))
@@ -822,6 +841,21 @@ txn NumAccounts
 txn ApprovalProgram
 txn ClearStateProgram
 txn RekeyTo
+txn ConfigAsset
+txn ConfigAssetTotal
+txn ConfigAssetDecimals
+txn ConfigAssetDefaultFrozen
+txn ConfigAssetUnitName
+txn ConfigAssetName
+txn ConfigAssetURL
+txn ConfigAssetMetadataHash
+txn ConfigAssetManager
+txn ConfigAssetReserve
+txn ConfigAssetFreeze
+txn ConfigAssetClawback
+txn FreezeAsset
+txn FreezeAssetAccount
+txn FreezeAssetFrozen
 gtxn 12 Fee
 `
 	for _, globalField := range GlobalFieldNames {

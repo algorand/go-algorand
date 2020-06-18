@@ -35,12 +35,22 @@ var lastValid uint64
 // numValidRounds specifies validity period for a transaction and used to calculate last valid round
 var numValidRounds uint64 // also used in account and asset
 
+var (
+	fee             uint64
+	outFilename     string
+	sign            bool
+	noteBase64      string
+	noteText        string
+	lease           string
+	noWaitAfterSend bool
+)
+
 func addTxnFlags(cmd *cobra.Command) {
 	cmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
 	cmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	cmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
 	cmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
-	cmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
+	cmd.Flags().StringVarP(&outFilename, "out", "o", "", "Write transaction to this file")
 	cmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	cmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
 	cmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
