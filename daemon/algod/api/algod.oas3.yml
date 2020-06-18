@@ -614,6 +614,10 @@
             },
             "type": "array"
           },
+          "auth-addr": {
+            "description": "The address against which signatures/multisigs/logicsigs should be checked",
+            "type": "string"
+          },
           "created-apps": {
             "description": "\\[appp\\] parameters of applications created by this account including app global data.\n\nNote: the raw account uses `map[int] -> AppParams` for this type.",
             "items": {
@@ -654,10 +658,6 @@
               "msig",
               "lsig"
             ],
-            "type": "string"
-          },
-          "spending-key": {
-            "description": "The address against which signatures/multisigs/logicsigs should be checked",
             "type": "string"
           },
           "status": {

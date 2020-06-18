@@ -32,6 +32,9 @@ type Account struct {
 	// Note the raw object uses `map[int] -> AssetHolding` for this type.
 	Assets *[]AssetHolding `json:"assets,omitempty"`
 
+	// The address against which signatures/multisigs/logicsigs should be checked
+	AuthAddr *string `json:"auth-addr,omitempty"`
+
 	// \[appp\] parameters of applications created by this account including app global data.
 	//
 	// Note: the raw account uses `map[int] -> AppParams` for this type.
@@ -62,9 +65,6 @@ type Account struct {
 	// * msig
 	// * lsig
 	SigType *string `json:"sig-type,omitempty"`
-
-	// The address against which signatures/multisigs/logicsigs should be checked
-	SpendingKey *string `json:"spending-key,omitempty"`
 
 	// \[onl\] delegation status of the account's MicroAlgos
 	// * Offline - indicates that the associated account is delegated.

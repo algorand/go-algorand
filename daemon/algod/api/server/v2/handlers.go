@@ -254,7 +254,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		Participation:               apiParticipation,
 		CreatedAssets:               &createdAssets,
 		Assets:                      &assets,
-		SpendingKey:                 addrOrNil(record.AuthAddr),
+		AuthAddr:                    addrOrNil(record.AuthAddr),
 		CreatedApps:                 &createdApps,
 		AppsLocalState:              &appsLocalState,
 		AppsTotalSchema:             &totalAppSchema,
