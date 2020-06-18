@@ -577,9 +577,7 @@ var infoAssetCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 
-		reserveEmpty := false
 		if params.ReserveAddr == "" {
-			reserveEmpty = true
 			params.ReserveAddr = params.Creator
 		}
 
@@ -600,11 +598,7 @@ var infoAssetCmd = &cobra.Command{
 		fmt.Printf("Decimals:         %d\n", params.Decimals)
 		fmt.Printf("Default frozen:   %v\n", params.DefaultFrozen)
 		fmt.Printf("Manager address:  %s\n", params.ManagerAddr)
-		if reserveEmpty {
-			fmt.Printf("Reserve address:  %s (Empty. Defaulting to creator)\n", params.ReserveAddr)
-		} else {
-			fmt.Printf("Reserve address:  %s\n", params.ReserveAddr)
-		}
+		fmt.Printf("Reserve address:  %s\n", params.ReserveAddr)
 		fmt.Printf("Freeze address:   %s\n", params.FreezeAddr)
 		fmt.Printf("Clawback address: %s\n", params.ClawbackAddr)
 	},
