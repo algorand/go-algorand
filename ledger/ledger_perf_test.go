@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -167,14 +168,15 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 
 	// open first ledger
 	const inMem = false // use persistent storage
-	const archival = true
-	l0, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l0, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 
 	// open second ledger
 	dbName = fmt.Sprintf("%s.%d.2", b.Name(), crypto.RandUint64())
 	dbPrefix = filepath.Join(dbTempDir, dbName)
-	l1, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	l1, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 
 	blk := genesisInitState.Block
