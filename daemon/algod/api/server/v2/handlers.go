@@ -41,6 +41,7 @@ import (
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
+	"github.com/algorand/go-codec/codec"
 )
 
 const maxTealSourceBytes = 1e5
@@ -82,7 +83,12 @@ func (v2 *Handlers) ShutdownNode(ctx echo.Context, params private.ShutdownNodePa
 
 // AccountInformation gets account information for a given account.
 // (GET /v2/accounts/{address})
-func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
+func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params generated.AccountInformationParams) error {
+	handle, contentType, err := getCodecHandle(params.Format)
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+
 	addr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
 		return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
@@ -94,6 +100,15 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
+
+	if handle == protocol.CodecHandle {
+		data, err := encode(handle, record)
+		if err != nil {
+			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+		}
+		return ctx.Blob(http.StatusOK, contentType, data)
+	}
+
 	recordWithoutPendingRewards, err := myLedger.LookupWithoutRewards(lastRound, basics.Address(addr))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
@@ -167,6 +182,65 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 		}
 	}
 
+	convertTKV := func(tkv *basics.TealKeyValue) (converted generated.TealKeyValueStore) {
+		for k, v := range *tkv {
+			converted = append(converted, generated.TealKeyValue{
+				Key: k,
+				Value: generated.TealValue{
+					Type:  uint64(v.Type),
+					Bytes: v.Bytes,
+					Uint:  v.Uint,
+				},
+			})
+		}
+		return
+	}
+
+	createdApps := make([]generated.Application, 0, len(record.AppParams))
+	if len(record.AppParams) > 0 {
+		for appIdx, appParams := range record.AppParams {
+			globalState := convertTKV(&appParams.GlobalState)
+			createdApps = append(createdApps, generated.Application{
+				AppIndex: uint64(appIdx),
+				AppParams: generated.ApplicationParams{
+					ApprovalProgram:   appParams.ApprovalProgram,
+					ClearStateProgram: appParams.ClearStateProgram,
+					GlobalState:       &globalState,
+					LocalStateSchema: &generated.ApplicationStateSchema{
+						NumByteSlice: appParams.LocalStateSchema.NumByteSlice,
+						NumUint:      appParams.LocalStateSchema.NumUint,
+					},
+					GlobalStateSchema: &generated.ApplicationStateSchema{
+						NumByteSlice: appParams.GlobalStateSchema.NumByteSlice,
+						NumUint:      appParams.GlobalStateSchema.NumUint,
+					},
+				},
+			})
+		}
+	}
+
+	appsLocalState := make([]generated.ApplicationLocalStates, 0, len(record.AppLocalStates))
+	if len(record.AppLocalStates) > 0 {
+		for appIdx, state := range record.AppLocalStates {
+			localState := convertTKV(&state.KeyValue)
+			appsLocalState = append(appsLocalState, generated.ApplicationLocalStates{
+				AppIndex: uint64(appIdx),
+				State: generated.ApplicationLocalState{
+					KeyValue: localState,
+					Schema: generated.ApplicationStateSchema{
+						NumByteSlice: state.Schema.NumByteSlice,
+						NumUint:      state.Schema.NumUint,
+					},
+				},
+			})
+		}
+	}
+
+	totalAppSchema := generated.ApplicationStateSchema{
+		NumByteSlice: record.TotalAppSchema.NumByteSlice,
+		NumUint:      record.TotalAppSchema.NumUint,
+	}
+
 	response := generated.AccountResponse{
 		SigType:                     nil,
 		Round:                       uint64(lastRound),
@@ -180,6 +254,10 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 		Participation:               apiParticipation,
 		CreatedAssets:               &createdAssets,
 		Assets:                      &assets,
+		SpendingKey:                 addrOrNil(record.AuthAddr),
+		CreatedApps:                 &createdApps,
+		AppsLocalState:              &appsLocalState,
+		AppsTotalSchema:             &totalAppSchema,
 	}
 
 	return ctx.JSON(http.StatusOK, response)
@@ -360,6 +438,63 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	// For backwards compatibility, return txid of first tx in group
 	txid := txgroup[0].ID()
 	return ctx.JSON(http.StatusOK, generated.PostTransactionsResponse{TxId: txid.String()})
+}
+
+// TransactionDryRun takes transactions and additional simulated ledger state and returns debugging information.
+// (POST /v2/transactions/dryrun)
+func (v2 *Handlers) TransactionDryRun(ctx echo.Context) error {
+	req := ctx.Request()
+	dec := protocol.NewJSONDecoder(req.Body)
+	var dr DryrunRequest
+	err := dec.Decode(&dr)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	// fetch previous block header just once to prevent racing with network
+	var hdr bookkeeping.BlockHeader
+	if dr.ProtocolVersion == "" || dr.Round == 0 || dr.LatestTimestamp == 0 {
+		actualLedger := v2.Node.Ledger()
+		hdr, err = actualLedger.BlockHdr(actualLedger.Latest())
+		if err != nil {
+			return internalError(ctx, err, "current block error", v2.Log)
+		}
+	}
+
+	var response DryrunResponse
+
+	var proto config.ConsensusParams
+	if dr.ProtocolVersion != "" {
+		var ok bool
+		proto, ok = config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
+		if !ok {
+			return badRequest(ctx, nil, "invalid protocol version", v2.Log)
+		}
+	} else {
+		proto = config.Consensus[hdr.CurrentProtocol]
+	}
+
+	if dr.Round == 0 {
+		dr.Round = uint64(hdr.Round + 1)
+	}
+
+	if dr.LatestTimestamp == 0 {
+		dr.LatestTimestamp = hdr.TimeStamp
+	}
+
+	doDryrunRequest(&dr, &proto, &response)
+	var tightJSON codec.JsonHandle
+	// like go-algorand/protocol/codec.go but Indent=0
+	tightJSON.ErrorIfNoField = true
+	tightJSON.ErrorIfNoArrayExpand = true
+	tightJSON.Canonical = true
+	tightJSON.RecursiveEmptyCheck = true
+	tightJSON.Indent = 0 // be compact
+	tightJSON.HTMLCharsAsIs = true
+	var rblob []byte
+	enc := codec.NewEncoderBytes(&rblob, &tightJSON)
+	enc.MustEncode(response)
+	return ctx.JSONBlob(http.StatusOK, rblob)
 }
 
 // TransactionParams returns the suggested parameters for constructing a new transaction.
