@@ -40,7 +40,7 @@ if { [catch {
     puts "regex match: $PRIMARY_ADDR"
 
     #start hosted node in the background
-    spawn ~/go/bin/algoh -d $TEST_NODE_DIR -p $PRIMARY_ADDR
+    spawn $env(GOPATH)/bin/algoh -d $TEST_NODE_DIR -p $PRIMARY_ADDR
     expect {
         "^Logging to: *" {puts "algoh startup successful"}
         timeout {puts "algoh failed to start"; close; exit 1}
@@ -55,7 +55,7 @@ if { [catch {
 
     #wait until Node approves blocks to the network
     set timeout 60
-    spawn ~/go/bin/goal node wait -d $TEST_NODE_DIR -w 61
+    spawn $env(GOPATH)/bin/goal node wait -d $TEST_NODE_DIR -w 61
     expect {
         eof {puts "successfully communicating with relay node"}
         "Timed out waiting for node to make progress" {puts "timed out waiting for connection to relay node"; close; exit 1}
@@ -67,7 +67,7 @@ if { [catch {
 
 
     set timeout 201
-    spawn ~/go/bin/goal node wait -d $TEST_NODE_DIR -w 200
+    spawn $env(GOPATH)/bin/goal node wait -d $TEST_NODE_DIR -w 200
     expect {
         "^Cannot contact Algorand node: open $TEST_NODE_DIR/algod.net: no such file or directory." {puts "ERROR: node shutdown"; close; exit 1}
         "^Timed out waiting for node to make progress" {puts "node correctly continued running despite relay shutdown"; close}

@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 )
@@ -90,6 +91,16 @@ func (w deadManWatcher) onBlock(block v1.Block) {
 }
 
 func (w deadManWatcher) reportDeadManTimeout(curBlock uint64) (err error) {
+	cfg, err := config.LoadConfigFromDisk(resolveDataDir())
+	if err == nil {
+		if !cfg.EnableProfiler {
+			algodClient, err := getNodeController().AlgodClient()
+			if err != nil {
+				err = algodClient.HealthCheck()
+			}
+			return err
+		}
+	}
 	goRoutines, err := getGoRoutines(w.client)
 	if err != nil {
 		goRoutines = fmt.Sprintf("Error dumping goroutines: %v", err)
