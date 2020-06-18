@@ -1,7 +1,7 @@
 ARG ARCH="amd64"
 
 FROM ${ARCH}/centos:7
-ENV GOLANG_VERSION 1.12
+ARG GOLANG_VERSION
 ARG ARCH="amd64"
 RUN yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm && \
     yum update -y && \

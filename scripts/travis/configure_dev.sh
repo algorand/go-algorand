@@ -7,6 +7,7 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 OS=$("${SCRIPTPATH}/../ostype.sh")
 ARCH=$("${SCRIPTPATH}/../archtype.sh")
+GO_VERSION=$(./scripts/get_golang_version.sh)
 
 if [ "${OS}" = "linux" ]; then
     if [[ "${ARCH}" = "arm64" ]]; then
@@ -15,7 +16,7 @@ if [ "${OS}" = "linux" ]; then
             echo "Go cannot be found; downloading..."
             # go is not installed ?
 	    # e.g. https://dl.google.com/go/go1.13.5.linux-amd64.tar.gz
-	    GO_TARBALL=go1.13.5.linux-amd64.tar.gz
+	    GO_TARBALL=go${GO_VERSION}.linux-amd64.tar.gz
             wget -q https://dl.google.com/go/${GO_TARBALL}
             if [ "$?" = "0" ]; then   
                 set -e
@@ -40,7 +41,7 @@ if [ "${OS}" = "linux" ]; then
         if [ "$?" != "0" ]; then
             echo "Go cannot be found; downloading..."
             # go is not installed ?
-	    GO_TARBALL=go1.13.5.linux-armv6l.tar.gz
+	    GO_TARBALL=go${GO_VERSION}.linux-armv6l.tar.gz
             wget -q https://dl.google.com/go/${GO_TARBALL}
             if [ "$?" = "0" ]; then
                 set -e
