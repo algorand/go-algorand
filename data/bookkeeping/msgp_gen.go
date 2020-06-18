@@ -1565,6 +1565,11 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Allocation")
 				return
 			}
+			if zb0004 > MaxInitialGenesisAllocationSize {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(MaxInitialGenesisAllocationSize))
+				err = msgp.WrapError(err, "struct-from-array", "Allocation")
+				return
+			}
 			if zb0005 {
 				(*z).Allocation = nil
 			} else if (*z).Allocation != nil && cap((*z).Allocation) >= zb0004 {
@@ -1658,6 +1663,11 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0007 bool
 				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
+					err = msgp.WrapError(err, "Allocation")
+					return
+				}
+				if zb0006 > MaxInitialGenesisAllocationSize {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(MaxInitialGenesisAllocationSize))
 					err = msgp.WrapError(err, "Allocation")
 					return
 				}
