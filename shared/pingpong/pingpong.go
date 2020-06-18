@@ -107,18 +107,25 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 func computeAccountMinBalance(cfg PpConfig) (requiredBalance uint64) {
 	const minActiveAccountBalance uint64 = 100000 // min balance for any active account
 
+	var fee uint64 = 1000
+	if cfg.MinFee > fee {
+		fee = cfg.MinFee
+	}
+	if cfg.MaxFee != 0 {
+		fee = cfg.MaxFee
+	}
 	requiredBalance = minActiveAccountBalance
 
 	// add cost of assets
 	if cfg.NumAsset > 0 {
-		assetCost := (minActiveAccountBalance * uint64(cfg.NumAsset) * uint64(cfg.NumPartAccounts)) + // assets*accounts
-			(cfg.MaxFee)*uint64(cfg.NumAsset) + // asset creations
-			(cfg.MaxFee)*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts) + // asset opt-ins
-			(cfg.MaxFee)*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts) // asset distributions
+		assetCost := minActiveAccountBalance*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts) + // assets*accounts
+			(fee)*uint64(cfg.NumAsset) + // asset creations
+			(fee)*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts) + // asset opt-ins
+			(fee)*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts) // asset distributions
 		requiredBalance += assetCost
 	}
 	// add cost of transactions
-	requiredBalance += (cfg.MaxAmt + cfg.MaxFee) * 2 * cfg.TxnPerSec * uint64(math.Ceil(cfg.RefreshTime.Seconds()))
+	requiredBalance += (cfg.MaxAmt + fee) * 2 * cfg.TxnPerSec * uint64(math.Ceil(cfg.RefreshTime.Seconds()))
 
 	// override computed value if less than configured value
 	if cfg.MinAccountFunds > requiredBalance {
@@ -480,6 +487,19 @@ func constructTxn(from, to string, fee, amt, aidx uint64, client libgoal.Client,
 	}
 	// adjust transaction duration for 5 rounds. That would prevent it from getting stuck in the transaction pool for too long.
 	txn.LastValid = txn.FirstValid + 5
+
+	// if cfg.MaxFee == 0, automatically adjust the fee amount to required min fee
+	if cfg.MaxFee == 0 {
+		var suggestedFee uint64
+		suggestedFee, err = client.SuggestedFee()
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stdout, "error retrieving suggestedFee: %v\n", err)
+			return
+		}
+		if suggestedFee > txn.Fee.Raw {
+			txn.Fee.Raw = suggestedFee
+		}
+	}
 	return
 }
 

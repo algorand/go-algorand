@@ -397,7 +397,7 @@ func init() {
 	testCases[params.name] = params
 
 	// Int 1
-	progBytes, err := logic.AssembleString(`int 1`)
+	progBytes, err := logic.AssembleStringV2(`int 1`)
 	if err != nil {
 		panic(err)
 	}
@@ -419,12 +419,12 @@ func init() {
 	testCases[params.name] = params
 
 	// Assemble ASA programs
-	asaClearStateProgram, err = logic.AssembleString(asaClearAsm)
+	asaClearStateProgram, err = logic.AssembleStringV2(asaClearAsm)
 	if err != nil {
 		panic(err)
 	}
 
-	asaAppovalProgram, err = logic.AssembleString(asaAppovalAsm)
+	asaAppovalProgram, err = logic.AssembleStringV2(asaAppovalAsm)
 	if err != nil {
 		panic(err)
 	}
@@ -471,7 +471,7 @@ func genBigNoOp(numOps int) []byte {
 	progParts = append(progParts, `int 1`)
 	progParts = append(progParts, `return`)
 	progAsm := strings.Join(progParts, "\n")
-	progBytes, err := logic.AssembleString(progAsm)
+	progBytes, err := logic.AssembleStringV2(progAsm)
 	if err != nil {
 		panic(err)
 	}
@@ -491,7 +491,7 @@ func genBigHashes(numHashes int, numPad int) []byte {
 	progParts = append(progParts, `int 1`)
 	progParts = append(progParts, `return`)
 	progAsm := strings.Join(progParts, "\n")
-	progBytes, err := logic.AssembleString(progAsm)
+	progBytes, err := logic.AssembleStringV2(progAsm)
 	if err != nil {
 		panic(err)
 	}
@@ -634,7 +634,7 @@ func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
 	progAsm := strings.Join(progParts, "\n")
 
 	// assemble
-	progBytes, err := logic.AssembleString(progAsm)
+	progBytes, err := logic.AssembleStringV2(progAsm)
 	if err != nil {
 		panic(err)
 	}
@@ -710,7 +710,7 @@ func genAppTestParamsMaxClone(numKeys int) testParams {
 	progAsm := strings.Join(progParts, "\n")
 
 	// assemble
-	progBytes, err := logic.AssembleString(progAsm)
+	progBytes, err := logic.AssembleStringV2(progAsm)
 	if err != nil {
 		panic(err)
 	}
