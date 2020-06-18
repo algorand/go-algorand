@@ -89,9 +89,6 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPo
 		cfg.TxPoolExponentialIncreaseFactor = 1
 	}
 	pool := TransactionPool{
-		pendingTxids:         make(map[transactions.Txid]txPoolVerifyCacheVal),
-		rememberedTxids:      make(map[transactions.Txid]txPoolVerifyCacheVal),
-		expiredTxCount:       make(map[basics.Round]int),
 		ledger:               ledger,
 		statusCache:          makeStatusCache(cfg.TxPoolSize),
 		logProcessBlockStats: cfg.EnableProcessBlockStats,
@@ -127,6 +124,21 @@ const timeoutOnNewBlock = time.Second
 // assemblyWaitEps is the extra time AssembleBlock() waits past the
 // deadline before giving up.
 const assemblyWaitEps = 10 * time.Millisecond
+
+// Reset resets the content of the transaction pool
+func (pool *TransactionPool) Reset() {
+	pool.pendingTxids = make(map[transactions.Txid]txPoolVerifyCacheVal)
+	pool.pendingVerifyParams = nil
+	pool.pendingTxGroups = nil
+	pool.rememberedTxids = make(map[transactions.Txid]txPoolVerifyCacheVal)
+	pool.rememberedVerifyParams = nil
+	pool.rememberedTxGroups = nil
+	pool.expiredTxCount = make(map[basics.Round]int)
+	pool.numPendingWholeBlocks = 0
+	pool.pendingBlockEvaluator = nil
+	pool.statusCache.reset()
+	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round))
+}
 
 // NumExpired returns the number of transactions that expired at the
 // end of a round (only meaningful if cleanup has been called for that

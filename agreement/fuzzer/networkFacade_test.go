@@ -77,7 +77,7 @@ func MakeNetworkFacade(fuzzer *Fuzzer, nodeID int) *NetworkFacade {
 	n := &NetworkFacade{
 		fuzzer:         fuzzer,
 		nodeID:         nodeID,
-		mux:            network.MakeMultiplexer(),
+		mux:            network.MakeMultiplexer(fuzzer.log),
 		clocks:         make(map[int]chan time.Time),
 		eventsQueues:   make(map[string]int),
 		eventsQueuesCh: make(chan int, 1000),
@@ -258,7 +258,7 @@ func (n *NetworkFacade) RegisterHandlers(dispatch []network.TaggedMessageHandler
 
 // ClearHandlers
 func (n *NetworkFacade) ClearHandlers() {
-	n.mux.ClearHandlers()
+	n.mux.ClearHandlers([]network.Tag{})
 }
 
 // SetDownstreamFilter sets the downstream filter.

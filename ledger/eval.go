@@ -618,7 +618,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *app
 		if err != nil {
 			return err
 		}
-		correctAuthorizer := acctdata.SpendingKey
+		correctAuthorizer := acctdata.AuthAddr
 		if (correctAuthorizer == basics.Address{}) {
 			correctAuthorizer = txn.Txn.Sender
 		}

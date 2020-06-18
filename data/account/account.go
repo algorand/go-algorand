@@ -16,8 +16,7 @@
 
 package account
 
-//go:generate dbgen -i root.sql -p account -n root -o rootInstall.go
-//go:generate dbgen -i part.sql -p account -n part -o partInstall.go
+//go:generate dbgen -i root.sql -p account -n root -o rootInstall.go -h ../../scripts/LICENSE_HEADER
 import (
 	"database/sql"
 	"fmt"

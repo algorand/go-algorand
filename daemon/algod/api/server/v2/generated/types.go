@@ -288,6 +288,9 @@ type AssetId uint64
 // BeforeTime defines model for before-time.
 type BeforeTime time.Time
 
+// Catchpoint defines model for catchpoint.
+type Catchpoint string
+
 // CurrencyGreaterThan defines model for currency-greater-than.
 type CurrencyGreaterThan uint64
 
@@ -346,11 +349,43 @@ type BlockResponse struct {
 	Cert *map[string]interface{} `json:"cert,omitempty"`
 }
 
+// CatchpointAbortResponse defines model for CatchpointAbortResponse.
+type CatchpointAbortResponse struct {
+
+	// Catchup abort response string
+	CatchupMessage string `json:"catchup-message"`
+}
+
+// CatchpointStartResponse defines model for CatchpointStartResponse.
+type CatchpointStartResponse struct {
+
+	// Catchup start response string
+	CatchupMessage string `json:"catchup-message"`
+}
+
 // NodeStatusResponse defines model for NodeStatusResponse.
 type NodeStatusResponse struct {
 
+	// The current catchpoint that is being caught up to
+	Catchpoint *string `json:"catchpoint,omitempty"`
+
+	// The number of blocks that have already been obtained by the node as part of the catchup
+	CatchpointAcquiredBlocks *uint64 `json:"catchpoint-acquired-blocks,omitempty"`
+
+	// The number of account from the current catchpoint that have been processed so far as part of the catchup
+	CatchpointProcessedAccounts *uint64 `json:"catchpoint-processed-accounts,omitempty"`
+
+	// The total number of accounts included in the current catchpoint
+	CatchpointTotalAccounts *uint64 `json:"catchpoint-total-accounts,omitempty"`
+
+	// The total number of blocks that are required to complete the current catchpoint catchup
+	CatchpointTotalBlocks *uint64 `json:"catchpoint-total-blocks,omitempty"`
+
 	// CatchupTime in nanoseconds
 	CatchupTime uint64 `json:"catchup-time"`
+
+	// The last catchpoint seen by the node
+	LastCatchpoint *string `json:"last-catchpoint,omitempty"`
 
 	// LastRound indicates the last round seen
 	LastRound uint64 `json:"last-round"`
@@ -410,6 +445,16 @@ type PendingTransactionsResponse struct {
 
 	// Total number of transactions in the pool.
 	TotalTransactions uint64 `json:"total-transactions"`
+}
+
+// PostCompileResponse defines model for PostCompileResponse.
+type PostCompileResponse struct {
+
+	// base32 SHA512_256 of program bytes (Address style)
+	Hash string `json:"hash"`
+
+	// base64 encoded program bytes
+	Result string `json:"result"`
 }
 
 // PostTransactionsResponse defines model for PostTransactionsResponse.

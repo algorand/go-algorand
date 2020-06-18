@@ -56,7 +56,7 @@ var (
 	signProgram     bool
 	programSource   string
 	argB64Strings   []string
-	disassesmble    bool
+	disassemble     bool
 	progByteFile    string
 	logicSigFile    string
 	timeStamp       int64
@@ -92,7 +92,7 @@ func init() {
 	sendCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Dump an unsigned tx to the given file. In order to dump a signed transaction, pass -s")
 	sendCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	sendCmd.Flags().StringVarP(&closeToAddress, "close-to", "c", "", "Close account and send remainder to this address")
-	sendCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
+	sendCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given authorization address. (Future transactions from this account will need to be signed with the new key.)")
 	sendCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
 	sendCmd.Flags().StringVarP(&programSource, "from-program", "F", "", "Program source to use as account logic")
 	sendCmd.Flags().StringVarP(&progByteFile, "from-program-bytes", "P", "", "Program binary to use as account logic")
@@ -128,7 +128,7 @@ func init() {
 	splitCmd.MarkFlagRequired("infile")
 	splitCmd.MarkFlagRequired("outfile")
 
-	compileCmd.Flags().BoolVarP(&disassesmble, "disassemble", "D", false, "disassemble a compiled program")
+	compileCmd.Flags().BoolVarP(&disassemble, "disassemble", "D", false, "disassemble a compiled program")
 	compileCmd.Flags().BoolVarP(&noProgramOutput, "no-out", "n", false, "don't write contract program binary")
 	compileCmd.Flags().BoolVarP(&signProgram, "sign", "s", false, "sign program, output is a binary signed LogicSig record")
 	compileCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename to write program bytes or signed LogicSig to")
@@ -850,7 +850,7 @@ var compileCmd = &cobra.Command{
 	Long:  "Reads a TEAL contract program and compiles it to binary output and contract address.",
 	Run: func(cmd *cobra.Command, args []string) {
 		for _, fname := range args {
-			if disassesmble {
+			if disassemble {
 				disassembleFile(fname, outFilename)
 				continue
 			}

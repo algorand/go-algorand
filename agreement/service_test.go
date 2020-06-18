@@ -510,6 +510,8 @@ func (e *testingNetworkEndpoint) Disconnect(h MessageHandle) {
 	e.parent.disconnect(e.id, sourceID)
 }
 
+func (e *testingNetworkEndpoint) Start() {}
+
 type activityMonitor struct {
 	deadlock.Mutex
 
@@ -788,10 +790,6 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 		services[i].tracer.tag = strconv.Itoa(i)
 
 		services[i].monitor = m
-		services[i].demux.monitor = m
-		pn := services[i].loopback.(asyncPseudonode)
-		pn.monitor = m
-		services[i].loopback = pn
 		m.inc(demuxCoserviceType)
 	}
 

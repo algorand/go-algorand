@@ -96,6 +96,10 @@ func (balances mockBalances) GetAppCreator(appIdx basics.AppIndex) (basics.Addre
 	return basics.Address{}, true, nil
 }
 
+func (balances mockBalances) GetAppCreator(appIdx basics.AppIndex) (basics.Address, bool, error) {
+	return basics.Address{}, true, nil
+}
+
 func (balances mockBalances) Put(basics.BalanceRecord) error {
 	return nil
 }

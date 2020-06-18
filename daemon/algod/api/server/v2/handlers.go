@@ -17,6 +17,8 @@
 package v2
 
 import (
+	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -29,21 +31,39 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
+	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
-	"github.com/algorand/go-codec/codec"
 )
+
+const maxTealSourceBytes = 1e5
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
-	Node     *node.AlgorandFullNode
+	Node     NodeInterface
 	Log      logging.Logger
 	Shutdown <-chan struct{}
+}
+
+// NodeInterface represents node fns used by the handlers.
+type NodeInterface interface {
+	Ledger() *data.Ledger
+	Status() (s node.StatusReport, err error)
+	GenesisID() string
+	GenesisHash() crypto.Digest
+	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
+	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
+	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
+	SuggestedFee() basics.MicroAlgos
+	StartCatchup(catchpoint string) error
+	AbortCatchup(catchpoint string) error
 }
 
 // RegisterParticipationKeys registers participation keys.
@@ -62,12 +82,7 @@ func (v2 *Handlers) ShutdownNode(ctx echo.Context, params private.ShutdownNodePa
 
 // AccountInformation gets account information for a given account.
 // (GET /v2/accounts/{address})
-func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params generated.AccountInformationParams) error {
-	handle, contentType, err := getCodecHandle(params.Format)
-	if err != nil {
-		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
-	}
-
+func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 	addr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
 		return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
@@ -79,15 +94,6 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
-
-	if handle == protocol.CodecHandle {
-		data, err := encode(handle, record)
-		if err != nil {
-			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
-		}
-		return ctx.Blob(http.StatusOK, contentType, data)
-	}
-
 	recordWithoutPendingRewards, err := myLedger.LookupWithoutRewards(lastRound, basics.Address(addr))
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
@@ -161,65 +167,6 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		}
 	}
 
-	convertTKV := func(tkv *basics.TealKeyValue) (converted generated.TealKeyValueStore) {
-		for k, v := range *tkv {
-			converted = append(converted, generated.TealKeyValue{
-				Key: k,
-				Value: generated.TealValue{
-					Type:  uint64(v.Type),
-					Bytes: v.Bytes,
-					Uint:  v.Uint,
-				},
-			})
-		}
-		return
-	}
-
-	createdApps := make([]generated.Application, 0, len(record.AppParams))
-	if len(record.AppParams) > 0 {
-		for appIdx, appParams := range record.AppParams {
-			globalState := convertTKV(&appParams.GlobalState)
-			createdApps = append(createdApps, generated.Application{
-				AppIndex: uint64(appIdx),
-				AppParams: generated.ApplicationParams{
-					ApprovalProgram:   appParams.ApprovalProgram,
-					ClearStateProgram: appParams.ClearStateProgram,
-					GlobalState:       &globalState,
-					LocalStateSchema: &generated.ApplicationStateSchema{
-						NumByteSlice: appParams.LocalStateSchema.NumByteSlice,
-						NumUint:      appParams.LocalStateSchema.NumUint,
-					},
-					GlobalStateSchema: &generated.ApplicationStateSchema{
-						NumByteSlice: appParams.GlobalStateSchema.NumByteSlice,
-						NumUint:      appParams.GlobalStateSchema.NumUint,
-					},
-				},
-			})
-		}
-	}
-
-	appsLocalState := make([]generated.ApplicationLocalStates, 0, len(record.AppLocalStates))
-	if len(record.AppLocalStates) > 0 {
-		for appIdx, state := range record.AppLocalStates {
-			localState := convertTKV(&state.KeyValue)
-			appsLocalState = append(appsLocalState, generated.ApplicationLocalStates{
-				AppIndex: uint64(appIdx),
-				State: generated.ApplicationLocalState{
-					KeyValue: localState,
-					Schema: generated.ApplicationStateSchema{
-						NumByteSlice: state.Schema.NumByteSlice,
-						NumUint:      state.Schema.NumUint,
-					},
-				},
-			})
-		}
-	}
-
-	totalAppSchema := generated.ApplicationStateSchema{
-		NumByteSlice: record.TotalAppSchema.NumByteSlice,
-		NumUint:      record.TotalAppSchema.NumUint,
-	}
-
 	response := generated.AccountResponse{
 		SigType:                     nil,
 		Round:                       uint64(lastRound),
@@ -233,10 +180,6 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		Participation:               apiParticipation,
 		CreatedAssets:               &createdAssets,
 		Assets:                      &assets,
-		SpendingKey:                 addrOrNil(record.SpendingKey),
-		CreatedApps:                 &createdApps,
-		AppsLocalState:              &appsLocalState,
-		AppsTotalSchema:             &totalAppSchema,
 	}
 
 	return ctx.JSON(http.StatusOK, response)
@@ -310,14 +253,20 @@ func (v2 *Handlers) GetStatus(ctx echo.Context) error {
 	}
 
 	response := generated.NodeStatusResponse{
-		LastRound:                 uint64(stat.LastRound),
-		LastVersion:               string(stat.LastVersion),
-		NextVersion:               string(stat.NextVersion),
-		NextVersionRound:          uint64(stat.NextVersionRound),
-		NextVersionSupported:      stat.NextVersionSupported,
-		TimeSinceLastRound:        uint64(stat.TimeSinceLastRound().Nanoseconds()),
-		CatchupTime:               uint64(stat.CatchupTime.Nanoseconds()),
-		StoppedAtUnsupportedRound: stat.StoppedAtUnsupportedRound,
+		LastRound:                   uint64(stat.LastRound),
+		LastVersion:                 string(stat.LastVersion),
+		NextVersion:                 string(stat.NextVersion),
+		NextVersionRound:            uint64(stat.NextVersionRound),
+		NextVersionSupported:        stat.NextVersionSupported,
+		TimeSinceLastRound:          uint64(stat.TimeSinceLastRound().Nanoseconds()),
+		CatchupTime:                 uint64(stat.CatchupTime.Nanoseconds()),
+		StoppedAtUnsupportedRound:   stat.StoppedAtUnsupportedRound,
+		LastCatchpoint:              &stat.LastCatchpoint,
+		Catchpoint:                  &stat.Catchpoint,
+		CatchpointTotalAccounts:     &stat.CatchpointCatchupTotalAccounts,
+		CatchpointProcessedAccounts: &stat.CatchpointCatchupProcessedAccounts,
+		CatchpointTotalBlocks:       &stat.CatchpointCatchupTotalBlocks,
+		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
 	}
 
 	return ctx.JSON(http.StatusOK, response)
@@ -335,6 +284,24 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 	if stat.StoppedAtUnsupportedRound {
 		return badRequest(ctx, err, errRequestedRoundInUnsupportedRound, v2.Log)
 	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("WaitForBlock failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
+	}
+
+	latestBlkHdr, err := ledger.BlockHdr(ledger.Latest())
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingLatestBlockHeaderStatus, v2.Log)
+	}
+	if latestBlkHdr.NextProtocol != "" {
+		if _, nextProtocolSupported := config.Consensus[latestBlkHdr.NextProtocol]; !nextProtocolSupported {
+			// see if the desired protocol switch is expect to happen before or after the above point.
+			if latestBlkHdr.NextProtocolSwitchOn <= basics.Round(round+1) {
+				// we would never reach to this round, since this round would happen after the (unsupported) protocol upgrade.
+				return badRequest(ctx, err, errRequestedRoundInUnsupportedRound, v2.Log)
+			}
+		}
+	}
 
 	// Wait
 	select {
@@ -351,6 +318,16 @@ func (v2 *Handlers) WaitForBlock(ctx echo.Context, round uint64) error {
 // RawTransaction broadcasts a raw transaction to the network.
 // (POST /v2/transactions)
 func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
+	stat, err := v2.Node.Status()
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("RawTransaction failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
+	}
+	proto := config.Consensus[stat.LastVersion]
+
 	var txgroup []transactions.SignedTxn
 	dec := protocol.NewDecoder(ctx.Request().Body)
 	for {
@@ -363,6 +340,11 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 			return badRequest(ctx, err, err.Error(), v2.Log)
 		}
 		txgroup = append(txgroup, st)
+
+		if len(txgroup) > proto.MaxTxGroupSize {
+			err := fmt.Errorf("max group size is %d", proto.MaxTxGroupSize)
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
 	}
 
 	if len(txgroup) == 0 {
@@ -370,7 +352,7 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
 
-	err := v2.Node.BroadcastSignedTxGroup(txgroup)
+	err = v2.Node.BroadcastSignedTxGroup(txgroup)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
@@ -380,69 +362,16 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, generated.PostTransactionsResponse{TxId: txid.String()})
 }
 
-// TransactionDryRun takes transactions and additional simulated ledger state and returns debugging information.
-// (POST /v2/transactions/dryrun)
-func (v2 *Handlers) TransactionDryRun(ctx echo.Context) error {
-	req := ctx.Request()
-	dec := protocol.NewJSONDecoder(req.Body)
-	var dr DryrunRequest
-	err := dec.Decode(&dr)
-	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
-	}
-
-	// fetch previous block header just once to prevent racing with network
-	var hdr bookkeeping.BlockHeader
-	if dr.ProtocolVersion == "" || dr.Round == 0 || dr.LatestTimestamp == 0 {
-		actualLedger := v2.Node.Ledger()
-		hdr, err = actualLedger.BlockHdr(actualLedger.Latest())
-		if err != nil {
-			return internalError(ctx, err, "current block error", v2.Log)
-		}
-	}
-
-	var response DryrunResponse
-
-	var proto config.ConsensusParams
-	if dr.ProtocolVersion != "" {
-		var ok bool
-		proto, ok = config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
-		if !ok {
-			return badRequest(ctx, nil, "invalid protocol version", v2.Log)
-		}
-	} else {
-		proto = config.Consensus[hdr.CurrentProtocol]
-	}
-
-	if dr.Round == 0 {
-		dr.Round = uint64(hdr.Round + 1)
-	}
-
-	if dr.LatestTimestamp == 0 {
-		dr.LatestTimestamp = hdr.TimeStamp
-	}
-
-	doDryrunRequest(&dr, &proto, &response)
-	var tightJSON codec.JsonHandle
-	// like go-algorand/protocol/codec.go but Indent=0
-	tightJSON.ErrorIfNoField = true
-	tightJSON.ErrorIfNoArrayExpand = true
-	tightJSON.Canonical = true
-	tightJSON.RecursiveEmptyCheck = true
-	tightJSON.Indent = 0 // be compact
-	tightJSON.HTMLCharsAsIs = true
-	var rblob []byte
-	enc := codec.NewEncoderBytes(&rblob, &tightJSON)
-	enc.MustEncode(response)
-	return ctx.JSONBlob(http.StatusOK, rblob)
-}
-
 // TransactionParams returns the suggested parameters for constructing a new transaction.
 // (GET /v2/transactions/params)
 func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
 	stat, err := v2.Node.Status()
 	if err != nil {
 		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("TransactionParams failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
 	}
 
 	gh := v2.Node.GenesisHash()
@@ -465,6 +394,16 @@ func (v2 *Handlers) TransactionParams(ctx echo.Context) error {
 // last proto.MaxTxnLife rounds
 // (GET /v2/transactions/pending/{txid})
 func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string, params generated.PendingTransactionInformationParams) error {
+
+	stat, err := v2.Node.Status()
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("PendingTransactionInformation failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
+	}
+
 	txID := transactions.Txid{}
 	if err := txID.UnmarshalText([]byte(txid)); err != nil {
 		return badRequest(ctx, err, errNoTxnSpecified, v2.Log)
@@ -519,6 +458,16 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 
 // getPendingTransactions returns to the provided context a list of uncomfirmed transactions currently in the transaction pool with optional Max/Address filters.
 func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format *string, addrFilter *string) error {
+
+	stat, err := v2.Node.Status()
+	if err != nil {
+		return internalError(ctx, err, errFailedRetrievingNodeStatus, v2.Log)
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		return serviceUnavailable(ctx, fmt.Errorf("PendingTransactionInformation failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, v2.Log)
+	}
+
 	var addrPtr *basics.Address
 
 	if addrFilter != nil {
@@ -578,6 +527,40 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 	return ctx.Blob(http.StatusOK, contentType, data)
 }
 
+// startCatchup Given a catchpoint, it starts catching up to this catchpoint
+func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string) error {
+	_, _, err := ledger.ParseCatchpointLabel(catchpoint)
+	if err != nil {
+		return badRequest(ctx, err, errFailedToParseCatchpoint, v2.Log)
+	}
+
+	err = v2.Node.StartCatchup(catchpoint)
+	if err != nil {
+		return internalError(ctx, err, fmt.Sprintf(errFailedToStartCatchup, err), v2.Log)
+	}
+
+	return ctx.JSON(http.StatusOK, private.CatchpointStartResponse{
+		CatchupMessage: catchpoint,
+	})
+}
+
+// abortCatchup Given a catchpoint, it aborts catching up to this catchpoint
+func (v2 *Handlers) abortCatchup(ctx echo.Context, catchpoint string) error {
+	_, _, err := ledger.ParseCatchpointLabel(catchpoint)
+	if err != nil {
+		return badRequest(ctx, err, errFailedToParseCatchpoint, v2.Log)
+	}
+
+	err = v2.Node.AbortCatchup(catchpoint)
+	if err != nil {
+		return internalError(ctx, err, fmt.Sprintf(errFailedToAbortCatchup, err), v2.Log)
+	}
+
+	return ctx.JSON(http.StatusOK, private.CatchpointAbortResponse{
+		CatchupMessage: catchpoint,
+	})
+}
+
 // GetPendingTransactions returns the list of unconfirmed transactions currently in the transaction pool.
 // (GET /v2/transactions/pending)
 func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.GetPendingTransactionsParams) error {
@@ -588,4 +571,37 @@ func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.Ge
 // (GET /v2/accounts/{address}/transactions/pending)
 func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr string, params generated.GetPendingTransactionsByAddressParams) error {
 	return v2.getPendingTransactions(ctx, params.Max, params.Format, &addr)
+}
+
+// StartCatchup Given a catchpoint, it starts catching up to this catchpoint
+// (POST /v2/catchup/{catchpoint})
+func (v2 *Handlers) StartCatchup(ctx echo.Context, catchpoint string) error {
+	return v2.startCatchup(ctx, catchpoint)
+}
+
+// AbortCatchup Given a catchpoint, it aborts catching up to this catchpoint
+// (DELETE /v2/catchup/{catchpoint})
+func (v2 *Handlers) AbortCatchup(ctx echo.Context, catchpoint string) error {
+	return v2.abortCatchup(ctx, catchpoint)
+}
+
+// TealCompile compiles TEAL code to binary, return both binary and hash
+// (POST /v2/teal/compile)
+func (v2 *Handlers) TealCompile(ctx echo.Context) error {
+	buf := new(bytes.Buffer)
+	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
+	buf.ReadFrom(ctx.Request().Body)
+	source := buf.String()
+	program, err := logic.AssembleString(source)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	pd := logic.HashProgram(program)
+	addr := basics.Address(pd)
+	response := generated.PostCompileResponse{
+		Hash:   addr.String(),
+		Result: base64.StdEncoding.EncodeToString(program),
+	}
+	return ctx.JSON(http.StatusOK, response)
 }

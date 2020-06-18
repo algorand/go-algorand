@@ -94,7 +94,7 @@ type Header struct {
 	Fee         basics.MicroAlgos `codec:"fee"`
 	FirstValid  basics.Round      `codec:"fv"`
 	LastValid   basics.Round      `codec:"lv"`
-	Note        []byte            `codec:"note"` // Uniqueness or app-level data about txn
+	Note        []byte            `codec:"note,allocbound=config.MaxTxnNoteBytes"` // Uniqueness or app-level data about txn
 	GenesisID   string            `codec:"gen"`
 	GenesisHash crypto.Digest     `codec:"gh"`
 
@@ -110,8 +110,8 @@ type Header struct {
 	// lease, no other transaction specifying this lease can be confirmed.
 	Lease [32]byte `codec:"lx"`
 
-	// RekeyTo, if nonzero, sets the sender's SpendingKey to the given address
-	// If the RekeyTo address is the sender's actual address, the SpendingKey is set to zero
+	// RekeyTo, if nonzero, sets the sender's AuthAddr to the given address
+	// If the RekeyTo address is the sender's actual address, the AuthAddr is set to zero
 	// This allows "re-keying" a long-lived account -- rotating the signing key, changing
 	// membership of a multisig account, etc.
 	RekeyTo basics.Address `codec:"rekey"`
@@ -180,7 +180,7 @@ type TxGroup struct {
 	// together, sequentially, in a block in order for the group to be
 	// valid.  Each hash in the list is a hash of a transaction with
 	// the `Group` field omitted.
-	TxGroupHashes []crypto.Digest `codec:"txlist,allocbound=-"`
+	TxGroupHashes []crypto.Digest `codec:"txlist,allocbound=config.MaxTxGroupSize"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
@@ -548,19 +548,19 @@ func (tx Transaction) Apply(balances Balances, steva StateEvaluator, spec Specia
 		return
 	}
 
-	// rekeying: update balrecord.SpendingKey to tx.RekeyTo if provided
+	// rekeying: update balrecord.AuthAddr to tx.RekeyTo if provided
 	if (tx.RekeyTo != basics.Address{}) {
 		var record basics.BalanceRecord
 		record, err = balances.Get(tx.Sender, false)
 		if err != nil {
 			return
 		}
-		// Special case: rekeying to the account's actual address just sets balrecord.SpendingKey to 0
+		// Special case: rekeying to the account's actual address just sets balrecord.AuthAddr to 0
 		// This saves 32 bytes in your balance record if you want to go back to using your original key
 		if tx.RekeyTo == tx.Sender {
-			record.SpendingKey = basics.Address{}
+			record.AuthAddr = basics.Address{}
 		} else {
-			record.SpendingKey = tx.RekeyTo
+			record.AuthAddr = tx.RekeyTo
 		}
 
 		err = balances.Put(record)

@@ -16,24 +16,21 @@ if [ -z "$OS_TYPE" ] || [ -z "$ARCH" ] || [ -z "$WORKDIR" ]; then
     exit 1
 fi
 
-REPO_DIR="$WORKDIR"
-BRANCH=$("$REPO_DIR/scripts/compute_branch.sh")
-CHANNEL=$("$REPO_DIR/scripts/compute_branch_channel.sh" "$BRANCH")
-BASE="$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH"
+BRANCH=${BRANCH:-$("$WORKDIR/scripts/compute_branch.sh" "$BRANCH")}
+CHANNEL=${CHANNEL:-$("$WORKDIR/scripts/compute_branch_channel.sh" "$BRANCH")}
+BASE="$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH"
 mkdir -p "$BASE/$CHANNEL/$OS_TYPE-$ARCH/bin"
 ALGO_BIN="$BASE/$CHANNEL/$OS_TYPE-$ARCH/bin"
-mkdir -p "$BASE/pkg"
-OUTDIR="$BASE/pkg"
-PKG_NAME=$("$REPO_DIR/scripts/compute_package_name.sh" "${CHANNEL:-stable}")
+OUTDIR="$BASE"
+PKG_NAME=$("$WORKDIR/scripts/compute_package_name.sh" "${CHANNEL:-stable}")
+VER=${VERSION:-$("$WORKDIR/scripts/compute_build_number.sh" -f)}
 
 echo "Building debian package for '${OS} - ${ARCH}'"
 
-VER=$("$REPO_DIR/scripts/compute_build_number.sh" -f)
-
 if [ "${DEFAULTNETWORK}" = "" ]; then
-    DEFAULTNETWORK=$("$REPO_DIR/scripts/compute_branch_network.sh")
+    DEFAULTNETWORK=$("$WORKDIR/scripts/compute_branch_network.sh")
 fi
-DEFAULT_RELEASE_NETWORK=$("$REPO_DIR/scripts/compute_branch_release_network.sh" "${DEFAULTNETWORK}")
+DEFAULT_RELEASE_NETWORK=$("$WORKDIR/scripts/compute_branch_release_network.sh" "${DEFAULTNETWORK}")
 
 PKG_ROOT=$(mktemp -d)
 trap "rm -rf $PKG_ROOT" 0
@@ -65,14 +62,14 @@ if [ ! -z "${RELEASE_GENESIS_PROCESS}" ]; then
     genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
     for dir in "${genesis_dirs[@]}"; do
         mkdir -p "${PKG_ROOT}/var/lib/algorand/genesis/${dir}"
-        cp "${REPO_DIR}/installer/genesis/${dir}/genesis.json" "${PKG_ROOT}/var/lib/algorand/genesis/${dir}/genesis.json"
+        cp "${WORKDIR}/installer/genesis/${dir}/genesis.json" "${PKG_ROOT}/var/lib/algorand/genesis/${dir}/genesis.json"
     done
     # Copy the appropriate network genesis.json for our default (in root ./genesis folder)
     cp "${PKG_ROOT}/var/lib/algorand/genesis/${DEFAULT_RELEASE_NETWORK}/genesis.json" "${PKG_ROOT}/var/lib/algorand"
 elif [[ "${CHANNEL}" == "dev" || "${CHANNEL}" == "stable" || "${CHANNEL}" == "nightly" || "${CHANNEL}" == "beta" ]]; then
-    cp "${REPO_DIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json" "${PKG_ROOT}/var/lib/algorand/genesis.json"
+    cp "${WORKDIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json" "${PKG_ROOT}/var/lib/algorand/genesis.json"
 else
-    cp "${REPO_DIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json" "${PKG_ROOT}/var/lib/algorand"
+    cp "${WORKDIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json" "${PKG_ROOT}/var/lib/algorand"
 fi
 
 systemd_files=("algorand.service" "algorand@.service")
@@ -120,7 +117,7 @@ sed 's/^$/./g' < COPYING | sed 's/^/ /g' >> "${PKG_ROOT}/DEBIAN/copyright"
 mkdir -p "${PKG_ROOT}/usr/share/doc/algorand"
 cp -p "${PKG_ROOT}/DEBIAN/copyright" "${PKG_ROOT}/usr/share/doc/algorand/copyright"
 
-OUTPUT="$OUTDIR/algorand_${VER}_${ARCH}.deb"
+OUTPUT="$OUTDIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
 dpkg-deb --build "${PKG_ROOT}" "${OUTPUT}"
 
 echo
