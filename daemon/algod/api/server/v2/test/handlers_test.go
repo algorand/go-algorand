@@ -62,7 +62,7 @@ func TestSimpleMockBuilding(t *testing.T) {
 func accountInformationTest(t *testing.T, address string, expectedCode int) {
 	handler, c, rec, _, _, releasefunc := setupTestForMethodGet(t)
 	defer releasefunc()
-	err := handler.AccountInformation(c, address)
+	err := handler.AccountInformation(c, address, generatedV2.AccountInformationParams{})
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
 	if address == poolAddr.String() {
