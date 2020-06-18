@@ -117,7 +117,7 @@ sed 's/^$/./g' < COPYING | sed 's/^/ /g' >> "${PKG_ROOT}/DEBIAN/copyright"
 mkdir -p "${PKG_ROOT}/usr/share/doc/algorand"
 cp -p "${PKG_ROOT}/DEBIAN/copyright" "${PKG_ROOT}/usr/share/doc/algorand/copyright"
 
-OUTPUT="$OUTDIR/algorand_${VER}_${ARCH}.deb"
+OUTPUT="$OUTDIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
 dpkg-deb --build "${PKG_ROOT}" "${OUTPUT}"
 
 echo
