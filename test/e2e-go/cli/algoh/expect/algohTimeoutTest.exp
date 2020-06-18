@@ -23,10 +23,12 @@ if { [catch {
     puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
 
 
-    ::Algoh::EstablishNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
+    ::Algoh::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
 
-    exec echo > $TEST_NODE_DIR/config.json \{ \"GossipFanout\": 1, \"EndpointAddress\": \"127.0.0.1:0\", \"DNSBootstrapID\": \"\", \"EnableProfiler\": false, \"IncomingConnectionsLimit\": 0, \"RunHosted\": true \}
-    exec echo > $TEST_NODE_DIR/host-config.json \{ \"DeadManTimeSec\": 32, \"StatusDelayMS\": 45000, \"StallDelayMS\": 60000, \"UploadOnError\": true, \"SendBlockStats\": false \}
+    ::Algoh::StartNode $TEST_PRIMARY_NODE_DIR
+
+    exec cat ./disabled_profiler_config.json > $TEST_NODE_DIR/config.json
+    exec cat ./host-config.json > $TEST_NODE_DIR/host-config.json
     
     set PRIMARY_ADDR ""
     spawn cat $TEST_ROOT_DIR/Primary/algod-listen.net
@@ -52,22 +54,20 @@ if { [catch {
     }
 
     #wait until Node approves blocks to the network
-    set timeout 605
-    spawn ~/go/bin/goal node wait -d $TEST_NODE_DIR -w 600
+    set timeout 60
+    spawn ~/go/bin/goal node wait -d $TEST_NODE_DIR -w 61
     expect {
         eof {puts "successfully communicating with relay node"}
         "Timed out waiting for node to make progress" {puts "timed out waiting for connection to relay node"; close; exit 1}
         timeout {puts "should not reached this case"; close; exit 1}
     }
 
-    spawn ~/go/bin/goal node stop -d $TEST_PRIMARY_NODE_DIR
-    expect {
-        "^The node was successfully stopped." {puts "primary relay node shut down"; close}
-        timeout {puts "unable to shut down primary relay node"; close; exit 1}
-    }
 
-    set timeout 305
-    spawn ~/go/bin/goal node wait -d $TEST_NODE_DIR -w 300
+    ::Algoh::StopNode $TEST_PRIMARY_NODE_DIR
+
+
+    set timeout 201
+    spawn ~/go/bin/goal node wait -d $TEST_NODE_DIR -w 200
     expect {
         "^Cannot contact Algorand node: open $TEST_NODE_DIR/algod.net: no such file or directory." {puts "ERROR: node shutdown"; close; exit 1}
         "^Timed out waiting for node to make progress" {puts "node correctly continued running despite relay shutdown"; close}

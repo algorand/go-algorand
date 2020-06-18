@@ -79,17 +79,7 @@ func (w deadManWatcher) run(initBlock uint64) {
 			// the details, but the best thing we can do is try to shut it down.
 			if err != nil {
 				nc := getNodeController()
-				algodClient, err := nc.AlgodClient()
-
-				// Before stopping the node due to timeout, ensure that it has genuinely failed
-				// and is not just timing out because of network unresponsiveness
-				if err == nil {
-					err = algodClient.HealthCheck()
-				}
-
-				if err != nil {
-					nc.FullStop()
-				}
+				nc.FullStop()
 			}
 		}
 	}
