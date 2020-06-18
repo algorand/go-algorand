@@ -34,9 +34,10 @@ type deadManWatcher struct {
 	client        Client
 	done          <-chan struct{}
 	wg            *sync.WaitGroup
+	algodConfig   config.Local
 }
 
-func makeDeadManWatcher(timeout int64, client Client, uploadOnError bool, done <-chan struct{}, wg *sync.WaitGroup) deadManWatcher {
+func makeDeadManWatcher(timeout int64, client Client, uploadOnError bool, done <-chan struct{}, wg *sync.WaitGroup, algodConfig config.Local) deadManWatcher {
 	var deadManTime time.Duration
 	if timeout == 0 {
 		deadManTime = time.Hour * (10 * 365 * 24) // Don't fire for 10 years
@@ -51,6 +52,7 @@ func makeDeadManWatcher(timeout int64, client Client, uploadOnError bool, done <
 		uploadOnError: uploadOnError,
 		done:          done,
 		wg:            wg,
+		algodConfig:   algodConfig,
 	}
 }
 
@@ -91,25 +93,27 @@ func (w deadManWatcher) onBlock(block v1.Block) {
 }
 
 func (w deadManWatcher) reportDeadManTimeout(curBlock uint64) (err error) {
-	cfg, err := config.LoadConfigFromDisk(resolveDataDir())
-	if err == nil {
-		if !cfg.EnableProfiler {
-			algodClient, err := getNodeController().AlgodClient()
-			if err != nil {
-				err = algodClient.HealthCheck()
-			}
-			return err
+	var details telemetryspec.DeadManTriggeredEventDetails
+	if w. algodConfig.EnableProfiler {
+		goRoutines, err := getGoRoutines(w.client)
+	  	if err != nil {
+		 	goRoutines = fmt.Sprintf("Error dumping goroutines: %v", err)
 		}
-	}
-	goRoutines, err := getGoRoutines(w.client)
-	if err != nil {
-		goRoutines = fmt.Sprintf("Error dumping goroutines: %v", err)
-	}
-
-	details := telemetryspec.DeadManTriggeredEventDetails{
-		Timeout:      int64(w.timeout.Seconds()),
-		CurrentBlock: curBlock,
-		GoRoutines:   goRoutines,
+		details = telemetryspec.DeadManTriggeredEventDetails{
+			Timeout:      int64(w.timeout.Seconds()),
+			CurrentBlock: curBlock,
+			GoRoutines:   goRoutines,
+		}
+	} else {
+		healthCheck, err := getHealthCheck(w.client)
+		if err != nil {
+			healthCheck = fmt.Sprintf("Error performing health check : %v", err)
+		}
+		details = telemetryspec.DeadManTriggeredEventDetails{
+			Timeout:      int64(w.timeout.Seconds()),
+			CurrentBlock: curBlock,
+			GoRoutines:  healthCheck,
+		}
 	}
 	log.EventWithDetails(telemetryspec.HostApplicationState, telemetryspec.DeadManTriggeredEvent, details)
 
@@ -125,6 +129,14 @@ func getGoRoutines(client Client) (goRoutines string, err error) {
 	goRoutines, err = client.GetGoRoutines(ctx)
 	if ctx.Err() == context.DeadlineExceeded {
 		err = fmt.Errorf("timed out requesting goroutines")
+	}
+	return
+}
+
+func getHealthCheck(client Client) (healthCheck string, err error) {
+	err = client.HealthCheck()
+	if err == nil {
+		healthCheck = "Node is healthy"
 	}
 	return
 }
