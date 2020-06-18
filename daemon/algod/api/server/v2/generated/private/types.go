@@ -4,6 +4,7 @@
 package private
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -220,6 +221,42 @@ type AssetParams struct {
 	Url *string `json:"url,omitempty"`
 }
 
+// DryrunApp defines model for DryrunApp.
+type DryrunApp struct {
+	AppIndex uint64 `json:"app-index"`
+	Creator  string `json:"creator"`
+
+	// Stores the global information associated with an application.
+	Params ApplicationParams `json:"params"`
+}
+
+// DryrunRequest defines model for DryrunRequest.
+type DryrunRequest struct {
+	Accounts []Account   `json:"accounts"`
+	Apps     []DryrunApp `json:"apps"`
+
+	// LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.
+	LatestTimestamp uint64 `json:"latest-timestamp"`
+
+	// ProtocolVersion specifies a specific version string to operate under, otherwise whatever the current protocol of the network this algod is running in.
+	ProtocolVersion string `json:"protocol-version"`
+
+	// Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.
+	Round   uint64            `json:"round"`
+	Sources []DryrunSource    `json:"sources"`
+	Txns    []json.RawMessage `json:"txns"`
+}
+
+// DryrunSource defines model for DryrunSource.
+type DryrunSource struct {
+	AppIndex uint64 `json:"app-index"`
+
+	// FieldName is what kind of sources this is. If lsig then it goes into the transactions[this.TxnIndex].LogicSig. If approv or clearp it goes into the Approval Program or Clear State Program of application[this.AppIndex].
+	FieldName string `json:"field-name"`
+	Source    string `json:"source"`
+	TxnIndex  uint64 `json:"txn-index"`
+}
+
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	Data    *string `json:"data,omitempty"`
@@ -344,6 +381,12 @@ type BlockResponse struct {
 
 	// Optional certificate object. This is only included when the format is set to message pack.
 	Cert *map[string]interface{} `json:"cert,omitempty"`
+}
+
+// DryrunResponse defines model for DryrunResponse.
+type DryrunResponse struct {
+	Error *string   `json:"error,omitempty"`
+	Txns  []Account `json:"txns"`
 }
 
 // NodeStatusResponse defines model for NodeStatusResponse.

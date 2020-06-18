@@ -28,54 +28,50 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// DryrunApp holds global app state for a dryrun call.
-// TODO: should become obsolete when app supported added to api v2?
-type DryrunApp struct {
-	Creator  basics.Address   `codec:"a"`
-	AppIndex uint64           `codec:"i"`
-	Params   basics.AppParams `codec:"p"`
-}
-
-// DryrunLocalAppState holds per-account app state for a dryrun call.
-// TODO: should become obsolete when app supported added to api v2?
-type DryrunLocalAppState struct {
-	Account  basics.Address       `codec:"a"`
-	AppIndex basics.AppIndex      `codec:"i"`
-	State    basics.AppLocalState `codec:"s"`
-}
-
-// DryrunSource is TEAL source text that gets uploaded, compiled, and inserted into transactions or application state
-type DryrunSource struct {
-	// FieldName is what kind of sources this is.
-	// If lsig then it goes into the transactions[this.TxnIndex].LogicSig
-	// If approv or clearp it goes into the Approval Program or Clear State Program of application[this.AppIndex]
-	FieldName string `codec:"f"` // "lsig", "approv", "clearp"
-	Source    string `codec:"text"`
-	TxnIndex  int    `codec:"ti,omitempty"`
-	AppIndex  uint64 `codec:"ai,omitempty"`
-}
-
-// DryrunRequest is the JSON object uploaded to /v2/transactions/dryrun
+// DryrunRequest object uploaded to /v2/transactions/dryrun
+// It is the same as generated.DryrunRequest but Txns deserialized properly.
 // Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.
 type DryrunRequest struct {
 	// Txns is transactions to simulate
-	Txns []transactions.SignedTxn `json:"txns,omitempty"`
+	Txns []transactions.SignedTxn `json:"-"` // not supposed to be serialized
 
 	// Optional, useful for testing Application Call txns.
-	Accounts []generated.Account `json:"accounts,omitempty"`
+	Accounts []generated.Account `json:"-"`
 
-	Apps []DryrunApp `json:"apps,omitempty"`
+	Apps []generated.DryrunApp `json:"-"`
 
 	// ProtocolVersion specifies a specific version string to operate under, otherwise whatever the current protocol of the network this algod is running in.
-	ProtocolVersion string `json:"proto,omitempty"`
+	ProtocolVersion string `json:"-"`
 
 	// Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.
-	Round uint64 `json:"round,omitempty"`
+	Round uint64 `json:"-"`
 
 	// LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.
-	LatestTimestamp int64 `json:"latest,omitempty"`
+	LatestTimestamp int64 `json:"-"`
 
-	Sources []DryrunSource
+	Sources []generated.DryrunSource `json:"-"`
+}
+
+// DryrunRequestFromGenerated converts generated.DryrunRequest to DryrunRequest field by fields
+// and re-types Txns []transactions.SignedTxn
+func DryrunRequestFromGenerated(gdr *generated.DryrunRequest) (dr DryrunRequest, err error) {
+	for _, raw := range gdr.Txns {
+		// no transactions.SignedTxn in OAS, map[string]interface{} is not good enough
+		// json.RawMessage does the job
+		var txn transactions.SignedTxn
+		err = protocol.DecodeJSON(raw, &txn)
+		if err != nil {
+			return
+		}
+		dr.Txns = append(dr.Txns, txn)
+	}
+	dr.Accounts = gdr.Accounts
+	dr.Apps = gdr.Apps
+	dr.ProtocolVersion = gdr.ProtocolVersion
+	dr.Round = gdr.Round
+	dr.LatestTimestamp = int64(gdr.LatestTimestamp)
+	dr.Sources = gdr.Sources
+	return
 }
 
 func (dr *DryrunRequest) expandSources() error {
@@ -207,7 +203,15 @@ func (dl *dryrunLedger) init() error {
 		dl.accountsIn[xaddr] = i
 	}
 	for i, app := range dl.dr.Apps {
-		dl.accountApps[app.Creator] = i
+		var addr basics.Address
+		if app.Creator != "" {
+			var err error
+			addr, err = basics.UnmarshalChecksumAddress(app.Creator)
+			if err != nil {
+				return err
+			}
+		}
+		dl.accountApps[addr] = i
 	}
 	return nil
 }
@@ -248,7 +252,7 @@ func (dl *dryrunLedger) Get(addr basics.Address, withPendingRewards bool) (basic
 		any = true
 		app := dl.dr.Apps[appi]
 		out.AppParams = make(map[basics.AppIndex]basics.AppParams)
-		out.AppParams[basics.AppIndex(app.AppIndex)] = app.Params
+		out.AppParams[basics.AppIndex(app.AppIndex)] = ApplicationParamsToAppParams(&app.Params)
 	}
 	if !any {
 		return basics.BalanceRecord{}, fmt.Errorf("no account for addr %s", addr.String())
@@ -292,7 +296,15 @@ func (dl *dryrunLedger) GetAssetCreator(aidx basics.AssetIndex) (basics.Address,
 func (dl *dryrunLedger) GetAppCreator(aidx basics.AppIndex) (basics.Address, bool, error) {
 	for _, app := range dl.dr.Apps {
 		if app.AppIndex == uint64(aidx) {
-			return app.Creator, true, nil
+			var addr basics.Address
+			if app.Creator != "" {
+				var err error
+				addr, err = basics.UnmarshalChecksumAddress(app.Creator)
+				if err != nil {
+					return basics.Address{}, false, err
+				}
+			}
+			return addr, true, nil
 		}
 	}
 	return basics.Address{}, false, fmt.Errorf("no app %d", aidx)
@@ -390,7 +402,7 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 		if stxn.Txn.Type == protocol.ApplicationCallTx {
 			appIdx := stxn.Txn.ApplicationID
 			if appIdx == 0 {
-				creator := stxn.Txn.Sender
+				creator := stxn.Txn.Sender.String()
 				// check and use the first entry in dr.Apps
 				if len(dr.Apps) > 0 && dr.Apps[0].Creator == creator {
 					appIdx = basics.AppIndex(dr.Apps[0].AppIndex)
@@ -407,7 +419,7 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 			ok := false
 			for _, appt := range dr.Apps {
 				if appt.AppIndex == uint64(appIdx) {
-					app = appt.Params
+					app = ApplicationParamsToAppParams(&appt.Params)
 					ok = true
 					break
 				}

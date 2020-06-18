@@ -557,7 +557,6 @@
     "/v2/transactions/dryrun": {
       "post": {
         "consumes": [
-          "application/x-msgpack",
           "application/json"
         ],
         "produces": [
@@ -575,8 +574,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "binary"
+              "$ref": "#/definitions/DryrunRequest"
             }
           }
         ],
@@ -1204,6 +1202,108 @@
           "type": "integer"
         }
       }
+    },
+    "DryrunRequest": {
+      "description": "Request data type for dryrun endpoint. Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.",
+      "type": "object",
+      "required": [
+        "txns",
+        "accounts",
+        "apps",
+        "protocol-version",
+        "round",
+        "latest-timestamp",
+        "sources"
+      ],
+      "properties": {
+        "txns": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "json",
+            "x-algorand-format": "SignedTransaction"
+          }
+        },
+        "accounts": {
+          "type": "array",
+          "items": {
+              "$ref": "#/definitions/Account"
+          }
+        },
+        "apps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DryrunApp"
+          }
+        },
+        "protocol-version": {
+          "description": "ProtocolVersion specifies a specific version string to operate under, otherwise whatever the current protocol of the network this algod is running in.",
+          "type": "string"
+        },
+        "round": {
+          "description": "Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "latest-timestamp": {
+          "description": "LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.",
+          "type": "integer",
+          "format": "int64"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DryrunSource"
+          }
+        }
+      }
+    },
+    "DryrunApp": {
+      "description": "DryrunApp holds global app state for a dryrun call.",
+      "type": "object",
+      "required": [
+        "creator",
+        "app-index",
+        "params"
+      ],
+      "properties": {
+        "creator": {
+          "type": "string"
+        },
+        "app-index": {
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        },
+        "params": {
+          "$ref": "#/definitions/ApplicationParams"
+        }
+      }
+    },
+    "DryrunSource": {
+      "description": "DryrunSource is TEAL source text that gets uploaded, compiled, and inserted into transactions or application state.",
+      "type": "object",
+      "required": [
+        "field-name",
+        "source",
+        "txn-index",
+        "app-index"
+      ],
+      "properties": {
+        "field-name": {
+          "description": "FieldName is what kind of sources this is. If lsig then it goes into the transactions[this.TxnIndex].LogicSig. If approv or clearp it goes into the Approval Program or Clear State Program of application[this.AppIndex].",
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "txn-index": {
+          "type": "integer"
+        },
+        "app-index": {
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        }
+      }
     }
   },
   "parameters": {
@@ -1597,6 +1697,26 @@
           }
         },
         "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+      }
+    },
+    "DryrunResponse": {
+      "description": "DryrunResponse contains per-txn debug information from a dryrun.",
+      "schema": {
+        "type": "object",
+        "required": [
+          "txns"
+        ],
+        "properties": {
+          "txns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/Account"
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        }
       }
     }
   },

@@ -19,6 +19,7 @@ package v2
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"strconv"
 	"strings"
 	"testing"
@@ -158,7 +159,7 @@ func TestDryrunLogicSigSource(t *testing.T) {
 	proto.LogicSigMaxCost = 1000
 
 	dr.Txns = []transactions.SignedTxn{{}}
-	dr.Sources = []DryrunSource{
+	dr.Sources = []generated.DryrunSource{
 		{
 			Source:    "int 1",
 			FieldName: "lsig",
@@ -390,14 +391,18 @@ func TestDryrunGlobal1(t *testing.T) {
 			},
 		},
 	}
-	app1gs := make(map[string]basics.TealValue)
-	app1gs["foo"] = basics.TealValue{Type: basics.TealBytesType, Bytes: "bar"}
-	dr.Apps = []DryrunApp{
+	gkv := generated.TealKeyValueStore{
+		generated.TealKeyValue{
+			Key:   "foo",
+			Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
+		},
+	}
+	dr.Apps = []generated.DryrunApp{
 		{
 			AppIndex: 1,
-			Params: basics.AppParams{
+			Params: generated.ApplicationParams{
 				ApprovalProgram: globalTestProgram,
-				GlobalState:     app1gs,
+				GlobalState:     &gkv,
 			},
 		},
 	}
@@ -433,14 +438,18 @@ func TestDryrunGlobal2(t *testing.T) {
 			},
 		},
 	}
-	app1gs := make(map[string]basics.TealValue)
-	app1gs["foo"] = basics.TealValue{Type: basics.TealBytesType, Bytes: "bar"}
-	dr.Apps = []DryrunApp{
+	gkv := generated.TealKeyValueStore{
+		generated.TealKeyValue{
+			Key:   "foo",
+			Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
+		},
+	}
+	dr.Apps = []generated.DryrunApp{
 		{
 			AppIndex: 1,
-			Params: basics.AppParams{
+			Params: generated.ApplicationParams{
 				ApprovalProgram: globalTestProgram,
-				GlobalState:     app1gs,
+				GlobalState:     &gkv,
 			},
 		},
 	}
@@ -483,10 +492,10 @@ func TestDryrunLocal1(t *testing.T) {
 			},
 		},
 	}
-	dr.Apps = []DryrunApp{
+	dr.Apps = []generated.DryrunApp{
 		{
 			AppIndex: 1,
-			Params: basics.AppParams{
+			Params: generated.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 			},
 		},
@@ -548,7 +557,7 @@ func TestDryrunLocal1A(t *testing.T) {
 			},
 		},
 	}
-	dr.Apps = []DryrunApp{
+	dr.Apps = []generated.DryrunApp{
 		{
 			AppIndex: 1,
 		},
@@ -560,7 +569,7 @@ func TestDryrunLocal1A(t *testing.T) {
 		},
 	}
 
-	dr.Sources = []DryrunSource{
+	dr.Sources = []generated.DryrunSource{
 		{
 			Source:    localStateCheckSource,
 			FieldName: "approv",
@@ -617,10 +626,10 @@ func TestDryrunLocalCheck(t *testing.T) {
 			},
 		},
 	}
-	dr.Apps = []DryrunApp{
+	dr.Apps = []generated.DryrunApp{
 		{
 			AppIndex: 1,
-			Params: basics.AppParams{
+			Params: generated.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 			},
 		},
@@ -661,13 +670,14 @@ func TestDryrunLocalCheck(t *testing.T) {
 func TestDryrunEncodeDecode(t *testing.T) {
 	t.Parallel()
 
-	var dr DryrunRequest
-	dr.Txns = []transactions.SignedTxn{
+	var gdr generated.DryrunRequest
+	txns := []transactions.SignedTxn{
 		{
 			Txn: transactions.Transaction{
 				Type: protocol.ApplicationCallTx,
 				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: 1,
+					ApplicationID:   1,
+					ApprovalProgram: []byte{1, 2, 3},
 					ApplicationArgs: [][]byte{
 						[]byte("check"),
 						[]byte("bar"),
@@ -676,10 +686,15 @@ func TestDryrunEncodeDecode(t *testing.T) {
 			},
 		},
 	}
-	dr.Apps = []DryrunApp{
+	for i := range txns {
+		enc := protocol.EncodeJSON(&txns[i])
+		gdr.Txns = append(gdr.Txns, enc)
+	}
+
+	gdr.Apps = []generated.DryrunApp{
 		{
 			AppIndex: 1,
-			Params: basics.AppParams{
+			Params: generated.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 			},
 		},
@@ -690,7 +705,7 @@ func TestDryrunEncodeDecode(t *testing.T) {
 		Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
 	}
 
-	dr.Accounts = []generated.Account{
+	gdr.Accounts = []generated.Account{
 		{
 			Address: basics.Address{}.String(),
 			AppsLocalState: &[]generated.ApplicationLocalStates{
@@ -704,18 +719,34 @@ func TestDryrunEncodeDecode(t *testing.T) {
 		},
 	}
 
-	encoded := protocol.EncodeJSON(&dr)
-	var decoded DryrunRequest
+	// use protocol
+	encoded := protocol.EncodeJSON(&gdr)
+	var decoded generated.DryrunRequest
 	err := protocol.DecodeJSON(encoded, &decoded)
 	require.NoError(t, err)
-	require.Equal(t, dr, decoded)
+	require.Equal(t, gdr, decoded)
 
 	buf := bytes.NewBuffer(encoded)
 	dec := protocol.NewJSONDecoder(buf)
-	decoded = DryrunRequest{}
+	decoded = generated.DryrunRequest{}
 	err = dec.Decode(&decoded)
 	require.NoError(t, err)
-	require.Equal(t, dr, decoded)
+	require.Equal(t, gdr, decoded)
+
+	// use json
+	data, err := json.Marshal(&gdr)
+	require.NoError(t, err)
+	gdr = generated.DryrunRequest{}
+	err = json.Unmarshal(data, &gdr)
+	require.NoError(t, err)
+
+	dr, err := DryrunRequestFromGenerated(&gdr)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(dr.Txns))
+	require.Equal(t, txns[0].Txn.ApplicationID, dr.Txns[0].Txn.ApplicationID)
+	require.Equal(t, txns[0].Txn.ApprovalProgram, dr.Txns[0].Txn.ApprovalProgram)
+	require.Equal(t, []byte{1, 2, 3}, dr.Txns[0].Txn.ApprovalProgram)
+	require.Equal(t, txns[0].Txn.ApplicationArgs, dr.Txns[0].Txn.ApplicationArgs)
 }
 
 func TestDryrunMakeLedger(t *testing.T) {
@@ -745,11 +776,11 @@ func TestDryrunMakeLedger(t *testing.T) {
 			},
 		},
 	}
-	dr.Apps = []DryrunApp{
+	dr.Apps = []generated.DryrunApp{
 		{
 			AppIndex: 1,
-			Creator:  sender,
-			Params: basics.AppParams{
+			Creator:  sender.String(),
+			Params: generated.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 			},
 		},
@@ -759,4 +790,99 @@ func TestDryrunMakeLedger(t *testing.T) {
 	require.NoError(t, err)
 	_, err = makeAppLedger(&dl, &dr.Txns[0].Txn, 1)
 	require.NoError(t, err)
+}
+
+var dataJSON = []byte(`{
+	"accounts": [
+	  {
+		"address": "UAPJE355K7BG7RQVMTZOW7QW4ICZJEIC3RZGYG5LSHZ65K6LCNFPJDSR7M",
+		"amount": 5002280000000000,
+		"amount-without-pending-rewards": 5000000000000000,
+		"participation": {
+		  "selection-participation-key": "tVDPagKEH1ch9q0jWwPdBIe13k2EbOw+0UTrfpKLqlU=",
+		  "vote-first-valid": 0,
+		  "vote-key-dilution": 10000,
+		  "vote-last-valid": 3000000,
+		  "vote-participation-key": "gBw6xPd3U4pLXaRkw1UC1wgvR51P5+aYQv5OADAFyOM="
+		},
+		"pending-rewards": 2280000000000,
+		"reward-base": 456,
+		"rewards": 2280000000000,
+		"round": 18241,
+		"status": "Online"
+	  }
+	],
+	"apps": [
+	  {
+		"app-index": 1380011588,
+		"creator": "UAPJE355K7BG7RQVMTZOW7QW4ICZJEIC3RZGYG5LSHZ65K6LCNFPJDSR7M",
+		"params": {
+		  "approval-program": "AiABASI=",
+		  "clear-state-program": "AiABASI=",
+		  "global-state-schema": {
+			"num-byte-slice": 5,
+			"num-uint": 5
+		  },
+		  "local-state-schema": {
+			"num-byte-slice": 5,
+			"num-uint": 5
+		  }
+		}
+	  }
+	],
+	"latest-timestamp": 1592537757,
+	"protocol-version": "future",
+	"round": 18241,
+	"sources": null,
+	"txns": [
+	  {
+	"txn": {
+	  "apap": "AiABASI=",
+	  "apgs": {
+		"nbs": 5,
+		"nui": 5
+	  },
+	  "apls": {
+		"nbs": 5,
+		"nui": 5
+	  },
+	  "apsu": "AiABASI=",
+	  "fee": 1000,
+	  "fv": 18242,
+	  "gh": "ZIkPs8pTDxbRJsFB1yJ7gvnpDu0Q85FRkl2NCkEAQLU=",
+	  "lv": 19242,
+	  "note": "tjpNge78JD8=",
+	  "snd": "UAPJE355K7BG7RQVMTZOW7QW4ICZJEIC3RZGYG5LSHZ65K6LCNFPJDSR7M",
+	  "type": "appl"
+	}
+  }
+	]
+}`)
+
+func TestDryrunRequestJSON(t *testing.T) {
+	t.Parallel()
+
+	var gdr generated.DryrunRequest
+	buf := bytes.NewBuffer(dataJSON)
+	dec := protocol.NewJSONDecoder(buf)
+	err := dec.Decode(&gdr)
+	require.NoError(t, err)
+
+	dr, err := DryrunRequestFromGenerated(&gdr)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(dr.Txns))
+	require.Equal(t, 1, len(dr.Accounts))
+	require.Equal(t, 1, len(dr.Apps))
+
+	var proto config.ConsensusParams
+	var response DryrunResponse
+
+	proto.LogicSigVersion = 2
+	proto.LogicSigMaxCost = 1000
+
+	doDryrunRequest(&dr, &proto, &response)
+	checkAppCallPass(t, &response)
+	if t.Failed() {
+		logResponse(t, &response)
+	}
 }

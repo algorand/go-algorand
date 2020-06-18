@@ -169,6 +169,22 @@ func AccountDataToAccount(
 	}, nil
 }
 
+func convertGeneratedTKV(akvs *generated.TealKeyValueStore) basics.TealKeyValue {
+	if akvs == nil || len(*akvs) == 0 {
+		return nil
+	}
+
+	tkv := make(basics.TealKeyValue)
+	for _, kv := range *akvs {
+		tkv[kv.Key] = basics.TealValue{
+			Type:  basics.TealType(kv.Value.Type),
+			Uint:  kv.Value.Uint,
+			Bytes: kv.Value.Bytes,
+		}
+	}
+	return tkv
+}
+
 // AccountToAccountData converts v2.generated.Account to basics.AccountData
 func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 	var voteID crypto.OneTimeSignatureVerifier
@@ -238,22 +254,6 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 		}
 	}
 
-	convertTKV := func(akvs *generated.TealKeyValueStore) basics.TealKeyValue {
-		if len(*akvs) == 0 {
-			return nil
-		}
-
-		tkv := make(basics.TealKeyValue)
-		for _, kv := range *akvs {
-			tkv[kv.Key] = basics.TealValue{
-				Type:  basics.TealType(kv.Value.Type),
-				Uint:  kv.Value.Uint,
-				Bytes: kv.Value.Bytes,
-			}
-		}
-		return tkv
-	}
-
 	var appLocalStates map[basics.AppIndex]basics.AppLocalState
 	if a.AppsLocalState != nil && len(*a.AppsLocalState) > 0 {
 		appLocalStates = make(map[basics.AppIndex]basics.AppLocalState, len(*a.AppsLocalState))
@@ -263,7 +263,7 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 					NumUint:      ls.State.Schema.NumUint,
 					NumByteSlice: ls.State.Schema.NumByteSlice,
 				},
-				KeyValue: convertTKV(&ls.State.KeyValue),
+				KeyValue: convertGeneratedTKV(&ls.State.KeyValue),
 			}
 		}
 	}
@@ -272,19 +272,7 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 	if a.CreatedApps != nil && len(*a.CreatedApps) > 0 {
 		appParams = make(map[basics.AppIndex]basics.AppParams, len(*a.CreatedApps))
 		for _, params := range *a.CreatedApps {
-			appParams[basics.AppIndex(params.AppIndex)] = basics.AppParams{
-				ApprovalProgram:   params.AppParams.ApprovalProgram,
-				ClearStateProgram: params.AppParams.ClearStateProgram,
-				LocalStateSchema: basics.StateSchema{
-					NumUint:      params.AppParams.LocalStateSchema.NumUint,
-					NumByteSlice: params.AppParams.LocalStateSchema.NumByteSlice,
-				},
-				GlobalStateSchema: basics.StateSchema{
-					NumUint:      params.AppParams.GlobalStateSchema.NumUint,
-					NumByteSlice: params.AppParams.GlobalStateSchema.NumByteSlice,
-				},
-				GlobalState: convertTKV(params.AppParams.GlobalState),
-			}
+			appParams[basics.AppIndex(params.AppIndex)] = ApplicationParamsToAppParams(&params.AppParams)
 		}
 	}
 
@@ -331,4 +319,27 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 	}
 
 	return ad, nil
+}
+
+// ApplicationParamsToAppParams converts generated.ApplicationParams to basics.AppParams
+func ApplicationParamsToAppParams(gap *generated.ApplicationParams) basics.AppParams {
+	ap := basics.AppParams{
+		ApprovalProgram:   gap.ApprovalProgram,
+		ClearStateProgram: gap.ClearStateProgram,
+	}
+	if gap.LocalStateSchema != nil {
+		ap.LocalStateSchema = basics.StateSchema{
+			NumUint:      gap.LocalStateSchema.NumUint,
+			NumByteSlice: gap.LocalStateSchema.NumByteSlice,
+		}
+	}
+	if gap.GlobalStateSchema != nil {
+		ap.GlobalStateSchema = basics.StateSchema{
+			NumUint:      gap.GlobalStateSchema.NumUint,
+			NumByteSlice: gap.GlobalStateSchema.NumByteSlice,
+		}
+	}
+	ap.GlobalState = convertGeneratedTKV(gap.GlobalState)
+
+	return ap
 }

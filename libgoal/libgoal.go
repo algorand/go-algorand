@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 
@@ -856,24 +856,27 @@ func (c *Client) SetAPIVersionAffinity(algodVersionAffinity algodclient.APIVersi
 	c.kmdVersionAffinity = kmdVersionAffinity
 }
 
-func convertAppParams(paramsIn *v1.AppParams) (appParams basics.AppParams) {
+func convertAppParams(paramsIn *v1.AppParams) (appParams generatedV2.ApplicationParams) {
 	appParams.ApprovalProgram = []byte(paramsIn.ApprovalProgram)
 	appParams.ClearStateProgram = []byte(paramsIn.ClearStateProgram)
-	appParams.GlobalStateSchema = basics.StateSchema{
+	appParams.GlobalStateSchema = &generatedV2.ApplicationStateSchema{
 		NumUint:      paramsIn.GlobalStateSchema.NumUint,
 		NumByteSlice: paramsIn.GlobalStateSchema.NumByteSlice,
 	}
-	appParams.LocalStateSchema = basics.StateSchema{
+	appParams.LocalStateSchema = &generatedV2.ApplicationStateSchema{
 		NumUint:      paramsIn.LocalStateSchema.NumUint,
 		NumByteSlice: paramsIn.LocalStateSchema.NumByteSlice,
 	}
-	appParams.GlobalState = make(map[string]basics.TealValue, len(paramsIn.GlobalState))
+	appParams.GlobalState = &generatedV2.TealKeyValueStore{}
 	for k, v := range paramsIn.GlobalState {
-		appParams.GlobalState[k] = basics.TealValue{
-			Type:  basics.TealTypeFromString(v.Type),
-			Uint:  v.Uint,
-			Bytes: v.Bytes,
-		}
+		*appParams.GlobalState = append(*appParams.GlobalState, generated.TealKeyValue{
+			Key: k,
+			Value: generatedV2.TealValue{
+				Type:  uint64(basics.TealTypeFromString(v.Type)),
+				Uint:  v.Uint,
+				Bytes: v.Bytes,
+			},
+		})
 	}
 	return
 }
@@ -881,24 +884,33 @@ func convertAppParams(paramsIn *v1.AppParams) (appParams basics.AppParams) {
 const defaultAppIdx = 1380011588
 
 // MakeDryrunState function creates DryrunRequest data structure and serializes it into a file
-func MakeDryrunState(client Client, tx transactions.Transaction, other []transactions.SignedTxn, proto string) (dr v2.DryrunRequest, err error) {
+func MakeDryrunState(client Client, tx transactions.Transaction, other []transactions.SignedTxn, proto string) (dr generatedV2.DryrunRequest, err error) {
 	txns := []transactions.SignedTxn{{Txn: tx}}
 	txns = append(txns, other...)
-	dr.Txns = txns
+	for i := range txns {
+		enc := protocol.EncodeJSON(&txns[i])
+		dr.Txns = append(dr.Txns, enc)
+	}
 
 	if tx.Type == protocol.ApplicationCallTx {
 		apps := []basics.AppIndex{tx.ApplicationID}
 		apps = append(apps, tx.ForeignApps...)
 		for _, appIdx := range apps {
-			var appParams basics.AppParams
-			var creator basics.Address
+			var appParams generated.ApplicationParams
+			var creator string
 			// if app create txn then use params from the txn
 			if appIdx == 0 {
 				appParams.ApprovalProgram = tx.ApprovalProgram
 				appParams.ClearStateProgram = tx.ClearStateProgram
-				appParams.GlobalStateSchema = tx.GlobalStateSchema
-				appParams.LocalStateSchema = tx.LocalStateSchema
-				creator = tx.Sender
+				appParams.GlobalStateSchema = &generatedV2.ApplicationStateSchema{
+					NumUint:      tx.GlobalStateSchema.NumUint,
+					NumByteSlice: tx.GlobalStateSchema.NumByteSlice,
+				}
+				appParams.LocalStateSchema = &generatedV2.ApplicationStateSchema{
+					NumUint:      tx.LocalStateSchema.NumUint,
+					NumByteSlice: tx.LocalStateSchema.NumByteSlice,
+				}
+				creator = tx.Sender.String()
 				// zero is not acceptable by ledger in dryrun/debugger
 				appIdx = defaultAppIdx
 			} else {
@@ -908,11 +920,9 @@ func MakeDryrunState(client Client, tx transactions.Transaction, other []transac
 					return
 				}
 				appParams = convertAppParams(&params)
-				if creator, err = basics.UnmarshalChecksumAddress(params.Creator); err != nil {
-					return
-				}
+				creator = params.Creator
 			}
-			dr.Apps = append(dr.Apps, v2.DryrunApp{
+			dr.Apps = append(dr.Apps, generatedV2.DryrunApp{
 				Creator:  creator,
 				AppIndex: uint64(appIdx),
 				Params:   appParams,
@@ -936,7 +946,7 @@ func MakeDryrunState(client Client, tx transactions.Transaction, other []transac
 		if b, err = client.Block(dr.Round); err != nil {
 			return
 		}
-		dr.LatestTimestamp = b.Timestamp
+		dr.LatestTimestamp = uint64(b.Timestamp)
 	}
 	return
 }

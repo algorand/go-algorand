@@ -262,8 +262,13 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 func (v2 *Handlers) TransactionDryRun(ctx echo.Context) error {
 	req := ctx.Request()
 	dec := protocol.NewJSONDecoder(req.Body)
-	var dr DryrunRequest
-	err := dec.Decode(&dr)
+	var gdr generated.DryrunRequest
+	err := dec.Decode(&gdr)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	dr, err := DryrunRequestFromGenerated(&gdr)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
