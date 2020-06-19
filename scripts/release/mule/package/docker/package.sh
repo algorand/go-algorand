@@ -38,7 +38,7 @@ DOCKERFILE="./docker/build/algod.Dockerfile"
 START_ALGOD_FILE="./docker/release/start_algod_docker.sh"
 ALGOD_DOCKER_INIT="./docker/release/algod_docker_init.sh"
 
-GOLANG_VERSION=$(./script/get_go_version.sh)
+GOLANG_VERSION=$(./scripts/get_golang_version.sh)
 GOROOT=/usr/local/go
 GOPATH="$HOME/go"
 PATH="$GOPATH/bin:$GOROOT/bin:$PATH"
