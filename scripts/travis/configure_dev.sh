@@ -27,6 +27,8 @@ if [ "${OS}" = "linux" ]; then
                 sudo ln -s /usr/local/go/bin/go /usr/local/bin/go
                 sudo ln -s /usr/local/go/bin/godoc /usr/local/bin/godoc
                 sudo ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+                echo "PATH: ${PATH}"
+                which go
                 go version
             else
                 echo "Failed to download go"
@@ -52,6 +54,8 @@ if [ "${OS}" = "linux" ]; then
                 sudo ln -s /usr/local/go/bin/go /usr/local/bin/go
                 sudo ln -s /usr/local/go/bin/godoc /usr/local/bin/godoc
                 sudo ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+                echo "PATH: ${PATH}"
+                which go
                 go version
             else
                 echo "Failed to download go"
