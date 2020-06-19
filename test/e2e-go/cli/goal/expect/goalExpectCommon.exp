@@ -159,7 +159,7 @@ proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR 
         spawn goal network start -d $TEST_ALGO_DIR -r $TEST_ROOT_DIR
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timed out starting network"  }
-            ".*Network started under.* { puts "Network $NETWORK_NAME started"  ;close  }
+            ".*Network started under.*" { puts "Network $NETWORK_NAME started"  ;close  }
             close
         }
     } EXCEPTION ] } {
@@ -173,7 +173,7 @@ proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR 
         spawn goal network status -d $TEST_ALGO_DIR -r $TEST_ROOT_DIR
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timed out retrieving network status"  }
-            ".*Error getting status.*" { close; ::AlgorandGoal::Abort "error getting network status: $expect_out(buffer)""}
+            ".*Error getting status.*" { close; ::AlgorandGoal::Abort "error getting network status: $expect_out(buffer)"}
             "^Network Started under.*"   { puts "Network $NETWORK_NAME status ok"; close }
             close
         }
