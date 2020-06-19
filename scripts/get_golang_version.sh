@@ -1,2 +1,3 @@
 #!/usr/bin/env bash
-echo $(cat ./go.mod | grep 'go ' | head -n 1 | cut -d' ' -f2)
+GOLANG_VERSION=$(grep 'go ' ./go.mod | head -n 1 | cut -d' ' -f2)
+echo "${GOLANG_VERSION}"
