@@ -256,12 +256,13 @@
                 },
                 "txns": {
                   "items": {
-                    "$ref": "#/components/schemas/Account"
+                    "$ref": "#/components/schemas/DryrunTxnResult"
                   },
                   "type": "array"
                 }
               },
               "required": [
+                "error",
                 "txns"
               ],
               "type": "object"
@@ -636,6 +637,22 @@
         ],
         "type": "object"
       },
+      "AccountStateDelta": {
+        "description": "Application state delta.",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "delta": {
+            "$ref": "#/components/schemas/StateDelta"
+          }
+        },
+        "required": [
+          "address",
+          "delta"
+        ],
+        "type": "object"
+      },
       "Application": {
         "description": "Application index and its parameters",
         "properties": {
@@ -947,6 +964,90 @@
         ],
         "type": "object"
       },
+      "DryrunState": {
+        "description": "Stores the TEAL eval step data",
+        "properties": {
+          "error": {
+            "description": "Evaluation error if any",
+            "type": "string"
+          },
+          "line": {
+            "description": "Line number",
+            "type": "integer"
+          },
+          "pc": {
+            "description": "Program counter",
+            "type": "integer"
+          },
+          "scratch": {
+            "items": {
+              "$ref": "#/components/schemas/TealValue"
+            },
+            "type": "array"
+          },
+          "stack": {
+            "items": {
+              "$ref": "#/components/schemas/TealValue"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "line",
+          "pc",
+          "stack"
+        ],
+        "type": "object"
+      },
+      "DryrunTxnResult": {
+        "description": "DryrunTxnResult contains any LogicSig or ApplicationCall program debug information and state updates from a dryrun.",
+        "properties": {
+          "app-call-messages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "app-call-trace": {
+            "items": {
+              "$ref": "#/components/schemas/DryrunState"
+            },
+            "type": "array"
+          },
+          "disassembly": {
+            "description": "Disassembled program line by line.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "global-delta": {
+            "$ref": "#/components/schemas/StateDelta"
+          },
+          "local-deltas": {
+            "items": {
+              "$ref": "#/components/schemas/AccountStateDelta"
+            },
+            "type": "array"
+          },
+          "logic-sig-messages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "logic-sig-trace": {
+            "items": {
+              "$ref": "#/components/schemas/DryrunState"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "disassembly"
+        ],
+        "type": "object"
+      },
       "ErrorResponse": {
         "description": "An error response with optional data field.",
         "properties": {
@@ -961,6 +1062,51 @@
           "message"
         ],
         "type": "object"
+      },
+      "EvalDelta": {
+        "description": "Represents a TEAL value delta.",
+        "properties": {
+          "action": {
+            "description": "\\[at\\] delta action.",
+            "type": "integer"
+          },
+          "bytes": {
+            "description": "\\[bs\\] bytes value.",
+            "type": "string"
+          },
+          "uint": {
+            "description": "\\[ui\\] uint value.",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "EvalDeltaKeyValue": {
+        "description": "Key-value pairs for StateDelta.",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/EvalDelta"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object"
+      },
+      "StateDelta": {
+        "description": "Application state delta.",
+        "items": {
+          "$ref": "#/components/schemas/EvalDeltaKeyValue"
+        },
+        "type": "array"
       },
       "TealKeyValue": {
         "description": "Represents a key-value pair in an application store.",

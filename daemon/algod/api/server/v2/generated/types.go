@@ -93,6 +93,14 @@ type AccountParticipation struct {
 	VoteParticipationKey []byte `json:"vote-participation-key"`
 }
 
+// AccountStateDelta defines model for AccountStateDelta.
+type AccountStateDelta struct {
+	Address string `json:"address"`
+
+	// Application state delta.
+	Delta StateDelta `json:"delta"`
+}
+
 // Application defines model for Application.
 type Application struct {
 
@@ -257,11 +265,65 @@ type DryrunSource struct {
 	TxnIndex  uint64 `json:"txn-index"`
 }
 
+// DryrunState defines model for DryrunState.
+type DryrunState struct {
+
+	// Evaluation error if any
+	Error *string `json:"error,omitempty"`
+
+	// Line number
+	Line uint64 `json:"line"`
+
+	// Program counter
+	Pc      uint64       `json:"pc"`
+	Scratch *[]TealValue `json:"scratch,omitempty"`
+	Stack   []TealValue  `json:"stack"`
+}
+
+// DryrunTxnResult defines model for DryrunTxnResult.
+type DryrunTxnResult struct {
+	AppCallMessages *[]string      `json:"app-call-messages,omitempty"`
+	AppCallTrace    *[]DryrunState `json:"app-call-trace,omitempty"`
+
+	// Disassembled program line by line.
+	Disassembly []string `json:"disassembly"`
+
+	// Application state delta.
+	GlobalDelta      *StateDelta          `json:"global-delta,omitempty"`
+	LocalDeltas      *[]AccountStateDelta `json:"local-deltas,omitempty"`
+	LogicSigMessages *[]string            `json:"logic-sig-messages,omitempty"`
+	LogicSigTrace    *[]DryrunState       `json:"logic-sig-trace,omitempty"`
+}
+
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	Data    *string `json:"data,omitempty"`
 	Message string  `json:"message"`
 }
+
+// EvalDelta defines model for EvalDelta.
+type EvalDelta struct {
+
+	// \[at\] delta action.
+	Action uint64 `json:"action"`
+
+	// \[bs\] bytes value.
+	Bytes *string `json:"bytes,omitempty"`
+
+	// \[ui\] uint value.
+	Uint *uint64 `json:"uint,omitempty"`
+}
+
+// EvalDeltaKeyValue defines model for EvalDeltaKeyValue.
+type EvalDeltaKeyValue struct {
+	Key string `json:"key"`
+
+	// Represents a TEAL value delta.
+	Value EvalDelta `json:"value"`
+}
+
+// StateDelta defines model for StateDelta.
+type StateDelta []EvalDeltaKeyValue
 
 // TealKeyValue defines model for TealKeyValue.
 type TealKeyValue struct {
@@ -385,8 +447,8 @@ type BlockResponse struct {
 
 // DryrunResponse defines model for DryrunResponse.
 type DryrunResponse struct {
-	Error *string   `json:"error,omitempty"`
-	Txns  []Account `json:"txns"`
+	Error string            `json:"error"`
+	Txns  []DryrunTxnResult `json:"txns"`
 }
 
 // NodeStatusResponse defines model for NodeStatusResponse.

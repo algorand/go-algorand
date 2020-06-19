@@ -35,7 +35,6 @@ import (
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
-	"github.com/algorand/go-codec/codec"
 )
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
@@ -283,7 +282,7 @@ func (v2 *Handlers) TransactionDryRun(ctx echo.Context) error {
 		}
 	}
 
-	var response DryrunResponse
+	var response generated.DryrunResponse
 
 	var proto config.ConsensusParams
 	if dr.ProtocolVersion != "" {
@@ -305,18 +304,7 @@ func (v2 *Handlers) TransactionDryRun(ctx echo.Context) error {
 	}
 
 	doDryrunRequest(&dr, &proto, &response)
-	var tightJSON codec.JsonHandle
-	// like go-algorand/protocol/codec.go but Indent=0
-	tightJSON.ErrorIfNoField = true
-	tightJSON.ErrorIfNoArrayExpand = true
-	tightJSON.Canonical = true
-	tightJSON.RecursiveEmptyCheck = true
-	tightJSON.Indent = 0 // be compact
-	tightJSON.HTMLCharsAsIs = true
-	var rblob []byte
-	enc := codec.NewEncoderBytes(&rblob, &tightJSON)
-	enc.MustEncode(response)
-	return ctx.JSONBlob(http.StatusOK, rblob)
+	return ctx.JSON(http.StatusOK, response)
 }
 
 // TransactionParams returns the suggested parameters for constructing a new transaction.

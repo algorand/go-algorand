@@ -43,16 +43,16 @@ func unB64(x string) []byte {
 	return out
 }
 
-func tvStr(tv basics.TealValue) string {
-	if tv.Type == basics.TealBytesType {
+func tvStr(tv generated.TealValue) string {
+	if tv.Type == uint64(basics.TealBytesType) {
 		return tv.Bytes
-	} else if tv.Type == basics.TealUintType {
+	} else if tv.Type == uint64(basics.TealUintType) {
 		return strconv.FormatUint(tv.Uint, 10)
 	}
 	return "UNKNOWN TEAL VALUE"
 }
 
-func dbStack(stack []basics.TealValue) string {
+func dbStack(stack []generated.TealValue) string {
 	parts := make([]string, len(stack))
 	for i, sv := range stack {
 		parts[i] = tvStr(sv)
@@ -60,63 +60,63 @@ func dbStack(stack []basics.TealValue) string {
 	return strings.Join(parts, " ")
 }
 
-func logTrace(t *testing.T, trace []logic.DebugState) {
+func logTrace(t *testing.T, lines []string, trace []generated.DryrunState) {
 	var disasm string
-	var lines []string
 	for _, ds := range trace {
-		if ds.Disassembly != "" {
-			disasm = ds.Disassembly
-			t.Log(disasm)
-			lines = strings.Split(disasm, "\n")
-		}
 		var line string
 		if len(lines) > 0 {
+			disasm = strings.Join(lines, "\n")
+			t.Log(disasm)
 			line = lines[ds.Line]
 		} else {
 			line = ""
 		}
 		t.Logf("\tstack=[%s]", dbStack(ds.Stack))
-		t.Logf("%s\t// line=%d pc=%d", line, ds.Line, ds.PC)
+		t.Logf("%s\t// line=%d pc=%d", line, ds.Line, ds.Pc)
 	}
 }
 
-func logStateDelta(t *testing.T, sd basics.StateDelta) {
-	for key, vd := range sd {
-		t.Logf("\t%v: %#v", key, vd)
+func logStateDelta(t *testing.T, sd generated.StateDelta) {
+	for _, vd := range sd {
+		t.Logf("\t%s: %#v", vd.Key, vd)
 	}
 }
 
-func logResponse(t *testing.T, response *DryrunResponse) {
+func logResponse(t *testing.T, response *generated.DryrunResponse) {
 	t.Log(response.Error)
 	for i, rt := range response.Txns {
 		t.Logf("txn[%d]", i)
-		if len(rt.LogicSigTrace) > 0 {
+		if rt.LogicSigTrace != nil && len(*rt.LogicSigTrace) > 0 {
 			t.Log("Logic Sig:")
-			logTrace(t, rt.LogicSigTrace)
-			if len(rt.LogicSigMessages) > 0 {
+			logTrace(t, rt.Disassembly, *rt.LogicSigTrace)
+			if rt.LogicSigMessages != nil && len(*rt.LogicSigMessages) > 0 {
 				t.Log("Messages:")
-			}
-			for _, m := range rt.LogicSigMessages {
-				t.Log(m)
+				for _, m := range *rt.LogicSigMessages {
+					t.Log(m)
+				}
 			}
 		}
-		if len(rt.AppCallTrace) > 0 {
+		if rt.AppCallTrace != nil && len(*rt.AppCallTrace) > 0 {
 			t.Log("App Call:")
-			logTrace(t, rt.AppCallTrace)
-			if len(rt.AppCallMessages) > 0 {
+			logTrace(t, rt.Disassembly, *rt.AppCallTrace)
+			if rt.AppCallMessages != nil && len(*rt.AppCallMessages) > 0 {
 				t.Log("Messages:")
-			}
-			for _, m := range rt.AppCallMessages {
-				t.Log(m)
+				for _, m := range *rt.AppCallMessages {
+					t.Log(m)
+				}
 			}
 		}
-		if len(rt.GlobalDelta) > 0 {
+		if rt.GlobalDelta != nil && len(*rt.GlobalDelta) > 0 {
 			t.Log("Global delta")
-			logStateDelta(t, rt.GlobalDelta)
+			logStateDelta(t, *rt.GlobalDelta)
 		}
-		for addr, ld := range rt.LocalDeltas {
-			t.Logf("%s delta", addr)
-			logStateDelta(t, ld)
+		if rt.LocalDeltas != nil {
+			for _, ld := range *rt.LocalDeltas {
+				addr := ld.Address
+				delta := ld.Delta
+				t.Logf("%s delta", addr)
+				logStateDelta(t, delta)
+			}
 		}
 	}
 }
@@ -127,7 +127,7 @@ func TestDryrunLogicSig(t *testing.T) {
 
 	var dr DryrunRequest
 	var proto config.ConsensusParams
-	var response DryrunResponse
+	var response generated.DryrunResponse
 
 	proto.LogicSigVersion = 2
 	proto.LogicSigMaxCost = 1000
@@ -153,7 +153,7 @@ func TestDryrunLogicSigSource(t *testing.T) {
 
 	var dr DryrunRequest
 	var proto config.ConsensusParams
-	var response DryrunResponse
+	var response generated.DryrunResponse
 
 	proto.LogicSigVersion = 2
 	proto.LogicSigMaxCost = 1000
@@ -341,28 +341,28 @@ func init() {
 	}
 }
 
-func checkLogicSigPass(t *testing.T, response *DryrunResponse) {
+func checkLogicSigPass(t *testing.T, response *generated.DryrunResponse) {
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
-	} else if response.Txns[0] == nil {
+	} else if len(response.Txns) == 0 {
 		t.Error("response txns is nil")
-	} else if len(response.Txns[0].LogicSigMessages) < 1 {
+	} else if response.Txns[0].LogicSigMessages == nil || len(*response.Txns[0].LogicSigMessages) < 1 {
 		t.Error("no response lsig msg")
 	} else {
-		messages := response.Txns[0].LogicSigMessages
+		messages := *response.Txns[0].LogicSigMessages
 		assert.Equal(t, "PASS", messages[len(messages)-1])
 	}
 }
 
-func checkAppCallPass(t *testing.T, response *DryrunResponse) {
+func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
-	} else if response.Txns[0] == nil {
+	} else if len(response.Txns) == 0 {
 		t.Error("response txns is nil")
-	} else if len(response.Txns[0].AppCallMessages) < 1 {
+	} else if response.Txns[0].AppCallMessages == nil || len(*response.Txns[0].AppCallMessages) < 1 {
 		t.Error("no response app msg")
 	} else {
-		messages := response.Txns[0].AppCallMessages
+		messages := *response.Txns[0].AppCallMessages
 		assert.Equal(t, "PASS", messages[len(messages)-1])
 	}
 }
@@ -373,7 +373,7 @@ func TestDryrunGlobal1(t *testing.T) {
 
 	var dr DryrunRequest
 	var proto config.ConsensusParams
-	var response DryrunResponse
+	var response generated.DryrunResponse
 
 	proto.LogicSigVersion = 2
 	proto.LogicSigMaxCost = 1000
@@ -419,7 +419,7 @@ func TestDryrunGlobal2(t *testing.T) {
 
 	var dr DryrunRequest
 	var proto config.ConsensusParams
-	var response DryrunResponse
+	var response generated.DryrunResponse
 
 	proto.LogicSigVersion = 2
 	proto.LogicSigMaxCost = 1000
@@ -456,10 +456,10 @@ func TestDryrunGlobal2(t *testing.T) {
 	doDryrunRequest(&dr, &proto, &response)
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
-	} else if len(response.Txns[0].AppCallMessages) < 1 {
+	} else if response.Txns[0].AppCallMessages == nil || len(*response.Txns[0].AppCallMessages) < 1 {
 		t.Error("no response lsig msg")
 	} else {
-		messages := response.Txns[0].AppCallMessages
+		messages := *response.Txns[0].AppCallMessages
 		assert.Equal(t, "PASS", messages[len(messages)-1])
 	}
 	if t.Failed() {
@@ -473,7 +473,7 @@ func TestDryrunLocal1(t *testing.T) {
 
 	var dr DryrunRequest
 	var proto config.ConsensusParams
-	var response DryrunResponse
+	var response generated.DryrunResponse
 
 	proto.LogicSigVersion = 2
 	proto.LogicSigMaxCost = 1000
@@ -507,25 +507,30 @@ func TestDryrunLocal1(t *testing.T) {
 		},
 	}
 	doDryrunRequest(&dr, &proto, &response)
-	if len(response.Txns) < 1 {
-		t.Error("no response txns")
-	} else if len(response.Txns[0].AppCallMessages) < 1 {
-		t.Error("no response lsig msg")
-	} else {
-		messages := response.Txns[0].AppCallMessages
-		assert.Equal(t, "PASS", messages[len(messages)-1])
+	checkAppCallPass(t, &response)
+	if response.Txns[0].LocalDeltas == nil {
+		t.Error("empty local delta")
 	}
-	ld, ok := response.Txns[0].LocalDeltas["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"]
-	if ok {
-		foo, ok := ld["foo"]
-		if ok {
-			assert.Equal(t, foo.Action, basics.SetBytesAction)
-			assert.Equal(t, foo.Bytes, "bar")
-		} else {
-			t.Error("no local delta for value foo")
+	addrFound := false
+	valueFound := false
+	for _, lds := range *response.Txns[0].LocalDeltas {
+		if lds.Address == "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ" {
+			addrFound = true
+			for _, ld := range lds.Delta {
+				if ld.Key == "foo" {
+					valueFound = true
+					assert.Equal(t, ld.Value.Action, uint64(basics.SetBytesAction))
+					assert.Equal(t, *ld.Value.Bytes, "bar")
+
+				}
+			}
 		}
-	} else {
+	}
+	if !addrFound {
 		t.Error("no local delta for AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ")
+	}
+	if !valueFound {
+		t.Error("no local delta for value foo")
 	}
 	if t.Failed() {
 		logResponse(t, &response)
@@ -538,7 +543,7 @@ func TestDryrunLocal1A(t *testing.T) {
 
 	var dr DryrunRequest
 	var proto config.ConsensusParams
-	var response DryrunResponse
+	var response generated.DryrunResponse
 
 	proto.LogicSigVersion = 2
 	proto.LogicSigMaxCost = 1000
@@ -577,25 +582,30 @@ func TestDryrunLocal1A(t *testing.T) {
 		},
 	}
 	doDryrunRequest(&dr, &proto, &response)
-	if len(response.Txns) < 1 {
-		t.Error("no response txns")
-	} else if len(response.Txns[0].AppCallMessages) < 1 {
-		t.Error("no response lsig msg")
-	} else {
-		messages := response.Txns[0].AppCallMessages
-		assert.Equal(t, "PASS", messages[len(messages)-1])
+	checkAppCallPass(t, &response)
+	if response.Txns[0].LocalDeltas == nil {
+		t.Error("empty local delta")
 	}
-	ld, ok := response.Txns[0].LocalDeltas["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ"]
-	if ok {
-		foo, ok := ld["foo"]
-		if ok {
-			assert.Equal(t, foo.Action, basics.SetBytesAction)
-			assert.Equal(t, foo.Bytes, "bar")
-		} else {
-			t.Error("no local delta for value foo")
+	addrFound := false
+	valueFound := false
+	for _, lds := range *response.Txns[0].LocalDeltas {
+		if lds.Address == "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ" {
+			addrFound = true
+			for _, ld := range lds.Delta {
+				if ld.Key == "foo" {
+					valueFound = true
+					assert.Equal(t, ld.Value.Action, uint64(basics.SetBytesAction))
+					assert.Equal(t, *ld.Value.Bytes, "bar")
+
+				}
+			}
 		}
-	} else {
+	}
+	if !addrFound {
 		t.Error("no local delta for AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ")
+	}
+	if !valueFound {
+		t.Error("no local delta for value foo")
 	}
 	if t.Failed() {
 		logResponse(t, &response)
@@ -607,7 +617,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 	t.Parallel()
 	var dr DryrunRequest
 	var proto config.ConsensusParams
-	var response DryrunResponse
+	var response generated.DryrunResponse
 
 	proto.LogicSigVersion = 2
 	proto.LogicSigMaxCost = 1000
@@ -655,17 +665,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 	}
 
 	doDryrunRequest(&dr, &proto, &response)
-	if len(response.Txns) < 1 {
-		t.Error("no response txns")
-	} else if len(response.Txns[0].AppCallMessages) < 1 {
-		t.Error("no response lsig msg")
-	} else {
-		messages := response.Txns[0].AppCallMessages
-		assert.Equal(t, "PASS", messages[len(messages)-1])
-	}
-	if t.Failed() {
-		logResponse(t, &response)
-	}
+	checkAppCallPass(t, &response)
 }
 func TestDryrunEncodeDecode(t *testing.T) {
 	t.Parallel()
@@ -875,7 +875,7 @@ func TestDryrunRequestJSON(t *testing.T) {
 	require.Equal(t, 1, len(dr.Apps))
 
 	var proto config.ConsensusParams
-	var response DryrunResponse
+	var response generated.DryrunResponse
 
 	proto.LogicSigVersion = 2
 	proto.LogicSigMaxCost = 1000

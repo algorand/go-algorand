@@ -1076,6 +1076,67 @@
         }
       }
     },
+    "StateDelta": {
+      "description": "Application state delta.",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/EvalDeltaKeyValue"
+      }
+    },
+    "AccountStateDelta": {
+      "description": "Application state delta.",
+      "type": "object",
+      "required": [
+        "address",
+        "delta"
+      ],
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "delta": {
+          "$ref": "#/definitions/StateDelta"
+        }
+      }
+    },
+    "EvalDeltaKeyValue": {
+      "description": "Key-value pairs for StateDelta.",
+      "type": "object",
+      "required": [
+        "key",
+        "value"
+      ],
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/definitions/EvalDelta"
+        }
+      }
+    },
+    "EvalDelta": {
+      "description": "Represents a TEAL value delta.",
+      "type": "object",
+      "required": [
+        "action"
+      ],
+      "properties": {
+        "action": {
+          "description": "\\[at\\] delta action.",
+          "type": "integer"
+        },
+        "bytes": {
+          "description": "\\[bs\\] bytes value.",
+          "type": "string"
+        },
+        "uint": {
+          "description": "\\[ui\\] uint value.",
+          "type": "integer",
+          "x-algorand-format": "uint64"
+        }
+      }
+    },
     "Application": {
       "description": "Application index and its parameters",
       "type": "object",
@@ -1123,6 +1184,90 @@
         "global-state": {
           "description": "[\\gs\\] global schema",
           "$ref": "#/definitions/TealKeyValueStore"
+        }
+      }
+    },
+    "DryrunState": {
+      "description": "Stores the TEAL eval step data",
+      "type": "object",
+      "required": [
+        "line",
+        "pc",
+        "stack"
+      ],
+      "properties": {
+        "line": {
+          "description": "Line number",
+          "type": "integer"
+        },
+        "pc": {
+          "description": "Program counter",
+          "type": "integer"
+        },
+        "stack": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TealValue"
+          }
+        },
+        "scratch": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TealValue"
+          }
+        },
+        "error": {
+          "description": "Evaluation error if any",
+          "type": "string"
+        }
+      }
+    },
+    "DryrunTxnResult": {
+      "description": "DryrunTxnResult contains any LogicSig or ApplicationCall program debug information and state updates from a dryrun.",
+      "type": "object",
+      "required": [
+        "disassembly"
+      ],
+      "properties": {
+        "disassembly": {
+          "description": "Disassembled program line by line.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "logic-sig-trace": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DryrunState"
+          }
+        },
+        "logic-sig-messages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "app-call-trace": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DryrunState"
+          }
+        },
+        "app-call-messages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "global-delta": {
+          "$ref": "#/definitions/StateDelta"
+        },
+        "local-deltas": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AccountStateDelta"
+          }
         }
       }
     },
@@ -1704,13 +1849,14 @@
       "schema": {
         "type": "object",
         "required": [
-          "txns"
+          "txns",
+          "error"
         ],
         "properties": {
           "txns": {
             "type": "array",
             "items": {
-              "$ref": "#/definitions/Account"
+              "$ref": "#/definitions/DryrunTxnResult"
             }
           },
           "error": {

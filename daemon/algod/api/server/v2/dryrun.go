@@ -18,6 +18,7 @@ package v2
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
@@ -102,7 +103,9 @@ func (dr *DryrunRequest) expandSources() error {
 }
 
 type dryrunDebugReceiver struct {
-	history       []logic.DebugState
+	disassembly   string
+	lines         []string
+	history       []generated.DryrunState
 	scratchActive []bool
 }
 
@@ -111,59 +114,84 @@ func (ddr *dryrunDebugReceiver) updateScratch() {
 	maxActive := -1
 	lasti := len(ddr.history) - 1
 
-	for i, sv := range ddr.history[lasti].Scratch {
-		if sv.Type != basics.TealUintType || sv.Uint != 0 {
-			any = true
-			maxActive = i
+	if ddr.history[lasti].Scratch != nil {
+		for i, sv := range *ddr.history[lasti].Scratch {
+			if sv.Type != uint64(basics.TealUintType) || sv.Uint != 0 {
+				any = true
+				maxActive = i
+			}
 		}
-	}
-	if any {
-		if ddr.scratchActive == nil {
-			ddr.scratchActive = make([]bool, maxActive+1, 256)
-		}
-		for i := len(ddr.scratchActive); i <= maxActive; i++ {
-			sv := ddr.history[lasti].Scratch[i]
-			active := sv.Type != basics.TealUintType || sv.Uint != 0
-			ddr.scratchActive = append(ddr.scratchActive, active)
-		}
-	} else {
-		if ddr.scratchActive != nil {
-			ddr.history[lasti].Scratch = ddr.history[lasti].Scratch[:len(ddr.scratchActive)]
+		if any {
+			if ddr.scratchActive == nil {
+				ddr.scratchActive = make([]bool, maxActive+1, 256)
+			}
+			for i := len(ddr.scratchActive); i <= maxActive; i++ {
+				sv := (*ddr.history[lasti].Scratch)[i]
+				active := sv.Type != uint64(basics.TealUintType) || sv.Uint != 0
+				ddr.scratchActive = append(ddr.scratchActive, active)
+			}
 		} else {
-			ddr.history[lasti].Scratch = nil
-			return
+			if ddr.scratchActive != nil {
+				*ddr.history[lasti].Scratch = (*ddr.history[lasti].Scratch)[:len(ddr.scratchActive)]
+			} else {
+				ddr.history[lasti].Scratch = nil
+				return
+			}
 		}
-	}
-	scratchlen := maxActive + 1
-	if len(ddr.scratchActive) > scratchlen {
-		scratchlen = len(ddr.scratchActive)
-	}
-	ddr.history[lasti].Scratch = ddr.history[lasti].Scratch[:scratchlen]
-	for i := range ddr.history[lasti].Scratch {
-		if !ddr.scratchActive[i] {
-			ddr.history[lasti].Scratch[i].Type = 0
+		scratchlen := maxActive + 1
+		if len(ddr.scratchActive) > scratchlen {
+			scratchlen = len(ddr.scratchActive)
+		}
+		*ddr.history[lasti].Scratch = (*ddr.history[lasti].Scratch)[:scratchlen]
+		for i := range *ddr.history[lasti].Scratch {
+			if !ddr.scratchActive[i] {
+				(*ddr.history[lasti].Scratch)[i].Type = 0
+			}
 		}
 	}
 }
 
+func (ddr *dryrunDebugReceiver) stateToState(state *logic.DebugState) generated.DryrunState {
+	st := generated.DryrunState{
+		Line: uint64(state.Line),
+		Pc:   uint64(state.PC),
+	}
+	st.Stack = make([]generated.TealValue, len(state.Stack))
+	for i, v := range state.Stack {
+		st.Stack[i] = generated.TealValue{
+			Uint:  v.Uint,
+			Bytes: v.Bytes,
+			Type:  uint64(v.Type),
+		}
+	}
+	if len(state.Error) > 0 {
+		st.Error = new(string)
+		*st.Error = state.Error
+	}
+
+	scratch := make([]generated.TealValue, len(state.Scratch))
+	for i, v := range state.Scratch {
+		scratch[i] = generated.TealValue{
+			Uint:  v.Uint,
+			Bytes: v.Bytes,
+			Type:  uint64(v.Type),
+		}
+	}
+	st.Scratch = &scratch
+	return st
+}
+
 // Register is fired on program creation (DebuggerHook interface)
 func (ddr *dryrunDebugReceiver) Register(state *logic.DebugState) error {
-	ddr.history = append(ddr.history, *state)
-	ddr.updateScratch()
+	ddr.disassembly = state.Disassembly
+	ddr.lines = strings.Split(state.Disassembly, "\n")
 	return nil
 }
 
 // Update is fired on every step (DebuggerHook interface)
 func (ddr *dryrunDebugReceiver) Update(state *logic.DebugState) error {
-	// see go-algorand/data/transactions/logic/debugger.go refreshDebugState() for which fields are updated
-	ds := logic.DebugState{
-		PC:      state.PC,
-		Line:    state.Line,
-		Error:   state.Error,
-		Stack:   state.Stack,
-		Scratch: state.Scratch,
-	}
-	ddr.history = append(ddr.history, ds)
+	st := ddr.stateToState(state)
+	ddr.history = append(ddr.history, st)
 	ddr.updateScratch()
 	return nil
 }
@@ -340,27 +368,8 @@ func makeAppLedger(dl *dryrunLedger, txn *transactions.Transaction, appIdx basic
 	return ledger.MakeDebugAppLedger(dl, accounts, apps, appIdx, globals)
 }
 
-// DryrunTxnResult contains any LogicSig or ApplicationCall program debug information and state updates from a dryrun.
-type DryrunTxnResult struct {
-	LogicSigTrace    []logic.DebugState `json:"lsig,omitempty"`
-	LogicSigMessages []string           `json:"lsigt,omitempty"`
-
-	AppCallTrace    []logic.DebugState `json:"app,omitempty"`
-	AppCallMessages []string           `json:"appt,omitempty"`
-
-	// Open up the pieces of EvalDelta so we can replace map[uint64]{} with something JSON friendly.
-	GlobalDelta basics.StateDelta            `json:"gd,omitempty"`
-	LocalDeltas map[string]basics.StateDelta `json:"ld,omitempty"`
-}
-
-// DryrunResponse contains per-txn debug information from a dryrun.
-type DryrunResponse struct {
-	Txns  []*DryrunTxnResult `json:"txns,omitempty"`
-	Error string             `json:"error,omitempty"`
-}
-
 // unit-testable core of dryrun handler
-func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response *DryrunResponse) {
+func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response *generated.DryrunResponse) {
 	err := dr.expandSources()
 	if err != nil {
 		response.Error = err.Error()
@@ -372,7 +381,7 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 		response.Error = err.Error()
 		return
 	}
-	response.Txns = make([]*DryrunTxnResult, len(dr.Txns))
+	response.Txns = make([]generated.DryrunTxnResult, len(dr.Txns))
 	for ti, stxn := range dr.Txns {
 		ep := logic.EvalParams{
 			Txn:        &stxn,
@@ -381,14 +390,15 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 			GroupIndex: ti,
 			//Logger: nil, // TODO: capture logs, send them back
 		}
-		var result *DryrunTxnResult
+		var result *generated.DryrunTxnResult
 		if len(stxn.Lsig.Logic) > 0 {
 			var debug dryrunDebugReceiver
 			ep.Debugger = &debug
 			pass, err := logic.Eval(stxn.Lsig.Logic, ep)
-			result = new(DryrunTxnResult)
+			result = new(generated.DryrunTxnResult)
 			var messages []string
-			result.LogicSigTrace = debug.history
+			result.Disassembly = debug.lines
+			result.LogicSigTrace = &debug.history
 			if pass {
 				messages = append(messages, "PASS")
 			} else {
@@ -397,7 +407,7 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 			if err != nil {
 				messages = append(messages, err.Error())
 			}
-			result.LogicSigMessages = messages
+			result.LogicSigMessages = &messages
 		}
 		if stxn.Txn.Type == protocol.ApplicationCallTx {
 			appIdx := stxn.Txn.ApplicationID
@@ -426,7 +436,7 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 			}
 			var messages []string
 			if result == nil {
-				result = new(DryrunTxnResult)
+				result = new(generated.DryrunTxnResult)
 			}
 			if !ok {
 				messages = make([]string, 1)
@@ -444,17 +454,22 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 					messages[0] = "ApprovalProgram"
 				}
 				pass, delta, err := logic.EvalStateful(program, ep)
-				result.AppCallTrace = debug.history
-				result.GlobalDelta = delta.GlobalDelta
+				result.Disassembly = debug.lines
+				result.AppCallTrace = &debug.history
+				result.GlobalDelta = StateDeltaToStateDelta(delta.GlobalDelta)
 				if len(delta.LocalDeltas) > 0 {
-					result.LocalDeltas = make(map[string]basics.StateDelta, len(delta.LocalDeltas))
+					localDeltas := make([]generated.AccountStateDelta, len(delta.LocalDeltas))
 					for k, v := range delta.LocalDeltas {
 						ldaddr, err := stxn.Txn.AddressByIndex(k, stxn.Txn.Sender)
 						if err != nil {
 							messages = append(messages, err.Error())
 						}
-						result.LocalDeltas[ldaddr.String()] = v
+						localDeltas = append(localDeltas, generated.AccountStateDelta{
+							Address: ldaddr.String(),
+							Delta:   *StateDeltaToStateDelta(v),
+						})
 					}
+					result.LocalDeltas = &localDeltas
 				}
 				if pass {
 					messages = append(messages, "PASS")
@@ -465,8 +480,29 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 					messages = append(messages, err.Error())
 				}
 			}
-			result.AppCallMessages = messages
+			result.AppCallMessages = &messages
 		}
-		response.Txns[ti] = result
+		response.Txns[ti] = *result
 	}
+}
+
+// StateDeltaToStateDelta converts basics.StateDelta to generated.StateDelta
+func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
+	if len(sd) == 0 {
+		return nil
+	}
+
+	gsd := make(generated.StateDelta, 0, len(sd))
+	for k, v := range sd {
+		gsd = append(gsd, generated.EvalDeltaKeyValue{
+			Key: k,
+			Value: generated.EvalDelta{
+				Action: uint64(v.Action),
+				Uint:   &v.Uint,
+				Bytes:  &v.Bytes,
+			},
+		})
+	}
+
+	return &gsd
 }
