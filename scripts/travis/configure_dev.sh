@@ -7,7 +7,7 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 OS=$("${SCRIPTPATH}/../ostype.sh")
 ARCH=$("${SCRIPTPATH}/../archtype.sh")
-GO_VERSION=$(./scripts/get_golang_version.sh)
+GO_VERSION=$(${SCRIPTPATH}/../get_golang_version.sh)
 
 if [ "${OS}" = "linux" ]; then
     if [[ "${ARCH}" = "arm64" ]]; then
