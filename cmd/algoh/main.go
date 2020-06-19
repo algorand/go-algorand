@@ -297,6 +297,7 @@ func initTelemetry(genesis bookkeeping.Genesis, log logging.Logger, dataDirector
 			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 			return
 		}
+		fmt.Fprintf(os.Stdout, "algoh telemetry configured from '%s'\n", telemetryConfig.FilePath)
 
 		// Apply telemetry override.
 		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride)
