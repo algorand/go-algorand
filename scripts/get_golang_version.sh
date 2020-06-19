@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-GOLANG_VERSION=$(grep 'go ' ./go.mod | head -n 1 | cut -d' ' -f2)
+GOLANG_VERSION=$(awk '/^go/{print $2}' go.mod)
 echo "${GOLANG_VERSION}"
