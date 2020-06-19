@@ -17,8 +17,8 @@ if [ "${OS}" = "linux" ]; then
         if [ "$?" != "0" ]; then
             echo "Go cannot be found; downloading..."
             # go is not installed ?
-	        # e.g. https://dl.google.com/go/go1.13.5.linux-amd64.tar.gz
-	        GO_TARBALL=go${GO_VERSION}.linux-amd64.tar.gz
+	        # e.g. https://dl.google.com/go/go1.13.5.linux-arm64.tar.gz
+	        GO_TARBALL=go${GO_VERSION}.linux-arm64.tar.gz
             wget -q https://dl.google.com/go/${GO_TARBALL}
             if [ "$?" = "0" ]; then   
                 set -e
