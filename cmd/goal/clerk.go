@@ -27,6 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -67,6 +68,7 @@ func init() {
 	clerkCmd.AddCommand(splitCmd)
 	clerkCmd.AddCommand(compileCmd)
 	clerkCmd.AddCommand(dryrunCmd)
+	clerkCmd.AddCommand(dryrunRemoteCmd)
 
 	// Wallet to be used for the clerk operation
 	clerkCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
@@ -123,6 +125,11 @@ func init() {
 	dryrunCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "transaction or transaction-group to test")
 	dryrunCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "consensus protocol version id string")
 	dryrunCmd.MarkFlagRequired("txfile")
+
+	dryrunRemoteCmd.Flags().StringVarP(&txFilename, "dryrun-state", "D", "", "dryrun request object to run")
+	dryrunRemoteCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print more info")
+	dryrunRemoteCmd.MarkFlagRequired("dryrun-state")
+
 }
 
 var clerkCmd = &cobra.Command{
@@ -948,5 +955,64 @@ var dryrunCmd = &cobra.Command{
 			}
 		}
 
+	},
+}
+
+var dryrunRemoteCmd = &cobra.Command{
+	Use:   "dryrun-remote",
+	Short: "test a program with algod's dryrun REST endpoint",
+	Long:  "Test a TEAL program with algod's dryrun REST endpoint under various conditions and verbosity.",
+	Run: func(cmd *cobra.Command, args []string) {
+		data, err := readFile(txFilename)
+		if err != nil {
+			reportErrorf(fileReadError, txFilename, err)
+		}
+
+		dataDir := ensureSingleDataDir()
+		client := ensureFullClient(dataDir)
+		resp, err := client.Dryrun(data)
+		if err != nil {
+			reportErrorf("dryrun-remote: %s\n", err.Error())
+		}
+
+		stackToString := func(stack []generatedV2.TealValue) string {
+			result := make([]string, len(stack))
+			for i, sv := range stack {
+				if sv.Type == uint64(basics.TealBytesType) {
+					result[i] = heuristicFormatStr(sv.Bytes)
+				} else {
+					result[i] = fmt.Sprintf("%d", sv.Uint)
+				}
+			}
+			return strings.Join(result, " ")
+		}
+		if len(resp.Txns) > 0 {
+			for i, txnResult := range resp.Txns {
+				var msgs []string
+				var trace []generatedV2.DryrunState
+				if txnResult.AppCallMessages != nil && len(*txnResult.AppCallMessages) > 0 {
+					msgs = *txnResult.AppCallMessages
+					if txnResult.AppCallTrace != nil {
+						trace = *txnResult.AppCallTrace
+					}
+				} else if txnResult.LogicSigMessages != nil && len(*txnResult.LogicSigMessages) > 0 {
+					msgs = *txnResult.LogicSigMessages
+					if txnResult.LogicSigTrace != nil {
+						trace = *txnResult.LogicSigTrace
+					}
+				}
+				fmt.Fprintf(os.Stdout, "tx[%d] messages:\n", i)
+				for _, msg := range msgs {
+					fmt.Fprintf(os.Stdout, "%s\n", msg)
+				}
+				if verbose && len(trace) > 0 {
+					fmt.Fprintf(os.Stdout, "tx[%d] trace:\n", i)
+					for _, item := range trace {
+						fmt.Fprintf(os.Stdout, "%4d (%04x): %s [%s]\n",
+							item.Line, item.Pc, txnResult.Disassembly[item.Line-1], stackToString(item.Stack))
+					}
+				}
+			}
+		}
 	},
 }

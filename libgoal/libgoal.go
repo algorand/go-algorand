@@ -17,6 +17,7 @@
 package libgoal
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -947,6 +948,19 @@ func MakeDryrunState(client Client, tx transactions.Transaction, other []transac
 			return
 		}
 		dr.LatestTimestamp = uint64(b.Timestamp)
+	}
+	return
+}
+
+// Dryrun takes an app's index and returns its information
+func (c *Client) Dryrun(data []byte) (resp generatedV2.DryrunResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		data, err = algod.RawDryrun(data)
+		if err != nil {
+			return
+		}
+		err = json.Unmarshal(data, &resp)
 	}
 	return
 }
