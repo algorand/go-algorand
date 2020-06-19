@@ -45,9 +45,9 @@ proc ::Algoh::CreateNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ROOT_DIR } {
         puts "network create $NETWORK_NAME"
         spawn goal network create --network $NETWORK_NAME --template $NETWORK_TEMPLATE --rootdir $TEST_ROOT_DIR
         expect {
-            timeout { close; ::AlgorandGoal::Abort "Timed out creating network" }
-            "^Network $NETWORK_NAME created under.*" { puts "Network $NETWORK_NAME created" ; close  }
-            close
+            timeout { close; ::Algoh::Abort "Timed out creating network" }
+            "^Network $NETWORK_NAME created under.*" { puts "Network $NETWORK_NAME created" ; close }
+            eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to create network"; Algoh::Abort } }
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in CreateNetwork: $EXCEPTION"
@@ -61,13 +61,12 @@ proc ::Algoh::StartNode { TEST_ALGO_DIR } {
     if { [catch {
         spawn goal node start -d $TEST_ALGO_DIR
         expect {
-            timeout { close; ::AlgorandGoal::Abort "Timed out starting relay node"  }
-            "^Algorand node successfully started!* { puts "Primary relay node started"  ;close  }
-            close
+            timeout { close; ::Algoh::Abort "Timed out starting relay node"  }
+            "^Algorand node successfully started!* { puts "Primary relay node started"; close  }
+            eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to start node"; Algoh::Abort } }
         }
-
     } EXCEPTION ] } {
-       ::AlgorandGoal::Abort "ERROR in StartNode: $EXCEPTION"
+       ::Algoh::Abort "ERROR in StartNode: $EXCEPTION"
     }
 }
 
@@ -78,12 +77,13 @@ proc ::Algoh::StopNode { TEST_ALGO_DIR } {
         puts "node stop with $TEST_ALGO_DIR"
         spawn goal node stop -d $TEST_ALGO_DIR
         expect {
-            timeout { close; ::AlgorandGoal::Abort "Did not recieve appropriate message during node stop"}
+            timeout { close; ::Algoh::Abort "Did not recieve appropriate message during node stop"}
             "*The node was successfully stopped.*" {puts "Node stopped successfully"; close}
+            eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to stop node"; Algoh::Abort } }
+
         }
     } EXCEPTION] } {
-       ::AlgorandGoal::Abort "ERROR in StopNode: $EXCEPTION"
-
+       ::Algoh::Abort "ERROR in StopNode: $EXCEPTION"
     }
 }
 
@@ -102,6 +102,8 @@ proc ::Algoh::StopNetwork { NETWORK_NAME TEST_ROOT_DIR } {
 	      exit 1
 	    }
         "Network Stopped under.*" {set NETWORK_STOP_MESSAGE $expect_out(buffer); close}
+        eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to stop network"; Algoh::Abort } }
+
     }
     puts $NETWORK_STOP_MESSAGE
 }

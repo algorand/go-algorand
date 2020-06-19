@@ -94,10 +94,10 @@ func (w deadManWatcher) onBlock(block v1.Block) {
 
 func (w deadManWatcher) reportDeadManTimeout(curBlock uint64) (err error) {
 	var details telemetryspec.DeadManTriggeredEventDetails
-	if w. algodConfig.EnableProfiler {
+	if w.algodConfig.EnableProfiler {
 		goRoutines, err := getGoRoutines(w.client)
-	  	if err != nil {
-		 	goRoutines = fmt.Sprintf("Error dumping goroutines: %v", err)
+		if err != nil {
+			goRoutines = fmt.Sprintf("Error dumping goroutines: %v", err)
 		}
 		details = telemetryspec.DeadManTriggeredEventDetails{
 			Timeout:      int64(w.timeout.Seconds()),
@@ -112,7 +112,7 @@ func (w deadManWatcher) reportDeadManTimeout(curBlock uint64) (err error) {
 		details = telemetryspec.DeadManTriggeredEventDetails{
 			Timeout:      int64(w.timeout.Seconds()),
 			CurrentBlock: curBlock,
-			GoRoutines:  healthCheck,
+			GoRoutines:   healthCheck,
 		}
 	}
 	log.EventWithDetails(telemetryspec.HostApplicationState, telemetryspec.DeadManTriggeredEvent, details)

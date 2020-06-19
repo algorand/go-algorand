@@ -99,11 +99,11 @@ func main() {
 	if absPathErr != nil {
 		reportErrorf("Can't convert data directory's path to absolute, %v\n", dataDir)
 	}
-	
+
 	algodConfig, err := config.LoadConfigFromDisk(absolutePath)
 
-	if err != nil {
-
+	if err != nil && !os.IsNotExist(err) {
+		log.Fatalf("Cannot load config: %v", err)
 	}
 
 	if _, err := os.Stat(absolutePath); err != nil {
