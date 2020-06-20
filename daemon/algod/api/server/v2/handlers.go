@@ -180,6 +180,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 		Participation:               apiParticipation,
 		CreatedAssets:               &createdAssets,
 		Assets:                      &assets,
+		AuthAddr:                    addrOrNil(record.AuthAddr),
 	}
 
 	return ctx.JSON(http.StatusOK, response)
