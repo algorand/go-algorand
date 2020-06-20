@@ -408,9 +408,19 @@ var sendCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeFile(outFilename, protocol.Encode(&stx), 0600)
-			if err != nil {
-				reportErrorf(err.Error())
+			if dumpForDryrun {
+				// Write dryrun data to file
+				proto, _ := getProto(protoVersion)
+				dr, err := libgoal.MakeDryrunState(client, stx, []transactions.SignedTxn{}, string(proto))
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				writeFile(outFilename, protocol.EncodeJSON(&dr), 0600)
+			} else {
+				err = writeFile(outFilename, protocol.Encode(&stx), 0600)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
 			}
 		}
 	},

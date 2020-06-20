@@ -494,9 +494,19 @@ var updateAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-			if err != nil {
-				reportErrorf(err.Error())
+			if dumpForDryrun {
+				// Write dryrun data to file
+				proto, _ := getProto(protoVersion)
+				dr, err := libgoal.MakeDryrunState(client, tx, []transactions.SignedTxn{}, string(proto))
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				writeFile(outFilename, protocol.EncodeJSON(&dr), 0600)
+			} else {
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
 			}
 		}
 	},
@@ -562,9 +572,19 @@ var optInAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-			if err != nil {
-				reportErrorf(err.Error())
+			if dumpForDryrun {
+				// Write dryrun data to file
+				proto, _ := getProto(protoVersion)
+				dr, err := libgoal.MakeDryrunState(client, tx, []transactions.SignedTxn{}, string(proto))
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				writeFile(outFilename, protocol.EncodeJSON(&dr), 0600)
+			} else {
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
 			}
 		}
 	},
@@ -630,9 +650,19 @@ var closeOutAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-			if err != nil {
-				reportErrorf(err.Error())
+			if dumpForDryrun {
+				// Write dryrun data to file
+				proto, _ := getProto(protoVersion)
+				dr, err := libgoal.MakeDryrunState(client, tx, []transactions.SignedTxn{}, string(proto))
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				writeFile(outFilename, protocol.EncodeJSON(&dr), 0600)
+			} else {
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
 			}
 		}
 	},
@@ -698,9 +728,19 @@ var clearAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-			if err != nil {
-				reportErrorf(err.Error())
+			if dumpForDryrun {
+				// Write dryrun data to file
+				proto, _ := getProto(protoVersion)
+				dr, err := libgoal.MakeDryrunState(client, tx, []transactions.SignedTxn{}, string(proto))
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				writeFile(outFilename, protocol.EncodeJSON(&dr), 0600)
+			} else {
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
 			}
 		}
 	},
@@ -766,9 +806,19 @@ var callAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-			if err != nil {
-				reportErrorf(err.Error())
+			if dumpForDryrun {
+				// Write dryrun data to file
+				proto, _ := getProto(protoVersion)
+				dr, err := libgoal.MakeDryrunState(client, tx, []transactions.SignedTxn{}, string(proto))
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				writeFile(outFilename, protocol.EncodeJSON(&dr), 0600)
+			} else {
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
 			}
 		}
 	},
@@ -834,9 +884,19 @@ var deleteAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
-			if err != nil {
-				reportErrorf(err.Error())
+			if dumpForDryrun {
+				// Write dryrun data to file
+				proto, _ := getProto(protoVersion)
+				dr, err := libgoal.MakeDryrunState(client, tx, []transactions.SignedTxn{}, string(proto))
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				writeFile(outFilename, protocol.EncodeJSON(&dr), 0600)
+			} else {
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
 			}
 		}
 	},

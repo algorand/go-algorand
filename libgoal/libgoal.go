@@ -885,8 +885,19 @@ func convertAppParams(paramsIn *v1.AppParams) (appParams generatedV2.Application
 const defaultAppIdx = 1380011588
 
 // MakeDryrunState function creates DryrunRequest data structure and serializes it into a file
-func MakeDryrunState(client Client, tx transactions.Transaction, other []transactions.SignedTxn, proto string) (dr generatedV2.DryrunRequest, err error) {
-	txns := []transactions.SignedTxn{{Txn: tx}}
+func MakeDryrunState(client Client, txnOrStxn interface{}, other []transactions.SignedTxn, proto string) (dr generatedV2.DryrunRequest, err error) {
+	var txns []transactions.SignedTxn
+	var tx *transactions.Transaction
+	if txn, ok := txnOrStxn.(transactions.Transaction); ok {
+		tx = &txn
+		txns = append(txns, transactions.SignedTxn{Txn: txn})
+	} else if stxn, ok := txnOrStxn.(transactions.SignedTxn); ok {
+		tx = &stxn.Txn
+		txns = append(txns, stxn)
+	} else {
+		err = fmt.Errorf("unsupported txn type")
+		return
+	}
 	txns = append(txns, other...)
 	for i := range txns {
 		enc := protocol.EncodeJSON(&txns[i])
