@@ -57,23 +57,27 @@ proc ::AlgorandGoal::Abort { ERROR } {
 }
 
 # Start the node
-proc ::AlgorandGoal::StartNode { TEST_ALGO_DIR {SYSTEMD_MANAGED ""} } {
+proc ::AlgorandGoal::StartNode { TEST_ALGO_DIR {SYSTEMD_MANAGED "False"} {PEER_ADDRESS ""} } {
     set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
     set timeout 15
-
+    set GOAL_PARAMS "node start -d $TEST_ALGO_DIR"
+    if { $PEER_ADDRESS != "" } {
+        set GOAL_PARAMS "$GOAL_PARAMS -p $PEER_ADDRESS"
+    }
     if { [catch {
         puts "node start with $TEST_ALGO_DIR"
-        if { $SYSTEMD_MANAGED eq "" } {
-            spawn goal node start -d $TEST_ALGO_DIR
-            expect {
-                timeout { close; ::AlgorandGoal::Abort "Did not recieve appropriate message during node start" }
-                "^Algorand node successfully started!*" {puts "Node started successfully"; close}
-            }
-        } else {
-            spawn goal node start -d $TEST_ALGO_DIR
+        spawn goal {*}$GOAL_PARAMS
+        if { $SYSTEMD_MANAGED eq "True" } {
             expect {
                 timeout { close; ::AlgorandGoal::Abort "Did not recieve appropriate message during node start" }
                 "^This node is managed by systemd, you must run the following command to make your desired state change to your node:*" { puts "Goal showed correct error message for systemd" ; close}
+                eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to start network"; exit 1 } }
+            }
+        } else {
+            expect {
+                timeout { close; ::AlgorandGoal::Abort "Did not recieve appropriate message during node start" }
+                "^Algorand node successfully started!*" {puts "Node started successfully"; close}
+                eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to start network"; exit 1 } }
             }
         }
     } EXCEPTION] } {
@@ -85,7 +89,7 @@ proc ::AlgorandGoal::StartNode { TEST_ALGO_DIR {SYSTEMD_MANAGED ""} } {
 # Stop the node
 proc ::AlgorandGoal::StopNode { TEST_ALGO_DIR {SYSTEMD_MANAGED ""} } {
     set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
-    set timeout 15
+    set timeout 5
 
     if { [catch {
         puts "node stop with $TEST_ALGO_DIR"
@@ -94,12 +98,14 @@ proc ::AlgorandGoal::StopNode { TEST_ALGO_DIR {SYSTEMD_MANAGED ""} } {
             expect {
                 timeout { close; ::AlgorandGoal::Abort "Did not recieve appropriate message during node stop" }
                 "*The node was successfully stopped.*" {puts "Node stopped successfully"; close}
+                eof { close; ::AlgorandGoal::Abort "Did not recieve appropriate message before goal command completion" }
             }
         } else {
             spawn goal node stop -d $TEST_ALGO_DIR
             expect {
                 timeout { close; ::AlgorandGoal::Abort "Did not recieve appropriate message during node stop" }
                 "*This node is managed by systemd, you must run the following command to make your desired state change to your node:*" { puts "Goal showed correct error message for systemd" ; close}
+                eof { close; ::AlgorandGoal::Abort "Did not recieve appropriate message before goal command completion" }
             }
         }
     } EXCEPTION] } {
@@ -134,12 +140,8 @@ proc ::AlgorandGoal::RestartNode { TEST_ALGO_DIR {SYSTEMD_MANAGED ""} } {
     }
 }
 
-# Start the network
-proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR TEST_ROOT_DIR } {
-    set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
-    set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
-    set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
-
+# Create the network
+proc ::AlgorandGoal::CreateNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR TEST_ROOT_DIR } {
     # Running on ARM64, it seems that network creation is pretty slow.
     # 30 second won't be enough here, so I'm changing this to 90 seconds.
     set timeout 90
@@ -151,9 +153,21 @@ proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR 
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timed out creating network" }
             "^Network $NETWORK_NAME created under.*" { puts "Network $NETWORK_NAME created" ; close  }
-            close
+            eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to create network"; exit 1 } }
         }
+    } EXCEPTION ] } {
+       puts "ERROR in CreateNetwork: $EXCEPTION"
+       exit 1
+    }
+}
 
+# Start the network
+proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR TEST_ROOT_DIR } {
+    set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
+    set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
+    set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
+
+    if { [catch {
         # Start network
         puts "network start $NETWORK_NAME"
         spawn goal network start -d $TEST_ALGO_DIR -r $TEST_ROOT_DIR
@@ -687,19 +701,85 @@ proc ::AlgorandGoal::DeleteMultisigAccount { MULTISIG_ADDRESS TEST_PRIMARY_NODE_
 }
 
 # Wait for node to reach a specific round
-proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR } {
+proc ::AlgorandGoal::GetNodeLastCatchpoint { NODE_DATA_DIR } {
+    set CATCHPOINT ""
+    if { [catch {
+        # Check node status
+        puts "spawn node status"
+        spawn goal node status -d $NODE_DATA_DIR
+        expect {
+            timeout { ::AlgorandGoal::Abort "goal node status timed out" }
+            -re {Last Catchpoint: ([0-9]*#[A-Z2-7]*)} {regexp -- {[0-9]*#[A-Z2-7]*} $expect_out(0,string) CATCHPOINT; exp_continue }
+            eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to perform goal node status : error code [lindex $result 3]"} }
+        }
+        if { $CATCHPOINT == "" } {
+            ::AlgorandGoal::Abort "Last Catchpoint entry was missing from goal node status"
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in GetNodeLastCatchpoint: $EXCEPTION"
+    }
+    return $CATCHPOINT
+}
 
-   puts "node status waiting for Round $WAIT_FOR_ROUND_NUMBER "
+# Start catching up to a specific catchpoint
+proc ::AlgorandGoal::StartCatchup { NODE_DATA_DIR CATCHPOINT } {
+    if { [catch {
+        # start catchup
+        puts "spawn node catchup $CATCHPOINT"
+        spawn goal node catchup $CATCHPOINT -d $NODE_DATA_DIR
+        expect {
+            timeout { ::AlgorandGoal::Abort "goal node catchup timed out" }
+            eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to start catching up : error code [lindex $result 3]"} }
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in StartCatchup: $EXCEPTION"
+    }
+    return $CATCHPOINT
+}
 
+# Wait for node to get into catchup mode
+proc ::AlgorandGoal::WaitCatchup { TEST_PRIMARY_NODE_DIR WAIT_DURATION_SEC } {
+    if { [catch {
+        set i 0
+        while { $i < $WAIT_DURATION_SEC } {
+            # Check node status
+            puts "spawn node status  "
+            spawn goal node status -d $TEST_PRIMARY_NODE_DIR
+            expect {
+                timeout { ::AlgorandGoal::Abort "goal node status timed out"  }
+                -re {Catchpoint: ([0-9]*#[A-Z2-7]*)} { set CATCHPOINT $expect_out(1,string); exp_continue }
+                eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to wait for catchup mode : error code [lindex $result 3]"} }
+            }
+            if { [info exists CATCHPOINT] } {
+                break
+            }
+
+            incr i
+            exec sleep 1
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in WaitCatchup: $EXCEPTION"
+    }
+    if { [info exists CATCHPOINT] == 0 } {
+        ::AlgorandGoal::Abort "Node failed to start catching up withint $WAIT_DURATION_SEC seconds"
+    }
+}
+
+# Wait for node to reach a specific round
+proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER NODE_DATA_DIR } {
+    puts "node status waiting for Round $WAIT_FOR_ROUND_NUMBER "
+    set LAST_ROUND -1
+    set SLEEP_TIME 1
     if { [catch {
         set i 0
         while 1 {
             incr i
-            exec sleep 10
+            puts "sleep time $SLEEP_TIME"
+            exec sleep $SLEEP_TIME
 
             # Check node status
             puts "spawn node status  "
-            spawn goal node status -d $TEST_PRIMARY_NODE_DIR
+            spawn goal node status -d $NODE_DATA_DIR
             expect {
                 timeout { ::AlgorandGoal::Abort "goal node status timed out"  }
                 -re {Cannot contact Algorand node: (\d+)} {set BLOCK 0; close }
@@ -711,19 +791,22 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR 
                 -re {Round for next consensus protocol: (\d+)} {set ROUND_FOR_NEXT_CONSENSUS_PROTOCOL $expect_out(1,string); exp_continue }
                 -re {Next consensus protocol supported: (\w+)} {set NEXT_CONSENSUS_PROTOCOL_SUPPORTED $expect_out(1,string); exp_continue }
                 -re {Genesis ID: (\w+)} {set GENESIS_ID $expect_out(1,string); exp_continue }
-                -re {Genesis hash: ([A-Za-z0-9+/]+={0,2})} {set GENESIS_HASH $expect_out(1,string); close }
+                -re {Genesis hash: ([A-Za-z0-9+/]+={0,2})} {set GENESIS_HASH $expect_out(1,string); exp_continue }
+                -re {Catchpoint: ([0-9]*#[A-Z2-7]*)} { set CATCHPOINT $expect_out(1,string); exp_continue }
+                eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to wait for round : error code [lindex $result 3]"} }
             }
             if { $BLOCK > 0 } {
                 puts "node status check complete"
                 puts "block: $BLOCK"
-                puts "time since last block: $TIME_SINCE_LAST_BLOCK"
                 puts "sync time: $SYNC_TIME"
-                puts "last consensus protocol: $LAST_CONSENSUS_PROTOCOL"
-                puts "next consensus protocol: $NEXT_CONSENSUS_PROTOCOL"
-                puts "round for next consensus protocol: $ROUND_FOR_NEXT_CONSENSUS_PROTOCOL"
-                puts "next consensus protocol supported: $NEXT_CONSENSUS_PROTOCOL_SUPPORTED"
                 puts "genesis id: $GENESIS_ID"
                 puts "genesis hash: $GENESIS_HASH"
+                if { [info exists CATCHPOINT] } { puts "catchpoint: $CATCHPOINT" }
+                if { [info exists TIME_SINCE_LAST_BLOCK] } { puts "time since last block: $TIME_SINCE_LAST_BLOCK" }
+                if { [info exists LAST_CONSENSUS_PROTOCOL] } { puts "last consensus protocol: $LAST_CONSENSUS_PROTOCOL" }
+                if { [info exists NEXT_CONSENSUS_PROTOCOL] } { puts "next consensus protocol: $NEXT_CONSENSUS_PROTOCOL" }
+                if { [info exists ROUND_FOR_NEXT_CONSENSUS_PROTOCOL] } { puts "round for next consensus protocol: $ROUND_FOR_NEXT_CONSENSUS_PROTOCOL" }
+                if { [info exists NEXT_CONSENSUS_PROTOCOL_SUPPORTED] } { puts "next consensus protocol supported: $NEXT_CONSENSUS_PROTOCOL_SUPPORTED" }
             }
 
             # Check if the round number is reached
@@ -731,7 +814,16 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER TEST_PRIMARY_NODE_DIR 
                 puts "Reached Round number: $WAIT_FOR_ROUND_NUMBER"; break
             } else {
                puts "Current Round: '$BLOCK' is less than wait for round: '$WAIT_FOR_ROUND_NUMBER'"
-               if { $i >= 10 } then { ::AlgorandGoal::Abort " Current Round $BLOCK did not reach $WAIT_FOR_ROUND_NUMBER   "; break;}
+               if { $LAST_ROUND >= $BLOCK } {
+                   # no progress was made since last time we checked.
+                   incr SLEEP_TIME
+               } else {
+                   # we've made progress since last time we checked.
+                   incr SLEEP_TIME -1
+                   set i 0
+                   set LAST_ROUND $BLOCK
+               }
+               if { $i >= 5 } then { ::AlgorandGoal::Abort " Current Round $BLOCK did not reach $WAIT_FOR_ROUND_NUMBER   "; break;}
             }
         }
     } EXCEPTION ] } {

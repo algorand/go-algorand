@@ -35,7 +35,7 @@ import (
 // CatchpointCatchupNodeServices defines the extenal node support needed
 // for the catchpoint service to switch the node between "regular" operational mode and catchup mode.
 type CatchpointCatchupNodeServices interface {
-	SetCatchpointCatchupMode(bool) (newCtx context.Context)
+	SetCatchpointCatchupMode(bool) (newContext <-chan context.Context)
 }
 
 // CatchpointCatchupStats is used for querying and reporting the current state of the catchpoint catchup process
@@ -270,7 +270,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 
 		err = cs.ledgerAccessor.ResetStagingBalances(cs.ctx, true)
 		if err != nil {
-			if err == cs.ctx.Err() {
+			if cs.ctx.Err() != nil {
 				return cs.stopOrAbort()
 			}
 			return cs.abort(fmt.Errorf("processStageLedgerDownload failed to reset staging balances : %v", err))
@@ -279,7 +279,10 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 		if err == nil {
 			break
 		}
-		if err == cs.ctx.Err() {
+		// instead of testing for err == cs.ctx.Err() , we'll check on the context itself.
+		// this is more robust, as the http client library sometimes wrap the context canceled
+		// error with other erros.
+		if cs.ctx.Err() != nil {
 			return cs.stopOrAbort()
 		}
 
@@ -319,7 +322,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 			fetcher := fetcherFactory.New()
 			blk, _, client, err = fetcher.FetchBlock(cs.ctx, blockRound)
 			if err != nil {
-				if err == cs.ctx.Err() {
+				if cs.ctx.Err() != nil {
 					return cs.stopOrAbort()
 				}
 				if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
@@ -360,7 +363,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		// verify that the catchpoint is valid.
 		err = cs.ledgerAccessor.VerifyCatchpoint(cs.ctx, blk)
 		if err != nil {
-			if err == cs.ctx.Err() {
+			if cs.ctx.Err() != nil {
 				return cs.stopOrAbort()
 			}
 			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
@@ -458,7 +461,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			fetcher := fetcherFactory.New()
 			blk, _, client, err = fetcher.FetchBlock(cs.ctx, topBlock.Round()-basics.Round(blocksFetched))
 			if err != nil {
-				if err == cs.ctx.Err() {
+				if cs.ctx.Err() != nil {
 					return cs.stopOrAbort()
 				}
 				if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
@@ -585,8 +588,18 @@ func (cs *CatchpointCatchupService) updateStage(newStage ledger.CatchpointCatchu
 }
 
 func (cs *CatchpointCatchupService) updateNodeCatchupMode(catchupModeEnabled bool) {
-	newCtx := cs.node.SetCatchpointCatchupMode(catchupModeEnabled)
-	cs.ctx, cs.cancelCtxFunc = context.WithCancel(newCtx)
+	newCtxCh := cs.node.SetCatchpointCatchupMode(catchupModeEnabled)
+	select {
+	case newCtx, open := <-newCtxCh:
+		if open {
+			cs.ctx, cs.cancelCtxFunc = context.WithCancel(newCtx)
+		} else {
+			// channel is closed, i.e. we need to abort.
+		}
+	case <-cs.ctx.Done():
+		// we want to abort.
+	}
+
 }
 
 func (cs *CatchpointCatchupService) updateLedgerFetcherProgress(fetcherStats *ledger.CatchpointCatchupAccessorProgress) {

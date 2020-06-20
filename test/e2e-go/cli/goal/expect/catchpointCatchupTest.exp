@@ -1,0 +1,149 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+if { [catch {
+    source goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/CatchpointCatchupTestNetwork.json"
+
+    # copy the consensus protocol to this data directory.
+    exec mkdir -p $TEST_ALGO_DIR
+    exec cp $TEST_DATA_DIR/consensus/catchpointtestingprotocol.json $TEST_ALGO_DIR/consensus.json
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Update the Primary Node configuration
+    exec -- cat "$TEST_ROOT_DIR/Primary/config.json" | jq {. |= . + {"CatchpointInterval":4}} > $TEST_ROOT_DIR/Primary/config.json.new
+    exec rm $TEST_ROOT_DIR/Primary/config.json
+    exec mv $TEST_ROOT_DIR/Primary/config.json.new $TEST_ROOT_DIR/Primary/config.json
+
+    set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
+    set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
+    set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
+
+    set ::env(ALGOSMALLLAMBDAMSEC) 500
+
+    # Start the Primary Node
+    ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Primary
+
+    ::AlgorandGoal::WaitForRound 37 $TEST_ROOT_DIR/Primary
+    
+
+    # Get primary node listening address:
+    set PRIMARY_LISTEN_ADDRESS ""
+    spawn cat $TEST_ROOT_DIR/Primary/algod-listen.net
+    expect {
+        -regexp {http://[0-9\.]+:[0-9]+} { regexp -- {[0-9.]+:[0-9]+} $expect_out(0,string) PRIMARY_LISTEN_ADDRESS; close;}
+        timeout {::AlgorandGoal::Abort "timed out listing $TEST_ROOT_DIR/Primary/algod-listen.net"}
+    }
+    
+    if { $PRIMARY_LISTEN_ADDRESS == "" } {
+        ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Primary
+        puts "Primary node listening address could not be retrieved."
+        exit 1
+    }
+
+    puts "Primary node listening address is $PRIMARY_LISTEN_ADDRESS"
+
+    # start the web proxy
+    set WEBPROXY_LISTEN_ADDRESS ""
+    spawn go run ./catchpointCatchupWebProxy -targetEndpoint "$PRIMARY_LISTEN_ADDRESS" -runtime 30
+    set WP_SPAWN_ID $spawn_id
+    expect {
+        -regexp {[0-9\.]+:[0-9]+} { regexp -- {[0-9.]+:[0-9]+} $expect_out(0,string) WEBPROXY_LISTEN_ADDRESS;}
+        timeout {::AlgorandGoal::Abort "timed out waiting for web proxy listen address"}
+        eof {::AlgorandGoal::Abort "web proxy failed to start"}
+    }
+
+    puts "Web proxy listening address is $WEBPROXY_LISTEN_ADDRESS"
+
+    ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Node False $WEBPROXY_LISTEN_ADDRESS
+
+    ::AlgorandGoal::WaitForRound 1 $TEST_ROOT_DIR/Node
+
+    set CATCHPOINT [::AlgorandGoal::GetNodeLastCatchpoint $TEST_ROOT_DIR/Primary]
+
+    puts "Catchpoint is $CATCHPOINT"
+
+    ::AlgorandGoal::StartCatchup $TEST_ROOT_DIR/Node $CATCHPOINT
+
+    ::AlgorandGoal::WaitForRound 37 $TEST_ROOT_DIR/Node
+
+    ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Node
+
+    # close the web proxy
+    close -i $WP_SPAWN_ID
+
+    puts "catchpointCatchupTest basic test completed"
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in catchpointCatchupTest - basic test: $EXCEPTION"
+}
+
+    # basic testing is done. Now, let's try to see if we can stop and resume a node.
+if { [catch {
+    # delete the genesis directory, so that the node would be on round 0 again.
+    exec rm -rf $TEST_ROOT_DIR/Node/node.log
+    exec rm -rf {*}[glob $TEST_ROOT_DIR/Node/test_net*]
+    # start the proxy. this time, make it go really slow
+
+    set WEBPROXY_LISTEN_ADDRESS ""
+    spawn go run ./catchpointCatchupWebProxy -targetEndpoint "$PRIMARY_LISTEN_ADDRESS" -runtime 30 -requestDelay 1500
+    set WP_SPAWN_ID $spawn_id
+    expect {
+        -regexp {[0-9\.]+:[0-9]+} { regexp -- {[0-9.]+:[0-9]+} $expect_out(0,string) WEBPROXY_LISTEN_ADDRESS;}
+        timeout {::AlgorandGoal::Abort "timed out waiting for web proxy listen address"}
+        eof {::AlgorandGoal::Abort "web proxy failed to start"}
+    }
+
+    puts "Web proxy listening address is $WEBPROXY_LISTEN_ADDRESS"
+
+    ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Node False $WEBPROXY_LISTEN_ADDRESS
+
+    ::AlgorandGoal::WaitForRound 1 $TEST_ROOT_DIR/Node
+
+    ::AlgorandGoal::StartCatchup $TEST_ROOT_DIR/Node $CATCHPOINT
+
+    ::AlgorandGoal::WaitCatchup $TEST_ROOT_DIR/Node 35
+
+    ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Node
+
+    # close the web proxy
+    close -i $WP_SPAWN_ID
+
+    set WEBPROXY_LISTEN_ADDRESS ""
+    spawn go run ./catchpointCatchupWebProxy -targetEndpoint "$PRIMARY_LISTEN_ADDRESS" -runtime 30
+    set WP_SPAWN_ID $spawn_id
+    expect {
+        -regexp {[0-9\.]+:[0-9]+} { regexp -- {[0-9.]+:[0-9]+} $expect_out(0,string) WEBPROXY_LISTEN_ADDRESS;}
+        timeout {::AlgorandGoal::Abort "timed out waiting for web proxy listen address"}
+        eof {::AlgorandGoal::Abort "web proxy failed to start"}
+    }
+
+    ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Node False $WEBPROXY_LISTEN_ADDRESS
+
+    ::AlgorandGoal::WaitForRound 38 $TEST_ROOT_DIR/Node
+
+    ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Node
+
+    # close the web proxy
+    close -i $WP_SPAWN_ID
+
+    ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Primary
+
+    puts "catchpointCatchupTest stop/start test completed"
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in catchpointCatchupTest - stop/start: $EXCEPTION"
+}
