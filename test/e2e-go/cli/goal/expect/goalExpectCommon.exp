@@ -875,7 +875,10 @@ proc ::AlgorandGoal::AddParticipationKey { ADDRESS FIRST_ROUND LAST_ROUND TEST_P
 
 # Register online participation with a given account
 proc ::AlgorandGoal::TakeAccountOnline { ADDRESS FIRST_ROUND LAST_ROUND TEST_PRIMARY_NODE_DIR } {
-   if { [ catch {
+    # we need to set the timeout to more than one round, since it migth take few rounds for the transaction to be accepted, transmitted, proposed, etc.
+    set timeout 20
+
+    if { [ catch {
        spawn goal account changeonlinestatus --address $ADDRESS --firstvalid $FIRST_ROUND --lastvalid $LAST_ROUND -d $TEST_PRIMARY_NODE_DIR
        expect {
            timeout { ::AlgorandGoal::Abort "goal TakeAccountOnline timed out"  }
