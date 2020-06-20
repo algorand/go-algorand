@@ -819,11 +819,11 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER NODE_DATA_DIR } {
                    incr SLEEP_TIME
                } else {
                    # we've made progress since last time we checked.
-                   incr SLEEP_TIME -1
+                   if { $SLEEP_TIME != 0 } { incr SLEEP_TIME -1 }
                    set i 0
                    set LAST_ROUND $BLOCK
                }
-               if { $i >= 5 } then { ::AlgorandGoal::Abort " Current Round $BLOCK did not reach $WAIT_FOR_ROUND_NUMBER   "; break;}
+               if { $i >= 10 } then { ::AlgorandGoal::Abort " Current Round $BLOCK did not reach $WAIT_FOR_ROUND_NUMBER   "; break;}
             }
         }
     } EXCEPTION ] } {
