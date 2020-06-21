@@ -888,3 +888,12 @@ proc ::AlgorandGoal::TakeAccountOnline { ADDRESS FIRST_ROUND LAST_ROUND TEST_PRI
    ::AlgorandGoal::Abort "ERROR in TakeAccountOnline: $EXCEPTION"
    }
 }
+
+# CheckEOF checks if there was an error, and aborts if there was an error
+proc ::AlgorandGoal::CheckEOF { { ERROR_STRING "" } } {
+    catch wait result;
+    if { [lindex $result 3] != 0 } {
+        puts $ERROR_STRING
+        exit 1
+    }
+}

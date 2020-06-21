@@ -35,7 +35,7 @@ import (
 // CatchpointCatchupNodeServices defines the extenal node support needed
 // for the catchpoint service to switch the node between "regular" operational mode and catchup mode.
 type CatchpointCatchupNodeServices interface {
-	SetCatchpointCatchupMode(bool) (newContext <-chan context.Context)
+	SetCatchpointCatchupMode(bool) (newContextCh <-chan context.Context)
 }
 
 // CatchpointCatchupStats is used for querying and reporting the current state of the catchpoint catchup process
@@ -587,6 +587,8 @@ func (cs *CatchpointCatchupService) updateStage(newStage ledger.CatchpointCatchu
 	return nil
 }
 
+// updateNodeCatchupMode requests the node to change it's operational mode from
+// catchup mode to normal mode and vice versa.
 func (cs *CatchpointCatchupService) updateNodeCatchupMode(catchupModeEnabled bool) {
 	newCtxCh := cs.node.SetCatchpointCatchupMode(catchupModeEnabled)
 	select {
@@ -594,10 +596,12 @@ func (cs *CatchpointCatchupService) updateNodeCatchupMode(catchupModeEnabled boo
 		if open {
 			cs.ctx, cs.cancelCtxFunc = context.WithCancel(newCtx)
 		} else {
-			// channel is closed, i.e. we need to abort.
+			// channel is closed, this means that the node is stopping
 		}
 	case <-cs.ctx.Done():
-		// we want to abort.
+		// the node context was canceled before the SetCatchpointCatchupMode goroutine had
+		// the chance of completing. We'll wait here for the above goroutine to complete :
+		<-newCtxCh
 	}
 
 }

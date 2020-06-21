@@ -877,18 +877,21 @@ func (node *AlgorandFullNode) AbortCatchup(catchpoint string) error {
 }
 
 // SetCatchpointCatchupMode change the node's operational mode from catchpoint catchup mode and back, it returns a
-// channel which contains the updated node context. This function need to work asyncronisly so that the node could
+// channel which contains the updated node context. This function need to work asyncronisly so that the caller could
 // detect and handle the usecase where the node is being shut down while we're switching to/from catchup mode without
 // deadlocking on the shared node mutex.
-func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode bool) (outCtx <-chan context.Context) {
-	newContext := make(chan context.Context)
-	outCtx = newContext
+func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode bool) (outCtxCh <-chan context.Context) {
+	// create a non-buffered channel to return the newly created context. The fact that it's non-buffered here
+	// is imporant, as it allows us to syncronize the "receiving" of the new context before canceling of the previous
+	// one.
+	ctxCh := make(chan context.Context)
+	outCtxCh = ctxCh
 	go func() {
 		node.mu.Lock()
 		// check that the node wasn't canceled. If it have been canceled, it means that the node.Stop() was called, in which case
 		// we should close the channel.
 		if node.ctx.Err() == context.Canceled {
-			close(newContext)
+			close(ctxCh)
 			return
 		}
 		if catchpointCatchupMode {
@@ -910,7 +913,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 
 			// Set up a context we can use to cancel goroutines on Stop()
 			node.ctx, node.cancelCtx = context.WithCancel(context.Background())
-			newContext <- node.ctx
+			ctxCh <- node.ctx
 
 			prevNodeCancelFunc()
 			return
@@ -947,9 +950,9 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		// at this point, the catchpoint catchup is done ( either successfully or not.. )
 		node.catchpointCatchupService = nil
 
-		newContext <- node.ctx
+		ctxCh <- node.ctx
 	}()
-	return newContext
+	return
 
 }
 
