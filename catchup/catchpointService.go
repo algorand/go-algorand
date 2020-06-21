@@ -600,10 +600,16 @@ func (cs *CatchpointCatchupService) updateNodeCatchupMode(catchupModeEnabled boo
 		}
 	case <-cs.ctx.Done():
 		// the node context was canceled before the SetCatchpointCatchupMode goroutine had
-		// the chance of completing. We'll wait here for the above goroutine to complete :
-		<-newCtxCh
+		// the chance of completing. We At this point, the service is shutting down. However,
+		// we don't know how long it would take for the node mutex until it's become available.
+		// given that the SetCatchpointCatchupMode gave us a non-buffered channel, it might get blocked
+		// if we won't be draining that channel. To resolve that, we will create another goroutine here
+		// which would drain that channel.
+		go func() {
+			// We'll wait here for the above goroutine to complete :
+			<-newCtxCh
+		}()
 	}
-
 }
 
 func (cs *CatchpointCatchupService) updateLedgerFetcherProgress(fetcherStats *ledger.CatchpointCatchupAccessorProgress) {
