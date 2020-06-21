@@ -1,3 +1,2 @@
 #!/usr/bin/env bash
-GOLANG_VERSION=$(awk '/^go/{print $2}' go.mod)
-echo "${GOLANG_VERSION}"
+echo $(awk '/^go[ \t]+[0-9]+\.[0-9]+(\.[0-9]+)?.*$/{print $2}' go.mod)
