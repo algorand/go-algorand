@@ -71,13 +71,13 @@ proc ::AlgorandGoal::StartNode { TEST_ALGO_DIR {SYSTEMD_MANAGED "False"} {PEER_A
             expect {
                 timeout { close; ::AlgorandGoal::Abort "Did not recieve appropriate message during node start" }
                 "^This node is managed by systemd, you must run the following command to make your desired state change to your node:*" { puts "Goal showed correct error message for systemd" ; close}
-                eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to start network"; exit 1 } }
+                eof { ::AlgorandGoal::CheckEOF "Unable to start network" }
             }
         } else {
             expect {
                 timeout { close; ::AlgorandGoal::Abort "Did not recieve appropriate message during node start" }
                 "^Algorand node successfully started!*" {puts "Node started successfully"; close}
-                eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to start network"; exit 1 } }
+                eof { ::AlgorandGoal::CheckEOF "Unable to start network" }
             }
         }
     } EXCEPTION] } {
@@ -153,7 +153,7 @@ proc ::AlgorandGoal::CreateNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timed out creating network" }
             "^Network $NETWORK_NAME created under.*" { puts "Network $NETWORK_NAME created" ; close  }
-            eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to create network"; exit 1 } }
+            eof { ::AlgorandGoal::CheckEOF "Unable to create network" }
         }
     } EXCEPTION ] } {
        puts "ERROR in CreateNetwork: $EXCEPTION"
