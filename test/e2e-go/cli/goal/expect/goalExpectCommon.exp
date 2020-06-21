@@ -145,14 +145,13 @@ proc ::AlgorandGoal::CreateNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR
     # Running on ARM64, it seems that network creation is pretty slow.
     # 30 second won't be enough here, so I'm changing this to 90 seconds.
     set timeout 90
-
     if { [catch {
         # Create network
         puts "network create $NETWORK_NAME"
         spawn goal network create --network $NETWORK_NAME --template $NETWORK_TEMPLATE --datadir $TEST_ALGO_DIR --rootdir $TEST_ROOT_DIR
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timed out creating network" }
-            "^Network $NETWORK_NAME created under.*" { puts "Network $NETWORK_NAME created" ; close  }
+            "^Network $NETWORK_NAME created under.*" { puts "Network $NETWORK_NAME created" ; exp_continue }
             eof { ::AlgorandGoal::CheckEOF "Unable to create network" }
         }
     } EXCEPTION ] } {
@@ -891,9 +890,11 @@ proc ::AlgorandGoal::TakeAccountOnline { ADDRESS FIRST_ROUND LAST_ROUND TEST_PRI
 
 # CheckEOF checks if there was an error, and aborts if there was an error
 proc ::AlgorandGoal::CheckEOF { { ERROR_STRING "" } } {
-    catch wait result;
+    upvar spawn_id spawn_id
+    catch { wait -i $spawn_id } result;
     if { [lindex $result 3] != 0 } {
         puts $ERROR_STRING
+        puts "returned error code is [lindex $result 3]"
         exit 1
     }
 }
