@@ -96,8 +96,10 @@ if { [catch {
     # basic testing is done. Now, let's try to see if we can stop and resume a node.
 if { [catch {
     # delete the genesis directory, so that the node would be on round 0 again.
-    exec rm -rf $TEST_ROOT_DIR/Node/node.log
-    exec rm -rf {*}[glob $TEST_ROOT_DIR/Node/test_net*]
+    file delete -force $TEST_ROOT_DIR/Node/node.log
+    foreach path [glob $TEST_ROOT_DIR/Node/test_net*] {
+        file delete -force -- $path
+    }
 
     # start the proxy. this time, make it go really slow
     set WEBPROXY_LISTEN_ADDRESS ""
@@ -113,7 +115,12 @@ if { [catch {
 
     ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Node False $WEBPROXY_LISTEN_ADDRESS
 
-    ::AlgorandGoal::WaitForRound 1 $TEST_ROOT_DIR/Node
+    set NODE_ROUND [::AlgorandGoal::WaitForRound 1 $TEST_ROOT_DIR/Node]
+
+    if { $NODE_ROUND >= 35 } {
+        # it means that we haven't reset the directory correctly.
+        ::AlgorandGoal::Abort "Node $TEST_ROOT_DIR/Node should have been reset, but it didn't"
+    }
 
     ::AlgorandGoal::StartCatchup $TEST_ROOT_DIR/Node $CATCHPOINT
 

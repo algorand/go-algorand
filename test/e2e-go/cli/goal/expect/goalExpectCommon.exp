@@ -761,7 +761,7 @@ proc ::AlgorandGoal::WaitCatchup { TEST_PRIMARY_NODE_DIR WAIT_DURATION_SEC } {
        ::AlgorandGoal::Abort "ERROR in WaitCatchup: $EXCEPTION"
     }
     if { [info exists CATCHPOINT] == 0 } {
-        ::AlgorandGoal::Abort "Node failed to start catching up withint $WAIT_DURATION_SEC seconds"
+        ::AlgorandGoal::Abort "Node failed to start catching up within $WAIT_DURATION_SEC seconds"
     }
 }
 
