@@ -63,7 +63,7 @@ if { [catch {
     spawn go run ./catchpointCatchupWebProxy -targetEndpoint "$PRIMARY_LISTEN_ADDRESS" -runtime 30
     set WP_SPAWN_ID $spawn_id
     expect {
-        -re {[0-9\.]+:[0-9]+} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
+        -re {([0-9\.]+:[0-9]+)} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
         timeout {::AlgorandGoal::Abort "timed out waiting for web proxy listen address"}
         eof { ::AlgorandGoal::CheckEOF "web proxy failed to start"}
     }
@@ -106,7 +106,7 @@ if { [catch {
     spawn go run ./catchpointCatchupWebProxy -targetEndpoint "$PRIMARY_LISTEN_ADDRESS" -runtime 30 -requestDelay 1500
     set WP_SPAWN_ID $spawn_id
     expect {
-        -re {[0-9\.]+:[0-9]+} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
+        -re {([0-9\.]+:[0-9]+)} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
         timeout {::AlgorandGoal::Abort "timed out waiting for web proxy listen address"}
         eof { ::AlgorandGoal::CheckEOF "web proxy failed to start"}
     }
@@ -136,7 +136,7 @@ if { [catch {
     spawn go run ./catchpointCatchupWebProxy -targetEndpoint "$PRIMARY_LISTEN_ADDRESS" -runtime 30
     set WP_SPAWN_ID $spawn_id
     expect {
-        -re {[0-9\.]+:[0-9]+} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
+        -re {([0-9\.]+:[0-9]+)} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
         timeout {::AlgorandGoal::Abort "timed out waiting for web proxy listen address"}
         eof { ::AlgorandGoal::CheckEOF "web proxy failed to start"}
     }
