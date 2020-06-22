@@ -26,17 +26,18 @@ type keyValueCow struct {
 	base  basics.TealKeyValue
 	delta basics.StateDelta
 
-	curSchema basics.StateSchema
+	maxSchema basics.StateSchema
+	calcSchema basics.StateSchema
 }
 
-func makeKeyValueCow(base basics.TealKeyValue, delta basics.StateDelta) (*keyValueCow, error) {
+func makeKeyValueCow(base basics.TealKeyValue, delta basics.StateDelta, maxSchema basics.StateSchema) (*keyValueCow, error) {
 	var kvc keyValueCow
 	var err error
 
 	kvc.base = base
 	kvc.delta = delta
-
-	kvc.curSchema, err = base.ToStateSchema()
+	kvc.maxSchema = maxSchema
+	kvc.calcSchema, err = base.ToStateSchema()
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +74,11 @@ func (kvc *keyValueCow) write(key string, value basics.TealValue) error {
 
 	// Keep track of new value for updating counts
 	afterValue, afterOk := kvc.read(key)
-	return kvc.updateCounts(beforeValue, beforeOk, afterValue, afterOk)
+	err := kvc.updateSchema(beforeValue, beforeOk, afterValue, afterOk)
+	if err != nil {
+		return err
+	}
+	return kvc.checkSchema()
 }
 
 func (kvc *keyValueCow) del(key string) error {
@@ -97,17 +102,21 @@ func (kvc *keyValueCow) del(key string) error {
 	// can never cause a schema violation, but for consistency let's return
 	// an instance of type error for functions that can modify the cow
 	afterValue, afterOk := kvc.read(key)
-	return kvc.updateCounts(beforeValue, beforeOk, afterValue, afterOk)
+	err := kvc.updateSchema(beforeValue, beforeOk, afterValue, afterOk)
+	if err != nil {
+		return err
+	}
+	return kvc.checkSchema()
 }
 
-func (kvc *keyValueCow) updateCounts(bv basics.TealValue, bok bool, av basics.TealValue, aok bool) error {
+func (kvc *keyValueCow) updateSchema(bv basics.TealValue, bok bool, av basics.TealValue, aok bool) error {
 	// If the value existed before, decrement the count of the old type.
 	if bok {
 		switch bv.Type {
 		case basics.TealBytesType:
-			kvc.curSchema.NumByteSlice--
+			kvc.calcSchema.NumByteSlice--
 		case basics.TealUintType:
-			kvc.curSchema.NumUint--
+			kvc.calcSchema.NumUint--
 		default:
 			return fmt.Errorf("unknown before type: %v", bv.Type)
 		}
@@ -117,12 +126,23 @@ func (kvc *keyValueCow) updateCounts(bv basics.TealValue, bok bool, av basics.Te
 	if aok {
 		switch av.Type {
 		case basics.TealBytesType:
-			kvc.curSchema.NumByteSlice++
+			kvc.calcSchema.NumByteSlice++
 		case basics.TealUintType:
-			kvc.curSchema.NumUint++
+			kvc.calcSchema.NumUint++
 		default:
 			return fmt.Errorf("unknown after type: %v", av.Type)
 		}
+	}
+	return nil
+}
+
+func (kvc *keyValueCow) checkSchema() error {
+	// Check against the max schema
+	if kvc.calcSchema.NumUint > kvc.maxSchema.NumUint {
+		return fmt.Errorf("store integer count %d exceeds schema integer count %d", kvc.calcSchema.NumUint, kvc.maxSchema.NumUint)
+	}
+	if kvc.calcSchema.NumByteSlice > kvc.maxSchema.NumByteSlice {
+		return fmt.Errorf("store bytes count %d exceeds schema bytes count %d", kvc.calcSchema.NumByteSlice, kvc.maxSchema.NumByteSlice)
 	}
 	return nil
 }

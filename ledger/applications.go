@@ -287,3 +287,11 @@ func (al *appLedger) LatestTimestamp() int64 {
 func (al *appLedger) ApplicationID() basics.AppIndex {
 	return al.appIdx
 }
+
+func (al *appLedger) LocalSchema() basics.StateSchema {
+	return al.localSchema
+}
+
+func (al *appLedger) GlobalSchema() basics.StateSchema {
+	return al.globalSchema
+}
