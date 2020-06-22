@@ -17,19 +17,31 @@
 package logic
 
 import (
+	"fmt"
+
 	"github.com/algorand/go-algorand/data/basics"
 )
 
 type keyValueCow struct {
 	base  basics.TealKeyValue
 	delta basics.StateDelta
+
+	curSchema basics.StateSchema
 }
 
-func makeKeyValueCow(base basics.TealKeyValue, delta basics.StateDelta) *keyValueCow {
+func makeKeyValueCow(base basics.TealKeyValue, delta basics.StateDelta) (*keyValueCow, error) {
 	var kvc keyValueCow
+	var err error
+
 	kvc.base = base
 	kvc.delta = delta
-	return &kvc
+
+	kvc.curSchema, err = base.ToStateSchema()
+	if err != nil {
+		return nil, err
+	}
+
+	return &kvc, nil
 }
 
 func (kvc *keyValueCow) read(key string) (value basics.TealValue, ok bool) {
@@ -45,7 +57,10 @@ func (kvc *keyValueCow) read(key string) (value basics.TealValue, ok bool) {
 	return value, ok
 }
 
-func (kvc *keyValueCow) write(key string, value basics.TealValue) {
+func (kvc *keyValueCow) write(key string, value basics.TealValue) error {
+	// Keep track of old value for updating counts
+	beforeValue, beforeOk := kvc.read(key)
+
 	// If the value being written is identical to the underlying key/value,
 	// then ensure there is no delta entry for the key.
 	baseValue, ok := kvc.base[key]
@@ -55,9 +70,16 @@ func (kvc *keyValueCow) write(key string, value basics.TealValue) {
 		// Otherwise, update the delta with the new value.
 		kvc.delta[key] = value.ToValueDelta()
 	}
+
+	// Keep track of new value for updating counts
+	afterValue, afterOk := kvc.read(key)
+	return kvc.updateCounts(beforeValue, beforeOk, afterValue, afterOk)
 }
 
-func (kvc *keyValueCow) del(key string) {
+func (kvc *keyValueCow) del(key string) error {
+	// Keep track of old value for updating counts
+	beforeValue, beforeOk := kvc.read(key)
+
 	_, ok := kvc.base[key]
 	if ok {
 		// If the key already exists in the underlying key/value,
@@ -70,4 +92,37 @@ func (kvc *keyValueCow) del(key string) {
 		// don't include a delta entry for its deletion.
 		delete(kvc.delta, key)
 	}
+
+	// Keep track of new value for updating counts. Technically a delete
+	// can never cause a schema violation, but for consistency let's return
+	// an instance of type error for functions that can modify the cow
+	afterValue, afterOk := kvc.read(key)
+	return kvc.updateCounts(beforeValue, beforeOk, afterValue, afterOk)
+}
+
+func (kvc *keyValueCow) updateCounts(bv basics.TealValue, bok bool, av basics.TealValue, aok bool) error {
+	// If the value existed before, decrement the count of the old type.
+	if bok {
+		switch bv.Type {
+		case basics.TealBytesType:
+			kvc.curSchema.NumByteSlice--
+		case basics.TealUintType:
+			kvc.curSchema.NumUint--
+		default:
+			return fmt.Errorf("unknown before type: %v", bv.Type)
+		}
+	}
+
+	// If the value exists now, increment the count of the new type.
+	if aok {
+		switch av.Type {
+		case basics.TealBytesType:
+			kvc.curSchema.NumByteSlice++
+		case basics.TealUintType:
+			kvc.curSchema.NumUint++
+		default:
+			return fmt.Errorf("unknown after type: %v", av.Type)
+		}
+	}
+	return nil
 }

@@ -1735,7 +1735,10 @@ func (cx *evalContext) getLocalStateCow(accountIdx uint64) (*keyValueCow, error)
 		}
 
 		localDelta := make(basics.StateDelta)
-		kvCow := makeKeyValueCow(localKV, localDelta)
+		kvCow, err := makeKeyValueCow(localKV, localDelta)
+		if err != nil {
+			return nil, err
+		}
 		idxCow = &indexedCow{accountIdx, kvCow}
 		cx.localStateCows[addr] = idxCow
 	}
@@ -1803,7 +1806,10 @@ func (cx *evalContext) getGlobalStateCow() (*keyValueCow, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch global state: %v", err)
 		}
-		cx.globalStateCow = makeKeyValueCow(globalKV, cx.appEvalDelta.GlobalDelta)
+		cx.globalStateCow, err = makeKeyValueCow(globalKV, cx.appEvalDelta.GlobalDelta)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return cx.globalStateCow, nil
 }
