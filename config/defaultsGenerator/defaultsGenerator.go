@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -41,19 +42,23 @@ var autoGenHeader = `
 // If you want to make changes to this file, make the corresponding changes to Local in config.go and run "go generate".
 `
 
+// printExit prints the given formatted string ( i.e. just like fmt.Printf ), with the defaultGenerator executable program name
+// at the begining, and exit the process with a error code of 1.
+func printExit(fmtStr string, args ...interface{}) {
+	fmt.Printf("%s: "+fmtStr, append([]interface{}{filepath.Base(os.Args[0])}, args...)...)
+	os.Exit(1)
+}
+
 func main() {
 
 	flag.Parse()
 	if *outputfilename == "" || *packageName == "" || *headerFileName == "" || *jsonExampleFileName == "" {
-		fmt.Printf("%s: one or more of the required input arguments was not provided\n", os.Args[0])
-		os.Exit(1)
-		return
+		printExit("one or more of the required input arguments was not provided\n")
 	}
 
 	localDefaultsBytes, err := ioutil.ReadFile(*headerFileName)
 	if err != nil {
-		fmt.Printf("Unable to load file %s : %v", *headerFileName, err)
-		os.Exit(1)
+		printExit("Unable to load file %s : %v", *headerFileName, err)
 	}
 	localDefaultsBytes = []byte(strings.Replace(string(localDefaultsBytes), "{DATE_Y}", fmt.Sprintf("%d", time.Now().Year()), 1))
 	localDefaultsBytes = append(localDefaultsBytes, []byte(autoGenHeader)...)
@@ -67,16 +72,14 @@ func main() {
 
 	err = ioutil.WriteFile(*outputfilename, localDefaultsBytes, 0644)
 	if err != nil {
-		fmt.Printf("Unable to write file %s : %v", *outputfilename, err)
-		os.Exit(1)
+		printExit("Unable to write file %s : %v", *outputfilename, err)
 	}
 
 	// generate an update json for the example as well.
 	autoDefaultsBytes = []byte(prettyPrint(config.AutogenLocal, "json"))
 	err = ioutil.WriteFile(*jsonExampleFileName, autoDefaultsBytes, 0644)
 	if err != nil {
-		fmt.Printf("Unable to write file %s : %v", *jsonExampleFileName, err)
-		os.Exit(1)
+		printExit("Unable to write file %s : %v", *jsonExampleFileName, err)
 	}
 }
 
@@ -159,10 +162,10 @@ func prettyPrint(c config.Local, format string) (out string) {
 					out = fmt.Sprintf("%s    \"%s\": {},\n", out, field.Name)
 				}
 			} else {
-				panic(fmt.Sprintf("non-empty default maps data type encountered when reflecting on config.Local datatype %s", field.Name))
+				printExit("non-empty default maps data type encountered when reflecting on config.Local datatype %s", field.Name)
 			}
 		default:
-			panic(fmt.Sprintf("unsupported data type (%s) encountered when reflecting on config.Local datatype %s", field.Type.Kind(), field.Name))
+			printExit("unsupported data type (%s) encountered when reflecting on config.Local datatype %s", field.Type.Kind(), field.Name)
 		}
 		if format != "go" {
 			if fieldIdx == len(fields)-1 {
