@@ -461,8 +461,10 @@ func (ac *ApplicationCallTxnFields) createApplication(
 	record.AppParams[appIdx] = basics.AppParams{
 		ApprovalProgram:   ac.ApprovalProgram,
 		ClearStateProgram: ac.ClearStateProgram,
-		LocalStateSchema:  ac.LocalStateSchema,
-		GlobalStateSchema: ac.GlobalStateSchema,
+		StateSchemas: basics.StateSchemas{
+			LocalStateSchema:  ac.LocalStateSchema,
+			GlobalStateSchema: ac.GlobalStateSchema,
+		},
 	}
 
 	// Update the cached TotalStateSchema for this account, used
@@ -634,7 +636,7 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 	//   GlobalState)
 	acctWhitelist := append(ac.Accounts, header.Sender)
 	appGlobalWhitelist := append(ac.ForeignApps, appIdx)
-	err = steva.InitLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, params)
+	err = steva.InitLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, params.StateSchemas)
 	if err != nil {
 		return err
 	}

@@ -188,12 +188,19 @@ type AppLocalState struct {
 type AppParams struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApprovalProgram   []byte      `codec:"approv"`
-	ClearStateProgram []byte      `codec:"clearp"`
+	ApprovalProgram   []byte       `codec:"approv"`
+	ClearStateProgram []byte       `codec:"clearp"`
+	GlobalState       TealKeyValue `codec:"gs,allocbound=-"`
+	StateSchemas
+}
+
+// StateSchemas is a thin wrapper around the LocalStateSchema and the
+// GlobalStateSchema, since they are often needed together
+type StateSchemas struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	LocalStateSchema  StateSchema `codec:"lsch"`
 	GlobalStateSchema StateSchema `codec:"gsch"`
-
-	GlobalState TealKeyValue `codec:"gs,allocbound=-"`
 }
 
 // Clone returns a copy of some AppParams that may be modified without

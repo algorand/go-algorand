@@ -43,12 +43,11 @@ type appTealEvaluator struct {
 
 // appLedger implements logic.LedgerForLogic
 type appLedger struct {
-	addresses    map[basics.Address]bool
-	apps         map[basics.AppIndex]bool
-	balances     transactions.Balances
-	appIdx       basics.AppIndex
-	localSchema  basics.StateSchema
-	globalSchema basics.StateSchema
+	addresses map[basics.Address]bool
+	apps      map[basics.AppIndex]bool
+	balances  transactions.Balances
+	appIdx    basics.AppIndex
+	schemas   basics.StateSchemas
 	AppTealGlobals
 }
 
@@ -78,8 +77,8 @@ func (ae *appTealEvaluator) Check(program []byte) (cost int, err error) {
 // from, and the appGlobalWhitelist lists all the app IDs we are allowed to
 // fetch global state for (which requires looking up the creator's balance
 // record).
-func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, params basics.AppParams) error {
-	ledger, err := newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, params, ae.AppTealGlobals)
+func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, schemas basics.StateSchemas) error {
+	ledger, err := newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, schemas, ae.AppTealGlobals)
 	if err != nil {
 		return err
 	}
@@ -88,7 +87,7 @@ func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, acctWhite
 	return nil
 }
 
-func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, params basics.AppParams, globals AppTealGlobals) (al *appLedger, err error) {
+func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, schemas basics.StateSchemas, globals AppTealGlobals) (al *appLedger, err error) {
 	if balances == nil {
 		err = fmt.Errorf("cannot create appLedger with nil balances")
 		return
@@ -112,8 +111,7 @@ func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address
 	al = &appLedger{}
 	al.appIdx = appIdx
 	al.balances = balances
-	al.localSchema = params.LocalStateSchema
-	al.globalSchema = params.GlobalStateSchema
+	al.schemas = schemas
 	al.addresses = make(map[basics.Address]bool, len(acctWhitelist))
 	al.apps = make(map[basics.AppIndex]bool, len(appGlobalWhitelist))
 	al.AppTealGlobals = globals
@@ -130,8 +128,8 @@ func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address
 }
 
 // MakeDebugAppLedger returns logic.LedgerForLogic suitable for debug or dryrun
-func MakeDebugAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, params basics.AppParams, globals AppTealGlobals) (al logic.LedgerForLogic, err error) {
-	return newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, params, globals)
+func MakeDebugAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, schemas basics.StateSchemas, globals AppTealGlobals) (al logic.LedgerForLogic, err error) {
+	return newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, schemas, globals)
 }
 
 func (al *appLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err error) {
@@ -289,9 +287,9 @@ func (al *appLedger) ApplicationID() basics.AppIndex {
 }
 
 func (al *appLedger) LocalSchema() basics.StateSchema {
-	return al.localSchema
+	return al.schemas.LocalStateSchema
 }
 
 func (al *appLedger) GlobalSchema() basics.StateSchema {
-	return al.globalSchema
+	return al.schemas.GlobalStateSchema
 }

@@ -365,7 +365,10 @@ func makeAppLedger(dl *dryrunLedger, txn *transactions.Transaction, appIdx basic
 		CurrentRound:    basics.Round(dl.dr.Round),
 		LatestTimestamp: dl.dr.LatestTimestamp,
 	}
-	return ledger.MakeDebugAppLedger(dl, accounts, apps, appIdx, basics.AppParams{}, globals)
+	localSchema := basics.StateSchema{NumUint: 16, NumByteSlice: 16}
+	globalSchema := basics.StateSchema{NumUint: 64, NumByteSlice: 64}
+	schemas := basics.StateSchemas{LocalStateSchema: localSchema, GlobalStateSchema: globalSchema}
+	return ledger.MakeDebugAppLedger(dl, accounts, apps, appIdx, schemas, globals)
 }
 
 // unit-testable core of dryrun handler

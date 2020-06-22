@@ -138,9 +138,10 @@ type evalResult struct {
 type evalFn func(program []byte, ep logic.EvalParams) (bool, error)
 
 type appState struct {
-	appIdx basics.AppIndex
-	global map[basics.AppIndex]basics.TealKeyValue
-	locals map[basics.Address]map[basics.AppIndex]basics.TealKeyValue
+	appIdx  basics.AppIndex
+	schemas basics.StateSchemas
+	global  map[basics.AppIndex]basics.TealKeyValue
+	locals  map[basics.Address]map[basics.AppIndex]basics.TealKeyValue
 }
 
 func (a *appState) clone() (b appState) {

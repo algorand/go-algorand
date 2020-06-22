@@ -67,10 +67,14 @@ func makeAppLedger(
 
 	appsExist := make(map[basics.AppIndex]bool, len(apps))
 	states := makeAppState()
+	states.schemas = makeSchemas()
 	states.appIdx = appIdx
 	for _, aid := range apps {
 		for addr, ad := range balances {
 			if params, ok := ad.AppParams[aid]; ok {
+				if aid == appIdx {
+					states.schemas = params.StateSchemas
+				}
 				states.global[aid] = params.GlobalState
 				appsExist[aid] = true
 			}
@@ -97,9 +101,8 @@ func makeAppLedger(
 				ad := basics.AccountData{
 					AppParams: map[basics.AppIndex]basics.AppParams{
 						aid: {
-							LocalStateSchema:  makeSchema(),
-							GlobalStateSchema: makeSchema(),
-							GlobalState:       make(basics.TealKeyValue),
+							StateSchemas: makeSchemas(),
+							GlobalState:  make(basics.TealKeyValue),
 						},
 					},
 				}
@@ -119,7 +122,7 @@ func makeAppLedger(
 				_, ok = ad.AppLocalStates[aid]
 				if !ok {
 					ad.AppLocalStates[aid] = basics.AppLocalState{
-						Schema: makeSchema(),
+						Schema: makeLocalSchema(),
 					}
 				}
 			}
@@ -127,14 +130,28 @@ func makeAppLedger(
 	}
 
 	appGlobals := ledger.AppTealGlobals{CurrentRound: basics.Round(round), LatestTimestamp: latestTimestamp}
-	ledger, err := ledger.MakeDebugAppLedger(ba, accounts, apps, appIdx, basics.AppParams{}, appGlobals)
+	ledger, err := ledger.MakeDebugAppLedger(ba, accounts, apps, appIdx, states.schemas, appGlobals)
 	return ledger, states, err
 }
 
-func makeSchema() basics.StateSchema {
+func makeSchemas() basics.StateSchemas {
+	return basics.StateSchemas{
+		LocalStateSchema:  makeLocalSchema(),
+		GlobalStateSchema: makeGlobalSchema(),
+	}
+}
+
+func makeLocalSchema() basics.StateSchema {
 	return basics.StateSchema{
 		NumUint:      16,
 		NumByteSlice: 16,
+	}
+}
+
+func makeGlobalSchema() basics.StateSchema {
+	return basics.StateSchema{
+		NumUint:      64,
+		NumByteSlice: 64,
 	}
 }
 

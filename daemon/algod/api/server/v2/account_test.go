@@ -33,8 +33,10 @@ func TestAccount(t *testing.T) {
 	round := basics.Round(2)
 
 	params := basics.AppParams{
-		ApprovalProgram:   []byte{1},
-		GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		ApprovalProgram: []byte{1},
+		StateSchemas: basics.StateSchemas{
+			GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		},
 	}
 	a := basics.AccountData{
 		Status:             basics.Online,
