@@ -130,8 +130,8 @@ func (kvc *keyValueCow) del(key string) error {
 	}
 
 	// Keep track of new value for updating counts. Technically a delete
-	// can never cause a schema violation, but for consistency let's return
-	// an instance of type error for functions that can modify the cow
+	// can never cause a schema violation, but for let's return an error
+	// type for functions that can modify the cow
 	afterValue, afterOk := kvc.read(key)
 	err := kvc.updateSchema(beforeValue, beforeOk, afterValue, afterOk)
 	if err != nil {
