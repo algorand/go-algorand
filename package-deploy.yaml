@@ -17,18 +17,6 @@ tasks:
     dependencies: docker.Version
 
   - task: docker.Make
-    name: generate-releases-page
-    docker:
-      image: algorand/mule-linux-ubuntu
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
-      env: [
-        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-      ]
-    target: mule-deploy-generate_releases_page WORKDIR=/projects/go-algorand
-
-  - task: docker.Make
     name: deb
     docker:
       image: algorand/mule-linux-ubuntu
@@ -78,11 +66,6 @@ tasks:
     dest: /root
 
   - task: s3.BucketCopy
-    name: releases-page
-    src: /tmp/index.html
-    dest: s3://algorand-releases
-
-  - task: s3.BucketCopy
     name: deploy-dev-deb-repo
     src: s3://algorand-staging/releases/${CHANNEL}/${VERSION}
     dest: s3://algorand-dev-deb-repo/releases/${CHANNEL}/${VERSION}
@@ -99,7 +82,6 @@ jobs:
     tasks:
       - shell.docker.Ensure.deb
       - shell.docker.Ensure.rpm
-      - docker.Make.generate-releases-page
       - docker.Make.deb
       - docker.Make.rpm
 
@@ -118,10 +100,6 @@ jobs:
   package-deploy-setup-gnupg:
     tasks:
       - s3.BucketCopy.gnupg
-
-  package-deploy-releases-page:
-    tasks:
-      - s3.BucketCopy.releases-page
 
   package-deploy-rpm-repo:
     tasks:
