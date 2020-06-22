@@ -22,7 +22,7 @@ import (
 	"strconv"
 )
 
-//go:generate $GOROOT/bin/go run ./defaults_gen/defaults_gen.go -h ../scripts/LICENSE_HEADER -p config -o ./local_defaults.go -j ../installer/config.json.example
+//go:generate $GOROOT/bin/go run ./defaultsGenerator/defaultsGenerator.go -h ../scripts/LICENSE_HEADER -p config -o ./local_defaults.go -j ../installer/config.json.example
 //go:generate $GOROOT/bin/go fmt local_defaults.go
 
 // AutogenLocal - this variable is the "input" for the config default generator which automatically updates the above defaultLocal varaible.
