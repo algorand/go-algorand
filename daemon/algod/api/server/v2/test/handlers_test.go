@@ -301,6 +301,7 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int) {
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name())
+	mockNode.config.EnableDeveloperAPI = true
 	handler := v2.Handlers{
 		Node:     &mockNode,
 		Log:      logging.Base(),
