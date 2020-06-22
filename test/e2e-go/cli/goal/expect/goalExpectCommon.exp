@@ -787,11 +787,13 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER NODE_DATA_DIR } {
             incr i
 
             # Check node status
-            puts "spawn node status  "
+            puts "spawn node status"
+            log_user 0
+            set BLOCK -1
             spawn goal node status -d $NODE_DATA_DIR
             expect {
                 timeout { ::AlgorandGoal::Abort "goal node status timed out"  }
-                -re {Cannot contact Algorand node: (\d+)} {set BLOCK 0; close }
+                -re {Cannot contact Algorand node: (\d+)} {set BLOCK -1; close }
                 -re {Last committed block: (\d+)} {set BLOCK $expect_out(1,string); exp_continue }
                 -re {Time since last block: ([0-9]*\.?[0-9]*)s} {set TIME_SINCE_LAST_BLOCK $expect_out(1,string); exp_continue }
                 -re {Sync Time: ([0-9]*\.?[0-9]*)s} {set SYNC_TIME $expect_out(1,string); exp_continue }
@@ -804,18 +806,11 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER NODE_DATA_DIR } {
                 -re {Catchpoint: ([0-9]*#[A-Z2-7]*)} { set CATCHPOINT $expect_out(1,string); exp_continue }
                 eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to wait for round : error code [lindex $result 3]"} }
             }
-            if { $BLOCK > 0 } {
-                puts "node status check complete"
-                puts "block: $BLOCK"
-                puts "sync time: $SYNC_TIME"
-                puts "genesis id: $GENESIS_ID"
-                puts "genesis hash: $GENESIS_HASH"
-                if { [info exists CATCHPOINT] } { puts "catchpoint: $CATCHPOINT" }
-                if { [info exists TIME_SINCE_LAST_BLOCK] } { puts "time since last block: $TIME_SINCE_LAST_BLOCK" }
-                if { [info exists LAST_CONSENSUS_PROTOCOL] } { puts "last consensus protocol: $LAST_CONSENSUS_PROTOCOL" }
-                if { [info exists NEXT_CONSENSUS_PROTOCOL] } { puts "next consensus protocol: $NEXT_CONSENSUS_PROTOCOL" }
-                if { [info exists ROUND_FOR_NEXT_CONSENSUS_PROTOCOL] } { puts "round for next consensus protocol: $ROUND_FOR_NEXT_CONSENSUS_PROTOCOL" }
-                if { [info exists NEXT_CONSENSUS_PROTOCOL_SUPPORTED] } { puts "next consensus protocol supported: $NEXT_CONSENSUS_PROTOCOL_SUPPORTED" }
+            log_user 1
+            if { $BLOCK > -1 } {
+                puts "node status check complete, current round is $BLOCK"
+            } else {
+                ::AlgorandGoal::Abort "failed to retrieve block round number"
             }
 
             # Check if the round number is reached

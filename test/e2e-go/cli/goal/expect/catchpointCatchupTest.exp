@@ -25,7 +25,7 @@ if { [catch {
     ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
 
     # Update the Primary Node configuration
-    exec -- cat "$TEST_ROOT_DIR/Primary/config.json" | jq {. |= . + {"CatchpointInterval":4}} > $TEST_ROOT_DIR/Primary/config.json.new
+    exec -- cat "$TEST_ROOT_DIR/Primary/config.json" | jq {. |= . + {"CatchpointInterval":4,"EnableRequestLogger":true}} > $TEST_ROOT_DIR/Primary/config.json.new
     exec rm $TEST_ROOT_DIR/Primary/config.json
     exec mv $TEST_ROOT_DIR/Primary/config.json.new $TEST_ROOT_DIR/Primary/config.json
 
@@ -60,10 +60,10 @@ if { [catch {
 
     # start the web proxy
     set WEBPROXY_LISTEN_ADDRESS ""
-    spawn go run ./catchpointCatchupWebProxy -targetEndpoint "$PRIMARY_LISTEN_ADDRESS" -runtime 30
+    spawn go run ./catchpointCatchupWebProxy -targetEndpoint "$PRIMARY_LISTEN_ADDRESS" -runtime 30 -requestDelay 20
     set WP_SPAWN_ID $spawn_id
     expect {
-        -re {([0-9\.]+:[0-9]+)} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
+        -re {(^[0-9\.]+:[0-9]+)} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
         timeout {::AlgorandGoal::Abort "timed out waiting for web proxy listen address"}
         eof { ::AlgorandGoal::CheckEOF "web proxy failed to start"}
     }
@@ -106,7 +106,7 @@ if { [catch {
     spawn go run ./catchpointCatchupWebProxy -targetEndpoint "$PRIMARY_LISTEN_ADDRESS" -runtime 30 -requestDelay 1500
     set WP_SPAWN_ID $spawn_id
     expect {
-        -re {([0-9\.]+:[0-9]+)} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
+        -re {(^[0-9\.]+:[0-9]+)} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
         timeout {::AlgorandGoal::Abort "timed out waiting for web proxy listen address"}
         eof { ::AlgorandGoal::CheckEOF "web proxy failed to start"}
     }
@@ -136,7 +136,7 @@ if { [catch {
     spawn go run ./catchpointCatchupWebProxy -targetEndpoint "$PRIMARY_LISTEN_ADDRESS" -runtime 30
     set WP_SPAWN_ID $spawn_id
     expect {
-        -re {([0-9\.]+:[0-9]+)} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
+        -re {(^[0-9\.]+:[0-9]+)} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
         timeout {::AlgorandGoal::Abort "timed out waiting for web proxy listen address"}
         eof { ::AlgorandGoal::CheckEOF "web proxy failed to start"}
     }

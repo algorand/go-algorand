@@ -20,7 +20,10 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -31,6 +34,7 @@ import (
 var webProxyDestination = flag.String("targetEndpoint", "", "target endpoint")
 var webProxyRuntime = flag.Int64("runtime", 60, "how many seconds we need to run")
 var webProxyRequestDelay = flag.Int64("requestDelay", 0, "how many milliseconds we're going to delay before forwarding the request")
+var webProxyLogFile = flag.String("log", "webProxy.log", "optional name of log file")
 
 func printHelp() {
 	fmt.Printf("catchpoint catchup web proxy testing utility\n")
@@ -54,7 +58,12 @@ func main() {
 			response.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		fmt.Printf("proxy saw request for %s\n", request.URL.String())
+		if *webProxyLogFile != "" {
+			f, _ := os.OpenFile(*webProxyLogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			f.Write([]byte(fmt.Sprintf("proxy saw request for %s\n", request.URL.String())))
+			f.Close()
+		}
+
 		next(response, request)
 	})
 	if err != nil {
@@ -62,5 +71,15 @@ func main() {
 	}
 	defer wp.Close()
 	fmt.Printf("%s\n", wp.GetListenAddress())
-	time.Sleep(time.Duration(*webProxyRuntime) * time.Second)
+
+	// Handle signals cleanly
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+	signal.Ignore(syscall.SIGHUP)
+
+	select {
+	case sig := <-c:
+		fmt.Printf("Exiting webproxy on %v\n", sig)
+	case <-time.After(time.Duration(*webProxyRuntime) * time.Second):
+	}
 }
