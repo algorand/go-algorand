@@ -1,0 +1,69 @@
+#!/usr/bin/expect -f
+#exp_internal 1
+set err 0
+log_user 1
+
+if { [catch {
+
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+
+    exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
+
+    # Create network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    # Check the balance of the primary account
+    set PRIMARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
+
+    set TEAL_PROG_FILE "$TEST_ROOT_DIR/trivial.teal"
+    exec echo int 1 > $TEAL_PROG_FILE
+    set DRREQ_FILE "$TEST_ROOT_DIR/app-create-drreq.json"
+    spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog $TEAL_PROG_FILE --clear-prog $TEAL_PROG_FILE --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 -d $TEST_PRIMARY_NODE_DIR -o $DRREQ_FILE --dryrun-dump
+    expect {
+        timeout { ::AlgorandGoal::Abort "goal app create timeout" }
+    }
+
+    set PASSED 0
+    set PROGRAM_TYPE ""
+    spawn goal clerk dryrun-remote -d $TEST_PRIMARY_NODE_DIR -D $DRREQ_FILE -v
+    expect {
+        timeout { ::AlgorandGoal::Abort "goal clerk dryrun-remote timeout" }
+        -re {(ApprovalProgram)} {puts "match1"; set PROGRAM_TYPE $expect_out(1,string); exp_continue}
+        "PASS" {puts "match2"; set PASSED 1; close}
+    }
+    if { $PASSED == 0 } {
+        ::AlgorandGoal::Abort "Program did not pass"
+    }
+    if { $PROGRAM_TYPE != "ApprovalProgram" } {
+        puts "Program type: $PROGRAM_TYPE"
+        ::AlgorandGoal::Abort "Invalid program type"
+    }
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in goalDryrunRestTest: $EXCEPTION"
+}

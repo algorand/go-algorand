@@ -43,6 +43,7 @@ var (
 	noteText        string
 	lease           string
 	noWaitAfterSend bool
+	dumpForDryrun   bool
 )
 
 func addTxnFlags(cmd *cobra.Command) {
@@ -56,4 +57,5 @@ func addTxnFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
 	cmd.Flags().StringVarP(&lease, "lease", "x", "", "Lease value (base64, optional): no transaction may also acquire this lease until lastvalid")
 	cmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
+	cmd.Flags().BoolVar(&dumpForDryrun, "dryrun-dump", false, "Dump in dryrun format acceptable by dryrun REST api")
 }

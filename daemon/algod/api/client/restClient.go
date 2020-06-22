@@ -54,7 +54,8 @@ const (
 
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
-	"/v1/transactions": true,
+	"/v1/transactions":        true,
+	"/v2/transactions/dryrun": true,
 }
 
 // RestClient manages the REST interface for a calling user.
@@ -334,6 +335,12 @@ func (client RestClient) AccountInformation(address string) (response v1.Account
 	return
 }
 
+// AccountInformationV2 gets the AccountData associated with the passed address
+func (client RestClient) AccountInformationV2(address string) (response generatedV2.Account, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), nil)
+	return
+}
+
 // Blob represents arbitrary blob of data satisfying v1.RawResponse interface
 type Blob []byte
 
@@ -466,5 +473,13 @@ func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryA
 		return
 	}
 	result = string(bytes)
+	return
+}
+
+// RawDryrun gets the raw DryrunResponse associated with the passed address
+func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
+	var blob Blob
+	err = client.submitForm(&blob, "/v2/transactions/dryrun", data, "POST", false /* encodeJSON */, false /* decodeJSON */)
+	response = blob
 	return
 }
