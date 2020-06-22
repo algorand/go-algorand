@@ -30,7 +30,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/logging"
 )
 
@@ -135,18 +135,6 @@ type AssetsResponse struct {
 }
 
 func (r AssetsResponse) getBody() interface{} {
-	return r.Body
-}
-
-// ApplicationsResponse contains a list of applications
-//
-// swagger:response ApplicationsResponse
-type ApplicationsResponse struct {
-	// in: body
-	Body *v1.ApplicationList
-}
-
-func (r ApplicationsResponse) getBody() interface{} {
 	return r.Body
 }
 

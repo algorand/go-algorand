@@ -310,22 +310,16 @@ func (client RestClient) AssetInformation(index uint64) (response v1.AssetParams
 	return
 }
 
-// ApplicationInformation gets the ApplicationInformationResponse associated
-// with the passed application index
-func (client RestClient) ApplicationInformation(index uint64) (response v1.AppParams, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/application/%d", index), nil)
-	return
-}
-
 // Assets gets up to max assets with maximum asset index assetIdx
 func (client RestClient) Assets(assetIdx, max uint64) (response v1.AssetList, err error) {
 	err = client.get(&response, "/v1/assets", assetsParams{assetIdx, max})
 	return
 }
 
-// Applications gets up to max applications with maximum application index appIdx
-func (client RestClient) Applications(appIdx, max uint64) (response v1.ApplicationList, err error) {
-	err = client.get(&response, "/v1/applications", appsParams{appIdx, max})
+// ApplicationInformation gets the ApplicationInformationResponse associated
+// with the passed application index
+func (client RestClient) ApplicationInformation(index uint64) (response v1.AppParams, err error) {
+	err = client.get(&response, fmt.Sprintf("/v1/application/%d", index), nil)
 	return
 }
 

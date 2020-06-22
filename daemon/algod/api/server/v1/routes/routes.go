@@ -138,13 +138,6 @@ var V1Routes = lib.Routes{
 		HandlerFunc: handlers.ApplicationInformation,
 	},
 
-	lib.Route{
-		Name:        "list-applications",
-		Method:      "GET",
-		Path:        "/applications",
-		HandlerFunc: handlers.Applications,
-	},
-
 	// ----- This can only be active when indexer is live
 
 	lib.Route{
