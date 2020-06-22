@@ -23,6 +23,11 @@ import (
 // LogicVersion defines default assembler and max eval versions
 const LogicVersion = 2
 
+// rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
+// was enabled. This is important to remember so that old TEAL accounts cannot
+// be maliciously or accidentally rekeyed.
+const rekeyingEnabledVersion = 2
+
 // opSize records the length in bytes for an op that is constant-length but not length 1
 type opSize struct {
 	cost      int

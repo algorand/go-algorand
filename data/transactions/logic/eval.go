@@ -50,11 +50,6 @@ const EvalMaxScratchSize = 255
 // MaxStringSize is the limit of byte strings created by `concat`
 const MaxStringSize = 4096
 
-// rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
-// was enabled. This is important to remember so that old TEAL accounts cannot
-// be maliciously or accidentally rekeyed.
-const rekeyingEnabledVersion = 2
-
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
 // If (.Bytes != nil) the stackValue is a []byte value, otherwise uint64 value.
