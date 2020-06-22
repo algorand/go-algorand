@@ -30,47 +30,42 @@ func AccountDataToAccount(
 	lastRound basics.Round, amountWithoutPendingRewards basics.MicroAlgos,
 ) (generated.Account, error) {
 
-	assets := make([]generated.AssetHolding, 0)
-	if len(record.Assets) > 0 {
-		//assets = make(map[uint64]v1.AssetHolding)
-		for curid, holding := range record.Assets {
-			// Empty is ok, asset may have been deleted, so we can no
-			// longer fetch the creator
-			creator := assetsCreators[curid]
-			holding := generated.AssetHolding{
-				Amount:   holding.Amount,
-				AssetId:  uint64(curid),
-				Creator:  creator,
-				IsFrozen: holding.Frozen,
-			}
-
-			assets = append(assets, holding)
+	assets := make([]generated.AssetHolding, 0, len(record.Assets))
+	for curid, holding := range record.Assets {
+		// Empty is ok, asset may have been deleted, so we can no
+		// longer fetch the creator
+		creator := assetsCreators[curid]
+		holding := generated.AssetHolding{
+			Amount:   holding.Amount,
+			AssetId:  uint64(curid),
+			Creator:  creator,
+			IsFrozen: holding.Frozen,
 		}
+
+		assets = append(assets, holding)
 	}
 
-	createdAssets := make([]generated.Asset, 0)
-	if len(record.AssetParams) > 0 {
-		for idx, params := range record.AssetParams {
-			assetParams := generated.AssetParams{
-				Creator:       address,
-				Total:         params.Total,
-				Decimals:      uint64(params.Decimals),
-				DefaultFrozen: &params.DefaultFrozen,
-				MetadataHash:  byteOrNil(params.MetadataHash[:]),
-				Name:          strOrNil(params.AssetName),
-				UnitName:      strOrNil(params.UnitName),
-				Url:           strOrNil(params.URL),
-				Clawback:      addrOrNil(params.Clawback),
-				Freeze:        addrOrNil(params.Freeze),
-				Manager:       addrOrNil(params.Manager),
-				Reserve:       addrOrNil(params.Reserve),
-			}
-			asset := generated.Asset{
-				Index:  uint64(idx),
-				Params: assetParams,
-			}
-			createdAssets = append(createdAssets, asset)
+	createdAssets := make([]generated.Asset, 0, len(record.AssetParams))
+	for idx, params := range record.AssetParams {
+		assetParams := generated.AssetParams{
+			Creator:       address,
+			Total:         params.Total,
+			Decimals:      uint64(params.Decimals),
+			DefaultFrozen: &params.DefaultFrozen,
+			MetadataHash:  byteOrNil(params.MetadataHash[:]),
+			Name:          strOrNil(params.AssetName),
+			UnitName:      strOrNil(params.UnitName),
+			Url:           strOrNil(params.URL),
+			Clawback:      addrOrNil(params.Clawback),
+			Freeze:        addrOrNil(params.Freeze),
+			Manager:       addrOrNil(params.Manager),
+			Reserve:       addrOrNil(params.Reserve),
 		}
+		asset := generated.Asset{
+			Index:  uint64(idx),
+			Params: assetParams,
+		}
+		createdAssets = append(createdAssets, asset)
 	}
 
 	var apiParticipation *generated.AccountParticipation
@@ -99,43 +94,39 @@ func AccountDataToAccount(
 	}
 
 	createdApps := make([]generated.Application, 0, len(record.AppParams))
-	if len(record.AppParams) > 0 {
-		for appIdx, appParams := range record.AppParams {
-			globalState := convertTKV(&appParams.GlobalState)
-			createdApps = append(createdApps, generated.Application{
-				AppIndex: uint64(appIdx),
-				AppParams: generated.ApplicationParams{
-					ApprovalProgram:   appParams.ApprovalProgram,
-					ClearStateProgram: appParams.ClearStateProgram,
-					GlobalState:       &globalState,
-					LocalStateSchema: &generated.ApplicationStateSchema{
-						NumByteSlice: appParams.LocalStateSchema.NumByteSlice,
-						NumUint:      appParams.LocalStateSchema.NumUint,
-					},
-					GlobalStateSchema: &generated.ApplicationStateSchema{
-						NumByteSlice: appParams.GlobalStateSchema.NumByteSlice,
-						NumUint:      appParams.GlobalStateSchema.NumUint,
-					},
+	for appIdx, appParams := range record.AppParams {
+		globalState := convertTKV(&appParams.GlobalState)
+		createdApps = append(createdApps, generated.Application{
+			AppIndex: uint64(appIdx),
+			AppParams: generated.ApplicationParams{
+				ApprovalProgram:   appParams.ApprovalProgram,
+				ClearStateProgram: appParams.ClearStateProgram,
+				GlobalState:       &globalState,
+				LocalStateSchema: &generated.ApplicationStateSchema{
+					NumByteSlice: appParams.LocalStateSchema.NumByteSlice,
+					NumUint:      appParams.LocalStateSchema.NumUint,
 				},
-			})
-		}
+				GlobalStateSchema: &generated.ApplicationStateSchema{
+					NumByteSlice: appParams.GlobalStateSchema.NumByteSlice,
+					NumUint:      appParams.GlobalStateSchema.NumUint,
+				},
+			},
+		})
 	}
 
 	appsLocalState := make([]generated.ApplicationLocalStates, 0, len(record.AppLocalStates))
-	if len(record.AppLocalStates) > 0 {
-		for appIdx, state := range record.AppLocalStates {
-			localState := convertTKV(&state.KeyValue)
-			appsLocalState = append(appsLocalState, generated.ApplicationLocalStates{
-				AppIndex: uint64(appIdx),
-				State: generated.ApplicationLocalState{
-					KeyValue: localState,
-					Schema: generated.ApplicationStateSchema{
-						NumByteSlice: state.Schema.NumByteSlice,
-						NumUint:      state.Schema.NumUint,
-					},
+	for appIdx, state := range record.AppLocalStates {
+		localState := convertTKV(&state.KeyValue)
+		appsLocalState = append(appsLocalState, generated.ApplicationLocalStates{
+			AppIndex: uint64(appIdx),
+			State: generated.ApplicationLocalState{
+				KeyValue: localState,
+				Schema: generated.ApplicationStateSchema{
+					NumByteSlice: state.Schema.NumByteSlice,
+					NumUint:      state.Schema.NumUint,
 				},
-			})
-		}
+			},
+		})
 	}
 
 	totalAppSchema := generated.ApplicationStateSchema{
