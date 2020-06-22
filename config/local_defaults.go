@@ -44,6 +44,7 @@ var defaultLocal = Local{
 	EnableAgreementTimeMetrics:            false,
 	EnableAssembleStats:                   false,
 	EnableBlockService:                    false,
+	EnableDeveloperAPI:                    false,
 	EnableGossipBlockService:              true,
 	EnableIncomingMessageFilter:           false,
 	EnableLedgerService:                   false,

@@ -64,6 +64,7 @@ type NodeInterface interface {
 	SuggestedFee() basics.MicroAlgos
 	StartCatchup(catchpoint string) error
 	AbortCatchup(catchpoint string) error
+	Config() config.Local
 }
 
 // RegisterParticipationKeys registers participation keys.
@@ -589,6 +590,10 @@ func (v2 *Handlers) AbortCatchup(ctx echo.Context, catchpoint string) error {
 // TealCompile compiles TEAL code to binary, return both binary and hash
 // (POST /v2/teal/compile)
 func (v2 *Handlers) TealCompile(ctx echo.Context) error {
+	// return early if teal compile is not allowed in node config
+	if !v2.Node.Config().EnableDeveloperAPI {
+		return ctx.String(http.StatusNotFound, "/teal/compile was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
+	}
 	buf := new(bytes.Buffer)
 	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
 	buf.ReadFrom(ctx.Request().Body)
