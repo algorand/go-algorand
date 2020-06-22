@@ -63,6 +63,7 @@ type DebugParams struct {
 	TxnBlob          []byte
 	GroupIndex       int
 	BalanceBlob      []byte
+	DdrBlob          []byte
 	Round            int
 	LatestTimestamp  int64
 	RunMode          string
