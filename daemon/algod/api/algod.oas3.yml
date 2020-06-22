@@ -246,6 +246,31 @@
         },
         "description": "Encoded block object."
       },
+      "DryrunResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "error": {
+                  "type": "string"
+                },
+                "txns": {
+                  "items": {
+                    "$ref": "#/components/schemas/DryrunTxnResult"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "error",
+                "txns"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "DryrunResponse contains per-txn debug information from a dryrun."
+      },
       "NodeStatusResponse": {
         "content": {
           "application/json": {
@@ -612,6 +637,22 @@
         ],
         "type": "object"
       },
+      "AccountStateDelta": {
+        "description": "Application state delta.",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "delta": {
+            "$ref": "#/components/schemas/StateDelta"
+          }
+        },
+        "required": [
+          "address",
+          "delta"
+        ],
+        "type": "object"
+      },
       "Application": {
         "description": "Application index and its parameters",
         "properties": {
@@ -821,6 +862,192 @@
         ],
         "type": "object"
       },
+      "DryrunApp": {
+        "description": "DryrunApp holds global app state for a dryrun call.",
+        "properties": {
+          "app-index": {
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          },
+          "creator": {
+            "type": "string"
+          },
+          "params": {
+            "$ref": "#/components/schemas/ApplicationParams"
+          }
+        },
+        "required": [
+          "app-index",
+          "creator",
+          "params"
+        ],
+        "type": "object"
+      },
+      "DryrunRequest": {
+        "description": "Request data type for dryrun endpoint. Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.",
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/Account"
+            },
+            "type": "array"
+          },
+          "apps": {
+            "items": {
+              "$ref": "#/components/schemas/DryrunApp"
+            },
+            "type": "array"
+          },
+          "latest-timestamp": {
+            "description": "LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "protocol-version": {
+            "description": "ProtocolVersion specifies a specific version string to operate under, otherwise whatever the current protocol of the network this algod is running in.",
+            "type": "string"
+          },
+          "round": {
+            "description": "Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/DryrunSource"
+            },
+            "type": "array"
+          },
+          "txns": {
+            "items": {
+              "format": "json",
+              "type": "string",
+              "x-algorand-format": "SignedTransaction"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "accounts",
+          "apps",
+          "latest-timestamp",
+          "protocol-version",
+          "round",
+          "sources",
+          "txns"
+        ],
+        "type": "object"
+      },
+      "DryrunSource": {
+        "description": "DryrunSource is TEAL source text that gets uploaded, compiled, and inserted into transactions or application state.",
+        "properties": {
+          "app-index": {
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          },
+          "field-name": {
+            "description": "FieldName is what kind of sources this is. If lsig then it goes into the transactions[this.TxnIndex].LogicSig. If approv or clearp it goes into the Approval Program or Clear State Program of application[this.AppIndex].",
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "txn-index": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "app-index",
+          "field-name",
+          "source",
+          "txn-index"
+        ],
+        "type": "object"
+      },
+      "DryrunState": {
+        "description": "Stores the TEAL eval step data",
+        "properties": {
+          "error": {
+            "description": "Evaluation error if any",
+            "type": "string"
+          },
+          "line": {
+            "description": "Line number",
+            "type": "integer"
+          },
+          "pc": {
+            "description": "Program counter",
+            "type": "integer"
+          },
+          "scratch": {
+            "items": {
+              "$ref": "#/components/schemas/TealValue"
+            },
+            "type": "array"
+          },
+          "stack": {
+            "items": {
+              "$ref": "#/components/schemas/TealValue"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "line",
+          "pc",
+          "stack"
+        ],
+        "type": "object"
+      },
+      "DryrunTxnResult": {
+        "description": "DryrunTxnResult contains any LogicSig or ApplicationCall program debug information and state updates from a dryrun.",
+        "properties": {
+          "app-call-messages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "app-call-trace": {
+            "items": {
+              "$ref": "#/components/schemas/DryrunState"
+            },
+            "type": "array"
+          },
+          "disassembly": {
+            "description": "Disassembled program line by line.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "global-delta": {
+            "$ref": "#/components/schemas/StateDelta"
+          },
+          "local-deltas": {
+            "items": {
+              "$ref": "#/components/schemas/AccountStateDelta"
+            },
+            "type": "array"
+          },
+          "logic-sig-messages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "logic-sig-trace": {
+            "items": {
+              "$ref": "#/components/schemas/DryrunState"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "disassembly"
+        ],
+        "type": "object"
+      },
       "ErrorResponse": {
         "description": "An error response with optional data field.",
         "properties": {
@@ -835,6 +1062,51 @@
           "message"
         ],
         "type": "object"
+      },
+      "EvalDelta": {
+        "description": "Represents a TEAL value delta.",
+        "properties": {
+          "action": {
+            "description": "\\[at\\] delta action.",
+            "type": "integer"
+          },
+          "bytes": {
+            "description": "\\[bs\\] bytes value.",
+            "type": "string"
+          },
+          "uint": {
+            "description": "\\[ui\\] uint value.",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "EvalDeltaKeyValue": {
+        "description": "Key-value pairs for StateDelta.",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/EvalDelta"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object"
+      },
+      "StateDelta": {
+        "description": "Application state delta.",
+        "items": {
+          "$ref": "#/components/schemas/EvalDeltaKeyValue"
+        },
+        "type": "array"
       },
       "TealKeyValue": {
         "description": "Represents a key-value pair in an application store.",
@@ -1815,14 +2087,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "format": "binary",
-                "type": "string"
-              }
-            },
-            "application/x-msgpack": {
-              "schema": {
-                "format": "binary",
-                "type": "string"
+                "$ref": "#/components/schemas/DryrunRequest"
               }
             }
           },

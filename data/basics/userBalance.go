@@ -49,6 +49,21 @@ func (s Status) String() string {
 	return ""
 }
 
+// UnmarshalStatus decodes string status value back to Status constant
+func UnmarshalStatus(value string) (s Status) {
+	switch value {
+	case "Offline":
+		s = Offline
+	case "Online":
+		s = Online
+	case "Not Participating":
+		s = NotParticipating
+	default:
+		s = Offline
+	}
+	return
+}
+
 // AccountData contains the data associated with a given address.
 //
 // This includes the account balance, delegation keys, delegation status, and a custom note.

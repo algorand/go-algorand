@@ -17,18 +17,20 @@
 package libgoal
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/daemon/kmd/lib/kmdapi"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -649,6 +651,15 @@ func (c *Client) AccountInformation(account string) (resp v1.Account, err error)
 	return
 }
 
+// AccountInformationV2 takes an address and returns its information
+func (c *Client) AccountInformationV2(account string) (resp generatedV2.Account, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AccountInformationV2(account)
+	}
+	return
+}
+
 // AccountData takes an address and returns its basics.AccountData
 func (c *Client) AccountData(account string) (accountData basics.AccountData, err error) {
 	algod, err := c.ensureAlgodClient()
@@ -844,4 +855,123 @@ func (c *Client) ConsensusParams(round uint64) (consensus config.ConsensusParams
 func (c *Client) SetAPIVersionAffinity(algodVersionAffinity algodclient.APIVersion, kmdVersionAffinity kmdclient.APIVersion) {
 	c.algodVersionAffinity = algodVersionAffinity
 	c.kmdVersionAffinity = kmdVersionAffinity
+}
+
+func convertAppParams(paramsIn *v1.AppParams) (appParams generatedV2.ApplicationParams) {
+	appParams.ApprovalProgram = []byte(paramsIn.ApprovalProgram)
+	appParams.ClearStateProgram = []byte(paramsIn.ClearStateProgram)
+	appParams.GlobalStateSchema = &generatedV2.ApplicationStateSchema{
+		NumUint:      paramsIn.GlobalStateSchema.NumUint,
+		NumByteSlice: paramsIn.GlobalStateSchema.NumByteSlice,
+	}
+	appParams.LocalStateSchema = &generatedV2.ApplicationStateSchema{
+		NumUint:      paramsIn.LocalStateSchema.NumUint,
+		NumByteSlice: paramsIn.LocalStateSchema.NumByteSlice,
+	}
+	appParams.GlobalState = &generatedV2.TealKeyValueStore{}
+	for k, v := range paramsIn.GlobalState {
+		*appParams.GlobalState = append(*appParams.GlobalState, generated.TealKeyValue{
+			Key: k,
+			Value: generatedV2.TealValue{
+				Type:  uint64(basics.TealTypeFromString(v.Type)),
+				Uint:  v.Uint,
+				Bytes: v.Bytes,
+			},
+		})
+	}
+	return
+}
+
+const defaultAppIdx = 1380011588
+
+// MakeDryrunState function creates DryrunRequest data structure and serializes it into a file
+func MakeDryrunState(client Client, txnOrStxn interface{}, other []transactions.SignedTxn, proto string) (dr generatedV2.DryrunRequest, err error) {
+	var txns []transactions.SignedTxn
+	var tx *transactions.Transaction
+	if txn, ok := txnOrStxn.(transactions.Transaction); ok {
+		tx = &txn
+		txns = append(txns, transactions.SignedTxn{Txn: txn})
+	} else if stxn, ok := txnOrStxn.(transactions.SignedTxn); ok {
+		tx = &stxn.Txn
+		txns = append(txns, stxn)
+	} else {
+		err = fmt.Errorf("unsupported txn type")
+		return
+	}
+	txns = append(txns, other...)
+	for i := range txns {
+		enc := protocol.EncodeJSON(&txns[i])
+		dr.Txns = append(dr.Txns, enc)
+	}
+
+	if tx.Type == protocol.ApplicationCallTx {
+		apps := []basics.AppIndex{tx.ApplicationID}
+		apps = append(apps, tx.ForeignApps...)
+		for _, appIdx := range apps {
+			var appParams generated.ApplicationParams
+			var creator string
+			// if app create txn then use params from the txn
+			if appIdx == 0 {
+				appParams.ApprovalProgram = tx.ApprovalProgram
+				appParams.ClearStateProgram = tx.ClearStateProgram
+				appParams.GlobalStateSchema = &generatedV2.ApplicationStateSchema{
+					NumUint:      tx.GlobalStateSchema.NumUint,
+					NumByteSlice: tx.GlobalStateSchema.NumByteSlice,
+				}
+				appParams.LocalStateSchema = &generatedV2.ApplicationStateSchema{
+					NumUint:      tx.LocalStateSchema.NumUint,
+					NumByteSlice: tx.LocalStateSchema.NumByteSlice,
+				}
+				creator = tx.Sender.String()
+				// zero is not acceptable by ledger in dryrun/debugger
+				appIdx = defaultAppIdx
+			} else {
+				// otherwise need to fetch app state
+				var params v1.AppParams
+				if params, err = client.ApplicationInformation(uint64(tx.ApplicationID)); err != nil {
+					return
+				}
+				appParams = convertAppParams(&params)
+				creator = params.Creator
+			}
+			dr.Apps = append(dr.Apps, generatedV2.DryrunApp{
+				Creator:  creator,
+				AppIndex: uint64(appIdx),
+				Params:   appParams,
+			})
+		}
+
+		accounts := append(tx.Accounts, tx.Sender)
+		for _, acc := range accounts {
+			var info generatedV2.Account
+			if info, err = client.AccountInformationV2(acc.String()); err != nil {
+				return
+			}
+			dr.Accounts = append(dr.Accounts, info)
+		}
+
+		dr.ProtocolVersion = proto
+		if dr.Round, err = client.CurrentRound(); err != nil {
+			return
+		}
+		var b v1.Block
+		if b, err = client.Block(dr.Round); err != nil {
+			return
+		}
+		dr.LatestTimestamp = uint64(b.Timestamp)
+	}
+	return
+}
+
+// Dryrun takes an app's index and returns its information
+func (c *Client) Dryrun(data []byte) (resp generatedV2.DryrunResponse, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		data, err = algod.RawDryrun(data)
+		if err != nil {
+			return
+		}
+		err = json.Unmarshal(data, &resp)
+	}
+	return
 }
