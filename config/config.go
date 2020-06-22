@@ -317,6 +317,10 @@ type Local struct {
 
 	// CatchupLedgerDownloadRetryAttempts controls the number of attempt the block fetching would be attempted before giving up catching up to the provided catchpoint.
 	CatchupBlockDownloadRetryAttempts int `version[9]:"1000"`
+
+	// EnableDeveloperAPI enables teal/compile, teal/dryrun API endpoints.
+	// This functionlity is disabled by default.
+	EnableDeveloperAPI bool `version[9]:"false"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
