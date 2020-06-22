@@ -235,7 +235,7 @@ func (e *testEvaluator) Check(program []byte) (cost int, err error) {
 	return len(program), nil
 }
 
-func (e *testEvaluator) InitLedger(balances Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex) error {
+func (e *testEvaluator) InitLedger(balances Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, params basics.AppParams, appIdx basics.AppIndex) error {
 	e.appIdx = appIdx
 	e.acctWhitelist = acctWhitelist
 	e.appGlobalWhitelist = appGlobalWhitelist

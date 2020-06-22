@@ -340,7 +340,7 @@ func makeAppLedger(dl *dryrunLedger, txnIndex int) (l logic.LedgerForLogic, err 
 		CurrentRound:    basics.Round(dl.dr.Round),
 		LatestTimestamp: dl.dr.LatestTimestamp,
 	}
-	return ledger.MakeDebugAppLedger(dl, accounts, apps, dr.Txns[txnIndex].Txn.ApplicationID, globals)
+	return ledger.MakeDebugAppLedger(dl, accounts, apps, dr.Txns[txnIndex].Txn.ApplicationID, basics.AppParams{}, globals)
 }
 
 // DryrunTxnResult contains any LogicSig or ApplicationCall program debug information and state updates from a dryrun.

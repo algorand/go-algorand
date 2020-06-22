@@ -618,6 +618,12 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 		}
 	}
 
+	// Fetch the application parameters, if they exist
+	params, creator, exists, err := getAppParams(balances, appIdx)
+	if err != nil {
+		return err
+	}
+
 	// Initialize our TEAL evaluation context. Internally, this manages
 	// access to balance records for Stateful TEAL programs. Stateful TEAL
 	// may only access
@@ -628,7 +634,7 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 	//   GlobalState)
 	acctWhitelist := append(ac.Accounts, header.Sender)
 	appGlobalWhitelist := append(ac.ForeignApps, appIdx)
-	err = steva.InitLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx)
+	err = steva.InitLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, params)
 	if err != nil {
 		return err
 	}
@@ -648,12 +654,6 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 	// execute the ClearStateProgram, whose failures are ignored.
 	if ac.OnCompletion == ClearStateOC {
 		return ac.applyClearState(balances, header.Sender, appIdx, ad, steva)
-	}
-
-	// Fetch the application parameters, if they exist
-	params, creator, exists, err := getAppParams(balances, appIdx)
-	if err != nil {
-		return err
 	}
 
 	// Past this point, the AppParams must exist. NoOp, OptIn, CloseOut,
