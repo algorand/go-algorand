@@ -19,6 +19,7 @@ package logic
 import (
 	"fmt"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 )
 
@@ -26,18 +27,38 @@ type keyValueCow struct {
 	base  basics.TealKeyValue
 	delta basics.StateDelta
 
-	maxSchema basics.StateSchema
+	maxSchema  basics.StateSchema
 	calcSchema basics.StateSchema
+
+	maxKeyLen int
+	maxValLen int
 }
 
-func makeKeyValueCow(base basics.TealKeyValue, delta basics.StateDelta, maxSchema basics.StateSchema) (*keyValueCow, error) {
+func makeKeyValueCow(base basics.TealKeyValue, delta basics.StateDelta, maxSchema basics.StateSchema, proto *config.ConsensusParams) (*keyValueCow, error) {
 	var kvc keyValueCow
 	var err error
+
+	if proto == nil {
+		return nil, fmt.Errorf("got nil consensus params in kvcow")
+	}
+
+	if delta == nil {
+		return nil, fmt.Errorf("got nil delta in kvcow")
+	}
 
 	kvc.base = base
 	kvc.delta = delta
 	kvc.maxSchema = maxSchema
+	kvc.maxKeyLen = proto.MaxAppKeyLen
+	kvc.maxValLen = proto.MaxAppBytesValueLen
+
 	kvc.calcSchema, err = base.ToStateSchema()
+	if err != nil {
+		return nil, err
+	}
+
+	// Check that the backing map is compliant with the consensus params
+	err = kvc.checkSchema()
 	if err != nil {
 		return nil, err
 	}
@@ -59,6 +80,16 @@ func (kvc *keyValueCow) read(key string) (value basics.TealValue, ok bool) {
 }
 
 func (kvc *keyValueCow) write(key string, value basics.TealValue) error {
+	// Enforce maximum key length
+	if len(key) > kvc.maxKeyLen {
+		return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), kvc.maxKeyLen)
+	}
+
+	// Enforce maximum value length
+	if value.Type == basics.TealBytesType && len(value.Bytes) > kvc.maxValLen {
+		return fmt.Errorf("value too long for key 0x%x: length was %d, maximum is %d", key, len(value.Bytes), kvc.maxValLen)
+	}
+
 	// Keep track of old value for updating counts
 	beforeValue, beforeOk := kvc.read(key)
 
