@@ -634,6 +634,10 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 	// - The app creator's balance record (to read/write GlobalState)
 	// - The balance records of creators of apps in ac.ForeignApps (to read
 	//   GlobalState)
+	// Note that at this point in execution, the application might not exist
+	// (e.g. if it was deleted). In that case, we will pass empty
+	// params.StateSchemas below. This is OK because if the application is
+	// deleted, we will never execute its programs.
 	acctWhitelist := append(ac.Accounts, header.Sender)
 	appGlobalWhitelist := append(ac.ForeignApps, appIdx)
 	err = steva.InitLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, params.StateSchemas)
