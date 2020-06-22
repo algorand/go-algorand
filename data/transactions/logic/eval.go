@@ -369,14 +369,6 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 		return false, cx.err
 	}
 
-	// A transaction may not have a nonzero RekeyTo field set before TEAL
-	// v2, otherwise TEAL v0 or v1 accounts could be rekeyed by an anyone
-	// who could ordinarily spend from them.
-	if version < rekeyingEnabledVersion && !cx.EvalParams.Txn.Txn.RekeyTo.IsZero() {
-		cx.err = fmt.Errorf("program version %d doesn't allow transactions with nonzero RekeyTo field", version)
-		return false, cx.err
-	}
-
 	// TODO: if EvalMaxVersion > version, ensure that inaccessible
 	// fields as of the program's version are zero or other
 	// default value so that no one is hiding unexpected
@@ -386,6 +378,11 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	cx.pc = vlen
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
+
+	err = cx.checkRekeyAllowed()
+	if err != nil {
+		return
+	}
 
 	if cx.Debugger != nil {
 		cx.debugState = makeDebugState(cx)
@@ -477,10 +474,17 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 		err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 		return
 	}
+
 	cx.version = version
 	cx.pc = vlen
 	cx.EvalParams = params
 	cx.program = program
+
+	err = cx.checkRekeyAllowed()
+	if err != nil {
+		return
+	}
+
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
 		prevpc := cx.pc
 		cost += cx.checkStep()
@@ -494,6 +498,16 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 		return
 	}
 	return
+}
+
+func (cx *evalContext) checkRekeyAllowed() error {
+	// A transaction may not have a nonzero RekeyTo field set before TEAL
+	// v2, otherwise TEAL v0 or v1 accounts could be rekeyed by an anyone
+	// who could ordinarily spend from them.
+	if cx.version < rekeyingEnabledVersion && !cx.EvalParams.Txn.Txn.RekeyTo.IsZero() {
+		return fmt.Errorf("program version %d doesn't allow transactions with nonzero RekeyTo field", cx.version)
+	}
+	return nil
 }
 
 func opCompat(expected, got StackType) bool {
