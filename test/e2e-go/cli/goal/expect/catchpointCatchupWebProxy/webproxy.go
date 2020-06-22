@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -49,10 +50,11 @@ func main() {
 		time.Sleep(time.Duration(*webProxyRequestDelay) * time.Millisecond)
 		mu.Unlock()
 		// prevent requests for block #2 to go through.
-		if request.URL.String() == "/v1/test-v1/block/2" {
+		if strings.HasSuffix(request.URL.String(), "/block/2") {
 			response.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		fmt.Printf("proxy saw request for %s\n", request.URL.String())
 		next(response, request)
 	})
 	if err != nil {

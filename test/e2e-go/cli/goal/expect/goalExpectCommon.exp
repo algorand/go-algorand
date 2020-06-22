@@ -773,8 +773,6 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER NODE_DATA_DIR } {
         set i 0
         while 1 {
             incr i
-            puts "sleep time $SLEEP_TIME"
-            exec sleep $SLEEP_TIME
 
             # Check node status
             puts "spawn node status  "
@@ -818,12 +816,15 @@ proc ::AlgorandGoal::WaitForRound { WAIT_FOR_ROUND_NUMBER NODE_DATA_DIR } {
                    incr SLEEP_TIME
                } else {
                    # we've made progress since last time we checked.
-                   if { $SLEEP_TIME != 0 } { incr SLEEP_TIME -1 }
+                   if { $SLEEP_TIME > 0 } { incr SLEEP_TIME -1 }
                    set i 0
                    set LAST_ROUND $BLOCK
                }
                if { $i >= 10 } then { ::AlgorandGoal::Abort " Current Round $BLOCK did not reach $WAIT_FOR_ROUND_NUMBER   "; break;}
             }
+
+            puts "sleep time $SLEEP_TIME"
+            after [expr {int($SLEEP_TIME * 1000)}]
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in WaitForRound: $EXCEPTION"
