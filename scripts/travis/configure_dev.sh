@@ -2,18 +2,18 @@
 
 # keep script execution on errors
 set +e
+set -x
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 OS=$("${SCRIPTPATH}/../ostype.sh")
 ARCH=$("${SCRIPTPATH}/../archtype.sh")
 GO_VERSION=$("${SCRIPTPATH}/../get_golang_version.sh")
-
+INSTALLED_GO_VERSION=$("${SCRIPTPATH}/../get_installed_golang_version.sh")
 if [ "${OS}" = "linux" ]; then
     if [[ "${ARCH}" = "arm64" ]]; then
-        go version 2>/dev/null
-        if [ "$?" != "0" ]; then
-            echo "Go cannot be found; downloading..."
+        if [ "$INSTALLED_GO_VERSION" != "$GO_VERSION" ]; then
+            echo "Correct Go version cannot be found; downloading version $GO_VERSION ..."
             # go is not installed ?
 	        # e.g. https://dl.google.com/go/go1.13.5.linux-arm64.tar.gz
 	        GO_TARBALL=go${GO_VERSION}.linux-arm64.tar.gz
@@ -22,9 +22,9 @@ if [ "${OS}" = "linux" ]; then
                 set -e
                 sudo tar -C /usr/local -xzf ${GO_TARBALL}
                 rm -f ${GO_TARBALL}
-                sudo ln -s /usr/local/go/bin/go /usr/local/bin/go
-                sudo ln -s /usr/local/go/bin/godoc /usr/local/bin/godoc
-                sudo ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+                sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
+                sudo ln -sf /usr/local/go/bin/godoc /usr/local/bin/godoc
+                sudo ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
                 go version
             else
                 echo "Failed to download go"
@@ -37,9 +37,8 @@ if [ "${OS}" = "linux" ]; then
     fi
     if [[ "${ARCH}" = "arm" ]]; then
         sudo sh -c 'echo "CONF_SWAPSIZE=1024" > /etc/dphys-swapfile; dphys-swapfile setup; dphys-swapfile swapon'
-        go version 2>/dev/null
-        if [ "$?" != "0" ]; then
-            echo "Go cannot be found; downloading..."
+        if [ "$INSTALLED_GO_VERSION" != "$GO_VERSION" ]; then
+            echo "Correct Go version cannot be found; downloading version $GO_VERSION ..."
             # go is not installed ?
 	        GO_TARBALL=go${GO_VERSION}.linux-armv6l.tar.gz
             wget -q https://dl.google.com/go/${GO_TARBALL}
@@ -47,9 +46,9 @@ if [ "${OS}" = "linux" ]; then
                 set -e
                 sudo tar -C /usr/local -xzf ./${GO_TARBALL}
                 rm -f ./${GO_TARBALL}
-                sudo ln -s /usr/local/go/bin/go /usr/local/bin/go
-                sudo ln -s /usr/local/go/bin/godoc /usr/local/bin/godoc
-                sudo ln -s /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+                sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
+                sudo ln -sf /usr/local/go/bin/godoc /usr/local/bin/godoc
+                sudo ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
                 go version
             else
                 echo "Failed to download go"
