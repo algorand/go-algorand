@@ -23,13 +23,16 @@ function installGo() {
 
             if [[ "${ARCH}" = "amd64" ]]; then
                 GO_BIN=$(dirname $(which go))
-                sudo rm ${GO_BIN}/go
-                sudo rm ${GO_BIN}/godoc
-                sudo rm ${GO_BIN}/gofmt
-                sudo ln -sf /usr/local/go/bin/go ${GO_BIN}/go
-                sudo ln -sf /usr/local/go/bin/godoc ${GO_BIN}/godoc
-                sudo ln -sf /usr/local/go/bin/gofmt ${GO_BIN}/gofmt
-                rm -rf $(echo ${GOPATH} | cut -d':' -f1)/pkg/*
+                sudo rm -rf ${GO_BIN}
+#                sudo rm ${GO_BIN}/go
+#                sudo rm ${GO_BIN}/godoc
+#                sudo rm ${GO_BIN}/gofmt
+                sudo ln -sf /usr/local/go/bin ${GO_BIN}
+#                sudo ln -sf /usr/local/go/bin/go ${GO_BIN}/go
+#                sudo ln -sf /usr/local/go/bin/godoc ${GO_BIN}/godoc
+#                sudo ln -sf /usr/local/go/bin/gofmt ${GO_BIN}/gofmt
+                sudo rm -rf $(echo ${GOPATH} | cut -d':' -f1)/pkg
+                sudo mkdir $(echo ${GOPATH} | cut -d':' -f1)/pkg
             else
                 sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
                 sudo ln -sf /usr/local/go/bin/godoc /usr/local/bin/godoc
@@ -37,6 +40,9 @@ function installGo() {
             fi
             echo "go version: $(go version)"
             echo "GOROOT ${GOROOT}"
+            echo "GOPATH ${GOPATH}"
+            ls $(echo ${GOPATH} | cut -d':' -f1)/pkg
+
         else
             echo "Failed to download go"
             exit 1
