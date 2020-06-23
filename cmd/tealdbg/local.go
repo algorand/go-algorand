@@ -232,18 +232,36 @@ func determineEvalMode(program []byte, modeIn string) (eval evalFn, mode string,
 
 // Setup validates input params
 func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
-	r.protoName, r.proto, err = protoFromString(dp.Proto)
+	ddr, err := ddrFromParams(dp)
 	if err != nil {
 		return
 	}
+
+	protoString := ddr.ProtocolVersion
+	if len(dp.Proto) != 0 {
+		protoString = dp.Proto
+	}
+	r.protoName, r.proto, err = protoFromString(protoString)
+	if err != nil {
+		return
+	}
+
 	log.Printf("Using proto: %s", r.protoName)
 
-	r.txnGroup, err = txnGroupFromParams(dp)
-	if err != nil {
-		return
+	r.txnGroup = ddr.Txns
+	if len(dp.TxnBlob) != 0 || len(r.txnGroup) == 0 {
+		r.txnGroup, err = txnGroupFromParams(dp)
+		if err != nil {
+			return
+		}
 	}
 
-	records, err := balanceRecordsFromParams(dp)
+	var records []basics.BalanceRecord
+	if len(dp.BalanceBlob) > 0 {
+		records, err = balanceRecordsFromParams(dp)
+	} else {
+		records, err = balanceRecordsFromDdr(&ddr)
+	}
 	if err != nil {
 		return
 	}

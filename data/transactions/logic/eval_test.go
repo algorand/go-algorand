@@ -3718,3 +3718,27 @@ func TestAllowedOpcodesV2(t *testing.T) {
 	}
 	require.Equal(t, len(tests), cnt)
 }
+
+func TestRekeyFailsOnOldVersion(t *testing.T) {
+	t.Parallel()
+	for v := uint64(0); v < rekeyingEnabledVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			program, err := AssembleStringWithVersion(`int 1`, v)
+			require.NoError(t, err)
+			var txn transactions.SignedTxn
+			txn.Lsig.Logic = program
+			txn.Txn.RekeyTo = basics.Address{1, 2, 3, 4}
+			sb := strings.Builder{}
+			proto := defaultEvalProto()
+			ep := defaultEvalParams(&sb, &txn)
+			ep.Proto = &proto
+			_, err = Check(program, ep)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "nonzero RekeyTo field")
+			pass, err := Eval(program, ep)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "nonzero RekeyTo field")
+			require.False(t, pass)
+		})
+	}
+}

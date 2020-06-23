@@ -83,7 +83,6 @@ func init() {
 	sendCmd.Flags().StringVarP(&progByteFile, "from-program-bytes", "P", "", "Program binary to use as account logic")
 	sendCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "base64 encoded args to pass to transaction logic")
 	sendCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
-
 	sendCmd.MarkFlagRequired("to")
 	sendCmd.MarkFlagRequired("amount")
 
@@ -271,7 +270,7 @@ var sendCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		// -s is invalid without -o
-		if txFilename == "" && sign {
+		if outFilename == "" && sign {
 			reportErrorln(soFlagError)
 		}
 
@@ -368,7 +367,7 @@ var sendCmd = &cobra.Command{
 			}
 			err = verify.LogicSigSanityCheck(&uncheckedTxn, &verify.Context{Params: verify.Params{CurrProto: proto}})
 			if err != nil {
-				reportErrorf("%s: txn[0] error %s", txFilename, err)
+				reportErrorf("%s: txn[0] error %s", outFilename, err)
 			}
 			stx = uncheckedTxn
 		} else if program != nil {
@@ -380,7 +379,7 @@ var sendCmd = &cobra.Command{
 				},
 			}
 		} else {
-			signTx := sign || (txFilename == "")
+			signTx := sign || (outFilename == "")
 			stx, err = createSignedTransaction(client, signTx, dataDir, walletName, payment)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
