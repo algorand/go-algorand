@@ -28,7 +28,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/crypto"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -669,62 +668,70 @@ var appQueryCmd = &cobra.Command{
 			reportErrorf("Unknown schema entry %s.\nDefined %s schema entries in %s:\n%s", param, scope, appHdr, lookup.EntryList())
 		}
 
-		enckey := base64.StdEncoding.EncodeToString([]byte(meta.Key))
-		var tealval v1.TealValue
+		var tealval basics.TealValue
 		if scope == "local" {
 			// Fetching local state. Get account information
-			response, err := client.AccountInformation(account)
+			ad, err := client.AccountData(account)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
 
 			// Get application local state
-			local, ok := response.AppLocalStates[appIdx]
+			local, ok := ad.AppLocalStates[basics.AppIndex(appIdx)]
 			if !ok {
 				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
 			}
 
 			kv := local.KeyValue
-			tealval = kv[enckey]
+			tealval = kv[meta.Key]
 		}
 
 		if scope == "global" {
-			// Fetching global state. Get application information
-			params, err := client.ApplicationInformation(appIdx)
+			// Fetching global state. Get application creator
+			info, err := client.ApplicationInformation(appIdx)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
 
+			// Get creator information
+			ad, err := client.AccountData(info.Creator)
+			if err != nil {
+				reportErrorf(errorRequestFail, err)
+			}
+
+			// Get app params
+			params, ok := ad.AppParams[basics.AppIndex(appIdx)]
+			if !ok {
+				reportErrorf(errorNoSuchApplication, appIdx)
+			}
+
 			kv := params.GlobalState
-			tealval = kv[enckey]
+			tealval = kv[meta.Key]
 		}
 
 		var decoded string
 		switch meta.Kind {
 		case "int", "integer":
-			if tealval.Type == "" {
+			if tealval.Type == 0 {
 				if meta.Explicit {
 					reportErrorf("%s not set for %s.%s", param, appIdx, storeName)
 				}
-			} else if tealval.Type != "u" {
+			} else if tealval.Type != basics.TealUintType {
 				reportErrorf("Expected kind %s but got teal type %s", meta.Kind, tealval.Type)
 			}
 			decoded = fmt.Sprintf("%d", tealval.Uint)
 		default:
-			if tealval.Type == "" {
+			if tealval.Type == 0 {
 				if meta.Explicit {
 					reportErrorf("%s not set for %s.%s", param, appIdx, storeName)
 				}
-			} else if tealval.Type != "b" {
+			} else if tealval.Type != basics.TealBytesType {
 				reportErrorf("Expected kind %s but got teal type %s", meta.Kind, tealval.Type)
 			}
-			raw, err := base64.StdEncoding.DecodeString(tealval.Bytes)
-			if err != nil {
-				reportErrorf("Fatal error: could not decode base64-encoded string: %s", tealval.Bytes)
-			}
+			raw := []byte(tealval.Bytes)
 			switch meta.Kind {
 			case "str", "string":
-				decoded = string(raw)
+				decoded = tealval.Bytes
 			case "addr", "address":
 				var addr basics.Address
 				copy(addr[:], raw)
@@ -732,9 +739,9 @@ var appQueryCmd = &cobra.Command{
 			case "b32", "base32", "byte base32":
 				decoded = base32.StdEncoding.EncodeToString(raw)
 			case "b64", "base64", "byte base64":
-				fallthrough
+				decoded = base64.StdEncoding.EncodeToString(raw)
 			default:
-				decoded = string(tealval.Bytes)
+				decoded = tealval.Bytes
 			}
 		}
 		reportInfoln(decoded)
