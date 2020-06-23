@@ -150,18 +150,6 @@ func (r AssetInformationResponse) getBody() interface{} {
 	return r.Body
 }
 
-// ApplicationInformationResponse contains app information
-//
-// swagger:response ApplicationInformationResponse
-type ApplicationInformationResponse struct {
-	// in: body
-	Body *v1.AppParams
-}
-
-func (r ApplicationInformationResponse) getBody() interface{} {
-	return r.Body
-}
-
 // TransactionFeeResponse contains a suggested fee
 //
 // swagger:response TransactionFeeResponse

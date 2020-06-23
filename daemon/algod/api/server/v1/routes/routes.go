@@ -131,13 +131,6 @@ var V1Routes = lib.Routes{
 		HandlerFunc: handlers.Assets,
 	},
 
-	lib.Route{
-		Name:        "application-information-by-id",
-		Method:      "GET",
-		Path:        "/application/:index",
-		HandlerFunc: handlers.ApplicationInformation,
-	},
-
 	// ----- This can only be active when indexer is live
 
 	lib.Route{
