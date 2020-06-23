@@ -708,8 +708,7 @@
         ],
         "responses": {
           "200": {
-            "description": "debugging json",
-            "schema": { "type": "object" }
+            "$ref": "#/responses/DryrunResponse"
           },
           "400": {
             "description": "Bad Request",

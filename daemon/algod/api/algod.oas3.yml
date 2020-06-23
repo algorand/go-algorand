@@ -2025,11 +2025,26 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "txns": {
+                      "items": {
+                        "$ref": "#/components/schemas/DryrunTxnResult"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "txns"
+                  ],
                   "type": "object"
                 }
               }
             },
-            "description": "debugging json"
+            "description": "DryrunResponse contains per-txn debug information from a dryrun."
           },
           "400": {
             "content": {
