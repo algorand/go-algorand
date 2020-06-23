@@ -44,7 +44,7 @@ func TestRoute(t *testing.T) {
 	// pending transaction extracted parameter
 	func() {
 		path := "/v1/account/address-param/transactions/pending"
-		ctx := e.NewContext(nil, nil)//.(*context)
+		ctx := e.NewContext(nil, nil)
 		e.Router().Find(http.MethodGet, path, ctx)
 		assert.Equal(t, ctx.Path(), "/v1/account/:addr/transactions/pending")
 		assert.Equal(t, ctx.Param("addr"), "address-param")
