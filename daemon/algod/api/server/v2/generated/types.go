@@ -199,6 +199,16 @@ type AssetHolding struct {
 	IsFrozen bool `json:"is-frozen"`
 }
 
+// AssetInformation defines model for AssetInformation.
+type AssetInformation struct {
+
+	// Specifies both the unique identifier and the parameters for an asset
+	Asset Asset `json:"asset"`
+
+	// Asset creator
+	Creator string `json:"creator"`
+}
+
 // AssetParams defines model for AssetParams.
 type AssetParams struct {
 
@@ -447,6 +457,9 @@ type AccountResponse Account
 
 // ApplicationResponse defines model for ApplicationResponse.
 type ApplicationResponse ApplicationInformation
+
+// AssetResponse defines model for AssetResponse.
+type AssetResponse AssetInformation
 
 // BlockResponse defines model for BlockResponse.
 type BlockResponse struct {

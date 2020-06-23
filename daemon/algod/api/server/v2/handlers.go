@@ -495,3 +495,35 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 	response := generated.ApplicationResponse(appInfo)
 	return ctx.JSON(http.StatusOK, response)
 }
+
+// GetAssetByID returns application information by app idx.
+// (GET /v2/asset/{asset-id})
+func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
+	assetIdx := basics.AssetIndex(assetID)
+	ledger := v2.Node.Ledger()
+	creator, ok, err := ledger.GetAssetCreator(assetIdx)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+	if !ok {
+		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
+	}
+
+	lastRound := ledger.Latest()
+	record, err := ledger.Lookup(lastRound, creator)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	assetParams, ok := record.AssetParams[assetIdx]
+	if !ok {
+		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
+	}
+
+	assetInfo := generated.AssetInformation{
+		Creator: creator.String(),
+		Asset:   AssetParamsToAsset(creator.String(), assetIdx, &assetParams),
+	}
+	response := generated.AssetResponse(assetInfo)
+	return ctx.JSON(http.StatusOK, response)
+}

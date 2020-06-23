@@ -47,24 +47,7 @@ func AccountDataToAccount(
 
 	createdAssets := make([]generated.Asset, 0, len(record.AssetParams))
 	for idx, params := range record.AssetParams {
-		assetParams := generated.AssetParams{
-			Creator:       address,
-			Total:         params.Total,
-			Decimals:      uint64(params.Decimals),
-			DefaultFrozen: &params.DefaultFrozen,
-			MetadataHash:  byteOrNil(params.MetadataHash[:]),
-			Name:          strOrNil(params.AssetName),
-			UnitName:      strOrNil(params.UnitName),
-			Url:           strOrNil(params.URL),
-			Clawback:      addrOrNil(params.Clawback),
-			Freeze:        addrOrNil(params.Freeze),
-			Manager:       addrOrNil(params.Manager),
-			Reserve:       addrOrNil(params.Reserve),
-		}
-		asset := generated.Asset{
-			Index:  uint64(idx),
-			Params: assetParams,
-		}
+		asset := AssetParamsToAsset(address, idx, &params)
 		createdAssets = append(createdAssets, asset)
 	}
 
@@ -338,5 +321,28 @@ func AppParamsToApplication(appIdx basics.AppIndex, appParams *basics.AppParams)
 				NumUint:      appParams.GlobalStateSchema.NumUint,
 			},
 		},
+	}
+}
+
+// AssetParamsToAsset converts basics.AssetParams to generated.Asset
+func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.AssetParams) generated.Asset {
+	assetParams := generated.AssetParams{
+		Creator:       creator,
+		Total:         params.Total,
+		Decimals:      uint64(params.Decimals),
+		DefaultFrozen: &params.DefaultFrozen,
+		MetadataHash:  byteOrNil(params.MetadataHash[:]),
+		Name:          strOrNil(params.AssetName),
+		UnitName:      strOrNil(params.UnitName),
+		Url:           strOrNil(params.URL),
+		Clawback:      addrOrNil(params.Clawback),
+		Freeze:        addrOrNil(params.Freeze),
+		Manager:       addrOrNil(params.Manager),
+		Reserve:       addrOrNil(params.Reserve),
+	}
+
+	return generated.Asset{
+		Index:  uint64(idx),
+		Params: assetParams,
 	}
 }

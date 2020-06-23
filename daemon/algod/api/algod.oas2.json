@@ -744,6 +744,68 @@
       }
       ]
     },
+    "/v2/assets/{asset-id}": {
+      "get": {
+        "description": "Given a asset id, it returns asset information including creator, name, total supply and special addresses.",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get asset information.",
+        "operationId": "GetAssetByID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "An asset identifier",
+            "name": "asset-id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/AssetResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Application Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "integer",
+          "name": "asset-id",
+          "in": "path",
+          "required": true
+      }
+      ]
+    },
     "/v2/teal/dryrun": {
       "post": {
         "consumes": [
@@ -1529,6 +1591,25 @@
           "$ref": "#/definitions/Application"
         }
       }
+    },
+    "AssetInformation": {
+      "description": "Information about the asset including creator",
+      "type": "object",
+      "required": [
+        "creator",
+        "asset"
+      ],
+      "properties": {
+        "creator": {
+          "description": "Asset creator",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "asset": {
+          "description": "Asset information",
+          "$ref": "#/definitions/Asset"
+        }
+      }
     }
   },
   "parameters": {
@@ -1928,6 +2009,12 @@
       "description": "Application information",
       "schema": {
         "$ref": "#/definitions/ApplicationInformation"
+      }
+    },
+    "AssetResponse": {
+      "description": "Asset information",
+      "schema": {
+        "$ref": "#/definitions/AssetInformation"
       }
     },
     "DryrunResponse": {

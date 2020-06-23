@@ -682,6 +682,15 @@ func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error)
 	return
 }
 
+// AssetInformationV2 takes an asset's index and returns its information
+func (c *Client) AssetInformationV2(index uint64) (resp generatedV2.AssetInformation, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AssetInformationV2(index)
+	}
+	return
+}
+
 // ApplicationInformation takes an app's index and returns its information
 func (c *Client) ApplicationInformation(index uint64) (resp generatedV2.ApplicationInformation, err error) {
 	algod, err := c.ensureAlgodClient()

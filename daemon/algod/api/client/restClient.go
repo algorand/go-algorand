@@ -316,6 +316,12 @@ func (client RestClient) Assets(assetIdx, max uint64) (response v1.AssetList, er
 	return
 }
 
+// AssetInformationV2 gets the AssetInformationResponse associated with the passed asset index
+func (client RestClient) AssetInformationV2(index uint64) (response generatedV2.AssetInformation, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/assets/%d", index), nil)
+	return
+}
+
 // ApplicationInformation gets the ApplicationInformationResponse associated
 // with the passed application index
 func (client RestClient) ApplicationInformation(index uint64) (response generatedV2.ApplicationInformation, err error) {

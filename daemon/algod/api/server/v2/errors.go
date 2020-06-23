@@ -18,6 +18,7 @@ package v2
 
 var (
 	errAppDoesNotExist                  = "application does not exist"
+	errAssetDoesNotExist                = "asset does not exist"
 	errFailedLookingUpLedger            = "failed to retrieve information from the ledger"
 	errFailedLookingUpTransactionPool   = "failed to retrieve information from the transaction pool"
 	errFailedRetrievingNodeStatus       = "failed retrieving node status"
