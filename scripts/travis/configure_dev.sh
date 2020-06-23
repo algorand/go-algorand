@@ -9,6 +9,7 @@ function installGo() {
     GO_VERSION=$("${SCRIPTPATH}/../get_golang_version.sh")
     INSTALLED_GO_VERSION=$("${SCRIPTPATH}/../get_installed_golang_version.sh")
     echo "Install Go for arch ${OS_ARCH} with GO VERSION ${GO_VERSION} to replace ${INSTALLED_GO_VERSION}"
+    which go
 
     if [[ "$INSTALLED_GO_VERSION" != "$GO_VERSION" ]]; then
         echo "Correct Go version not found; downloading version $GO_VERSION for ${OS_ARCH}..."
