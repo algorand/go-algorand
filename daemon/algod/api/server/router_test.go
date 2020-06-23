@@ -33,19 +33,17 @@ func TestRoute(t *testing.T) {
 	// Registering v1 routes
 	registerHandlers(e, apiV1Tag, routes.V1Routes, lib.ReqContext{}, nil)
 
-	// Baseline, "method not found".
+	// Baseline, unknown endpoint
 	func() {
-		path := "/v0/this/is/no/endpoint"
 		ctx := e.NewContext(nil, nil)
-		e.Router().Find(http.MethodGet, path, ctx)
-		assert.Equal(t, ctx.Path(), path)
+		e.Router().Find(http.MethodGet, "/v0/this/is/no/endpoint", ctx)
+		assert.Equal(t, ctx.Handler()(ctx), echo.ErrNotFound)
 	}()
 
 	// pending transaction extracted parameter
 	func() {
-		path := "/v1/account/address-param/transactions/pending"
 		ctx := e.NewContext(nil, nil)
-		e.Router().Find(http.MethodGet, path, ctx)
+		e.Router().Find(http.MethodGet, "/v1/account/address-param/transactions/pending", ctx)
 		assert.Equal(t, ctx.Path(), "/v1/account/:addr/transactions/pending")
 		assert.Equal(t, ctx.Param("addr"), "address-param")
 	}()
