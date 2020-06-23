@@ -893,6 +893,7 @@ func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode boo
 		// we should close the channel.
 		if node.ctx.Err() == context.Canceled {
 			close(ctxCh)
+			node.mu.Unlock()
 			return
 		}
 		if catchpointCatchupMode {
