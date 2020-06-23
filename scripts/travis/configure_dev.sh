@@ -10,43 +10,32 @@ function installGo() {
     GO_VERSION=$("${SCRIPTPATH}/../get_golang_version.sh")
     INSTALLED_GO_VERSION=$("${SCRIPTPATH}/../get_installed_golang_version.sh")
     echo "Install Go for arch ${OS_ARCH} with GO VERSION ${GO_VERSION} to replace ${INSTALLED_GO_VERSION}"
-    which go
 
-    if [[ "$INSTALLED_GO_VERSION" != "$GO_VERSION" ]]; then
-        echo "Correct Go version not found; downloading version $GO_VERSION for ${OS_ARCH}..."
-        GO_TARBALL=go${GO_VERSION}.${OS_ARCH}.tar.gz
-        wget -q https://dl.google.com/go/${GO_TARBALL}
-        if [[ "$?" = "0" ]]; then
-            set -e
-            sudo tar -C /usr/local -xzf ${GO_TARBALL}
-            rm -f ${GO_TARBALL}
+    if [[ "${INSTALLED_GO_VERSION}" != "${GO_VERSION}" ]]; then
 
-            if [[ "${ARCH}" = "amd64" ]]; then
-                GO_BIN=$(dirname $(which go))
-                sudo rm -rf ${GO_BIN}
-#                sudo rm ${GO_BIN}/go
-#                sudo rm ${GO_BIN}/godoc
-#                sudo rm ${GO_BIN}/gofmt
-                sudo ln -sf /usr/local/go/bin ${GO_BIN}
-#                sudo ln -sf /usr/local/go/bin/go ${GO_BIN}/go
-#                sudo ln -sf /usr/local/go/bin/godoc ${GO_BIN}/godoc
-#                sudo ln -sf /usr/local/go/bin/gofmt ${GO_BIN}/gofmt
-                sudo rm -rf $(echo ${GOPATH} | cut -d':' -f1)/pkg
-                sudo mkdir $(echo ${GOPATH} | cut -d':' -f1)/pkg
-            else
+        if [[ "${ARCH}" = "amd64" ]]; then
+            eval "$(gimme ${GO_VERSION})"
+        else
+            echo "Correct Go version not found; downloading version ${GO_VERSION} for ${OS_ARCH}..."
+            GO_TARBALL=go${GO_VERSION}.${OS_ARCH}.tar.gz
+            wget -q https://dl.google.com/go/${GO_TARBALL}
+            if [[ "$?" = "0" ]]; then
+                set -e
+                sudo tar -C /usr/local -xzf ${GO_TARBALL}
+                rm -f ${GO_TARBALL}
+
                 sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
                 sudo ln -sf /usr/local/go/bin/godoc /usr/local/bin/godoc
                 sudo ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+            else
+                echo "Failed to download go"
+                exit 1
             fi
-            echo "go version: $(go version)"
-            echo "GOROOT ${GOROOT}"
-            echo "GOPATH ${GOPATH}"
-            ls $(echo ${GOPATH} | cut -d':' -f1)/pkg
-
-        else
-            echo "Failed to download go"
-            exit 1
         fi
+        which go
+        echo "go version: $(go version)"
+        echo "GOROOT ${GOROOT}"
+        echo "GOPATH ${GOPATH}"
     fi
 }
 
