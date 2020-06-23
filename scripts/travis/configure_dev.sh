@@ -11,7 +11,7 @@ function installGo() {
     echo "Install Go for arch ${OS_ARCH} with GO VERSION ${GO_VERSION} to replace ${INSTALLED_GO_VERSION}"
 
     if [[ "$INSTALLED_GO_VERSION" != "$GO_VERSION" ]]; then
-        echo "Correct Go version not be found; downloading go $GO_VERSION for ${OS_ARCH}..."
+        echo "Correct Go version not found; downloading version $GO_VERSION for ${OS_ARCH}..."
         GO_TARBALL=go${GO_VERSION}.${OS_ARCH}.tar.gz
         wget -q https://dl.google.com/go/${GO_TARBALL}
         if [[ "$?" = "0" ]]; then
