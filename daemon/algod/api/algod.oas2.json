@@ -554,59 +554,6 @@
         }
       }
     },
-    "/v2/transactions/dryrun": {
-      "post": {
-        "consumes": [
-          "application/json"
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "schemes": [
-          "http"
-        ],
-        "summary": "Provide debugging information for a transaction (or group).",
-        "operationId": "TransactionDryRun",
-        "parameters": [
-          {
-            "description": "Transaction (or group) and any accompanying state-simulation data",
-            "name": "rawtxn",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/DryrunRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "debugging json",
-            "schema": { "type": "object" }
-          },
-          "400": {
-            "description": "Bad Request",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "401": {
-            "description": "Invalid API Token",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "500": {
-            "description": "Internal Error",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
-          },
-          "default": {
-            "description": "Unknown Error"
-          }
-        }
-      }
-    },
     "/v2/transactions/params": {
       "get": {
         "produces": [
@@ -734,6 +681,59 @@
           "required": true
         }
       ]
+    },
+    "/v2/teal/dryrun": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Provide debugging information for a transaction (or group).",
+        "operationId": "TealDryRun",
+        "parameters": [
+          {
+            "description": "Transaction (or group) and any accompanying state-simulation data",
+            "name": "rawtxn",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DryrunRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "debugging json",
+            "schema": { "type": "object" }
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
     }
   },
   "definitions": {

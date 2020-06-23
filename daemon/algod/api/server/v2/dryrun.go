@@ -29,7 +29,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// DryrunRequest object uploaded to /v2/transactions/dryrun
+// DryrunRequest object uploaded to /v2/teal/dryrun
 // It is the same as generated.DryrunRequest but Txns deserialized properly.
 // Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.
 type DryrunRequest struct {
