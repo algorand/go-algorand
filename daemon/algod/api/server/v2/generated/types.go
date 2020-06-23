@@ -32,7 +32,7 @@ type Account struct {
 	// Note the raw object uses `map[int] -> AssetHolding` for this type.
 	Assets *[]AssetHolding `json:"assets,omitempty"`
 
-	// The address against which signatures/multisigs/logicsigs should be checked
+	// \[spend\] the address against which signing should be checked. If empty, the address of the current account is used. This field can be updated in any transaction by setting the RekeyTo field.
 	AuthAddr *string `json:"auth-addr,omitempty"`
 
 	// \[appp\] parameters of applications created by this account including app global data.

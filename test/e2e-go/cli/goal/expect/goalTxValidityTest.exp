@@ -22,7 +22,7 @@ set FILE_COUNTER 1
 proc TestLastValidInTx { CMD TX_FILE EXPECTED_LAST_VALID } {
     set PASSED 0
     set LAST_VALID 0
-    set timeout 5
+    set timeout 60
 
     eval spawn $CMD
     expect

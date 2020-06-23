@@ -615,8 +615,9 @@
             "type": "array"
           },
           "auth-addr": {
-            "description": "The address against which signatures/multisigs/logicsigs should be checked",
-            "type": "string"
+            "description": "\\[spend\\] the address against which signing should be checked. If empty, the address of the current account is used. This field can be updated in any transaction by setting the RekeyTo field.",
+            "type": "string",
+            "x-algorand-format": "Address"
           },
           "created-apps": {
             "description": "\\[appp\\] parameters of applications created by this account including app global data.\n\nNote: the raw account uses `map[int] -> AppParams` for this type.",

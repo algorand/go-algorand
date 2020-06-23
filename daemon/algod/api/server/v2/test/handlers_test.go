@@ -293,7 +293,7 @@ func TestAbortCatchup(t *testing.T) {
 	abortCatchupTest(t, badCatchPoint, 400)
 }
 
-func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int) {
+func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int, enableDeveloperAPI bool) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
@@ -301,6 +301,7 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int) {
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
 	mockNode := makeMockNode(mockLedger, t.Name())
+	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
 		Node:     &mockNode,
 		Log:      logging.Base(),
@@ -316,11 +317,12 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int) {
 }
 
 func TestTealCompile(t *testing.T) {
-	tealCompileTest(t, nil, 200) // nil program should work
+	tealCompileTest(t, nil, 200, true) // nil program should work
 	goodProgram := `int 1`
 	goodProgramBytes := []byte(goodProgram)
-	tealCompileTest(t, goodProgramBytes, 200)
+	tealCompileTest(t, goodProgramBytes, 200, true)
+	tealCompileTest(t, goodProgramBytes, 404, false)
 	badProgram := "bad program"
 	badProgramBytes := []byte(badProgram)
-	tealCompileTest(t, badProgramBytes, 400)
+	tealCompileTest(t, badProgramBytes, 400, true)
 }

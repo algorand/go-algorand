@@ -1004,10 +1004,6 @@
           "description": "The round for which this information is relevant.",
           "type": "integer"
         },
-        "auth-addr": {
-          "description": "The address against which signatures/multisigs/logicsigs should be checked",
-          "type": "string"
-        },
         "status": {
           "description": "\\[onl\\] delegation status of the account's MicroAlgos\n* Offline - indicates that the associated account is delegated.\n*  Online  - indicates that the associated account used as part of the delegation pool.\n*   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.",
           "type": "string"
@@ -1020,6 +1016,11 @@
             "msig",
             "lsig"
           ]
+        },
+        "auth-addr": {
+          "description": "\\[spend\\] the address against which signing should be checked. If empty, the address of the current account is used. This field can be updated in any transaction by setting the RekeyTo field.",
+          "type": "string",
+          "x-algorand-format": "Address"
         }
       }
     },
