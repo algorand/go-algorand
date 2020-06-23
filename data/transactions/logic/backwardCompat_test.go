@@ -279,6 +279,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	txgroup := makeSampleTxnGroup(txn)
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], txn.Txn.Sender[:], txn.Txn.Note}
+	txn.Txn.RekeyTo = basics.Address{} // RekeyTo not allowed in TEAL v1
 
 	sb := strings.Builder{}
 	ep := defaultEvalParams(&sb, &txn)
