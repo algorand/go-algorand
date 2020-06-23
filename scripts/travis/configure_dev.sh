@@ -11,9 +11,7 @@ function installGo() {
     echo "Install Go for arch ${OS_ARCH} with GO VERSION ${GO_VERSION} to replace ${INSTALLED_GO_VERSION}"
 
     if [[ "$INSTALLED_GO_VERSION" != "$GO_VERSION" ]]; then
-        echo "Correct Go version cannot be found; downloading go $GO_VERSION for ${OS_ARCH}..."
-        # go is not installed ?
-        # e.g. https://dl.google.com/go/go1.13.5.linux-arm64.tar.gz
+        echo "Correct Go version not be found; downloading go $GO_VERSION for ${OS_ARCH}..."
         GO_TARBALL=go${GO_VERSION}.${OS_ARCH}.tar.gz
         wget -q https://dl.google.com/go/${GO_TARBALL}
         if [[ "$?" = "0" ]]; then
@@ -32,7 +30,6 @@ function installGo() {
 }
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-
 OS=$("${SCRIPTPATH}/../ostype.sh")
 ARCH=$("${SCRIPTPATH}/../archtype.sh")
 
@@ -50,14 +47,9 @@ if [[ "${OS}" = "linux" ]]; then
         sudo apt-get -y install sqlite3
     elif [[ "${ARCH}" = "amd64" ]]; then
         installGo "linux-amd64"
-        set -e
-        sudo apt-get update -y
-        sudo apt-get -y install sqlite3
     fi
 elif [[ "${OS}" = "darwin" ]]; then
-
     installGo "darwin-amd64"
-
     # we don't want to upgrade boost if we already have it, as it will try to update
     # other components.
     brew update
