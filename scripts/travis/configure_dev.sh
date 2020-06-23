@@ -22,9 +22,9 @@ function installGo() {
             rm -f ${GO_TARBALL}
 
             if [[ "${ARCH}" = "amd64" ]]; then
-                mv /usr/local/go/bin/go $(which go)
-                mv /usr/local/go/bin/godoc $(which godoc)
-                mv /usr/local/go/bin/gofmt $(which gofmt)
+                sudo mv /usr/local/go/bin/go $(which go)
+                sudo mv /usr/local/go/bin/godoc $(which godoc)
+                sudo mv /usr/local/go/bin/gofmt $(which gofmt)
             else
                 sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
                 sudo ln -sf /usr/local/go/bin/godoc /usr/local/bin/godoc
