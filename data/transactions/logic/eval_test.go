@@ -1683,6 +1683,10 @@ func TestTxn(t *testing.T) {
 			txn.Txn.ApprovalProgram = program
 			txn.Txn.ClearStateProgram = clearProgram
 			txn.Lsig.Logic = program
+			// RekeyTo not allowed in TEAL v1
+			if v < rekeyingEnabledVersion {
+				txn.Txn.RekeyTo = basics.Address{}
+			}
 			txid := txn.Txn.ID()
 			programHash := HashProgram(program)
 			clearProgramHash := HashProgram(clearProgram)
@@ -1877,6 +1881,10 @@ int 1
 			require.True(t, cost < 1000)
 			txn := makeSampleTxn()
 			txgroup := makeSampleTxnGroup(txn)
+			// RekeyTo not allowed in TEAL v1
+			if v < rekeyingEnabledVersion {
+				txn.Txn.RekeyTo = basics.Address{}
+			}
 			txn.Lsig.Logic = program
 			txn.Lsig.Args = [][]byte{
 				txn.Txn.Sender[:],
