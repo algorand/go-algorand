@@ -26,6 +26,7 @@ done
 
 # turn off exit on error
 set +e
+set -x
 
 CONFIGURE_SUCCESS=false
 
