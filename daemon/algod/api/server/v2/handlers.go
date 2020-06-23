@@ -463,3 +463,35 @@ func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.Ge
 func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr string, params generated.GetPendingTransactionsByAddressParams) error {
 	return v2.getPendingTransactions(ctx, params.Max, params.Format, &addr)
 }
+
+// GetApplicationByID returns application information by app idx.
+// (GET /v2/applications/{id})
+func (v2 *Handlers) GetApplicationByID(ctx echo.Context, id uint64) error {
+	appIdx := basics.AppIndex(id)
+	ledger := v2.Node.Ledger()
+	creator, ok, err := ledger.GetAppCreator(appIdx)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+	if !ok {
+		return notFound(ctx, errors.New(errAppDoesNotExist), errAppDoesNotExist, v2.Log)
+	}
+
+	lastRound := ledger.Latest()
+	record, err := ledger.Lookup(lastRound, creator)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	appParams, ok := record.AppParams[appIdx]
+	if !ok {
+		return notFound(ctx, errors.New(errAppDoesNotExist), errAppDoesNotExist, v2.Log)
+	}
+	appInfo := generated.ApplicationInformation{
+		Creator:     creator.String(),
+		Application: AppParamsToApplication(appIdx, &appParams),
+	}
+
+	response := generated.ApplicationResponse(appInfo)
+	return ctx.JSON(http.StatusOK, response)
+}

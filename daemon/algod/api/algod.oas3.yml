@@ -219,6 +219,16 @@
         },
         "description": "(empty)"
       },
+      "ApplicationResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApplicationInformation"
+            }
+          }
+        },
+        "description": "Application information"
+      },
       "BlockResponse": {
         "content": {
           "application/json": {
@@ -667,6 +677,23 @@
         "required": [
           "app-index",
           "app-params"
+        ],
+        "type": "object"
+      },
+      "ApplicationInformation": {
+        "description": "Information about the application including creator",
+        "properties": {
+          "application": {
+            "$ref": "#/components/schemas/Application"
+          },
+          "creator": {
+            "description": "Application creator",
+            "type": "string"
+          }
+        },
+        "required": [
+          "application",
+          "creator"
         ],
         "type": "object"
       },
@@ -1505,6 +1532,82 @@
           }
         },
         "summary": "Get a list of unconfirmed transactions currently in the transaction pool by address."
+      }
+    },
+    "/v2/applications/{id}": {
+      "get": {
+        "description": "Given a application id, it returns information about it.",
+        "operationId": "GetApplicationByID",
+        "parameters": [
+          {
+            "description": "An application identifier",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "x-algorand-format": "uint64"
+            },
+            "x-algorand-format": "uint64"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationInformation"
+                }
+              }
+            },
+            "description": "Application information"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Application Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get application information."
       }
     },
     "/v2/blocks/{round}": {

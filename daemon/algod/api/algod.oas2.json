@@ -682,6 +682,70 @@
         }
       ]
     },
+    "/v2/applications/{id}": {
+      "get": {
+        "description": "Given a application id, it returns information about it.",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get application information.",
+        "operationId": "GetApplicationByID",
+        "parameters": [
+          {
+            "type": "integer",
+            "x-algorand-format": "uint64",
+            "description": "An application identifier",
+            "name": "id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/ApplicationResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Application Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "integer",
+          "x-algorand-format": "uint64",
+          "name": "id",
+          "in": "path",
+          "required": true
+      }
+      ]
+    },
     "/v2/teal/dryrun": {
       "post": {
         "consumes": [
@@ -1448,6 +1512,24 @@
           "x-algorand-format": "uint64"
         }
       }
+    },
+    "ApplicationInformation": {
+      "description": "Information about the application including creator",
+      "type": "object",
+      "required": [
+        "creator",
+        "application"
+      ],
+      "properties": {
+        "creator": {
+          "description": "Application creator",
+          "type": "string"
+        },
+        "application": {
+          "description": "Application information",
+          "$ref": "#/definitions/Application"
+        }
+      }
     }
   },
   "parameters": {
@@ -1841,6 +1923,12 @@
           }
         },
         "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+      }
+    },
+    "ApplicationResponse": {
+      "description": "Application information",
+      "schema": {
+        "$ref": "#/definitions/ApplicationInformation"
       }
     },
     "DryrunResponse": {

@@ -111,6 +111,16 @@ type Application struct {
 	AppParams ApplicationParams `json:"app-params"`
 }
 
+// ApplicationInformation defines model for ApplicationInformation.
+type ApplicationInformation struct {
+
+	// Application index and its parameters
+	Application Application `json:"application"`
+
+	// Application creator
+	Creator string `json:"creator"`
+}
+
 // ApplicationLocalState defines model for ApplicationLocalState.
 type ApplicationLocalState struct {
 
@@ -434,6 +444,9 @@ type TxType string
 
 // AccountResponse defines model for AccountResponse.
 type AccountResponse Account
+
+// ApplicationResponse defines model for ApplicationResponse.
+type ApplicationResponse ApplicationInformation
 
 // BlockResponse defines model for BlockResponse.
 type BlockResponse struct {

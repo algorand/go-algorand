@@ -79,44 +79,15 @@ func AccountDataToAccount(
 		}
 	}
 
-	convertTKV := func(tkv *basics.TealKeyValue) (converted generated.TealKeyValueStore) {
-		for k, v := range *tkv {
-			converted = append(converted, generated.TealKeyValue{
-				Key: k,
-				Value: generated.TealValue{
-					Type:  uint64(v.Type),
-					Bytes: v.Bytes,
-					Uint:  v.Uint,
-				},
-			})
-		}
-		return
-	}
-
 	createdApps := make([]generated.Application, 0, len(record.AppParams))
 	for appIdx, appParams := range record.AppParams {
-		globalState := convertTKV(&appParams.GlobalState)
-		createdApps = append(createdApps, generated.Application{
-			AppIndex: uint64(appIdx),
-			AppParams: generated.ApplicationParams{
-				ApprovalProgram:   appParams.ApprovalProgram,
-				ClearStateProgram: appParams.ClearStateProgram,
-				GlobalState:       &globalState,
-				LocalStateSchema: &generated.ApplicationStateSchema{
-					NumByteSlice: appParams.LocalStateSchema.NumByteSlice,
-					NumUint:      appParams.LocalStateSchema.NumUint,
-				},
-				GlobalStateSchema: &generated.ApplicationStateSchema{
-					NumByteSlice: appParams.GlobalStateSchema.NumByteSlice,
-					NumUint:      appParams.GlobalStateSchema.NumUint,
-				},
-			},
-		})
+		app := AppParamsToApplication(appIdx, &appParams)
+		createdApps = append(createdApps, app)
 	}
 
 	appsLocalState := make([]generated.ApplicationLocalStates, 0, len(record.AppLocalStates))
 	for appIdx, state := range record.AppLocalStates {
-		localState := convertTKV(&state.KeyValue)
+		localState := convertTKVToGenerated(&state.KeyValue)
 		appsLocalState = append(appsLocalState, generated.ApplicationLocalStates{
 			AppIndex: uint64(appIdx),
 			State: generated.ApplicationLocalState{
@@ -158,6 +129,20 @@ func AccountDataToAccount(
 		AppsLocalState:              &appsLocalState,
 		AppsTotalSchema:             &totalAppSchema,
 	}, nil
+}
+
+func convertTKVToGenerated(tkv *basics.TealKeyValue) (converted generated.TealKeyValueStore) {
+	for k, v := range *tkv {
+		converted = append(converted, generated.TealKeyValue{
+			Key: k,
+			Value: generated.TealValue{
+				Type:  uint64(v.Type),
+				Bytes: v.Bytes,
+				Uint:  v.Uint,
+			},
+		})
+	}
+	return
 }
 
 func convertGeneratedTKV(akvs *generated.TealKeyValueStore) basics.TealKeyValue {
@@ -333,4 +318,25 @@ func ApplicationParamsToAppParams(gap *generated.ApplicationParams) basics.AppPa
 	ap.GlobalState = convertGeneratedTKV(gap.GlobalState)
 
 	return ap
+}
+
+// AppParamsToApplication converts basics.AppParams to generated.Application
+func AppParamsToApplication(appIdx basics.AppIndex, appParams *basics.AppParams) generated.Application {
+	globalState := convertTKVToGenerated(&appParams.GlobalState)
+	return generated.Application{
+		AppIndex: uint64(appIdx),
+		AppParams: generated.ApplicationParams{
+			ApprovalProgram:   appParams.ApprovalProgram,
+			ClearStateProgram: appParams.ClearStateProgram,
+			GlobalState:       &globalState,
+			LocalStateSchema: &generated.ApplicationStateSchema{
+				NumByteSlice: appParams.LocalStateSchema.NumByteSlice,
+				NumUint:      appParams.LocalStateSchema.NumUint,
+			},
+			GlobalStateSchema: &generated.ApplicationStateSchema{
+				NumByteSlice: appParams.GlobalStateSchema.NumByteSlice,
+				NumUint:      appParams.GlobalStateSchema.NumUint,
+			},
+		},
+	}
 }
