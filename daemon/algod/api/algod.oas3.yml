@@ -2415,6 +2415,70 @@
         "x-codegen-request-body-name": "source"
       }
     },
+    "/v2/teal/dryrun": {
+      "post": {
+        "operationId": "TealDryRun",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DryrunRequest"
+              }
+            }
+          },
+          "description": "Transaction (or group) and any accompanying state-simulation data",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "debugging json"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Provide debugging information for a transaction (or group).",
+        "x-codegen-request-body-name": "rawtxn"
+      }
+    },
     "/v2/transactions": {
       "post": {
         "operationId": "RawTransaction",
@@ -2496,70 +2560,6 @@
           }
         },
         "summary": "Broadcasts a raw transaction to the network.",
-        "x-codegen-request-body-name": "rawtxn"
-      }
-    },
-    "/v2/transactions/dryrun": {
-      "post": {
-        "operationId": "TransactionDryRun",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DryrunRequest"
-              }
-            }
-          },
-          "description": "Transaction (or group) and any accompanying state-simulation data",
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object"
-                }
-              }
-            },
-            "description": "debugging json"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid API Token"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Internal Error"
-          },
-          "default": {
-            "content": {},
-            "description": "Unknown Error"
-          }
-        },
-        "summary": "Provide debugging information for a transaction (or group).",
         "x-codegen-request-body-name": "rawtxn"
       }
     },
