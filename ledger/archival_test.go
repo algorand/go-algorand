@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -96,7 +97,7 @@ func getInitState() (genesisInitState InitState) {
 	return genesisInitState
 }
 
-func TestArchival(t *testing.T) {
+func TestArchivalBase(t *testing.T) {
 	// This test ensures that trackers return the correct value from
 	// committedUpTo() -- that is, if they return round rnd, then they
 	// do not ask for any round before rnd on a subsequent call to
@@ -104,6 +105,7 @@ func TestArchival(t *testing.T) {
 	//
 	// We generate mostly empty blocks, with the exception of timestamps,
 	// which affect participationTracker.committedUpTo()'s return value.
+	PrintMemUsage("before TestArchival")
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
@@ -120,6 +122,7 @@ func TestArchival(t *testing.T) {
 
 	nonZeroMinSaves := 0
 	blk := genesisInitState.Block
+	PrintMemUsage("in TestArchival, before populating ledger")
 
 	for i := 0; i < 2000; i++ {
 		blk.BlockHeader.Round++
@@ -136,6 +139,7 @@ func TestArchival(t *testing.T) {
 		require.NoError(t, err)
 		if err != nil {
 			// Return early, to help with iterative debugging
+			PrintMemUsage("in TestArchival, after hitting error")
 			return
 		}
 
@@ -145,15 +149,22 @@ func TestArchival(t *testing.T) {
 
 		if nonZeroMinSaves > 20 {
 			// Every tracker has given the ledger a chance to GC a few blocks
+			PrintMemUsage("in TestArchival, after GC")
 			return
 		}
-	}
 
+		if (i / 10) * 10 == i {
+			msg := fmt.Sprintf("in TestArchival, after adding %v blocks", i)
+			PrintMemUsage(msg)
+		}
+	}
+	PrintMemUsage("in TestArchival, after exiting loop")
 	t.Error("Did not observe every tracker GCing the ledger")
 }
 
 func TestArchivalRestart(t *testing.T) {
 	// Start in archival mode, add 2K blocks, restart, ensure all blocks are there
+	PrintMemUsage("before TestArchivalRestart")
 
 	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
 	require.NoError(t, err)
@@ -177,6 +188,8 @@ func TestArchivalRestart(t *testing.T) {
 		l.AddBlock(blk, agreement.Certificate{})
 	}
 	l.WaitForCommit(blk.Round())
+	PrintMemUsage("in TestArchivalRestart, after adding all blocks to ledger")
+
 
 	var latest, earliest basics.Round
 	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
@@ -193,6 +206,8 @@ func TestArchivalRestart(t *testing.T) {
 	// close and reopen the same DB, ensure latest/earliest are not changed
 	l.Close()
 	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
+	PrintMemUsage("in TestArchivalRestart, after closing and reopening ledger")
+
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -207,6 +222,7 @@ func TestArchivalRestart(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(maxBlocks), latest)
 	require.Equal(t, basics.Round(0), earliest)
+	PrintMemUsage("after TestArchivalRestart")
 }
 
 func makeUnsignedAssetCreateTx(firstValid, lastValid basics.Round, total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string, assetName string, url string, metadataHash []byte) (transactions.Transaction, error) {
@@ -256,6 +272,7 @@ func makeUnsignedAssetDestroyTx(client libgoal.Client, firstValid, lastValid bas
 func TestArchivalAssets(t *testing.T) {
 	// Start in archival mode, add 2K blocks with asset txns, restart, ensure all
 	// assets are there in index unless they were deleted
+	PrintMemUsage("before TestArchivalAssets")
 
 	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
 	require.NoError(t, err)
@@ -289,6 +306,7 @@ func TestArchivalAssets(t *testing.T) {
 		creators = append(creators, creator)
 		genesisInitState.Accounts[creator] = basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890})
 	}
+	PrintMemUsage("in TestArchivalAssets, after giving creators money")
 
 	// open ledger
 	const inMem = false // use persistent storage
@@ -338,8 +356,14 @@ func TestArchivalAssets(t *testing.T) {
 		// Add the block
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
+		if (i / 100) * 100 == i {
+			msg := fmt.Sprintf("in TestArchivalAssets, after creating %v assets", i)
+			PrintMemUsage(msg)
+		}
 	}
 	l.WaitForCommit(blk.Round())
+
+	PrintMemUsage("in TestArchivalAssets, after creating assets")
 
 	// check that we can fetch creator for all created assets and can't for
 	// deleted assets
@@ -365,6 +389,7 @@ func TestArchivalAssets(t *testing.T) {
 	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
+	PrintMemUsage("in TestArchivalAssets, after reopening DB")
 
 	// check that we can fetch creator for all created assets and can't for
 	// deleted assets
@@ -404,6 +429,8 @@ func TestArchivalAssets(t *testing.T) {
 	blk.BlockHeader.TxnCounter++
 	expectedExisting--
 	expectedDeleted++
+
+	PrintMemUsage("in TestArchivalAssets, after deleting old and new assets")
 
 	// start mining a block with the deletion txns
 	blk.BlockHeader.Round++
@@ -449,6 +476,8 @@ func TestArchivalAssets(t *testing.T) {
 		require.NoError(t, err)
 	}
 	l.WaitForCommit(blk.Round())
+	PrintMemUsage("in TestArchivalAssets, after mining the blocks again")
+
 
 	// close and reopen the same DB
 	l.Close()
@@ -475,6 +504,8 @@ func TestArchivalAssets(t *testing.T) {
 	require.Equal(t, expectedExisting, existing)
 	require.Equal(t, expectedDeleted, deleted)
 	require.Equal(t, len(assetIdxs), existing+deleted)
+
+	PrintMemUsage("after TestArchivalAssets")
 }
 
 func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInBlock {
@@ -490,6 +521,7 @@ func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInB
 
 func TestArchivalFromNonArchival(t *testing.T) {
 	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
+	PrintMemUsage("before TestArchivalFromNonArchival")
 
 	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
 	require.NoError(t, err)
@@ -514,6 +546,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 		l.AddBlock(blk, agreement.Certificate{})
 	}
 	l.WaitForCommit(blk.Round())
+	PrintMemUsage("in TestArchivalFromNonArchival, after adding blocks to ledger")
 
 	var latest, earliest basics.Round
 	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
@@ -547,6 +580,8 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(0), earliest)
 	require.Equal(t, basics.Round(0), latest)
+
+	PrintMemUsage("after TestArchivalFromNonArchival")
 }
 
 func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Round, error) {
@@ -599,4 +634,21 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 	}
 
 	return minMinSave, nil
+}
+
+// PrintMemUsage outputs the current, total and OS memory being used. As well as the number 
+// of garage collection cycles completed.
+func PrintMemUsage(message string) {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	// For info on each, see: https://golang.org/pkg/runtime/#MemStats
+	fmt.Printf("MemUsage %v:\n", message)
+	fmt.Printf("Alloc = %v MiB", bToMb(m.Alloc))
+	fmt.Printf("\tTotalAlloc = %v MiB", bToMb(m.TotalAlloc))
+	fmt.Printf("\tSys = %v MiB", bToMb(m.Sys))
+	fmt.Printf("\tNumGC = %v\n", m.NumGC)
+}
+
+func bToMb(b uint64) uint64 {
+	return b / 1024 / 1024
 }
