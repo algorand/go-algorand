@@ -51,6 +51,7 @@ var (
 	programSource   string
 	argB64Strings   []string
 	disassemble     bool
+	verbose         bool
 	progByteFile    string
 	logicSigFile    string
 	timeStamp       int64
