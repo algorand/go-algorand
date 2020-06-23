@@ -2,6 +2,25 @@
 set err 0
 log_user 1
 
+proc spawnCatchpointCatchupWebProxy { TARGET_ENDPOINT RUNTIME REQUEST_DELAY } {
+    upvar WP_SPAWN_ID WP_SPAWN_ID
+    set WEBPROXY_LISTEN_ADDRESS ""
+
+    # the timeout is set here to take a long while since the command below would end up compiling the go source code before running it.
+    # on slow machines, this could take a long while.
+    set timeout 60
+    spawn go run ./catchpointCatchupWebProxy -targetEndpoint "$TARGET_ENDPOINT" -runtime $RUNTIME -requestDelay $REQUEST_DELAY
+    set WP_SPAWN_ID $spawn_id
+    expect {
+        -re {(^[0-9\.]+:[0-9]+)} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
+        timeout {::AlgorandGoal::Abort "timed out waiting for web proxy listen address"}
+        eof { ::AlgorandGoal::CheckEOF "web proxy failed to start"}
+    }
+
+    puts "Web proxy listening address is $WEBPROXY_LISTEN_ADDRESS"
+    return $WEBPROXY_LISTEN_ADDRESS
+}
+
 if { [catch {
     source goalExpectCommon.exp
     set TEST_ALGO_DIR [lindex $argv 0]
@@ -38,9 +57,10 @@ if { [catch {
     # Start the Primary Node
     ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Primary
 
+
     # Wait until the primary node reaches round 37. At that point, the catchpoint for round 36 is already done.
     ::AlgorandGoal::WaitForRound 37 $TEST_ROOT_DIR/Primary
-    
+
     # Get primary node listening address:
     set PRIMARY_LISTEN_ADDRESS ""
     spawn cat $TEST_ROOT_DIR/Primary/algod-listen.net
@@ -59,16 +79,8 @@ if { [catch {
     puts "Primary node listening address is $PRIMARY_LISTEN_ADDRESS"
 
     # start the web proxy
-    set WEBPROXY_LISTEN_ADDRESS ""
-    spawn go run ./catchpointCatchupWebProxy -targetEndpoint "$PRIMARY_LISTEN_ADDRESS" -runtime 30 -requestDelay 20
-    set WP_SPAWN_ID $spawn_id
-    expect {
-        -re {(^[0-9\.]+:[0-9]+)} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
-        timeout {::AlgorandGoal::Abort "timed out waiting for web proxy listen address"}
-        eof { ::AlgorandGoal::CheckEOF "web proxy failed to start"}
-    }
-
-    puts "Web proxy listening address is $WEBPROXY_LISTEN_ADDRESS"
+    set WP_SPAWN_ID 0
+    set WEBPROXY_LISTEN_ADDRESS [spawnCatchpointCatchupWebProxy $PRIMARY_LISTEN_ADDRESS 30 20]
 
     ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Node False $WEBPROXY_LISTEN_ADDRESS
 
@@ -102,16 +114,7 @@ if { [catch {
     }
 
     # start the proxy. this time, make it go really slow
-    set WEBPROXY_LISTEN_ADDRESS ""
-    spawn go run ./catchpointCatchupWebProxy -targetEndpoint "$PRIMARY_LISTEN_ADDRESS" -runtime 30 -requestDelay 1500
-    set WP_SPAWN_ID $spawn_id
-    expect {
-        -re {(^[0-9\.]+:[0-9]+)} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
-        timeout {::AlgorandGoal::Abort "timed out waiting for web proxy listen address"}
-        eof { ::AlgorandGoal::CheckEOF "web proxy failed to start"}
-    }
-
-    puts "Web proxy listening address is $WEBPROXY_LISTEN_ADDRESS"
+    set WEBPROXY_LISTEN_ADDRESS [spawnCatchpointCatchupWebProxy $PRIMARY_LISTEN_ADDRESS 30 1500]
 
     ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Node False $WEBPROXY_LISTEN_ADDRESS
 
@@ -132,14 +135,8 @@ if { [catch {
     # close the web proxy
     close -i $WP_SPAWN_ID
 
-    set WEBPROXY_LISTEN_ADDRESS ""
-    spawn go run ./catchpointCatchupWebProxy -targetEndpoint "$PRIMARY_LISTEN_ADDRESS" -runtime 30
-    set WP_SPAWN_ID $spawn_id
-    expect {
-        -re {(^[0-9\.]+:[0-9]+)} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
-        timeout {::AlgorandGoal::Abort "timed out waiting for web proxy listen address"}
-        eof { ::AlgorandGoal::CheckEOF "web proxy failed to start"}
-    }
+    # restart the web proxy, without the delaying part.
+    set WEBPROXY_LISTEN_ADDRESS [spawnCatchpointCatchupWebProxy $PRIMARY_LISTEN_ADDRESS 30 20]
 
     ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Node False $WEBPROXY_LISTEN_ADDRESS
 
