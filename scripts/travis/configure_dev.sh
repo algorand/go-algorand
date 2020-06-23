@@ -23,12 +23,14 @@ function installGo() {
 
             if [[ "${ARCH}" = "amd64" ]]; then
                 export PATH=/usr/local/go/bin:${PATH}
+                export GOROOT=/usr/local/go
             else
                 sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
                 sudo ln -sf /usr/local/go/bin/godoc /usr/local/bin/godoc
                 sudo ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
             fi
-            go version
+            echo "go version: $(go version)"
+            echo "GOROOT ${GOROOT}"
         else
             echo "Failed to download go"
             exit 1
