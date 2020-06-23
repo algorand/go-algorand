@@ -22,8 +22,9 @@ function installGo() {
             rm -f ${GO_TARBALL}
 
             if [[ "${ARCH}" = "amd64" ]]; then
-                export PATH=/usr/local/go/bin:${PATH}
-                export GOROOT=/usr/local/go
+                mv /usr/local/go/bin/go $(which go)
+                mv /usr/local/go/bin/godoc $(which godoc)
+                mv /usr/local/go/bin/gofmt $(which gofmt)
             else
                 sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
                 sudo ln -sf /usr/local/go/bin/godoc /usr/local/bin/godoc
