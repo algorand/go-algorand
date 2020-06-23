@@ -1,10 +1,4 @@
 tasks:
-
-  - task: shell.Shell
-    name: go-version
-    command: scripts/get_golang_version.sh
-    saveLogs: true
-
   # Stash tasks
   - task: stash.Stash
     name: linux-amd64
@@ -71,67 +65,53 @@ tasks:
   - task: shell.docker.Ensure
     name: centos
     image: algorand/go-algorand-ci-linux
-    version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.logs }}'
-    goVersion: '{{ shell.Shell.go-version.outputs.logs }}'
+    version: '{{ docker.Version.outputs.version }}'
     dockerFilePath: docker/build/cicd.centos.Dockerfile
-    dependencies: shell.Shell.go-version docker.Version
+    dependencies: docker.Version
   - task: shell.docker.Ensure
     name: alpine
     image: algorand/go-algorand-ci-linux
-    version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.logs }}'
-    goVersion: '{{ shell.Shell.go-version.outputs.logs }}'
+    version: '{{ docker.Version.outputs.version }}'
     dockerFilePath: docker/build/cicd.alpine.Dockerfile
-    dependencies: shell.Shell.go-version docker.Version
+    dependencies: docker.Version
   - task: docker.Make
     name: build
     docker:
       image: algorand/go-algorand-ci-linux
-      version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.logs }}'
-      goVersion: '{{ shell.Shell.go-version.outputs.logs }}'
+      version: '{{ docker.Version.outputs.version }}'
       workDir: /go/src/github.com/algorand/go-algorand
     target: ci-build
-    dependencies: shell.Shell.go-version docker.Version
   - task: docker.Make
     name: fulltest
     docker:
       image: algorand/go-algorand-ci-linux
-      version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.logs }}'
-      goVersion: '{{ shell.Shell.go-version.outputs.logs }}'
+      version: '{{ docker.Version.outputs.version }}'
       workDir: /go/src/github.com/algorand/go-algorand
     target: fulltest -j4
-    dependencies: shell.Shell.go-version docker.Version
   - task: docker.Make
     name: integration-test
     docker:
       env:
         - SHORTTEST=-short
       image: algorand/go-algorand-ci-linux
-      version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.logs }}'
-      goVersion: '{{ shell.Shell.go-version.outputs.logs }}'
+      version: '{{ docker.Version.outputs.version }}'
       workDir: /go/src/github.com/algorand/go-algorand
     target: ci-integration -j4
-    dependencies: shell.Shell.go-version docker.Version
   - task: docker.Make
     name: archive
     docker:
       image: algorand/go-algorand-ci-linux
-      version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.logs }}'
-      goVersion: '{{ shell.Shell.go-version.outputs.logs }}'
+      version: '{{ docker.Version.outputs.version }}'
       workDir: /go/src/github.com/algorand/go-algorand
     target: ci-archive
-    dependencies: shell.Shell.go-version docker.Version
 
   # Local Tasks
   - task: shell.Make
     name: ci-deps build
     target: ci-build
-
   - task: shell.Make
     name: fulltest
     target: fulltest -j4
-  - task: shell.Make
-    name: shorttest
-    target: shorttest -j3
   - task: shell.Make
     name: integration-test
     target: ci-integration -j4
@@ -147,13 +127,13 @@ jobs:
     tasks:
       - shell.docker.Ensure.centos
       - docker.Make.build
-#      - stash.Stash.linux-amd64
+      - stash.Stash.linux-amd64
   test-linux-amd64-integration:
     configs:
       arch: amd64
     tasks:
       - shell.docker.Ensure.centos
-#      - stash.Unstash.linux-amd64
+      - stash.Unstash.linux-amd64
       - docker.Make.integration-test
   test-linux-amd64-fulltest:
     configs:
@@ -163,23 +143,23 @@ jobs:
       - docker.Make.fulltest
 
   # Darwin amd64 jobs
-  # build-darwin-amd64:
-  #   configs:
-  #     arch: amd64
-  #   tasks:
-  #     - shell.Make.build
-  #     - stash.Stash.darwin-amd64
-  # test-darwin-amd64-integration:
-  #   configs:
-  #     arch: amd64
-  #   tasks:
-  #     - stash.Unstash.darwin-amd64
-  #     - shell.Make.integration-test
-  # test-darwin-amd64-fulltest:
-  #   configs:
-  #     arch: amd64
-  #   tasks:
-  #     - shell.Make.fulltest
+# build-darwin-amd64:
+#   configs:
+#     arch: amd64
+#   tasks:
+#     - shell.Make.build
+#     - stash.Stash.darwin-amd64
+# test-darwin-amd64-integration:
+#   configs:
+#     arch: amd64
+#   tasks:
+#     - stash.Unstash.darwin-amd64
+#     - shell.Make.integration-test
+# test-darwin-amd64-fulltest:
+#   configs:
+#     arch: amd64
+#   tasks:
+#     - shell.Make.fulltest
 
   # Linux arm64 jobs
   build-linux-arm64:
@@ -188,7 +168,7 @@ jobs:
     tasks:
       - shell.docker.Ensure.centos
       - docker.Make.build
-#      - stash.Stash.linux-arm64
+      - stash.Stash.linux-arm64
   test-linux-arm64-integration:
     configs:
       arch: arm64v8
@@ -205,7 +185,7 @@ jobs:
       - shell.docker.Ensure.alpine
       - docker.Make.build
       - stash.Stash.linux-arm32
-
+  
   # Archive jobs
   archive-linux-amd64:
     configs:
@@ -213,8 +193,7 @@ jobs:
     tasks:
       - shell.docker.Ensure.centos
       - stash.Unstash.linux-amd64
-      # - stash.Unstash.darwin-amd64
+    # - stash.Unstash.darwin-amd64
       - stash.Unstash.linux-arm64
       - stash.Unstash.linux-arm32
       - docker.Make.archive
-
