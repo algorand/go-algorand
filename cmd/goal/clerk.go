@@ -50,7 +50,7 @@ var (
 	signProgram     bool
 	programSource   string
 	argB64Strings   []string
-	disassesmble    bool
+	disassemble     bool
 	progByteFile    string
 	logicSigFile    string
 	timeStamp       int64
@@ -115,7 +115,7 @@ func init() {
 	splitCmd.MarkFlagRequired("infile")
 	splitCmd.MarkFlagRequired("outfile")
 
-	compileCmd.Flags().BoolVarP(&disassesmble, "disassemble", "D", false, "disassemble a compiled program")
+	compileCmd.Flags().BoolVarP(&disassemble, "disassemble", "D", false, "disassemble a compiled program")
 	compileCmd.Flags().BoolVarP(&noProgramOutput, "no-out", "n", false, "don't write contract program binary")
 	compileCmd.Flags().BoolVarP(&signProgram, "sign", "s", false, "sign program, output is a binary signed LogicSig record")
 	compileCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename to write program bytes or signed LogicSig to")
@@ -852,7 +852,7 @@ var compileCmd = &cobra.Command{
 	Long:  "Reads a TEAL contract program and compiles it to binary output and contract address.",
 	Run: func(cmd *cobra.Command, args []string) {
 		for _, fname := range args {
-			if disassesmble {
+			if disassemble {
 				disassembleFile(fname, outFilename)
 				continue
 			}
