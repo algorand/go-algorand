@@ -29,15 +29,32 @@ import (
 
 func TestRoute(t *testing.T) {
 	e := echo.New()
+	calls := 0
+
+	handler := func(context lib.ReqContext, context2 echo.Context) {
+		calls++
+	}
+
+	// Make a deep copy of the routes array with dummy handlers that log a call.
+	v1RoutesCopy := make([]lib.Route, len(routes.V1Routes))
+	for _, route := range routes.V1Routes {
+		v1RoutesCopy = append(v1RoutesCopy, lib.Route{
+			Name:        route.Name,
+			Method:      route.Method,
+			Path:        route.Path,
+			HandlerFunc: handler,
+		})
+	}
 
 	// Registering v1 routes
-	registerHandlers(e, apiV1Tag, routes.V1Routes, lib.ReqContext{}, nil)
+	registerHandlers(e, apiV1Tag, v1RoutesCopy, lib.ReqContext{})
 
 	// Baseline, unknown endpoint
 	func() {
 		ctx := e.NewContext(nil, nil)
 		e.Router().Find(http.MethodGet, "/v0/this/is/no/endpoint", ctx)
 		assert.Equal(t, ctx.Handler()(ctx), echo.ErrNotFound)
+		assert.Equal(t, calls, 0)
 	}()
 
 	// pending transaction extracted parameter
@@ -46,5 +63,11 @@ func TestRoute(t *testing.T) {
 		e.Router().Find(http.MethodGet, "/v1/account/address-param/transactions/pending", ctx)
 		assert.Equal(t, ctx.Path(), "/v1/account/:addr/transactions/pending")
 		assert.Equal(t, ctx.Param("addr"), "address-param")
+
+		// A "real" handler should be found
+		callsBefore := calls
+		ctx.Handler()(ctx)
+
+		assert.Equal(t, callsBefore + 1, calls)
 	}()
 }
