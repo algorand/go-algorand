@@ -22,6 +22,9 @@ function installGo() {
             sudo ln -sf /usr/local/go/bin/godoc /usr/local/bin/godoc
             sudo ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
             go version
+            GOPATH=$(go env GOPATH)
+            export PATH=${HOME}/gpgbin:${GOPATH}/bin:/usr/local/go/bin:${PATH}
+            export GOPATH
         else
             echo "Failed to download go"
             exit 1
