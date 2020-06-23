@@ -682,7 +682,7 @@
         }
       ]
     },
-    "/v2/applications/{id}": {
+    "/v2/applications/{application-id}": {
       "get": {
         "description": "Given a application id, it returns information about it.",
         "produces": [
@@ -696,9 +696,8 @@
         "parameters": [
           {
             "type": "integer",
-            "x-algorand-format": "uint64",
             "description": "An application identifier",
-            "name": "id",
+            "name": "application-id",
             "in": "path",
             "required": true
           }
@@ -739,8 +738,7 @@
       "parameters": [
         {
           "type": "integer",
-          "x-algorand-format": "uint64",
-          "name": "id",
+          "name": "application-id",
           "in": "path",
           "required": true
       }
@@ -1523,7 +1521,8 @@
       "properties": {
         "creator": {
           "description": "Application creator",
-          "type": "string"
+          "type": "string",
+          "x-algorand-format": "Address"
         },
         "application": {
           "description": "Application information",

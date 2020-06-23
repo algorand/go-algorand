@@ -465,9 +465,9 @@ func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr strin
 }
 
 // GetApplicationByID returns application information by app idx.
-// (GET /v2/applications/{id})
-func (v2 *Handlers) GetApplicationByID(ctx echo.Context, id uint64) error {
-	appIdx := basics.AppIndex(id)
+// (GET /v2/applications/{application-id})
+func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) error {
+	appIdx := basics.AppIndex(applicationID)
 	ledger := v2.Node.Ledger()
 	creator, ok, err := ledger.GetAppCreator(appIdx)
 	if err != nil {

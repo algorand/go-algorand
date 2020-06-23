@@ -688,7 +688,8 @@
           },
           "creator": {
             "description": "Application creator",
-            "type": "string"
+            "type": "string",
+            "x-algorand-format": "Address"
           }
         },
         "required": [
@@ -1534,7 +1535,7 @@
         "summary": "Get a list of unconfirmed transactions currently in the transaction pool by address."
       }
     },
-    "/v2/applications/{id}": {
+    "/v2/applications/{application-id}": {
       "get": {
         "description": "Given a application id, it returns information about it.",
         "operationId": "GetApplicationByID",
@@ -1542,13 +1543,11 @@
           {
             "description": "An application identifier",
             "in": "path",
-            "name": "id",
+            "name": "application-id",
             "required": true,
             "schema": {
-              "type": "integer",
-              "x-algorand-format": "uint64"
-            },
-            "x-algorand-format": "uint64"
+              "type": "integer"
+            }
           }
         ],
         "responses": {
