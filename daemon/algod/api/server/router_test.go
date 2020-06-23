@@ -53,20 +53,20 @@ func TestRoute(t *testing.T) {
 	func() {
 		ctx := e.NewContext(nil, nil)
 		e.Router().Find(http.MethodGet, "/v0/this/is/no/endpoint", ctx)
-		assert.Equal(t, ctx.Handler()(ctx), echo.ErrNotFound)
-		assert.Equal(t, calls, 0)
+		assert.Equal(t, echo.ErrNotFound, ctx.Handler()(ctx))
+		assert.Equal(t, 0, calls)
 	}()
 
 	// pending transaction extracted parameter
 	func() {
 		ctx := e.NewContext(nil, nil)
 		e.Router().Find(http.MethodGet, "/v1/account/address-param/transactions/pending", ctx)
-		assert.Equal(t, ctx.Path(), "/v1/account/:addr/transactions/pending")
-		assert.Equal(t, ctx.Param("addr"), "address-param")
+		assert.Equal(t, "/v1/account/:addr/transactions/pending", ctx.Path())
+		assert.Equal(t, "address-param", ctx.Param("addr"))
 
 		// Ensure that a handler in the route array was called by checking that the 'calls' variable is incremented.
 		callsBefore := calls
-		ctx.Handler()(ctx)
+		assert.Equal(t, nil, ctx.Handler()(ctx))
 		assert.Equal(t, callsBefore + 1, calls)
 	}()
 }
