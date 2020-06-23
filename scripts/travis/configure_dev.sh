@@ -2,28 +2,25 @@
 
 # keep script execution on errors
 set +e
-set -x
 
 function installGo() {
     OS_ARCH=$1
     ARCH=$2
     GO_VERSION=$("${SCRIPTPATH}/../get_golang_version.sh")
     INSTALLED_GO_VERSION=$("${SCRIPTPATH}/../get_installed_golang_version.sh")
-    echo "Install Go for arch ${OS_ARCH} with GO VERSION ${GO_VERSION} to replace ${INSTALLED_GO_VERSION}"
+    echo "Ensure Go version ${GO_VERSION} for arch ${OS_ARCH}"
 
     if [[ "${INSTALLED_GO_VERSION}" != "${GO_VERSION}" ]]; then
-
+        echo "Installing go version ${GO_VERSION} to replace ${INSTALLED_GO_VERSION}"
         if [[ "${ARCH}" = "amd64" ]]; then
             eval "$(gimme ${GO_VERSION})"
         else
-            echo "Correct Go version not found; downloading version ${GO_VERSION} for ${OS_ARCH}..."
             GO_TARBALL=go${GO_VERSION}.${OS_ARCH}.tar.gz
             wget -q https://dl.google.com/go/${GO_TARBALL}
             if [[ "$?" = "0" ]]; then
                 set -e
                 sudo tar -C /usr/local -xzf ${GO_TARBALL}
                 rm -f ${GO_TARBALL}
-
                 sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
                 sudo ln -sf /usr/local/go/bin/godoc /usr/local/bin/godoc
                 sudo ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
@@ -32,10 +29,6 @@ function installGo() {
                 exit 1
             fi
         fi
-        which go
-        echo "go version: $(go version)"
-        echo "GOROOT ${GOROOT}"
-        echo "GOPATH ${GOPATH}"
     fi
 }
 
