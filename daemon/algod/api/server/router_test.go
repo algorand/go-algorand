@@ -64,10 +64,9 @@ func TestRoute(t *testing.T) {
 		assert.Equal(t, ctx.Path(), "/v1/account/:addr/transactions/pending")
 		assert.Equal(t, ctx.Param("addr"), "address-param")
 
-		// A "real" handler should be found
+		// Ensure that a handler in the route array was called by checking that the 'calls' variable is incremented.
 		callsBefore := calls
 		ctx.Handler()(ctx)
-
 		assert.Equal(t, callsBefore + 1, calls)
 	}()
 }
