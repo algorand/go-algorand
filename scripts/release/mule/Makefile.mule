@@ -15,7 +15,7 @@ ci-deps:
 ci-setup:
 	mkdir -p $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)
 
-ci-test: ci-build
+ci-test:
 ifeq ($(ARCH), amd64)
 	RACE=-race
 else
@@ -26,25 +26,18 @@ endif
 	done
 
 ci-integration:
+	NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/bin \
+	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/bin:$$PATH \
+	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/tools:$$PATH \
+	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/test-utils:$$PATH \
+	SRCROOT=$(SRCPATH) \
+	test/scripts/e2e.sh -c $(BUILDCHANNEL) -n
 
-ifeq ($(ARCH), amd64)
-	export NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin && \
-	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin:$$PATH && \
-	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/test-utils:$$PATH && \
-	export SRCROOT=$(SRCPATH) && \
-	./test/scripts/e2e_go_tests.sh
-else
-	export NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin && \
-	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin:$$PATH && \
-	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/test-utils:$$PATH && \
-	export SRCROOT=$(SRCPATH) && \
-	./test/scripts/e2e_go_tests.sh -norace
-endif
-
-ci-build: ci-setup buildsrc gen
-	PKG_ROOT=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH) \
-		 NO_BUILD=True VARIATIONS=$(OS_TYPE)/$(ARCH) \
-		 scripts/build_packages.sh $(OS_TYPE)/$(ARCH)
+ci-build: buildsrc gen ci-setup
+	CHANNEL=$(BUILDCHANNEL) PKG_ROOT=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH) NO_BUILD=True VARIATIONS=$(OS_TYPE)-$(ARCH) \
+	scripts/build_packages.sh $(OS_TYPE)/$(ARCH) && \
+	mkdir -p $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/data && \
+	cp gen/devnet/genesis.json $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/data
 
 # Builds targets from the sub-directories of ./scripts/release/mule/, such as `mule-package`, `mule-sign`, `mule-test`.
 # https://scene-si.org/2019/12/04/make-dynamic-makefile-targets/
