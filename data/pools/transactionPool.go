@@ -89,6 +89,9 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPo
 		cfg.TxPoolExponentialIncreaseFactor = 1
 	}
 	pool := TransactionPool{
+		pendingTxids:         make(map[transactions.Txid]txPoolVerifyCacheVal),
+		rememberedTxids:      make(map[transactions.Txid]txPoolVerifyCacheVal),
+		expiredTxCount:       make(map[basics.Round]int),
 		ledger:               ledger,
 		statusCache:          makeStatusCache(cfg.TxPoolSize),
 		logProcessBlockStats: cfg.EnableProcessBlockStats,
