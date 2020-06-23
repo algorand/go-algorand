@@ -41,7 +41,6 @@ import (
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
-	"github.com/algorand/go-codec/codec"
 )
 
 const maxTealSourceBytes = 1e5
@@ -97,7 +96,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 
 	myLedger := v2.Node.Ledger()
 	lastRound := myLedger.Latest()
-	record, err := myLedger.Lookup(lastRound, basics.Address(addr))
+	record, err := myLedger.Lookup(lastRound, addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -110,22 +109,16 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		return ctx.Blob(http.StatusOK, contentType, data)
 	}
 
-	recordWithoutPendingRewards, err := myLedger.LookupWithoutRewards(lastRound, basics.Address(addr))
+	recordWithoutPendingRewards, err := myLedger.LookupWithoutRewards(lastRound, addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
-
-	amount := record.MicroAlgos
 	amountWithoutPendingRewards := recordWithoutPendingRewards.MicroAlgos
-	pendingRewards, overflowed := basics.OSubA(amount, amountWithoutPendingRewards)
-	if overflowed {
-		return internalError(ctx, err, errInternalFailure, v2.Log)
-	}
 
-	assets := make([]generated.AssetHolding, 0)
+	assetsCreators := make(map[basics.AssetIndex]string, len(record.Assets))
 	if len(record.Assets) > 0 {
 		//assets = make(map[uint64]v1.AssetHolding)
-		for curid, holding := range record.Assets {
+		for curid := range record.Assets {
 			var creator string
 			creatorAddr, ok, err := myLedger.GetAssetCreator(curid)
 			if err == nil && ok {
@@ -135,132 +128,16 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 				// longer fetch the creator
 				creator = ""
 			}
-
-			holding := generated.AssetHolding{
-				Amount:   holding.Amount,
-				AssetId:  uint64(curid),
-				Creator:  creator,
-				IsFrozen: holding.Frozen,
-			}
-
-			assets = append(assets, holding)
+			assetsCreators[curid] = creator
 		}
 	}
 
-	createdAssets := make([]generated.Asset, 0)
-	if len(record.AssetParams) > 0 {
-		for idx, params := range record.AssetParams {
-			assetParams := generated.AssetParams{
-				Creator:       address,
-				Total:         params.Total,
-				Decimals:      uint64(params.Decimals),
-				DefaultFrozen: &params.DefaultFrozen,
-				MetadataHash:  byteOrNil(params.MetadataHash[:]),
-				Name:          strOrNil(params.AssetName),
-				UnitName:      strOrNil(params.UnitName),
-				Url:           strOrNil(params.URL),
-				Clawback:      addrOrNil(params.Clawback),
-				Freeze:        addrOrNil(params.Freeze),
-				Manager:       addrOrNil(params.Manager),
-				Reserve:       addrOrNil(params.Reserve),
-			}
-			asset := generated.Asset{
-				Index:  uint64(idx),
-				Params: assetParams,
-			}
-			createdAssets = append(createdAssets, asset)
-		}
+	account, err := AccountDataToAccount(address, &record, assetsCreators, lastRound, amountWithoutPendingRewards)
+	if err != nil {
+		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}
 
-	var apiParticipation *generated.AccountParticipation
-	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
-		apiParticipation = &generated.AccountParticipation{
-			VoteParticipationKey:      record.VoteID[:],
-			SelectionParticipationKey: record.SelectionID[:],
-			VoteFirstValid:            uint64(record.VoteFirstValid),
-			VoteLastValid:             uint64(record.VoteLastValid),
-			VoteKeyDilution:           uint64(record.VoteKeyDilution),
-		}
-	}
-
-	convertTKV := func(tkv *basics.TealKeyValue) (converted generated.TealKeyValueStore) {
-		for k, v := range *tkv {
-			converted = append(converted, generated.TealKeyValue{
-				Key: k,
-				Value: generated.TealValue{
-					Type:  uint64(v.Type),
-					Bytes: v.Bytes,
-					Uint:  v.Uint,
-				},
-			})
-		}
-		return
-	}
-
-	createdApps := make([]generated.Application, 0, len(record.AppParams))
-	if len(record.AppParams) > 0 {
-		for appIdx, appParams := range record.AppParams {
-			globalState := convertTKV(&appParams.GlobalState)
-			createdApps = append(createdApps, generated.Application{
-				AppIndex: uint64(appIdx),
-				AppParams: generated.ApplicationParams{
-					ApprovalProgram:   appParams.ApprovalProgram,
-					ClearStateProgram: appParams.ClearStateProgram,
-					GlobalState:       &globalState,
-					LocalStateSchema: &generated.ApplicationStateSchema{
-						NumByteSlice: appParams.LocalStateSchema.NumByteSlice,
-						NumUint:      appParams.LocalStateSchema.NumUint,
-					},
-					GlobalStateSchema: &generated.ApplicationStateSchema{
-						NumByteSlice: appParams.GlobalStateSchema.NumByteSlice,
-						NumUint:      appParams.GlobalStateSchema.NumUint,
-					},
-				},
-			})
-		}
-	}
-
-	appsLocalState := make([]generated.ApplicationLocalStates, 0, len(record.AppLocalStates))
-	if len(record.AppLocalStates) > 0 {
-		for appIdx, state := range record.AppLocalStates {
-			localState := convertTKV(&state.KeyValue)
-			appsLocalState = append(appsLocalState, generated.ApplicationLocalStates{
-				AppIndex: uint64(appIdx),
-				State: generated.ApplicationLocalState{
-					KeyValue: localState,
-					Schema: generated.ApplicationStateSchema{
-						NumByteSlice: state.Schema.NumByteSlice,
-						NumUint:      state.Schema.NumUint,
-					},
-				},
-			})
-		}
-	}
-
-	totalAppSchema := generated.ApplicationStateSchema{
-		NumByteSlice: record.TotalAppSchema.NumByteSlice,
-		NumUint:      record.TotalAppSchema.NumUint,
-	}
-
-	response := generated.AccountResponse{
-		SigType:                     nil,
-		Round:                       uint64(lastRound),
-		Address:                     addr.String(),
-		Amount:                      amount.Raw,
-		PendingRewards:              pendingRewards.Raw,
-		AmountWithoutPendingRewards: amountWithoutPendingRewards.Raw,
-		Rewards:                     record.RewardedMicroAlgos.Raw,
-		Status:                      record.Status.String(),
-		RewardBase:                  &record.RewardsBase,
-		Participation:               apiParticipation,
-		CreatedAssets:               &createdAssets,
-		Assets:                      &assets,
-		AuthAddr:                    addrOrNil(record.AuthAddr),
-		CreatedApps:                 &createdApps,
-		AppsLocalState:              &appsLocalState,
-		AppsTotalSchema:             &totalAppSchema,
-	}
-
+	response := generated.AccountResponse(account)
 	return ctx.JSON(http.StatusOK, response)
 }
 
@@ -446,8 +323,13 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 func (v2 *Handlers) TransactionDryRun(ctx echo.Context) error {
 	req := ctx.Request()
 	dec := protocol.NewJSONDecoder(req.Body)
-	var dr DryrunRequest
-	err := dec.Decode(&dr)
+	var gdr generated.DryrunRequest
+	err := dec.Decode(&gdr)
+	if err != nil {
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	}
+
+	dr, err := DryrunRequestFromGenerated(&gdr)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
@@ -462,7 +344,7 @@ func (v2 *Handlers) TransactionDryRun(ctx echo.Context) error {
 		}
 	}
 
-	var response DryrunResponse
+	var response generated.DryrunResponse
 
 	var proto config.ConsensusParams
 	if dr.ProtocolVersion != "" {
@@ -484,18 +366,7 @@ func (v2 *Handlers) TransactionDryRun(ctx echo.Context) error {
 	}
 
 	doDryrunRequest(&dr, &proto, &response)
-	var tightJSON codec.JsonHandle
-	// like go-algorand/protocol/codec.go but Indent=0
-	tightJSON.ErrorIfNoField = true
-	tightJSON.ErrorIfNoArrayExpand = true
-	tightJSON.Canonical = true
-	tightJSON.RecursiveEmptyCheck = true
-	tightJSON.Indent = 0 // be compact
-	tightJSON.HTMLCharsAsIs = true
-	var rblob []byte
-	enc := codec.NewEncoderBytes(&rblob, &tightJSON)
-	enc.MustEncode(response)
-	return ctx.JSONBlob(http.StatusOK, rblob)
+	return ctx.JSON(http.StatusOK, response)
 }
 
 // TransactionParams returns the suggested parameters for constructing a new transaction.

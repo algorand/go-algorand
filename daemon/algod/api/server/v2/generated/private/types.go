@@ -4,6 +4,7 @@
 package private
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -90,6 +91,14 @@ type AccountParticipation struct {
 
 	// \[vote\] root participation public key (if any) currently registered for this round.
 	VoteParticipationKey []byte `json:"vote-participation-key"`
+}
+
+// AccountStateDelta defines model for AccountStateDelta.
+type AccountStateDelta struct {
+	Address string `json:"address"`
+
+	// Application state delta.
+	Delta StateDelta `json:"delta"`
 }
 
 // Application defines model for Application.
@@ -220,11 +229,101 @@ type AssetParams struct {
 	Url *string `json:"url,omitempty"`
 }
 
+// DryrunApp defines model for DryrunApp.
+type DryrunApp struct {
+	AppIndex uint64 `json:"app-index"`
+	Creator  string `json:"creator"`
+
+	// Stores the global information associated with an application.
+	Params ApplicationParams `json:"params"`
+}
+
+// DryrunRequest defines model for DryrunRequest.
+type DryrunRequest struct {
+	Accounts []Account   `json:"accounts"`
+	Apps     []DryrunApp `json:"apps"`
+
+	// LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.
+	LatestTimestamp uint64 `json:"latest-timestamp"`
+
+	// ProtocolVersion specifies a specific version string to operate under, otherwise whatever the current protocol of the network this algod is running in.
+	ProtocolVersion string `json:"protocol-version"`
+
+	// Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.
+	Round   uint64            `json:"round"`
+	Sources []DryrunSource    `json:"sources"`
+	Txns    []json.RawMessage `json:"txns"`
+}
+
+// DryrunSource defines model for DryrunSource.
+type DryrunSource struct {
+	AppIndex uint64 `json:"app-index"`
+
+	// FieldName is what kind of sources this is. If lsig then it goes into the transactions[this.TxnIndex].LogicSig. If approv or clearp it goes into the Approval Program or Clear State Program of application[this.AppIndex].
+	FieldName string `json:"field-name"`
+	Source    string `json:"source"`
+	TxnIndex  uint64 `json:"txn-index"`
+}
+
+// DryrunState defines model for DryrunState.
+type DryrunState struct {
+
+	// Evaluation error if any
+	Error *string `json:"error,omitempty"`
+
+	// Line number
+	Line uint64 `json:"line"`
+
+	// Program counter
+	Pc      uint64       `json:"pc"`
+	Scratch *[]TealValue `json:"scratch,omitempty"`
+	Stack   []TealValue  `json:"stack"`
+}
+
+// DryrunTxnResult defines model for DryrunTxnResult.
+type DryrunTxnResult struct {
+	AppCallMessages *[]string      `json:"app-call-messages,omitempty"`
+	AppCallTrace    *[]DryrunState `json:"app-call-trace,omitempty"`
+
+	// Disassembled program line by line.
+	Disassembly []string `json:"disassembly"`
+
+	// Application state delta.
+	GlobalDelta      *StateDelta          `json:"global-delta,omitempty"`
+	LocalDeltas      *[]AccountStateDelta `json:"local-deltas,omitempty"`
+	LogicSigMessages *[]string            `json:"logic-sig-messages,omitempty"`
+	LogicSigTrace    *[]DryrunState       `json:"logic-sig-trace,omitempty"`
+}
+
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	Data    *string `json:"data,omitempty"`
 	Message string  `json:"message"`
 }
+
+// EvalDelta defines model for EvalDelta.
+type EvalDelta struct {
+
+	// \[at\] delta action.
+	Action uint64 `json:"action"`
+
+	// \[bs\] bytes value.
+	Bytes *string `json:"bytes,omitempty"`
+
+	// \[ui\] uint value.
+	Uint *uint64 `json:"uint,omitempty"`
+}
+
+// EvalDeltaKeyValue defines model for EvalDeltaKeyValue.
+type EvalDeltaKeyValue struct {
+	Key string `json:"key"`
+
+	// Represents a TEAL value delta.
+	Value EvalDelta `json:"value"`
+}
+
+// StateDelta defines model for StateDelta.
+type StateDelta []EvalDeltaKeyValue
 
 // TealKeyValue defines model for TealKeyValue.
 type TealKeyValue struct {
@@ -361,6 +460,12 @@ type CatchpointStartResponse struct {
 
 	// Catchup start response string
 	CatchupMessage string `json:"catchup-message"`
+}
+
+// DryrunResponse defines model for DryrunResponse.
+type DryrunResponse struct {
+	Error string            `json:"error"`
+	Txns  []DryrunTxnResult `json:"txns"`
 }
 
 // NodeStatusResponse defines model for NodeStatusResponse.
