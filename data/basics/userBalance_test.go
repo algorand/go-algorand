@@ -101,6 +101,10 @@ func makeString(len int) string {
 func TestEncodedAccountDataSize(t *testing.T) {
 	oneTimeSecrets := crypto.GenerateOneTimeSignatureSecrets(0, 1)
 	vrfSecrets := crypto.GenerateVRFSecrets()
+	maxStateSchema := StateSchema{
+		NumUint:      0x1234123412341234,
+		NumByteSlice: 0x1234123412341234,
+	}
 	ad := AccountData{
 		Status:             NotParticipating,
 		MicroAlgos:         MicroAlgos{},
@@ -113,9 +117,14 @@ func TestEncodedAccountDataSize(t *testing.T) {
 		VoteKeyDilution:    0x1234123412341234,
 		AssetParams:        make(map[AssetIndex]AssetParams),
 		Assets:             make(map[AssetIndex]AssetHolding),
+		AppLocalStates:     make(map[AppIndex]AppLocalState),
+		AppParams:          make(map[AppIndex]AppParams),
+		TotalAppSchema:     maxStateSchema,
 		AuthAddr:           Address(crypto.Hash([]byte{1, 2, 3, 4})),
 	}
-	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	// TODO after applications enabled: change back to protocol.ConsensusCurrentVersion
+	currentConsensusParams := config.Consensus[protocol.ConsensusFuture]
 
 	for assetCreatorAssets := 0; assetCreatorAssets < currentConsensusParams.MaxAssetsPerAccount; assetCreatorAssets++ {
 		ap := AssetParams{
@@ -140,6 +149,49 @@ func TestEncodedAccountDataSize(t *testing.T) {
 			Frozen: true,
 		}
 		ad.Assets[AssetIndex(0x1234123412341234-assetHolderAssets)] = ah
+	}
+
+	maxProg := []byte(makeString(currentConsensusParams.MaxAppProgramLen))
+	maxGlobalState := make(TealKeyValue, currentConsensusParams.MaxGlobalSchemaEntries)
+	maxLocalState := make(TealKeyValue, currentConsensusParams.MaxLocalSchemaEntries)
+	maxValue := TealValue{
+		Type:  TealBytesType,
+		Bytes: makeString(currentConsensusParams.MaxAppBytesValueLen),
+	}
+
+	for globalKey := uint64(0); globalKey < currentConsensusParams.MaxGlobalSchemaEntries; globalKey++ {
+		prefix := fmt.Sprintf("%d|", globalKey)
+		padding := makeString(currentConsensusParams.MaxAppKeyLen - len(prefix))
+		maxKey := prefix + padding
+		maxGlobalState[maxKey] = maxValue
+	}
+
+	for localKey := uint64(0); localKey < currentConsensusParams.MaxLocalSchemaEntries; localKey++ {
+		prefix := fmt.Sprintf("%d|", localKey)
+		padding := makeString(currentConsensusParams.MaxAppKeyLen - len(prefix))
+		maxKey := prefix + padding
+		maxLocalState[maxKey] = maxValue
+	}
+
+	for appCreatorApps := 0; appCreatorApps < currentConsensusParams.MaxAppsCreated; appCreatorApps++ {
+		ap := AppParams{
+			ApprovalProgram:   maxProg,
+			ClearStateProgram: maxProg,
+			GlobalState:       maxGlobalState,
+			StateSchemas: StateSchemas{
+				LocalStateSchema:  maxStateSchema,
+				GlobalStateSchema: maxStateSchema,
+			},
+		}
+		ad.AppParams[AppIndex(0x1234123412341234-appCreatorApps)] = ap
+	}
+
+	for appHolderApps := 0; appHolderApps < currentConsensusParams.MaxAppsOptedIn; appHolderApps++ {
+		ls := AppLocalState{
+			KeyValue: maxLocalState,
+			Schema:   maxStateSchema,
+		}
+		ad.AppLocalStates[AppIndex(0x1234123412341234-appHolderApps)] = ls
 	}
 
 	encoded, err := ad.MarshalMsg(nil)
