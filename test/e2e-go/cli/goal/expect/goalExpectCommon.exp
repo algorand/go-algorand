@@ -89,7 +89,7 @@ proc ::AlgorandGoal::StartNode { TEST_ALGO_DIR {SYSTEMD_MANAGED "False"} {PEER_A
 # Stop the node
 proc ::AlgorandGoal::StopNode { TEST_ALGO_DIR {SYSTEMD_MANAGED ""} } {
     set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
-    set timeout 5
+    set timeout 15
 
     if { [catch {
         puts "node stop with $TEST_ALGO_DIR"
