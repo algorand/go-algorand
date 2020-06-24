@@ -294,30 +294,39 @@ func (tk TealKeyValue) Clone() TealKeyValue {
 	return res
 }
 
+// ToStateSchema calculates the number of each value type in a TealKeyValue and
+// reprsents the result as a StateSchema
+func (tk TealKeyValue) ToStateSchema() (schema StateSchema, err error) {
+	for _, value := range tk {
+		switch value.Type {
+		case TealBytesType:
+			schema.NumByteSlice++
+		case TealUintType:
+			schema.NumUint++
+		default:
+			err = fmt.Errorf("unknown type %v", value.Type)
+			return StateSchema{}, err
+		}
+	}
+	return schema, nil
+}
+
 // SatisfiesSchema returns an error indicating whether or not a particular
 // TealKeyValue store meets the requirements set by a StateSchema on how
 // many values of each type are allowed
 func (tk TealKeyValue) SatisfiesSchema(schema StateSchema) error {
-	// Count all of the types in the key/value store
-	var uintCount, bytesCount uint64
-	for _, value := range tk {
-		switch value.Type {
-		case TealBytesType:
-			bytesCount++
-		case TealUintType:
-			uintCount++
-		default:
-			// Shouldn't happen
-			return fmt.Errorf("unknown type %v", value.Type)
-		}
+	calc, err := tk.ToStateSchema()
+	if err != nil {
+		return err
 	}
 
 	// Check against the schema
-	if uintCount > schema.NumUint {
-		return fmt.Errorf("store integer count %d exceeds schema integer count %d", uintCount, schema.NumUint)
+	if calc.NumUint > schema.NumUint {
+		return fmt.Errorf("store integer count %d exceeds schema integer count %d", calc.NumUint, schema.NumUint)
 	}
-	if bytesCount > schema.NumByteSlice {
-		return fmt.Errorf("store bytes count %d exceeds schema bytes count %d", bytesCount, schema.NumByteSlice)
+	if calc.NumByteSlice > schema.NumByteSlice {
+		return fmt.Errorf("store bytes count %d exceeds schema bytes count %d", calc.NumByteSlice, schema.NumByteSlice)
 	}
+
 	return nil
 }

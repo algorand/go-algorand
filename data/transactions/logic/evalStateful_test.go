@@ -171,6 +171,20 @@ func (l *testLedger) ApplicationID() basics.AppIndex {
 	return basics.AppIndex(l.appID)
 }
 
+func (l *testLedger) LocalSchema() basics.StateSchema {
+	return basics.StateSchema{
+		NumUint:      100,
+		NumByteSlice: 100,
+	}
+}
+
+func (l *testLedger) GlobalSchema() basics.StateSchema {
+	return basics.StateSchema{
+		NumUint:      100,
+		NumByteSlice: 100,
+	}
+}
+
 func TestEvalModes(t *testing.T) {
 	t.Parallel()
 	// ed25519verify and err are tested separately below

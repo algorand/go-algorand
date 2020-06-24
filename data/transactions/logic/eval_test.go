@@ -48,7 +48,12 @@ func defaultEvalProtoV1() config.ConsensusParams {
 }
 
 func defaultEvalProtoWithVersion(version uint64) config.ConsensusParams {
-	return config.ConsensusParams{LogicSigVersion: version, LogicSigMaxCost: 20000}
+	return config.ConsensusParams{
+		LogicSigVersion:     version,
+		LogicSigMaxCost:     20000,
+		MaxAppKeyLen:        64,
+		MaxAppBytesValueLen: 64,
+	}
 }
 
 func defaultEvalParamsV1(sb *strings.Builder, txn *transactions.SignedTxn) EvalParams {
