@@ -1,6 +1,2 @@
 #!/usr/bin/env bash
-if go version > /dev/null 2>&1 ; then
-   go version | awk '{print $3}' | sed 's/go//'
-else
-   echo ""
-fi
+go version 2>&1 | awk 'BEGIN {v=""}; /^go version go[0-9]+\.[0-9]+(\.[0-9]+)?[ \t]*.*$/{v=$3}; END {print(v)}' | sed 's/go//'
