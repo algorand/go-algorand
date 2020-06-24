@@ -10,12 +10,11 @@ function installGo() {
     echo "Ensure Go version ${GO_VERSION} for platform ${OS_ARCH}"
     if [[ "${INSTALLED_GO_VERSION}" != "${GO_VERSION}" ]]; then
         echo "Installing go version ${GO_VERSION} to replace ${INSTALLED_GO_VERSION}"
-        if [[ "${OS_ARCH}" = "linux-arm64" || "${OS_ARCH}" = "linux-armv6l" ]]; then
-            sudo apt-get update -y
-            sudo apt-get -y install gimme
+        if [[ "${OS_ARCH}" == "linux-arm64" || "${OS_ARCH}" == "linux-armv6l" ]]; then
+            sudo apt install ruby ruby-dev
+            sudo gem install travis
         fi
-        eval "$(gimme ${GO_VERSION})"
-        if [[ "$?" != "0" ]]; then
+        if eval "$(gimme "${GO_VERSION}")"; then
             echo "Failed to download go"
             exit 1
         fi
@@ -26,22 +25,22 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 OS=$("${SCRIPTPATH}/../ostype.sh")
 ARCH=$("${SCRIPTPATH}/../archtype.sh")
 
-if [[ "${OS}" = "linux" ]]; then
-    if [[ "${ARCH}" = "arm64" ]]; then
+if [[ "${OS}" == "linux" ]]; then
+    if [[ "${ARCH}" == "arm64" ]]; then
         installGo "linux-arm64"
         set -e
         sudo apt-get update -y
         sudo apt-get -y install sqlite3 python3-venv libffi-dev libssl-dev
-    elif [[ "${ARCH}" = "arm" ]]; then
+    elif [[ "${ARCH}" == "arm" ]]; then
         sudo sh -c 'echo "CONF_SWAPSIZE=1024" > /etc/dphys-swapfile; dphys-swapfile setup; dphys-swapfile swapon'
         installGo "linux-armv6l"
         set -e
         sudo apt-get update -y
         sudo apt-get -y install sqlite3
-    elif [[ "${ARCH}" = "amd64" ]]; then
+    elif [[ "${ARCH}" == "amd64" ]]; then
         installGo "linux-amd64"
     fi
-elif [[ "${OS}" = "darwin" ]]; then
+elif [[ "${OS}" == "darwin" ]]; then
     installGo "darwin-amd64"
     # we don't want to upgrade boost if we already have it, as it will try to update
     # other components.
