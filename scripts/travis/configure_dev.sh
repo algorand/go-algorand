@@ -10,6 +10,10 @@ function installGo() {
     echo "Ensure Go version ${GO_VERSION} for platform ${OS_ARCH}"
     if [[ "${INSTALLED_GO_VERSION}" != "${GO_VERSION}" ]]; then
         echo "Installing go version ${GO_VERSION} to replace ${INSTALLED_GO_VERSION}"
+        if [[ "${OS_ARCH}" = "linux-arm64" || "${OS_ARCH}" = "linux-armv6l" ]]; then
+            sudo apt-get update -y
+            sudo apt-get -y install gimme
+        fi
         eval "$(gimme ${GO_VERSION})"
         if [[ "$?" != "0" ]]; then
             echo "Failed to download go"
