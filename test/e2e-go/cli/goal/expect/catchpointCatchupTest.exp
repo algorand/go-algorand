@@ -2,6 +2,19 @@
 set err 0
 log_user 1
 
+# catchpointCatchupTest - test overview
+#
+# The goal of the test is to demonstrate the catchpoint catchup functionality using the goal command line interface.
+# It does that by deploying a single relay, which advances until it generates a catchpoint.
+# Once it does, another node is started, and instructred to catchup using the catchpoint from the first relay.
+# To make sure that the second node won't be using the "regular" catchup, we tunnel all the communication between the two using a proxy.
+# The proxy is responsible to filter out block number 2. This would prevent the "regular" catchup from working,
+# and would be a good test ground for the catchpoint catchup.
+#
+# The second test is a variation of the first one, but we also stop the node that is catching up in the middle of it's catchup process.
+# That allows us to verify that the node persist it's catchpoint catchup mode correctly.
+#
+
 proc spawnCatchpointCatchupWebProxy { TARGET_ENDPOINT RUNTIME REQUEST_DELAY } {
     upvar WP_SPAWN_ID WP_SPAWN_ID
     set WEBPROXY_LISTEN_ADDRESS ""
