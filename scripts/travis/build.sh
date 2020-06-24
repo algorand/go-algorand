@@ -35,7 +35,7 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 OS=$("${SCRIPTPATH}/../ostype.sh")
 ARCH=$("${SCRIPTPATH}/../archtype.sh")
 
-eval $(./gimme $("${SCRIPTPATH}/../get_golang_version.sh"))
+eval $("${SCRIPTPATH}"/gimme $("${SCRIPTPATH}/../get_golang_version.sh"))
 
 # travis sometimes fail to download a dependency. trying multiple times might help.
 for (( attempt=1; attempt<=5; attempt++ ))
