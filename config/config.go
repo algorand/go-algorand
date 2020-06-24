@@ -288,6 +288,10 @@ type Local struct {
 	// EnableBlockService enables the block serving service. The functionality of this depends on NetAddress, which must also be provided.
 	// This functionality is required for the catchup.
 	EnableBlockService bool
+
+	// EnableGossipBlockService enables the block serving service over the gossip network. The functionality of this depends on NetAddress, which must also be provided.
+	// This functionality is required for the relays to perform catchup from nodes.
+	EnableGossipBlockService bool
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

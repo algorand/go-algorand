@@ -307,9 +307,13 @@ func (n Network) GetPeerAddresses(binDir string) []string {
 	for _, relayDir := range n.cfg.RelayDirs {
 		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(relayDir))
 		relayAddress, err := nc.GetListeningAddress()
-		if err == nil {
-			peerAddresses = append(peerAddresses, relayAddress)
+		if err != nil {
+			continue
 		}
+		if strings.HasPrefix(relayAddress, "http://") {
+			relayAddress = relayAddress[7:]
+		}
+		peerAddresses = append(peerAddresses, relayAddress)
 	}
 	return peerAddresses
 }
@@ -336,7 +340,6 @@ func (n Network) StartNode(binDir, nodeDir string, redirectOutput bool) (err err
 	controller := nodecontrol.MakeNodeController(binDir, nodeDir)
 	peers := n.GetPeerAddresses(binDir)
 	peerAddresses := strings.Join(peers, ";")
-
 	_, err = controller.StartAlgod(nodecontrol.AlgodStartArgs{
 		PeerAddress:    peerAddresses,
 		RedirectOutput: redirectOutput,
