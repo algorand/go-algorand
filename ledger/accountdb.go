@@ -122,8 +122,8 @@ const (
 	catchpointStateCatchupBalancesRound = catchpointState("catchpointCatchupBalancesRound")
 )
 
-func writeCatchpointStagingAssets(ctx context.Context, tx *sql.Tx, addr basics.Address, assetIdx basics.AssetIndex) error {
-	_, err := tx.ExecContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator) VALUES(?, ?)", assetIdx, addr[:])
+func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) error {
+	_, err := tx.ExecContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)", cidx, addr[:], ctype)
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 	s += "DROP TABLE IF EXISTS catchpointaccounthashes;"
 	s += "DELETE FROM accounttotals where id='catchpointStaging';"
 	if newCatchup {
-		s += "CREATE TABLE IF NOT EXISTS catchpointassetcreators(asset integer primary key, creator blob);"
+		s += "CREATE TABLE IF NOT EXISTS catchpointassetcreators(asset integer primary key, creator blob, ctype integer);"
 		s += "CREATE TABLE IF NOT EXISTS catchpointbalances(address blob primary key, data blob);"
 		s += "CREATE TABLE IF NOT EXISTS catchpointaccounthashes(id integer primary key, data blob);"
 	}
@@ -179,6 +179,13 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 	s += "DROP TABLE IF EXISTS accountbase_old;"
 	s += "DROP TABLE IF EXISTS assetcreators_old;"
 	s += "DROP TABLE IF EXISTS accounthashes_old;"
+	s += "DROP INDEX IF EXISTS assetcreators_ctype_idx;"
+
+	// If recreating this index is too slow, we should create it at the same
+	// time as catchpointassetcreators. Unfortunately there doesn't seem to
+	// be an easy way to rename indexes and do the '_old' swap like above...
+	s += "CREATE INDEX assetcreators_ctype_idx ON assetcreators (asset, ctype);"
+
 	_, err = tx.Exec(s)
 	if err != nil {
 		return err
