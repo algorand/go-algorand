@@ -578,6 +578,70 @@ func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.Ge
 	return v2.getPendingTransactions(ctx, params.Max, params.Format, nil)
 }
 
+// GetApplicationByID returns application information by app idx.
+// (GET /v2/applications/{application-id})
+func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) error {
+	appIdx := basics.AppIndex(applicationID)
+	ledger := v2.Node.Ledger()
+	creator, ok, err := ledger.GetAppCreator(appIdx)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+	if !ok {
+		return notFound(ctx, errors.New(errAppDoesNotExist), errAppDoesNotExist, v2.Log)
+	}
+
+	lastRound := ledger.Latest()
+	record, err := ledger.Lookup(lastRound, creator)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	appParams, ok := record.AppParams[appIdx]
+	if !ok {
+		return notFound(ctx, errors.New(errAppDoesNotExist), errAppDoesNotExist, v2.Log)
+	}
+	appInfo := generated.ApplicationInformation{
+		Creator:     creator.String(),
+		Application: AppParamsToApplication(appIdx, &appParams),
+	}
+
+	response := generated.ApplicationResponse(appInfo)
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// GetAssetByID returns application information by app idx.
+// (GET /v2/asset/{asset-id})
+func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
+	assetIdx := basics.AssetIndex(assetID)
+	ledger := v2.Node.Ledger()
+	creator, ok, err := ledger.GetAssetCreator(assetIdx)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+	if !ok {
+		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
+	}
+
+	lastRound := ledger.Latest()
+	record, err := ledger.Lookup(lastRound, creator)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	assetParams, ok := record.AssetParams[assetIdx]
+	if !ok {
+		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
+	}
+
+	assetInfo := generated.AssetInformation{
+		Creator: creator.String(),
+		Asset:   AssetParamsToAsset(creator.String(), assetIdx, &assetParams),
+	}
+	response := generated.AssetResponse(assetInfo)
+	return ctx.JSON(http.StatusOK, response)
+}
+
 // GetPendingTransactionsByAddress takes an Algorand address and returns its associated list of unconfirmed transactions currently in the transaction pool.
 // (GET /v2/accounts/{address}/transactions/pending)
 func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr string, params generated.GetPendingTransactionsByAddressParams) error {

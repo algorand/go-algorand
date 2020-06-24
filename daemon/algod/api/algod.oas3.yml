@@ -232,6 +232,26 @@
         },
         "description": "(empty)"
       },
+      "ApplicationResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApplicationInformation"
+            }
+          }
+        },
+        "description": "Application information"
+      },
+      "AssetResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AssetInformation"
+            }
+          }
+        },
+        "description": "Asset information"
+      },
       "BlockResponse": {
         "content": {
           "application/json": {
@@ -772,6 +792,24 @@
         ],
         "type": "object"
       },
+      "ApplicationInformation": {
+        "description": "Information about the application including creator",
+        "properties": {
+          "application": {
+            "$ref": "#/components/schemas/Application"
+          },
+          "creator": {
+            "description": "Application creator",
+            "type": "string",
+            "x-algorand-format": "Address"
+          }
+        },
+        "required": [
+          "application",
+          "creator"
+        ],
+        "type": "object"
+      },
       "ApplicationLocalState": {
         "description": "Stores local state associated with an application.",
         "properties": {
@@ -897,6 +935,24 @@
           "asset-id",
           "creator",
           "is-frozen"
+        ],
+        "type": "object"
+      },
+      "AssetInformation": {
+        "description": "Information about the asset including creator",
+        "properties": {
+          "asset": {
+            "$ref": "#/components/schemas/Asset"
+          },
+          "creator": {
+            "description": "Asset creator",
+            "type": "string",
+            "x-algorand-format": "Address"
+          }
+        },
+        "required": [
+          "asset",
+          "creator"
         ],
         "type": "object"
       },
@@ -1617,6 +1673,154 @@
           }
         },
         "summary": "Get a list of unconfirmed transactions currently in the transaction pool by address."
+      }
+    },
+    "/v2/applications/{application-id}": {
+      "get": {
+        "description": "Given a application id, it returns application information including creator, approval and clear programs, global and local schemas, and global state.",
+        "operationId": "GetApplicationByID",
+        "parameters": [
+          {
+            "description": "An application identifier",
+            "in": "path",
+            "name": "application-id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationInformation"
+                }
+              }
+            },
+            "description": "Application information"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Application Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get application information."
+      }
+    },
+    "/v2/assets/{asset-id}": {
+      "get": {
+        "description": "Given a asset id, it returns asset information including creator, name, total supply and special addresses.",
+        "operationId": "GetAssetByID",
+        "parameters": [
+          {
+            "description": "An asset identifier",
+            "in": "path",
+            "name": "asset-id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetInformation"
+                }
+              }
+            },
+            "description": "Asset information"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Application Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get asset information."
       }
     },
     "/v2/blocks/{round}": {
@@ -2434,11 +2638,26 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "txns": {
+                      "items": {
+                        "$ref": "#/components/schemas/DryrunTxnResult"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "txns"
+                  ],
                   "type": "object"
                 }
               }
             },
-            "description": "debugging json"
+            "description": "DryrunResponse contains per-txn debug information from a dryrun."
           },
           "400": {
             "content": {

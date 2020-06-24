@@ -111,6 +111,16 @@ type Application struct {
 	AppParams ApplicationParams `json:"app-params"`
 }
 
+// ApplicationInformation defines model for ApplicationInformation.
+type ApplicationInformation struct {
+
+	// Application index and its parameters
+	Application Application `json:"application"`
+
+	// Application creator
+	Creator string `json:"creator"`
+}
+
 // ApplicationLocalState defines model for ApplicationLocalState.
 type ApplicationLocalState struct {
 
@@ -187,6 +197,16 @@ type AssetHolding struct {
 
 	// \[f\] whether or not the holding is frozen.
 	IsFrozen bool `json:"is-frozen"`
+}
+
+// AssetInformation defines model for AssetInformation.
+type AssetInformation struct {
+
+	// Specifies both the unique identifier and the parameters for an asset
+	Asset Asset `json:"asset"`
+
+	// Asset creator
+	Creator string `json:"creator"`
 }
 
 // AssetParams defines model for AssetParams.
@@ -437,6 +457,12 @@ type TxType string
 
 // AccountResponse defines model for AccountResponse.
 type AccountResponse Account
+
+// ApplicationResponse defines model for ApplicationResponse.
+type ApplicationResponse ApplicationInformation
+
+// AssetResponse defines model for AssetResponse.
+type AssetResponse AssetInformation
 
 // BlockResponse defines model for BlockResponse.
 type BlockResponse struct {

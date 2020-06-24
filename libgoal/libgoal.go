@@ -682,8 +682,17 @@ func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error)
 	return
 }
 
+// AssetInformationV2 takes an asset's index and returns its information
+func (c *Client) AssetInformationV2(index uint64) (resp generatedV2.AssetInformation, err error) {
+	algod, err := c.ensureAlgodClient()
+	if err == nil {
+		resp, err = algod.AssetInformationV2(index)
+	}
+	return
+}
+
 // ApplicationInformation takes an app's index and returns its information
-func (c *Client) ApplicationInformation(index uint64) (resp v1.AppParams, err error) {
+func (c *Client) ApplicationInformation(index uint64) (resp generatedV2.ApplicationInformation, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.ApplicationInformation(index)
@@ -963,12 +972,12 @@ func MakeDryrunState(client Client, txnOrStxn interface{}, other []transactions.
 				appIdx = defaultAppIdx
 			} else {
 				// otherwise need to fetch app state
-				var params v1.AppParams
-				if params, err = client.ApplicationInformation(uint64(tx.ApplicationID)); err != nil {
+				var appInfo generatedV2.ApplicationInformation
+				if appInfo, err = client.ApplicationInformation(uint64(tx.ApplicationID)); err != nil {
 					return
 				}
-				appParams = convertAppParams(&params)
-				creator = params.Creator
+				creator = appInfo.Creator
+				appParams = appInfo.Application.AppParams
 			}
 			dr.Apps = append(dr.Apps, generatedV2.DryrunApp{
 				Creator:  creator,

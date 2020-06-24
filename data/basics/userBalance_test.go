@@ -144,7 +144,7 @@ func TestEncodedAccountDataSize(t *testing.T) {
 
 	encoded, err := ad.MarshalMsg(nil)
 	require.NoError(t, err)
-	require.Equal(t, MaxEncodedAccountDataSize, len(encoded))
+	require.GreaterOrEqual(t, MaxEncodedAccountDataSize, len(encoded))
 }
 
 func TestEncodedAccountAllocationBounds(t *testing.T) {

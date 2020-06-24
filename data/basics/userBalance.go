@@ -38,7 +38,7 @@ const (
 
 	// MaxEncodedAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
 	// this number is verified by the TestEncodedAccountDataSize function.
-	MaxEncodedAccountDataSize = 324205
+	MaxEncodedAccountDataSize = 750000
 
 	// encodedMaxAssetsPerAccount is the decoder limit of number of assets stored per account.
 	// it's being verified by the unit test TestEncodedAccountAllocationBounds to align
@@ -217,9 +217,17 @@ type AppParams struct {
 
 	ApprovalProgram   []byte       `codec:"approv,allocbound=config.MaxAppProgramLen"`
 	ClearStateProgram []byte       `codec:"clearp,allocbound=config.MaxAppProgramLen"`
-	LocalStateSchema  StateSchema  `codec:"lsch"`
-	GlobalStateSchema StateSchema  `codec:"gsch"`
 	GlobalState       TealKeyValue `codec:"gs"`
+	StateSchemas
+}
+
+// StateSchemas is a thin wrapper around the LocalStateSchema and the
+// GlobalStateSchema, since they are often needed together
+type StateSchemas struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	LocalStateSchema  StateSchema `codec:"lsch"`
+	GlobalStateSchema StateSchema `codec:"gsch"`
 }
 
 // Clone returns a copy of some AppParams that may be modified without

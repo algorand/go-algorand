@@ -718,6 +718,130 @@
         }
       ]
     },
+    "/v2/applications/{application-id}": {
+      "get": {
+        "description": "Given a application id, it returns application information including creator, approval and clear programs, global and local schemas, and global state.",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get application information.",
+        "operationId": "GetApplicationByID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "An application identifier",
+            "name": "application-id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/ApplicationResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Application Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "integer",
+          "name": "application-id",
+          "in": "path",
+          "required": true
+      }
+      ]
+    },
+    "/v2/assets/{asset-id}": {
+      "get": {
+        "description": "Given a asset id, it returns asset information including creator, name, total supply and special addresses.",
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Get asset information.",
+        "operationId": "GetAssetByID",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "An asset identifier",
+            "name": "asset-id",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/AssetResponse"
+          },
+          "400": {
+            "description": "Bad Request",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "401": {
+            "description": "Invalid API Token",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "404": {
+            "description": "Application Not Found",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "500": {
+            "description": "Internal Error",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "type": "integer",
+          "name": "asset-id",
+          "in": "path",
+          "required": true
+      }
+      ]
+    },
     "/v2/teal/compile": {
       "post": {
         "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style).",
@@ -897,8 +1021,7 @@
         ],
         "responses": {
           "200": {
-            "description": "debugging json",
-            "schema": { "type": "object" }
+            "$ref": "#/responses/DryrunResponse"
           },
           "400": {
             "description": "Bad Request",
@@ -1639,6 +1762,44 @@
           "x-algorand-format": "uint64"
         }
       }
+    },
+    "ApplicationInformation": {
+      "description": "Information about the application including creator",
+      "type": "object",
+      "required": [
+        "creator",
+        "application"
+      ],
+      "properties": {
+        "creator": {
+          "description": "Application creator",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "application": {
+          "description": "Application information",
+          "$ref": "#/definitions/Application"
+        }
+      }
+    },
+    "AssetInformation": {
+      "description": "Information about the asset including creator",
+      "type": "object",
+      "required": [
+        "creator",
+        "asset"
+      ],
+      "properties": {
+        "creator": {
+          "description": "Asset creator",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
+        "asset": {
+          "description": "Asset information",
+          "$ref": "#/definitions/Asset"
+        }
+      }
     }
   },
   "parameters": {
@@ -2104,6 +2265,18 @@
           }
         },
         "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+      }
+    },
+    "ApplicationResponse": {
+      "description": "Application information",
+      "schema": {
+        "$ref": "#/definitions/ApplicationInformation"
+      }
+    },
+    "AssetResponse": {
+      "description": "Asset information",
+      "schema": {
+        "$ref": "#/definitions/AssetInformation"
       }
     },
     "PostCompileResponse": {

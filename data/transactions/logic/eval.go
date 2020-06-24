@@ -108,6 +108,8 @@ type LedgerForLogic interface {
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error)
 	ApplicationID() basics.AppIndex
+	LocalSchema() basics.StateSchema
+	GlobalSchema() basics.StateSchema
 }
 
 // EvalParams contains data that comes into condition evaluation.
@@ -1757,7 +1759,10 @@ func (cx *evalContext) getLocalStateCow(accountIdx uint64) (*keyValueCow, error)
 		}
 
 		localDelta := make(basics.StateDelta)
-		kvCow := makeKeyValueCow(localKV, localDelta)
+		kvCow, err := makeKeyValueCow(localKV, localDelta, cx.Ledger.LocalSchema(), cx.Proto)
+		if err != nil {
+			return nil, err
+		}
 		idxCow = &indexedCow{accountIdx, kvCow}
 		cx.localStateCows[addr] = idxCow
 	}
@@ -1792,8 +1797,7 @@ func (cx *evalContext) appWriteLocalKey(accountIdx uint64, key string, tv basics
 	if err != nil {
 		return err
 	}
-	kvCow.write(key, tv)
-	return nil
+	return kvCow.write(key, tv)
 }
 
 // appDeleteLocalKey deletes a value from the key/value cow
@@ -1802,8 +1806,7 @@ func (cx *evalContext) appDeleteLocalKey(accountIdx uint64, key string) error {
 	if err != nil {
 		return err
 	}
-	kvCow.del(key)
-	return nil
+	return kvCow.del(key)
 }
 
 func (cx *evalContext) getReadOnlyGlobalState(appID uint64) (basics.TealKeyValue, error) {
@@ -1825,7 +1828,10 @@ func (cx *evalContext) getGlobalStateCow() (*keyValueCow, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch global state: %v", err)
 		}
-		cx.globalStateCow = makeKeyValueCow(globalKV, cx.appEvalDelta.GlobalDelta)
+		cx.globalStateCow, err = makeKeyValueCow(globalKV, cx.appEvalDelta.GlobalDelta, cx.Ledger.GlobalSchema(), cx.Proto)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return cx.globalStateCow, nil
 }
@@ -1858,8 +1864,7 @@ func (cx *evalContext) appWriteGlobalKey(key string, tv basics.TealValue) error 
 	if err != nil {
 		return err
 	}
-	kvCow.write(key, tv)
-	return nil
+	return kvCow.write(key, tv)
 }
 
 // appDeleteGlobalKey deletes a value from the cache and adds it to StateDelta
@@ -1868,8 +1873,7 @@ func (cx *evalContext) appDeleteGlobalKey(key string) error {
 	if err != nil {
 		return err
 	}
-	kvCow.del(key)
-	return nil
+	return kvCow.del(key)
 }
 
 func opAppGetLocalState(cx *evalContext) {

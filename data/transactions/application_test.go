@@ -235,7 +235,7 @@ func (e *testEvaluator) Check(program []byte) (cost int, err error) {
 	return len(program), nil
 }
 
-func (e *testEvaluator) InitLedger(balances Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex) error {
+func (e *testEvaluator) InitLedger(balances Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, schemas basics.StateSchemas) error {
 	e.appIdx = appIdx
 	e.acctWhitelist = acctWhitelist
 	e.appGlobalWhitelist = appGlobalWhitelist
@@ -1108,8 +1108,10 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 		OnCompletion:  CloseOutOC,
 	}
 	params := basics.AppParams{
-		ApprovalProgram:   []byte{1},
-		GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		ApprovalProgram: []byte{1},
+		StateSchemas: basics.StateSchemas{
+			GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		},
 	}
 	h := Header{
 		Sender: sender,
@@ -1190,8 +1192,10 @@ func TestAppCallApplyUpdate(t *testing.T) {
 		ClearStateProgram: []byte{3},
 	}
 	params := basics.AppParams{
-		ApprovalProgram:   []byte{1},
-		GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		ApprovalProgram: []byte{1},
+		StateSchemas: basics.StateSchemas{
+			GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		},
 	}
 	h := Header{
 		Sender: sender,
@@ -1252,8 +1256,10 @@ func TestAppCallApplyDelete(t *testing.T) {
 		OnCompletion:  DeleteApplicationOC,
 	}
 	params := basics.AppParams{
-		ApprovalProgram:   []byte{1},
-		GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		ApprovalProgram: []byte{1},
+		StateSchemas: basics.StateSchemas{
+			GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		},
 	}
 	h := Header{
 		Sender: sender,

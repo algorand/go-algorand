@@ -461,8 +461,10 @@ func (ac *ApplicationCallTxnFields) createApplication(
 	record.AppParams[appIdx] = basics.AppParams{
 		ApprovalProgram:   ac.ApprovalProgram,
 		ClearStateProgram: ac.ClearStateProgram,
-		LocalStateSchema:  ac.LocalStateSchema,
-		GlobalStateSchema: ac.GlobalStateSchema,
+		StateSchemas: basics.StateSchemas{
+			LocalStateSchema:  ac.LocalStateSchema,
+			GlobalStateSchema: ac.GlobalStateSchema,
+		},
 	}
 
 	// Update the cached TotalStateSchema for this account, used
@@ -618,6 +620,12 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 		}
 	}
 
+	// Fetch the application parameters, if they exist
+	params, creator, exists, err := getAppParams(balances, appIdx)
+	if err != nil {
+		return err
+	}
+
 	// Initialize our TEAL evaluation context. Internally, this manages
 	// access to balance records for Stateful TEAL programs. Stateful TEAL
 	// may only access
@@ -626,9 +634,13 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 	// - The app creator's balance record (to read/write GlobalState)
 	// - The balance records of creators of apps in ac.ForeignApps (to read
 	//   GlobalState)
+	// Note that at this point in execution, the application might not exist
+	// (e.g. if it was deleted). In that case, we will pass empty
+	// params.StateSchemas below. This is OK because if the application is
+	// deleted, we will never execute its programs.
 	acctWhitelist := append(ac.Accounts, header.Sender)
 	appGlobalWhitelist := append(ac.ForeignApps, appIdx)
-	err = steva.InitLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx)
+	err = steva.InitLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, params.StateSchemas)
 	if err != nil {
 		return err
 	}
@@ -648,12 +660,6 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 	// execute the ClearStateProgram, whose failures are ignored.
 	if ac.OnCompletion == ClearStateOC {
 		return ac.applyClearState(balances, header.Sender, appIdx, ad, steva)
-	}
-
-	// Fetch the application parameters, if they exist
-	params, creator, exists, err := getAppParams(balances, appIdx)
-	if err != nil {
-		return err
 	}
 
 	// Past this point, the AppParams must exist. NoOp, OptIn, CloseOut,

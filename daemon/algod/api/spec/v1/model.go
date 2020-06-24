@@ -777,15 +777,6 @@ type AssetList struct {
 	Assets []Asset `json:"assets,omitempty"`
 }
 
-// ApplicationList contains a list of applications
-// swagger:model ApplicationList
-type ApplicationList struct {
-	// Applications is a list of applications
-	//
-	// required: true
-	Applications []Application `json:"applications,omitempty"`
-}
-
 // TransactionFee contains the suggested fee
 // swagger:model TransactionFee
 type TransactionFee struct {
