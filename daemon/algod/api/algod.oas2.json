@@ -684,7 +684,7 @@
     },
     "/v2/applications/{application-id}": {
       "get": {
-        "description": "Given a application id, it returns information about it.",
+        "description": "Given a application id, it returns application information including creator, approval and clear programs, global and local schemas, and global state.",
         "produces": [
           "application/json"
         ],
