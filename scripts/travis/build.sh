@@ -35,6 +35,8 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 OS=$("${SCRIPTPATH}/../ostype.sh")
 ARCH=$("${SCRIPTPATH}/../archtype.sh")
 
+curl -sL -o ${SCRIPTPATH}/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
+chmod +x ${SCRIPTPATH}/gimme
 eval $("${SCRIPTPATH}"/gimme $("${SCRIPTPATH}/../get_golang_version.sh"))
 
 # travis sometimes fail to download a dependency. trying multiple times might help.
