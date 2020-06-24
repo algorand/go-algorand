@@ -11,7 +11,7 @@ function installGo() {
     if [[ "${INSTALLED_GO_VERSION}" != "${GO_VERSION}" ]]; then
         echo "Installing go version ${GO_VERSION} to replace ${INSTALLED_GO_VERSION}"
         if [[ "${OS_ARCH}" == "linux-arm64" || "${OS_ARCH}" == "linux-armv6l" ]]; then
-            sudo apt install ruby-dev libffi-dev make gcc
+            sudo apt -y install ruby-dev libffi-dev make gcc
             sudo gem install travis
         fi
         if eval $(gimme "${GO_VERSION}"); then
