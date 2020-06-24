@@ -14,7 +14,9 @@ function installGo() {
             sudo apt install ruby ruby-dev
             sudo gem install travis
         fi
-        if eval "$(gimme "${GO_VERSION}")"; then
+        if eval $(gimme "${GO_VERSION}"); then
+            go version
+        else
             echo "Failed to download go"
             exit 1
         fi
