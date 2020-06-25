@@ -60,8 +60,8 @@ func (wl *wrappedLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, er
 	return wl.l.BlockHdr(rnd)
 }
 
-func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block) (StateDelta, error) {
-	return wl.l.trackerEvalVerified(blk)
+func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
+	return wl.l.trackerEvalVerified(blk, accUpdatesLedger)
 }
 
 func (wl *wrappedLedger) Latest() basics.Round {
@@ -554,13 +554,13 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 	var minSave basics.Round
 	var cleanTracker ledgerTracker
 	var trackerType reflect.Type
+	wl.l.trackerMu.RLock()
+	defer wl.l.trackerMu.RUnlock()
 	for _, trk := range wl.l.trackers.trackers {
-		wl.l.trackerMu.RLock()
 		if au, ok := trk.(*accountUpdates); ok {
 			au.waitAccountsWriting()
 			minSave = trk.committedUpTo(rnd)
 			au.waitAccountsWriting()
-			wl.l.trackerMu.RUnlock()
 			if minSave < minMinSave {
 				minMinSave = minSave
 			}
@@ -575,7 +575,6 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			au.initialize(cfg, "", au.initProto, wl.l.accts.initAccounts)
 		} else {
 			minSave = trk.committedUpTo(rnd)
-			wl.l.trackerMu.RUnlock()
 			if minSave < minMinSave {
 				minMinSave = minSave
 			}
