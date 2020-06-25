@@ -857,6 +857,7 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 		return err
 	}
 	node.catchpointCatchupService.Start(node.ctx)
+	node.log.Infof("starting catching up toward catchpoint %s", catchpoint)
 	return nil
 }
 
@@ -876,63 +877,84 @@ func (node *AlgorandFullNode) AbortCatchup(catchpoint string) error {
 	return nil
 }
 
-// SetCatchpointCatchupMode change the node's operational mode from catchpoint catchup mode and back
-func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode bool) (newCtx context.Context) {
-	node.mu.Lock()
-	if catchpointCatchupMode {
-		// stop..
-		defer func() {
+// SetCatchpointCatchupMode change the node's operational mode from catchpoint catchup mode and back, it returns a
+// channel which contains the updated node context. This function need to work asyncronisly so that the caller could
+// detect and handle the usecase where the node is being shut down while we're switching to/from catchup mode without
+// deadlocking on the shared node mutex.
+func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode bool) (outCtxCh <-chan context.Context) {
+	// create a non-buffered channel to return the newly created context. The fact that it's non-buffered here
+	// is imporant, as it allows us to syncronize the "receiving" of the new context before canceling of the previous
+	// one.
+	ctxCh := make(chan context.Context)
+	outCtxCh = ctxCh
+	go func() {
+		node.mu.Lock()
+		// check that the node wasn't canceled. If it have been canceled, it means that the node.Stop() was called, in which case
+		// we should close the channel.
+		if node.ctx.Err() == context.Canceled {
+			close(ctxCh)
 			node.mu.Unlock()
-			node.waitMonitoringRoutines()
-		}()
-		node.net.ClearHandlers()
-		node.txHandler.Stop()
-		node.agreementService.Shutdown()
-		node.catchupService.Stop()
-		node.txPoolSyncerService.Stop()
-		node.blockService.Stop()
-		node.ledgerService.Stop()
-		node.wsFetcherService.Stop()
+			return
+		}
+		if catchpointCatchupMode {
+			// stop..
+			defer func() {
+				node.mu.Unlock()
+				node.waitMonitoringRoutines()
+			}()
+			node.net.ClearHandlers()
+			node.txHandler.Stop()
+			node.agreementService.Shutdown()
+			node.catchupService.Stop()
+			node.txPoolSyncerService.Stop()
+			node.blockService.Stop()
+			node.ledgerService.Stop()
+			node.wsFetcherService.Stop()
 
-		node.cancelCtx()
+			prevNodeCancelFunc := node.cancelCtx
+
+			// Set up a context we can use to cancel goroutines on Stop()
+			node.ctx, node.cancelCtx = context.WithCancel(context.Background())
+			ctxCh <- node.ctx
+
+			prevNodeCancelFunc()
+			return
+		}
+		defer node.mu.Unlock()
+		// start
+		node.transactionPool.Reset()
+		node.wsFetcherService.Start()
+		node.catchupService.Start()
+		node.agreementService.Start()
+		node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
+		node.blockService.Start()
+		node.ledgerService.Start()
+		node.txHandler.Start()
+
+		// start indexer
+		if idx, err := node.Indexer(); err == nil {
+			err := idx.Start()
+			if err != nil {
+				node.log.Errorf("indexer failed to start, turning it off - %v", err)
+				node.config.IsIndexerActive = false
+			} else {
+				node.log.Info("Indexer was started successfully")
+			}
+		} else {
+			node.log.Infof("Indexer is not available - %v", err)
+		}
 
 		// Set up a context we can use to cancel goroutines on Stop()
 		node.ctx, node.cancelCtx = context.WithCancel(context.Background())
-		return node.ctx
-	}
-	defer node.mu.Unlock()
-	// start
-	node.transactionPool.Reset()
-	node.wsFetcherService.Start()
-	node.catchupService.Start()
-	node.agreementService.Start()
-	node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
-	node.blockService.Start()
-	node.ledgerService.Start()
-	node.txHandler.Start()
 
-	// start indexer
-	if idx, err := node.Indexer(); err == nil {
-		err := idx.Start()
-		if err != nil {
-			node.log.Errorf("indexer failed to start, turning it off - %v", err)
-			node.config.IsIndexerActive = false
-		} else {
-			node.log.Info("Indexer was started successfully")
-		}
-	} else {
-		node.log.Infof("Indexer is not available - %v", err)
-	}
+		node.startMonitoringRoutines()
 
-	// Set up a context we can use to cancel goroutines on Stop()
-	node.ctx, node.cancelCtx = context.WithCancel(context.Background())
+		// at this point, the catchpoint catchup is done ( either successfully or not.. )
+		node.catchpointCatchupService = nil
 
-	node.startMonitoringRoutines()
-
-	// at this point, the catchpoint catchup is done ( either successfully or not.. )
-	node.catchpointCatchupService = nil
-
-	return node.ctx
+		ctxCh <- node.ctx
+	}()
+	return
 
 }
 

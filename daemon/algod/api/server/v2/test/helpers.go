@@ -74,10 +74,11 @@ var poolAddrResponseGolden = generatedV2.AccountResponse{
 type mockNode struct {
 	ledger    *data.Ledger
 	genesisID string
+	config    config.Local
 }
 
 func makeMockNode(ledger *data.Ledger, genesisID string) mockNode {
-	return mockNode{ledger: ledger, genesisID: genesisID}
+	return mockNode{ledger: ledger, genesisID: genesisID, config: config.GetDefaultLocal()}
 }
 
 func (m mockNode) Ledger() *data.Ledger {
@@ -116,7 +117,7 @@ func (m mockNode) SuggestedFee() basics.MicroAlgos {
 
 // unused by handlers:
 func (m mockNode) Config() config.Local {
-	return config.GetDefaultLocal()
+	return m.config
 }
 func (m mockNode) Start() {}
 
