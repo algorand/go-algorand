@@ -538,11 +538,12 @@ func (l *Ledger) trackerLog() logging.Logger {
 	return l.log
 }
 
-// trackerEvalVerified is used by the accountUpdates to reconstruct the StateDelta from a given block.
+// trackerEvalVerified is used by the accountUpdates to reconstruct the StateDelta from a given block during it's loadFromDisk execution.
+// when this function is called, the trackers mutex is expected alredy to be taken. The provided accUpdatesLedger would allow the
+// evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
 func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
-	delta, err := eval(context.Background(), accUpdatesLedger, blk, false, nil, nil)
-	return delta, err
+	return eval(context.Background(), accUpdatesLedger, blk, false, nil, nil)
 }
 
 // A txlease is a transaction (sender, lease) pair which uniquely specifies a

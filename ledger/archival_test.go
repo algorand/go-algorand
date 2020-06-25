@@ -80,6 +80,10 @@ func (wl *wrappedLedger) trackerLog() logging.Logger {
 	return wl.l.trackerLog()
 }
 
+func (wl *wrappedLedger) GenesisHash() crypto.Digest {
+	return wl.l.GenesisHash()
+}
+
 func getInitState() (genesisInitState InitState) {
 	blk := bookkeeping.Block{}
 	blk.CurrentProtocol = protocol.ConsensusCurrentVersion

@@ -93,6 +93,13 @@ func (ml *mockLedgerForTracker) trackerLog() logging.Logger {
 	return ml.log
 }
 
+func (ml *mockLedgerForTracker) GenesisHash() crypto.Digest {
+	if len(ml.blocks) > 0 {
+		return ml.blocks[0].block.GenesisHash()
+	}
+	return crypto.Digest{}
+}
+
 // this function used to be in acctupdates.go, but we were never using it for production purposes. This
 // function has a conceptual flaw in that it attempts to load the entire balances into memory. This might
 // not work if we have large number of balances. On these unit testing, however, it's not the case, and it's
