@@ -113,7 +113,7 @@ var V1Routes = lib.Routes{
 	lib.Route{
 		Name:        "pending-transaction-information-by-address",
 		Method:      "GET",
-		Path:        "/account/{addr}/transactions/pending",
+		Path:        "/account/:addr/transactions/pending",
 		HandlerFunc: handlers.GetPendingTransactionsByAddress,
 	},
 
