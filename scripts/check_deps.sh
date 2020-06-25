@@ -23,6 +23,11 @@ GOPATH=$(go env GOPATH)
 export GOPATH
 GO_BIN="$(echo "$GOPATH" | cut -d: -f1)/bin"
 MISSING=0
+SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+ARCH=$("$SCRIPTPATH"/archtype.sh)
+if [[ "${ARCH}" == "arm" ]]; then
+    export GOPROXY="https://goproxy.io"
+fi
 
 missing_dep() {
     echo "$YELLOW_FG[WARNING]$END_FG_COLOR Missing dependency \`$TEAL_FG${1}$END_FG_COLOR\`."
