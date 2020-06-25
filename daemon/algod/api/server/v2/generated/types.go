@@ -660,7 +660,7 @@ type GetBlockParams struct {
 }
 
 // TealDryRunJSONBody defines parameters for TealDryRun.
-type TealDryRunJSONBody DryrunRequest
+type TealDryRunJSONBody map[string]interface{}
 
 // GetPendingTransactionsParams defines parameters for GetPendingTransactions.
 type GetPendingTransactionsParams struct {

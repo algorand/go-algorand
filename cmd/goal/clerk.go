@@ -411,11 +411,11 @@ var sendCmd = &cobra.Command{
 			if dumpForDryrun {
 				// Write dryrun data to file
 				proto, _ := getProto(protoVersion)
-				dr, err := libgoal.MakeDryrunState(client, stx, []transactions.SignedTxn{}, string(proto))
+				data, err := libgoal.MakeDryrunStateBytes(client, stx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
 				if err != nil {
 					reportErrorf(err.Error())
 				}
-				writeFile(outFilename, protocol.EncodeJSON(&dr), 0600)
+				writeFile(outFilename, data, 0600)
 			} else {
 				err = writeFile(outFilename, protocol.Encode(&stx), 0600)
 				if err != nil {

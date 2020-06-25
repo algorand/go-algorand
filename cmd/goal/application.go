@@ -417,11 +417,11 @@ var createAppCmd = &cobra.Command{
 			if dumpForDryrun {
 				// Write dryrun data to file
 				proto, _ := getProto(protoVersion)
-				dr, err := libgoal.MakeDryrunState(client, tx, []transactions.SignedTxn{}, string(proto))
+				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
 				if err != nil {
 					reportErrorf(err.Error())
 				}
-				writeFile(outFilename, protocol.EncodeJSON(&dr), 0600)
+				writeFile(outFilename, data, 0600)
 			} else {
 				// Write transaction to file
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
@@ -497,11 +497,11 @@ var updateAppCmd = &cobra.Command{
 			if dumpForDryrun {
 				// Write dryrun data to file
 				proto, _ := getProto(protoVersion)
-				dr, err := libgoal.MakeDryrunState(client, tx, []transactions.SignedTxn{}, string(proto))
+				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
 				if err != nil {
 					reportErrorf(err.Error())
 				}
-				writeFile(outFilename, protocol.EncodeJSON(&dr), 0600)
+				writeFile(outFilename, data, 0600)
 			} else {
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 				if err != nil {
@@ -575,11 +575,11 @@ var optInAppCmd = &cobra.Command{
 			if dumpForDryrun {
 				// Write dryrun data to file
 				proto, _ := getProto(protoVersion)
-				dr, err := libgoal.MakeDryrunState(client, tx, []transactions.SignedTxn{}, string(proto))
+				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
 				if err != nil {
 					reportErrorf(err.Error())
 				}
-				writeFile(outFilename, protocol.EncodeJSON(&dr), 0600)
+				writeFile(outFilename, data, 0600)
 			} else {
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 				if err != nil {
@@ -653,11 +653,11 @@ var closeOutAppCmd = &cobra.Command{
 			if dumpForDryrun {
 				// Write dryrun data to file
 				proto, _ := getProto(protoVersion)
-				dr, err := libgoal.MakeDryrunState(client, tx, []transactions.SignedTxn{}, string(proto))
+				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
 				if err != nil {
 					reportErrorf(err.Error())
 				}
-				writeFile(outFilename, protocol.EncodeJSON(&dr), 0600)
+				writeFile(outFilename, data, 0600)
 			} else {
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 				if err != nil {
@@ -731,11 +731,11 @@ var clearAppCmd = &cobra.Command{
 			if dumpForDryrun {
 				// Write dryrun data to file
 				proto, _ := getProto(protoVersion)
-				dr, err := libgoal.MakeDryrunState(client, tx, []transactions.SignedTxn{}, string(proto))
+				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
 				if err != nil {
 					reportErrorf(err.Error())
 				}
-				writeFile(outFilename, protocol.EncodeJSON(&dr), 0600)
+				writeFile(outFilename, data, 0600)
 			} else {
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 				if err != nil {
@@ -809,11 +809,11 @@ var callAppCmd = &cobra.Command{
 			if dumpForDryrun {
 				// Write dryrun data to file
 				proto, _ := getProto(protoVersion)
-				dr, err := libgoal.MakeDryrunState(client, tx, []transactions.SignedTxn{}, string(proto))
+				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
 				if err != nil {
 					reportErrorf(err.Error())
 				}
-				writeFile(outFilename, protocol.EncodeJSON(&dr), 0600)
+				writeFile(outFilename, data, 0600)
 			} else {
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 				if err != nil {
@@ -887,11 +887,11 @@ var deleteAppCmd = &cobra.Command{
 			if dumpForDryrun {
 				// Write dryrun data to file
 				proto, _ := getProto(protoVersion)
-				dr, err := libgoal.MakeDryrunState(client, tx, []transactions.SignedTxn{}, string(proto))
+				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
 				if err != nil {
 					reportErrorf(err.Error())
 				}
-				writeFile(outFilename, protocol.EncodeJSON(&dr), 0600)
+				writeFile(outFilename, data, 0600)
 			} else {
 				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 				if err != nil {

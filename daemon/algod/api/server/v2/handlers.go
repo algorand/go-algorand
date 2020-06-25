@@ -44,6 +44,7 @@ import (
 )
 
 const maxTealSourceBytes = 1e5
+const maxTealDryrunBytes = 1e5
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
@@ -326,16 +327,24 @@ func (v2 *Handlers) TealDryRun(ctx echo.Context) error {
 	// 	return ctx.String(http.StatusNotFound, "/teal/dryrun was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 	// }
 	req := ctx.Request()
-	dec := protocol.NewJSONDecoder(req.Body)
-	var gdr generated.DryrunRequest
-	err := dec.Decode(&gdr)
-	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
-	}
+	buf := new(bytes.Buffer)
+	req.Body = http.MaxBytesReader(nil, req.Body, maxTealDryrunBytes)
+	buf.ReadFrom(req.Body)
+	data := buf.Bytes()
 
-	dr, err := DryrunRequestFromGenerated(&gdr)
-	if err != nil {
-		return badRequest(ctx, err, err.Error(), v2.Log)
+	var dr DryrunRequest
+	var gdr generated.DryrunRequest
+	err := decode(protocol.JSONHandle, data, &gdr)
+	if err == nil {
+		dr, err = DryrunRequestFromGenerated(&gdr)
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+	} else {
+		err = decode(protocol.CodecHandle, data, &dr)
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
 	}
 
 	// fetch previous block header just once to prevent racing with network

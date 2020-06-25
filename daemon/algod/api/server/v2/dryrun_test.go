@@ -758,6 +758,31 @@ func TestDryrunEncodeDecode(t *testing.T) {
 	require.Equal(t, txns[0].Txn.ApprovalProgram, dr.Txns[0].Txn.ApprovalProgram)
 	require.Equal(t, []byte{1, 2, 3}, dr.Txns[0].Txn.ApprovalProgram)
 	require.Equal(t, txns[0].Txn.ApplicationArgs, dr.Txns[0].Txn.ApplicationArgs)
+
+	// use protocol msgp
+	dr1, err := DryrunRequestFromGenerated(&gdr)
+	require.NoError(t, err)
+	encoded, err = encode(protocol.CodecHandle, &dr)
+	encoded2 := protocol.EncodeReflect(&dr)
+	require.Equal(t, encoded, encoded2)
+
+	buf = bytes.NewBuffer(encoded)
+	dec = protocol.NewDecoder(buf)
+	var dr2 DryrunRequest
+	err = dec.Decode(&dr2)
+	require.NoError(t, err)
+	require.Equal(t, dr1, dr2)
+
+	dec = protocol.NewDecoder(buf)
+	dr2 = DryrunRequest{}
+	err = decode(protocol.CodecHandle, encoded, &dr2)
+	require.NoError(t, err)
+	require.Equal(t, dr1, dr2)
+
+	dr2 = DryrunRequest{}
+	err = protocol.DecodeReflect(encoded, &dr2)
+	require.NoError(t, err)
+	require.Equal(t, dr1, dr2)
 }
 
 func TestDryrunMakeLedger(t *testing.T) {

@@ -1078,6 +1078,7 @@
           },
           "txns": {
             "items": {
+              "description": "SignedTxn object. Must be canonically encoded.",
               "format": "json",
               "type": "string",
               "x-algorand-format": "SignedTransaction"
@@ -2627,12 +2628,19 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DryrunRequest"
+                "description": "The same as DryrunRequest but message-pack encoded",
+                "type": "object"
+              }
+            },
+            "application/msgpack": {
+              "schema": {
+                "description": "The same as DryrunRequest but message-pack encoded",
+                "type": "object"
               }
             }
           },
           "description": "Transaction (or group) and any accompanying state-simulation data",
-          "required": true
+          "required": false
         },
         "responses": {
           "200": {
@@ -2696,7 +2704,7 @@
           }
         },
         "summary": "Provide debugging information for a transaction (or group).",
-        "x-codegen-request-body-name": "rawtxn"
+        "x-codegen-request-body-name": "rawobj"
       }
     },
     "/v2/transactions": {

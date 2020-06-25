@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 
@@ -915,7 +915,7 @@ func convertAppParams(paramsIn *v1.AppParams) (appParams generatedV2.Application
 	}
 	appParams.GlobalState = &generatedV2.TealKeyValueStore{}
 	for k, v := range paramsIn.GlobalState {
-		*appParams.GlobalState = append(*appParams.GlobalState, generated.TealKeyValue{
+		*appParams.GlobalState = append(*appParams.GlobalState, generatedV2.TealKeyValue{
 			Key: k,
 			Value: generatedV2.TealValue{
 				Type:  uint64(basics.TealTypeFromString(v.Type)),
@@ -929,8 +929,39 @@ func convertAppParams(paramsIn *v1.AppParams) (appParams generatedV2.Application
 
 const defaultAppIdx = 1380011588
 
+// MakeDryrunStateBytes function creates DryrunRequest data structure in serialized form according to the format
+func MakeDryrunStateBytes(client Client, txnOrStxn interface{}, other []transactions.SignedTxn, proto string, format string) (result []byte, err error) {
+	switch format {
+	case "json":
+		var gdr generatedV2.DryrunRequest
+		gdr, err = MakeDryrunStateGenerated(client, txnOrStxn, other, proto)
+		if err == nil {
+			result = protocol.EncodeJSON(&gdr)
+		}
+		return
+	case "msgp":
+		var dr v2.DryrunRequest
+		dr, err = MakeDryrunState(client, txnOrStxn, other, proto)
+		if err == nil {
+			result = protocol.EncodeReflect(&dr)
+		}
+		return
+	default:
+		return nil, fmt.Errorf("format %s not supported", format)
+	}
+}
+
 // MakeDryrunState function creates DryrunRequest data structure and serializes it into a file
-func MakeDryrunState(client Client, txnOrStxn interface{}, other []transactions.SignedTxn, proto string) (dr generatedV2.DryrunRequest, err error) {
+func MakeDryrunState(client Client, txnOrStxn interface{}, other []transactions.SignedTxn, proto string) (dr v2.DryrunRequest, err error) {
+	gdr, err := MakeDryrunStateGenerated(client, txnOrStxn, other, proto)
+	if err != nil {
+		return
+	}
+	return v2.DryrunRequestFromGenerated(&gdr)
+}
+
+// MakeDryrunStateGenerated function creates DryrunRequest data structure and serializes it into a file
+func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, other []transactions.SignedTxn, proto string) (dr generatedV2.DryrunRequest, err error) {
 	var txns []transactions.SignedTxn
 	var tx *transactions.Transaction
 	if txn, ok := txnOrStxn.(transactions.Transaction); ok {
@@ -953,7 +984,7 @@ func MakeDryrunState(client Client, txnOrStxn interface{}, other []transactions.
 		apps := []basics.AppIndex{tx.ApplicationID}
 		apps = append(apps, tx.ForeignApps...)
 		for _, appIdx := range apps {
-			var appParams generated.ApplicationParams
+			var appParams generatedV2.ApplicationParams
 			var creator string
 			// if app create txn then use params from the txn
 			if appIdx == 0 {

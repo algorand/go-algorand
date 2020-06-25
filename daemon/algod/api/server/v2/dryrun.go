@@ -32,25 +32,26 @@ import (
 // DryrunRequest object uploaded to /v2/teal/dryrun
 // It is the same as generated.DryrunRequest but Txns deserialized properly.
 // Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.
+// This is also used for msgp-decoding
 type DryrunRequest struct {
 	// Txns is transactions to simulate
-	Txns []transactions.SignedTxn `json:"-"` // not supposed to be serialized
+	Txns []transactions.SignedTxn `codec:"txns"` // not supposed to be serialized
 
 	// Optional, useful for testing Application Call txns.
-	Accounts []generated.Account `json:"-"`
+	Accounts []generated.Account `codec:"accounts"`
 
-	Apps []generated.DryrunApp `json:"-"`
+	Apps []generated.DryrunApp `codec:"apps"`
 
 	// ProtocolVersion specifies a specific version string to operate under, otherwise whatever the current protocol of the network this algod is running in.
-	ProtocolVersion string `json:"-"`
+	ProtocolVersion string `codec:"protocol-version"`
 
 	// Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.
-	Round uint64 `json:"-"`
+	Round uint64 `codec:"round"`
 
 	// LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.
-	LatestTimestamp int64 `json:"-"`
+	LatestTimestamp int64 `codec:"latest-timestamp"`
 
-	Sources []generated.DryrunSource `json:"-"`
+	Sources []generated.DryrunSource `codec:"sources"`
 }
 
 // DryrunRequestFromGenerated converts generated.DryrunRequest to DryrunRequest field by fields

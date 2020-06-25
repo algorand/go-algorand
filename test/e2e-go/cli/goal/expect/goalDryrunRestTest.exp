@@ -3,6 +3,24 @@
 set err 0
 log_user 1
 
+proc TestGoalDryrun { DRREQ_FILE TEST_PRIMARY_NODE_DIR } {
+    set PASSED 0
+    set PROGRAM_TYPE ""
+    spawn goal clerk dryrun-remote -d $TEST_PRIMARY_NODE_DIR -D $DRREQ_FILE -v
+    expect {
+        timeout { ::AlgorandGoal::Abort "goal clerk dryrun-remote timeout" }
+        -re {(ApprovalProgram)} {puts "match1"; set PROGRAM_TYPE $expect_out(1,string); exp_continue}
+        "PASS" {puts "match2"; set PASSED 1; close}
+    }
+    if { $PASSED == 0 } {
+        ::AlgorandGoal::Abort "Program did not pass"
+    }
+    if { $PROGRAM_TYPE != "ApprovalProgram" } {
+        puts "Program type: $PROGRAM_TYPE"
+        ::AlgorandGoal::Abort "Invalid program type"
+    }
+}
+
 if { [catch {
 
     source  goalExpectCommon.exp
@@ -38,27 +56,27 @@ if { [catch {
 
     set TEAL_PROG_FILE "$TEST_ROOT_DIR/trivial.teal"
     exec echo int 1 > $TEAL_PROG_FILE
-    set DRREQ_FILE "$TEST_ROOT_DIR/app-create-drreq.json"
-    spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog $TEAL_PROG_FILE --clear-prog $TEAL_PROG_FILE --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 -d $TEST_PRIMARY_NODE_DIR -o $DRREQ_FILE --dryrun-dump
+    set DRREQ_FILE_1 "$TEST_ROOT_DIR/app-create-drreq-1.json"
+    spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog $TEAL_PROG_FILE --clear-prog $TEAL_PROG_FILE --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 -d $TEST_PRIMARY_NODE_DIR -o $DRREQ_FILE_1 --dryrun-dump
     expect {
         timeout { ::AlgorandGoal::Abort "goal app create timeout" }
     }
 
-    set PASSED 0
-    set PROGRAM_TYPE ""
-    spawn goal clerk dryrun-remote -d $TEST_PRIMARY_NODE_DIR -D $DRREQ_FILE -v
+    set DRREQ_FILE_2 "$TEST_ROOT_DIR/app-create-drreq-2.json"
+    spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog $TEAL_PROG_FILE --clear-prog $TEAL_PROG_FILE --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 -d $TEST_PRIMARY_NODE_DIR -o $DRREQ_FILE_2 --dryrun-dump --dryrun-dump-format=json
     expect {
-        timeout { ::AlgorandGoal::Abort "goal clerk dryrun-remote timeout" }
-        -re {(ApprovalProgram)} {puts "match1"; set PROGRAM_TYPE $expect_out(1,string); exp_continue}
-        "PASS" {puts "match2"; set PASSED 1; close}
+        timeout { ::AlgorandGoal::Abort "goal app create timeout" }
     }
-    if { $PASSED == 0 } {
-        ::AlgorandGoal::Abort "Program did not pass"
+
+    set DRREQ_FILE_3 "$TEST_ROOT_DIR/app-create-drreq.msgp"
+    spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog $TEAL_PROG_FILE --clear-prog $TEAL_PROG_FILE --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 -d $TEST_PRIMARY_NODE_DIR -o $DRREQ_FILE_3 --dryrun-dump --dryrun-dump-format=msgp
+    expect {
+        timeout { ::AlgorandGoal::Abort "goal app create timeout" }
     }
-    if { $PROGRAM_TYPE != "ApprovalProgram" } {
-        puts "Program type: $PROGRAM_TYPE"
-        ::AlgorandGoal::Abort "Invalid program type"
-    }
+
+    TestGoalDryrun $DRREQ_FILE_1 $TEST_PRIMARY_NODE_DIR
+    TestGoalDryrun $DRREQ_FILE_2 $TEST_PRIMARY_NODE_DIR
+    TestGoalDryrun $DRREQ_FILE_3 $TEST_PRIMARY_NODE_DIR
 
     # Shutdown the network
     ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR

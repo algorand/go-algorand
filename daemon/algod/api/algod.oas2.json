@@ -999,7 +999,8 @@
     "/v2/teal/dryrun": {
       "post": {
         "consumes": [
-          "application/json"
+          "application/json",
+          "application/msgpack"
         ],
         "produces": [
           "application/json"
@@ -1012,11 +1013,19 @@
         "parameters": [
           {
             "description": "Transaction (or group) and any accompanying state-simulation data",
-            "name": "rawtxn",
+            "name": "jsonobj",
             "in": "body",
-            "required": true,
             "schema": {
               "$ref": "#/definitions/DryrunRequest"
+            }
+          },
+          {
+            "description": "Transaction (or group) and any accompanying state-simulation data",
+            "name": "rawobj",
+            "in": "body",
+            "schema": {
+              "description": "The same as DryrunRequest but message-pack encoded",
+              "type": "object"
             }
           }
         ],
@@ -1678,6 +1687,7 @@
         "txns": {
           "type": "array",
           "items": {
+            "description": "SignedTxn object. Must be canonically encoded.",
             "type": "string",
             "format": "json",
             "x-algorand-format": "SignedTransaction"
