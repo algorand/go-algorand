@@ -181,7 +181,7 @@ func TestArchivalRestart(t *testing.T) {
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
-	const maxBlocks = 1000
+	const maxBlocks = 2000
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
@@ -297,7 +297,7 @@ func TestArchivalAssets(t *testing.T) {
 	var expectedDeleted int
 
 	// give creators money for min balance
-	const maxBlocks = 500
+	const maxBlocks = 2000
 	var creators []basics.Address
 	for i := 0; i < maxBlocks; i++ {
 		creator := basics.Address{}
