@@ -211,10 +211,6 @@ type ConsensusParams struct {
 	// max decimal precision for assets
 	MaxAssetDecimals uint32
 
-	// whether to use the old buggy Credential.lowestOutput function
-	// TODO(upgrade): Please remove as soon as the upgrade goes through
-	UseBuggyProposalLowestOutput bool
-
 	// SupportRekeying indicates support for account rekeying (the RekeyTo and AuthAddr fields)
 	SupportRekeying bool
 
@@ -500,7 +496,6 @@ func initConsensusProtocols() {
 		MaxBalLookback: 320,
 
 		MaxTxGroupSize:               1,
-		UseBuggyProposalLowestOutput: true, // TODO(upgrade): Please remove as soon as the upgrade goes through
 	}
 
 	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
@@ -669,7 +664,6 @@ func initConsensusProtocols() {
 	// v21 fixes a bug in Credential.lowestOutput that would cause larger accounts to be selected to propose disproportionately more often than small accounts
 	v21 := v20
 	v21.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	v21.UseBuggyProposalLowestOutput = false // TODO(upgrade): Please remove this line as soon as the protocol upgrade goes through
 	Consensus[protocol.ConsensusV21] = v21
 	// v20 can be upgraded to v21.
 	v20.ApprovedUpgrades[protocol.ConsensusV21] = 0
