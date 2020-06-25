@@ -23,6 +23,14 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+const (
+	// MaxInitialGenesisAllocationSize is the maximum number of accounts that are supported when
+	// bootstrapping a new network. The number of account *can* grow further after the bootstrapping.
+	// This value is used exclusively for the messagepack decoder, and has no affect on the network
+	// capabilities/capacity in any way.
+	MaxInitialGenesisAllocationSize = 100000000
+)
+
 // A Genesis object defines an Algorand "universe" -- a set of nodes that can
 // talk to each other, agree on the ledger contents, etc.  This is defined
 // by the initial account states (GenesisAllocation), the initial
@@ -47,7 +55,7 @@ type Genesis struct {
 	Proto protocol.ConsensusVersion `codec:"proto"`
 
 	// Allocation determines the initial accounts and their state.
-	Allocation []GenesisAllocation `codec:"alloc,allocbound=-"`
+	Allocation []GenesisAllocation `codec:"alloc,allocbound=MaxInitialGenesisAllocationSize"`
 
 	// RewardsPool is the address of the rewards pool.
 	RewardsPool string `codec:"rwd"`

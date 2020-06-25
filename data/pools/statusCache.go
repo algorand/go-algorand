@@ -32,11 +32,11 @@ type statusCache struct {
 }
 
 func makeStatusCache(sz int) *statusCache {
-	return &statusCache{
-		cur:  map[transactions.Txid]statusCacheEntry{},
-		prev: map[transactions.Txid]statusCacheEntry{},
-		sz:   sz,
+	sc := &statusCache{
+		sz: sz,
 	}
+	sc.reset()
+	return sc
 }
 
 func (sc *statusCache) check(txid transactions.Txid) (tx transactions.SignedTxn, txErr string, found bool) {
@@ -59,4 +59,9 @@ func (sc *statusCache) put(tx transactions.SignedTxn, txErr string) {
 		tx:    tx,
 		txErr: txErr,
 	}
+}
+
+func (sc *statusCache) reset() {
+	sc.cur = map[transactions.Txid]statusCacheEntry{}
+	sc.prev = map[transactions.Txid]statusCacheEntry{}
 }

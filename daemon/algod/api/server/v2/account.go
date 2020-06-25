@@ -106,9 +106,9 @@ func AccountDataToAccount(
 		RewardBase:                  &record.RewardsBase,
 		Participation:               apiParticipation,
 		CreatedAssets:               &createdAssets,
-		Assets:                      &assets,
-		SpendingKey:                 addrOrNil(record.SpendingKey),
 		CreatedApps:                 &createdApps,
+		Assets:                      &assets,
+		AuthAddr:                    addrOrNil(record.AuthAddr),
 		AppsLocalState:              &appsLocalState,
 		AppsTotalSchema:             &totalAppSchema,
 	}, nil
@@ -257,12 +257,12 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 		TotalAppSchema:     totalSchema,
 	}
 
-	if a.SpendingKey != nil {
-		spendingKey, err := basics.UnmarshalChecksumAddress(*a.SpendingKey)
+	if a.AuthAddr != nil {
+		authAddr, err := basics.UnmarshalChecksumAddress(*a.AuthAddr)
 		if err != nil {
 			return basics.AccountData{}, err
 		}
-		ad.SpendingKey = spendingKey
+		ad.AuthAddr = authAddr
 	}
 	if len(assetParams) > 0 {
 		ad.AssetParams = assetParams

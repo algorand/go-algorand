@@ -44,6 +44,14 @@ var dataDirectory = flag.String("d", "", "Root Algorand daemon data path")
 var versionCheck = flag.Bool("v", false, "Display and write current build version and exit")
 var telemetryOverride = flag.String("t", "", `Override telemetry setting if supported (Use "true", "false", "0" or "1")`)
 
+// the following flags aren't being used by the algoh, but are needed so that the flag package won't complain that
+// these flags were provided but were not defined. We grab all the input flags and pass these downstream to the algod executable
+// as an input arguments.
+var peerOverride = flag.String("p", "", "Override phonebook with peer ip:port (or semicolon separated list: ip:port;ip:port;ip:port...)")
+var listenIP = flag.String("l", "", "Override config.EndpointAddress (REST listening address) with ip:port")
+var seed = flag.String("seed", "", "input to math/rand.Seed()")
+var genesisFile = flag.String("g", "", "Genesis configuration file")
+
 const algodFileName = "algod"
 const goalFileName = "goal"
 
@@ -283,6 +291,7 @@ func initTelemetry(genesis bookkeeping.Genesis, log logging.Logger, dataDirector
 			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 			return
 		}
+		fmt.Fprintf(os.Stdout, "algoh telemetry configured from '%s'\n", telemetryConfig.FilePath)
 
 		// Apply telemetry override.
 		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride)

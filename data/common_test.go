@@ -17,6 +17,7 @@
 package data
 
 import (
+	"fmt"
 	"math/rand"
 	"strconv"
 	"testing"
@@ -116,18 +117,19 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*L
 
 	// generate test transactions
 	const inMem = true
-	const archival = true
-	ledger, err := LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusCurrentVersion, bootstrap, genesisID, genesisHash, nil, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledger, err := LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusCurrentVersion, bootstrap, genesisID, genesisHash, nil, cfg)
 	if err != nil {
 		panic(err)
 	}
 
 	tx := make([]transactions.SignedTxn, TXs)
 	latest := ledger.Latest()
-	bal, err := ledger.AllBalances(latest)
-	if err != nil {
-		panic(err)
+	if latest != 0 {
+		panic(fmt.Errorf("newly created ledger doesn't start on round 0"))
 	}
+	bal := bootstrap.balances
 
 	for i := 0; i < TXs; i++ {
 		send := gen.Int() % P

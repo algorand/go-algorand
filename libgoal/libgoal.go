@@ -866,6 +866,42 @@ func (c *Client) SetAPIVersionAffinity(algodVersionAffinity algodclient.APIVersi
 	c.kmdVersionAffinity = kmdVersionAffinity
 }
 
+// AbortCatchup aborts the currently running catchup
+func (c *Client) AbortCatchup() error {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return err
+	}
+	// we need to ensure we're using the v2 status so that we would get the catchpoint information.
+	algod.SetAPIVersionAffinity(algodclient.APIVersionV2)
+	resp, err := algod.Status()
+	if err != nil {
+		return err
+	}
+	if resp.Catchpoint == nil || (*resp.Catchpoint) == "" {
+		// no error - we were not catching up.
+		return nil
+	}
+	_, err = algod.AbortCatchup(*resp.Catchpoint)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Catchup start catching up to the give catchpoint label.
+func (c *Client) Catchup(catchpointLabel string) error {
+	algod, err := c.ensureAlgodClient()
+	if err != nil {
+		return err
+	}
+	_, err = algod.Catchup(catchpointLabel)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func convertAppParams(paramsIn *v1.AppParams) (appParams generatedV2.ApplicationParams) {
 	appParams.ApprovalProgram = []byte(paramsIn.ApprovalProgram)
 	appParams.ClearStateProgram = []byte(paramsIn.ClearStateProgram)

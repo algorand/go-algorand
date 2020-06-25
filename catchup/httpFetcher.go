@@ -23,7 +23,9 @@ import (
 	"net/http"
 	"path"
 	"strconv"
+	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -50,12 +52,19 @@ type HTTPFetcher struct {
 
 	client *http.Client
 
-	log logging.Logger
+	log    logging.Logger
+	config *config.Local
 }
 
 // MakeHTTPFetcher wraps an HTTPPeer so that we can get blocks from it
-func MakeHTTPFetcher(log logging.Logger, peer network.HTTPPeer, net network.GossipNode) (fc FetcherClient) {
-	fc = &HTTPFetcher{peer, peer.GetAddress(), net, peer.GetHTTPClient(), log}
+func MakeHTTPFetcher(log logging.Logger, peer network.HTTPPeer, net network.GossipNode, cfg *config.Local) (fc FetcherClient) {
+	fc = &HTTPFetcher{
+		peer:    peer,
+		rootURL: peer.GetAddress(),
+		net:     net,
+		client:  peer.GetHTTPClient(),
+		log:     log,
+		config:  cfg}
 	return
 }
 
@@ -73,7 +82,9 @@ func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data 
 	if err != nil {
 		return nil, err
 	}
-	request = request.WithContext(ctx)
+	requestCtx, requestCancel := context.WithTimeout(ctx, time.Duration(hf.config.CatchupHTTPBlockFetchTimeoutSec)*time.Second)
+	defer requestCancel()
+	request = request.WithContext(requestCtx)
 	network.SetUserAgentHeader(request.Header)
 	response, err := hf.client.Do(request)
 	if err != nil {
@@ -105,8 +116,8 @@ func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data 
 
 	// TODO: Temporarily allow old and new content types so we have time for lazy upgrades
 	// Remove this 'old' string after next release.
-	const ledgerResponseContentTypeOld = "application/algorand-block-v1"
-	if contentTypes[0] != rpcs.LedgerResponseContentType && contentTypes[0] != ledgerResponseContentTypeOld {
+	const blockResponseContentTypeOld = "application/algorand-block-v1"
+	if contentTypes[0] != rpcs.BlockResponseContentType && contentTypes[0] != blockResponseContentTypeOld {
 		hf.log.Warnf("http block fetcher response has an invalid content type : %s", contentTypes[0])
 		response.Body.Close()
 		return nil, fmt.Errorf("http block fetcher invalid content type '%s'", contentTypes[0])

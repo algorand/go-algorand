@@ -274,7 +274,8 @@ func TestGroupTransactionsSubmission(t *testing.T) {
 		err = client.BroadcastTransactionGroup(expanded)
 		a.Error(err)
 		if len(expanded) >= exceedGroupSize {
-			a.Contains(err.Error(), fmt.Sprintf("group size %d exceeds maximum %d", len(expanded), maxTxGroupSize))
+			a.Contains(err.Error(), "group size")
+			a.Contains(err.Error(), fmt.Sprintf("%d", maxTxGroupSize))
 		} else {
 			a.Contains(err.Error(), "inconsistent group values")
 		}

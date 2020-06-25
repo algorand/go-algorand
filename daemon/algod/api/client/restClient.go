@@ -30,6 +30,8 @@ import (
 	"github.com/google/go-querystring/query"
 
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	privateV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
+
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -426,6 +428,18 @@ func (client RestClient) RawBlock(round uint64) (response v1.RawBlock, err error
 func (client RestClient) Shutdown() (err error) {
 	response := 1
 	err = client.post(&response, "/v2/shutdown", nil)
+	return
+}
+
+// AbortCatchup aborts the currently running catchup
+func (client RestClient) AbortCatchup(catchpointLabel string) (response privateV2.CatchpointAbortResponse, err error) {
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "DELETE", false, true)
+	return
+}
+
+// Catchup start catching up to the give catchpoint label
+func (client RestClient) Catchup(catchpointLabel string) (response privateV2.CatchpointStartResponse, err error) {
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "POST", false, true)
 	return
 }
 

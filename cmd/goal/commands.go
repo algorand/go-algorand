@@ -47,7 +47,7 @@ var dataDirs []string
 
 var defaultCacheDir = "goal.cache"
 
-var verbose bool
+var verboseVersionPrint bool
 
 var kmdDataDirFlag string
 
@@ -56,7 +56,7 @@ var versionCheck bool
 func init() {
 	// infile
 	rootCmd.AddCommand(versionCmd)
-	versionCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Print all version info available")
+	versionCmd.Flags().BoolVarP(&verboseVersionPrint, "verbose", "v", false, "Print all version info available")
 	rootCmd.Flags().BoolVarP(&versionCheck, "version", "v", false, "Display and write current build version and exit")
 	rootCmd.AddCommand(licenseCmd)
 	rootCmd.AddCommand(reportCmd)
@@ -169,7 +169,7 @@ var versionCmd = &cobra.Command{
 				fmt.Println(err)
 				os.Exit(1)
 			}
-			if !verbose {
+			if !verboseVersionPrint {
 				fmt.Println(response.Versions)
 				return
 			}

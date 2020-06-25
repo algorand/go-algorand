@@ -65,6 +65,19 @@
         },
         "x-algorand-format": "RFC3339 String"
       },
+      "catchpoint": {
+        "description": "A catch point",
+        "in": "path",
+        "name": "catchpoint",
+        "required": true,
+        "schema": {
+          "format": "catchpoint",
+          "pattern": "[0-9]{1,10}#[A-Z0-9]{1,53}",
+          "type": "string",
+          "x-algorand-format": "Catchpoint String"
+        },
+        "x-algorand-format": "Catchpoint String"
+      },
       "currency-greater-than": {
         "description": "Results should have an amount greater than this value. MicroAlgos are the default currency unless an asset-id is provided, in which case the asset will be used.",
         "in": "query",
@@ -266,6 +279,46 @@
         },
         "description": "Encoded block object."
       },
+      "CatchpointAbortResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "description": "An catchpoint abort response.",
+              "properties": {
+                "catchup-message": {
+                  "description": "Catchup abort response string",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "catchup-message"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "(empty)"
+      },
+      "CatchpointStartResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "description": "An catchpoint start response.",
+              "properties": {
+                "catchup-message": {
+                  "description": "Catchup start response string",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "catchup-message"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "(empty)"
+      },
       "DryrunResponse": {
         "content": {
           "application/json": {
@@ -297,9 +350,33 @@
             "schema": {
               "description": "NodeStatus contains the information about a node status",
               "properties": {
+                "catchpoint": {
+                  "description": "The current catchpoint that is being caught up to",
+                  "type": "string"
+                },
+                "catchpoint-acquired-blocks": {
+                  "description": "The number of blocks that have already been obtained by the node as part of the catchup",
+                  "type": "integer"
+                },
+                "catchpoint-processed-accounts": {
+                  "description": "The number of account from the current catchpoint that have been processed so far as part of the catchup",
+                  "type": "integer"
+                },
+                "catchpoint-total-accounts": {
+                  "description": "The total number of accounts included in the current catchpoint",
+                  "type": "integer"
+                },
+                "catchpoint-total-blocks": {
+                  "description": "The total number of blocks that are required to complete the current catchpoint catchup",
+                  "type": "integer"
+                },
                 "catchup-time": {
                   "description": "CatchupTime in nanoseconds",
                   "type": "integer"
+                },
+                "last-catchpoint": {
+                  "description": "The last catchpoint seen by the node",
+                  "type": "string"
                 },
                 "last-round": {
                   "description": "LastRound indicates the last round seen",
@@ -426,6 +503,30 @@
           }
         },
         "description": "A potentially truncated list of transactions currently in the node's transaction pool. You can compute whether or not the list is truncated if the number of elements in the **top-transactions** array is fewer than **total-transactions**."
+      },
+      "PostCompileResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "hash": {
+                  "description": "base32 SHA512_256 of program bytes (Address style)",
+                  "type": "string"
+                },
+                "result": {
+                  "description": "base64 encoded program bytes",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "hash",
+                "result"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Teal compile Result"
       },
       "PostTransactionsResponse": {
         "content": {
@@ -558,6 +659,11 @@
             },
             "type": "array"
           },
+          "auth-addr": {
+            "description": "\\[spend\\] the address against which signing should be checked. If empty, the address of the current account is used. This field can be updated in any transaction by setting the RekeyTo field.",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
           "created-apps": {
             "description": "\\[appp\\] parameters of applications created by this account including app global data.\n\nNote: the raw account uses `map[int] -> AppParams` for this type.",
             "items": {
@@ -598,10 +704,6 @@
               "msig",
               "lsig"
             ],
-            "type": "string"
-          },
-          "spending-key": {
-            "description": "The address against which signatures/multisigs/logicsigs should be checked",
             "type": "string"
           },
           "status": {
@@ -1555,6 +1657,16 @@
             },
             "description": "Internal Error"
           },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
           "default": {
             "content": {},
             "description": "Unknown Error"
@@ -1856,6 +1968,166 @@
         "summary": "Get the block for the given round."
       }
     },
+    "/v2/catchup/{catchpoint}": {
+      "delete": {
+        "description": "Given a catchpoint, it aborts catching up to this catchpoint",
+        "operationId": "AbortCatchup",
+        "parameters": [
+          {
+            "description": "A catch point",
+            "in": "path",
+            "name": "catchpoint",
+            "required": true,
+            "schema": {
+              "format": "catchpoint",
+              "pattern": "[0-9]{1,10}#[A-Z0-9]{1,53}",
+              "type": "string",
+              "x-algorand-format": "Catchpoint String"
+            },
+            "x-algorand-format": "Catchpoint String"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "An catchpoint abort response.",
+                  "properties": {
+                    "catchup-message": {
+                      "description": "Catchup abort response string",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "catchup-message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "(empty)"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Aborts a catchpoint catchup.",
+        "tags": [
+          "private"
+        ]
+      },
+      "post": {
+        "description": "Given a catchpoint, it starts catching up to this catchpoint",
+        "operationId": "StartCatchup",
+        "parameters": [
+          {
+            "description": "A catch point",
+            "in": "path",
+            "name": "catchpoint",
+            "required": true,
+            "schema": {
+              "format": "catchpoint",
+              "pattern": "[0-9]{1,10}#[A-Z0-9]{1,53}",
+              "type": "string",
+              "x-algorand-format": "Catchpoint String"
+            },
+            "x-algorand-format": "Catchpoint String"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "An catchpoint start response.",
+                  "properties": {
+                    "catchup-message": {
+                      "description": "Catchup start response string",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "catchup-message"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "(empty)"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Starts a catchpoint catchup.",
+        "tags": [
+          "private"
+        ]
+      }
+    },
     "/v2/ledger/supply": {
       "get": {
         "operationId": "GetSupply",
@@ -2023,9 +2295,33 @@
                 "schema": {
                   "description": "NodeStatus contains the information about a node status",
                   "properties": {
+                    "catchpoint": {
+                      "description": "The current catchpoint that is being caught up to",
+                      "type": "string"
+                    },
+                    "catchpoint-acquired-blocks": {
+                      "description": "The number of blocks that have already been obtained by the node as part of the catchup",
+                      "type": "integer"
+                    },
+                    "catchpoint-processed-accounts": {
+                      "description": "The number of account from the current catchpoint that have been processed so far as part of the catchup",
+                      "type": "integer"
+                    },
+                    "catchpoint-total-accounts": {
+                      "description": "The total number of accounts included in the current catchpoint",
+                      "type": "integer"
+                    },
+                    "catchpoint-total-blocks": {
+                      "description": "The total number of blocks that are required to complete the current catchpoint catchup",
+                      "type": "integer"
+                    },
                     "catchup-time": {
                       "description": "CatchupTime in nanoseconds",
                       "type": "integer"
+                    },
+                    "last-catchpoint": {
+                      "description": "The last catchpoint seen by the node",
+                      "type": "string"
                     },
                     "last-round": {
                       "description": "LastRound indicates the last round seen",
@@ -2123,9 +2419,33 @@
                 "schema": {
                   "description": "NodeStatus contains the information about a node status",
                   "properties": {
+                    "catchpoint": {
+                      "description": "The current catchpoint that is being caught up to",
+                      "type": "string"
+                    },
+                    "catchpoint-acquired-blocks": {
+                      "description": "The number of blocks that have already been obtained by the node as part of the catchup",
+                      "type": "integer"
+                    },
+                    "catchpoint-processed-accounts": {
+                      "description": "The number of account from the current catchpoint that have been processed so far as part of the catchup",
+                      "type": "integer"
+                    },
+                    "catchpoint-total-accounts": {
+                      "description": "The total number of accounts included in the current catchpoint",
+                      "type": "integer"
+                    },
+                    "catchpoint-total-blocks": {
+                      "description": "The total number of blocks that are required to complete the current catchpoint catchup",
+                      "type": "integer"
+                    },
                     "catchup-time": {
                       "description": "CatchupTime in nanoseconds",
                       "type": "integer"
+                    },
+                    "last-catchpoint": {
+                      "description": "The last catchpoint seen by the node",
+                      "type": "string"
                     },
                     "last-round": {
                       "description": "LastRound indicates the last round seen",
@@ -2202,12 +2522,101 @@
             },
             "description": "Internal Error"
           },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
           "default": {
             "content": {},
             "description": "Unknown Error"
           }
         },
         "summary": "Gets the node status after waiting for the given round."
+      }
+    },
+    "/v2/teal/compile": {
+      "post": {
+        "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style).",
+        "operationId": "TealCompile",
+        "requestBody": {
+          "content": {
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "TEAL source code to be compiled",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "hash": {
+                      "description": "base32 SHA512_256 of program bytes (Address style)",
+                      "type": "string"
+                    },
+                    "result": {
+                      "description": "base64 encoded program bytes",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "hash",
+                    "result"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Teal compile Result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - Teal Compile Error"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Compile TEAL source code to binary, produce its hash",
+        "x-codegen-request-body-name": "source"
       }
     },
     "/v2/teal/dryrun": {
@@ -2354,6 +2763,16 @@
             },
             "description": "Internal Error"
           },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
+          },
           "default": {
             "content": {},
             "description": "Unknown Error"
@@ -2424,6 +2843,26 @@
               }
             },
             "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
           },
           "default": {
             "content": {},
@@ -2544,6 +2983,21 @@
               }
             },
             "description": "Internal Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Temporarily Unavailable"
           },
           "default": {
             "content": {},

@@ -35,6 +35,33 @@ const (
 	Online
 	// NotParticipating indicates that the associated account is neither a delegator nor a delegate. Currently it is reserved for the incentive pool.
 	NotParticipating
+
+	// MaxEncodedAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
+	// this number is verified by the TestEncodedAccountDataSize function.
+	MaxEncodedAccountDataSize = 750000
+
+	// encodedMaxAssetsPerAccount is the decoder limit of number of assets stored per account.
+	// it's being verified by the unit test TestEncodedAccountAllocationBounds to align
+	// with config.Consensus[protocol.ConsensusCurrentVersion].MaxAssetsPerAccount; note that the decoded
+	// parameter is used only for protecting the decoder against malicious encoded account data stream.
+	// protocol-specific constains would be tested once the decoding is complete.
+	encodedMaxAssetsPerAccount = 1024
+
+	// encodedMaxAppLocalStates is the decoder limit for number of opted-in apps in a single account.
+	// It is verified in TestEncodedAccountAllocationBounds to align with
+	// config.Consensus[protocol.ConsensusCurrentVersion].MaxppsOptedIn
+	encodedMaxAppLocalStates = 64
+
+	// encodedMaxAppParams is the decoder limit for number of created apps in a single account.
+	// It is verified in TestEncodedAccountAllocationBounds to align with
+	// config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsCreated
+	encodedMaxAppParams = 64
+
+	// encodedMaxKeyValueEntries is the decoder limit for the length of a key/value store.
+	// It is verified in TestEncodedAccountAllocationBounds to align with
+	// config.Consensus[protocol.ConsensusCurrentVersion].MaxLocalSchemaEntries and
+	// config.Consensus[protocol.ConsensusCurrentVersion].MaxGlobalSchemaEntries
+	encodedMaxKeyValueEntries = 1024
 )
 
 func (s Status) String() string {
@@ -133,7 +160,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	AssetParams map[AssetIndex]AssetParams `codec:"apar,allocbound=-"`
+	AssetParams map[AssetIndex]AssetParams `codec:"apar,allocbound=encodedMaxAssetsPerAccount"`
 
 	// Assets is the set of assets that can be held by this
 	// account.  Assets (i.e., slots in this map) are explicitly
@@ -150,21 +177,21 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=-"`
+	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=encodedMaxAssetsPerAccount"`
 
-	// SpendingKey is the address against which signatures/multisigs/logicsigs should be checked.
+	// AuthAddr is the address against which signatures/multisigs/logicsigs should be checked.
 	// If empty, the address of the account whose AccountData this is is used.
-	// A transaction may change an account's SpendingKey to "re-key" the account.
+	// A transaction may change an account's AuthAddr to "re-key" the account.
 	// This allows key rotation, changing the members in a multisig, etc.
-	SpendingKey Address `codec:"spend"`
+	AuthAddr Address `codec:"spend"`
 
 	// AppLocalStates stores the local states associated with any applications
 	// that this account has opted in to.
-	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=-"`
+	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=encodedMaxAppLocalStates"`
 
 	// AppParams stores the global parameters and state associated with any
 	// applications that this account has created.
-	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=-"`
+	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=encodedMaxAppParams"`
 
 	// TotalAppSchema stores the sum of all of the LocalStateSchemas
 	// and GlobalStateSchemas in this account (global for applications
@@ -188,9 +215,9 @@ type AppLocalState struct {
 type AppParams struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApprovalProgram   []byte       `codec:"approv"`
-	ClearStateProgram []byte       `codec:"clearp"`
-	GlobalState       TealKeyValue `codec:"gs,allocbound=-"`
+	ApprovalProgram   []byte       `codec:"approv,allocbound=config.MaxAppProgramLen"`
+	ClearStateProgram []byte       `codec:"clearp,allocbound=config.MaxAppProgramLen"`
+	GlobalState       TealKeyValue `codec:"gs"`
 	StateSchemas
 }
 

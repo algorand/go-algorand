@@ -89,9 +89,9 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 		fmt.Printf("Located Source Account: %s -> %v\n", cfg.SrcAccount, accounts[cfg.SrcAccount])
 	}
 
+	// Only reuse existing accounts for non asset testing.
+	// For asset testing, new participant accounts will be created since accounts are limited to 1000 assets.
 	if cfg.NumAsset == 0 {
-		// all new participant accounts will be created for asset testing since accounts are limited to 1000 assets
-
 		// If we have more accounts than requested, pick the top N (not including src)
 		if len(accounts) > int(cfg.NumPartAccounts+1) {
 			fmt.Printf("Finding the richest %d accounts to use for transacting\n", cfg.NumPartAccounts)
