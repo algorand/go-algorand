@@ -16,10 +16,12 @@ if [ "${BUILD_TYPE}" = "integration" ]; then
     ./test/scripts/run_integration_tests.sh
 elif [ "${TRAVIS_EVENT_TYPE}" = "cron" ] || [[ "${TRAVIS_BRANCH}" =~ ^rel/ ]]; then
     if [[ "${OS}" != "darwin" ]]; then
-	make fulltest -j4
+	    make fulltest -j2
     fi
 else
     if [[ "${OS}" != "darwin" ]]; then
-	make shorttest -j4
+        # setting it to 1 disable parallel making. This is done specicifically for travis, as travis seems to
+        # have memory limitations and setting this to 1 could reduce the likelihood of hitting these.
+	    make shorttest -j1
     fi
 fi

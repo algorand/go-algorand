@@ -35,7 +35,7 @@ import (
 // CatchpointCatchupNodeServices defines the extenal node support needed
 // for the catchpoint service to switch the node between "regular" operational mode and catchup mode.
 type CatchpointCatchupNodeServices interface {
-	SetCatchpointCatchupMode(bool) (newCtx context.Context)
+	SetCatchpointCatchupMode(bool) (newContextCh <-chan context.Context)
 }
 
 // CatchpointCatchupStats is used for querying and reporting the current state of the catchpoint catchup process
@@ -52,21 +52,36 @@ type CatchpointCatchupStats struct {
 
 // CatchpointCatchupService represents the catchpoint catchup service.
 type CatchpointCatchupService struct {
-	stats          CatchpointCatchupStats
-	statsMu        deadlock.Mutex
-	node           CatchpointCatchupNodeServices
-	ctx            context.Context
-	cancelCtxFunc  context.CancelFunc
-	running        sync.WaitGroup
+	// stats is the statistics object, updated async while downloading the ledger
+	stats CatchpointCatchupStats
+	// statsMu syncronizes access to stats, as we could attempt to update it while querying for it's current state
+	statsMu deadlock.Mutex
+	node    CatchpointCatchupNodeServices
+	// ctx is the node cancelation context, used when the node is being stopped.
+	ctx           context.Context
+	cancelCtxFunc context.CancelFunc
+	// running is a waitgroup counting the running goroutine(1), and allow us to exit cleanly.
+	running sync.WaitGroup
+	// ledgerAccessor is the ledger accessor used to perform ledger-level operation on the database
 	ledgerAccessor ledger.CatchpointCatchupAccessor
-	stage          ledger.CatchpointCatchupState
-	log            logging.Logger
-	newService     bool // indicates whether this service was created after the node was running ( i.e. true ) or the node just started to find that it was previously perfoming catchup
-	net            network.GossipNode
-	ledger         *ledger.Ledger
+	// stage is the current stage of the catchpoint catchup process
+	stage ledger.CatchpointCatchupState
+	// log is the logger object
+	log logging.Logger
+	// newService indicates whether this service was created after the node was running ( i.e. true ) or the node just started to find that it was previously perfoming catchup
+	newService bool
+	// net is the underlaying network module
+	net network.GossipNode
+	// ledger points to the ledger object
+	ledger *ledger.Ledger
 	// lastBlockHeader is the latest block we have before going into catchpoint catchup mode. We use it to serve the node status requests instead of going to the ledger.
 	lastBlockHeader bookkeeping.BlockHeader
-	config          config.Local
+	// config is a copy of the node configuration
+	config config.Local
+	// abortCtx used as a syncronized flag to let us know when the user asked us to abort the catchpoint catchup process. note that it's not being used when we decided to abort
+	// the catchup due to an internal issue ( such as exceeding number of retries )
+	abortCtx     context.Context
+	abortCtxFunc context.CancelFunc
 }
 
 // MakeResumedCatchpointCatchupService creates a catchpoint catchup service for a node that is already in catchpoint catchup mode
@@ -124,12 +139,17 @@ func MakeNewCatchpointCatchupService(catchpoint string, node CatchpointCatchupNo
 // Start starts the catchpoint catchup service ( continue in the process )
 func (cs *CatchpointCatchupService) Start(ctx context.Context) {
 	cs.ctx, cs.cancelCtxFunc = context.WithCancel(ctx)
+	cs.abortCtx, cs.abortCtxFunc = context.WithCancel(context.Background())
 	cs.running.Add(1)
 	go cs.run()
 }
 
 // Abort aborts the catchpoint catchup process
 func (cs *CatchpointCatchupService) Abort() {
+	// In order to abort the catchpoint catchup process, we need to first set the flag of abortCtxFunc, and follow that by canceling the main context.
+	// The order of these calls is crucial : The various stages are blocked on the main context. When that one expires, it uses the abort context to determine
+	// if the cancelation meaning that we want to shut down the process, or aborting the catchpoint catchup completly.
+	cs.abortCtxFunc()
 	cs.cancelCtxFunc()
 }
 
@@ -140,6 +160,13 @@ func (cs *CatchpointCatchupService) Stop() {
 	cs.cancelCtxFunc()
 	// wait for the running goroutine to terminate.
 	cs.running.Wait()
+	// call the abort context canceling, just to release it's goroutine.
+	cs.abortCtxFunc()
+}
+
+// GetLatestBlockHeader returns the last block header that was available at the time the catchpoint catchup service started
+func (cs *CatchpointCatchupService) GetLatestBlockHeader() bookkeeping.BlockHeader {
+	return cs.lastBlockHeader
 }
 
 // run is the main stage-swtiching background service function. It switches the current stage into the correct stage handler.
@@ -243,8 +270,8 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 
 		err = cs.ledgerAccessor.ResetStagingBalances(cs.ctx, true)
 		if err != nil {
-			if err == cs.ctx.Err() {
-				return cs.abort(err) // we want to keep it with the context error.
+			if cs.ctx.Err() != nil {
+				return cs.stopOrAbort()
 			}
 			return cs.abort(fmt.Errorf("processStageLedgerDownload failed to reset staging balances : %v", err))
 		}
@@ -252,8 +279,11 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 		if err == nil {
 			break
 		}
-		if err == cs.ctx.Err() {
-			return cs.abort(err) // we want to keep it with the context error.
+		// instead of testing for err == cs.ctx.Err() , we'll check on the context itself.
+		// this is more robust, as the http client library sometimes wrap the context canceled
+		// error with other erros.
+		if cs.ctx.Err() != nil {
+			return cs.stopOrAbort()
 		}
 
 		if attemptsCount >= cs.config.CatchupLedgerDownloadRetryAttempts {
@@ -292,8 +322,8 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 			fetcher := fetcherFactory.New()
 			blk, _, client, err = fetcher.FetchBlock(cs.ctx, blockRound)
 			if err != nil {
-				if err == cs.ctx.Err() {
-					return cs.abort(err)
+				if cs.ctx.Err() != nil {
+					return cs.stopOrAbort()
 				}
 				if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 					// try again.
@@ -333,8 +363,8 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		// verify that the catchpoint is valid.
 		err = cs.ledgerAccessor.VerifyCatchpoint(cs.ctx, blk)
 		if err != nil {
-			if err == cs.ctx.Err() {
-				return cs.abort(err)
+			if cs.ctx.Err() != nil {
+				return cs.stopOrAbort()
 			}
 			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 				// try again.
@@ -411,7 +441,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	var client FetcherClient
 	for attemptsCount := uint64(1); blocksFetched <= lookback; attemptsCount++ {
 		if err := cs.ctx.Err(); err != nil {
-			return cs.abort(err)
+			return cs.stopOrAbort()
 		}
 
 		blk = nil
@@ -431,8 +461,8 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			fetcher := fetcherFactory.New()
 			blk, _, client, err = fetcher.FetchBlock(cs.ctx, topBlock.Round()-basics.Round(blocksFetched))
 			if err != nil {
-				if err == cs.ctx.Err() {
-					return cs.abort(err)
+				if cs.ctx.Err() != nil {
+					return cs.stopOrAbort()
 				}
 				if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 					// try again.
@@ -523,6 +553,15 @@ func (cs *CatchpointCatchupService) processStageSwitch() (err error) {
 	return nil
 }
 
+// stopOrAbort is called when any of the stage processing function sees that cs.ctx has been canceled. It can be
+// due to the end user attempting to abort the current catchpoint catchup operation or due to a node shutdown.
+func (cs *CatchpointCatchupService) stopOrAbort() error {
+	if cs.abortCtx.Err() == context.Canceled {
+		return cs.abort(context.Canceled)
+	}
+	return nil
+}
+
 // abort aborts the current catchpoint catchup process, reverting to node to standard operation.
 func (cs *CatchpointCatchupService) abort(originatingErr error) error {
 	outError := originatingErr
@@ -532,7 +571,8 @@ func (cs *CatchpointCatchupService) abort(originatingErr error) error {
 	}
 	cs.updateNodeCatchupMode(false)
 	// we want to abort the catchpoint catchup process, and the node already reverted to normal operation.
-	// at this point, all we need to do is to abort the run function.
+	// as part of the returning to normal operation, we've re-created our context. This context need to be
+	// canceled so that when we go back to run(), we would exit from there right away.
 	cs.cancelCtxFunc()
 	return outError
 }
@@ -547,9 +587,29 @@ func (cs *CatchpointCatchupService) updateStage(newStage ledger.CatchpointCatchu
 	return nil
 }
 
+// updateNodeCatchupMode requests the node to change it's operational mode from
+// catchup mode to normal mode and vice versa.
 func (cs *CatchpointCatchupService) updateNodeCatchupMode(catchupModeEnabled bool) {
-	newCtx := cs.node.SetCatchpointCatchupMode(catchupModeEnabled)
-	cs.ctx, cs.cancelCtxFunc = context.WithCancel(newCtx)
+	newCtxCh := cs.node.SetCatchpointCatchupMode(catchupModeEnabled)
+	select {
+	case newCtx, open := <-newCtxCh:
+		if open {
+			cs.ctx, cs.cancelCtxFunc = context.WithCancel(newCtx)
+		} else {
+			// channel is closed, this means that the node is stopping
+		}
+	case <-cs.ctx.Done():
+		// the node context was canceled before the SetCatchpointCatchupMode goroutine had
+		// the chance of completing. We At this point, the service is shutting down. However,
+		// we don't know how long it would take for the node mutex until it's become available.
+		// given that the SetCatchpointCatchupMode gave us a non-buffered channel, it might get blocked
+		// if we won't be draining that channel. To resolve that, we will create another goroutine here
+		// which would drain that channel.
+		go func() {
+			// We'll wait here for the above goroutine to complete :
+			<-newCtxCh
+		}()
+	}
 }
 
 func (cs *CatchpointCatchupService) updateLedgerFetcherProgress(fetcherStats *ledger.CatchpointCatchupAccessorProgress) {
@@ -574,9 +634,4 @@ func (cs *CatchpointCatchupService) updateBlockRetrievalStatistics(aquiredBlocks
 	defer cs.statsMu.Unlock()
 	cs.stats.AcquiredBlocks = uint64(int64(cs.stats.AcquiredBlocks) + aquiredBlocksDelta)
 	cs.stats.VerifiedBlocks = uint64(int64(cs.stats.VerifiedBlocks) + verifiedBlocksDelta)
-}
-
-// GetLatestBlockHeader returns the last block header that was available at the time the catchpoint catchup service started
-func (cs *CatchpointCatchupService) GetLatestBlockHeader() bookkeeping.BlockHeader {
-	return cs.lastBlockHeader
 }
