@@ -3,8 +3,6 @@
 set -ex
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-eval $(./gimme $("${SCRIPTPATH}/../get_golang_version.sh"))
-
 curl -sL -o ${SCRIPTPATH}/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
 chmod +x ${SCRIPTPATH}/gimme
 eval $("${SCRIPTPATH}"/gimme $("${SCRIPTPATH}/../get_golang_version.sh"))
