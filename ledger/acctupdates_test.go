@@ -346,7 +346,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		rewardLevel += rewardLevelDelta
 		updates, totals := randomDeltasBalanced(1, accts[i-1], rewardLevel)
 
-		prevTotals, err := au.totals(basics.Round(i - 1))
+		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
 		oldPool := accts[i-1][testPoolAddr]
