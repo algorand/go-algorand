@@ -363,6 +363,7 @@ func checkAppCallPass(t *testing.T, response *generated.DryrunResponse) {
 		t.Error("no response app msg")
 	} else {
 		messages := *response.Txns[0].AppCallMessages
+		assert.GreaterOrEqual(t, len(messages), 1)
 		assert.Equal(t, "PASS", messages[len(messages)-1])
 	}
 }
@@ -377,6 +378,8 @@ func TestDryrunGlobal1(t *testing.T) {
 
 	proto.LogicSigVersion = 2
 	proto.LogicSigMaxCost = 1000
+	proto.MaxAppKeyLen = 64
+	proto.MaxAppBytesValueLen = 64
 
 	dr.Txns = []transactions.SignedTxn{
 		{
@@ -423,6 +426,8 @@ func TestDryrunGlobal2(t *testing.T) {
 
 	proto.LogicSigVersion = 2
 	proto.LogicSigMaxCost = 1000
+	proto.MaxAppKeyLen = 64
+	proto.MaxAppBytesValueLen = 64
 
 	dr.Txns = []transactions.SignedTxn{
 		{
@@ -477,6 +482,8 @@ func TestDryrunLocal1(t *testing.T) {
 
 	proto.LogicSigVersion = 2
 	proto.LogicSigMaxCost = 1000
+	proto.MaxAppKeyLen = 64
+	proto.MaxAppBytesValueLen = 64
 
 	dr.Txns = []transactions.SignedTxn{
 		{
@@ -509,7 +516,7 @@ func TestDryrunLocal1(t *testing.T) {
 	doDryrunRequest(&dr, &proto, &response)
 	checkAppCallPass(t, &response)
 	if response.Txns[0].LocalDeltas == nil {
-		t.Error("empty local delta")
+		t.Fatal("empty local delta")
 	}
 	addrFound := false
 	valueFound := false
@@ -547,6 +554,8 @@ func TestDryrunLocal1A(t *testing.T) {
 
 	proto.LogicSigVersion = 2
 	proto.LogicSigMaxCost = 1000
+	proto.MaxAppKeyLen = 64
+	proto.MaxAppBytesValueLen = 64
 
 	dr.Txns = []transactions.SignedTxn{
 		{
@@ -584,7 +593,7 @@ func TestDryrunLocal1A(t *testing.T) {
 	doDryrunRequest(&dr, &proto, &response)
 	checkAppCallPass(t, &response)
 	if response.Txns[0].LocalDeltas == nil {
-		t.Error("empty local delta")
+		t.Fatal("empty local delta")
 	}
 	addrFound := false
 	valueFound := false
@@ -621,6 +630,8 @@ func TestDryrunLocalCheck(t *testing.T) {
 
 	proto.LogicSigVersion = 2
 	proto.LogicSigMaxCost = 1000
+	proto.MaxAppKeyLen = 64
+	proto.MaxAppBytesValueLen = 64
 
 	dr.Txns = []transactions.SignedTxn{
 		{
@@ -757,6 +768,8 @@ func TestDryrunMakeLedger(t *testing.T) {
 
 	proto.LogicSigVersion = 2
 	proto.LogicSigMaxCost = 1000
+	proto.MaxAppKeyLen = 64
+	proto.MaxAppBytesValueLen = 64
 
 	sender, err := basics.UnmarshalChecksumAddress("UAPJE355K7BG7RQVMTZOW7QW4ICZJEIC3RZGYG5LSHZ65K6LCNFPJDSR7M")
 	require.NoError(t, err)

@@ -194,7 +194,7 @@ func makeSampleBalanceRecord(addr basics.Address, assetIdx basics.AssetIndex, ap
 				},
 				GlobalStateSchema: basics.StateSchema{
 					NumUint:      1,
-					NumByteSlice: 1,
+					NumByteSlice: 2,
 				},
 			},
 			GlobalState: basics.TealKeyValue{
