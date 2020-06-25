@@ -2,11 +2,6 @@
 
 set -ex
 
-SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-curl -sL -o ${SCRIPTPATH}/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
-chmod +x ${SCRIPTPATH}/gimme
-eval $("${SCRIPTPATH}"/gimme $("${SCRIPTPATH}/../get_golang_version.sh"))
-
 function install_go_module {
     local OUTPUT
     OUTPUT=$(GO111MODULE=off go get -u "$1" 2>&1)
