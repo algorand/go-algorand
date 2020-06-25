@@ -67,7 +67,7 @@ func init() {
 	createAssetCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
 	createAssetCmd.Flags().StringVar(&assetURL, "asseturl", "", "URL where user can access more information about the asset (max 32 bytes)")
 	createAssetCmd.Flags().StringVar(&assetMetadataHashBase64, "assetmetadatab64", "", "base-64 encoded 32-byte commitment to asset metadata")
-	createAssetCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
+	createAssetCmd.Flags().StringVarP(&outFilename, "out", "o", "", "Write transaction to this file")
 	createAssetCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	createAssetCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
 	createAssetCmd.Flags().StringVarP(&lease, "lease", "x", "", "Lease value (base64, optional): no transaction may also acquire this lease until lastvalid")
@@ -84,7 +84,7 @@ func init() {
 	destroyAssetCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	destroyAssetCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
 	destroyAssetCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
-	destroyAssetCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
+	destroyAssetCmd.Flags().StringVarP(&outFilename, "out", "o", "", "Write transaction to this file")
 	destroyAssetCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	destroyAssetCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
 	destroyAssetCmd.Flags().StringVarP(&lease, "lease", "x", "", "Lease value (base64, optional): no transaction may also acquire this lease until lastvalid")
@@ -103,7 +103,7 @@ func init() {
 	configAssetCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	configAssetCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
 	configAssetCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
-	configAssetCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
+	configAssetCmd.Flags().StringVarP(&outFilename, "out", "o", "", "Write transaction to this file")
 	configAssetCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	configAssetCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
 	configAssetCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
@@ -123,7 +123,7 @@ func init() {
 	sendAssetCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	sendAssetCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
 	sendAssetCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
-	sendAssetCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
+	sendAssetCmd.Flags().StringVarP(&outFilename, "out", "o", "", "Write transaction to this file")
 	sendAssetCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	sendAssetCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
 	sendAssetCmd.Flags().StringVarP(&lease, "lease", "x", "", "Lease value (base64, optional): no transaction may also acquire this lease until lastvalid")
@@ -142,7 +142,7 @@ func init() {
 	freezeAssetCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
 	freezeAssetCmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
 	freezeAssetCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
-	freezeAssetCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Write transaction to this file")
+	freezeAssetCmd.Flags().StringVarP(&outFilename, "out", "o", "", "Write transaction to this file")
 	freezeAssetCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	freezeAssetCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
 	freezeAssetCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
@@ -247,7 +247,7 @@ var createAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -277,7 +277,7 @@ var createAssetCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -323,7 +323,7 @@ var destroyAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -345,7 +345,7 @@ var destroyAssetCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -412,7 +412,7 @@ var configAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -434,7 +434,7 @@ var configAssetCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -493,7 +493,7 @@ var sendAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -515,7 +515,7 @@ var sendAssetCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -558,7 +558,7 @@ var freezeAssetCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -580,7 +580,7 @@ var freezeAssetCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}

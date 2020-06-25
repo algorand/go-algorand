@@ -100,6 +100,12 @@ func main() {
 		reportErrorf("Can't convert data directory's path to absolute, %v\n", dataDir)
 	}
 
+	algodConfig, err := config.LoadConfigFromDisk(absolutePath)
+
+	if err != nil && !os.IsNotExist(err) {
+		log.Fatalf("Cannot load config: %v", err)
+	}
+
 	if _, err := os.Stat(absolutePath); err != nil {
 		reportErrorf("Data directory %s does not appear to be valid\n", dataDir)
 	}
@@ -112,7 +118,7 @@ func main() {
 
 	done := make(chan struct{})
 	log := logging.Base()
-	configureLogging(genesis, log, absolutePath, done)
+	configureLogging(genesis, log, absolutePath, done, algodConfig)
 	defer log.CloseTelemetry()
 
 	exeDir, err = util.ExeDir()
@@ -175,7 +181,7 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	deadMan := makeDeadManWatcher(algohConfig.DeadManTimeSec, algodClient, algohConfig.UploadOnError, done, &wg)
+	deadMan := makeDeadManWatcher(algohConfig.DeadManTimeSec, algodClient, algohConfig.UploadOnError, done, &wg, algodConfig)
 	wg.Add(1)
 
 	listeners := []blockListener{deadMan}
@@ -259,7 +265,7 @@ func getNodeController() nodecontrol.NodeController {
 	return nc
 }
 
-func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath string, abort chan struct{}) {
+func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath string, abort chan struct{}, algodConfig config.Local) {
 	log = logging.Base()
 
 	liveLog := fmt.Sprintf("%s/host.log", rootPath)
@@ -272,7 +278,7 @@ func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath 
 	log.SetJSONFormatter()
 	log.SetLevel(logging.Debug)
 
-	initTelemetry(genesis, log, rootPath, abort)
+	initTelemetry(genesis, log, rootPath, abort, algodConfig)
 
 	// if we have the telemetry enabled, we want to use it's sessionid as part of the
 	// collected metrics decorations.
@@ -281,7 +287,7 @@ func configureLogging(genesis bookkeeping.Genesis, log logging.Logger, rootPath 
 	fmt.Fprintln(writer, "++++++++++++++++++++++++++++++++++++++++")
 }
 
-func initTelemetry(genesis bookkeeping.Genesis, log logging.Logger, dataDirectory string, abort chan struct{}) {
+func initTelemetry(genesis bookkeeping.Genesis, log logging.Logger, dataDirectory string, abort chan struct{}, algodConfig config.Local) {
 	// Enable telemetry hook in daemon to send logs to cloud
 	// If ALGOTEST env variable is set, telemetry is disabled - allows disabling telemetry for tests
 	isTest := os.Getenv("ALGOTEST") != ""
@@ -291,6 +297,7 @@ func initTelemetry(genesis bookkeeping.Genesis, log logging.Logger, dataDirector
 			fmt.Fprintln(os.Stdout, "error loading telemetry config", err)
 			return
 		}
+		fmt.Fprintf(os.Stdout, "algoh telemetry configured from '%s'\n", telemetryConfig.FilePath)
 
 		// Apply telemetry override.
 		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride)
@@ -303,14 +310,10 @@ func initTelemetry(genesis bookkeeping.Genesis, log logging.Logger, dataDirector
 			}
 
 			if log.GetTelemetryEnabled() {
-				cfg, err := config.LoadConfigFromDisk(dataDirectory)
-				if err != nil && !os.IsNotExist(err) {
-					log.Fatalf("Cannot load config: %v", err)
-				}
 
 				// If the telemetry URI is not set, periodically check SRV records for new telemetry URI
 				if log.GetTelemetryURI() == "" {
-					network.StartTelemetryURIUpdateService(time.Minute, cfg, genesis.Network, log, abort)
+					network.StartTelemetryURIUpdateService(time.Minute, algodConfig, genesis.Network, log, abort)
 				}
 
 				// For privacy concerns, we don't want to provide the full data directory to telemetry.
