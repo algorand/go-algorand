@@ -248,55 +248,16 @@ func (au *accountUpdates) close() {
 	au.waitAccountsWriting()
 }
 
+// Lookup returns the accound data for a given address at a given round. The withRewards indicates whether the
+// rewards should be added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
+// even while it could return the AccoutData which represent the "rewarded" account data.
 func (au *accountUpdates) Lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 	return au.lookup(rnd, addr, withRewards)
 }
 
-func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return
-	}
-
-	offsetForRewards := offset
-
-	defer func() {
-		if withRewards {
-			totals := au.roundTotals[offsetForRewards]
-			proto := au.protos[offsetForRewards]
-			data = data.WithUpdatedRewards(proto, totals.RewardsLevel)
-		}
-	}()
-
-	// Check if this is the most recent round, in which case, we can
-	// use a cache of the most recent account state.
-	if offset == uint64(len(au.deltas)) {
-		macct, ok := au.accounts[addr]
-		if ok {
-			return macct.data, nil
-		}
-	} else {
-		// Check if the account has been updated recently.  Traverse the deltas
-		// backwards to ensure that later updates take priority if present.
-		for offset > 0 {
-			offset--
-			d, ok := au.deltas[offset][addr]
-			if ok {
-				return d.new, nil
-			}
-		}
-	}
-
-	// No updates of this account in the in-memory deltas; use on-disk DB.
-	// The check in roundOffset() made sure the round is exactly the one
-	// present in the on-disk DB.  As an optimization, we avoid creating
-	// a separate transaction here, and directly use a prepared SQL query
-	// against the database.
-	return au.accountsq.lookup(addr)
-}
-
+// listAssets lists the assets by their asset index, limiring to the first maxResults
 func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
@@ -489,68 +450,18 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	return
 }
 
+// newBlock is the accountUpdates implementation of the ledgerTracker interface. This is the "external" facing function
+// which invokes the internal implementation after taking the lock.
 func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	au.accountsMu.Lock()
 	defer au.accountsMu.Unlock()
 	au.newBlockImpl(blk, delta)
 }
 
-func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) {
-	proto := config.Consensus[blk.CurrentProtocol]
-	rnd := blk.Round()
-
-	if rnd <= au.latest() {
-		// Duplicate, ignore.
-		return
-	}
-
-	if rnd != au.latest()+1 {
-		au.log.Panicf("accountUpdates: newBlock %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
-	}
-	au.deltas = append(au.deltas, delta.accts)
-	au.protos = append(au.protos, proto)
-	au.assetDeltas = append(au.assetDeltas, delta.assets)
-	au.roundDigest = append(au.roundDigest, blk.Digest())
-	au.deltasAccum = append(au.deltasAccum, len(delta.accts)+au.deltasAccum[len(au.deltasAccum)-1])
-
-	var ot basics.OverflowTracker
-	newTotals := au.roundTotals[len(au.roundTotals)-1]
-	allBefore := newTotals.All()
-	newTotals.applyRewards(delta.hdr.RewardsLevel, &ot)
-
-	for addr, data := range delta.accts {
-		newTotals.delAccount(proto, data.old, &ot)
-		newTotals.addAccount(proto, data.new, &ot)
-
-		macct := au.accounts[addr]
-		macct.ndeltas++
-		macct.data = data.new
-		au.accounts[addr] = macct
-	}
-
-	for aidx, adelta := range delta.assets {
-		masset := au.assets[aidx]
-		masset.creator = adelta.creator
-		masset.created = adelta.created
-		masset.ndeltas++
-		au.assets[aidx] = masset
-	}
-
-	if ot.Overflowed {
-		au.log.Panicf("accountUpdates: newBlock %d overflowed totals", rnd)
-	}
-	allAfter := newTotals.All()
-	if allBefore != allAfter {
-		au.log.Panicf("accountUpdates: sum of money changed from %d to %d", allBefore.Raw, allAfter.Raw)
-	}
-
-	au.roundTotals = append(au.roundTotals, newTotals)
-}
-
+// Totals returns the totals for a given round
 func (au *accountUpdates) Totals(rnd basics.Round) (totals AccountTotals, err error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
-
 	return au.totals(rnd)
 }
 
@@ -609,15 +520,28 @@ func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser
 
 // functions below this line are all internal functions
 
+// accountUpdatesLedgerEvaluator is a "ledger emulator" which is used *only* by initializeCaches, as a way to shortcut
+// the locks taken by the real ledger object when making requests that are being served by the accountUpdates.
+// Using this struct allow us to take the tracker lock *before* calling the loadFromDisk, and having the operation complete
+// without taking any locks. Note that it's not only the locks performance that is gained : by having the loadFrom disk
+// not requiring any external locks, we can safely take a trackers lock on the ledger during reloadLedger, which ensures
+// that even during catchpoint catchup mode switch, we're still correctly protected by a mutex.
 type accountUpdatesLedgerEvaluator struct {
-	au         *accountUpdates
+	// au is the associated accountUpdates structure which invoking the trackerEvalVerified function, passing this structure as input.
+	// the accountUpdatesLedgerEvaluator would access the underlying accountUpdates function directly, bypassing the balances mutex lock.
+	au *accountUpdates
+	// prevHeader is the previous header to the current one. The usage of this is only in the context of initializeCaches where we iteratively
+	// building the StateDelta, which requires a peek on the "previous" header information.
 	prevHeader bookkeeping.BlockHeader
 }
 
+// GenesisHash returns the genesis hash
 func (aul *accountUpdatesLedgerEvaluator) GenesisHash() crypto.Digest {
-	return aul.prevHeader.GenesisHash
+	return aul.au.ledger.GenesisHash()
 }
 
+// BlockHdr returns the header of the given round. When the evaluator is running, it's only referring to the previous header, which is what we
+// are providing here. Any attempt to access a different header would get denied.
 func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
 	if r == aul.prevHeader.Round {
 		return aul.prevHeader, nil
@@ -625,10 +549,12 @@ func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.
 	return bookkeeping.BlockHeader{}, ErrNoEntry{}
 }
 
+// Lookup returns the account balance for a given address at a given round
 func (aul *accountUpdatesLedgerEvaluator) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
 	return aul.au.lookup(rnd, addr, true)
 }
 
+// Totals returns the totals for a given round
 func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (AccountTotals, error) {
 	return aul.au.totals(rnd)
 }
@@ -638,15 +564,18 @@ func (aul *accountUpdatesLedgerEvaluator) isDup(config.ConsensusParams, basics.R
 	return false, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initilization ")
 }
 
+// GetRoundTxIds returns the transaction ids for a given round. It's not being used by the evaluator at all, and should be (future task) be removed from
+// the ledgerForEvaluator interface
 func (aul *accountUpdatesLedgerEvaluator) GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
-	// this is a non-issue since this call will never be made on non-validating evaluation
 	return nil
 }
 
+// Lookup returns the account balance for a given address at a given round, without the reward
 func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
 	return aul.au.lookup(rnd, addr, false)
 }
 
+// GetAssetCreatorForRound returns the asset creator for a given round
 func (aul *accountUpdatesLedgerEvaluator) GetAssetCreatorForRound(rnd basics.Round, assetIdx basics.AssetIndex) (basics.Address, error) {
 	return aul.au.getAssetCreatorForRound(rnd, assetIdx)
 }
@@ -757,7 +686,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		}
 		// Check for blocks DB and tracker DB un-sync
 		if au.dbRound > lastestBlockRound {
-			au.log.Warnf("resetting accounts DB (on round %v, but blocks DB's latest is %v)", au.dbRound, lastestBlockRound)
+			au.log.Warnf("accountUpdates.initializeFromDisk: resetting accounts DB (on round %v, but blocks DB's latest is %v)", au.dbRound, lastestBlockRound)
 			err0 = accountsReset(tx)
 			if err0 != nil {
 				return err0
@@ -942,6 +871,101 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Addre
 	// write it all to disk.
 	err = au.balancesTrie.Commit()
 	return
+}
+
+func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) {
+	proto := config.Consensus[blk.CurrentProtocol]
+	rnd := blk.Round()
+
+	if rnd <= au.latest() {
+		// Duplicate, ignore.
+		return
+	}
+
+	if rnd != au.latest()+1 {
+		au.log.Panicf("accountUpdates: newBlock %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
+	}
+	au.deltas = append(au.deltas, delta.accts)
+	au.protos = append(au.protos, proto)
+	au.assetDeltas = append(au.assetDeltas, delta.assets)
+	au.roundDigest = append(au.roundDigest, blk.Digest())
+	au.deltasAccum = append(au.deltasAccum, len(delta.accts)+au.deltasAccum[len(au.deltasAccum)-1])
+
+	var ot basics.OverflowTracker
+	newTotals := au.roundTotals[len(au.roundTotals)-1]
+	allBefore := newTotals.All()
+	newTotals.applyRewards(delta.hdr.RewardsLevel, &ot)
+
+	for addr, data := range delta.accts {
+		newTotals.delAccount(proto, data.old, &ot)
+		newTotals.addAccount(proto, data.new, &ot)
+
+		macct := au.accounts[addr]
+		macct.ndeltas++
+		macct.data = data.new
+		au.accounts[addr] = macct
+	}
+
+	for aidx, adelta := range delta.assets {
+		masset := au.assets[aidx]
+		masset.creator = adelta.creator
+		masset.created = adelta.created
+		masset.ndeltas++
+		au.assets[aidx] = masset
+	}
+
+	if ot.Overflowed {
+		au.log.Panicf("accountUpdates: newBlock %d overflowed totals", rnd)
+	}
+	allAfter := newTotals.All()
+	if allBefore != allAfter {
+		au.log.Panicf("accountUpdates: sum of money changed from %d to %d", allBefore.Raw, allAfter.Raw)
+	}
+
+	au.roundTotals = append(au.roundTotals, newTotals)
+}
+
+func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return
+	}
+
+	offsetForRewards := offset
+
+	defer func() {
+		if withRewards {
+			totals := au.roundTotals[offsetForRewards]
+			proto := au.protos[offsetForRewards]
+			data = data.WithUpdatedRewards(proto, totals.RewardsLevel)
+		}
+	}()
+
+	// Check if this is the most recent round, in which case, we can
+	// use a cache of the most recent account state.
+	if offset == uint64(len(au.deltas)) {
+		macct, ok := au.accounts[addr]
+		if ok {
+			return macct.data, nil
+		}
+	} else {
+		// Check if the account has been updated recently.  Traverse the deltas
+		// backwards to ensure that later updates take priority if present.
+		for offset > 0 {
+			offset--
+			d, ok := au.deltas[offset][addr]
+			if ok {
+				return d.new, nil
+			}
+		}
+	}
+
+	// No updates of this account in the in-memory deltas; use on-disk DB.
+	// The check in roundOffset() made sure the round is exactly the one
+	// present in the on-disk DB.  As an optimization, we avoid creating
+	// a separate transaction here, and directly use a prepared SQL query
+	// against the database.
+	return au.accountsq.lookup(addr)
 }
 
 func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Round, totals AccountTotals, ledgerBlockDigest crypto.Digest, trieBalancesHash crypto.Digest) (label string, err error) {
