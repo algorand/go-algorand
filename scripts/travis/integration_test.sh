@@ -10,6 +10,10 @@
 set -e
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+curl -sL -o ~/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
+chmod +x ~/gimme
+eval $(~/gimme $("${SCRIPTPATH}/../get_golang_version.sh"))
+
 export BUILD_TYPE="integration"
 if [ "${USER}" = "travis" ]; then
     # we're running on a travis machine
