@@ -32,11 +32,12 @@ func ddrFromParams(dp *DebugParams) (ddr v2.DryrunRequest, err error) {
 
 	var gdr generatedV2.DryrunRequest
 	err = protocol.DecodeJSON(dp.DdrBlob, &gdr)
-	if err != nil {
-		return
+	if err == nil {
+		ddr, err = v2.DryrunRequestFromGenerated(&gdr)
+	} else {
+		err = protocol.DecodeReflect(dp.DdrBlob, &ddr)
 	}
 
-	ddr, err = v2.DryrunRequestFromGenerated(&gdr)
 	return
 }
 
