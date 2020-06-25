@@ -85,7 +85,7 @@ type ledgerForTracker interface {
 	trackerDB() dbPair
 	blockDB() dbPair
 	trackerLog() logging.Logger
-	trackerEvalVerified(bookkeeping.Block) (StateDelta, error)
+	trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error)
 
 	Latest() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)

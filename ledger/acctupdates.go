@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -210,6 +211,8 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 // loadFromDisk is the 2nd level initializtion, and is required before the accountUpdates becomes functional
 // The close function is expected to be call in pair with loadFromDisk
 func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
+	au.accountsMu.Lock()
+	defer au.accountsMu.Unlock()
 	var writingCatchpointRound uint64
 	lastBalancesRound, lastestBlockRound, err := au.initializeFromDisk(l)
 
@@ -221,7 +224,6 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 
 	writingCatchpointRound, _, err = au.accountsq.readCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint)
 	if err != nil {
-		au.accountsMu.Unlock()
 		return err
 	}
 
@@ -246,9 +248,13 @@ func (au *accountUpdates) close() {
 	au.waitAccountsWriting()
 }
 
-func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
+func (au *accountUpdates) Lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
+	return au.lookup(rnd, addr, withRewards)
+}
+
+func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return
@@ -367,41 +373,11 @@ func (au *accountUpdates) getLastCatchpointLabel() string {
 	return au.lastCatchpointLabel
 }
 
-// getAssetCreatorForRound returns the asset creator for a given asset index at a given round
-func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.AssetIndex) (basics.Address, error) {
+// GetAssetCreatorForRound returns the asset creator for a given asset index at a given round
+func (au *accountUpdates) GetAssetCreatorForRound(rnd basics.Round, aidx basics.AssetIndex) (basics.Address, error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return basics.Address{}, err
-	}
-
-	// If this is the most recent round, au.assets has will have the latest
-	// state and we can skip scanning backwards over assetDeltas
-	if offset == uint64(len(au.deltas)) {
-		// Check if we already have the asset/creator in cache
-		assetDelta, ok := au.assets[aidx]
-		if ok {
-			if assetDelta.created {
-				return assetDelta.creator, nil
-			}
-			return basics.Address{}, fmt.Errorf("asset %v has been deleted", aidx)
-		}
-	} else {
-		for offset > 0 {
-			offset--
-			assetDelta, ok := au.assetDeltas[offset][aidx]
-			if ok {
-				if assetDelta.created {
-					return assetDelta.creator, nil
-				}
-				return basics.Address{}, fmt.Errorf("asset %v has been deleted", aidx)
-			}
-		}
-	}
-
-	// Check the database
-	return au.accountsq.lookupAssetCreator(aidx)
+	return au.getAssetCreatorForRound(rnd, aidx)
 }
 
 // committedUpTo enqueues commiting the balances for round committedRound-lookback.
@@ -516,7 +492,10 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	au.accountsMu.Lock()
 	defer au.accountsMu.Unlock()
+	au.newBlockImpl(blk, delta)
+}
 
+func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) {
 	proto := config.Consensus[blk.CurrentProtocol]
 	rnd := blk.Round()
 
@@ -568,16 +547,11 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	au.roundTotals = append(au.roundTotals, newTotals)
 }
 
-func (au *accountUpdates) totals(rnd basics.Round) (totals AccountTotals, err error) {
+func (au *accountUpdates) Totals(rnd basics.Round) (totals AccountTotals, err error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return
-	}
 
-	totals = au.roundTotals[offset]
-	return
+	return au.totals(rnd)
 }
 
 func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser, error) {
@@ -635,10 +609,107 @@ func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser
 
 // functions below this line are all internal functions
 
+type accountUpdatesLedgerEvaluator struct {
+	au         *accountUpdates
+	prevHeader bookkeeping.BlockHeader
+}
+
+func (aul *accountUpdatesLedgerEvaluator) GenesisHash() crypto.Digest {
+	return aul.prevHeader.GenesisHash
+}
+
+func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+	if r == aul.prevHeader.Round {
+		return aul.prevHeader, nil
+	}
+	return bookkeeping.BlockHeader{}, ErrNoEntry{}
+}
+
+func (aul *accountUpdatesLedgerEvaluator) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+	return aul.au.lookup(rnd, addr, true)
+}
+
+func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (AccountTotals, error) {
+	return aul.au.totals(rnd)
+}
+
+func (aul *accountUpdatesLedgerEvaluator) isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error) {
+	// this is a non-issue since this call will never be made on non-validating evaluation
+	return false, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initilization ")
+}
+
+func (aul *accountUpdatesLedgerEvaluator) GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
+	// this is a non-issue since this call will never be made on non-validating evaluation
+	return nil
+}
+
+func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+	return aul.au.lookup(rnd, addr, false)
+}
+
+func (aul *accountUpdatesLedgerEvaluator) GetAssetCreatorForRound(rnd basics.Round, assetIdx basics.AssetIndex) (basics.Address, error) {
+	return aul.au.getAssetCreatorForRound(rnd, assetIdx)
+}
+
+// getAssetCreatorForRound returns the asset creator for a given asset index at a given round
+func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.AssetIndex) (basics.Address, error) {
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return basics.Address{}, err
+	}
+
+	// If this is the most recent round, au.assets has will have the latest
+	// state and we can skip scanning backwards over assetDeltas
+	if offset == uint64(len(au.deltas)) {
+		// Check if we already have the asset/creator in cache
+		assetDelta, ok := au.assets[aidx]
+		if ok {
+			if assetDelta.created {
+				return assetDelta.creator, nil
+			}
+			return basics.Address{}, fmt.Errorf("asset %v has been deleted", aidx)
+		}
+	} else {
+		for offset > 0 {
+			offset--
+			assetDelta, ok := au.assetDeltas[offset][aidx]
+			if ok {
+				if assetDelta.created {
+					return assetDelta.creator, nil
+				}
+				return basics.Address{}, fmt.Errorf("asset %v has been deleted", aidx)
+			}
+		}
+	}
+
+	// Check the database
+	return au.accountsq.lookupAssetCreator(aidx)
+}
+
+func (au *accountUpdates) totals(rnd basics.Round) (totals AccountTotals, err error) {
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return
+	}
+
+	totals = au.roundTotals[offset]
+	return
+}
+
 // initializeCaches fills up the accountUpdates cache with the most recent ~320 blocks
 func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound, writingCatchpointRound basics.Round) (catchpointBlockDigest crypto.Digest, err error) {
 	var blk bookkeeping.Block
 	var delta StateDelta
+
+	accLedgerEval := accountUpdatesLedgerEvaluator{
+		au: au,
+	}
+	if lastBalancesRound < lastestBlockRound {
+		accLedgerEval.prevHeader, err = au.ledger.BlockHdr(lastBalancesRound)
+		if err != nil {
+			return
+		}
+	}
 
 	for lastBalancesRound < lastestBlockRound {
 		next := lastBalancesRound + 1
@@ -648,17 +719,19 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 			return
 		}
 
-		delta, err = au.ledger.trackerEvalVerified(blk)
+		delta, err = au.ledger.trackerEvalVerified(blk, &accLedgerEval)
 		if err != nil {
 			return
 		}
 
-		au.newBlock(blk, delta)
+		au.newBlockImpl(blk, delta)
 		lastBalancesRound = next
 
 		if next == basics.Round(writingCatchpointRound) {
 			catchpointBlockDigest = blk.Digest()
 		}
+
+		accLedgerEval.prevHeader = *delta.hdr
 	}
 	return
 }
@@ -666,15 +739,12 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 // initializeFromDisk performs the atomic operation of loading the accounts data information from disk
 // and preparing the accountUpdates for operation, including initlizating the commitSyncer goroutine.
 func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRound, lastestBlockRound basics.Round, err error) {
-	au.accountsMu.Lock()
-	defer au.accountsMu.Unlock()
-
 	au.dbs = l.trackerDB()
 	au.log = l.trackerLog()
 	au.ledger = l
 
 	if au.initAccounts == nil {
-		err = fmt.Errorf("accountUpdates.loadFromDisk: initAccounts not set")
+		err = fmt.Errorf("accountUpdates.initializeFromDisk: initAccounts not set")
 		return
 	}
 

@@ -137,6 +137,9 @@ func OpenLedger(
 }
 
 func (l *Ledger) reloadLedger() error {
+	l.trackerMu.Lock()
+	defer l.trackerMu.Unlock()
+
 	// close first.
 	l.trackers.close()
 	if l.blockQ != nil {
@@ -161,7 +164,7 @@ func (l *Ledger) reloadLedger() error {
 
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {
-		err = fmt.Errorf("reloadLedger.loadFromDisk %v", err)
+		err = fmt.Errorf("reloadLedger.reloadLedger %v", err)
 		return err
 	}
 
@@ -326,7 +329,7 @@ func (l *Ledger) GetLastCatchpointLabel() string {
 func (l *Ledger) GetAssetCreatorForRound(rnd basics.Round, assetIdx basics.AssetIndex) (basics.Address, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getAssetCreatorForRound(rnd, assetIdx)
+	return l.accts.GetAssetCreatorForRound(rnd, assetIdx)
 }
 
 // GetAssetCreator is like GetAssetCreatorForRound, but for the latest round
@@ -334,7 +337,7 @@ func (l *Ledger) GetAssetCreatorForRound(rnd basics.Round, assetIdx basics.Asset
 func (l *Ledger) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getAssetCreatorForRound(l.blockQ.latest(), assetIdx)
+	return l.accts.GetAssetCreatorForRound(l.blockQ.latest(), assetIdx)
 }
 
 // ListAssets takes a maximum asset index and maximum result length, and
@@ -354,7 +357,7 @@ func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	data, err := l.accts.lookup(rnd, addr, true)
+	data, err := l.accts.Lookup(rnd, addr, true)
 	if err != nil {
 		return basics.AccountData{}, err
 	}
@@ -368,7 +371,7 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ba
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	data, err := l.accts.lookup(rnd, addr, false)
+	data, err := l.accts.Lookup(rnd, addr, false)
 	if err != nil {
 		return basics.AccountData{}, err
 	}
@@ -380,7 +383,7 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ba
 func (l *Ledger) Totals(rnd basics.Round) (AccountTotals, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.totals(rnd)
+	return l.accts.Totals(rnd)
 }
 
 func (l *Ledger) isDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
@@ -444,7 +447,7 @@ func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreem
 func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
 
-	updates, err := l.eval(context.Background(), blk, false, nil, nil)
+	updates, err := eval(context.Background(), l, blk, false, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -535,9 +538,10 @@ func (l *Ledger) trackerLog() logging.Logger {
 	return l.log
 }
 
-func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block) (StateDelta, error) {
+// trackerEvalVerified is used by the accountUpdates to reconstruct the StateDelta from a given block.
+func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
-	delta, err := l.eval(context.Background(), blk, false, nil, nil)
+	delta, err := eval(context.Background(), accUpdatesLedger, blk, false, nil, nil)
 	return delta, err
 }
 
