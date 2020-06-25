@@ -127,14 +127,14 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 	latest := au.latest()
 	require.Equal(t, latest, latestRnd)
 
-	_, err := au.totals(latest + 1)
+	_, err := au.Totals(latest + 1)
 	require.Error(t, err)
 
 	_, err = au.lookup(latest+1, randomAddress(), false)
 	require.Error(t, err)
 
 	if base > 0 {
-		_, err := au.totals(base - 1)
+		_, err := au.Totals(base - 1)
 		require.Error(t, err)
 
 		_, err = au.lookup(base-1, randomAddress(), false)
@@ -186,7 +186,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			require.NoError(t, err)
 			require.Equal(t, all, accts[rnd])
 
-			totals, err := au.totals(rnd)
+			totals, err := au.Totals(rnd)
 			require.NoError(t, err)
 			require.Equal(t, totals.Online.Money.Raw, totalOnline)
 			require.Equal(t, totals.Offline.Money.Raw, totalOffline)
@@ -261,7 +261,7 @@ func TestAcctUpdates(t *testing.T) {
 		rewardLevel += rewardLevelDelta
 		updates, totals := randomDeltasBalanced(1, accts[i-1], rewardLevel)
 
-		prevTotals, err := au.totals(basics.Round(i - 1))
+		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
 		oldPool := accts[i-1][testPoolAddr]
@@ -436,7 +436,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		}
 
 		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
-		prevTotals, err := au.totals(basics.Round(i - 1))
+		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(b, err)
 
 		oldPool := accts[i-1][testPoolAddr]
@@ -566,7 +566,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		rewardLevel += rewardLevelDelta
 		updates, totals := randomDeltasBalanced(1, accts[i-1], rewardLevel)
 
-		prevTotals, err := au.totals(basics.Round(i - 1))
+		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
 		oldPool := accts[i-1][testPoolAddr]
