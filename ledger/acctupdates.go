@@ -1000,9 +1000,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		for addr := range deltas[i] {
 			flushcount[addr] = flushcount[addr] + 1
 		}
-	}
-
-	for i := uint64(0); i < offset; i++ {
 		for cidx := range creatableDeltas[i] {
 			creatableFlushcount[cidx] = creatableFlushcount[cidx] + 1
 		}
