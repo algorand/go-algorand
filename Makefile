@@ -13,8 +13,8 @@ S3_RELEASE_BUCKET = $$S3_RELEASE_BUCKET
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
 COMMITHASH       := $(shell ./scripts/compute_build_commit.sh)
 BUILDBRANCH      := $(shell ./scripts/compute_branch.sh)
-BUILDCHANNEL     := $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
-CHANNEL          ?= $(BUILDCHANNEL)
+CHANNEL          ?= $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
+BUILDCHANNEL     :=  CHANNEL
 DEFAULTNETWORK   ?= $(shell ./scripts/compute_branch_network.sh $(BUILDBRANCH))
 DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILDBRANCH))
 
@@ -294,5 +294,5 @@ SUPPORTED_ARCHIVE_OS_ARCH = linux/amd64 linux/arm64 linux/arm darwin/amd64
 
 archive:
 	CHANNEL=$(CHANNEL) \
-	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/bin:$${PATH} \
-	scripts/upload_version.sh $(BUILDCHANNEL) $(SRCPATH)/tmp/node_pkgs $(S3_RELEASE_BUCKET)
+	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(CHANNEL)/$(OS_TYPE)-$(ARCH)/bin:$${PATH} \
+	scripts/upload_version.sh $(CHANNEL) $(SRCPATH)/tmp/node_pkgs $(S3_RELEASE_BUCKET)
