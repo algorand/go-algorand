@@ -965,9 +965,11 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]map[basics.Address]accountDelta, offset, offset)
+	creatableDeltas := make([]map[basics.CreatableIndex]modifiedCreatable, offset, offset)
 	roundTotals := make([]AccountTotals, offset+1, offset+1)
 	protos := make([]config.ConsensusParams, offset+1, offset+1)
 	copy(deltas, au.deltas[:offset])
+	copy(creatableDeltas, au.creatableDeltas[:offset])
 	copy(roundTotals, au.roundTotals[:offset+1])
 	copy(protos, au.protos[:offset+1])
 
@@ -976,11 +978,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	// au.accounts.
 	flushcount := make(map[basics.Address]int)
 	creatableFlushcount := make(map[basics.CreatableIndex]int)
-	for i := uint64(0); i < offset; i++ {
-		for cidx := range au.creatableDeltas[i] {
-			creatableFlushcount[cidx] = creatableFlushcount[cidx] + 1
-		}
-	}
 
 	var committedRoundDigest crypto.Digest
 
@@ -1002,6 +999,12 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	for i := uint64(0); i < offset; i++ {
 		for addr := range deltas[i] {
 			flushcount[addr] = flushcount[addr] + 1
+		}
+	}
+
+	for i := uint64(0); i < offset; i++ {
+		for cidx := range creatableDeltas[i] {
+			creatableFlushcount[cidx] = creatableFlushcount[cidx] + 1
 		}
 	}
 
@@ -1028,7 +1031,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 		for i := uint64(0); i < offset; i++ {
-			err = accountsNewRound(tx, deltas[i], au.creatableDeltas[i], roundTotals[i+1].RewardsLevel, protos[i+1])
+			err = accountsNewRound(tx, deltas[i], creatableDeltas[i], roundTotals[i+1].RewardsLevel, protos[i+1])
 			if err != nil {
 				return err
 			}
