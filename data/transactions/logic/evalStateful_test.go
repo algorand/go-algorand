@@ -2659,3 +2659,33 @@ int 1
 	require.NoError(t, err)
 	require.True(t, pass)
 }
+
+func TestCurrentApplicationID(t *testing.T) {
+	source := `global CurrentApplicationID
+int 42
+==
+`
+	ledger := makeTestLedger(
+		map[basics.Address]uint64{},
+	)
+	ledger.appID = 42
+	program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(t, err)
+
+	ep := defaultEvalParams(nil, nil)
+	_, err = CheckStateful(program, ep)
+	require.NoError(t, err)
+	_, _, err = EvalStateful(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "ledger not available")
+
+	pass, err := Eval(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not allowed in current mode")
+	require.False(t, pass)
+
+	ep.Ledger = ledger
+	pass, _, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+}
