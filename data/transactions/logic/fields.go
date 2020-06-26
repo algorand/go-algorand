@@ -281,6 +281,8 @@ const (
 	Round
 	// LatestTimestamp uint64
 	LatestTimestamp
+	// CurrentApplicationID uint64
+	CurrentApplicationID
 
 	invalidGlobalField
 )
@@ -307,6 +309,7 @@ var globalFieldSpecs = []globalFieldSpec{
 	{LogicSigVersion, StackUint64, modeAny, 2},
 	{Round, StackUint64, runModeApplication, 2},
 	{LatestTimestamp, StackUint64, runModeApplication, 2},
+	{CurrentApplicationID, StackUint64, runModeApplication, 2},
 }
 
 // GlobalFieldSpecByField maps GlobalField to spec

@@ -1495,6 +1495,14 @@ func (cx *evalContext) getLatestTimestamp() (timestamp uint64, err error) {
 	return uint64(ts), nil
 }
 
+func (cx *evalContext) getApplicationID() (rnd uint64, err error) {
+	if cx.Ledger == nil {
+		err = fmt.Errorf("ledger not available")
+		return
+	}
+	return uint64(cx.Ledger.ApplicationID()), nil
+}
+
 var zeroAddress basics.Address
 
 func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err error) {
@@ -1515,6 +1523,8 @@ func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err
 		sv.Uint, err = cx.getRound()
 	case LatestTimestamp:
 		sv.Uint, err = cx.getLatestTimestamp()
+	case CurrentApplicationID:
+		sv.Uint, err = cx.getApplicationID()
 	default:
 		err = fmt.Errorf("invalid global[%d]", field)
 	}

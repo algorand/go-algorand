@@ -806,6 +806,7 @@ global GroupSize
 global LogicSigVersion
 global Round
 global LatestTimestamp
+global CurrentApplicationID
 txn Sender
 txn Fee
 bnz label1

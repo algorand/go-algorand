@@ -1215,6 +1215,10 @@ global LatestTimestamp
 int 0
 >
 &&
+global CurrentApplicationID
+int 42
+==
+&&
 `
 
 func TestGlobal(t *testing.T) {
@@ -1229,7 +1233,7 @@ func TestGlobal(t *testing.T) {
 		0: {GroupSize, globalV1TestProgram, Eval, Check},
 		1: {GroupSize, globalV1TestProgram, Eval, Check},
 		2: {
-			LatestTimestamp, globalV1TestProgram + globalV2TestProgram,
+			CurrentApplicationID, globalV1TestProgram + globalV2TestProgram,
 			func(p []byte, ep EvalParams) (bool, error) {
 				pass, _, err := EvalStateful(p, ep)
 				return pass, err
@@ -1238,6 +1242,7 @@ func TestGlobal(t *testing.T) {
 		},
 	}
 	ledger := makeTestLedger(nil)
+	ledger.appID = 42
 	for v := uint64(0); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			last := tests[v].lastField
