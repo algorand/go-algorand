@@ -34,9 +34,7 @@ fi
 
 export BRANCH=$1
 shift
-if [[ "${CHANNEL}" != "" ]];then
-   export CHANNEL=$(./scripts/compute_branch_channel.sh ${BRANCH})
-fi
+export CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "${BRANCH}")}
 export FULLVERSION=$(./scripts/compute_build_number.sh -f)
 export PKG_ROOT=${HOME}/node_pkg
 
