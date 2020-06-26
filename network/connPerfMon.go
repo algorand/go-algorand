@@ -70,8 +70,8 @@ type pmStatistics struct {
 // pmPendingMessageBucket is used to buffer messages in time ranges blocks.
 type pmPendingMessageBucket struct {
 	messages  map[crypto.Digest]*pmMessage // the pendingMessages map contains messages that haven't been received from all the peers within the pmMaxMessageWaitTime, and belong to the timerange of this bucket.
-	startTime int64                        // the start-range of the timestamp which bounds the messages ranges which would go into this bucket.
-	endTime   int64                        // the end-range of the timestamp which bounds the messages ranges which would go into this bucket.
+	startTime int64                        // the inclusive start-range of the timestamp which bounds the messages ranges which would go into this bucket. Time is in nano seconds UTC epoch time.
+	endTime   int64                        // the inclusive end-range of the timestamp which bounds the messages ranges which would go into this bucket. Time is in nano seconds UTC epoch time.
 }
 
 // connectionPerformanceMonitor is the connection monitor datatype. We typically would like to have a single monitor for all
