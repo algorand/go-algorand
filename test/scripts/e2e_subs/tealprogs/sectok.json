@@ -1,0 +1,414 @@
+{
+  "query": {
+    "global": {
+      "lock-until-group": {
+        "map": {
+          "kind": "byte",
+          "prefix": "0x0001"
+        },
+        "size": 40,
+        "kind": "int",
+        "help": "The first timestamp at which accounts in one group can issue transfers to accounts in another group."
+      },
+      "token-params": {
+        "kind": "string",
+        "key": "px",
+        "help": "The parameters of the security token. This is a JSON object with the string \"symbol\" attribute, the string \"name\" attribute, and the integer \"decimals\" attribute."
+      },
+      "reserve-supply": {
+        "kind": "int",
+        "key": "rv",
+        "help": "The supply of this security token currently sitting in reserve."
+      },
+      "total-supply": {
+        "kind": "int",
+        "key": "tt",
+        "help": "The total supply of this security token when first created. This value is constant."
+      },
+      "paused": {
+        "kind": "int",
+        "key": "ps",
+        "help": "Whether all trading is paused. No trading occurs unless this is zero."
+      }
+    },
+    "local": {
+      "lock-until": {
+        "kind": "int",
+        "key": "tl",
+        "help": "The first timestamp at which this account can issue and accept transfers."
+      },
+      "contract-admin": {
+        "kind": "int",
+        "key": "cX",
+        "help": "Whether this account is a contract admin. If this is one, this account may upgrade the application code, set the contract and transfer admin status of accounts, destroy the asset if the reserve holds the supply, mint and burn from the supply, pause and unpause all transfers, and freeze and unfreeze accounts. This is automatically set to one for the token creator."
+      },
+      "frozen": {
+        "kind": "int",
+        "key": "fz",
+        "help": "Whether this account is frozen. This account issue and accept transfers unless this is zero."
+      },
+      "balance": {
+        "kind": "int",
+        "key": "bl",
+        "help": "The number of tokens held by this account."
+      },
+      "transfer-admin": {
+        "kind": "int",
+        "key": "tX",
+        "help": "Whether this account is a transfer admin. A transfer admin can set transfer rules between groups, freeze and unfreeze accounts, and set the max balance, transfer group, and timed locks for accounts."
+      },
+      "transfer-group": {
+        "kind": "int",
+        "key": "tg",
+        "help": "The transfer group of this account, which affects the set of allowed transfers to and from other groups."
+      },
+      "max-balance": {
+        "kind": "int",
+        "key": "mb",
+        "help": "The maximum token balance allowed for this account."
+      }
+    }
+  },
+  "execute": {
+    "clear": {
+      "on-completion": "ClearState",
+      "accounts": [],
+      "foreign": [],
+      "create": false,
+      "help": "Clear all tokens out of the account.",
+      "args": []
+    },
+    "destroy": {
+      "on-completion": "DeleteApplication",
+      "accounts": [],
+      "foreign": [],
+      "create": false,
+      "help": "Destroy a security token. The entire token supply must be in the reserve. This transaction must be sent by a contract admin.",
+      "args": []
+    },
+    "set-transfer-rule": {
+      "on-completion": "NoOp",
+      "accounts": [],
+      "foreign": [],
+      "create": false,
+      "help": "Create, update, or delete a transfer rule. This transaction must be sent by a transfer admin.",
+      "args": [
+        {
+          "name": "send-group",
+          "pseudo": false,
+          "kind": "int",
+          "help": "The sending group the rule applies to."
+        },
+        {
+          "name": "receive-group",
+          "pseudo": false,
+          "kind": "int",
+          "help": "The receiving group the rule applies to."
+        },
+        {
+          "name": "lock-until",
+          "pseudo": false,
+          "kind": "int",
+          "help": "The first timestamp at which accounts in the sending group may make transfers to accounts in the receiving group."
+        }
+      ]
+    },
+    "pause": {
+      "on-completion": "NoOp",
+      "accounts": [],
+      "foreign": [],
+      "create": false,
+      "help": "Control whether all transfers are disallowed.",
+      "args": [
+        {
+          "name": "paused",
+          "pseudo": false,
+          "kind": "int",
+          "help": "No transfers will be allowed unless this is zero."
+        }
+      ]
+    },
+    "opt-in": {
+      "on-completion": "OptIn",
+      "accounts": [],
+      "foreign": [],
+      "create": false,
+      "help": "Opt into a token. The initial transfer group of all accounts is zero.",
+      "args": []
+    },
+    "mint": {
+      "on-completion": "NoOp",
+      "accounts": [
+        {
+          "name": "target",
+          "pseudo": false,
+          "help": "The account to which to mint to."
+        }
+      ],
+      "foreign": [],
+      "create": false,
+      "help": "Mint funds into an account. This circumvents other restrictions on that account. This transaction must be sent by a contract admin.",
+      "args": [
+        {
+          "name": "ignored",
+          "pseudo": true,
+          "kind": "string",
+          "help": "",
+          "default": "mn"
+        },
+        {
+          "name": "amount",
+          "pseudo": false,
+          "kind": "int",
+          "help": "The number of tokens to mint into the account."
+        }
+      ]
+    },
+    "set-transfer-admin": {
+      "on-completion": "NoOp",
+      "accounts": [
+        {
+          "name": "target",
+          "pseudo": false,
+          "help": "The account to configure."
+        }
+      ],
+      "foreign": [],
+      "create": false,
+      "help": "Configure the transfer admin status of an account. This transaction must be sent by a contract admin.",
+      "args": [
+        {
+          "name": "ignored",
+          "pseudo": true,
+          "kind": "string",
+          "help": "",
+          "default": "tX"
+        },
+        {
+          "name": "status",
+          "pseudo": false,
+          "kind": "int",
+          "help": "If this is 1, confer transfer admin status on the account; otherwise, revoke transfer admin status on the account."
+        }
+      ]
+    },
+    "set-contract-admin": {
+      "on-completion": "NoOp",
+      "accounts": [
+        {
+          "name": "target",
+          "pseudo": false,
+          "help": "The account to configure."
+        }
+      ],
+      "foreign": [],
+      "create": false,
+      "help": "Configure the contract admin status of an account. This transaction must be sent by a contract admin.",
+      "args": [
+        {
+          "name": "ignored",
+          "pseudo": true,
+          "kind": "string",
+          "help": "",
+          "default": "cX"
+        },
+        {
+          "name": "status",
+          "pseudo": false,
+          "kind": "int",
+          "help": "If this is 1, confer contract admin status on the account; otherwise, revoke contract admin status on the account."
+        }
+      ]
+    },
+    "transfer": {
+      "on-completion": "NoOp",
+      "accounts": [
+        {
+          "name": "receiver",
+          "pseudo": false,
+          "help": "The account receiving the tokens."
+        }
+      ],
+      "foreign": [],
+      "create": false,
+      "help": "Transfer tokens to a receiver.",
+      "args": [
+        {
+          "name": "amount",
+          "pseudo": false,
+          "kind": "int",
+          "help": "The number of tokens to transfer."
+        }
+      ]
+    },
+    "upgrade": {
+      "on-completion": "UpdateApplication",
+      "accounts": [],
+      "foreign": [],
+      "create": false,
+      "help": "Update the programs implementing the token. This transaction must be sent by a contract admin.",
+      "args": []
+    },
+    "set-lock-until": {
+      "on-completion": "NoOp",
+      "accounts": [
+        {
+          "name": "target",
+          "pseudo": false,
+          "help": "The account to configure."
+        }
+      ],
+      "foreign": [],
+      "create": false,
+      "help": "Set the first timestamp at which an account can issue transactions. This transaction must be sent by a transfer admin.",
+      "args": [
+        {
+          "name": "ignored",
+          "pseudo": true,
+          "kind": "string",
+          "help": "",
+          "default": "tl"
+        },
+        {
+          "name": "lock-until",
+          "pseudo": false,
+          "kind": "int",
+          "help": "Transfers from the account will be restricted until this timestamp passes."
+        }
+      ]
+    },
+    "set-max-balance": {
+      "on-completion": "NoOp",
+      "accounts": [
+        {
+          "name": "target",
+          "pseudo": false,
+          "help": "The account to configure."
+        }
+      ],
+      "foreign": [],
+      "create": false,
+      "help": "Set the maximum balance of an account. This transaction must be sent by a transfer admin.",
+      "args": [
+        {
+          "name": "ignored",
+          "pseudo": true,
+          "kind": "string",
+          "help": "",
+          "default": "mb"
+        },
+        {
+          "name": "max-balance",
+          "pseudo": false,
+          "kind": "int",
+          "help": "The new maximum balance of the account."
+        }
+      ]
+    },
+    "create": {
+      "on-completion": "OptIn",
+      "accounts": [],
+      "foreign": [],
+      "create": true,
+      "help": "Create a new security token.",
+      "args": [
+        {
+          "name": "token-params",
+          "pseudo": false,
+          "kind": "string",
+          "help": "The parameters for the token."
+        },
+        {
+          "name": "total-supply",
+          "pseudo": false,
+          "kind": "int",
+          "help": "The total supply for the token."
+        }
+      ]
+    },
+    "burn": {
+      "on-completion": "NoOp",
+      "accounts": [
+        {
+          "name": "target",
+          "pseudo": false,
+          "help": "The account from which to mint from."
+        }
+      ],
+      "foreign": [],
+      "create": false,
+      "help": "Burn funds from an account. This circumvents other restrictions on that account. This transaction must be sent by a contract admin.",
+      "args": [
+        {
+          "name": "ignored",
+          "pseudo": true,
+          "kind": "string",
+          "help": "",
+          "default": "br"
+        },
+        {
+          "name": "amount",
+          "pseudo": false,
+          "kind": "int",
+          "help": "The number of tokens to burn from the account."
+        }
+      ]
+    },
+    "freeze": {
+      "on-completion": "NoOp",
+      "accounts": [
+        {
+          "name": "target",
+          "pseudo": false,
+          "help": "The account which to freeze/unfreeze."
+        }
+      ],
+      "foreign": [],
+      "create": false,
+      "help": "Freeze or unfreeze an account. This transaction must be sent by either a contract or a transfer admin.",
+      "args": [
+        {
+          "name": "ignored",
+          "pseudo": true,
+          "kind": "string",
+          "help": "",
+          "default": "fz"
+        },
+        {
+          "name": "frozen",
+          "pseudo": false,
+          "kind": "int",
+          "help": "No transfers from this account will be allowed unless this is zero."
+        }
+      ]
+    },
+    "set-transfer-group": {
+      "on-completion": "NoOp",
+      "accounts": [
+        {
+          "name": "target",
+          "pseudo": false,
+          "help": "The account to configure."
+        }
+      ],
+      "foreign": [],
+      "create": false,
+      "help": "Set the transfer group an account belongs to. This transaction must be sent by a transfer admin.",
+      "args": [
+        {
+          "name": "ignored",
+          "pseudo": true,
+          "kind": "string",
+          "help": "",
+          "default": "tg"
+        },
+        {
+          "name": "transfer-group",
+          "pseudo": false,
+          "kind": "int",
+          "help": "The new transfer group of the account."
+        }
+      ]
+    }
+  }
+}
