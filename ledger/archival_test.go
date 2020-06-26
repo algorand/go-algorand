@@ -36,7 +36,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -245,11 +244,10 @@ func makeUnsignedAssetCreateTx(firstValid, lastValid basics.Round, total uint64,
 	return tx, nil
 }
 
-func makeUnsignedAssetDestroyTx(client libgoal.Client, firstValid, lastValid basics.Round, assetIndex uint64) (transactions.Transaction, error) {
-	txn, err := client.MakeUnsignedAssetDestroyTx(assetIndex)
-	if err != nil {
-		return transactions.Transaction{}, err
-	}
+func makeUnsignedAssetDestroyTx(firstValid, lastValid basics.Round, assetIndex uint64) (transactions.Transaction, error) {
+	var txn transactions.Transaction
+	txn.Type = protocol.AssetConfigTx
+	txn.ConfigAsset = basics.AssetIndex(assetIndex)
 	txn.FirstValid = firstValid
 	txn.LastValid = lastValid
 	return txn, nil
@@ -349,7 +347,6 @@ func TestArchivalCreatables(t *testing.T) {
 	var maxCreated uint64
 
 	// create apps and assets
-	client := libgoal.Client{}
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
@@ -385,7 +382,7 @@ func TestArchivalCreatables(t *testing.T) {
 		if i >= maxBlocks/2 && i < (3*(maxBlocks/4)) {
 			switch creatableIdxs[createdIdx] {
 			case AssetCreated:
-				tx, err = makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(createdIdx))
+				tx, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(createdIdx))
 				creatableIdxs[createdIdx] = AssetDeleted
 			case AppCreated:
 				tx, err = makeUnsignedApplicationCallTx(uint64(createdIdx), transactions.DeleteApplicationOC)
@@ -494,7 +491,7 @@ func TestArchivalCreatables(t *testing.T) {
 	var tx0 transactions.Transaction
 	switch creatableIdxs[creatableToDelete] {
 	case AssetCreated:
-		tx0, err = makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(creatableToDelete))
+		tx0, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(creatableToDelete))
 		creatableIdxs[creatableToDelete] = AssetDeleted
 	case AppCreated:
 		tx0, err = makeUnsignedApplicationCallTx(uint64(creatableToDelete), transactions.DeleteApplicationOC)
@@ -512,7 +509,7 @@ func TestArchivalCreatables(t *testing.T) {
 	var tx1 transactions.Transaction
 	switch creatableIdxs[creatableToDelete] {
 	case AssetCreated:
-		tx1, err = makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(creatableToDelete))
+		tx1, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(creatableToDelete))
 		creatableIdxs[creatableToDelete] = AssetDeleted
 	case AppCreated:
 		tx1, err = makeUnsignedApplicationCallTx(uint64(creatableToDelete), transactions.DeleteApplicationOC)
