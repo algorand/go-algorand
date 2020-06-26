@@ -45,6 +45,7 @@ type whiteholeDomain struct {
 	messagesMu   deadlock.Mutex
 	messagesCond *sync.Cond
 	peerIdx      uint32
+	log          logging.Logger
 }
 
 type whiteholeNetwork struct {
@@ -55,6 +56,7 @@ type whiteholeNetwork struct {
 	quit         chan struct{}
 	domain       *whiteholeDomain
 	disconnected map[uint32]bool
+	log          logging.Logger
 }
 
 func (d *whiteholeDomain) syncNetwork(networks ...*whiteholeNetwork) {
@@ -89,7 +91,7 @@ func (w *whiteholeNetwork) RegisterHandlers(dispatch []network.TaggedMessageHand
 
 // ClearHandlers deregisters all the existing message handlers.
 func (w *whiteholeNetwork) ClearHandlers() {
-	w.mux.ClearHandlers()
+	w.mux.ClearHandlers([]network.Tag{})
 }
 
 func (w *whiteholeNetwork) Address() (string, bool) {
@@ -315,7 +317,7 @@ func makewhiteholeNetwork(domain *whiteholeDomain) *whiteholeNetwork {
 	w := &whiteholeNetwork{
 		peer:         atomic.AddUint32(&domain.peerIdx, 1),
 		lastMsgRead:  uint32(len(domain.messages)),
-		mux:          network.MakeMultiplexer(),
+		mux:          network.MakeMultiplexer(domain.log),
 		domain:       domain,
 		disconnected: make(map[uint32]bool),
 	}
@@ -327,6 +329,7 @@ func spinNetworkImpl(domain *whiteholeDomain) (whiteholeNet *whiteholeNetwork, c
 	netImpl := WrapNetwork(whiteholeNet, logging.Base()).(*networkImpl)
 	counter = startMessageCounter(netImpl)
 	whiteholeNet.Start()
+	netImpl.Start()
 	return
 }
 
@@ -336,6 +339,7 @@ func TestNetworkImpl(t *testing.T) {
 	domain := &whiteholeDomain{
 		messages: make([]sentMessage, 0),
 		peerIdx:  uint32(0),
+		log:      logging.TestingLog(t),
 	}
 	domain.messagesCond = sync.NewCond(&domain.messagesMu)
 

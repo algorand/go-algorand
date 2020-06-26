@@ -4,15 +4,15 @@ tasks:
 
   - task: shell.docker.Ensure
     name: package
-    image: algorand/mule-linux-ubuntu
+    image: algorand/mule-linux-debian
     version: '{{ docker.Version.outputs.version }}'
-    dockerFilePath: docker/build/mule.ubuntu.Dockerfile
+    dockerFilePath: docker/build/mule.go.debian.Dockerfile
     dependencies: docker.Version
 
   - task: docker.Make
     name: package-test-deb
     docker:
-      image: algorand/mule-linux-ubuntu
+      image: algorand/mule-linux-debian
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
       env: [
@@ -20,12 +20,12 @@ tasks:
         AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
       ]
       volumes: [ /var/run/docker.sock:/var/run/docker.sock ]
-    target: package-test-deb WORKDIR=/projects/go-algorand
+    target: mule-test-deb WORKDIR=/projects/go-algorand
 
   - task: docker.Make
     name: package-test-rpm
     docker:
-      image: algorand/mule-linux-ubuntu
+      image: algorand/mule-linux-debian
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
       env: [
@@ -33,7 +33,7 @@ tasks:
         AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
       ]
       volumes: [ /var/run/docker.sock:/var/run/docker.sock ]
-    target: package-test-rpm WORKDIR=/projects/go-algorand
+    target: mule-test-rpm WORKDIR=/projects/go-algorand
 
   - task: s3.DownloadFile
     name: deb

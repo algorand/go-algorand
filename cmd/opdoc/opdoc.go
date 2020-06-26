@@ -82,12 +82,12 @@ func fieldTableMarkdown(out io.Writer, names []string, types []logic.StackType, 
 
 func transactionFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`txn` Fields:\n\n")
-	fieldTableMarkdown(out, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs)
+	fieldTableMarkdown(out, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs())
 }
 
 func globalFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`global` Fields:\n\n")
-	fieldTableMarkdown(out, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs)
+	fieldTableMarkdown(out, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs())
 }
 
 func assetHoldingFieldsMarkdown(out io.Writer) {
@@ -209,6 +209,15 @@ func argEnum(name string) []string {
 	if name == "global" {
 		return logic.GlobalFieldNames
 	}
+	if name == "txna" || name == "gtxna" {
+		return logic.TxnaFieldNames
+	}
+	if name == "asset_holding_get" {
+		return logic.AssetHoldingFieldNames
+	}
+	if name == "asset_params_get" {
+		return logic.AssetParamsFieldNames
+	}
 	return nil
 }
 
@@ -241,6 +250,16 @@ func argEnumTypes(name string) string {
 	if name == "global" {
 		return typeString(logic.GlobalFieldTypes)
 	}
+	if name == "txna" || name == "gtxna" {
+		return typeString(logic.TxnaFieldTypes)
+	}
+	if name == "asset_holding_get" {
+		return typeString(logic.AssetHoldingFieldTypes)
+	}
+	if name == "asset_params_get" {
+		return typeString(logic.AssetParamsFieldTypes)
+	}
+
 	return ""
 }
 
@@ -288,11 +307,11 @@ func main() {
 	constants.Close()
 
 	txnfields, _ := os.Create("txn_fields.md")
-	fieldTableMarkdown(txnfields, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs)
+	fieldTableMarkdown(txnfields, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs())
 	txnfields.Close()
 
 	globalfields, _ := os.Create("global_fields.md")
-	fieldTableMarkdown(globalfields, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs)
+	fieldTableMarkdown(globalfields, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs())
 	globalfields.Close()
 
 	assetholding, _ := os.Create("asset_holding_fields.md")
@@ -307,4 +326,10 @@ func main() {
 	enc := json.NewEncoder(langspecjs)
 	enc.Encode(buildLanguageSpec(opGroups))
 	langspecjs.Close()
+
+	tealtm, _ := os.Create("teal.tmLanguage.json")
+	enc = json.NewEncoder(tealtm)
+	enc.SetIndent("", "  ")
+	enc.Encode(buildSyntaxHighlight())
+	tealtm.Close()
 }

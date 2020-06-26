@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -134,6 +135,10 @@ func (vc *alwaysVerifiedCache) Verified(txn transactions.SignedTxn, params verif
 }
 
 func benchmarkFullBlocks(params testParams, b *testing.B) {
+	// Disable deadlock checking library (we do this here and not in init
+	// because we want deadlock detection for unit tests)
+	deadlock.Opts.Disable = true
+
 	dbTempDir, err := ioutil.TempDir("", "testdir"+b.Name())
 	require.NoError(b, err)
 	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
@@ -167,14 +172,15 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 
 	// open first ledger
 	const inMem = false // use persistent storage
-	const archival = true
-	l0, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l0, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 
 	// open second ledger
 	dbName = fmt.Sprintf("%s.%d.2", b.Name(), crypto.RandUint64())
 	dbPrefix = filepath.Join(dbTempDir, dbName)
-	l1, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	l1, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 
 	blk := genesisInitState.Block
@@ -374,9 +380,6 @@ func BenchmarkPay(b *testing.B) { benchmarkFullBlocks(testCases["pay"], b) }
 func init() {
 	testCases = make(map[string]testParams)
 
-	// Disable deadlock checking library
-	deadlock.Opts.Disable = true
-
 	lengths := []int{1, 16}
 	diffs := []bool{true, false}
 	state := []string{"local", "global"}
@@ -395,7 +398,7 @@ func init() {
 	testCases[params.name] = params
 
 	// Int 1
-	progBytes, err := logic.AssembleString(`int 1`)
+	progBytes, err := logic.AssembleStringV2(`int 1`)
 	if err != nil {
 		panic(err)
 	}
@@ -417,12 +420,12 @@ func init() {
 	testCases[params.name] = params
 
 	// Assemble ASA programs
-	asaClearStateProgram, err = logic.AssembleString(asaClearAsm)
+	asaClearStateProgram, err = logic.AssembleStringV2(asaClearAsm)
 	if err != nil {
 		panic(err)
 	}
 
-	asaAppovalProgram, err = logic.AssembleString(asaAppovalAsm)
+	asaAppovalProgram, err = logic.AssembleStringV2(asaAppovalAsm)
 	if err != nil {
 		panic(err)
 	}
@@ -469,7 +472,7 @@ func genBigNoOp(numOps int) []byte {
 	progParts = append(progParts, `int 1`)
 	progParts = append(progParts, `return`)
 	progAsm := strings.Join(progParts, "\n")
-	progBytes, err := logic.AssembleString(progAsm)
+	progBytes, err := logic.AssembleStringV2(progAsm)
 	if err != nil {
 		panic(err)
 	}
@@ -489,7 +492,7 @@ func genBigHashes(numHashes int, numPad int) []byte {
 	progParts = append(progParts, `int 1`)
 	progParts = append(progParts, `return`)
 	progAsm := strings.Join(progParts, "\n")
-	progBytes, err := logic.AssembleString(progAsm)
+	progBytes, err := logic.AssembleStringV2(progAsm)
 	if err != nil {
 		panic(err)
 	}
@@ -509,7 +512,7 @@ func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
 			int 0
 			int 1
 			itob
-			app_local_get
+			app_local_get_ex
 			bnz delete
 		`
 
@@ -563,7 +566,7 @@ func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
 			int 0  // current app id
 			int 1  // key
 			itob
-			app_global_get
+			app_global_get_ex
 			bnz delete
 		`
 
@@ -617,7 +620,7 @@ func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
 	}
 
 	// generate assembly
-	var progParts []string
+	progParts := []string{"#pragma version 2"}
 	progParts = append(progParts, deleteBranch)
 	progParts = append(progParts, writePrefix)
 	for i := 0; i < numKeys; i++ {
@@ -632,7 +635,7 @@ func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
 	progAsm := strings.Join(progParts, "\n")
 
 	// assemble
-	progBytes, err := logic.AssembleString(progAsm)
+	progBytes, err := logic.AssembleStringV2(progAsm)
 	if err != nil {
 		panic(err)
 	}
@@ -651,7 +654,7 @@ func genAppTestParamsMaxClone(numKeys int) testParams {
 		int 0  // current app id
 		int 1  // key
 		itob
-		app_global_get
+		app_global_get_ex
 		bnz flip
 	`
 
@@ -696,7 +699,7 @@ func genAppTestParamsMaxClone(numKeys int) testParams {
 	testDiffName := "max-clone"
 
 	// generate assembly
-	var progParts []string
+	progParts := []string{"#pragma version 2"}
 	progParts = append(progParts, flipBranch)
 	progParts = append(progParts, writePrefix)
 	for i := 0; i < numKeys; i++ {
@@ -708,7 +711,7 @@ func genAppTestParamsMaxClone(numKeys int) testParams {
 	progAsm := strings.Join(progParts, "\n")
 
 	// assemble
-	progBytes, err := logic.AssembleString(progAsm)
+	progBytes, err := logic.AssembleStringV2(progAsm)
 	if err != nil {
 		panic(err)
 	}
@@ -721,21 +724,21 @@ func genAppTestParamsMaxClone(numKeys int) testParams {
 	}
 }
 
-const asaClearAsm = `
+const asaClearAsm = `#pragma version 2
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_gets
+app_global_get
 int 0
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 +
 app_global_put
 int 1
 `
 
-const asaAppovalAsm = `
+const asaAppovalAsm = `#pragma version 2
 txn NumAppArgs
 int 7
 ==
@@ -770,13 +773,13 @@ bnz unless7
 // cannot modify frozen asset
 txn Sender
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if9
 int 0
 int 0
 byte base64 Zno=
-app_local_get
+app_local_get_ex
 pop
 int 1
 ==
@@ -784,7 +787,7 @@ int 1
 bnz if_end10
 if9:
 byte base64 Zno=
-app_global_gets
+app_global_get
 int 1
 ==
 if_end10:
@@ -794,7 +797,7 @@ err
 assert8:
 txn Sender
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if11
 int 0
@@ -802,7 +805,7 @@ byte base64 Ymw=
 int 0
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 load 1
 -
@@ -812,7 +815,7 @@ bnz if_end12
 if11:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_gets
+app_global_get
 load 1
 -
 app_global_put
@@ -825,13 +828,13 @@ bnz unless13
 // cannot modify frozen asset
 txna Accounts 1
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if15
 int 1
 int 0
 byte base64 Zno=
-app_local_get
+app_local_get_ex
 pop
 int 1
 ==
@@ -839,7 +842,7 @@ int 1
 bnz if_end16
 if15:
 byte base64 Zno=
-app_global_gets
+app_global_get
 int 1
 ==
 if_end16:
@@ -849,7 +852,7 @@ err
 assert14:
 txna Accounts 1
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if17
 int 1
@@ -857,7 +860,7 @@ byte base64 Ymw=
 int 1
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 load 1
 +
@@ -867,7 +870,7 @@ bnz if_end18
 if17:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_gets
+app_global_get
 load 1
 +
 app_global_put
@@ -880,7 +883,7 @@ bnz unless19
 int 0
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 store 2
 load 2
@@ -890,13 +893,13 @@ bnz unless20
 // cannot modify frozen asset
 txn Sender
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if22
 int 0
 int 0
 byte base64 Zno=
-app_local_get
+app_local_get_ex
 pop
 int 1
 ==
@@ -904,7 +907,7 @@ int 1
 bnz if_end23
 if22:
 byte base64 Zno=
-app_global_gets
+app_global_get
 int 1
 ==
 if_end23:
@@ -914,7 +917,7 @@ err
 assert21:
 txn Sender
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if24
 int 0
@@ -922,7 +925,7 @@ byte base64 Ymw=
 int 0
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 load 2
 -
@@ -932,7 +935,7 @@ bnz if_end25
 if24:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_gets
+app_global_get
 load 2
 -
 app_global_put
@@ -945,13 +948,13 @@ bnz unless26
 // cannot modify frozen asset
 txna Accounts 2
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if28
 int 2
 int 0
 byte base64 Zno=
-app_local_get
+app_local_get_ex
 pop
 int 1
 ==
@@ -959,7 +962,7 @@ int 1
 bnz if_end29
 if28:
 byte base64 Zno=
-app_global_gets
+app_global_get
 int 1
 ==
 if_end29:
@@ -969,7 +972,7 @@ err
 assert27:
 txna Accounts 2
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if30
 int 2
@@ -977,7 +980,7 @@ byte base64 Ymw=
 int 2
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 load 2
 +
@@ -987,7 +990,7 @@ bnz if_end31
 if30:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_gets
+app_global_get
 load 2
 +
 app_global_put
@@ -1011,7 +1014,7 @@ int 2
 int 0
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 int 0
 ==
@@ -1038,7 +1041,7 @@ btoi
 store 0
 txna Accounts 1
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if34
 int 1
@@ -1046,7 +1049,7 @@ byte base64 Ymw=
 int 1
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 load 0
 -
@@ -1056,14 +1059,14 @@ bnz if_end35
 if34:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_gets
+app_global_get
 load 0
 -
 app_global_put
 if_end35:
 txna Accounts 2
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if36
 int 2
@@ -1071,7 +1074,7 @@ byte base64 Ymw=
 int 2
 int 0
 byte base64 Ymw=
-app_local_get
+app_local_get_ex
 pop
 load 0
 +
@@ -1081,7 +1084,7 @@ bnz if_end37
 if36:
 byte base64 Ymw=
 byte base64 Ymw=
-app_global_gets
+app_global_get
 load 0
 +
 app_global_put
@@ -1095,7 +1098,7 @@ int 0
 &&
 txn Sender
 byte base64 Y2w=
-app_global_gets
+app_global_get
 ==
 &&
 int 1
@@ -1104,7 +1107,7 @@ cond5:
 // freeze asset holding
 txna Accounts 1
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 bnz if38
 int 1
@@ -1129,7 +1132,7 @@ int 0
 &&
 txn Sender
 byte base64 ZnI=
-app_global_gets
+app_global_get
 ==
 &&
 int 1
@@ -1145,7 +1148,7 @@ bnz when40
 int 0
 byte base64 Zno=
 byte base64 ZGY=
-app_global_gets
+app_global_get
 app_local_put
 when40:
 txn NumAppArgs
@@ -1156,13 +1159,13 @@ int 5
 ==
 txn Sender
 byte base64 bW4=
-app_global_gets
+app_global_get
 ==
 &&
 byte base64 dHQ=
-app_global_gets
+app_global_get
 byte base64 Ymw=
-app_global_gets
+app_global_get
 ==
 &&
 txn OnCompletion
@@ -1170,7 +1173,7 @@ int 1
 ==
 txn Sender
 byte base64 Y3I=
-app_global_gets
+app_global_get
 ==
 !
 &&
@@ -1187,13 +1190,13 @@ int 0
 bnz if41
 txn Sender
 byte base64 bW4=
-app_global_gets
+app_global_get
 ==
 txna ApplicationArgs 0
 global ZeroAddress
 ==
 byte base64 bW4=
-app_global_gets
+app_global_get
 global ZeroAddress
 ==
 !
@@ -1203,7 +1206,7 @@ txna ApplicationArgs 1
 global ZeroAddress
 ==
 byte base64 cnY=
-app_global_gets
+app_global_get
 global ZeroAddress
 ==
 !
@@ -1213,7 +1216,7 @@ txna ApplicationArgs 2
 global ZeroAddress
 ==
 byte base64 ZnI=
-app_global_gets
+app_global_get
 global ZeroAddress
 ==
 !
@@ -1223,7 +1226,7 @@ txna ApplicationArgs 3
 global ZeroAddress
 ==
 byte base64 Y2w=
-app_global_gets
+app_global_get
 global ZeroAddress
 ==
 !

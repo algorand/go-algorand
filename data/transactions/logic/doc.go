@@ -17,7 +17,8 @@
 package logic
 
 import (
-	"github.com/algorand/go-algorand/data/transactions"
+	"fmt"
+
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -63,6 +64,7 @@ var opDocList = []stringString{
 	{"^", "A bitwise-xor B"},
 	{"~", "bitwise invert value X"},
 	{"mulw", "A times B out to 128-bit long result as low (top) and high uint64 values on the stack"},
+	{"plusw", "A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack"},
 	{"intcblock", "load block of uint64 constants"},
 	{"intc", "push value from uint64 constants to stack by index into constants"},
 	{"intc_0", "push constant 0 from intcblock to stack"},
@@ -99,16 +101,16 @@ var opDocList = []stringString{
 	{"substring3", "pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result"},
 	{"balance", "get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction"},
 	{"app_opted_in", "check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1}"},
-	{"app_local_gets", "read from account specified by Txn.Accounts[A] from local state of the current application key B  => value"},
-	{"app_local_get", "read from account specified by Txn.Accounts[A] from local state of the application B key C  => {0 or 1 (top), value}"},
-	{"app_global_gets", "read key A from global state of a current application => value"},
-	{"app_global_get", "read from application A global state key B => {0 or 1 (top), value}"},
+	{"app_local_get", "read from account specified by Txn.Accounts[A] from local state of the current application key B => value"},
+	{"app_local_get_ex", "read from account specified by Txn.Accounts[A] from local state of the application B key C => {0 or 1 (top), value}"},
+	{"app_global_get", "read key A from global state of a current application => value"},
+	{"app_global_get_ex", "read from application A global state key B => {0 or 1 (top), value}"},
 	{"app_local_put", "write to account specified by Txn.Accounts[A] to local state of a current application key B with value C"},
 	{"app_global_put", "write key A and value B to global state of the current application"},
 	{"app_local_del", "delete from account specified by Txn.Accounts[A] local state key B of the current application"},
 	{"app_global_del", "delete key A from a global state of the current application"},
-	{"asset_holding_get", "read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg)  => {0 or 1 (top), value}"},
-	{"asset_params_get", "read from account specified by Txn.Accounts[A] and asset B params field X (imm arg)  => {0 or 1 (top), value}"},
+	{"asset_holding_get", "read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value}"},
+	{"asset_params_get", "read from account specified by Txn.Accounts[A] and asset B params field X (imm arg) => {0 or 1 (top), value}"},
 }
 
 var opDocByName map[string]string
@@ -156,25 +158,26 @@ func OpImmediateNote(opName string) string {
 var opDocExtraList = []stringString{
 	{"ed25519verify", "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack."},
 	{"bnz", "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are currently limited to forward branches only, 0-0x7fff. A future expansion might make this a signed 16 bit integer allowing for backward branches and looping.\n\nAt LogicSigVersion 2 it became allowed to branch to the end of the program exactly after the last instruction, removing the need for a last instruction or no-op as a branch target at the end. Branching beyond that may still fail the program."},
-	{"bz", "See `bnz` for details on how branches work"},
+	{"bz", "See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`."},
 	{"b", "See `bnz` for details on how branches work. `b` always jumps to the offset."},
 	{"intcblock", "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script."},
 	{"bytecblock", "`bytecblock` loads the following program bytes into an array of byte string constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script."},
 	{"*", "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`."},
+	{"+", "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `plusw`."},
 	{"txn", "FirstValidTime causes the program to fail. The field is reserved for future use."},
-	{"gtxn", "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`"},
-	{"btoi", "`btoi` panics if the input is longer than 8 bytes"},
-	{"concat", "`concat` panics if the result would be greater than 4096 bytes"},
-	{"app_opted_in", "params: account index, application id (top of the stack on opcode entry)"},
-	{"app_local_gets", "params: account index, state key. Return: value. The value is zero if the key does ont exist"},
-	{"app_local_get", "params: account index, application id, state key. Return: did_exist flag (top of the stack), value"},
-	{"app_global_get", "params: application id, state key. Return: value"},
-	{"app_global_gets", "params: state key. Return: value. The value is zero if the key does ont exist"},
-	{"app_local_put", "params: account index, state key, value"},
-	{"app_local_del", "params: account index, state key"},
-	{"app_global_del", "params: state key"},
-	{"asset_holding_get", "params: account index, asset id. Return: did_exist flag, value"},
-	{"asset_params_get", "params: account index, asset id. Return: did_exist flag, value"},
+	{"gtxn", "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`."},
+	{"btoi", "`btoi` panics if the input is longer than 8 bytes."},
+	{"concat", "`concat` panics if the result would be greater than 4096 bytes."},
+	{"app_opted_in", "params: account index, application id (top of the stack on opcode entry). Return: 1 if opted in and 0 otherwise."},
+	{"app_local_get", "params: account index, state key. Return: value. The value is zero if the key does not exist."},
+	{"app_local_get_ex", "params: account index, application id, state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value."},
+	{"app_global_get_ex", "params: application id, state key. Return: value."},
+	{"app_global_get", "params: state key. Return: value. The value is zero if the key does not exist."},
+	{"app_local_put", "params: account index, state key, value."},
+	{"app_local_del", "params: account index, state key."},
+	{"app_global_del", "params: state key."},
+	{"asset_holding_get", "params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherwise), value."},
+	{"asset_params_get", "params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherwise), value."},
 }
 
 var opDocExtras map[string]string
@@ -196,13 +199,11 @@ type OpGroup struct {
 
 // OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
-	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "concat", "substring", "substring3"}},
+	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "plusw", "concat", "substring", "substring3"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2"}},
-	{"State Access", []string{"balance", "app_opted_in", "app_local_gets", "app_local_get", "app_global_gets", "app_global_get", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
+	{"State Access", []string{"balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
 }
-
-var opCostByName map[string]int
 
 // OpCost returns the relative cost score for an op
 func OpCost(opName string) int {
@@ -229,13 +230,6 @@ func OpAllCosts(opName string) []int {
 	return costs
 }
 
-// OpAllVersions returns all opcode versions
-func OpAllVersions(opName string) []int {
-	return []int{}
-}
-
-var opSizeByName map[string]int
-
 // OpSize returns the number of bytes for an op. 0 for variable.
 func OpSize(opName string) int {
 	return opsByName[LogicVersion][opName].opSize.size
@@ -244,7 +238,7 @@ func OpSize(opName string) int {
 // see assembler.go TxnTypeNames
 // also used to parse symbolic constants for `int`
 var typeEnumDescriptions = []stringString{
-	{string(protocol.UnknownTx), "Unknown type. Invalid transaction."},
+	{string(protocol.UnknownTx), "Unknown type. Invalid transaction"},
 	{string(protocol.PaymentTx), "Payment"},
 	{string(protocol.KeyRegistrationTx), "KeyRegistration"},
 	{string(protocol.AssetConfigTx), "AssetConfig"},
@@ -265,18 +259,18 @@ func TypeNameDescription(typeName string) string {
 
 // see assembler.go TxnTypeNames
 // also used to parse symbolic constants for `int`
-var onCompletionDescriptions = map[transactions.OnCompletion]string{
-	transactions.NoOpOC:              "Application transaction will simply call its ApprovalProgram.",
-	transactions.OptInOC:             "Application transaction will allocate some LocalState for the application in the sender's account.",
-	transactions.CloseOutOC:          "Application transaction will deallocate some LocalState for the application from the user's account.",
-	transactions.ClearStateOC:        "Similar to CloseOutOC, but may never fail. This allows users to reclaim their minimum balance from an application they no longer wish to opt in to.",
-	transactions.UpdateApplicationOC: "Application transaction will update the ApprovalProgram and ClearStateProgram for the application.",
-	transactions.DeleteApplicationOC: "Application transaction will delete the AppParams for the application from the creator's balance.",
+var onCompletionDescriptions = map[OnCompletionConstType]string{
+	NoOp:              "Application transaction will simply call its ApprovalProgram.",
+	OptIn:             "Application transaction will allocate some LocalState for the application in the sender's account.",
+	CloseOut:          "Application transaction will deallocate some LocalState for the application from the user's account.",
+	ClearState:        "Similar to CloseOut, but may never fail. This allows users to reclaim their minimum balance from an application they no longer wish to opt in to.",
+	UpdateApplication: "Application transaction will update the ApprovalProgram and ClearStateProgram for the application.",
+	DeleteApplication: "Application transaction will delete the AppParams for the application from the creator's balance.",
 }
 
 // OnCompletionDescription returns extra description about OnCompletion constants
 func OnCompletionDescription(value uint64) string {
-	desc, ok := onCompletionDescriptions[transactions.OnCompletion(value)]
+	desc, ok := onCompletionDescriptions[OnCompletionConstType(value)]
 	if ok {
 		return desc
 	}
@@ -287,7 +281,7 @@ var txnFieldDocList = []stringString{
 	{"Sender", "32 byte address"},
 	{"Fee", "micro-Algos"},
 	{"FirstValid", "round number"},
-	{"FirstValidTime", "Causes program to fail; reserved for future use."},
+	{"FirstValidTime", "Causes program to fail; reserved for future use"},
 	{"LastValid", "round number"},
 	{"Receiver", "32 byte address"},
 	{"Amount", "micro-Algos"},
@@ -302,7 +296,7 @@ var txnFieldDocList = []stringString{
 	{"AssetSender", "32 byte address. Causes clawback of all value of asset from AssetSender if Sender is the Clawback address of the asset."},
 	{"AssetReceiver", "32 byte address"},
 	{"AssetCloseTo", "32 byte address"},
-	{"GroupIndex", "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1."},
+	{"GroupIndex", "Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1"},
 	{"TxID", "The computed ID for this transaction. 32 bytes."},
 	{"ApplicationID", "ApplicationID from ApplicationCall transaction"},
 	{"OnCompletion", "ApplicationCall transaction on completion action"},
@@ -312,23 +306,73 @@ var txnFieldDocList = []stringString{
 	{"NumAccounts", "Number of Accounts"},
 	{"ApprovalProgram", "Approval program"},
 	{"ClearStateProgram", "Clear state program"},
+	{"RekeyTo", "32 byte Sender's new AuthAddr"},
+	{"ConfigAsset", "Asset ID in asset config transaction"},
+	{"ConfigAssetTotal", "Total number of units of this asset created"},
+	{"ConfigAssetDecimals", "Number of digits to display after the decimal place when displaying the asset"},
+	{"ConfigAssetDefaultFrozen", "Whether the asset's slots are frozen by default or not, 0 or 1"},
+	{"ConfigAssetUnitName", "Unit name of the asset"},
+	{"ConfigAssetName", "The asset name"},
+	{"ConfigAssetURL", "URL"},
+	{"ConfigAssetMetadataHash", "32 byte commitment to some unspecified asset metadata"},
+	{"ConfigAssetManager", "32 byte address"},
+	{"ConfigAssetReserve", "32 byte address"},
+	{"ConfigAssetFreeze", "32 byte address"},
+	{"ConfigAssetClawback", "32 byte address"},
+	{"FreezeAsset", "Asset ID being frozen or un-frozen"},
+	{"FreezeAssetAccount", "32 byte address of the account whose asset slot is being frozen or un-frozen"},
+	{"FreezeAssetFrozen", "The new frozen value, 0 or 1"},
 }
 
 // TxnFieldDocs are notes on fields available by `txn` and `gtxn`
-var TxnFieldDocs map[string]string
+var txnFieldDocs map[string]string
+
+// TxnFieldDocs are notes on fields available by `txn` and `gtxn` with extra versioning info if any
+func TxnFieldDocs() map[string]string {
+	return fieldsDocWithExtra(txnFieldDocs, txnFieldSpecByName)
+}
 
 var globalFieldDocList = []stringString{
 	{"MinTxnFee", "micro Algos"},
 	{"MinBalance", "micro Algos"},
 	{"MaxTxnLife", "rounds"},
 	{"ZeroAddress", "32 byte address of all zero bytes"},
-	{"GroupSize", "Number of transactions in this atomic transaction group. At least 1."},
+	{"GroupSize", "Number of transactions in this atomic transaction group. At least 1"},
+	{"LogicSigVersion", "Maximum supported TEAL version"},
 	{"Round", "Current round number"},
 	{"LatestTimestamp", "Last confirmed block UNIX timestamp. Fails if negative"},
 }
 
-// GlobalFieldDocs are notes on fields available in `global`
-var GlobalFieldDocs map[string]string
+// globalFieldDocs are notes on fields available in `global`
+var globalFieldDocs map[string]string
+
+// GlobalFieldDocs are notes on fields available in `global` with extra versioning info if any
+func GlobalFieldDocs() map[string]string {
+	return fieldsDocWithExtra(globalFieldDocs, globalFieldSpecByName)
+}
+
+type extractor interface {
+	getExtraFor(string) string
+}
+
+func fieldsDocWithExtra(source map[string]string, ex extractor) map[string]string {
+	result := make(map[string]string, len(source))
+	for name, doc := range source {
+		if extra := ex.getExtraFor(name); len(extra) > 0 {
+			if len(doc) == 0 {
+				doc = extra
+			} else {
+				sep := ". "
+				if doc[len(doc)-1] == '.' {
+					sep = " "
+				}
+				doc = fmt.Sprintf("%s%s%s", doc, sep, extra)
+			}
+		}
+		result[name] = doc
+	}
+	return result
+}
 
 var assetHoldingFieldDocList = []stringString{
 	{"AssetBalance", "Amount of the asset unit held by this account"},
@@ -343,7 +387,7 @@ var assetParamsFieldDocList = []stringString{
 	{"AssetDecimals", "See AssetParams.Decimals"},
 	{"AssetDefaultFrozen", "Frozen by default or not"},
 	{"AssetUnitName", "Asset unit name"},
-	{"AssetAssetName", "Asset name"},
+	{"AssetName", "Asset name"},
 	{"AssetURL", "URL with additional info about the asset"},
 	{"AssetMetadataHash", "Arbitrary commitment"},
 	{"AssetManager", "Manager commitment"},
@@ -356,8 +400,8 @@ var assetParamsFieldDocList = []stringString{
 var AssetParamsFieldDocs map[string]string
 
 func init() {
-	TxnFieldDocs = stringStringListToMap(txnFieldDocList)
-	GlobalFieldDocs = stringStringListToMap(globalFieldDocList)
+	txnFieldDocs = stringStringListToMap(txnFieldDocList)
+	globalFieldDocs = stringStringListToMap(globalFieldDocList)
 	AssetHoldingFieldDocs = stringStringListToMap(assetHoldingFieldDocList)
 	AssetParamsFieldDocs = stringStringListToMap(assetParamsFieldDocList)
 }

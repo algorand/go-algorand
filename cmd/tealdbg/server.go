@@ -63,10 +63,13 @@ type DebugParams struct {
 	TxnBlob          []byte
 	GroupIndex       int
 	BalanceBlob      []byte
+	DdrBlob          []byte
 	Round            int
 	LatestTimestamp  int64
 	RunMode          string
 	DisableSourceMap bool
+	AppID            int
+	Painless         bool
 }
 
 // FrontendFactory interface for attaching debug frontends

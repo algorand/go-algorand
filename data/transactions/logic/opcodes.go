@@ -23,6 +23,11 @@ import (
 // LogicVersion defines default assembler and max eval versions
 const LogicVersion = 2
 
+// rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
+// was enabled. This is important to remember so that old TEAL accounts cannot
+// be maliciously or accidentally rekeyed.
+const rekeyingEnabledVersion = 2
+
 // opSize records the length in bytes for an op that is constant-length but not length 1
 type opSize struct {
 	cost      int
@@ -54,7 +59,6 @@ var oneInt = StackTypes{StackUint64}
 var twoInts = StackTypes{StackUint64, StackUint64}
 var oneAny = StackTypes{StackAny}
 var twoAny = StackTypes{StackAny, StackAny}
-var threeInts = StackTypes{StackUint64, StackUint64, StackUint64}
 
 // OpSpecs is the table of operations that can be assembled and evaluated.
 //
@@ -98,6 +102,7 @@ var OpSpecs = []OpSpec{
 	{0x1b, "^", opBitXor, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opSizeDefault},
 	{0x1c, "~", opBitNot, asmDefault, disDefault, oneInt, oneInt, 1, modeAny, opSizeDefault},
 	{0x1d, "mulw", opMulw, asmDefault, disDefault, twoInts, twoInts, 1, modeAny, opSizeDefault},
+	{0x1e, "plusw", opPlusw, asmDefault, disDefault, twoInts, twoInts, 2, modeAny, opSizeDefault},
 
 	{0x20, "intcblock", opIntConstBlock, assembleIntCBlock, disIntcblock, nil, nil, 1, modeAny, opSize{1, 0, checkIntConstBlock}},
 	{0x21, "intc", opIntConstLoad, assembleIntC, disIntc, nil, oneInt, 1, modeAny, opSize{1, 2, nil}},
@@ -143,10 +148,10 @@ var OpSpecs = []OpSpec{
 
 	{0x60, "balance", opBalance, asmDefault, disDefault, oneInt, oneInt, 2, runModeApplication, opSizeDefault},
 	{0x61, "app_opted_in", opAppCheckOptedIn, asmDefault, disDefault, twoInts, oneInt, 2, runModeApplication, opSizeDefault},
-	{0x62, "app_local_gets", opAppGetLocalStateSimple, asmDefault, disDefault, oneInt.plus(oneBytes), oneAny, 2, runModeApplication, opSizeDefault},
-	{0x63, "app_local_get", opAppGetLocalState, asmDefault, disDefault, twoInts.plus(oneBytes), oneInt.plus(oneAny), 2, runModeApplication, opSizeDefault},
-	{0x64, "app_global_gets", opAppGetGlobalStateSimple, asmDefault, disDefault, oneBytes, oneAny, 2, runModeApplication, opSizeDefault},
-	{0x65, "app_global_get", opAppGetGlobalState, asmDefault, disDefault, oneInt.plus(oneBytes), oneInt.plus(oneAny), 2, runModeApplication, opSizeDefault},
+	{0x62, "app_local_get", opAppGetLocalState, asmDefault, disDefault, oneInt.plus(oneBytes), oneAny, 2, runModeApplication, opSizeDefault},
+	{0x63, "app_local_get_ex", opAppGetLocalStateEx, asmDefault, disDefault, twoInts.plus(oneBytes), oneInt.plus(oneAny), 2, runModeApplication, opSizeDefault},
+	{0x64, "app_global_get", opAppGetGlobalState, asmDefault, disDefault, oneBytes, oneAny, 2, runModeApplication, opSizeDefault},
+	{0x65, "app_global_get_ex", opAppGetGlobalStateEx, asmDefault, disDefault, oneInt.plus(oneBytes), oneInt.plus(oneAny), 2, runModeApplication, opSizeDefault},
 	{0x66, "app_local_put", opAppPutLocalState, asmDefault, disDefault, oneInt.plus(oneBytes).plus(oneAny), nil, 2, runModeApplication, opSizeDefault},
 	{0x67, "app_global_put", opAppPutGlobalState, asmDefault, disDefault, oneBytes.plus(oneAny), nil, 2, runModeApplication, opSizeDefault},
 	{0x68, "app_local_del", opAppDeleteLocalState, asmDefault, disDefault, oneInt.plus(oneBytes), nil, 2, runModeApplication, opSizeDefault},
@@ -164,7 +169,8 @@ func (a sortByOpcode) Less(i, j int) bool { return a[i].Opcode < a[j].Opcode }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
 // by copying v1 opcodes to v2 to create a full list.
-// This function must be used for documentation only because it modifies opcode versions.
+// This function must be used for documentation only because it modifies opcode versions
+// to the first introduced for the opcodes updated in later versions.
 func OpcodesByVersion(version uint64) []OpSpec {
 	// for updated opcodes use the lowest version opcode was introduced in
 	maxOpcode := 0
@@ -213,6 +219,12 @@ func OpcodesByVersion(version uint64) []OpSpec {
 var opsByOpcode [LogicVersion + 1][256]OpSpec
 var opsByName [LogicVersion + 1]map[string]OpSpec
 
+// Migration from TEAL v1 to TEAL v2.
+// TEAL v1 allowed execution of program with version 0.
+// With TEAL v2 opcode versions are introduced and they are bound to every opcode.
+// There is no opcodes with version 0 so that TEAL v2 evaluator rejects any program with version 0.
+// To preserve backward compatibility version 0 array is populated with TEAL v1 opcodes
+// with the version overwritten to 0.
 func init() {
 	// First, initialize baseline v1 opcodes.
 	// Zero (empty) version is an alias for TEAL v1 opcodes and needed for compatibility with v1 code.
@@ -220,8 +232,10 @@ func init() {
 	opsByName[1] = make(map[string]OpSpec, 256)
 	for _, oi := range OpSpecs {
 		if oi.Version == 1 {
-			opsByOpcode[0][oi.Opcode] = oi
-			opsByName[0][oi.Name] = oi
+			cp := oi
+			cp.Version = 0
+			opsByOpcode[0][oi.Opcode] = cp
+			opsByName[0][oi.Name] = cp
 
 			opsByOpcode[1][oi.Opcode] = oi
 			opsByName[1][oi.Name] = oi

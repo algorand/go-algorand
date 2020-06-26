@@ -32,7 +32,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -43,7 +43,7 @@ import (
 	"github.com/algorand/go-algorand/rpcs"
 )
 
-func nodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
+func getNodeStatus(node *node.AlgorandFullNode) (res v1.NodeStatus, err error) {
 	stat, err := node.Status()
 	if err != nil {
 		return v1.NodeStatus{}, err
@@ -496,7 +496,7 @@ func Status(ctx lib.ReqContext, context echo.Context) {
 
 	w := context.Response().Writer
 
-	nodeStatus, err := nodeStatus(ctx.Node)
+	nodeStatus, err := getNodeStatus(ctx.Node)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
 		return
@@ -530,10 +530,13 @@ func WaitForBlock(ctx lib.ReqContext, context echo.Context) {
 	//       400:
 	//         description: Bad Request
 	//         schema: {type: string}
+	//       401: { description: Invalid API Token }
 	//       500:
 	//         description: Internal Error
 	//         schema: {type: string}
-	//       401: { description: Invalid API Token }
+	//       503:
+	//         description: Service
+	//         schema: {type: string}
 	//       default: { description: Unknown Error }
 
 	w := context.Response().Writer
@@ -561,6 +564,17 @@ func WaitForBlock(ctx lib.ReqContext, context echo.Context) {
 		}
 	}
 
+	internalNodeStatus, err := ctx.Node.Status()
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+	}
+
+	if internalNodeStatus.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("WaitForBlock failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
+		return
+	}
+
 	select {
 	case <-ctx.Shutdown:
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errServiceShuttingDown, ctx.Log)
@@ -569,7 +583,7 @@ func WaitForBlock(ctx lib.ReqContext, context echo.Context) {
 	case <-ledger.Wait(basics.Round(queryRound + 1)):
 	}
 
-	nodeStatus, err := nodeStatus(ctx.Node)
+	nodeStatus, err := getNodeStatus(ctx.Node)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
 		return
@@ -604,14 +618,29 @@ func RawTransaction(ctx lib.ReqContext, context echo.Context) {
 	//       400:
 	//         description: Bad Request
 	//         schema: {type: string}
+	//       401: { description: Invalid API Token }
 	//       500:
 	//         description: Internal Error
 	//         schema: {type: string}
-	//       401: { description: Invalid API Token }
+	//       503:
+	//         description: Service Unavailable
+	//         schema: {type: string}
 	//       default: { description: Unknown Error }
 
 	w := context.Response().Writer
 	r := context.Request()
+
+	stat, err := ctx.Node.Status()
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+		return
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("RawTransaction failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
+		return
+	}
+	proto := config.Consensus[stat.LastVersion]
 
 	var txgroup []transactions.SignedTxn
 	dec := protocol.NewDecoder(r.Body)
@@ -626,6 +655,12 @@ func RawTransaction(ctx lib.ReqContext, context echo.Context) {
 			return
 		}
 		txgroup = append(txgroup, st)
+
+		if len(txgroup) > proto.MaxTxGroupSize {
+			err := fmt.Errorf("max group size is %d", proto.MaxTxGroupSize)
+			lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
+			return
+		}
 	}
 
 	if len(txgroup) == 0 {
@@ -634,7 +669,7 @@ func RawTransaction(ctx lib.ReqContext, context echo.Context) {
 		return
 	}
 
-	err := ctx.Node.BroadcastSignedTxGroup(txgroup)
+	err = ctx.Node.BroadcastSignedTxGroup(txgroup)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
 		return
@@ -915,6 +950,9 @@ func PendingTransactionInformation(ctx lib.ReqContext, context echo.Context) {
 	//         description: Transaction Not Found
 	//         schema: {type: string}
 	//       401: { description: Invalid API Token }
+	//       503:
+	//         description: Service Unavailable
+	//         schema: {type: string}
 	//       default: { description: Unknown Error }
 
 	w := context.Response().Writer
@@ -928,6 +966,16 @@ func PendingTransactionInformation(ctx lib.ReqContext, context echo.Context) {
 	txID := transactions.Txid{}
 	if txID.UnmarshalText([]byte(queryTxID)) != nil {
 		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errNoTxnSpecified), errNoTxnSpecified, ctx.Log)
+		return
+	}
+
+	internalNodeStatus, err := ctx.Node.Status()
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+	}
+	if internalNodeStatus.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("PendingTransactionInformation failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
 		return
 	}
 
@@ -985,10 +1033,13 @@ func GetPendingTransactions(ctx lib.ReqContext, context echo.Context) {
 	//     Responses:
 	//       "200":
 	//         "$ref": '#/responses/PendingTransactionsResponse'
+	//       401: { description: Invalid API Token }
 	//       500:
 	//         description: Internal Error
 	//         schema: {type: string}
-	//       401: { description: Invalid API Token }
+	//       503:
+	//         description: Service Unavailable
+	//         schema: {type: string}
 	//       default: { description: Unknown Error }
 
 	w := context.Response().Writer
@@ -997,6 +1048,16 @@ func GetPendingTransactions(ctx lib.ReqContext, context echo.Context) {
 	max, err := strconv.ParseUint(r.FormValue("max"), 10, 64)
 	if err != nil {
 		max = 0
+	}
+
+	internalNodeStatus, err := ctx.Node.Status()
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+	}
+	if internalNodeStatus.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("GetPendingTransactions failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
+		return
 	}
 
 	txs, err := ctx.Node.GetPendingTxnsFromPool()
@@ -1066,10 +1127,13 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, context echo.Context) {
 	//     Responses:
 	//       "200":
 	//         "$ref": '#/responses/PendingTransactionsResponse'
+	//       401: { description: Invalid API Token }
 	//       500:
 	//         description: Internal Error
 	//         schema: {type: string}
-	//       401: { description: Invalid API Token }
+	//       503:
+	//         description: Service Unavailable
+	//         schema: {type: string}
 	//       default: { description: Unknown Error }
 
 	w := context.Response().Writer
@@ -1091,6 +1155,17 @@ func GetPendingTransactionsByAddress(ctx lib.ReqContext, context echo.Context) {
 	addr, err := basics.UnmarshalChecksumAddress(queryAddr)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseAddress, ctx.Log)
+		return
+	}
+
+	internalNodeStatus, err := ctx.Node.Status()
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+	}
+
+	if internalNodeStatus.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("GetPendingTransactionsByAddress failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
 		return
 	}
 
@@ -1297,172 +1372,6 @@ func Assets(ctx lib.ReqContext, context echo.Context) {
 	SendJSON(AssetsResponse{&result}, w, ctx.Log)
 }
 
-// ApplicationInformation is an httpHandler for route GET /v1/application/{index:[0-9]+}
-func ApplicationInformation(ctx lib.ReqContext, context echo.Context) {
-	// swagger:operation GET /v1/application/{index} ApplicationInformation
-	// ---
-	//     Summary: Get application information.
-	//     Description: >
-	//       Given the application's unique index, this call returns the application's
-	//       creator and global parameters (including global state).
-	//     Produces:
-	//     - application/json
-	//     Schemes:
-	//     - http
-	//     Parameters:
-	//       - name: index
-	//         in: path
-	//         type: integer
-	//         format: int64
-	//         required: true
-	//         description: App index
-	//     Responses:
-	//       200:
-	//         "$ref": '#/responses/ApplicationInformationResponse'
-	//       400:
-	//         description: Bad Request
-	//         schema: {type: string}
-	//       500:
-	//         description: Internal Error
-	//         schema: {type: string}
-	//       401: { description: Invalid API Token }
-	//       default: { description: Unknown Error }
-	w := context.Response().Writer
-
-	queryIndex, err := strconv.ParseUint(context.Param("index"), 10, 64)
-
-	if err != nil {
-		lib.ErrorResponse(w, http.StatusBadRequest, err, errFailedToParseAppIndex, ctx.Log)
-		return
-	}
-
-	ledger := ctx.Node.Ledger()
-	aidx := basics.AppIndex(queryIndex)
-	creator, ok, err := ledger.GetAppCreator(aidx)
-	if err != nil {
-		lib.ErrorResponse(w, http.StatusNotFound, err, errFailedToGetAppCreator, ctx.Log)
-		return
-	}
-	if !ok {
-		lib.ErrorResponse(w, http.StatusNotFound, err, errAppDoesNotExist, ctx.Log)
-		return
-	}
-
-	lastRound := ledger.Latest()
-	record, err := ledger.Lookup(lastRound, creator)
-	if err != nil {
-		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
-		return
-	}
-
-	if app, ok := record.AppParams[aidx]; ok {
-		appParams := modelAppParams(creator, app)
-		SendJSON(ApplicationInformationResponse{&appParams}, w, ctx.Log)
-	} else {
-		lib.ErrorResponse(w, http.StatusBadRequest, fmt.Errorf(errFailedRetrievingApp), errFailedRetrievingApp, ctx.Log)
-		return
-	}
-}
-
-// Applications is an httpHandler for route GET /v1/applications
-func Applications(ctx lib.ReqContext, context echo.Context) {
-	// swagger:operation GET /v1/applications Applications
-	// ---
-	//     Summary: List applications
-	//     Description: Returns list of up to `max` applications, where the maximum appIdx is <= `appIdx`
-	//     Produces:
-	//     - application/json
-	//     Schemes:
-	//     - http
-	//     Parameters:
-	//       - name: appIdx
-	//         in: query
-	//         type: integer
-	//         format: int64
-	//         minimum: 0
-	//         required: false
-	//         description: Fetch applications with application index <= appIdx. If zero, fetch most recent assets.
-	//       - name: max
-	//         in: query
-	//         type: integer
-	//         format: int64
-	//         minimum: 0
-	//         maximum: 100
-	//         required: false
-	//         description: Fetch no more than this many applications
-	//     Responses:
-	//       200:
-	//         "$ref": '#/responses/ApplicationsResponse'
-	//       400:
-	//         description: Bad Request
-	//         schema: {type: string}
-	//       500:
-	//         description: Internal Error
-	//         schema: {type: string}
-	//       401: { description: Invalid API Token }
-	//       default: { description: Unknown Error }
-	w := context.Response().Writer
-	r := context.Request()
-
-	const maxAppsToList = 100
-
-	// Parse max app to fetch from db
-	max, err := strconv.ParseInt(r.FormValue("max"), 10, 64)
-	if err != nil || max < 0 || max > maxAppsToList {
-		err := fmt.Errorf(errFailedParsingMaxAppsToList, 0, maxAppsToList)
-		lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
-		return
-	}
-
-	// Parse maximum app idx
-	appIdx, err := strconv.ParseInt(r.FormValue("appIdx"), 10, 64)
-	if err != nil || appIdx < 0 {
-		errs := errFailedParsingAppIdx
-		lib.ErrorResponse(w, http.StatusBadRequest, errors.New(errs), errs, ctx.Log)
-		return
-	}
-
-	// If appIdx is 0, we want the most recent apps, so make it intmax
-	if appIdx == 0 {
-		appIdx = (1 << 63) - 1
-	}
-
-	// Query app range from the database
-	ledger := ctx.Node.Ledger()
-	alocs, err := ledger.ListApplications(basics.AppIndex(appIdx), uint64(max))
-	if err != nil {
-		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingApp, ctx.Log)
-		return
-	}
-
-	// Fill in the app models
-	lastRound := ledger.Latest()
-	var result v1.ApplicationList
-	for _, aloc := range alocs {
-		// Fetch the app parameters
-		creatorRecord, err := ledger.Lookup(lastRound, aloc.Creator)
-		if err != nil {
-			lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
-			return
-		}
-
-		// Ensure no race with app deletion
-		rp, ok := creatorRecord.AppParams[basics.AppIndex(aloc.Index)]
-		if !ok {
-			continue
-		}
-
-		// Append the result
-		params := modelAppParams(aloc.Creator, rp)
-		result.Applications = append(result.Applications, v1.Application{
-			AppIndex:  uint64(aloc.Index),
-			AppParams: params,
-		})
-	}
-
-	SendJSON(ApplicationsResponse{&result}, w, ctx.Log)
-}
-
 // SuggestedFee is an httpHandler for route GET /v1/transactions/fee
 func SuggestedFee(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/transactions/fee SuggestedFee
@@ -1481,9 +1390,24 @@ func SuggestedFee(ctx lib.ReqContext, context echo.Context) {
 	//       "200":
 	//         "$ref": '#/responses/TransactionFeeResponse'
 	//       401: { description: Invalid API Token }
+	//       503:
+	//         description: Service Unavailable
+	//         schema: {type: string}
 	//       default: { description: Unknown Error }
 
 	w := context.Response().Writer
+
+	internalNodeStatus, err := ctx.Node.Status()
+	if err != nil {
+		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+	}
+
+	if internalNodeStatus.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("SuggestedFee failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
+		return
+	}
+
 	fee := v1.TransactionFee{Fee: ctx.Node.SuggestedFee().Raw}
 	SendJSON(TransactionFeeResponse{&fee}, w, ctx.Log)
 }
@@ -1508,6 +1432,11 @@ func SuggestedParams(ctx lib.ReqContext, context echo.Context) {
 	stat, err := ctx.Node.Status()
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedRetrievingNodeStatus, ctx.Log)
+		return
+	}
+	if stat.Catchpoint != "" {
+		// node is currently catching up to the requested catchpoint.
+		lib.ErrorResponse(w, http.StatusServiceUnavailable, fmt.Errorf("SuggestedParams failed as the node was catchpoint catchuping"), errOperationNotAvailableDuringCatchup, ctx.Log)
 		return
 	}
 
@@ -1584,7 +1513,7 @@ func GetBlock(ctx lib.ReqContext, context echo.Context) {
 				lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 				return
 			}
-			w.Header().Set("Content-Type", rpcs.LedgerResponseContentType)
+			w.Header().Set("Content-Type", rpcs.BlockResponseContentType)
 			w.Header().Set("Content-Length", strconv.Itoa(len(blockbytes)))
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 			w.WriteHeader(http.StatusOK)
@@ -1603,6 +1532,12 @@ func GetBlock(ctx lib.ReqContext, context echo.Context) {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
 	}
+
+	if len(c.Votes) == 0 && c.Round > basics.Round(0) {
+		lib.ErrorResponse(w, http.StatusNotFound, err, errCertificateIsMissingFromBlock, ctx.Log)
+		return
+	}
+
 	block, err := blockEncode(b, c)
 
 	if err != nil {

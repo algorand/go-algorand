@@ -113,7 +113,7 @@ var V1Routes = lib.Routes{
 	lib.Route{
 		Name:        "pending-transaction-information-by-address",
 		Method:      "GET",
-		Path:        "/account/{addr}/transactions/pending",
+		Path:        "/account/:addr/transactions/pending",
 		HandlerFunc: handlers.GetPendingTransactionsByAddress,
 	},
 
@@ -129,20 +129,6 @@ var V1Routes = lib.Routes{
 		Method:      "GET",
 		Path:        "/assets",
 		HandlerFunc: handlers.Assets,
-	},
-
-	lib.Route{
-		Name:        "application-information-by-id",
-		Method:      "GET",
-		Path:        "/application/:index",
-		HandlerFunc: handlers.ApplicationInformation,
-	},
-
-	lib.Route{
-		Name:        "list-applications",
-		Method:      "GET",
-		Path:        "/applications",
-		HandlerFunc: handlers.Applications,
 	},
 
 	// ----- This can only be active when indexer is live

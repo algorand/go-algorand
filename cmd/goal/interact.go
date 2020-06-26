@@ -28,7 +28,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -103,6 +102,38 @@ func helpList(help map[string]appInteractDatum) string {
 	return strings.Join(entries, "\n")
 }
 
+func appSpecRuneInvalid(r rune) bool {
+	if 'a' <= r && r <= 'z' {
+		return false
+	}
+	if 'A' <= r && r <= 'Z' {
+		return false
+	}
+	if '0' <= r && r <= '9' {
+		return false
+	}
+	if r == '-' || r == '+' || r == '_' {
+		return false
+	}
+	return true
+}
+
+func appSpecStringInvalid(s string) error {
+	for _, r := range s {
+		if appSpecRuneInvalid(r) {
+			return fmt.Errorf("%s contains an invalid rune", strconv.Quote(s))
+		}
+	}
+	return nil
+}
+
+func appSpecHelpStringInvalid(s string) error {
+	if !printable(s) {
+		return fmt.Errorf("%s is not Unicode printable", strconv.Quote(s))
+	}
+	return nil
+}
+
 type appInteractProc struct {
 	Create       bool   `json:"create"`
 	OnCompletion string `json:"on-completion"`
@@ -111,6 +142,36 @@ type appInteractProc struct {
 	Args        []appInteractArg     `json:"args"`
 	Accounts    []appInteractAccount `json:"accounts"`
 	ForeignApps []appInteractForeign `json:"foreign"`
+}
+
+func (proc appInteractProc) validate() (err error) {
+	err = appSpecStringInvalid(proc.OnCompletion)
+	if err != nil {
+		return fmt.Errorf("OnCompletion: %v", err)
+	}
+	err = appSpecHelpStringInvalid(proc.Help)
+	if err != nil {
+		return fmt.Errorf("Help: %v", err)
+	}
+	for i, arg := range proc.Args {
+		err = arg.validate()
+		if err != nil {
+			return fmt.Errorf("Arg(%d): %v", i, err)
+		}
+	}
+	for i, acc := range proc.Accounts {
+		err = acc.validate()
+		if err != nil {
+			return fmt.Errorf("Account(%d): %v", i, err)
+		}
+	}
+	for i, app := range proc.ForeignApps {
+		err = app.validate()
+		if err != nil {
+			return fmt.Errorf("App(%d): %v", i, err)
+		}
+	}
+	return
 }
 
 func (proc appInteractProc) kind() string {
@@ -133,6 +194,25 @@ type appInteractArg struct {
 	Default string `json:"default"`
 }
 
+func (arg appInteractArg) validate() (err error) {
+	err = appSpecStringInvalid(arg.Name)
+	if err != nil {
+		return fmt.Errorf("Key: %v", err)
+	}
+	err = appSpecStringInvalid(arg.Kind)
+	if err != nil {
+		return fmt.Errorf("Kind: %v", err)
+	}
+	err = appSpecHelpStringInvalid(arg.Help)
+	if err != nil {
+		return fmt.Errorf("Help: %v", err)
+	}
+	// default values can be arbitrary
+	// make sure to escape them before printing!
+	// err = appSpecStringInvalid(arg.Default)
+	return
+}
+
 func (arg appInteractArg) kind() string {
 	return arg.Kind
 }
@@ -152,42 +232,50 @@ type appInteractAccount struct {
 	Explicit bool   `json:"explicit"`
 }
 
+func (acc appInteractAccount) validate() (err error) {
+	err = appSpecStringInvalid(acc.Name)
+	if err != nil {
+		return fmt.Errorf("Name: %v", err)
+	}
+	err = appSpecHelpStringInvalid(acc.Help)
+	if err != nil {
+		return fmt.Errorf("Help: %v", err)
+	}
+	return
+}
+
 type appInteractForeign struct {
 	Name string `json:"name"`
 	Help string `json:"help"`
 }
 
+func (f appInteractForeign) validate() (err error) {
+	err = appSpecStringInvalid(f.Name)
+	if err != nil {
+		return fmt.Errorf("Name: %v", err)
+	}
+	err = appSpecHelpStringInvalid(f.Help)
+	if err != nil {
+		return fmt.Errorf("Help: %v", err)
+	}
+	return
+}
+
 // map key -> data
 type appInteractSchema map[string]appInteractSchemaEntry
 
-type appInteractSchemaEntry struct {
-	Key      string `json:"key"`
-	Kind     string `json:"kind"`
-	Help     string `json:"help"`
-	Size     int    `json:"size"`
-	Explicit bool   `json:"explicit"`
-
-	Map appInteractMap `json:"map"` // TODO support for queries
-}
-
-func (entry appInteractSchemaEntry) kind() string {
-	if entry.Map.Kind != "" {
-		return fmt.Sprintf("map %s -> %s", entry.Kind, entry.Map.Kind)
+func (sch appInteractSchema) validate() (err error) {
+	for k, v := range sch {
+		err = appSpecStringInvalid(k)
+		if err != nil {
+			return fmt.Errorf("Key: %v", err)
+		}
+		err = v.validate()
+		if err != nil {
+			return fmt.Errorf("Entry(%s): %v", k, err)
+		}
 	}
-	return entry.Kind
-}
-
-func (entry appInteractSchemaEntry) help() string {
-	return entry.Help
-}
-
-func (entry appInteractSchemaEntry) pseudo() bool {
-	return false
-}
-
-type appInteractMap struct {
-	Kind   string `json:"kind"`
-	Prefix string `json:"prefix"`
+	return
 }
 
 func (sch appInteractSchema) EntryList() string {
@@ -224,16 +312,118 @@ func (sch appInteractSchema) ToStateSchema() (schema basics.StateSchema) {
 	return
 }
 
+type appInteractSchemaEntry struct {
+	Key      string `json:"key"`
+	Kind     string `json:"kind"`
+	Help     string `json:"help"`
+	Size     int    `json:"size"`
+	Explicit bool   `json:"explicit"`
+
+	Map appInteractMap `json:"map"` // TODO support for queries
+}
+
+func (entry appInteractSchemaEntry) validate() (err error) {
+	err = appSpecStringInvalid(entry.Key)
+	if err != nil {
+		return fmt.Errorf("Key: %v", err)
+	}
+	err = appSpecStringInvalid(entry.Kind)
+	if err != nil {
+		return fmt.Errorf("Kind: %v", err)
+	}
+	err = appSpecHelpStringInvalid(entry.Help)
+	if err != nil {
+		return fmt.Errorf("Help: %v", err)
+	}
+	err = entry.Map.validate()
+	if err != nil {
+		return fmt.Errorf("Map: %v", err)
+	}
+	return
+}
+
+func (entry appInteractSchemaEntry) kind() string {
+	if entry.Map.Kind != "" {
+		return fmt.Sprintf("map %s -> %s", entry.Kind, entry.Map.Kind)
+	}
+	return entry.Kind
+}
+
+func (entry appInteractSchemaEntry) help() string {
+	return entry.Help
+}
+
+func (entry appInteractSchemaEntry) pseudo() bool {
+	return false
+}
+
+type appInteractMap struct {
+	Kind   string `json:"kind"`
+	Prefix string `json:"prefix"`
+}
+
+func (m appInteractMap) validate() (err error) {
+	err = appSpecStringInvalid(m.Kind)
+	if err != nil {
+		return fmt.Errorf("Kind: %v", m.Kind)
+	}
+	err = appSpecStringInvalid(m.Prefix)
+	if err != nil {
+		return fmt.Errorf("Prefix: %v", m.Prefix)
+	}
+	return
+}
+
 type appInteractState struct {
 	Global appInteractSchema `json:"global"`
 	Local  appInteractSchema `json:"local"`
 }
 
-type appInteractHeader struct {
-	// map procedure name -> procedure
-	Execute map[string]appInteractProc `json:"execute"`
+func (s appInteractState) validate() (err error) {
+	err = s.Global.validate()
+	if err != nil {
+		return fmt.Errorf("Global: %v", err)
+	}
+	err = s.Local.validate()
+	if err != nil {
+		return fmt.Errorf("Local: %v", err)
+	}
+	return
+}
 
-	Query appInteractState `json:"query"`
+// map procedure name -> procedure
+type appInteractProcs map[string]appInteractProc
+
+func (m appInteractProcs) validate() (err error) {
+	for k, v := range m {
+		err = appSpecStringInvalid(k)
+		if err != nil {
+			return fmt.Errorf("Key: %v", err)
+		}
+		err = v.validate()
+		if err != nil {
+			return fmt.Errorf("Proc(%s): %v", strconv.QuoteToASCII(k), err)
+		}
+	}
+	return
+}
+
+type appInteractHeader struct {
+	Execute appInteractProcs `json:"execute"`
+	Query   appInteractState `json:"query"`
+}
+
+// TODO use reflect to recursively validate
+func (hdr appInteractHeader) validate() (err error) {
+	err = hdr.Execute.validate()
+	if err != nil {
+		return fmt.Errorf("Execute: %v", err)
+	}
+	err = hdr.Query.validate()
+	if err != nil {
+		return fmt.Errorf("Query: %v", err)
+	}
+	return
 }
 
 func (hdr appInteractHeader) ProcList() string {
@@ -265,6 +455,11 @@ func parseAppHeader() (header appInteractHeader) {
 	err = dec.Decode(&header)
 	if err != nil {
 		reportErrorf("Could not decode app header JSON file %s: %v", appHdr, err)
+	}
+
+	err = header.validate()
+	if err != nil {
+		reportErrorf("App header JSON file could not validate: %v", err)
 	}
 
 	return
@@ -347,7 +542,7 @@ var appExecuteCmd = &cobra.Command{
 				var err error
 				addr, err = basics.UnmarshalChecksumAddress(s)
 				if err != nil {
-					reportErrorf("Could not unmarshal address %s", addr)
+					reportErrorf("Could not unmarshal address for %s (%s): %v", account.Name, s, err)
 				}
 			}
 			inputs.Accounts = append(inputs.Accounts, addr.String())
@@ -406,7 +601,7 @@ var appExecuteCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -441,7 +636,7 @@ var appExecuteCmd = &cobra.Command{
 			}
 		} else {
 			// Broadcast or write transaction to file
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
+			err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
 			if err != nil {
 				reportErrorf(err.Error())
 			}
@@ -473,62 +668,70 @@ var appQueryCmd = &cobra.Command{
 			reportErrorf("Unknown schema entry %s.\nDefined %s schema entries in %s:\n%s", param, scope, appHdr, lookup.EntryList())
 		}
 
-		enckey := base64.StdEncoding.EncodeToString([]byte(meta.Key))
-		var tealval v1.TealValue
+		var tealval basics.TealValue
 		if scope == "local" {
 			// Fetching local state. Get account information
-			response, err := client.AccountInformation(account)
+			ad, err := client.AccountData(account)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
 
 			// Get application local state
-			local, ok := response.AppLocalStates[appIdx]
+			local, ok := ad.AppLocalStates[basics.AppIndex(appIdx)]
 			if !ok {
 				reportErrorf(errorAccountNotOptedInToApp, account, appIdx)
 			}
 
 			kv := local.KeyValue
-			tealval = kv[enckey]
+			tealval = kv[meta.Key]
 		}
 
 		if scope == "global" {
-			// Fetching global state. Get application information
-			params, err := client.ApplicationInformation(appIdx)
+			// Fetching global state. Get application creator
+			info, err := client.ApplicationInformation(appIdx)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
 
+			// Get creator information
+			ad, err := client.AccountData(info.Creator)
+			if err != nil {
+				reportErrorf(errorRequestFail, err)
+			}
+
+			// Get app params
+			params, ok := ad.AppParams[basics.AppIndex(appIdx)]
+			if !ok {
+				reportErrorf(errorNoSuchApplication, appIdx)
+			}
+
 			kv := params.GlobalState
-			tealval = kv[enckey]
+			tealval = kv[meta.Key]
 		}
 
 		var decoded string
 		switch meta.Kind {
 		case "int", "integer":
-			if tealval.Type == "" {
+			if tealval.Type == 0 {
 				if meta.Explicit {
 					reportErrorf("%s not set for %s.%s", param, appIdx, storeName)
 				}
-			} else if tealval.Type != "u" {
+			} else if tealval.Type != basics.TealUintType {
 				reportErrorf("Expected kind %s but got teal type %s", meta.Kind, tealval.Type)
 			}
 			decoded = fmt.Sprintf("%d", tealval.Uint)
 		default:
-			if tealval.Type == "" {
+			if tealval.Type == 0 {
 				if meta.Explicit {
 					reportErrorf("%s not set for %s.%s", param, appIdx, storeName)
 				}
-			} else if tealval.Type != "b" {
+			} else if tealval.Type != basics.TealBytesType {
 				reportErrorf("Expected kind %s but got teal type %s", meta.Kind, tealval.Type)
 			}
-			raw, err := base64.StdEncoding.DecodeString(tealval.Bytes)
-			if err != nil {
-				reportErrorf("Fatal error: could not decode base64-encoded string: %s", tealval.Bytes)
-			}
+			raw := []byte(tealval.Bytes)
 			switch meta.Kind {
 			case "str", "string":
-				decoded = string(raw)
+				decoded = tealval.Bytes
 			case "addr", "address":
 				var addr basics.Address
 				copy(addr[:], raw)
@@ -536,9 +739,9 @@ var appQueryCmd = &cobra.Command{
 			case "b32", "base32", "byte base32":
 				decoded = base32.StdEncoding.EncodeToString(raw)
 			case "b64", "base64", "byte base64":
-				fallthrough
+				decoded = base64.StdEncoding.EncodeToString(raw)
 			default:
-				decoded = string(tealval.Bytes)
+				decoded = tealval.Bytes
 			}
 		}
 		reportInfoln(decoded)

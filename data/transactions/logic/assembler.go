@@ -146,6 +146,9 @@ func (ops *OpStream) Intc(constIndex uint) error {
 		ops.Out.WriteByte(0x21) // intc
 		ops.Out.WriteByte(uint8(constIndex))
 	}
+	if constIndex >= uint(len(ops.intc)) {
+		return fmt.Errorf("intc %d is not defined", constIndex)
+	}
 	ops.tpush(StackUint64)
 	return nil
 }
@@ -684,6 +687,12 @@ func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
 }
 
 func disSubstring(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 2
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	start := uint(dis.program[dis.pc+1])
 	end := uint(dis.program[dis.pc+2])
 	dis.nextpc = dis.pc + 3
@@ -694,10 +703,14 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return errors.New("txn expects one argument")
 	}
-	val, ok := txnFields[args[0]]
+	fs, ok := txnFieldSpecByName[args[0]]
 	if !ok {
 		return fmt.Errorf("txn unknown arg %s", args[0])
 	}
+	if fs.version > ops.Version {
+		return fmt.Errorf("txn %s available in version %d. Missed #pragma version?", args[0], fs.version)
+	}
+	val := fs.field
 	return ops.Txn(uint64(val))
 }
 
@@ -716,14 +729,22 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
 		return errors.New("txna expects two arguments")
 	}
-	fieldNum, ok := txnFields[args[0]]
-	if !ok || fieldNum != uint(ApplicationArgs) && fieldNum != uint(Accounts) {
+	fs, ok := txnFieldSpecByName[args[0]]
+	if !ok {
 		return fmt.Errorf("txna unknown arg %s", args[0])
+	}
+	_, ok = txnaFieldSpecByField[fs.field]
+	if !ok {
+		return fmt.Errorf("txna unknown arg %s", args[0])
+	}
+	if fs.version > ops.Version {
+		return fmt.Errorf("txna %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[1], 0, 64)
 	if err != nil {
 		return err
 	}
+	fieldNum := fs.field
 	return ops.Txna(uint64(fieldNum), uint64(arrayFieldIdx))
 }
 
@@ -735,10 +756,14 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if err != nil {
 		return err
 	}
-	val, ok := txnFields[args[1]]
+	fs, ok := txnFieldSpecByName[args[1]]
 	if !ok {
-		return fmt.Errorf("gtxn unknown arg %s", args[0])
+		return fmt.Errorf("gtxn unknown arg %s", args[1])
 	}
+	if fs.version > ops.Version {
+		return fmt.Errorf("gtxn %s available in version %d. Missed #pragma version?", args[1], fs.version)
+	}
+	val := fs.field
 	return ops.Gtxn(gtid, uint64(val))
 }
 
@@ -760,14 +785,22 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 	if err != nil {
 		return err
 	}
-	fieldNum, ok := txnFields[args[1]]
-	if !ok || fieldNum != uint(ApplicationArgs) && fieldNum != uint(Accounts) {
-		return fmt.Errorf("gtxna unknown arg %s", args[0])
+	fs, ok := txnFieldSpecByName[args[1]]
+	if !ok {
+		return fmt.Errorf("gtxna unknown arg %s", args[1])
+	}
+	_, ok = txnaFieldSpecByField[fs.field]
+	if !ok {
+		return fmt.Errorf("gtxna unknown arg %s", args[1])
+	}
+	if fs.version > ops.Version {
+		return fmt.Errorf("gtxna %s available in version %d. Missed #pragma version?", args[1], fs.version)
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[2], 0, 64)
 	if err != nil {
 		return err
 	}
+	fieldNum := fs.field
 	return ops.Gtxna(gtid, uint64(fieldNum), uint64(arrayFieldIdx))
 }
 
@@ -775,10 +808,14 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return errors.New("global expects one argument")
 	}
-	val, ok := globalFields[args[0]]
+	fs, ok := globalFieldSpecByName[args[0]]
 	if !ok {
 		return fmt.Errorf("global unknown arg %v", args[0])
 	}
+	if fs.version > ops.Version {
+		return fmt.Errorf("global %s available in version %d. Missed #pragma version?", args[0], fs.version)
+	}
+	val := fs.gfield
 	return ops.Global(uint64(val))
 }
 
@@ -970,8 +1007,8 @@ func (ops *OpStream) checkArgs(spec OpSpec) error {
 	return nil
 }
 
-// Assemble reads text from an input and accumulates the program
-func (ops *OpStream) Assemble(fin io.Reader) error {
+// assemble reads text from an input and accumulates the program
+func (ops *OpStream) assemble(fin io.Reader) error {
 	scanner := bufio.NewScanner(fin)
 	ops.sourceLine = 0
 	for scanner.Scan() {
@@ -983,6 +1020,11 @@ func (ops *OpStream) Assemble(fin io.Reader) error {
 		}
 		if strings.HasPrefix(line, "//") {
 			ops.trace("%d: // line\n", ops.sourceLine)
+			continue
+		}
+		if strings.HasPrefix(line, "#pragma") {
+			// all pragmas must be be already processed in advance
+			ops.trace("%d: #pragma line\n", ops.sourceLine)
 			continue
 		}
 		fields := fieldsFromLine(line)
@@ -1054,7 +1096,14 @@ func (ops *OpStream) resolveLabels() (err error) {
 }
 
 // AssemblerDefaultVersion what version of code do we emit by default
-const AssemblerDefaultVersion = LogicVersion
+// AssemblerDefaultVersion is set to 1 on puprose
+// to prevent accidental building of v1 official templates with version 2
+// because these templates are not aware of rekeying.
+const AssemblerDefaultVersion = 1
+
+// AssemblerMaxVersion is a maximum supported assembler version
+const AssemblerMaxVersion = LogicVersion
+const assemblerNoVersion = (^uint64(0))
 
 // Bytes returns the finished program bytes
 func (ops *OpStream) Bytes() (program []byte, err error) {
@@ -1112,7 +1161,7 @@ func (ops *OpStream) Bytes() (program []byte, err error) {
 
 // AssembleString takes an entire program in a string and assembles it to bytecode using AssemblerDefaultVersion
 func AssembleString(text string) ([]byte, error) {
-	return AssembleStringWithVersion(text, AssemblerDefaultVersion)
+	return AssembleStringWithVersion(text, assemblerNoVersion)
 }
 
 // AssembleStringV1 takes an entire program in a string and assembles it to bytecode using TEAL v1
@@ -1131,17 +1180,96 @@ func AssembleStringWithVersion(text string, version uint64) ([]byte, error) {
 	return program, err
 }
 
-// AssembleStringWithVersionEx takes an entire program in a string and assembles it to bytecode using the assembler version specified
-// It also returns PC to source line mapping
+// AssembleStringWithVersionEx takes an entire program in a string and assembles it to bytecode
+// using the assembler version specified.
+// If version is assemblerNoVersion it uses #pragma version or fallbacks to AssemblerDefaultVersion.
+// It also returns PC to source line mapping.
 func AssembleStringWithVersionEx(text string, version uint64) ([]byte, map[int]int, error) {
 	sr := strings.NewReader(text)
+	ps := PragmaStream{}
+	err := ps.Process(sr)
+	if err != nil {
+		return nil, nil, err
+	}
+	// If version not set yet then set either default or #pragma version.
+	// We have to use assemblerNoVersion as a marker for non-specified version
+	// because version 0 is valid version for TEAL v1
+	if version == assemblerNoVersion {
+		if ps.Version != 0 {
+			version = ps.Version
+		} else {
+			version = AssemblerDefaultVersion
+		}
+	} else if ps.Version != 0 && version != ps.Version {
+		err = fmt.Errorf("version mismatch: assembling v%d with v%d assembler", ps.Version, version)
+		return nil, nil, err
+	} else {
+		// otherwise the passed version matches the pragma and we are ok
+	}
+
+	sr = strings.NewReader(text)
 	ops := OpStream{Version: version}
-	err := ops.Assemble(sr)
+	err = ops.assemble(sr)
 	if err != nil {
 		return nil, nil, err
 	}
 	program, err := ops.Bytes()
 	return program, ops.offsetToLine, err
+}
+
+// PragmaStream represents all parsed pragmas from the program
+type PragmaStream struct {
+	Version uint64
+}
+
+// Process all pragmas in the input stream
+func (ps *PragmaStream) Process(fin io.Reader) (err error) {
+	scanner := bufio.NewScanner(fin)
+	sourceLine := 0
+	for scanner.Scan() {
+		sourceLine++
+		line := scanner.Text()
+		if len(line) == 0 || !strings.HasPrefix(line, "#pragma") {
+			continue
+		}
+
+		fields := strings.Split(line, " ")
+		if fields[0] != "#pragma" {
+			err = fmt.Errorf("invalid syntax: %s", fields[0])
+			return
+		}
+		if len(fields) < 2 {
+			err = fmt.Errorf("empty pragma")
+			return
+		}
+		key := fields[1]
+		switch key {
+		case "version":
+			if len(fields) < 3 {
+				err = fmt.Errorf("no version value")
+				return
+			}
+			value := fields[2]
+			var ver uint64
+			if sourceLine != 1 {
+				err = fmt.Errorf("#pragma version is only allowed on 1st line")
+				return
+			}
+			ver, err = strconv.ParseUint(value, 0, 64)
+			if err != nil {
+				return
+			}
+			if ver < 1 || ver > AssemblerMaxVersion {
+				err = fmt.Errorf("unsupported version: %d", ver)
+				return
+			}
+			ps.Version = ver
+		default:
+			err = fmt.Errorf("unsupported pragma directive: %s", key)
+			return
+		}
+	}
+	return
 }
 
 type disassembleState struct {
@@ -1332,6 +1460,12 @@ func disIntcblock(dis *disassembleState, spec *OpSpec) {
 }
 
 func disIntc(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 2
 	_, dis.err = fmt.Fprintf(dis.out, "intc %d\n", dis.program[dis.pc+1])
 }
@@ -1356,16 +1490,34 @@ func disBytecblock(dis *disassembleState, spec *OpSpec) {
 }
 
 func disBytec(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 2
 	_, dis.err = fmt.Fprintf(dis.out, "bytec %d\n", dis.program[dis.pc+1])
 }
 
 func disArg(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 2
 	_, dis.err = fmt.Fprintf(dis.out, "arg %d\n", dis.program[dis.pc+1])
 }
 
 func disTxn(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 2
 	txarg := dis.program[dis.pc+1]
 	if int(txarg) >= len(TxnFieldNames) {
@@ -1376,6 +1528,12 @@ func disTxn(dis *disassembleState, spec *OpSpec) {
 }
 
 func disTxna(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 2
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 3
 	txarg := dis.program[dis.pc+1]
 	if int(txarg) >= len(TxnFieldNames) {
@@ -1387,6 +1545,12 @@ func disTxna(dis *disassembleState, spec *OpSpec) {
 }
 
 func disGtxn(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 2
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 3
 	gi := dis.program[dis.pc+1]
 	txarg := dis.program[dis.pc+2]
@@ -1398,6 +1562,12 @@ func disGtxn(dis *disassembleState, spec *OpSpec) {
 }
 
 func disGtxna(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 3
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 4
 	gi := dis.program[dis.pc+1]
 	txarg := dis.program[dis.pc+2]
@@ -1410,6 +1580,12 @@ func disGtxna(dis *disassembleState, spec *OpSpec) {
 }
 
 func disGlobal(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 2
 	garg := dis.program[dis.pc+1]
 	if int(garg) >= len(GlobalFieldNames) {
@@ -1420,6 +1596,13 @@ func disGlobal(dis *disassembleState, spec *OpSpec) {
 }
 
 func disBranch(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 2
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
+
 	dis.nextpc = dis.pc + 3
 	offset := (uint(dis.program[dis.pc+1]) << 8) | uint(dis.program[dis.pc+2])
 	target := int(offset) + dis.pc + 3
@@ -1433,18 +1616,36 @@ func disBranch(dis *disassembleState, spec *OpSpec) {
 }
 
 func disLoad(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	n := uint(dis.program[dis.pc+1])
 	dis.nextpc = dis.pc + 2
 	_, dis.err = fmt.Fprintf(dis.out, "load %d\n", n)
 }
 
 func disStore(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	n := uint(dis.program[dis.pc+1])
 	dis.nextpc = dis.pc + 2
 	_, dis.err = fmt.Fprintf(dis.out, "store %d\n", n)
 }
 
 func disAssetHolding(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 2
 	arg := dis.program[dis.pc+1]
 	if int(arg) >= len(AssetHoldingFieldNames) {
@@ -1455,6 +1656,12 @@ func disAssetHolding(dis *disassembleState, spec *OpSpec) {
 }
 
 func disAssetParams(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
 	dis.nextpc = dis.pc + 2
 	arg := dis.program[dis.pc+1]
 	if int(arg) >= len(AssetParamsFieldNames) {

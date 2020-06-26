@@ -47,6 +47,7 @@ type appLedger struct {
 	apps      map[basics.AppIndex]bool
 	balances  transactions.Balances
 	appIdx    basics.AppIndex
+	schemas   basics.StateSchemas
 	AppTealGlobals
 }
 
@@ -76,8 +77,8 @@ func (ae *appTealEvaluator) Check(program []byte) (cost int, err error) {
 // from, and the appGlobalWhitelist lists all the app IDs we are allowed to
 // fetch global state for (which requires looking up the creator's balance
 // record).
-func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex) error {
-	ledger, err := newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, ae.AppTealGlobals)
+func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, schemas basics.StateSchemas) error {
+	ledger, err := newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, schemas, ae.AppTealGlobals)
 	if err != nil {
 		return err
 	}
@@ -86,7 +87,7 @@ func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, acctWhite
 	return nil
 }
 
-func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, globals AppTealGlobals) (al *appLedger, err error) {
+func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, schemas basics.StateSchemas, globals AppTealGlobals) (al *appLedger, err error) {
 	if balances == nil {
 		err = fmt.Errorf("cannot create appLedger with nil balances")
 		return
@@ -110,6 +111,7 @@ func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address
 	al = &appLedger{}
 	al.appIdx = appIdx
 	al.balances = balances
+	al.schemas = schemas
 	al.addresses = make(map[basics.Address]bool, len(acctWhitelist))
 	al.apps = make(map[basics.AppIndex]bool, len(appGlobalWhitelist))
 	al.AppTealGlobals = globals
@@ -126,8 +128,8 @@ func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address
 }
 
 // MakeDebugAppLedger returns logic.LedgerForLogic suitable for debug or dryrun
-func MakeDebugAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, globals AppTealGlobals) (al logic.LedgerForLogic, err error) {
-	return newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, globals)
+func MakeDebugAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, schemas basics.StateSchemas, globals AppTealGlobals) (al logic.LedgerForLogic, err error) {
+	return newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, schemas, globals)
 }
 
 func (al *appLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err error) {
@@ -201,7 +203,7 @@ func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) 
 
 	// Ensure requested address is on whitelist
 	if !al.addresses[addr] {
-		return nil, fmt.Errorf("cannot access localstate for %s, not sender or in txn.Addresses", addr.String())
+		return nil, fmt.Errorf("cannot access local state for %s, not sender or in txn.Addresses", addr.String())
 	}
 
 	// Don't fetch with pending rewards here since we are only returning
@@ -273,17 +275,21 @@ func (al *appLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex
 }
 
 func (al *appLedger) Round() basics.Round {
-	return al.CurrentRound
+	return al.AppTealGlobals.CurrentRound
 }
 
 func (al *appLedger) LatestTimestamp() int64 {
 	return al.AppTealGlobals.LatestTimestamp
 }
 
-func (al *appLedger) LatestTimestamp() int64 {
-	return al.latestTimestamp
+func (al *appLedger) ApplicationID() basics.AppIndex {
+	return al.appIdx
 }
 
-func (al *appLedger) LatestTimestamp() int64 {
-	return al.latestTimestamp
+func (al *appLedger) LocalSchema() basics.StateSchema {
+	return al.schemas.LocalStateSchema
+}
+
+func (al *appLedger) GlobalSchema() basics.StateSchema {
+	return al.schemas.GlobalStateSchema
 }

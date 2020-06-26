@@ -34,6 +34,10 @@ var CodecHandle *codec.MsgpackHandle
 // with our settings (canonical, paranoid about decoding errors)
 var JSONHandle *codec.JsonHandle
 
+// JSONStrictHandle is the same as JSONHandle but with MapKeyAsString=true
+// for correct maps[int]interface{} encoding
+var JSONStrictHandle *codec.JsonHandle
+
 // Decoder is our interface for a thing that can decode objects.
 type Decoder interface {
 	Decode(objptr interface{}) error
@@ -56,6 +60,15 @@ func init() {
 	JSONHandle.RecursiveEmptyCheck = true
 	JSONHandle.Indent = 2
 	JSONHandle.HTMLCharsAsIs = true
+
+	JSONStrictHandle = new(codec.JsonHandle)
+	JSONStrictHandle.ErrorIfNoField = JSONHandle.ErrorIfNoField
+	JSONStrictHandle.ErrorIfNoArrayExpand = JSONHandle.ErrorIfNoArrayExpand
+	JSONStrictHandle.Canonical = JSONHandle.Canonical
+	JSONStrictHandle.RecursiveEmptyCheck = JSONHandle.RecursiveEmptyCheck
+	JSONStrictHandle.Indent = JSONHandle.Indent
+	JSONStrictHandle.HTMLCharsAsIs = JSONHandle.HTMLCharsAsIs
+	JSONStrictHandle.MapKeyAsString = true
 }
 
 type codecBytes struct {
@@ -140,6 +153,15 @@ func EncodeJSON(obj interface{}) []byte {
 	return b
 }
 
+// EncodeJSONStrict returns a JSON-encoded byte buffer for a given object
+// It is the same EncodeJSON but encodes map's int keys as strings
+func EncodeJSONStrict(obj interface{}) []byte {
+	var b []byte
+	enc := codec.NewEncoderBytes(&b, JSONStrictHandle)
+	enc.MustEncode(obj)
+	return b
+}
+
 // DecodeReflect attempts to decode a msgpack-encoded byte buffer
 // into an object instance pointed to by objptr, using reflection.
 func DecodeReflect(b []byte, objptr interface{}) error {
@@ -203,6 +225,11 @@ func DecodeJSON(b []byte, objptr interface{}) error {
 // NewEncoder returns an encoder object writing bytes into [w].
 func NewEncoder(w io.Writer) *codec.Encoder {
 	return codec.NewEncoder(w, CodecHandle)
+}
+
+// NewJSONEncoder returns an encoder object writing bytes into [w].
+func NewJSONEncoder(w io.Writer) *codec.Encoder {
+	return codec.NewEncoder(w, JSONHandle)
 }
 
 // NewDecoder returns a decoder object reading bytes from [r].

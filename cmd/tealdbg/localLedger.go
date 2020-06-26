@@ -18,8 +18,10 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -34,27 +36,20 @@ type balancesAdapter struct {
 	round      int
 }
 
-const defaultNewAppIdx = 1380011588
-
 func makeAppLedger(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
 	groupIndex int, proto config.ConsensusParams, round int, latestTimestamp int64,
-) (logic.LedgerForLogic, error) {
+	appIdx basics.AppIndex, painless bool,
+) (logic.LedgerForLogic, appState, error) {
 
 	if groupIndex >= len(txnGroup) {
-		return nil, fmt.Errorf("invalid groupIndex %d exceed txn group length %d", groupIndex, len(txnGroup))
+		return nil, appState{}, fmt.Errorf("invalid groupIndex %d exceed txn group length %d", groupIndex, len(txnGroup))
 	}
 	txn := txnGroup[groupIndex]
 
 	accounts := []basics.Address{txn.Txn.Sender}
 	for _, addr := range txn.Txn.Accounts {
 		accounts = append(accounts, addr)
-	}
-
-	appIdx := txn.Txn.ApplicationID
-	if appIdx == 0 {
-		// presumably this is app create transaction, initialize with some value
-		appIdx = defaultNewAppIdx
 	}
 
 	apps := []basics.AppIndex{appIdx}
@@ -70,7 +65,106 @@ func makeAppLedger(
 		round:      round,
 	}
 
-	return ledger.MakeDebugAppLedger(ba, accounts, apps, appIdx, ledger.AppTealGlobals{CurrentRound: basics.Round(round), LatestTimestamp: latestTimestamp})
+	appsExist := make(map[basics.AppIndex]bool, len(apps))
+	states := makeAppState()
+	states.schemas = makeSchemas()
+	states.appIdx = appIdx
+	for _, aid := range apps {
+		for addr, ad := range balances {
+			if params, ok := ad.AppParams[aid]; ok {
+				if aid == appIdx {
+					states.schemas = params.StateSchemas
+				}
+				states.global[aid] = params.GlobalState
+				appsExist[aid] = true
+			}
+			if local, ok := ad.AppLocalStates[aid]; ok {
+				ls, ok := states.locals[addr]
+				if !ok {
+					ls = make(map[basics.AppIndex]basics.TealKeyValue)
+				}
+				ls[aid] = local.KeyValue
+				states.locals[addr] = ls
+			}
+		}
+	}
+
+	// painless mode creates all missed global states and opt-in all mentioned accounts
+	if painless {
+		for _, aid := range apps {
+			if ok := appsExist[aid]; !ok {
+				// create balance record and AppParams for this app
+				addr, err := getRandomAddress()
+				if err != nil {
+					return nil, appState{}, err
+				}
+				ad := basics.AccountData{
+					AppParams: map[basics.AppIndex]basics.AppParams{
+						aid: {
+							StateSchemas: makeSchemas(),
+							GlobalState:  make(basics.TealKeyValue),
+						},
+					},
+				}
+				balances[addr] = ad
+			}
+			for _, addr := range accounts {
+				ad, ok := balances[addr]
+				if !ok {
+					ad = basics.AccountData{
+						AppLocalStates: map[basics.AppIndex]basics.AppLocalState{},
+					}
+					balances[addr] = ad
+				}
+				if ad.AppLocalStates == nil {
+					ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+				}
+				_, ok = ad.AppLocalStates[aid]
+				if !ok {
+					ad.AppLocalStates[aid] = basics.AppLocalState{
+						Schema: makeLocalSchema(),
+					}
+				}
+			}
+		}
+	}
+
+	appGlobals := ledger.AppTealGlobals{CurrentRound: basics.Round(round), LatestTimestamp: latestTimestamp}
+	ledger, err := ledger.MakeDebugAppLedger(ba, accounts, apps, appIdx, states.schemas, appGlobals)
+	return ledger, states, err
+}
+
+func makeSchemas() basics.StateSchemas {
+	return basics.StateSchemas{
+		LocalStateSchema:  makeLocalSchema(),
+		GlobalStateSchema: makeGlobalSchema(),
+	}
+}
+
+func makeLocalSchema() basics.StateSchema {
+	return basics.StateSchema{
+		NumUint:      16,
+		NumByteSlice: 16,
+	}
+}
+
+func makeGlobalSchema() basics.StateSchema {
+	return basics.StateSchema{
+		NumUint:      64,
+		NumByteSlice: 64,
+	}
+}
+
+func getRandomAddress() (basics.Address, error) {
+	const rl = 16
+	b := make([]byte, rl)
+	_, err := rand.Read(b)
+	if err != nil {
+		return basics.Address{}, err
+	}
+
+	address := crypto.Hash(b)
+	return basics.Address(address), nil
 }
 
 func (ba *balancesAdapter) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {

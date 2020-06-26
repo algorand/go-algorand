@@ -500,7 +500,7 @@ func (eval *BlockEvaluator) prepareAppEvaluators(txgroup []transactions.SignedTx
 		// transactions.StateEvaluator) for use in ApplicationCall transactions.
 		steva := appTealEvaluator{
 			evalParams: logic.EvalParams{
-				Txn:        &txn.SignedTxn,
+				Txn:        &groupNoAD[i],
 				Proto:      &eval.proto,
 				TxnGroup:   groupNoAD,
 				GroupIndex: i,
@@ -613,12 +613,12 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *app
 		}
 
 		// Does the address that authorized the transaction actually match whatever address the sender has rekeyed to?
-		// i.e., the sig/lsig/msig was checked against the txn.Authorizer() address, but does this match the SpendingKey in the sender's balance record?
+		// i.e., the sig/lsig/msig was checked against the txn.Authorizer() address, but does this match the sender's balrecord.AuthAddr?
 		acctdata, err := cow.lookup(txn.Txn.Sender)
 		if err != nil {
 			return err
 		}
-		correctAuthorizer := acctdata.SpendingKey
+		correctAuthorizer := acctdata.AuthAddr
 		if (correctAuthorizer == basics.Address{}) {
 			correctAuthorizer = txn.Txn.Sender
 		}

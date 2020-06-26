@@ -61,8 +61,10 @@ bytec 4
 `
 
 func TestWebDebuggerManual(t *testing.T) {
-	//t.Skip()
 	debugURL := os.Getenv("TEAL_DEBUGGER_URL")
+	if len(debugURL) == 0 {
+		return
+	}
 
 	txn := makeSampleTxn()
 	txgroup := makeSampleTxnGroup(txn)

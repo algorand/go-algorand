@@ -43,6 +43,10 @@ func badRequest(ctx echo.Context, internal error, external string, log logging.L
 	return returnError(ctx, http.StatusBadRequest, internal, external, log)
 }
 
+func serviceUnavailable(ctx echo.Context, internal error, external string, log logging.Logger) error {
+	return returnError(ctx, http.StatusServiceUnavailable, internal, external, log)
+}
+
 func internalError(ctx echo.Context, internal error, external string, log logging.Logger) error {
 	return returnError(ctx, http.StatusInternalServerError, internal, external, log)
 }
@@ -163,4 +167,14 @@ func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
 		return nil, fmt.Errorf("failed to encode object: %v", err)
 	}
 	return output, nil
+}
+
+func decode(handle codec.Handle, data []byte, v interface{}) error {
+	enc := codec.NewDecoderBytes(data, handle)
+
+	err := enc.Decode(v)
+	if err != nil {
+		return fmt.Errorf("failed to decode object: %v", err)
+	}
+	return nil
 }

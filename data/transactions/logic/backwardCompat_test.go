@@ -18,13 +18,15 @@ package logic
 
 import (
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
-	// "github.com/algorand/go-algorand/protocol"
 )
 
 // This test ensures a program compiled with by pre-TEAL v2 go-algorand
@@ -259,8 +261,12 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	program, err := hex.DecodeString(programTEALv1)
 	require.NoError(t, err)
 
-	// ensure old program is the same as a new one except TEAL version byte
-	program2, err := AssembleString(sourceTEALv1)
+	// ensure old program is the same as a new one when assembling without version
+	program1, err := AssembleString(sourceTEALv1)
+	require.NoError(t, err)
+	require.Equal(t, program, program1)
+	// ensure the old program is the same as a new one except TEAL version byte
+	program2, err := AssembleStringWithVersion(sourceTEALv1, AssemblerMaxVersion)
 	require.NoError(t, err)
 	require.Equal(t, program[1:], program2[1:])
 
@@ -273,10 +279,14 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	txgroup := makeSampleTxnGroup(txn)
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], txn.Txn.Sender[:], txn.Txn.Note}
+	txn.Txn.RekeyTo = basics.Address{} // RekeyTo not allowed in TEAL v1
 
 	sb := strings.Builder{}
 	ep := defaultEvalParams(&sb, &txn)
 	ep.TxnGroup = txgroup
+
+	// ensure v1 program runs well on latest TEAL evaluator
+	require.Equal(t, uint8(1), program[0])
 	cost, err := Check(program, ep)
 	require.NoError(t, err)
 	require.Equal(t, 2140, cost)
@@ -301,4 +311,159 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, pass)
 
+	// ensure v0 program runs well on latest TEAL evaluator
+	program[0] = 0
+	sig = c.Sign(Msg{
+		ProgramHash: crypto.HashObj(Program(program)),
+		Data:        data[:],
+	})
+	txn.Lsig.Logic = program
+	txn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], txn.Txn.Sender[:], txn.Txn.Note}
+	cost, err = Check(program, ep)
+	require.NoError(t, err)
+	require.Equal(t, 2140, cost)
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+}
+
+// ensure v2 fields error on pre TEAL v2 logicsig version
+// ensure v2 fields error in v1 program
+func TestBackwardCompatGlobalFields(t *testing.T) {
+	var fields []string
+	for _, fs := range globalFieldSpecs {
+		if fs.version > 1 {
+			fields = append(fields, fs.gfield.String())
+		}
+	}
+	require.Greater(t, len(fields), 1)
+
+	ledger := makeTestLedger(nil)
+	for _, field := range fields {
+		text := fmt.Sprintf("global %s", field)
+		// check V1 assembler fails
+		program, err := AssembleStringWithVersion(text, 0)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "available in version 2")
+		require.Nil(t, program)
+
+		program, err = AssembleStringWithVersion(text, 1)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "available in version 2")
+		require.Nil(t, program)
+
+		program, err = AssembleString(text)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "available in version 2")
+		require.Nil(t, program)
+
+		program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+		require.NoError(t, err)
+
+		proto := config.Consensus[protocol.ConsensusV23]
+		ep := defaultEvalParams(nil, nil)
+		ep.Proto = &proto
+		ep.Ledger = ledger
+
+		// check failure with version check
+		_, err = Eval(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "greater than protocol supported version")
+		_, _, err = EvalStateful(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "greater than protocol supported version")
+
+		// check opcodes failures
+		program[0] = 1 // set version to 1
+		_, err = Eval(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid global[")
+		_, _, err = EvalStateful(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid global[")
+
+		// check opcodes failures
+		program[0] = 0 // set version to 0
+		_, err = Eval(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid global[")
+		_, _, err = EvalStateful(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid global[")
+	}
+}
+
+// ensure v2 fields error in v1 program
+func TestBackwardCompatTxnFields(t *testing.T) {
+	var fields []string
+	for _, fs := range txnFieldSpecs {
+		if fs.version > 1 {
+			fields = append(fields, fs.field.String())
+		}
+	}
+	require.Greater(t, len(fields), 1)
+
+	tests := []string{
+		"txn %s",
+		"gtxn 0 %s",
+	}
+
+	ledger := makeTestLedger(nil)
+	txn := makeSampleTxn()
+	txgroup := makeSampleTxnGroup(txn)
+	for _, field := range fields {
+		for _, command := range tests {
+			text := fmt.Sprintf(command, field)
+			// check V1 assembler fails
+			program, err := AssembleStringWithVersion(text, 0)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "available in version 2")
+			require.Nil(t, program)
+
+			program, err = AssembleStringWithVersion(text, 1)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "available in version 2")
+			require.Nil(t, program)
+
+			program, err = AssembleString(text)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "available in version 2")
+			require.Nil(t, program)
+
+			program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+			require.NoError(t, err)
+
+			proto := config.Consensus[protocol.ConsensusV23]
+			ep := defaultEvalParams(nil, nil)
+			ep.Proto = &proto
+			ep.Ledger = ledger
+			ep.TxnGroup = txgroup
+
+			// check failure with version check
+			_, err = Eval(program, ep)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "greater than protocol supported version")
+			_, _, err = EvalStateful(program, ep)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "greater than protocol supported version")
+
+			// check opcodes failures
+			program[0] = 1 // set version to 1
+			_, err = Eval(program, ep)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "invalid txn field")
+			_, _, err = EvalStateful(program, ep)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "invalid txn field")
+
+			// check opcodes failures
+			program[0] = 0 // set version to 0
+			_, err = Eval(program, ep)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "invalid txn field")
+			_, _, err = EvalStateful(program, ep)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "invalid txn field")
+		}
+	}
 }

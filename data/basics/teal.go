@@ -84,7 +84,14 @@ func (sd StateDelta) Equal(o StateDelta) bool {
 	}
 	// All keys and deltas should be the same
 	for k, v := range sd {
-		if o[k] != v {
+		// Other StateDelta must contain key
+		ov, ok := o[k]
+		if !ok {
+			return false
+		}
+
+		// Other StateDelta must have same value for key
+		if ov != v {
 			return false
 		}
 	}
@@ -94,6 +101,9 @@ func (sd StateDelta) Equal(o StateDelta) bool {
 // Valid checks whether the keys and values in a StateDelta conform to the
 // consensus parameters' maximum lengths
 func (sd StateDelta) Valid(proto *config.ConsensusParams) error {
+	if len(sd) > 0 && proto.MaxAppKeyLen == 0 {
+		return fmt.Errorf("delta not empty, but proto.MaxAppKeyLen is 0 (why did we make a delta?)")
+	}
 	for key, delta := range sd {
 		if len(key) > proto.MaxAppKeyLen {
 			return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), proto.MaxAppKeyLen)
@@ -106,7 +116,7 @@ func (sd StateDelta) Valid(proto *config.ConsensusParams) error {
 		case SetUintAction:
 		case DeleteAction:
 		default:
-			return fmt.Errorf("unknown delta action")
+			return fmt.Errorf("unknown delta action: %v", delta.Action)
 		}
 	}
 	return nil
@@ -130,11 +140,6 @@ type EvalDelta struct {
 // because the msgpack codec will encode/decode an empty map as nil, and we want
 // an empty generated EvalDelta to equal an empty one we decode off the wire.
 func (ed EvalDelta) Equal(o EvalDelta) bool {
-	// GlobalDeltas must be equal
-	if !ed.GlobalDelta.Equal(o.GlobalDelta) {
-		return false
-	}
-
 	// LocalDeltas length should be the same
 	if len(ed.LocalDeltas) != len(o.LocalDeltas) {
 		return false
@@ -142,9 +147,21 @@ func (ed EvalDelta) Equal(o EvalDelta) bool {
 
 	// All keys and local StateDeltas should be the same
 	for k, v := range ed.LocalDeltas {
-		if !o.LocalDeltas[k].Equal(v) {
+		// Other LocalDelta must have value for key
+		ov, ok := o.LocalDeltas[k]
+		if !ok {
 			return false
 		}
+
+		// Other LocalDelta must have same value for key
+		if !ov.Equal(v) {
+			return false
+		}
+	}
+
+	// GlobalDeltas must be equal
+	if !ed.GlobalDelta.Equal(o.GlobalDelta) {
+		return false
 	}
 
 	return true
@@ -222,6 +239,14 @@ func (tt TealType) String() string {
 	return "?"
 }
 
+// TealTypeFromString converts "b"/"u" string back to TealType
+func TealTypeFromString(t string) TealType {
+	if t == "b" {
+		return TealBytesType
+	}
+	return TealUintType
+}
+
 // TealValue contains type information and a value, representing a value in a
 // TEAL program
 type TealValue struct {
@@ -253,7 +278,7 @@ func (tv *TealValue) String() string {
 
 // TealKeyValue represents a key/value store for use in an application's
 // LocalState or GlobalState
-//msgp:allocbound TealKeyValue 4096
+//msgp:allocbound TealKeyValue encodedMaxKeyValueEntries
 type TealKeyValue map[string]TealValue
 
 // Clone returns a copy of a TealKeyValue that may be modified without
@@ -269,30 +294,39 @@ func (tk TealKeyValue) Clone() TealKeyValue {
 	return res
 }
 
+// ToStateSchema calculates the number of each value type in a TealKeyValue and
+// reprsents the result as a StateSchema
+func (tk TealKeyValue) ToStateSchema() (schema StateSchema, err error) {
+	for _, value := range tk {
+		switch value.Type {
+		case TealBytesType:
+			schema.NumByteSlice++
+		case TealUintType:
+			schema.NumUint++
+		default:
+			err = fmt.Errorf("unknown type %v", value.Type)
+			return StateSchema{}, err
+		}
+	}
+	return schema, nil
+}
+
 // SatisfiesSchema returns an error indicating whether or not a particular
 // TealKeyValue store meets the requirements set by a StateSchema on how
 // many values of each type are allowed
 func (tk TealKeyValue) SatisfiesSchema(schema StateSchema) error {
-	// Count all of the types in the key/value store
-	var uintCount, bytesCount uint64
-	for _, value := range tk {
-		switch value.Type {
-		case TealBytesType:
-			bytesCount++
-		case TealUintType:
-			uintCount++
-		default:
-			// Shouldn't happen
-			return fmt.Errorf("unknown type %v", value.Type)
-		}
+	calc, err := tk.ToStateSchema()
+	if err != nil {
+		return err
 	}
 
 	// Check against the schema
-	if uintCount > schema.NumUint {
-		return fmt.Errorf("store integer count %d exceeds schema integer count %d", uintCount, schema.NumUint)
+	if calc.NumUint > schema.NumUint {
+		return fmt.Errorf("store integer count %d exceeds schema integer count %d", calc.NumUint, schema.NumUint)
 	}
-	if bytesCount > schema.NumByteSlice {
-		return fmt.Errorf("store bytes count %d exceeds schema bytes count %d", bytesCount, schema.NumByteSlice)
+	if calc.NumByteSlice > schema.NumByteSlice {
+		return fmt.Errorf("store bytes count %d exceeds schema bytes count %d", calc.NumByteSlice, schema.NumByteSlice)
 	}
+
 	return nil
 }

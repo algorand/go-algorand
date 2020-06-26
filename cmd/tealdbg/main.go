@@ -128,6 +128,7 @@ var proto string
 var txnFile string
 var groupIndex int
 var balanceFile string
+var ddrFile string
 var roundNumber int
 var timestamp int64
 var runMode runModeValue = runModeValue{makeCobraStringValue("auto", []string{"signature", "application"})}
@@ -136,6 +137,8 @@ var noFirstRun bool
 var noBrowserCheck bool
 var noSourceMap bool
 var verbose bool
+var painless bool
+var appID int
 
 func init() {
 	rootCmd.PersistentFlags().VarP(&frontend, "frontend", "f", "Frontend to use: "+frontend.AllowedString())
@@ -151,9 +154,12 @@ func init() {
 	debugCmd.Flags().StringVarP(&txnFile, "txn", "t", "", "Transaction(s) to evaluate TEAL on in form of json or msgpack file")
 	debugCmd.Flags().IntVarP(&groupIndex, "group-index", "g", 0, "Transaction index in a txn group")
 	debugCmd.Flags().StringVarP(&balanceFile, "balance", "b", "", "Balance records to evaluate stateful TEAL on in form of json or msgpack file")
+	debugCmd.Flags().StringVarP(&ddrFile, "dryrun-req", "d", "", "Program(s) and state(s) in dryrun REST request format")
+	debugCmd.Flags().IntVarP(&appID, "app-id", "a", 1380011588, "Application ID for stateful TEAL if not set in transaction(s)")
 	debugCmd.Flags().IntVarP(&roundNumber, "round", "r", 1095518031, "Ledger round number to evaluate stateful TEAL on")
 	debugCmd.Flags().Int64VarP(&timestamp, "latest-timestamp", "l", 0, "Latest confirmed timestamp to evaluate stateful TEAL on")
 	debugCmd.Flags().VarP(&runMode, "mode", "m", "TEAL evaluation mode: "+runMode.AllowedString())
+	debugCmd.Flags().BoolVar(&painless, "painless", false, "Automatically create balance record for all accounts and applications")
 
 	rootCmd.AddCommand(debugCmd)
 	rootCmd.AddCommand(remoteCmd)
@@ -174,8 +180,8 @@ func debugLocal(args []string) {
 	// program can be set either directly
 	// or with SignedTxn.Lsig.Logic,
 	// or with BalanceRecord.AppParams.ApprovalProgram
-	if len(args) == 0 && (len(txnFile) == 0 || len(balanceFile) == 0) {
-		log.Fatalln("No program to debug: must specify program(s), or transaction(s), or a balance record(s)")
+	if len(args) == 0 && (len(txnFile) == 0 || len(balanceFile) == 0) && len(ddrFile) == 0 {
+		log.Fatalln("No program to debug: must specify program(s), or transaction(s) and a balance record(s), or dryrun-req object")
 	}
 
 	if len(args) == 0 && groupIndex != 0 {
@@ -184,6 +190,14 @@ func debugLocal(args []string) {
 
 	if len(args) == 0 && runMode.IsSet() {
 		log.Fatalln("Error: mode may be only set only along with program(s)")
+	}
+
+	if len(txnFile) != 0 && len(ddrFile) != 0 {
+		log.Fatalln("Error: cannot specify both transaction(s) and dryrun-req")
+	}
+
+	if len(balanceFile) != 0 && len(ddrFile) != 0 {
+		log.Fatalln("Error: cannot specify both balance records(s) and dryrun-req")
 	}
 
 	var programNames []string
@@ -218,6 +232,14 @@ func debugLocal(args []string) {
 		}
 	}
 
+	var ddrBlob []byte
+	if len(ddrFile) > 0 {
+		ddrBlob, err = ioutil.ReadFile(ddrFile)
+		if err != nil {
+			log.Fatalf("Error dryrun-dump reading %s: %s", ddrFile, err)
+		}
+	}
+
 	dp := DebugParams{
 		ProgramNames:     programNames,
 		ProgramBlobs:     programBlobs,
@@ -225,10 +247,13 @@ func debugLocal(args []string) {
 		TxnBlob:          txnBlob,
 		GroupIndex:       groupIndex,
 		BalanceBlob:      balanceBlob,
+		DdrBlob:          ddrBlob,
 		Round:            roundNumber,
 		LatestTimestamp:  timestamp,
 		RunMode:          runMode.String(),
 		DisableSourceMap: noSourceMap,
+		AppID:            appID,
+		Painless:         painless,
 	}
 
 	ds := makeDebugServer(port, &frontend, &dp)

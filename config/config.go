@@ -46,41 +46,55 @@ const Mainnet protocol.NetworkID = "mainnet"
 const GenesisJSONFile = "genesis.json"
 
 // Local holds the per-node-instance configuration settings for the protocol.
+// !!! WARNING !!!
+//
+// These versioned struct tags need to be maintained CAREFULLY and treated
+// like UNIVERSAL CONSTANTS - they should not be modified once committed.
+//
+// New fields may be added to the Local struct, along with a version tag
+// denoting a new version. When doing so, also update the
+// test/testdata/configs/config-v{n}.json and call "make generate" to regenerate the constants.
+//
+// !!! WARNING !!!
 type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
-	// for an existing parameter.
-	Version uint32
+	// for an existing parameter. This field tag must be updated any time we add a new version.
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9"`
 
 	// environmental (may be overridden)
-	// if true, does not garbage collect; also, replies to catchup requests
-	Archival bool
+	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
+	// are being kept around. ( the precise number of recent blocks depends on the consensus parameters )
+	Archival bool `version[0]:"false"`
 
 	// gossipNode.go
 	// how many peers to propagate to?
-	GossipFanout  int
-	NetAddress    string
-	ReconnectTime time.Duration
-	// what we should tell people to connect to
-	PublicAddress string
+	GossipFanout int    `version[0]:"4"`
+	NetAddress   string `version[0]:""`
 
-	MaxConnectionsPerIP int
+	// 1 * time.Minute = 60000000000 ns
+	ReconnectTime time.Duration `version[0]:"60" version[1]:"60000000000"`
+
+	// what we should tell people to connect to
+	PublicAddress string `version[0]:""`
+
+	MaxConnectionsPerIP int `version[3]:"30"`
 
 	// 0 == disable
-	PeerPingPeriodSeconds int
+	PeerPingPeriodSeconds int `version[0]:"0"`
 
 	// for https serving
-	TLSCertFile string
-	TLSKeyFile  string
+	TLSCertFile string `version[0]:""`
+	TLSKeyFile  string `version[0]:""`
 
 	// Logging
-	BaseLoggerDebugLevel uint32
+	BaseLoggerDebugLevel uint32 `version[0]:"1" version[1]:"4"`
 	// if this is 0, do not produce agreement.cadaver
-	CadaverSizeTarget uint64
+	CadaverSizeTarget uint64 `version[0]:"1073741824"`
 
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
 	// connections.  0 means no connections allowed.  -1 is unbounded.
-	IncomingConnectionsLimit int
+	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000"`
 
 	// BroadcastConnectionsLimit specifies the number of connections that
 	// will receive broadcast (gossip) messages from this node.  If the
@@ -89,38 +103,38 @@ type Local struct {
 	// by money held by peers based on their participation key).  0 means
 	// no outgoing messages (not even transaction broadcasting to outgoing
 	// peers).  -1 means unbounded (default).
-	BroadcastConnectionsLimit int
+	BroadcastConnectionsLimit int `version[4]:"-1"`
 
 	// AnnounceParticipationKey specifies that this node should announce its
 	// participation key (with the largest stake) to its gossip peers.  This
 	// allows peers to prioritize our connection, if necessary, in case of a
 	// DoS attack.  Disabling this means that the peers will not have any
 	// additional information to allow them to prioritize our connection.
-	AnnounceParticipationKey bool
+	AnnounceParticipationKey bool `version[4]:"true"`
 
 	// PriorityPeers specifies peer IP addresses that should always get
 	// outgoing broadcast messages from this node.
-	PriorityPeers map[string]bool
+	PriorityPeers map[string]bool `version[4]:""`
 
 	// To make sure the algod process does not run out of FDs, algod ensures
 	// that RLIMIT_NOFILE exceeds the max number of incoming connections (i.e.,
 	// IncomingConnectionsLimit) by at least ReservedFDs.  ReservedFDs are meant
 	// to leave room for short-lived FDs like DNS queries, SQLite files, etc.
-	ReservedFDs uint64
+	ReservedFDs uint64 `version[2]:"256"`
 
 	// local server
 	// API endpoint address
-	EndpointAddress string
+	EndpointAddress string `version[0]:"127.0.0.1:0"`
 
 	// timeouts passed to the rest http.Server implementation
-	RestReadTimeoutSeconds  int
-	RestWriteTimeoutSeconds int
+	RestReadTimeoutSeconds  int `version[4]:"15"`
+	RestWriteTimeoutSeconds int `version[4]:"120"`
 
 	// SRV-based phonebook
-	DNSBootstrapID string
+	DNSBootstrapID string `version[0]:"<network>.algorand.network"`
 
 	// Log file size limit in bytes
-	LogSizeLimit uint64
+	LogSizeLimit uint64 `version[0]:"1073741824"`
 
 	// text/template for creating log archive filename.
 	// Available template vars:
@@ -130,129 +144,129 @@ type Local struct {
 	// If the filename ends with .gz or .bz2 it will be compressed.
 	//
 	// default: "node.archive.log" (no rotation, clobbers previous archive)
-	LogArchiveName string
+	LogArchiveName string `version[4]:"node.archive.log"`
 
 	// LogArchiveMaxAge will be parsed by time.ParseDuration().
 	// Valid units are 's' seconds, 'm' minutes, 'h' hours
-	LogArchiveMaxAge string
+	LogArchiveMaxAge string `version[4]:""`
 
 	// number of consecutive attempts to catchup after which we replace the peers we're connected to
-	CatchupFailurePeerRefreshRate int
+	CatchupFailurePeerRefreshRate int `version[0]:"10"`
 
 	// where should the node exporter listen for metrics
-	NodeExporterListenAddress string
+	NodeExporterListenAddress string `version[0]:":9100"`
 
 	// enable metric reporting flag
-	EnableMetricReporting bool
+	EnableMetricReporting bool `version[0]:"false"`
 
 	// enable top accounts reporting flag
-	EnableTopAccountsReporting bool
+	EnableTopAccountsReporting bool `version[0]:"false"`
 
 	// enable agreement reporting flag. Currently only prints additional period events.
-	EnableAgreementReporting bool
+	EnableAgreementReporting bool `version[3]:"false"`
 
 	// enable agreement timing metrics flag
-	EnableAgreementTimeMetrics bool
+	EnableAgreementTimeMetrics bool `version[3]:"false"`
 
 	// The path to the node exporter.
-	NodeExporterPath string
+	NodeExporterPath string `version[0]:"./node_exporter"`
 
 	// The fallback DNS resolver address that would be used if the system resolver would fail to retrieve SRV records
-	FallbackDNSResolverAddress string
+	FallbackDNSResolverAddress string `version[0]:""`
 
 	// exponential increase factor of transaction pool's fee threshold, should always be 2 in production
-	TxPoolExponentialIncreaseFactor uint64
+	TxPoolExponentialIncreaseFactor uint64 `version[0]:"2"`
 
-	SuggestedFeeBlockHistory int
+	SuggestedFeeBlockHistory int `version[0]:"3"`
 
 	// TxPoolSize is the number of transactions that fit in the transaction pool
-	TxPoolSize int
+	TxPoolSize int `version[0]:"50000" version[5]:"15000"`
 
 	// number of seconds allowed for syncing transactions
-	TxSyncTimeoutSeconds int64
+	TxSyncTimeoutSeconds int64 `version[0]:"30"`
 
 	// number of seconds between transaction synchronizations
-	TxSyncIntervalSeconds int64
+	TxSyncIntervalSeconds int64 `version[0]:"60"`
 
 	// the number of incoming message hashes buckets.
-	IncomingMessageFilterBucketCount int
+	IncomingMessageFilterBucketCount int `version[0]:"5"`
 
 	// the size of each incoming message hash bucket.
-	IncomingMessageFilterBucketSize int
+	IncomingMessageFilterBucketSize int `version[0]:"512"`
 
 	// the number of outgoing message hashes buckets.
-	OutgoingMessageFilterBucketCount int
+	OutgoingMessageFilterBucketCount int `version[0]:"3"`
 
 	// the size of each outgoing message hash bucket.
-	OutgoingMessageFilterBucketSize int
+	OutgoingMessageFilterBucketSize int `version[0]:"128"`
 
 	// enable the filtering of outgoing messages
-	EnableOutgoingNetworkMessageFiltering bool
+	EnableOutgoingNetworkMessageFiltering bool `version[0]:"true"`
 
 	// enable the filtering of incoming messages
-	EnableIncomingMessageFilter bool
+	EnableIncomingMessageFilter bool `version[0]:"false"`
 
 	// control enabling / disabling deadlock detection.
 	// negative (-1) to disable, positive (1) to enable, 0 for default.
-	DeadlockDetection int
+	DeadlockDetection int `version[1]:"0"`
 
 	// Prefer to run algod Hosted (under algoh)
 	// Observed by `goal` for now.
-	RunHosted bool
+	RunHosted bool `version[3]:"false"`
 
 	// The maximal number of blocks that catchup will fetch in parallel.
 	// If less than Protocol.SeedLookback, then Protocol.SeedLookback will be used as to limit the catchup.
-	CatchupParallelBlocks uint64
+	CatchupParallelBlocks uint64 `version[3]:"50" version[5]:"16"`
 
 	// Generate AssembleBlockMetrics telemetry event
-	EnableAssembleStats bool
+	EnableAssembleStats bool `version[0]:""`
 
 	// Generate ProcessBlockMetrics telemetry event
-	EnableProcessBlockStats bool
+	EnableProcessBlockStats bool `version[0]:""`
 
 	// SuggestedFeeSlidingWindowSize is number of past blocks that will be considered in computing the suggested fee
-	SuggestedFeeSlidingWindowSize uint32
+	SuggestedFeeSlidingWindowSize uint32 `version[3]:"50"`
 
 	// the max size the sync server would return
-	TxSyncServeResponseSize int
+	TxSyncServeResponseSize int `version[3]:"1000000"`
 
 	// IsIndexerActive indicates whether to activate the indexer for fast retrieval of transactions
 	// Note -- Indexer cannot operate on non Archival nodes
-	IsIndexerActive bool
+	IsIndexerActive bool `version[3]:"false"`
 
 	// UseXForwardedForAddress indicates whether or not the node should use the X-Forwarded-For HTTP Header when
 	// determining the source of a connection.  If used, it should be set to the string "X-Forwarded-For", unless the
 	// proxy vendor provides another header field.  In the case of CloudFlare proxy, the "CF-Connecting-IP" header
 	// field can be used.
-	UseXForwardedForAddressField string
+	UseXForwardedForAddressField string `version[0]:""`
 
 	// ForceRelayMessages indicates whether the network library relay messages even in the case that no NetAddress was specified.
-	ForceRelayMessages bool
+	ForceRelayMessages bool `version[0]:"false"`
 
 	// ConnectionsRateLimitingWindowSeconds is being used in conjunction with ConnectionsRateLimitingCount;
 	// see ConnectionsRateLimitingCount description for further information. Providing a zero value
 	// in this variable disables the connection rate limiting.
-	ConnectionsRateLimitingWindowSeconds uint
+	ConnectionsRateLimitingWindowSeconds uint `version[4]:"1"`
 
 	// ConnectionsRateLimitingCount is being used along with ConnectionsRateLimitingWindowSeconds to determine if
 	// a connection request should be accepted or not. The gossip network examine all the incoming requests in the past
 	// ConnectionsRateLimitingWindowSeconds seconds that share the same origin. If the total count exceed the ConnectionsRateLimitingCount
 	// value, the connection is refused.
-	ConnectionsRateLimitingCount uint
+	ConnectionsRateLimitingCount uint `version[4]:"60"`
 
 	// EnableRequestLogger enabled the logging of the incoming requests to the telemetry server.
-	EnableRequestLogger bool
+	EnableRequestLogger bool `version[4]:"false"`
 
 	// PeerConnectionsUpdateInterval defines the interval at which the peer connections information is being sent to the
 	// telemetry ( when enabled ). Defined in seconds.
-	PeerConnectionsUpdateInterval int
+	PeerConnectionsUpdateInterval int `version[5]:"3600"`
 
 	// EnableProfiler enables the go pprof endpoints, should be false if
 	// the algod api will be exposed to untrusted individuals
-	EnableProfiler bool
+	EnableProfiler bool `version[0]:"false"`
 
 	// TelemetryToLog records messages to node.log that are normally sent to remote event monitoring
-	TelemetryToLog bool
+	TelemetryToLog bool `version[5]:"true"`
 
 	// DNSSecurityFlags instructs algod validating DNS responses.
 	// Possible fla values
@@ -261,17 +275,52 @@ type Local struct {
 	// 0x02 (dnssecRelayAddr) - validate relays' names to addresses resolution
 	// 0x04 (dnssecTelemetryAddr) - validate telemetry and metrics names to addresses resolution
 	// ...
-	DNSSecurityFlags uint32
+	DNSSecurityFlags uint32 `version[6]:"1"`
 
 	// EnablePingHandler controls whether the gossip node would respond to ping messages with a pong message.
-	EnablePingHandler bool
+	EnablePingHandler bool `version[6]:"true"`
 
 	// DisableOutgoingConnectionThrottling disables the connection throttling of the network library, which
 	// allow the network library to continuesly disconnect relays based on their relative ( and absolute ) performance.
-	DisableOutgoingConnectionThrottling bool
+	DisableOutgoingConnectionThrottling bool `version[5]:"false"`
 
 	// NetworkProtocolVersion overrides network protocol version ( if present )
-	NetworkProtocolVersion string
+	NetworkProtocolVersion string `version[6]:""`
+
+	// CatchpointInterval set the interval at which catchpoint are being generated.
+	CatchpointInterval uint64 `version[7]:"10000"`
+
+	// CatchpointFileHistoryLength defines how many catchpoint files we want to store back.
+	// 0 means don't store any, -1 mean unlimited and positive number suggest the number of most recent catchpoint files.
+	CatchpointFileHistoryLength int `version[7]:"365"`
+
+	// EnableLedgerService enables the ledger serving service. The functionality of this depends on NetAddress, which must also be provided.
+	// This functionality is required for the catchpoint catchup.
+	EnableLedgerService bool `version[7]:"false"`
+
+	// EnableBlockService enables the block serving service. The functionality of this depends on NetAddress, which must also be provided.
+	// This functionality is required for the catchup.
+	EnableBlockService bool `version[7]:"false"`
+
+	// EnableGossipBlockService enables the block serving service over the gossip network. The functionality of this depends on NetAddress, which must also be provided.
+	// This functionality is required for the relays to perform catchup from nodes.
+	EnableGossipBlockService bool `version[8]:"true"`
+
+	// CatchupHTTPBlockFetchTimeoutSec controls how long the http query for fetching a block from a relay would take before giving up and trying another relay.
+	CatchupHTTPBlockFetchTimeoutSec int `version[9]:"4"`
+
+	// CatchupGossipBlockFetchTimeoutSec controls how long the gossip query for fetching a block from a relay would take before giving up and trying another relay.
+	CatchupGossipBlockFetchTimeoutSec int `version[9]:"4"`
+
+	// CatchupLedgerDownloadRetryAttempts controls the number of attempt the ledger fetching would be attempted before giving up catching up to the provided catchpoint.
+	CatchupLedgerDownloadRetryAttempts int `version[9]:"50"`
+
+	// CatchupLedgerDownloadRetryAttempts controls the number of attempt the block fetching would be attempted before giving up catching up to the provided catchpoint.
+	CatchupBlockDownloadRetryAttempts int `version[9]:"1000"`
+
+	// EnableDeveloperAPI enables teal/compile, teal/dryrun API endpoints.
+	// This functionlity is disabled by default.
+	EnableDeveloperAPI bool `version[9]:"false"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
@@ -339,6 +388,8 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 	// We can change this logic in the future, but it's currently the sanest default.
 	if source.NetAddress != "" {
 		source.Archival = true
+		source.EnableLedgerService = true
+		source.EnableBlockService = true
 	}
 
 	return source, err

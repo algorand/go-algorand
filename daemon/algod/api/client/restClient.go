@@ -30,6 +30,8 @@ import (
 	"github.com/google/go-querystring/query"
 
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	privateV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
+
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -55,6 +57,7 @@ const (
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
 	"/v1/transactions": true,
+	"/v2/teal/dryrun":  true,
 }
 
 // RestClient manages the REST interface for a calling user.
@@ -309,28 +312,34 @@ func (client RestClient) AssetInformation(index uint64) (response v1.AssetParams
 	return
 }
 
-// ApplicationInformation gets the ApplicationInformationResponse associated
-// with the passed application index
-func (client RestClient) ApplicationInformation(index uint64) (response v1.AppParams, err error) {
-	err = client.get(&response, fmt.Sprintf("/v1/application/%d", index), nil)
-	return
-}
-
 // Assets gets up to max assets with maximum asset index assetIdx
 func (client RestClient) Assets(assetIdx, max uint64) (response v1.AssetList, err error) {
 	err = client.get(&response, "/v1/assets", assetsParams{assetIdx, max})
 	return
 }
 
-// Applications gets up to max applications with maximum application index appIdx
-func (client RestClient) Applications(appIdx, max uint64) (response v1.ApplicationList, err error) {
-	err = client.get(&response, "/v1/applications", appsParams{appIdx, max})
+// AssetInformationV2 gets the AssetInformationResponse associated with the passed asset index
+func (client RestClient) AssetInformationV2(index uint64) (response generatedV2.AssetInformation, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/assets/%d", index), nil)
+	return
+}
+
+// ApplicationInformation gets the ApplicationInformationResponse associated
+// with the passed application index
+func (client RestClient) ApplicationInformation(index uint64) (response generatedV2.ApplicationInformation, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/applications/%d", index), nil)
 	return
 }
 
 // AccountInformation also gets the AccountInformationResponse associated with the passed address
 func (client RestClient) AccountInformation(address string) (response v1.Account, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s", address), nil)
+	return
+}
+
+// AccountInformationV2 gets the AccountData associated with the passed address
+func (client RestClient) AccountInformationV2(address string) (response generatedV2.Account, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), nil)
 	return
 }
 
@@ -422,6 +431,18 @@ func (client RestClient) Shutdown() (err error) {
 	return
 }
 
+// AbortCatchup aborts the currently running catchup
+func (client RestClient) AbortCatchup(catchpointLabel string) (response privateV2.CatchpointAbortResponse, err error) {
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "DELETE", false, true)
+	return
+}
+
+// Catchup start catching up to the give catchpoint label
+func (client RestClient) Catchup(catchpointLabel string) (response privateV2.CatchpointStartResponse, err error) {
+	err = client.submitForm(&response, fmt.Sprintf("/v2/catchup/%s", catchpointLabel), nil, "POST", false, true)
+	return
+}
+
 // GetGoRoutines gets a dump of the goroutines from pprof
 // Not supported
 func (client RestClient) GetGoRoutines(ctx context.Context) (goRoutines string, err error) {
@@ -466,5 +487,13 @@ func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryA
 		return
 	}
 	result = string(bytes)
+	return
+}
+
+// RawDryrun gets the raw DryrunResponse associated with the passed address
+func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
+	var blob Blob
+	err = client.submitForm(&blob, "/v2/teal/dryrun", data, "POST", false /* encodeJSON */, false /* decodeJSON */)
+	response = blob
 	return
 }

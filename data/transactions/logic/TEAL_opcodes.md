@@ -58,6 +58,8 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 - Pushes: uint64
 - A plus B. Panic on overflow.
 
+Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `plusw`.
+
 ## -
 
 - Opcode: 0x09
@@ -165,7 +167,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pushes: uint64
 - converts bytes X as big endian to uint64
 
-`btoi` panics if the input is longer than 8 bytes
+`btoi` panics if the input is longer than 8 bytes.
 
 ## %
 
@@ -208,6 +210,14 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64, uint64
 - A times B out to 128-bit long result as low (top) and high uint64 values on the stack
+
+## plusw
+
+- Opcode: 0x1e
+- Pops: *... stack*, {uint64 A}, {uint64 B}
+- Pushes: uint64, uint64
+- A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack
+- LogicSigVersion >= 2
 
 ## intcblock
 
@@ -351,7 +361,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 0 | Sender | []byte | 32 byte address |
 | 1 | Fee | uint64 | micro-Algos |
 | 2 | FirstValid | uint64 | round number |
-| 3 | FirstValidTime | uint64 | Causes program to fail; reserved for future use. |
+| 3 | FirstValidTime | uint64 | Causes program to fail; reserved for future use |
 | 4 | LastValid | uint64 | round number |
 | 5 | Note | []byte |  |
 | 6 | Lease | []byte |  |
@@ -370,23 +380,39 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 19 | AssetSender | []byte | 32 byte address. Causes clawback of all value of asset from AssetSender if Sender is the Clawback address of the asset. |
 | 20 | AssetReceiver | []byte | 32 byte address |
 | 21 | AssetCloseTo | []byte | 32 byte address |
-| 22 | GroupIndex | uint64 | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1. |
+| 22 | GroupIndex | uint64 | Position of this transaction within an atomic transaction group. A stand-alone transaction is implicitly element 0 in a group of 1 |
 | 23 | TxID | []byte | The computed ID for this transaction. 32 bytes. |
-| 24 | ApplicationID | uint64 | ApplicationID from ApplicationCall transaction |
-| 25 | OnCompletion | uint64 | ApplicationCall transaction on completion action |
-| 26 | ApplicationArgs | []byte | Arguments passed to the application in the ApplicationCall transaction |
-| 27 | NumAppArgs | uint64 | Number of ApplicationArgs |
-| 28 | Accounts | []byte | Accounts listed in the ApplicationCall transaction |
-| 29 | NumAccounts | uint64 | Number of Accounts |
-| 30 | ApprovalProgram | []byte | Approval program |
-| 31 | ClearStateProgram | []byte | Clear state program |
+| 24 | ApplicationID | uint64 | ApplicationID from ApplicationCall transaction. LogicSigVersion >= 2. |
+| 25 | OnCompletion | uint64 | ApplicationCall transaction on completion action. LogicSigVersion >= 2. |
+| 26 | ApplicationArgs | []byte | Arguments passed to the application in the ApplicationCall transaction. LogicSigVersion >= 2. |
+| 27 | NumAppArgs | uint64 | Number of ApplicationArgs. LogicSigVersion >= 2. |
+| 28 | Accounts | []byte | Accounts listed in the ApplicationCall transaction. LogicSigVersion >= 2. |
+| 29 | NumAccounts | uint64 | Number of Accounts. LogicSigVersion >= 2. |
+| 30 | ApprovalProgram | []byte | Approval program. LogicSigVersion >= 2. |
+| 31 | ClearStateProgram | []byte | Clear state program. LogicSigVersion >= 2. |
+| 32 | RekeyTo | []byte | 32 byte Sender's new AuthAddr. LogicSigVersion >= 2. |
+| 33 | ConfigAsset | uint64 | Asset ID in asset config transaction. LogicSigVersion >= 2. |
+| 34 | ConfigAssetTotal | uint64 | Total number of units of this asset created. LogicSigVersion >= 2. |
+| 35 | ConfigAssetDecimals | uint64 | Number of digits to display after the decimal place when displaying the asset. LogicSigVersion >= 2. |
+| 36 | ConfigAssetDefaultFrozen | uint64 | Whether the asset's slots are frozen by default or not, 0 or 1. LogicSigVersion >= 2. |
+| 37 | ConfigAssetUnitName | []byte | Unit name of the asset. LogicSigVersion >= 2. |
+| 38 | ConfigAssetName | []byte | The asset name. LogicSigVersion >= 2. |
+| 39 | ConfigAssetURL | []byte | URL. LogicSigVersion >= 2. |
+| 40 | ConfigAssetMetadataHash | []byte | 32 byte commitment to some unspecified asset metadata. LogicSigVersion >= 2. |
+| 41 | ConfigAssetManager | []byte | 32 byte address. LogicSigVersion >= 2. |
+| 42 | ConfigAssetReserve | []byte | 32 byte address. LogicSigVersion >= 2. |
+| 43 | ConfigAssetFreeze | []byte | 32 byte address. LogicSigVersion >= 2. |
+| 44 | ConfigAssetClawback | []byte | 32 byte address. LogicSigVersion >= 2. |
+| 45 | FreezeAsset | uint64 | Asset ID being frozen or un-frozen. LogicSigVersion >= 2. |
+| 46 | FreezeAssetAccount | []byte | 32 byte address of the account whose asset slot is being frozen or un-frozen. LogicSigVersion >= 2. |
+| 47 | FreezeAssetFrozen | uint64 | The new frozen value, 0 or 1. LogicSigVersion >= 2. |
 
 
 TypeEnum mapping:
 
 | Index | "Type" string | Description |
 | --- | --- | --- |
-| 0 | unknown | Unknown type. Invalid transaction. |
+| 0 | unknown | Unknown type. Invalid transaction |
 | 1 | pay | Payment |
 | 2 | keyreg | KeyRegistration |
 | 3 | acfg | AssetConfig |
@@ -412,10 +438,10 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 | 1 | MinBalance | uint64 | micro Algos |
 | 2 | MaxTxnLife | uint64 | rounds |
 | 3 | ZeroAddress | []byte | 32 byte address of all zero bytes |
-| 4 | GroupSize | uint64 | Number of transactions in this atomic transaction group. At least 1. |
-| 5 | LogicSigVersion | uint64 |  |
-| 6 | Round | uint64 | Current round number |
-| 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative |
+| 4 | GroupSize | uint64 | Number of transactions in this atomic transaction group. At least 1 |
+| 5 | LogicSigVersion | uint64 | Maximum supported TEAL version. LogicSigVersion >= 2. |
+| 6 | Round | uint64 | Current round number. LogicSigVersion >= 2. |
+| 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative. LogicSigVersion >= 2. |
 
 
 ## gtxn
@@ -425,7 +451,7 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 - Pushes: any
 - push field to the stack from a transaction in the current transaction group
 
-for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`
+for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`.
 
 ## load
 
@@ -476,7 +502,7 @@ At LogicSigVersion 2 it became allowed to branch to the end of the program exact
 - branch if value X is zero
 - LogicSigVersion >= 2
 
-See `bnz` for details on how branches work
+See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`.
 
 ## b
 
@@ -526,7 +552,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - pop two byte strings A and B and join them, push the result
 - LogicSigVersion >= 2
 
-`concat` panics if the result would be greater than 4096 bytes
+`concat` panics if the result would be greater than 4096 bytes.
 
 ## substring
 
@@ -562,31 +588,31 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, application id (top of the stack on opcode entry)
+params: account index, application id (top of the stack on opcode entry). Return: 1 if opted in and 0 otherwise.
 
-## app_local_gets
+## app_local_get
 
 - Opcode: 0x62
 - Pops: *... stack*, {uint64 A}, {[]byte B}
 - Pushes: any
-- read from account specified by Txn.Accounts[A] from local state of the current application key B  => value
+- read from account specified by Txn.Accounts[A] from local state of the current application key B => value
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, state key. Return: value. The value is zero if the key does ont exist
+params: account index, state key. Return: value. The value is zero if the key does not exist.
 
-## app_local_get
+## app_local_get_ex
 
 - Opcode: 0x63
 - Pops: *... stack*, {uint64 A}, {uint64 B}, {[]byte C}
 - Pushes: uint64, any
-- read from account specified by Txn.Accounts[A] from local state of the application B key C  => {0 or 1 (top), value}
+- read from account specified by Txn.Accounts[A] from local state of the application B key C => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, application id, state key. Return: did_exist flag (top of the stack), value
+params: account index, application id, state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value.
 
-## app_global_gets
+## app_global_get
 
 - Opcode: 0x64
 - Pops: *... stack*, []byte
@@ -595,9 +621,9 @@ params: account index, application id, state key. Return: did_exist flag (top of
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: state key. Return: value. The value is zero if the key does ont exist
+params: state key. Return: value. The value is zero if the key does not exist.
 
-## app_global_get
+## app_global_get_ex
 
 - Opcode: 0x65
 - Pops: *... stack*, {uint64 A}, {[]byte B}
@@ -606,7 +632,7 @@ params: state key. Return: value. The value is zero if the key does ont exist
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: application id, state key. Return: value
+params: application id, state key. Return: value.
 
 ## app_local_put
 
@@ -617,7 +643,7 @@ params: application id, state key. Return: value
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, state key, value
+params: account index, state key, value.
 
 ## app_global_put
 
@@ -637,7 +663,7 @@ params: account index, state key, value
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: account index, state key
+params: account index, state key.
 
 ## app_global_del
 
@@ -648,14 +674,14 @@ params: account index, state key
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: state key
+params: state key.
 
 ## asset_holding_get
 
 - Opcode: 0x70 {uint8 asset holding field index}
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64, any
-- read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg)  => {0 or 1 (top), value}
+- read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -667,14 +693,14 @@ params: state key
 | 1 | AssetFrozen | uint64 | Is the asset frozen or not |
 
 
-params: account index, asset id. Return: did_exist flag, value
+params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherwise), value.
 
 ## asset_params_get
 
 - Opcode: 0x71 {uint8 asset params field index}
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64, any
-- read from account specified by Txn.Accounts[A] and asset B params field X (imm arg)  => {0 or 1 (top), value}
+- read from account specified by Txn.Accounts[A] and asset B params field X (imm arg) => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -686,7 +712,7 @@ params: account index, asset id. Return: did_exist flag, value
 | 1 | AssetDecimals | uint64 | See AssetParams.Decimals |
 | 2 | AssetDefaultFrozen | uint64 | Frozen by default or not |
 | 3 | AssetUnitName | []byte | Asset unit name |
-| 4 | AssetAssetName | []byte | Asset name |
+| 4 | AssetName | []byte | Asset name |
 | 5 | AssetURL | []byte | URL with additional info about the asset |
 | 6 | AssetMetadataHash | []byte | Arbitrary commitment |
 | 7 | AssetManager | []byte | Manager commitment |
@@ -695,4 +721,4 @@ params: account index, asset id. Return: did_exist flag, value
 | 10 | AssetClawback | []byte | Clawback address |
 
 
-params: account index, asset id. Return: did_exist flag, value
+params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherwise), value.

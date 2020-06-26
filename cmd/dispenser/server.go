@@ -67,44 +67,48 @@ const topPageTemplate = `
 <html>
   <head>
     <title>Algorand dispenser</title>
-    <script src='https://www.google.com/recaptcha/api.js'></script>
-    <script
-      src="https://code.jquery.com/jquery-3.3.1.min.js"
-      integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
-      crossorigin="anonymous"></script>
-
+    <script src='https://www.google.com/recaptcha/api.js'>
+    </script>
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"
+    integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+    crossorigin="anonymous">
+    </script>
     <script>
-      function onload() {
-            $('#dispense').click(function (e) {
-              var recaptcha = grecaptcha.getResponse();
-              var target = $('#target').val();
+      function loadparam() {
+        const queryString = window.location.search;
+        const urlParams = new URLSearchParams(queryString);
+        $('#target').val(urlParams.get('account'));
+      }
 
-              $('#status').html('Sending request..');
-              var req = $.post('/dispense', {
-                recaptcha: recaptcha,
-                target: target,
-              }, function (data) {
-                $('#status').html('Code ' + req.status + ' ' + req.statusText + ': ' + req.responseText);
-              }).fail(function () {
-                $('#status').html('Code ' + req.status + ' ' + req.statusText + ': ' + req.responseText);
-              });
+      function onload() {
+        loadparam();
+        $('#dispense').click(function(e) {
+          var recaptcha = grecaptcha.getResponse();
+          var target = $('#target').val();
+
+          $('#status').html('Sending request..');
+          var req = $.post('/dispense', {
+            recaptcha: recaptcha,
+            target: target,
+          }, function(data) {
+            $('#status').html('Code ' + req.status + ' ' + req.statusText + ': ' + req.responseText);
+          }).fail(function() {
+            $('#status').html('Code ' + req.status + ' ' + req.statusText + ': ' + req.responseText);
+          });
         });
       }
     </script>
   </head>
-
   <body onload="onload()">
     <h1>Algorand dispenser</h1>
-
-    <div class="g-recaptcha" data-sitekey="{{.RecaptchaSiteKey}}"></div>
-
+    <div class="g-recaptcha" data-sitekey="{{.RecaptchaSiteKey}}">
+    </div>
     <div>
       <input id="target" placeholder="target address">
       <button id="dispense">Dispense</button>
     </div>
-
     <div>
-      Status: <span id="status">
+      Status: <span id="status"></span>
     </div>
   </body>
 </html>

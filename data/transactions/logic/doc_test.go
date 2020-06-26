@@ -80,7 +80,7 @@ func TestOpImmediateNote(t *testing.T) {
 func TestOpDocExtra(t *testing.T) {
 	xd := OpDocExtra("bnz")
 	require.NotEmpty(t, xd)
-	xd = OpDocExtra("+")
+	xd = OpDocExtra("-")
 	require.Empty(t, xd)
 }
 
@@ -115,4 +115,27 @@ func TestTypeNameDescription(t *testing.T) {
 		require.Equal(t, b, typeEnumDescriptions[i].b)
 	}
 	require.Equal(t, "invalid type name", TypeNameDescription("invalid type name"))
+}
+
+func TestOnCompletionDescription(t *testing.T) {
+	desc := OnCompletionDescription(0)
+	require.Equal(t, "Application transaction will simply call its ApprovalProgram.", desc)
+
+	desc = OnCompletionDescription(100)
+	require.Equal(t, "invalid constant value", desc)
+}
+
+func TestFieldDocs(t *testing.T) {
+	txnFields := TxnFieldDocs()
+	require.Greater(t, len(txnFields), 0)
+
+	globalFields := GlobalFieldDocs()
+	require.Greater(t, len(globalFields), 0)
+
+	doc := globalFields["MinTxnFee"]
+	require.NotContains(t, doc, "LogicSigVersion >= 2")
+
+	doc = globalFields["Round"]
+	require.Contains(t, doc, "LogicSigVersion >= 2")
+
 }

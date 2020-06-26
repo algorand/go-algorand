@@ -20,7 +20,6 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -33,6 +32,8 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 var (
@@ -77,8 +78,6 @@ func init() {
 	appCmd.AddCommand(clearAppCmd)
 	appCmd.AddCommand(readStateAppCmd)
 
-	appCmd.PersistentFlags().StringVarP(&txFilename, "out", "o", "", "Dump an unsigned tx to the given file. In order to dump a signed transaction, pass -s")
-	appCmd.PersistentFlags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	appCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
 	appCmd.PersistentFlags().StringSliceVar(&appArgs, "app-arg", nil, "Args to encode for application transactions (all will be encoded to a byte slice). For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.")
 	appCmd.PersistentFlags().StringSliceVar(&foreignApps, "foreign-app", nil, "Indexes of other apps whose global state is read in this transaction")
@@ -117,6 +116,15 @@ func init() {
 	readStateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 	updateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 
+	// Add common transaction flags to all txn-generating app commands
+	addTxnFlags(createAppCmd)
+	addTxnFlags(deleteAppCmd)
+	addTxnFlags(updateAppCmd)
+	addTxnFlags(callAppCmd)
+	addTxnFlags(optInAppCmd)
+	addTxnFlags(closeOutAppCmd)
+	addTxnFlags(clearAppCmd)
+
 	readStateAppCmd.Flags().BoolVar(&fetchLocal, "local", false, "Fetch account-specific state for this application. `--from` address is required when using this flag")
 	readStateAppCmd.Flags().BoolVar(&fetchGlobal, "global", false, "Fetch global state for this application.")
 	readStateAppCmd.Flags().BoolVar(&guessFormat, "guess-format", false, "Format application state using heuristics to guess data encoding.")
@@ -149,14 +157,14 @@ func init() {
 }
 
 type appCallArg struct {
-	Encoding string `json:"encoding"`
-	Value    string `json:"value"`
+	Encoding string `codec:"encoding"`
+	Value    string `codec:"value"`
 }
 
 type appCallInputs struct {
-	Accounts    []string     `json:"accounts"`
-	ForeignApps []uint64     `json:"foreignapps"`
-	Args        []appCallArg `json:"args"`
+	Accounts    []string     `codec:"accounts"`
+	ForeignApps []uint64     `codec:"foreignapps"`
+	Args        []appCallArg `codec:"args"`
 }
 
 func getForeignApps() []uint64 {
@@ -232,7 +240,7 @@ func processAppInputFile() (args [][]byte, accounts []string, foreignApps []uint
 		reportErrorf("Could not open app input JSON file: %v", err)
 	}
 
-	dec := json.NewDecoder(f)
+	dec := protocol.NewJSONDecoder(f)
 	err = dec.Decode(&inputs)
 	if err != nil {
 		reportErrorf("Could not decode app input JSON file: %v", err)
@@ -375,7 +383,8 @@ var createAppCmd = &cobra.Command{
 			reportErrorf("Cannot construct transaction: %s", err)
 		}
 
-		if txFilename == "" {
+		if outFilename == "" {
+			// Broadcast
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -405,10 +414,20 @@ var createAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			// Broadcast or write transaction to file
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
-			if err != nil {
-				reportErrorf(err.Error())
+			if dumpForDryrun {
+				// Write dryrun data to file
+				proto, _ := getProto(protoVersion)
+				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				writeFile(outFilename, data, 0600)
+			} else {
+				// Write transaction to file
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
 			}
 		}
 	},
@@ -448,7 +467,7 @@ var updateAppCmd = &cobra.Command{
 		}
 
 		// Broadcast or write transaction to file
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -475,9 +494,19 @@ var updateAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
-			if err != nil {
-				reportErrorf(err.Error())
+			if dumpForDryrun {
+				// Write dryrun data to file
+				proto, _ := getProto(protoVersion)
+				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				writeFile(outFilename, data, 0600)
+			} else {
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
 			}
 		}
 	},
@@ -516,7 +545,7 @@ var optInAppCmd = &cobra.Command{
 		}
 
 		// Broadcast or write transaction to file
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -543,9 +572,19 @@ var optInAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
-			if err != nil {
-				reportErrorf(err.Error())
+			if dumpForDryrun {
+				// Write dryrun data to file
+				proto, _ := getProto(protoVersion)
+				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				writeFile(outFilename, data, 0600)
+			} else {
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
 			}
 		}
 	},
@@ -584,7 +623,7 @@ var closeOutAppCmd = &cobra.Command{
 		}
 
 		// Broadcast or write transaction to file
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -611,9 +650,19 @@ var closeOutAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
-			if err != nil {
-				reportErrorf(err.Error())
+			if dumpForDryrun {
+				// Write dryrun data to file
+				proto, _ := getProto(protoVersion)
+				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				writeFile(outFilename, data, 0600)
+			} else {
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
 			}
 		}
 	},
@@ -652,7 +701,7 @@ var clearAppCmd = &cobra.Command{
 		}
 
 		// Broadcast or write transaction to file
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -679,9 +728,19 @@ var clearAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
-			if err != nil {
-				reportErrorf(err.Error())
+			if dumpForDryrun {
+				// Write dryrun data to file
+				proto, _ := getProto(protoVersion)
+				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				writeFile(outFilename, data, 0600)
+			} else {
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
 			}
 		}
 	},
@@ -720,7 +779,7 @@ var callAppCmd = &cobra.Command{
 		}
 
 		// Broadcast or write transaction to file
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -747,9 +806,19 @@ var callAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
-			if err != nil {
-				reportErrorf(err.Error())
+			if dumpForDryrun {
+				// Write dryrun data to file
+				proto, _ := getProto(protoVersion)
+				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				writeFile(outFilename, data, 0600)
+			} else {
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
 			}
 		}
 	},
@@ -788,7 +857,7 @@ var deleteAppCmd = &cobra.Command{
 		}
 
 		// Broadcast or write transaction to file
-		if txFilename == "" {
+		if outFilename == "" {
 			wh, pw := ensureWalletHandleMaybePassword(dataDir, walletName, true)
 			signedTxn, err := client.SignTransactionWithWallet(wh, pw, tx)
 			if err != nil {
@@ -815,9 +884,19 @@ var deleteAppCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeTxnToFile(client, sign, dataDir, walletName, tx, txFilename)
-			if err != nil {
-				reportErrorf(err.Error())
+			if dumpForDryrun {
+				// Write dryrun data to file
+				proto, _ := getProto(protoVersion)
+				data, err := libgoal.MakeDryrunStateBytes(client, tx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				writeFile(outFilename, data, 0600)
+			} else {
+				err = writeTxnToFile(client, sign, dataDir, walletName, tx, outFilename)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
 			}
 		}
 	},
@@ -833,18 +912,13 @@ func printable(str string) bool {
 }
 
 func heuristicFormatStr(str string) string {
-	decoded, err := base64.StdEncoding.DecodeString(str)
-	if err != nil {
-		reportErrorf("Fatal error: could not decode base64-encoded string: %s", str)
+	if printable(str) {
+		return str
 	}
 
-	if printable(string(decoded)) {
-		return string(decoded)
-	}
-
-	if len(decoded) == 32 {
+	if len(str) == 32 {
 		var addr basics.Address
-		copy(addr[:], decoded)
+		copy(addr[:], []byte(str))
 		return addr.String()
 	}
 
@@ -909,10 +983,7 @@ var readStateAppCmd = &cobra.Command{
 			}
 
 			// Encode local state to json, print, and exit
-			enc, err := json.MarshalIndent(kv, "", "  ")
-			if err != nil {
-				reportErrorf(errorMarshalingState, err)
-			}
+			enc := protocol.EncodeJSON(kv)
 
 			// Print to stdout
 			os.Stdout.Write(enc)
@@ -920,12 +991,19 @@ var readStateAppCmd = &cobra.Command{
 		}
 
 		if fetchGlobal {
-			// Fetching global state. Get application information
-			ad, err := client.AccountData(account)
+			// Fetching global state. Get application creator
+			info, err := client.ApplicationInformation(appIdx)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
 
+			// Get creator information
+			ad, err := client.AccountData(info.Creator)
+			if err != nil {
+				reportErrorf(errorRequestFail, err)
+			}
+
+			// Get app params
 			params, ok := ad.AppParams[basics.AppIndex(appIdx)]
 			if !ok {
 				reportErrorf(errorNoSuchApplication, appIdx)
@@ -937,10 +1015,7 @@ var readStateAppCmd = &cobra.Command{
 			}
 
 			// Encode global state to json, print, and exit
-			enc, err := json.MarshalIndent(kv, "", "  ")
-			if err != nil {
-				reportErrorf(errorMarshalingState, err)
-			}
+			enc := protocol.EncodeJSON(kv)
 
 			// Print to stdout
 			os.Stdout.Write(enc)

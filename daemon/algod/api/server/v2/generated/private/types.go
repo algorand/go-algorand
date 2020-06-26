@@ -4,6 +4,7 @@
 package private
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -32,6 +33,9 @@ type Account struct {
 	// Note the raw object uses `map[int] -> AssetHolding` for this type.
 	Assets *[]AssetHolding `json:"assets,omitempty"`
 
+	// \[spend\] the address against which signing should be checked. If empty, the address of the current account is used. This field can be updated in any transaction by setting the RekeyTo field.
+	AuthAddr *string `json:"auth-addr,omitempty"`
+
 	// \[appp\] parameters of applications created by this account including app global data.
 	//
 	// Note: the raw account uses `map[int] -> AppParams` for this type.
@@ -57,20 +61,17 @@ type Account struct {
 	// The round for which this information is relevant.
 	Round uint64 `json:"round"`
 
-	// The address against which signatures/multisigs/logicsigs should be checked
-	SpendingKey *string `json:"spending-key,omitempty"`
+	// Indicates what type of signature is used by this account, must be one of:
+	// * sig
+	// * msig
+	// * lsig
+	SigType *string `json:"sig-type,omitempty"`
 
 	// \[onl\] delegation status of the account's MicroAlgos
 	// * Offline - indicates that the associated account is delegated.
 	// *  Online  - indicates that the associated account used as part of the delegation pool.
 	// *   NotParticipating - indicates that the associated account is neither a delegator nor a delegate.
 	Status string `json:"status"`
-
-	// Indicates what type of signature is used by this account, must be one of:
-	// * sig
-	// * msig
-	// * lsig
-	Type *string `json:"type,omitempty"`
 }
 
 // AccountParticipation defines model for AccountParticipation.
@@ -92,6 +93,14 @@ type AccountParticipation struct {
 	VoteParticipationKey []byte `json:"vote-participation-key"`
 }
 
+// AccountStateDelta defines model for AccountStateDelta.
+type AccountStateDelta struct {
+	Address string `json:"address"`
+
+	// Application state delta.
+	Delta StateDelta `json:"delta"`
+}
+
 // Application defines model for Application.
 type Application struct {
 
@@ -100,6 +109,16 @@ type Application struct {
 
 	// Stores the global information associated with an application.
 	AppParams ApplicationParams `json:"app-params"`
+}
+
+// ApplicationInformation defines model for ApplicationInformation.
+type ApplicationInformation struct {
+
+	// Application index and its parameters
+	Application Application `json:"application"`
+
+	// Application creator
+	Creator string `json:"creator"`
 }
 
 // ApplicationLocalState defines model for ApplicationLocalState.
@@ -180,6 +199,16 @@ type AssetHolding struct {
 	IsFrozen bool `json:"is-frozen"`
 }
 
+// AssetInformation defines model for AssetInformation.
+type AssetInformation struct {
+
+	// Specifies both the unique identifier and the parameters for an asset
+	Asset Asset `json:"asset"`
+
+	// Asset creator
+	Creator string `json:"creator"`
+}
+
 // AssetParams defines model for AssetParams.
 type AssetParams struct {
 
@@ -220,11 +249,101 @@ type AssetParams struct {
 	Url *string `json:"url,omitempty"`
 }
 
+// DryrunApp defines model for DryrunApp.
+type DryrunApp struct {
+	AppIndex uint64 `json:"app-index"`
+	Creator  string `json:"creator"`
+
+	// Stores the global information associated with an application.
+	Params ApplicationParams `json:"params"`
+}
+
+// DryrunRequest defines model for DryrunRequest.
+type DryrunRequest struct {
+	Accounts []Account   `json:"accounts"`
+	Apps     []DryrunApp `json:"apps"`
+
+	// LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.
+	LatestTimestamp uint64 `json:"latest-timestamp"`
+
+	// ProtocolVersion specifies a specific version string to operate under, otherwise whatever the current protocol of the network this algod is running in.
+	ProtocolVersion string `json:"protocol-version"`
+
+	// Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.
+	Round   uint64            `json:"round"`
+	Sources []DryrunSource    `json:"sources"`
+	Txns    []json.RawMessage `json:"txns"`
+}
+
+// DryrunSource defines model for DryrunSource.
+type DryrunSource struct {
+	AppIndex uint64 `json:"app-index"`
+
+	// FieldName is what kind of sources this is. If lsig then it goes into the transactions[this.TxnIndex].LogicSig. If approv or clearp it goes into the Approval Program or Clear State Program of application[this.AppIndex].
+	FieldName string `json:"field-name"`
+	Source    string `json:"source"`
+	TxnIndex  uint64 `json:"txn-index"`
+}
+
+// DryrunState defines model for DryrunState.
+type DryrunState struct {
+
+	// Evaluation error if any
+	Error *string `json:"error,omitempty"`
+
+	// Line number
+	Line uint64 `json:"line"`
+
+	// Program counter
+	Pc      uint64       `json:"pc"`
+	Scratch *[]TealValue `json:"scratch,omitempty"`
+	Stack   []TealValue  `json:"stack"`
+}
+
+// DryrunTxnResult defines model for DryrunTxnResult.
+type DryrunTxnResult struct {
+	AppCallMessages *[]string      `json:"app-call-messages,omitempty"`
+	AppCallTrace    *[]DryrunState `json:"app-call-trace,omitempty"`
+
+	// Disassembled program line by line.
+	Disassembly []string `json:"disassembly"`
+
+	// Application state delta.
+	GlobalDelta      *StateDelta          `json:"global-delta,omitempty"`
+	LocalDeltas      *[]AccountStateDelta `json:"local-deltas,omitempty"`
+	LogicSigMessages *[]string            `json:"logic-sig-messages,omitempty"`
+	LogicSigTrace    *[]DryrunState       `json:"logic-sig-trace,omitempty"`
+}
+
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	Data    *string `json:"data,omitempty"`
 	Message string  `json:"message"`
 }
+
+// EvalDelta defines model for EvalDelta.
+type EvalDelta struct {
+
+	// \[at\] delta action.
+	Action uint64 `json:"action"`
+
+	// \[bs\] bytes value.
+	Bytes *string `json:"bytes,omitempty"`
+
+	// \[ui\] uint value.
+	Uint *uint64 `json:"uint,omitempty"`
+}
+
+// EvalDeltaKeyValue defines model for EvalDeltaKeyValue.
+type EvalDeltaKeyValue struct {
+	Key string `json:"key"`
+
+	// Represents a TEAL value delta.
+	Value EvalDelta `json:"value"`
+}
+
+// StateDelta defines model for StateDelta.
+type StateDelta []EvalDeltaKeyValue
 
 // TealKeyValue defines model for TealKeyValue.
 type TealKeyValue struct {
@@ -288,6 +407,9 @@ type AssetId uint64
 // BeforeTime defines model for before-time.
 type BeforeTime time.Time
 
+// Catchpoint defines model for catchpoint.
+type Catchpoint string
+
 // CurrencyGreaterThan defines model for currency-greater-than.
 type CurrencyGreaterThan uint64
 
@@ -336,6 +458,12 @@ type TxType string
 // AccountResponse defines model for AccountResponse.
 type AccountResponse Account
 
+// ApplicationResponse defines model for ApplicationResponse.
+type ApplicationResponse ApplicationInformation
+
+// AssetResponse defines model for AssetResponse.
+type AssetResponse AssetInformation
+
 // BlockResponse defines model for BlockResponse.
 type BlockResponse struct {
 
@@ -346,11 +474,49 @@ type BlockResponse struct {
 	Cert *map[string]interface{} `json:"cert,omitempty"`
 }
 
+// CatchpointAbortResponse defines model for CatchpointAbortResponse.
+type CatchpointAbortResponse struct {
+
+	// Catchup abort response string
+	CatchupMessage string `json:"catchup-message"`
+}
+
+// CatchpointStartResponse defines model for CatchpointStartResponse.
+type CatchpointStartResponse struct {
+
+	// Catchup start response string
+	CatchupMessage string `json:"catchup-message"`
+}
+
+// DryrunResponse defines model for DryrunResponse.
+type DryrunResponse struct {
+	Error string            `json:"error"`
+	Txns  []DryrunTxnResult `json:"txns"`
+}
+
 // NodeStatusResponse defines model for NodeStatusResponse.
 type NodeStatusResponse struct {
 
+	// The current catchpoint that is being caught up to
+	Catchpoint *string `json:"catchpoint,omitempty"`
+
+	// The number of blocks that have already been obtained by the node as part of the catchup
+	CatchpointAcquiredBlocks *uint64 `json:"catchpoint-acquired-blocks,omitempty"`
+
+	// The number of account from the current catchpoint that have been processed so far as part of the catchup
+	CatchpointProcessedAccounts *uint64 `json:"catchpoint-processed-accounts,omitempty"`
+
+	// The total number of accounts included in the current catchpoint
+	CatchpointTotalAccounts *uint64 `json:"catchpoint-total-accounts,omitempty"`
+
+	// The total number of blocks that are required to complete the current catchpoint catchup
+	CatchpointTotalBlocks *uint64 `json:"catchpoint-total-blocks,omitempty"`
+
 	// CatchupTime in nanoseconds
 	CatchupTime uint64 `json:"catchup-time"`
+
+	// The last catchpoint seen by the node
+	LastCatchpoint *string `json:"last-catchpoint,omitempty"`
 
 	// LastRound indicates the last round seen
 	LastRound uint64 `json:"last-round"`
@@ -410,6 +576,16 @@ type PendingTransactionsResponse struct {
 
 	// Total number of transactions in the pool.
 	TotalTransactions uint64 `json:"total-transactions"`
+}
+
+// PostCompileResponse defines model for PostCompileResponse.
+type PostCompileResponse struct {
+
+	// base32 SHA512_256 of program bytes (Address style)
+	Hash string `json:"hash"`
+
+	// base64 encoded program bytes
+	Result string `json:"result"`
 }
 
 // PostTransactionsResponse defines model for PostTransactionsResponse.

@@ -128,6 +128,21 @@ const timeoutOnNewBlock = time.Second
 // deadline before giving up.
 const assemblyWaitEps = 10 * time.Millisecond
 
+// Reset resets the content of the transaction pool
+func (pool *TransactionPool) Reset() {
+	pool.pendingTxids = make(map[transactions.Txid]txPoolVerifyCacheVal)
+	pool.pendingVerifyParams = nil
+	pool.pendingTxGroups = nil
+	pool.rememberedTxids = make(map[transactions.Txid]txPoolVerifyCacheVal)
+	pool.rememberedVerifyParams = nil
+	pool.rememberedTxGroups = nil
+	pool.expiredTxCount = make(map[basics.Round]int)
+	pool.numPendingWholeBlocks = 0
+	pool.pendingBlockEvaluator = nil
+	pool.statusCache.reset()
+	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round))
+}
+
 // NumExpired returns the number of transactions that expired at the
 // end of a round (only meaningful if cleanup has been called for that
 // round).

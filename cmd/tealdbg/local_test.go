@@ -187,13 +187,15 @@ func makeSampleBalanceRecord(addr basics.Address, assetIdx basics.AssetIndex, ap
 		appIdx: {
 			ApprovalProgram:   []byte{1},
 			ClearStateProgram: []byte{1, 1},
-			LocalStateSchema: basics.StateSchema{
-				NumUint:      2,
-				NumByteSlice: 3,
-			},
-			GlobalStateSchema: basics.StateSchema{
-				NumUint:      1,
-				NumByteSlice: 1,
+			StateSchemas: basics.StateSchemas{
+				LocalStateSchema: basics.StateSchema{
+					NumUint:      2,
+					NumByteSlice: 3,
+				},
+				GlobalStateSchema: basics.StateSchema{
+					NumUint:      1,
+					NumByteSlice: 2,
+				},
 			},
 			GlobalState: basics.TealKeyValue{
 				"gkeyint": {
@@ -378,14 +380,14 @@ int 1
 &&
 int 1
 byte 0x6c6b6579696e74 // lkeyint
-app_local_gets
+app_local_get
 int 1
 ==
 &&
 int 0
 int 100
 byte 0x6c6b657962797465 // lkeybyte
-app_local_get
+app_local_get_ex
 bnz ok
 err
 ok:
@@ -393,13 +395,13 @@ byte 0x6c6f63616c // local
 ==
 &&
 byte 0x676b6579696e74 // gkeyint
-app_global_gets
+app_global_get
 int 2
 ==
 &&
 int 200
 byte 0x676b657962797465 // gkeybyte
-app_global_get
+app_global_get_ex
 bnz ok2
 err
 ok2:
@@ -440,7 +442,6 @@ ok4:
 int 100
 ==
 &&
-
 `
 
 	ds := DebugParams{
@@ -463,11 +464,34 @@ int 100
 	a.NoError(err)
 	a.True(pass)
 
+	// check relaxed - opted in for both
+	source = `int 1
+int 100
+app_opted_in
+int 1
+==
+int 1
+int 200
+app_opted_in
+int 1
+==
+&&
+`
+	ds.Painless = true
+	ds.ProgramBlobs = [][]byte{[]byte(source)}
+	err = local.Setup(&ds)
+	a.NoError(err)
+
+	pass, err = local.Run()
+	a.NoError(err)
+	a.True(pass)
+	ds.Painless = false
+
 	// check ForeignApp
 	source = `
 int 300
 byte 0x676b657962797465 // gkeybyte
-app_global_get
+app_global_get_ex
 bnz ok
 err
 ok:
@@ -516,6 +540,7 @@ func TestDebugFromPrograms(t *testing.T) {
 		ProgramBlobs: [][]byte{{1}},
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
+		AppID:        100,
 	}
 
 	err = l.Setup(&dp)
@@ -535,7 +560,7 @@ func TestDebugFromPrograms(t *testing.T) {
 	a.Equal(1, len(l.runs))
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
-	a.NotNil(l.runs[0].ledger)
+	a.Nil(l.runs[0].ledger)
 
 	dp = DebugParams{
 		ProgramNames: []string{"test", "test"},
@@ -551,10 +576,10 @@ func TestDebugFromPrograms(t *testing.T) {
 	a.Equal(0, l.runs[0].groupIndex)
 	a.Equal(0, l.runs[1].groupIndex)
 	a.NotNil(l.runs[0].eval)
-	a.NotNil(l.runs[0].ledger)
+	a.Nil(l.runs[0].ledger)
 
 	a.NotNil(l.runs[1].eval)
-	a.NotNil(l.runs[1].ledger)
+	a.Nil(l.runs[1].ledger)
 }
 
 func TestRunMode(t *testing.T) {
@@ -570,6 +595,7 @@ func TestRunMode(t *testing.T) {
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "auto",
+		AppID:        100,
 	}
 
 	err := l.Setup(&dp)
@@ -590,6 +616,7 @@ func TestRunMode(t *testing.T) {
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "auto",
+		AppID:        100,
 	}
 
 	err = l.Setup(&dp)
@@ -597,7 +624,7 @@ func TestRunMode(t *testing.T) {
 	a.Equal(1, len(l.runs))
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
-	a.NotNil(l.runs[0].ledger)
+	a.Nil(l.runs[0].ledger)
 	a.Equal(
 		reflect.ValueOf(logic.Eval).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
@@ -610,6 +637,7 @@ func TestRunMode(t *testing.T) {
 		TxnBlob:      txnBlob,
 		GroupIndex:   0,
 		RunMode:      "application",
+		AppID:        100,
 	}
 
 	err = l.Setup(&dp)
@@ -637,7 +665,7 @@ func TestRunMode(t *testing.T) {
 	a.Equal(1, len(l.runs))
 	a.Equal(0, l.runs[0].groupIndex)
 	a.NotNil(l.runs[0].eval)
-	a.NotNil(l.runs[0].ledger)
+	a.Nil(l.runs[0].ledger)
 	a.Equal(
 		reflect.ValueOf(logic.Eval).Pointer(),
 		reflect.ValueOf(l.runs[0].eval).Pointer(),
@@ -771,6 +799,7 @@ func TestDebugFromTxn(t *testing.T) {
 		BalanceBlob: balanceBlob,
 		TxnBlob:     txnBlob,
 		GroupIndex:  10, // must be ignored
+		AppID:       100,
 	}
 
 	err = l.Setup(&dp)

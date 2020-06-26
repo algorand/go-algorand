@@ -63,7 +63,7 @@ func (balances keyregTestBalances) ConsensusParams() config.ConsensusParams {
 }
 
 func (balances keyregTestBalances) Round() basics.Round {
-	return basics.Round(8675309)
+	return basics.Round(4294967296)
 }
 
 func TestKeyregApply(t *testing.T) {

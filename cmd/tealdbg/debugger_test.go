@@ -37,11 +37,14 @@ type testDbgAdapter struct {
 	eventCount int
 
 	done chan struct{}
+
+	t *testing.T
 }
 
-func makeTestDbgAdapter(params interface{}) (d *testDbgAdapter) {
+func makeTestDbgAdapter(t *testing.T) (d *testDbgAdapter) {
 	d = new(testDbgAdapter)
 	d.done = make(chan struct{})
+	d.t = t
 	return d
 }
 
@@ -72,6 +75,10 @@ func (d *testDbgAdapter) eventLoop() {
 				return
 			}
 			if n.Event == "registered" {
+				require.NotNil(d.t, n.DebugState.Globals)
+				require.NotNil(d.t, n.DebugState.Scratch)
+				require.NotEmpty(d.t, n.DebugState.Disassembly)
+				require.NotEmpty(d.t, n.DebugState.ExecID)
 				d.debugger.SetBreakpoint(n.DebugState.Line + 1)
 			}
 			// simulate user delay to workaround race cond
@@ -85,7 +92,7 @@ func TestDebuggerSimple(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusV23]
 	debugger := MakeDebugger()
 
-	da := makeTestDbgAdapter(nil)
+	da := makeTestDbgAdapter(t)
 	debugger.AddAdapter(da)
 
 	ep := logic.EvalParams{

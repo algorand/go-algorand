@@ -211,36 +211,81 @@ type ConsensusParams struct {
 	// max decimal precision for assets
 	MaxAssetDecimals uint32
 
-	// whether to use the old buggy Credential.lowestOutput function
-	// TODO(upgrade): Please remove as soon as the upgrade goes through
-	UseBuggyProposalLowestOutput bool
-
 	// SupportRekeying indicates support for account rekeying (the RekeyTo and AuthAddr fields)
 	SupportRekeying bool
 
 	// application support
 	Application bool
 
-	MaxAppArgs              int
-	MaxAppTotalArgLen       int
-	MaxApprovalProgramLen   int
-	MaxClearStateProgramLen int
-	MaxAppTxnAccounts       int
-	MaxAppTxnForeignApps    int
-	MaxAppProgramCost       int
-	MaxAppKeyLen            int
-	MaxAppBytesValueLen     int
-	MaxAppsCreated          int
-	MaxAppsOptedIn          int
+	// max number of ApplicationArgs for an ApplicationCall transaction
+	MaxAppArgs int
 
-	AppFlatParamsMinBalance  uint64
-	AppFlatOptInMinBalance   uint64
+	// max sum([len(arg) for arg in txn.ApplicationArgs])
+	MaxAppTotalArgLen int
+
+	// maximum length of application approval program or clear state
+	// program in bytes
+	MaxAppProgramLen int
+
+	// maximum number of accounts in the ApplicationCall Accounts field.
+	// this determines, in part, the maximum number of balance records
+	// accessed by a single transaction
+	MaxAppTxnAccounts int
+
+	// maximum number of app ids in the ApplicationCall ForeignApps field.
+	// these are the only applications besides the called application for
+	// which global state may be read in the transaction
+	MaxAppTxnForeignApps int
+
+	// maximum cost of application approval program or clear state program
+	MaxAppProgramCost int
+
+	// maximum length of a key used in an application's global or local
+	// key/value store
+	MaxAppKeyLen int
+
+	// maximum length of a bytes value used in an application's global or
+	// local key/value store
+	MaxAppBytesValueLen int
+
+	// maximum number of applications a single account can create and store
+	// AppParams for at once
+	MaxAppsCreated int
+
+	// maximum number of applications a single account can opt in to and
+	// store AppLocalState for at once
+	MaxAppsOptedIn int
+
+	// flat MinBalance requirement for creating a single application and
+	// storing its AppParams
+	AppFlatParamsMinBalance uint64
+
+	// flat MinBalance requirement for opting in to a single application
+	// and storing its AppLocalState
+	AppFlatOptInMinBalance uint64
+
+	// MinBalance requirement per key/value entry in LocalState or
+	// GlobalState key/value stores, regardless of value type
 	SchemaMinBalancePerEntry uint64
-	SchemaUintMinBalance     uint64
-	SchemaBytesMinBalance    uint64
-	MaxLocalSchemaEntries    uint64
-	MaxGlobalSchemaEntries   uint64
 
+	// MinBalance requirement (in addition to SchemaMinBalancePerEntry) for
+	// integer values stored in LocalState or GlobalState key/value stores
+	SchemaUintMinBalance uint64
+
+	// MinBalance requirement (in addition to SchemaMinBalancePerEntry) for
+	// []byte values stored in LocalState or GlobalState key/value stores
+	SchemaBytesMinBalance uint64
+
+	// maximum number of total key/value pairs allowed by a given
+	// LocalStateSchema (and therefore allowed in LocalState)
+	MaxLocalSchemaEntries uint64
+
+	// maximum number of total key/value pairs allowed by a given
+	// GlobalStateSchema (and therefore allowed in GlobalState)
+	MaxGlobalSchemaEntries uint64
+
+	// maximum total minimum balance requirement for an account, used
+	// to limit the maximum size of a single balance record
 	MaximumMinimumBalance uint64
 }
 
@@ -264,6 +309,22 @@ var MaxEvalDeltaAccounts int
 // in a StateDelta, used for decoding purposes.
 var MaxStateDeltaKeys int
 
+// MaxLogicSigMaxSize is the largest logical signature appear in any of the supported
+// protocols, used for decoding purposes.
+var MaxLogicSigMaxSize int
+
+// MaxTxnNoteBytes is the largest supported nodes field array size supported by any
+// of the consensus protocols. used for decoding purposes.
+var MaxTxnNoteBytes int
+
+// MaxTxGroupSize is the largest supported number of transactions per transaction group supported by any
+// of the consensus protocols. used for decoding purposes.
+var MaxTxGroupSize int
+
+// MaxAppProgramLen is the largest supported app program size supported by any
+// of the consensus protocols. used for decoding purposes.
+var MaxAppProgramLen int
+
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -284,10 +345,12 @@ func checkSetAllocBounds(p ConsensusParams) {
 	// These bounds could be tighter, but since these values are just to
 	// prevent DoS, setting them to be the maximum number of allowed
 	// executed TEAL instructions should be fine (order of ~1000)
-	checkSetMax(p.MaxApprovalProgramLen, &MaxStateDeltaKeys)
-	checkSetMax(p.MaxClearStateProgramLen, &MaxStateDeltaKeys)
-	checkSetMax(p.MaxApprovalProgramLen, &MaxEvalDeltaAccounts)
-	checkSetMax(p.MaxClearStateProgramLen, &MaxEvalDeltaAccounts)
+	checkSetMax(p.MaxAppProgramLen, &MaxStateDeltaKeys)
+	checkSetMax(p.MaxAppProgramLen, &MaxEvalDeltaAccounts)
+	checkSetMax(p.MaxAppProgramLen, &MaxAppProgramLen)
+	checkSetMax(int(p.LogicSigMaxSize), &MaxLogicSigMaxSize)
+	checkSetMax(p.MaxTxnNoteBytes, &MaxTxnNoteBytes)
+	checkSetMax(p.MaxTxGroupSize, &MaxTxGroupSize)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
@@ -352,6 +415,10 @@ func LoadConfigurableConsensusProtocols(dataDirectory string) error {
 	}
 	if newConsensus != nil {
 		Consensus = newConsensus
+		// Set allocation limits
+		for _, p := range Consensus {
+			checkSetAllocBounds(p)
+		}
 	}
 	return nil
 }
@@ -429,7 +496,6 @@ func initConsensusProtocols() {
 		MaxBalLookback: 320,
 
 		MaxTxGroupSize:               1,
-		UseBuggyProposalLowestOutput: true, // TODO(upgrade): Please remove as soon as the upgrade goes through
 	}
 
 	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
@@ -598,7 +664,6 @@ func initConsensusProtocols() {
 	// v21 fixes a bug in Credential.lowestOutput that would cause larger accounts to be selected to propose disproportionately more often than small accounts
 	v21 := v20
 	v21.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	v21.UseBuggyProposalLowestOutput = false // TODO(upgrade): Please remove this line as soon as the protocol upgrade goes through
 	Consensus[protocol.ConsensusV21] = v21
 	// v20 can be upgraded to v21.
 	v20.ApprovedUpgrades[protocol.ConsensusV21] = 0
@@ -638,8 +703,7 @@ func initConsensusProtocols() {
 
 	vFuture.MaxAppArgs = 16
 	vFuture.MaxAppTotalArgLen = 2048
-	vFuture.MaxApprovalProgramLen = 1024
-	vFuture.MaxClearStateProgramLen = 1024
+	vFuture.MaxAppProgramLen = 1024
 	vFuture.MaxAppKeyLen = 64
 	vFuture.MaxAppBytesValueLen = 64
 

@@ -34,8 +34,14 @@ for LEDGER in $LEDGERS; do
       assetcreators)
         SORT=asset
         ;;
-      creatables)
-        SORT=creatable
+      storedcatchpoints)
+        SORT=round
+        ;;
+      accounthashes)
+        SORT=id
+        ;;
+      catchpointstate)
+        SORT=id
         ;;
       *)
         echo "Unknown table $T" >&2

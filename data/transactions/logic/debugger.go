@@ -21,14 +21,16 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/algorand/go-algorand/config"
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // DebuggerHook functions are called by eval function during TEAL program execution
@@ -50,28 +52,37 @@ type WebDebuggerHook struct {
 // PCOffset stores the mapping from a program counter value to an offset in the
 // disassembly of the bytecode
 type PCOffset struct {
-	PC     int `json:"pc"`
-	Offset int `json:"offset"`
+	PC     int `codec:"pc"`
+	Offset int `codec:"offset"`
 }
 
 // DebugState is a representation of the evaluation context that we encode
 // to json and send to tealdbg
 type DebugState struct {
 	// fields set once on Register
-	ExecID      string                   `json:"execid"`
-	Disassembly string                   `json:"disasm"`
-	PCOffset    []PCOffset               `json:"pctooffset"`
-	TxnGroup    []transactions.SignedTxn `json:"txngroup"`
-	GroupIndex  int                      `json:"gindex"`
-	Proto       *config.ConsensusParams  `json:"proto"`
-	Globals     []v2.TealValue           `json:"globals"`
+	ExecID      string                   `codec:"execid"`
+	Disassembly string                   `codec:"disasm"`
+	PCOffset    []PCOffset               `codec:"pctooffset"`
+	TxnGroup    []transactions.SignedTxn `codec:"txngroup"`
+	GroupIndex  int                      `codec:"gindex"`
+	Proto       *config.ConsensusParams  `codec:"proto"`
+	Globals     []basics.TealValue       `codec:"globals"`
 
 	// fields updated every step
-	PC      int            `json:"pc"`
-	Line    int            `json:"line"`
-	Stack   []v2.TealValue `json:"stack"`
-	Scratch []v2.TealValue `json:"scratch"`
-	Error   string         `json:"error"`
+	PC      int                `codec:"pc"`
+	Line    int                `codec:"line"`
+	Stack   []basics.TealValue `codec:"stack"`
+	Scratch []basics.TealValue `codec:"scratch"`
+	Error   string             `codec:"error"`
+
+	// global/local state changes are updated every step. Stateful TEAL only.
+	AppStateChage
+}
+
+// AppStateChage encapsulates global and local app state changes
+type AppStateChage struct {
+	GlobalStateChanges basics.StateDelta                    `codec:"gsch"`
+	LocalStateChanges  map[basics.Address]basics.StateDelta `codec:"lsch"`
 }
 
 func makeDebugState(cx *evalContext) DebugState {
@@ -92,15 +103,26 @@ func makeDebugState(cx *evalContext) DebugState {
 		Proto:       cx.Proto,
 	}
 
-	globals := make([]v2.TealValue, len(GlobalFieldNames))
+	globals := make([]basics.TealValue, len(GlobalFieldNames))
 	for fieldIdx := range GlobalFieldNames {
 		sv, err := cx.globalFieldToStack(GlobalField(fieldIdx))
 		if err != nil {
 			sv = stackValue{Bytes: []byte(err.Error())}
 		}
-		globals[fieldIdx] = stackValueToV2TealValue(&sv)
+		globals[fieldIdx] = stackValueToTealValue(&sv)
 	}
-	cx.debugState.Globals = globals
+	ds.Globals = globals
+
+	// pre-allocate state maps
+	if (cx.runModeFlags & runModeApplication) != 0 {
+		ds.GlobalStateChanges = make(basics.StateDelta)
+
+		// allocate maximum possible slots in the hashmap even if Txn.Accounts might have duplicate entries
+		locals := 1 + len(cx.Txn.Txn.Accounts) // sender + referenced accounts
+		ds.LocalStateChanges = make(map[basics.Address]basics.StateDelta, locals)
+
+		// do not pre-allocate ds.LocalStateChanges[addr] since it initialized during update
+	}
 
 	return ds
 }
@@ -113,6 +135,9 @@ func (d *DebugState) LineToPC(line int) int {
 	}
 
 	lines := strings.Split(d.Disassembly, "\n")
+	if line > len(lines) {
+		return 0
+	}
 	offset := len(strings.Join(lines[:line], "\n"))
 
 	for i := 0; i < len(d.PCOffset); i++ {
@@ -144,14 +169,17 @@ func (d *DebugState) PCToLine(pc int) int {
 		offset = d.PCOffset[len(d.PCOffset)-1].Offset
 		one = 0
 	}
+	if offset > len(d.Disassembly) {
+		return 0
+	}
 
 	return len(strings.Split(d.Disassembly[:offset], "\n")) - one
 }
 
-func stackValueToV2TealValue(sv *stackValue) v2.TealValue {
+func stackValueToTealValue(sv *stackValue) basics.TealValue {
 	tv := sv.toTealValue()
-	return v2.TealValue{
-		Type:  uint64(tv.Type),
+	return basics.TealValue{
+		Type:  tv.Type,
 		Bytes: base64.StdEncoding.EncodeToString([]byte(tv.Bytes)),
 		Uint:  tv.Uint,
 	}
@@ -167,41 +195,78 @@ func (cx *evalContext) refreshDebugState() *DebugState {
 		ds.Error = cx.err.Error()
 	}
 
-	stack := make([]v2.TealValue, len(cx.stack), len(cx.stack))
+	stack := make([]basics.TealValue, len(cx.stack), len(cx.stack))
 	for i, sv := range cx.stack {
-		stack[i] = stackValueToV2TealValue(&sv)
+		stack[i] = stackValueToTealValue(&sv)
 	}
 
-	scratch := make([]v2.TealValue, len(cx.scratch), len(cx.scratch))
+	scratch := make([]basics.TealValue, len(cx.scratch), len(cx.scratch))
 	for i, sv := range cx.scratch {
-		scratch[i] = stackValueToV2TealValue(&sv)
+		scratch[i] = stackValueToTealValue(&sv)
 	}
 
 	ds.Stack = stack
 	ds.Scratch = scratch
 
+	if (cx.runModeFlags & runModeApplication) != 0 {
+		if cx.globalStateCow != nil {
+			for k, v := range cx.globalStateCow.delta {
+				ds.GlobalStateChanges[k] = v
+			}
+		}
+		for addr, cow := range cx.localStateCows {
+			delta := make(basics.StateDelta, len(cow.cow.delta))
+			for k, v := range cow.cow.delta {
+				delta[k] = v
+			}
+			ds.LocalStateChanges[addr] = delta
+		}
+	}
+
 	return ds
 }
 
 func (dbg *WebDebuggerHook) postState(state *DebugState, endpoint string) error {
-	enc, err := json.Marshal(state)
+	var body bytes.Buffer
+	enc := protocol.NewJSONEncoder(&body)
+	err := enc.Encode(state)
 	if err != nil {
 		return err
 	}
 
-	body := bytes.NewBuffer(enc)
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/%s", dbg.URL, endpoint), body)
+	u, err := url.Parse(dbg.URL)
+	if err != nil {
+		return err
+	}
+	u.Path = endpoint
+
+	req, err := http.NewRequest(http.MethodPost, u.String(), &body)
 	if err != nil {
 		return err
 	}
 
 	httpClient := &http.Client{}
-	_, err = httpClient.Do(req)
+	r, err := httpClient.Do(req)
+	if err == nil {
+		if r.StatusCode != 200 {
+			err = fmt.Errorf("bad response: %d", r.StatusCode)
+		}
+		r.Body.Close()
+	}
 	return err
 }
 
 // Register sends state to remote debugger
 func (dbg *WebDebuggerHook) Register(state *DebugState) error {
+	u, err := url.Parse(dbg.URL)
+	if err != nil {
+		logging.Base().Errorf("Failed to parse url: %s", err.Error())
+	}
+	h := u.Hostname()
+	// check for 127.0.0/8 ?
+	if h != "localhost" && h != "127.0.0.1" && h != "::1" {
+		logging.Base().Warnf("Unsecured communication with non-local debugger: %s", h)
+	}
 	return dbg.postState(state, "exec/register")
 }
 

@@ -128,7 +128,6 @@ func init() {
 	changeOnlineCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to change (required if no -partkeyfile)")
 	changeOnlineCmd.Flags().StringVarP(&partKeyFile, "partkeyfile", "", "", "Participation key file (required if no -account)")
 	changeOnlineCmd.Flags().BoolVarP(&online, "online", "o", true, "Set this account to online or offline")
-	changeOnlineCmd.MarkFlagRequired("online")
 	changeOnlineCmd.Flags().Uint64VarP(&transactionFee, "fee", "f", 0, "The Fee to set on the status change transaction (defaults to suggested fee)")
 	changeOnlineCmd.Flags().Uint64VarP(&firstValid, "firstRound", "", 0, "")
 	changeOnlineCmd.Flags().Uint64VarP(&firstValid, "firstvalid", "", 0, "FirstValid for the status change transaction (0 for current)")
@@ -546,16 +545,21 @@ var dumpCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
 		client := ensureAlgodClient(dataDir)
+		rawAddress, err := basics.UnmarshalChecksumAddress(accountAddress)
+		if err != nil {
+			reportErrorf(errorParseAddr, err)
+		}
 		accountData, err := client.AccountData(accountAddress)
 		if err != nil {
 			reportErrorf(errorRequestFail, err)
 		}
 
+		br := basics.BalanceRecord{Addr: rawAddress, AccountData: accountData}
 		if len(dumpOutFile) > 0 {
-			data := protocol.Encode(&accountData)
+			data := protocol.Encode(&br)
 			writeFile(dumpOutFile, data, 0644)
 		} else {
-			data := protocol.EncodeJSON(&accountData)
+			data := protocol.EncodeJSON(&br)
 			fmt.Println(string(data))
 		}
 	},

@@ -19,12 +19,15 @@ package main
 //go:generate ./bundle_home_html.sh
 
 import (
+	"bytes"
 	"encoding/json"
 	"html/template"
 	"log"
 	"net/http"
 
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-deadlock"
+	"github.com/algorand/websocket"
 	"github.com/gorilla/mux"
 )
 
@@ -232,7 +235,13 @@ func (a *WebPageAdapter) subscribeHandler(w http.ResponseWriter, r *http.Request
 	for {
 		select {
 		case notification := <-notifications:
-			err := ws.WriteJSON(&notification)
+			var data bytes.Buffer
+			enc := protocol.NewJSONEncoder(&data)
+			err := enc.Encode(notification)
+			if err != nil {
+				return
+			}
+			err = ws.WriteMessage(websocket.TextMessage, data.Bytes())
 			if err != nil {
 				return
 			}

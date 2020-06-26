@@ -30,12 +30,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -73,6 +73,10 @@ func (wl *wrappedLedger) trackerDB() dbPair {
 	return wl.l.trackerDB()
 }
 
+func (wl *wrappedLedger) blockDB() dbPair {
+	return wl.l.blockDB()
+}
+
 func (wl *wrappedLedger) trackerLog() logging.Logger {
 	return wl.l.trackerLog()
 }
@@ -105,9 +109,10 @@ func TestArchival(t *testing.T) {
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
 	const inMem = true
-	const archival = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
 	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, archival)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 	wl := &wrappedLedger{
@@ -128,7 +133,6 @@ func TestArchival(t *testing.T) {
 		}
 
 		wl.l.WaitForCommit(blk.Round())
-
 		minMinSave, err := checkTrackers(t, wl, blk.Round())
 		require.NoError(t, err)
 		if err != nil {
@@ -160,9 +164,10 @@ func TestArchivalRestart(t *testing.T) {
 
 	genesisInitState := getInitState()
 	const inMem = false // use persistent storage
-	const archival = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
 
-	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
@@ -186,11 +191,9 @@ func TestArchivalRestart(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(maxBlocks), latest)
 	require.Equal(t, basics.Round(0), earliest)
-
 	// close and reopen the same DB, ensure latest/earliest are not changed
 	l.Close()
-
-	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -241,11 +244,10 @@ func makeUnsignedAssetCreateTx(firstValid, lastValid basics.Round, total uint64,
 	return tx, nil
 }
 
-func makeUnsignedAssetDestroyTx(client libgoal.Client, firstValid, lastValid basics.Round, assetIndex uint64) (transactions.Transaction, error) {
-	txn, err := client.MakeUnsignedAssetDestroyTx(assetIndex)
-	if err != nil {
-		return transactions.Transaction{}, err
-	}
+func makeUnsignedAssetDestroyTx(firstValid, lastValid basics.Round, assetIndex uint64) (transactions.Transaction, error) {
+	var txn transactions.Transaction
+	txn.Type = protocol.AssetConfigTx
+	txn.ConfigAsset = basics.AssetIndex(assetIndex)
 	txn.FirstValid = firstValid
 	txn.LastValid = lastValid
 	return txn, nil
@@ -258,7 +260,7 @@ func makeUnsignedApplicationCallTx(appIdx uint64, onCompletion transactions.OnCo
 
 	// If creating, set programs
 	if appIdx == 0 {
-		testprog := `
+		testprog := `#pragma version 2
 			// Write global["foo"] = "bar"
 			byte base64 Zm9v
 			byte base64 YmFy
@@ -335,8 +337,9 @@ func TestArchivalCreatables(t *testing.T) {
 
 	// open ledger
 	const inMem = false // use persistent storage
-	const archival = true
-	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
@@ -344,7 +347,6 @@ func TestArchivalCreatables(t *testing.T) {
 	var maxCreated uint64
 
 	// create apps and assets
-	client := libgoal.Client{}
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
@@ -380,7 +382,7 @@ func TestArchivalCreatables(t *testing.T) {
 		if i >= maxBlocks/2 && i < (3*(maxBlocks/4)) {
 			switch creatableIdxs[createdIdx] {
 			case AssetCreated:
-				tx, err = makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(createdIdx))
+				tx, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(createdIdx))
 				creatableIdxs[createdIdx] = AssetDeleted
 			case AppCreated:
 				tx, err = makeUnsignedApplicationCallTx(uint64(createdIdx), transactions.DeleteApplicationOC)
@@ -442,7 +444,7 @@ func TestArchivalCreatables(t *testing.T) {
 
 	// close and reopen the same DB
 	l.Close()
-	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -489,7 +491,7 @@ func TestArchivalCreatables(t *testing.T) {
 	var tx0 transactions.Transaction
 	switch creatableIdxs[creatableToDelete] {
 	case AssetCreated:
-		tx0, err = makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(creatableToDelete))
+		tx0, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(creatableToDelete))
 		creatableIdxs[creatableToDelete] = AssetDeleted
 	case AppCreated:
 		tx0, err = makeUnsignedApplicationCallTx(uint64(creatableToDelete), transactions.DeleteApplicationOC)
@@ -507,7 +509,7 @@ func TestArchivalCreatables(t *testing.T) {
 	var tx1 transactions.Transaction
 	switch creatableIdxs[creatableToDelete] {
 	case AssetCreated:
-		tx1, err = makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(creatableToDelete))
+		tx1, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(creatableToDelete))
 		creatableIdxs[creatableToDelete] = AssetDeleted
 	case AppCreated:
 		tx1, err = makeUnsignedApplicationCallTx(uint64(creatableToDelete), transactions.DeleteApplicationOC)
@@ -586,7 +588,7 @@ func TestArchivalCreatables(t *testing.T) {
 
 	// close and reopen the same DB
 	l.Close()
-	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -651,10 +653,11 @@ func TestArchivalFromNonArchival(t *testing.T) {
 
 	genesisInitState := getInitState()
 	const inMem = false // use persistent storage
-	archival := false
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
 
 	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, archival)
+	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
@@ -682,8 +685,8 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	// close and reopen the same DB, ensure the DB truncated
 	l.Close()
 
-	archival = true
-	l, err = OpenLedger(log, dbPrefix, inMem, genesisInitState, archival)
+	cfg.Archival = true
+	l, err = OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -702,30 +705,50 @@ func TestArchivalFromNonArchival(t *testing.T) {
 
 func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Round, error) {
 	minMinSave := rnd
-
+	var minSave basics.Round
+	var cleanTracker ledgerTracker
+	var trackerType reflect.Type
 	for _, trk := range wl.l.trackers.trackers {
 		wl.l.trackerMu.RLock()
-		minSave := trk.committedUpTo(rnd)
-		wl.l.trackerMu.RUnlock()
-		if minSave < minMinSave {
-			minMinSave = minSave
+		if au, ok := trk.(*accountUpdates); ok {
+			au.waitAccountsWriting()
+			minSave = trk.committedUpTo(rnd)
+			au.waitAccountsWriting()
+			wl.l.trackerMu.RUnlock()
+			if minSave < minMinSave {
+				minMinSave = minSave
+			}
+			wl.minQueriedBlock = rnd
+
+			trackerType = reflect.TypeOf(trk).Elem()
+			cleanTracker = reflect.New(trackerType).Interface().(ledgerTracker)
+
+			au = cleanTracker.(*accountUpdates)
+			cfg := config.GetDefaultLocal()
+			cfg.Archival = true
+			au.initialize(cfg, "", au.initProto, wl.l.accts.initAccounts)
+		} else {
+			minSave = trk.committedUpTo(rnd)
+			wl.l.trackerMu.RUnlock()
+			if minSave < minMinSave {
+				minMinSave = minSave
+			}
+			wl.minQueriedBlock = rnd
+
+			trackerType = reflect.TypeOf(trk).Elem()
+			cleanTracker = reflect.New(trackerType).Interface().(ledgerTracker)
 		}
 
-		trackerType := reflect.TypeOf(trk).Elem()
-		cleanTracker := reflect.New(trackerType).Interface().(ledgerTracker)
-		if trackerType.String() == "ledger.accountUpdates" {
-			cleanTracker.(*accountUpdates).initAccounts = wl.l.accts.initAccounts
-		}
-
-		wl.minQueriedBlock = rnd
-
+		cleanTracker.close()
 		err := cleanTracker.loadFromDisk(wl)
 		require.NoError(t, err)
 
+		cleanTracker.close()
+
 		// Special case: initAccounts reflects state after block 0,
 		// so it's OK to return minSave=0 but query block 1.
-		if minSave != wl.minQueriedBlock && minSave != 0 && wl.minQueriedBlock != 1 {
-			return minMinSave, fmt.Errorf("tracker %v: committed %d, minSave %d != minQuery %d", trackerType, rnd, minSave, wl.minQueriedBlock)
+		if minSave > wl.minQueriedBlock && minSave != 0 && wl.minQueriedBlock != 1 {
+			return minMinSave, fmt.Errorf("tracker %v: committed %d, minSave %d > minQuery %d", trackerType, rnd, minSave, wl.minQueriedBlock)
 		}
 	}
 

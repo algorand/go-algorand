@@ -81,6 +81,7 @@ func (a *CDTAdapter) SessionStarted(sid string, debugger Control, ch chan Notifi
 	}
 
 	s.verbose = a.verbose
+	s.states = debugger.GetStates(nil)
 
 	a.sessions[sid] = *s
 }

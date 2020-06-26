@@ -21,7 +21,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AssetHoldingField -output=fields_string.go
+//go:generate stringer -type=TxnField,GlobalField,AssetParamsField,AssetHoldingField,OnCompletionConstType -output=fields_string.go
 
 // TxnField is an enum type for `txn` and `gtxn`
 type TxnField int
@@ -91,56 +91,132 @@ const (
 	ApprovalProgram
 	// ClearStateProgram []byte
 	ClearStateProgram
+	// RekeyTo basics.Address
+	RekeyTo
+	// ConfigAsset basics.AssetIndex
+	ConfigAsset
+	// ConfigAssetTotal AssetParams.Total
+	ConfigAssetTotal
+	// ConfigAssetDecimals AssetParams.Decimals
+	ConfigAssetDecimals
+	// ConfigAssetDefaultFrozen AssetParams.AssetDefaultFrozen
+	ConfigAssetDefaultFrozen
+	// ConfigAssetUnitName AssetParams.UnitName
+	ConfigAssetUnitName
+	// ConfigAssetName AssetParams.AssetName
+	ConfigAssetName
+	// ConfigAssetURL AssetParams.URL
+	ConfigAssetURL
+	// ConfigAssetMetadataHash AssetParams.MetadataHash
+	ConfigAssetMetadataHash
+	// ConfigAssetManager AssetParams.Manager
+	ConfigAssetManager
+	// ConfigAssetReserve AssetParams.Reserve
+	ConfigAssetReserve
+	// ConfigAssetFreeze AssetParams.Freeze
+	ConfigAssetFreeze
+	// ConfigAssetClawback AssetParams.Clawback
+	ConfigAssetClawback
+	//FreezeAsset  basics.AssetIndex
+	FreezeAsset
+	// FreezeAssetAccount basics.Address
+	FreezeAssetAccount
+	// FreezeAssetFrozen bool
+	FreezeAssetFrozen
 
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
 
 // TxnFieldNames are arguments to the 'txn' and 'txnById' opcodes
 var TxnFieldNames []string
-var txnFields map[string]uint
-
-type txnFieldType struct {
-	field TxnField
-	ftype StackType
-}
-
-var txnFieldTypePairs = []txnFieldType{
-	{Sender, StackBytes},
-	{Fee, StackUint64},
-	{FirstValid, StackUint64},
-	{FirstValidTime, StackUint64},
-	{LastValid, StackUint64},
-	{Note, StackBytes},
-	{Lease, StackBytes},
-	{Receiver, StackBytes},
-	{Amount, StackUint64},
-	{CloseRemainderTo, StackBytes},
-	{VotePK, StackBytes},
-	{SelectionPK, StackBytes},
-	{VoteFirst, StackUint64},
-	{VoteLast, StackUint64},
-	{VoteKeyDilution, StackUint64},
-	{Type, StackBytes},
-	{TypeEnum, StackUint64},
-	{XferAsset, StackUint64},
-	{AssetAmount, StackUint64},
-	{AssetSender, StackBytes},
-	{AssetReceiver, StackBytes},
-	{AssetCloseTo, StackBytes},
-	{GroupIndex, StackUint64},
-	{TxID, StackBytes},
-	{ApplicationID, StackUint64},
-	{OnCompletion, StackUint64},
-	{ApplicationArgs, StackBytes},
-	{NumAppArgs, StackUint64},
-	{Accounts, StackBytes},
-	{NumAccounts, StackUint64},
-	{ApprovalProgram, StackBytes},
-	{ClearStateProgram, StackBytes},
-}
 
 // TxnFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
 var TxnFieldTypes []StackType
+
+var txnFieldSpecByField map[TxnField]txnFieldSpec
+var txnFieldSpecByName tfNameSpecMap
+
+// simple interface used by doc generator for fields versioning
+type tfNameSpecMap map[string]txnFieldSpec
+
+func (s tfNameSpecMap) getExtraFor(name string) (extra string) {
+	if s[name].version > 1 {
+		extra = "LogicSigVersion >= 2."
+	}
+	return
+}
+
+type txnFieldSpec struct {
+	field   TxnField
+	ftype   StackType
+	version uint64
+}
+
+var txnFieldSpecs = []txnFieldSpec{
+	{Sender, StackBytes, 0},
+	{Fee, StackUint64, 0},
+	{FirstValid, StackUint64, 0},
+	{FirstValidTime, StackUint64, 0},
+	{LastValid, StackUint64, 0},
+	{Note, StackBytes, 0},
+	{Lease, StackBytes, 0},
+	{Receiver, StackBytes, 0},
+	{Amount, StackUint64, 0},
+	{CloseRemainderTo, StackBytes, 0},
+	{VotePK, StackBytes, 0},
+	{SelectionPK, StackBytes, 0},
+	{VoteFirst, StackUint64, 0},
+	{VoteLast, StackUint64, 0},
+	{VoteKeyDilution, StackUint64, 0},
+	{Type, StackBytes, 0},
+	{TypeEnum, StackUint64, 0},
+	{XferAsset, StackUint64, 0},
+	{AssetAmount, StackUint64, 0},
+	{AssetSender, StackBytes, 0},
+	{AssetReceiver, StackBytes, 0},
+	{AssetCloseTo, StackBytes, 0},
+	{GroupIndex, StackUint64, 0},
+	{TxID, StackBytes, 0},
+	{ApplicationID, StackUint64, 2},
+	{OnCompletion, StackUint64, 2},
+	{ApplicationArgs, StackBytes, 2},
+	{NumAppArgs, StackUint64, 2},
+	{Accounts, StackBytes, 2},
+	{NumAccounts, StackUint64, 2},
+	{ApprovalProgram, StackBytes, 2},
+	{ClearStateProgram, StackBytes, 2},
+	{RekeyTo, StackBytes, 2},
+	{ConfigAsset, StackUint64, 2},
+	{ConfigAssetTotal, StackUint64, 2},
+	{ConfigAssetDecimals, StackUint64, 2},
+	{ConfigAssetDefaultFrozen, StackUint64, 2},
+	{ConfigAssetUnitName, StackBytes, 2},
+	{ConfigAssetName, StackBytes, 2},
+	{ConfigAssetURL, StackBytes, 2},
+	{ConfigAssetMetadataHash, StackBytes, 2},
+	{ConfigAssetManager, StackBytes, 2},
+	{ConfigAssetReserve, StackBytes, 2},
+	{ConfigAssetFreeze, StackBytes, 2},
+	{ConfigAssetClawback, StackBytes, 2},
+	{FreezeAsset, StackUint64, 2},
+	{FreezeAssetAccount, StackBytes, 2},
+	{FreezeAssetFrozen, StackUint64, 2},
+}
+
+// TxnaFieldNames are arguments to the 'txna' opcode
+// It is a subset of txn transaction fields so initialized here in-place
+var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String()}
+
+// TxnaFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
+var TxnaFieldTypes = []StackType{
+	txnaFieldSpecByField[ApplicationArgs].ftype,
+	txnaFieldSpecByField[Accounts].ftype,
+}
+
+var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
+	ApplicationArgs: {ApplicationArgs, StackBytes, 2},
+	Accounts:        {Accounts, StackBytes, 2},
+}
 
 // TxnTypeNames is the values of Txn.Type in enum order
 var TxnTypeNames = []string{
@@ -159,15 +235,25 @@ var txnTypeIndexes map[string]int
 // map symbolic name to uint64 for assembleInt
 var txnTypeConstToUint64 map[string]uint64
 
-// OnCompletionValues is the values of Txn.OnCompletion, not ordered
-var OnCompletionValues = []transactions.OnCompletion{
-	transactions.NoOpOC,
-	transactions.OptInOC,
-	transactions.CloseOutOC,
-	transactions.ClearStateOC,
-	transactions.UpdateApplicationOC,
-	transactions.DeleteApplicationOC,
-}
+// OnCompletionConstType is the same as transactions.OnCompletion
+type OnCompletionConstType transactions.OnCompletion
+
+const (
+	// NoOp = transactions.NoOpOC
+	NoOp OnCompletionConstType = OnCompletionConstType(transactions.NoOpOC)
+	// OptIn = transactions.OptInOC
+	OptIn OnCompletionConstType = OnCompletionConstType(transactions.OptInOC)
+	// CloseOut = transactions.CloseOutOC
+	CloseOut OnCompletionConstType = OnCompletionConstType(transactions.CloseOutOC)
+	// ClearState = transactions.ClearStateOC
+	ClearState OnCompletionConstType = OnCompletionConstType(transactions.ClearStateOC)
+	// UpdateApplication = transactions.UpdateApplicationOC
+	UpdateApplication OnCompletionConstType = OnCompletionConstType(transactions.UpdateApplicationOC)
+	// DeleteApplication = transactions.DeleteApplicationOC
+	DeleteApplication OnCompletionConstType = OnCompletionConstType(transactions.DeleteApplicationOC)
+	// end of constants
+	invalidOnCompletionConst OnCompletionConstType = DeleteApplication + 1
+)
 
 // OnCompletionNames is the string names of Txn.OnCompletion, array index is the const value
 var OnCompletionNames []string
@@ -202,26 +288,40 @@ const (
 // GlobalFieldNames are arguments to the 'global' opcode
 var GlobalFieldNames []string
 
-type globalFieldType struct {
-	gfield GlobalField
-	ftype  StackType
-}
-
-var globalFieldTypeList = []globalFieldType{
-	{MinTxnFee, StackUint64},
-	{MinBalance, StackUint64},
-	{MaxTxnLife, StackUint64},
-	{ZeroAddress, StackBytes},
-	{GroupSize, StackUint64},
-	{LogicSigVersion, StackUint64},
-	{Round, StackUint64},
-	{LatestTimestamp, StackUint64},
-}
-
 // GlobalFieldTypes is StackUint64 StackBytes in parallel with GlobalFieldNames
 var GlobalFieldTypes []StackType
 
-var globalFields map[string]uint
+type globalFieldSpec struct {
+	gfield  GlobalField
+	ftype   StackType
+	mode    runMode
+	version uint64
+}
+
+var globalFieldSpecs = []globalFieldSpec{
+	{MinTxnFee, StackUint64, modeAny, 0}, // version 0 is the same as TEAL v1 (initial TEAL release)
+	{MinBalance, StackUint64, modeAny, 0},
+	{MaxTxnLife, StackUint64, modeAny, 0},
+	{ZeroAddress, StackBytes, modeAny, 0},
+	{GroupSize, StackUint64, modeAny, 0},
+	{LogicSigVersion, StackUint64, modeAny, 2},
+	{Round, StackUint64, runModeApplication, 2},
+	{LatestTimestamp, StackUint64, runModeApplication, 2},
+}
+
+// GlobalFieldSpecByField maps GlobalField to spec
+var globalFieldSpecByField map[GlobalField]globalFieldSpec
+var globalFieldSpecByName gfNameSpecMap
+
+// simple interface used by doc generator for fields versioning
+type gfNameSpecMap map[string]globalFieldSpec
+
+func (s gfNameSpecMap) getExtraFor(name string) (extra string) {
+	if s[name].version > 1 {
+		extra = "LogicSigVersion >= 2."
+	}
+	return
+}
 
 // AssetHoldingField is an enum for `asset_holding_get` opcode
 type AssetHoldingField int
@@ -264,8 +364,8 @@ const (
 	AssetDefaultFrozen
 	// AssetUnitName AssetParams.UnitName
 	AssetUnitName
-	// AssetAssetName AssetParams.AssetName
-	AssetAssetName
+	// AssetName AssetParams.AssetName
+	AssetName
 	// AssetURL AssetParams.URL
 	AssetURL
 	// AssetMetadataHash AssetParams.MetadataHash
@@ -294,7 +394,7 @@ var assetParamsFieldTypeList = []assetParamsFieldType{
 	{AssetDecimals, StackUint64},
 	{AssetDefaultFrozen, StackUint64},
 	{AssetUnitName, StackBytes},
-	{AssetAssetName, StackBytes},
+	{AssetName, StackBytes},
 	{AssetURL, StackBytes},
 	{AssetMetadataHash, StackBytes},
 	{AssetManager, StackBytes},
@@ -313,17 +413,18 @@ func init() {
 	for fi := Sender; fi < invalidTxnField; fi++ {
 		TxnFieldNames[fi] = fi.String()
 	}
-	txnFields = make(map[string]uint)
-	for i, tfn := range TxnFieldNames {
-		txnFields[tfn] = uint(i)
-	}
-
 	TxnFieldTypes = make([]StackType, int(invalidTxnField))
-	for i, ft := range txnFieldTypePairs {
-		if int(ft.field) != i {
+	txnFieldSpecByField = make(map[TxnField]txnFieldSpec, len(TxnFieldNames))
+	for i, s := range txnFieldSpecs {
+		if int(s.field) != i {
 			panic("txnFieldTypePairs disjoint with TxnField enum")
 		}
-		TxnFieldTypes[i] = ft.ftype
+		TxnFieldTypes[i] = s.ftype
+		txnFieldSpecByField[s.field] = s
+	}
+	txnFieldSpecByName = make(tfNameSpecMap, len(TxnFieldNames))
+	for i, tfn := range TxnFieldNames {
+		txnFieldSpecByName[tfn] = txnFieldSpecByField[TxnField(i)]
 	}
 
 	GlobalFieldNames = make([]string, int(invalidGlobalField))
@@ -331,12 +432,14 @@ func init() {
 		GlobalFieldNames[int(i)] = i.String()
 	}
 	GlobalFieldTypes = make([]StackType, len(GlobalFieldNames))
-	for _, ft := range globalFieldTypeList {
-		GlobalFieldTypes[int(ft.gfield)] = ft.ftype
+	globalFieldSpecByField = make(map[GlobalField]globalFieldSpec, len(GlobalFieldNames))
+	for _, s := range globalFieldSpecs {
+		GlobalFieldTypes[int(s.gfield)] = s.ftype
+		globalFieldSpecByField[s.gfield] = s
 	}
-	globalFields = make(map[string]uint)
+	globalFieldSpecByName = make(gfNameSpecMap, len(GlobalFieldNames))
 	for i, gfn := range GlobalFieldNames {
-		globalFields[gfn] = uint(i)
+		globalFieldSpecByName[gfn] = globalFieldSpecByField[GlobalField(i)]
 	}
 
 	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))
@@ -376,11 +479,11 @@ func init() {
 		txnTypeConstToUint64[symbol] = uint64(v)
 	}
 
-	onCompletionConstToUint64 = make(map[string]uint64, len(OnCompletionValues))
-	OnCompletionNames = make([]string, len(OnCompletionValues))
-	for _, oc := range OnCompletionValues {
+	OnCompletionNames = make([]string, int(invalidOnCompletionConst))
+	onCompletionConstToUint64 = make(map[string]uint64, len(OnCompletionNames))
+	for oc := NoOp; oc < invalidOnCompletionConst; oc++ {
 		symbol := oc.String()
-		OnCompletionNames[int(oc)] = symbol
+		OnCompletionNames[oc] = symbol
 		onCompletionConstToUint64[symbol] = uint64(oc)
 	}
 }
