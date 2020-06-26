@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -123,4 +125,32 @@ func TestConnMonitorStageTiming(t *testing.T) {
 			stageTimings[i])
 	}
 
+}
+func TestBucketsPruning(t *testing.T) {
+	bucketsCount := 100
+	curTime := time.Now().UnixNano()
+	for i := 0; i < bucketsCount; i++ {
+		perfMonitor := makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag})
+		// create bucketsCount buckets, where i of them are before the "current" time stamp and bucketsCount-i are after the time stamp.
+		for j := 0; j < bucketsCount; j++ {
+			if j < i {
+				perfMonitor.pendingMessagesBuckets = append(perfMonitor.pendingMessagesBuckets, &pmPendingMessageBucket{endTime: curTime - 1})
+			} else {
+				perfMonitor.pendingMessagesBuckets = append(perfMonitor.pendingMessagesBuckets, &pmPendingMessageBucket{endTime: curTime + 1})
+			}
+		}
+		perfMonitor.pruneOldMessages(curTime + int64(pmMaxMessageWaitTime))
+		require.Equal(t, bucketsCount-i, len(perfMonitor.pendingMessagesBuckets))
+	}
+
+	for i := 0; i < bucketsCount; i++ {
+		perfMonitor := makeConnectionPerformanceMonitor([]Tag{protocol.AgreementVoteTag})
+
+		for j := 0; j < bucketsCount; j++ {
+			perfMonitor.pendingMessagesBuckets = append(perfMonitor.pendingMessagesBuckets, &pmPendingMessageBucket{endTime: curTime + int64(j)})
+		}
+
+		perfMonitor.pruneOldMessages(curTime + int64(pmMaxMessageWaitTime) + int64(i-1))
+		require.Equal(t, bucketsCount-i, len(perfMonitor.pendingMessagesBuckets))
+	}
 }
