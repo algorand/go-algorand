@@ -1,3 +1,5 @@
+#pragma version 2
+
 txn ApplicationID
 int 0
 ==
@@ -66,19 +68,19 @@ byte "fz"
 ==
 int 0
 byte base64 Y1g=
-app_local_gets
+app_local_get
 int 1
 ==
 int 0
 byte base64 dFg=
-app_local_gets
+app_local_get
 int 1
 ==
 ||
 &&
 int 0
 byte base64 dFg=
-app_local_gets
+app_local_get
 int 1
 ==
 txna ApplicationArgs 0
@@ -102,21 +104,21 @@ int 1
 byte base64 Ymw=
 int 1
 byte base64 Ymw=
-app_local_gets
+app_local_get
 txna ApplicationArgs 1
 btoi
 -
 app_local_put
 byte base64 cnY=
 byte base64 cnY=
-app_global_gets
+app_global_get
 txna ApplicationArgs 1
 btoi
 +
 app_global_put
 int 0
 byte base64 Y1g=
-app_local_gets
+app_local_get
 int 1
 ==
 int 1
@@ -127,21 +129,21 @@ int 1
 byte base64 Ymw=
 int 1
 byte base64 Ymw=
-app_local_gets
+app_local_get
 txna ApplicationArgs 1
 btoi
 +
 app_local_put
 byte base64 cnY=
 byte base64 cnY=
-app_global_gets
+app_global_get
 txna ApplicationArgs 1
 btoi
 -
 app_global_put
 int 0
 byte base64 Y1g=
-app_local_gets
+app_local_get
 int 1
 ==
 int 1
@@ -155,7 +157,7 @@ btoi
 app_local_put
 int 0
 byte base64 Y1g=
-app_local_gets
+app_local_get
 int 1
 ==
 cond_end11:
@@ -167,7 +169,7 @@ int 0
 byte base64 Ymw=
 int 0
 byte base64 Ymw=
-app_local_gets
+app_local_get
 txna ApplicationArgs 0
 btoi
 -
@@ -176,59 +178,59 @@ int 1
 byte base64 Ymw=
 int 1
 byte base64 Ymw=
-app_local_gets
+app_local_get
 txna ApplicationArgs 0
 btoi
 +
 app_local_put
 byte base64 cHM=
-app_global_gets
+app_global_get
 int 0
 ==
 int 1
 byte base64 Ymw=
-app_local_gets
+app_local_get
 int 1
 byte base64 bWI=
-app_local_gets
+app_local_get
 <=
 &&
 int 0
 byte base64 Zno=
-app_local_gets
+app_local_get
 int 0
 ==
 &&
 int 1
 byte base64 Zno=
-app_local_gets
+app_local_get
 int 0
 ==
 &&
 int 0
 byte base64 dGw=
-app_local_gets
+app_local_get
 global LatestTimestamp
 <
 &&
 int 1
 byte base64 dGw=
-app_local_gets
+app_local_get
 global LatestTimestamp
 <
 &&
 byte 0x0001
 int 0
 byte base64 dGc=
-app_local_gets
+app_local_get
 itob
 concat
 int 1
 byte base64 dGc=
-app_local_gets
+app_local_get
 itob
 concat
-app_global_gets
+app_global_get
 int 1
 -
 global LatestTimestamp
@@ -281,7 +283,7 @@ int 3
 &&
 int 0
 byte base64 dFg=
-app_local_gets
+app_local_get
 int 1
 ==
 &&
@@ -295,7 +297,7 @@ btoi
 app_global_put
 int 0
 byte base64 Y1g=
-app_local_gets
+app_local_get
 int 1
 ==
 if_end16:
@@ -324,7 +326,7 @@ int 0
 &&
 int 0
 byte base64 Y1g=
-app_local_gets
+app_local_get
 int 1
 ==
 &&
@@ -341,14 +343,14 @@ int 0
 &&
 int 0
 byte base64 Y1g=
-app_local_gets
+app_local_get
 int 1
 ==
 &&
 byte base64 cnY=
-app_global_gets
+app_global_get
 byte base64 dHQ=
-app_global_gets
+app_global_get
 ==
 &&
 int 1
