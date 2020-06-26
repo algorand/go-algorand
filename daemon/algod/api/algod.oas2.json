@@ -1025,7 +1025,8 @@
             "in": "body",
             "schema": {
               "description": "The same as DryrunRequest but message-pack encoded",
-              "type": "object"
+              "type": "object",
+              "format": "binary"
             }
           }
         ],

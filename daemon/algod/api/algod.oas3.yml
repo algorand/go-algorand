@@ -2629,12 +2629,14 @@
             "application/json": {
               "schema": {
                 "description": "The same as DryrunRequest but message-pack encoded",
+                "format": "binary",
                 "type": "object"
               }
             },
             "application/msgpack": {
               "schema": {
                 "description": "The same as DryrunRequest but message-pack encoded",
+                "format": "binary",
                 "type": "object"
               }
             }
