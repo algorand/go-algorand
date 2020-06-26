@@ -140,6 +140,7 @@ func TestArchivalBase(t *testing.T) {
 		if err != nil {
 			// Return early, to help with iterative debugging
 			PrintMemUsage("in TestArchival, after hitting error")
+			t.Error("In TestArchivalBase")
 			return
 		}
 
@@ -150,6 +151,7 @@ func TestArchivalBase(t *testing.T) {
 		if nonZeroMinSaves > 20 {
 			// Every tracker has given the ledger a chance to GC a few blocks
 			PrintMemUsage("in TestArchival, after GC")
+			t.Error("In TestArchivalBase")
 			return
 		}
 
@@ -223,6 +225,7 @@ func TestArchivalRestart(t *testing.T) {
 	require.Equal(t, basics.Round(maxBlocks), latest)
 	require.Equal(t, basics.Round(0), earliest)
 	PrintMemUsage("after TestArchivalRestart")
+	require.Equal(t, 0, 1) //fail test so we get verbose output
 }
 
 func makeUnsignedAssetCreateTx(firstValid, lastValid basics.Round, total uint64, defaultFrozen bool, manager string, reserve string, freeze string, clawback string, unitName string, assetName string, url string, metadataHash []byte) (transactions.Transaction, error) {
@@ -506,6 +509,7 @@ func TestArchivalAssets(t *testing.T) {
 	require.Equal(t, len(assetIdxs), existing+deleted)
 
 	PrintMemUsage("after TestArchivalAssets")
+	require.Equal(t, 0, 1) //fail test so we get verbose output
 }
 
 func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInBlock {
@@ -582,6 +586,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	require.Equal(t, basics.Round(0), latest)
 
 	PrintMemUsage("after TestArchivalFromNonArchival")
+	require.Equal(t, 0, 1) //fail test so we get verbose output
 }
 
 func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Round, error) {
