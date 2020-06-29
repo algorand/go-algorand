@@ -24,6 +24,9 @@ type Account struct {
 	// Note the raw object uses `map[int] -> AssetHolding` for this type.
 	Assets *[]AssetHolding `json:"assets,omitempty"`
 
+	// \[spend\] the address against which signing should be checked. If empty, the address of the current account is used. This field can be updated in any transaction by setting the RekeyTo field.
+	AuthAddr *string `json:"auth-addr,omitempty"`
+
 	// \[apar\] parameters of assets created by this account.
 	//
 	// Note: the raw account uses `map[int] -> Asset` for this type.

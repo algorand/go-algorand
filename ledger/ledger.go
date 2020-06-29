@@ -340,7 +340,7 @@ func (l *Ledger) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, er
 // ListAssets takes a maximum asset index and maximum result length, and
 // returns up to that many asset AssetIDs from the database where asset id is
 // less than or equal to the maximum.
-func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.AssetLocator, err error) {
+func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.listAssets(maxAssetIdx, maxResults)
@@ -498,13 +498,6 @@ func (l *Ledger) Timestamp(r basics.Round) (int64, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.time.timestamp(r)
-}
-
-// AllBalances returns a map of every account balance as of round rnd.
-func (l *Ledger) AllBalances(rnd basics.Round) (map[basics.Address]basics.AccountData, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.accts.allBalances(rnd)
 }
 
 // GenesisHash returns the genesis hash for this ledger.

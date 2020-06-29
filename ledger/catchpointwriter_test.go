@@ -17,6 +17,15 @@
 package ledger
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"context"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -111,4 +120,95 @@ func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, fbc, fbc2)
+}
+
+func TestBasicCatchpointWriter(t *testing.T) {
+	// create new protocol version, which has lower back balance.
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBasicCatchpointWriter")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 32
+	protoParams.SeedLookback = 2
+	protoParams.SeedRefreshInterval = 8
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+		os.RemoveAll("./catchpoints")
+	}()
+
+	ml := makeMockLedgerForTracker(t)
+	defer ml.close()
+	ml.blocks = randomInitChain(testProtocolVersion, 10)
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(300)}
+
+	au := &accountUpdates{}
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	conf.Archival = true
+	au.initialize(conf, ".", protoParams, accts[0])
+	defer au.close()
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+	au.close()
+	fileName := filepath.Join("./catchpoints", "15.catchpoint")
+	blocksRound := basics.Round(12345)
+	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
+	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
+	writer := makeCatchpointWriter(fileName, ml.trackerDB().rdb, blocksRound, blockHeaderDigest, catchpointLabel)
+	for {
+		more, err := writer.WriteStep(context.Background())
+		require.NoError(t, err)
+		if !more {
+			break
+		}
+	}
+
+	// load the file from disk.
+	fileContent, err := ioutil.ReadFile(fileName)
+	require.NoError(t, err)
+	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
+	require.NoError(t, err)
+	tarReader := tar.NewReader(gzipReader)
+	defer gzipReader.Close()
+	for {
+		header, err := tarReader.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+			break
+		}
+		balancesBlockBytes := make([]byte, header.Size)
+		readComplete := int64(0)
+
+		for readComplete < header.Size {
+			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
+			readComplete += int64(bytesRead)
+			if err != nil {
+				if err == io.EOF {
+					if readComplete == header.Size {
+						break
+					}
+					require.NoError(t, err)
+				}
+				break
+			}
+		}
+		if header.Name == "content.msgpack" {
+			var fileHeader catchpointFileHeader
+			err = protocol.Decode(balancesBlockBytes, &fileHeader)
+			require.NoError(t, err)
+			require.Equal(t, catchpointLabel, fileHeader.Catchpoint)
+			require.Equal(t, blocksRound, fileHeader.BlocksRound)
+			require.Equal(t, blockHeaderDigest, fileHeader.BlockHeaderDigest)
+			require.Equal(t, uint64(len(accts[0])), fileHeader.TotalAccounts)
+		} else if header.Name == "balances.1.1.msgpack" {
+			var balances catchpointFileBalancesChunk
+			err = protocol.Decode(balancesBlockBytes, &balances)
+			require.NoError(t, err)
+			require.Equal(t, uint64(len(accts[0])), uint64(len(balances.Balances)))
+		} else {
+			require.Failf(t, "unexpected tar chunk name %s", header.Name)
+		}
+	}
 }

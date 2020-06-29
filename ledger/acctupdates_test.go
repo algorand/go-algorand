@@ -17,7 +17,9 @@
 package ledger
 
 import (
+	"database/sql"
 	"fmt"
+	"os"
 	"runtime"
 	"sync"
 	"testing"
@@ -42,6 +44,7 @@ type mockLedgerForTracker struct {
 func makeMockLedgerForTracker(t testing.TB) *mockLedgerForTracker {
 	dbs := dbOpenTest(t)
 	dblogger := logging.TestingLog(t)
+	dblogger.SetLevel(logging.Info)
 	dbs.rdb.SetLogger(dblogger)
 	dbs.wdb.SetLogger(dblogger)
 	return &mockLedgerForTracker{dbs: dbs, log: dblogger}
@@ -88,6 +91,36 @@ func (ml *mockLedgerForTracker) blockDB() dbPair {
 
 func (ml *mockLedgerForTracker) trackerLog() logging.Logger {
 	return ml.log
+}
+
+// this function used to be in acctupdates.go, but we were never using it for production purposes. This
+// function has a conceptual flaw in that it attempts to load the entire balances into memory. This might
+// not work if we have large number of balances. On these unit testing, however, it's not the case, and it's
+// safe to call it.
+func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address]basics.AccountData, err error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	offsetLimit, err := au.roundOffset(rnd)
+
+	if err != nil {
+		return
+	}
+
+	err = au.dbs.rdb.Atomic(func(tx *sql.Tx) error {
+		var err0 error
+		bals, err0 = accountsAll(tx)
+		return err0
+	})
+	if err != nil {
+		return
+	}
+
+	for offset := uint64(0); offset < offsetLimit; offset++ {
+		for addr, delta := range au.deltas[offset] {
+			bals[addr] = delta.new
+		}
+	}
+	return
 }
 
 func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, latestRnd basics.Round, accts []map[basics.Address]basics.AccountData, rewards []uint64, proto config.ConsensusParams) {
@@ -475,4 +508,91 @@ func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
 		})
 	}
 	trieCachedNodesCount = defaultTrieCachedNodesCount
+}
+
+// TestLargeAccountCountCatchpointGeneration creates a ledger containing a large set of accounts ( i.e. 100K accounts )
+// and attempts to have the accountUpdates create the associated catchpoint. It's designed precisly around setting an
+// environment which would quickly ( i.e. after 32 rounds ) would start producing catchpoints.
+func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		t.Skip("This test is too slow on ARM and causes travis builds to time out")
+	}
+	// create new protocol version, which has lower back balance.
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLargeAccountCountCatchpointGeneration")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 32
+	protoParams.SeedLookback = 2
+	protoParams.SeedRefreshInterval = 8
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+		os.RemoveAll("./catchpoints")
+	}()
+
+	ml := makeMockLedgerForTracker(t)
+	defer ml.close()
+	ml.blocks = randomInitChain(testProtocolVersion, 10)
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(100000)}
+	rewardsLevels := []uint64{0}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	au := &accountUpdates{}
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	conf.Archival = true
+	au.initialize(conf, ".", protoParams, accts[0])
+	defer au.close()
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+
+	// cover 10 genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < 10; i++ {
+		accts = append(accts, accts[0])
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+
+	for i := basics.Round(10); i < basics.Round(protoParams.MaxBalLookback+5); i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		updates, totals := randomDeltasBalanced(1, accts[i-1], rewardLevel)
+
+		prevTotals, err := au.totals(basics.Round(i - 1))
+		require.NoError(t, err)
+
+		oldPool := accts[i-1][testPoolAddr]
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates[testPoolAddr] = accountDelta{old: oldPool, new: newPool}
+		totals[testPoolAddr] = newPool
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = testProtocolVersion
+
+		au.newBlock(blk, StateDelta{
+			accts: updates,
+			hdr:   &blk.BlockHeader,
+		})
+		accts = append(accts, totals)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+
+		au.committedUpTo(i)
+		if i%2 == 1 {
+			au.waitAccountsWriting()
+		}
+	}
 }

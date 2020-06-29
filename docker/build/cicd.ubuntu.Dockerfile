@@ -15,7 +15,6 @@ COPY . $GOPATH/src/github.com/algorand/go-algorand
 ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \
     BRANCH=${BRANCH} \
     CHANNEL=${CHANNEL} \
-    BUILDCHANNEL=${BUILDCHANNEL} \
     DEFAULTNETWORK=${DEFAULTNETWORK} \
     FULLVERSION=${FULLVERSION} \
     GOPROXY=https://gocenter.io \

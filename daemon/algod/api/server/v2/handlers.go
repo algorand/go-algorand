@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
+	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -46,9 +47,24 @@ const maxTealSourceBytes = 1e5
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
-	Node     *node.AlgorandFullNode
+	Node     NodeInterface
 	Log      logging.Logger
 	Shutdown <-chan struct{}
+}
+
+// NodeInterface represents node fns used by the handlers.
+type NodeInterface interface {
+	Ledger() *data.Ledger
+	Status() (s node.StatusReport, err error)
+	GenesisID() string
+	GenesisHash() crypto.Digest
+	BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error
+	GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool)
+	GetPendingTxnsFromPool() ([]transactions.SignedTxn, error)
+	SuggestedFee() basics.MicroAlgos
+	StartCatchup(catchpoint string) error
+	AbortCatchup(catchpoint string) error
+	Config() config.Local
 }
 
 // RegisterParticipationKeys registers participation keys.
@@ -165,6 +181,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 		Participation:               apiParticipation,
 		CreatedAssets:               &createdAssets,
 		Assets:                      &assets,
+		AuthAddr:                    addrOrNil(record.AuthAddr),
 	}
 
 	return ctx.JSON(http.StatusOK, response)
@@ -573,6 +590,10 @@ func (v2 *Handlers) AbortCatchup(ctx echo.Context, catchpoint string) error {
 // TealCompile compiles TEAL code to binary, return both binary and hash
 // (POST /v2/teal/compile)
 func (v2 *Handlers) TealCompile(ctx echo.Context) error {
+	// return early if teal compile is not allowed in node config
+	if !v2.Node.Config().EnableDeveloperAPI {
+		return ctx.String(http.StatusNotFound, "/teal/compile was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
+	}
 	buf := new(bytes.Buffer)
 	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
 	buf.ReadFrom(ctx.Request().Body)

@@ -86,11 +86,6 @@ func BenchmarkAssembleBlock(b *testing.B) {
 	require.NoError(b, err)
 
 	l := ledger
-	// allb, err := l.AllBalances(l.Latest())
-	// require.NoError(b, err)
-	// for addr, ad := range allb {
-	// 	b.Logf("%s\t%d", addr, ad.MicroAlgos)
-	// }
 	next := l.LastRound()
 	if err != nil {
 		b.Errorf("could not make proposals at round %d: could not read block from ledger: %v", next, err)
