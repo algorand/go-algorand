@@ -14,7 +14,6 @@ BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
 COMMITHASH       := $(shell ./scripts/compute_build_commit.sh)
 BUILDBRANCH      := $(shell ./scripts/compute_branch.sh)
 CHANNEL          ?= $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
-BUILDCHANNEL     :=  CHANNEL
 DEFAULTNETWORK   ?= $(shell ./scripts/compute_branch_network.sh $(BUILDBRANCH))
 DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILDBRANCH))
 
