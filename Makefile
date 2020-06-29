@@ -200,7 +200,7 @@ fulltest: build-race
 		go test $(GOTAGS) -timeout 2500s -race $$PACKAGE_DIRECTORY; \
 	done
 
-#the one that travis runs
+#the one that travis runs:
 shorttest: build-race 
 	go test $(GOTAGS) -timeout 2500s -race github.com/algorand/go-algorand/ledger
 	#$(addprefix short_test_target_, $(UNIT_TEST_SOURCES))
