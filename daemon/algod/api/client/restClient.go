@@ -57,6 +57,7 @@ const (
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
 	"/v1/transactions": true,
+	"/v2/teal/compile": true,
 }
 
 // RestClient manages the REST interface for a calling user.
@@ -407,6 +408,13 @@ func (client RestClient) GetGoRoutines(ctx context.Context) (goRoutines string, 
 
 	goRoutines, err = client.doGetWithQuery(ctx, "/debug/pprof/goroutine", query)
 	return
+}
+
+// Compile compiles the given program and returned the compiled program
+func (client RestClient) Compile(program []byte) (compiledProgram []byte, programHash []byte, err error) {
+	var compileResponse generatedV2.PostCompileResponse
+	err = client.submitForm(&compileResponse, "/v2/teal/compile", program, "POST", false, true)
+	return []byte(compileResponse.Result), []byte(compileResponse.Hash), err
 }
 
 func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryArgs map[string]string) (result string, err error) {
