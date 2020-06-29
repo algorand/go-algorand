@@ -201,7 +201,7 @@ fulltest: build-race
 	done
 
 shorttest: build-race 
-	go test $(GOTAGS) -timeout 2500s -race go-algorand/ledger
+	go test $(GOTAGS) -timeout 2500s -race github.com/algorand/go-algorand/ledger
 	#$(addprefix short_test_target_, $(UNIT_TEST_SOURCES))
 
 $(addprefix short_test_target_, $(UNIT_TEST_SOURCES)): build
