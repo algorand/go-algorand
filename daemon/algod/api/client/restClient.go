@@ -19,6 +19,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,8 +33,10 @@ import (
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	privateV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -411,10 +414,23 @@ func (client RestClient) GetGoRoutines(ctx context.Context) (goRoutines string, 
 }
 
 // Compile compiles the given program and returned the compiled program
-func (client RestClient) Compile(program []byte) (compiledProgram []byte, programHash []byte, err error) {
+func (client RestClient) Compile(program []byte) (compiledProgram []byte, programHash crypto.Digest, err error) {
 	var compileResponse generatedV2.PostCompileResponse
 	err = client.submitForm(&compileResponse, "/v2/teal/compile", program, "POST", false, true)
-	return []byte(compileResponse.Result), []byte(compileResponse.Hash), err
+	if err != nil {
+		return nil, crypto.Digest{}, err
+	}
+	compiledProgram, err = base64.StdEncoding.DecodeString(compileResponse.Result)
+	if err != nil {
+		return nil, crypto.Digest{}, err
+	}
+	var progAddr basics.Address
+	progAddr, err = basics.UnmarshalChecksumAddress(compileResponse.Hash)
+	if err != nil {
+		return nil, crypto.Digest{}, err
+	}
+	programHash = crypto.Digest(progAddr)
+	return
 }
 
 func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryArgs map[string]string) (result string, err error) {

@@ -26,11 +26,5 @@ func (c *Client) Compile(program []byte) (compiledProgram []byte, compiledProgra
 	if err2 != nil {
 		return nil, crypto.Digest{}, err2
 	}
-	var hash []byte
-	compiledProgram, hash, err = algod.Compile(program)
-	copy(compiledProgramHash[:], hash)
-	if err != nil {
-		return nil, crypto.Digest{}, err
-	}
-	return compiledProgram, compiledProgramHash, err
+	return algod.Compile(program)
 }
