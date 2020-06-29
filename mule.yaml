@@ -71,23 +71,23 @@ tasks:
   - task: shell.docker.Ensure
     name: centos
     image: algorand/go-algorand-ci-linux
-    version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.logs }}'
-    goVersion: '{{ shell.Shell.go-version.outputs.logs }}'
+    version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.stdout }}'
+    goVersion: '{{ shell.Shell.go-version.outputs.stdout }}'
     dockerFilePath: docker/build/cicd.centos.Dockerfile
     dependencies: shell.Shell.go-version docker.Version
   - task: shell.docker.Ensure
     name: alpine
     image: algorand/go-algorand-ci-linux
-    version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.logs }}'
-    goVersion: '{{ shell.Shell.go-version.outputs.logs }}'
+    version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.stdout }}'
+    goVersion: '{{ shell.Shell.go-version.outputs.stdout }}'
     dockerFilePath: docker/build/cicd.alpine.Dockerfile
     dependencies: shell.Shell.go-version docker.Version
   - task: docker.Make
     name: build
     docker:
       image: algorand/go-algorand-ci-linux
-      version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.logs }}'
-      goVersion: '{{ shell.Shell.go-version.outputs.logs }}'
+      version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.stdout }}'
+      goVersion: '{{ shell.Shell.go-version.outputs.stdout }}'
       workDir: /go/src/github.com/algorand/go-algorand
     target: ci-build
     dependencies: shell.Shell.go-version docker.Version
@@ -95,8 +95,8 @@ tasks:
     name: fulltest
     docker:
       image: algorand/go-algorand-ci-linux
-      version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.logs }}'
-      goVersion: '{{ shell.Shell.go-version.outputs.logs }}'
+      version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.stdout }}'
+      goVersion: '{{ shell.Shell.go-version.outputs.stdout }}'
       workDir: /go/src/github.com/algorand/go-algorand
     target: fulltest -j4
     dependencies: shell.Shell.go-version docker.Version
@@ -106,8 +106,8 @@ tasks:
       env:
         - SHORTTEST=-short
       image: algorand/go-algorand-ci-linux
-      version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.logs }}'
-      goVersion: '{{ shell.Shell.go-version.outputs.logs }}'
+      version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.stdout }}'
+      goVersion: '{{ shell.Shell.go-version.outputs.stdout }}'
       workDir: /go/src/github.com/algorand/go-algorand
     target: ci-integration -j4
     dependencies: shell.Shell.go-version docker.Version
@@ -115,8 +115,8 @@ tasks:
     name: archive
     docker:
       image: algorand/go-algorand-ci-linux
-      version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.logs }}'
-      goVersion: '{{ shell.Shell.go-version.outputs.logs }}'
+      version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.stdout }}'
+      goVersion: '{{ shell.Shell.go-version.outputs.stdout }}'
       workDir: /go/src/github.com/algorand/go-algorand
     target: ci-archive
     dependencies: shell.Shell.go-version docker.Version
