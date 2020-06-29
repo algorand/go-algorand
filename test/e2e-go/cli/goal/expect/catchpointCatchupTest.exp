@@ -61,6 +61,12 @@ if { [catch {
     exec rm $TEST_ROOT_DIR/Primary/config.json
     exec mv $TEST_ROOT_DIR/Primary/config.json.new $TEST_ROOT_DIR/Primary/config.json
 
+    # Update the Second Node configuration
+    exec -- cat "$TEST_ROOT_DIR/Node/config.json" | jq {. |= . + {"CatchupParallelBlocks":2}} > $TEST_ROOT_DIR/Node/config.json.new
+    exec rm $TEST_ROOT_DIR/Node/config.json
+    exec mv $TEST_ROOT_DIR/Node/config.json.new $TEST_ROOT_DIR/Node/config.json
+
+
     set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
     set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
     set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
