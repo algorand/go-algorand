@@ -1,7 +1,11 @@
 export GOPATH		:= $(shell go env GOPATH)
 GOPATH1		:= $(firstword $(subst :, ,$(GOPATH)))
 export GO111MODULE	:= on
+ifeq  ($(ARCH),arm)
+export GOPROXY := https://goproxy.io
+else
 export GOPROXY := direct
+endif
 
 UNAME		:= $(shell uname)
 SRCPATH     := $(shell pwd)
