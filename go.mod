@@ -30,7 +30,6 @@ require (
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/karalabe/hid v0.0.0-20181128192157-d815e0c1a2e2
 	github.com/labstack/echo/v4 v4.1.16
-	github.com/lib/pq v1.7.0
 	github.com/mailru/easyjson v0.0.0-20180823135443-60711f1a8329 // indirect
 	github.com/matryer/moq v0.0.0-20200607124540-4638a53893e6 // indirect
 	github.com/mattn/go-sqlite3 v1.10.0
