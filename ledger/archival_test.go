@@ -107,7 +107,7 @@ func TestArchival(t *testing.T) {
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
-	const inMem = true
+	const inMem = false
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	log := logging.TestingLog(t)
