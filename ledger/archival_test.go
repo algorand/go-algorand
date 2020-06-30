@@ -571,8 +571,9 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 
 			au = cleanTracker.(*accountUpdates)
 			cfg := config.GetDefaultLocal()
-			cfg.Archival = true
+			cfg.Archival = false
 			au.initialize(cfg, "", au.initProto, wl.l.accts.initAccounts)
+			au.close()
 		} else {
 			minSave = trk.committedUpTo(rnd)
 			wl.l.trackerMu.RUnlock()
@@ -585,7 +586,6 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			cleanTracker = reflect.New(trackerType).Interface().(ledgerTracker)
 		}
 
-		cleanTracker.close()
 		err := cleanTracker.loadFromDisk(wl)
 		require.NoError(t, err)
 
