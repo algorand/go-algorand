@@ -1,4 +1,4 @@
-dist: bionic
+dist: trusty
 go:
   - "1.12"
 go_import_path: github.com/algorand/go-algorand
