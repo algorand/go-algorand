@@ -132,7 +132,7 @@ PLATFORM_SPLIT=(${PLATFORM//\// })
 # a bash user might `source build_env` to manually continue a broken build
 cat << EOF > "${HOME}"/build_env
 export BRANCH=${BRANCH}
-export CHANNEL=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "${BRANCH}")
+export CHANNEL=${CHANNEL:-$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "$BRANCH")}
 export COMMIT_HASH=${COMMIT_HASH}
 export DEFAULTNETWORK=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_branch_network.sh)
 export DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)

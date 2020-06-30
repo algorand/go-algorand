@@ -26,18 +26,18 @@ endif
 	done
 
 ci-integration:
-	NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/bin \
-	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/bin:$$PATH \
-	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/tools:$$PATH \
-	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/test-utils:$$PATH \
+	NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(CHANNEL)/$(OS_TYPE)-$(ARCH)/bin \
+	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(CHANNEL)/$(OS_TYPE)-$(ARCH)/bin:$$PATH \
+	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(CHANNEL)/$(OS_TYPE)-$(ARCH)/tools:$$PATH \
+	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(CHANNEL)/$(OS_TYPE)-$(ARCH)/test-utils:$$PATH \
 	SRCROOT=$(SRCPATH) \
-	test/scripts/e2e.sh -c $(BUILDCHANNEL) -n
+	test/scripts/e2e.sh -c $(CHANNEL) -n
 
 ci-build: buildsrc gen ci-setup
-	CHANNEL=$(BUILDCHANNEL) PKG_ROOT=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH) NO_BUILD=True VARIATIONS=$(OS_TYPE)-$(ARCH) \
+	CHANNEL=$(CHANNEL) PKG_ROOT=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH) NO_BUILD=True VARIATIONS=$(OS_TYPE)-$(ARCH) \
 	scripts/build_packages.sh $(OS_TYPE)/$(ARCH) && \
-	mkdir -p $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/data && \
-	cp gen/devnet/genesis.json $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/data
+	mkdir -p $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(CHANNEL)/$(OS_TYPE)-$(ARCH)/data && \
+	cp gen/devnet/genesis.json $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(CHANNEL)/$(OS_TYPE)-$(ARCH)/data
 
 # Builds targets from the sub-directories of ./scripts/release/mule/, such as `mule-package`, `mule-sign`, `mule-test`.
 # https://scene-si.org/2019/12/04/make-dynamic-makefile-targets/
