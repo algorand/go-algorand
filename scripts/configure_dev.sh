@@ -29,7 +29,6 @@ done
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 OS=$("$SCRIPTPATH"/ostype.sh)
-ARCH=$("$SCRIPTPATH"/archtype.sh)
 
 function install_or_upgrade {
     if ${FORCE} ; then
