@@ -7,10 +7,6 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 OS=$("${SCRIPTPATH}/../ostype.sh")
 ARCH=$("${SCRIPTPATH}/../archtype.sh")
 
-#install gimme for fetching correct version of go
-curl -sL -o ~/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
-chmod +x ~/gimme
-
 if [[ "${OS}" == "linux" ]]; then
     if [[ "${ARCH}" == "arm64" ]]; then
         set -e
