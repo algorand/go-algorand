@@ -181,7 +181,7 @@ func TestArchivalRestart(t *testing.T) {
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
-	const maxBlocks = 2000
+	const maxBlocks = 500
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
@@ -297,7 +297,7 @@ func TestArchivalAssets(t *testing.T) {
 	var expectedDeleted int
 
 	// give creators money for min balance
-	const maxBlocks = 2000
+	const maxBlocks = 500
 	var creators []basics.Address
 	for i := 0; i < maxBlocks; i++ {
 		creator := basics.Address{}
@@ -385,11 +385,13 @@ func TestArchivalAssets(t *testing.T) {
 	require.Equal(t, len(assetIdxs), existing+deleted)
 
 	// close and reopen the same DB
+	PrintMemUsage("in TestArchivalAssets, before closing DB")
 	l.Close()
+	PrintMemUsage("in TestArchivalAssets, after closing DB")
 	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
-	LogMemUsage("in TestArchivalAssets, after reopening DB")
+	PrintMemUsage("in TestArchivalAssets, after reopening DB")
 
 	// check that we can fetch creator for all created assets and can't for
 	// deleted assets
@@ -539,7 +541,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
-	const maxBlocks = 2000
+	const maxBlocks = 1200
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
