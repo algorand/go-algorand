@@ -24,19 +24,9 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/data/committee" //TODO(upgrade) remove this line
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
-
-// TODO(upgrade) remove the entire lessMaybeBuggy function once the upgrade goes through
-func lessMaybeBuggy(cred, other committee.Credential) bool {
-	// this function calls either Less or LessBuggy depending on ConsensusCurrentVersion, which is what the agreement tests use
-	if config.Consensus[protocol.ConsensusCurrentVersion].UseBuggyProposalLowestOutput {
-		return cred.LessBuggy(other)
-	}
-	return cred.Less(other)
-}
 
 var playerTracer tracer
 
@@ -69,8 +59,7 @@ func generateProposalEvents(t *testing.T, player player, accs testAccountData, f
 	lowestCredential := votes[0].Cred
 	lowestProposal = votes[0].R.Proposal
 	for _, vote := range votes {
-		// if vote.Cred.Less(lowestCredential) { //TODO(upgrade) uncomment this line
-		if lessMaybeBuggy(vote.Cred, lowestCredential) { // TODO(upgrade) remove this line
+		if vote.Cred.Less(lowestCredential) {
 			lowestCredential = vote.Cred
 			lowestProposal = vote.R.Proposal
 		}
