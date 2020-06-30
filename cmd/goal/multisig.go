@@ -72,7 +72,7 @@ var multisigCmd = &cobra.Command{
 }
 
 var addSigCmd = &cobra.Command{
-	Use:   "sign -t TXFILE -a ADDR",
+	Use:   "sign -t [transaction file] -a [address]",
 	Short: "Add a signature to a multisig transaction",
 	Long:  `Start a multisig, or add a signature to an existing multisig, for a given transaction.`,
 	Args:  validateNoPosArgsFn,
@@ -137,7 +137,7 @@ var addSigCmd = &cobra.Command{
 }
 
 var signProgramCmd = &cobra.Command{
-	Use:   "signprogram -t TXFILE -a ADDR",
+	Use:   "signprogram -t [transaction file] -a [address]",
 	Short: "Add a signature to a multisig LogicSig",
 	Long:  `Start a multisig LogicSig, or add a signature to an existing multisig, for a given program.`,
 	Args:  validateNoPosArgsFn,
@@ -223,7 +223,7 @@ var signProgramCmd = &cobra.Command{
 }
 
 var mergeSigCmd = &cobra.Command{
-	Use:   "merge -o MERGEDTXFILE [TXFILE1] [TXFILE2]...",
+	Use:   "merge -o [merged transaction file] [input file 1] [input file 2]...",
 	Short: "Merge multisig signatures on transactions",
 	Long:  `Combine multiple partially-signed multisig transactions, and write out transactions with a single merged multisig signature.`,
 	Run: func(cmd *cobra.Command, args []string) {

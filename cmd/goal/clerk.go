@@ -624,7 +624,7 @@ func getProto(versArg string) (protocol.ConsensusVersion, config.ConsensusParams
 }
 
 var signCmd = &cobra.Command{
-	Use:   "sign -i INFILE -o OUTFILE",
+	Use:   "sign -i [input file] -o [output file]",
 	Short: "Sign a transaction file",
 	Long:  `Sign the passed transaction file, which may contain one or more transactions. If the infile and the outfile are the same, this overwrites the file with the new, signed data.`,
 	Args:  validateNoPosArgsFn,
