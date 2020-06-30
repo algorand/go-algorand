@@ -14,19 +14,18 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package network
 
 import (
-	"context"
+	"testing"
 
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/protocol"
 )
 
-// Client is a minimal interface for the RestClient
-type Client interface {
-	Status() (generatedV2.NodeStatusResponse, error)
-	Block(round uint64) (v1.Block, error)
-	GetGoRoutines(ctx context.Context) (string, error)
-	HealthCheck() error
+func BenchmarkGenerateMessageDigest(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		msgData := crypto.Hash([]byte{byte(i & 0xff), byte((i >> 8) & 0xff), byte((i >> 16) & 0xff), byte((i >> 24) & 0xff)})
+		generateMessageDigest(protocol.AgreementVoteTag, msgData[:])
+	}
 }

@@ -23,6 +23,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/netdeploy"
 	"github.com/algorand/go-algorand/util"
 )
@@ -93,7 +94,14 @@ var networkCreateCmd = &cobra.Command{
 			panic(err)
 		}
 
-		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, networkTemplateFile, binDir, !noImportKeys, nil, nil)
+		dataDir := maybeSingleDataDir()
+		var consensus config.ConsensusProtocols
+		if dataDir != "" {
+			// try to load the consensus from there. If there is none, we can just use the built in one.
+			consensus, _ = config.PreloadConfigurableConsensusProtocols(dataDir)
+		}
+
+		network, err := netdeploy.CreateNetworkFromTemplate(networkName, networkRootDir, networkTemplateFile, binDir, !noImportKeys, nil, consensus)
 		if err != nil {
 			if noClean {
 				reportInfof(" ** failed ** - Preserving network rootdir '%s'", networkRootDir)

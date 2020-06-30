@@ -1878,6 +1878,7 @@
           "content": {
             "text/plain": {
               "schema": {
+                "format": "binary",
                 "type": "string"
               }
             }

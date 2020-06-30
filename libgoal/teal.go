@@ -14,19 +14,17 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package libgoal
 
 import (
-	"context"
-
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/crypto"
 )
 
-// Client is a minimal interface for the RestClient
-type Client interface {
-	Status() (generatedV2.NodeStatusResponse, error)
-	Block(round uint64) (v1.Block, error)
-	GetGoRoutines(ctx context.Context) (string, error)
-	HealthCheck() error
+// Compile compiles the given program and returned the compiled program
+func (c *Client) Compile(program []byte) (compiledProgram []byte, compiledProgramHash crypto.Digest, err error) {
+	algod, err2 := c.ensureAlgodClient()
+	if err2 != nil {
+		return nil, crypto.Digest{}, err2
+	}
+	return algod.Compile(program)
 }

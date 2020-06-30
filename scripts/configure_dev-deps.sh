@@ -2,7 +2,6 @@
 
 set -ex
 
-
 function get_go_version {
     (
 	cd $(dirname "$0")
