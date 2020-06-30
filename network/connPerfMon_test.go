@@ -91,6 +91,7 @@ func BenchmarkConnMonitor(b *testing.B) {
 }
 
 func TestConnMonitorStageTiming(t *testing.T) {
+	t.Skip("The test ConnMonitorStageTiming is a performance benchmarking test for the various ConnectionPerformanceMonitor object stagesm and isn't a very usefull for correctness validation")
 	peers := []Peer{&wsPeer{}, &wsPeer{}, &wsPeer{}, &wsPeer{}}
 	msgPool := makeMsgPool(1000000, peers)
 
