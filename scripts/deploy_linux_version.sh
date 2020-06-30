@@ -65,7 +65,6 @@ echo SCRIPTPATH='$( cd "$(dirname "$0")" ; pwd -P )' >> ${TMPDIR}/deploy_linux_v
 echo cd \${SCRIPTPATH}/..${RELPATHXTRA} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export BRANCH=${BRANCH} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export CHANNEL=${CHANNEL} >> ${TMPDIR}/deploy_linux_version_exec.sh
-echo export BUILDCHANNEL=${BUILDCHANNEL} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export DEFAULTNETWORK=${DEFAULTNETWORK} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export GENESISFILE=${GENESISFILE} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export FULLVERSION=${FULLVERSION} >> ${TMPDIR}/deploy_linux_version_exec.sh
