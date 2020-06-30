@@ -202,7 +202,9 @@ fulltest: build-race
 
 #the one that travis runs:
 shorttest: build-race 
+	cat /proc/meminfo
 	go test $(GOTAGS) -timeout 2500s -race github.com/algorand/go-algorand/ledger
+	cat /proc/meminfo
 	#$(addprefix short_test_target_, $(UNIT_TEST_SOURCES))
 
 $(addprefix short_test_target_, $(UNIT_TEST_SOURCES)): build

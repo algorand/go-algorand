@@ -37,6 +37,7 @@ jobs:
       os: linux
       name: Ubuntu AMD64 Build
       script:
+        - ulimit -a
         - scripts/travis/build_test.sh
     - # same stage, parallel job
       os: linux
