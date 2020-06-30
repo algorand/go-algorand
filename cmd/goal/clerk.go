@@ -552,7 +552,7 @@ var rawsendCmd = &cobra.Command{
 }
 
 var inspectCmd = &cobra.Command{
-	Use:   "inspect",
+	Use:   "inspect [input file 1] [input file 2]...",
 	Short: "print a transaction file",
 	Long:  `Loads a transaction file, attempts to decode the transaction, and displays the decoded information.`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -832,7 +832,7 @@ func disassembleFile(fname, outname string) {
 }
 
 var compileCmd = &cobra.Command{
-	Use:   "compile",
+	Use:   "compile [input file 1] [input file 2]...",
 	Short: "compile a contract program",
 	Long:  "Reads a TEAL contract program and compiles it to binary output and contract address.",
 	Run: func(cmd *cobra.Command, args []string) {

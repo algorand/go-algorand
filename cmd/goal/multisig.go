@@ -223,7 +223,7 @@ var signProgramCmd = &cobra.Command{
 }
 
 var mergeSigCmd = &cobra.Command{
-	Use:   "merge -o MERGEDTXFILE TXFILE1 TXFILE2 ...",
+	Use:   "merge -o MERGEDTXFILE [TXFILE1] [TXFILE2]...",
 	Short: "Merge multisig signatures on transactions",
 	Long:  `Combine multiple partially-signed multisig transactions, and write out transactions with a single merged multisig signature.`,
 	Run: func(cmd *cobra.Command, args []string) {
