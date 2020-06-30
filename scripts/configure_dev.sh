@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -ex
 
 HELP="Usage: $0 [-s]
 Installs host level dependencies necessary to build go-algorand.
@@ -29,6 +29,24 @@ done
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 OS=$("$SCRIPTPATH"/ostype.sh)
+ARCH=$("$SCRIPTPATH"/archtype.sh)
+
+function installOpenSSL() {
+
+    OPENSSL_VER=1.1.0g
+
+    mkdir openssl
+    cd openssl
+    wget https://www.openssl.org/source/openssl-${OPENSSL_VER}.tar.gz
+    tar xf openssl-${OPENSSL_VER}.tar.gz
+    cd openssl-${OPENSSL_VER}
+    ./config zlib shared no-ssl3
+    make -j4
+    sudo make install
+
+    cd ../../
+
+}
 
 function install_or_upgrade {
     if ${FORCE} ; then
@@ -65,6 +83,10 @@ fi
 
 if ${SKIP_GO_DEPS} ; then
     exit 0
+fi
+
+if [[ "${ARCH}" = "arm" ]]; then
+    installOpenSSL
 fi
 
 "$SCRIPTPATH"/configure_dev-deps.sh
