@@ -2,14 +2,6 @@
 
 set -ex
 
-#function install_go_module {
-#    local OUTPUT
-#    OUTPUT=$(GO111MODULE=off go get -u "$1" 2>&1)
-#    if [ "${OUTPUT}" != "" ]; then
-#        echo "error: executing \"go get -u $1\" failed : ${OUTPUT}"
-#        exit 1
-#    fi
-#}
 
 function get_go_version {
     (
