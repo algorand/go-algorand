@@ -58,6 +58,7 @@ var (
 	protoVersion    string
 	rekeyToAddress  string
 	signerAddress   string
+	rawOutput       bool
 )
 
 func init() {
@@ -128,6 +129,7 @@ func init() {
 
 	dryrunRemoteCmd.Flags().StringVarP(&txFilename, "dryrun-state", "D", "", "dryrun request object to run")
 	dryrunRemoteCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print more info")
+	dryrunRemoteCmd.Flags().BoolVarP(&rawOutput, "raw", "r", false, "output raw response from algod")
 	dryrunRemoteCmd.MarkFlagRequired("dryrun-state")
 
 }
@@ -983,6 +985,10 @@ var dryrunRemoteCmd = &cobra.Command{
 		resp, err := client.Dryrun(data)
 		if err != nil {
 			reportErrorf("dryrun-remote: %s\n", err.Error())
+		}
+		if rawOutput {
+			fmt.Fprintf(os.Stdout, string(protocol.EncodeJSON(&resp)))
+			return
 		}
 
 		stackToString := func(stack []generatedV2.TealValue) string {
