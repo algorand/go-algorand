@@ -540,7 +540,6 @@ func (ac *ApplicationCallTxnFields) applyClearState(
 		// Fetch the (potentially updated) sender record
 		record, err = balances.Get(sender, false)
 		if err != nil {
-			ad.EvalDelta = basics.EvalDelta{}
 			return err
 		}
 	}
