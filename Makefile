@@ -13,7 +13,7 @@ S3_RELEASE_BUCKET = $$S3_RELEASE_BUCKET
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
 COMMITHASH       := $(shell ./scripts/compute_build_commit.sh)
 BUILDBRANCH      := $(shell ./scripts/compute_branch.sh)
-BUILDCHANNEL     := $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
+CHANNEL          ?= $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
 DEFAULTNETWORK   ?= $(shell ./scripts/compute_branch_network.sh $(BUILDBRANCH))
 DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILDBRANCH))
 
@@ -48,7 +48,7 @@ GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILD
 		 -extldflags \"$(EXTLDFLAGS)\"
 
 GOLDFLAGS := $(GOLDFLAGS_BASE) \
-		 -X github.com/algorand/go-algorand/config.Channel=$(BUILDCHANNEL)
+		 -X github.com/algorand/go-algorand/config.Channel=$(CHANNEL)
 
 UNIT_TEST_SOURCES := $(sort $(shell GO111MODULE=off go list ./... | grep -v /go-algorand/test/ ))
 ALGOD_API_PACKAGES := $(sort $(shell GO111MODULE=off cd daemon/algod/api; go list ./... ))
@@ -292,6 +292,6 @@ include ./scripts/release/mule/Makefile.mule
 SUPPORTED_ARCHIVE_OS_ARCH = linux/amd64 linux/arm64 linux/arm darwin/amd64
 
 archive:
-	CHANNEL=$(BUILDCHANNEL) \
-	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(BUILDCHANNEL)/$(OS_TYPE)-$(ARCH)/bin:$${PATH} \
-	scripts/upload_version.sh $(BUILDCHANNEL) $(SRCPATH)/tmp/node_pkgs $(S3_RELEASE_BUCKET)
+	CHANNEL=$(CHANNEL) \
+	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(CHANNEL)/$(OS_TYPE)-$(ARCH)/bin:$${PATH} \
+	scripts/upload_version.sh $(CHANNEL) $(SRCPATH)/tmp/node_pkgs $(S3_RELEASE_BUCKET)
