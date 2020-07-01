@@ -32,7 +32,8 @@ func makeMsgPool(N int, peers []Peer) (out []IncomingMessage) {
 	out = make([]IncomingMessage, 0, N*2)
 	msgIndex := uint64(0)
 	timer := int64(0)
-	msgPerSecond := uint64(1500)
+	msgPerSecond := uint64(500)
+	msgInterval := int64(time.Second) / int64(msgPerSecond)
 	for {
 		if len(out) >= N {
 			break
@@ -65,9 +66,9 @@ func makeMsgPool(N int, peers []Peer) (out []IncomingMessage) {
 
 		msgIndex++
 		if msgIndex%msgPerSecond == 0 {
-			timer += int64(time.Second)
+			timer += int64(time.Second * 3)
 		}
-		timer += int64(123 * time.Nanosecond)
+		timer += msgInterval + int64(123*time.Nanosecond)
 	}
 	return
 }
@@ -91,9 +92,8 @@ func BenchmarkConnMonitor(b *testing.B) {
 }
 
 func TestConnMonitorStageTiming(t *testing.T) {
-	t.Skip("The test ConnMonitorStageTiming is a performance benchmarking test for the various ConnectionPerformanceMonitor object stagesm and isn't a very usefull for correctness validation")
 	peers := []Peer{&wsPeer{}, &wsPeer{}, &wsPeer{}, &wsPeer{}}
-	msgPool := makeMsgPool(1000000, peers)
+	msgPool := makeMsgPool(60000, peers)
 
 	stageTimings := make([]time.Duration, 5)
 	stageNotifyCalls := make([]int, 5)
