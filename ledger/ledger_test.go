@@ -18,7 +18,10 @@ package ledger
 
 import (
 	"context"
+	"io/ioutil"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -861,4 +864,34 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 	} else {
 		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "should allow leasing payment transaction with newer FirstValid")
 	}
+}
+
+func TestLedgerDBConcurrentAccess(t *testing.T) {
+	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
+	require.NoError(t, err)
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	dbPrefix := filepath.Join(dbTempDir, dbName)
+	defer os.RemoveAll(dbTempDir)
+	log := logging.TestingLog(t)
+	trackerDBs, blockDBs, err := openLedgerDB(dbPrefix, true)
+	trackerDBs.rdb.SetLogger(log)
+	trackerDBs.wdb.SetLogger(log)
+	blockDBs.rdb.SetLogger(log)
+	blockDBs.wdb.SetLogger(log)
+
+	tryThreshold := 2000
+	_, err = trackerDBs.wdb.Handle.Begin()
+	if err != nil {
+		fmt.Printf("error initializing trackerDBs:%v", err)
+	}
+
+	for i := 0; i < tryThreshold; i++ {
+		_, err = blockDBs.wdb.Handle.Begin()
+		if err == nil {
+			break
+		}
+		fmt.Printf("error initializing blockDBs:%v", err)
+
+	}
+	//require.NoError(t, err)
 }
