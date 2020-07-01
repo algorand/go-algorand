@@ -352,16 +352,6 @@ func (dl *dryrunLedger) ConsensusParams() config.ConsensusParams {
 }
 
 func makeAppLedger(dl *dryrunLedger, txn *transactions.Transaction, appIdx basics.AppIndex) (l logic.LedgerForLogic, err error) {
-	accounts := make([]basics.Address, 1+len(txn.Accounts))
-	accounts[0] = txn.Sender
-	for i, addr := range txn.Accounts {
-		accounts[i+1] = addr
-	}
-	apps := make([]basics.AppIndex, 1+len(txn.ForeignApps))
-	apps[0] = appIdx
-	for i, appid := range txn.ForeignApps {
-		apps[i+1] = appid
-	}
 	globals := ledger.AppTealGlobals{
 		CurrentRound:    basics.Round(dl.dr.Round),
 		LatestTimestamp: dl.dr.LatestTimestamp,
@@ -369,7 +359,7 @@ func makeAppLedger(dl *dryrunLedger, txn *transactions.Transaction, appIdx basic
 	localSchema := basics.StateSchema{NumUint: 16, NumByteSlice: 16}
 	globalSchema := basics.StateSchema{NumUint: 64, NumByteSlice: 64}
 	schemas := basics.StateSchemas{LocalStateSchema: localSchema, GlobalStateSchema: globalSchema}
-	return ledger.MakeDebugAppLedger(dl, accounts, apps, appIdx, schemas, globals)
+	return ledger.MakeDebugAppLedger(dl, appIdx, schemas, globals)
 }
 
 // unit-testable core of dryrun handler

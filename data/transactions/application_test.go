@@ -215,12 +215,9 @@ func (b *testBalances) SetProto(name protocol.ConsensusVersion) {
 }
 
 type testEvaluator struct {
-	pass  bool
-	delta basics.EvalDelta
-
-	acctWhitelist      []basics.Address
-	appGlobalWhitelist []basics.AppIndex
-	appIdx             basics.AppIndex
+	pass   bool
+	delta  basics.EvalDelta
+	appIdx basics.AppIndex
 }
 
 // Eval for tests that fail on program version > 10 and returns pass/delta from its own state rather than running the program
@@ -239,10 +236,8 @@ func (e *testEvaluator) Check(program []byte) (cost int, err error) {
 	return len(program), nil
 }
 
-func (e *testEvaluator) InitLedger(balances Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, schemas basics.StateSchemas) error {
+func (e *testEvaluator) InitLedger(balances Balances, appIdx basics.AppIndex, schemas basics.StateSchemas) error {
 	e.appIdx = appIdx
-	e.acctWhitelist = acctWhitelist
-	e.appGlobalWhitelist = appGlobalWhitelist
 	return nil
 }
 
@@ -776,8 +771,6 @@ func TestAppCallApplyCreate(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), "applications that do not exist")
 	a.Equal(txnCounter+1, uint64(steva.appIdx))
-	a.Equal([]basics.Address{sender}, steva.acctWhitelist)
-	a.Equal([]basics.AppIndex{steva.appIdx}, steva.appGlobalWhitelist)
 	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 
@@ -790,8 +783,6 @@ func TestAppCallApplyCreate(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), fmt.Sprintf("app %d not found in account", steva.appIdx))
 	a.Equal(uint64(steva.appIdx), txnCounter+1)
-	a.Equal([]basics.Address{sender}, steva.acctWhitelist)
-	a.Equal([]basics.AppIndex{steva.appIdx}, steva.appGlobalWhitelist)
 	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 
@@ -805,8 +796,6 @@ func TestAppCallApplyCreate(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), "transaction rejected by ApprovalProgram")
 	a.Equal(uint64(steva.appIdx), txnCounter+1)
-	a.Equal([]basics.Address{sender}, steva.acctWhitelist)
-	a.Equal([]basics.AppIndex{steva.appIdx}, steva.appGlobalWhitelist)
 	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 	// ensure original balance record in the mock was not changed
@@ -830,8 +819,6 @@ func TestAppCallApplyCreate(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), "cannot apply GlobalState delta")
 	a.Equal(uint64(steva.appIdx), txnCounter+1)
-	a.Equal([]basics.Address{sender}, steva.acctWhitelist)
-	a.Equal([]basics.AppIndex{steva.appIdx}, steva.appGlobalWhitelist)
 	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
@@ -851,8 +838,6 @@ func TestAppCallApplyCreate(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), "too much space: store integer")
 	a.Equal(uint64(steva.appIdx), txnCounter+1)
-	a.Equal([]basics.Address{sender}, steva.acctWhitelist)
-	a.Equal([]basics.AppIndex{steva.appIdx}, steva.appGlobalWhitelist)
 	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 	a.Equal(saved, b.balances[creator])
@@ -870,8 +855,6 @@ func TestAppCallApplyCreate(t *testing.T) {
 	a.NoError(err)
 	appIdx := steva.appIdx
 	a.Equal(uint64(appIdx), txnCounter+1)
-	a.Equal([]basics.Address{sender}, steva.acctWhitelist)
-	a.Equal([]basics.AppIndex{appIdx}, steva.appGlobalWhitelist)
 	a.Equal(1, b.put)
 	a.Equal(1, b.putWith)
 	a.Equal(saved, b.balances[creator])
