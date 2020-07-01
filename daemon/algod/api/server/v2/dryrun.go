@@ -17,6 +17,7 @@
 package v2
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -498,12 +499,13 @@ func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
 
 	gsd := make(generated.StateDelta, 0, len(sd))
 	for k, v := range sd {
+		bytes := base64.StdEncoding.EncodeToString([]byte(v.Bytes))
 		gsd = append(gsd, generated.EvalDeltaKeyValue{
 			Key: k,
 			Value: generated.EvalDelta{
 				Action: uint64(v.Action),
 				Uint:   &v.Uint,
-				Bytes:  &v.Bytes,
+				Bytes:  &bytes,
 			},
 		})
 	}

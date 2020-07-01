@@ -527,7 +527,7 @@ func TestDryrunLocal1(t *testing.T) {
 				if ld.Key == "foo" {
 					valueFound = true
 					assert.Equal(t, ld.Value.Action, uint64(basics.SetBytesAction))
-					assert.Equal(t, *ld.Value.Bytes, "bar")
+					assert.Equal(t, *ld.Value.Bytes, "YmFy") // bar
 
 				}
 			}
@@ -604,7 +604,7 @@ func TestDryrunLocal1A(t *testing.T) {
 				if ld.Key == "foo" {
 					valueFound = true
 					assert.Equal(t, ld.Value.Action, uint64(basics.SetBytesAction))
-					assert.Equal(t, *ld.Value.Bytes, "bar")
+					assert.Equal(t, *ld.Value.Bytes, "YmFy") // bar
 
 				}
 			}
