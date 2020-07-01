@@ -18,7 +18,6 @@ package main
 
 import (
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -300,12 +299,8 @@ func (s *session) GetStates(changes *logic.AppStateChage) appState {
 			case basics.SetUintAction:
 				tkv[key] = basics.TealValue{Type: basics.TealUintType, Uint: delta.Uint}
 			case basics.SetBytesAction:
-				data, err := base64.StdEncoding.DecodeString(delta.Bytes)
-				if err != nil {
-					data = []byte(delta.Bytes)
-				}
 				tkv[key] = basics.TealValue{
-					Type: basics.TealBytesType, Bytes: string(data),
+					Type: basics.TealBytesType, Bytes: delta.Bytes,
 				}
 			case basics.DeleteAction:
 				delete(tkv, key)
