@@ -201,7 +201,7 @@ func (ba *balancesAdapter) ConsensusParams() config.ConsensusParams {
 	return ba.proto
 }
 
-func (ba *balancesAdapter) PutWithCreatables(basics.BalanceRecord, []basics.CreatableLocator, []basics.CreatableLocator) error {
+func (ba *balancesAdapter) PutWithCreatable(basics.BalanceRecord, *basics.CreatableLocator, *basics.CreatableLocator) error {
 	return nil
 }
 

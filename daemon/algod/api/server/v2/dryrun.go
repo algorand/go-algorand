@@ -298,8 +298,8 @@ func (dl *dryrunLedger) Put(br basics.BalanceRecord) error {
 	return nil
 }
 
-// PutWithCreatables is like Put, but should be used when creating or deleting an asset or application.
-func (dl *dryrunLedger) PutWithCreatables(record basics.BalanceRecord, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) error {
+// PutWithCreatable is like Put, but should be used when creating or deleting an asset or application.
+func (dl *dryrunLedger) PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
 	return nil
 }
 

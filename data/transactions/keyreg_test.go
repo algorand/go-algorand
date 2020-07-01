@@ -50,7 +50,7 @@ func (balances keyregTestBalances) Put(basics.BalanceRecord) error {
 	return nil
 }
 
-func (balances keyregTestBalances) PutWithCreatables(basics.BalanceRecord, []basics.CreatableLocator, []basics.CreatableLocator) error {
+func (balances keyregTestBalances) PutWithCreatable(basics.BalanceRecord, *basics.CreatableLocator, *basics.CreatableLocator) error {
 	return nil
 }
 

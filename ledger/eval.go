@@ -111,15 +111,15 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basi
 }
 
 func (cs *roundCowState) Put(record basics.BalanceRecord) error {
-	return cs.PutWithCreatables(record, nil, nil)
+	return cs.PutWithCreatable(record, nil, nil)
 }
 
-func (cs *roundCowState) PutWithCreatables(record basics.BalanceRecord, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) error {
+func (cs *roundCowState) PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
 	olddata, err := cs.lookup(record.Addr)
 	if err != nil {
 		return err
 	}
-	cs.put(record.Addr, olddata, record.AccountData, newCreatables, deletedCreatables)
+	cs.put(record.Addr, olddata, record.AccountData, newCreatable, deletedCreatable)
 	return nil
 }
 
