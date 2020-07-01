@@ -173,3 +173,55 @@ func TestBlockDBAppend(t *testing.T) {
 		checkBlockDB(t, tx, blocks)
 	}
 }
+
+func initDB(t *testing.T, dbs dbPair) *sql.Tx {
+	setDbLogging(t, dbs)
+
+	tx, err := dbs.wdb.Handle.Begin()
+	for err != nil {
+		print("error initializing dbs:%v", err)
+		tx, err = dbs.wdb.Handle.Begin()
+	}
+	require.NoError(t, err)
+
+	return tx
+}
+
+func addRecordsToDB(t *testing.T, dbs dbPair, tx *sql.Tx, numRecords int) {
+	blocks := randomInitChain(protocol.ConsensusCurrentVersion, numRecords)
+
+	err := blockInit(tx, blockChainBlocks(blocks))
+	require.NoError(t, err)
+	checkBlockDB(t, tx, blocks)
+
+	for i := 0; i < numRecords; i++ {
+		blkent := randomBlock(basics.Round(len(blocks)))
+		err := blockPut(tx, blkent.block, blkent.cert)
+		//require.NoError(t, err)
+		if err != nil {
+			fmt.Printf("error adding block:%v", err)
+		}
+
+		blocks = append(blocks, blkent)
+		//checkBlockDB(t, tx, blocks)
+	}
+}
+
+func TestOverlapMemoryOverload(t *testing.T) {
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	dbs1, err := dbOpen(dbName, true)
+	require.NoError(t, err)
+	dbs2, err := dbOpen(dbName, true)
+	require.NoError(t, err)
+	defer dbs1.close()
+	defer dbs2.close()
+
+	tx1 := initDB(t, dbs1)
+	tx2 := initDB(t, dbs2)
+	defer tx1.Rollback()
+	defer tx2.Rollback()
+
+	numRecords := 2000
+	go addRecordsToDB(t, dbs1, tx1, numRecords)
+	addRecordsToDB(t, dbs2, tx2, numRecords)
+}
