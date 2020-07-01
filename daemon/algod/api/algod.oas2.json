@@ -997,6 +997,7 @@
       ]
     },
     "/v2/teal/dryrun": {
+      "summary": "Executes TEAL program(s) in context and returns debugging information about the execution.",
       "post": {
         "consumes": [
           "application/json",
@@ -1009,24 +1010,14 @@
           "http"
         ],
         "summary": "Provide debugging information for a transaction (or group).",
-        "operationId": "TealDryRun",
+        "operationId": "TealDryrun",
         "parameters": [
           {
-            "description": "Transaction (or group) and any accompanying state-simulation data",
-            "name": "jsonobj",
+            "description": "Transaction (or group) and any accompanying state-simulation data.",
+            "name": "request",
             "in": "body",
             "schema": {
               "$ref": "#/definitions/DryrunRequest"
-            }
-          },
-          {
-            "description": "Transaction (or group) and any accompanying state-simulation data",
-            "name": "rawobj",
-            "in": "body",
-            "schema": {
-              "description": "The same as DryrunRequest but message-pack encoded",
-              "type": "object",
-              "format": "binary"
             }
           }
         ],

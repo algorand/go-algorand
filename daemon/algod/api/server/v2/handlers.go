@@ -319,9 +319,9 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, generated.PostTransactionsResponse{TxId: txid.String()})
 }
 
-// TealDryRun takes transactions and additional simulated ledger state and returns debugging information.
+// TealDryrun takes transactions and additional simulated ledger state and returns debugging information.
 // (POST /v2/teal/dryrun)
-func (v2 *Handlers) TealDryRun(ctx echo.Context) error {
+func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 	if !v2.Node.Config().EnableDeveloperAPI {
 		return ctx.String(http.StatusNotFound, "/teal/dryrun was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
 	}

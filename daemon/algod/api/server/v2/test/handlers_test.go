@@ -389,7 +389,7 @@ func tealDryrunTest(
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(data))
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	err := handler.TealDryRun(c)
+	err := handler.TealDryrun(c)
 	require.NoError(t, err)
 	require.Equal(t, expCode, rec.Code)
 	if rec.Code == 200 {

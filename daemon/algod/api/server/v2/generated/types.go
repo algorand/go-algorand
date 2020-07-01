@@ -659,8 +659,8 @@ type GetBlockParams struct {
 	Format *string `json:"format,omitempty"`
 }
 
-// TealDryRunJSONBody defines parameters for TealDryRun.
-type TealDryRunJSONBody map[string]interface{}
+// TealDryrunJSONBody defines parameters for TealDryrun.
+type TealDryrunJSONBody DryrunRequest
 
 // GetPendingTransactionsParams defines parameters for GetPendingTransactions.
 type GetPendingTransactionsParams struct {
@@ -679,5 +679,5 @@ type PendingTransactionInformationParams struct {
 	Format *string `json:"format,omitempty"`
 }
 
-// TealDryRunRequestBody defines body for TealDryRun for application/json ContentType.
-type TealDryRunJSONRequestBody TealDryRunJSONBody
+// TealDryrunRequestBody defines body for TealDryrun for application/json ContentType.
+type TealDryrunJSONRequestBody TealDryrunJSONBody

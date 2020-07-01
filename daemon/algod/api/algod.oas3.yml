@@ -2623,25 +2623,21 @@
     },
     "/v2/teal/dryrun": {
       "post": {
-        "operationId": "TealDryRun",
+        "operationId": "TealDryrun",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "description": "The same as DryrunRequest but message-pack encoded",
-                "format": "binary",
-                "type": "object"
+                "$ref": "#/components/schemas/DryrunRequest"
               }
             },
             "application/msgpack": {
               "schema": {
-                "description": "The same as DryrunRequest but message-pack encoded",
-                "format": "binary",
-                "type": "object"
+                "$ref": "#/components/schemas/DryrunRequest"
               }
             }
           },
-          "description": "Transaction (or group) and any accompanying state-simulation data",
+          "description": "Transaction (or group) and any accompanying state-simulation data.",
           "required": false
         },
         "responses": {
@@ -2706,7 +2702,7 @@
           }
         },
         "summary": "Provide debugging information for a transaction (or group).",
-        "x-codegen-request-body-name": "rawobj"
+        "x-codegen-request-body-name": "request"
       }
     },
     "/v2/transactions": {
