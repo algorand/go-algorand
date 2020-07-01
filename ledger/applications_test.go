@@ -51,7 +51,7 @@ func (b *testBalances) Put(record basics.BalanceRecord) error {
 	return nil
 }
 
-func (b *testBalances) PutWithCreatables(record basics.BalanceRecord, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) error {
+func (b *testBalances) PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
 	return nil
 }
 
@@ -84,7 +84,7 @@ func (b *testBalancesPass) Put(record basics.BalanceRecord) error {
 	return nil
 }
 
-func (b *testBalancesPass) PutWithCreatables(record basics.BalanceRecord, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) error {
+func (b *testBalancesPass) PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
 	return nil
 }
 

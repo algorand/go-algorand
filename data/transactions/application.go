@@ -475,16 +475,14 @@ func (ac *ApplicationCallTxnFields) createApplication(
 	record.TotalAppSchema = totalSchema
 
 	// Tell the cow what app we created
-	created := []basics.CreatableLocator{
-		{
-			Creator: creator,
-			Type:    basics.AppCreatable,
-			Index:   basics.CreatableIndex(appIdx),
-		},
+	created := &basics.CreatableLocator{
+		Creator: creator,
+		Type:    basics.AppCreatable,
+		Index:   basics.CreatableIndex(appIdx),
 	}
 
 	// Write back to the creator's balance record and continue
-	err = balances.PutWithCreatables(record, created, nil)
+	err = balances.PutWithCreatable(record, created, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -752,16 +750,14 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 		delete(record.AppParams, appIdx)
 
 		// Tell the cow what app we deleted
-		deleted := []basics.CreatableLocator{
-			basics.CreatableLocator{
-				Creator: header.Sender,
-				Type:    basics.AppCreatable,
-				Index:   basics.CreatableIndex(appIdx),
-			},
+		deleted := &basics.CreatableLocator{
+			Creator: creator,
+			Type:    basics.AppCreatable,
+			Index:   basics.CreatableIndex(appIdx),
 		}
 
 		// Write back to cow
-		err = balances.PutWithCreatables(record, nil, deleted)
+		err = balances.PutWithCreatable(record, nil, deleted)
 		if err != nil {
 			return err
 		}

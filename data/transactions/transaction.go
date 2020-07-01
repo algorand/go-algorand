@@ -57,8 +57,8 @@ type Balances interface {
 
 	Put(basics.BalanceRecord) error
 
-	// PutWithCreatables is like Put, but should be used when creating or deleting an asset or application.
-	PutWithCreatables(record basics.BalanceRecord, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) error
+	// PutWithCreatable is like Put, but should be used when creating or deleting an asset or application.
+	PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error
 
 	// GetAssetCreator gets the address of the account whose balance record
 	// contains the asset params

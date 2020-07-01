@@ -109,7 +109,7 @@ type testBalances struct {
 	proto       config.ConsensusParams
 
 	put             int // Put calls counter
-	putWith         int // PutWithCreatables calls counter
+	putWith         int // PutWithCreatable calls counter
 	putBalances     map[basics.Address]basics.AccountData
 	putWithBalances map[basics.Address]basics.AccountData
 	putWithNew      []basics.CreatableLocator
@@ -140,14 +140,18 @@ func (b *testBalances) Put(record basics.BalanceRecord) error {
 	return nil
 }
 
-func (b *testBalances) PutWithCreatables(record basics.BalanceRecord, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) error {
+func (b *testBalances) PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
 	b.putWith++
 	if b.putWithBalances == nil {
 		b.putWithBalances = make(map[basics.Address]basics.AccountData)
 	}
 	b.putWithBalances[record.Addr] = record.AccountData
-	b.putWithNew = append(b.putWithNew, newCreatables...)
-	b.putWithDel = append(b.putWithDel, deletedCreatables...)
+	if newCreatable != nil {
+		b.putWithNew = append(b.putWithNew, *newCreatable)
+	}
+	if deletedCreatable != nil {
+		b.putWithDel = append(b.putWithDel, *deletedCreatable)
+	}
 	return nil
 }
 
@@ -184,7 +188,7 @@ func (b *testBalancesPass) Put(record basics.BalanceRecord) error {
 	return nil
 }
 
-func (b *testBalancesPass) PutWithCreatables(record basics.BalanceRecord, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) error {
+func (b *testBalancesPass) PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
 	if b.balances == nil {
 		b.balances = make(map[basics.Address]basics.AccountData)
 	}
@@ -196,7 +200,7 @@ func (b *testBalances) ConsensusParams() config.ConsensusParams {
 	return b.proto
 }
 
-// ResetWrites clears side effects of Put/PutWithCreatables
+// ResetWrites clears side effects of Put/PutWithCreatable
 func (b *testBalances) ResetWrites() {
 	b.put = 0
 	b.putWith = 0

@@ -133,7 +133,7 @@ func (cb *roundCowState) txnCounter() uint64 {
 	return cb.lookupParent.txnCounter() + uint64(len(cb.mods.Txids))
 }
 
-func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new basics.AccountData, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) {
+func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) {
 	prev, present := cb.mods.accts[addr]
 	if present {
 		cb.mods.accts[addr] = accountDelta{old: prev.old, new: new}
@@ -141,18 +141,18 @@ func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new ba
 		cb.mods.accts[addr] = accountDelta{old: old, new: new}
 	}
 
-	for _, cl := range newCreatables {
-		cb.mods.creatables[cl.Index] = modifiedCreatable{
-			ctype:   cl.Type,
-			creator: addr,
+	if newCreatable != nil {
+		cb.mods.creatables[newCreatable.Index] = modifiedCreatable{
+			ctype:   newCreatable.Type,
+			creator: newCreatable.Creator,
 			created: true,
 		}
 	}
 
-	for _, cl := range deletedCreatables {
-		cb.mods.creatables[cl.Index] = modifiedCreatable{
-			ctype:   cl.Type,
-			creator: addr,
+	if deletedCreatable != nil {
+		cb.mods.creatables[deletedCreatable.Index] = modifiedCreatable{
+			ctype:   deletedCreatable.Type,
+			creator: deletedCreatable.Creator,
 			created: false,
 		}
 	}
