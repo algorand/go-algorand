@@ -268,17 +268,17 @@ func applicationCallTxEncode(tx transactions.Transaction, ad transactions.ApplyD
 		OnCompletion:      tx.OnCompletion.String(),
 	}
 
-	var encodedAccounts []string
+	encodedAccounts := make([]string, 0, len(tx.Accounts))
 	for _, addr := range tx.Accounts {
 		encodedAccounts = append(encodedAccounts, addr.String())
 	}
 
-	var encodedForeignApps []uint64
+	encodedForeignApps := make([]uint64, 0, len(tx.ForeignApps))
 	for _, aidx := range tx.ForeignApps {
 		encodedForeignApps = append(encodedForeignApps, uint64(aidx))
 	}
 
-	var encodedArgs []string
+	encodedArgs := make([]string, 0, len(tx.ApplicationArgs))
 	for _, arg := range tx.ApplicationArgs {
 		encodedArgs = append(encodedArgs, b64.EncodeToString([]byte(arg)))
 	}
