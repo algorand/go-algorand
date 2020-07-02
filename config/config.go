@@ -33,6 +33,9 @@ import (
 // Devnet identifies the 'development network' use for development and not generally accessible publicly
 const Devnet protocol.NetworkID = "devnet"
 
+// Betanet identifies the 'beta network' use for early releases of feature to the public prior to releasing these to mainnet/testnet
+const Betanet protocol.NetworkID = "betanet"
+
 // Devtestnet identifies the 'development network for tests' use for running tests against development and not generally accessible publicly
 const Devtestnet protocol.NetworkID = "devtestnet"
 
@@ -412,8 +415,12 @@ func (cfg Local) DNSBootstrap(network protocol.NetworkID) string {
 	// if user hasn't modified the default DNSBootstrapID in the configuration
 	// file and we're targeting a devnet ( via genesis file ), we the
 	// explicit devnet network bootstrap.
-	if defaultLocal.DNSBootstrapID == cfg.DNSBootstrapID && network == Devnet {
-		return "devnet.algodev.network"
+	if defaultLocal.DNSBootstrapID == cfg.DNSBootstrapID {
+		if network == Devnet {
+			return "devnet.algodev.network"
+		} else if network == Betanet {
+			return "betanet.algodev.network"
+		}
 	}
 	return strings.Replace(cfg.DNSBootstrapID, "<network>", string(network), -1)
 }
