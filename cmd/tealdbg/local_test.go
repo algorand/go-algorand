@@ -399,7 +399,7 @@ app_global_get
 int 2
 ==
 &&
-int 200
+int 1 // ForeignApps index
 byte 0x676b657962797465 // gkeybyte
 app_global_get_ex
 bnz ok2

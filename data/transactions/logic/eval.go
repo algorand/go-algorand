@@ -1834,7 +1834,8 @@ func (cx *evalContext) getReadOnlyGlobalState(appID uint64) (basics.TealKeyValue
 
 func (cx *evalContext) getGlobalStateCow() (*keyValueCow, error) {
 	if cx.globalStateCow == nil {
-		globalKV, err := cx.Ledger.AppGlobalState(cx.Txn.Txn.ApplicationID)
+		appIdx := cx.Ledger.ApplicationID()
+		globalKV, err := cx.Ledger.AppGlobalState(appIdx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch global state: %v", err)
 		}
@@ -1846,11 +1847,25 @@ func (cx *evalContext) getGlobalStateCow() (*keyValueCow, error) {
 	return cx.globalStateCow, nil
 }
 
-func (cx *evalContext) appReadGlobalKey(appID uint64, key string) (basics.TealValue, bool, error) {
-	// If this is for the application mentioned in the transaction header,
+func (cx *evalContext) appReadGlobalKey(foreignAppsIndex uint64, key string) (basics.TealValue, bool, error) {
+	// If this is for the current app (ForeignApps index zero),
 	// return the result from a GlobalState cow, since we may have written
 	// to it
-	if appID == 0 || appID == uint64(cx.Ledger.ApplicationID()) {
+	if foreignAppsIndex > uint64(len(cx.Txn.Txn.ForeignApps)) {
+		err := fmt.Errorf("invalid ForeignApps index %d", foreignAppsIndex)
+		return basics.TealValue{}, false, err
+	}
+
+	var appIdx basics.AppIndex
+	if foreignAppsIndex == 0 {
+		appIdx = 0
+	} else {
+		appIdx = cx.Txn.Txn.ForeignApps[foreignAppsIndex-1]
+		if appIdx == cx.Ledger.ApplicationID() {
+			appIdx = 0
+		}
+	}
+	if appIdx == 0 {
 		kvCow, err := cx.getGlobalStateCow()
 		if err != nil {
 			return basics.TealValue{}, false, err
@@ -1860,7 +1875,7 @@ func (cx *evalContext) appReadGlobalKey(appID uint64, key string) (basics.TealVa
 	}
 
 	// Otherwise, the state is read only, so return from the read only cache
-	kv, err := cx.getReadOnlyGlobalState(appID)
+	kv, err := cx.getReadOnlyGlobalState(uint64(appIdx))
 	if err != nil {
 		return basics.TealValue{}, false, err
 	}
@@ -1947,13 +1962,13 @@ func opAppGetLocalStateImpl(cx *evalContext, appID uint64, key []byte, accountId
 	return
 }
 
-func opAppGetGlobalStateImpl(cx *evalContext, appID uint64, key []byte) (result stackValue, ok bool, err error) {
+func opAppGetGlobalStateImpl(cx *evalContext, appIndex uint64, key []byte) (result stackValue, ok bool, err error) {
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
 		return
 	}
 
-	tv, ok, err := cx.appReadGlobalKey(appID, string(key))
+	tv, ok, err := cx.appReadGlobalKey(appIndex, string(key))
 	if err != nil {
 		return
 	}
@@ -1969,8 +1984,8 @@ func opAppGetGlobalState(cx *evalContext) {
 
 	key := cx.stack[last].Bytes
 
-	var appID uint64 = 0
-	result, _, err := opAppGetGlobalStateImpl(cx, appID, key)
+	var index uint64 = 0 // index in txn.ForeignApps
+	result, _, err := opAppGetGlobalStateImpl(cx, index, key)
 	if err != nil {
 		cx.err = err
 		return
@@ -1984,13 +1999,9 @@ func opAppGetGlobalStateEx(cx *evalContext) {
 	prev := last - 1
 
 	key := cx.stack[last].Bytes
-	appID := cx.stack[prev].Uint
+	index := cx.stack[prev].Uint // index in txn.ForeignApps
 
-	if appID != 0 && appID == uint64(cx.Txn.Txn.ApplicationID) {
-		appID = 0 // 0 is an alias for the current app
-	}
-
-	result, ok, err := opAppGetGlobalStateImpl(cx, appID, key)
+	result, ok, err := opAppGetGlobalStateImpl(cx, index, key)
 	if err != nil {
 		cx.err = err
 		return

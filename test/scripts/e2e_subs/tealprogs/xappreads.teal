@@ -1,8 +1,6 @@
 #pragma version 2
 // Fetch app idx we want to read global state from
-txna ApplicationArgs 0
-btoi
-
+int 1  // ForeignApps index
 // Fetch key "foo"
 byte base64 Zm9v
 
