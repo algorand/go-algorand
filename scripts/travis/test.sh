@@ -7,11 +7,11 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 OS=$("${SCRIPTPATH}/../ostype.sh")
 ARCH=$("${SCRIPTPATH}/../archtype.sh")
 
-if [[ "${ARCH}" != "arm" ]]; then
-    curl -sL -o ~/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
-    chmod +x ~/gimme
-    eval $(~/gimme $("${SCRIPTPATH}/../get_golang_version.sh"))
-fi
+#if [[ "${ARCH}" != "arm" ]]; then
+curl -sL -o ~/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
+chmod +x ~/gimme
+eval $(~/gimme $("${SCRIPTPATH}/../get_golang_version.sh"))
+#fi
 
 if [ "${OS}-${ARCH}" = "linux-arm" ]; then
     # for arm, no tests need to be invoked.
