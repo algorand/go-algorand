@@ -3,4 +3,4 @@
 echo Configuring for devnet build
 
 unset DEFAULTNETWORK
-unset BUILDCHANNEL
+unset CHANNEL
