@@ -9,28 +9,16 @@
 # Examples: scripts/travis/integration_test.sh
 set -e
 
-
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-#ARCH=$("${SCRIPTPATH}/../archtype.sh")
-
-#if [[ "${ARCH}" != "arm" ]]; then
-#    curl -sL -o ~/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
-#    chmod +x ~/gimme
-#    eval $(~/gimme $("${SCRIPTPATH}/../get_golang_version.sh"))
-#fi
 
 export BUILD_TYPE="integration"
+"${SCRIPTPATH}/build.sh" --make_debug
+
 if [ "${USER}" = "travis" ]; then
     # we're running on a travis machine
-    "${SCRIPTPATH}/build.sh" --make_debug
-#    GOPATHBIN=$(go env GOPATH)/bin
-#    export PATH=$PATH:$GOPATHBIN
     "${SCRIPTPATH}/travis_wait.sh" 120 "${SCRIPTPATH}/test.sh"
 else
     # we're running on an ephermal build machine
-    "${SCRIPTPATH}/build.sh" --make_debug
-#    GOPATHBIN=$(go env GOPATH)/bin
-#    export PATH=$PATH:$GOPATHBIN
     "${SCRIPTPATH}/test.sh"
 fi
 
