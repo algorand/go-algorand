@@ -883,7 +883,7 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
 	blockDBs.rdb.SetLogger(log)
 	blockDBs.wdb.SetLogger(log)
 
-	tryThreshold := 50000
+	tryThreshold := 2000000
 	_, err = trackerDBs.wdb.Handle.Begin()
 	if err != nil {
 		fmt.Printf("error initializing trackerDBs:%v\n", err)
@@ -894,7 +894,7 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
 		if err == nil {
 			break
 		}
-		fmt.Printf("error initializing blockDBs:%v\n", err)
+		//fmt.Printf("error initializing blockDBs:%v\n", err)
 	}
 	a.NoError(err, "was unable to open writer for block DB")
 }
