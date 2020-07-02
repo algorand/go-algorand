@@ -867,6 +867,8 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 }
 
 func TestLedgerDBConcurrentAccess(t *testing.T) {
+	a := require.New(t)
+
 	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
 	require.NoError(t, err)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
@@ -874,15 +876,17 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
 	defer os.RemoveAll(dbTempDir)
 	log := logging.TestingLog(t)
 	trackerDBs, blockDBs, err := openLedgerDB(dbPrefix, true)
+	defer trackerDBs.close()
+	defer blockDBs.close()
 	trackerDBs.rdb.SetLogger(log)
 	trackerDBs.wdb.SetLogger(log)
 	blockDBs.rdb.SetLogger(log)
 	blockDBs.wdb.SetLogger(log)
 
-	tryThreshold := 150
+	tryThreshold := 1000
 	_, err = trackerDBs.wdb.Handle.Begin()
 	if err != nil {
-		fmt.Printf("error initializing trackerDBs:%v", err)
+		fmt.Printf("error initializing trackerDBs:%v\n", err)
 	}
 
 	for i := 0; i < tryThreshold; i++ {
@@ -890,8 +894,7 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
 		if err == nil {
 			break
 		}
-		fmt.Printf("error initializing blockDBs:%v", err)
-
+		fmt.Printf("error initializing blockDBs:%v\n", err)
 	}
-	//require.NoError(t, err)
+	a.NoError(err, "was unable to open writer for block DB")
 }
