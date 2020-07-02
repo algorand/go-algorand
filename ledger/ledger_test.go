@@ -883,7 +883,7 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
 	blockDBs.rdb.SetLogger(log)
 	blockDBs.wdb.SetLogger(log)
 
-	tryThreshold := 20000
+	tryThreshold := 50000
 	_, err = trackerDBs.wdb.Handle.Begin()
 	if err != nil {
 		fmt.Printf("error initializing trackerDBs:%v\n", err)
