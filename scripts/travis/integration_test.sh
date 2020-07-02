@@ -7,17 +7,17 @@
 # Usage:    Can be used by either Travis or an ephermal build machine
 #
 # Examples: scripts/travis/integration_test.sh
-set -ex
+set -e
 
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 ARCH=$("${SCRIPTPATH}/../archtype.sh")
 
-#if [[ "${ARCH}" != "arm" ]]; then
-#    curl -sL -o ~/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
-#    chmod +x ~/gimme
-#    eval $(~/gimme $("${SCRIPTPATH}/../get_golang_version.sh"))
-#fi
+if [[ "${ARCH}" != "arm" ]]; then
+    curl -sL -o ~/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
+    chmod +x ~/gimme
+    eval $(~/gimme $("${SCRIPTPATH}/../get_golang_version.sh"))
+fi
 
 export BUILD_TYPE="integration"
 if [ "${USER}" = "travis" ]; then
