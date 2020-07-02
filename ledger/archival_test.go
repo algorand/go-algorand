@@ -410,25 +410,25 @@ func TestArchivalCreatables(t *testing.T) {
 	for aidx, status := range creatableIdxs {
 		switch status {
 		case AssetCreated:
-			c, ok, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			c, ok, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
 			existing++
 		case AppCreated:
-			c, ok, err := l.GetAppCreator(basics.AppIndex(aidx))
+			c, ok, err := l.GetCreator(aidx, basics.AppCreatable)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
 			existing++
 		case AssetDeleted:
-			c, ok, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			c, ok, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
 		case AppDeleted:
-			c, ok, err := l.GetAppCreator(basics.AppIndex(aidx))
+			c, ok, err := l.GetCreator(aidx, basics.AppCreatable)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
@@ -455,25 +455,25 @@ func TestArchivalCreatables(t *testing.T) {
 	for aidx, status := range creatableIdxs {
 		switch status {
 		case AssetCreated:
-			c, ok, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			c, ok, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
 			existing++
 		case AppCreated:
-			c, ok, err := l.GetAppCreator(basics.AppIndex(aidx))
+			c, ok, err := l.GetCreator(aidx, basics.AppCreatable)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
 			existing++
 		case AssetDeleted:
-			c, ok, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			c, ok, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
 		case AppDeleted:
-			c, ok, err := l.GetAppCreator(basics.AppIndex(aidx))
+			c, ok, err := l.GetCreator(aidx, basics.AppCreatable)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
@@ -545,25 +545,25 @@ func TestArchivalCreatables(t *testing.T) {
 	for aidx, status := range creatableIdxs {
 		switch status {
 		case AssetCreated:
-			c, ok, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			c, ok, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
 			existing++
 		case AppCreated:
-			c, ok, err := l.GetAppCreator(basics.AppIndex(aidx))
+			c, ok, err := l.GetCreator(aidx, basics.AppCreatable)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
 			existing++
 		case AssetDeleted:
-			c, ok, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			c, ok, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
 		case AppDeleted:
-			c, ok, err := l.GetAppCreator(basics.AppIndex(aidx))
+			c, ok, err := l.GetCreator(aidx, basics.AppCreatable)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
@@ -599,25 +599,25 @@ func TestArchivalCreatables(t *testing.T) {
 	for aidx, status := range creatableIdxs {
 		switch status {
 		case AssetCreated:
-			c, ok, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			c, ok, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
 			existing++
 		case AppCreated:
-			c, ok, err := l.GetAppCreator(basics.AppIndex(aidx))
+			c, ok, err := l.GetCreator(aidx, basics.AppCreatable)
 			require.NoError(t, err)
 			require.True(t, ok)
 			require.Equal(t, allCreators[aidx], c)
 			existing++
 		case AssetDeleted:
-			c, ok, err := l.GetAssetCreator(basics.AssetIndex(aidx))
+			c, ok, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
 		case AppDeleted:
-			c, ok, err := l.GetAppCreator(basics.AppIndex(aidx))
+			c, ok, err := l.GetCreator(aidx, basics.AppCreatable)
 			require.NoError(t, err)
 			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)

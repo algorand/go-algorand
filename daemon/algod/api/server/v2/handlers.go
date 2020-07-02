@@ -121,7 +121,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		//assets = make(map[uint64]v1.AssetHolding)
 		for curid := range record.Assets {
 			var creator string
-			creatorAddr, ok, err := myLedger.GetAssetCreator(curid)
+			creatorAddr, ok, err := myLedger.GetCreator(basics.CreatableIndex(curid), basics.AssetCreatable)
 			if err == nil && ok {
 				creator = creatorAddr.String()
 			} else {
@@ -591,7 +591,7 @@ func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.Ge
 func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) error {
 	appIdx := basics.AppIndex(applicationID)
 	ledger := v2.Node.Ledger()
-	creator, ok, err := ledger.GetAppCreator(appIdx)
+	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(appIdx), basics.AppCreatable)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -623,7 +623,7 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
 	assetIdx := basics.AssetIndex(assetID)
 	ledger := v2.Node.Ledger()
-	creator, ok, err := ledger.GetAssetCreator(assetIdx)
+	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(assetIdx), basics.AssetCreatable)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}

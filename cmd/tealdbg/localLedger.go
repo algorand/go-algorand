@@ -179,22 +179,26 @@ func (ba *balancesAdapter) Round() basics.Round {
 	return basics.Round(ba.round)
 }
 
-func (ba *balancesAdapter) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, bool, error) {
-	for addr, br := range ba.balances {
-		if _, ok := br.AssetParams[assetIdx]; ok {
-			return addr, true, nil
+func (ba *balancesAdapter) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	switch ctype {
+	case basics.AssetCreatable:
+		assetIdx := basics.AssetIndex(cidx)
+		for addr, br := range ba.balances {
+			if _, ok := br.AssetParams[assetIdx]; ok {
+				return addr, true, nil
+			}
 		}
-	}
-	return basics.Address{}, false, nil
-}
-
-func (ba *balancesAdapter) GetAppCreator(appIdx basics.AppIndex) (basics.Address, bool, error) {
-	for addr, br := range ba.balances {
-		if _, ok := br.AppParams[appIdx]; ok {
-			return addr, true, nil
+		return basics.Address{}, false, nil
+	case basics.AppCreatable:
+		appIdx := basics.AppIndex(cidx)
+		for addr, br := range ba.balances {
+			if _, ok := br.AppParams[appIdx]; ok {
+				return addr, true, nil
+			}
 		}
+		return basics.Address{}, false, nil
 	}
-	return basics.Address{}, false, nil
+	return basics.Address{}, false, fmt.Errorf("unknown creatable type %d", ctype)
 }
 
 func (ba *balancesAdapter) ConsensusParams() config.ConsensusParams {

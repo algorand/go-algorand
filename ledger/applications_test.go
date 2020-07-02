@@ -55,17 +55,17 @@ func (b *testBalances) PutWithCreatable(record basics.BalanceRecord, newCreatabl
 	return nil
 }
 
-func (b *testBalances) GetAssetCreator(aidx basics.AssetIndex) (basics.Address, bool, error) {
-	return basics.Address{}, false, nil
-}
+func (b *testBalances) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	if ctype == basics.AppCreatable {
+		aidx := basics.AppIndex(ctype)
+		if aidx == appIdxError { // magic for test
+			return basics.Address{}, false, fmt.Errorf("mock synthetic error")
+		}
 
-func (b *testBalances) GetAppCreator(aidx basics.AppIndex) (basics.Address, bool, error) {
-	if aidx == appIdxError { // magic for test
-		return basics.Address{}, false, fmt.Errorf("mock synthetic error")
+		creator, ok := b.appCreators[aidx]
+		return creator, ok, nil
 	}
-
-	creator, ok := b.appCreators[aidx]
-	return creator, ok, nil
+	return basics.Address{}, false, nil
 }
 
 func (b *testBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards *basics.MicroAlgos, dstRewards *basics.MicroAlgos) error {

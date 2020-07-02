@@ -36,8 +36,6 @@ type roundCowParent interface {
 	lookup(basics.Address) (basics.AccountData, error)
 	isDup(basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
 	txnCounter() uint64
-	getAssetCreator(aidx basics.AssetIndex) (basics.Address, bool, error)
-	getAppCreator(aidx basics.AppIndex) (basics.Address, bool, error)
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 }
 
@@ -94,14 +92,6 @@ func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.Cre
 		return basics.Address{}, false, nil
 	}
 	return cb.lookupParent.getCreator(cidx, ctype)
-}
-
-func (cb *roundCowState) getAppCreator(aidx basics.AppIndex) (basics.Address, bool, error) {
-	return cb.getCreator(basics.CreatableIndex(aidx), basics.AppCreatable)
-}
-
-func (cb *roundCowState) getAssetCreator(aidx basics.AssetIndex) (basics.Address, bool, error) {
-	return cb.getCreator(basics.CreatableIndex(aidx), basics.AssetCreatable)
 }
 
 func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, err error) {
