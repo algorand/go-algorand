@@ -769,7 +769,7 @@ func AccountInformation(ctx lib.ReqContext, context echo.Context) {
 
 	var assetParams map[uint64]v1.AssetParams
 	if len(record.AssetParams) > 0 {
-		assetParams = make(map[uint64]v1.AssetParams)
+		assetParams = make(map[uint64]v1.AssetParams, len(record.AssetParams))
 		for idx, params := range record.AssetParams {
 			assetParams[uint64(idx)] = modelAssetParams(addr, params)
 		}
@@ -777,7 +777,7 @@ func AccountInformation(ctx lib.ReqContext, context echo.Context) {
 
 	var apps map[uint64]v1.AppLocalState
 	if len(record.AppLocalStates) > 0 {
-		apps = make(map[uint64]v1.AppLocalState)
+		apps = make(map[uint64]v1.AppLocalState, len(record.AppLocalStates))
 		for idx, state := range record.AppLocalStates {
 			apps[uint64(idx)] = modelAppLocalState(state)
 		}
@@ -785,7 +785,7 @@ func AccountInformation(ctx lib.ReqContext, context echo.Context) {
 
 	var appParams map[uint64]v1.AppParams
 	if len(record.AppParams) > 0 {
-		appParams = make(map[uint64]v1.AppParams)
+		appParams = make(map[uint64]v1.AppParams, len(record.AppParams))
 		for idx, params := range record.AppParams {
 			appParams[uint64(idx)] = modelAppParams(addr, params)
 		}
