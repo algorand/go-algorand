@@ -239,14 +239,6 @@ func (tt TealType) String() string {
 	return "?"
 }
 
-// TealTypeFromString converts "b"/"u" string back to TealType
-func TealTypeFromString(t string) TealType {
-	if t == "b" {
-		return TealBytesType
-	}
-	return TealUintType
-}
-
 // TealValue contains type information and a value, representing a value in a
 // TEAL program
 type TealValue struct {

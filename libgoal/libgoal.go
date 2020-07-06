@@ -902,31 +902,6 @@ func (c *Client) Catchup(catchpointLabel string) error {
 	return nil
 }
 
-func convertAppParams(paramsIn *v1.AppParams) (appParams generatedV2.ApplicationParams) {
-	appParams.ApprovalProgram = []byte(paramsIn.ApprovalProgram)
-	appParams.ClearStateProgram = []byte(paramsIn.ClearStateProgram)
-	appParams.GlobalStateSchema = &generatedV2.ApplicationStateSchema{
-		NumUint:      paramsIn.GlobalStateSchema.NumUint,
-		NumByteSlice: paramsIn.GlobalStateSchema.NumByteSlice,
-	}
-	appParams.LocalStateSchema = &generatedV2.ApplicationStateSchema{
-		NumUint:      paramsIn.LocalStateSchema.NumUint,
-		NumByteSlice: paramsIn.LocalStateSchema.NumByteSlice,
-	}
-	appParams.GlobalState = &generatedV2.TealKeyValueStore{}
-	for k, v := range paramsIn.GlobalState {
-		*appParams.GlobalState = append(*appParams.GlobalState, generatedV2.TealKeyValue{
-			Key: k,
-			Value: generatedV2.TealValue{
-				Type:  uint64(basics.TealTypeFromString(v.Type)),
-				Uint:  v.Uint,
-				Bytes: v.Bytes,
-			},
-		})
-	}
-	return
-}
-
 const defaultAppIdx = 1380011588
 
 // MakeDryrunStateBytes function creates DryrunRequest data structure in serialized form according to the format
