@@ -24,8 +24,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
-// TODO remove round from balances
-
 // AppTealGlobals contains data accessible by the "global" opcode.
 type AppTealGlobals struct {
 	CurrentRound    basics.Round
@@ -163,7 +161,7 @@ func (al *appLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue
 	}
 
 	// Find app creator (and check if app exists)
-	creator, ok, err := al.balances.GetAppCreator(appIdx)
+	creator, ok, err := al.balances.GetCreator(basics.CreatableIndex(appIdx), basics.AppCreatable)
 	if err != nil {
 		return nil, err
 	}

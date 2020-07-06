@@ -66,14 +66,6 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 	return x.l.GetCreatorForRound(x.rnd, cidx, ctype)
 }
 
-func (x *roundCowBase) getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, bool, error) {
-	return x.l.GetAssetCreatorForRound(x.rnd, assetIdx)
-}
-
-func (x *roundCowBase) getAppCreator(appIdx basics.AppIndex) (basics.Address, bool, error) {
-	return x.l.GetAppCreatorForRound(x.rnd, appIdx)
-}
-
 func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
 	return x.l.LookupWithoutRewards(x.rnd, addr)
 }
@@ -86,14 +78,6 @@ func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
 }
 
-func (cs *roundCowState) GetAssetCreator(assetIdx basics.AssetIndex) (creator basics.Address, ok bool, err error) {
-	return cs.getAssetCreator(assetIdx)
-}
-
-func (cs *roundCowState) GetAppCreator(appIdx basics.AppIndex) (creator basics.Address, ok bool, err error) {
-	return cs.getAppCreator(appIdx)
-}
-
 // wrappers for roundCowState to satisfy the (current) transactions.Balances interface
 func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
 	acctdata, err := cs.lookup(addr)
@@ -104,6 +88,10 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basi
 		acctdata = acctdata.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
 	}
 	return basics.BalanceRecord{Addr: addr, AccountData: acctdata}, nil
+}
+
+func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	return cs.getCreator(cidx, ctype)
 }
 
 func (cs *roundCowState) Put(record basics.BalanceRecord) error {
@@ -199,8 +187,6 @@ type ledgerForEvaluator interface {
 	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
 	GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool)
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
-	GetAssetCreatorForRound(basics.Round, basics.AssetIndex) (basics.Address, bool, error)
-	GetAppCreatorForRound(basics.Round, basics.AppIndex) (basics.Address, bool, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }
 

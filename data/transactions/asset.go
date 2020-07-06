@@ -95,7 +95,7 @@ func cloneAssetParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.Ass
 }
 
 func getParams(balances Balances, aidx basics.AssetIndex) (params basics.AssetParams, creator basics.Address, err error) {
-	creator, exists, err := balances.GetAssetCreator(aidx)
+	creator, exists, err := balances.GetCreator(basics.CreatableIndex(aidx), basics.AssetCreatable)
 	if err != nil {
 		return
 	}

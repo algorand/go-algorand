@@ -304,40 +304,39 @@ func (dl *dryrunLedger) PutWithCreatable(record basics.BalanceRecord, newCreatab
 	return nil
 }
 
-// GetAssetCreator gets the address of the account whose balance record
-// contains the asset params
-func (dl *dryrunLedger) GetAssetCreator(aidx basics.AssetIndex) (basics.Address, bool, error) {
-	for _, acct := range dl.dr.Accounts {
-		if acct.CreatedAssets == nil {
-			continue
-		}
-		for _, asset := range *acct.CreatedAssets {
-			if asset.Index == uint64(aidx) {
-				addr, err := basics.UnmarshalChecksumAddress(acct.Address)
-				return addr, true, err
+// GetCreator gets the address of the creator of an app or asset
+func (dl *dryrunLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	switch ctype {
+	case basics.AssetCreatable:
+		for _, acct := range dl.dr.Accounts {
+			if acct.CreatedAssets == nil {
+				continue
 			}
-		}
-	}
-	return basics.Address{}, false, fmt.Errorf("no asset %d", aidx)
-}
-
-// GetAppCreator gets the address of the account whose balance record
-// contains the app params
-func (dl *dryrunLedger) GetAppCreator(aidx basics.AppIndex) (basics.Address, bool, error) {
-	for _, app := range dl.dr.Apps {
-		if app.AppIndex == uint64(aidx) {
-			var addr basics.Address
-			if app.Creator != "" {
-				var err error
-				addr, err = basics.UnmarshalChecksumAddress(app.Creator)
-				if err != nil {
-					return basics.Address{}, false, err
+			for _, asset := range *acct.CreatedAssets {
+				if asset.Index == uint64(cidx) {
+					addr, err := basics.UnmarshalChecksumAddress(acct.Address)
+					return addr, true, err
 				}
 			}
-			return addr, true, nil
 		}
+		return basics.Address{}, false, fmt.Errorf("no asset %d", cidx)
+	case basics.AppCreatable:
+		for _, app := range dl.dr.Apps {
+			if app.AppIndex == uint64(cidx) {
+				var addr basics.Address
+				if app.Creator != "" {
+					var err error
+					addr, err = basics.UnmarshalChecksumAddress(app.Creator)
+					if err != nil {
+						return basics.Address{}, false, err
+					}
+				}
+				return addr, true, nil
+			}
+		}
+		return basics.Address{}, false, fmt.Errorf("no app %d", cidx)
 	}
-	return basics.Address{}, false, fmt.Errorf("no app %d", aidx)
+	return basics.Address{}, false, fmt.Errorf("unknown creatable type %d", ctype)
 }
 
 // Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)

@@ -60,13 +60,8 @@ type Balances interface {
 	// PutWithCreatable is like Put, but should be used when creating or deleting an asset or application.
 	PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error
 
-	// GetAssetCreator gets the address of the account whose balance record
-	// contains the asset params
-	GetAssetCreator(aidx basics.AssetIndex) (basics.Address, bool, error)
-
-	// GetAppCreator gets the address of the account whose balance record
-	// contains the app params
-	GetAppCreator(aidx basics.AppIndex) (basics.Address, bool, error)
+	// GetCreator gets the address of the account that created a given creatable
+	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 
 	// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
 	// TODO: Does this need to be part of the balances interface, or can it just be implemented here as a function that calls Put and Get?
