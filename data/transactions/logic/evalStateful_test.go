@@ -798,7 +798,7 @@ err
 exist:
 byte 0x414c474f
 ==
-int 100
+int 1  // ForeignApps index
 txn ApplicationArgs 0
 app_global_get_ex
 bnz exist1
@@ -836,6 +836,7 @@ byte 0x414c474f
 	ep.Ledger = ledger
 
 	ep.Txn.Txn.ApplicationID = 100
+	ep.Txn.Txn.ForeignApps = []basics.AppIndex{ep.Txn.Txn.ApplicationID}
 	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to fetch global state")
@@ -848,12 +849,25 @@ byte 0x414c474f
 	require.Contains(t, err.Error(), "err opcode")
 
 	ledger.applications[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
+
 	cost, err = CheckStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
 	pass, _, err := EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
+
+	// check error on invalid app index for app_global_get_ex
+	text = `int 2
+txn ApplicationArgs 0
+app_global_get_ex
+`
+	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	require.NoError(t, err)
+
+	_, _, err = EvalStateful(program, ep)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invalid ForeignApps index 2")
 
 	// check app_local_get default value
 	text = `byte 0x414c474f55
@@ -873,12 +887,14 @@ int 0
 byte 0x41414141
 int 4141
 app_global_put
-int 100
+int 1  // ForeignApps index
 byte 0x41414141
 app_global_get_ex
+bnz exist
+err
+exist:
 int 4141
 ==
-pop
 `
 	// check that even during application creation (Txn.ApplicationID == 0)
 	// we will use the the kvCow if the exact application ID (100) is
@@ -887,6 +903,7 @@ pop
 	require.NoError(t, err)
 
 	ep.Txn.Txn.ApplicationID = 0
+	ep.Txn.Txn.ForeignApps = []basics.AppIndex{100}
 	pass, _, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -1681,7 +1698,7 @@ byte 0x414c474f
 ==
 &&
 // check generic with exact app id
-int 100 // current app id
+int 1 // ForeignApps index - current app
 byte 0x414c474f41  // key "ALGOA"
 app_global_get_ex
 bnz ok1
@@ -1697,7 +1714,7 @@ int 0x77
 ==
 &&
 // check generic with alias
-int 0 // current app id
+int 0 // ForeignApps index - current app
 byte 0x414c474f
 app_global_get_ex
 bnz ok2
@@ -1707,7 +1724,7 @@ int 0x77
 ==
 &&
 // check generic with exact app id
-int 100 // current app id
+int 1 // ForeignApps index - current app
 byte 0x414c474f
 app_global_get_ex
 bnz ok3
@@ -1720,6 +1737,7 @@ int 0x77
 	ep := defaultEvalParams(nil, nil)
 	txn := makeSampleTxn()
 	txn.Txn.ApplicationID = 100
+	txn.Txn.ForeignApps = []basics.AppIndex{txn.Txn.ApplicationID}
 	ep.Txn = &txn
 	ledger := makeTestLedger(
 		map[basics.Address]uint64{
@@ -1873,14 +1891,14 @@ byte 0x414c474f
 
 func TestAppGlobalReadOtherApp(t *testing.T) {
 	t.Parallel()
-	source := `int 101
+	source := `int 2 // ForeignApps index
 byte "mykey1"
 app_global_get_ex
 bz ok1
 err
 ok1:
 pop
-int 101
+int 2 // ForeignApps index
 byte "mykey"
 app_global_get_ex
 bnz ok2
@@ -1892,6 +1910,7 @@ byte "myval"
 	ep := defaultEvalParams(nil, nil)
 	txn := makeSampleTxn()
 	txn.Txn.ApplicationID = 100
+	txn.Txn.ForeignApps = []basics.AppIndex{txn.Txn.ApplicationID, 101}
 	ep.Txn = &txn
 	ledger := makeTestLedger(
 		map[basics.Address]uint64{
@@ -1995,12 +2014,12 @@ int 1
 	// check delete existing
 	source = `byte 0x414c474f   // key "ALGO"
 app_global_del
-int 100
+int 1
 byte 0x414c474f
 app_global_get_ex
 ==  // two zeros
 `
-
+	ep.Txn.Txn.ForeignApps = []basics.AppIndex{txn.Txn.ApplicationID}
 	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	pass, delta, err = EvalStateful(program, ep)
@@ -2486,6 +2505,7 @@ func TestReturnTypes(t *testing.T) {
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
 	ep.Txn.Txn.ApplicationID = 1
+	ep.Txn.Txn.ForeignApps = []basics.AppIndex{txn.Txn.ApplicationID}
 	txn.Lsig.Args = [][]byte{
 		[]byte("aoeu"),
 		[]byte("aoeu"),

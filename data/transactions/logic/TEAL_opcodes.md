@@ -576,7 +576,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Opcode: 0x60
 - Pops: *... stack*, uint64
 - Pushes: uint64
-- get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction
+- get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -629,11 +629,11 @@ params: state key. Return: value. The value is zero if the key does not exist.
 - Opcode: 0x65
 - Pops: *... stack*, {uint64 A}, {[]byte B}
 - Pushes: uint64, any
-- read from application A global state key B => {0 or 1 (top), value}
+- read from application Txn.ForeignApps[A] global state key B => {0 or 1 (top), value}. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: application id, state key. Return: value.
+params: application index, state key. Return: value. Application index is
 
 ## app_local_put
 

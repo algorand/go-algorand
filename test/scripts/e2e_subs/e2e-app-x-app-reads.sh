@@ -21,8 +21,8 @@ APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs
 
 # Creating an app that attempts to read APPID's global state without setting
 # foreignapps should fail
-EXPERR="or in txn.ForeignApps"
-RES=$(${gcmd} app create --creator ${ACCOUNT} --app-arg "int:$APPID" --approval-prog ${DIR}/tealprogs/xappreads.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(echo 'int 1') 2>&1 || true)
+EXPERR="invalid ForeignApps index"
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs/xappreads.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(echo 'int 1') 2>&1 || true)
 if [[ $RES != *"$EXPERR"* ]]; then
     date '+x-app-reads FAIL expected disallowed foreign global read to fail %Y%m%d_%H%M%S'
     false
@@ -32,7 +32,7 @@ fi
 # "bar" should make it past the foreign-app check, but fail since
 # "xxx" != "bar"
 EXPERR="rejected by ApprovalProgram"
-RES=$(${gcmd} app create --creator ${ACCOUNT} --app-arg "int:$APPID" --foreign-app $APPID --approval-prog ${DIR}/tealprogs/xappreads.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(echo 'int 1') 2>&1 || true)
+RES=$(${gcmd} app create --creator ${ACCOUNT} --foreign-app $APPID --approval-prog ${DIR}/tealprogs/xappreads.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(echo 'int 1') 2>&1 || true)
 if [[ $RES != *"$EXPERR"* ]]; then
     date '+x-app-reads FAIL expected disallowed foreign global read to fail %Y%m%d_%H%M%S'
     false
@@ -43,4 +43,4 @@ ${gcmd} app call --app-id $APPID --from $ACCOUNT --app-arg "str:bar"
 
 # Creating other app should now succeed with properly set foreignapps
 AARGS="{args: [{encoding: \"int\", value: \"$APPID\"}], foreignapps: [$APPID]}"
-${gcmd} app create --creator ${ACCOUNT} --app-arg "int:$APPID" --foreign-app $APPID --approval-prog ${DIR}/tealprogs/xappreads.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(echo 'int 1')
+${gcmd} app create --creator ${ACCOUNT} --foreign-app $APPID --approval-prog ${DIR}/tealprogs/xappreads.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(echo 'int 1')
