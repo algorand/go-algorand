@@ -58,6 +58,7 @@ type DryrunRequest struct {
 // DryrunRequestFromGenerated converts generated.DryrunRequest to DryrunRequest field by fields
 // and re-types Txns []transactions.SignedTxn
 func DryrunRequestFromGenerated(gdr *generated.DryrunRequest) (dr DryrunRequest, err error) {
+	dr.Txns = make([]transactions.SignedTxn, 0, len(gdr.Txns))
 	for _, raw := range gdr.Txns {
 		// no transactions.SignedTxn in OAS, map[string]interface{} is not good enough
 		// json.RawMessage does the job
