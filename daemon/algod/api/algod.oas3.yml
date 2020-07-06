@@ -351,6 +351,10 @@
                 "error": {
                   "type": "string"
                 },
+                "protocol-version": {
+                  "description": "Protocol version is the protocol version Dryrun was operated under.",
+                  "type": "string"
+                },
                 "txns": {
                   "items": {
                     "$ref": "#/components/schemas/DryrunTxnResult"
@@ -360,6 +364,7 @@
               },
               "required": [
                 "error",
+                "protocol-version",
                 "txns"
               ],
               "type": "object"
@@ -2620,6 +2625,10 @@
                     "error": {
                       "type": "string"
                     },
+                    "protocol-version": {
+                      "description": "Protocol version is the protocol version Dryrun was operated under.",
+                      "type": "string"
+                    },
                     "txns": {
                       "items": {
                         "$ref": "#/components/schemas/DryrunTxnResult"
@@ -2629,6 +2638,7 @@
                   },
                   "required": [
                     "error",
+                    "protocol-version",
                     "txns"
                   ],
                   "type": "object"

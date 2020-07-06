@@ -483,8 +483,11 @@ type CompileResponse struct {
 
 // DryrunResponse defines model for DryrunResponse.
 type DryrunResponse struct {
-	Error string            `json:"error"`
-	Txns  []DryrunTxnResult `json:"txns"`
+	Error string `json:"error"`
+
+	// Protocol version is the protocol version Dryrun was operated under.
+	ProtocolVersion string            `json:"protocol-version"`
+	Txns            []DryrunTxnResult `json:"txns"`
 }
 
 // NodeStatusResponse defines model for NodeStatusResponse.
