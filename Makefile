@@ -16,7 +16,7 @@ BUILDCHANNEL     ?= $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
 DEFAULTNETWORK   ?= $(shell ./scripts/compute_branch_network.sh $(BUILDBRANCH))
 DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILDBRANCH))
 
-GOTAGSLIST          := sqlite_omit_load_extension #sqlite_unlock_notify
+GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 
 ifeq ($(UNAME), Linux)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
