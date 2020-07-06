@@ -609,12 +609,8 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 	if !ok {
 		return notFound(ctx, errors.New(errAppDoesNotExist), errAppDoesNotExist, v2.Log)
 	}
-	appInfo := generated.ApplicationInformation{
-		Creator:     creator.String(),
-		Application: AppParamsToApplication(appIdx, &appParams),
-	}
-
-	response := generated.ApplicationResponse(appInfo)
+	app := AppParamsToApplication(creator.String(), appIdx, &appParams)
+	response := generated.ApplicationResponse(app)
 	return ctx.JSON(http.StatusOK, response)
 }
 
@@ -642,11 +638,8 @@ func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
 		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
 	}
 
-	assetInfo := generated.AssetInformation{
-		Creator: creator.String(),
-		Asset:   AssetParamsToAsset(creator.String(), assetIdx, &assetParams),
-	}
-	response := generated.AssetResponse(assetInfo)
+	asset := AssetParamsToAsset(creator.String(), assetIdx, &assetParams)
+	response := generated.AssetResponse(asset)
 	return ctx.JSON(http.StatusOK, response)
 }
 
@@ -686,7 +679,7 @@ func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 
 	pd := logic.HashProgram(program)
 	addr := basics.Address(pd)
-	response := generated.PostCompileResponse{
+	response := generated.CompileResponse{
 		Hash:   addr.String(),
 		Result: base64.StdEncoding.EncodeToString(program),
 	}

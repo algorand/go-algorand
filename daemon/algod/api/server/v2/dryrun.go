@@ -88,7 +88,7 @@ func (dr *DryrunRequest) expandSources() error {
 			dr.Txns[s.TxnIndex].Lsig.Logic = program
 		case "approv", "clearp":
 			for ai, app := range dr.Apps {
-				if app.AppIndex == s.AppIndex {
+				if app.Id == s.AppIndex {
 					switch s.FieldName {
 					case "approv":
 						dr.Apps[ai].Params.ApprovalProgram = program
@@ -282,7 +282,7 @@ func (dl *dryrunLedger) Get(addr basics.Address, withPendingRewards bool) (basic
 		any = true
 		app := dl.dr.Apps[appi]
 		out.AppParams = make(map[basics.AppIndex]basics.AppParams)
-		out.AppParams[basics.AppIndex(app.AppIndex)] = ApplicationParamsToAppParams(&app.Params)
+		out.AppParams[basics.AppIndex(app.Id)] = ApplicationParamsToAppParams(&app.Params)
 	}
 	if !any {
 		return basics.BalanceRecord{}, fmt.Errorf("no account for addr %s", addr.String())
@@ -322,7 +322,7 @@ func (dl *dryrunLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.Crea
 		return basics.Address{}, false, fmt.Errorf("no asset %d", cidx)
 	case basics.AppCreatable:
 		for _, app := range dl.dr.Apps {
-			if app.AppIndex == uint64(cidx) {
+			if app.Id == uint64(cidx) {
 				var addr basics.Address
 				if app.Creator != "" {
 					var err error
@@ -419,7 +419,7 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 				creator := stxn.Txn.Sender.String()
 				// check and use the first entry in dr.Apps
 				if len(dr.Apps) > 0 && dr.Apps[0].Creator == creator {
-					appIdx = basics.AppIndex(dr.Apps[0].AppIndex)
+					appIdx = basics.AppIndex(dr.Apps[0].Id)
 				}
 			}
 
@@ -432,7 +432,7 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 			var app basics.AppParams
 			ok := false
 			for _, appt := range dr.Apps {
-				if appt.AppIndex == uint64(appIdx) {
+				if appt.Id == uint64(appIdx) {
 					app = ApplicationParamsToAppParams(&appt.Params)
 					ok = true
 					break

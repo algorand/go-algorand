@@ -236,7 +236,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/ApplicationInformation"
+              "$ref": "#/components/schemas/Application"
             }
           }
         },
@@ -246,7 +246,7 @@
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/AssetInformation"
+              "$ref": "#/components/schemas/Asset"
             }
           }
         },
@@ -318,6 +318,30 @@
           }
         },
         "description": "(empty)"
+      },
+      "CompileResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "hash": {
+                  "description": "base32 SHA512_256 of program bytes (Address style)",
+                  "type": "string"
+                },
+                "result": {
+                  "description": "base64 encoded program bytes",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "hash",
+                "result"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Teal compile Result"
       },
       "DryrunResponse": {
         "content": {
@@ -503,30 +527,6 @@
           }
         },
         "description": "A potentially truncated list of transactions currently in the node's transaction pool. You can compute whether or not the list is truncated if the number of elements in the **top-transactions** array is fewer than **total-transactions**."
-      },
-      "PostCompileResponse": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "properties": {
-                "hash": {
-                  "description": "base32 SHA512_256 of program bytes (Address style)",
-                  "type": "string"
-                },
-                "result": {
-                  "description": "base64 encoded program bytes",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "hash",
-                "result"
-              ],
-              "type": "object"
-            }
-          }
-        },
-        "description": "Teal compile Result"
       },
       "PostTransactionsResponse": {
         "content": {
@@ -778,35 +778,17 @@
       "Application": {
         "description": "Application index and its parameters",
         "properties": {
-          "app-index": {
+          "id": {
             "description": "\\[appidx\\] application index.",
             "type": "integer"
           },
-          "app-params": {
+          "params": {
             "$ref": "#/components/schemas/ApplicationParams"
           }
         },
         "required": [
-          "app-index",
-          "app-params"
-        ],
-        "type": "object"
-      },
-      "ApplicationInformation": {
-        "description": "Information about the application including creator",
-        "properties": {
-          "application": {
-            "$ref": "#/components/schemas/Application"
-          },
-          "creator": {
-            "description": "Application creator",
-            "type": "string",
-            "x-algorand-format": "Address"
-          }
-        },
-        "required": [
-          "application",
-          "creator"
+          "id",
+          "params"
         ],
         "type": "object"
       },
@@ -829,7 +811,7 @@
       "ApplicationLocalStates": {
         "description": "Pair of application index and application local state",
         "properties": {
-          "app-index": {
+          "id": {
             "type": "integer"
           },
           "state": {
@@ -837,7 +819,7 @@
           }
         },
         "required": [
-          "app-index",
+          "id",
           "state"
         ],
         "type": "object"
@@ -857,6 +839,11 @@
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             "type": "string"
           },
+          "creator": {
+            "description": "The address that created this application. This is the address where the parameters and global state for this application can be found.",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
           "global-state": {
             "$ref": "#/components/schemas/TealKeyValueStore"
           },
@@ -869,7 +856,8 @@
         },
         "required": [
           "approval-program",
-          "clear-state-program"
+          "clear-state-program",
+          "creator"
         ],
         "type": "object"
       },
@@ -935,24 +923,6 @@
           "asset-id",
           "creator",
           "is-frozen"
-        ],
-        "type": "object"
-      },
-      "AssetInformation": {
-        "description": "Information about the asset including creator",
-        "properties": {
-          "asset": {
-            "$ref": "#/components/schemas/Asset"
-          },
-          "creator": {
-            "description": "Asset creator",
-            "type": "string",
-            "x-algorand-format": "Address"
-          }
-        },
-        "required": [
-          "asset",
-          "creator"
         ],
         "type": "object"
       },
@@ -1023,20 +993,20 @@
       "DryrunApp": {
         "description": "DryrunApp holds global app state for a dryrun call.",
         "properties": {
-          "app-index": {
-            "type": "integer",
-            "x-algorand-format": "uint64"
-          },
           "creator": {
             "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "x-algorand-format": "uint64"
           },
           "params": {
             "$ref": "#/components/schemas/ApplicationParams"
           }
         },
         "required": [
-          "app-index",
           "creator",
+          "id",
           "params"
         ],
         "type": "object"
@@ -1696,7 +1666,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApplicationInformation"
+                  "$ref": "#/components/schemas/Application"
                 }
               }
             },
@@ -1770,7 +1740,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AssetInformation"
+                  "$ref": "#/components/schemas/Asset"
                 }
               }
             },
@@ -2623,6 +2593,7 @@
     },
     "/v2/teal/dryrun": {
       "post": {
+        "description": "Executes TEAL program(s) in context and returns debugging information about the execution.",
         "operationId": "TealDryrun",
         "requestBody": {
           "content": {

@@ -379,6 +379,7 @@
         ],
         "responses": {
           "200": {
+            "description": "OK",
             "$ref": "#/responses/PostTransactionsResponse"
           }
         }
@@ -740,6 +741,7 @@
         ],
         "responses": {
           "200": {
+            "description": "OK",
             "$ref": "#/responses/ApplicationResponse"
           },
           "400": {
@@ -802,6 +804,7 @@
         ],
         "responses": {
           "200": {
+            "description": "OK",
             "$ref": "#/responses/AssetResponse"
           },
           "400": {
@@ -870,7 +873,8 @@
         ],
         "responses": {
           "200": {
-            "$ref": "#/responses/PostCompileResponse"
+            "description": "Successful compilation",
+            "$ref": "#/responses/CompileResponse"
           },
           "400": {
             "description": "Bad Request - Teal Compile Error",
@@ -917,6 +921,7 @@
         ],
         "responses": {
           "200": {
+            "description": "OK",
             "$ref": "#/responses/CatchpointStartResponse"
           },
           "400": {
@@ -997,8 +1002,8 @@
       ]
     },
     "/v2/teal/dryrun": {
-      "summary": "Executes TEAL program(s) in context and returns debugging information about the execution.",
       "post": {
+        "description": "Executes TEAL program(s) in context and returns debugging information about the execution.",
         "consumes": [
           "application/json",
           "application/msgpack"
@@ -1023,6 +1028,7 @@
         ],
         "responses": {
           "200": {
+            "description": "OK",
             "$ref": "#/responses/DryrunResponse"
           },
           "400": {
@@ -1314,11 +1320,11 @@
       "description": "Pair of application index and application local state",
       "type": "object",
       "required": [
-        "app-index",
+        "id",
         "state"
       ],
       "properties": {
-        "app-index": {
+        "id": {
           "type": "integer"
         },
         "state": {
@@ -1456,15 +1462,15 @@
       "description": "Application index and its parameters",
       "type": "object",
       "required": [
-        "app-index",
-        "app-params"
+        "id",
+        "params"
       ],
       "properties": {
-        "app-index": {
+        "id": {
           "description": "\\[appidx\\] application index.",
           "type": "integer"
         },
-        "app-params": {
+        "params": {
           "description": "\\[appparams\\] application parameters.",
           "$ref": "#/definitions/ApplicationParams"
         }
@@ -1474,10 +1480,16 @@
       "description": "Stores the global information associated with an application.",
       "type": "object",
       "required": [
+        "creator",
         "approval-program",
         "clear-state-program"
       ],
       "properties": {
+        "creator": {
+          "description": "The address that created this application. This is the address where the parameters and global state for this application can be found.",
+          "type": "string",
+          "x-algorand-format": "Address"
+        },
         "approval-program": {
           "description": "\\[approv\\] approval program.",
           "type": "string",
@@ -1724,14 +1736,14 @@
       "type": "object",
       "required": [
         "creator",
-        "app-index",
+        "id",
         "params"
       ],
       "properties": {
         "creator": {
           "type": "string"
         },
-        "app-index": {
+        "id": {
           "type": "integer",
           "x-algorand-format": "uint64"
         },
@@ -1763,44 +1775,6 @@
         "app-index": {
           "type": "integer",
           "x-algorand-format": "uint64"
-        }
-      }
-    },
-    "ApplicationInformation": {
-      "description": "Information about the application including creator",
-      "type": "object",
-      "required": [
-        "creator",
-        "application"
-      ],
-      "properties": {
-        "creator": {
-          "description": "Application creator",
-          "type": "string",
-          "x-algorand-format": "Address"
-        },
-        "application": {
-          "description": "Application information",
-          "$ref": "#/definitions/Application"
-        }
-      }
-    },
-    "AssetInformation": {
-      "description": "Information about the asset including creator",
-      "type": "object",
-      "required": [
-        "creator",
-        "asset"
-      ],
-      "properties": {
-        "creator": {
-          "description": "Asset creator",
-          "type": "string",
-          "x-algorand-format": "Address"
-        },
-        "asset": {
-          "description": "Asset information",
-          "$ref": "#/definitions/Asset"
         }
       }
     }
@@ -2002,7 +1976,7 @@
         }
       }
     },
-    "CatchpointStartResponse":{
+    "CatchpointStartResponse": {
       "tags": [
         "private"
       ],
@@ -2273,16 +2247,16 @@
     "ApplicationResponse": {
       "description": "Application information",
       "schema": {
-        "$ref": "#/definitions/ApplicationInformation"
+        "$ref": "#/definitions/Application"
       }
     },
     "AssetResponse": {
       "description": "Asset information",
       "schema": {
-        "$ref": "#/definitions/AssetInformation"
+        "$ref": "#/definitions/Asset"
       }
     },
-    "PostCompileResponse": {
+    "CompileResponse": {
       "description": "Teal compile Result",
       "schema": {
         "type": "object",

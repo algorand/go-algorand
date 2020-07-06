@@ -208,4 +208,9 @@ int 1
 	a.Equal(uint64(1), value.Uint)
 
 	a.Equal(basics.MicroAlgos{Raw: 10000000000 - fee}, ad.MicroAlgos)
+
+	app, err := client.ApplicationInformation(uint64(appIdx))
+	a.NoError(err)
+	a.Equal(uint64(appIdx), app.Id)
+	a.Equal(creator, app.Params.Creator)
 }

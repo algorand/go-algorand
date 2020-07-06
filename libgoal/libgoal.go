@@ -683,7 +683,7 @@ func (c *Client) AssetInformation(index uint64) (resp v1.AssetParams, err error)
 }
 
 // AssetInformationV2 takes an asset's index and returns its information
-func (c *Client) AssetInformationV2(index uint64) (resp generatedV2.AssetInformation, err error) {
+func (c *Client) AssetInformationV2(index uint64) (resp generatedV2.Asset, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.AssetInformationV2(index)
@@ -692,7 +692,7 @@ func (c *Client) AssetInformationV2(index uint64) (resp generatedV2.AssetInforma
 }
 
 // ApplicationInformation takes an app's index and returns its information
-func (c *Client) ApplicationInformation(index uint64) (resp generatedV2.ApplicationInformation, err error) {
+func (c *Client) ApplicationInformation(index uint64) (resp generatedV2.Application, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.ApplicationInformation(index)
@@ -1003,17 +1003,17 @@ func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, other []tran
 				appIdx = defaultAppIdx
 			} else {
 				// otherwise need to fetch app state
-				var appInfo generatedV2.ApplicationInformation
-				if appInfo, err = client.ApplicationInformation(uint64(tx.ApplicationID)); err != nil {
+				var app generatedV2.Application
+				if app, err = client.ApplicationInformation(uint64(tx.ApplicationID)); err != nil {
 					return
 				}
-				creator = appInfo.Creator
-				appParams = appInfo.Application.AppParams
+				appParams = app.Params
+				creator = appParams.Creator
 			}
 			dr.Apps = append(dr.Apps, generatedV2.DryrunApp{
-				Creator:  creator,
-				AppIndex: uint64(appIdx),
-				Params:   appParams,
+				Creator: creator,
+				Id:      uint64(appIdx),
+				Params:  appParams,
 			})
 		}
 

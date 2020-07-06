@@ -105,20 +105,10 @@ type AccountStateDelta struct {
 type Application struct {
 
 	// \[appidx\] application index.
-	AppIndex uint64 `json:"app-index"`
+	Id uint64 `json:"id"`
 
 	// Stores the global information associated with an application.
-	AppParams ApplicationParams `json:"app-params"`
-}
-
-// ApplicationInformation defines model for ApplicationInformation.
-type ApplicationInformation struct {
-
-	// Application index and its parameters
-	Application Application `json:"application"`
-
-	// Application creator
-	Creator string `json:"creator"`
+	Params ApplicationParams `json:"params"`
 }
 
 // ApplicationLocalState defines model for ApplicationLocalState.
@@ -133,7 +123,7 @@ type ApplicationLocalState struct {
 
 // ApplicationLocalStates defines model for ApplicationLocalStates.
 type ApplicationLocalStates struct {
-	AppIndex uint64 `json:"app-index"`
+	Id uint64 `json:"id"`
 
 	// Stores local state associated with an application.
 	State ApplicationLocalState `json:"state"`
@@ -147,6 +137,9 @@ type ApplicationParams struct {
 
 	// \[clearp\] approval program.
 	ClearStateProgram []byte `json:"clear-state-program"`
+
+	// The address that created this application. This is the address where the parameters and global state for this application can be found.
+	Creator string `json:"creator"`
 
 	// Represents a key-value store for use in an application.
 	GlobalState *TealKeyValueStore `json:"global-state,omitempty"`
@@ -199,16 +192,6 @@ type AssetHolding struct {
 	IsFrozen bool `json:"is-frozen"`
 }
 
-// AssetInformation defines model for AssetInformation.
-type AssetInformation struct {
-
-	// Specifies both the unique identifier and the parameters for an asset
-	Asset Asset `json:"asset"`
-
-	// Asset creator
-	Creator string `json:"creator"`
-}
-
 // AssetParams defines model for AssetParams.
 type AssetParams struct {
 
@@ -251,8 +234,8 @@ type AssetParams struct {
 
 // DryrunApp defines model for DryrunApp.
 type DryrunApp struct {
-	AppIndex uint64 `json:"app-index"`
-	Creator  string `json:"creator"`
+	Creator string `json:"creator"`
+	Id      uint64 `json:"id"`
 
 	// Stores the global information associated with an application.
 	Params ApplicationParams `json:"params"`
@@ -459,10 +442,10 @@ type TxType string
 type AccountResponse Account
 
 // ApplicationResponse defines model for ApplicationResponse.
-type ApplicationResponse ApplicationInformation
+type ApplicationResponse Application
 
 // AssetResponse defines model for AssetResponse.
-type AssetResponse AssetInformation
+type AssetResponse Asset
 
 // BlockResponse defines model for BlockResponse.
 type BlockResponse struct {
@@ -486,6 +469,16 @@ type CatchpointStartResponse struct {
 
 	// Catchup start response string
 	CatchupMessage string `json:"catchup-message"`
+}
+
+// CompileResponse defines model for CompileResponse.
+type CompileResponse struct {
+
+	// base32 SHA512_256 of program bytes (Address style)
+	Hash string `json:"hash"`
+
+	// base64 encoded program bytes
+	Result string `json:"result"`
 }
 
 // DryrunResponse defines model for DryrunResponse.
@@ -576,16 +569,6 @@ type PendingTransactionsResponse struct {
 
 	// Total number of transactions in the pool.
 	TotalTransactions uint64 `json:"total-transactions"`
-}
-
-// PostCompileResponse defines model for PostCompileResponse.
-type PostCompileResponse struct {
-
-	// base32 SHA512_256 of program bytes (Address style)
-	Hash string `json:"hash"`
-
-	// base64 encoded program bytes
-	Result string `json:"result"`
 }
 
 // PostTransactionsResponse defines model for PostTransactionsResponse.
