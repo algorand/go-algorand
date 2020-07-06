@@ -39,7 +39,9 @@ type ServerInterfaceWrapper struct {
 // AbortCatchup converts echo context to params.
 func (w *ServerInterfaceWrapper) AbortCatchup(ctx echo.Context) error {
 
-	validQueryParams := map[string]bool{}
+	validQueryParams := map[string]bool{
+		"pretty": true,
+	}
 
 	// Check for unknown query parameters.
 	for name, _ := range ctx.QueryParams() {
@@ -67,7 +69,9 @@ func (w *ServerInterfaceWrapper) AbortCatchup(ctx echo.Context) error {
 // StartCatchup converts echo context to params.
 func (w *ServerInterfaceWrapper) StartCatchup(ctx echo.Context) error {
 
-	validQueryParams := map[string]bool{}
+	validQueryParams := map[string]bool{
+		"pretty": true,
+	}
 
 	// Check for unknown query parameters.
 	for name, _ := range ctx.QueryParams() {
@@ -96,6 +100,7 @@ func (w *ServerInterfaceWrapper) StartCatchup(ctx echo.Context) error {
 func (w *ServerInterfaceWrapper) RegisterParticipationKeys(ctx echo.Context) error {
 
 	validQueryParams := map[string]bool{
+		"pretty":           true,
 		"fee":              true,
 		"key-dilution":     true,
 		"round-last-valid": true,
@@ -171,6 +176,7 @@ func (w *ServerInterfaceWrapper) RegisterParticipationKeys(ctx echo.Context) err
 func (w *ServerInterfaceWrapper) ShutdownNode(ctx echo.Context) error {
 
 	validQueryParams := map[string]bool{
+		"pretty":  true,
 		"timeout": true,
 	}
 

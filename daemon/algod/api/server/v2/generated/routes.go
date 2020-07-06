@@ -70,6 +70,7 @@ type ServerInterfaceWrapper struct {
 func (w *ServerInterfaceWrapper) AccountInformation(ctx echo.Context) error {
 
 	validQueryParams := map[string]bool{
+		"pretty": true,
 		"format": true,
 	}
 
@@ -112,6 +113,7 @@ func (w *ServerInterfaceWrapper) AccountInformation(ctx echo.Context) error {
 func (w *ServerInterfaceWrapper) GetPendingTransactionsByAddress(ctx echo.Context) error {
 
 	validQueryParams := map[string]bool{
+		"pretty": true,
 		"max":    true,
 		"format": true,
 	}
@@ -164,7 +166,9 @@ func (w *ServerInterfaceWrapper) GetPendingTransactionsByAddress(ctx echo.Contex
 // GetApplicationByID converts echo context to params.
 func (w *ServerInterfaceWrapper) GetApplicationByID(ctx echo.Context) error {
 
-	validQueryParams := map[string]bool{}
+	validQueryParams := map[string]bool{
+		"pretty": true,
+	}
 
 	// Check for unknown query parameters.
 	for name, _ := range ctx.QueryParams() {
@@ -192,7 +196,9 @@ func (w *ServerInterfaceWrapper) GetApplicationByID(ctx echo.Context) error {
 // GetAssetByID converts echo context to params.
 func (w *ServerInterfaceWrapper) GetAssetByID(ctx echo.Context) error {
 
-	validQueryParams := map[string]bool{}
+	validQueryParams := map[string]bool{
+		"pretty": true,
+	}
 
 	// Check for unknown query parameters.
 	for name, _ := range ctx.QueryParams() {
@@ -221,6 +227,7 @@ func (w *ServerInterfaceWrapper) GetAssetByID(ctx echo.Context) error {
 func (w *ServerInterfaceWrapper) GetBlock(ctx echo.Context) error {
 
 	validQueryParams := map[string]bool{
+		"pretty": true,
 		"format": true,
 	}
 
@@ -262,7 +269,9 @@ func (w *ServerInterfaceWrapper) GetBlock(ctx echo.Context) error {
 // GetSupply converts echo context to params.
 func (w *ServerInterfaceWrapper) GetSupply(ctx echo.Context) error {
 
-	validQueryParams := map[string]bool{}
+	validQueryParams := map[string]bool{
+		"pretty": true,
+	}
 
 	// Check for unknown query parameters.
 	for name, _ := range ctx.QueryParams() {
@@ -283,7 +292,9 @@ func (w *ServerInterfaceWrapper) GetSupply(ctx echo.Context) error {
 // GetStatus converts echo context to params.
 func (w *ServerInterfaceWrapper) GetStatus(ctx echo.Context) error {
 
-	validQueryParams := map[string]bool{}
+	validQueryParams := map[string]bool{
+		"pretty": true,
+	}
 
 	// Check for unknown query parameters.
 	for name, _ := range ctx.QueryParams() {
@@ -304,7 +315,9 @@ func (w *ServerInterfaceWrapper) GetStatus(ctx echo.Context) error {
 // WaitForBlock converts echo context to params.
 func (w *ServerInterfaceWrapper) WaitForBlock(ctx echo.Context) error {
 
-	validQueryParams := map[string]bool{}
+	validQueryParams := map[string]bool{
+		"pretty": true,
+	}
 
 	// Check for unknown query parameters.
 	for name, _ := range ctx.QueryParams() {
@@ -332,7 +345,9 @@ func (w *ServerInterfaceWrapper) WaitForBlock(ctx echo.Context) error {
 // TealCompile converts echo context to params.
 func (w *ServerInterfaceWrapper) TealCompile(ctx echo.Context) error {
 
-	validQueryParams := map[string]bool{}
+	validQueryParams := map[string]bool{
+		"pretty": true,
+	}
 
 	// Check for unknown query parameters.
 	for name, _ := range ctx.QueryParams() {
@@ -353,7 +368,9 @@ func (w *ServerInterfaceWrapper) TealCompile(ctx echo.Context) error {
 // TealDryrun converts echo context to params.
 func (w *ServerInterfaceWrapper) TealDryrun(ctx echo.Context) error {
 
-	validQueryParams := map[string]bool{}
+	validQueryParams := map[string]bool{
+		"pretty": true,
+	}
 
 	// Check for unknown query parameters.
 	for name, _ := range ctx.QueryParams() {
@@ -374,7 +391,9 @@ func (w *ServerInterfaceWrapper) TealDryrun(ctx echo.Context) error {
 // RawTransaction converts echo context to params.
 func (w *ServerInterfaceWrapper) RawTransaction(ctx echo.Context) error {
 
-	validQueryParams := map[string]bool{}
+	validQueryParams := map[string]bool{
+		"pretty": true,
+	}
 
 	// Check for unknown query parameters.
 	for name, _ := range ctx.QueryParams() {
@@ -395,7 +414,9 @@ func (w *ServerInterfaceWrapper) RawTransaction(ctx echo.Context) error {
 // TransactionParams converts echo context to params.
 func (w *ServerInterfaceWrapper) TransactionParams(ctx echo.Context) error {
 
-	validQueryParams := map[string]bool{}
+	validQueryParams := map[string]bool{
+		"pretty": true,
+	}
 
 	// Check for unknown query parameters.
 	for name, _ := range ctx.QueryParams() {
@@ -417,6 +438,7 @@ func (w *ServerInterfaceWrapper) TransactionParams(ctx echo.Context) error {
 func (w *ServerInterfaceWrapper) GetPendingTransactions(ctx echo.Context) error {
 
 	validQueryParams := map[string]bool{
+		"pretty": true,
 		"max":    true,
 		"format": true,
 	}
@@ -463,6 +485,7 @@ func (w *ServerInterfaceWrapper) GetPendingTransactions(ctx echo.Context) error 
 func (w *ServerInterfaceWrapper) PendingTransactionInformation(ctx echo.Context) error {
 
 	validQueryParams := map[string]bool{
+		"pretty": true,
 		"format": true,
 	}
 
