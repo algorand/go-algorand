@@ -2282,6 +2282,7 @@
         "type": "object",
         "required": [
           "txns",
+          "protocol-version",
           "error"
         ],
         "properties": {
@@ -2292,6 +2293,10 @@
             }
           },
           "error": {
+            "type": "string"
+          },
+          "protocol-version": {
+            "description": "Protocol version is the protocol version Dryrun was operated under.",
             "type": "string"
           }
         }

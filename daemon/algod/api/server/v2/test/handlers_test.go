@@ -361,7 +361,7 @@ func TestTealCompile(t *testing.T) {
 func tealDryrunTest(
 	t *testing.T, obj *generatedV2.DryrunRequest, format string,
 	expCode int, expResult string, enableDeveloperAPI bool,
-) {
+) (response generatedV2.DryrunResponse) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
@@ -393,7 +393,6 @@ func tealDryrunTest(
 	require.NoError(t, err)
 	require.Equal(t, expCode, rec.Code)
 	if rec.Code == 200 {
-		var response generatedV2.DryrunResponse
 		data = rec.Body.Bytes()
 		err = protocol.DecodeJSON(data, &response)
 		require.NoError(t, err, string(data))
@@ -404,6 +403,7 @@ func tealDryrunTest(
 		require.GreaterOrEqual(t, len(messages), 1)
 		require.Equal(t, expResult, messages[len(messages)-1])
 	}
+	return
 }
 
 func TestTealDryrun(t *testing.T) {
@@ -467,6 +467,15 @@ func TestTealDryrun(t *testing.T) {
 	tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
 	tealDryrunTest(t, &gdr, "msgp", 200, "PASS", true)
 	tealDryrunTest(t, &gdr, "msgp", 404, "", false)
+
+	gdr.ProtocolVersion = "unk"
+	tealDryrunTest(t, &gdr, "json", 400, "", true)
+	gdr.ProtocolVersion = ""
+	ddr := tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
+	require.Equal(t, string(protocol.ConsensusCurrentVersion), ddr.ProtocolVersion)
+	gdr.ProtocolVersion = string(protocol.ConsensusFuture)
+	ddr = tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
+	require.Equal(t, string(protocol.ConsensusFuture), ddr.ProtocolVersion)
 
 	gdr.Apps[0].Params.ApprovalProgram = failProgram
 	tealDryrunTest(t, &gdr, "json", 200, "REJECT", true)

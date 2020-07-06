@@ -509,6 +509,7 @@ func TestDryrunLocal1(t *testing.T) {
 	}
 	dr.Accounts = []generated.Account{
 		{
+			Status:         "Online",
 			Address:        basics.Address{}.String(),
 			AppsLocalState: &[]generated.ApplicationLocalStates{{Id: 1}},
 		},
@@ -578,6 +579,7 @@ func TestDryrunLocal1A(t *testing.T) {
 	}
 	dr.Accounts = []generated.Account{
 		{
+			Status:         "Online",
 			Address:        basics.Address{}.String(),
 			AppsLocalState: &[]generated.ApplicationLocalStates{{Id: 1}},
 		},
@@ -663,6 +665,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 
 	dr.Accounts = []generated.Account{
 		{
+			Status:  "Online",
 			Address: basics.Address{}.String(),
 			AppsLocalState: &[]generated.ApplicationLocalStates{
 				{
@@ -718,6 +721,7 @@ func TestDryrunEncodeDecode(t *testing.T) {
 
 	gdr.Accounts = []generated.Account{
 		{
+			Status:  "Online",
 			Address: basics.Address{}.String(),
 			AppsLocalState: &[]generated.ApplicationLocalStates{
 				{
