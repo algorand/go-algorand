@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"context"
+	"database/sql"
 	"io/ioutil"
 	"fmt"
 	"os"
@@ -866,35 +867,70 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 	}
 }
 
-func TestLedgerDBConcurrentAccess(t *testing.T) {
-	a := require.New(t)
+func initDBs(t *testing.T, dbs dbPair) *sql.Tx {
+	dblogger := logging.TestingLog(t)
+	dbs.wdb.SetLogger(dblogger)
+	dbs.rdb.SetLogger(dblogger)
 
+	tx, err := dbs.wdb.Handle.Begin()
+	for err != nil {
+		print("error initializing dbs:%v\n", err)
+		tx, err = dbs.wdb.Handle.Begin()
+	}
+	require.NoError(t, err)
+
+	return tx
+}
+
+func addRecordsToDB(t *testing.T, dbs dbPair, tx *sql.Tx, numRecords int) {
+	blocks := randomInitChain(protocol.ConsensusCurrentVersion, numRecords)
+
+	err := blockInit(tx, blockChainBlocks(blocks))
+	require.NoError(t, err)
+	checkBlockDB(t, tx, blocks)
+
+	for i := 0; i < numRecords; i++ {
+		blkent := randomBlock(basics.Round(len(blocks)))
+		err := blockPut(tx, blkent.block, blkent.cert)
+		//require.NoError(t, err)
+		if err != nil {
+			fmt.Printf("error adding block:%v\n", err)
+		}
+
+		blocks = append(blocks, blkent)
+		//checkBlockDB(t, tx, blocks)
+	}
+}
+
+
+func TestLedgerDBConcurrentAccess(t *testing.T) {
 	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
 	require.NoError(t, err)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	dbPrefix := filepath.Join(dbTempDir, dbName)
 	defer os.RemoveAll(dbTempDir)
-	log := logging.TestingLog(t)
 	trackerDBs, blockDBs, err := openLedgerDB(dbPrefix, true)
 	defer trackerDBs.close()
 	defer blockDBs.close()
-	trackerDBs.rdb.SetLogger(log)
-	trackerDBs.wdb.SetLogger(log)
-	blockDBs.rdb.SetLogger(log)
-	blockDBs.wdb.SetLogger(log)
+	trackerTx := initDBs(t, trackerDBs)
+	blockTx := initDBs(t, blockDBs)
 
-	tryThreshold := 2000000
-	_, err = trackerDBs.wdb.Handle.Begin()
-	if err != nil {
-		fmt.Printf("error initializing trackerDBs:%v\n", err)
-	}
+	tryThreshold := 150
+	go addRecordsToDB(t, trackerDBs, trackerTx, tryThreshold)
+	addRecordsToDB(t, blockDBs, blockTx, tryThreshold)
 
-	for i := 0; i < tryThreshold; i++ {
-		_, err = blockDBs.wdb.Handle.Begin()
-		if err == nil {
-			break
-		}
-		//fmt.Printf("error initializing blockDBs:%v\n", err)
-	}
-	a.NoError(err, "was unable to open writer for block DB")
+	// _, err = trackerDBs.wdb.Handle.Begin()
+	// if err != nil {
+	// 	fmt.Printf("error initializing trackerDBs:%v\n", err)
+	// }
+	// go func () {
+	// 	for i := 0; i < tryThreshold; i++ {
+	// 		_, err = blockDBs.wdb.Handle.Begin()
+	// 		fmt.Printf("error initializing blockDBs:%v\n", err)
+	// 		if err == nil {
+	// 			break
+	// 		}
+	// 	}
+	// 	a.NoError(err, "was unable to open writer for block DB")
+	// } ()
 }
