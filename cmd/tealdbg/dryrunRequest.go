@@ -79,7 +79,7 @@ func balanceRecordsFromDdr(ddr *v2.DryrunRequest) (records []basics.BalanceRecor
 		if err != nil {
 			return
 		}
-		appIdx := basics.AppIndex(a.AppIndex)
+		appIdx := basics.AppIndex(a.Id)
 		var ad basics.AccountData
 		var ok bool
 		if ad, ok = accounts[addr]; ok {

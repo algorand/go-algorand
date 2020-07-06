@@ -350,7 +350,7 @@ var deleteCmd = &cobra.Command{
 }
 
 var newMultisigCmd = &cobra.Command{
-	Use:   "new [addr1 addr2 ...]",
+	Use:   "new [address 1] [address 2]...",
 	Short: "Create a new multisig account",
 	Long:  `Create a new multisig account from a list of existing non-multisig addresses`,
 	Args:  cobra.MinimumNArgs(1),

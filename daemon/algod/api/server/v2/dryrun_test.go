@@ -402,7 +402,7 @@ func TestDryrunGlobal1(t *testing.T) {
 	}
 	dr.Apps = []generated.DryrunApp{
 		{
-			AppIndex: 1,
+			Id: 1,
 			Params: generated.ApplicationParams{
 				ApprovalProgram: globalTestProgram,
 				GlobalState:     &gkv,
@@ -451,7 +451,7 @@ func TestDryrunGlobal2(t *testing.T) {
 	}
 	dr.Apps = []generated.DryrunApp{
 		{
-			AppIndex: 1,
+			Id: 1,
 			Params: generated.ApplicationParams{
 				ApprovalProgram: globalTestProgram,
 				GlobalState:     &gkv,
@@ -501,7 +501,7 @@ func TestDryrunLocal1(t *testing.T) {
 	}
 	dr.Apps = []generated.DryrunApp{
 		{
-			AppIndex: 1,
+			Id: 1,
 			Params: generated.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 			},
@@ -510,7 +510,7 @@ func TestDryrunLocal1(t *testing.T) {
 	dr.Accounts = []generated.Account{
 		{
 			Address:        basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalStates{{AppIndex: 1}},
+			AppsLocalState: &[]generated.ApplicationLocalStates{{Id: 1}},
 		},
 	}
 	doDryrunRequest(&dr, &proto, &response)
@@ -527,7 +527,7 @@ func TestDryrunLocal1(t *testing.T) {
 				if ld.Key == "foo" {
 					valueFound = true
 					assert.Equal(t, ld.Value.Action, uint64(basics.SetBytesAction))
-					assert.Equal(t, *ld.Value.Bytes, "bar")
+					assert.Equal(t, *ld.Value.Bytes, "YmFy") // bar
 
 				}
 			}
@@ -573,13 +573,13 @@ func TestDryrunLocal1A(t *testing.T) {
 	}
 	dr.Apps = []generated.DryrunApp{
 		{
-			AppIndex: 1,
+			Id: 1,
 		},
 	}
 	dr.Accounts = []generated.Account{
 		{
 			Address:        basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalStates{{AppIndex: 1}},
+			AppsLocalState: &[]generated.ApplicationLocalStates{{Id: 1}},
 		},
 	}
 
@@ -604,7 +604,7 @@ func TestDryrunLocal1A(t *testing.T) {
 				if ld.Key == "foo" {
 					valueFound = true
 					assert.Equal(t, ld.Value.Action, uint64(basics.SetBytesAction))
-					assert.Equal(t, *ld.Value.Bytes, "bar")
+					assert.Equal(t, *ld.Value.Bytes, "YmFy") // bar
 
 				}
 			}
@@ -649,7 +649,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 	}
 	dr.Apps = []generated.DryrunApp{
 		{
-			AppIndex: 1,
+			Id: 1,
 			Params: generated.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 			},
@@ -666,7 +666,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 			Address: basics.Address{}.String(),
 			AppsLocalState: &[]generated.ApplicationLocalStates{
 				{
-					AppIndex: 1,
+					Id: 1,
 					State: generated.ApplicationLocalState{
 						KeyValue: localv,
 					},
@@ -704,7 +704,7 @@ func TestDryrunEncodeDecode(t *testing.T) {
 
 	gdr.Apps = []generated.DryrunApp{
 		{
-			AppIndex: 1,
+			Id: 1,
 			Params: generated.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 			},
@@ -721,7 +721,7 @@ func TestDryrunEncodeDecode(t *testing.T) {
 			Address: basics.Address{}.String(),
 			AppsLocalState: &[]generated.ApplicationLocalStates{
 				{
-					AppIndex: 1,
+					Id: 1,
 					State: generated.ApplicationLocalState{
 						KeyValue: localv,
 					},
@@ -816,8 +816,8 @@ func TestDryrunMakeLedger(t *testing.T) {
 	}
 	dr.Apps = []generated.DryrunApp{
 		{
-			AppIndex: 1,
-			Creator:  sender.String(),
+			Id:      1,
+			Creator: sender.String(),
 			Params: generated.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
 			},
@@ -852,7 +852,7 @@ var dataJSON = []byte(`{
 	],
 	"apps": [
 	  {
-		"app-index": 1380011588,
+		"id": 1380011588,
 		"creator": "UAPJE355K7BG7RQVMTZOW7QW4ICZJEIC3RZGYG5LSHZ65K6LCNFPJDSR7M",
 		"params": {
 		  "approval-program": "AiABASI=",

@@ -562,7 +562,7 @@ var rawsendCmd = &cobra.Command{
 }
 
 var inspectCmd = &cobra.Command{
-	Use:   "inspect",
+	Use:   "inspect [input file 1] [input file 2]...",
 	Short: "print a transaction file",
 	Long:  `Loads a transaction file, attempts to decode the transaction, and displays the decoded information.`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -634,7 +634,7 @@ func getProto(versArg string) (protocol.ConsensusVersion, config.ConsensusParams
 }
 
 var signCmd = &cobra.Command{
-	Use:   "sign -i INFILE -o OUTFILE",
+	Use:   "sign -i [input file] -o [output file]",
 	Short: "Sign a transaction file",
 	Long:  `Sign the passed transaction file, which may contain one or more transactions. If the infile and the outfile are the same, this overwrites the file with the new, signed data.`,
 	Args:  validateNoPosArgsFn,
@@ -850,7 +850,7 @@ func disassembleFile(fname, outname string) {
 }
 
 var compileCmd = &cobra.Command{
-	Use:   "compile",
+	Use:   "compile [input file 1] [input file 2]...",
 	Short: "compile a contract program",
 	Long:  "Reads a TEAL contract program and compiles it to binary output and contract address.",
 	Run: func(cmd *cobra.Command, args []string) {

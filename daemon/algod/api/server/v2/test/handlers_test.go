@@ -438,7 +438,7 @@ func TestTealDryrun(t *testing.T) {
 
 	gdr.Apps = []generated.DryrunApp{
 		{
-			AppIndex: 1,
+			Id: 1,
 			Params: generated.ApplicationParams{
 				ApprovalProgram: sucProgram,
 			},
@@ -455,7 +455,7 @@ func TestTealDryrun(t *testing.T) {
 			Address: basics.Address{}.String(),
 			AppsLocalState: &[]generated.ApplicationLocalStates{
 				{
-					AppIndex: 1,
+					Id: 1,
 					State: generated.ApplicationLocalState{
 						KeyValue: localv,
 					},

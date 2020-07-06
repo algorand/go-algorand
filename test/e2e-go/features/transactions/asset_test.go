@@ -487,9 +487,9 @@ func TestAssetInformation(t *testing.T) {
 	a.NoError(err)
 	a.NotNil(info2.CreatedAssets)
 	for _, cp := range *info2.CreatedAssets {
-		assetInfo, err := client.AssetInformationV2(cp.Index)
+		asset, err := client.AssetInformationV2(cp.Index)
 		a.NoError(err)
-		a.Equal(cp, assetInfo.Asset)
+		a.Equal(cp, asset)
 	}
 
 	// Destroy assets

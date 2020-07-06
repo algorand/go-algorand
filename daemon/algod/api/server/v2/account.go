@@ -64,7 +64,7 @@ func AccountDataToAccount(
 
 	createdApps := make([]generated.Application, 0, len(record.AppParams))
 	for appIdx, appParams := range record.AppParams {
-		app := AppParamsToApplication(appIdx, &appParams)
+		app := AppParamsToApplication(address, appIdx, &appParams)
 		createdApps = append(createdApps, app)
 	}
 
@@ -72,7 +72,7 @@ func AccountDataToAccount(
 	for appIdx, state := range record.AppLocalStates {
 		localState := convertTKVToGenerated(&state.KeyValue)
 		appsLocalState = append(appsLocalState, generated.ApplicationLocalStates{
-			AppIndex: uint64(appIdx),
+			Id: uint64(appIdx),
 			State: generated.ApplicationLocalState{
 				KeyValue: localState,
 				Schema: generated.ApplicationStateSchema{
@@ -217,7 +217,7 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 	if a.AppsLocalState != nil && len(*a.AppsLocalState) > 0 {
 		appLocalStates = make(map[basics.AppIndex]basics.AppLocalState, len(*a.AppsLocalState))
 		for _, ls := range *a.AppsLocalState {
-			appLocalStates[basics.AppIndex(ls.AppIndex)] = basics.AppLocalState{
+			appLocalStates[basics.AppIndex(ls.Id)] = basics.AppLocalState{
 				Schema: basics.StateSchema{
 					NumUint:      ls.State.Schema.NumUint,
 					NumByteSlice: ls.State.Schema.NumByteSlice,
@@ -231,7 +231,7 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 	if a.CreatedApps != nil && len(*a.CreatedApps) > 0 {
 		appParams = make(map[basics.AppIndex]basics.AppParams, len(*a.CreatedApps))
 		for _, params := range *a.CreatedApps {
-			appParams[basics.AppIndex(params.AppIndex)] = ApplicationParamsToAppParams(&params.AppParams)
+			appParams[basics.AppIndex(params.Id)] = ApplicationParamsToAppParams(&params.Params)
 		}
 	}
 
@@ -304,11 +304,12 @@ func ApplicationParamsToAppParams(gap *generated.ApplicationParams) basics.AppPa
 }
 
 // AppParamsToApplication converts basics.AppParams to generated.Application
-func AppParamsToApplication(appIdx basics.AppIndex, appParams *basics.AppParams) generated.Application {
+func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *basics.AppParams) generated.Application {
 	globalState := convertTKVToGenerated(&appParams.GlobalState)
 	return generated.Application{
-		AppIndex: uint64(appIdx),
-		AppParams: generated.ApplicationParams{
+		Id: uint64(appIdx),
+		Params: generated.ApplicationParams{
+			Creator:           creator,
 			ApprovalProgram:   appParams.ApprovalProgram,
 			ClearStateProgram: appParams.ClearStateProgram,
 			GlobalState:       &globalState,

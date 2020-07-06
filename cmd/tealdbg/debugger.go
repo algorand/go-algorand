@@ -299,7 +299,9 @@ func (s *session) GetStates(changes *logic.AppStateChage) appState {
 			case basics.SetUintAction:
 				tkv[key] = basics.TealValue{Type: basics.TealUintType, Uint: delta.Uint}
 			case basics.SetBytesAction:
-				tkv[key] = basics.TealValue{Type: basics.TealBytesType, Bytes: delta.Bytes}
+				tkv[key] = basics.TealValue{
+					Type: basics.TealBytesType, Bytes: delta.Bytes,
+				}
 			case basics.DeleteAction:
 				delete(tkv, key)
 			}

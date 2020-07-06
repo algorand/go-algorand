@@ -154,7 +154,7 @@ func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]
 // if they exist. It does *not* clone the AppParams, so the returned params
 // must not be modified directly.
 func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppParams, creator basics.Address, exists bool, err error) {
-	creator, exists, err = balances.GetAppCreator(aidx)
+	creator, exists, err = balances.GetCreator(basics.CreatableIndex(aidx), basics.AppCreatable)
 	if err != nil {
 		return
 	}

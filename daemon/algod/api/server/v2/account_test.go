@@ -65,15 +65,15 @@ func TestAccount(t *testing.T) {
 	require.NotNil(t, conv.CreatedApps)
 	require.Equal(t, 1, len(*conv.CreatedApps))
 	app := (*conv.CreatedApps)[0]
-	require.Equal(t, uint64(appIdx), app.AppIndex)
-	require.Equal(t, params.ApprovalProgram, app.AppParams.ApprovalProgram)
-	require.Equal(t, params.GlobalStateSchema.NumUint, app.AppParams.GlobalStateSchema.NumUint)
-	require.Equal(t, params.GlobalStateSchema.NumByteSlice, app.AppParams.GlobalStateSchema.NumByteSlice)
+	require.Equal(t, uint64(appIdx), app.Id)
+	require.Equal(t, params.ApprovalProgram, app.Params.ApprovalProgram)
+	require.Equal(t, params.GlobalStateSchema.NumUint, app.Params.GlobalStateSchema.NumUint)
+	require.Equal(t, params.GlobalStateSchema.NumByteSlice, app.Params.GlobalStateSchema.NumByteSlice)
 	require.NotNil(t, conv.AppsLocalState)
 	require.Equal(t, 1, len(*conv.AppsLocalState))
 
 	ls := (*conv.AppsLocalState)[0]
-	require.Equal(t, uint64(appIdx), ls.AppIndex)
+	require.Equal(t, uint64(appIdx), ls.Id)
 	require.Equal(t, uint64(10), ls.State.Schema.NumUint)
 	require.Equal(t, uint64(0), ls.State.Schema.NumByteSlice)
 	require.Equal(t, 2, len(ls.State.KeyValue))

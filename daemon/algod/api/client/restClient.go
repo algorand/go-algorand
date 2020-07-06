@@ -19,6 +19,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,8 +33,10 @@ import (
 	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	privateV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated/private"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -58,6 +61,7 @@ const (
 var rawRequestPaths = map[string]bool{
 	"/v1/transactions": true,
 	"/v2/teal/dryrun":  true,
+	"/v2/teal/compile": true,
 }
 
 // RestClient manages the REST interface for a calling user.
@@ -319,14 +323,14 @@ func (client RestClient) Assets(assetIdx, max uint64) (response v1.AssetList, er
 }
 
 // AssetInformationV2 gets the AssetInformationResponse associated with the passed asset index
-func (client RestClient) AssetInformationV2(index uint64) (response generatedV2.AssetInformation, err error) {
+func (client RestClient) AssetInformationV2(index uint64) (response generatedV2.Asset, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/assets/%d", index), nil)
 	return
 }
 
 // ApplicationInformation gets the ApplicationInformationResponse associated
 // with the passed application index
-func (client RestClient) ApplicationInformation(index uint64) (response generatedV2.ApplicationInformation, err error) {
+func (client RestClient) ApplicationInformation(index uint64) (response generatedV2.Application, err error) {
 	err = client.get(&response, fmt.Sprintf("/v2/applications/%d", index), nil)
 	return
 }
@@ -451,6 +455,26 @@ func (client RestClient) GetGoRoutines(ctx context.Context) (goRoutines string, 
 	query["debug"] = "1"
 
 	goRoutines, err = client.doGetWithQuery(ctx, "/debug/pprof/goroutine", query)
+	return
+}
+
+// Compile compiles the given program and returned the compiled program
+func (client RestClient) Compile(program []byte) (compiledProgram []byte, programHash crypto.Digest, err error) {
+	var compileResponse generatedV2.CompileResponse
+	err = client.submitForm(&compileResponse, "/v2/teal/compile", program, "POST", false, true)
+	if err != nil {
+		return nil, crypto.Digest{}, err
+	}
+	compiledProgram, err = base64.StdEncoding.DecodeString(compileResponse.Result)
+	if err != nil {
+		return nil, crypto.Digest{}, err
+	}
+	var progAddr basics.Address
+	progAddr, err = basics.UnmarshalChecksumAddress(compileResponse.Hash)
+	if err != nil {
+		return nil, crypto.Digest{}, err
+	}
+	programHash = crypto.Digest(progAddr)
 	return
 }
 

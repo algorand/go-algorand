@@ -17,6 +17,7 @@
 package v2
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -87,7 +88,7 @@ func (dr *DryrunRequest) expandSources() error {
 			dr.Txns[s.TxnIndex].Lsig.Logic = program
 		case "approv", "clearp":
 			for ai, app := range dr.Apps {
-				if app.AppIndex == s.AppIndex {
+				if app.Id == s.AppIndex {
 					switch s.FieldName {
 					case "approv":
 						dr.Apps[ai].Params.ApprovalProgram = program
@@ -281,7 +282,7 @@ func (dl *dryrunLedger) Get(addr basics.Address, withPendingRewards bool) (basic
 		any = true
 		app := dl.dr.Apps[appi]
 		out.AppParams = make(map[basics.AppIndex]basics.AppParams)
-		out.AppParams[basics.AppIndex(app.AppIndex)] = ApplicationParamsToAppParams(&app.Params)
+		out.AppParams[basics.AppIndex(app.Id)] = ApplicationParamsToAppParams(&app.Params)
 	}
 	if !any {
 		return basics.BalanceRecord{}, fmt.Errorf("no account for addr %s", addr.String())
@@ -303,40 +304,39 @@ func (dl *dryrunLedger) PutWithCreatable(record basics.BalanceRecord, newCreatab
 	return nil
 }
 
-// GetAssetCreator gets the address of the account whose balance record
-// contains the asset params
-func (dl *dryrunLedger) GetAssetCreator(aidx basics.AssetIndex) (basics.Address, bool, error) {
-	for _, acct := range dl.dr.Accounts {
-		if acct.CreatedAssets == nil {
-			continue
-		}
-		for _, asset := range *acct.CreatedAssets {
-			if asset.Index == uint64(aidx) {
-				addr, err := basics.UnmarshalChecksumAddress(acct.Address)
-				return addr, true, err
+// GetCreator gets the address of the creator of an app or asset
+func (dl *dryrunLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	switch ctype {
+	case basics.AssetCreatable:
+		for _, acct := range dl.dr.Accounts {
+			if acct.CreatedAssets == nil {
+				continue
 			}
-		}
-	}
-	return basics.Address{}, false, fmt.Errorf("no asset %d", aidx)
-}
-
-// GetAppCreator gets the address of the account whose balance record
-// contains the app params
-func (dl *dryrunLedger) GetAppCreator(aidx basics.AppIndex) (basics.Address, bool, error) {
-	for _, app := range dl.dr.Apps {
-		if app.AppIndex == uint64(aidx) {
-			var addr basics.Address
-			if app.Creator != "" {
-				var err error
-				addr, err = basics.UnmarshalChecksumAddress(app.Creator)
-				if err != nil {
-					return basics.Address{}, false, err
+			for _, asset := range *acct.CreatedAssets {
+				if asset.Index == uint64(cidx) {
+					addr, err := basics.UnmarshalChecksumAddress(acct.Address)
+					return addr, true, err
 				}
 			}
-			return addr, true, nil
 		}
+		return basics.Address{}, false, fmt.Errorf("no asset %d", cidx)
+	case basics.AppCreatable:
+		for _, app := range dl.dr.Apps {
+			if app.Id == uint64(cidx) {
+				var addr basics.Address
+				if app.Creator != "" {
+					var err error
+					addr, err = basics.UnmarshalChecksumAddress(app.Creator)
+					if err != nil {
+						return basics.Address{}, false, err
+					}
+				}
+				return addr, true, nil
+			}
+		}
+		return basics.Address{}, false, fmt.Errorf("no app %d", cidx)
 	}
-	return basics.Address{}, false, fmt.Errorf("no app %d", aidx)
+	return basics.Address{}, false, fmt.Errorf("unknown creatable type %d", ctype)
 }
 
 // Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
@@ -409,7 +409,7 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 				creator := stxn.Txn.Sender.String()
 				// check and use the first entry in dr.Apps
 				if len(dr.Apps) > 0 && dr.Apps[0].Creator == creator {
-					appIdx = basics.AppIndex(dr.Apps[0].AppIndex)
+					appIdx = basics.AppIndex(dr.Apps[0].Id)
 				}
 			}
 
@@ -422,7 +422,7 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 			var app basics.AppParams
 			ok := false
 			for _, appt := range dr.Apps {
-				if appt.AppIndex == uint64(appIdx) {
+				if appt.Id == uint64(appIdx) {
 					app = ApplicationParamsToAppParams(&appt.Params)
 					ok = true
 					break
@@ -488,12 +488,13 @@ func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
 
 	gsd := make(generated.StateDelta, 0, len(sd))
 	for k, v := range sd {
+		bytes := base64.StdEncoding.EncodeToString([]byte(v.Bytes))
 		gsd = append(gsd, generated.EvalDeltaKeyValue{
 			Key: k,
 			Value: generated.EvalDelta{
 				Action: uint64(v.Action),
 				Uint:   &v.Uint,
-				Bytes:  &v.Bytes,
+				Bytes:  &bytes,
 			},
 		})
 	}

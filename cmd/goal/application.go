@@ -992,13 +992,13 @@ var readStateAppCmd = &cobra.Command{
 
 		if fetchGlobal {
 			// Fetching global state. Get application creator
-			info, err := client.ApplicationInformation(appIdx)
+			app, err := client.ApplicationInformation(appIdx)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
 
 			// Get creator information
-			ad, err := client.AccountData(info.Creator)
+			ad, err := client.AccountData(app.Params.Creator)
 			if err != nil {
 				reportErrorf(errorRequestFail, err)
 			}
