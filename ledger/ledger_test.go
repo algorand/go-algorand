@@ -922,7 +922,7 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
-	const maxBlocks = 2000
+	const maxBlocks = 6000
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
