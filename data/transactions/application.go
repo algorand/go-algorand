@@ -62,7 +62,9 @@ const (
 
 	// ClearStateOC is similar to CloseOutOC, but may never fail. This
 	// allows users to reclaim their minimum balance from an application
-	// they no longer wish to opt in to.
+	// they no longer wish to opt in to. When an ApplicationCall
+	// transaction's OnCompletion is ClearStateOC, the ClearStateProgram
+	// executes instead of the ApprovalProgram
 	ClearStateOC OnCompletion = 3
 
 	// UpdateApplicationOC indicates that an application transaction will
@@ -80,16 +82,56 @@ const (
 type ApplicationCallTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApplicationID   basics.AppIndex   `codec:"apid"`
-	OnCompletion    OnCompletion      `codec:"apan"`
-	ApplicationArgs [][]byte          `codec:"apaa,allocbound=encodedMaxApplicationArgs"`
-	Accounts        []basics.Address  `codec:"apat,allocbound=encodedMaxAccounts"`
-	ForeignApps     []basics.AppIndex `codec:"apfa,allocbound=encodedMaxForeignApps"`
+	// ApplicationID is 0 when creating an application, and nonzero when
+	// calling an existing application.
+	ApplicationID basics.AppIndex `codec:"apid"`
 
-	LocalStateSchema  basics.StateSchema `codec:"apls"`
+	// OnCompletion specifies an optional side-effect that this transaction
+	// will have on the balance record of the sender or the application's
+	// creator. See the documentation for the OnCompletion type for more
+	// information on each possible value.
+	OnCompletion OnCompletion `codec:"apan"`
+
+	// ApplicationArgs are arguments accessible to the executing
+	// ApprovalProgram or ClearStateProgram.
+	ApplicationArgs [][]byte `codec:"apaa,allocbound=encodedMaxApplicationArgs"`
+
+	// Accounts are accounts whose balance records are accessible by the
+	// executing ApprovalProgram or ClearStateProgram. To access LocalState
+	// for an account besides the sender, that account's address must be
+	// listed here.
+	Accounts []basics.Address `codec:"apat,allocbound=encodedMaxAccounts"`
+
+	// ForeignApps are application IDs for applications besides this one
+	// whose GlobalState may be read by the executing ApprovalProgram or
+	// ClearStateProgram.
+	ForeignApps []basics.AppIndex `codec:"apfa,allocbound=encodedMaxForeignApps"`
+
+	// LocalStateSchema specifies the maximum number of each type that may
+	// appear in the local key/value store of users who opt in to this
+	// application. This field is only used during application creation
+	// (when the ApplicationID field is 0),
+	LocalStateSchema basics.StateSchema `codec:"apls"`
+
+	// GlobalStateSchema specifies the maximum number of each type that may
+	// appear in the global key/value store associated with this
+	// application. This field is only used during application creation
+	// (when the ApplicationID field is 0).
 	GlobalStateSchema basics.StateSchema `codec:"apgs"`
-	ApprovalProgram   []byte             `codec:"apap,allocbound=config.MaxAppProgramLen"`
-	ClearStateProgram []byte             `codec:"apsu,allocbound=config.MaxAppProgramLen"`
+
+	// ApprovalProgram is the stateful TEAL bytecode that executes on all
+	// ApplicationCall transactions associated with this application,
+	// except for those where OnCompletion is equal to ClearStateOC. If
+	// this program fails, the transaction is rejected. This program may
+	// read and write local and global state for this application.
+	ApprovalProgram []byte `codec:"apap,allocbound=config.MaxAppProgramLen"`
+
+	// ClearStateProgram is the stateful TEAL bytecode that executes on
+	// ApplicationCall transactions associated with this application when
+	// OnCompletion is equal to ClearStateOC. This program will not cause
+	// the transaction to be rejected, even if it fails. This program may
+	// read and write local and global state for this application.
+	ClearStateProgram []byte `codec:"apsu,allocbound=config.MaxAppProgramLen"`
 
 	// If you add any fields here, remember you MUST modify the Empty
 	// method below!
