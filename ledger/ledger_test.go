@@ -904,42 +904,102 @@ func addRecordsToDB(t *testing.T, dbs dbPair, tx *sql.Tx, numRecords int) {
 
 
 func TestLedgerDBConcurrentAccess(t *testing.T) {
+	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
+
 	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
 	require.NoError(t, err)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	dbPrefix := filepath.Join(dbTempDir, dbName)
 	defer os.RemoveAll(dbTempDir)
-	trackerDBs, blockDBs, err := openLedgerDB(dbPrefix, true)
-	defer trackerDBs.close()
-	defer blockDBs.close()
-	trackerTx := initDBs(t, trackerDBs)
-	var blockTx *sql.Tx
 
-	finished := make(chan bool)
+	genesisInitState := getInitState()
+	const inMem = false // use persistent storage
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
 
-	go func() {
-		blockTx = initDBs(t, blockDBs)
-		finished <- true
-	} ()
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	blk := genesisInitState.Block
 
-	<- finished
+	const maxBlocks = 2000
+	for i := 0; i < maxBlocks; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		l.AddBlock(blk, agreement.Certificate{})
+	}
+	l.WaitForCommit(blk.Round())
 
-	tryThreshold := 150
-	go addRecordsToDB(t, trackerDBs, trackerTx, tryThreshold)
-	addRecordsToDB(t, blockDBs, blockTx, tryThreshold)
+	// var latest, earliest basics.Round
+	// err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	// 	latest, err = blockLatest(tx)
+	// 	require.NoError(t, err)
 
-	// _, err = trackerDBs.wdb.Handle.Begin()
-	// if err != nil {
-	// 	fmt.Printf("error initializing trackerDBs:%v\n", err)
-	// }
-	// go func () {
-	// 	for i := 0; i < tryThreshold; i++ {
-	// 		_, err = blockDBs.wdb.Handle.Begin()
-	// 		fmt.Printf("error initializing blockDBs:%v\n", err)
-	// 		if err == nil {
-	// 			break
-	// 		}
-	// 	}
-	// 	a.NoError(err, "was unable to open writer for block DB")
-	// } ()
+	// 	earliest, err = blockEarliest(tx)
+	// 	require.NoError(t, err)
+	// 	return err
+	// })
+	// require.NoError(t, err)
+	// require.Equal(t, basics.Round(maxBlocks), latest)
+	// require.True(t, basics.Round(0) < earliest, fmt.Sprintf("%d < %d", basics.Round(0), earliest))
+
+	// close and reopen the same DB, ensure the DB truncated
+	l.Close()
+
+	// cfg.Archival = true
+	// l, err = OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
+	// require.NoError(t, err)
+	// defer l.Close()
+
+	// err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	// 	latest, err = blockLatest(tx)
+	// 	require.NoError(t, err)
+
+	// 	earliest, err = blockEarliest(tx)
+	// 	require.NoError(t, err)
+	// 	return err
+	// })
+	// require.NoError(t, err)
+	// require.Equal(t, basics.Round(0), earliest)
+	// require.Equal(t, basics.Round(0), latest)
 }
+
+// 	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
+// 	require.NoError(t, err)
+// 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+// 	dbPrefix := filepath.Join(dbTempDir, dbName)
+// 	defer os.RemoveAll(dbTempDir)
+// 	trackerDBs, blockDBs, err := openLedgerDB(dbPrefix, true)
+// 	defer trackerDBs.close()
+// 	defer blockDBs.close()
+// 	trackerTx := initDBs(t, trackerDBs)
+// 	var blockTx *sql.Tx
+
+// 	finished := make(chan bool)
+
+// 	go func() {
+// 		blockTx = initDBs(t, blockDBs)
+// 		finished <- true
+// 	} ()
+
+// 	<- finished
+
+// 	tryThreshold := 150
+// 	go addRecordsToDB(t, trackerDBs, trackerTx, tryThreshold)
+// 	addRecordsToDB(t, blockDBs, blockTx, tryThreshold)
+
+// 	// _, err = trackerDBs.wdb.Handle.Begin()
+// 	// if err != nil {
+// 	// 	fmt.Printf("error initializing trackerDBs:%v\n", err)
+// 	// }
+// 	// go func () {
+// 	// 	for i := 0; i < tryThreshold; i++ {
+// 	// 		_, err = blockDBs.wdb.Handle.Begin()
+// 	// 		fmt.Printf("error initializing blockDBs:%v\n", err)
+// 	// 		if err == nil {
+// 	// 			break
+// 	// 		}
+// 	// 	}
+// 	// 	a.NoError(err, "was unable to open writer for block DB")
+// 	// } ()
+// }
