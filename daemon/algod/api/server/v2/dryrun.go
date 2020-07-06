@@ -117,39 +117,44 @@ func (ddr *dryrunDebugReceiver) updateScratch() {
 	maxActive := -1
 	lasti := len(ddr.history) - 1
 
-	if ddr.history[lasti].Scratch != nil {
-		for i, sv := range *ddr.history[lasti].Scratch {
-			if sv.Type != uint64(basics.TealUintType) || sv.Uint != 0 {
-				any = true
-				maxActive = i
-			}
+	if ddr.history[lasti].Scratch == nil {
+		return
+	}
+
+	for i, sv := range *ddr.history[lasti].Scratch {
+		if sv.Type != uint64(basics.TealUintType) || sv.Uint != 0 {
+			any = true
+			maxActive = i
 		}
-		if any {
-			if ddr.scratchActive == nil {
-				ddr.scratchActive = make([]bool, maxActive+1, 256)
-			}
-			for i := len(ddr.scratchActive); i <= maxActive; i++ {
-				sv := (*ddr.history[lasti].Scratch)[i]
-				active := sv.Type != uint64(basics.TealUintType) || sv.Uint != 0
-				ddr.scratchActive = append(ddr.scratchActive, active)
-			}
+	}
+
+	if any {
+		if ddr.scratchActive == nil {
+			ddr.scratchActive = make([]bool, maxActive+1, 256)
+		}
+		for i := len(ddr.scratchActive); i <= maxActive; i++ {
+			sv := (*ddr.history[lasti].Scratch)[i]
+			active := sv.Type != uint64(basics.TealUintType) || sv.Uint != 0
+			ddr.scratchActive = append(ddr.scratchActive, active)
+		}
+	} else {
+		if ddr.scratchActive != nil {
+			*ddr.history[lasti].Scratch = (*ddr.history[lasti].Scratch)[:len(ddr.scratchActive)]
 		} else {
-			if ddr.scratchActive != nil {
-				*ddr.history[lasti].Scratch = (*ddr.history[lasti].Scratch)[:len(ddr.scratchActive)]
-			} else {
-				ddr.history[lasti].Scratch = nil
-				return
-			}
+			ddr.history[lasti].Scratch = nil
+			return
 		}
-		scratchlen := maxActive + 1
-		if len(ddr.scratchActive) > scratchlen {
-			scratchlen = len(ddr.scratchActive)
-		}
-		*ddr.history[lasti].Scratch = (*ddr.history[lasti].Scratch)[:scratchlen]
-		for i := range *ddr.history[lasti].Scratch {
-			if !ddr.scratchActive[i] {
-				(*ddr.history[lasti].Scratch)[i].Type = 0
-			}
+	}
+
+	scratchlen := maxActive + 1
+	if len(ddr.scratchActive) > scratchlen {
+		scratchlen = len(ddr.scratchActive)
+	}
+
+	*ddr.history[lasti].Scratch = (*ddr.history[lasti].Scratch)[:scratchlen]
+	for i := range *ddr.history[lasti].Scratch {
+		if !ddr.scratchActive[i] {
+			(*ddr.history[lasti].Scratch)[i].Type = 0
 		}
 	}
 }
