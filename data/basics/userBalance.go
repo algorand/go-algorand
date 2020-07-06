@@ -17,6 +17,7 @@
 package basics
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/algorand/go-algorand/config"
@@ -77,7 +78,7 @@ func (s Status) String() string {
 }
 
 // UnmarshalStatus decodes string status value back to Status constant
-func UnmarshalStatus(value string) (s Status) {
+func UnmarshalStatus(value string) (s Status, err error) {
 	switch value {
 	case "Offline":
 		s = Offline
@@ -86,7 +87,7 @@ func UnmarshalStatus(value string) (s Status) {
 	case "Not Participating":
 		s = NotParticipating
 	default:
-		s = Offline
+		err = fmt.Errorf("unknown account status: %v", value)
 	}
 	return
 }

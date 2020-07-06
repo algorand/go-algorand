@@ -241,8 +241,13 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 		totalSchema.NumByteSlice = a.AppsTotalSchema.NumByteSlice
 	}
 
+	status, err := basics.UnmarshalStatus(a.Status)
+	if err != nil {
+		return basics.AccountData{}, err
+	}
+
 	ad := basics.AccountData{
-		Status:             basics.UnmarshalStatus(a.Status),
+		Status:             status,
 		MicroAlgos:         basics.MicroAlgos{Raw: a.Amount},
 		RewardsBase:        rewardsBase,
 		RewardedMicroAlgos: basics.MicroAlgos{Raw: a.Rewards},
