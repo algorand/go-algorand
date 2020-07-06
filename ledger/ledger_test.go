@@ -913,7 +913,16 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
 	defer trackerDBs.close()
 	defer blockDBs.close()
 	trackerTx := initDBs(t, trackerDBs)
-	blockTx := initDBs(t, blockDBs)
+	var blockTx *sql.Tx
+
+	finished := make(chan bool)
+
+	go func() {
+		blockTx = initDBs(t, blockDBs)
+		finished <- true
+	} ()
+
+	<- finished
 
 	tryThreshold := 150
 	go addRecordsToDB(t, trackerDBs, trackerTx, tryThreshold)
