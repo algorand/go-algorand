@@ -666,20 +666,14 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 	}
 
 	// Initialize our TEAL evaluation context. Internally, this manages
-	// access to balance records for Stateful TEAL programs. Stateful TEAL
-	// may only access
-	// - The sender's balance record
-	// - The balance records of accounts explicitly listed in ac.Accounts
-	// - The app creator's balance record (to read/write GlobalState)
-	// - The balance records of creators of apps in ac.ForeignApps (to read
-	//   GlobalState)
+	// access to balance records for Stateful TEAL programs as a thin
+	// wrapper around Balances.
+	//
 	// Note that at this point in execution, the application might not exist
 	// (e.g. if it was deleted). In that case, we will pass empty
 	// params.StateSchemas below. This is OK because if the application is
 	// deleted, we will never execute its programs.
-	acctWhitelist := append(ac.Accounts, header.Sender)
-	appGlobalWhitelist := append(ac.ForeignApps, appIdx)
-	err = steva.InitLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, params.StateSchemas)
+	err = steva.InitLedger(balances, appIdx, params.StateSchemas)
 	if err != nil {
 		return err
 	}

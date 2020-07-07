@@ -41,11 +41,9 @@ type appTealEvaluator struct {
 
 // appLedger implements logic.LedgerForLogic
 type appLedger struct {
-	addresses map[basics.Address]bool
-	apps      map[basics.AppIndex]bool
-	balances  transactions.Balances
-	appIdx    basics.AppIndex
-	schemas   basics.StateSchemas
+	balances transactions.Balances
+	appIdx   basics.AppIndex
+	schemas  basics.StateSchemas
 	AppTealGlobals
 }
 
@@ -70,13 +68,9 @@ func (ae *appTealEvaluator) Check(program []byte) (cost int, err error) {
 }
 
 // InitLedger initializes an appLedger, which satisfies the
-// logic.LedgerForLogic interface. The acctWhitelist lists all the accounts
-// whose balance records we can fetch information like LocalState and balance
-// from, and the appGlobalWhitelist lists all the app IDs we are allowed to
-// fetch global state for (which requires looking up the creator's balance
-// record).
-func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, schemas basics.StateSchemas) error {
-	ledger, err := newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, schemas, ae.AppTealGlobals)
+// logic.LedgerForLogic interface.
+func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, appIdx basics.AppIndex, schemas basics.StateSchemas) error {
+	ledger, err := newAppLedger(balances, appIdx, schemas, ae.AppTealGlobals)
 	if err != nil {
 		return err
 	}
@@ -85,19 +79,9 @@ func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, acctWhite
 	return nil
 }
 
-func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, schemas basics.StateSchemas, globals AppTealGlobals) (al *appLedger, err error) {
+func newAppLedger(balances transactions.Balances, appIdx basics.AppIndex, schemas basics.StateSchemas, globals AppTealGlobals) (al *appLedger, err error) {
 	if balances == nil {
 		err = fmt.Errorf("cannot create appLedger with nil balances")
-		return
-	}
-
-	if len(acctWhitelist) < 1 {
-		err = fmt.Errorf("appLedger acct whitelist should at least include txn sender")
-		return
-	}
-
-	if len(appGlobalWhitelist) < 1 {
-		err = fmt.Errorf("appLedger app whitelist should at least include this appIdx")
 		return
 	}
 
@@ -110,33 +94,16 @@ func newAppLedger(balances transactions.Balances, acctWhitelist []basics.Address
 	al.appIdx = appIdx
 	al.balances = balances
 	al.schemas = schemas
-	al.addresses = make(map[basics.Address]bool, len(acctWhitelist))
-	al.apps = make(map[basics.AppIndex]bool, len(appGlobalWhitelist))
 	al.AppTealGlobals = globals
-
-	for _, addr := range acctWhitelist {
-		al.addresses[addr] = true
-	}
-
-	for _, aidx := range appGlobalWhitelist {
-		al.apps[aidx] = true
-	}
-
 	return al, nil
 }
 
 // MakeDebugAppLedger returns logic.LedgerForLogic suitable for debug or dryrun
-func MakeDebugAppLedger(balances transactions.Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex, schemas basics.StateSchemas, globals AppTealGlobals) (al logic.LedgerForLogic, err error) {
-	return newAppLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx, schemas, globals)
+func MakeDebugAppLedger(balances transactions.Balances, appIdx basics.AppIndex, schemas basics.StateSchemas, globals AppTealGlobals) (logic.LedgerForLogic, error) {
+	return newAppLedger(balances, appIdx, schemas, globals)
 }
 
 func (al *appLedger) Balance(addr basics.Address) (res basics.MicroAlgos, err error) {
-	// Ensure requested address is on whitelist
-	if !al.addresses[addr] {
-		err = fmt.Errorf("cannot access balance for %s, not sender or in txn.Addresses", addr.String())
-		return
-	}
-
 	// Fetch record with pending rewards applied
 	record, err := al.balances.Get(addr, true)
 	if err != nil {
@@ -153,11 +120,6 @@ func (al *appLedger) AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue
 	var params basics.AppParams
 	if appIdx == 0 {
 		appIdx = al.appIdx
-	}
-
-	// Ensure requested app is on whitelist
-	if !al.apps[appIdx] {
-		return nil, fmt.Errorf("cannot access global state for %d, is not for this app (%d) or in txn.ForeignApps", appIdx, al.appIdx)
 	}
 
 	// Find app creator (and check if app exists)
@@ -199,11 +161,6 @@ func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) 
 		appIdx = al.appIdx
 	}
 
-	// Ensure requested address is on whitelist
-	if !al.addresses[addr] {
-		return nil, fmt.Errorf("cannot access local state for %s, not sender or in txn.Addresses", addr.String())
-	}
-
 	// Don't fetch with pending rewards here since we are only returning
 	// the LocalState, not the balance
 	record, err := al.balances.Get(addr, false)
@@ -226,47 +183,35 @@ func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) 
 	return keyValue, nil
 }
 
-func (al *appLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (holding basics.AssetHolding, err error) {
-	// Ensure requested address is on whitelist
-	if !al.addresses[addr] {
-		err = fmt.Errorf("cannot access asset holding for %s, not sender or in txn.Addresses", addr.String())
-		return
-	}
-
+func (al *appLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {
 	// Fetch the requested balance record
 	record, err := al.balances.Get(addr, false)
 	if err != nil {
-		return
+		return basics.AssetHolding{}, err
 	}
 
 	// Ensure we have the requested holding
 	holding, ok := record.Assets[assetIdx]
 	if !ok {
 		err = fmt.Errorf("account %s has not opted in to asset %d", addr.String(), assetIdx)
-		return
+		return basics.AssetHolding{}, err
 	}
 
 	return holding, nil
 }
 
-func (al *appLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (params basics.AssetParams, err error) {
-	// Ensure requested address is on whitelist
-	if !al.addresses[addr] {
-		err = fmt.Errorf("cannot access asset params for %s, not sender or in txn.Addresses", addr.String())
-		return
-	}
-
+func (al *appLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error) {
 	// Fetch the requested balance record
 	record, err := al.balances.Get(addr, false)
 	if err != nil {
-		return
+		return basics.AssetParams{}, err
 	}
 
 	// Ensure account created the requested asset
 	params, ok := record.AssetParams[assetIdx]
 	if !ok {
 		err = fmt.Errorf("account %s has not created asset %d", addr.String(), assetIdx)
-		return
+		return basics.AssetParams{}, err
 	}
 
 	return params, nil

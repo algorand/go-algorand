@@ -130,7 +130,7 @@ func makeAppLedger(
 	}
 
 	appGlobals := ledger.AppTealGlobals{CurrentRound: basics.Round(round), LatestTimestamp: latestTimestamp}
-	ledger, err := ledger.MakeDebugAppLedger(ba, accounts, apps, appIdx, states.schemas, appGlobals)
+	ledger, err := ledger.MakeDebugAppLedger(ba, appIdx, states.schemas, appGlobals)
 	return ledger, states, err
 }
 

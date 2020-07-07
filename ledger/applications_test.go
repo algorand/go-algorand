@@ -106,35 +106,24 @@ func getRandomAddress(a *require.Assertions) basics.Address {
 func TestNewAppLedger(t *testing.T) {
 	a := require.New(t)
 
-	_, err := newAppLedger(nil, nil, nil, 0, basics.StateSchemas{}, AppTealGlobals{})
+	_, err := newAppLedger(nil, 0, basics.StateSchemas{}, AppTealGlobals{})
 	a.Error(err)
 	a.Contains(err.Error(), "nil balances")
 
 	b := testBalances{}
-	_, err = newAppLedger(&b, nil, nil, 0, basics.StateSchemas{}, AppTealGlobals{})
-	a.Error(err)
-	a.Contains(err.Error(), "should at least include txn sender")
 
-	acc := []basics.Address{getRandomAddress(a)}
-	_, err = newAppLedger(&b, acc, nil, 0, basics.StateSchemas{}, AppTealGlobals{})
-	a.Error(err)
-	a.Contains(err.Error(), "should at least include this appIdx")
-
-	app := []basics.AppIndex{0}
-	_, err = newAppLedger(&b, acc, app, 0, basics.StateSchemas{}, AppTealGlobals{})
+	_, err = newAppLedger(&b, 0, basics.StateSchemas{}, AppTealGlobals{})
 	a.Error(err)
 	a.Contains(err.Error(), "cannot create appLedger for appIdx 0")
 
 	appIdx := basics.AppIndex(1)
-	l, err := newAppLedger(&b, acc, app, appIdx, basics.StateSchemas{}, AppTealGlobals{})
+	l, err := newAppLedger(&b, appIdx, basics.StateSchemas{}, AppTealGlobals{})
 	a.NoError(err)
 	a.NotNil(l)
 	a.Equal(appIdx, l.appIdx)
 	a.NotNil(l.balances)
-	a.Equal(1, len(l.addresses))
-	a.Equal(1, len(l.apps))
 
-	dl, err := MakeDebugAppLedger(&b, acc, app, appIdx, basics.StateSchemas{}, AppTealGlobals{})
+	dl, err := MakeDebugAppLedger(&b, appIdx, basics.StateSchemas{}, AppTealGlobals{})
 	a.NoError(err)
 	a.NotNil(dl)
 }
@@ -145,11 +134,9 @@ func TestAppLedgerBalances(t *testing.T) {
 	b := testBalances{}
 	addr1 := getRandomAddress(a)
 	addr2 := getRandomAddress(a)
-	acc := []basics.Address{addr1}
-	app := []basics.AppIndex{appIdxOk}
 	appIdx := appIdxOk
 
-	l, err := newAppLedger(&b, acc, app, appIdx, basics.StateSchemas{}, AppTealGlobals{})
+	l, err := newAppLedger(&b, appIdx, basics.StateSchemas{}, AppTealGlobals{})
 	a.NoError(err)
 	a.NotNil(l)
 
@@ -172,15 +159,12 @@ func TestAppLedgerGetters(t *testing.T) {
 	a := require.New(t)
 
 	b := testBalances{}
-	addr1 := getRandomAddress(a)
-	acc := []basics.Address{addr1}
-	app := []basics.AppIndex{appIdxOk}
 	appIdx := appIdxOk
 	round := basics.Round(1234)
 	ts := int64(11223344)
 	globals := AppTealGlobals{round, ts}
 
-	l, err := newAppLedger(&b, acc, app, appIdx, basics.StateSchemas{}, globals)
+	l, err := newAppLedger(&b, appIdx, basics.StateSchemas{}, globals)
 	a.NoError(err)
 	a.NotNil(l)
 
@@ -189,7 +173,8 @@ func TestAppLedgerGetters(t *testing.T) {
 	a.Equal(ts, l.LatestTimestamp())
 
 	// check there no references/pointers
-	globals = AppTealGlobals{101, 102}
+	globals.CurrentRound = 101
+	globals.LatestTimestamp = 102
 	a.Equal(round, l.Round())
 	a.Equal(ts, l.LatestTimestamp())
 }
@@ -200,11 +185,9 @@ func TestAppLedgerAsset(t *testing.T) {
 	b := testBalances{}
 	addr1 := getRandomAddress(a)
 	addr2 := getRandomAddress(a)
-	acc := []basics.Address{addr1}
-	app := []basics.AppIndex{appIdxOk}
 	appIdx := appIdxOk
 
-	l, err := newAppLedger(&b, acc, app, appIdx, basics.StateSchemas{}, AppTealGlobals{})
+	l, err := newAppLedger(&b, appIdx, basics.StateSchemas{}, AppTealGlobals{})
 	a.NoError(err)
 	a.NotNil(l)
 
@@ -256,11 +239,9 @@ func TestAppLedgerAppGlobalState(t *testing.T) {
 
 	b := testBalances{}
 	addr1 := getRandomAddress(a)
-	acc := []basics.Address{addr1}
-	app := []basics.AppIndex{appIdxOk, appIdxError}
 	appIdx := appIdxOk
 
-	l, err := newAppLedger(&b, acc, app, appIdx, basics.StateSchemas{}, AppTealGlobals{})
+	l, err := newAppLedger(&b, appIdx, basics.StateSchemas{}, AppTealGlobals{})
 	a.NoError(err)
 	a.NotNil(l)
 
@@ -303,11 +284,9 @@ func TestAppLedgerAppLocalState(t *testing.T) {
 	b := testBalances{}
 	addr1 := getRandomAddress(a)
 	addr2 := getRandomAddress(a)
-	acc := []basics.Address{addr1}
-	app := []basics.AppIndex{appIdxOk, appIdxError}
 	appIdx := basics.AppIndex(100) // not in app
 
-	l, err := newAppLedger(&b, acc, app, appIdx, basics.StateSchemas{}, AppTealGlobals{})
+	l, err := newAppLedger(&b, appIdx, basics.StateSchemas{}, AppTealGlobals{})
 	a.NoError(err)
 	a.NotNil(l)
 
