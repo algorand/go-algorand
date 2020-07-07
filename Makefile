@@ -194,7 +194,8 @@ fulltest: build-race
 	done
 
 shorttest: build-race #$(addprefix short_test_target_, $(UNIT_TEST_SOURCES))
-	go test $(GOTAGS) -timeout 2500s -v -race github.com/algorand/go-algorand/ledger -run "TestLedgerDBConcurrentAccess"
+	go test $(GOTAGS) -timeout 2500s -v -race github.com/algorand/go-algorand/ledger
+	# -run "TestLedgerDBConcurrentAccess"
 	
 $(addprefix short_test_target_, $(UNIT_TEST_SOURCES)): build
 	@go test $(GOTAGS) -short -timeout 2500s -race $(subst short_test_target_,,$@)
