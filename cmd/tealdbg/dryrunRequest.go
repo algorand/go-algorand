@@ -75,7 +75,7 @@ func balanceRecordsFromDdr(ddr *v2.DryrunRequest) (records []basics.BalanceRecor
 	}
 	for _, a := range ddr.Apps {
 		var addr basics.Address
-		addr, err = basics.UnmarshalChecksumAddress(a.Creator)
+		addr, err = basics.UnmarshalChecksumAddress(a.Params.Creator)
 		if err != nil {
 			return
 		}

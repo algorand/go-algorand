@@ -41,7 +41,7 @@ type DryrunRequest struct {
 	// Optional, useful for testing Application Call txns.
 	Accounts []generated.Account `codec:"accounts"`
 
-	Apps []generated.DryrunApp `codec:"apps"`
+	Apps []generated.Application `codec:"apps"`
 
 	// ProtocolVersion specifies a specific version string to operate under, otherwise whatever the current protocol of the network this algod is running in.
 	ProtocolVersion string `codec:"protocol-version"`
@@ -240,9 +240,9 @@ func (dl *dryrunLedger) init() error {
 	}
 	for i, app := range dl.dr.Apps {
 		var addr basics.Address
-		if app.Creator != "" {
+		if app.Params.Creator != "" {
 			var err error
-			addr, err = basics.UnmarshalChecksumAddress(app.Creator)
+			addr, err = basics.UnmarshalChecksumAddress(app.Params.Creator)
 			if err != nil {
 				return err
 			}
@@ -330,9 +330,9 @@ func (dl *dryrunLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.Crea
 		for _, app := range dl.dr.Apps {
 			if app.Id == uint64(cidx) {
 				var addr basics.Address
-				if app.Creator != "" {
+				if app.Params.Creator != "" {
 					var err error
-					addr, err = basics.UnmarshalChecksumAddress(app.Creator)
+					addr, err = basics.UnmarshalChecksumAddress(app.Params.Creator)
 					if err != nil {
 						return basics.Address{}, false, err
 					}
@@ -424,7 +424,7 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 			if appIdx == 0 {
 				creator := stxn.Txn.Sender.String()
 				// check and use the first entry in dr.Apps
-				if len(dr.Apps) > 0 && dr.Apps[0].Creator == creator {
+				if len(dr.Apps) > 0 && dr.Apps[0].Params.Creator == creator {
 					appIdx = basics.AppIndex(dr.Apps[0].Id)
 				}
 			}

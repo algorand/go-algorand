@@ -400,7 +400,7 @@ func TestDryrunGlobal1(t *testing.T) {
 			Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
 		},
 	}
-	dr.Apps = []generated.DryrunApp{
+	dr.Apps = []generated.Application{
 		{
 			Id: 1,
 			Params: generated.ApplicationParams{
@@ -449,7 +449,7 @@ func TestDryrunGlobal2(t *testing.T) {
 			Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
 		},
 	}
-	dr.Apps = []generated.DryrunApp{
+	dr.Apps = []generated.Application{
 		{
 			Id: 1,
 			Params: generated.ApplicationParams{
@@ -499,7 +499,7 @@ func TestDryrunLocal1(t *testing.T) {
 			},
 		},
 	}
-	dr.Apps = []generated.DryrunApp{
+	dr.Apps = []generated.Application{
 		{
 			Id: 1,
 			Params: generated.ApplicationParams{
@@ -572,7 +572,7 @@ func TestDryrunLocal1A(t *testing.T) {
 			},
 		},
 	}
-	dr.Apps = []generated.DryrunApp{
+	dr.Apps = []generated.Application{
 		{
 			Id: 1,
 		},
@@ -649,7 +649,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 			},
 		},
 	}
-	dr.Apps = []generated.DryrunApp{
+	dr.Apps = []generated.Application{
 		{
 			Id: 1,
 			Params: generated.ApplicationParams{
@@ -705,7 +705,7 @@ func TestDryrunEncodeDecode(t *testing.T) {
 		gdr.Txns = append(gdr.Txns, enc)
 	}
 
-	gdr.Apps = []generated.DryrunApp{
+	gdr.Apps = []generated.Application{
 		{
 			Id: 1,
 			Params: generated.ApplicationParams{
@@ -818,11 +818,11 @@ func TestDryrunMakeLedger(t *testing.T) {
 			},
 		},
 	}
-	dr.Apps = []generated.DryrunApp{
+	dr.Apps = []generated.Application{
 		{
-			Id:      1,
-			Creator: sender.String(),
+			Id: 1,
 			Params: generated.ApplicationParams{
+				Creator:         sender.String(),
 				ApprovalProgram: localStateCheckProg,
 			},
 		},
@@ -857,8 +857,8 @@ var dataJSON = []byte(`{
 	"apps": [
 	  {
 		"id": 1380011588,
-		"creator": "UAPJE355K7BG7RQVMTZOW7QW4ICZJEIC3RZGYG5LSHZ65K6LCNFPJDSR7M",
 		"params": {
+		  "creator": "UAPJE355K7BG7RQVMTZOW7QW4ICZJEIC3RZGYG5LSHZ65K6LCNFPJDSR7M",
 		  "approval-program": "AiABASI=",
 		  "clear-state-program": "AiABASI=",
 		  "global-state-schema": {
@@ -878,26 +878,26 @@ var dataJSON = []byte(`{
 	"sources": null,
 	"txns": [
 	  {
-	"txn": {
-	  "apap": "AiABASI=",
-	  "apgs": {
-		"nbs": 5,
-		"nui": 5
-	  },
-	  "apls": {
-		"nbs": 5,
-		"nui": 5
-	  },
-	  "apsu": "AiABASI=",
-	  "fee": 1000,
-	  "fv": 18242,
-	  "gh": "ZIkPs8pTDxbRJsFB1yJ7gvnpDu0Q85FRkl2NCkEAQLU=",
-	  "lv": 19242,
-	  "note": "tjpNge78JD8=",
-	  "snd": "UAPJE355K7BG7RQVMTZOW7QW4ICZJEIC3RZGYG5LSHZ65K6LCNFPJDSR7M",
-	  "type": "appl"
-	}
-  }
+		"txn": {
+			"apap": "AiABASI=",
+			"apgs": {
+				"nbs": 5,
+				"nui": 5
+			},
+			"apls": {
+				"nbs": 5,
+				"nui": 5
+			},
+			"apsu": "AiABASI=",
+			"fee": 1000,
+			"fv": 18242,
+			"gh": "ZIkPs8pTDxbRJsFB1yJ7gvnpDu0Q85FRkl2NCkEAQLU=",
+			"lv": 19242,
+			"note": "tjpNge78JD8=",
+			"snd": "UAPJE355K7BG7RQVMTZOW7QW4ICZJEIC3RZGYG5LSHZ65K6LCNFPJDSR7M",
+			"type": "appl"
+		}
+  	  }
 	]
 }`)
 

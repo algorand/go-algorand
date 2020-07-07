@@ -232,19 +232,10 @@ type AssetParams struct {
 	Url *string `json:"url,omitempty"`
 }
 
-// DryrunApp defines model for DryrunApp.
-type DryrunApp struct {
-	Creator string `json:"creator"`
-	Id      uint64 `json:"id"`
-
-	// Stores the global information associated with an application.
-	Params ApplicationParams `json:"params"`
-}
-
 // DryrunRequest defines model for DryrunRequest.
 type DryrunRequest struct {
-	Accounts []Account   `json:"accounts"`
-	Apps     []DryrunApp `json:"apps"`
+	Accounts []Account     `json:"accounts"`
+	Apps     []Application `json:"apps"`
 
 	// LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.
 	LatestTimestamp uint64 `json:"latest-timestamp"`

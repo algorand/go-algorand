@@ -436,7 +436,7 @@ func TestTealDryrun(t *testing.T) {
 	failProgram, err := logic.AssembleString("int 0")
 	require.NoError(t, err)
 
-	gdr.Apps = []generated.DryrunApp{
+	gdr.Apps = []generated.Application{
 		{
 			Id: 1,
 			Params: generated.ApplicationParams{

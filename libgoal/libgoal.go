@@ -960,9 +960,8 @@ func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, other []tran
 		apps = append(apps, tx.ForeignApps...)
 		for _, appIdx := range apps {
 			var appParams generatedV2.ApplicationParams
-			var creator string
-			// if app create txn then use params from the txn
 			if appIdx == 0 {
+				// if it is an app create txn then use params from the txn
 				appParams.ApprovalProgram = tx.ApprovalProgram
 				appParams.ClearStateProgram = tx.ClearStateProgram
 				appParams.GlobalStateSchema = &generatedV2.ApplicationStateSchema{
@@ -973,7 +972,7 @@ func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, other []tran
 					NumUint:      tx.LocalStateSchema.NumUint,
 					NumByteSlice: tx.LocalStateSchema.NumByteSlice,
 				}
-				creator = tx.Sender.String()
+				appParams.Creator = tx.Sender.String()
 				// zero is not acceptable by ledger in dryrun/debugger
 				appIdx = defaultAppIdx
 			} else {
@@ -983,12 +982,10 @@ func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, other []tran
 					return
 				}
 				appParams = app.Params
-				creator = appParams.Creator
 			}
-			dr.Apps = append(dr.Apps, generatedV2.DryrunApp{
-				Creator: creator,
-				Id:      uint64(appIdx),
-				Params:  appParams,
+			dr.Apps = append(dr.Apps, generatedV2.Application{
+				Id:     uint64(appIdx),
+				Params: appParams,
 			})
 		}
 

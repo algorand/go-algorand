@@ -1706,7 +1706,7 @@
         "apps": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/DryrunApp"
+            "$ref": "#/definitions/Application"
           }
         },
         "protocol-version": {
@@ -1728,27 +1728,6 @@
           "items": {
             "$ref": "#/definitions/DryrunSource"
           }
-        }
-      }
-    },
-    "DryrunApp": {
-      "description": "DryrunApp holds global app state for a dryrun call.",
-      "type": "object",
-      "required": [
-        "creator",
-        "id",
-        "params"
-      ],
-      "properties": {
-        "creator": {
-          "type": "string"
-        },
-        "id": {
-          "type": "integer",
-          "x-algorand-format": "uint64"
-        },
-        "params": {
-          "$ref": "#/definitions/ApplicationParams"
         }
       }
     },

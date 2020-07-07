@@ -995,27 +995,6 @@
         ],
         "type": "object"
       },
-      "DryrunApp": {
-        "description": "DryrunApp holds global app state for a dryrun call.",
-        "properties": {
-          "creator": {
-            "type": "string"
-          },
-          "id": {
-            "type": "integer",
-            "x-algorand-format": "uint64"
-          },
-          "params": {
-            "$ref": "#/components/schemas/ApplicationParams"
-          }
-        },
-        "required": [
-          "creator",
-          "id",
-          "params"
-        ],
-        "type": "object"
-      },
       "DryrunRequest": {
         "description": "Request data type for dryrun endpoint. Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.",
         "properties": {
@@ -1027,7 +1006,7 @@
           },
           "apps": {
             "items": {
-              "$ref": "#/components/schemas/DryrunApp"
+              "$ref": "#/components/schemas/Application"
             },
             "type": "array"
           },
