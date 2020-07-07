@@ -83,7 +83,6 @@ var accountsSchema = []string{
 // 'asset' column -> 'creatable'
 var creatablesMigration = []string{
 	`ALTER TABLE assetcreators ADD COLUMN ctype INTEGER DEFAULT 0`,
-	`CREATE INDEX assetcreators_ctype_idx ON assetcreators (asset, ctype)`,
 }
 
 var accountsResetExprs = []string{
@@ -179,12 +178,6 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 	s += "DROP TABLE IF EXISTS accountbase_old;"
 	s += "DROP TABLE IF EXISTS assetcreators_old;"
 	s += "DROP TABLE IF EXISTS accounthashes_old;"
-	s += "DROP INDEX IF EXISTS assetcreators_ctype_idx;"
-
-	// If recreating this index is too slow, we should create it at the same
-	// time as catchpointassetcreators. Unfortunately there doesn't seem to
-	// be an easy way to rename indexes and do the '_old' swap like above...
-	s += "CREATE INDEX assetcreators_ctype_idx ON assetcreators (asset, ctype);"
 
 	_, err = tx.Exec(s)
 	if err != nil {
@@ -221,7 +214,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 
 	// Run creatables migration if it hasn't run yet
 	var creatableMigrated bool
-	err := tx.QueryRow("SELECT 1 FROM sqlite_master WHERE type='index' AND name='assetcreators_ctype_idx'").Scan(&creatableMigrated)
+	err := tx.QueryRow("SELECT 1 FROM pragma_table_info('assetcreators') WHERE name='ctype'").Scan(&creatableMigrated)
 	if err == sql.ErrNoRows {
 		// Run migration
 		for _, migrateCmd := range creatablesMigration {
