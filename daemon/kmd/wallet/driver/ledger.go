@@ -30,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/kmd/config"
 	"github.com/algorand/go-algorand/daemon/kmd/wallet"
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -308,40 +307,16 @@ func (lw *LedgerWallet) DeleteMultisigAddr(addr crypto.Digest, pw []byte) error 
 }
 
 // SignTransaction implements the Wallet interface.
-func (lw *LedgerWallet) SignTransaction(tx transactions.Transaction, pk crypto.PublicKey, pw []byte) ([]byte, error) {
-	pks, err := lw.ListKeys()
-	if err != nil {
-		return nil, err
-	}
-	// Right now the device only supports one key
-	if len(pks) > 1 {
-		return nil, errors.New("LedgerWallet device only supports one key but ListKeys returned more than one")
-	}
-	if len(pks) < 1 {
-		return nil, errKeyNotFound
-	}
-	if (pk != crypto.PublicKey{}) && pk != crypto.PublicKey(pks[0]) {
-		// A specific key was requested; return an error if it's not the one on the device.
-		return nil, errKeyNotFound
-	}
-	pk = crypto.PublicKey(pks[0])
-
+func (lw *LedgerWallet) SignTransaction(tx transactions.Transaction, pw []byte) ([]byte, error) {
 	sig, err := lw.signTransactionHelper(tx)
 	if err != nil {
 		return nil, err
 	}
 
-	stxn := transactions.SignedTxn{
+	return protocol.Encode(&transactions.SignedTxn{
 		Txn: tx,
 		Sig: sig,
-	}
-
-	// Set the AuthAddr if the key we signed with doesn't match the txn sender
-	if basics.Address(pk) != tx.Sender {
-		stxn.AuthAddr = basics.Address(pk)
-	}
-
-	return protocol.Encode(&stxn), nil
+	}), nil
 }
 
 // SignProgram implements the Wallet interface.

@@ -86,9 +86,8 @@ func BenchmarkManyAccounts(b *testing.B) {
 
 	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
 	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	const archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
 	require.NoError(b, err)
 	defer l.Close()
 
@@ -139,9 +138,8 @@ func BenchmarkValidate(b *testing.B) {
 
 	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
 	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	const archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
 	require.NoError(b, err)
 	defer l.Close()
 

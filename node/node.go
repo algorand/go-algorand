@@ -23,7 +23,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -35,7 +34,6 @@ import (
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -56,22 +54,16 @@ const participationKeyCheckSecs = 60
 
 // StatusReport represents the current basic status of the node
 type StatusReport struct {
-	LastRound                          basics.Round
-	LastVersion                        protocol.ConsensusVersion
-	NextVersion                        protocol.ConsensusVersion
-	NextVersionRound                   basics.Round
-	NextVersionSupported               bool
-	LastRoundTimestamp                 time.Time
-	SynchronizingTime                  time.Duration
-	CatchupTime                        time.Duration
-	HasSyncedSinceStartup              bool
-	StoppedAtUnsupportedRound          bool
-	LastCatchpoint                     string // the last catchpoint hit by the node. This would get updated regardless of whether the node is catching up using catchpoints or not.
-	Catchpoint                         string // the catchpoint where we're currently catching up to. If the node isn't in fast catchup mode, it will be empty.
-	CatchpointCatchupTotalAccounts     uint64
-	CatchpointCatchupProcessedAccounts uint64
-	CatchpointCatchupTotalBlocks       uint64
-	CatchpointCatchupAcquiredBlocks    uint64
+	LastRound                 basics.Round
+	LastVersion               protocol.ConsensusVersion
+	NextVersion               protocol.ConsensusVersion
+	NextVersionRound          basics.Round
+	NextVersionSupported      bool
+	LastRoundTimestamp        time.Time
+	SynchronizingTime         time.Duration
+	CatchupTime               time.Duration
+	HasSyncedSinceStartup     bool
+	StoppedAtUnsupportedRound bool
 }
 
 // TimeSinceLastRound returns the time since the last block was approved (locally), or 0 if no blocks seen
@@ -100,13 +92,8 @@ type AlgorandFullNode struct {
 	accountManager  *data.AccountManager
 	feeTracker      *pools.FeeTracker
 
-	agreementService         *agreement.Service
-	catchupService           *catchup.Service
-	catchpointCatchupService *catchup.CatchpointCatchupService
-	blockService             *rpcs.BlockService
-	ledgerService            *rpcs.LedgerService
-	wsFetcherService         *rpcs.WsFetcherService // to handle inbound gossip msgs for fetching over gossip
-	txPoolSyncerService      *rpcs.TxSyncer
+	algorandService *agreement.Service
+	syncer          *catchup.Service
 
 	indexer *indexer.Indexer
 
@@ -119,13 +106,16 @@ type AlgorandFullNode struct {
 	lastRoundTimestamp    time.Time
 	hasSyncedSinceStartup bool
 
+	txPoolSyncer *rpcs.TxSyncer
+
 	cryptoPool                         execpool.ExecutionPool
 	lowPriorityCryptoVerificationPool  execpool.BacklogPool
 	highPriorityCryptoVerificationPool execpool.BacklogPool
-	catchupBlockAuth                   blockAuthenticatorImpl
 
-	oldKeyDeletionNotify        chan struct{}
-	monitoringRoutinesWaitGroup sync.WaitGroup
+	ledgerService    *rpcs.LedgerService
+	wsFetcherService *rpcs.WsFetcherService // to handle inbound gossip msgs for fetching over gossip
+
+	oldKeyDeletionNotify chan struct{}
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -186,7 +176,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	node.cryptoPool = execpool.MakePool(node)
 	node.lowPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.LowPriority, node)
 	node.highPriorityCryptoVerificationPool = execpool.MakeBacklog(node.cryptoPool, 2*node.cryptoPool.GetParallelism(), execpool.HighPriority, node)
-	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledger.BlockListener{}, cfg)
+	node.ledger, err = data.LoadLedger(node.log, ledgerPathnamePrefix, false, genesis.Proto, genalloc, node.genesisID, node.genesisHash, []ledger.BlockListener{}, cfg.Archival)
 	if err != nil {
 		log.Errorf("Cannot initialize ledger (%s): %v", ledgerPathnamePrefix, err)
 		return nil, err
@@ -219,9 +209,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		}
 	}
 
-	node.blockService = rpcs.MakeBlockService(cfg, node.ledger, p2pNode, node.genesisID)
-	node.ledgerService = rpcs.MakeLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
-	node.wsFetcherService = rpcs.MakeWsFetcherService(node.log, p2pNode)
+	node.ledgerService = rpcs.RegisterLedgerService(cfg, node.ledger, p2pNode, node.genesisID)
+	node.wsFetcherService = rpcs.RegisterWsFetcherService(node.log, p2pNode)
 	rpcs.RegisterTxService(node.transactionPool, p2pNode, node.genesisID, cfg.TxPoolSize, cfg.TxSyncServeResponseSize)
 
 	crashPathname := filepath.Join(genesisDir, config.CrashFilename)
@@ -231,6 +220,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
+	blockFactory := makeBlockFactory(node.ledger, node.transactionPool, node.config.EnableProcessBlockStats, node.highPriorityCryptoVerificationPool)
 	blockValidator := blockValidatorImpl{l: node.ledger, tp: node.transactionPool, verificationPool: node.highPriorityCryptoVerificationPool}
 	agreementLedger := makeAgreementLedger(node.ledger, node.net)
 
@@ -241,17 +231,16 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		Local:          node.config,
 		Network:        gossip.WrapNetwork(node.net, log),
 		Ledger:         agreementLedger,
-		BlockFactory:   node,
+		BlockFactory:   blockFactory,
 		BlockValidator: blockValidator,
 		KeyManager:     node.accountManager,
 		RandomSource:   node,
 		BacklogPool:    node.highPriorityCryptoVerificationPool,
 	}
-	node.agreementService = agreement.MakeService(agreementParameters)
+	node.algorandService = agreement.MakeService(agreementParameters)
 
-	node.catchupBlockAuth = blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}
-	node.catchupService = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, node.catchupBlockAuth, agreementLedger.UnmatchedPendingCertificates)
-	node.txPoolSyncerService = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
+	node.syncer = catchup.MakeService(node.log, node.config, p2pNode, node.ledger, node.wsFetcherService, blockAuthenticatorImpl{Ledger: node.ledger, AsyncVoteVerifier: agreement.MakeAsyncVoteVerifier(node.lowPriorityCryptoVerificationPool)}, agreementLedger.UnmatchedPendingCertificates)
+	node.txPoolSyncer = rpcs.MakeTxSyncer(node.transactionPool, node.net, node.txHandler.SolicitedTxHandler(), time.Duration(cfg.TxSyncIntervalSeconds)*time.Second, time.Duration(cfg.TxSyncTimeoutSeconds)*time.Second, cfg.TxSyncServeResponseSize)
 
 	err = node.loadParticipationKeys()
 	if err != nil {
@@ -260,19 +249,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 
 	node.oldKeyDeletionNotify = make(chan struct{}, 1)
-
-	catchpointCatchupState, err := node.ledger.GetCatchpointCatchupState(context.Background())
-	if err != nil {
-		log.Errorf("unable to determine catchpoint catchup state: %v", err)
-		return nil, err
-	}
-	if catchpointCatchupState != ledger.CatchpointCatchupStateInactive {
-		node.catchpointCatchupService, err = catchup.MakeResumedCatchpointCatchupService(context.Background(), node, node.log, node.net, node.ledger.Ledger)
-		if err != nil {
-			log.Errorf("unable to create catchpoint catchup service: %v", err)
-			return nil, err
-		}
-	}
 
 	return node, err
 }
@@ -321,45 +297,32 @@ func (node *AlgorandFullNode) Start() {
 	node.mu.Lock()
 	defer node.mu.Unlock()
 
-	// Set up a context we can use to cancel goroutines on Stop()
-	node.ctx, node.cancelCtx = context.WithCancel(context.Background())
-
 	// start accepting connections
 	node.net.Start()
 	node.config.NetAddress, _ = node.net.Address()
 
-	if node.catchpointCatchupService != nil {
-		node.catchpointCatchupService.Start(node.ctx)
-	} else {
-		node.wsFetcherService.Start()
-		node.catchupService.Start()
-		node.agreementService.Start()
-		node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
-		node.blockService.Start()
-		node.ledgerService.Start()
-		node.txHandler.Start()
+	node.syncer.Start()
+	node.algorandService.Start()
+	node.txPoolSyncer.Start(node.syncer.InitialSyncDone)
+	node.ledgerService.Start()
+	node.txHandler.Start()
 
-		// start indexer
-		if idx, err := node.Indexer(); err == nil {
-			err := idx.Start()
-			if err != nil {
-				node.log.Errorf("indexer failed to start, turning it off - %v", err)
-				node.config.IsIndexerActive = false
-			} else {
-				node.log.Info("Indexer was started successfully")
-			}
-		} else {
-			node.log.Infof("Indexer is not available - %v", err)
+	// Set up a context we can use to cancel goroutines on Stop()
+	ctx, cancel := context.WithCancel(context.Background())
+	node.ctx = ctx
+	node.cancelCtx = cancel
+
+	// start indexer
+	if idx, err := node.Indexer(); err == nil {
+		err := idx.Start()
+		if err != nil {
+			node.log.Errorf("indexer failed to start, turning it off - %v", err)
+			node.config.IsIndexerActive = false
 		}
-
-		node.startMonitoringRoutines()
+		node.log.Info("Indexer was started successfully")
+	} else {
+		node.log.Infof("Indexer is not available - %v", err)
 	}
-
-}
-
-// startMonitoringRoutines starts the internal monitoring routines used by the node.
-func (node *AlgorandFullNode) startMonitoringRoutines() {
-	node.monitoringRoutinesWaitGroup.Add(3)
 
 	// Periodically check for new participation keys
 	go node.checkForParticipationKeys()
@@ -370,12 +333,6 @@ func (node *AlgorandFullNode) startMonitoringRoutines() {
 
 	// TODO re-enable with configuration flag post V1
 	//go logging.UsageLogThread(node.ctx, node.log, 100*time.Millisecond, nil)
-}
-
-// waitMonitoringRoutines waits for all the monitoring routines to exit. Note that
-// the node.mu must not be taken, and that the node's context should have been canceled.
-func (node *AlgorandFullNode) waitMonitoringRoutines() {
-	node.monitoringRoutinesWaitGroup.Wait()
 }
 
 // ListeningAddress retrieves the node's current listening address, if any.
@@ -389,29 +346,21 @@ func (node *AlgorandFullNode) ListeningAddress() (string, bool) {
 // Stop stops running the node. Once a node is closed, it can never start again.
 func (node *AlgorandFullNode) Stop() {
 	node.mu.Lock()
-	defer func() {
-		node.mu.Unlock()
-		node.waitMonitoringRoutines()
-	}()
+	defer node.mu.Unlock()
 
 	node.net.ClearHandlers()
+
+	node.txHandler.Stop()
 	node.net.Stop()
-	if node.catchpointCatchupService != nil {
-		node.catchpointCatchupService.Stop()
-	} else {
-		node.txHandler.Stop()
-		node.agreementService.Shutdown()
-		node.catchupService.Stop()
-		node.txPoolSyncerService.Stop()
-		node.blockService.Stop()
-		node.ledgerService.Stop()
-		node.wsFetcherService.Stop()
-	}
-	node.catchupBlockAuth.Quit()
+	node.algorandService.Shutdown()
+	node.syncer.Stop()
+	node.txPoolSyncer.Stop()
+	node.ledgerService.Stop()
 	node.highPriorityCryptoVerificationPool.Shutdown()
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.cancelCtx()
+
 	if node.indexer != nil {
 		node.indexer.Shutdown()
 	}
@@ -594,23 +543,11 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 
 	s.LastVersion = b.CurrentProtocol
 	s.NextVersion, s.NextVersionRound, s.NextVersionSupported = b.NextVersionInfo()
-
+	s.SynchronizingTime = node.syncer.SynchronizingTime()
 	s.LastRoundTimestamp = node.lastRoundTimestamp
+	s.CatchupTime = node.syncer.SynchronizingTime()
 	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
 	s.StoppedAtUnsupportedRound = s.LastRound+1 == s.NextVersionRound && !s.NextVersionSupported
-	s.LastCatchpoint = node.ledger.GetLastCatchpointLabel()
-	if node.catchpointCatchupService != nil {
-		stats := node.catchpointCatchupService.GetStatistics()
-		s.Catchpoint = stats.CatchpointLabel
-		s.CatchpointCatchupTotalAccounts = stats.TotalAccounts
-		s.CatchpointCatchupProcessedAccounts = stats.ProcessedAccounts
-		s.CatchpointCatchupTotalBlocks = stats.TotalBlocks
-		s.CatchpointCatchupAcquiredBlocks = stats.AcquiredBlocks
-		s.CatchupTime = time.Now().Sub(stats.StartTime)
-	} else {
-		s.SynchronizingTime = node.catchupService.SynchronizingTime()
-		s.CatchupTime = node.catchupService.SynchronizingTime()
-	}
 
 	return
 }
@@ -661,7 +598,6 @@ func (node *AlgorandFullNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn
 
 // Reload participation keys from disk periodically
 func (node *AlgorandFullNode) checkForParticipationKeys() {
-	defer node.monitoringRoutinesWaitGroup.Done()
 	ticker := time.NewTicker(participationKeyCheckSecs * time.Second)
 	for {
 		select {
@@ -724,10 +660,8 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 	return nil
 }
 
-var txPoolGuage = metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_count", Description: "current number of available transactions in pool"})
-
 func (node *AlgorandFullNode) txPoolGaugeThread() {
-	defer node.monitoringRoutinesWaitGroup.Done()
+	txPoolGuage := metrics.MakeGauge(metrics.MetricName{Name: "algod_tx_pool_count", Description: "current number of available transactions in pool"})
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for true {
@@ -766,7 +700,6 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledger.S
 // It runs in a separate thread so that, during catchup, we
 // don't have to delete key for each block we received.
 func (node *AlgorandFullNode) oldKeyDeletionThread() {
-	defer node.monitoringRoutinesWaitGroup.Done()
 	for {
 		select {
 		case <-node.ctx.Done():
@@ -811,7 +744,6 @@ func (node *AlgorandFullNode) Indexer() (*indexer.Indexer, error) {
 }
 
 // GetTransactionByID gets transaction by ID
-// this function is intended to be called externally via the REST api interface.
 func (node *AlgorandFullNode) GetTransactionByID(txid transactions.Txid, rnd basics.Round) (TxnWithStatus, error) {
 	stx, _, err := node.ledger.LookupTxid(txid, rnd)
 	if err != nil {
@@ -822,128 +754,4 @@ func (node *AlgorandFullNode) GetTransactionByID(txid transactions.Txid, rnd bas
 		ConfirmedRound: rnd,
 		ApplyData:      stx.ApplyData,
 	}, nil
-}
-
-// StartCatchup starts the catchpoint mode and attempt to get to the provided catchpoint
-// this function is intended to be called externally via the REST api interface.
-func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
-	node.mu.Lock()
-	defer node.mu.Unlock()
-	if node.indexer != nil {
-		return fmt.Errorf("catching up using a catchpoint is not supported on indexer-enabled nodes")
-	}
-	if node.catchpointCatchupService != nil {
-		stats := node.catchpointCatchupService.GetStatistics()
-		return fmt.Errorf("unable to start catchpoint catchup for '%s' - already catching up '%s'", catchpoint, stats.CatchpointLabel)
-	}
-	var err error
-	node.catchpointCatchupService, err = catchup.MakeNewCatchpointCatchupService(catchpoint, node, node.log, node.net, node.ledger.Ledger)
-	if err != nil {
-		node.log.Warnf("unable to create catchpoint catchup service : %v", err)
-		return err
-	}
-	node.catchpointCatchupService.Start(node.ctx)
-	return nil
-}
-
-// AbortCatchup aborts the given catchpoint
-// this function is intended to be called externally via the REST api interface.
-func (node *AlgorandFullNode) AbortCatchup(catchpoint string) error {
-	node.mu.Lock()
-	defer node.mu.Unlock()
-	if node.catchpointCatchupService == nil {
-		return nil
-	}
-	stats := node.catchpointCatchupService.GetStatistics()
-	if stats.CatchpointLabel != catchpoint {
-		return fmt.Errorf("unable to abort catchpoint catchup for '%s' - already catching up '%s'", catchpoint, stats.CatchpointLabel)
-	}
-	node.catchpointCatchupService.Abort()
-	return nil
-}
-
-// SetCatchpointCatchupMode change the node's operational mode from catchpoint catchup mode and back
-func (node *AlgorandFullNode) SetCatchpointCatchupMode(catchpointCatchupMode bool) (newCtx context.Context) {
-	node.mu.Lock()
-	if catchpointCatchupMode {
-		// stop..
-		defer func() {
-			node.mu.Unlock()
-			node.waitMonitoringRoutines()
-		}()
-		node.net.ClearHandlers()
-		node.txHandler.Stop()
-		node.agreementService.Shutdown()
-		node.catchupService.Stop()
-		node.txPoolSyncerService.Stop()
-		node.blockService.Stop()
-		node.ledgerService.Stop()
-		node.wsFetcherService.Stop()
-
-		node.cancelCtx()
-
-		// Set up a context we can use to cancel goroutines on Stop()
-		node.ctx, node.cancelCtx = context.WithCancel(context.Background())
-		return node.ctx
-	}
-	defer node.mu.Unlock()
-	// start
-	node.transactionPool.Reset()
-	node.wsFetcherService.Start()
-	node.catchupService.Start()
-	node.agreementService.Start()
-	node.txPoolSyncerService.Start(node.catchupService.InitialSyncDone)
-	node.blockService.Start()
-	node.ledgerService.Start()
-	node.txHandler.Start()
-
-	// start indexer
-	if idx, err := node.Indexer(); err == nil {
-		err := idx.Start()
-		if err != nil {
-			node.log.Errorf("indexer failed to start, turning it off - %v", err)
-			node.config.IsIndexerActive = false
-		} else {
-			node.log.Info("Indexer was started successfully")
-		}
-	} else {
-		node.log.Infof("Indexer is not available - %v", err)
-	}
-
-	// Set up a context we can use to cancel goroutines on Stop()
-	node.ctx, node.cancelCtx = context.WithCancel(context.Background())
-
-	node.startMonitoringRoutines()
-
-	// at this point, the catchpoint catchup is done ( either successfully or not.. )
-	node.catchpointCatchupService = nil
-
-	return node.ctx
-
-}
-
-// validatedBlock satisfies agreement.ValidatedBlock
-type validatedBlock struct {
-	vb *ledger.ValidatedBlock
-}
-
-// WithSeed satisfies the agreement.ValidatedBlock interface.
-func (vb validatedBlock) WithSeed(s committee.Seed) agreement.ValidatedBlock {
-	lvb := vb.vb.WithSeed(s)
-	return validatedBlock{vb: &lvb}
-}
-
-// Block satisfies the agreement.ValidatedBlock interface.
-func (vb validatedBlock) Block() bookkeeping.Block {
-	blk := vb.vb.Block()
-	return blk
-}
-
-// AssembleBlock implements Ledger.AssembleBlock.
-func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
-	lvb, err := node.transactionPool.AssembleBlock(round, deadline)
-	if err != nil {
-		return nil, err
-	}
-	return validatedBlock{vb: lvb}, nil
 }

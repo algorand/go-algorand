@@ -156,10 +156,8 @@ func setupFullNodes(t *testing.T, proto protocol.ConsensusVersion, verificationP
 		require.Nil(t, err1)
 		nodeID := fmt.Sprintf("Node%d", i)
 		const inMem = false
-		cfg, err := config.LoadConfigFromDisk(rootDirectory)
-		require.NoError(t, err)
-		cfg.Archival = true
-		_, err = data.LoadLedger(logging.Base().With("name", nodeID), ledgerFilenamePrefix, inMem, g.Proto, bootstrap, "", crypto.Digest{}, nil, cfg)
+		const archival = true
+		_, err := data.LoadLedger(logging.Base().With("name", nodeID), ledgerFilenamePrefix, inMem, g.Proto, bootstrap, "", crypto.Digest{}, nil, archival)
 		require.NoError(t, err)
 	}
 

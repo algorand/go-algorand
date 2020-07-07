@@ -24,6 +24,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -107,6 +108,10 @@ func TestGoalWithExpect(t *testing.T) {
 	for testName := range expectFiles {
 		if match, _ := regexp.MatchString(f.testFilter, testName); match {
 			t.Run(testName, func(t *testing.T) {
+				if runtime.GOOS == "darwin" &&
+					(testName == "basicGoalTest.exp" || testName == "createWalletTest.exp" || testName == "goalNodeStatusTest.exp") {
+					t.Skip()
+				}
 				workingDir, algoDir, err := f.getTestDir(testName)
 				require.NoError(t, err)
 				t.Logf("algoDir: %s\ntestDataDir:%s\n", algoDir, f.testDataDir)

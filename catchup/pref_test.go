@@ -47,12 +47,10 @@ func BenchmarkServiceFetchBlocks(b *testing.B) {
 
 	net := &mocks.MockNetwork{}
 
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-
 	for i := 0; i < b.N; i++ {
+		archival := true
 		inMem := true
-		local, err := data.LoadLedger(logging.Base(), b.Name()+"empty"+strconv.Itoa(i), inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, cfg)
+		local, err := data.LoadLedger(logging.Base(), b.Name()+"empty"+strconv.Itoa(i), inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, archival)
 		require.NoError(b, err)
 
 		// Make Service
@@ -131,9 +129,8 @@ func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *da
 	var err error
 	genesisBalances = data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	emptyLedger, err = data.LoadLedger(logging.Base(), t.Name()+"empty", inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, cfg)
+	const archival = true
+	emptyLedger, err = data.LoadLedger(logging.Base(), t.Name()+"empty", inMem, protocol.ConsensusCurrentVersion, genesisBalances, "", crypto.Digest{}, nil, archival)
 	require.NoError(t, err)
 
 	ledger, err = datatest.FabricateLedger(logging.Base(), t.Name(), parts, genesisBalances, emptyLedger.LastRound()+basics.Round(numBlocks))

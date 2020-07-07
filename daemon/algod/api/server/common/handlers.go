@@ -20,15 +20,13 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/labstack/echo/v4"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 )
 
 // SwaggerJSON is an httpHandler for route GET /swagger.json
-func SwaggerJSON(ctx lib.ReqContext, context echo.Context) {
+func SwaggerJSON(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	// swagger:operation GET /swagger.json SwaggerJSON
 	//---
 	//     Summary: Gets the current swagger spec.
@@ -42,14 +40,13 @@ func SwaggerJSON(ctx lib.ReqContext, context echo.Context) {
 	//         description: The current swagger spec
 	//         schema: {type: string}
 	//       default: { description: Unknown Error }
-	w := context.Response().Writer
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(lib.SwaggerSpecJSON))
 }
 
 // HealthCheck is an httpHandler for route GET /health
-func HealthCheck(ctx lib.ReqContext, context echo.Context) {
+func HealthCheck(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	// swagger:operation GET /health HealthCheck
 	//---
 	//     Summary: Returns OK if healthy.
@@ -60,14 +57,17 @@ func HealthCheck(ctx lib.ReqContext, context echo.Context) {
 	//     Responses:
 	//       200:
 	//         description: OK.
+	//       404:
+	//         description: Not Found
+	//         schema: {type: string}
+	//       401: { description: Invalid API Token }
 	//       default: { description: Unknown Error }
-	w := context.Response().Writer
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(nil)
 }
 
 // VersionsHandler is an httpHandler for route GET /versions
-func VersionsHandler(ctx lib.ReqContext, context echo.Context) {
+func VersionsHandler(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	// swagger:route GET /versions GetVersion
 	//
 	// Retrieves the current version
@@ -79,9 +79,6 @@ func VersionsHandler(ctx lib.ReqContext, context echo.Context) {
 	//
 	//     Responses:
 	//		200: VersionsResponse
-
-	w := context.Response().Writer
-
 	gh := ctx.Node.GenesisHash()
 	currentVersion := config.GetCurrentVersion()
 
@@ -89,7 +86,7 @@ func VersionsHandler(ctx lib.ReqContext, context echo.Context) {
 	w.WriteHeader(http.StatusOK)
 	response := VersionsResponse{
 		Body: common.Version{
-			Versions:    []string{"v1", "v2"},
+			Versions:    []string{"v1"},
 			GenesisID:   ctx.Node.GenesisID(),
 			GenesisHash: gh[:],
 			Build: common.BuildVersion{
@@ -108,6 +105,6 @@ func VersionsHandler(ctx lib.ReqContext, context echo.Context) {
 }
 
 // CORS
-func optionsHandler(ctx lib.ReqContext, context echo.Context) {
-	context.Response().Writer.WriteHeader(http.StatusOK)
+func optionsHandler(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
 }

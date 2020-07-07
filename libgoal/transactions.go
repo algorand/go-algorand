@@ -36,34 +36,7 @@ func (c *Client) SignTransactionWithWallet(walletHandle, pw []byte, utx transact
 	}
 
 	// Sign the transaction
-	resp, err := kmd.SignTransaction(walletHandle, pw, crypto.PublicKey{}, utx)
-	if err != nil {
-		return
-	}
-
-	// Decode the SignedTxn
-	err = protocol.Decode(resp.SignedTransaction, &stx)
-	return
-}
-
-// SignTransactionWithWalletAndSigner signs the passed transaction under a specific signer (which may differ from the sender's address). This is necessary after an account has been rekeyed.
-// If signerAddr is the empty string, just infer spending key from the sender address.
-func (c *Client) SignTransactionWithWalletAndSigner(walletHandle, pw []byte, signerAddr string, utx transactions.Transaction) (stx transactions.SignedTxn, err error) {
-	if signerAddr == "" {
-		return c.SignTransactionWithWallet(walletHandle, pw, utx)
-	}
-
-	kmd, err := c.ensureKmdClient()
-	if err != nil {
-		return
-	}
-
-	authaddr, err := basics.UnmarshalChecksumAddress(signerAddr)
-	if err != nil {
-		return
-	}
-	// Sign the transaction
-	resp, err := kmd.SignTransaction(walletHandle, pw, crypto.PublicKey(authaddr), utx)
+	resp, err := kmd.SignTransaction(walletHandle, pw, utx)
 	if err != nil {
 		return
 	}

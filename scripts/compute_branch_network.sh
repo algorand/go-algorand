@@ -3,6 +3,13 @@
 export GOPATH=$(go env GOPATH)
 cd "$(dirname "$0")"/..
 
+# If enlistment isn't clean, it's 'dev'
+./scripts/check_clean_enlistment.sh
+if [ $? -ne 0 ]; then
+    echo "devnet"
+    exit 0
+fi
+
 if [ "$1" != "" ]; then
     BRANCH="$1"
 else

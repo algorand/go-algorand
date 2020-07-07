@@ -1,7 +1,7 @@
 
 ## Thanks
 
-A big thank you to everyone who has contributed to the `go-algorand` codebase.
+A big thank you to everyone who has contributed to the `go-algorand` codebase. 
 
 ### External Contributors
 In no particular order:
@@ -11,7 +11,6 @@ In no particular order:
 - scnale
 - jsign
 - RomitKumar
-- jeapostrophe
 
 ### Bug Reports
 - Nanyan

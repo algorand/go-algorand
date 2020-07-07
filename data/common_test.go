@@ -36,17 +36,7 @@ var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x
 var genesisHash = crypto.Digest{0xff, 0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe}
 var genesisID = "testingid"
 
-var proto = config.Consensus[protocol.ConsensusCurrentVersion]
-
-const mockBalancesMinBalance = 1000
 const defaultRewardUnit = 1e6
-
-func keypair() *crypto.SignatureSecrets {
-	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
-	s := crypto.GenerateSignatureSecrets(seed)
-	return s
-}
 
 func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*Ledger, []account.Root, []account.Participation, []transactions.SignedTxn, func()) {
 	P := numAccounts               // n accounts
@@ -116,9 +106,8 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*L
 
 	// generate test transactions
 	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	ledger, err := LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusCurrentVersion, bootstrap, genesisID, genesisHash, nil, cfg)
+	const archival = true
+	ledger, err := LoadLedger(logging.Base(), t.Name(), inMem, protocol.ConsensusCurrentVersion, bootstrap, genesisID, genesisHash, nil, archival)
 	if err != nil {
 		panic(err)
 	}

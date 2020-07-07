@@ -21,10 +21,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"reflect"
-	"strings"
 	"testing"
-
-	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/msgp/msgp"
 	"github.com/stretchr/testify/require"
@@ -36,9 +33,6 @@ type msgpMarshalUnmarshal interface {
 	msgp.Marshaler
 	msgp.Unmarshaler
 }
-
-var rawMsgpType = reflect.TypeOf(msgp.Raw{})
-var errSkipRawMsgpTesting = fmt.Errorf("skipping msgp.Raw serializing, since it won't be the same across go-codec and msgp")
 
 func oneOf(n int) bool {
 	return (rand.Int() % n) == 0
@@ -52,55 +46,11 @@ func RandomizeObject(template interface{}) (interface{}, error) {
 	}
 
 	v := reflect.New(tt.Elem())
-	err := randomizeValue(v.Elem(), tt.String(), "")
+	err := randomizeValue(v.Elem())
 	return v.Interface(), err
 }
 
-func parseStructTags(structTag string) map[string]string {
-	tagsMap := map[string]string{}
-
-	for _, tag := range strings.Split(reflect.StructTag(structTag).Get("codec"), ",") {
-		elements := strings.Split(tag, "=")
-		if len(elements) != 2 {
-			continue
-		}
-		tagsMap[elements[0]] = elements[1]
-	}
-	return tagsMap
-}
-
-var printWarningOnce deadlock.Mutex
-var warningMessages map[string]bool
-
-func printWarning(warnMsg string) {
-	printWarningOnce.Lock()
-	defer printWarningOnce.Unlock()
-	if warningMessages == nil {
-		warningMessages = make(map[string]bool)
-	}
-	if !warningMessages[warnMsg] {
-		warningMessages[warnMsg] = true
-		fmt.Printf("%s\n", warnMsg)
-	}
-}
-
-func checkBoundsLimitingTag(objType string, datapath string, structTag string) {
-	if structTag == "" {
-		return
-	}
-	tagsMap := parseStructTags(structTag)
-
-	if _, have := tagsMap["allocbound"]; !have {
-		printWarning(fmt.Sprintf("%s %s does not have an allocbound defined", objType, datapath))
-		return
-	}
-	if tagsMap["allocbound"] == "-" {
-		printWarning(fmt.Sprintf("%s %s have an unbounded allocbound defined", objType, datapath))
-		return
-	}
-}
-
-func randomizeValue(v reflect.Value, datapath string, tag string) error {
+func randomizeValue(v reflect.Value) error {
 	if oneOf(5) {
 		// Leave zero value
 		return nil
@@ -122,33 +72,28 @@ func randomizeValue(v reflect.Value, datapath string, tag string) error {
 		st := v.Type()
 		for i := 0; i < v.NumField(); i++ {
 			f := st.Field(i)
-			tag := f.Tag
-
 			if f.PkgPath != "" && !f.Anonymous {
 				// unexported
 				continue
 			}
-			if rawMsgpType == f.Type {
-				return errSkipRawMsgpTesting
-			}
-			err := randomizeValue(v.Field(i), datapath+"/"+f.Name, string(tag))
+
+			err := randomizeValue(v.Field(i))
 			if err != nil {
 				return err
 			}
 		}
 	case reflect.Array:
 		for i := 0; i < v.Len(); i++ {
-			err := randomizeValue(v.Index(i), fmt.Sprintf("%s/%d", datapath, i), "")
+			err := randomizeValue(v.Index(i))
 			if err != nil {
 				return err
 			}
 		}
 	case reflect.Slice:
-		checkBoundsLimitingTag("slice", datapath, tag)
 		l := rand.Int() % 32
 		s := reflect.MakeSlice(v.Type(), l, l)
 		for i := 0; i < l; i++ {
-			err := randomizeValue(s.Index(i), fmt.Sprintf("%s/%d", datapath, i), "")
+			err := randomizeValue(s.Index(i))
 			if err != nil {
 				return err
 			}
@@ -157,19 +102,18 @@ func randomizeValue(v reflect.Value, datapath string, tag string) error {
 	case reflect.Bool:
 		v.SetBool(rand.Uint32()%2 == 0)
 	case reflect.Map:
-		checkBoundsLimitingTag("map", datapath, tag)
 		mt := v.Type()
 		v.Set(reflect.MakeMap(mt))
 		l := rand.Int() % 32
 		for i := 0; i < l; i++ {
 			mk := reflect.New(mt.Key())
-			err := randomizeValue(mk.Elem(), fmt.Sprintf("%s/%d", datapath, i), "")
+			err := randomizeValue(mk.Elem())
 			if err != nil {
 				return err
 			}
 
 			mv := reflect.New(mt.Elem())
-			err = randomizeValue(mv.Elem(), fmt.Sprintf("%s/%d", datapath, i), "")
+			err = randomizeValue(mv.Elem())
 			if err != nil {
 				return err
 			}
@@ -261,11 +205,6 @@ func EncodingTest(template msgpMarshalUnmarshal) error {
 func RunEncodingTest(t *testing.T, template msgpMarshalUnmarshal) {
 	for i := 0; i < 1000; i++ {
 		err := EncodingTest(template)
-		if err == errSkipRawMsgpTesting {
-			// we want to skip the serilization test in this case.
-			t.Skip()
-			return
-		}
 		require.NoError(t, err)
 	}
 }

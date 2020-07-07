@@ -187,9 +187,7 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 	syncer := MakeService(logging.Base(), defaultConfig, net, local, nil, &mockedAuthenticator{errorRound: -1}, nil)
 	syncer.fetcherFactory = makeMockFactory(&MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)})
 
-	syncer.testStart()
 	syncer.sync(nil)
-
 	require.Equal(t, remote.LastRound(), local.LastRound())
 }
 
@@ -199,7 +197,6 @@ func TestPeriodicSync(t *testing.T) {
 
 	auth := &mockedAuthenticator{fail: true}
 	initialLocalRound := local.LastRound()
-	require.True(t, 0 == initialLocalRound)
 
 	// Make Service
 	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, auth, nil)
@@ -212,7 +209,7 @@ func TestPeriodicSync(t *testing.T) {
 	s.Start()
 	defer s.Stop()
 	time.Sleep(s.deadlineTimeout*2 - 200*time.Millisecond)
-	require.Equal(t, initialLocalRound, local.LastRound())
+	require.Equal(t, local.LastRound(), initialLocalRound)
 	auth.alter(-1, false)
 	s.fetcherFactory.(*MockedFetcherFactory).changeFetcher(&MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)})
 	time.Sleep(2 * time.Second)
@@ -243,9 +240,6 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 
 	// Get last round
 	require.False(t, factory.fetcher.client.closed)
-
-	// Start the service ( dummy )
-	s.testStart()
 
 	// Fetch blocks
 	s.sync(nil)
@@ -298,9 +292,6 @@ func TestAbruptWrites(t *testing.T) {
 		}
 	}()
 
-	// Start the service ( dummy )
-	s.testStart()
-
 	s.sync(nil)
 	require.Equal(t, remote.LastRound(), local.LastRound())
 }
@@ -317,9 +308,6 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 	// Make Service
 	syncer := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: -1}, nil)
 	syncer.fetcherFactory = &MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
-
-	// Start the service ( dummy )
-	syncer.testStart()
 
 	// Fetch blocks
 	syncer.sync(nil)
@@ -349,9 +337,6 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 	// Make Service
 	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil)
 	s.fetcherFactory = &MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
-
-	// Start the service ( dummy )
-	s.testStart()
 
 	s.sync(nil)
 	require.Equal(t, lastRoundAtStart, local.LastRound())
@@ -634,13 +619,6 @@ func (avv *MockVoteVerifier) Parallelism() int {
 	return 1
 }
 
-// Start the catchup service, without starting the periodic sync.
-func (s *Service) testStart() {
-	s.done = make(chan struct{})
-	s.ctx, s.cancel = context.WithCancel(context.Background())
-	s.InitialSyncDone = make(chan struct{})
-}
-
 func TestCatchupUnmatchedCertificate(t *testing.T) {
 	// Make Ledger
 	remote, local := testingenv(t, 10)
@@ -650,7 +628,6 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 	// Make Service
 	s := MakeService(logging.Base(), defaultConfig, &mocks.MockNetwork{}, local, nil, &mockedAuthenticator{errorRound: int(lastRoundAtStart + 1)}, nil)
 	s.latestRoundFetcherFactory = &MockedFetcherFactory{fetcher: &MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)}}
-	s.testStart()
 	for roundNumber := 2; roundNumber < 10; roundNumber += 3 {
 		pc := &PendingUnmatchedCertificate{
 			Cert: agreement.Certificate{
