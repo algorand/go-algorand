@@ -299,17 +299,6 @@ def goal_network_delete(netdir, normal_cleanup=False):
             raise e
     already_deleted = True
 
-def reportcomms(p, stdout, stderr):
-    cmdr = repr(p.args)
-    if not stdout and p.stdout:
-        stdout = p.stdout.read()
-    if not stderr and p.stderr:
-        stderr = p.stderr.read()
-    if stdout:
-        sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, stdout))
-    if stderr:
-        sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, stderr))
-
 def xrun(cmd, *args, **kwargs):
     timeout = kwargs.pop('timeout', None)
     kwargs['stdout'] = subprocess.PIPE
@@ -321,21 +310,32 @@ def xrun(cmd, *args, **kwargs):
         raise
     try:
         if timeout:
-            stdout,stderr = p.communicate(timeout=timeout)
+            p.communicate(timeout=timeout)
         else:
-            stdout,stderr = p.communicate()
+            p.communicate()
     except subprocess.TimeoutExpired as te:
-        logger.error('subprocess timed out {!r}'.format(cmd), exc_info=True)
-        reportcomms(p, stdout, stderr)
+        cmdr = repr(cmd)
+        logger.error('subprocess timed out {}'.format(cmdr), exc_info=True)
+        if p.stdout:
+            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout.read()))
+        if p.stderr:
+            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr.read()))
         raise
     except Exception as e:
-        logger.error('subprocess exception {!r}'.format(cmd), exc_info=True)
-        reportcomms(p, stdout, stderr)
+        cmdr = repr(cmd)
+        logger.error('subprocess exception {}'.format(cmdr), exc_info=True)
+        if p.stdout:
+            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout.read()))
+        if p.stderr:
+            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr.read()))
         raise
     if p.returncode != 0:
         cmdr = repr(cmd)
         logger.error('cmd failed {}'.format(cmdr))
-        reportcomms(p, stdout, stderr)
+        if p.stdout:
+            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout.read()))
+        if p.stderr:
+            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr.read()))
         raise Exception('error: cmd failed: {}'.format(cmdr))
 
 _logging_format = '%(asctime)s :%(lineno)d %(message)s'

@@ -276,10 +276,6 @@ type Network interface {
 	// Disconnect sends the Network a hint to disconnect to the peer
 	// associated with the given MessageHandle.
 	Disconnect(MessageHandle)
-
-	// Start notifies the network that the agreement service is ready
-	// to start receiving messages.
-	Start()
 }
 
 // RandomSource is an abstraction over the random number generator.

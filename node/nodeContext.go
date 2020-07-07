@@ -29,15 +29,15 @@ type nodeContextData struct {
 
 // IsCatchingUp (implements NodeContext) returns true if our sync routine is currently running
 func (node *AlgorandFullNode) IsCatchingUp() bool {
-	// Lock not required - catchupService doesn't change
-	catchingUp, _ := node.catchupService.IsSynchronizing()
+	// Lock not required - syncer doesn't change
+	catchingUp, _ := node.syncer.IsSynchronizing()
 	return catchingUp
 }
 
 // IsInitialCatchupComplete (implements NodeContext) returns true if the initial sync has completed (doesn't mean it succeeded)
 func (node *AlgorandFullNode) IsInitialCatchupComplete() bool {
-	// Lock not required - catchupService doesn't change
-	_, initSyncComplete := node.catchupService.IsSynchronizing()
+	// Lock not required - syncer doesn't change
+	_, initSyncComplete := node.syncer.IsSynchronizing()
 	return initSyncComplete
 }
 

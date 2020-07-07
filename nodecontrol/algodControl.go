@@ -43,12 +43,9 @@ const StdOutFilename = "algod-out.log"
 // AlgodClient attempts to build a client.RestClient for communication with
 // the algod REST API, but fails if we can't find the net file
 func (nc NodeController) AlgodClient() (algodClient client.RestClient, err error) {
-	algodAPIToken, err := tokens.GetAndValidateAPIToken(nc.algodDataDir, tokens.AlgodAdminTokenFilename)
+	algodAPIToken, err := tokens.GetAndValidateAPIToken(nc.algodDataDir, tokens.AlgodTokenFilename)
 	if err != nil {
-		algodAPIToken, err = tokens.GetAndValidateAPIToken(nc.algodDataDir, tokens.AlgodTokenFilename)
-		if err != nil {
-			return
-		}
+		return
 	}
 
 	// Fetch the server URL from the net file, if it exists
@@ -388,13 +385,4 @@ func (nc NodeController) SetConsensus(consensus config.ConsensusProtocols) error
 // GetConsensus rebuild the consensus version from the data directroy
 func (nc NodeController) GetConsensus() (config.ConsensusProtocols, error) {
 	return config.PreloadConfigurableConsensusProtocols(nc.algodDataDir)
-}
-
-// Shutdown requests the node to shut itself down
-func (nc NodeController) Shutdown() error {
-	algodClient, err := nc.AlgodClient()
-	if err == nil {
-		err = algodClient.Shutdown()
-	}
-	return err
 }

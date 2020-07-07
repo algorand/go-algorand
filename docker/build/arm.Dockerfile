@@ -23,8 +23,7 @@ RUN apk add dpkg && \
     mv usr/bin/shellcheck /usr/bin/
 COPY . $GOPATH/src/github.com/algorand/go-algorand
 WORKDIR $GOPATH/src/github.com/algorand/go-algorand
-ENV GCC_CONFIG="--with-arch=armv6" \
-    GOPROXY=https://gocenter.io
+ENV GCC_CONFIG="--with-arch=armv6"
 RUN make ci-deps && make clean
 RUN rm -rf $GOPATH/src/github.com/algorand/go-algorand && \
     mkdir -p $GOPATH/src/github.com/algorand/go-algorand

@@ -148,12 +148,9 @@ func parseCreateDNSRecordResponse(response *http.Response) (*CreateDNSRecordResp
 	if err != nil {
 		return nil, err
 	}
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Response status code %d; body = %s", response.StatusCode, string(body))
-	}
 	var parsedReponse CreateDNSRecordResponse
 	if err := json.Unmarshal(body, &parsedReponse); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response body '%s' : %v", string(body), err)
+		return nil, err
 	}
 	return &parsedReponse, nil
 }

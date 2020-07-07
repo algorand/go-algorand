@@ -65,15 +65,15 @@ func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 	genBal := MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	ledgerName := fmt.Sprintf("%s-mem-%d", b.Name(), b.N)
 	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
-	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	const archival = true
+	ledger, err := LoadLedger(log, ledgerName, inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, archival)
 	require.NoError(b, err)
 
 	l := ledger
 
+	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = 20000
-	cfg.EnableProcessBlockStats = false
+	cfg.EnableAssembleStats = false
 	tp := pools.MakeTransactionPool(l.Ledger, cfg)
 	signedTransactions := make([]transactions.SignedTxn, 0, b.N)
 	for i := 0; i < b.N/numUsers; i++ {

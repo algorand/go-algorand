@@ -18,7 +18,6 @@ package cloudflare
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -75,12 +74,9 @@ func parseGetZonesResponse(response *http.Response) (*GetZonesResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Response status code %d", response.StatusCode)
-	}
 	var parsedReponse GetZonesResult
 	if err := json.Unmarshal(body, &parsedReponse); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response body '%s' : %v", string(body), err)
+		return nil, err
 	}
 	return &parsedReponse, nil
 }

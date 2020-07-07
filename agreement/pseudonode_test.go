@@ -141,15 +141,7 @@ func TestPseudonode(t *testing.T) {
 	sLogger := serviceLogger{logging.Base()}
 
 	keyManager := simpleKeyManager(accounts)
-	pb := makePseudonode(pseudonodeParams{
-		factory:      testBlockFactory{Owner: 0},
-		validator:    testBlockValidator{},
-		keys:         keyManager,
-		ledger:       ledger,
-		voteVerifier: MakeAsyncVoteVerifier(nil),
-		log:          sLogger,
-		monitor:      nil,
-	})
+	pb := makePseudonode(testBlockFactory{Owner: 0}, testBlockValidator{}, keyManager, ledger, MakeAsyncVoteVerifier(nil), sLogger)
 	defer pb.Quit()
 	spn := makeSerializedPseudonode(testBlockFactory{Owner: 0}, testBlockValidator{}, keyManager, ledger)
 	defer spn.Quit()

@@ -48,7 +48,9 @@ func EnableTelemetry(cfg TelemetryConfig, l *logger) (err error) {
 func enableTelemetryState(telemetry *telemetryState, l *logger) {
 	l.loggerState.telemetry = telemetry
 	// Hook our normal logging to send desired types to telemetry
-	l.AddHook(telemetry.hook)
+	if telemetry.hook != nil {
+		l.AddHook(telemetry.hook)
+	}
 	// Wrap current logger Output writer to capture history
 	l.setOutput(telemetry.wrapOutput(l.getOutput()))
 }

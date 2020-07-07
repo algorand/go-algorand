@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 
 	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 
 	"github.com/algorand/go-algorand/config"
@@ -47,13 +46,11 @@ const DefaultKMDDataDir = nodecontrol.DefaultKMDDataDir
 
 // Client represents the entry point for all libgoal functions
 type Client struct {
-	nc                   nodecontrol.NodeController
-	kmdStartArgs         nodecontrol.KMDStartArgs
-	dataDir              string
-	cacheDir             string
-	consensus            config.ConsensusProtocols
-	algodVersionAffinity algodclient.APIVersion
-	kmdVersionAffinity   kmdclient.APIVersion
+	nc           nodecontrol.NodeController
+	kmdStartArgs nodecontrol.KMDStartArgs
+	dataDir      string
+	cacheDir     string
+	consensus    config.ConsensusProtocols
 }
 
 // ClientConfig is data to configure a Client
@@ -136,8 +133,6 @@ func (c *Client) init(config ClientConfig, clientType ClientType) error {
 	}
 	c.dataDir = dataDir
 	c.cacheDir = config.CacheDir
-	c.algodVersionAffinity = algodclient.APIVersionV1
-	c.kmdVersionAffinity = kmdclient.APIVersionV1
 
 	// Get node controller
 	nc, err := getNodeController(config.BinDir, config.AlgodDataDir)
@@ -175,7 +170,6 @@ func (c *Client) init(config ClientConfig, clientType ClientType) error {
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -192,7 +186,6 @@ func (c *Client) ensureAlgodClient() (*algodclient.RestClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	algod.SetAPIVersionAffinity(c.algodVersionAffinity)
 	return &algod, err
 }
 
@@ -467,8 +460,7 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
-	// TODO(rekeying) probably libgoal should allow passing in different public key to sign with
-	resp0, err := kmd.SignTransaction(walletHandle, pw, crypto.PublicKey{}, tx)
+	resp0, err := kmd.SignTransaction(walletHandle, pw, tx)
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
@@ -485,11 +477,11 @@ func (c *Client) signAndBroadcastTransactionWithWallet(walletHandle, pw []byte, 
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
-
 	_, err = algod.SendRawTransaction(stx)
 	if err != nil {
 		return transactions.Transaction{}, err
 	}
+
 	return tx, nil
 }
 
@@ -632,7 +624,7 @@ func (c *Client) ConstructPayment(from, to string, fee, amount uint64, note []by
 /* Algod Wrappers */
 
 // Status returns the node status
-func (c *Client) Status() (resp generatedV2.NodeStatusResponse, err error) {
+func (c *Client) Status() (resp v1.NodeStatus, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.Status()
@@ -705,7 +697,7 @@ func (c *Client) HealthCheck() error {
 }
 
 // WaitForRound takes a round, waits until it appears and returns its status. This function blocks.
-func (c *Client) WaitForRound(round uint64) (resp generatedV2.NodeStatusResponse, err error) {
+func (c *Client) WaitForRound(round uint64) (resp v1.NodeStatus, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		resp, err = algod.StatusAfterBlock(round)
@@ -816,46 +808,4 @@ func (c *Client) ConsensusParams(round uint64) (consensus config.ConsensusParams
 	}
 
 	return params, nil
-}
-
-// SetAPIVersionAffinity sets the desired client API version affinity of the algod and kmd clients.
-func (c *Client) SetAPIVersionAffinity(algodVersionAffinity algodclient.APIVersion, kmdVersionAffinity kmdclient.APIVersion) {
-	c.algodVersionAffinity = algodVersionAffinity
-	c.kmdVersionAffinity = kmdVersionAffinity
-}
-
-// AbortCatchup aborts the currently running catchup
-func (c *Client) AbortCatchup() error {
-	algod, err := c.ensureAlgodClient()
-	if err != nil {
-		return err
-	}
-	// we need to ensure we're using the v2 status so that we would get the catchpoint information.
-	algod.SetAPIVersionAffinity(algodclient.APIVersionV2)
-	resp, err := algod.Status()
-	if err != nil {
-		return err
-	}
-	if resp.Catchpoint == nil || (*resp.Catchpoint) == "" {
-		// no error - we were not catching up.
-		return nil
-	}
-	_, err = algod.AbortCatchup(*resp.Catchpoint)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// Catchup start catching up to the give catchpoint label.
-func (c *Client) Catchup(catchpointLabel string) error {
-	algod, err := c.ensureAlgodClient()
-	if err != nil {
-		return err
-	}
-	_, err = algod.Catchup(catchpointLabel)
-	if err != nil {
-		return err
-	}
-	return nil
 }

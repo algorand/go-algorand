@@ -15,6 +15,12 @@ pipeline {
         }
     }
 
+    /*
+    triggers {
+        cron('* * * * *')
+    }
+    */
+
     stages {
         stage("create ec2 instance") {
             steps {

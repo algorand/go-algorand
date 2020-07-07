@@ -30,9 +30,6 @@ import (
 	"github.com/spf13/cobra/doc"
 	"golang.org/x/crypto/ssh/terminal"
 
-	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
-	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
-
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -60,7 +57,6 @@ func init() {
 	rootCmd.Flags().BoolVarP(&versionCheck, "version", "v", false, "Display and write current build version and exit")
 	rootCmd.AddCommand(licenseCmd)
 	rootCmd.AddCommand(reportCmd)
-	rootCmd.AddCommand(protoCmd)
 
 	// account.go
 	rootCmd.AddCommand(accountCmd)
@@ -221,16 +217,6 @@ var reportCmd = &cobra.Command{
 	},
 }
 
-var protoCmd = &cobra.Command{
-	Use:   "protocols",
-	Short: "",
-	Long:  "Dump standard consensus protocols as json to stdout.",
-	Args:  validateNoPosArgsFn,
-	Run: func(cmd *cobra.Command, args []string) {
-		os.Stdout.Write(protocol.EncodeJSON(config.Consensus))
-	},
-}
-
 func readGenesis(dataDir string) (genesis bookkeeping.Genesis, err error) {
 	path := filepath.Join(dataDir, config.GenesisJSONFile)
 	genesisText, err := ioutil.ReadFile(path)
@@ -378,7 +364,6 @@ func ensureGoalClient(dataDir string, clientType libgoal.ClientType) libgoal.Cli
 	if err != nil {
 		reportErrorf(errorNodeStatus, err)
 	}
-	client.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
 	return client
 }
 

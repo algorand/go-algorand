@@ -30,9 +30,8 @@ const maximumAPITokenLength = 256
 
 // API tokens that live in the datadirs of their respective daemons
 const (
-	AlgodTokenFilename      = "algod.token"
-	AlgodAdminTokenFilename = "algod.admin.token"
-	KmdTokenFilename        = "kmd.token"
+	AlgodTokenFilename = "algod.token"
+	KmdTokenFilename   = "kmd.token"
 )
 
 func tokenFilepath(dataDir, tokenFilename string) string {

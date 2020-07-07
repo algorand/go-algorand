@@ -170,13 +170,11 @@ func (s *Server) Start() {
 		os.Exit(1)
 	}
 
-	adminAPIToken, err := tokens.GetAndValidateAPIToken(s.RootPath, tokens.AlgodAdminTokenFilename)
-	if err != nil {
-		fmt.Printf("APIToken error: %v\n", err)
-		os.Exit(1)
-	}
-
 	s.stopping = make(chan struct{})
+
+	// use the data dir as the static file dir (for our API server), there's
+	// no need to separate the two yet. This lets us serve the swagger.json file.
+	apiHandler := apiServer.NewRouter(s.log, s.node, s.stopping, apiToken)
 
 	addr := cfg.EndpointAddress
 	if addr == "" {
@@ -193,17 +191,15 @@ func (s *Server) Start() {
 	addr = listener.Addr().String()
 	server = http.Server{
 		Addr:         addr,
+		Handler:      apiHandler,
 		ReadTimeout:  time.Duration(cfg.RestReadTimeoutSeconds) * time.Second,
 		WriteTimeout: time.Duration(cfg.RestWriteTimeoutSeconds) * time.Second,
 	}
 
 	tcpListener := listener.(*net.TCPListener)
-
-	e := apiServer.NewRouter(s.log, s.node, s.stopping, apiToken, adminAPIToken, tcpListener)
-
 	errChan := make(chan error, 1)
 	go func() {
-		err := e.StartServer(&server)
+		err = server.Serve(tcpListener)
 		errChan <- err
 	}()
 

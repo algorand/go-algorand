@@ -140,8 +140,8 @@ func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new ba
 	}
 }
 
-func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {
-	cb.mods.Txids[txid] = txn.LastValid
+func (cb *roundCowState) addTx(txn transactions.Transaction) {
+	cb.mods.Txids[txn.ID()] = txn.LastValid
 	cb.mods.txleases[txlease{sender: txn.Sender, lease: txn.Lease}] = txn.LastValid
 }
 

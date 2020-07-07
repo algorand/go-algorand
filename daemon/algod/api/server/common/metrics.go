@@ -20,14 +20,12 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/labstack/echo/v4"
-
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // Metrics returns data collected by util/metrics
-func Metrics(ctx lib.ReqContext, context echo.Context) {
+func Metrics(ctx lib.ReqContext, w http.ResponseWriter, r *http.Request) {
 	// swagger:operation GET /metrics Metrics
 	//---
 	//     Summary: Return metrics about algod functioning.
@@ -40,7 +38,6 @@ func Metrics(ctx lib.ReqContext, context echo.Context) {
 	//         description: text with \#-comments and key:value lines
 	//       404:
 	//         description: metrics were compiled out
-	w := context.Response().Writer
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 

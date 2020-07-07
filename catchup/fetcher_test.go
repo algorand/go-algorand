@@ -443,11 +443,10 @@ func buildTestLedger(t *testing.T) (ledger *data.Ledger, next basics.Round, b bo
 	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	genHash := crypto.Digest{0x42}
 	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
+	const archival = true
 	ledger, err = data.LoadLedger(
 		log, t.Name(), inMem, protocol.ConsensusCurrentVersion, genBal, "", genHash,
-		nil, cfg,
+		nil, archival,
 	)
 	if err != nil {
 		t.Fatal("couldn't build ledger", err)
@@ -578,7 +577,7 @@ func (s *httpTestPeerSource) addPeer(rootURL string) {
 }
 
 // Build a ledger with genesis and one block, start an HTTPServer around it, use NetworkFetcher to fetch the block.
-// For smaller test, see blockService_test.go TestGetBlockHTTP
+// For smaller test, see ledgerService_test.go TestGetBlockHTTP
 // todo - fix this one
 func TestGetBlockHTTP(t *testing.T) {
 	// start server
@@ -588,10 +587,10 @@ func TestGetBlockHTTP(t *testing.T) {
 		return
 	}
 	net := buildTestHTTPPeerSource()
-	ls := rpcs.MakeBlockService(config.GetDefaultLocal(), ledger, net, "test genesisID")
+	ls := rpcs.RegisterLedgerService(config.GetDefaultLocal(), ledger, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
-	nodeA.RegisterHTTPHandler(rpcs.BlockServiceBlockPath, ls)
+	nodeA.RegisterHTTPHandler(rpcs.LedgerServiceBlockPath, ls)
 	nodeA.start()
 	defer nodeA.stop()
 	rootURL := nodeA.rootURL()
@@ -664,19 +663,16 @@ func TestGetBlockMocked(t *testing.T) {
 	// A is running the ledger service and will respond to fetch requests
 	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
+	const archival = true
 	ledgerA, err := data.LoadLedger(
 		log.With("name", "A"), t.Name(), inMem,
 		protocol.ConsensusCurrentVersion, genBal, "", crypto.Digest{},
-		nil, cfg,
+		nil, archival,
 	)
 	if err != nil {
 		t.Errorf("Couldn't make ledger: %v", err)
 	}
-	blockServiceConfig := config.GetDefaultLocal()
-	blockServiceConfig.EnableBlockService = true
-	rpcs.MakeBlockService(blockServiceConfig, ledgerA, nodeA, "test genesisID")
+	rpcs.RegisterLedgerService(config.GetDefaultLocal(), ledgerA, nodeA, "test genesisID")
 
 	next := ledgerA.NextRound()
 	genHash := crypto.Digest{0x42}
@@ -750,17 +746,16 @@ func TestGetFutureBlock(t *testing.T) {
 	gen := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
 	// A is running the ledger service and will respond to fetch requests
 	const inMem = true
-	cfg := config.GetDefaultLocal()
-	cfg.Archival = true
+	const archival = true
 	ledgerA, err := data.LoadLedger(
 		log.With("name", "A"), t.Name(), inMem,
 		protocol.ConsensusCurrentVersion, gen, "", crypto.Digest{},
-		nil, cfg,
+		nil, archival,
 	)
 	if err != nil {
 		t.Errorf("Couldn't make ledger: %v", err)
 	}
-	rpcs.MakeBlockService(config.GetDefaultLocal(), ledgerA, nodeA, "test genesisID")
+	rpcs.RegisterLedgerService(config.GetDefaultLocal(), ledgerA, nodeA, "test genesisID")
 
 	// B tries to fetch block 4
 	factory := MakeNetworkFetcherFactory(nodeB, 10, nil)
@@ -873,18 +868,16 @@ func TestGetBlockWS(t *testing.T) {
 	for _, version := range versions { // range network.SupportedProtocolVersions {
 
 		net := buildTestHTTPPeerSource()
-		blockServiceConfig := config.GetDefaultLocal()
-		blockServiceConfig.CatchupParallelBlocks = 5
-		blockServiceConfig.EnableBlockService = true
-		ls := rpcs.MakeBlockService(blockServiceConfig, ledger, net, "test genesisID")
+		ledgerServiceConfig := config.GetDefaultLocal()
+		ledgerServiceConfig.CatchupParallelBlocks = 5
+		ls := rpcs.RegisterLedgerService(ledgerServiceConfig, ledger, net, "test genesisID")
 
 		ls.Start()
 
 		up := makeTestUnicastPeer(net, version, t)
 		net.peers = append(net.peers, up)
 
-		fs := rpcs.MakeWsFetcherService(logging.TestingLog(t), net)
-		fs.Start()
+		fs := rpcs.RegisterWsFetcherService(logging.TestingLog(t), net)
 
 		_, ok := net.GetPeers(network.PeersConnectedIn)[0].(network.UnicastPeer)
 		require.True(t, ok)

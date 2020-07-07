@@ -17,6 +17,12 @@
 package ledger
 
 import (
+	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -47,4 +53,11 @@ func dbOpen(filename string, memory bool) (p dbPair, err error) {
 	}
 
 	return
+}
+
+func dbOpenTest(t *testing.T) dbPair {
+	fn := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	dbs, err := dbOpen(fn, true)
+	require.NoError(t, err)
+	return dbs
 }

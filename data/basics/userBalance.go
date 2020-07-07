@@ -35,17 +35,6 @@ const (
 	Online
 	// NotParticipating indicates that the associated account is neither a delegator nor a delegate. Currently it is reserved for the incentive pool.
 	NotParticipating
-
-	// MaxEncodedAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
-	// this number is verified by the TestEncodedAccountDataSize function.
-	MaxEncodedAccountDataSize = 324205
-
-	// encodedMaxAssetsPerAccount is the decoder limit of number of assets stored per account.
-	// it's being verified by the unit test TestEncodedAccountAssetsAllocationBound to align
-	// with config.Consensus[protocol.ConsensusCurrentVersion].MaxAssetsPerAccount; note that the decoded
-	// parameter is used only for protecting the decoder against malicious encoded account data stream.
-	// protocol-specific constains would be tested once the decoding is complete.
-	encodedMaxAssetsPerAccount = 1024
 )
 
 func (s Status) String() string {
@@ -129,7 +118,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	AssetParams map[AssetIndex]AssetParams `codec:"apar,allocbound=encodedMaxAssetsPerAccount"`
+	AssetParams map[AssetIndex]AssetParams `codec:"apar,allocbound=-"`
 
 	// Assets is the set of assets that can be held by this
 	// account.  Assets (i.e., slots in this map) are explicitly
@@ -146,13 +135,7 @@ type AccountData struct {
 	// NOTE: do not modify this value in-place in existing AccountData
 	// structs; allocate a copy and modify that instead.  AccountData
 	// is expected to have copy-by-value semantics.
-	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=encodedMaxAssetsPerAccount"`
-
-	// AuthAddr is the address against which signatures/multisigs/logicsigs should be checked.
-	// If empty, the address of the account whose AccountData this is is used.
-	// A transaction may change an account's AuthAddr to "re-key" the account.
-	// This allows key rotation, changing the members in a multisig, etc.
-	AuthAddr Address `codec:"spend"`
+	Assets map[AssetIndex]AssetHolding `codec:"asset,allocbound=-"`
 }
 
 // AccountDetail encapsulates meaningful details about a given account, for external consumption

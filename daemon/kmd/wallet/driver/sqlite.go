@@ -1087,9 +1087,9 @@ func (sw *SQLiteWallet) ListMultisigAddrs() (addrs []crypto.Digest, err error) {
 	return
 }
 
-// SignTransaction signs the passed transaction with the private key whose public key is provided, or
-// if the provided public key is zero, inferring the required private key from the transaction itself
-func (sw *SQLiteWallet) SignTransaction(tx transactions.Transaction, pk crypto.PublicKey, pw []byte) (stx []byte, err error) {
+// SignTransaction signs the passed transaction, inferring the required private
+// key from the transaction itself
+func (sw *SQLiteWallet) SignTransaction(tx transactions.Transaction, pw []byte) (stx []byte, err error) {
 	// Check the password
 	err = sw.CheckPassword(pw)
 	if err != nil {
@@ -1097,12 +1097,7 @@ func (sw *SQLiteWallet) SignTransaction(tx transactions.Transaction, pk crypto.P
 	}
 
 	// Fetch the required key
-	var sk crypto.PrivateKey
-	if (pk == crypto.PublicKey{}) {
-		sk, err = sw.fetchSecretKey(crypto.Digest(tx.Src()))
-	} else {
-		sk, err = sw.fetchSecretKey(crypto.Digest(pk))
-	}
+	sk, err := sw.fetchSecretKey(crypto.Digest(tx.Src()))
 	if err != nil {
 		return
 	}

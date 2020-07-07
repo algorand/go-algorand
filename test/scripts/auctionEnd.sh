@@ -45,12 +45,6 @@ if [[ "${NODEBINDIR}" = "" ]]; then
     export NODEBINDIR="${GOPATH}/bin"
 fi
 
-if [ -d "${NODEBINDIR}/../tools" ]; then
-    export TOOLSBINDIR="${NODEBINDIR}/../tools"
-else
-    export TOOLSBINDIR="${NODEBINDIR}"
-fi
-
 #define algod working dir
 if [[ "${ALGOTESTDIR}" = "" ]]; then
     export ALGOTESTDIR="${AUCTION_TESTDIR}/Primary"
@@ -85,7 +79,7 @@ sleep ${WAIT_SECONDS}
 
 # call auction minion to complete auction
 {
-  ${TOOLSBINDIR}/auctionminion -verbose -statefile ${AUCTIONMINIONSTATEFILE}  &> ${AUCTIONMINIONTESTDIR}/auctionminion_complete.log
+  ${NODEBINDIR}/auctionminion -verbose -statefile ${AUCTIONMINIONSTATEFILE}  &> ${AUCTIONMINIONTESTDIR}/auctionminion_complete.log
 } || {
   echo "error calling auction minion"
   cat ${AUCTIONMINIONTESTDIR}/auctionminion_complete.log
@@ -102,7 +96,7 @@ export GENESIS_HASH="$(${NODEBINDIR}/goal node status -d ${ALGOTESTDIR} | grep '
 export TXN_FEE=1000
 
 {
-  ${TOOLSBINDIR}/auctionmaster -dir ${AUCTIONMASTERTESTDIR} -txround ${FINAL_ROUND} -notesfee ${TXN_FEE} -payfee ${TXN_FEE} -currentversion ${CURRENT_VERSION} -genhash ${GENESIS_HASH} &> ${AUCTIONMASTERTESTDIR}/auction_master.log
+  ${NODEBINDIR}/auctionmaster -dir ${AUCTIONMASTERTESTDIR} -txround ${FINAL_ROUND} -notesfee ${TXN_FEE} -payfee ${TXN_FEE} -currentversion ${CURRENT_VERSION} -genhash ${GENESIS_HASH} &> ${AUCTIONMASTERTESTDIR}/auction_master.log
 } || {
   echo "error calling auction master"
   cat ${AUCTIONMASTERTESTDIR}/auction_master.log
