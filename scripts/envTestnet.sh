@@ -3,4 +3,4 @@
 echo Configuring for testnet build
 
 export DEFAULTNETWORK=testnet
-export BUILDCHANNEL=stable
+export CHANNEL=stable

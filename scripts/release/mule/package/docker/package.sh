@@ -6,15 +6,8 @@ echo
 date "+build_release begin PACKAGE DOCKER stage %Y%m%d_%H%M%S"
 echo
 
-OS_TYPE="$1"
-ARCH="$2"
-WORKDIR="$3"
-
-if [ -z "$OS_TYPE" ] || [ -z "$ARCH" ] || [ -z "$WORKDIR" ]; then
-    echo "OS=$OS, ARCH=$ARCH and WORKDIR=$WORKDIR variables must be defined."
-    exit 1
-fi
-
+ARCH=$(./scripts/archtype.sh)
+OS_TYPE=$(./scripts/ostype.sh)
 BRANCH=$(./scripts/compute_branch.sh)
 CHANNEL=$(./scripts/compute_branch_channel.sh "$BRANCH")
 PKG_ROOT_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH"
@@ -44,7 +37,7 @@ GOPATH="$HOME/go"
 PATH="$GOPATH/bin:$GOROOT/bin:$PATH"
 
 curl "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" | tar -xzf -
-mv go /usr/local
+cp -r go /usr/local
 
 echo "building '$DOCKERFILE' with install file $ALGOD_INSTALL_TAR_FILE"
 cp "$ALGOD_INSTALL_TAR_FILE" "/tmp/$INPUT_ALGOD_TAR_FILE"
