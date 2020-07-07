@@ -891,8 +891,6 @@ func TestLocalLedger(t *testing.T) {
 	balance, err := ledger.Balance(sender)
 	a.NoError(err)
 	a.Equal(basics.MicroAlgos{Raw: 500000000}, balance)
-	balance, err = ledger.Balance(payTxn.Txn.Receiver)
-	a.Error(err)
 
 	holdings, err := ledger.AssetHolding(sender, assetIdx)
 	a.NoError(err)
