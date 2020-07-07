@@ -19,11 +19,10 @@ package ledger
 import (
 	"context"
 	"database/sql"
-	"errors"
-	//"io/ioutil"
+//	"io/ioutil"
 	"fmt"
-	//"os"
-	//"path/filepath"
+//	"os"
+//	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -872,14 +871,10 @@ func initDBs(t *testing.T, dbs dbPair) *sql.Tx {
 	dblogger := logging.TestingLog(t)
 	dbs.wdb.SetLogger(dblogger)
 	dbs.rdb.SetLogger(dblogger)
-	var tx *sql.Tx
-	var err error
-	err = errors.New("filler error to start loop")
+	tx, err := dbs.wdb.Handle.Begin()
 	for err != nil {
-		print("error initializing dbs:%v\n", err)
-		go func() {
-			tx, err = dbs.wdb.Handle.Begin()
-		} ()
+		print("error initializing dbs:%#v\n", err)
+		tx, err = dbs.wdb.Handle.Begin()
 	}
 	require.NoError(t, err)
 
@@ -898,7 +893,7 @@ func addRecordsToDB(t *testing.T, dbs dbPair, tx *sql.Tx, numRecords int) {
 		err := blockPut(tx, blkent.block, blkent.cert)
 		//require.NoError(t, err)
 		if err != nil {
-			fmt.Printf("error adding block:%v\n", err)
+			fmt.Printf("error adding block:%#v\n", err)
 		}
 
 		blocks = append(blocks, blkent)
@@ -907,7 +902,50 @@ func addRecordsToDB(t *testing.T, dbs dbPair, tx *sql.Tx, numRecords int) {
 }
 
 
-// func TestLedgerDBConcurrentAccess(t *testing.T) {
+func TestLedgerDBConcurrentAccess(t *testing.T) {
+	// This test ensures that trackers return the correct value from
+	// committedUpTo() -- that is, if they return round rnd, then they
+	// do not ask for any round before rnd on a subsequent call to
+	// loadFromDisk().
+	//
+	// We generate mostly empty blocks, with the exception of timestamps,
+	// which affect participationTracker.committedUpTo()'s return value.
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+	wl := &wrappedLedger{
+		l: l,
+	}
+
+	blk := genesisInitState.Block
+
+	for i := 0; i < 20000; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		wl.l.AddBlock(blk, agreement.Certificate{})
+
+		// Don't bother checking the trackers every round -- it's too slow...
+		if crypto.RandUint64()%23 > 0 {
+			continue
+		}
+
+		wl.l.WaitForCommit(blk.Round())
+		_, err := checkTrackers(t, wl, blk.Round())
+		require.NoError(t, err)
+		if err != nil {
+			// Return early, to help with iterative debugging
+			return
+		}
+
+	}
+}
 // // 	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
 
 // // 	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
