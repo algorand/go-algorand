@@ -99,7 +99,7 @@ func newAppLedger(balances transactions.Balances, appIdx basics.AppIndex, schema
 }
 
 // MakeDebugAppLedger returns logic.LedgerForLogic suitable for debug or dryrun
-func MakeDebugAppLedger(balances transactions.Balances, appIdx basics.AppIndex, schemas basics.StateSchemas, globals AppTealGlobals) (al logic.LedgerForLogic, err error) {
+func MakeDebugAppLedger(balances transactions.Balances, appIdx basics.AppIndex, schemas basics.StateSchemas, globals AppTealGlobals) (logic.LedgerForLogic, error) {
 	return newAppLedger(balances, appIdx, schemas, globals)
 }
 
@@ -183,35 +183,35 @@ func (al *appLedger) AppLocalState(addr basics.Address, appIdx basics.AppIndex) 
 	return keyValue, nil
 }
 
-func (al *appLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (holding basics.AssetHolding, err error) {
+func (al *appLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error) {
 	// Fetch the requested balance record
 	record, err := al.balances.Get(addr, false)
 	if err != nil {
-		return
+		return basics.AssetHolding{}, err
 	}
 
 	// Ensure we have the requested holding
 	holding, ok := record.Assets[assetIdx]
 	if !ok {
 		err = fmt.Errorf("account %s has not opted in to asset %d", addr.String(), assetIdx)
-		return
+		return basics.AssetHolding{}, err
 	}
 
 	return holding, nil
 }
 
-func (al *appLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (params basics.AssetParams, err error) {
+func (al *appLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error) {
 	// Fetch the requested balance record
 	record, err := al.balances.Get(addr, false)
 	if err != nil {
-		return
+		return basics.AssetParams{}, err
 	}
 
 	// Ensure account created the requested asset
 	params, ok := record.AssetParams[assetIdx]
 	if !ok {
 		err = fmt.Errorf("account %s has not created asset %d", addr.String(), assetIdx)
-		return
+		return basics.AssetParams{}, err
 	}
 
 	return params, nil
