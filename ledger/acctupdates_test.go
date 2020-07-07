@@ -208,7 +208,8 @@ func TestAcctUpdates(t *testing.T) {
 	accts[0][testSinkAddr] = sinkdata
 
 	au := &accountUpdates{}
-	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
+	au.initProto = proto
+	au.initAccounts = accts[0]
 	defer au.close()
 
 	err := au.loadFromDisk(ml)
@@ -260,12 +261,13 @@ func TestAcctUpdates(t *testing.T) {
 		au.lastFlushTime = time.Time{}
 
 		au.committedUpTo(basics.Round(proto.MaxBalLookback) + i)
-		au.waitAccountsWriting()
+		//au.waitAccountsWriting()
 		checkAcctUpdates(t, au, i, basics.Round(proto.MaxBalLookback+14), accts, rewardsLevels, proto)
 	}
 }
 
 func TestAcctUpdatesFastUpdates(t *testing.T) {
+	t.Skip("This test require the account updates to be self-syncronizing, which was disabled with this release")
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
 	}
@@ -291,7 +293,8 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
-	au.initialize(conf, ".", proto, accts[0])
+	au.initProto = proto
+	au.initAccounts = accts[0]
 	defer au.close()
 
 	err := au.loadFromDisk(ml)
@@ -382,7 +385,8 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	accts[0][testSinkAddr] = sinkdata
 
 	au := &accountUpdates{}
-	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
+	au.initProto = proto
+	au.initAccounts = accts[0]
 	err := au.loadFromDisk(ml)
 	require.NoError(b, err)
 	defer au.close()
@@ -432,7 +436,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		au.lastFlushTime = time.Time{}
 		au.committedUpTo(basics.Round(i))
 	}
-	au.waitAccountsWriting()
+	//au.waitAccountsWriting()
 	b.ResetTimer()
 	startTime := time.Now()
 	for i := proto.MaxBalLookback + initialRounds; i < proto.MaxBalLookback+uint64(b.N); i++ {
@@ -440,7 +444,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		au.lastFlushTime = time.Time{}
 		au.committedUpTo(basics.Round(i))
 	}
-	au.waitAccountsWriting()
+	//au.waitAccountsWriting()
 	deltaTime := time.Now().Sub(startTime)
 	if deltaTime > time.Second {
 		return
@@ -453,6 +457,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 }
 
+/*
 func BenchmarkCalibrateNodesPerPage(b *testing.B) {
 	b.Skip("This benchmark was used to tune up the NodesPerPage; it's not really usefull otherwise")
 	defaultNodesPerPage := merkleCommitterNodesPerPage
@@ -476,3 +481,4 @@ func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
 	}
 	trieCachedNodesCount = defaultTrieCachedNodesCount
 }
+*/

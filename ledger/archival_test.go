@@ -557,9 +557,10 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 	for _, trk := range wl.l.trackers.trackers {
 		wl.l.trackerMu.RLock()
 		if au, ok := trk.(*accountUpdates); ok {
-			au.waitAccountsWriting()
+			proto := au.initProto
+			//au.waitAccountsWriting()
 			minSave = trk.committedUpTo(rnd)
-			au.waitAccountsWriting()
+			//au.waitAccountsWriting()
 			wl.l.trackerMu.RUnlock()
 			if minSave < minMinSave {
 				minMinSave = minSave
@@ -572,7 +573,9 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			au = cleanTracker.(*accountUpdates)
 			cfg := config.GetDefaultLocal()
 			cfg.Archival = true
-			au.initialize(cfg, "", au.initProto, wl.l.accts.initAccounts)
+			//au.initialize(cfg, "", au.initProto, wl.l.accts.initAccounts)
+			au.initProto = proto
+			au.initAccounts = wl.l.accts.initAccounts
 		} else {
 			minSave = trk.committedUpTo(rnd)
 			wl.l.trackerMu.RUnlock()
@@ -587,7 +590,7 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 
 		cleanTracker.close()
 		err := cleanTracker.loadFromDisk(wl)
-		require.NoError(t, err)
+		require.NoErrorf(t, err, "tracker type: %v", trackerType)
 
 		cleanTracker.close()
 

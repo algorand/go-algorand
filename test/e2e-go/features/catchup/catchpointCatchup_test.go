@@ -56,6 +56,7 @@ func nodeExitWithError(t *testing.T, nc *nodecontrol.NodeController, err error) 
 }
 
 func TestBasicCatchpointCatchup(t *testing.T) {
+	t.Skip("This test requires catchpoint catchup support")
 	if testing.Short() {
 		t.Skip()
 	}

@@ -122,11 +122,14 @@ func OpenLedger(
 		return nil, err
 	}
 
-	if l.genesisAccounts == nil {
-		l.genesisAccounts = make(map[basics.Address]basics.AccountData)
+	// Accounts are special because they get an initialization argument (initAccounts).
+	initAccounts := genesisInitState.Accounts
+	if initAccounts == nil {
+		initAccounts = make(map[basics.Address]basics.AccountData)
 	}
 
-	l.accts.initialize(cfg, dbPathPrefix, l.genesisProto, l.genesisAccounts)
+	l.accts.initProto = config.Consensus[genesisInitState.Block.CurrentProtocol]
+	l.accts.initAccounts = initAccounts
 
 	err = l.reloadLedger()
 	if err != nil {
@@ -317,7 +320,8 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 func (l *Ledger) GetLastCatchpointLabel() string {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getLastCatchpointLabel()
+	//return l.accts.getLastCatchpointLabel()
+	return ""
 }
 
 // GetAssetCreatorForRound looks up the asset creator given the numerical asset
@@ -525,7 +529,8 @@ func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state Catchpoin
 func (l *Ledger) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getCatchpointStream(round)
+	//return l.accts.getCatchpointStream(round)
+	return nil, fmt.Errorf("this binary does not support catchpoint catchup")
 }
 
 // ledgerForTracker methods
