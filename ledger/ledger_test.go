@@ -20,10 +20,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"io/ioutil"
+	//"io/ioutil"
 	"fmt"
-	"os"
-	"path/filepath"
+	//"os"
+	//"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
