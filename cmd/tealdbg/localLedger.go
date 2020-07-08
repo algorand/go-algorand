@@ -48,14 +48,10 @@ func makeAppLedger(
 	txn := txnGroup[groupIndex]
 
 	accounts := []basics.Address{txn.Txn.Sender}
-	for _, addr := range txn.Txn.Accounts {
-		accounts = append(accounts, addr)
-	}
+	accounts = append(accounts, txn.Txn.Accounts...)
 
 	apps := []basics.AppIndex{appIdx}
-	for _, aid := range txn.Txn.ForeignApps {
-		apps = append(apps, aid)
-	}
+	apps = append(apps, txn.Txn.ForeignApps...)
 
 	ba := &balancesAdapter{
 		balances:   balances,
