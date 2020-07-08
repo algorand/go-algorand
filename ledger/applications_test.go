@@ -57,7 +57,7 @@ func (b *testBalances) PutWithCreatable(record basics.BalanceRecord, newCreatabl
 
 func (b *testBalances) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	if ctype == basics.AppCreatable {
-		aidx := basics.AppIndex(ctype)
+		aidx := basics.AppIndex(cidx)
 		if aidx == appIdxError { // magic for test
 			return basics.Address{}, false, fmt.Errorf("mock synthetic error")
 		}
@@ -133,20 +133,11 @@ func TestAppLedgerBalances(t *testing.T) {
 
 	b := testBalances{}
 	addr1 := getRandomAddress(a)
-	addr2 := getRandomAddress(a)
 	appIdx := appIdxOk
 
 	l, err := newAppLedger(&b, appIdx, basics.StateSchemas{}, AppTealGlobals{})
 	a.NoError(err)
 	a.NotNil(l)
-
-	_, err = l.Balance(addr2)
-	a.Error(err)
-	a.Contains(err.Error(), "not sender or in txn.Addresses")
-
-	_, err = l.Balance(addr1)
-	a.Error(err)
-	a.NotContains(err.Error(), "not sender or in txn.Addresses")
 
 	ble := basics.MicroAlgos{Raw: 100}
 	b.balances = map[basics.Address]basics.AccountData{addr1: {MicroAlgos: ble}}
@@ -184,7 +175,6 @@ func TestAppLedgerAsset(t *testing.T) {
 
 	b := testBalances{}
 	addr1 := getRandomAddress(a)
-	addr2 := getRandomAddress(a)
 	appIdx := appIdxOk
 
 	l, err := newAppLedger(&b, appIdx, basics.StateSchemas{}, AppTealGlobals{})
@@ -192,14 +182,6 @@ func TestAppLedgerAsset(t *testing.T) {
 	a.NotNil(l)
 
 	assetIdx := basics.AssetIndex(2)
-	_, err = l.AssetParams(addr2, assetIdx)
-	a.Error(err)
-	a.Contains(err.Error(), "not sender or in txn.Addresses")
-
-	_, err = l.AssetParams(addr1, assetIdx)
-	a.Error(err)
-	a.NotContains(err.Error(), "not sender or in txn.Addresses")
-
 	b.balances = map[basics.Address]basics.AccountData{addr1: {}}
 	_, err = l.AssetParams(addr1, assetIdx)
 	a.Error(err)
@@ -212,14 +194,6 @@ func TestAppLedgerAsset(t *testing.T) {
 	a.NoError(err)
 	a.Equal(uint64(1000), ap.Total)
 	delete(b.balances, addr1)
-
-	_, err = l.AssetHolding(addr2, assetIdx)
-	a.Error(err)
-	a.Contains(err.Error(), "not sender or in txn.Addresses")
-
-	_, err = l.AssetHolding(addr1, assetIdx)
-	a.Error(err)
-	a.NotContains(err.Error(), "not sender or in txn.Addresses")
 
 	b.balances = map[basics.Address]basics.AccountData{addr1: {}}
 	_, err = l.AssetHolding(addr1, assetIdx)
@@ -244,10 +218,6 @@ func TestAppLedgerAppGlobalState(t *testing.T) {
 	l, err := newAppLedger(&b, appIdx, basics.StateSchemas{}, AppTealGlobals{})
 	a.NoError(err)
 	a.NotNil(l)
-
-	_, err = l.AppGlobalState(2)
-	a.Error(err)
-	a.Contains(err.Error(), "cannot access global state")
 
 	_, err = l.AppGlobalState(appIdx)
 	a.Error(err)
@@ -283,20 +253,11 @@ func TestAppLedgerAppLocalState(t *testing.T) {
 
 	b := testBalances{}
 	addr1 := getRandomAddress(a)
-	addr2 := getRandomAddress(a)
 	appIdx := basics.AppIndex(100) // not in app
 
 	l, err := newAppLedger(&b, appIdx, basics.StateSchemas{}, AppTealGlobals{})
 	a.NoError(err)
 	a.NotNil(l)
-
-	_, err = l.AppLocalState(addr2, appIdx)
-	a.Error(err)
-	a.Contains(err.Error(), "cannot access local state")
-
-	_, err = l.AppLocalState(addr1, appIdx)
-	a.Error(err)
-	a.NotContains(err.Error(), "cannot access global state")
 
 	b.balances = map[basics.Address]basics.AccountData{addr1: {}}
 	_, err = l.AppLocalState(addr1, appIdx)
