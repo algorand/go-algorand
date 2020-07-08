@@ -70,22 +70,6 @@ jobs:
       - docker.Make.package-test-deb
       - docker.Make.package-test-rpm
 
-  package-test-linux-arm64:
-    configs:
-      arch: arm64
-    tasks:
-      - shell.docker.Ensure.package
-      - docker.Make.package-test-deb
-      - docker.Make.package-test-rpm
-
-  package-test-linux-arm32:
-    configs:
-      arch: arm32
-    tasks:
-      - shell.docker.Ensure.package
-      - docker.Make.package-test-deb
-      - docker.Make.package-test-rpm
-
   package-test-setup-deb:
     tasks:
       - s3.DownloadFile.deb
