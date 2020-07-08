@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
 	"os"
@@ -594,5 +595,112 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		if i%2 == 1 {
 			au.waitAccountsWriting()
 		}
+	}
+}
+
+func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		t.Skip("This test is too slow on ARM and causes travis builds to time out")
+	}
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	ml := makeMockLedgerForTracker(t)
+	defer ml.close()
+	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
+
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(100)}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	var moneyAccounts []basics.Address
+	for addr := range accts[0] {
+		if bytes.Compare(addr[:], testPoolAddr[:]) == 0 || bytes.Compare(addr[:], testSinkAddr[:]) == 0 {
+			continue
+		}
+		moneyAccounts = append(moneyAccounts, addr)
+	}
+
+	// set all the accounts with 100 algos.
+	for _, addr := range moneyAccounts {
+		accountData := accts[0][addr]
+		accountData.MicroAlgos.Raw = 100 * 1000000
+		accts[0][addr] = accountData
+	}
+
+	au := &accountUpdates{}
+	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
+	defer au.close()
+
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+
+	// cover 10 genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < 10; i++ {
+		accts = append(accts, accts[0])
+	}
+
+	i := basics.Round(10)
+	for ; i < basics.Round(2010); i++ {
+		updates := make(map[basics.Address]accountDelta)
+		toAccount := moneyAccounts[0]
+		toAccountDataOld, err := au.lookup(i-1, toAccount, false)
+		require.NoError(t, err)
+		toAccountDataNew := toAccountDataOld
+		for j := 1; j < len(moneyAccounts); j++ {
+			fromAccount := moneyAccounts[j]
+
+			fromAccountDataOld, err := au.lookup(i-1, fromAccount, false)
+			require.NoError(t, err)
+
+			fromAccountDataNew := fromAccountDataOld
+
+			fromAccountDataNew.MicroAlgos.Raw -= uint64(i - 10)
+			toAccountDataNew.MicroAlgos.Raw += uint64(i - 10)
+			updates[fromAccount] = accountDelta{
+				old: fromAccountDataOld,
+				new: fromAccountDataNew,
+			}
+		}
+		updates[toAccount] = accountDelta{
+			old: toAccountDataOld,
+			new: toAccountDataNew,
+		}
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
+
+		au.newBlock(blk, StateDelta{
+			accts: updates,
+			hdr:   &blk.BlockHeader,
+		})
+		au.committedUpTo(i)
+
+	}
+	lastRound := i - 1
+	au.waitAccountsWriting()
+
+	for idx, addr := range moneyAccounts {
+		balance, err := au.lookup(lastRound, addr, false)
+		require.NoErrorf(t, err, "unable to retrieve balance for account idx %d %v", idx, addr)
+		if idx != 0 {
+			require.Equalf(t, 100*1000000-2000*1999/2, int(balance.MicroAlgos.Raw), "account idx %d %v has the wrong balance", idx, addr)
+		} else {
+			require.Equalf(t, 100*1000000+(len(moneyAccounts)-1)*2000*1999/2, int(balance.MicroAlgos.Raw), "account idx %d %v has the wrong balance", idx, addr)
+		}
+
 	}
 }
