@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -52,7 +53,6 @@ var fileCmd = &cobra.Command{
 			cmd.HelpFunc()(cmd, args)
 			return
 		}
-		reportInfof("Processing %s..", tarFile)
 		tarFileBytes, err := ioutil.ReadFile(tarFile)
 		if err != nil || len(tarFileBytes) == 0 {
 			reportErrorf("Unable to read '%s' : %v", tarFile, err)
@@ -63,6 +63,15 @@ var fileCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Unable to open ledger : %v", err)
 		}
+
+		defer os.Remove("./ledger.block.sqlite")
+		defer os.Remove("./ledger.block.sqlite-shm")
+		defer os.Remove("./ledger.block.sqlite-wal")
+		defer os.Remove("./ledger.tracker.sqlite")
+		defer os.Remove("./ledger.tracker.sqlite-shm")
+		defer os.Remove("./ledger.tracker.sqlite-wal")
+		defer l.Close()
+
 		catchupAccessor := ledger.MakeCatchpointCatchupAccessor(l, logging.Base())
 		err = catchupAccessor.ResetStagingBalances(context.Background(), true)
 		if err != nil {
@@ -72,10 +81,11 @@ var fileCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Unable to load catchpoint file into in-memory database : %v", err)
 		}
-		err = printAccountsDatabase("./ledger.tracker.sqlite")
+		err = printAccountsDatabase("./ledger.tracker.sqlite", true, os.Stdout)
 		if err != nil {
 			reportErrorf("Unable to print account database : %v", err)
 		}
+
 	},
 }
 
@@ -114,14 +124,18 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 	}
 }
 
-func printAccountsDatabase(databaseName string) error {
+func printAccountsDatabase(databaseName string, staging bool, outFile *os.File) error {
 	dbAccessor, err := db.MakeAccessor(databaseName, true, false)
 	if err != nil || dbAccessor.Handle == nil {
 		return err
 	}
 	return dbAccessor.Atomic(func(tx *sql.Tx) (err error) {
 		var totals ledger.AccountTotals
-		row := tx.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", "catchpointStaging")
+		id := ""
+		if staging {
+			id = "catchpointStaging"
+		}
+		row := tx.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
 		err = row.Scan(&totals.Online.Money.Raw, &totals.Online.RewardUnits,
 			&totals.Offline.Money.Raw, &totals.Offline.RewardUnits,
 			&totals.NotParticipating.Money.Raw, &totals.NotParticipating.RewardUnits,
@@ -129,12 +143,16 @@ func printAccountsDatabase(databaseName string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("AccountTotals - Online Money: %d\nAccountTotals - Online RewardUnits : %d\nAccountTotals - Offline Money: %d\nAccountTotals - Offline RewardUnits : %d\nAccountTotals - Not Participating Money: %d\nAccountTotals - Not Participating Money RewardUnits: %d\nAccountTotals - Rewards Level: %d\n", &totals.Online.Money.Raw, &totals.Online.RewardUnits,
+		fmt.Fprintf(outFile, "AccountTotals - Online Money: %d\nAccountTotals - Online RewardUnits : %d\nAccountTotals - Offline Money: %d\nAccountTotals - Offline RewardUnits : %d\nAccountTotals - Not Participating Money: %d\nAccountTotals - Not Participating Money RewardUnits: %d\nAccountTotals - Rewards Level: %d\n", &totals.Online.Money.Raw, &totals.Online.RewardUnits,
 			&totals.Offline.Money.Raw, &totals.Offline.RewardUnits,
 			&totals.NotParticipating.Money.Raw, &totals.NotParticipating.RewardUnits,
 			&totals.RewardsLevel)
 
-		rows, err := tx.Query("SELECT address, data FROM catchpointbalances order by address")
+		balancesTable := "accountbase"
+		if staging {
+			balancesTable = "catchpointbalances"
+		}
+		rows, err := tx.Query(fmt.Sprintf("SELECT address, data FROM %s order by address", balancesTable))
 		if err != nil {
 			return
 		}
@@ -165,7 +183,7 @@ func printAccountsDatabase(databaseName string) error {
 				return err
 			}
 
-			fmt.Printf("%v : %s\n", addr, string(jsonData))
+			fmt.Fprintf(outFile, "%v : %s\n", addr, string(jsonData))
 		}
 
 		err = rows.Err()

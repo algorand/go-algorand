@@ -43,6 +43,7 @@ var versionCheck bool
 func init() {
 	// file.go
 	rootCmd.AddCommand(fileCmd)
+	rootCmd.AddCommand(netCmd)
 
 }
 
@@ -50,7 +51,7 @@ var rootCmd = &cobra.Command{
 	Use:   "catchpointdump",
 	Short: "Catchpoint dump utility",
 	Long:  "Catchpoint dump utility",
-	//Args:  validateNoPosArgsFn,
+	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		if versionCheck {
 			fmt.Println(config.FormatVersionAndLicense())
