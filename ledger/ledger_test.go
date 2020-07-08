@@ -927,7 +927,7 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
 	nonZeroMinSaves := 0
 	blk := genesisInitState.Block
 
-	for i := 0; i < 20000; i++ {
+	for i := 0; i < 8000; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		wl.l.AddBlock(blk, agreement.Certificate{})
@@ -948,8 +948,6 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
 		if minMinSave > 0 {
 			nonZeroMinSaves++
 		}
-
-
 	}
 }
 // // 	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
