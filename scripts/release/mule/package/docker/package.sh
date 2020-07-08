@@ -34,7 +34,7 @@ ALGOD_DOCKER_INIT="./docker/release/algod_docker_init.sh"
 echo "building '$DOCKERFILE' with install file $ALGOD_INSTALL_TAR_FILE"
 cp "$ALGOD_INSTALL_TAR_FILE" "/tmp/$INPUT_ALGOD_TAR_FILE"
 cp "$ALGOD_DOCKER_INIT" /tmp
-docker build --build-arg ALGOD_INSTALL_TAR_FILE="$INPUT_ALGOD_TAR_FILE" /tmp -t "$DOCKER_IMAGE" -f "$DOCKERFILE"
+docker build --build-arg ALGOD_INSTALL_TAR_FILE="$INPUT_ALGOD_TAR_FILE" --build-arg GOLANG_VERSION="${GOLANG_VERSION}" /tmp -t "$DOCKER_IMAGE" -f "$DOCKERFILE"
 
 mkdir -p "/tmp/$NEW_PKG_DIR"
 

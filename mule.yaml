@@ -1,45 +1,131 @@
 tasks:
+
+  - task: shell.Shell
+    name: go-version
+    command: scripts/get_golang_version.sh
+    saveLogs: true
+
+  # Stash tasks
+  - task: stash.Stash
+    name: linux-amd64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
+    globSpecs:
+      - tmp/node_pkgs/**
+      - crypto/libs/**
+      - gen/devnet/genesis.json
+      - gen/testnet/genesis.json
+      - gen/mainnet/genesis.json
+  - task: stash.Stash
+    name: darwin-amd64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
+    globSpecs:
+      - tmp/node_pkgs/**
+      - crypto/libs/**
+      - gen/devnet/genesis.json
+      - gen/testnet/genesis.json
+      - gen/mainnet/genesis.json
+  - task: stash.Stash
+    name: linux-arm64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm64
+    globSpecs:
+      - tmp/node_pkgs/**
+      - crypto/libs/**
+      - gen/devnet/genesis.json
+      - gen/testnet/genesis.json
+      - gen/mainnet/genesis.json
+  - task: stash.Stash
+    name: linux-arm32
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm32
+    globSpecs:
+      - tmp/node_pkgs/**
+      - crypto/libs/**
+      - gen/devnet/genesis.json
+      - gen/testnet/genesis.json
+      - gen/mainnet/genesis.json
+
+  # Unstash tasks
+  - task: stash.Unstash
+    name: linux-arm64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm64
+  - task: stash.Unstash
+    name: linux-amd64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
+  - task: stash.Unstash
+    name: darwin-amd64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
+  - task: stash.Unstash
+    name: linux-arm32
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm32
+
+  # Docker tasks
   - task: docker.Version
     configFilePath: scripts/configure_dev-deps.sh
   - task: shell.docker.Ensure
+    name: centos
     image: algorand/go-algorand-ci-linux
-    version: '{{ docker.Version.outputs.version }}'
-    dockerFilePath: docker/build/cicd.Dockerfile
-    dependencies: docker.Version
+    version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.stdout }}'
+    goVersion: '{{ shell.Shell.go-version.outputs.stdout }}'
+    dockerFilePath: docker/build/cicd.centos.Dockerfile
+    dependencies: shell.Shell.go-version docker.Version
+  - task: shell.docker.Ensure
+    name: alpine
+    image: algorand/go-algorand-ci-linux
+    version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.stdout }}'
+    goVersion: '{{ shell.Shell.go-version.outputs.stdout }}'
+    dockerFilePath: docker/build/cicd.alpine.Dockerfile
+    dependencies: shell.Shell.go-version docker.Version
   - task: docker.Make
     name: build
     docker:
       image: algorand/go-algorand-ci-linux
-      version: '{{ docker.Version.outputs.version }}'
+      version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.stdout }}'
+      goVersion: '{{ shell.Shell.go-version.outputs.stdout }}'
       workDir: /go/src/github.com/algorand/go-algorand
     target: ci-build
+    dependencies: shell.Shell.go-version docker.Version
   - task: docker.Make
     name: fulltest
     docker:
       image: algorand/go-algorand-ci-linux
-      version: '{{ docker.Version.outputs.version }}'
+      version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.stdout }}'
+      goVersion: '{{ shell.Shell.go-version.outputs.stdout }}'
       workDir: /go/src/github.com/algorand/go-algorand
     target: fulltest -j4
-  - task: docker.Make
-    name: shorttest
-    docker:
-      image: algorand/go-algorand-ci-linux
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /go/src/github.com/algorand/go-algorand
-    target: shorttest -j4
+    dependencies: shell.Shell.go-version docker.Version
   - task: docker.Make
     name: integration-test
     docker:
+      env:
+        - SHORTTEST=-short
       image: algorand/go-algorand-ci-linux
-      version: '{{ docker.Version.outputs.version }}'
+      version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.stdout }}'
+      goVersion: '{{ shell.Shell.go-version.outputs.stdout }}'
       workDir: /go/src/github.com/algorand/go-algorand
     target: ci-integration -j4
+    dependencies: shell.Shell.go-version docker.Version
+  - task: docker.Make
+    name: archive
+    docker:
+      image: algorand/go-algorand-ci-linux
+      version: '{{ docker.Version.outputs.version }}-{{ shell.Shell.go-version.outputs.stdout }}'
+      goVersion: '{{ shell.Shell.go-version.outputs.stdout }}'
+      workDir: /go/src/github.com/algorand/go-algorand
+    target: ci-archive
+    dependencies: shell.Shell.go-version docker.Version
+
+  # Local Tasks
   - task: shell.Make
-    name: deps
-    target: ci-deps 
-  - task: shell.Make
-    name: build
+    name: ci-deps build
     target: ci-build
+
   - task: shell.Make
     name: fulltest
     target: fulltest -j4
@@ -54,146 +140,81 @@ tasks:
     target: archive
 
 jobs:
-  # Linux arm64 jobs
-  build-linux-arm64:
-    configs:
-      arch: arm64v8
-      docker:
-        env:
-          - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
-          - TRAVIS_BRANCH=${TRAVIS_BRANCH}
-          - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
-          - S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
-    tasks:
-      - shell.docker.Ensure
-      - docker.Make.build
-  test-linux-arm64-fulltest:
-    configs:
-      arch: arm64v8
-      docker:
-        env:
-          - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
-          - TRAVIS_BRANCH=${TRAVIS_BRANCH}
-          - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
-          - S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
-    tasks:
-      - shell.docker.Ensure
-      - docker.Make.fulltest
-  test-linux-arm64-shorttest:
-    configs:
-      arch: arm64v8
-      docker:
-        env:
-          - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
-          - TRAVIS_BRANCH=${TRAVIS_BRANCH}
-          - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
-          - S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
-    tasks:
-      - shell.docker.Ensure
-      - docker.Make.shorttest
-  test-linux-arm64-integration:
-    configs:
-      arch: arm64v8
-      docker:
-        env:
-          - SHORTTEST=${SHORTTEST}
-          - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
-          - TRAVIS_BRANCH=${TRAVIS_BRANCH}
-          - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
-          - S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
-    tasks:
-      - shell.docker.Ensure
-      - docker.Make.integration-test
-
-
-
   # Linux amd64 jobs
   build-linux-amd64:
     configs:
       arch: amd64
-      docker:
-        env:
-          - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
-          - TRAVIS_BRANCH=${TRAVIS_BRANCH}
-          - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
-          - S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
     tasks:
-      - shell.docker.Ensure
+      - shell.docker.Ensure.centos
       - docker.Make.build
-  test-linux-amd64-fulltest:
-    configs:
-      arch: amd64
-      docker:
-        env:
-          - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
-          - TRAVIS_BRANCH=${TRAVIS_BRANCH}
-          - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
-          - S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
-    tasks:
-      - shell.docker.Ensure
-      - docker.Make.fulltest
-  test-linux-amd64-shorttest:
-    configs:
-      arch: amd64
-      docker:
-        env:
-          - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
-          - TRAVIS_BRANCH=${TRAVIS_BRANCH}
-          - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
-          - S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
-    tasks:
-      - shell.docker.Ensure
-      - docker.Make.shorttest
+#      - stash.Stash.linux-amd64
   test-linux-amd64-integration:
     configs:
       arch: amd64
-      docker:
-        env:
-          - SHORTTEST=${SHORTTEST}
-          - TRAVIS_OS_NAME=${TRAVIS_OS_NAME}
-          - TRAVIS_BRANCH=${TRAVIS_BRANCH}
-          - TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST}
-          - S3_RELEASE_BUCKET=${S3_RELEASE_BUCKET}
     tasks:
-      - shell.docker.Ensure
+      - shell.docker.Ensure.centos
+#      - stash.Unstash.linux-amd64
+      - docker.Make.integration-test
+  test-linux-amd64-fulltest:
+    configs:
+      arch: amd64
+    tasks:
+      - shell.docker.Ensure.centos
+      - docker.Make.fulltest
+
+  # Darwin amd64 jobs
+  # build-darwin-amd64:
+  #   configs:
+  #     arch: amd64
+  #   tasks:
+  #     - shell.Make.build
+  #     - stash.Stash.darwin-amd64
+  # test-darwin-amd64-integration:
+  #   configs:
+  #     arch: amd64
+  #   tasks:
+  #     - stash.Unstash.darwin-amd64
+  #     - shell.Make.integration-test
+  # test-darwin-amd64-fulltest:
+  #   configs:
+  #     arch: amd64
+  #   tasks:
+  #     - shell.Make.fulltest
+
+  # Linux arm64 jobs
+  build-linux-arm64:
+    configs:
+      arch: arm64v8
+    tasks:
+      - shell.docker.Ensure.centos
+      - docker.Make.build
+#      - stash.Stash.linux-arm64
+  test-linux-arm64-integration:
+    configs:
+      arch: arm64v8
+    tasks:
+      - shell.docker.Ensure.centos
+      - stash.Unstash.linux-arm64
       - docker.Make.integration-test
 
-
-
-  # Local jobs
-  build-local:
-    tasks:
-      - shell.Make.deps
-      - shell.Make.build
-  test-local-fulltest:
-    tasks:
-      - shell.Make.deps
-      - shell.Make.fulltest
-  test-local-shorttest:
-    tasks:
-      - shell.Make.deps
-      - shell.Make.shorttest
-  test-local-integration:
-    tasks:
-      - shell.Make.deps
-      - shell.Make.integration-test
-  archive-local:
-    tasks:
-      - shell.Make.deps
-      - shell.Make.archive
-
-
-
-  # Linux arm jobs
-  build-linux-arm:
+  # Linux arm32 jobs
+  build-linux-arm32:
     configs:
       arch: arm32v6
-      target: ci-build
     tasks:
-    - docker.Make
-  test-linux-arm-shorttest:
+      - shell.docker.Ensure.alpine
+      - docker.Make.build
+      - stash.Stash.linux-arm32
+
+  # Archive jobs
+  archive-linux-amd64:
     configs:
-      arch: arm32v6
-      target: shorttest
+      arch: amd64
     tasks:
-    - docker.Make
+      - shell.docker.Ensure.centos
+      - stash.Unstash.linux-amd64
+      # - stash.Unstash.darwin-amd64
+      - stash.Unstash.linux-arm64
+      - stash.Unstash.linux-arm32
+      - docker.Make.archive
+
