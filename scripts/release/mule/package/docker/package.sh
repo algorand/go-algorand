@@ -8,10 +8,10 @@ echo
 
 ARCH=$(./scripts/archtype.sh)
 OS_TYPE=$(./scripts/ostype.sh)
-BRANCH=$(./scripts/compute_branch.sh)
-CHANNEL=$(./scripts/compute_branch_channel.sh "$BRANCH")
+BRANCH=${BRANCH:-$(./scripts/compute_branch.sh "$BRANCH")}
+CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
 PKG_ROOT_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH"
-FULLVERSION=$(./scripts/compute_build_number.sh -f)
+FULLVERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 ALGOD_INSTALL_TAR_FILE="$PKG_ROOT_DIR/node_${CHANNEL}_${OS_TYPE}-${ARCH}_${FULLVERSION}.tar.gz"
 
 if [ -f "$ALGOD_INSTALL_TAR_FILE" ]; then
@@ -30,14 +30,6 @@ DOCKER_IMAGE="algorand/algod_$CHANNEL_VERSION:latest"
 DOCKERFILE="./docker/build/algod.Dockerfile"
 START_ALGOD_FILE="./docker/release/start_algod_docker.sh"
 ALGOD_DOCKER_INIT="./docker/release/algod_docker_init.sh"
-
-GO_VERSION=1.12
-GOROOT=/usr/local/go
-GOPATH="$HOME/go"
-PATH="$GOPATH/bin:$GOROOT/bin:$PATH"
-
-curl "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" | tar -xzf -
-cp -r go /usr/local
 
 echo "building '$DOCKERFILE' with install file $ALGOD_INSTALL_TAR_FILE"
 cp "$ALGOD_INSTALL_TAR_FILE" "/tmp/$INPUT_ALGOD_TAR_FILE"
