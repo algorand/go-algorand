@@ -38,18 +38,18 @@ DOCKERFILE="./docker/build/algod.Dockerfile"
 START_ALGOD_FILE="./docker/release/start_algod_docker.sh"
 ALGOD_DOCKER_INIT="./docker/release/algod_docker_init.sh"
 
-GO_VERSION=1.12
+GOLANG_VERSION=$(./scripts/get_golang_version.sh)
 GOROOT=/usr/local/go
 GOPATH="$HOME/go"
 PATH="$GOPATH/bin:$GOROOT/bin:$PATH"
 
-curl "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" | tar -xzf -
+curl "https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz" | tar -xzf -
 mv go /usr/local
 
 echo "building '$DOCKERFILE' with install file $ALGOD_INSTALL_TAR_FILE"
 cp "$ALGOD_INSTALL_TAR_FILE" "/tmp/$INPUT_ALGOD_TAR_FILE"
 cp "$ALGOD_DOCKER_INIT" /tmp
-docker build --build-arg ALGOD_INSTALL_TAR_FILE="$INPUT_ALGOD_TAR_FILE" /tmp -t "$DOCKER_IMAGE" -f "$DOCKERFILE"
+docker build --build-arg ALGOD_INSTALL_TAR_FILE="$INPUT_ALGOD_TAR_FILE" --build-arg GOLANG_VERSION="${GOLANG_VERSION}" /tmp -t "$DOCKER_IMAGE" -f "$DOCKERFILE"
 
 mkdir -p "/tmp/$NEW_PKG_DIR"
 
