@@ -23,7 +23,7 @@ tasks:
         $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
         $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
       ]
-    target: mule-sign-deb WORKDIR=/projects/go-algorand
+    target: mule-sign-deb
 
   - task: docker.Make
     name: package-sign-rpm
@@ -39,7 +39,7 @@ tasks:
         $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
         $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
       ]
-    target: mule-sign-rpm WORKDIR=/projects/go-algorand
+    target: mule-sign-rpm
 
   - task: docker.Make
     name: package-sign-tarball
@@ -55,7 +55,7 @@ tasks:
         $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
         $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
       ]
-    target: mule-sign-tar.gz WORKDIR=/projects/go-algorand
+    target: mule-sign-tar.gz
 
   - task: docker.Make
     name: package-sign-source
@@ -67,7 +67,7 @@ tasks:
         $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
         $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
       ]
-    target: mule-sign-source WORKDIR=/projects/go-algorand
+    target: mule-sign-source
 
   - task: s3.DownloadFile
     name: deb
