@@ -44,6 +44,7 @@ func init() {
 	// file.go
 	rootCmd.AddCommand(fileCmd)
 	rootCmd.AddCommand(netCmd)
+	rootCmd.AddCommand(databaseCmd)
 
 }
 

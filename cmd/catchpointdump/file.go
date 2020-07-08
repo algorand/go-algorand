@@ -38,9 +38,11 @@ import (
 )
 
 var tarFile string
+var outFileName string
 
 func init() {
 	fileCmd.Flags().StringVarP(&tarFile, "tar", "t", "", "Specify the tar file to process")
+	fileCmd.Flags().StringVarP(&outFileName, "output", "o", "", "Specify an outfile for the dump ( i.e. ./ledger.tracker.sqlite )")
 }
 
 var fileCmd = &cobra.Command{
@@ -81,7 +83,16 @@ var fileCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Unable to load catchpoint file into in-memory database : %v", err)
 		}
-		err = printAccountsDatabase("./ledger.tracker.sqlite", true, os.Stdout)
+
+		outFile := os.Stdout
+		if outFileName != "" {
+			outFile, err = os.OpenFile(outFileName, os.O_RDWR|os.O_CREATE, 0755)
+			if err != nil {
+				reportErrorf("Unable to create file '%s' : %v", outFileName, err)
+			}
+		}
+
+		err = printAccountsDatabase("./ledger.tracker.sqlite", true, outFile)
 		if err != nil {
 			reportErrorf("Unable to print account database : %v", err)
 		}
