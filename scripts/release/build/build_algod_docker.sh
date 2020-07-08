@@ -38,10 +38,11 @@ DOCKER_IMAGE="algorand/algod_${CHANNEL_VERSION}:${DOCKER_TAG}"
 RESULT_DIR="${HOME}/node_pkg/"
 DOCKERFILE="$HOME/go/src/github.com/algorand/go-algorand/docker/build/algod.Dockerfile"
 START_ALGOD_FILE="start_algod_docker.sh"
+GOLANG_VERSION=$(script/get_golang_version.sh)
 
 echo "building '${DOCKERFILE}' with install file $ALGOD_INSTALL_TAR_FILE"
 cp "${ALGOD_INSTALL_TAR_FILE}" "./${INPUT_ALGOD_TAR_FILE}"
-docker build --build-arg ALGOD_INSTALL_TAR_FILE=${INPUT_ALGOD_TAR_FILE} . -t ${DOCKER_IMAGE} -f ${DOCKERFILE}
+docker build --build-arg ALGOD_INSTALL_TAR_FILE=${INPUT_ALGOD_TAR_FILE} --build-arg GOLANG_VERSION=${GOLANG_VERSION} . -t ${DOCKER_IMAGE} -f ${DOCKERFILE}
 
 #echo "pushing '${DOCKER_IMAGE}'"
 #docker push ${DOCKER_IMAGE}
