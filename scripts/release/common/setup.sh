@@ -49,8 +49,12 @@ COMMIT_HASH=$(git rev-parse "${BRANCH}")
 
 export DEBIAN_FRONTEND=noninteractive
 
-# Install go version specified in go.mod
-GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+# Use go version specified by get_golang_version.sh
+if ! GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+then
+    echo $GOLANG_VERSION
+    exit 1
+fi
 cd "${HOME}"
 if ! curl -O https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz
 then
