@@ -665,6 +665,12 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 		return err
 	}
 
+	// Ensure that the only operation we can do is ClearState if the application
+	// does not exist
+	if !exists && ac.OnCompletion != ClearStateOC {
+		return fmt.Errorf("only clearing out is supported for applications that do not exist")
+	}
+
 	// Initialize our TEAL evaluation context. Internally, this manages
 	// access to balance records for Stateful TEAL programs as a thin
 	// wrapper around Balances.
@@ -693,12 +699,6 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 	// execute the ClearStateProgram, whose failures are ignored.
 	if ac.OnCompletion == ClearStateOC {
 		return ac.applyClearState(balances, header.Sender, appIdx, ad, steva)
-	}
-
-	// Past this point, the AppParams must exist. NoOp, OptIn, CloseOut,
-	// Delete, and Update
-	if !exists {
-		return fmt.Errorf("only clearing out is supported for applications that do not exist")
 	}
 
 	// If this is an OptIn transaction, ensure that the sender has
