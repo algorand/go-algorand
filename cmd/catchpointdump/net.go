@@ -141,7 +141,8 @@ func makeFileDump(addr string, catchpointFileBytes []byte) error {
 	if err != nil {
 		reportErrorf("Unable to initialize catchup database : %v", err)
 	}
-	err = loadCatchpointIntoDatabase(context.Background(), catchupAccessor, catchpointFileBytes)
+	var fileHeader ledger.CatchpointFileHeader
+	fileHeader, err = loadCatchpointIntoDatabase(context.Background(), catchupAccessor, catchpointFileBytes)
 	if err != nil {
 		reportErrorf("Unable to load catchpoint file into in-memory database : %v", err)
 	}
@@ -151,7 +152,7 @@ func makeFileDump(addr string, catchpointFileBytes []byte) error {
 	if err != nil {
 		return err
 	}
-	err = printAccountsDatabase("./ledger.tracker.sqlite", true, outFile)
+	err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile)
 	if err != nil {
 		return err
 	}

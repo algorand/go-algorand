@@ -20,6 +20,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/algorand/go-algorand/ledger"
 )
 
 var ledgerTrackerFilename string
@@ -47,7 +49,7 @@ var databaseCmd = &cobra.Command{
 				reportErrorf("Unable to create file '%s' : %v", outFileName, err)
 			}
 		}
-		err = printAccountsDatabase(ledgerTrackerFilename, false, outFile)
+		err = printAccountsDatabase(ledgerTrackerFilename, ledger.CatchpointFileHeader{}, outFile)
 		if err != nil {
 			reportErrorf("Unable to print account database : %v", err)
 		}

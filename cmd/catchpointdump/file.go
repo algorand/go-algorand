@@ -79,7 +79,8 @@ var fileCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Unable to initialize catchup database : %v", err)
 		}
-		err = loadCatchpointIntoDatabase(context.Background(), catchupAccessor, tarFileBytes)
+		var fileHeader ledger.CatchpointFileHeader
+		fileHeader, err = loadCatchpointIntoDatabase(context.Background(), catchupAccessor, tarFileBytes)
 		if err != nil {
 			reportErrorf("Unable to load catchpoint file into in-memory database : %v", err)
 		}
@@ -92,7 +93,7 @@ var fileCmd = &cobra.Command{
 			}
 		}
 
-		err = printAccountsDatabase("./ledger.tracker.sqlite", true, outFile)
+		err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile)
 		if err != nil {
 			reportErrorf("Unable to print account database : %v", err)
 		}
@@ -100,7 +101,7 @@ var fileCmd = &cobra.Command{
 	},
 }
 
-func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.CatchpointCatchupAccessor, fileBytes []byte) error {
+func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.CatchpointCatchupAccessor, fileBytes []byte) (fileHeader ledger.CatchpointFileHeader, err error) {
 	reader := bytes.NewReader(fileBytes)
 	tarReader := tar.NewReader(reader)
 	var downloadProgress ledger.CatchpointCatchupAccessorProgress
@@ -108,9 +109,9 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 		header, err := tarReader.Next()
 		if err != nil {
 			if err == io.EOF {
-				return nil
+				return fileHeader, nil
 			}
-			return err
+			return fileHeader, err
 		}
 		balancesBlockBytes := make([]byte, header.Size)
 		readComplete := int64(0)
@@ -125,42 +126,54 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 					}
 					err = fmt.Errorf("getPeerLedger received io.EOF while reading from tar file stream prior of reaching chunk size %d / %d", readComplete, header.Size)
 				}
-				return err
+				return fileHeader, err
 			}
 		}
 		err = catchupAccessor.ProgressStagingBalances(ctx, header.Name, balancesBlockBytes, &downloadProgress)
 		if err != nil {
-			return err
+			return fileHeader, err
+		}
+		if header.Name == "content.msgpack" {
+			// we already know it's valid, since we validated that above.
+			protocol.Decode(balancesBlockBytes, &fileHeader)
 		}
 	}
 }
 
-func printAccountsDatabase(databaseName string, staging bool, outFile *os.File) error {
+func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFileHeader, outFile *os.File) error {
 	dbAccessor, err := db.MakeAccessor(databaseName, true, false)
 	if err != nil || dbAccessor.Handle == nil {
 		return err
 	}
+	if fileHeader.Version != 0 {
+		totals := fileHeader.Totals
+		fmt.Fprintf(outFile, "AccountTotals - Online Money: %d\nAccountTotals - Online RewardUnits : %d\nAccountTotals - Offline Money: %d\nAccountTotals - Offline RewardUnits : %d\nAccountTotals - Not Participating Money: %d\nAccountTotals - Not Participating Money RewardUnits: %d\nAccountTotals - Rewards Level: %d\n",
+			totals.Online.Money.Raw, totals.Online.RewardUnits,
+			totals.Offline.Money.Raw, totals.Offline.RewardUnits,
+			totals.NotParticipating.Money.Raw, totals.NotParticipating.RewardUnits,
+			totals.RewardsLevel)
+	}
 	return dbAccessor.Atomic(func(tx *sql.Tx) (err error) {
-		var totals ledger.AccountTotals
-		id := ""
-		if staging {
-			id = "catchpointStaging"
+		if fileHeader.Version == 0 {
+			var totals ledger.AccountTotals
+			id := ""
+			row := tx.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
+			err = row.Scan(&totals.Online.Money.Raw, &totals.Online.RewardUnits,
+				&totals.Offline.Money.Raw, &totals.Offline.RewardUnits,
+				&totals.NotParticipating.Money.Raw, &totals.NotParticipating.RewardUnits,
+				&totals.RewardsLevel)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(outFile, "AccountTotals - Online Money: %d\nAccountTotals - Online RewardUnits : %d\nAccountTotals - Offline Money: %d\nAccountTotals - Offline RewardUnits : %d\nAccountTotals - Not Participating Money: %d\nAccountTotals - Not Participating Money RewardUnits: %d\nAccountTotals - Rewards Level: %d\n",
+				totals.Online.Money.Raw, totals.Online.RewardUnits,
+				totals.Offline.Money.Raw, totals.Offline.RewardUnits,
+				totals.NotParticipating.Money.Raw, totals.NotParticipating.RewardUnits,
+				totals.RewardsLevel)
 		}
-		row := tx.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
-		err = row.Scan(&totals.Online.Money.Raw, &totals.Online.RewardUnits,
-			&totals.Offline.Money.Raw, &totals.Offline.RewardUnits,
-			&totals.NotParticipating.Money.Raw, &totals.NotParticipating.RewardUnits,
-			&totals.RewardsLevel)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(outFile, "AccountTotals - Online Money: %d\nAccountTotals - Online RewardUnits : %d\nAccountTotals - Offline Money: %d\nAccountTotals - Offline RewardUnits : %d\nAccountTotals - Not Participating Money: %d\nAccountTotals - Not Participating Money RewardUnits: %d\nAccountTotals - Rewards Level: %d\n", &totals.Online.Money.Raw, &totals.Online.RewardUnits,
-			&totals.Offline.Money.Raw, &totals.Offline.RewardUnits,
-			&totals.NotParticipating.Money.Raw, &totals.NotParticipating.RewardUnits,
-			&totals.RewardsLevel)
 
 		balancesTable := "accountbase"
-		if staging {
+		if fileHeader.Version != 0 {
 			balancesTable = "catchpointbalances"
 		}
 		rows, err := tx.Query(fmt.Sprintf("SELECT address, data FROM %s order by address", balancesTable))
