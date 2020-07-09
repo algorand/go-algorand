@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -ex
 
 HELP="Usage: $0 [-s]
 Installs host level dependencies necessary to build go-algorand.
