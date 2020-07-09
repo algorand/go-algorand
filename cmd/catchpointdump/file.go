@@ -146,6 +146,15 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 		return err
 	}
 	if fileHeader.Version != 0 {
+		fmt.Fprintf(outFile, "Version: %d\nBalances Round: %d\nBlock Round: %d\nBlock Header Digest: %s\nCatchpoint: %s\nTotal Accounts: %d\nTotal Chunks: %d\n",
+			fileHeader.Version,
+			fileHeader.BalancesRound,
+			fileHeader.BlocksRound,
+			fileHeader.BlockHeaderDigest.String(),
+			fileHeader.Catchpoint,
+			fileHeader.TotalAccounts,
+			fileHeader.TotalChunks)
+
 		totals := fileHeader.Totals
 		fmt.Fprintf(outFile, "AccountTotals - Online Money: %d\nAccountTotals - Online RewardUnits : %d\nAccountTotals - Offline Money: %d\nAccountTotals - Offline RewardUnits : %d\nAccountTotals - Not Participating Money: %d\nAccountTotals - Not Participating Money RewardUnits: %d\nAccountTotals - Rewards Level: %d\n",
 			totals.Online.Money.Raw, totals.Online.RewardUnits,
