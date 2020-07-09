@@ -109,7 +109,7 @@ type testBalances struct {
 	proto       config.ConsensusParams
 
 	put             int // Put calls counter
-	putWith         int // PutWithCreatables calls counter
+	putWith         int // PutWithCreatable calls counter
 	putBalances     map[basics.Address]basics.AccountData
 	putWithBalances map[basics.Address]basics.AccountData
 	putWithNew      []basics.CreatableLocator
@@ -140,28 +140,32 @@ func (b *testBalances) Put(record basics.BalanceRecord) error {
 	return nil
 }
 
-func (b *testBalances) PutWithCreatables(record basics.BalanceRecord, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) error {
+func (b *testBalances) PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
 	b.putWith++
 	if b.putWithBalances == nil {
 		b.putWithBalances = make(map[basics.Address]basics.AccountData)
 	}
 	b.putWithBalances[record.Addr] = record.AccountData
-	b.putWithNew = append(b.putWithNew, newCreatables...)
-	b.putWithDel = append(b.putWithDel, deletedCreatables...)
+	if newCreatable != nil {
+		b.putWithNew = append(b.putWithNew, *newCreatable)
+	}
+	if deletedCreatable != nil {
+		b.putWithDel = append(b.putWithDel, *deletedCreatable)
+	}
 	return nil
 }
 
-func (b *testBalances) GetAssetCreator(aidx basics.AssetIndex) (basics.Address, error) {
-	return basics.Address{}, nil
-}
+func (b *testBalances) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	if ctype == basics.AppCreatable {
+		aidx := basics.AppIndex(cidx)
+		if aidx == appIdxError { // magic for test
+			return basics.Address{}, false, fmt.Errorf("mock synthetic error")
+		}
 
-func (b *testBalances) GetAppCreator(aidx basics.AppIndex) (basics.Address, bool, error) {
-	if aidx == appIdxError { // magic for test
-		return basics.Address{}, false, fmt.Errorf("mock synthetic error")
+		creator, ok := b.appCreators[aidx]
+		return creator, ok, nil
 	}
-
-	creator, ok := b.appCreators[aidx]
-	return creator, ok, nil
+	return basics.Address{}, false, nil
 }
 
 func (b *testBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards *basics.MicroAlgos, dstRewards *basics.MicroAlgos) error {
@@ -184,7 +188,7 @@ func (b *testBalancesPass) Put(record basics.BalanceRecord) error {
 	return nil
 }
 
-func (b *testBalancesPass) PutWithCreatables(record basics.BalanceRecord, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) error {
+func (b *testBalancesPass) PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
 	if b.balances == nil {
 		b.balances = make(map[basics.Address]basics.AccountData)
 	}
@@ -196,7 +200,7 @@ func (b *testBalances) ConsensusParams() config.ConsensusParams {
 	return b.proto
 }
 
-// ResetWrites clears side effects of Put/PutWithCreatables
+// ResetWrites clears side effects of Put/PutWithCreatable
 func (b *testBalances) ResetWrites() {
 	b.put = 0
 	b.putWith = 0
@@ -211,12 +215,9 @@ func (b *testBalances) SetProto(name protocol.ConsensusVersion) {
 }
 
 type testEvaluator struct {
-	pass  bool
-	delta basics.EvalDelta
-
-	acctWhitelist      []basics.Address
-	appGlobalWhitelist []basics.AppIndex
-	appIdx             basics.AppIndex
+	pass   bool
+	delta  basics.EvalDelta
+	appIdx basics.AppIndex
 }
 
 // Eval for tests that fail on program version > 10 and returns pass/delta from its own state rather than running the program
@@ -235,10 +236,8 @@ func (e *testEvaluator) Check(program []byte) (cost int, err error) {
 	return len(program), nil
 }
 
-func (e *testEvaluator) InitLedger(balances Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex) error {
+func (e *testEvaluator) InitLedger(balances Balances, appIdx basics.AppIndex, schemas basics.StateSchemas) error {
 	e.appIdx = appIdx
-	e.acctWhitelist = acctWhitelist
-	e.appGlobalWhitelist = appGlobalWhitelist
 	return nil
 }
 
@@ -489,8 +488,8 @@ func TestAppCallApplyGlobalStateDeltas(t *testing.T) {
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 
-	// simulate balances.GetAppCreator and balances.Get get out of sync
-	// creator received from balances.GetAppCreator and has app params
+	// simulate balances.GetCreator and balances.Get get out of sync
+	// creator received from balances.GetCreator and has app params
 	// and its balances.Get record is out of sync/not initialized
 	// ensure even if AppParams were allocated they are empty
 	creator = getRandomAddress(a)
@@ -767,32 +766,34 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 	b.SetProto(protocol.ConsensusFuture)
 
-	// error on non-existing app
+	// this test will succeed in creating the app, but then fail
+	// because the mock balances doesn't update the creators table
+	// so it will think the app doesn't exist
 	err = ac.apply(h, &b, spec, ad, txnCounter, &steva)
 	a.Error(err)
 	a.Contains(err.Error(), "applications that do not exist")
-	a.Equal(txnCounter+1, uint64(steva.appIdx))
-	a.Equal([]basics.Address{sender}, steva.acctWhitelist)
-	a.Equal([]basics.AppIndex{steva.appIdx}, steva.appGlobalWhitelist)
 	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 
-	b.appCreators = map[basics.AppIndex]basics.Address{steva.appIdx: creator}
+	createdAppIdx := basics.AppIndex(txnCounter + 1)
+	b.appCreators = map[basics.AppIndex]basics.Address{createdAppIdx: creator}
+
+	// save the created app info to the side
 	saved := b.putWithBalances[creator]
 
 	b.ResetWrites()
 
+	// now looking up the creator will succeed, but we reset writes, so
+	// they won't have the app params
 	err = ac.apply(h, &b, spec, ad, txnCounter, &steva)
 	a.Error(err)
-	a.Contains(err.Error(), fmt.Sprintf("app %d not found in account", steva.appIdx))
-	a.Equal(uint64(steva.appIdx), txnCounter+1)
-	a.Equal([]basics.Address{sender}, steva.acctWhitelist)
-	a.Equal([]basics.AppIndex{steva.appIdx}, steva.appGlobalWhitelist)
+	a.Contains(err.Error(), fmt.Sprintf("app %d not found in account", createdAppIdx))
 	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 
 	b.ResetWrites()
 
+	// now we give the creator the app params again
 	cp := basics.AccountData{}
 	cp.AppParams = cloneAppParams(saved.AppParams)
 	cp.AppLocalStates = cloneAppLocalStates(saved.AppLocalStates)
@@ -801,8 +802,6 @@ func TestAppCallApplyCreate(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), "transaction rejected by ApprovalProgram")
 	a.Equal(uint64(steva.appIdx), txnCounter+1)
-	a.Equal([]basics.Address{sender}, steva.acctWhitelist)
-	a.Equal([]basics.AppIndex{steva.appIdx}, steva.appGlobalWhitelist)
 	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 	// ensure original balance record in the mock was not changed
@@ -826,8 +825,6 @@ func TestAppCallApplyCreate(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), "cannot apply GlobalState delta")
 	a.Equal(uint64(steva.appIdx), txnCounter+1)
-	a.Equal([]basics.Address{sender}, steva.acctWhitelist)
-	a.Equal([]basics.AppIndex{steva.appIdx}, steva.appGlobalWhitelist)
 	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
@@ -847,8 +844,6 @@ func TestAppCallApplyCreate(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), "too much space: store integer")
 	a.Equal(uint64(steva.appIdx), txnCounter+1)
-	a.Equal([]basics.Address{sender}, steva.acctWhitelist)
-	a.Equal([]basics.AppIndex{steva.appIdx}, steva.appGlobalWhitelist)
 	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 	a.Equal(saved, b.balances[creator])
@@ -866,8 +861,6 @@ func TestAppCallApplyCreate(t *testing.T) {
 	a.NoError(err)
 	appIdx := steva.appIdx
 	a.Equal(uint64(appIdx), txnCounter+1)
-	a.Equal([]basics.Address{sender}, steva.acctWhitelist)
-	a.Equal([]basics.AppIndex{appIdx}, steva.appGlobalWhitelist)
 	a.Equal(1, b.put)
 	a.Equal(1, b.putWith)
 	a.Equal(saved, b.balances[creator])
@@ -1108,8 +1101,10 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 		OnCompletion:  CloseOutOC,
 	}
 	params := basics.AppParams{
-		ApprovalProgram:   []byte{1},
-		GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		ApprovalProgram: []byte{1},
+		StateSchemas: basics.StateSchemas{
+			GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		},
 	}
 	h := Header{
 		Sender: sender,
@@ -1190,8 +1185,10 @@ func TestAppCallApplyUpdate(t *testing.T) {
 		ClearStateProgram: []byte{3},
 	}
 	params := basics.AppParams{
-		ApprovalProgram:   []byte{1},
-		GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		ApprovalProgram: []byte{1},
+		StateSchemas: basics.StateSchemas{
+			GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		},
 	}
 	h := Header{
 		Sender: sender,
@@ -1252,8 +1249,10 @@ func TestAppCallApplyDelete(t *testing.T) {
 		OnCompletion:  DeleteApplicationOC,
 	}
 	params := basics.AppParams{
-		ApprovalProgram:   []byte{1},
-		GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		ApprovalProgram: []byte{1},
+		StateSchemas: basics.StateSchemas{
+			GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		},
 	}
 	h := Header{
 		Sender: sender,

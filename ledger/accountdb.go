@@ -32,9 +32,9 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	listAssetsStmt               *sql.Stmt
+	listCreatablesStmt           *sql.Stmt
 	lookupStmt                   *sql.Stmt
-	lookupAssetCreatorStmt       *sql.Stmt
+	lookupCreatorStmt            *sql.Stmt
 	deleteStoredCatchpoint       *sql.Stmt
 	insertStoredCatchpoint       *sql.Stmt
 	selectOldestsCatchpointFiles *sql.Stmt
@@ -79,6 +79,12 @@ var accountsSchema = []string{
 		strval text)`,
 }
 
+// TODO: Post applications, rename assetcreators -> creatables and rename
+// 'asset' column -> 'creatable'
+var creatablesMigration = []string{
+	`ALTER TABLE assetcreators ADD COLUMN ctype INTEGER DEFAULT 0`,
+}
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -115,8 +121,8 @@ const (
 	catchpointStateCatchupBalancesRound = catchpointState("catchpointCatchupBalancesRound")
 )
 
-func writeCatchpointStagingAssets(ctx context.Context, tx *sql.Tx, addr basics.Address, assetIdx basics.AssetIndex) error {
-	_, err := tx.ExecContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator) VALUES(?, ?)", assetIdx, addr[:])
+func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) error {
+	_, err := tx.ExecContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)", cidx, addr[:], ctype)
 	if err != nil {
 		return err
 	}
@@ -152,7 +158,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 	s += "DROP TABLE IF EXISTS catchpointaccounthashes;"
 	s += "DELETE FROM accounttotals where id='catchpointStaging';"
 	if newCatchup {
-		s += "CREATE TABLE IF NOT EXISTS catchpointassetcreators(asset integer primary key, creator blob);"
+		s += "CREATE TABLE IF NOT EXISTS catchpointassetcreators(asset integer primary key, creator blob, ctype integer);"
 		s += "CREATE TABLE IF NOT EXISTS catchpointbalances(address blob primary key, data blob);"
 		s += "CREATE TABLE IF NOT EXISTS catchpointaccounthashes(id integer primary key, data blob);"
 	}
@@ -172,6 +178,7 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 	s += "DROP TABLE IF EXISTS accountbase_old;"
 	s += "DROP TABLE IF EXISTS assetcreators_old;"
 	s += "DROP TABLE IF EXISTS accounthashes_old;"
+
 	_, err = tx.Exec(s)
 	if err != nil {
 		return err
@@ -205,7 +212,22 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		}
 	}
 
-	_, err := tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
+	// Run creatables migration if it hasn't run yet
+	var creatableMigrated bool
+	err := tx.QueryRow("SELECT 1 FROM pragma_table_info('assetcreators') WHERE name='ctype'").Scan(&creatableMigrated)
+	if err == sql.ErrNoRows {
+		// Run migration
+		for _, migrateCmd := range creatablesMigration {
+			_, err = tx.Exec(migrateCmd)
+			if err != nil {
+				return err
+			}
+		}
+	} else if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
 	if err == nil {
 		var ot basics.OverflowTracker
 		var totals AccountTotals
@@ -275,7 +297,7 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 	var err error
 	qs := &accountsDbQueries{}
 
-	qs.listAssetsStmt, err = r.Prepare("SELECT asset, creator FROM assetcreators WHERE asset <= ? ORDER BY asset desc LIMIT ?")
+	qs.listCreatablesStmt, err = r.Prepare("SELECT asset, creator, ctype FROM assetcreators WHERE asset <= ? AND ctype = ? ORDER BY asset desc LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
@@ -285,7 +307,7 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 		return nil, err
 	}
 
-	qs.lookupAssetCreatorStmt, err = r.Prepare("SELECT creator FROM assetcreators WHERE asset=?")
+	qs.lookupCreatorStmt, err = r.Prepare("SELECT creator FROM assetcreators WHERE asset = ? AND ctype = ?")
 	if err != nil {
 		return nil, err
 	}
@@ -332,10 +354,10 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 	return qs, nil
 }
 
-func (qs *accountsDbQueries) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
+func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, err error) {
 	err = db.Retry(func() error {
 		// Query for assets in range
-		rows, err := qs.listAssetsStmt.Query(maxAssetIdx, maxResults)
+		rows, err := qs.listCreatablesStmt.Query(maxIdx, ctype, maxResults)
 		if err != nil {
 			return err
 		}
@@ -343,32 +365,37 @@ func (qs *accountsDbQueries) listAssets(maxAssetIdx basics.AssetIndex, maxResult
 
 		// For each row, copy into a new CreatableLocator and append to results
 		var buf []byte
-		var al basics.CreatableLocator
+		var cl basics.CreatableLocator
 		for rows.Next() {
-			err := rows.Scan(&al.Index, &buf)
+			err := rows.Scan(&cl.Index, &buf)
 			if err != nil {
 				return err
 			}
-			copy(al.Creator[:], buf)
-			results = append(results, al)
+			copy(cl.Creator[:], buf)
+			cl.Type = ctype
+			results = append(results, cl)
 		}
 		return nil
 	})
 	return
 }
 
-func (qs *accountsDbQueries) lookupAssetCreator(assetIdx basics.AssetIndex) (addr basics.Address, err error) {
+func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
-		err := qs.lookupAssetCreatorStmt.QueryRow(assetIdx).Scan(&buf)
+		err := qs.lookupCreatorStmt.QueryRow(cidx, ctype).Scan(&buf)
 
+		// Common error: creatable does not exist
 		if err == sql.ErrNoRows {
-			err = fmt.Errorf("asset %d does not exist or has been deleted", assetIdx)
+			return nil
 		}
 
+		// Some other database error
 		if err != nil {
 			return err
 		}
+
+		ok = true
 		copy(addr[:], buf)
 		return nil
 	})
@@ -561,37 +588,7 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool)
 	return err
 }
 
-// getChangedAssetIndices takes an accountDelta and returns which AssetIndices
-// were created and which were deleted
-func getChangedAssetIndices(creator basics.Address, delta accountDelta) map[basics.AssetIndex]modifiedAsset {
-	assetMods := make(map[basics.AssetIndex]modifiedAsset)
-
-	// Get assets that were created
-	for idx := range delta.new.AssetParams {
-		// AssetParams are in now the balance record now, but _weren't_ before
-		if _, ok := delta.old.AssetParams[idx]; !ok {
-			assetMods[idx] = modifiedAsset{
-				created: true,
-				creator: creator,
-			}
-		}
-	}
-
-	// Get assets that were deleted
-	for idx := range delta.old.AssetParams {
-		// AssetParams were in the balance record, but _aren't_ anymore
-		if _, ok := delta.new.AssetParams[idx]; !ok {
-			assetMods[idx] = modifiedAsset{
-				created: false,
-				creator: creator,
-			}
-		}
-	}
-
-	return assetMods
-}
-
-func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, rewardsLevel uint64, proto config.ConsensusParams) (err error) {
+func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creatables map[basics.CreatableIndex]modifiedCreatable, rewardsLevel uint64, proto config.ConsensusParams) (err error) {
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx, false)
 	if err != nil {
@@ -612,17 +609,17 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, rewar
 	}
 	defer replaceStmt.Close()
 
-	insertAssetIdxStmt, err := tx.Prepare("INSERT INTO assetcreators (asset, creator) VALUES (?, ?)")
+	insertCreatableIdxStmt, err := tx.Prepare("INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)")
 	if err != nil {
 		return
 	}
-	defer insertAssetIdxStmt.Close()
+	defer insertCreatableIdxStmt.Close()
 
-	deleteAssetIdxStmt, err := tx.Prepare("DELETE FROM assetcreators WHERE asset=?")
+	deleteCreatableIdxStmt, err := tx.Prepare("DELETE FROM assetcreators WHERE asset=? AND ctype=?")
 	if err != nil {
 		return
 	}
-	defer deleteAssetIdxStmt.Close()
+	defer deleteCreatableIdxStmt.Close()
 
 	for addr, data := range updates {
 		if data.new.IsZero() {
@@ -637,17 +634,16 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, rewar
 
 		totals.delAccount(proto, data.old, &ot)
 		totals.addAccount(proto, data.new, &ot)
+	}
 
-		adeltas := getChangedAssetIndices(addr, data)
-		for aidx, delta := range adeltas {
-			if delta.created {
-				_, err = insertAssetIdxStmt.Exec(aidx, addr[:])
-			} else {
-				_, err = deleteAssetIdxStmt.Exec(aidx)
-			}
-			if err != nil {
-				return
-			}
+	for cidx, cdelta := range creatables {
+		if cdelta.created {
+			_, err = insertCreatableIdxStmt.Exec(cidx, cdelta.creator[:], cdelta.ctype)
+		} else {
+			_, err = deleteCreatableIdxStmt.Exec(cidx, cdelta.ctype)
+		}
+		if err != nil {
+			return
 		}
 	}
 
