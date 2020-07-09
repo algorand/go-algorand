@@ -713,7 +713,7 @@ func opPlus(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
-func opPluswImpl(x, y uint64) (carry uint64, sum uint64) {
+func opAddwImpl(x, y uint64) (carry uint64, sum uint64) {
 	sum = x + y
 	if sum < x {
 		carry = 1
@@ -721,10 +721,10 @@ func opPluswImpl(x, y uint64) (carry uint64, sum uint64) {
 	return
 }
 
-func opPlusw(cx *evalContext) {
+func opAddw(cx *evalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
-	carry, sum := opPluswImpl(cx.stack[prev].Uint, cx.stack[last].Uint)
+	carry, sum := opAddwImpl(cx.stack[prev].Uint, cx.stack[last].Uint)
 	cx.stack[prev].Uint = carry
 	cx.stack[last].Uint = sum
 }

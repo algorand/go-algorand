@@ -197,7 +197,7 @@ txn ClearStateProgram
 txn RekeyTo
 int 0
 int 1
-plusw
+addw
 txn ConfigAsset
 txn ConfigAssetTotal
 txn ConfigAssetDecimals

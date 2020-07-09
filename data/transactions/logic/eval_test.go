@@ -683,33 +683,33 @@ int 1                   // ret 1
 	}
 }
 
-func TestPluswImpl(t *testing.T) {
+func TestAddwImpl(t *testing.T) {
 	t.Parallel()
-	carry, sum := opPluswImpl(1, 2)
+	carry, sum := opAddwImpl(1, 2)
 	require.Equal(t, uint64(0), carry)
 	require.Equal(t, uint64(3), sum)
 
-	carry, sum = opPluswImpl(0xFFFFFFFFFFFFFFFD, 0x45)
+	carry, sum = opAddwImpl(0xFFFFFFFFFFFFFFFD, 0x45)
 	require.Equal(t, uint64(1), carry)
 	require.Equal(t, uint64(0x42), sum)
 
-	carry, sum = opPluswImpl(0, 0)
+	carry, sum = opAddwImpl(0, 0)
 	require.Equal(t, uint64(0), carry)
 	require.Equal(t, uint64(0), sum)
 
-	carry, sum = opPluswImpl((1<<64)-1, (1<<64)-1)
+	carry, sum = opAddwImpl((1<<64)-1, (1<<64)-1)
 	require.Equal(t, uint64(1), carry)
 	require.Equal(t, uint64((1<<64)-2), sum)
 }
 
-func TestPlusw(t *testing.T) {
+func TestAddw(t *testing.T) {
 	t.Parallel()
 	// add two numbers, ensure sum is 0x42 and carry is 0x1
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			program, err := AssembleStringWithVersion(`int 0xFFFFFFFFFFFFFFFF
 int 0x43
-plusw
+addw
 int 0x42  // compare sum (top of the stack)
 ==
 bnz continue
@@ -3659,7 +3659,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 		"bz":                "bz l\nl:",
 		"b":                 "b l\nl:",
 		"return":            "int 1\nreturn",
-		"plusw":             "int 0\nint 1\nplusw",
+		"addw":              "int 0\nint 1\naddw",
 		"dup2":              "dup2",
 		"concat":            "byte 0x41\ndup\nconcat",
 		"substring":         "byte 0x41\nsubstring 0 1",
