@@ -78,7 +78,7 @@ type AssetFreezeTxnFields struct {
 	AssetFrozen bool `codec:"afrz"`
 }
 
-func clone(m map[basics.AssetIndex]basics.AssetHolding) map[basics.AssetIndex]basics.AssetHolding {
+func cloneAssetHoldings(m map[basics.AssetIndex]basics.AssetHolding) map[basics.AssetIndex]basics.AssetHolding {
 	res := make(map[basics.AssetIndex]basics.AssetHolding)
 	for id, val := range m {
 		res[id] = val
@@ -86,7 +86,7 @@ func clone(m map[basics.AssetIndex]basics.AssetHolding) map[basics.AssetIndex]ba
 	return res
 }
 
-func cloneParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.AssetIndex]basics.AssetParams {
+func cloneAssetParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.AssetIndex]basics.AssetParams {
 	res := make(map[basics.AssetIndex]basics.AssetParams)
 	for id, val := range m {
 		res[id] = val
@@ -95,8 +95,15 @@ func cloneParams(m map[basics.AssetIndex]basics.AssetParams) map[basics.AssetInd
 }
 
 func getParams(balances Balances, aidx basics.AssetIndex) (params basics.AssetParams, creator basics.Address, err error) {
-	creator, err = balances.GetAssetCreator(aidx)
+	creator, exists, err := balances.GetCreator(basics.CreatableIndex(aidx), basics.AssetCreatable)
 	if err != nil {
+		return
+	}
+
+	// For assets, anywhere we're attempting to fetch parameters, we are
+	// assuming that the asset should exist.
+	if !exists {
+		err = fmt.Errorf("asset %d does not exist or has been deleted", aidx)
 		return
 	}
 
@@ -121,8 +128,8 @@ func (cc AssetConfigTxnFields) apply(header Header, balances Balances, spec Spec
 		if err != nil {
 			return err
 		}
-		record.Assets = clone(record.Assets)
-		record.AssetParams = cloneParams(record.AssetParams)
+		record.Assets = cloneAssetHoldings(record.Assets)
+		record.AssetParams = cloneAssetParams(record.AssetParams)
 
 		// Ensure index is never zero
 		newidx := basics.AssetIndex(txnCounter + 1)
@@ -142,7 +149,14 @@ func (cc AssetConfigTxnFields) apply(header Header, balances Balances, spec Spec
 			return fmt.Errorf("too many assets in account: %d > %d", len(record.Assets), balances.ConsensusParams().MaxAssetsPerAccount)
 		}
 
-		return balances.Put(record)
+		// Tell the cow what asset we created
+		created := &basics.CreatableLocator{
+			Creator: header.Sender,
+			Type:    basics.AssetCreatable,
+			Index:   basics.CreatableIndex(newidx),
+		}
+
+		return balances.PutWithCreatable(record, created, nil)
 	}
 
 	// Re-configuration and destroying must be done by the manager key.
@@ -160,14 +174,22 @@ func (cc AssetConfigTxnFields) apply(header Header, balances Balances, spec Spec
 		return err
 	}
 
-	record.Assets = clone(record.Assets)
-	record.AssetParams = cloneParams(record.AssetParams)
+	record.Assets = cloneAssetHoldings(record.Assets)
+	record.AssetParams = cloneAssetParams(record.AssetParams)
 
+	var deleted *basics.CreatableLocator
 	if cc.AssetParams == (basics.AssetParams{}) {
 		// Destroying an asset.  The creator account must hold
 		// the entire outstanding asset amount.
 		if record.Assets[cc.ConfigAsset].Amount != params.Total {
 			return fmt.Errorf("cannot destroy asset: creator is holding only %d/%d", record.Assets[cc.ConfigAsset].Amount, params.Total)
+		}
+
+		// Tell the cow what asset we deleted
+		deleted = &basics.CreatableLocator{
+			Creator: creator,
+			Type:    basics.AssetCreatable,
+			Index:   basics.CreatableIndex(cc.ConfigAsset),
 		}
 
 		delete(record.Assets, cc.ConfigAsset)
@@ -190,7 +212,7 @@ func (cc AssetConfigTxnFields) apply(header Header, balances Balances, spec Spec
 		record.AssetParams[cc.ConfigAsset] = params
 	}
 
-	return balances.Put(record)
+	return balances.PutWithCreatable(record, nil, deleted)
 }
 
 func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, amount uint64, bypassFreeze bool) error {
@@ -203,7 +225,7 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 		return err
 	}
 
-	snd.Assets = clone(snd.Assets)
+	snd.Assets = cloneAssetHoldings(snd.Assets)
 	sndHolding, ok := snd.Assets[asset]
 	if !ok {
 		return fmt.Errorf("asset %v missing from %v", asset, addr)
@@ -233,7 +255,7 @@ func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amou
 		return err
 	}
 
-	rcv.Assets = clone(rcv.Assets)
+	rcv.Assets = cloneAssetHoldings(rcv.Assets)
 	rcvHolding, ok := rcv.Assets[asset]
 	if !ok {
 		return fmt.Errorf("asset %v missing from %v", asset, addr)
@@ -283,7 +305,7 @@ func (ct AssetTransferTxnFields) apply(header Header, balances Balances, spec Sp
 			return err
 		}
 
-		snd.Assets = clone(snd.Assets)
+		snd.Assets = cloneAssetHoldings(snd.Assets)
 		sndHolding, ok := snd.Assets[ct.XferAsset]
 		if !ok {
 			// Initialize holding with default Frozen value.
@@ -379,7 +401,7 @@ func (ct AssetTransferTxnFields) apply(header Header, balances Balances, spec Sp
 			return err
 		}
 
-		snd.Assets = clone(snd.Assets)
+		snd.Assets = cloneAssetHoldings(snd.Assets)
 		sndHolding = snd.Assets[ct.XferAsset]
 		if sndHolding.Amount != 0 {
 			return fmt.Errorf("asset %v not zero (%d) after closing", ct.XferAsset, sndHolding.Amount)
@@ -411,7 +433,7 @@ func (cf AssetFreezeTxnFields) apply(header Header, balances Balances, spec Spec
 	if err != nil {
 		return err
 	}
-	record.Assets = clone(record.Assets)
+	record.Assets = cloneAssetHoldings(record.Assets)
 
 	holding, ok := record.Assets[cf.FreezeAsset]
 	if !ok {

@@ -1,0 +1,12 @@
+#pragma version 2
+// Key is "foo"
+byte base64 Zm9v
+
+// Value is ApplicationArgs 0
+txna ApplicationArgs 0
+
+// Write it
+app_global_put
+
+int 1
+return

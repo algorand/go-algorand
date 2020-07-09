@@ -1,0 +1,22 @@
+#pragma version 2
+// a simple global and local calls counter app
+byte "counter"
+dup
+app_global_get
+int 1
++
+app_global_put  // update the counter
+int 0
+int 0
+app_opted_in
+bnz opted_in
+err
+opted_in:
+int 0
+byte "counter"
+dup2
+app_local_get
+int 1  // increment
++
+app_local_put
+int 1

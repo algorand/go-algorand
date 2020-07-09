@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -61,8 +62,8 @@ type roundCowBase struct {
 	proto config.ConsensusParams
 }
 
-func (x *roundCowBase) getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
-	return x.l.GetAssetCreatorForRound(x.rnd, assetIdx)
+func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	return x.l.GetCreatorForRound(x.rnd, cidx, ctype)
 }
 
 func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
@@ -77,18 +78,6 @@ func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
 }
 
-func (cs *roundCowState) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
-	return cs.getAssetCreator(assetIdx)
-}
-
-func (cs *roundCowState) GetAppCreator(appIdx basics.AppIndex) (basics.Address, bool, error) {
-	return basics.Address{}, false, errors.New("applications not implemented")
-}
-
-func (cs *roundCowState) PutWithCreatables(record basics.BalanceRecord, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) error {
-	return errors.New("applications not implemented")
-}
-
 // wrappers for roundCowState to satisfy the (current) transactions.Balances interface
 func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
 	acctdata, err := cs.lookup(addr)
@@ -101,12 +90,20 @@ func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basi
 	return basics.BalanceRecord{Addr: addr, AccountData: acctdata}, nil
 }
 
+func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	return cs.getCreator(cidx, ctype)
+}
+
 func (cs *roundCowState) Put(record basics.BalanceRecord) error {
+	return cs.PutWithCreatable(record, nil, nil)
+}
+
+func (cs *roundCowState) PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
 	olddata, err := cs.lookup(record.Addr)
 	if err != nil {
 		return err
 	}
-	cs.put(record.Addr, olddata, record.AccountData)
+	cs.put(record.Addr, olddata, record.AccountData, newCreatable, deletedCreatable)
 	return nil
 }
 
@@ -133,7 +130,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if overflowed {
 		return fmt.Errorf("overspend (account %v, data %+v, tried to spend %v)", from, fromBal, amt)
 	}
-	cs.put(from, fromBal, fromBalNew)
+	cs.put(from, fromBal, fromBalNew, nil, nil)
 
 	toBal, err := cs.lookup(to)
 	if err != nil {
@@ -154,7 +151,7 @@ func (cs *roundCowState) Move(from basics.Address, to basics.Address, amt basics
 	if overflowed {
 		return fmt.Errorf("balance overflow (account %v, data %+v, was going to receive %v)", to, toBal, amt)
 	}
-	cs.put(to, toBal, toBalNew)
+	cs.put(to, toBal, toBalNew, nil, nil)
 
 	return nil
 }
@@ -177,6 +174,8 @@ type BlockEvaluator struct {
 	block        bookkeeping.Block
 	blockTxBytes int
 
+	blockGenerated bool // prevent repeated GenerateBlock calls
+
 	l ledgerForEvaluator
 }
 
@@ -188,7 +187,7 @@ type ledgerForEvaluator interface {
 	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
 	GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool)
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
-	GetAssetCreatorForRound(basics.Round, basics.AssetIndex) (basics.Address, error)
+	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
@@ -460,6 +459,45 @@ func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithA
 	return eval.transactionGroup(txads)
 }
 
+// prepareAppEvaluators creates appTealEvaluators for each ApplicationCall
+// transaction in the group
+func (eval *BlockEvaluator) prepareAppEvaluators(txgroup []transactions.SignedTxnWithAD) (res []*appTealEvaluator) {
+	var groupNoAD []transactions.SignedTxn
+	res = make([]*appTealEvaluator, len(txgroup))
+	for i, txn := range txgroup {
+		// Ignore any non-ApplicationCall transactions
+		if txn.SignedTxn.Txn.Type != protocol.ApplicationCallTx {
+			continue
+		}
+
+		// Initialize group without ApplyData lazily
+		if groupNoAD == nil {
+			groupNoAD = make([]transactions.SignedTxn, len(txgroup))
+			for j := range txgroup {
+				groupNoAD[j] = txgroup[j].SignedTxn
+			}
+		}
+
+		// Construct an appTealEvaluator (implements
+		// transactions.StateEvaluator) for use in ApplicationCall transactions.
+		steva := appTealEvaluator{
+			evalParams: logic.EvalParams{
+				Txn:        &groupNoAD[i],
+				Proto:      &eval.proto,
+				TxnGroup:   groupNoAD,
+				GroupIndex: i,
+			},
+			AppTealGlobals: AppTealGlobals{
+				CurrentRound:    eval.prevHeader.Round + 1,
+				LatestTimestamp: eval.prevHeader.TimeStamp,
+			},
+		}
+
+		res[i] = &steva
+	}
+	return
+}
+
 // transactionGroup tentatively executes a group of transactions as part of this block evaluation.
 // If the transaction group cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
@@ -479,10 +517,15 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 
 	cow := eval.state.child()
 
+	// Prepare TEAL contexts for any ApplicationCall transactions in the group
+	appEvaluators := eval.prepareAppEvaluators(txgroup)
+
+	// Evaluate each transaction in the group
+	txibs = make([]transactions.SignedTxnInBlock, 0, len(txgroup))
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, txad.ApplyData, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, appEvaluators[gi], txad.ApplyData, cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -530,7 +573,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *appTealEvaluator, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	// Only compute the TxID once
@@ -572,7 +615,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := txn.Txn.Apply(cow, nil, spec, cow.txnCounter())
+	applyData, err := txn.Txn.Apply(cow, appEval, spec, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
@@ -622,10 +665,17 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 		}
 
 		dataNew := data.WithUpdatedRewards(eval.proto, rewardlvl)
-		effectiveMinBalance := basics.MulSaturate(eval.proto.MinBalance, uint64(1+len(dataNew.Assets)))
-		if dataNew.MicroAlgos.Raw < effectiveMinBalance {
+		effectiveMinBalance := dataNew.MinBalance(&eval.proto)
+		if dataNew.MicroAlgos.Raw < effectiveMinBalance.Raw {
 			return fmt.Errorf("transaction %v: account %v balance %d below min %d (%d assets)",
-				txid, addr, dataNew.MicroAlgos.Raw, effectiveMinBalance, len(dataNew.Assets))
+				txid, addr, dataNew.MicroAlgos.Raw, effectiveMinBalance.Raw, len(dataNew.Assets))
+		}
+
+		// Check if we have exceeded the maximum minimum balance
+		if eval.proto.MaximumMinimumBalance != 0 {
+			if effectiveMinBalance.Raw > eval.proto.MaximumMinimumBalance {
+				return fmt.Errorf("transaction %v: account %v would use too much space after this transaction. Minimum balance requirements would be %d (greater than max %d)", txid, addr, effectiveMinBalance.Raw, eval.proto.MaximumMinimumBalance)
+			}
 		}
 	}
 
@@ -635,7 +685,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, ad transacti
 	return nil
 }
 
-// Call "endOfBlock" after all the block's rewards and transactions are processed. Applies any deferred balance updates.
+// Call "endOfBlock" after all the block's rewards and transactions are processed.
 func (eval *BlockEvaluator) endOfBlock() error {
 	if eval.generate {
 		eval.block.TxnRoot = eval.block.Payset.Commit(eval.proto.PaysetCommitFlat)
@@ -673,9 +723,17 @@ func (eval *BlockEvaluator) finalValidation() error {
 // GenerateBlock produces a complete block from the BlockEvaluator.  This is
 // used during proposal to get an actual block that will be proposed, after
 // feeding in tentative transactions into this block evaluator.
+//
+// After a call to GenerateBlock, the BlockEvaluator can still be used to
+// accept transactions.  However, to guard against reuse, subsequent calls
+// to GenerateBlock on the same BlockEvaluator will fail.
 func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 	if !eval.generate {
 		logging.Base().Panicf("GenerateBlock() called but generate is false")
+	}
+
+	if eval.blockGenerated {
+		return nil, fmt.Errorf("GenerateBlock already called on this BlockEvaluator")
 	}
 
 	err := eval.endOfBlock()
@@ -692,6 +750,8 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 		blk:   eval.block,
 		delta: eval.state.mods,
 	}
+	eval.blockGenerated = true
+	eval.state = makeRoundCowState(eval.state, eval.block.BlockHeader)
 	return &vb, nil
 }
 
