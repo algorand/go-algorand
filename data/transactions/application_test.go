@@ -766,28 +766,34 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 	b.SetProto(protocol.ConsensusFuture)
 
-	// error on non-existing app
+	// this test will succeed in creating the app, but then fail
+	// because the mock balances doesn't update the creators table
+	// so it will think the app doesn't exist
 	err = ac.apply(h, &b, spec, ad, txnCounter, &steva)
 	a.Error(err)
 	a.Contains(err.Error(), "applications that do not exist")
-	a.Equal(txnCounter+1, uint64(steva.appIdx))
 	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 
-	b.appCreators = map[basics.AppIndex]basics.Address{steva.appIdx: creator}
+	createdAppIdx := basics.AppIndex(txnCounter + 1)
+	b.appCreators = map[basics.AppIndex]basics.Address{createdAppIdx: creator}
+
+	// save the created app info to the side
 	saved := b.putWithBalances[creator]
 
 	b.ResetWrites()
 
+	// now looking up the creator will succeed, but we reset writes, so
+	// they won't have the app params
 	err = ac.apply(h, &b, spec, ad, txnCounter, &steva)
 	a.Error(err)
-	a.Contains(err.Error(), fmt.Sprintf("app %d not found in account", steva.appIdx))
-	a.Equal(uint64(steva.appIdx), txnCounter+1)
+	a.Contains(err.Error(), fmt.Sprintf("app %d not found in account", createdAppIdx))
 	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 
 	b.ResetWrites()
 
+	// now we give the creator the app params again
 	cp := basics.AccountData{}
 	cp.AppParams = cloneAppParams(saved.AppParams)
 	cp.AppLocalStates = cloneAppLocalStates(saved.AppLocalStates)
