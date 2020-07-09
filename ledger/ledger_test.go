@@ -924,7 +924,6 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
 		l: l,
 	}
 
-	nonZeroMinSaves := 0
 	blk := genesisInitState.Block
 
 	for i := 0; i < 4000; i++ {
@@ -938,16 +937,13 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
 		}
 
 		wl.l.WaitForCommit(blk.Round())
-		minMinSave, err := checkTrackers(t, wl, blk.Round())
+		_, err := checkTrackers(t, wl, blk.Round())
 		require.NoError(t, err)
 		if err != nil {
 			// Return early, to help with iterative debugging
 			return
 		}
 
-		if minMinSave > 0 {
-			nonZeroMinSaves++
-		}
 	}
 }
 // // 	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
