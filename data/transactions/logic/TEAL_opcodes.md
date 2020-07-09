@@ -58,7 +58,7 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 - Pushes: uint64
 - A plus B. Panic on overflow.
 
-Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `plusw`.
+Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`.
 
 ## -
 
@@ -211,7 +211,7 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pushes: uint64, uint64
 - A times B out to 128-bit long result as low (top) and high uint64 values on the stack
 
-## plusw
+## addw
 
 - Opcode: 0x1e
 - Pops: *... stack*, {uint64 A}, {uint64 B}
