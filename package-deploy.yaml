@@ -31,7 +31,7 @@ tasks:
         $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
         $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
       ]
-    target: mule-deploy-deb WORKDIR=/projects/go-algorand
+    target: mule-deploy-deb
 
   - task: docker.Make
     name: rpm
@@ -48,7 +48,7 @@ tasks:
         $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
         $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
       ]
-    target: mule-deploy-rpm WORKDIR=/projects/go-algorand
+    target: mule-deploy-rpm
 
   - task: s3.BucketCopy
     name: deb

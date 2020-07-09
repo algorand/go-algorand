@@ -37,7 +37,7 @@ tasks:
       image: algorand/go-algorand-ci-linux-centos
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
-    target: mule-package-rpm WORKDIR=/projects/go-algorand
+    target: mule-package-rpm
 
   - task: docker.Make
     name: deb
@@ -45,7 +45,7 @@ tasks:
       image: algorand/go-algorand-ci-linux-ubuntu
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
-    target: mule-package-deb WORKDIR=/projects/go-algorand
+    target: mule-package-deb
 
   - task: docker.Make
     name: docker-image
@@ -54,7 +54,7 @@ tasks:
       version: '{{ docker.Version.outputs.version }}'
       workDir: /projects/go-algorand
       volumes: [ /var/run/docker.sock:/var/run/docker.sock ]
-    target: mule-package-docker WORKDIR=/projects/go-algorand
+    target: mule-package-docker
 
 jobs:
   package:
