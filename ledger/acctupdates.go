@@ -1008,7 +1008,20 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	var catchpointLabel string
 	beforeUpdatingBalancesTime := time.Now()
 	var trieBalancesHash crypto.Digest
+
+	// the lockTaken variable would help us to ensure that we take the lock before commiting the transaction to the database.
+	// since the function within the "Atomic" migth be re-attempted, we need to perform the check at the begining, and after
+	// we exit from Atomic. Note that there is no concurrently issue within this function around testing the variable value.
+	lockTaken := false
+
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+		// check if the lock was taken in previous iteration
+		if lockTaken {
+			// undo the lock.
+			au.accountsMu.Unlock()
+			lockTaken = false
+		}
+
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
 			mc, err0 := makeMerkleCommitter(tx, false)
@@ -1045,10 +1058,22 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 				return
 			}
 		}
+
+		// if everytyhing went well,
+		if err == nil {
+			// take the lock, as we're going to attempt to commit the transaction to database.
+			au.accountsMu.Lock()
+			lockTaken = true
+		}
 		return err
 	})
 
 	if err != nil {
+		// if we failed during the commit, undo the lock.
+		if lockTaken {
+			au.accountsMu.Unlock()
+		}
+
 		au.balancesTrie = nil
 		au.log.Warnf("unable to advance account snapshot: %v", err)
 		return
@@ -1066,7 +1091,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 	}
 
-	au.accountsMu.Lock()
 	if isCatchpointRound && catchpointLabel != "" {
 		au.lastCatchpointLabel = catchpointLabel
 	}

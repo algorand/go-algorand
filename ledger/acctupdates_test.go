@@ -598,17 +598,32 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	}
 }
 
+// The TestAcctUpdatesUpdatesCorrectness conduct a correctless test for the accounts update in the following way -
+// Each account is initialized with 100 algos.
+// On every round, each account move variable amount of funds to an accumulating account.
+// The deltas for each accounts are picked by using the lookup method.
+// At the end of the test, we verify that each account has the expected amount of algos.
+// In addition, throughout the test, we check ( using lookup ) that the historical balances, *beyond* the
+// lookback are generating either an error, or returning the correct amount.
 func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
 	}
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	// create new protocol version, which has lower look back.
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesUpdatesCorrectness")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 5
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
 
 	ml := makeMockLedgerForTracker(t)
 	defer ml.close()
-	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
+	ml.blocks = randomInitChain(testProtocolVersion, 10)
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(100)}
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(8)}
 
 	pooldata := basics.AccountData{}
 	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
@@ -621,6 +636,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	accts[0][testSinkAddr] = sinkdata
 
 	var moneyAccounts []basics.Address
+
 	for addr := range accts[0] {
 		if bytes.Compare(addr[:], testPoolAddr[:]) == 0 || bytes.Compare(addr[:], testSinkAddr[:]) == 0 {
 			continue
@@ -628,6 +644,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		moneyAccounts = append(moneyAccounts, addr)
 	}
 
+	moneyAccountsExpectedAmounts := make([][]uint64, 0)
 	// set all the accounts with 100 algos.
 	for _, addr := range moneyAccounts {
 		accountData := accts[0][addr]
@@ -636,7 +653,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	}
 
 	au := &accountUpdates{}
-	au.initialize(config.GetDefaultLocal(), ".", proto, accts[0])
+	au.initialize(config.GetDefaultLocal(), ".", protoParams, accts[0])
 	defer au.close()
 
 	err := au.loadFromDisk(ml)
@@ -646,20 +663,31 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	rewardLevel := uint64(0)
 	for i := 1; i < 10; i++ {
 		accts = append(accts, accts[0])
+
+	}
+	for i := 0; i < 10; i++ {
+		moneyAccountsExpectedAmounts = append(moneyAccountsExpectedAmounts, make([]uint64, len(moneyAccounts)))
+		for j := range moneyAccounts {
+			moneyAccountsExpectedAmounts[i][j] = 100 * 1000000
+		}
 	}
 
 	i := basics.Round(10)
-	for ; i < basics.Round(2010); i++ {
+	roundCount := 50
+	for ; i < basics.Round(10+roundCount); i++ {
 		updates := make(map[basics.Address]accountDelta)
+		moneyAccountsExpectedAmounts = append(moneyAccountsExpectedAmounts, make([]uint64, len(moneyAccounts)))
 		toAccount := moneyAccounts[0]
 		toAccountDataOld, err := au.lookup(i-1, toAccount, false)
 		require.NoError(t, err)
 		toAccountDataNew := toAccountDataOld
+
 		for j := 1; j < len(moneyAccounts); j++ {
 			fromAccount := moneyAccounts[j]
 
 			fromAccountDataOld, err := au.lookup(i-1, fromAccount, false)
 			require.NoError(t, err)
+			require.Equalf(t, moneyAccountsExpectedAmounts[i-1][j], fromAccountDataOld.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, i)
 
 			fromAccountDataNew := fromAccountDataOld
 
@@ -669,7 +697,27 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 				old: fromAccountDataOld,
 				new: fromAccountDataNew,
 			}
+
+			moneyAccountsExpectedAmounts[i][j] = fromAccountDataNew.MicroAlgos.Raw
 		}
+
+		moneyAccountsExpectedAmounts[i][0] = moneyAccountsExpectedAmounts[i-1][0] + uint64(len(moneyAccounts)-1)*uint64(i-10)
+
+		// force to perform a test that goes directly to disk, and see if it has the expected values.
+		if uint64(i) > protoParams.MaxBalLookback+3 {
+			// check the status at a historical time:
+			checkRound := uint64(i) - protoParams.MaxBalLookback - 3
+			for j := 1; j < len(moneyAccounts); j++ {
+				acct, err := au.lookup(basics.Round(checkRound), moneyAccounts[j], false)
+				// we might get an error like "round 2 before dbRound 5", which is the success case, so we'll ignore it.
+				if err != nil {
+					continue
+				}
+				// if we received no error, we want to make sure the reported amount is correct.
+				require.Equalf(t, moneyAccountsExpectedAmounts[checkRound][j], acct.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, checkRound)
+			}
+		}
+
 		updates[toAccount] = accountDelta{
 			old: toAccountDataOld,
 			new: toAccountDataNew,
@@ -681,14 +729,13 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			},
 		}
 		blk.RewardsLevel = rewardLevel
-		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
+		blk.CurrentProtocol = testProtocolVersion
 
 		au.newBlock(blk, StateDelta{
 			accts: updates,
 			hdr:   &blk.BlockHeader,
 		})
 		au.committedUpTo(i)
-
 	}
 	lastRound := i - 1
 	au.waitAccountsWriting()
@@ -697,9 +744,9 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		balance, err := au.lookup(lastRound, addr, false)
 		require.NoErrorf(t, err, "unable to retrieve balance for account idx %d %v", idx, addr)
 		if idx != 0 {
-			require.Equalf(t, 100*1000000-2000*1999/2, int(balance.MicroAlgos.Raw), "account idx %d %v has the wrong balance", idx, addr)
+			require.Equalf(t, 100*1000000-roundCount*(roundCount-1)/2, int(balance.MicroAlgos.Raw), "account idx %d %v has the wrong balance", idx, addr)
 		} else {
-			require.Equalf(t, 100*1000000+(len(moneyAccounts)-1)*2000*1999/2, int(balance.MicroAlgos.Raw), "account idx %d %v has the wrong balance", idx, addr)
+			require.Equalf(t, 100*1000000+(len(moneyAccounts)-1)*roundCount*(roundCount-1)/2, int(balance.MicroAlgos.Raw), "account idx %d %v has the wrong balance", idx, addr)
 		}
 
 	}
