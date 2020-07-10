@@ -310,7 +310,16 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			// if the account has any asset params, it means that it's the creator of an asset.
 			if len(accountData.AssetParams) > 0 {
 				for aidx := range accountData.AssetParams {
-					err = writeCatchpointStagingAssets(ctx, tx, balance.Address, aidx)
+					err = writeCatchpointStagingCreatable(ctx, tx, balance.Address, basics.CreatableIndex(aidx), basics.AssetCreatable)
+					if err != nil {
+						return err
+					}
+				}
+			}
+
+			if len(accountData.AppParams) > 0 {
+				for aidx := range accountData.AppParams {
+					err = writeCatchpointStagingCreatable(ctx, tx, balance.Address, basics.CreatableIndex(aidx), basics.AppCreatable)
 					if err != nil {
 						return err
 					}

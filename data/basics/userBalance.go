@@ -17,6 +17,7 @@
 package basics
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/algorand/go-algorand/config"
@@ -38,7 +39,7 @@ const (
 
 	// MaxEncodedAccountDataSize is a rough estimate for the worst-case scenario we're going to have of the account data and address serialized.
 	// this number is verified by the TestEncodedAccountDataSize function.
-	MaxEncodedAccountDataSize = 324205
+	MaxEncodedAccountDataSize = 750000
 
 	// encodedMaxAssetsPerAccount is the decoder limit of number of assets stored per account.
 	// it's being verified by the unit test TestEncodedAccountAllocationBounds to align
@@ -74,6 +75,21 @@ func (s Status) String() string {
 		return "Not Participating"
 	}
 	return ""
+}
+
+// UnmarshalStatus decodes string status value back to Status constant
+func UnmarshalStatus(value string) (s Status, err error) {
+	switch value {
+	case "Offline":
+		s = Offline
+	case "Online":
+		s = Online
+	case "Not Participating":
+		s = NotParticipating
+	default:
+		err = fmt.Errorf("unknown account status: %v", value)
+	}
+	return
 }
 
 // AccountData contains the data associated with a given address.
@@ -200,12 +216,19 @@ type AppLocalState struct {
 type AppParams struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApprovalProgram   []byte      `codec:"approv,allocbound=config.MaxAppProgramLen"`
-	ClearStateProgram []byte      `codec:"clearp,allocbound=config.MaxAppProgramLen"`
+	ApprovalProgram   []byte       `codec:"approv,allocbound=config.MaxAppProgramLen"`
+	ClearStateProgram []byte       `codec:"clearp,allocbound=config.MaxAppProgramLen"`
+	GlobalState       TealKeyValue `codec:"gs"`
+	StateSchemas
+}
+
+// StateSchemas is a thin wrapper around the LocalStateSchema and the
+// GlobalStateSchema, since they are often needed together
+type StateSchemas struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
 	LocalStateSchema  StateSchema `codec:"lsch"`
 	GlobalStateSchema StateSchema `codec:"gsch"`
-
-	GlobalState TealKeyValue `codec:"gs"`
 }
 
 // Clone returns a copy of some AppParams that may be modified without

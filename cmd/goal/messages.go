@@ -23,6 +23,7 @@ const (
 	errorRequestFail         = "Error processing command: %s"
 	errorGenesisIDFail       = "Error determining kmd folder (%s). Ensure the node is running in %s."
 	errorDirectoryNotExist   = "Specified directory '%s' does not exist."
+	errorParseAddr           = "Failed to parse addr: %v"
 
 	// Account
 	infoNoAccounts                 = "Did not find any account. Please import or create a new one."
@@ -87,6 +88,15 @@ const (
 
 	// Asset
 	malformedMetadataHash = "Cannot base64-decode metadata hash %s: %s"
+
+	// Application
+	errorLocalGlobal               = "Exactly one of --local or --global is required"
+	errorLocalStateRequiresAccount = "--local requires --from account"
+	errorAccountNotOptedInToApp    = "%s has not opted in to application %d"
+	errorNoSuchApplication         = "application %d does not exist"
+	errorMarshalingState           = "failed to encode state: %s"
+	errorApprovProgArgsRequired    = "Exactly one of --approval-prog or --approval-prog-raw is required"
+	errorClearProgArgsRequired     = "Exactly one of --clear-prog or --clear-prog-raw is required"
 
 	// Clerk
 	infoTxIssued    = "Sent %d MicroAlgos from account %s to address %s, transaction ID: %s. Fee set to %d"
