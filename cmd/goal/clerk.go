@@ -27,6 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -42,27 +43,22 @@ var (
 	toAddress       string
 	account         string
 	amount          uint64
-	fee             uint64
 	txFilename      string
-	outFilename     string
 	rejectsFilename string
-	noteBase64      string
-	noteText        string
-	lease           string
-	sign            bool
 	closeToAddress  string
-	noWaitAfterSend bool
 	noProgramOutput bool
 	signProgram     bool
 	programSource   string
 	argB64Strings   []string
 	disassemble     bool
+	verbose         bool
 	progByteFile    string
 	logicSigFile    string
 	timeStamp       int64
 	protoVersion    string
 	rekeyToAddress  string
 	signerAddress   string
+	rawOutput       bool
 )
 
 func init() {
@@ -74,6 +70,7 @@ func init() {
 	clerkCmd.AddCommand(splitCmd)
 	clerkCmd.AddCommand(compileCmd)
 	clerkCmd.AddCommand(dryrunCmd)
+	clerkCmd.AddCommand(dryrunRemoteCmd)
 
 	// Wallet to be used for the clerk operation
 	clerkCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
@@ -82,25 +79,17 @@ func init() {
 	sendCmd.Flags().StringVarP(&account, "from", "f", "", "Account address to send the money from (If not specified, uses default account)")
 	sendCmd.Flags().StringVarP(&toAddress, "to", "t", "", "Address to send to money to (required)")
 	sendCmd.Flags().Uint64VarP(&amount, "amount", "a", 0, "The amount to be transferred (required), in microAlgos")
-	sendCmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
-	sendCmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
-	sendCmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
-	sendCmd.Flags().Uint64VarP(&numValidRounds, "validrounds", "v", 0, "The validity period for the transaction, used to calculate lastvalid")
-	sendCmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
-	sendCmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
-	sendCmd.Flags().StringVarP(&lease, "lease", "x", "", "Lease value (base64, optional): no transaction may also acquire this lease until lastvalid")
-	sendCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Dump an unsigned tx to the given file. In order to dump a signed transaction, pass -s")
-	sendCmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
 	sendCmd.Flags().StringVarP(&closeToAddress, "close-to", "c", "", "Close account and send remainder to this address")
-	sendCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given authorization address. (Future transactions from this account will need to be signed with the new key.)")
-	sendCmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
+	sendCmd.Flags().StringVar(&rekeyToAddress, "rekey-to", "", "Rekey account to the given spending key/address. (Future transactions from this account will need to be signed with the new key.)")
 	sendCmd.Flags().StringVarP(&programSource, "from-program", "F", "", "Program source to use as account logic")
 	sendCmd.Flags().StringVarP(&progByteFile, "from-program-bytes", "P", "", "Program binary to use as account logic")
 	sendCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "base64 encoded args to pass to transaction logic")
 	sendCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
-
 	sendCmd.MarkFlagRequired("to")
 	sendCmd.MarkFlagRequired("amount")
+
+	// Add common transaction flags
+	addTxnFlags(sendCmd)
 
 	// rawsend flags
 	rawsendCmd.Flags().StringVarP(&txFilename, "filename", "f", "", "Filename of file containing raw transactions")
@@ -137,6 +126,12 @@ func init() {
 	dryrunCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "transaction or transaction-group to test")
 	dryrunCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "consensus protocol version id string")
 	dryrunCmd.MarkFlagRequired("txfile")
+
+	dryrunRemoteCmd.Flags().StringVarP(&txFilename, "dryrun-state", "D", "", "dryrun request object to run")
+	dryrunRemoteCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "print more info")
+	dryrunRemoteCmd.Flags().BoolVarP(&rawOutput, "raw", "r", false, "output raw response from algod")
+	dryrunRemoteCmd.MarkFlagRequired("dryrun-state")
+
 }
 
 var clerkCmd = &cobra.Command{
@@ -213,12 +208,12 @@ func writeTxnToFile(client libgoal.Client, signTx bool, dataDir string, walletNa
 	return writeFile(filename, protocol.Encode(&stxn), 0600)
 }
 
-func getProgramArgs() [][]byte {
-	if len(argB64Strings) == 0 {
+func getB64Args(args []string) [][]byte {
+	if len(args) == 0 {
 		return nil
 	}
-	programArgs := make([][]byte, len(argB64Strings))
-	for i, argstr := range argB64Strings {
+	programArgs := make([][]byte, len(args))
+	for i, argstr := range args {
 		if argstr == "" {
 			programArgs[i] = []byte{}
 			continue
@@ -230,6 +225,11 @@ func getProgramArgs() [][]byte {
 		}
 	}
 	return programArgs
+
+}
+
+func getProgramArgs() [][]byte {
+	return getB64Args(argB64Strings)
 }
 
 func parseNoteField(cmd *cobra.Command) []byte {
@@ -273,7 +273,7 @@ var sendCmd = &cobra.Command{
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		// -s is invalid without -o
-		if txFilename == "" && sign {
+		if outFilename == "" && sign {
 			reportErrorln(soFlagError)
 		}
 
@@ -370,7 +370,7 @@ var sendCmd = &cobra.Command{
 			}
 			err = verify.LogicSigSanityCheck(&uncheckedTxn, &verify.Context{Params: verify.Params{CurrProto: proto}})
 			if err != nil {
-				reportErrorf("%s: txn[0] error %s", txFilename, err)
+				reportErrorf("%s: txn[0] error %s", outFilename, err)
 			}
 			stx = uncheckedTxn
 		} else if program != nil {
@@ -382,14 +382,14 @@ var sendCmd = &cobra.Command{
 				},
 			}
 		} else {
-			signTx := sign || (txFilename == "")
+			signTx := sign || (outFilename == "")
 			stx, err = createSignedTransaction(client, signTx, dataDir, walletName, payment)
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
 		}
 
-		if txFilename == "" {
+		if outFilename == "" {
 			// Broadcast the tx
 			txid, err := client.BroadcastTransaction(stx)
 
@@ -410,9 +410,19 @@ var sendCmd = &cobra.Command{
 				}
 			}
 		} else {
-			err = writeFile(txFilename, protocol.Encode(&stx), 0600)
-			if err != nil {
-				reportErrorf(err.Error())
+			if dumpForDryrun {
+				// Write dryrun data to file
+				proto, _ := getProto(protoVersion)
+				data, err := libgoal.MakeDryrunStateBytes(client, stx, []transactions.SignedTxn{}, string(proto), dumpForDryrunFormat.String())
+				if err != nil {
+					reportErrorf(err.Error())
+				}
+				writeFile(outFilename, data, 0600)
+			} else {
+				err = writeFile(outFilename, protocol.Encode(&stx), 0600)
+				if err != nil {
+					reportErrorf(err.Error())
+				}
 			}
 		}
 	},
@@ -552,7 +562,7 @@ var rawsendCmd = &cobra.Command{
 }
 
 var inspectCmd = &cobra.Command{
-	Use:   "inspect",
+	Use:   "inspect [input file 1] [input file 2]...",
 	Short: "print a transaction file",
 	Long:  `Loads a transaction file, attempts to decode the transaction, and displays the decoded information.`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -624,7 +634,7 @@ func getProto(versArg string) (protocol.ConsensusVersion, config.ConsensusParams
 }
 
 var signCmd = &cobra.Command{
-	Use:   "sign -i INFILE -o OUTFILE",
+	Use:   "sign -i [input file] -o [output file]",
 	Short: "Sign a transaction file",
 	Long:  `Sign the passed transaction file, which may contain one or more transactions. If the infile and the outfile are the same, this overwrites the file with the new, signed data.`,
 	Args:  validateNoPosArgsFn,
@@ -783,6 +793,14 @@ var splitCmd = &cobra.Command{
 	},
 }
 
+func mustReadFile(fname string) []byte {
+	contents, err := readFile(fname)
+	if err != nil {
+		reportErrorf("%s: %s\n", fname, err)
+	}
+	return contents
+}
+
 func assembleFile(fname string) (program []byte) {
 	text, err := readFile(fname)
 	if err != nil {
@@ -832,7 +850,7 @@ func disassembleFile(fname, outname string) {
 }
 
 var compileCmd = &cobra.Command{
-	Use:   "compile",
+	Use:   "compile [input file 1] [input file 2]...",
 	Short: "compile a contract program",
 	Long:  "Reads a TEAL contract program and compiles it to binary output and contract address.",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -931,10 +949,10 @@ var dryrunCmd = &cobra.Command{
 			sb := strings.Builder{}
 			ep = logic.EvalParams{
 				Txn:        &txn,
+				GroupIndex: i,
 				Proto:      &params,
 				Trace:      &sb,
 				TxnGroup:   txgroup,
-				GroupIndex: i,
 			}
 			pass, err := logic.Eval(txn.Lsig.Logic, ep)
 			// TODO: optionally include `inspect` output here?
@@ -949,5 +967,68 @@ var dryrunCmd = &cobra.Command{
 			}
 		}
 
+	},
+}
+
+var dryrunRemoteCmd = &cobra.Command{
+	Use:   "dryrun-remote",
+	Short: "test a program with algod's dryrun REST endpoint",
+	Long:  "Test a TEAL program with algod's dryrun REST endpoint under various conditions and verbosity.",
+	Run: func(cmd *cobra.Command, args []string) {
+		data, err := readFile(txFilename)
+		if err != nil {
+			reportErrorf(fileReadError, txFilename, err)
+		}
+
+		dataDir := ensureSingleDataDir()
+		client := ensureFullClient(dataDir)
+		resp, err := client.Dryrun(data)
+		if err != nil {
+			reportErrorf("dryrun-remote: %s\n", err.Error())
+		}
+		if rawOutput {
+			fmt.Fprintf(os.Stdout, string(protocol.EncodeJSON(&resp)))
+			return
+		}
+
+		stackToString := func(stack []generatedV2.TealValue) string {
+			result := make([]string, len(stack))
+			for i, sv := range stack {
+				if sv.Type == uint64(basics.TealBytesType) {
+					result[i] = heuristicFormatStr(sv.Bytes)
+				} else {
+					result[i] = fmt.Sprintf("%d", sv.Uint)
+				}
+			}
+			return strings.Join(result, " ")
+		}
+		if len(resp.Txns) > 0 {
+			for i, txnResult := range resp.Txns {
+				var msgs []string
+				var trace []generatedV2.DryrunState
+				if txnResult.AppCallMessages != nil && len(*txnResult.AppCallMessages) > 0 {
+					msgs = *txnResult.AppCallMessages
+					if txnResult.AppCallTrace != nil {
+						trace = *txnResult.AppCallTrace
+					}
+				} else if txnResult.LogicSigMessages != nil && len(*txnResult.LogicSigMessages) > 0 {
+					msgs = *txnResult.LogicSigMessages
+					if txnResult.LogicSigTrace != nil {
+						trace = *txnResult.LogicSigTrace
+					}
+				}
+				fmt.Fprintf(os.Stdout, "tx[%d] messages:\n", i)
+				for _, msg := range msgs {
+					fmt.Fprintf(os.Stdout, "%s\n", msg)
+				}
+				if verbose && len(trace) > 0 {
+					fmt.Fprintf(os.Stdout, "tx[%d] trace:\n", i)
+					for _, item := range trace {
+						fmt.Fprintf(os.Stdout, "%4d (%04x): %s [%s]\n",
+							item.Line, item.Pc, txnResult.Disassembly[item.Line-1], stackToString(item.Stack))
+					}
+				}
+			}
+		}
 	},
 }

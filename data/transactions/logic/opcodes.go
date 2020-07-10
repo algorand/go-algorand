@@ -23,6 +23,11 @@ import (
 // LogicVersion defines default assembler and max eval versions
 const LogicVersion = 2
 
+// rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
+// was enabled. This is important to remember so that old TEAL accounts cannot
+// be maliciously or accidentally rekeyed.
+const rekeyingEnabledVersion = 2
+
 // opSize records the length in bytes for an op that is constant-length but not length 1
 type opSize struct {
 	cost      int
@@ -97,6 +102,7 @@ var OpSpecs = []OpSpec{
 	{0x1b, "^", opBitXor, asmDefault, disDefault, twoInts, oneInt, 1, modeAny, opSizeDefault},
 	{0x1c, "~", opBitNot, asmDefault, disDefault, oneInt, oneInt, 1, modeAny, opSizeDefault},
 	{0x1d, "mulw", opMulw, asmDefault, disDefault, twoInts, twoInts, 1, modeAny, opSizeDefault},
+	{0x1e, "addw", opAddw, asmDefault, disDefault, twoInts, twoInts, 2, modeAny, opSizeDefault},
 
 	{0x20, "intcblock", opIntConstBlock, assembleIntCBlock, disIntcblock, nil, nil, 1, modeAny, opSize{1, 0, checkIntConstBlock}},
 	{0x21, "intc", opIntConstLoad, assembleIntC, disIntc, nil, oneInt, 1, modeAny, opSize{1, 2, nil}},

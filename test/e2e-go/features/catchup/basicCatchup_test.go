@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package rewards
+package catchup
 
 import (
 	"os"
@@ -153,6 +153,7 @@ func runCatchupOverGossip(t *testing.T,
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(lg, waitForRound)
 	a.NoError(err)
 
+	waitStart := time.Now()
 	// wait until the round number on the secondary node matches the round number on the primary node.
 	for {
 		nodeLibGoalClient := fixture.LibGoalFixture.GetLibGoalClientFromDataDir(nc.GetDataDir())
@@ -161,11 +162,16 @@ func runCatchupOverGossip(t *testing.T,
 
 		primaryStatus, err := lg.Status()
 		a.NoError(err)
-		a.True(nodeStatus.LastRound >= primaryStatus.LastRound)
-		if nodeStatus.LastRound == primaryStatus.LastRound && waitForRound < nodeStatus.LastRound {
+		if nodeStatus.LastRound <= primaryStatus.LastRound && waitForRound < nodeStatus.LastRound {
 			//t.Logf("Both nodes reached round %d\n", primaryStatus.LastRound)
 			break
 		}
+
+		if time.Now().Sub(waitStart) > time.Minute {
+			// it's taking too long.
+			require.FailNow(t, "Waiting too long for catchup to complete")
+		}
+
 		time.Sleep(50 * time.Millisecond)
 	}
 }

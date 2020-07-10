@@ -50,6 +50,7 @@ type mockClient struct {
 	StatusCalls        int
 	BlockCalls         map[uint64]int
 	GetGoRoutinesCalls int
+	HealthCheckCalls   int
 	error              []error
 	status             []generatedV2.NodeStatusResponse
 	routine            []string
@@ -105,6 +106,16 @@ func (c *mockClient) GetGoRoutines(ctx context.Context) (r string, e error) {
 	c.GetGoRoutinesCalls++
 	r = c.routine[0]
 	// Repeat last routine...
+	if len(c.routine) > 1 {
+		c.routine = c.routine[1:]
+	}
+	e = c.nextError()
+	return
+}
+
+func (c *mockClient) HealthCheck() (e error) {
+	c.HealthCheckCalls++
+	// Repeat last healthcheck...
 	if len(c.routine) > 1 {
 		c.routine = c.routine[1:]
 	}

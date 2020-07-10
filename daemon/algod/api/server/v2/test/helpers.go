@@ -58,6 +58,9 @@ var cannedStatusReportGolden = node.StatusReport{
 var poolAddrRewardBaseGolden = uint64(0)
 var poolAddrAssetsGolden = make([]generatedV2.AssetHolding, 0)
 var poolAddrCreatedAssetsGolden = make([]generatedV2.Asset, 0)
+var appLocalStates = make([]generatedV2.ApplicationLocalStates, 0)
+var appsTotalSchema = generatedV2.ApplicationStateSchema{}
+var appCreatedApps = make([]generatedV2.Application, 0)
 var poolAddrResponseGolden = generatedV2.AccountResponse{
 	Address:                     poolAddr.String(),
 	Amount:                      50000000000,
@@ -66,6 +69,9 @@ var poolAddrResponseGolden = generatedV2.AccountResponse{
 	CreatedAssets:               &poolAddrCreatedAssetsGolden,
 	RewardBase:                  &poolAddrRewardBaseGolden,
 	Status:                      "Not Participating",
+	AppsLocalState:              &appLocalStates,
+	AppsTotalSchema:             &appsTotalSchema,
+	CreatedApps:                 &appCreatedApps,
 }
 
 // ordinarily mockNode would live in `components/mocks`
@@ -74,10 +80,11 @@ var poolAddrResponseGolden = generatedV2.AccountResponse{
 type mockNode struct {
 	ledger    *data.Ledger
 	genesisID string
+	config    config.Local
 }
 
 func makeMockNode(ledger *data.Ledger, genesisID string) mockNode {
-	return mockNode{ledger: ledger, genesisID: genesisID}
+	return mockNode{ledger: ledger, genesisID: genesisID, config: config.GetDefaultLocal()}
 }
 
 func (m mockNode) Ledger() *data.Ledger {
@@ -116,7 +123,7 @@ func (m mockNode) SuggestedFee() basics.MicroAlgos {
 
 // unused by handlers:
 func (m mockNode) Config() config.Local {
-	return config.GetDefaultLocal()
+	return m.config
 }
 func (m mockNode) Start() {}
 
