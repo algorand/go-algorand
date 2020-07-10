@@ -1009,9 +1009,11 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	beforeUpdatingBalancesTime := time.Now()
 	var trieBalancesHash crypto.Digest
 
-	// the lockTaken variable would help us to ensure that we take the lock before commiting the transaction to the database.
-	// since the function within the "Atomic" migth be re-attempted, we need to perform the check at the begining, and after
-	// we exit from Atomic. Note that there is no concurrently issue within this function around testing the variable value.
+	// The lockTaken variable would help us to ensure that we take the lock before commiting the transaction to the database.
+	// Since the function within the "Atomic" migth be re-attempted, and since we want to have the lock only on the "commit"
+	// part of the operation, we need to release the lock at the beginning of the Atomic function if it was already taken,
+	// and re-aquire it just before a successfull completion of the function.
+	// Note that there is no concurrently issue within this function around testing the variable value.
 	lockTaken := false
 
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
@@ -1078,6 +1080,13 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		au.log.Warnf("unable to advance account snapshot: %v", err)
 		return
 	}
+
+	// The following usecase should never happen, but in case it does, log a message and take the lock.
+	if !lockTaken {
+		au.log.Warnf("commitRound : account mutex was not taken by Atomic call, and the Atomic call succeeded")
+		au.accountsMu.Lock()
+	}
+
 	if isCatchpointRound {
 		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, roundTotals[offset], committedRoundDigest, trieBalancesHash)
 		if err != nil {
