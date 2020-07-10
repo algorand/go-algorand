@@ -293,5 +293,6 @@ SUPPORTED_ARCHIVE_OS_ARCH = linux/amd64 linux/arm64 linux/arm darwin/amd64
 
 archive:
 	CHANNEL=$(CHANNEL) \
-	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/$(CHANNEL)/$(OS_TYPE)-$(ARCH)/bin:$${PATH} \
+	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/bin:$${PATH} \
 	scripts/upload_version.sh $(CHANNEL) $(SRCPATH)/tmp/node_pkgs $(S3_RELEASE_BUCKET)
+

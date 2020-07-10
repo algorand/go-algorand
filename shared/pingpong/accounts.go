@@ -18,14 +18,18 @@ package pingpong
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
-	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/libgoal"
 	"math"
 	"os"
 	"sort"
+	"strings"
 	"time"
+
+	"github.com/algorand/go-algorand/crypto"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/libgoal"
 )
 
 func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, cfg PpConfig, err error) {
@@ -88,7 +92,6 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 	// Only reuse existing accounts for non asset testing.
 	// For asset testing, new participant accounts will be created since accounts are limited to 1000 assets.
 	if cfg.NumAsset == 0 {
-
 		// If we have more accounts than requested, pick the top N (not including src)
 		if len(accounts) > int(cfg.NumPartAccounts+1) {
 			fmt.Printf("Finding the richest %d accounts to use for transacting\n", cfg.NumPartAccounts)
@@ -312,6 +315,193 @@ func signAndBroadcastTransaction(accounts map[string]uint64, sender string, tx t
 	}
 	accounts[sender] -= tx.Fee.Raw
 
+	return
+}
+
+func genBigNoOp(numOps uint32) []byte {
+	var progParts []string
+	for i := uint32(0); i < numOps/2; i++ {
+		progParts = append(progParts, `int 1`)
+		progParts = append(progParts, `pop`)
+	}
+	progParts = append(progParts, `int 1`)
+	progParts = append(progParts, `return`)
+	progAsm := strings.Join(progParts, "\n")
+	progBytes, err := logic.AssembleString(progAsm)
+	if err != nil {
+		panic(err)
+	}
+	return progBytes
+}
+
+func genBigHashes(numHashes int, numPad int, hash string) []byte {
+	var progParts []string
+	progParts = append(progParts, `byte base64 AA==`)
+	for i := 0; i < numHashes; i++ {
+		progParts = append(progParts, hash)
+	}
+	for i := 0; i < numPad/2; i++ {
+		progParts = append(progParts, `int 1`)
+		progParts = append(progParts, `pop`)
+	}
+	progParts = append(progParts, `int 1`)
+	progParts = append(progParts, `return`)
+	progAsm := strings.Join(progParts, "\n")
+	progBytes, err := logic.AssembleString(progAsm)
+	if err != nil {
+		panic(err)
+	}
+	return progBytes
+}
+
+func genMaxClone(numKeys int) []byte {
+	// goto flip if first key exists
+	flipBranch := `
+		int 0  // current app id
+		int 1  // key
+		itob
+		app_global_get_ex
+		bnz flip
+	`
+
+	writePrefix := `
+		write:
+		int 0
+	`
+
+	writeBlock := `
+		int 1
+		+
+		dup
+		itob
+		dup
+		app_global_put
+	`
+
+	writeSuffix := `
+		int 1
+		return
+	`
+
+	// flip stored value's low bit
+	flipPrefix := `
+		flip:
+		btoi
+		int 1
+		^
+		itob
+		store 0
+		int 1
+		itob
+		load 0
+		app_global_put
+	`
+
+	flipSuffix := `
+		int 1
+		return
+	`
+
+	// generate assembly
+	progParts := []string{"#pragma version 2"}
+	progParts = append(progParts, flipBranch)
+	progParts = append(progParts, writePrefix)
+	for i := 0; i < numKeys; i++ {
+		progParts = append(progParts, writeBlock)
+	}
+	progParts = append(progParts, writeSuffix)
+	progParts = append(progParts, flipPrefix)
+	progParts = append(progParts, flipSuffix)
+	progAsm := strings.Join(progParts, "\n")
+
+	// assemble
+	progBytes, err := logic.AssembleString(progAsm)
+	if err != nil {
+		panic(err)
+	}
+	return progBytes
+}
+
+func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (appParams map[uint64]v1.AppParams, err error) {
+	// get existing apps
+	account, accountErr := client.AccountInformation(cfg.SrcAccount)
+	if accountErr != nil {
+		fmt.Printf("Cannot lookup source account")
+		err = accountErr
+		return
+	}
+
+	// Get wallet handle token
+	var h []byte
+	h, err = client.GetUnencryptedWalletHandle()
+	if err != nil {
+		return
+	}
+
+	toCreate := int(cfg.NumApp) - len(account.AppParams)
+
+	// create apps in srcAccount
+	for i := 0; i < toCreate; i++ {
+		var tx transactions.Transaction
+
+		// generate app program with roughly some number of operations
+		prog := genBigNoOp(cfg.AppProgOps)
+
+		globSchema := basics.StateSchema{NumByteSlice: 64}
+		locSchema := basics.StateSchema{}
+		tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil)
+		if err != nil {
+			fmt.Printf("Cannot create app txn\n")
+			return
+		}
+
+		tx, err = client.FillUnsignedTxTemplate(cfg.SrcAccount, 0, 0, cfg.MaxFee, tx)
+		if err != nil {
+			fmt.Printf("Cannot fill app creation txn\n")
+			return
+		}
+
+		// Ensure different txids
+		var note [8]byte
+		crypto.RandBytes(note[:])
+		tx.Note = note[:]
+
+		signedTxn, signErr := client.SignTransactionWithWallet(h, nil, tx)
+		if signErr != nil {
+			fmt.Printf("Cannot sign app creation txn\n")
+			err = signErr
+			return
+		}
+
+		txid, broadcastErr := client.BroadcastTransaction(signedTxn)
+		if broadcastErr != nil {
+			fmt.Printf("Cannot broadcast app creation txn\n")
+			err = broadcastErr
+			return
+		}
+
+		if !cfg.Quiet {
+			fmt.Printf("Create a new app: txid=%s\n", txid)
+		}
+
+		accounts[cfg.SrcAccount] -= tx.Fee.Raw
+	}
+
+	// get these apps
+	for {
+		account, accountErr = client.AccountInformation(cfg.SrcAccount)
+		if accountErr != nil {
+			fmt.Printf("Cannot lookup source account")
+			err = accountErr
+			return
+		}
+		if len(account.AppParams) >= int(cfg.NumApp) {
+			break
+		}
+		time.Sleep(time.Second)
+	}
+
+	appParams = account.AppParams
 	return
 }
 

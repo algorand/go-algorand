@@ -91,6 +91,38 @@ const (
 	ApprovalProgram
 	// ClearStateProgram []byte
 	ClearStateProgram
+	// RekeyTo basics.Address
+	RekeyTo
+	// ConfigAsset basics.AssetIndex
+	ConfigAsset
+	// ConfigAssetTotal AssetParams.Total
+	ConfigAssetTotal
+	// ConfigAssetDecimals AssetParams.Decimals
+	ConfigAssetDecimals
+	// ConfigAssetDefaultFrozen AssetParams.AssetDefaultFrozen
+	ConfigAssetDefaultFrozen
+	// ConfigAssetUnitName AssetParams.UnitName
+	ConfigAssetUnitName
+	// ConfigAssetName AssetParams.AssetName
+	ConfigAssetName
+	// ConfigAssetURL AssetParams.URL
+	ConfigAssetURL
+	// ConfigAssetMetadataHash AssetParams.MetadataHash
+	ConfigAssetMetadataHash
+	// ConfigAssetManager AssetParams.Manager
+	ConfigAssetManager
+	// ConfigAssetReserve AssetParams.Reserve
+	ConfigAssetReserve
+	// ConfigAssetFreeze AssetParams.Freeze
+	ConfigAssetFreeze
+	// ConfigAssetClawback AssetParams.Clawback
+	ConfigAssetClawback
+	//FreezeAsset  basics.AssetIndex
+	FreezeAsset
+	// FreezeAssetAccount basics.Address
+	FreezeAssetAccount
+	// FreezeAssetFrozen bool
+	FreezeAssetFrozen
 
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
@@ -153,6 +185,37 @@ var txnFieldSpecs = []txnFieldSpec{
 	{NumAccounts, StackUint64, 2},
 	{ApprovalProgram, StackBytes, 2},
 	{ClearStateProgram, StackBytes, 2},
+	{RekeyTo, StackBytes, 2},
+	{ConfigAsset, StackUint64, 2},
+	{ConfigAssetTotal, StackUint64, 2},
+	{ConfigAssetDecimals, StackUint64, 2},
+	{ConfigAssetDefaultFrozen, StackUint64, 2},
+	{ConfigAssetUnitName, StackBytes, 2},
+	{ConfigAssetName, StackBytes, 2},
+	{ConfigAssetURL, StackBytes, 2},
+	{ConfigAssetMetadataHash, StackBytes, 2},
+	{ConfigAssetManager, StackBytes, 2},
+	{ConfigAssetReserve, StackBytes, 2},
+	{ConfigAssetFreeze, StackBytes, 2},
+	{ConfigAssetClawback, StackBytes, 2},
+	{FreezeAsset, StackUint64, 2},
+	{FreezeAssetAccount, StackBytes, 2},
+	{FreezeAssetFrozen, StackUint64, 2},
+}
+
+// TxnaFieldNames are arguments to the 'txna' opcode
+// It is a subset of txn transaction fields so initialized here in-place
+var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String()}
+
+// TxnaFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
+var TxnaFieldTypes = []StackType{
+	txnaFieldSpecByField[ApplicationArgs].ftype,
+	txnaFieldSpecByField[Accounts].ftype,
+}
+
+var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
+	ApplicationArgs: {ApplicationArgs, StackBytes, 2},
+	Accounts:        {Accounts, StackBytes, 2},
 }
 
 // TxnTypeNames is the values of Txn.Type in enum order
@@ -218,6 +281,8 @@ const (
 	Round
 	// LatestTimestamp uint64
 	LatestTimestamp
+	// CurrentApplicationID uint64
+	CurrentApplicationID
 
 	invalidGlobalField
 )
@@ -244,6 +309,7 @@ var globalFieldSpecs = []globalFieldSpec{
 	{LogicSigVersion, StackUint64, modeAny, 2},
 	{Round, StackUint64, runModeApplication, 2},
 	{LatestTimestamp, StackUint64, runModeApplication, 2},
+	{CurrentApplicationID, StackUint64, runModeApplication, 2},
 }
 
 // GlobalFieldSpecByField maps GlobalField to spec
@@ -301,8 +367,8 @@ const (
 	AssetDefaultFrozen
 	// AssetUnitName AssetParams.UnitName
 	AssetUnitName
-	// AssetAssetName AssetParams.AssetName
-	AssetAssetName
+	// AssetName AssetParams.AssetName
+	AssetName
 	// AssetURL AssetParams.URL
 	AssetURL
 	// AssetMetadataHash AssetParams.MetadataHash
@@ -331,7 +397,7 @@ var assetParamsFieldTypeList = []assetParamsFieldType{
 	{AssetDecimals, StackUint64},
 	{AssetDefaultFrozen, StackUint64},
 	{AssetUnitName, StackBytes},
-	{AssetAssetName, StackBytes},
+	{AssetName, StackBytes},
 	{AssetURL, StackBytes},
 	{AssetMetadataHash, StackBytes},
 	{AssetManager, StackBytes},
