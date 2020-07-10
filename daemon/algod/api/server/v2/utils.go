@@ -168,3 +168,13 @@ func encode(handle codec.Handle, obj interface{}) ([]byte, error) {
 	}
 	return output, nil
 }
+
+func decode(handle codec.Handle, data []byte, v interface{}) error {
+	enc := codec.NewDecoderBytes(data, handle)
+
+	err := enc.Decode(v)
+	if err != nil {
+		return fmt.Errorf("failed to decode object: %v", err)
+	}
+	return nil
+}

@@ -1,0 +1,25 @@
+{
+    "addr": "47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU",
+    "onl": 1,
+    "algo": 500000000,
+    "appl": {
+        "100": {
+            "hsch": {
+                "nbs": 3,
+                "nui": 2
+            }
+        }
+    },
+    "appp": {
+        "100": {
+            "gsch": {
+                "nbs": 1,
+                "nui": 1
+            },
+            "lsch": {
+                "nbs": 3,
+                "nui": 2
+            }
+        }
+    }
+}
