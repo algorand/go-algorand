@@ -97,7 +97,7 @@ func getInitState() (genesisInitState InitState) {
 	return genesisInitState
 }
 
-func TestArchival(t *testing.T) {
+func TeastArchival(t *testing.T) {
 	// This test ensures that trackers return the correct value from
 	// committedUpTo() -- that is, if they return round rnd, then they
 	// do not ask for any round before rnd on a subsequent call to
@@ -153,7 +153,7 @@ func TestArchival(t *testing.T) {
 	t.Error("Did not observe every tracker GCing the ledger")
 }
 
-func TestArchivalRestart(t *testing.T) {
+func TeastArchivalRestart(t *testing.T) {
 	// Start in archival mode, add 2K blocks, restart, ensure all blocks are there
 
 	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
@@ -292,7 +292,7 @@ func makeUnsignedApplicationCallTx(appIdx uint64, onCompletion transactions.OnCo
 	return tx, nil
 }
 
-func TestArchivalCreatables(t *testing.T) {
+func TeastArchivalCreatables(t *testing.T) {
 	// Start in archival mode, add 2K blocks with asset + app txns
 	// restart, ensure all assets are there in index unless they were
 	// deleted
@@ -642,8 +642,8 @@ func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInB
 	}
 }
 
-func TestArchivalFromNonArchival(t *testing.T) {
-	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there.
+func TeastArchivalFromNonArchival(t *testing.T) {
+	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
 
 	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
 	require.NoError(t, err)
