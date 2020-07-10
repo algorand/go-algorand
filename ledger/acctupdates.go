@@ -1054,6 +1054,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			}
 		}
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
+		if err != nil {
+			return err
+		}
+
 		if isCatchpointRound {
 			trieBalancesHash, err = au.balancesTrie.RootHash()
 			if err != nil {
@@ -1061,13 +1065,11 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			}
 		}
 
-		// if everytyhing went well,
-		if err == nil {
-			// take the lock, as we're going to attempt to commit the transaction to database.
-			au.accountsMu.Lock()
-			lockTaken = true
-		}
-		return err
+		// if everytyhing went well, take the lock, as we're going to attempt to commit the transaction to database.
+		au.accountsMu.Lock()
+		lockTaken = true
+
+		return nil
 	})
 
 	if err != nil {
