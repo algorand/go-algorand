@@ -10,7 +10,7 @@ ARCH=$("${SCRIPTPATH}/../archtype.sh")
 # Use go version specified by get_golang_version.sh
 if ! GOLANG_VERSION=$("${SCRIPTPATH}/../get_golang_version.sh")
 then
-    echo $GOLANG_VERSION
+    echo "${GOLANG_VERSION}"
     exit 1
 fi
 

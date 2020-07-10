@@ -41,7 +41,7 @@ START_ALGOD_FILE="start_algod_docker.sh"
 # Use go version specified by get_golang_version.sh
 if ! GOLANG_VERSION=$("${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_golang_version.sh")
 then
-    echo $GOLANG_VERSION
+    echo "${GOLANG_VERSION}"
     exit 1
 fi
 

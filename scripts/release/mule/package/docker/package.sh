@@ -11,7 +11,7 @@ ARCH="$2"
 WORKDIR="$3"
 
 if [ -z "$OS_TYPE" ] || [ -z "$ARCH" ] || [ -z "$WORKDIR" ]; then
-    echo "OS=$OS, ARCH=$ARCH and WORKDIR=$WORKDIR variables must be defined."
+    echo "OS=$OS_TYPE, ARCH=$ARCH and WORKDIR=$WORKDIR variables must be defined."
     exit 1
 fi
 
@@ -38,7 +38,12 @@ DOCKERFILE="./docker/build/algod.Dockerfile"
 START_ALGOD_FILE="./docker/release/start_algod_docker.sh"
 ALGOD_DOCKER_INIT="./docker/release/algod_docker_init.sh"
 
-GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+# Use go version specified by get_golang_version.sh
+if ! GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+then
+    echo "${GOLANG_VERSION}"
+    exit 1
+fi
 GOROOT=/usr/local/go
 GOPATH="$HOME/go"
 PATH="$GOPATH/bin:$GOROOT/bin:$PATH"
