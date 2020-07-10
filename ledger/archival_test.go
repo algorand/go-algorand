@@ -643,7 +643,7 @@ func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInB
 }
 
 func TestArchivalFromNonArchival(t *testing.T) {
-	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
+	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there.
 
 	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
 	require.NoError(t, err)
