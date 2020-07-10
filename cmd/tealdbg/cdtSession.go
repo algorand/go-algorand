@@ -242,7 +242,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 			case <-cdtUpdatedCh:
 				dbgStateMu.Lock()
 
-				appState := s.debugger.GetStates(&dbgState.AppStateChage)
+				appState := s.debugger.GetStates(&dbgState.AppStateChange)
 				state.Update(cdtStateUpdate{
 					dbgState.Stack, dbgState.Scratch,
 					dbgState.PC, dbgState.Line, dbgState.Error,
