@@ -1014,7 +1014,9 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	// part of the operation, we need to release the lock at the beginning of the Atomic function if it was already taken,
 	// and re-aquire it just before a successfull completion of the function.
 	// Note that there is no concurrently issue within this function around testing the variable value.
-	lockTaken := false
+	// TODO : explain why we want to take this lock now.
+	au.accountsMu.Lock()
+	lockTaken := true
 
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
 		// check if the lock was taken in previous iteration
