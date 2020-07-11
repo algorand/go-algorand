@@ -195,7 +195,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 			}
 		}
 		if header.Name == "content.msgpack" {
-			var fileHeader catchpointFileHeader
+			var fileHeader CatchpointFileHeader
 			err = protocol.Decode(balancesBlockBytes, &fileHeader)
 			require.NoError(t, err)
 			require.Equal(t, catchpointLabel, fileHeader.Catchpoint)
