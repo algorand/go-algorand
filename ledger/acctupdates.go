@@ -1015,12 +1015,15 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	// and re-aquire it just before a successfull completion of the function.
 	// Note that there is no concurrently issue within this function around testing the variable value.
 	// TODO : explain why we want to take this lock now.
-	au.accountsMu.Lock()
-	lockTaken := true
+	lockTaken := false
+	if au.dbs.wdb.IsSharedCacheConnection() {
+		au.accountsMu.Lock()
+		lockTaken = true
+	}
 
 	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
 		// check if the lock was taken in previous iteration
-		if lockTaken {
+		if lockTaken && (!au.dbs.wdb.IsSharedCacheConnection()) {
 			// undo the lock.
 			au.accountsMu.Unlock()
 			lockTaken = false
@@ -1068,8 +1071,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 
 		// if everytyhing went well, take the lock, as we're going to attempt to commit the transaction to database.
-		au.accountsMu.Lock()
-		lockTaken = true
+		if !au.dbs.wdb.IsSharedCacheConnection() {
+			au.accountsMu.Lock()
+			lockTaken = true
+		}
 
 		return nil
 	})

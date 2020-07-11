@@ -56,6 +56,7 @@ var sqliteInitOnce sync.Once
 type Accessor struct {
 	Handle   *sql.DB
 	readOnly bool
+	inMemory bool
 	log      logging.Logger
 }
 
@@ -74,6 +75,7 @@ func MakeErasableAccessor(dbfilename string) (Accessor, error) {
 func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []string) (Accessor, error) {
 	var db Accessor
 	db.readOnly = readOnly
+	db.inMemory = inMemory
 
 	// SQLite3 driver we use (mattn/go-sqlite3) does not implement driver.DriverContext interface
 	// that forces sql.Open calling sql.OpenDB and return a struct without any touches to the underlying driver.
@@ -183,6 +185,12 @@ func (db *Accessor) getDecoratedLogger(fn idemFn, extras ...interface{}) logging
 	}
 
 	return log
+}
+
+// IsSharedCacheConnection returns whether this connection was created using shared-cache connection or not.
+// we use shared cache for in-memory databases
+func (db *Accessor) IsSharedCacheConnection() bool {
+	return db.inMemory
 }
 
 // Atomic executes a piece of code with respect to the database atomically.

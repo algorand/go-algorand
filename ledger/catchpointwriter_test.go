@@ -135,7 +135,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		os.RemoveAll("./catchpoints")
 	}()
 
-	ml := makeMockLedgerForTracker(t)
+	ml := makeMockLedgerForTracker(t, true)
 	defer ml.close()
 	ml.blocks = randomInitChain(testProtocolVersion, 10)
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(300)}
