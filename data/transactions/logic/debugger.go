@@ -76,11 +76,11 @@ type DebugState struct {
 	Error   string             `codec:"error"`
 
 	// global/local state changes are updated every step. Stateful TEAL only.
-	AppStateChage
+	AppStateChange
 }
 
-// AppStateChage encapsulates global and local app state changes
-type AppStateChage struct {
+// AppStateChange encapsulates global and local app state changes
+type AppStateChange struct {
 	GlobalStateChanges basics.StateDelta                    `codec:"gsch"`
 	LocalStateChanges  map[basics.Address]basics.StateDelta `codec:"lsch"`
 }
