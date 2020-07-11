@@ -234,7 +234,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	if progress.SeenHeader {
 		return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: content chunk already seen")
 	}
-	var fileHeader catchpointFileHeader
+	var fileHeader CatchpointFileHeader
 	err = protocol.Decode(bytes, &fileHeader)
 	if err != nil {
 		return err
