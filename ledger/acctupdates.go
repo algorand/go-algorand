@@ -1014,9 +1014,25 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	// part of the operation, we need to release the lock at the beginning of the Atomic function if it was already taken,
 	// and re-aquire it just before a successfull completion of the function.
 	// Note that there is no concurrently issue within this function around testing the variable value.
-	// TODO : explain why we want to take this lock now.
 	lockTaken := false
 	if au.dbs.wdb.IsSharedCacheConnection() {
+		// When we're using in memory database, the sqlite implementation forces us to use a shared cache
+		// mode so that multiple connections ( i.e. read and write ) could share the database instance.
+		// ( it would also create issues between precompiled statements and regular atomic calls, as the former
+		// would generate a connection on the fly).
+		// when using a shared cache, we have to be aware that there are additional locking mechanisms that are
+		// internal to the sqlite. Two of them which play a role here are the sqlite_unlock_notify which
+		// prevents a shared cache locks from returning "database is busy" error and would block instead, and
+		// table level locks, which ensure that at any one time, a single table may have any number of active
+		// read-locks or a single active write lock.
+		// see https://www.sqlite.org/sharedcache.html for more details.
+		// These shared cache constrains are more strict than the WAL based concurrency limitations, which allows
+		// one writer and multiple readers at the same time.
+		// In particular, the shared cache limitation means that since a connection could become a writer, any syncronization
+		// operating that would prevent this operation from completing could result with a deadlock.
+		// This is the reason why for shared cache connections, we'll take the lock before starting the write transaction,
+		// and would keep it along. It will cause a degraded performance when using a shared cache connection
+		// compared to a private cache connection, but would grentee correct locking semantics.
 		au.accountsMu.Lock()
 		lockTaken = true
 	}
@@ -1092,8 +1108,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	// The following usecase should never happen, but in case it does, log a message and take the lock.
 	if !lockTaken {
-		au.log.Warnf("commitRound : account mutex was not taken by Atomic call, and the Atomic call succeeded")
 		au.accountsMu.Lock()
+		au.log.Warnf("commitRound : account mutex was not taken by Atomic call, and the Atomic call succeeded")
 	}
 
 	if isCatchpointRound {

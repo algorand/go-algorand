@@ -634,7 +634,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		defer ml.close()
 		ml.blocks = randomInitChain(testProtocolVersion, 10)
 
-		accts := []map[basics.Address]basics.AccountData{randomAccounts(8)}
+		accts := []map[basics.Address]basics.AccountData{randomAccounts(9)}
 
 		pooldata := basics.AccountData{}
 		pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
@@ -716,16 +716,33 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 
 			// force to perform a test that goes directly to disk, and see if it has the expected values.
 			if uint64(i) > protoParams.MaxBalLookback+3 {
+
 				// check the status at a historical time:
-				checkRound := uint64(i) - protoParams.MaxBalLookback - 3
+				checkRound := uint64(i) - protoParams.MaxBalLookback - 2
+
+				testback := 1
 				for j := 1; j < len(moneyAccounts); j++ {
-					acct, err := au.lookup(basics.Round(checkRound), moneyAccounts[j], false)
+					if checkRound < uint64(testback) {
+						continue
+					}
+					acct, err := au.lookup(basics.Round(checkRound-uint64(testback)), moneyAccounts[j], false)
 					// we might get an error like "round 2 before dbRound 5", which is the success case, so we'll ignore it.
 					if err != nil {
+						// verify it's the expected error and not anything else.
+						var r1, r2 int
+						n, err2 := fmt.Sscanf(err.Error(), "round %d before dbRound %d", &r1, &r2)
+						require.NoErrorf(t, err2, "unable to parse : %v", err)
+						require.Equal(t, 2, n)
+						require.Less(t, r1, r2)
+						if testback > 1 {
+							testback--
+						}
 						continue
 					}
 					// if we received no error, we want to make sure the reported amount is correct.
-					require.Equalf(t, moneyAccountsExpectedAmounts[checkRound][j], acct.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, checkRound)
+					require.Equalf(t, moneyAccountsExpectedAmounts[checkRound-uint64(testback)][j], acct.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, checkRound)
+					testback++
+					j--
 				}
 			}
 
