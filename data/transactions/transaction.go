@@ -57,16 +57,11 @@ type Balances interface {
 
 	Put(basics.BalanceRecord) error
 
-	// PutWithCreatables is like Put, but should be used when creating or deleting an asset or application.
-	PutWithCreatables(record basics.BalanceRecord, newCreatables []basics.CreatableLocator, deletedCreatables []basics.CreatableLocator) error
+	// PutWithCreatable is like Put, but should be used when creating or deleting an asset or application.
+	PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error
 
-	// GetAssetCreator gets the address of the account whose balance record
-	// contains the asset params
-	GetAssetCreator(aidx basics.AssetIndex) (basics.Address, error)
-
-	// GetAppCreator gets the address of the account whose balance record
-	// contains the app params
-	GetAppCreator(aidx basics.AppIndex) (basics.Address, bool, error)
+	// GetCreator gets the address of the account that created a given creatable
+	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 
 	// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
 	// TODO: Does this need to be part of the balances interface, or can it just be implemented here as a function that calls Put and Get?
@@ -83,7 +78,7 @@ type Balances interface {
 type StateEvaluator interface {
 	Eval(program []byte) (pass bool, stateDelta basics.EvalDelta, err error)
 	Check(program []byte) (cost int, err error)
-	InitLedger(balances Balances, acctWhitelist []basics.Address, appGlobalWhitelist []basics.AppIndex, appIdx basics.AppIndex) error
+	InitLedger(balances Balances, appIdx basics.AppIndex, schemas basics.StateSchemas) error
 }
 
 // Header captures the fields common to every transaction type.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -ex
 
 HELP="Usage: $0 [-s]
 Installs host level dependencies necessary to build go-algorand.
@@ -49,7 +49,7 @@ if [ "${OS}" = "linux" ]; then
     fi
 
     sudo apt-get update
-    sudo apt-get install -y libboost-all-dev expect jq autoconf shellcheck sqlite3 python3.7-venv
+    sudo apt-get install -y libboost-all-dev expect jq autoconf shellcheck sqlite3 python3-venv
 elif [ "${OS}" = "darwin" ]; then
     brew update
     brew tap homebrew/cask

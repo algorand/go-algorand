@@ -32,7 +32,7 @@ import (
 )
 
 // PrepareAccounts to set up accounts and asset accounts required for Ping Pong run
-func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, assetParams map[uint64]v1.AssetParams, cfg PpConfig, err error) {
+func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, assetParams map[uint64]v1.AssetParams, appParams map[uint64]v1.AppParams, cfg PpConfig, err error) {
 	cfg = initCfg
 	accounts, cfg, err = ensureAccounts(ac, cfg)
 	if err != nil {
@@ -41,7 +41,6 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 	}
 
 	if cfg.NumAsset > 0 {
-
 		// zero out max amount for asset transactions
 		cfg.MaxAmt = 0
 
@@ -83,6 +82,11 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 
 		for k := range assetAccounts {
 			accounts[k] = assetAccounts[k]
+		}
+	} else if cfg.NumApp > 0 {
+		appParams, err = prepareApps(accounts, ac, cfg)
+		if err != nil {
+			return
 		}
 	}
 
@@ -194,7 +198,7 @@ func listSufficientAccounts(accounts map[string]uint64, minimumAmount uint64, ex
 }
 
 // RunPingPong starts ping pong process
-func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uint64, assetParam map[uint64]v1.AssetParams, cfg PpConfig) {
+func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uint64, assetParam map[uint64]v1.AssetParams, appParam map[uint64]v1.AppParams, cfg PpConfig) {
 	// Infinite loop given:
 	//  - accounts -> map of accounts to include in transfers (including src account, which we don't want to use)
 	//  - cfg      -> configuration for how to proceed
@@ -234,7 +238,7 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 			fromList := listSufficientAccounts(accounts, cfg.MinAccountFunds+(cfg.MaxAmt+cfg.MaxFee)*2, cfg.SrcAccount)
 			toList := listSufficientAccounts(accounts, 0, cfg.SrcAccount)
 
-			sent, succeded, err := sendFromTo(fromList, toList, accounts, assetParam, ac, cfg)
+			sent, succeded, err := sendFromTo(fromList, toList, accounts, assetParam, appParam, ac, cfg)
 			totalSent += sent
 			totalSucceeded += succeded
 			if err != nil {
@@ -262,7 +266,7 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 	}
 }
 
-func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetParams map[uint64]v1.AssetParams, client libgoal.Client, cfg PpConfig) (sentCount, successCount uint64, err error) {
+func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetParams map[uint64]v1.AssetParams, appParams map[uint64]v1.AppParams, client libgoal.Client, cfg PpConfig) (sentCount, successCount uint64, err error) {
 	amt := cfg.MaxAmt
 	fee := cfg.MaxFee
 	for i, from := range fromList {
@@ -288,24 +292,36 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetPara
 		if cfg.NumAsset > 0 {
 			amt = 1
 		}
+
+		// app or asset ID
+		var aidx uint64
 		if cfg.GroupSize == 1 {
-			var assetID uint64
 			if cfg.NumAsset > 0 { // generate random assetID if we send asset txns
 				rindex := rand.Intn(len(assetParams))
 				i := 0
 				for k := range assetParams {
 					if i == rindex {
-						assetID = k
+						aidx = k
+						break
+					}
+					i++
+				}
+			} else if cfg.NumApp > 0 {
+				rindex := rand.Intn(len(appParams))
+				i := 0
+				for k := range appParams {
+					if i == rindex {
+						aidx = k
 						break
 					}
 					i++
 				}
 			} else {
-				assetID = 0
+				aidx = 0
 			}
 
 			// Construct single txn
-			txn, consErr := constructTxn(from, to, fee, amt, assetID, client, cfg)
+			txn, consErr := constructTxn(from, to, fee, amt, aidx, client, cfg)
 			if consErr != nil {
 				err = consErr
 				_, _ = fmt.Fprintf(os.Stderr, "constructTxn failed: %v\n", err)
@@ -402,7 +418,7 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetPara
 			accounts[to] = uint64(toBalanceChange + int64(accounts[to]))
 		}
 		if sendErr != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "error sending Transaction, sleeping .5 seconds: %+v\n", sendErr)
+			_, _ = fmt.Fprintf(os.Stderr, "error sending Transaction, sleeping .5 seconds: %v\n", sendErr)
 			err = sendErr
 			time.Sleep(500 * time.Millisecond)
 			return
@@ -414,7 +430,7 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetPara
 	return
 }
 
-func constructTxn(from, to string, fee, amt, assetID uint64, client libgoal.Client, cfg PpConfig) (txn transactions.Transaction, err error) {
+func constructTxn(from, to string, fee, amt, aidx uint64, client libgoal.Client, cfg PpConfig) (txn transactions.Transaction, err error) {
 	var noteField []byte
 	const pingpongTag = "pingpong"
 	const tagLen = uint32(len(pingpongTag))
@@ -435,13 +451,19 @@ func constructTxn(from, to string, fee, amt, assetID uint64, client libgoal.Clie
 		crypto.RandBytes(lease[:])
 	}
 
-	if cfg.NumAsset == 0 { // Construct payment transaction
-		txn, err = client.ConstructPayment(from, to, fee, amt, noteField[:], "", lease, 0, 0)
-		if !cfg.Quiet {
-			_, _ = fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, to)
+	if cfg.NumApp > 0 { // Construct app transaction
+		txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, nil, nil)
+		if err != nil {
+			return
 		}
-	} else { // Construct asset transaction
-		txn, err = client.MakeUnsignedAssetSendTx(assetID, amt, to, "", "")
+		txn.Note = noteField[:]
+		txn.Lease = lease
+		txn, err = client.FillUnsignedTxTemplate(from, 0, 0, cfg.MaxFee, txn)
+		if !cfg.Quiet {
+			_, _ = fmt.Fprintf(os.Stdout, "Calling app %d : %s\n", aidx, from)
+		}
+	} else if cfg.NumAsset > 0 { // Construct asset transaction
+		txn, err = client.MakeUnsignedAssetSendTx(aidx, amt, to, "", "")
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stdout, "error making unsigned asset send tx %v\n", err)
 			return
@@ -450,10 +472,15 @@ func constructTxn(from, to string, fee, amt, assetID uint64, client libgoal.Clie
 		txn.Lease = lease
 		txn, err = client.FillUnsignedTxTemplate(from, 0, 0, cfg.MaxFee, txn)
 		if !cfg.Quiet {
-			_, _ = fmt.Fprintf(os.Stdout, "Sending %d asset %d: %s -> %s\n", amt, assetID, from, to)
+			_, _ = fmt.Fprintf(os.Stdout, "Sending %d asset %d: %s -> %s\n", amt, aidx, from, to)
 		}
-
+	} else {
+		txn, err = client.ConstructPayment(from, to, fee, amt, noteField[:], "", lease, 0, 0)
+		if !cfg.Quiet {
+			_, _ = fmt.Fprintf(os.Stdout, "Sending %d : %s -> %s\n", amt, from, to)
+		}
 	}
+
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stdout, "error constructing transaction %v\n", err)
 		return

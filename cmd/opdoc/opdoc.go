@@ -209,6 +209,15 @@ func argEnum(name string) []string {
 	if name == "global" {
 		return logic.GlobalFieldNames
 	}
+	if name == "txna" || name == "gtxna" {
+		return logic.TxnaFieldNames
+	}
+	if name == "asset_holding_get" {
+		return logic.AssetHoldingFieldNames
+	}
+	if name == "asset_params_get" {
+		return logic.AssetParamsFieldNames
+	}
 	return nil
 }
 
@@ -241,6 +250,16 @@ func argEnumTypes(name string) string {
 	if name == "global" {
 		return typeString(logic.GlobalFieldTypes)
 	}
+	if name == "txna" || name == "gtxna" {
+		return typeString(logic.TxnaFieldTypes)
+	}
+	if name == "asset_holding_get" {
+		return typeString(logic.AssetHoldingFieldTypes)
+	}
+	if name == "asset_params_get" {
+		return typeString(logic.AssetParamsFieldTypes)
+	}
+
 	return ""
 }
 

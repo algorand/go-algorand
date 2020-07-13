@@ -42,7 +42,6 @@ echo "closeout part b, asset trader"
 # quick expiration, test closeout
 
 ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
-
 SETUP_ROUND=$((${ROUND} + 10))
 TIMEOUT_ROUND=$((${SETUP_ROUND} + 1))
 
