@@ -1,0 +1,75 @@
+#!/usr/bin/expect -f
+#exp_internal 1
+set err 0
+log_user 1
+
+if { [catch {
+
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50Each.json"
+
+    exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    # Check the balance of the primary account
+    set PRIMARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
+
+    spawn echo "hello"
+    expect {
+        timeout { abort "\n Failed to see expected input hello" }
+        "^hello*" {close}
+    }
+    set TEAL_PROGS_DIR $TEST_DATA_DIR/../scripts/e2e_subs/tealprogs
+
+    # Succeed in creating app that approves transactions with arg[0] == 'hello'
+    #APPID=$(${gcmd} app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog ${TEAL_PROGS_DIR}/loccheck.teal --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 --app-arg "str:hello" --clear-prog <(echo 'int 1') | grep Created | awk '{ print $6 }')
+
+    puts "calling goal app create"
+    spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog ${TEAL_PROGS_DIR}//loccheck.teal --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 --app-arg "str:hello" -d $TEST_PRIMARY_NODE_DIR --clear-prog \'int 1\'
+
+    spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog ${TEAL_PROGS_DIR}/loccheck.teal --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 --app-arg "str:hello" -d $TEST_PRIMARY_NODE_DIR --clear-prog \`int 1\'
+    expect {
+        timeout { abort "\n Failed to see expected input hello" }
+        {Created*} {set APP_ID $expect_out(buffer) }
+    }
+    puts "App ID $APP_ID"
+
+
+    # Get Ledger Supply
+    ::AlgorandGoal::GetLedgerSupply $TEST_PRIMARY_NODE_DIR
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    puts "Goal Ledger Test Successful"
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in ledgerTest: $EXCEPTION"
+}
