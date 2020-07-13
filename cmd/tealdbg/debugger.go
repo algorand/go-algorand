@@ -53,7 +53,7 @@ type Control interface {
 
 	GetSourceMap() ([]byte, error)
 	GetSource() (string, []byte)
-	GetStates(changes *logic.AppStateChage) appState
+	GetStates(changes *logic.AppStateChange) appState
 }
 
 // Debugger is TEAL event-driven debugger
@@ -285,7 +285,7 @@ func (s *session) GetSource() (string, []byte) {
 	return s.programName, []byte(s.source)
 }
 
-func (s *session) GetStates(changes *logic.AppStateChage) appState {
+func (s *session) GetStates(changes *logic.AppStateChange) appState {
 	if changes == nil {
 		return s.states
 	}
