@@ -63,7 +63,13 @@ func TestTealCompile(t *testing.T) {
 	var hash crypto.Digest
 	compiledProgram, hash, err = libGoalClient.Compile([]byte("int 1"))
 	a.NotNil(compiledProgram)
-	a.NoError(err, "A valid program should result in a compilation success")
+	a.NoError(err, "A valid v1 program should result in a compilation success")
+	a.Equal([]byte{0x1, 0x20, 0x1, 0x1, 0x22}, compiledProgram)
+	a.Equal("6Z3C3LDVWGMX23BMSYMANACQOSINPFIRF77H7N3AWJZYV6OH6GWQ", hash.String())
+
+	compiledProgram, hash, err = libGoalClient.Compile([]byte("#pragma version 2\nint 1"))
+	a.NotNil(compiledProgram)
+	a.NoError(err, "A valid v2 program should result in a compilation success")
 	a.Equal([]byte{0x2, 0x20, 0x1, 0x1, 0x22}, compiledProgram)
 	a.Equal("YOE6C22GHCTKAN3HU4SE5PGIPN5UKXAJTXCQUPJ3KKF5HOAH646A", hash.String())
 

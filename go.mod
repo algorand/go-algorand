@@ -15,7 +15,7 @@ require (
 	github.com/fatih/color v1.7.0
 	github.com/fortytw2/leaktest v1.3.0 // indirect
 	github.com/gen2brain/beeep v0.0.0-20180718162406-4e430518395f
-	github.com/getkin/kin-openapi v0.9.0
+	github.com/getkin/kin-openapi v0.14.0
 	github.com/go-chi/chi v4.1.2+incompatible // indirect
 	github.com/godbus/dbus v0.0.0-20181101234600-2ff6f7ffd60f // indirect
 	github.com/gofrs/flock v0.7.0
@@ -44,16 +44,21 @@ require (
 	github.com/sirupsen/logrus v1.0.5
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3 // indirect
-	github.com/stretchr/testify v1.5.1
+	github.com/stretchr/objx v0.2.0 // indirect
+	github.com/stretchr/testify v1.6.1
+	github.com/yuin/goldmark v1.1.32 // indirect
 	golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9
 	golang.org/x/mod v0.3.0 // indirect
 	golang.org/x/net v0.0.0-20200602114024-627f9648deb9
-	golang.org/x/sys v0.0.0-20200610111108-226ff32320da
-	golang.org/x/tools v0.0.0-20200610052024-8d7dbee4c8ae // indirect
+	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a // indirect
+	golang.org/x/sys v0.0.0-20200615200032-f1bc736245b1
+	golang.org/x/text v0.3.3 // indirect
+	golang.org/x/tools v0.0.0-20200618155944-c7475b9d7fb2 // indirect
 	google.golang.org/appengine v1.6.1 // indirect
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
+	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2 // indirect
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
 	gopkg.in/toast.v1 v1.0.0-20180812000517-0a84660828b2 // indirect
-	gopkg.in/yaml.v2 v2.3.0 // indirect
+	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 )

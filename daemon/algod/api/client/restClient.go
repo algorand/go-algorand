@@ -60,6 +60,7 @@ const (
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
 	"/v1/transactions": true,
+	"/v2/teal/dryrun":  true,
 	"/v2/teal/compile": true,
 }
 
@@ -289,8 +290,17 @@ type assetsParams struct {
 	Max      uint64 `url:"max"`
 }
 
+type appsParams struct {
+	AppIdx uint64 `url:"appIdx"`
+	Max    uint64 `url:"max"`
+}
+
 type rawblockParams struct {
 	Raw uint64 `url:"raw"`
+}
+
+type rawAccountParams struct {
+	Format string `url:"format"`
 }
 
 // TransactionsByAddr returns all transactions for a PK [addr] in the [first,
@@ -312,9 +322,44 @@ func (client RestClient) Assets(assetIdx, max uint64) (response v1.AssetList, er
 	return
 }
 
+// AssetInformationV2 gets the AssetInformationResponse associated with the passed asset index
+func (client RestClient) AssetInformationV2(index uint64) (response generatedV2.Asset, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/assets/%d", index), nil)
+	return
+}
+
+// ApplicationInformation gets the ApplicationInformationResponse associated
+// with the passed application index
+func (client RestClient) ApplicationInformation(index uint64) (response generatedV2.Application, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/applications/%d", index), nil)
+	return
+}
+
 // AccountInformation also gets the AccountInformationResponse associated with the passed address
 func (client RestClient) AccountInformation(address string) (response v1.Account, err error) {
 	err = client.get(&response, fmt.Sprintf("/v1/account/%s", address), nil)
+	return
+}
+
+// AccountInformationV2 gets the AccountData associated with the passed address
+func (client RestClient) AccountInformationV2(address string) (response generatedV2.Account, err error) {
+	err = client.get(&response, fmt.Sprintf("/v2/accounts/%s", address), nil)
+	return
+}
+
+// Blob represents arbitrary blob of data satisfying v1.RawResponse interface
+type Blob []byte
+
+// SetBytes fulfills the RawResponse interface on Blob
+func (blob *Blob) SetBytes(b []byte) {
+	*blob = b
+}
+
+// RawAccountInformationV2 gets the raw AccountData associated with the passed address
+func (client RestClient) RawAccountInformationV2(address string) (response []byte, err error) {
+	var blob Blob
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s", address), rawAccountParams{Format: "msgpack"})
+	response = blob
 	return
 }
 
@@ -415,7 +460,7 @@ func (client RestClient) GetGoRoutines(ctx context.Context) (goRoutines string, 
 
 // Compile compiles the given program and returned the compiled program
 func (client RestClient) Compile(program []byte) (compiledProgram []byte, programHash crypto.Digest, err error) {
-	var compileResponse generatedV2.PostCompileResponse
+	var compileResponse generatedV2.CompileResponse
 	err = client.submitForm(&compileResponse, "/v2/teal/compile", program, "POST", false, true)
 	if err != nil {
 		return nil, crypto.Digest{}, err
@@ -466,5 +511,13 @@ func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryA
 		return
 	}
 	result = string(bytes)
+	return
+}
+
+// RawDryrun gets the raw DryrunResponse associated with the passed address
+func (client RestClient) RawDryrun(data []byte) (response []byte, err error) {
+	var blob Blob
+	err = client.submitForm(&blob, "/v2/teal/dryrun", data, "POST", false /* encodeJSON */, false /* decodeJSON */)
+	response = blob
 	return
 }

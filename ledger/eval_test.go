@@ -222,3 +222,99 @@ func TestRekeying(t *testing.T) {
 
 	// TODO: More tests
 }
+
+func TestPrepareAppEvaluators(t *testing.T) {
+	eval := BlockEvaluator{
+		prevHeader: bookkeeping.BlockHeader{
+			TimeStamp: 1234,
+			Round:     2345,
+		},
+		proto: config.ConsensusParams{
+			Application: true,
+		},
+	}
+
+	// Create some sample transactions
+	payment := transactions.SignedTxnWithAD{
+		SignedTxn: transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.PaymentTx,
+				Header: transactions.Header{
+					Sender: basics.Address{1, 2, 3, 4},
+				},
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: basics.Address{4, 3, 2, 1},
+					Amount:   basics.MicroAlgos{Raw: 100},
+				},
+			},
+		},
+	}
+
+	appcall1 := transactions.SignedTxnWithAD{
+		SignedTxn: transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: transactions.Header{
+					Sender: basics.Address{1, 2, 3, 4},
+				},
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID: basics.AppIndex(1),
+				},
+			},
+		},
+	}
+
+	appcall2 := appcall1
+	appcall2.SignedTxn.Txn.ApplicationCallTxnFields.ApplicationID = basics.AppIndex(2)
+
+	type evalTestCase struct {
+		group []transactions.SignedTxnWithAD
+
+		// indicates if prepareAppEvaluators should return a non-nil
+		// appTealEvaluator for the txn at index i
+		expected []bool
+	}
+
+	// Create some groups with these transactions
+	cases := []evalTestCase{
+		evalTestCase{[]transactions.SignedTxnWithAD{payment}, []bool{false}},
+		evalTestCase{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}},
+		evalTestCase{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}},
+		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}},
+		evalTestCase{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}},
+		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}},
+		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}},
+		evalTestCase{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}},
+		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}},
+	}
+
+	for i, testCase := range cases {
+		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			res := eval.prepareAppEvaluators(testCase.group)
+			require.Equal(t, len(res), len(testCase.group))
+
+			// Compute the expected transaction group without ApplyData for
+			// the test case
+			expGroupNoAD := make([]transactions.SignedTxn, len(testCase.group))
+			for j := range testCase.group {
+				expGroupNoAD[j] = testCase.group[j].SignedTxn
+			}
+
+			// Ensure non app calls have a nil evaluator, and that non-nil
+			// evaluators point to the right transactions and values
+			for j, present := range testCase.expected {
+				if present {
+					require.NotNil(t, res[j])
+					require.Equal(t, res[j].evalParams.GroupIndex, j)
+					require.Equal(t, res[j].evalParams.TxnGroup, expGroupNoAD)
+					require.Equal(t, *res[j].evalParams.Proto, eval.proto)
+					require.Equal(t, *res[j].evalParams.Txn, testCase.group[j].SignedTxn)
+					require.Equal(t, res[j].AppTealGlobals.CurrentRound, eval.prevHeader.Round+1)
+					require.Equal(t, res[j].AppTealGlobals.LatestTimestamp, eval.prevHeader.TimeStamp)
+				} else {
+					require.Nil(t, res[j])
+				}
+			}
+		})
+	}
+}

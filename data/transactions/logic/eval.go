@@ -108,6 +108,8 @@ type LedgerForLogic interface {
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
 	AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error)
 	ApplicationID() basics.AppIndex
+	LocalSchema() basics.StateSchema
+	GlobalSchema() basics.StateSchema
 }
 
 // EvalParams contains data that comes into condition evaluation.
@@ -369,13 +371,6 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 		return false, cx.err
 	}
 
-	// Currently no TEAL version knows about the RekeyTo field, but this
-	// may change in a future TEAL version
-	if !cx.EvalParams.Txn.Txn.RekeyTo.IsZero() {
-		cx.err = fmt.Errorf("program version %d doesn't allow transactions with nonzero RekeyTo field", version)
-		return false, cx.err
-	}
-
 	// TODO: if EvalMaxVersion > version, ensure that inaccessible
 	// fields as of the program's version are zero or other
 	// default value so that no one is hiding unexpected
@@ -385,6 +380,11 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	cx.pc = vlen
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
+
+	err = cx.checkRekeyAllowed()
+	if err != nil {
+		return
+	}
 
 	if cx.Debugger != nil {
 		cx.debugState = makeDebugState(cx)
@@ -476,10 +476,17 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 		err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 		return
 	}
+
 	cx.version = version
 	cx.pc = vlen
 	cx.EvalParams = params
 	cx.program = program
+
+	err = cx.checkRekeyAllowed()
+	if err != nil {
+		return
+	}
+
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
 		prevpc := cx.pc
 		cost += cx.checkStep()
@@ -495,6 +502,16 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 	return
 }
 
+func (cx *evalContext) checkRekeyAllowed() error {
+	// A transaction may not have a nonzero RekeyTo field set before TEAL
+	// v2, otherwise TEAL v0 or v1 accounts could be rekeyed by an anyone
+	// who could ordinarily spend from them.
+	if cx.version < rekeyingEnabledVersion && !cx.EvalParams.Txn.Txn.RekeyTo.IsZero() {
+		return fmt.Errorf("program version %d doesn't allow transactions with nonzero RekeyTo field", cx.version)
+	}
+	return nil
+}
+
 func opCompat(expected, got StackType) bool {
 	if expected == StackAny {
 		return true
@@ -507,6 +524,13 @@ func nilToEmpty(x []byte) []byte {
 		return make([]byte, 0)
 	}
 	return x
+}
+
+func boolToUint(x bool) uint64 {
+	if x {
+		return 1
+	}
+	return 0
 }
 
 // MaxStackDepth should move to consensus params
@@ -687,6 +711,22 @@ func opPlus(cx *evalContext) {
 		return
 	}
 	cx.stack = cx.stack[:last]
+}
+
+func opAddwImpl(x, y uint64) (carry uint64, sum uint64) {
+	sum = x + y
+	if sum < x {
+		carry = 1
+	}
+	return
+}
+
+func opAddw(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	carry, sum := opAddwImpl(cx.stack[prev].Uint, cx.stack[last].Uint)
+	cx.stack[prev].Uint = carry
+	cx.stack[last].Uint = sum
 }
 
 func opMinus(cx *evalContext) {
@@ -1125,11 +1165,7 @@ func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, fie
 	case AssetBalance:
 		sv.Uint = holding.Amount
 	case AssetFrozen:
-		if holding.Frozen {
-			sv.Uint = 1
-		} else {
-			sv.Uint = 0
-		}
+		sv.Uint = boolToUint(holding.Frozen)
 	default:
 		err = fmt.Errorf("invalid asset holding field %d", field)
 		return
@@ -1150,14 +1186,10 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field 
 	case AssetDecimals:
 		sv.Uint = uint64(params.Decimals)
 	case AssetDefaultFrozen:
-		if params.DefaultFrozen {
-			sv.Uint = 1
-		} else {
-			sv.Uint = 0
-		}
+		sv.Uint = boolToUint(params.DefaultFrozen)
 	case AssetUnitName:
 		sv.Bytes = []byte(params.UnitName)
-	case AssetAssetName:
+	case AssetName:
 		sv.Bytes = []byte(params.AssetName)
 	case AssetURL:
 		sv.Bytes = []byte(params.URL)
@@ -1266,8 +1298,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 			err = fmt.Errorf("invalid ApplicationArgs index %d", arrayFieldIdx)
 			return
 		}
-		sv.Bytes = make([]byte, len(txn.ApplicationArgs[arrayFieldIdx]))
-		copy(sv.Bytes, txn.ApplicationArgs[arrayFieldIdx])
+		sv.Bytes = nilToEmpty(txn.ApplicationArgs[arrayFieldIdx])
 	case NumAppArgs:
 		sv.Uint = uint64(len(txn.ApplicationArgs))
 	case Accounts:
@@ -1284,11 +1315,41 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case NumAccounts:
 		sv.Uint = uint64(len(txn.Accounts))
 	case ApprovalProgram:
-		sv.Bytes = make([]byte, len(txn.ApprovalProgram))
-		copy(sv.Bytes, txn.ApprovalProgram)
+		sv.Bytes = nilToEmpty(txn.ApprovalProgram)
 	case ClearStateProgram:
-		sv.Bytes = make([]byte, len(txn.ClearStateProgram))
-		copy(sv.Bytes, txn.ClearStateProgram)
+		sv.Bytes = nilToEmpty(txn.ClearStateProgram)
+	case RekeyTo:
+		sv.Bytes = txn.RekeyTo[:]
+	case ConfigAsset:
+		sv.Uint = uint64(txn.ConfigAsset)
+	case ConfigAssetTotal:
+		sv.Uint = uint64(txn.AssetParams.Total)
+	case ConfigAssetDecimals:
+		sv.Uint = uint64(txn.AssetParams.Decimals)
+	case ConfigAssetDefaultFrozen:
+		sv.Uint = boolToUint(txn.AssetParams.DefaultFrozen)
+	case ConfigAssetUnitName:
+		sv.Bytes = nilToEmpty([]byte(txn.AssetParams.UnitName))
+	case ConfigAssetName:
+		sv.Bytes = nilToEmpty([]byte(txn.AssetParams.AssetName))
+	case ConfigAssetURL:
+		sv.Bytes = nilToEmpty([]byte(txn.AssetParams.URL))
+	case ConfigAssetMetadataHash:
+		sv.Bytes = nilToEmpty(txn.AssetParams.MetadataHash[:])
+	case ConfigAssetManager:
+		sv.Bytes = txn.AssetParams.Manager[:]
+	case ConfigAssetReserve:
+		sv.Bytes = txn.AssetParams.Reserve[:]
+	case ConfigAssetFreeze:
+		sv.Bytes = txn.AssetParams.Freeze[:]
+	case ConfigAssetClawback:
+		sv.Bytes = txn.AssetParams.Clawback[:]
+	case FreezeAsset:
+		sv.Uint = uint64(txn.FreezeAsset)
+	case FreezeAssetAccount:
+		sv.Bytes = txn.FreezeAccount[:]
+	case FreezeAssetFrozen:
+		sv.Uint = boolToUint(txn.AssetFrozen)
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
 		return
@@ -1305,7 +1366,12 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 func opTxn(cx *evalContext) {
 	field := TxnField(uint64(cx.program[cx.pc+1]))
 	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version || field == ApplicationArgs || field == Accounts {
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if ok {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
@@ -1327,7 +1393,8 @@ func opTxna(cx *evalContext) {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
-	if field != ApplicationArgs && field != Accounts {
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
 		cx.err = fmt.Errorf("txna unsupported field %d", field)
 		return
 	}
@@ -1352,7 +1419,12 @@ func opGtxn(cx *evalContext) {
 	tx := &cx.TxnGroup[gtxid].Txn
 	field := TxnField(uint64(cx.program[cx.pc+2]))
 	fs, ok := txnFieldSpecByField[field]
-	if !ok || fs.version > cx.version || field == ApplicationArgs || field == Accounts {
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if ok {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
@@ -1385,7 +1457,8 @@ func opGtxna(cx *evalContext) {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
 		return
 	}
-	if TxnField(field) != ApplicationArgs && TxnField(field) != Accounts {
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
 		cx.err = fmt.Errorf("gtxna unsupported field %d", field)
 		return
 	}
@@ -1422,6 +1495,14 @@ func (cx *evalContext) getLatestTimestamp() (timestamp uint64, err error) {
 	return uint64(ts), nil
 }
 
+func (cx *evalContext) getApplicationID() (rnd uint64, err error) {
+	if cx.Ledger == nil {
+		err = fmt.Errorf("ledger not available")
+		return
+	}
+	return uint64(cx.Ledger.ApplicationID()), nil
+}
+
 var zeroAddress basics.Address
 
 func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err error) {
@@ -1442,6 +1523,8 @@ func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err
 		sv.Uint, err = cx.getRound()
 	case LatestTimestamp:
 		sv.Uint, err = cx.getLatestTimestamp()
+	case CurrentApplicationID:
+		sv.Uint, err = cx.getApplicationID()
 	default:
 		err = fmt.Errorf("invalid global[%d]", field)
 	}
@@ -1686,7 +1769,10 @@ func (cx *evalContext) getLocalStateCow(accountIdx uint64) (*keyValueCow, error)
 		}
 
 		localDelta := make(basics.StateDelta)
-		kvCow := makeKeyValueCow(localKV, localDelta)
+		kvCow, err := makeKeyValueCow(localKV, localDelta, cx.Ledger.LocalSchema(), cx.Proto)
+		if err != nil {
+			return nil, err
+		}
 		idxCow = &indexedCow{accountIdx, kvCow}
 		cx.localStateCows[addr] = idxCow
 	}
@@ -1721,8 +1807,7 @@ func (cx *evalContext) appWriteLocalKey(accountIdx uint64, key string, tv basics
 	if err != nil {
 		return err
 	}
-	kvCow.write(key, tv)
-	return nil
+	return kvCow.write(key, tv)
 }
 
 // appDeleteLocalKey deletes a value from the key/value cow
@@ -1731,8 +1816,7 @@ func (cx *evalContext) appDeleteLocalKey(accountIdx uint64, key string) error {
 	if err != nil {
 		return err
 	}
-	kvCow.del(key)
-	return nil
+	return kvCow.del(key)
 }
 
 func (cx *evalContext) getReadOnlyGlobalState(appID uint64) (basics.TealKeyValue, error) {
@@ -1750,20 +1834,38 @@ func (cx *evalContext) getReadOnlyGlobalState(appID uint64) (basics.TealKeyValue
 
 func (cx *evalContext) getGlobalStateCow() (*keyValueCow, error) {
 	if cx.globalStateCow == nil {
-		globalKV, err := cx.Ledger.AppGlobalState(cx.Txn.Txn.ApplicationID)
+		appIdx := cx.Ledger.ApplicationID()
+		globalKV, err := cx.Ledger.AppGlobalState(appIdx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch global state: %v", err)
 		}
-		cx.globalStateCow = makeKeyValueCow(globalKV, cx.appEvalDelta.GlobalDelta)
+		cx.globalStateCow, err = makeKeyValueCow(globalKV, cx.appEvalDelta.GlobalDelta, cx.Ledger.GlobalSchema(), cx.Proto)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return cx.globalStateCow, nil
 }
 
-func (cx *evalContext) appReadGlobalKey(appID uint64, key string) (basics.TealValue, bool, error) {
-	// If this is for the application mentioned in the transaction header,
+func (cx *evalContext) appReadGlobalKey(foreignAppsIndex uint64, key string) (basics.TealValue, bool, error) {
+	// If this is for the current app (ForeignApps index zero),
 	// return the result from a GlobalState cow, since we may have written
 	// to it
-	if appID == 0 || appID == uint64(cx.Ledger.ApplicationID()) {
+	if foreignAppsIndex > uint64(len(cx.Txn.Txn.ForeignApps)) {
+		err := fmt.Errorf("invalid ForeignApps index %d", foreignAppsIndex)
+		return basics.TealValue{}, false, err
+	}
+
+	var appIdx basics.AppIndex
+	if foreignAppsIndex == 0 {
+		appIdx = 0
+	} else {
+		appIdx = cx.Txn.Txn.ForeignApps[foreignAppsIndex-1]
+		if appIdx == cx.Ledger.ApplicationID() {
+			appIdx = 0
+		}
+	}
+	if appIdx == 0 {
 		kvCow, err := cx.getGlobalStateCow()
 		if err != nil {
 			return basics.TealValue{}, false, err
@@ -1773,7 +1875,7 @@ func (cx *evalContext) appReadGlobalKey(appID uint64, key string) (basics.TealVa
 	}
 
 	// Otherwise, the state is read only, so return from the read only cache
-	kv, err := cx.getReadOnlyGlobalState(appID)
+	kv, err := cx.getReadOnlyGlobalState(uint64(appIdx))
 	if err != nil {
 		return basics.TealValue{}, false, err
 	}
@@ -1787,8 +1889,7 @@ func (cx *evalContext) appWriteGlobalKey(key string, tv basics.TealValue) error 
 	if err != nil {
 		return err
 	}
-	kvCow.write(key, tv)
-	return nil
+	return kvCow.write(key, tv)
 }
 
 // appDeleteGlobalKey deletes a value from the cache and adds it to StateDelta
@@ -1797,8 +1898,7 @@ func (cx *evalContext) appDeleteGlobalKey(key string) error {
 	if err != nil {
 		return err
 	}
-	kvCow.del(key)
-	return nil
+	return kvCow.del(key)
 }
 
 func opAppGetLocalState(cx *evalContext) {
@@ -1862,13 +1962,13 @@ func opAppGetLocalStateImpl(cx *evalContext, appID uint64, key []byte, accountId
 	return
 }
 
-func opAppGetGlobalStateImpl(cx *evalContext, appID uint64, key []byte) (result stackValue, ok bool, err error) {
+func opAppGetGlobalStateImpl(cx *evalContext, appIndex uint64, key []byte) (result stackValue, ok bool, err error) {
 	if cx.Ledger == nil {
 		err = fmt.Errorf("ledger not available")
 		return
 	}
 
-	tv, ok, err := cx.appReadGlobalKey(appID, string(key))
+	tv, ok, err := cx.appReadGlobalKey(appIndex, string(key))
 	if err != nil {
 		return
 	}
@@ -1884,8 +1984,8 @@ func opAppGetGlobalState(cx *evalContext) {
 
 	key := cx.stack[last].Bytes
 
-	var appID uint64 = 0
-	result, _, err := opAppGetGlobalStateImpl(cx, appID, key)
+	var index uint64 = 0 // index in txn.ForeignApps
+	result, _, err := opAppGetGlobalStateImpl(cx, index, key)
 	if err != nil {
 		cx.err = err
 		return
@@ -1899,13 +1999,9 @@ func opAppGetGlobalStateEx(cx *evalContext) {
 	prev := last - 1
 
 	key := cx.stack[last].Bytes
-	appID := cx.stack[prev].Uint
+	index := cx.stack[prev].Uint // index in txn.ForeignApps
 
-	if appID != 0 && appID == uint64(cx.Txn.Txn.ApplicationID) {
-		appID = 0 // 0 is an alias for the current app
-	}
-
-	result, ok, err := opAppGetGlobalStateImpl(cx, appID, key)
+	result, ok, err := opAppGetGlobalStateImpl(cx, index, key)
 	if err != nil {
 		cx.err = err
 		return

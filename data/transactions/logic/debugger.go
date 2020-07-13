@@ -76,11 +76,11 @@ type DebugState struct {
 	Error   string             `codec:"error"`
 
 	// global/local state changes are updated every step. Stateful TEAL only.
-	AppStateChage
+	AppStateChange
 }
 
-// AppStateChage encapsulates global and local app state changes
-type AppStateChage struct {
+// AppStateChange encapsulates global and local app state changes
+type AppStateChange struct {
 	GlobalStateChanges basics.StateDelta                    `codec:"gsch"`
 	LocalStateChanges  map[basics.Address]basics.StateDelta `codec:"lsch"`
 }
@@ -185,6 +185,14 @@ func stackValueToTealValue(sv *stackValue) basics.TealValue {
 	}
 }
 
+func valueDeltaToValueDelta(vd *basics.ValueDelta) basics.ValueDelta {
+	return basics.ValueDelta{
+		Action: vd.Action,
+		Bytes:  base64.StdEncoding.EncodeToString([]byte(vd.Bytes)),
+		Uint:   vd.Uint,
+	}
+}
+
 func (cx *evalContext) refreshDebugState() *DebugState {
 	ds := &cx.debugState
 
@@ -211,13 +219,13 @@ func (cx *evalContext) refreshDebugState() *DebugState {
 	if (cx.runModeFlags & runModeApplication) != 0 {
 		if cx.globalStateCow != nil {
 			for k, v := range cx.globalStateCow.delta {
-				ds.GlobalStateChanges[k] = v
+				ds.GlobalStateChanges[k] = valueDeltaToValueDelta(&v)
 			}
 		}
 		for addr, cow := range cx.localStateCows {
 			delta := make(basics.StateDelta, len(cow.cow.delta))
 			for k, v := range cow.cow.delta {
-				delta[k] = v
+				delta[k] = valueDeltaToValueDelta(&v)
 			}
 			ds.LocalStateChanges[addr] = delta
 		}
