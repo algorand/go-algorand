@@ -867,41 +867,6 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 	}
 }
 
-func initDBs(t *testing.T, dbs dbPair) *sql.Tx {
-	dblogger := logging.TestingLog(t)
-	dbs.wdb.SetLogger(dblogger)
-	dbs.rdb.SetLogger(dblogger)
-	tx, err := dbs.wdb.Handle.Begin()
-	for err != nil {
-		print("error initializing dbs:%#v\n", err)
-		tx, err = dbs.wdb.Handle.Begin()
-	}
-	require.NoError(t, err)
-
-	return tx
-}
-
-func addRecordsToDB(t *testing.T, dbs dbPair, tx *sql.Tx, numRecords int) {
-	blocks := randomInitChain(protocol.ConsensusCurrentVersion, numRecords)
-
-	err := blockInit(tx, blockChainBlocks(blocks))
-	require.NoError(t, err)
-	checkBlockDB(t, tx, blocks)
-
-	for i := 0; i < numRecords; i++ {
-		blkent := randomBlock(basics.Round(len(blocks)))
-		err := blockPut(tx, blkent.block, blkent.cert)
-		//require.NoError(t, err)
-		if err != nil {
-			fmt.Printf("error adding block:%#v\n", err)
-		}
-
-		blocks = append(blocks, blkent)
-		//checkBlockDB(t, tx, blocks)
-	}
-}
-
-
 func TestLedgerDBConcurrentAccess(t *testing.T) {
 	// This test ensures that trackers return the correct value from
 	// committedUpTo() -- that is, if they return round rnd, then they
