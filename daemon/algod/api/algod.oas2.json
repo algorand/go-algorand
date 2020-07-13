@@ -1931,7 +1931,20 @@
     "AccountResponse": {
       "description": "(empty)",
       "schema": {
-        "$ref": "#/definitions/Account"
+        "type": "object",
+        "required": [
+          "current-round",
+          "account"
+        ],
+        "properties": {
+          "account": {
+            "$ref": "#/definitions/Account"
+          },
+          "current-round": {
+            "description": "Round at which the results were computed.",
+            "type": "integer"
+          }
+        }
       }
     },
     "BlockResponse": {
