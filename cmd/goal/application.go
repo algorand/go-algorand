@@ -1051,8 +1051,8 @@ var infoAppCmd = &cobra.Command{
 
 		fmt.Printf("Application ID:        %d\n", appIdx)
 		fmt.Printf("Creator:               %v\n", params.Creator)
-		fmt.Printf("Approval hash:         %v\n", logic.HashProgram(params.ApprovalProgram))
-		fmt.Printf("Clear hash:            %v\n", logic.HashProgram(params.ClearStateProgram))
+		fmt.Printf("Approval hash:         %v\n", basics.Address(logic.HashProgram(params.ApprovalProgram)))
+		fmt.Printf("Clear hash:            %v\n", basics.Address(logic.HashProgram(params.ClearStateProgram)))
 
 		if gsch != nil {
 			fmt.Printf("Max global byteslices: %d\n", gsch.NumByteSlice)
