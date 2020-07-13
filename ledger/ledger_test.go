@@ -926,7 +926,7 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
 
 	blk := genesisInitState.Block
 
-	for i := 0; i < 10002; i++ {
+	for i := 0; i < 8000; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		wl.l.AddBlock(blk, agreement.Certificate{})
