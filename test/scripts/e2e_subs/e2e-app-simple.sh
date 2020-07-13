@@ -12,12 +12,42 @@ WALLET=$1
 gcmd="goal -w ${WALLET}"
 
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
+GLOBAL_INTS=2
+
+echo 'int 1' > "${TEMPDIR}/simple.teal"
+PROGRAM=($(${gcmd} clerk compile "${TEMPDIR}/simple.teal"))
 
 # Succeed in creating app that approves all transactions
-APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog <(echo 'int 1') --clear-prog <(echo 'int 1') --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
+APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog "${TEMPDIR}/simple.teal" --clear-prog "${TEMPDIR}/simple.teal" --global-byteslices 0 --global-ints ${GLOBAL_INTS} --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
+
+# Check that parameters were set correctly
+APPID_CHECK=($(${gcmd} app info --app-id $APPID | grep "ID"))
+CREATOR_CHECK=($(${gcmd} app info --app-id $APPID | grep "Creator"))
+GLOBAL_CHECK=($(${gcmd} app info --app-id $APPID | grep "global integers"))
+PROGRAM_CHECK=($(${gcmd} app info --app-id $APPID | grep "Approval"))
+
+if [[ ${APPID} != ${APPID_CHECK[2]} ]]; then
+    date '+app-create-test FAIL returned app ID does not match ${APPID} != ${APPID_CHECK[2]} %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ ${ACCOUNT} != ${CREATOR_CHECK[1]} ]]; then
+    date '+app-create-test FAIL returned creator does not match ${ACCOUNT} != ${CREATOR_CHECK[1]} %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ ${GLOBAL_INTS} != ${GLOBAL_CHECK[3]} ]]; then
+    date '+app-create-test FAIL returned global integers does not match ${GLOBAL_CHECK[3]} != ${GLOBAL_INTS} %Y%m%d_%H%M%S'
+    false
+fi
+
+if [[ ${PROGRAM[1]} != ${PROGRAM_CHECK[2]} ]]; then
+    date '+app-create-test FAIL returned app ID does not match ${PROGRAM[1]} != ${PROGRAM_CHECK[2]} %Y%m%d_%H%M%S'
+    false
+fi
 
 # Fail to create app if approval program rejects creation
-RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog <(echo 'int 0') --clear-prog <(echo 'int 1') --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
+RES=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog <(echo 'int 0') --clear-prog "${TEMPDIR}/simple.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 2>&1 || true)
 EXPERROR='rejected by ApprovalProgram'
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL txn with failing approval prog should be rejected %Y%m%d_%H%M%S'
