@@ -322,7 +322,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	vc := alwaysVerifiedCache{}
 	b.ResetTimer()
 	for _, blk := range blocks {
-		_, err = l1.eval(context.Background(), blk, true, &vc, nil)
+		_, err = eval(context.Background(), l1, blk, true, &vc, nil)
 		require.NoError(b, err)
 		err = l1.AddBlock(blk, cert)
 		require.NoError(b, err)
