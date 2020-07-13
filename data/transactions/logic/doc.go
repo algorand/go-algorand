@@ -64,6 +64,7 @@ var opDocList = []stringString{
 	{"^", "A bitwise-xor B"},
 	{"~", "bitwise invert value X"},
 	{"mulw", "A times B out to 128-bit long result as low (top) and high uint64 values on the stack"},
+	{"addw", "A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack"},
 	{"intcblock", "load block of uint64 constants"},
 	{"intc", "push value from uint64 constants to stack by index into constants"},
 	{"intc_0", "push constant 0 from intcblock to stack"},
@@ -98,12 +99,12 @@ var opDocList = []stringString{
 	{"concat", "pop two byte strings A and B and join them, push the result"},
 	{"substring", "pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to but not including M, push the substring result"},
 	{"substring3", "pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result"},
-	{"balance", "get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction"},
+	{"balance", "get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender"},
 	{"app_opted_in", "check if account specified by Txn.Accounts[A] opted in for the application B => {0 or 1}"},
 	{"app_local_get", "read from account specified by Txn.Accounts[A] from local state of the current application key B => value"},
 	{"app_local_get_ex", "read from account specified by Txn.Accounts[A] from local state of the application B key C => {0 or 1 (top), value}"},
 	{"app_global_get", "read key A from global state of a current application => value"},
-	{"app_global_get_ex", "read from application A global state key B => {0 or 1 (top), value}"},
+	{"app_global_get_ex", "read from application Txn.ForeignApps[A] global state key B => {0 or 1 (top), value}. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app"},
 	{"app_local_put", "write to account specified by Txn.Accounts[A] to local state of a current application key B with value C"},
 	{"app_global_put", "write key A and value B to global state of the current application"},
 	{"app_local_del", "delete from account specified by Txn.Accounts[A] local state key B of the current application"},
@@ -162,6 +163,7 @@ var opDocExtraList = []stringString{
 	{"intcblock", "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script."},
 	{"bytecblock", "`bytecblock` loads the following program bytes into an array of byte string constants in the evaluator. These constants can be referred to by `bytec` and `bytec_*` which will push the value onto the stack. Subsequent calls to `bytecblock` reset and replace the bytes constants available to the script."},
 	{"*", "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `mulw`."},
+	{"+", "Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`."},
 	{"txn", "FirstValidTime causes the program to fail. The field is reserved for future use."},
 	{"gtxn", "for notes on transaction fields available, see `txn`. If this transaction is _i_ in the group, `gtxn i field` is equivalent to `txn field`."},
 	{"btoi", "`btoi` panics if the input is longer than 8 bytes."},
@@ -169,7 +171,7 @@ var opDocExtraList = []stringString{
 	{"app_opted_in", "params: account index, application id (top of the stack on opcode entry). Return: 1 if opted in and 0 otherwise."},
 	{"app_local_get", "params: account index, state key. Return: value. The value is zero if the key does not exist."},
 	{"app_local_get_ex", "params: account index, application id, state key. Return: did_exist flag (top of the stack, 1 if exist and 0 otherwise), value."},
-	{"app_global_get_ex", "params: application id, state key. Return: value."},
+	{"app_global_get_ex", "params: application index, state key. Return: value. Application index is"},
 	{"app_global_get", "params: state key. Return: value. The value is zero if the key does not exist."},
 	{"app_local_put", "params: account index, state key, value."},
 	{"app_local_del", "params: account index, state key."},
@@ -197,7 +199,7 @@ type OpGroup struct {
 
 // OpGroupList is groupings of ops for documentation purposes.
 var OpGroupList = []OpGroup{
-	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "concat", "substring", "substring3"}},
+	{"Arithmetic", []string{"sha256", "keccak256", "sha512_256", "ed25519verify", "+", "-", "/", "*", "<", ">", "<=", ">=", "&&", "||", "==", "!=", "!", "len", "itob", "btoi", "%", "|", "&", "^", "~", "mulw", "addw", "concat", "substring", "substring3"}},
 	{"Loading Values", []string{"intcblock", "intc", "intc_0", "intc_1", "intc_2", "intc_3", "bytecblock", "bytec", "bytec_0", "bytec_1", "bytec_2", "bytec_3", "arg", "arg_0", "arg_1", "arg_2", "arg_3", "txn", "gtxn", "txna", "gtxna", "global", "load", "store"}},
 	{"Flow Control", []string{"err", "bnz", "bz", "b", "return", "pop", "dup", "dup2"}},
 	{"State Access", []string{"balance", "app_opted_in", "app_local_get", "app_local_get_ex", "app_global_get", "app_global_get_ex", "app_local_put", "app_global_put", "app_local_del", "app_global_del", "asset_holding_get", "asset_params_get"}},
@@ -304,6 +306,22 @@ var txnFieldDocList = []stringString{
 	{"NumAccounts", "Number of Accounts"},
 	{"ApprovalProgram", "Approval program"},
 	{"ClearStateProgram", "Clear state program"},
+	{"RekeyTo", "32 byte Sender's new AuthAddr"},
+	{"ConfigAsset", "Asset ID in asset config transaction"},
+	{"ConfigAssetTotal", "Total number of units of this asset created"},
+	{"ConfigAssetDecimals", "Number of digits to display after the decimal place when displaying the asset"},
+	{"ConfigAssetDefaultFrozen", "Whether the asset's slots are frozen by default or not, 0 or 1"},
+	{"ConfigAssetUnitName", "Unit name of the asset"},
+	{"ConfigAssetName", "The asset name"},
+	{"ConfigAssetURL", "URL"},
+	{"ConfigAssetMetadataHash", "32 byte commitment to some unspecified asset metadata"},
+	{"ConfigAssetManager", "32 byte address"},
+	{"ConfigAssetReserve", "32 byte address"},
+	{"ConfigAssetFreeze", "32 byte address"},
+	{"ConfigAssetClawback", "32 byte address"},
+	{"FreezeAsset", "Asset ID being frozen or un-frozen"},
+	{"FreezeAssetAccount", "32 byte address of the account whose asset slot is being frozen or un-frozen"},
+	{"FreezeAssetFrozen", "The new frozen value, 0 or 1"},
 }
 
 // TxnFieldDocs are notes on fields available by `txn` and `gtxn`
@@ -323,6 +341,7 @@ var globalFieldDocList = []stringString{
 	{"LogicSigVersion", "Maximum supported TEAL version"},
 	{"Round", "Current round number"},
 	{"LatestTimestamp", "Last confirmed block UNIX timestamp. Fails if negative"},
+	{"CurrentApplicationID", "ID of current application executing. Fails if no such application is executing"},
 }
 
 // globalFieldDocs are notes on fields available in `global`
@@ -369,7 +388,7 @@ var assetParamsFieldDocList = []stringString{
 	{"AssetDecimals", "See AssetParams.Decimals"},
 	{"AssetDefaultFrozen", "Frozen by default or not"},
 	{"AssetUnitName", "Asset unit name"},
-	{"AssetAssetName", "Asset name"},
+	{"AssetName", "Asset name"},
 	{"AssetURL", "URL with additional info about the asset"},
 	{"AssetMetadataHash", "Arbitrary commitment"},
 	{"AssetManager", "Manager commitment"},

@@ -31,6 +31,14 @@ import (
 //            |-----> Msgsize
 //            |-----> MsgIsZero
 //
+// CatchpointFileHeader
+//           |-----> (*) MarshalMsg
+//           |-----> (*) CanMarshalMsg
+//           |-----> (*) UnmarshalMsg
+//           |-----> (*) CanUnmarshalMsg
+//           |-----> (*) Msgsize
+//           |-----> (*) MsgIsZero
+//
 // catchpointFileBalancesChunk
 //              |-----> (*) MarshalMsg
 //              |-----> (*) CanMarshalMsg
@@ -38,14 +46,6 @@ import (
 //              |-----> (*) CanUnmarshalMsg
 //              |-----> (*) Msgsize
 //              |-----> (*) MsgIsZero
-//
-// catchpointFileHeader
-//           |-----> (*) MarshalMsg
-//           |-----> (*) CanMarshalMsg
-//           |-----> (*) UnmarshalMsg
-//           |-----> (*) CanUnmarshalMsg
-//           |-----> (*) Msgsize
-//           |-----> (*) MsgIsZero
 //
 // catchpointState
 //        |-----> MarshalMsg
@@ -881,6 +881,289 @@ func (z CatchpointCatchupState) MsgIsZero() bool {
 }
 
 // MarshalMsg implements msgp.Marshaler
+func (z *CatchpointFileHeader) MarshalMsg(b []byte) (o []byte, err error) {
+	o = msgp.Require(b, z.Msgsize())
+	// omitempty: check for empty values
+	zb0001Len := uint32(8)
+	var zb0001Mask uint16 /* 9 bits */
+	if (*z).Totals.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x2
+	}
+	if (*z).TotalAccounts == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x4
+	}
+	if (*z).BalancesRound.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x8
+	}
+	if (*z).BlockHeaderDigest.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x10
+	}
+	if (*z).BlocksRound.MsgIsZero() {
+		zb0001Len--
+		zb0001Mask |= 0x20
+	}
+	if (*z).Catchpoint == "" {
+		zb0001Len--
+		zb0001Mask |= 0x40
+	}
+	if (*z).TotalChunks == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x80
+	}
+	if (*z).Version == 0 {
+		zb0001Len--
+		zb0001Mask |= 0x100
+	}
+	// variable map header, size zb0001Len
+	o = append(o, 0x80|uint8(zb0001Len))
+	if zb0001Len != 0 {
+		if (zb0001Mask & 0x2) == 0 { // if not empty
+			// string "accountTotals"
+			o = append(o, 0xad, 0x61, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x73)
+			o, err = (*z).Totals.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "Totals")
+				return
+			}
+		}
+		if (zb0001Mask & 0x4) == 0 { // if not empty
+			// string "accountsCount"
+			o = append(o, 0xad, 0x61, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x73, 0x43, 0x6f, 0x75, 0x6e, 0x74)
+			o = msgp.AppendUint64(o, (*z).TotalAccounts)
+		}
+		if (zb0001Mask & 0x8) == 0 { // if not empty
+			// string "balancesRound"
+			o = append(o, 0xad, 0x62, 0x61, 0x6c, 0x61, 0x6e, 0x63, 0x65, 0x73, 0x52, 0x6f, 0x75, 0x6e, 0x64)
+			o, err = (*z).BalancesRound.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "BalancesRound")
+				return
+			}
+		}
+		if (zb0001Mask & 0x10) == 0 { // if not empty
+			// string "blockHeaderDigest"
+			o = append(o, 0xb1, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x48, 0x65, 0x61, 0x64, 0x65, 0x72, 0x44, 0x69, 0x67, 0x65, 0x73, 0x74)
+			o, err = (*z).BlockHeaderDigest.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "BlockHeaderDigest")
+				return
+			}
+		}
+		if (zb0001Mask & 0x20) == 0 { // if not empty
+			// string "blocksRound"
+			o = append(o, 0xab, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x73, 0x52, 0x6f, 0x75, 0x6e, 0x64)
+			o, err = (*z).BlocksRound.MarshalMsg(o)
+			if err != nil {
+				err = msgp.WrapError(err, "BlocksRound")
+				return
+			}
+		}
+		if (zb0001Mask & 0x40) == 0 { // if not empty
+			// string "catchpoint"
+			o = append(o, 0xaa, 0x63, 0x61, 0x74, 0x63, 0x68, 0x70, 0x6f, 0x69, 0x6e, 0x74)
+			o = msgp.AppendString(o, (*z).Catchpoint)
+		}
+		if (zb0001Mask & 0x80) == 0 { // if not empty
+			// string "chunksCount"
+			o = append(o, 0xab, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x73, 0x43, 0x6f, 0x75, 0x6e, 0x74)
+			o = msgp.AppendUint64(o, (*z).TotalChunks)
+		}
+		if (zb0001Mask & 0x100) == 0 { // if not empty
+			// string "version"
+			o = append(o, 0xa7, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
+			o = msgp.AppendUint64(o, (*z).Version)
+		}
+	}
+	return
+}
+
+func (_ *CatchpointFileHeader) CanMarshalMsg(z interface{}) bool {
+	_, ok := (z).(*CatchpointFileHeader)
+	return ok
+}
+
+// UnmarshalMsg implements msgp.Unmarshaler
+func (z *CatchpointFileHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
+	var field []byte
+	_ = field
+	var zb0001 int
+	var zb0002 bool
+	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
+	if _, ok := err.(msgp.TypeError); ok {
+		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).Version, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Version")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).BalancesRound.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "BalancesRound")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).BlocksRound.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "BlocksRound")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).Totals.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Totals")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).TotalAccounts, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TotalAccounts")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).TotalChunks, bts, err = msgp.ReadUint64Bytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "TotalChunks")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			(*z).Catchpoint, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "Catchpoint")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			zb0001--
+			bts, err = (*z).BlockHeaderDigest.UnmarshalMsg(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array", "BlockHeaderDigest")
+				return
+			}
+		}
+		if zb0001 > 0 {
+			err = msgp.ErrTooManyArrayFields(zb0001)
+			if err != nil {
+				err = msgp.WrapError(err, "struct-from-array")
+				return
+			}
+		}
+	} else {
+		if err != nil {
+			err = msgp.WrapError(err)
+			return
+		}
+		if zb0002 {
+			(*z) = CatchpointFileHeader{}
+		}
+		for zb0001 > 0 {
+			zb0001--
+			field, bts, err = msgp.ReadMapKeyZC(bts)
+			if err != nil {
+				err = msgp.WrapError(err)
+				return
+			}
+			switch string(field) {
+			case "version":
+				(*z).Version, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Version")
+					return
+				}
+			case "balancesRound":
+				bts, err = (*z).BalancesRound.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "BalancesRound")
+					return
+				}
+			case "blocksRound":
+				bts, err = (*z).BlocksRound.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "BlocksRound")
+					return
+				}
+			case "accountTotals":
+				bts, err = (*z).Totals.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Totals")
+					return
+				}
+			case "accountsCount":
+				(*z).TotalAccounts, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TotalAccounts")
+					return
+				}
+			case "chunksCount":
+				(*z).TotalChunks, bts, err = msgp.ReadUint64Bytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "TotalChunks")
+					return
+				}
+			case "catchpoint":
+				(*z).Catchpoint, bts, err = msgp.ReadStringBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "Catchpoint")
+					return
+				}
+			case "blockHeaderDigest":
+				bts, err = (*z).BlockHeaderDigest.UnmarshalMsg(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "BlockHeaderDigest")
+					return
+				}
+			default:
+				err = msgp.ErrNoField(string(field))
+				if err != nil {
+					err = msgp.WrapError(err)
+					return
+				}
+			}
+		}
+	}
+	o = bts
+	return
+}
+
+func (_ *CatchpointFileHeader) CanUnmarshalMsg(z interface{}) bool {
+	_, ok := (z).(*CatchpointFileHeader)
+	return ok
+}
+
+// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
+func (z *CatchpointFileHeader) Msgsize() (s int) {
+	s = 1 + 8 + msgp.Uint64Size + 14 + (*z).BalancesRound.Msgsize() + 12 + (*z).BlocksRound.Msgsize() + 14 + (*z).Totals.Msgsize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 11 + msgp.StringPrefixSize + len((*z).Catchpoint) + 18 + (*z).BlockHeaderDigest.Msgsize()
+	return
+}
+
+// MsgIsZero returns whether this is a zero value
+func (z *CatchpointFileHeader) MsgIsZero() bool {
+	return ((*z).Version == 0) && ((*z).BalancesRound.MsgIsZero()) && ((*z).BlocksRound.MsgIsZero()) && ((*z).Totals.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0) && ((*z).Catchpoint == "") && ((*z).BlockHeaderDigest.MsgIsZero())
+}
+
+// MarshalMsg implements msgp.Marshaler
 func (z *catchpointFileBalancesChunk) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
 	// omitempty: check for empty values
@@ -1194,289 +1477,6 @@ func (z *catchpointFileBalancesChunk) Msgsize() (s int) {
 // MsgIsZero returns whether this is a zero value
 func (z *catchpointFileBalancesChunk) MsgIsZero() bool {
 	return (len((*z).Balances) == 0)
-}
-
-// MarshalMsg implements msgp.Marshaler
-func (z *catchpointFileHeader) MarshalMsg(b []byte) (o []byte, err error) {
-	o = msgp.Require(b, z.Msgsize())
-	// omitempty: check for empty values
-	zb0001Len := uint32(8)
-	var zb0001Mask uint16 /* 9 bits */
-	if (*z).Totals.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x2
-	}
-	if (*z).TotalAccounts == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x4
-	}
-	if (*z).BalancesRound.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x8
-	}
-	if (*z).BlockHeaderDigest.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x10
-	}
-	if (*z).BlocksRound.MsgIsZero() {
-		zb0001Len--
-		zb0001Mask |= 0x20
-	}
-	if (*z).Catchpoint == "" {
-		zb0001Len--
-		zb0001Mask |= 0x40
-	}
-	if (*z).TotalChunks == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x80
-	}
-	if (*z).Version == 0 {
-		zb0001Len--
-		zb0001Mask |= 0x100
-	}
-	// variable map header, size zb0001Len
-	o = append(o, 0x80|uint8(zb0001Len))
-	if zb0001Len != 0 {
-		if (zb0001Mask & 0x2) == 0 { // if not empty
-			// string "accountTotals"
-			o = append(o, 0xad, 0x61, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x73)
-			o, err = (*z).Totals.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "Totals")
-				return
-			}
-		}
-		if (zb0001Mask & 0x4) == 0 { // if not empty
-			// string "accountsCount"
-			o = append(o, 0xad, 0x61, 0x63, 0x63, 0x6f, 0x75, 0x6e, 0x74, 0x73, 0x43, 0x6f, 0x75, 0x6e, 0x74)
-			o = msgp.AppendUint64(o, (*z).TotalAccounts)
-		}
-		if (zb0001Mask & 0x8) == 0 { // if not empty
-			// string "balancesRound"
-			o = append(o, 0xad, 0x62, 0x61, 0x6c, 0x61, 0x6e, 0x63, 0x65, 0x73, 0x52, 0x6f, 0x75, 0x6e, 0x64)
-			o, err = (*z).BalancesRound.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "BalancesRound")
-				return
-			}
-		}
-		if (zb0001Mask & 0x10) == 0 { // if not empty
-			// string "blockHeaderDigest"
-			o = append(o, 0xb1, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x48, 0x65, 0x61, 0x64, 0x65, 0x72, 0x44, 0x69, 0x67, 0x65, 0x73, 0x74)
-			o, err = (*z).BlockHeaderDigest.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "BlockHeaderDigest")
-				return
-			}
-		}
-		if (zb0001Mask & 0x20) == 0 { // if not empty
-			// string "blocksRound"
-			o = append(o, 0xab, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x73, 0x52, 0x6f, 0x75, 0x6e, 0x64)
-			o, err = (*z).BlocksRound.MarshalMsg(o)
-			if err != nil {
-				err = msgp.WrapError(err, "BlocksRound")
-				return
-			}
-		}
-		if (zb0001Mask & 0x40) == 0 { // if not empty
-			// string "catchpoint"
-			o = append(o, 0xaa, 0x63, 0x61, 0x74, 0x63, 0x68, 0x70, 0x6f, 0x69, 0x6e, 0x74)
-			o = msgp.AppendString(o, (*z).Catchpoint)
-		}
-		if (zb0001Mask & 0x80) == 0 { // if not empty
-			// string "chunksCount"
-			o = append(o, 0xab, 0x63, 0x68, 0x75, 0x6e, 0x6b, 0x73, 0x43, 0x6f, 0x75, 0x6e, 0x74)
-			o = msgp.AppendUint64(o, (*z).TotalChunks)
-		}
-		if (zb0001Mask & 0x100) == 0 { // if not empty
-			// string "version"
-			o = append(o, 0xa7, 0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e)
-			o = msgp.AppendUint64(o, (*z).Version)
-		}
-	}
-	return
-}
-
-func (_ *catchpointFileHeader) CanMarshalMsg(z interface{}) bool {
-	_, ok := (z).(*catchpointFileHeader)
-	return ok
-}
-
-// UnmarshalMsg implements msgp.Unmarshaler
-func (z *catchpointFileHeader) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	var field []byte
-	_ = field
-	var zb0001 int
-	var zb0002 bool
-	zb0001, zb0002, bts, err = msgp.ReadMapHeaderBytes(bts)
-	if _, ok := err.(msgp.TypeError); ok {
-		zb0001, zb0002, bts, err = msgp.ReadArrayHeaderBytes(bts)
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0001 > 0 {
-			zb0001--
-			(*z).Version, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Version")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).BalancesRound.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "BalancesRound")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).BlocksRound.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "BlocksRound")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).Totals.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Totals")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			(*z).TotalAccounts, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TotalAccounts")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			(*z).TotalChunks, bts, err = msgp.ReadUint64Bytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "TotalChunks")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			(*z).Catchpoint, bts, err = msgp.ReadStringBytes(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "Catchpoint")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			zb0001--
-			bts, err = (*z).BlockHeaderDigest.UnmarshalMsg(bts)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array", "BlockHeaderDigest")
-				return
-			}
-		}
-		if zb0001 > 0 {
-			err = msgp.ErrTooManyArrayFields(zb0001)
-			if err != nil {
-				err = msgp.WrapError(err, "struct-from-array")
-				return
-			}
-		}
-	} else {
-		if err != nil {
-			err = msgp.WrapError(err)
-			return
-		}
-		if zb0002 {
-			(*z) = catchpointFileHeader{}
-		}
-		for zb0001 > 0 {
-			zb0001--
-			field, bts, err = msgp.ReadMapKeyZC(bts)
-			if err != nil {
-				err = msgp.WrapError(err)
-				return
-			}
-			switch string(field) {
-			case "version":
-				(*z).Version, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Version")
-					return
-				}
-			case "balancesRound":
-				bts, err = (*z).BalancesRound.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "BalancesRound")
-					return
-				}
-			case "blocksRound":
-				bts, err = (*z).BlocksRound.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "BlocksRound")
-					return
-				}
-			case "accountTotals":
-				bts, err = (*z).Totals.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Totals")
-					return
-				}
-			case "accountsCount":
-				(*z).TotalAccounts, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TotalAccounts")
-					return
-				}
-			case "chunksCount":
-				(*z).TotalChunks, bts, err = msgp.ReadUint64Bytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "TotalChunks")
-					return
-				}
-			case "catchpoint":
-				(*z).Catchpoint, bts, err = msgp.ReadStringBytes(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "Catchpoint")
-					return
-				}
-			case "blockHeaderDigest":
-				bts, err = (*z).BlockHeaderDigest.UnmarshalMsg(bts)
-				if err != nil {
-					err = msgp.WrapError(err, "BlockHeaderDigest")
-					return
-				}
-			default:
-				err = msgp.ErrNoField(string(field))
-				if err != nil {
-					err = msgp.WrapError(err)
-					return
-				}
-			}
-		}
-	}
-	o = bts
-	return
-}
-
-func (_ *catchpointFileHeader) CanUnmarshalMsg(z interface{}) bool {
-	_, ok := (z).(*catchpointFileHeader)
-	return ok
-}
-
-// Msgsize returns an upper bound estimate of the number of bytes occupied by the serialized message
-func (z *catchpointFileHeader) Msgsize() (s int) {
-	s = 1 + 8 + msgp.Uint64Size + 14 + (*z).BalancesRound.Msgsize() + 12 + (*z).BlocksRound.Msgsize() + 14 + (*z).Totals.Msgsize() + 14 + msgp.Uint64Size + 12 + msgp.Uint64Size + 11 + msgp.StringPrefixSize + len((*z).Catchpoint) + 18 + (*z).BlockHeaderDigest.Msgsize()
-	return
-}
-
-// MsgIsZero returns whether this is a zero value
-func (z *catchpointFileHeader) MsgIsZero() bool {
-	return ((*z).Version == 0) && ((*z).BalancesRound.MsgIsZero()) && ((*z).BlocksRound.MsgIsZero()) && ((*z).Totals.MsgIsZero()) && ((*z).TotalAccounts == 0) && ((*z).TotalChunks == 0) && ((*z).Catchpoint == "") && ((*z).BlockHeaderDigest.MsgIsZero())
 }
 
 // MarshalMsg implements msgp.Marshaler

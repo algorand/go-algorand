@@ -347,7 +347,6 @@ func checkSetAllocBounds(p ConsensusParams) {
 	// executed TEAL instructions should be fine (order of ~1000)
 	checkSetMax(p.MaxAppProgramLen, &MaxStateDeltaKeys)
 	checkSetMax(p.MaxAppProgramLen, &MaxEvalDeltaAccounts)
-
 	checkSetMax(p.MaxAppProgramLen, &MaxAppProgramLen)
 	checkSetMax(int(p.LogicSigMaxSize), &MaxLogicSigMaxSize)
 	checkSetMax(p.MaxTxnNoteBytes, &MaxTxnNoteBytes)
