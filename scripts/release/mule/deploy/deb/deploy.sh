@@ -2,26 +2,17 @@
 
 set -ex
 
-WORKDIR="$5"
-
-if [ -z "$WORKDIR" ]
-then
-    echo "WORKDIR variable must be defined."
-    exit 1
-fi
-
 echo
 date "+build_release begin SNAPSHOT stage %Y%m%d_%H%M%S"
 echo
 
-OS_TYPE="$1"
-ARCH_TYPE="$2"
-ARCH_BIT="$3"
-VERSION=${VERSION:-$4}
-
+ARCH_BIT=$(uname -m)
+ARCH_TYPE=$(./scripts/archtype.sh)
+OS_TYPE=$(./scripts/ostype.sh)
+VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
-CHANNEL=${CHANNEL:-$("$WORKDIR/scripts/compute_branch_channel.sh" "$BRANCH")}
-PKG_DIR="$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
+CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
+PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 SIGNING_KEY_ADDR=dev@algorand.com
 
 chmod 400 "$HOME/.gnupg"

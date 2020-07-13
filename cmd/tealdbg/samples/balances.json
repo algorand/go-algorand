@@ -1,0 +1,84 @@
+[
+    {
+        "addr": "47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU",
+        "onl": 1,
+        "algo": 500000000,
+        "apar": {
+            "50": {
+                "an": "asset",
+                "t": 100,
+                "un": "tok"
+            }
+        },
+        "asset": {
+            "50": {
+                "a": 10
+            }
+        },
+        "appl": {
+            "100": {
+                "hsch": {
+                    "nbs": 3,
+                    "nui": 2
+                },
+                "tkv": {
+                    "lkeybyte": {
+                        "tb": "local",
+                        "tt": 1
+                    },
+                    "lkeyint": {
+                        "tt": 2,
+                        "ui": 1
+                    }
+                }
+            }
+        },
+        "appp": {
+            "100": {
+                "approv": "AQE=",
+                "gs": {
+                    "gkeyint": {
+                        "tt": 2,
+                        "ui": 2
+                    }
+                },
+                "gsch": {
+                    "nbs": 1,
+                    "nui": 1
+                },
+                "lsch": {
+                    "nbs": 3,
+                    "nui": 2
+                }
+            }
+        }
+    },
+    {
+        "addr": "PNWOET7LLOWMBMLE4KOCELCX6X3D3Q4H2Q4QJASYIEOF7YIPPQBG3YQ5YI",
+        "onl": 1,
+        "algo": 500000000,
+        "asset": {
+            "50": {
+                "a": 10
+            }
+        },
+        "appl": {
+            "100": {
+                "hsch": {
+                    "nbs": 3,
+                    "nui": 2
+                },
+                "tkv": {
+                    "lkeybyte": {
+                        "tb": "local",
+                        "tt": 1
+                    },
+                    "lkeyint": {
+                        "tt": 2,
+                        "ui": 1
+                    }
+                }
+            }
+        }
+    }
+]

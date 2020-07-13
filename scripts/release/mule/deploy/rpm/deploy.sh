@@ -3,7 +3,7 @@
 
 set -ex
 
-VERSION=$(./scripts/compute_build_number.sh -f)
+VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 
 mule -f package-deploy.yaml package-deploy-setup-gnupg
 

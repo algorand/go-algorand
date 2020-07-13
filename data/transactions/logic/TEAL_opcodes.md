@@ -58,6 +58,8 @@ The 32 byte public key is the last element on the stack, preceded by the 64 byte
 - Pushes: uint64
 - A plus B. Panic on overflow.
 
+Overflow is an error condition which halts execution and fails the transaction. Full precision is available from `addw`.
+
 ## -
 
 - Opcode: 0x09
@@ -208,6 +210,14 @@ Overflow is an error condition which halts execution and fails the transaction. 
 - Pops: *... stack*, {uint64 A}, {uint64 B}
 - Pushes: uint64, uint64
 - A times B out to 128-bit long result as low (top) and high uint64 values on the stack
+
+## addw
+
+- Opcode: 0x1e
+- Pops: *... stack*, {uint64 A}, {uint64 B}
+- Pushes: uint64, uint64
+- A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack
+- LogicSigVersion >= 2
 
 ## intcblock
 
@@ -380,6 +390,22 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 29 | NumAccounts | uint64 | Number of Accounts. LogicSigVersion >= 2. |
 | 30 | ApprovalProgram | []byte | Approval program. LogicSigVersion >= 2. |
 | 31 | ClearStateProgram | []byte | Clear state program. LogicSigVersion >= 2. |
+| 32 | RekeyTo | []byte | 32 byte Sender's new AuthAddr. LogicSigVersion >= 2. |
+| 33 | ConfigAsset | uint64 | Asset ID in asset config transaction. LogicSigVersion >= 2. |
+| 34 | ConfigAssetTotal | uint64 | Total number of units of this asset created. LogicSigVersion >= 2. |
+| 35 | ConfigAssetDecimals | uint64 | Number of digits to display after the decimal place when displaying the asset. LogicSigVersion >= 2. |
+| 36 | ConfigAssetDefaultFrozen | uint64 | Whether the asset's slots are frozen by default or not, 0 or 1. LogicSigVersion >= 2. |
+| 37 | ConfigAssetUnitName | []byte | Unit name of the asset. LogicSigVersion >= 2. |
+| 38 | ConfigAssetName | []byte | The asset name. LogicSigVersion >= 2. |
+| 39 | ConfigAssetURL | []byte | URL. LogicSigVersion >= 2. |
+| 40 | ConfigAssetMetadataHash | []byte | 32 byte commitment to some unspecified asset metadata. LogicSigVersion >= 2. |
+| 41 | ConfigAssetManager | []byte | 32 byte address. LogicSigVersion >= 2. |
+| 42 | ConfigAssetReserve | []byte | 32 byte address. LogicSigVersion >= 2. |
+| 43 | ConfigAssetFreeze | []byte | 32 byte address. LogicSigVersion >= 2. |
+| 44 | ConfigAssetClawback | []byte | 32 byte address. LogicSigVersion >= 2. |
+| 45 | FreezeAsset | uint64 | Asset ID being frozen or un-frozen. LogicSigVersion >= 2. |
+| 46 | FreezeAssetAccount | []byte | 32 byte address of the account whose asset slot is being frozen or un-frozen. LogicSigVersion >= 2. |
+| 47 | FreezeAssetFrozen | uint64 | The new frozen value, 0 or 1. LogicSigVersion >= 2. |
 
 
 TypeEnum mapping:
@@ -416,6 +442,7 @@ FirstValidTime causes the program to fail. The field is reserved for future use.
 | 5 | LogicSigVersion | uint64 | Maximum supported TEAL version. LogicSigVersion >= 2. |
 | 6 | Round | uint64 | Current round number. LogicSigVersion >= 2. |
 | 7 | LatestTimestamp | uint64 | Last confirmed block UNIX timestamp. Fails if negative. LogicSigVersion >= 2. |
+| 8 | CurrentApplicationID | uint64 | ID of current application executing. Fails if no such application is executing. LogicSigVersion >= 2. |
 
 
 ## gtxn
@@ -549,7 +576,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Opcode: 0x60
 - Pops: *... stack*, uint64
 - Pushes: uint64
-- get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction
+- get balance for the requested account specified by Txn.Accounts[A] in microalgos. A is specified as an account index in the Accounts field of the ApplicationCall transaction, zero index means the sender
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -602,11 +629,11 @@ params: state key. Return: value. The value is zero if the key does not exist.
 - Opcode: 0x65
 - Pops: *... stack*, {uint64 A}, {[]byte B}
 - Pushes: uint64, any
-- read from application A global state key B => {0 or 1 (top), value}
+- read from application Txn.ForeignApps[A] global state key B => {0 or 1 (top), value}. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app
 - LogicSigVersion >= 2
 - Mode: Application
 
-params: application id, state key. Return: value.
+params: application index, state key. Return: value. Application index is
 
 ## app_local_put
 
@@ -686,7 +713,7 @@ params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherw
 | 1 | AssetDecimals | uint64 | See AssetParams.Decimals |
 | 2 | AssetDefaultFrozen | uint64 | Frozen by default or not |
 | 3 | AssetUnitName | []byte | Asset unit name |
-| 4 | AssetAssetName | []byte | Asset name |
+| 4 | AssetName | []byte | Asset name |
 | 5 | AssetURL | []byte | URL with additional info about the asset |
 | 6 | AssetMetadataHash | []byte | Arbitrary commitment |
 | 7 | AssetManager | []byte | Manager commitment |
