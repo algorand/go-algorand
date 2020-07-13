@@ -49,9 +49,10 @@ COMMIT_HASH=$(git rev-parse "${BRANCH}")
 
 export DEBIAN_FRONTEND=noninteractive
 
-# Install latest go.1.12.9.
+# Install go version specified in go.mod
+GOLANG_VERSION=$(./scripts/get_golang_version.sh)
 cd "${HOME}"
-if ! curl -O https://dl.google.com/go/go1.12.9.linux-amd64.tar.gz
+if ! curl -O https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz
 then
     echo Golang could not be installed!
     exit 1
@@ -132,7 +133,7 @@ PLATFORM_SPLIT=(${PLATFORM//\// })
 # a bash user might `source build_env` to manually continue a broken build
 cat << EOF > "${HOME}"/build_env
 export BRANCH=${BRANCH}
-export CHANNEL=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "${BRANCH}")
+export CHANNEL=${CHANNEL:-$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "$BRANCH")}
 export COMMIT_HASH=${COMMIT_HASH}
 export DEFAULTNETWORK=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_branch_network.sh)
 export DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)

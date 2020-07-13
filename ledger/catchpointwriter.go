@@ -59,7 +59,7 @@ type catchpointWriter struct {
 	headerWritten     bool
 	balancesOffset    int
 	balancesChunk     catchpointFileBalancesChunk
-	fileHeader        *catchpointFileHeader
+	fileHeader        *CatchpointFileHeader
 	balancesChunkNum  uint64
 	writtenBytes      int64
 	blocksRound       basics.Round
@@ -74,7 +74,9 @@ type encodedBalanceRecord struct {
 	AccountData msgp.Raw       `codec:"ad,allocbound=basics.MaxEncodedAccountDataSize"`
 }
 
-type catchpointFileHeader struct {
+// CatchpointFileHeader is the content we would have in the "content.msgpack" file in the catchpoint tar archive.
+// we need it to be public, as it's being decoded externaly by the catchpointdump utility.
+type CatchpointFileHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Version           uint64        `codec:"version"`
@@ -228,7 +230,7 @@ func (cw *catchpointWriter) readDatabaseStep(tx *sql.Tx) (err error) {
 }
 
 func (cw *catchpointWriter) readHeaderFromDatabase(tx *sql.Tx) (err error) {
-	var header catchpointFileHeader
+	var header CatchpointFileHeader
 	header.BalancesRound, _, err = accountsRound(tx)
 	if err != nil {
 		return

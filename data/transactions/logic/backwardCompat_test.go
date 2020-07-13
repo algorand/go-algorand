@@ -261,8 +261,12 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	program, err := hex.DecodeString(programTEALv1)
 	require.NoError(t, err)
 
-	// ensure old program is the same as a new one except TEAL version byte
-	program2, err := AssembleString(sourceTEALv1)
+	// ensure old program is the same as a new one when assembling without version
+	program1, err := AssembleString(sourceTEALv1)
+	require.NoError(t, err)
+	require.Equal(t, program, program1)
+	// ensure the old program is the same as a new one except TEAL version byte
+	program2, err := AssembleStringWithVersion(sourceTEALv1, AssemblerMaxVersion)
 	require.NoError(t, err)
 	require.Equal(t, program[1:], program2[1:])
 
@@ -275,6 +279,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	txgroup := makeSampleTxnGroup(txn)
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], txn.Txn.Sender[:], txn.Txn.Note}
+	txn.Txn.RekeyTo = basics.Address{} // RekeyTo not allowed in TEAL v1
 
 	sb := strings.Builder{}
 	ep := defaultEvalParams(&sb, &txn)
@@ -339,15 +344,20 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		// check V1 assembler fails
 		program, err := AssembleStringWithVersion(text, 0)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "global unknown arg")
+		require.Contains(t, err.Error(), "available in version 2")
 		require.Nil(t, program)
 
 		program, err = AssembleStringWithVersion(text, 1)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "global unknown arg")
+		require.Contains(t, err.Error(), "available in version 2")
 		require.Nil(t, program)
 
 		program, err = AssembleString(text)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "available in version 2")
+		require.Nil(t, program)
+
+		program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 		require.NoError(t, err)
 
 		proto := config.Consensus[protocol.ConsensusV23]
@@ -407,15 +417,20 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			// check V1 assembler fails
 			program, err := AssembleStringWithVersion(text, 0)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "txn unknown arg")
+			require.Contains(t, err.Error(), "available in version 2")
 			require.Nil(t, program)
 
 			program, err = AssembleStringWithVersion(text, 1)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "txn unknown arg")
+			require.Contains(t, err.Error(), "available in version 2")
 			require.Nil(t, program)
 
 			program, err = AssembleString(text)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "available in version 2")
+			require.Nil(t, program)
+
+			program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 			require.NoError(t, err)
 
 			proto := config.Consensus[protocol.ConsensusV23]

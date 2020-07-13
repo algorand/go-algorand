@@ -704,8 +704,11 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 		return errors.New("txn expects one argument")
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
-	if !ok || fs.version > ops.Version {
+	if !ok {
 		return fmt.Errorf("txn unknown arg %s", args[0])
+	}
+	if fs.version > ops.Version {
+		return fmt.Errorf("txn %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	val := fs.field
 	return ops.Txn(uint64(val))
@@ -727,8 +730,15 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 		return errors.New("txna expects two arguments")
 	}
 	fs, ok := txnFieldSpecByName[args[0]]
-	if !ok || fs.version > ops.Version || fs.field != ApplicationArgs && fs.field != Accounts {
+	if !ok {
 		return fmt.Errorf("txna unknown arg %s", args[0])
+	}
+	_, ok = txnaFieldSpecByField[fs.field]
+	if !ok {
+		return fmt.Errorf("txna unknown arg %s", args[0])
+	}
+	if fs.version > ops.Version {
+		return fmt.Errorf("txna %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[1], 0, 64)
 	if err != nil {
@@ -747,8 +757,11 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 		return err
 	}
 	fs, ok := txnFieldSpecByName[args[1]]
-	if !ok || fs.version > ops.Version {
-		return fmt.Errorf("gtxn unknown arg %s", args[0])
+	if !ok {
+		return fmt.Errorf("gtxn unknown arg %s", args[1])
+	}
+	if fs.version > ops.Version {
+		return fmt.Errorf("gtxn %s available in version %d. Missed #pragma version?", args[1], fs.version)
 	}
 	val := fs.field
 	return ops.Gtxn(gtid, uint64(val))
@@ -773,8 +786,15 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 		return err
 	}
 	fs, ok := txnFieldSpecByName[args[1]]
-	if !ok || fs.version > ops.Version || fs.field != ApplicationArgs && fs.field != Accounts {
-		return fmt.Errorf("gtxna unknown arg %s", args[0])
+	if !ok {
+		return fmt.Errorf("gtxna unknown arg %s", args[1])
+	}
+	_, ok = txnaFieldSpecByField[fs.field]
+	if !ok {
+		return fmt.Errorf("gtxna unknown arg %s", args[1])
+	}
+	if fs.version > ops.Version {
+		return fmt.Errorf("gtxna %s available in version %d. Missed #pragma version?", args[1], fs.version)
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[2], 0, 64)
 	if err != nil {
@@ -789,8 +809,11 @@ func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 		return errors.New("global expects one argument")
 	}
 	fs, ok := globalFieldSpecByName[args[0]]
-	if !ok || fs.version > ops.Version {
+	if !ok {
 		return fmt.Errorf("global unknown arg %v", args[0])
+	}
+	if fs.version > ops.Version {
+		return fmt.Errorf("global %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	val := fs.gfield
 	return ops.Global(uint64(val))
@@ -984,8 +1007,8 @@ func (ops *OpStream) checkArgs(spec OpSpec) error {
 	return nil
 }
 
-// Assemble reads text from an input and accumulates the program
-func (ops *OpStream) Assemble(fin io.Reader) error {
+// assemble reads text from an input and accumulates the program
+func (ops *OpStream) assemble(fin io.Reader) error {
 	scanner := bufio.NewScanner(fin)
 	ops.sourceLine = 0
 	for scanner.Scan() {
@@ -1073,7 +1096,13 @@ func (ops *OpStream) resolveLabels() (err error) {
 }
 
 // AssemblerDefaultVersion what version of code do we emit by default
-const AssemblerDefaultVersion = LogicVersion
+// AssemblerDefaultVersion is set to 1 on puprose
+// to prevent accidental building of v1 official templates with version 2
+// because these templates are not aware of rekeying.
+const AssemblerDefaultVersion = 1
+
+// AssemblerMaxVersion is a maximum supported assembler version
+const AssemblerMaxVersion = LogicVersion
 const assemblerNoVersion = (^uint64(0))
 
 // Bytes returns the finished program bytes
@@ -1153,7 +1182,7 @@ func AssembleStringWithVersion(text string, version uint64) ([]byte, error) {
 
 // AssembleStringWithVersionEx takes an entire program in a string and assembles it to bytecode
 // using the assembler version specified.
-// If version is zero it uses #pragma version or fallbacks to AssemblerDefaultVersion.
+// If version is assemblerNoVersion it uses #pragma version or fallbacks to AssemblerDefaultVersion.
 // It also returns PC to source line mapping.
 func AssembleStringWithVersionEx(text string, version uint64) ([]byte, map[int]int, error) {
 	sr := strings.NewReader(text)
@@ -1180,7 +1209,7 @@ func AssembleStringWithVersionEx(text string, version uint64) ([]byte, map[int]i
 
 	sr = strings.NewReader(text)
 	ops := OpStream{Version: version}
-	err = ops.Assemble(sr)
+	err = ops.assemble(sr)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1230,7 +1259,7 @@ func (ps *PragmaStream) Process(fin io.Reader) (err error) {
 			if err != nil {
 				return
 			}
-			if ver < 1 || ver > AssemblerDefaultVersion {
+			if ver < 1 || ver > AssemblerMaxVersion {
 				err = fmt.Errorf("unsupported version: %d", ver)
 				return
 			}
