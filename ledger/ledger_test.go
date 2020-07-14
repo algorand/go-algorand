@@ -862,3 +862,55 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "should allow leasing payment transaction with newer FirstValid")
 	}
 }
+
+func TestLedgerDBConcurrentAccess(t *testing.T) {
+	// This test ensures that both the tracker and block DBs can be accessed independently, by 
+	
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+	wl := &wrappedLedger{
+		l: l,
+	}
+
+	blk := genesisInitState.Block
+
+	// var payset transactions.Payset
+	// var tx transactions.Transaction
+	// nTxns := 50
+	// for i := 0; i < nTxns; i++ {
+	// 	tx, err = makeUnsignedApplicationCallTx(0, transactions.OptInOC)
+	// 	require.NoError(t, err)
+	// 	// make a payset
+	// 	stxnib := makeSignedTxnInBlock(tx)
+	// 	payset = append(payset, stxnib)
+	// 	fmt.Printf("added transaction %v\n", i)
+	// }
+	// blk.Payset = payset
+	// blk.BlockHeader.TxnCounter = uint64(nTxns)
+
+	fmt.Printf("beginning block adding\n")
+	for i := 0; i < 100; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		
+		fmt.Printf("adding block %v\n", i)
+		wl.l.AddBlock(blk, agreement.Certificate{})
+		fmt.Printf("committing block %v\n", i)
+		wl.l.WaitForCommit(blk.Round())
+		fmt.Printf("checking trackers after block %v\n", i)
+		_, err := checkTrackers(t, wl, blk.Round())
+		require.NoError(t, err)
+		if err != nil {
+			// Return early, to help with iterative debugging
+			return
+		}
+		fmt.Printf("added block %v\n", i)
+	}
+}
