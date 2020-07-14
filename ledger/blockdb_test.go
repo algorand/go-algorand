@@ -19,6 +19,7 @@ package ledger
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,11 +32,11 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func dbOpenTest(t testing.TB) dbPair {
-	fn := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	dbs, err := dbOpen(fn, true)
-	require.NoError(t, err)
-	return dbs
+func dbOpenTest(t testing.TB, inMemory bool) (dbPair, string) {
+	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
+	dbs, err := dbOpen(fn, inMemory)
+	require.NoErrorf(t, err, "Filename : %s\nInMemory: %v", fn, inMemory)
+	return dbs, fn
 }
 
 func randomBlock(r basics.Round) blockEntry {
@@ -116,7 +117,7 @@ func setDbLogging(t testing.TB, dbs dbPair) {
 }
 
 func TestBlockDBEmpty(t *testing.T) {
-	dbs := dbOpenTest(t)
+	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.close()
 
@@ -130,7 +131,7 @@ func TestBlockDBEmpty(t *testing.T) {
 }
 
 func TestBlockDBInit(t *testing.T) {
-	dbs := dbOpenTest(t)
+	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.close()
 
@@ -150,7 +151,7 @@ func TestBlockDBInit(t *testing.T) {
 }
 
 func TestBlockDBAppend(t *testing.T) {
-	dbs := dbOpenTest(t)
+	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.close()
 
