@@ -166,7 +166,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 func TestAccountDBInit(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	dbs := dbOpenTest(t)
+	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.close()
 
@@ -187,7 +187,7 @@ func TestAccountDBInit(t *testing.T) {
 func TestAccountDBRound(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	dbs := dbOpenTest(t)
+	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.close()
 
@@ -214,7 +214,7 @@ func TestAccountDBRound(t *testing.T) {
 func BenchmarkReadingAllBalances(b *testing.B) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	//b.N = 50000
-	dbs := dbOpenTest(b)
+	dbs, _ := dbOpenTest(b, true)
 	setDbLogging(b, dbs)
 	defer dbs.close()
 

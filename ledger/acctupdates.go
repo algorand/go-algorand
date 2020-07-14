@@ -1008,7 +1008,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	var catchpointLabel string
 	beforeUpdatingBalancesTime := time.Now()
 	var trieBalancesHash crypto.Digest
-	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+
+	err := au.dbs.wdb.AtomicCommitWriteLock(func(tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
 			mc, err0 := makeMerkleCommitter(tx, false)
@@ -1039,20 +1040,26 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			}
 		}
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
+		if err != nil {
+			return err
+		}
+
 		if isCatchpointRound {
 			trieBalancesHash, err = au.balancesTrie.RootHash()
 			if err != nil {
 				return
 			}
 		}
-		return err
-	})
+
+		return nil
+	}, &au.accountsMu)
 
 	if err != nil {
 		au.balancesTrie = nil
 		au.log.Warnf("unable to advance account snapshot: %v", err)
 		return
 	}
+
 	if isCatchpointRound {
 		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, roundTotals[offset], committedRoundDigest, trieBalancesHash)
 		if err != nil {
@@ -1066,7 +1073,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 	}
 
-	au.accountsMu.Lock()
 	if isCatchpointRound && catchpointLabel != "" {
 		au.lastCatchpointLabel = catchpointLabel
 	}
@@ -1122,7 +1128,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.accountsMu.Unlock()
 
 	if isCatchpointRound && au.archivalLedger && catchpointLabel != "" {
-		// start generating the catchpoint on a separate goroutine.
+		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
+		// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
 		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest, updatingBalancesDuration)
 	}
 
