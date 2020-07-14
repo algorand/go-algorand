@@ -864,8 +864,11 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 }
 
 func TestLedgerDBConcurrentAccess(t *testing.T) {
-	// This test ensures that both the tracker and block DBs can be accessed independently, by 
-	
+	// This test ensures that both the tracker and block DBs can be accessed independently in-memory,
+	// by adding a block to the ledger many times, and repeatedly checking the ledger's tracker DB
+	// to cause many concurrent attempts to hold the two DBs' locks, eventually causing a memory
+	// overload if they share a lock.
+
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
 	const inMem = true
