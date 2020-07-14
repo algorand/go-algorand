@@ -69,13 +69,13 @@ proc ::AlgorandGoal::StartNode { TEST_ALGO_DIR {SYSTEMD_MANAGED "False"} {PEER_A
         spawn goal {*}$GOAL_PARAMS
         if { $SYSTEMD_MANAGED eq "True" } {
             expect {
-                timeout { close; ::AlgorandGoal::Abort "Did not recieve appropriate message during node start" }
+                timeout { close; ::AlgorandGoal::Abort "Did not receive appropriate message during node start" }
                 "^This node is managed by systemd, you must run the following command to make your desired state change to your node:*" { puts "Goal showed correct error message for systemd" ; close}
                 eof { ::AlgorandGoal::CheckEOF "Unable to start network" }
             }
         } else {
             expect {
-                timeout { close; ::AlgorandGoal::Abort "Did not recieve appropriate message during node start" }
+                timeout { close; ::AlgorandGoal::Abort "Did not receive appropriate message during node start" }
                 "^Algorand node successfully started!*" {puts "Node started successfully"; close}
                 eof { ::AlgorandGoal::CheckEOF "Unable to start network" }
             }
@@ -96,16 +96,16 @@ proc ::AlgorandGoal::StopNode { TEST_ALGO_DIR {SYSTEMD_MANAGED ""} } {
         if { $SYSTEMD_MANAGED eq "" } {
             spawn goal node stop -d $TEST_ALGO_DIR
             expect {
-                timeout { close; ::AlgorandGoal::Abort "Did not recieve appropriate message during node stop" }
+                timeout { close; ::AlgorandGoal::Abort "Did not receive appropriate message during node stop" }
                 "*The node was successfully stopped.*" {puts "Node stopped successfully"; close}
-                eof { close; ::AlgorandGoal::Abort "Did not recieve appropriate message before goal command completion" }
+                eof { close; ::AlgorandGoal::Abort "Did not receive appropriate message before goal command completion" }
             }
         } else {
             spawn goal node stop -d $TEST_ALGO_DIR
             expect {
-                timeout { close; ::AlgorandGoal::Abort "Did not recieve appropriate message during node stop" }
+                timeout { close; ::AlgorandGoal::Abort "Did not receive appropriate message during node stop" }
                 "*This node is managed by systemd, you must run the following command to make your desired state change to your node:*" { puts "Goal showed correct error message for systemd" ; close}
-                eof { close; ::AlgorandGoal::Abort "Did not recieve appropriate message before goal command completion" }
+                eof { close; ::AlgorandGoal::Abort "Did not receive appropriate message before goal command completion" }
             }
         }
     } EXCEPTION] } {
@@ -124,13 +124,13 @@ proc ::AlgorandGoal::RestartNode { TEST_ALGO_DIR {SYSTEMD_MANAGED ""} } {
         if { $SYSTEMD_MANAGED eq "" } {
             spawn goal node restart -d $TEST_ALGO_DIR
             expect {
-                timeout { close; ::AlgorandGoal::Abort "Did not recieve appropriate message during node restart" }
+                timeout { close; ::AlgorandGoal::Abort "Did not receive appropriate message during node restart" }
                 "^The node was successfully stopped.*Algorand node successfully started!*" {puts "Node restarted successfully"; close}
             }
         } else {
             spawn goal node restart -d $TEST_ALGO_DIR
             expect {
-                timeout { close; ::AlgorandGoal::Abort "Did not recieve appropriate message during node restart" }
+                timeout { close; ::AlgorandGoal::Abort "Did not receive appropriate message during node restart" }
                 "^This node is managed by systemd, you must run the following command to make your desired state change to your node:*" { puts "Goal showed correct error message for systemd" ; close}
             }
         }
@@ -381,7 +381,7 @@ proc ::AlgorandGoal::AccountTransfer { FROM_WALLET_NAME FROM_WALLET_PASSWORD FRO
     set timeout 60
     if { [ catch {
         set TRANSACTION_ID "NOT SET"
-        spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR -N
+        spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timed out transferring funds"  }
             "Please enter the password for wallet '$FROM_WALLET_NAME':" { send "$FROM_WALLET_PASSWORD\r" }
