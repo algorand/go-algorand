@@ -18,11 +18,7 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
-//	"io/ioutil"
 	"fmt"
-//	"os"
-//	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -868,14 +864,8 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 }
 
 func TestLedgerDBConcurrentAccess(t *testing.T) {
-	// This test ensures that trackers return the correct value from
-	// committedUpTo() -- that is, if they return round rnd, then they
-	// do not ask for any round before rnd on a subsequent call to
-	// loadFromDisk().
-	//
-	// We generate mostly empty blocks, with the exception of timestamps,
-	// which affect participationTracker.committedUpTo()'s return value.
-
+	// This test ensures that both the tracker and block DBs can be accessed independently, by 
+	
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
 	const inMem = true
@@ -889,17 +879,23 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
 		l: l,
 	}
 
+	var tx transactions.Transaction
 	blk := genesisInitState.Block
+	var payset transactions.Payset
+	for i := 0; i < 50; i++ {
+		tx, err = makeUnsignedApplicationCallTx(0, transactions.OptInOC)
+		require.NoError(t, err)
+		// make a payset
+		stxnib := makeSignedTxnInBlock(tx)
+		payset = append(payset, stxnib)
+	}
 
-	for i := 0; i < 10000; i++ {
+
+	for i := 0; i < 100; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		blk.Payset = payset
 		wl.l.AddBlock(blk, agreement.Certificate{})
-
-		// Don't bother checking the trackers every round -- it's too slow...
-		if crypto.RandUint64()%23 > 0 {
-			continue
-		}
 
 		wl.l.WaitForCommit(blk.Round())
 		_, err := checkTrackers(t, wl, blk.Round())
