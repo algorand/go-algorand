@@ -62,7 +62,9 @@ const (
 
 	// ClearStateOC is similar to CloseOutOC, but may never fail. This
 	// allows users to reclaim their minimum balance from an application
-	// they no longer wish to opt in to.
+	// they no longer wish to opt in to. When an ApplicationCall
+	// transaction's OnCompletion is ClearStateOC, the ClearStateProgram
+	// executes instead of the ApprovalProgram
 	ClearStateOC OnCompletion = 3
 
 	// UpdateApplicationOC indicates that an application transaction will
@@ -80,16 +82,56 @@ const (
 type ApplicationCallTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	ApplicationID   basics.AppIndex   `codec:"apid"`
-	OnCompletion    OnCompletion      `codec:"apan"`
-	ApplicationArgs [][]byte          `codec:"apaa,allocbound=encodedMaxApplicationArgs"`
-	Accounts        []basics.Address  `codec:"apat,allocbound=encodedMaxAccounts"`
-	ForeignApps     []basics.AppIndex `codec:"apfa,allocbound=encodedMaxForeignApps"`
+	// ApplicationID is 0 when creating an application, and nonzero when
+	// calling an existing application.
+	ApplicationID basics.AppIndex `codec:"apid"`
 
-	LocalStateSchema  basics.StateSchema `codec:"apls"`
+	// OnCompletion specifies an optional side-effect that this transaction
+	// will have on the balance record of the sender or the application's
+	// creator. See the documentation for the OnCompletion type for more
+	// information on each possible value.
+	OnCompletion OnCompletion `codec:"apan"`
+
+	// ApplicationArgs are arguments accessible to the executing
+	// ApprovalProgram or ClearStateProgram.
+	ApplicationArgs [][]byte `codec:"apaa,allocbound=encodedMaxApplicationArgs"`
+
+	// Accounts are accounts whose balance records are accessible by the
+	// executing ApprovalProgram or ClearStateProgram. To access LocalState
+	// for an account besides the sender, that account's address must be
+	// listed here.
+	Accounts []basics.Address `codec:"apat,allocbound=encodedMaxAccounts"`
+
+	// ForeignApps are application IDs for applications besides this one
+	// whose GlobalState may be read by the executing ApprovalProgram or
+	// ClearStateProgram.
+	ForeignApps []basics.AppIndex `codec:"apfa,allocbound=encodedMaxForeignApps"`
+
+	// LocalStateSchema specifies the maximum number of each type that may
+	// appear in the local key/value store of users who opt in to this
+	// application. This field is only used during application creation
+	// (when the ApplicationID field is 0),
+	LocalStateSchema basics.StateSchema `codec:"apls"`
+
+	// GlobalStateSchema specifies the maximum number of each type that may
+	// appear in the global key/value store associated with this
+	// application. This field is only used during application creation
+	// (when the ApplicationID field is 0).
 	GlobalStateSchema basics.StateSchema `codec:"apgs"`
-	ApprovalProgram   []byte             `codec:"apap,allocbound=config.MaxAppProgramLen"`
-	ClearStateProgram []byte             `codec:"apsu,allocbound=config.MaxAppProgramLen"`
+
+	// ApprovalProgram is the stateful TEAL bytecode that executes on all
+	// ApplicationCall transactions associated with this application,
+	// except for those where OnCompletion is equal to ClearStateOC. If
+	// this program fails, the transaction is rejected. This program may
+	// read and write local and global state for this application.
+	ApprovalProgram []byte `codec:"apap,allocbound=config.MaxAppProgramLen"`
+
+	// ClearStateProgram is the stateful TEAL bytecode that executes on
+	// ApplicationCall transactions associated with this application when
+	// OnCompletion is equal to ClearStateOC. This program will not cause
+	// the transaction to be rejected, even if it fails. This program may
+	// read and write local and global state for this application.
+	ClearStateProgram []byte `codec:"apsu,allocbound=config.MaxAppProgramLen"`
 
 	// If you add any fields here, remember you MUST modify the Empty
 	// method below!
@@ -154,7 +196,7 @@ func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]
 // if they exist. It does *not* clone the AppParams, so the returned params
 // must not be modified directly.
 func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppParams, creator basics.Address, exists bool, err error) {
-	creator, exists, err = balances.GetAppCreator(aidx)
+	creator, exists, err = balances.GetCreator(basics.CreatableIndex(aidx), basics.AppCreatable)
 	if err != nil {
 		return
 	}
@@ -461,8 +503,10 @@ func (ac *ApplicationCallTxnFields) createApplication(
 	record.AppParams[appIdx] = basics.AppParams{
 		ApprovalProgram:   ac.ApprovalProgram,
 		ClearStateProgram: ac.ClearStateProgram,
-		LocalStateSchema:  ac.LocalStateSchema,
-		GlobalStateSchema: ac.GlobalStateSchema,
+		StateSchemas: basics.StateSchemas{
+			LocalStateSchema:  ac.LocalStateSchema,
+			GlobalStateSchema: ac.GlobalStateSchema,
+		},
 	}
 
 	// Update the cached TotalStateSchema for this account, used
@@ -473,16 +517,14 @@ func (ac *ApplicationCallTxnFields) createApplication(
 	record.TotalAppSchema = totalSchema
 
 	// Tell the cow what app we created
-	created := []basics.CreatableLocator{
-		{
-			Creator: creator,
-			Type:    basics.AppCreatable,
-			Index:   basics.CreatableIndex(appIdx),
-		},
+	created := &basics.CreatableLocator{
+		Creator: creator,
+		Type:    basics.AppCreatable,
+		Index:   basics.CreatableIndex(appIdx),
 	}
 
 	// Write back to the creator's balance record and continue
-	err = balances.PutWithCreatables(record, created, nil)
+	err = balances.PutWithCreatable(record, created, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -540,7 +582,6 @@ func (ac *ApplicationCallTxnFields) applyClearState(
 		// Fetch the (potentially updated) sender record
 		record, err = balances.Get(sender, false)
 		if err != nil {
-			ad.EvalDelta = basics.EvalDelta{}
 			return err
 		}
 	}
@@ -618,17 +659,27 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 		}
 	}
 
+	// Fetch the application parameters, if they exist
+	params, creator, exists, err := getAppParams(balances, appIdx)
+	if err != nil {
+		return err
+	}
+
+	// Ensure that the only operation we can do is ClearState if the application
+	// does not exist
+	if !exists && ac.OnCompletion != ClearStateOC {
+		return fmt.Errorf("only clearing out is supported for applications that do not exist")
+	}
+
 	// Initialize our TEAL evaluation context. Internally, this manages
-	// access to balance records for Stateful TEAL programs. Stateful TEAL
-	// may only access
-	// - The sender's balance record
-	// - The balance records of accounts explicitly listed in ac.Accounts
-	// - The app creator's balance record (to read/write GlobalState)
-	// - The balance records of creators of apps in ac.ForeignApps (to read
-	//   GlobalState)
-	acctWhitelist := append(ac.Accounts, header.Sender)
-	appGlobalWhitelist := append(ac.ForeignApps, appIdx)
-	err = steva.InitLedger(balances, acctWhitelist, appGlobalWhitelist, appIdx)
+	// access to balance records for Stateful TEAL programs as a thin
+	// wrapper around Balances.
+	//
+	// Note that at this point in execution, the application might not exist
+	// (e.g. if it was deleted). In that case, we will pass empty
+	// params.StateSchemas below. This is OK because if the application is
+	// deleted, we will never execute its programs.
+	err = steva.InitLedger(balances, appIdx, params.StateSchemas)
 	if err != nil {
 		return err
 	}
@@ -648,18 +699,6 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 	// execute the ClearStateProgram, whose failures are ignored.
 	if ac.OnCompletion == ClearStateOC {
 		return ac.applyClearState(balances, header.Sender, appIdx, ad, steva)
-	}
-
-	// Fetch the application parameters, if they exist
-	params, creator, exists, err := getAppParams(balances, appIdx)
-	if err != nil {
-		return err
-	}
-
-	// Past this point, the AppParams must exist. NoOp, OptIn, CloseOut,
-	// Delete, and Update
-	if !exists {
-		return fmt.Errorf("only clearing out is supported for applications that do not exist")
 	}
 
 	// If this is an OptIn transaction, ensure that the sender has
@@ -746,16 +785,14 @@ func (ac *ApplicationCallTxnFields) apply(header Header, balances Balances, spec
 		delete(record.AppParams, appIdx)
 
 		// Tell the cow what app we deleted
-		deleted := []basics.CreatableLocator{
-			basics.CreatableLocator{
-				Creator: header.Sender,
-				Type:    basics.AppCreatable,
-				Index:   basics.CreatableIndex(appIdx),
-			},
+		deleted := &basics.CreatableLocator{
+			Creator: creator,
+			Type:    basics.AppCreatable,
+			Index:   basics.CreatableIndex(appIdx),
 		}
 
 		// Write back to cow
-		err = balances.PutWithCreatables(record, nil, deleted)
+		err = balances.PutWithCreatable(record, nil, deleted)
 		if err != nil {
 			return err
 		}

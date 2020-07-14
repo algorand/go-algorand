@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Computes a name to use to identify a current test run, based on timestamp:
 # D[DD]HHMMSS
@@ -7,8 +7,10 @@
 # This mimics the BuildNumber so it can be correlated (ie this is [BuildNumber]MMSS)
 
 from datetime import datetime
+import time
 
 epoch = datetime(2018, 5, 25, 0, 0, 0)
 d1 = datetime.utcnow()
 delta = d1 - epoch
-print("%d%02d%02d%02d" % (delta.days, d1.hour, d1.minute, d1.second))
+
+print(f"{delta.days}{d1.hour}-{int(round(time.time() * 1000))}")

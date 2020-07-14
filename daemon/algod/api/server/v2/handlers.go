@@ -44,6 +44,7 @@ import (
 )
 
 const maxTealSourceBytes = 1e5
+const maxTealDryrunBytes = 1e5
 
 // Handlers is an implementation to the V2 route handler interface defined by the generated code.
 type Handlers struct {
@@ -64,6 +65,7 @@ type NodeInterface interface {
 	SuggestedFee() basics.MicroAlgos
 	StartCatchup(catchpoint string) error
 	AbortCatchup(catchpoint string) error
+	Config() config.Local
 }
 
 // RegisterParticipationKeys registers participation keys.
@@ -82,7 +84,12 @@ func (v2 *Handlers) ShutdownNode(ctx echo.Context, params private.ShutdownNodePa
 
 // AccountInformation gets account information for a given account.
 // (GET /v2/accounts/{address})
-func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
+func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params generated.AccountInformationParams) error {
+	handle, contentType, err := getCodecHandle(params.Format)
+	if err != nil {
+		return badRequest(ctx, err, errFailedParsingFormatOption, v2.Log)
+	}
+
 	addr, err := basics.UnmarshalChecksumAddress(address)
 	if err != nil {
 		return badRequest(ctx, err, errFailedToParseAddress, v2.Log)
@@ -90,98 +97,48 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string) error {
 
 	myLedger := v2.Node.Ledger()
 	lastRound := myLedger.Latest()
-	record, err := myLedger.Lookup(lastRound, basics.Address(addr))
-	if err != nil {
-		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
-	}
-	recordWithoutPendingRewards, err := myLedger.LookupWithoutRewards(lastRound, basics.Address(addr))
+	record, err := myLedger.Lookup(lastRound, addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
-	amount := record.MicroAlgos
+	if handle == protocol.CodecHandle {
+		data, err := encode(handle, record)
+		if err != nil {
+			return internalError(ctx, err, errFailedToEncodeResponse, v2.Log)
+		}
+		return ctx.Blob(http.StatusOK, contentType, data)
+	}
+
+	recordWithoutPendingRewards, err := myLedger.LookupWithoutRewards(lastRound, addr)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
 	amountWithoutPendingRewards := recordWithoutPendingRewards.MicroAlgos
-	pendingRewards, overflowed := basics.OSubA(amount, amountWithoutPendingRewards)
-	if overflowed {
-		return internalError(ctx, err, errInternalFailure, v2.Log)
-	}
 
-	assets := make([]generated.AssetHolding, 0)
+	assetsCreators := make(map[basics.AssetIndex]string, len(record.Assets))
 	if len(record.Assets) > 0 {
 		//assets = make(map[uint64]v1.AssetHolding)
-		for curid, holding := range record.Assets {
+		for curid := range record.Assets {
 			var creator string
-			creatorAddr, err := myLedger.GetAssetCreator(curid)
-			if err == nil {
+			creatorAddr, ok, err := myLedger.GetCreator(basics.CreatableIndex(curid), basics.AssetCreatable)
+			if err == nil && ok {
 				creator = creatorAddr.String()
 			} else {
 				// Asset may have been deleted, so we can no
 				// longer fetch the creator
 				creator = ""
 			}
-
-			holding := generated.AssetHolding{
-				Amount:   holding.Amount,
-				AssetId:  uint64(curid),
-				Creator:  creator,
-				IsFrozen: holding.Frozen,
-			}
-
-			assets = append(assets, holding)
+			assetsCreators[curid] = creator
 		}
 	}
 
-	createdAssets := make([]generated.Asset, 0)
-	if len(record.AssetParams) > 0 {
-		for idx, params := range record.AssetParams {
-			assetParams := generated.AssetParams{
-				Creator:       address,
-				Total:         params.Total,
-				Decimals:      uint64(params.Decimals),
-				DefaultFrozen: &params.DefaultFrozen,
-				MetadataHash:  byteOrNil(params.MetadataHash[:]),
-				Name:          strOrNil(params.AssetName),
-				UnitName:      strOrNil(params.UnitName),
-				Url:           strOrNil(params.URL),
-				Clawback:      addrOrNil(params.Clawback),
-				Freeze:        addrOrNil(params.Freeze),
-				Manager:       addrOrNil(params.Manager),
-				Reserve:       addrOrNil(params.Reserve),
-			}
-			asset := generated.Asset{
-				Index:  uint64(idx),
-				Params: assetParams,
-			}
-			createdAssets = append(createdAssets, asset)
-		}
+	account, err := AccountDataToAccount(address, &record, assetsCreators, lastRound, amountWithoutPendingRewards)
+	if err != nil {
+		return internalError(ctx, err, errInternalFailure, v2.Log)
 	}
 
-	var apiParticipation *generated.AccountParticipation
-	if record.VoteID != (crypto.OneTimeSignatureVerifier{}) {
-		apiParticipation = &generated.AccountParticipation{
-			VoteParticipationKey:      record.VoteID[:],
-			SelectionParticipationKey: record.SelectionID[:],
-			VoteFirstValid:            uint64(record.VoteFirstValid),
-			VoteLastValid:             uint64(record.VoteLastValid),
-			VoteKeyDilution:           uint64(record.VoteKeyDilution),
-		}
-	}
-
-	response := generated.AccountResponse{
-		SigType:                     nil,
-		Round:                       uint64(lastRound),
-		Address:                     addr.String(),
-		Amount:                      amount.Raw,
-		PendingRewards:              pendingRewards.Raw,
-		AmountWithoutPendingRewards: amountWithoutPendingRewards.Raw,
-		Rewards:                     record.RewardedMicroAlgos.Raw,
-		Status:                      record.Status.String(),
-		RewardBase:                  &record.RewardsBase,
-		Participation:               apiParticipation,
-		CreatedAssets:               &createdAssets,
-		Assets:                      &assets,
-	}
-
+	response := generated.AccountResponse(account)
 	return ctx.JSON(http.StatusOK, response)
 }
 
@@ -360,6 +317,72 @@ func (v2 *Handlers) RawTransaction(ctx echo.Context) error {
 	// For backwards compatibility, return txid of first tx in group
 	txid := txgroup[0].ID()
 	return ctx.JSON(http.StatusOK, generated.PostTransactionsResponse{TxId: txid.String()})
+}
+
+// TealDryrun takes transactions and additional simulated ledger state and returns debugging information.
+// (POST /v2/teal/dryrun)
+func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
+	if !v2.Node.Config().EnableDeveloperAPI {
+		return ctx.String(http.StatusNotFound, "/teal/dryrun was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
+	}
+	req := ctx.Request()
+	buf := new(bytes.Buffer)
+	req.Body = http.MaxBytesReader(nil, req.Body, maxTealDryrunBytes)
+	buf.ReadFrom(req.Body)
+	data := buf.Bytes()
+
+	var dr DryrunRequest
+	var gdr generated.DryrunRequest
+	err := decode(protocol.JSONHandle, data, &gdr)
+	if err == nil {
+		dr, err = DryrunRequestFromGenerated(&gdr)
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+	} else {
+		err = decode(protocol.CodecHandle, data, &dr)
+		if err != nil {
+			return badRequest(ctx, err, err.Error(), v2.Log)
+		}
+	}
+
+	// fetch previous block header just once to prevent racing with network
+	var hdr bookkeeping.BlockHeader
+	if dr.ProtocolVersion == "" || dr.Round == 0 || dr.LatestTimestamp == 0 {
+		actualLedger := v2.Node.Ledger()
+		hdr, err = actualLedger.BlockHdr(actualLedger.Latest())
+		if err != nil {
+			return internalError(ctx, err, "current block error", v2.Log)
+		}
+	}
+
+	var response generated.DryrunResponse
+
+	var proto config.ConsensusParams
+	var protocolVersion protocol.ConsensusVersion
+	if dr.ProtocolVersion != "" {
+		var ok bool
+		proto, ok = config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
+		if !ok {
+			return badRequest(ctx, nil, "unsupported protocol version", v2.Log)
+		}
+		protocolVersion = protocol.ConsensusVersion(dr.ProtocolVersion)
+	} else {
+		proto = config.Consensus[hdr.CurrentProtocol]
+		protocolVersion = hdr.CurrentProtocol
+	}
+
+	if dr.Round == 0 {
+		dr.Round = uint64(hdr.Round + 1)
+	}
+
+	if dr.LatestTimestamp == 0 {
+		dr.LatestTimestamp = hdr.TimeStamp
+	}
+
+	doDryrunRequest(&dr, &proto, &response)
+	response.ProtocolVersion = string(protocolVersion)
+	return ctx.JSON(http.StatusOK, response)
 }
 
 // TransactionParams returns the suggested parameters for constructing a new transaction.
@@ -567,6 +590,63 @@ func (v2 *Handlers) GetPendingTransactions(ctx echo.Context, params generated.Ge
 	return v2.getPendingTransactions(ctx, params.Max, params.Format, nil)
 }
 
+// GetApplicationByID returns application information by app idx.
+// (GET /v2/applications/{application-id})
+func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) error {
+	appIdx := basics.AppIndex(applicationID)
+	ledger := v2.Node.Ledger()
+	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(appIdx), basics.AppCreatable)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+	if !ok {
+		return notFound(ctx, errors.New(errAppDoesNotExist), errAppDoesNotExist, v2.Log)
+	}
+
+	lastRound := ledger.Latest()
+	record, err := ledger.Lookup(lastRound, creator)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	appParams, ok := record.AppParams[appIdx]
+	if !ok {
+		return notFound(ctx, errors.New(errAppDoesNotExist), errAppDoesNotExist, v2.Log)
+	}
+	app := AppParamsToApplication(creator.String(), appIdx, &appParams)
+	response := generated.ApplicationResponse(app)
+	return ctx.JSON(http.StatusOK, response)
+}
+
+// GetAssetByID returns application information by app idx.
+// (GET /v2/asset/{asset-id})
+func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
+	assetIdx := basics.AssetIndex(assetID)
+	ledger := v2.Node.Ledger()
+	creator, ok, err := ledger.GetCreator(basics.CreatableIndex(assetIdx), basics.AssetCreatable)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+	if !ok {
+		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
+	}
+
+	lastRound := ledger.Latest()
+	record, err := ledger.Lookup(lastRound, creator)
+	if err != nil {
+		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
+	}
+
+	assetParams, ok := record.AssetParams[assetIdx]
+	if !ok {
+		return notFound(ctx, errors.New(errAssetDoesNotExist), errAssetDoesNotExist, v2.Log)
+	}
+
+	asset := AssetParamsToAsset(creator.String(), assetIdx, &assetParams)
+	response := generated.AssetResponse(asset)
+	return ctx.JSON(http.StatusOK, response)
+}
+
 // GetPendingTransactionsByAddress takes an Algorand address and returns its associated list of unconfirmed transactions currently in the transaction pool.
 // (GET /v2/accounts/{address}/transactions/pending)
 func (v2 *Handlers) GetPendingTransactionsByAddress(ctx echo.Context, addr string, params generated.GetPendingTransactionsByAddressParams) error {
@@ -588,6 +668,10 @@ func (v2 *Handlers) AbortCatchup(ctx echo.Context, catchpoint string) error {
 // TealCompile compiles TEAL code to binary, return both binary and hash
 // (POST /v2/teal/compile)
 func (v2 *Handlers) TealCompile(ctx echo.Context) error {
+	// return early if teal compile is not allowed in node config
+	if !v2.Node.Config().EnableDeveloperAPI {
+		return ctx.String(http.StatusNotFound, "/teal/compile was not enabled in the configuration file by setting the EnableDeveloperAPI to true")
+	}
 	buf := new(bytes.Buffer)
 	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
 	buf.ReadFrom(ctx.Request().Body)
@@ -599,7 +683,7 @@ func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 
 	pd := logic.HashProgram(program)
 	addr := basics.Address(pd)
-	response := generated.PostCompileResponse{
+	response := generated.CompileResponse{
 		Hash:   addr.String(),
 		Result: base64.StdEncoding.EncodeToString(program),
 	}

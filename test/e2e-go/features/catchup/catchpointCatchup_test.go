@@ -14,21 +14,20 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package rewards
+package catchup
 
 import (
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
@@ -39,20 +38,45 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
-func nodeExitWithError(t *testing.T, nc *nodecontrol.NodeController, err error) {
+type nodeExitErrorCollector struct {
+	errors   []error
+	messages []string
+	mu       deadlock.Mutex
+	t        *testing.T
+}
+
+func (ec *nodeExitErrorCollector) nodeExitWithError(nc *nodecontrol.NodeController, err error) {
 	if err == nil {
 		return
 	}
 
 	exitError, ok := err.(*exec.ExitError)
 	if !ok {
-		require.NoError(t, err, "Node at %s has terminated with an error", nc.GetDataDir())
+		if err != nil {
+			ec.mu.Lock()
+			ec.errors = append(ec.errors, err)
+			ec.messages = append(ec.messages, "Node at %s has terminated with an error", nc.GetDataDir())
+			ec.mu.Unlock()
+		}
 		return
 	}
 	ws := exitError.Sys().(syscall.WaitStatus)
 	exitCode := ws.ExitStatus()
 
-	require.NoError(t, err, "Node at %s has terminated with error code %d", nc.GetDataDir(), exitCode)
+	if err != nil {
+		ec.mu.Lock()
+		ec.errors = append(ec.errors, err)
+		ec.messages = append(ec.messages, fmt.Sprintf("Node at %s has terminated with error code %d", nc.GetDataDir(), exitCode))
+		ec.mu.Unlock()
+	}
+}
+
+func (ec *nodeExitErrorCollector) Print() {
+	ec.mu.Lock()
+	defer ec.mu.Unlock()
+	for i, err := range ec.errors {
+		require.NoError(ec.t, err, ec.messages[i])
+	}
 }
 
 func TestBasicCatchpointCatchup(t *testing.T) {
@@ -90,11 +114,14 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 
 	var fixture fixtures.RestClientFixture
 	fixture.SetConsensus(consensus)
+
+	errorsCollector := nodeExitErrorCollector{t: t}
+	defer errorsCollector.Print()
+
 	// Give the second node (which starts up last) all the stake so that its proposal always has better credentials,
 	// and so that its proposal isn't dropped. Otherwise the test burns 17s to recover. We don't care about stake
 	// distribution for catchup so this is fine.
 	fixture.SetupNoStart(t, filepath.Join("nettemplates", "CatchpointCatchupTestNetwork.json"))
-	//defer fixture.Shutdown()
 
 	// Get primary node
 	primaryNode, err := fixture.GetNodeController("Primary")
@@ -121,7 +148,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 		RedirectOutput:    true,
 		RunUnderHost:      false,
 		TelemetryOverride: "",
-		ExitErrorCallback: func(nc *nodecontrol.NodeController, err error) { nodeExitWithError(t, nc, err) },
+		ExitErrorCallback: errorsCollector.nodeExitWithError,
 	})
 	a.NoError(err)
 
@@ -144,7 +171,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	primaryListeningAddress, err := primaryNode.GetListeningAddress()
 	a.NoError(err)
 
-	wp, err := makeWebProxy(primaryListeningAddress, func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
+	wp, err := fixtures.MakeWebProxy(primaryListeningAddress, func(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
 		// prevent requests for block #2 to go through.
 		if request.URL.String() == "/v1/test-v1/block/2" {
 			response.WriteHeader(http.StatusBadRequest)
@@ -163,7 +190,7 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 		RedirectOutput:    true,
 		RunUnderHost:      false,
 		TelemetryOverride: "",
-		ExitErrorCallback: func(nc *nodecontrol.NodeController, err error) { nodeExitWithError(t, nc, err) },
+		ExitErrorCallback: errorsCollector.nodeExitWithError,
 	})
 	a.NoError(err)
 
@@ -204,112 +231,4 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 
 	secondNode.StopAlgod()
 	primaryNode.StopAlgod()
-}
-
-type webProxyInterceptFunc func(http.ResponseWriter, *http.Request, http.HandlerFunc)
-
-type webProxy struct {
-	server      *http.Server
-	listener    net.Listener
-	destination string
-	intercept   webProxyInterceptFunc
-}
-
-func makeWebProxy(destination string, intercept webProxyInterceptFunc) (wp *webProxy, err error) {
-	if strings.HasPrefix(destination, "http://") {
-		destination = destination[7:]
-	}
-	wp = &webProxy{
-		destination: destination,
-		intercept:   intercept,
-	}
-	wp.server = &http.Server{
-		Handler: wp,
-	}
-	wp.listener, err = net.Listen("tcp", "localhost:")
-	if err != nil {
-		return nil, err
-	}
-	go func() {
-		wp.server.Serve(wp.listener)
-	}()
-	return wp, nil
-}
-
-func (wp *webProxy) GetListenAddress() string {
-	return wp.listener.Addr().String()
-}
-
-func (wp *webProxy) Close() {
-	// we can't use shutdown, since we have tunneled websocket, which is a hijacked connection
-	// that http.Server doens't know how to handle.
-	wp.server.Close()
-}
-
-func (wp *webProxy) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	//fmt.Printf("incoming request for %v\n", request.URL)
-	if wp.intercept == nil {
-		wp.Passthrough(response, request)
-		return
-	}
-	wp.intercept(response, request, wp.Passthrough)
-}
-
-func (wp *webProxy) Passthrough(response http.ResponseWriter, request *http.Request) {
-	client := http.Client{}
-	clientRequestURL := *request.URL
-	clientRequestURL.Scheme = "http"
-	clientRequestURL.Host = wp.destination
-	clientRequest, err := http.NewRequest(request.Method, clientRequestURL.String(), request.Body)
-	if err != nil {
-		fmt.Printf("Passthrough request assembly error %v (%#v)\n", err, clientRequestURL)
-		response.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if request.Header != nil {
-		for headerKey, headerValues := range request.Header {
-			for _, headerValue := range headerValues {
-				clientRequest.Header.Add(headerKey, headerValue)
-			}
-		}
-	}
-	clientResponse, err := client.Do(clientRequest)
-	if err != nil {
-		fmt.Printf("Passthrough request error %v (%v)\n", err, request.URL.String())
-		response.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	if clientResponse.Header != nil {
-		for headerKey, headerValues := range clientResponse.Header {
-			for _, headerValue := range headerValues {
-				response.Header().Add(headerKey, headerValue)
-			}
-		}
-	}
-	response.WriteHeader(clientResponse.StatusCode)
-	ch := make(chan []byte, 10)
-	go func(outCh chan []byte) {
-		defer close(outCh)
-		if clientResponse.Body == nil {
-			return
-		}
-		defer clientResponse.Body.Close()
-		for {
-			buf := make([]byte, 4096)
-			n, err := clientResponse.Body.Read(buf)
-			if n > 0 {
-				outCh <- buf[:n]
-			}
-			if err != nil {
-				break
-			}
-
-		}
-	}(ch)
-	for bytes := range ch {
-		response.Write(bytes)
-		if flusher, has := response.(http.Flusher); has {
-			flusher.Flush()
-		}
-	}
 }

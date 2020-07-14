@@ -135,7 +135,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		os.RemoveAll("./catchpoints")
 	}()
 
-	ml := makeMockLedgerForTracker(t)
+	ml := makeMockLedgerForTracker(t, true)
 	defer ml.close()
 	ml.blocks = randomInitChain(testProtocolVersion, 10)
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(300)}
@@ -195,7 +195,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 			}
 		}
 		if header.Name == "content.msgpack" {
-			var fileHeader catchpointFileHeader
+			var fileHeader CatchpointFileHeader
 			err = protocol.Decode(balancesBlockBytes, &fileHeader)
 			require.NoError(t, err)
 			require.Equal(t, catchpointLabel, fileHeader.Catchpoint)

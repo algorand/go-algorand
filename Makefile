@@ -1,18 +1,19 @@
 export GOPATH		:= $(shell go env GOPATH)
 GOPATH1		:= $(firstword $(subst :, ,$(GOPATH)))
 export GO111MODULE	:= on
-export GOPROXY := https://gocenter.io
+export GOPROXY := direct
 
 UNAME		:= $(shell uname)
 SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
+S3_RELEASE_BUCKET = $$S3_RELEASE_BUCKET
 
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
 COMMITHASH       := $(shell ./scripts/compute_build_commit.sh)
-BUILDBRANCH      ?= $(shell ./scripts/compute_branch.sh)
-BUILDCHANNEL     ?= $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
+BUILDBRANCH      := $(shell ./scripts/compute_branch.sh)
+CHANNEL          ?= $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
 DEFAULTNETWORK   ?= $(shell ./scripts/compute_branch_network.sh $(BUILDBRANCH))
 DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILDBRANCH))
 
@@ -47,7 +48,7 @@ GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILD
 		 -extldflags \"$(EXTLDFLAGS)\"
 
 GOLDFLAGS := $(GOLDFLAGS_BASE) \
-		 -X github.com/algorand/go-algorand/config.Channel=$(BUILDCHANNEL)
+		 -X github.com/algorand/go-algorand/config.Channel=$(CHANNEL)
 
 UNIT_TEST_SOURCES := $(sort $(shell GO111MODULE=off go list ./... | grep -v /go-algorand/test/ ))
 ALGOD_API_PACKAGES := $(sort $(shell GO111MODULE=off cd daemon/algod/api; go list ./... ))
@@ -155,8 +156,14 @@ $(KMD_API_SWAGGER_INJECT): $(KMD_API_SWAGGER_SPEC) $(KMD_API_SWAGGER_SPEC).valid
 
 build: buildsrc gen
 
+# We're making an empty file in the go-cache dir to
+# get around a bug in go build where it will fail
+# to cache binaries from time to time on empty NFS
+# dirs
 buildsrc: crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
-	go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+	mkdir -p tmp/go-cache && \
+	touch tmp/go-cache/file.txt && \
+	GOCACHE=$(SRCPATH)/tmp/go-cache go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
 
@@ -233,7 +240,10 @@ node_exporter: $(GOPATH1)/bin/node_exporter
 # The file is was taken from the S3 cloud and it traditionally stored at
 # /travis-build-artifacts-us-ea-1.algorand.network/algorand/node_exporter/latest/node_exporter-stable-linux-x86_64.tar.gz
 $(GOPATH1)/bin/node_exporter:
-	tar -xzvf installer/external/node_exporter-stable-$(shell ./scripts/ostype.sh)-$(shell uname -m | tr '[:upper:]' '[:lower:]').tar.gz -C $(GOPATH1)/bin
+	mkdir -p $(GOPATH1)/bin && \
+	cd $(GOPATH1)/bin && \
+	tar -xzvf $(SRCPATH)/installer/external/node_exporter-stable-$(shell ./scripts/ostype.sh)-$(shell uname -m | tr '[:upper:]' '[:lower:]').tar.gz && \
+	cd -
 
 # deploy
 
@@ -278,4 +288,11 @@ install: build
 
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule
+
+SUPPORTED_ARCHIVE_OS_ARCH = linux/amd64 linux/arm64 linux/arm darwin/amd64
+
+archive:
+	CHANNEL=$(CHANNEL) \
+	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/bin:$${PATH} \
+	scripts/upload_version.sh $(CHANNEL) $(SRCPATH)/tmp/node_pkgs $(S3_RELEASE_BUCKET)
 
