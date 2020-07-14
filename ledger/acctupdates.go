@@ -173,10 +173,10 @@ type accountUpdates struct {
 	// otherwise, it would take it's time and perform periodic sleeps between chunks processing.
 	catchpointSlowWriting chan struct{}
 
-	// ctx is the context for canceling any pending catchpoint generation operation
+	// ctx is the context for the committing go-routine. It's also used as the "parent" of the catchpoint generation operation.
 	ctx context.Context
 
-	// ctxCancel is the canceling function canceling any pending catchpoint generation operation
+	// ctxCancel is the canceling function for canceling the commiting go-routine ( i.e. signaling the commiting go-routine that it's time to abort )
 	ctxCancel context.CancelFunc
 
 	// deltasAccum stores the accumulated deltas for every round starting dbRound-1.
@@ -190,6 +190,10 @@ type accountUpdates struct {
 
 	// accountsWriting provides syncronization around the background writing of account balances.
 	accountsWriting sync.WaitGroup
+
+	// commitSyncerWaitGroup is the blocking channel for syncronizing closing the commitSyncer goroutine. Once it's closed, the
+	// commitSyncer can be assumed to have aborted.
+	commitSyncerClosed chan struct{}
 }
 
 type deferedCommit struct {
@@ -209,6 +213,9 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	if cfg.CatchpointFileHistoryLength < -1 {
 		au.catchpointFileHistoryLength = -1
 	}
+	// initialize the commitSyncerClosed with a closed channel ( since the commitSyncer go-routine is not active )
+	au.commitSyncerClosed = make(chan struct{})
+	close(au.commitSyncerClosed)
 }
 
 // loadFromDisk is the 2nd level initializtion, and is required before the accountUpdates becomes functional
@@ -249,6 +256,8 @@ func (au *accountUpdates) close() {
 		au.ctxCancel()
 	}
 	au.waitAccountsWriting()
+	// this would block until the commitSyncerClosed channel get closed.
+	<-au.commitSyncerClosed
 }
 
 // Lookup returns the accound data for a given address at a given round. The withRewards indicates whether the
@@ -717,6 +726,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	close(au.catchpointWriting)
 	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
 	au.committedOffset = make(chan deferedCommit, 1)
+	au.commitSyncerClosed = make(chan struct{})
 	go au.commitSyncer(au.committedOffset)
 
 	lastBalancesRound = au.dbRound
@@ -1007,6 +1017,7 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 }
 
 func (au *accountUpdates) commitSyncer(deferedCommits chan deferedCommit) {
+	defer close(au.commitSyncerClosed)
 	for {
 		select {
 		case committedOffset, ok := <-deferedCommits:

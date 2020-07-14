@@ -137,15 +137,19 @@ func OpenLedger(
 }
 
 func (l *Ledger) reloadLedger() error {
-	l.trackerMu.Lock()
-	defer l.trackerMu.Unlock()
-
-	// close first.
-	l.trackers.close()
+	// similar to the Close function, we want to start by closing the blockQ first. The
+	// blockQ is having a sync goroutine which indirectly calls other trackers. We want to eliminate the path first,
+	// and follow up by taking the trackers lock.
 	if l.blockQ != nil {
 		l.blockQ.close()
 		l.blockQ = nil
 	}
+
+	l.trackerMu.Lock()
+	defer l.trackerMu.Unlock()
+
+	// close the trackers. At this point, we already have the trackers write lock which ensures that noone is current using these.
+	l.trackers.close()
 
 	// reload.
 	var err error
