@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
@@ -94,6 +95,8 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS catchpointstate`,
 	`DROP TABLE IF EXISTS accounthashes`,
 }
+
+var accountDBVersion = int32(2)
 
 type accountDelta struct {
 	old basics.AccountData
@@ -274,6 +277,7 @@ func accountsReset(tx *sql.Tx) error {
 			return err
 		}
 	}
+	db.SetUserVersion(context.Background(), tx, 0)
 	return nil
 }
 
@@ -746,6 +750,68 @@ func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
 		err = nil
 		return
 	}
+	return
+}
+
+// reencodeAccounts reads all the accounts in the accountbase table, decode and reencode the account data.
+// if the account data is found to have a different encoding, it would update the encoded account on disk.
+// on return, it returns the number of modified accounts as well as an error ( if we had any )
+func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, err error) {
+	modifiedAccounts = 0
+	rows, err := tx.Query("SELECT address, data FROM accountbase")
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	updateStmt, err := tx.PrepareContext(ctx, "UPDATE accountbase SET data = ? WHERE address = ?")
+	if err != nil {
+		return 0, err
+	}
+
+	var addr basics.Address
+	for rows.Next() {
+		var addrbuf []byte
+		var preencodedAccountData []byte
+		err = rows.Scan(&addrbuf, &preencodedAccountData)
+		if err != nil {
+			return
+		}
+
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return
+		}
+		copy(addr[:], addrbuf[:])
+
+		// decode and re-encode:
+		var decodedAccountData basics.AccountData
+		err = protocol.Decode(preencodedAccountData, &decodedAccountData)
+		if err != nil {
+			return
+		}
+		reencodedAccountData := protocol.Encode(&decodedAccountData)
+		if bytes.Compare(preencodedAccountData, reencodedAccountData) == 0 {
+			// these are identical, no need to store re-encoded account data
+			continue
+		}
+
+		// we need to update the encoded data.
+		result, err := updateStmt.ExecContext(ctx, reencodedAccountData, addrbuf)
+		if err != nil {
+			return 0, err
+		}
+		rowsUpdated, err := result.RowsAffected()
+		if err != nil {
+			return 0, err
+		}
+		if rowsUpdated != 1 {
+			return 0, fmt.Errorf("failed to update account %v, number of rows updated was %d instead of 1", addr, rowsUpdated)
+		}
+		modifiedAccounts++
+	}
+
+	err = rows.Err()
 	return
 }
 

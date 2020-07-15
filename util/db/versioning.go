@@ -27,7 +27,6 @@ import (
 // GetUserVersion returns the user version field stored in the sqlite database
 // if the database was never initiliazed with a version, it would return 0 as the version.
 func GetUserVersion(ctx context.Context, tx *sql.Tx) (userVersion int32, err error) {
-
 	err = tx.QueryRowContext(ctx, "PRAGMA user_version").Scan(&userVersion)
 	// it's not really supposed to happen with a user_version, since the above would always succeed, but
 	// we want to have it so that we can align with the SQL statements "correct handling practices".
@@ -44,9 +43,8 @@ func SetUserVersion(ctx context.Context, tx *sql.Tx, userVersion int32) (previou
 	if err != nil {
 		return
 	}
-	var result sql.Result
-	var rowsAffected int64
-	result, err = tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", userVersion))
+
+	_, err = tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", userVersion))
 	if err != nil {
 		if err == ctx.Err() {
 			// if we're aborting due to context cancelation, just clear out the previous version.
@@ -55,12 +53,6 @@ func SetUserVersion(ctx context.Context, tx *sql.Tx, userVersion int32) (previou
 		}
 		return
 	}
-	rowsAffected, err = result.RowsAffected()
-	if err != nil {
-		return
-	}
-	if rowsAffected != 0 {
-		err = fmt.Errorf("expected rows to be affected by updating user_version was 0, but %d rows got updated instead", rowsAffected)
-	}
+
 	return
 }

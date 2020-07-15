@@ -38,6 +38,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 const (
@@ -777,9 +778,73 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 
 // Initialize accounts DB if needed and return account round
 func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
-	err := accountsInit(tx, au.initAccounts, au.initProto)
+	dbVersion, err := db.GetUserVersion(context.Background(), tx)
 	if err != nil {
 		return 0, err
+	}
+	if dbVersion > accountDBVersion {
+		return 0, fmt.Errorf("database schema version is %d, but algod supports only %d", dbVersion, accountDBVersion)
+	}
+
+	for dbVersion < accountDBVersion {
+		// perform the initialization/upgrade
+		switch dbVersion {
+		case 0:
+			err = accountsInit(tx, au.initAccounts, au.initProto)
+			if err != nil {
+				return 0, err
+			}
+			_, err = db.SetUserVersion(context.Background(), tx, 1)
+			if err != nil {
+				return 0, err
+			}
+			dbVersion = 1
+		case 1:
+			// update accounts encoding.
+			modifiedAccounts, err := reencodeAccounts(context.Background(), tx)
+			if err != nil {
+				return 0, err
+			}
+
+			if modifiedAccounts > 0 {
+				au.log.Infof("accountsInitialize reencoded %d accounts", modifiedAccounts)
+
+				// reset the merkle trie
+				err = resetAccountHashes(tx)
+				if err != nil {
+					return 0, err
+				}
+
+				// initialize a new accountsq with the incoming transaction.
+				accountsq, err := accountsDbInit(tx, tx)
+				if err != nil {
+					return 0, err
+				}
+
+				// delete the last catchpoint label if we have any.
+				_, err = accountsq.writeCatchpointStateString(context.Background(), catchpointStateLastCatchpoint, "")
+				if err != nil {
+					return 0, err
+				}
+
+				// delete catchpoints.
+				err = au.deleteStoredCatchpoints(tx, accountsq)
+				if err != nil {
+					return 0, err
+				}
+			} else {
+				au.log.Infof("accountsInitialize reencoded no accounts")
+			}
+
+			// update version
+			_, err = db.SetUserVersion(context.Background(), tx, 2)
+			if err != nil {
+				return 0, err
+			}
+			dbVersion = 2
+		default:
+			return 0, fmt.Errorf("unable to upgrade database from schema version %d", dbVersion)
+		}
 	}
 
 	rnd, hashRound, err := accountsRound(tx)
@@ -856,6 +921,35 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 	}
 	au.balancesTrie = trie
 	return rnd, nil
+}
+
+// deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
+// once all the files have been deleted, it would go ahead and remove the entries from the table.
+func (au *accountUpdates) deleteStoredCatchpoints(tx *sql.Tx, dbQueries *accountsDbQueries) (err error) {
+	catchpointsFilesChunkSize := 50
+	for {
+		fileNames, err := dbQueries.getOldestCatchpointFiles(context.Background(), catchpointsFilesChunkSize, 0)
+		if err != nil {
+			return err
+		}
+		if len(fileNames) == 0 {
+			break
+		}
+
+		for round, fileName := range fileNames {
+			absCatchpointFileName := filepath.Join(au.dbDirectory, fileName)
+			err = os.Remove(absCatchpointFileName)
+			if err == nil || os.IsNotExist(err) {
+				// it's ok if the file doesn't exist. just remove it from the database and we'll be good to go.
+				err = nil
+			} else {
+				// we can't delete the file, abort -
+				return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
+			}
+			dbQueries.storeCatchpoint(context.Background(), round, "", "", 0)
+		}
+	}
+	return nil
 }
 
 func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Address]accountDelta) (err error) {
