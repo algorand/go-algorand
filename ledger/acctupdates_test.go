@@ -115,7 +115,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 		return
 	}
 
-	err = au.dbs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		bals, err0 = accountsAll(tx)
 		return err0

@@ -60,6 +60,10 @@ type Accessor struct {
 	log      logging.Logger
 }
 
+type txContext struct {
+	deadline time.Time
+}
+
 // MakeAccessor creates a new Accessor.
 func MakeAccessor(dbfilename string, readOnly bool, inMemory bool) (Accessor, error) {
 	return makeAccessorImpl(dbfilename, readOnly, inMemory, []string{"_journal_mode=wal"})
@@ -202,10 +206,10 @@ func (db *Accessor) Atomic(fn idemFn, extras ...interface{}) (err error) {
 // Atomic executes a piece of code with respect to the database atomically.
 // For transactions where readOnly is false, sync determines whether or not to wait for the result.
 func (db *Accessor) atomic(fn idemFn, commitLocker sync.Locker, extras ...interface{}) (err error) {
-	start := time.Now()
+	atomicDeadline := time.Now().Add(time.Second)
 
 	// note that the sql library will drop panics inside an active transaction
-	guardedFn := func(tx *sql.Tx) (err error) {
+	guardedFn := func(ctx context.Context, tx *sql.Tx) (err error) {
 		defer func() {
 			if r := recover(); r != nil {
 				var ok bool
@@ -216,7 +220,7 @@ func (db *Accessor) atomic(fn idemFn, commitLocker sync.Locker, extras ...interf
 			}
 		}()
 
-		err = fn(tx)
+		err = fn(ctx, tx)
 		return
 	}
 
@@ -296,7 +300,12 @@ func (db *Accessor) atomic(fn idemFn, commitLocker sync.Locker, extras ...interf
 			break
 		}
 
-		err = guardedFn(tx)
+		// create a transaction context data
+		txContextData := &txContext{
+			deadline: atomicDeadline,
+		}
+
+		err = guardedFn(context.WithValue(ctx, tx, txContextData), tx)
 		if err != nil {
 			tx.Rollback()
 			if dbretry(err) {
@@ -314,6 +323,8 @@ func (db *Accessor) atomic(fn idemFn, commitLocker sync.Locker, extras ...interf
 
 		err = tx.Commit()
 		if err == nil {
+			// update the deadline, as it might have been updated.
+			atomicDeadline = txContextData.deadline
 			break
 		} else if !dbretry(err) {
 			break
@@ -325,13 +336,23 @@ func (db *Accessor) atomic(fn idemFn, commitLocker sync.Locker, extras ...interf
 		commitLocker.Unlock()
 	}
 
-	end := time.Now()
-	delta := end.Sub(start)
-	if delta > time.Second {
-		db.getDecoratedLogger(fn, extras).Warnf("dbatomic: tx took %v", delta)
-	} else if delta > time.Millisecond {
-		db.getDecoratedLogger(fn, extras).Debugf("dbatomic: tx took %v", delta)
+	if time.Now().After(atomicDeadline) {
+		db.getDecoratedLogger(fn, extras).Warnf("dbatomic: tx surpassed expected deadline by %v", atomicDeadline.Sub(time.Now()))
 	}
+	return
+}
+
+// ResetTransactionWarnDeadline allow the atomic function to extend it's warn deadline by setting a new deadline.
+// the ctx and tx parameters were added to support recursive atomic calls.
+// the function fails if the given transaction is not on the stack of the provided context.
+func ResetTransactionWarnDeadline(ctx context.Context, tx *sql.Tx, deadline time.Time) (prevDeadline time.Time, err error) {
+	txContextData, ok := ctx.Value(tx).(*txContext)
+	if !ok {
+		// it's not a valid call. just return an error.
+		return time.Time{}, fmt.Errorf("the provided tx does not have a valid txContext object in it's context")
+	}
+	prevDeadline = txContextData.deadline
+	txContextData.deadline = deadline
 	return
 }
 
@@ -362,7 +383,7 @@ func dbretry(obj error) bool {
 	return ok && (err.Code == sqlite3.ErrLocked || err.Code == sqlite3.ErrBusy)
 }
 
-type idemFn func(tx *sql.Tx) error
+type idemFn func(ctx context.Context, tx *sql.Tx) error
 
 const infoTxRetries = 5
 const warnTxRetriesInterval = 1

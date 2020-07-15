@@ -17,6 +17,7 @@
 package indexer
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -100,7 +101,7 @@ func MakeIndexerDB(dbPath string, inMemory bool) (*DB, error) {
 
 // AddBlock takes an Algorand block and stores its transactions in the DB.
 func (idb *DB) AddBlock(b bookkeeping.Block) error {
-	err := idb.dbw.Atomic(func(tx *sql.Tx) error {
+	err := idb.dbw.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 
 		// Get last block
 		rnd, err := idb.MaxRound()
