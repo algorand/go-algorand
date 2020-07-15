@@ -19,14 +19,20 @@ package db
 import (
 	"context"
 	"database/sql"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestVersioning(t *testing.T) {
-	acc, err := MakeAccessor("fn.db", false, true)
+func testVersioning(t *testing.T, inMemory bool) {
+	acc, err := MakeAccessor("fn.db", false, inMemory)
 	require.NoError(t, err)
+	if !inMemory {
+		defer os.Remove("fn.db")
+		defer os.Remove("fn.db-shm")
+		defer os.Remove("fn.db-wal")
+	}
 
 	conn, err := acc.Handle.Conn(context.Background())
 	require.NoError(t, err)
@@ -61,4 +67,9 @@ func TestVersioning(t *testing.T) {
 	conn.Close()
 	acc.Close()
 
+}
+
+func TestVersioning(t *testing.T) {
+	t.Run("InMem", func(t *testing.T) { testVersioning(t, true) })
+	t.Run("OnDisk", func(t *testing.T) { testVersioning(t, false) })
 }
