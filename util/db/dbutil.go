@@ -60,7 +60,10 @@ type Accessor struct {
 	log      logging.Logger
 }
 
-type txContext struct {
+// txExecutionContext contains the data that is associated with every created transaction
+// before sending it to the user-defined callback. This allows the callback function to
+// make changes to the execution setting of an ongoing transaction.
+type txExecutionContext struct {
 	deadline time.Time
 }
 
@@ -301,7 +304,7 @@ func (db *Accessor) atomic(fn idemFn, commitLocker sync.Locker, extras ...interf
 		}
 
 		// create a transaction context data
-		txContextData := &txContext{
+		txContextData := &txExecutionContext{
 			deadline: atomicDeadline,
 		}
 
@@ -343,13 +346,15 @@ func (db *Accessor) atomic(fn idemFn, commitLocker sync.Locker, extras ...interf
 }
 
 // ResetTransactionWarnDeadline allow the atomic function to extend it's warn deadline by setting a new deadline.
-// the ctx and tx parameters were added to support recursive atomic calls.
+// The Accessor can be copied and therefore isn't suitable for multi-threading directly,
+// however, the transaction context and transaction object can be used to uniquely associate the request
+// with a particular deadline.
 // the function fails if the given transaction is not on the stack of the provided context.
 func ResetTransactionWarnDeadline(ctx context.Context, tx *sql.Tx, deadline time.Time) (prevDeadline time.Time, err error) {
-	txContextData, ok := ctx.Value(tx).(*txContext)
+	txContextData, ok := ctx.Value(tx).(*txExecutionContext)
 	if !ok {
 		// it's not a valid call. just return an error.
-		return time.Time{}, fmt.Errorf("the provided tx does not have a valid txContext object in it's context")
+		return time.Time{}, fmt.Errorf("the provided tx does not have a valid txExecutionContext object in it's context")
 	}
 	prevDeadline = txContextData.deadline
 	txContextData.deadline = deadline
