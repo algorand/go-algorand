@@ -454,7 +454,7 @@ func TestTealDryrun(t *testing.T) {
 		{
 			Address: basics.Address{}.String(),
 			AppsLocalState: &[]generated.ApplicationLocalState{
-				Id: 1,
+				Id:       1,
 				KeyValue: localv,
 			},
 		},

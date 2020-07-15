@@ -668,8 +668,8 @@ func TestDryrunLocalCheck(t *testing.T) {
 			Status:  "Online",
 			Address: basics.Address{}.String(),
 			AppsLocalState: &[]generated.ApplicationLocalState{
-						Id: 1,
-						KeyValue: localv,
+				Id:       1,
+				KeyValue: localv,
 			},
 		},
 	}
@@ -720,7 +720,7 @@ func TestDryrunEncodeDecode(t *testing.T) {
 			Status:  "Online",
 			Address: basics.Address{}.String(),
 			AppsLocalState: &[]generated.ApplicationLocalState{
-				Id: 1,
+				Id:       1,
 				KeyValue: localv,
 			},
 		},

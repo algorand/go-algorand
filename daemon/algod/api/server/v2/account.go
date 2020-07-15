@@ -72,9 +72,12 @@ func AccountDataToAccount(
 	for appIdx, state := range record.AppLocalStates {
 		localState := convertTKVToGenerated(&state.KeyValue)
 		appsLocalState = append(appsLocalState, generated.ApplicationLocalState{
-				Id: uint64(appIdx),
+			Id:       uint64(appIdx),
+			KeyValue: localState,
+			Schema: generated.ApplicationStateSchema{
 				NumByteSlice: state.Schema.NumByteSlice,
 				NumUint:      state.Schema.NumUint,
+			},
 		})
 	}
 
@@ -214,10 +217,10 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 		for _, ls := range *a.AppsLocalState {
 			appLocalStates[basics.AppIndex(ls.Id)] = basics.AppLocalState{
 				Schema: basics.StateSchema{
-					NumUint:      ls.State.Schema.NumUint,
-					NumByteSlice: ls.State.Schema.NumByteSlice,
+					NumUint:      ls.Schema.NumUint,
+					NumByteSlice: ls.Schema.NumByteSlice,
 				},
-				KeyValue: convertGeneratedTKV(&ls.State.KeyValue),
+				KeyValue: convertGeneratedTKV(&ls.KeyValue),
 			}
 		}
 	}
