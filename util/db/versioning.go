@@ -44,23 +44,15 @@ func SetUserVersion(ctx context.Context, tx *sql.Tx, userVersion int32) (previou
 	if err != nil {
 		return
 	}
-	var result sql.Result
-	var rowsAffected int64
-	result, err = tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", userVersion))
-	if err != nil {
-		if err == ctx.Err() {
-			// if we're aborting due to context cancelation, just clear out the previous version.
-			// this is done so that the function result is consistant.
-			previousUserVersion = 0
-		}
+	if previousUserVersion == userVersion {
 		return
 	}
-	rowsAffected, err = result.RowsAffected()
+	_, err = tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", userVersion))
 	if err != nil {
+		// if we're aborting due to an error, clear the previousUserVersion so that
+		// on all error cases we'll be returning zero.
+		previousUserVersion = 0
 		return
-	}
-	if rowsAffected != 0 {
-		err = fmt.Errorf("expected rows to be affected by updating user_version was 0, but %d rows got updated instead", rowsAffected)
 	}
 	return
 }
