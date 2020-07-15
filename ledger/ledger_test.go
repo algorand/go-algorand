@@ -884,27 +884,36 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
 
 	blk := genesisInitState.Block
 
-	// var payset transactions.Payset
-	// var tx transactions.Transaction
-	// nTxns := 50
-	// for i := 0; i < nTxns; i++ {
-	// 	tx, err = makeUnsignedApplicationCallTx(0, transactions.OptInOC)
-	// 	require.NoError(t, err)
-	// 	// make a payset
-	// 	stxnib := makeSignedTxnInBlock(tx)
-	// 	payset = append(payset, stxnib)
-	// 	fmt.Printf("added transaction %v\n", i)
-	// }
-	// blk.Payset = payset
-	// blk.BlockHeader.TxnCounter = uint64(nTxns)
+	var payset transactions.Payset
+	var tx transactions.Transaction
+	nTxns := 5000
+	for i := 0; i < nTxns; i++ {
+		tx, err = makeUnsignedApplicationCallTx(0, transactions.OptInOC)
+		require.NoError(t, err)
+		// make a payset
+		stxnib := makeSignedTxnInBlock(tx)
+		payset = append(payset, stxnib)
+		fmt.Printf("added transaction %v\n", i)
+	}
+	blk.Payset = payset
+	blk.BlockHeader.TxnCounter = uint64(nTxns)
 
 	fmt.Printf("beginning block adding\n")
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 10000; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		
 		fmt.Printf("adding block %v\n", i)
-		wl.l.AddBlock(blk, agreement.Certificate{})
+		vb := ValidatedBlock{
+			blk:   blk,
+			delta: StateDelta{
+				accts:      make(map[basics.Address]accountDelta),
+				Txids:      make(map[transactions.Txid]basics.Round),
+				txleases:   make(map[txlease]basics.Round),
+				creatables: make(map[basics.CreatableIndex]modifiedCreatable),
+				hdr: &blk.BlockHeader},
+		}
+		wl.l.AddValidatedBlock(vb, agreement.Certificate{})
 		fmt.Printf("committing block %v\n", i)
 		wl.l.WaitForCommit(blk.Round())
 		fmt.Printf("checking trackers after block %v\n", i)
