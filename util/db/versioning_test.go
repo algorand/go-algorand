@@ -19,14 +19,20 @@ package db
 import (
 	"context"
 	"database/sql"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestVersioning(t *testing.T) {
-	acc, err := MakeAccessor("fn.db", false, true)
+func testVersioning(t *testing.T, inMemory bool) {
+	acc, err := MakeAccessor("fn.db", false, inMemory)
 	require.NoError(t, err)
+	if !inMemory {
+		defer os.Remove("fn.db")
+		defer os.Remove("fn.db-shm")
+		defer os.Remove("fn.db-wal")
+	}
 
 	conn, err := acc.Handle.Conn(context.Background())
 	require.NoError(t, err)
@@ -57,8 +63,32 @@ func TestVersioning(t *testing.T) {
 	require.Equal(t, expiredContext.Err(), err)
 	require.Equal(t, int32(0), ver)
 
+	tx.Commit()
+
+	tx, err = conn.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: false})
+	require.NoError(t, err)
+
+	previousVersion, err = SetUserVersion(context.Background(), tx, 2)
+	require.NoError(t, err)
+	require.Equal(t, int32(9), previousVersion)
+
 	tx.Rollback()
+
+	tx, err = conn.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: false})
+	require.NoError(t, err)
+
+	ver, err = GetUserVersion(context.Background(), tx)
+	require.NoError(t, err)
+	require.Equal(t, int32(9), ver)
+
+	tx.Commit()
+
 	conn.Close()
 	acc.Close()
 
+}
+
+func TestVersioning(t *testing.T) {
+	t.Run("InMem", func(t *testing.T) { testVersioning(t, true) })
+	t.Run("OnDisk", func(t *testing.T) { testVersioning(t, false) })
 }

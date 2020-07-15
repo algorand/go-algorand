@@ -162,7 +162,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 			totals.NotParticipating.Money.Raw, totals.NotParticipating.RewardUnits,
 			totals.RewardsLevel)
 	}
-	return dbAccessor.Atomic(func(tx *sql.Tx) (err error) {
+	return dbAccessor.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		if fileHeader.Version == 0 {
 			var totals ledger.AccountTotals
 			id := ""

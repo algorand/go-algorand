@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"fmt"
@@ -180,7 +181,7 @@ func TestArchivalRestart(t *testing.T) {
 	l.WaitForCommit(blk.Round())
 
 	var latest, earliest basics.Round
-	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err = blockLatest(tx)
 		require.NoError(t, err)
 
@@ -197,7 +198,7 @@ func TestArchivalRestart(t *testing.T) {
 	require.NoError(t, err)
 	defer l.Close()
 
-	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err = blockLatest(tx)
 		require.NoError(t, err)
 
@@ -670,7 +671,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	l.WaitForCommit(blk.Round())
 
 	var latest, earliest basics.Round
-	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err = blockLatest(tx)
 		require.NoError(t, err)
 
@@ -690,7 +691,7 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	require.NoError(t, err)
 	defer l.Close()
 
-	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err = blockLatest(tx)
 		require.NoError(t, err)
 
