@@ -890,7 +890,6 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
 	for i := 0; i < nTxns; i++ {
 		tx, err = makeUnsignedApplicationCallTx(0, transactions.OptInOC)
 		require.NoError(t, err)
-		// make a payset
 		stxnib := makeSignedTxnInBlock(tx)
 		payset = append(payset, stxnib)
 		fmt.Printf("added transaction %v\n", i)
