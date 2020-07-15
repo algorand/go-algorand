@@ -63,7 +63,26 @@ func testVersioning(t *testing.T, inMemory bool) {
 	require.Equal(t, expiredContext.Err(), err)
 	require.Equal(t, int32(0), ver)
 
+	tx.Commit()
+
+	tx, err = conn.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: false})
+	require.NoError(t, err)
+
+	previousVersion, err = SetUserVersion(context.Background(), tx, 2)
+	require.NoError(t, err)
+	require.Equal(t, int32(9), previousVersion)
+
 	tx.Rollback()
+
+	tx, err = conn.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelSerializable, ReadOnly: false})
+	require.NoError(t, err)
+
+	ver, err = GetUserVersion(context.Background(), tx)
+	require.NoError(t, err)
+	require.Equal(t, int32(9), ver)
+
+	tx.Commit()
+
 	conn.Close()
 	acc.Close()
 
