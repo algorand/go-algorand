@@ -780,7 +780,7 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (basics.Round, error) {
 	dbVersion, err := db.GetUserVersion(ctx, tx)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("accountsInitialize unable to read database schema version : %v", err)
 	}
 	if dbVersion > accountDBVersion {
 		return 0, fmt.Errorf("accountsInitialize database schema version is %d, but algod supports only %d", dbVersion, accountDBVersion)

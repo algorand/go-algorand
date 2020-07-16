@@ -794,17 +794,6 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(20)}
-	/*
-		pooldata := basics.AccountData{}
-		pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-		pooldata.Status = basics.NotParticipating
-		accts[0][testPoolAddr] = pooldata
-
-		sinkdata := basics.AccountData{}
-		sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
-		sinkdata.Status = basics.NotParticipating
-		accts[0][testSinkAddr] = sinkdata*/
-
 	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
