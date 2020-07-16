@@ -785,3 +785,57 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	inMemory = false
 	t.Run("DiskDB", testFunction)
 }
+
+func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	ml := makeMockLedgerForTracker(t, true)
+	defer ml.close()
+	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
+
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20)}
+	/*
+		pooldata := basics.AccountData{}
+		pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+		pooldata.Status = basics.NotParticipating
+		accts[0][testPoolAddr] = pooldata
+
+		sinkdata := basics.AccountData{}
+		sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+		sinkdata.Status = basics.NotParticipating
+		accts[0][testSinkAddr] = sinkdata*/
+
+	au := &accountUpdates{}
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	au.initialize(conf, ".", proto, accts[0])
+	defer au.close()
+
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+
+	dummyCatchpointFilesToCreate := 42
+
+	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
+		f, err := os.Create(fmt.Sprintf("./dummy_catchpoint_file-%d", i))
+		require.NoError(t, err)
+		err = f.Close()
+		require.NoError(t, err)
+	}
+
+	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
+		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fmt.Sprintf("./dummy_catchpoint_file-%d", i), "", 0)
+		require.NoError(t, err)
+	}
+	err = au.deleteStoredCatchpoints(context.Background(), au.accountsq)
+	require.NoError(t, err)
+
+	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
+		// ensure that all the files were deleted.
+		_, err := os.Open(fmt.Sprintf("./dummy_catchpoint_file-%d", i))
+		require.True(t, os.IsNotExist(err))
+	}
+	fileNames, err := au.accountsq.getOldestCatchpointFiles(context.Background(), dummyCatchpointFilesToCreate, 0)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fileNames))
+}

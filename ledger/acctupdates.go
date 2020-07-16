@@ -788,70 +788,79 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 
 	if dbVersion < accountDBVersion {
 		au.log.Infof("accountsInitialize upgrading database schema from version %d to version %d", dbVersion, accountDBVersion)
-	}
-	for dbVersion < accountDBVersion {
-		au.log.Infof("accountsInitialize performing upgrade from version %d", dbVersion)
-		// perform the initialization/upgrade
-		switch dbVersion {
-		case 0:
-			err = accountsInit(tx, au.initAccounts, au.initProto)
-			if err != nil {
-				return 0, err
-			}
-			_, err = db.SetUserVersion(ctx, tx, 1)
-			if err != nil {
-				return 0, err
-			}
-			dbVersion = 1
-		case 1:
-			// update accounts encoding.
-			modifiedAccounts, err := reencodeAccounts(ctx, tx)
-			if err != nil {
-				return 0, err
-			}
 
-			if modifiedAccounts > 0 {
-				au.log.Infof("accountsInitialize reencoded %d accounts", modifiedAccounts)
-
-				// reset the merkle trie
-				err = resetAccountHashes(tx)
+		for dbVersion < accountDBVersion {
+			au.log.Infof("accountsInitialize performing upgrade from version %d", dbVersion)
+			// perform the initialization/upgrade
+			switch dbVersion {
+			case 0:
+				au.log.Infof("accountsInitialize initializing schema")
+				err = accountsInit(tx, au.initAccounts, au.initProto)
+				if err != nil {
+					return 0, fmt.Errorf("accountsInitialize unable to initialize schema : %v", err)
+				}
+				_, err = db.SetUserVersion(ctx, tx, 1)
+				if err != nil {
+					return 0, fmt.Errorf("accountsInitialize unable to update database schema version from %d to %d: %v", dbVersion, 1, err)
+				}
+				dbVersion = 1
+			case 1:
+				// update accounts encoding.
+				au.log.Infof("accountsInitialize verifying accounts data encoding")
+				modifiedAccounts, err := reencodeAccounts(ctx, tx)
 				if err != nil {
 					return 0, err
 				}
 
-				// initialize a new accountsq with the incoming transaction.
-				accountsq, err := accountsDbInit(tx, tx)
-				if err != nil {
-					return 0, err
+				if modifiedAccounts > 0 {
+					au.log.Infof("accountsInitialize reencoded %d accounts", modifiedAccounts)
+
+					au.log.Infof("accountsInitialize resetting account hashes")
+					// reset the merkle trie
+					err = resetAccountHashes(tx)
+					if err != nil {
+						return 0, fmt.Errorf("accountsInitialize unable to reset account hashes : %v", err)
+					}
+
+					au.log.Infof("accountsInitialize preparing queries")
+					// initialize a new accountsq with the incoming transaction.
+					accountsq, err := accountsDbInit(tx, tx)
+					if err != nil {
+						return 0, fmt.Errorf("accountsInitialize unable to prepare queries : %v", err)
+					}
+
+					// close the prepared statements when we're done with them.
+					defer accountsq.close()
+
+					au.log.Infof("accountsInitialize resetting prior catchpoints")
+					// delete the last catchpoint label if we have any.
+					_, err = accountsq.writeCatchpointStateString(ctx, catchpointStateLastCatchpoint, "")
+					if err != nil {
+						return 0, fmt.Errorf("accountsInitialize unable to clear prior catchpoint : %v", err)
+					}
+
+					au.log.Infof("accountsInitialize deleting stored catchpoints")
+					// delete catchpoints.
+					err = au.deleteStoredCatchpoints(ctx, accountsq)
+					if err != nil {
+						return 0, fmt.Errorf("accountsInitialize unable to delete stored catchpoints : %v", err)
+					}
+				} else {
+					au.log.Infof("accountsInitialize reencoded no accounts")
 				}
 
-				// close the prepared statements when we're done with them.
-				defer accountsq.close()
-
-				// delete the last catchpoint label if we have any.
-				_, err = accountsq.writeCatchpointStateString(ctx, catchpointStateLastCatchpoint, "")
+				// update version
+				_, err = db.SetUserVersion(ctx, tx, 2)
 				if err != nil {
-					return 0, err
+					return 0, fmt.Errorf("accountsInitialize unable to update database schema version from %d to %d: %v", dbVersion, 2, err)
 				}
-
-				// delete catchpoints.
-				err = au.deleteStoredCatchpoints(tx, accountsq)
-				if err != nil {
-					return 0, err
-				}
-			} else {
-				au.log.Infof("accountsInitialize reencoded no accounts")
+				dbVersion = 2
+			default:
+				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
 			}
-
-			// update version
-			_, err = db.SetUserVersion(ctx, tx, 2)
-			if err != nil {
-				return 0, err
-			}
-			dbVersion = 2
-		default:
-			return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
 		}
+
+		au.log.Infof("accountsInitialize database schema upgrade complete")
 	}
 
 	rnd, hashRound, err := accountsRound(tx)
@@ -891,7 +900,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 	if rootHash.IsZero() {
 		accountIdx := 0
 		for {
-			bal, err := encodedAccountsRange(tx, accountIdx, trieRebuildAccountChunkSize)
+			bal, err := encodedAccountsRange(ctx, tx, accountIdx, trieRebuildAccountChunkSize)
 			if err != nil {
 				return rnd, err
 			}
@@ -910,7 +919,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
 				}
 				if !added {
-					au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.", hash)
+					au.log.Warnf("accountsInitialize attempted to add duplicate hash '%v' to merkle trie.", hash)
 				}
 			}
 
@@ -925,6 +934,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 			}
 			accountIdx += trieRebuildAccountChunkSize
 		}
+
+		// we've just updated the markle trie, update the hashRound to reflect that.
+		err = updateAccountsRound(tx, rnd, rnd)
+		if err != nil {
+			return 0, fmt.Errorf("accountsInitialize was unable to update the account round to %d: %v", rnd, err)
+		}
 	}
 	au.balancesTrie = trie
 	return rnd, nil
@@ -932,10 +947,10 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
 // once all the files have been deleted, it would go ahead and remove the entries from the table.
-func (au *accountUpdates) deleteStoredCatchpoints(tx *sql.Tx, dbQueries *accountsDbQueries) (err error) {
+func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries *accountsDbQueries) (err error) {
 	catchpointsFilesChunkSize := 50
 	for {
-		fileNames, err := dbQueries.getOldestCatchpointFiles(context.Background(), catchpointsFilesChunkSize, 0)
+		fileNames, err := dbQueries.getOldestCatchpointFiles(ctx, catchpointsFilesChunkSize, 0)
 		if err != nil {
 			return err
 		}
@@ -953,7 +968,7 @@ func (au *accountUpdates) deleteStoredCatchpoints(tx *sql.Tx, dbQueries *account
 				// we can't delete the file, abort -
 				return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
 			}
-			dbQueries.storeCatchpoint(context.Background(), round, "", "", 0)
+			dbQueries.storeCatchpoint(ctx, round, "", "", 0)
 		}
 	}
 	return nil

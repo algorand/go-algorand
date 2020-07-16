@@ -21,6 +21,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/mattn/go-sqlite3"
 
@@ -725,8 +726,8 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (
 
 // encodedAccountsRange returns an array containing the account data, in the same way it appear in the database
 // starting at entry startAccountIndex, and up to accountCount accounts long.
-func encodedAccountsRange(tx *sql.Tx, startAccountIndex, accountCount int) (bals []encodedBalanceRecord, err error) {
-	rows, err := tx.Query("SELECT address, data FROM accountbase ORDER BY rowid LIMIT ? OFFSET ?", accountCount, startAccountIndex)
+func encodedAccountsRange(ctx context.Context, tx *sql.Tx, startAccountIndex, accountCount int) (bals []encodedBalanceRecord, err error) {
+	rows, err := tx.QueryContext(ctx, "SELECT address, data FROM accountbase ORDER BY rowid LIMIT ? OFFSET ?", accountCount, startAccountIndex)
 	if err != nil {
 		return
 	}
@@ -753,6 +754,12 @@ func encodedAccountsRange(tx *sql.Tx, startAccountIndex, accountCount int) (bals
 	}
 
 	err = rows.Err()
+	if err == nil {
+		// the encodedAccountsRange typically called in a loop iterating over all the accounts. This could clearly take more than the
+		// "standard" 1 second, so we want to extend the timeout on each iteration. If the last iteration takes more than a second, then
+		// it should be noted. The one second here is quite liberal to ensure symmetrical behaviour on low-power devices.
+		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(time.Second))
+	}
 	return
 }
 
@@ -772,19 +779,29 @@ func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
 // on return, it returns the number of modified accounts as well as an error ( if we had any )
 func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, err error) {
 	modifiedAccounts = 0
-	rows, err := tx.Query("SELECT address, data FROM accountbase")
-	if err != nil {
-		return
-	}
-	defer rows.Close()
+	scannedAccounts := 0
 
 	updateStmt, err := tx.PrepareContext(ctx, "UPDATE accountbase SET data = ? WHERE address = ?")
 	if err != nil {
 		return 0, err
 	}
 
+	rows, err := tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
 	var addr basics.Address
 	for rows.Next() {
+		// once every 1000 accounts we scan through, update the warning deadline.
+		// as long as the last "chunk" takes less than one second, we should be good to go.
+		// note that we should be quite liberal on timing here, since it might perform much slower
+		// on low-power devices.
+		if scannedAccounts%1000 == 0 {
+			db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(time.Second))
+		}
+
 		var addrbuf []byte
 		var preencodedAccountData []byte
 		err = rows.Scan(&addrbuf, &preencodedAccountData)
@@ -797,6 +814,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 			return
 		}
 		copy(addr[:], addrbuf[:])
+		scannedAccounts++
 
 		// decode and re-encode:
 		var decodedAccountData basics.AccountData
@@ -826,6 +844,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 	}
 
 	err = rows.Err()
+	updateStmt.Close()
 	return
 }
 
