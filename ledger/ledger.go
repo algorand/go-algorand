@@ -200,28 +200,22 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 }
 
 func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs dbPair, err error) {
-	// Backwards compatibility: we used to store both blocks and tracker
-	// state in a single SQLite db file.
 	var trackerDBFilename string
 	var blockDBFilename string
 
-	commonDBFilename := dbPathPrefix + ".sqlite"
 	if !dbMem {
+		commonDBFilename := dbPathPrefix + ".sqlite"
 		_, err = os.Stat(commonDBFilename)
+		if !os.IsNotExist(err) {
+			// before launch, we used to have both blocks and tracker
+			// state in a single SQLite db file. We don't have that anymore,
+			// and we want to fail when that's the case.
+			err = fmt.Errorf("A single ledger database file '%s' was detected. This is no longer supported by current binary", commonDBFilename)
+			return
+		}
 	}
-
-	if !dbMem && os.IsNotExist(err) {
-		// No common file, so use two separate files for blocks and tracker.
-		trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
-		blockDBFilename = dbPathPrefix + ".block.sqlite"
-	} else if err == nil {
-		// Legacy common file exists (or testing in-memory, where performance
-		// doesn't matter), use same database for everything.
-		trackerDBFilename = commonDBFilename
-		blockDBFilename = commonDBFilename
-	} else {
-		return
-	}
+	trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
+	blockDBFilename = dbPathPrefix + ".block.sqlite"
 
 	trackerDBs, err = dbOpen(trackerDBFilename, dbMem)
 	if err != nil {
