@@ -366,3 +366,27 @@ func TestAccountsReencoding(t *testing.T) {
 	})
 	require.NoError(t, err)
 }
+
+// TestAccountsDbQueriesCreateClose tests to see that we can create the accountsDbQueries and close it.
+// it also verify that double-closing it doesn't create an issue.
+func TestAccountsDbQueriesCreateClose(t *testing.T) {
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.close()
+
+	err := dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	qs, err := accountsDbInit(dbs.rdb.Handle, dbs.wdb.Handle)
+	require.NoError(t, err)
+	require.NotNil(t, qs.listCreatablesStmt)
+	qs.close()
+	require.Nil(t, qs.listCreatablesStmt)
+	qs.close()
+	require.Nil(t, qs.listCreatablesStmt)
+}

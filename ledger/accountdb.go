@@ -278,8 +278,8 @@ func accountsReset(tx *sql.Tx) error {
 			return err
 		}
 	}
-	db.SetUserVersion(context.Background(), tx, 0)
-	return nil
+	_, err := db.SetUserVersion(context.Background(), tx, 0)
+	return err
 }
 
 // accountsRound returns the tracker balances round number, and the round of the hash tree
@@ -530,17 +530,25 @@ func (qs *accountsDbQueries) writeCatchpointStateString(ctx context.Context, sta
 }
 
 func (qs *accountsDbQueries) close() {
-	qs.listCreatablesStmt.Close()
-	qs.lookupStmt.Close()
-	qs.lookupCreatorStmt.Close()
-	qs.deleteStoredCatchpoint.Close()
-	qs.insertStoredCatchpoint.Close()
-	qs.selectOldestsCatchpointFiles.Close()
-	qs.selectCatchpointStateUint64.Close()
-	qs.deleteCatchpointState.Close()
-	qs.insertCatchpointStateUint64.Close()
-	qs.selectCatchpointStateString.Close()
-	qs.insertCatchpointStateString.Close()
+	preparedQueries := []**sql.Stmt{
+		&qs.listCreatablesStmt,
+		&qs.lookupStmt,
+		&qs.lookupCreatorStmt,
+		&qs.deleteStoredCatchpoint,
+		&qs.insertStoredCatchpoint,
+		&qs.selectOldestsCatchpointFiles,
+		&qs.selectCatchpointStateUint64,
+		&qs.deleteCatchpointState,
+		&qs.insertCatchpointStateUint64,
+		&qs.selectCatchpointStateString,
+		&qs.insertCatchpointStateString,
+	}
+	for _, preparedQuery := range preparedQueries {
+		if (*preparedQuery) != nil {
+			(*preparedQuery).Close()
+			*preparedQuery = nil
+		}
+	}
 }
 
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
