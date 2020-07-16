@@ -27,6 +27,7 @@ import (
 // GetUserVersion returns the user version field stored in the sqlite database
 // if the database was never initiliazed with a version, it would return 0 as the version.
 func GetUserVersion(ctx context.Context, tx *sql.Tx) (userVersion int32, err error) {
+
 	err = tx.QueryRowContext(ctx, "PRAGMA user_version").Scan(&userVersion)
 	// it's not really supposed to happen with a user_version, since the above would always succeed, but
 	// we want to have it so that we can align with the SQL statements "correct handling practices".
