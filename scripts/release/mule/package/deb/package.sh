@@ -84,7 +84,7 @@ done
 # TODO: make `Files:` segments for vendor/... and crypto/libsodium-fork, but reasonably this should be understood to cover all _our_ files and copied in packages continue to be licenced under their own terms
 cat <<EOF> "${PKG_ROOT}/DEBIAN/copyright"
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: Algorand
+Upstream-Name: algorand
 Upstream-Contact: Algorand developers <dev@algorand.com>
 Source: https://github.com/algorand/go-algorand
 

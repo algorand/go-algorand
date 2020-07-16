@@ -14,7 +14,7 @@ sg docker "docker build -t algocentosbuild - < ${HOME}/go/src/github.com/algoran
 
 cat <<EOF>"${HOME}"/dummyrepo/algodummy.repo
 [algodummy]
-name=Algorand
+name=algorand
 baseurl=http://${DC_IP}:8111/
 enabled=1
 gpgcheck=1

@@ -34,7 +34,7 @@ EOF
 SNAPSHOT=algodummy-$(date +%Y%m%d_%H%M%S)
 "$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf snapshot create "${SNAPSHOT}" from repo algodummy
 # Creates ~/dummyaptly/public
-"$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf publish snapshot -origin=Algorand -label=Algorand "${SNAPSHOT}"
+"$HOME"/go/bin/aptly -config="${HOME}"/dummyaptly.conf publish snapshot -origin=algorand -label=algorand "${SNAPSHOT}"
 
 (cd "${HOME}"/dummyaptly/public && python3 "${HOME}"/go/src/github.com/algorand/go-algorand/scripts/httpd.py --pid "${HOME}"/phttpd.pid) &
 trap "${HOME}"/go/src/github.com/algorand/go-algorand/scripts/kill_httpd.sh 0

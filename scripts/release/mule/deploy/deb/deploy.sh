@@ -71,7 +71,7 @@ SNAPSHOT="${CHANNEL}-${VERSION}"
 aptly repo create -distribution="$CHANNEL" -component=main algorand
 aptly repo add algorand "$DEBS_DIR"/*.deb
 aptly snapshot create "$SNAPSHOT" from repo algorand
-aptly publish snapshot -gpg-key="$SIGNING_KEY_ADDR" -origin=Algorand -label=Algorand "$SNAPSHOT" "s3:algorand-releases:"
+aptly publish snapshot -gpg-key="$SIGNING_KEY_ADDR" -origin=algorand -label=algorand "$SNAPSHOT" "s3:algorand-releases:"
 
 echo
 date "+build_release end SNAPSHOT stage %Y%m%d_%H%M%S"

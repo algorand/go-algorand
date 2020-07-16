@@ -24,7 +24,7 @@ aptly repo add algorand "$DEBS_DIR"
 aptly snapshot create "${CHANNEL}-${VERSION}" from repo algorand
 
 # Note: only run the first command below if there is nothing published.
-#aptly -config="$HOME"/.aptly.conf publish snapshot -gpg-key=dev@algorand.com -origin=Algorand -label=Algorand "${CHANNEL}-${VERSION}" "s3:ben-test-2.0.3:"
+#aptly -config="$HOME"/.aptly.conf publish snapshot -gpg-key=dev@algorand.com -origin=algorand -label=algorand "${CHANNEL}-${VERSION}" "s3:ben-test-2.0.3:"
 
 # Since snapshots have already been published, it's only necessary to switch the old one for the new one.
 aptly -config="$HOME"/.aptly.conf -gpg-key=dev@algorand.com publish switch "$CHANNEL" "s3:algorand-releases:" "$SNAPSHOT"
