@@ -896,6 +896,116 @@ proc ::AlgorandGoal::TakeAccountOnline { ADDRESS FIRST_ROUND LAST_ROUND TEST_PRI
    }
 }
 
+# stateful teal app procedures
+
+
+# App Create
+proc ::AlgorandGoal::AppCreate { WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS APPROVAL_PROGRAM APP_ARG CLEAR_PROGRAM DATA_DIR } {
+    set timeout 60
+    if { [ catch {
+        set APP_ID "NOT SET"
+        puts "calling goal app create"
+        spawn goal app create --creator $ACCOUNT_ADDRESS --approval-prog $APPROVAL_PROGRAM --global-byteslices 0 --global-ints 0 --local-byteslices 1 --local-ints 0 --app-arg $APP_ARG --clear-prog $CLEAR_PROGRAM -w $WALLET_NAME -d $DATA_DIR
+        expect {
+            timeout { abort "\n Failed to see expected output" }
+            "Please enter the password for wallet '$WALLET_NAME':" {send "$WALLET_PASSWORD\r" ; exp_continue }
+            -re {Created app with app index ([0-9]+)} {set APP_ID $expect_out(1,string) ;close  }
+            eof {puts "app not created" ; return 1}
+        }
+        puts "App ID $APP_ID"
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in AppCreate: $EXCEPTION"
+    }
+    return $APP_ID
+}
+
+
+# App OptIn with 1 argument
+proc ::AlgorandGoal::AppOptIn { APP_ID WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS APP_ARG1 DATA_DIR } {
+    set timeout 60
+    if { [ catch {
+        puts "opting in account to app"
+        spawn goal app optin --app-id $APP_ID --app-arg $APP_ARG1 -w $WALLET_NAME --from $ACCOUNT_ADDRESS -d $DATA_DIR
+        expect {
+            timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+            "Please enter the password for wallet '$WALLET_NAME':" {send "$WALLET_PASSWORD\r" ; exp_continue}
+            "*committed in round*" {puts "optin successful"; close}
+            eof {puts "optin failed" ; return 1}
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in AppOptIn: $EXCEPTION"
+    }
+}
+
+# App Call with 1 argument
+proc ::AlgorandGoal::AppCall { APP_ID WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS APP_ARG1 DATA_DIR } {
+    set timeout 60
+    if { [ catch {
+        puts "app call with arg: 'APP_ARG1'"
+        spawn goal app call --app-id $APP_ID --app-arg $APP_ARG1 -w $WALLET_NAME --from $ACCOUNT_ADDRESS -d $DATA_DIR
+        expect {
+            timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+            "Please enter the password for wallet '$WALLET_NAME':" {send "$WALLET_PASSWORD\r" ; exp_continue}
+            "*committed in round*" {puts "app call succeeded"; close}
+            eof {puts "app call failed" ; return 1}
+        }
+    } EXCEPTION ] } {
+        ::AlgorandGoal::Abort "ERROR in AppCall: $EXCEPTION"
+    }
+}
+
+# App Call with 2 arguments
+proc ::AlgorandGoal::AppCall2 { APP_ID WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS APP_ARG1 APP_ARG2 DATA_DIR } {
+  set timeout 60
+  if { [ catch {
+      puts "app call with args: 'APP_ARG1' and 'APP_ARG2'"
+      spawn goal app call --app-id $APP_ID --app-arg $APP_ARG1 --app-arg $APP_ARG2 -w $WALLET_NAME --from $ACCOUNT_ADDRESS -d $DATA_DIR
+      expect {
+          timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+          "Please enter the password for wallet '$WALLET_NAME':" {send "$WALLET_PASSWORD\r" ; exp_continue}
+          "*committed in round*" {puts "app call succeeded"; close}
+          eof {puts "app call failed" ; return 1}
+      }
+  } EXCEPTION ] } {
+     ::AlgorandGoal::Abort "ERROR in AppCall2: $EXCEPTION"
+  }
+}
+
+# App Closeout with 1 argument
+proc ::AlgorandGoal::AppCloseout { APP_ID WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS APP_ARG1 DATA_DIR } {
+    set timeout 60
+    if { [ catch {
+        puts "calling goal app close out with first arg $APP_ARG1"
+        spawn goal app closeout --app-id $APP_ID --app-arg $APP_ARG1 -w $WALLET_NAME --from $ACCOUNT_ADDRESS -d $DATA_DIR
+        expect {
+            timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+            "Please enter the password for wallet '$WALLET_NAME':" {send "$WALLET_PASSWORD\r" ; exp_continue }
+            "*committed in round*" {puts "app closeout succeeded"; close}
+            eof {puts "app closeout failed" ; return 1}
+        }
+    } EXCEPTION ] } {
+        ::AlgorandGoal::Abort "ERROR in AppCloseout: $EXCEPTION"
+    }
+}
+
+# App Delete with 1 argument
+proc ::AlgorandGoal::AppDelete { APP_ID WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS APP_ARG1 DATA_DIR } {
+    set timeout 60
+    if { [ catch {
+        puts "call app delete"
+        spawn goal app delete --app-id $APP_ID --app-arg $APP_ARG1 -w $WALLET_NAME --from $ACCOUNT_ADDRESS -d $DATA_DIR
+        expect {
+            timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+            "Please enter the password for wallet '$WALLET_NAME':" {send "$WALLET_PASSWORD\r" ; exp_continue}
+            "*committed in round*" {puts "app delete successful"; close}
+            eof {puts "app delete failed" ; return 1}
+        }
+    } EXCEPTION ] } {
+        ::AlgorandGoal::Abort "ERROR in AppDelete: $EXCEPTION"
+    }
+}
+
+
 # CheckEOF checks if there was an error, and aborts if there was an error
 proc ::AlgorandGoal::CheckEOF { { ERROR_STRING "" } } {
     upvar spawn_id spawn_id
