@@ -38,12 +38,12 @@ export PATH=$GOPATH/bin:$PATH
 
 To run the Goal Expect test, run the following command from the top level go-algorand directory:
 
-`go test test/e2e-go/cli/goal/expect/goal_expect_test.go` 
+`go test -v test/e2e-go/cli/goal/expect/goal_expect_test.go` 
 
 
 ## Adding New Tests
 
-To add a test, create a copy of the `test/e2e-go/cli/goal/expect/basicGoalTest.exp` file. 
+To add a test, create a copy of the `test/e2e-go/cli/goal/expect/basicGoalTest.exp` file within the same directory. 
 Give it a name that reflects the purpose of the test, and make sure the the file name suffix matches `'Test.exp'`.  This will allow it to be included when running the expect tests.
  
 ## Common Procedures
