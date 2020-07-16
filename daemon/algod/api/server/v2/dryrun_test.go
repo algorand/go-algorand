@@ -511,7 +511,7 @@ func TestDryrunLocal1(t *testing.T) {
 		{
 			Status:         "Online",
 			Address:        basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalState{Id: 1},
+			AppsLocalState: &[]generated.ApplicationLocalState{{Id: 1}},
 		},
 	}
 	doDryrunRequest(&dr, &proto, &response)
@@ -581,7 +581,7 @@ func TestDryrunLocal1A(t *testing.T) {
 		{
 			Status:         "Online",
 			Address:        basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalState{Id: 1},
+			AppsLocalState: &[]generated.ApplicationLocalState{{Id: 1}},
 		},
 	}
 
@@ -667,10 +667,10 @@ func TestDryrunLocalCheck(t *testing.T) {
 		{
 			Status:  "Online",
 			Address: basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalState{
+			AppsLocalState: &[]generated.ApplicationLocalState{{
 				Id:       1,
 				KeyValue: localv,
-			},
+			}},
 		},
 	}
 
@@ -719,10 +719,10 @@ func TestDryrunEncodeDecode(t *testing.T) {
 		{
 			Status:  "Online",
 			Address: basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalState{
+			AppsLocalState: &[]generated.ApplicationLocalState{{
 				Id:       1,
 				KeyValue: localv,
-			},
+			}},
 		},
 	}
 
