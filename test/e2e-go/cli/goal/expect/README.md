@@ -4,6 +4,21 @@ Expect is a framework for testing command line interfaces (CLI).  It is a extens
  
 We use expect to test the Algorand Goal CLI.
 
+## Setup 
+
+From the go-algorand root directory, setup the environment and build the binaries as described in the top-level project README.md file.  
+
+Initialize the project:
+```bash
+git clone https://github.com/algorand/go-algorand
+cd go-algorand
+./scripts/configure_dev.sh
+```
+Then build the binaries:
+```bash
+make install clean
+```
+
 ## Running the Expect Tests
 
 To run the Goal Expect test, run the following command from the top level go-algorand directory:

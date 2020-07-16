@@ -910,7 +910,7 @@ proc ::AlgorandGoal::AppCreate { WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS APP
             timeout { abort "\n Failed to see expected output" }
             "Please enter the password for wallet '$WALLET_NAME':" {send "$WALLET_PASSWORD\r" ; exp_continue }
             -re {Created app with app index ([0-9]+)} {set APP_ID $expect_out(1,string) ;close  }
-            eof {puts "app not created" ; return 1}
+            eof {::AlgorandGoal::Abort "app not created" }
         }
         puts "App ID $APP_ID"
     } EXCEPTION ] } {
@@ -930,7 +930,7 @@ proc ::AlgorandGoal::AppOptIn { APP_ID WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRE
             timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
             "Please enter the password for wallet '$WALLET_NAME':" {send "$WALLET_PASSWORD\r" ; exp_continue}
             "*committed in round*" {puts "optin successful"; close}
-            eof {puts "optin failed" ; return 1}
+            eof {::AlgorandGoal::Abort "optin failed" }
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in AppOptIn: $EXCEPTION"
@@ -947,7 +947,7 @@ proc ::AlgorandGoal::AppCall { APP_ID WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRES
             timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
             "Please enter the password for wallet '$WALLET_NAME':" {send "$WALLET_PASSWORD\r" ; exp_continue}
             "*committed in round*" {puts "app call succeeded"; close}
-            eof {puts "app call failed" ; return 1}
+            eof {::AlgorandGoal::Abort "app call failed" }
         }
     } EXCEPTION ] } {
         ::AlgorandGoal::Abort "ERROR in AppCall: $EXCEPTION"
@@ -964,7 +964,7 @@ proc ::AlgorandGoal::AppCall2 { APP_ID WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRE
           timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
           "Please enter the password for wallet '$WALLET_NAME':" {send "$WALLET_PASSWORD\r" ; exp_continue}
           "*committed in round*" {puts "app call succeeded"; close}
-          eof {puts "app call failed" ; return 1}
+          eof {::AlgorandGoal::Abort "app call failed" }
       }
   } EXCEPTION ] } {
      ::AlgorandGoal::Abort "ERROR in AppCall2: $EXCEPTION"
@@ -981,7 +981,7 @@ proc ::AlgorandGoal::AppCloseout { APP_ID WALLET_NAME WALLET_PASSWORD ACCOUNT_AD
             timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
             "Please enter the password for wallet '$WALLET_NAME':" {send "$WALLET_PASSWORD\r" ; exp_continue }
             "*committed in round*" {puts "app closeout succeeded"; close}
-            eof {puts "app closeout failed" ; return 1}
+            eof {::AlgorandGoal::Abort "app closeout failed"}
         }
     } EXCEPTION ] } {
         ::AlgorandGoal::Abort "ERROR in AppCloseout: $EXCEPTION"
@@ -998,7 +998,7 @@ proc ::AlgorandGoal::AppDelete { APP_ID WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDR
             timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
             "Please enter the password for wallet '$WALLET_NAME':" {send "$WALLET_PASSWORD\r" ; exp_continue}
             "*committed in round*" {puts "app delete successful"; close}
-            eof {puts "app delete failed" ; return 1}
+            eof {::AlgorandGoal::Abort "app delete failed" }
         }
     } EXCEPTION ] } {
         ::AlgorandGoal::Abort "ERROR in AppDelete: $EXCEPTION"
