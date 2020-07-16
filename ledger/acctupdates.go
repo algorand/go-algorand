@@ -598,7 +598,7 @@ func (au *accountUpdates) totals(rnd basics.Round) (totals AccountTotals, err er
 
 func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	dbFileName := ""
-	err := au.dbs.rdb.Atomic(func(tx *sql.Tx) (err error) {
+	err := au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		dbFileName, _, _, err = getCatchpoint(tx, round)
 		return
 	})
@@ -695,7 +695,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	}
 
 	lastestBlockRound = l.Latest()
-	err = au.dbs.wdb.Atomic(func(tx *sql.Tx) error {
+	err = au.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		au.dbRound, err0 = au.accountsInitialize(tx)
 		if err0 != nil {
@@ -1009,7 +1009,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	beforeUpdatingBalancesTime := time.Now()
 	var trieBalancesHash crypto.Digest
 
-	err := au.dbs.wdb.AtomicCommitWriteLock(func(tx *sql.Tx) (err error) {
+	err := au.dbs.wdb.AtomicCommitWriteLock(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
 			mc, err0 := makeMerkleCommitter(tx, false)
