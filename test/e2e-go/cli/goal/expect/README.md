@@ -8,16 +8,22 @@ We use expect to test the Algorand Goal CLI.
 
 From the go-algorand root directory, setup the environment and build the binaries as described in the top-level project README.md file.  
 
-Initialize the project:
+#### Initialize the project
 ```bash
 git clone https://github.com/algorand/go-algorand
 cd go-algorand
 ./scripts/configure_dev.sh
 ```
-Then build the binaries:
+#### Build the binaries
 ```bash
 make install clean
 ```
+
+#### Set environment variables
+
+The `PATH` environment variable should include `$GOPATH/bin`
+
+The `GOPATH` should be set to your local Go projects directory.
 
 ## Running the Expect Tests
 
