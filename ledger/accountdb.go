@@ -528,6 +528,20 @@ func (qs *accountsDbQueries) writeCatchpointStateString(ctx context.Context, sta
 	return cleared, err
 }
 
+func (qs *accountsDbQueries) close() {
+	qs.listCreatablesStmt.Close()
+	qs.lookupStmt.Close()
+	qs.lookupCreatorStmt.Close()
+	qs.deleteStoredCatchpoint.Close()
+	qs.insertStoredCatchpoint.Close()
+	qs.selectOldestsCatchpointFiles.Close()
+	qs.selectCatchpointStateUint64.Close()
+	qs.deleteCatchpointState.Close()
+	qs.insertCatchpointStateUint64.Close()
+	qs.selectCatchpointStateString.Close()
+	qs.insertCatchpointStateString.Close()
+}
+
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
 	rows, err := tx.Query("SELECT address, data FROM accountbase")
 	if err != nil {

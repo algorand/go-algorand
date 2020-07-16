@@ -698,7 +698,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	lastestBlockRound = l.Latest()
 	err = au.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		au.dbRound, err0 = au.accountsInitialize(tx)
+		au.dbRound, err0 = au.accountsInitialize(ctx, tx)
 		if err0 != nil {
 			return err0
 		}
@@ -709,7 +709,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 			if err0 != nil {
 				return err0
 			}
-			au.dbRound, err0 = au.accountsInitialize(tx)
+			au.dbRound, err0 = au.accountsInitialize(ctx, tx)
 			if err0 != nil {
 				return err0
 			}
@@ -777,16 +777,20 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 }
 
 // Initialize accounts DB if needed and return account round
-func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
-	dbVersion, err := db.GetUserVersion(context.Background(), tx)
+func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (basics.Round, error) {
+	dbVersion, err := db.GetUserVersion(ctx, tx)
 	if err != nil {
 		return 0, err
 	}
 	if dbVersion > accountDBVersion {
-		return 0, fmt.Errorf("database schema version is %d, but algod supports only %d", dbVersion, accountDBVersion)
+		return 0, fmt.Errorf("accountsInitialize database schema version is %d, but algod supports only %d", dbVersion, accountDBVersion)
 	}
 
+	if dbVersion < accountDBVersion {
+		au.log.Infof("accountsInitialize upgrading database schema from version %d to version %d", dbVersion, accountDBVersion)
+	}
 	for dbVersion < accountDBVersion {
+		au.log.Infof("accountsInitialize performing upgrade from version %d", dbVersion)
 		// perform the initialization/upgrade
 		switch dbVersion {
 		case 0:
@@ -794,14 +798,14 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 			if err != nil {
 				return 0, err
 			}
-			_, err = db.SetUserVersion(context.Background(), tx, 1)
+			_, err = db.SetUserVersion(ctx, tx, 1)
 			if err != nil {
 				return 0, err
 			}
 			dbVersion = 1
 		case 1:
 			// update accounts encoding.
-			modifiedAccounts, err := reencodeAccounts(context.Background(), tx)
+			modifiedAccounts, err := reencodeAccounts(ctx, tx)
 			if err != nil {
 				return 0, err
 			}
@@ -821,8 +825,11 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 					return 0, err
 				}
 
+				// close the prepared statements when we're done with them.
+				defer accountsq.close()
+
 				// delete the last catchpoint label if we have any.
-				_, err = accountsq.writeCatchpointStateString(context.Background(), catchpointStateLastCatchpoint, "")
+				_, err = accountsq.writeCatchpointStateString(ctx, catchpointStateLastCatchpoint, "")
 				if err != nil {
 					return 0, err
 				}
@@ -837,13 +844,13 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 			}
 
 			// update version
-			_, err = db.SetUserVersion(context.Background(), tx, 2)
+			_, err = db.SetUserVersion(ctx, tx, 2)
 			if err != nil {
 				return 0, err
 			}
 			dbVersion = 2
 		default:
-			return 0, fmt.Errorf("unable to upgrade database from schema version %d", dbVersion)
+			return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
 		}
 	}
 
