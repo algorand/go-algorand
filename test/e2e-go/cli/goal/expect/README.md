@@ -16,14 +16,23 @@ cd go-algorand
 ```
 #### Build the binaries
 ```bash
-make install clean
+make clean install
 ```
 
 #### Set environment variables
 
+The `GOPATH` should be set to your local Go projects directory. For example:
+
+```bash
+export GOPATH=~/GolandProjects/
+```
+
 The `PATH` environment variable should include `$GOPATH/bin`
 
-The `GOPATH` should be set to your local Go projects directory.
+```bash
+export PATH=$GOPATH/bin:$PATH
+```
+
 
 ## Running the Expect Tests
 
