@@ -351,25 +351,37 @@ func (wlc *WarningLogCounter) With(key string, value interface{}) logging.Logger
 
 // Test resetting warning notification
 func TestResettingTransactionWarnDeadline(t *testing.T) {
-	acc, err := MakeAccessor("fn.db", false, true)
-	require.NoError(t, err)
-	defer acc.Close()
-	logger := WarningLogCounter{
-		Logger: logging.Base(),
-	}
-	acc.log = &logger
-	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		time.Sleep(1001 * time.Millisecond)
-		return err
+	t.Run("expectedWarning", func(t *testing.T) {
+		t.Parallel()
+		acc, err := MakeAccessor("fn-expectedWarning.db", false, true)
+		require.NoError(t, err)
+		defer acc.Close()
+		logger := WarningLogCounter{
+			Logger: logging.Base(),
+		}
+		acc.log = &logger
+		err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			time.Sleep(1001 * time.Millisecond)
+			return err
+		})
+		require.NoError(t, err)
+		require.Equal(t, 1, logger.warningsCounter)
 	})
-	require.NoError(t, err)
-	require.Equal(t, 1, logger.warningsCounter)
-
-	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(30*time.Second))
-		time.Sleep(1001 * time.Millisecond)
-		return err
+	t.Run("expectedNoWarning", func(t *testing.T) {
+		t.Parallel()
+		acc, err := MakeAccessor("fn-expectedNoWarning.db", false, true)
+		require.NoError(t, err)
+		defer acc.Close()
+		logger := WarningLogCounter{
+			Logger: logging.Base(),
+		}
+		acc.log = &logger
+		err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(30*time.Second))
+			time.Sleep(1001 * time.Millisecond)
+			return err
+		})
+		require.NoError(t, err)
+		require.Equal(t, 0, logger.warningsCounter)
 	})
-	require.NoError(t, err)
-	require.Equal(t, 1, logger.warningsCounter)
 }
