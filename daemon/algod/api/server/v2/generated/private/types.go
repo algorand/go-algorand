@@ -23,7 +23,7 @@ type Account struct {
 	// \[appl\] applications local data stored in this account.
 	//
 	// Note the raw object uses `map[int] -> AppLocalState` for this type.
-	AppsLocalState *[]ApplicationLocalStates `json:"apps-local-state,omitempty"`
+	AppsLocalState *[]ApplicationLocalState `json:"apps-local-state,omitempty"`
 
 	// Specifies maximums on the number of each type that may be stored.
 	AppsTotalSchema *ApplicationStateSchema `json:"apps-total-schema,omitempty"`
@@ -114,19 +114,14 @@ type Application struct {
 // ApplicationLocalState defines model for ApplicationLocalState.
 type ApplicationLocalState struct {
 
+	// The application which this local state is for.
+	Id uint64 `json:"id"`
+
 	// Represents a key-value store for use in an application.
 	KeyValue TealKeyValueStore `json:"key-value"`
 
 	// Specifies maximums on the number of each type that may be stored.
 	Schema ApplicationStateSchema `json:"schema"`
-}
-
-// ApplicationLocalStates defines model for ApplicationLocalStates.
-type ApplicationLocalStates struct {
-	Id uint64 `json:"id"`
-
-	// Stores local state associated with an application.
-	State ApplicationLocalState `json:"state"`
 }
 
 // ApplicationParams defines model for ApplicationParams.

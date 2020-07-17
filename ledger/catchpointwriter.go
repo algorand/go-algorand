@@ -221,7 +221,7 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 	}
 }
 
-func (cw *catchpointWriter) readDatabaseStep(tx *sql.Tx) (err error) {
+func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (err error) {
 	cw.balancesChunk.Balances, err = encodedAccountsRange(tx, cw.balancesOffset, BalancesPerCatchpointFileChunk)
 	if err == nil {
 		cw.balancesOffset += BalancesPerCatchpointFileChunk
@@ -229,7 +229,7 @@ func (cw *catchpointWriter) readDatabaseStep(tx *sql.Tx) (err error) {
 	return
 }
 
-func (cw *catchpointWriter) readHeaderFromDatabase(tx *sql.Tx) (err error) {
+func (cw *catchpointWriter) readHeaderFromDatabase(ctx context.Context, tx *sql.Tx) (err error) {
 	var header CatchpointFileHeader
 	header.BalancesRound, _, err = accountsRound(tx)
 	if err != nil {

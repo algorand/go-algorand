@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"sync"
@@ -53,7 +54,7 @@ func bqInit(l *Ledger) (*blockQueue, error) {
 	bq.l = l
 	bq.running = true
 	bq.closed = make(chan struct{})
-	err := bq.l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err := bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		bq.lastCommitted, err0 = blockLatest(tx)
 		return err0
@@ -100,7 +101,7 @@ func (bq *blockQueue) syncer() {
 		workQ := bq.q
 		bq.mu.Unlock()
 
-		err := bq.l.blockDBs.wdb.Atomic(func(tx *sql.Tx) error {
+		err := bq.l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			for _, e := range workQ {
 				err0 := blockPut(tx, e.block, e.cert)
 				if err0 != nil {
@@ -133,7 +134,7 @@ func (bq *blockQueue) syncer() {
 			bq.mu.Unlock()
 
 			minToSave := bq.l.notifyCommit(committed)
-			err = bq.l.blockDBs.wdb.Atomic(func(tx *sql.Tx) error {
+			err = bq.l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 				return blockForgetBefore(tx, minToSave)
 			})
 			if err != nil {
@@ -244,7 +245,7 @@ func (bq *blockQueue) getBlock(r basics.Round) (blk bookkeeping.Block, err error
 		return
 	}
 
-	err = bq.l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		blk, err0 = blockGet(tx, r)
 		return err0
@@ -263,7 +264,7 @@ func (bq *blockQueue) getBlockHdr(r basics.Round) (hdr bookkeeping.BlockHeader, 
 		return
 	}
 
-	err = bq.l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		hdr, err0 = blockGetHdr(tx, r)
 		return err0
@@ -286,7 +287,7 @@ func (bq *blockQueue) getEncodedBlockCert(r basics.Round) (blk []byte, cert []by
 		return
 	}
 
-	err = bq.l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		blk, cert, err0 = blockGetEncodedCert(tx, r)
 		return err0
@@ -305,7 +306,7 @@ func (bq *blockQueue) getBlockCert(r basics.Round) (blk bookkeeping.Block, cert 
 		return
 	}
 
-	err = bq.l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		blk, cert, err0 = blockGetCert(tx, r)
 		return err0
