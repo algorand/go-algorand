@@ -60,7 +60,7 @@ if ! aws ec2 create-key-pair --key-name "${KEY_NAME}" --region "${AWS_REGION}" |
     exit 1
 fi
 
-if ! aws ec2 run-instances --image-id ${AWS_AMI} --key-name "${KEY_NAME}" --security-groups ${SECURITY_GROUP_NAME} --instance-type "${AWS_INSTANCE_TYPE}" --tag-specifications "ResourceType=instance,Tags=[{Key=\"Name\",Value=\"Buildhost_Ephermal_Instance_${INSTANCE_NUMBER}\"}, {Key=\"For\",Value=\"Buildhost_Ephermal_Instance\"}]" --block-device-mappings DeviceName=/dev/sdh,Ebs={VolumeSize=100} --count 1 --region "${AWS_REGION}" > instance.json ; then
+if ! aws ec2 run-instances --image-id "${AWS_AMI}" --key-name "${KEY_NAME}" --security-groups ${SECURITY_GROUP_NAME} --instance-type "${AWS_INSTANCE_TYPE}" --tag-specifications "ResourceType=instance,Tags=[{Key=\"Name\",Value=\"Buildhost_Ephermal_Instance_${INSTANCE_NUMBER}\"}, {Key=\"For\",Value=\"Buildhost_Ephermal_Instance\"}]" --block-device-mappings DeviceName="/dev/sdh,Ebs={VolumeSize=100}" --count 1 --region "${AWS_REGION}" > instance.json ; then
     aws ec2 delete-key-pair --key-name "${KEY_NAME}" --region "${AWS_REGION}"
     aws ec2 delete-security-group --group-id "${SGID}" --region "${AWS_REGION}"
     rm key.pem
