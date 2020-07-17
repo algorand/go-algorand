@@ -778,12 +778,16 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 
 // Initialize accounts DB if needed and return account round
 func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (basics.Round, error) {
+	// check current daabase version.
 	dbVersion, err := db.GetUserVersion(ctx, tx)
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize unable to read database schema version : %v", err)
 	}
+
+	// if database version is greater than supported by current binary, write a warning. This would keep the existing
+	// fallback behaviour where we could use an older binary iff the schema happen to be backward compatible.
 	if dbVersion > accountDBVersion {
-		return 0, fmt.Errorf("accountsInitialize database schema version is %d, but algod supports only %d", dbVersion, accountDBVersion)
+		au.log.Warnf("accountsInitialize database schema version is %d, but algod supports only %d", dbVersion, accountDBVersion)
 	}
 
 	if dbVersion < accountDBVersion {
@@ -846,7 +850,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 						return 0, fmt.Errorf("accountsInitialize unable to delete stored catchpoints : %v", err)
 					}
 				} else {
-					au.log.Infof("accountsInitialize reencoded no accounts")
+					au.log.Infof("accountsInitialize found that no accounts needed to be reencoded")
 				}
 
 				// update version
