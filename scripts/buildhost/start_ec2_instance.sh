@@ -28,7 +28,7 @@ SECURITY_GROUP_NAME="BuilderMachineSSH_${INSTANCE_NUMBER}"
 function security_group_exists {
     if aws ec2 describe-security-groups --group-name "${SECURITY_GROUP_NAME}" --region "$AWS_REGION" > /dev/null 2>&1; then
         echo "WARNING: security group ${SECURITY_GROUP_NAME} exists"
-	    return 0
+        return 0
     fi
     
     return 1
@@ -37,7 +37,7 @@ function security_group_exists {
 function key_pair_exists {
     if aws ec2 describe-key-pairs --key-names "${KEY_NAME}" --region "$AWS_REGION" > /dev/null 2>&1; then
         echo "WARNING: key pair ${KEY_NAME} exists"
-	    return 0
+        return 0
     fi
         return 1
 }
