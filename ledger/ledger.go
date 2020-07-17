@@ -235,10 +235,9 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs 
 	return
 }
 
-// initLedgerDB performs DB initialization:
+// initBlocksDB performs DB initialization:
 // - creates and populates it with genesis blocks
 // - ensures DB is in good shape for archival mode and resets it if not
-// - does nothing if everything looks good
 func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchival bool) (err error) {
 	err = blockInit(tx, initBlocks)
 	if err != nil {
@@ -269,7 +268,22 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 				return err
 			}
 		}
+
+		// Manually replace block 0, even if we already had it
+		// (necessary to normalize the payset commitment because of a
+		// bug that caused its value to change)
+		//
+		// Don't bother for non-archival nodes since they will toss
+		// block 0 almost immediately
+		if len(initBlocks) > 0 && initBlocks[0].Round() == basics.Round(0) {
+			blockReplaceIfExists(tx, initBlocks[0], agreement.Certificate{})
+			if err != nil {
+				err = fmt.Errorf("initBlocksDB.blockReplaceIfExists %v", err)
+				return err
+			}
+		}
 	}
+
 	return nil
 }
 
