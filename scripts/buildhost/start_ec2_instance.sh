@@ -25,6 +25,20 @@ INSTANCE_NUMBER=$RANDOM
 KEY_NAME="BuilderInstanceKey_${INSTANCE_NUMBER}"
 SECURITY_GROUP_NAME="BuilderMachineSSH_${INSTANCE_NUMBER}"
 
+function security_group_exists {
+    if aws ec2 describe-security-groups --group-name "${SECURITY_GROUP_NAME}" --region "$AWS_REGION" > /dev/null 2>&1; then
+	return 0
+    fi
+    return 1
+}
+
+while security_group_exists ; do
+    echo "Security group ${SECURITY_GROUP_NAME} exists, picking new group"
+    INSTANCE_NUMBER=$RANDOM
+    KEY_NAME="BuilderInstanceKey_${INSTANCE_NUMBER}"
+    SECURITY_GROUP_NAME="BuilderMachineSSH_${INSTANCE_NUMBER}"
+done
+
 if ! SGID=$(aws ec2 create-security-group --group-name ${SECURITY_GROUP_NAME} --description "Security Group for ephermal build machine to allow port 22" --region "${AWS_REGION}" | jq -r '.GroupId') ; then
     exit 1
 fi
