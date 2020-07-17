@@ -972,7 +972,11 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 				// we can't delete the file, abort -
 				return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
 			}
-			dbQueries.storeCatchpoint(ctx, round, "", "", 0)
+			// clear the entry from the database
+			err = dbQueries.storeCatchpoint(ctx, round, "", "", 0)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
