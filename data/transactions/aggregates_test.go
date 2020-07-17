@@ -67,7 +67,7 @@ func TestEmptyPaysetCommitment(t *testing.T) {
 	require.Equal(t, nilFlatPaysetHash, Payset{}.Commit(true).String())
 	require.Equal(t, nilFlatPaysetHash, nilPayset.Commit(true).String())
 
-	// Genesis block should encode empty payset differently
+	// Genesis block should encode the empty payset differently
 	require.Equal(t, emptyFlatPaysetHash, Payset{}.CommitGenesis(true).String())
 	require.Equal(t, nilFlatPaysetHash, nilPayset.CommitGenesis(true).String())
 }
