@@ -64,6 +64,7 @@ type DebugParams struct {
 	GroupIndex       int
 	BalanceBlob      []byte
 	DdrBlob          []byte
+	IndexerURL       string
 	Round            int
 	LatestTimestamp  int64
 	RunMode          string

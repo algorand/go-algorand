@@ -17,16 +17,32 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"io/ioutil"
 	"math/rand"
+	"net/http"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
 )
+
+type AccountResponse struct {
+	// Account information at a given round.
+	//
+	// Definition:
+	// data/basics/userBalance.go : AccountData
+	Account generated.Account `json:"account"`
+
+	// Round at which the results were computed.
+	CurrentRound uint64 `json:"current-round"`
+}
 
 type balancesAdapter struct {
 	balances   map[basics.Address]basics.AccountData
@@ -39,7 +55,7 @@ type balancesAdapter struct {
 func makeAppLedger(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
 	groupIndex int, proto config.ConsensusParams, round int, latestTimestamp int64,
-	appIdx basics.AppIndex, painless bool,
+	appIdx basics.AppIndex, painless bool, indexerURL string,
 ) (logic.LedgerForLogic, appState, error) {
 
 	if groupIndex >= len(txnGroup) {
@@ -52,6 +68,25 @@ func makeAppLedger(
 
 	apps := []basics.AppIndex{appIdx}
 	apps = append(apps, txn.Txn.ForeignApps...)
+
+	// first populate balances from the indexer
+	for _, acc := range accounts {
+		fmt.Println("debug hello")
+		if _, ok := balances[acc]; !ok {
+			queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%v", indexerURL, acc, round)
+			fmt.Println(queryString)
+			if resp, err := http.Get(queryString); err == nil {
+				if responseData, err := ioutil.ReadAll(resp.Body); err == nil {
+					var accountResp AccountResponse
+					json.Unmarshal(responseData, &accountResp)
+					balances[acc], err = v2.AccountToAccountData(&accountResp.Account)
+					fmt.Println(balances[acc])
+				}
+			} else {
+				fmt.Println(err)
+			}
+		}
+	}
 
 	ba := &balancesAdapter{
 		balances:   balances,
@@ -166,6 +201,7 @@ func getRandomAddress() (basics.Address, error) {
 func (ba *balancesAdapter) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
 	br, ok := ba.balances[addr]
 	if !ok {
+		// fetch from indexer first
 		return basics.BalanceRecord{}, nil
 	}
 	return basics.BalanceRecord{Addr: addr, AccountData: br}, nil
