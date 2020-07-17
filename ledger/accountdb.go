@@ -766,6 +766,8 @@ func encodedAccountsRange(ctx context.Context, tx *sql.Tx, startAccountIndex, ac
 		// the encodedAccountsRange typically called in a loop iterating over all the accounts. This could clearly take more than the
 		// "standard" 1 second, so we want to extend the timeout on each iteration. If the last iteration takes more than a second, then
 		// it should be noted. The one second here is quite liberal to ensure symmetrical behaviour on low-power devices.
+		// The return value from ResetTransactionWarnDeadline can be safely ignored here since it would only default to writing the warnning
+		// message, which would let us know that it failed anyway.
 		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(time.Second))
 	}
 	return
@@ -807,6 +809,8 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 		// note that we should be quite liberal on timing here, since it might perform much slower
 		// on low-power devices.
 		if scannedAccounts%1000 == 0 {
+			// The return value from ResetTransactionWarnDeadline can be safely ignored here since it would only default to writing the warnning
+			// message, which would let us know that it failed anyway.
 			db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(time.Second))
 		}
 
