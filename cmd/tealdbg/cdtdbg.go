@@ -127,8 +127,8 @@ func (a *CDTAdapter) enableWebsocketEndpoint(
 		Title:                     "Algorand TEAL program",
 		TabType:                   "node",
 		URL:                       "https://algorand.com/",
-		DevtoolsFrontendURL:       "chrome-devtools://devtools/bundled/js_app.html?experiments=true&v8only=false&ws=" + address,
-		DevtoolsFrontendURLCompat: "chrome-devtools://devtools/bundled/inspector.html?experiments=true&v8only=false&ws=" + address,
+		DevtoolsFrontendURL:       "devtools://devtools/bundled/js_app.html?experiments=true&v8only=false&ws=" + address,
+		DevtoolsFrontendURLCompat: "devtools://devtools/bundled/inspector.html?experiments=true&v8only=false&ws=" + address,
 		WebSocketDebuggerURL:      "ws://" + address,
 		FaviconURL:                "https://www.algorand.com/icons/icon-144x144.png",
 	}
