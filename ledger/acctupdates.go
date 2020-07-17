@@ -69,15 +69,18 @@ type modifiedAccount struct {
 	ndeltas int
 }
 
-type modifiedAsset struct {
+type modifiedCreatable struct {
+	// Type of the creatable: app or asset
+	ctype basics.CreatableType
+
 	// Created if true, deleted if false
 	created bool
 
-	// Creator is the creator of the asset
+	// creator of the app/asset
 	creator basics.Address
 
-	// Keeps track of how many times this asset appears in
-	// accountUpdates.assetDeltas
+	// Keeps track of how many times this app/asset appears in
+	// accountUpdates.creatableDeltas
 	ndeltas int
 }
 
@@ -122,12 +125,12 @@ type accountUpdates struct {
 	// address that appears in deltas.
 	accounts map[basics.Address]modifiedAccount
 
-	// assetDeltas stores asset updates for every round after dbRound.
-	assetDeltas []map[basics.AssetIndex]modifiedAsset
+	// creatableDeltas stores creatable updates for every round after dbRound.
+	creatableDeltas []map[basics.CreatableIndex]modifiedCreatable
 
-	// assets stores the most recent asset state for every asset
-	// that appears in assetDeltas
-	assets map[basics.AssetIndex]modifiedAsset
+	// creatables stores the most recent state for every creatable that
+	// appears in creatableDeltas
+	creatables map[basics.CreatableIndex]modifiedCreatable
 
 	// protos stores consensus parameters dbRound and every
 	// round after it; i.e., protos is one longer than deltas.
@@ -292,51 +295,63 @@ func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewa
 }
 
 func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
+	return au.listCreatables(basics.CreatableIndex(maxAssetIdx), maxResults, basics.AssetCreatable)
+}
+
+func (au *accountUpdates) listApplications(maxAppIdx basics.AppIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
+	return au.listCreatables(basics.CreatableIndex(maxAppIdx), maxResults, basics.AppCreatable)
+}
+
+func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) ([]basics.CreatableLocator, error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 
-	// Sort indices for assets that have been created/deleted. If this
+	// Sort indices for creatables that have been created/deleted. If this
 	// turns out to be too inefficient, we could keep around a heap of
 	// created/deleted asset indices in memory.
-	keys := make([]basics.AssetIndex, 0, len(au.assets))
-	for aidx := range au.assets {
-		if aidx <= maxAssetIdx {
-			keys = append(keys, aidx)
+	keys := make([]basics.CreatableIndex, 0, len(au.creatables))
+	for cidx, delta := range au.creatables {
+		if delta.ctype != ctype {
+			continue
+		}
+		if cidx <= maxCreatableIdx {
+			keys = append(keys, cidx)
 		}
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i] > keys[j] })
 
-	// Check for assets that haven't been synced to disk yet.
-	var unsyncedAssets []basics.CreatableLocator
-	deletedAssets := make(map[basics.AssetIndex]bool)
-	for _, aidx := range keys {
-		delta := au.assets[aidx]
+	// Check for creatables that haven't been synced to disk yet.
+	var unsyncedCreatables []basics.CreatableLocator
+	deletedCreatables := make(map[basics.CreatableIndex]bool)
+	for _, cidx := range keys {
+		delta := au.creatables[cidx]
 		if delta.created {
-			// Created asset that only exists in memory
-			unsyncedAssets = append(unsyncedAssets, basics.CreatableLocator{
-				Index:   basics.CreatableIndex(aidx),
+			// Created but only exists in memory
+			unsyncedCreatables = append(unsyncedCreatables, basics.CreatableLocator{
+				Type:    delta.ctype,
+				Index:   cidx,
 				Creator: delta.creator,
 			})
 		} else {
-			// Mark deleted assets for exclusion from the results set
-			deletedAssets[aidx] = true
+			// Mark deleted creatables for exclusion from the results set
+			deletedCreatables[cidx] = true
 		}
 	}
 
-	// Check in-memory created assets, which will always be newer than anything
+	// Check in-memory created creatables, which will always be newer than anything
 	// in the database
 	var res []basics.CreatableLocator
-	for _, loc := range unsyncedAssets {
+	for _, loc := range unsyncedCreatables {
 		if uint64(len(res)) == maxResults {
 			return res, nil
 		}
 		res = append(res, loc)
 	}
 
-	// Fetch up to maxResults - len(res) + len(deletedAssets) from the database, so we
-	// have enough extras in case assets were deleted
-	numToFetch := maxResults - uint64(len(res)) + uint64(len(deletedAssets))
-	dbResults, err := au.accountsq.listAssets(maxAssetIdx, numToFetch)
+	// Fetch up to maxResults - len(res) + len(deletedCreatables) from the database,
+	// so we have enough extras in case creatables were deleted
+	numToFetch := maxResults - uint64(len(res)) + uint64(len(deletedCreatables))
+	dbResults, err := au.accountsq.listCreatables(maxCreatableIdx, numToFetch, ctype)
 	if err != nil {
 		return nil, err
 	}
@@ -348,8 +363,8 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 			return res, nil
 		}
 
-		// Asset was deleted
-		if _, ok := deletedAssets[basics.AssetIndex(loc.Index)]; ok {
+		// Creatable was deleted
+		if _, ok := deletedCreatables[loc.Index]; ok {
 			continue
 		}
 
@@ -367,41 +382,41 @@ func (au *accountUpdates) getLastCatchpointLabel() string {
 	return au.lastCatchpointLabel
 }
 
-// getAssetCreatorForRound returns the asset creator for a given asset index at a given round
-func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.AssetIndex) (basics.Address, error) {
+func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
+
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
-		return basics.Address{}, err
+		return basics.Address{}, false, err
 	}
 
-	// If this is the most recent round, au.assets has will have the latest
-	// state and we can skip scanning backwards over assetDeltas
+	// If this is the most recent round, au.creatables has will have the latest
+	// state and we can skip scanning backwards over creatableDeltas
 	if offset == uint64(len(au.deltas)) {
 		// Check if we already have the asset/creator in cache
-		assetDelta, ok := au.assets[aidx]
+		creatableDelta, ok := au.creatables[cidx]
 		if ok {
-			if assetDelta.created {
-				return assetDelta.creator, nil
+			if creatableDelta.created && creatableDelta.ctype == ctype {
+				return creatableDelta.creator, true, nil
 			}
-			return basics.Address{}, fmt.Errorf("asset %v has been deleted", aidx)
+			return basics.Address{}, false, nil
 		}
 	} else {
 		for offset > 0 {
 			offset--
-			assetDelta, ok := au.assetDeltas[offset][aidx]
+			creatableDelta, ok := au.creatableDeltas[offset][cidx]
 			if ok {
-				if assetDelta.created {
-					return assetDelta.creator, nil
+				if creatableDelta.created && creatableDelta.ctype == ctype {
+					return creatableDelta.creator, true, nil
 				}
-				return basics.Address{}, fmt.Errorf("asset %v has been deleted", aidx)
+				return basics.Address{}, false, nil
 			}
 		}
 	}
 
 	// Check the database
-	return au.accountsq.lookupAssetCreator(aidx)
+	return au.accountsq.lookupCreator(cidx, ctype)
 }
 
 // committedUpTo enqueues commiting the balances for round committedRound-lookback.
@@ -530,7 +545,7 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	}
 	au.deltas = append(au.deltas, delta.accts)
 	au.protos = append(au.protos, proto)
-	au.assetDeltas = append(au.assetDeltas, delta.assets)
+	au.creatableDeltas = append(au.creatableDeltas, delta.creatables)
 	au.roundDigest = append(au.roundDigest, blk.Digest())
 	au.deltasAccum = append(au.deltasAccum, len(delta.accts)+au.deltasAccum[len(au.deltasAccum)-1])
 
@@ -549,12 +564,13 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 		au.accounts[addr] = macct
 	}
 
-	for aidx, adelta := range delta.assets {
-		masset := au.assets[aidx]
-		masset.creator = adelta.creator
-		masset.created = adelta.created
-		masset.ndeltas++
-		au.assets[aidx] = masset
+	for cidx, cdelta := range delta.creatables {
+		mcreat := au.creatables[cidx]
+		mcreat.creator = cdelta.creator
+		mcreat.created = cdelta.created
+		mcreat.ctype = cdelta.ctype
+		mcreat.ndeltas++
+		au.creatables[cidx] = mcreat
 	}
 
 	if ot.Overflowed {
@@ -582,7 +598,7 @@ func (au *accountUpdates) totals(rnd basics.Round) (totals AccountTotals, err er
 
 func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	dbFileName := ""
-	err := au.dbs.rdb.Atomic(func(tx *sql.Tx) (err error) {
+	err := au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		dbFileName, _, _, err = getCatchpoint(tx, round)
 		return
 	})
@@ -679,7 +695,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	}
 
 	lastestBlockRound = l.Latest()
-	err = au.dbs.wdb.Atomic(func(tx *sql.Tx) error {
+	err = au.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		au.dbRound, err0 = au.accountsInitialize(tx)
 		if err0 != nil {
@@ -726,9 +742,9 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	}
 	au.protos = []config.ConsensusParams{config.Consensus[hdr.CurrentProtocol]}
 	au.deltas = nil
-	au.assetDeltas = nil
+	au.creatableDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
-	au.assets = make(map[basics.AssetIndex]modifiedAsset)
+	au.creatables = make(map[basics.CreatableIndex]modifiedCreatable)
 	au.deltasAccum = []int{0}
 
 	// keep these channel closed if we're not generating catchpoint
@@ -949,9 +965,11 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]map[basics.Address]accountDelta, offset, offset)
+	creatableDeltas := make([]map[basics.CreatableIndex]modifiedCreatable, offset, offset)
 	roundTotals := make([]AccountTotals, offset+1, offset+1)
 	protos := make([]config.ConsensusParams, offset+1, offset+1)
 	copy(deltas, au.deltas[:offset])
+	copy(creatableDeltas, au.creatableDeltas[:offset])
 	copy(roundTotals, au.roundTotals[:offset+1])
 	copy(protos, au.protos[:offset+1])
 
@@ -959,12 +977,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	// account DB, so that we can drop the corresponding refcounts in
 	// au.accounts.
 	flushcount := make(map[basics.Address]int)
-	assetFlushcount := make(map[basics.AssetIndex]int)
-	for i := uint64(0); i < offset; i++ {
-		for aidx := range au.assetDeltas[i] {
-			assetFlushcount[aidx] = assetFlushcount[aidx] + 1
-		}
-	}
+	creatableFlushcount := make(map[basics.CreatableIndex]int)
 
 	var committedRoundDigest crypto.Digest
 
@@ -987,12 +1000,16 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		for addr := range deltas[i] {
 			flushcount[addr] = flushcount[addr] + 1
 		}
+		for cidx := range creatableDeltas[i] {
+			creatableFlushcount[cidx] = creatableFlushcount[cidx] + 1
+		}
 	}
 
 	var catchpointLabel string
 	beforeUpdatingBalancesTime := time.Now()
 	var trieBalancesHash crypto.Digest
-	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+
+	err := au.dbs.wdb.AtomicCommitWriteLock(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
 			mc, err0 := makeMerkleCommitter(tx, false)
@@ -1012,7 +1029,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 		for i := uint64(0); i < offset; i++ {
-			err = accountsNewRound(tx, deltas[i], roundTotals[i+1].RewardsLevel, protos[i+1])
+			err = accountsNewRound(tx, deltas[i], creatableDeltas[i], roundTotals[i+1].RewardsLevel, protos[i+1])
 			if err != nil {
 				return err
 			}
@@ -1023,20 +1040,26 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			}
 		}
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
+		if err != nil {
+			return err
+		}
+
 		if isCatchpointRound {
 			trieBalancesHash, err = au.balancesTrie.RootHash()
 			if err != nil {
 				return
 			}
 		}
-		return err
-	})
+
+		return nil
+	}, &au.accountsMu)
 
 	if err != nil {
 		au.balancesTrie = nil
 		au.log.Warnf("unable to advance account snapshot: %v", err)
 		return
 	}
+
 	if isCatchpointRound {
 		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, roundTotals[offset], committedRoundDigest, trieBalancesHash)
 		if err != nil {
@@ -1050,7 +1073,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 	}
 
-	au.accountsMu.Lock()
 	if isCatchpointRound && catchpointLabel != "" {
 		au.lastCatchpointLabel = catchpointLabel
 	}
@@ -1076,21 +1098,21 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 	}
 
-	for aidx, cnt := range assetFlushcount {
-		masset, ok := au.assets[aidx]
+	for cidx, cnt := range creatableFlushcount {
+		mcreat, ok := au.creatables[cidx]
 		if !ok {
-			au.log.Panicf("inconsistency: flushed %d changes to asset %d, but not in au.assets", cnt, aidx)
+			au.log.Panicf("inconsistency: flushed %d changes to creatable %d, but not in au.creatables", cnt, cidx)
 		}
 
-		if cnt > masset.ndeltas {
-			au.log.Panicf("inconsistency: flushed %d changes to asset %d, but au.assets had %d", cnt, aidx, masset.ndeltas)
+		if cnt > mcreat.ndeltas {
+			au.log.Panicf("inconsistency: flushed %d changes to creatable %d, but au.creatables had %d", cnt, cidx, mcreat.ndeltas)
 		}
 
-		masset.ndeltas -= cnt
-		if masset.ndeltas == 0 {
-			delete(au.assets, aidx)
+		mcreat.ndeltas -= cnt
+		if mcreat.ndeltas == 0 {
+			delete(au.creatables, cidx)
 		} else {
-			au.assets[aidx] = masset
+			au.creatables[cidx] = mcreat
 		}
 	}
 
@@ -1099,14 +1121,15 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.roundDigest = au.roundDigest[offset:]
 	au.protos = au.protos[offset:]
 	au.roundTotals = au.roundTotals[offset:]
-	au.assetDeltas = au.assetDeltas[offset:]
+	au.creatableDeltas = au.creatableDeltas[offset:]
 	au.dbRound = newBase
 	au.lastFlushTime = flushTime
 
 	au.accountsMu.Unlock()
 
 	if isCatchpointRound && au.archivalLedger && catchpointLabel != "" {
-		// start generating the catchpoint on a separate goroutine.
+		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
+		// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
 		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest, updatingBalancesDuration)
 	}
 

@@ -114,7 +114,7 @@ func OpenLedger(
 	l.blockDBs.rdb.SetLogger(log)
 	l.blockDBs.wdb.SetLogger(log)
 
-	err = l.blockDBs.wdb.Atomic(func(tx *sql.Tx) error {
+	err = l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
 	})
 	if err != nil {
@@ -176,7 +176,7 @@ func (l *Ledger) reloadLedger() error {
 // verifyMatchingGenesisHash tests to see that the latest block header pointing to the same genesis hash provided in genesisHash.
 func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	// Check that the genesis hash, if present, matches.
-	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err := blockLatest(tx)
 		if err != nil {
 			return err
@@ -317,30 +317,39 @@ func (l *Ledger) GetLastCatchpointLabel() string {
 	return l.accts.getLastCatchpointLabel()
 }
 
-// GetAssetCreatorForRound looks up the asset creator given the numerical asset
-// ID. This is necessary so that we can retrieve the AssetParams from the
-// creator's balance record.
-func (l *Ledger) GetAssetCreatorForRound(rnd basics.Round, assetIdx basics.AssetIndex) (basics.Address, error) {
+// GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
+// look up a creator address, setting ok to false if the query succeeded but no
+// creator was found.
+func (l *Ledger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getAssetCreatorForRound(rnd, assetIdx)
+	return l.accts.getCreatorForRound(rnd, cidx, ctype)
 }
 
-// GetAssetCreator is like GetAssetCreatorForRound, but for the latest round
-// and race free with respect to ledger.Latest()
-func (l *Ledger) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+// GetCreator is like GetCreatorForRound, but for the latest round and race-free
+// with respect to ledger.Latest()
+func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getAssetCreatorForRound(l.blockQ.latest(), assetIdx)
+	return l.accts.getCreatorForRound(l.blockQ.latest(), cidx, ctype)
 }
 
 // ListAssets takes a maximum asset index and maximum result length, and
-// returns up to that many asset AssetIDs from the database where asset id is
+// returns up to that many CreatableLocators from the database where app idx is
 // less than or equal to the maximum.
 func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.listAssets(maxAssetIdx, maxResults)
+}
+
+// ListApplications takes a maximum app index and maximum result length, and
+// returns up to that many CreatableLocators from the database where app idx is
+// less than or equal to the maximum.
+func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.listApplications(maxAppIdx, maxResults)
 }
 
 // Lookup uses the accounts tracker to return the account state for a

@@ -65,7 +65,6 @@ echo SCRIPTPATH='$( cd "$(dirname "$0")" ; pwd -P )' >> ${TMPDIR}/deploy_linux_v
 echo cd \${SCRIPTPATH}/..${RELPATHXTRA} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export BRANCH=${BRANCH} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export CHANNEL=${CHANNEL} >> ${TMPDIR}/deploy_linux_version_exec.sh
-echo export BUILDCHANNEL=${BUILDCHANNEL} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export DEFAULTNETWORK=${DEFAULTNETWORK} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export GENESISFILE=${GENESISFILE} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo export FULLVERSION=${FULLVERSION} >> ${TMPDIR}/deploy_linux_version_exec.sh
@@ -78,5 +77,11 @@ echo export NETWORK=${NETWORK} >> ${TMPDIR}/deploy_linux_version_exec.sh
 echo scripts/deploy_private_version.sh -c \"${CHANNEL}\" -g \"${DEFAULTNETWORK}\" -n \"${NETWORK}\" -f \"${GENESISFILE}\" -b \"${S3_RELEASE_BUCKET}\" >> ${TMPDIR}/deploy_linux_version_exec.sh
 chmod +x ${TMPDIR}/deploy_linux_version_exec.sh
 
+# Use go version specified by get_golang_version.sh
+if ! GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+then
+    echo "${GOLANG_VERSION}"
+    exit 1
+fi
 sed "s|TMPDIR|${SUBDIR}|g" ${SRCPATH}/docker/build/Dockerfile-deploy > ${TMPDIR}/Dockerfile-deploy
-docker build -f ${TMPDIR}/Dockerfile-deploy -t algorand-deploy .
+docker build -f ${TMPDIR}/Dockerfile-deploy --build-arg GOLANG_VERSION="${GOLANG_VERSION}" -t algorand-deploy .

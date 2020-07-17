@@ -58,6 +58,9 @@ var cannedStatusReportGolden = node.StatusReport{
 var poolAddrRewardBaseGolden = uint64(0)
 var poolAddrAssetsGolden = make([]generatedV2.AssetHolding, 0)
 var poolAddrCreatedAssetsGolden = make([]generatedV2.Asset, 0)
+var appLocalStates = make([]generatedV2.ApplicationLocalState, 0)
+var appsTotalSchema = generatedV2.ApplicationStateSchema{}
+var appCreatedApps = make([]generatedV2.Application, 0)
 var poolAddrResponseGolden = generatedV2.AccountResponse{
 	Address:                     poolAddr.String(),
 	Amount:                      50000000000,
@@ -66,6 +69,9 @@ var poolAddrResponseGolden = generatedV2.AccountResponse{
 	CreatedAssets:               &poolAddrCreatedAssetsGolden,
 	RewardBase:                  &poolAddrRewardBaseGolden,
 	Status:                      "Not Participating",
+	AppsLocalState:              &appLocalStates,
+	AppsTotalSchema:             &appsTotalSchema,
+	CreatedApps:                 &appCreatedApps,
 }
 
 // ordinarily mockNode would live in `components/mocks`

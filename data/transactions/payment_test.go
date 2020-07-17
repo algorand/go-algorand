@@ -80,7 +80,7 @@ func (balances mockBalances) Round() basics.Round {
 	return basics.Round(8675309)
 }
 
-func (balances mockBalances) PutWithCreatables(basics.BalanceRecord, []basics.CreatableLocator, []basics.CreatableLocator) error {
+func (balances mockBalances) PutWithCreatable(basics.BalanceRecord, *basics.CreatableLocator, *basics.CreatableLocator) error {
 	return nil
 }
 
@@ -88,11 +88,7 @@ func (balances mockBalances) Get(basics.Address, bool) (basics.BalanceRecord, er
 	return basics.BalanceRecord{}, nil
 }
 
-func (balances mockBalances) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
-	return basics.Address{}, nil
-}
-
-func (balances mockBalances) GetAppCreator(appIdx basics.AppIndex) (basics.Address, bool, error) {
+func (balances mockBalances) GetCreator(idx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return basics.Address{}, true, nil
 }
 
