@@ -123,12 +123,7 @@ done
 
 echo "error: Unable to establish SSH connection"
 
-# Fallthrough error condition - delete security group, keypair, and instance
-aws ec2 terminate-instances --instance-ids "$(cat instance-id)"
-aws ec2 delete-security-group --group-id "$(cat sgid)"
-aws ec2 delete-key-pair --key-name "$(cat key-name)"
+# Fallthrough error condition - run shutdown to delete security group, keypair, and instance
+"$(cd "$(dirname "$0")" && pwd)"/shutdown_ec2_instance.sh "$AWS_REGION"
 
-# Remove files
-rm -f key.pem
-rm sgid instance instance-id key-name
 exit 1
