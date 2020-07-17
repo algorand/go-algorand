@@ -49,7 +49,7 @@ while security_group_exists || key_pair_exists; do
     SECURITY_GROUP_NAME="BuilderMachineSSH_${INSTANCE_NUMBER}"
 done
 
-if ! SGID=$(aws ec2 create-security-group --group-name ${SECURITY_GROUP_NAME} --description "Security Group for ephermal build machine to allow port 22" --region "${AWS_REGION}" | jq -r '.GroupId') ; then
+if ! SGID=$(aws ec2 create-security-group --group-name ${SECURITY_GROUP_NAME} --description "Security Group for ephemeral build machine to allow port 22" --region "${AWS_REGION}" | jq -r '.GroupId') ; then
     exit 1
 fi
 
