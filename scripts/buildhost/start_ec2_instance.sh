@@ -8,7 +8,7 @@
 #
 # Exit Code: returns 0 if instance started successfully, non-zero otherwise
 #
-# Examples: scripts/buildhost/start_ec2_instance.sh <AWS_REGION> <AWS_AMI>
+# Examples: scripts/buildhost/start_ec2_instance.sh <AWS_REGION> <AWS_AMI> <AWS_INSTANCE_TYPE>
 #
 # Upon successfull execution, the following files would be created:
 # sgid - contain the security group identifier
