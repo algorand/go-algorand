@@ -16,6 +16,8 @@
 # instance - contains the address of the created instance
 #
 
+set -eo pipefail
+
 AWS_REGION=$1
 AWS_AMI=$2
 AWS_INSTANCE_TYPE=$3
@@ -23,48 +25,43 @@ INSTANCE_NUMBER=$RANDOM
 KEY_NAME="BuilderInstanceKey_${INSTANCE_NUMBER}"
 SECURITY_GROUP_NAME="BuilderMachineSSH_${INSTANCE_NUMBER}"
 
-SGID=$(aws ec2 create-security-group --group-name ${SECURITY_GROUP_NAME} --description "Security Group for ephermal build machine to allow port 22" --region ${AWS_REGION} | jq -r '.GroupId')
-if [ "$?" != "0" ]; then
+if ! SGID=$(aws ec2 create-security-group --group-name ${SECURITY_GROUP_NAME} --description "Security Group for ephermal build machine to allow port 22" --region "${AWS_REGION}" | jq -r '.GroupId') ; then
     exit 1
 fi
 
-aws ec2 authorize-security-group-ingress --group-name ${SECURITY_GROUP_NAME} --protocol tcp --port 22 --cidr 0.0.0.0/0 --region ${AWS_REGION}
-if [ "$?" != "0" ]; then
-    aws ec2 delete-security-group --group-id "${SGID}" --region ${AWS_REGION}
+if ! aws ec2 authorize-security-group-ingress --group-name ${SECURITY_GROUP_NAME} --protocol tcp --port 22 --cidr 0.0.0.0/0 --region "${AWS_REGION}" ; then
+    aws ec2 delete-security-group --group-id "${SGID}" --region "${AWS_REGION}"
     exit 1
 fi
 
-aws ec2 authorize-security-group-ingress --group-name ${SECURITY_GROUP_NAME} --protocol tcp --port 5022 --cidr 0.0.0.0/0 --region ${AWS_REGION}
-if [ "$?" != "0" ]; then
-    aws ec2 delete-security-group --group-id "${SGID}" --region ${AWS_REGION}
+if ! aws ec2 authorize-security-group-ingress --group-name ${SECURITY_GROUP_NAME} --protocol tcp --port 5022 --cidr 0.0.0.0/0 --region "${AWS_REGION}" ; then
+    aws ec2 delete-security-group --group-id "${SGID}" --region "${AWS_REGION}"
     exit 1
 fi
 
 rm -f key.pem
-aws ec2 create-key-pair --key-name "${KEY_NAME}" --region ${AWS_REGION} | jq -r '.KeyMaterial' > key.pem
-if [ "$?" != "0" ]; then
-    aws ec2 delete-security-group --group-id "${SGID}" --region ${AWS_REGION}
+if ! aws ec2 create-key-pair --key-name "${KEY_NAME}" --region "${AWS_REGION}" | jq -r '.KeyMaterial' > key.pem ; then
+    aws ec2 delete-security-group --group-id "${SGID}" --region "${AWS_REGION}"
     rm key.pem
     exit 1
 fi
 
-aws ec2 run-instances --image-id ${AWS_AMI} --key-name "${KEY_NAME}" --security-groups ${SECURITY_GROUP_NAME} --instance-type "${AWS_INSTANCE_TYPE}" --tag-specifications "ResourceType=instance,Tags=[{Key=\"Name\",Value=\"Buildhost_Ephermal_Instance_${INSTANCE_NUMBER}\"}, {Key=\"For\",Value=\"Buildhost_Ephermal_Instance\"}]" --block-device-mappings DeviceName=/dev/sdh,Ebs={VolumeSize=100} --count 1 --region ${AWS_REGION} > instance.json
-if [ "$?" != "0" ]; then
-    aws ec2 delete-key-pair --key-name "${KEY_NAME}" --region ${AWS_REGION}
-    aws ec2 delete-security-group --group-id "${SGID}" --region ${AWS_REGION}
+if ! aws ec2 run-instances --image-id ${AWS_AMI} --key-name "${KEY_NAME}" --security-groups ${SECURITY_GROUP_NAME} --instance-type "${AWS_INSTANCE_TYPE}" --tag-specifications "ResourceType=instance,Tags=[{Key=\"Name\",Value=\"Buildhost_Ephermal_Instance_${INSTANCE_NUMBER}\"}, {Key=\"For\",Value=\"Buildhost_Ephermal_Instance\"}]" --block-device-mappings DeviceName=/dev/sdh,Ebs={VolumeSize=100} --count 1 --region "${AWS_REGION}" > instance.json ; then
+    aws ec2 delete-key-pair --key-name "${KEY_NAME}" --region "${AWS_REGION}"
+    aws ec2 delete-security-group --group-id "${SGID}" --region "${AWS_REGION}"
     rm key.pem
     exit 1
 fi
 
 
-INSTANCE_ID=$(cat instance.json | jq -r '.Instances[].InstanceId')
+INSTANCE_ID=$(jq -r '.Instances[].InstanceId' < instance.json)
 
 echo "Waiting for instance to start"
 end=$((SECONDS+90))
 while [ $SECONDS -lt $end ]; do
-    aws ec2 describe-instance-status --instance-id ${INSTANCE_ID} --region ${AWS_REGION} --include-all-instances > instance2.json
-    INSTANCE_CODE=$(cat instance2.json | jq '.InstanceStatuses[].InstanceState.Code')
-    INSTANCE_STATE=$(cat instance2.json | jq '.InstanceStatuses[].InstanceState.Name')
+    aws ec2 describe-instance-status --instance-id "${INSTANCE_ID}" --region "${AWS_REGION}" --include-all-instances > instance2.json
+    INSTANCE_CODE=$(jq '.InstanceStatuses[].InstanceState.Code' < instance2.json)
+    INSTANCE_STATE=$(jq '.InstanceStatuses[].InstanceState.Name' < instance2.json)
     if [ "${INSTANCE_CODE}" = "16" ]; then
         echo "Instance started"
         break
@@ -77,8 +74,8 @@ while [ $SECONDS -lt $end ]; do
     sleep 1s
 done
 
-aws ec2 describe-instances --region ${AWS_REGION} --instance-id ${INSTANCE_ID} > instance2.json
-INSTANCE_NAME=$(cat instance2.json | jq -r '.Reservations[].Instances[].PublicDnsName')
+aws ec2 describe-instances --region "${AWS_REGION}" --instance-id "${INSTANCE_ID}" > instance2.json
+INSTANCE_NAME=$(jq -r '.Reservations[].Instances[].PublicDnsName' < instance2.json)
 
 echo "Instance name = ${INSTANCE_NAME}"
 rm instance.json instance2.json
@@ -93,8 +90,7 @@ chmod 400 key.pem
 echo "Waiting for SSH connection"
 end=$((SECONDS+90))
 while [ $SECONDS -lt $end ]; do
-    ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@$(cat instance) "uname"
-    if [ "$?" = "0" ]; then
+    if ssh -i key.pem -o "StrictHostKeyChecking no" ubuntu@"$(cat instance)" "uname" ; then
         echo "SSH connection ready"
         exit 0
     fi
@@ -102,6 +98,13 @@ while [ $SECONDS -lt $end ]; do
 done
 
 echo "error: Unable to establish SSH connection"
+
+# Fallthrough error condition - delete security group, keypair, and instance
+aws ec2 delete-security-group --group-id "$(cat sgid)"
+aws ec2 delete-key-pair --key-name "$(cat key-name)"
+aws ec2-terminate-instances --instance-ids "$(cat instance-id)"
+
+# Remove files
 rm -f key.pem
 rm sgid instance instance-id key-name
 exit 1
