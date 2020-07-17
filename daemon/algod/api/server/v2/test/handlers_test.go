@@ -453,14 +453,10 @@ func TestTealDryrun(t *testing.T) {
 	gdr.Accounts = []generated.Account{
 		{
 			Address: basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalStates{
-				{
-					Id: 1,
-					State: generated.ApplicationLocalState{
-						KeyValue: localv,
-					},
-				},
-			},
+			AppsLocalState: &[]generated.ApplicationLocalState{{
+				Id:       1,
+				KeyValue: localv,
+			}},
 		},
 	}
 

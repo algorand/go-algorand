@@ -511,7 +511,7 @@ func TestDryrunLocal1(t *testing.T) {
 		{
 			Status:         "Online",
 			Address:        basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalStates{{Id: 1}},
+			AppsLocalState: &[]generated.ApplicationLocalState{{Id: 1}},
 		},
 	}
 	doDryrunRequest(&dr, &proto, &response)
@@ -581,7 +581,7 @@ func TestDryrunLocal1A(t *testing.T) {
 		{
 			Status:         "Online",
 			Address:        basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalStates{{Id: 1}},
+			AppsLocalState: &[]generated.ApplicationLocalState{{Id: 1}},
 		},
 	}
 
@@ -667,14 +667,10 @@ func TestDryrunLocalCheck(t *testing.T) {
 		{
 			Status:  "Online",
 			Address: basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalStates{
-				{
-					Id: 1,
-					State: generated.ApplicationLocalState{
-						KeyValue: localv,
-					},
-				},
-			},
+			AppsLocalState: &[]generated.ApplicationLocalState{{
+				Id:       1,
+				KeyValue: localv,
+			}},
 		},
 	}
 
@@ -723,14 +719,10 @@ func TestDryrunEncodeDecode(t *testing.T) {
 		{
 			Status:  "Online",
 			Address: basics.Address{}.String(),
-			AppsLocalState: &[]generated.ApplicationLocalStates{
-				{
-					Id: 1,
-					State: generated.ApplicationLocalState{
-						KeyValue: localv,
-					},
-				},
-			},
+			AppsLocalState: &[]generated.ApplicationLocalState{{
+				Id:       1,
+				KeyValue: localv,
+			}},
 		},
 	}
 
@@ -927,4 +919,48 @@ func TestDryrunRequestJSON(t *testing.T) {
 	if t.Failed() {
 		logResponse(t, &response)
 	}
+}
+
+func TestStateDeltaToStateDelta(t *testing.T) {
+	t.Parallel()
+	sd := basics.StateDelta{
+		"intkey": {
+			Action: basics.SetUintAction,
+			Uint:   11,
+		},
+		"byteskey": {
+			Action: basics.SetBytesAction,
+			Bytes:  "test",
+		},
+		"delkey": {
+			Action: basics.DeleteAction,
+		},
+	}
+	gsd := StateDeltaToStateDelta(sd)
+	require.Equal(t, 3, len(*gsd))
+
+	var keys []string
+	// test with a loop because sd is a map and iteration order is random
+	for _, item := range *gsd {
+		if item.Key == "intkey" {
+			require.Equal(t, uint64(1), item.Value.Action)
+			require.NotNil(t, item.Value.Uint)
+			require.Equal(t, uint64(11), *item.Value.Uint)
+			require.Nil(t, item.Value.Bytes)
+		} else if item.Key == "byteskey" {
+			require.Equal(t, uint64(2), item.Value.Action)
+			require.Nil(t, item.Value.Uint)
+			require.NotNil(t, item.Value.Bytes)
+			require.Equal(t, base64.StdEncoding.EncodeToString([]byte("test")), *item.Value.Bytes)
+		} else if item.Key == "delkey" {
+			require.Equal(t, uint64(3), item.Value.Action)
+			require.Nil(t, item.Value.Uint)
+			require.Nil(t, item.Value.Bytes)
+		}
+		keys = append(keys, item.Key)
+	}
+	require.Equal(t, 3, len(keys))
+	require.Contains(t, keys, "intkey")
+	require.Contains(t, keys, "byteskey")
+	require.Contains(t, keys, "delkey")
 }

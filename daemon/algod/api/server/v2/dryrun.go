@@ -494,15 +494,20 @@ func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
 
 	gsd := make(generated.StateDelta, 0, len(sd))
 	for k, v := range sd {
-		bytes := base64.StdEncoding.EncodeToString([]byte(v.Bytes))
-		gsd = append(gsd, generated.EvalDeltaKeyValue{
-			Key: k,
-			Value: generated.EvalDelta{
-				Action: uint64(v.Action),
-				Uint:   &v.Uint,
-				Bytes:  &bytes,
-			},
-		})
+		value := generated.EvalDelta{Action: uint64(v.Action)}
+		if v.Action == basics.SetBytesAction {
+			bytesVal := base64.StdEncoding.EncodeToString([]byte(v.Bytes))
+			value.Bytes = &bytesVal
+		} else if v.Action == basics.SetUintAction {
+			uintVal := v.Uint
+			value.Uint = &uintVal
+		}
+		// basics.DeleteAction does not require Uint/Bytes
+		kv := generated.EvalDeltaKeyValue{
+			Key:   k,
+			Value: value,
+		}
+		gsd = append(gsd, kv)
 	}
 
 	return &gsd
