@@ -19,13 +19,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
-	"io/ioutil"
+	//"io/ioutil"
 	"math/rand"
 	"net/http"
+	//"path"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -33,7 +34,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 )
 
-type AccountResponse struct {
+type AccountIndexerResponse struct {
 	// Account information at a given round.
 	//
 	// Definition:
@@ -70,20 +71,28 @@ func makeAppLedger(
 	apps = append(apps, txn.Txn.ForeignApps...)
 
 	// first populate balances from the indexer
-	for _, acc := range accounts {
-		fmt.Println("debug hello")
-		if _, ok := balances[acc]; !ok {
-			queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%v", indexerURL, acc, round)
-			fmt.Println(queryString)
-			if resp, err := http.Get(queryString); err == nil {
-				if responseData, err := ioutil.ReadAll(resp.Body); err == nil {
-					var accountResp AccountResponse
-					json.Unmarshal(responseData, &accountResp)
-					balances[acc], err = v2.AccountToAccountData(&accountResp.Account)
-					fmt.Println(balances[acc])
+	if indexerURL != "" {
+		for _, acc := range accounts {
+			fmt.Println("debug hello")
+			if _, ok := balances[acc]; !ok {
+				queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%v", indexerURL, acc, round) // path.Join(indexerURL, "v2", "accounts", fmt.Sprintf("%s?round=%v", acc, round))
+				fmt.Println(queryString)
+				resp, err := http.Get(queryString)
+				if err != nil {
+					return nil, appState{}, err
 				}
-			} else {
-				fmt.Println(err)
+				//responseData, err := ioutil.ReadAll(resp.Body)
+				//if err != nil {
+				//	return nil, appState{}, err
+				//}
+				var accountResp AccountIndexerResponse
+				//err = json.Unmarshal(responseData, &accountResp)
+				err = json.NewDecoder(resp.Body).Decode(&accountResp)
+				if err != nil {
+					return nil, appState{}, err
+				}
+				balances[acc], err = v2.AccountToAccountData(&accountResp.Account)
+				fmt.Println(balances[acc])
 			}
 		}
 	}
@@ -201,7 +210,6 @@ func getRandomAddress() (basics.Address, error) {
 func (ba *balancesAdapter) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
 	br, ok := ba.balances[addr]
 	if !ok {
-		// fetch from indexer first
 		return basics.BalanceRecord{}, nil
 	}
 	return basics.BalanceRecord{Addr: addr, AccountData: br}, nil
