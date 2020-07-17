@@ -124,9 +124,9 @@ done
 echo "error: Unable to establish SSH connection"
 
 # Fallthrough error condition - delete security group, keypair, and instance
+aws ec2 terminate-instances --instance-ids "$(cat instance-id)"
 aws ec2 delete-security-group --group-id "$(cat sgid)"
 aws ec2 delete-key-pair --key-name "$(cat key-name)"
-aws ec2-terminate-instances --instance-ids "$(cat instance-id)"
 
 # Remove files
 rm -f key.pem
