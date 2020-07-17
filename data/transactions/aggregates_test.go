@@ -57,3 +57,17 @@ func TestPaysetDoesNotCommitToSignatures(t *testing.T) {
 	commit2 := payset.Commit(false)
 	require.Equal(t, commit1, commit2)
 }
+
+func TestEmptyPaysetCommitment(t *testing.T) {
+	const nilFlatPaysetHash = "WRS2VL2OQ5LPWBYLNBCZV3MEQ4DACSRDES6IUKHGOWYQERJRWC5A"
+	const emptyFlatPaysetHash = "E54GFMNS2LISPG5VUGOQ3B2RR7TRKAHRE24LUM3HOW6TJGQ6PNZQ"
+
+	// Non-genesis blocks should encode empty paysets identically to nil paysets
+	var nilPayset Payset
+	require.Equal(t, nilFlatPaysetHash, Payset{}.Commit(true).String())
+	require.Equal(t, nilFlatPaysetHash, nilPayset.Commit(true).String())
+
+	// Genesis block should encode empty payset differently
+	require.Equal(t, emptyFlatPaysetHash, Payset{}.CommitGenesis(true).String())
+	require.Equal(t, nilFlatPaysetHash, nilPayset.CommitGenesis(true).String())
+}

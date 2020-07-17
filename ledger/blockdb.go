@@ -144,6 +144,17 @@ func blockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agr
 	return
 }
 
+func blockReplaceIfExists(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) error {
+	_, err := tx.Exec("UPDATE blocks SET proto=?, hdrdata=?, blkdata=?, certdata=? WHERE rnd=?",
+		blk.CurrentProtocol,
+		protocol.Encode(&blk.BlockHeader),
+		protocol.Encode(&blk),
+		protocol.Encode(&cert),
+		blk.Round(),
+	)
+	return err
+}
+
 func blockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) error {
 	var max sql.NullInt64
 	err := tx.QueryRow("SELECT MAX(rnd) FROM blocks").Scan(&max)
