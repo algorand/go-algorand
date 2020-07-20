@@ -130,6 +130,7 @@ var groupIndex int
 var balanceFile string
 var ddrFile string
 var indexerURL string
+var indexerToken string
 var roundNumber int
 var timestamp int64
 var runMode runModeValue = runModeValue{makeCobraStringValue("auto", []string{"signature", "application"})}
@@ -158,6 +159,7 @@ func init() {
 	debugCmd.Flags().StringVarP(&ddrFile, "dryrun-req", "d", "", "Program(s) and state(s) in dryrun REST request format")
 	debugCmd.Flags().IntVarP(&appID, "app-id", "a", 1380011588, "Application ID for stateful TEAL if not set in transaction(s)")
 	debugCmd.Flags().StringVarP(&indexerURL, "indexer-url", "i", "", "URL for indexer to fetch Balance records from to evaluate stateful TEAL")
+	debugCmd.Flags().StringVarP(&indexerURL, "indexer-token", "", "", "API token for indexer to fetch Balance records from to evaluate stateful TEAL")
 	debugCmd.Flags().IntVarP(&roundNumber, "round", "r", 1095518031, "Ledger round number to evaluate stateful TEAL on")
 	debugCmd.Flags().Int64VarP(&timestamp, "latest-timestamp", "l", 0, "Latest confirmed timestamp to evaluate stateful TEAL on")
 	debugCmd.Flags().VarP(&runMode, "mode", "m", "TEAL evaluation mode: "+runMode.AllowedString())
@@ -251,6 +253,7 @@ func debugLocal(args []string) {
 		BalanceBlob:      balanceBlob,
 		DdrBlob:          ddrBlob,
 		IndexerURL:       indexerURL,
+		IndexerToken:     indexerToken,
 		Round:            roundNumber,
 		LatestTimestamp:  timestamp,
 		RunMode:          runMode.String(),

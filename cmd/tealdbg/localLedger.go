@@ -55,7 +55,7 @@ type balancesAdapter struct {
 func makeAppLedger(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
 	groupIndex int, proto config.ConsensusParams, round int, latestTimestamp int64,
-	appIdx basics.AppIndex, painless bool, indexerURL string,
+	appIdx basics.AppIndex, painless bool, indexerURL string, indexerToke string,
 ) (logic.LedgerForLogic, appState, error) {
 
 	if groupIndex >= len(txnGroup) {
@@ -75,7 +75,7 @@ func makeAppLedger(
 			// only populate from indexer if balance record not specified
 			if _, ok := balances[acc]; !ok {
 				var err error
-				balances[acc], err = getBalanceFromIndexer(indexerURL, acc, round)
+				balances[acc], err = getBalanceFromIndexer(indexerURL, indexerToken, acc, round)
 				if err != nil {
 					return nil, appState{}, err
 				}
@@ -161,9 +161,12 @@ func makeAppLedger(
 	return ledger, states, err
 }
 
-func getBalanceFromIndexer(indexerURL string, account basics.Address, round int) (basics.AccountData, error){
+func getBalanceFromIndexer(indexerURL string, indexerToken string, account basics.Address, round int) (basics.AccountData, error){
 	queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%d", indexerURL, account, round)
-	resp, err := http.Get(queryString)
+	client := &http.Client{}
+	request, err := http.NewRequest("GET", queryString, nil)
+	request.Header.Set("X-Algo-API-Token", indexerToken)
+	resp, err := client.Do(request)
 	if err != nil {
 		return basics.AccountData{}, err
 	}
