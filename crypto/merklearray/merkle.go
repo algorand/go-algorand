@@ -7,6 +7,8 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
+// Tree is a Merkle tree, represented by layers of nodes (hashes) in the tree
+// at each height.
 type Tree struct {
 	// Level 0 is the leaves.
 	levels []layer
@@ -16,6 +18,7 @@ func (tree *Tree) topLayer() layer {
 	return tree.levels[len(tree.levels)-1]
 }
 
+// Build constructs a Merkle tree given an array.
 func Build(array Array) (*Tree, error) {
 	tree := &Tree{}
 
@@ -41,6 +44,7 @@ func Build(array Array) (*Tree, error) {
 	return tree, nil
 }
 
+// Root returns the root hash of the tree.
 func (tree *Tree) Root() crypto.Digest {
 	// Special case: commitment to zero-length array
 	if len(tree.levels) == 0 {
@@ -53,6 +57,8 @@ func (tree *Tree) Root() crypto.Digest {
 
 const validateProof = false
 
+// Prove constructs a proof for some set of positions in the array that was
+// used to construct the tree.
 func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
 	if len(idxs) == 0 {
 		return nil, nil
@@ -109,6 +115,9 @@ func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
 	return s.hints, nil
 }
 
+// Verify ensures that the positions in elems correspond to the hashes of their respective
+// crypto.Hashable objects in a tree with the given root hash.  The proof is expected to
+// be the proof returned by Prove().
 func Verify(root crypto.Digest, elems map[uint64]crypto.Hashable, proof []crypto.Digest) error {
 	if len(elems) == 0 {
 		if len(proof) != 0 {
