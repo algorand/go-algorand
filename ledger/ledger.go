@@ -279,10 +279,13 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 		// TODO remove this once a version containing this code has
 		// been deployed to archival nodes
 		if len(initBlocks) > 0 && initBlocks[0].Round() == basics.Round(0) {
-			err = blockReplaceIfExists(tx, initBlocks[0], agreement.Certificate{})
+			updated, err := blockReplaceIfExists(tx, l.log, initBlocks[0], agreement.Certificate{})
 			if err != nil {
 				err = fmt.Errorf("initBlocksDB.blockReplaceIfExists %v", err)
 				return err
+			}
+			if updated {
+				l.log.Infof("initBlocksDB replaced block 0")
 			}
 		}
 	}
