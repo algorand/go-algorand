@@ -669,7 +669,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 			Address: basics.Address{}.String(),
 			AppsLocalState: &[]generated.ApplicationLocalState{{
 				Id:       1,
-				KeyValue: localv,
+				KeyValue: &localv,
 			}},
 		},
 	}
@@ -721,7 +721,7 @@ func TestDryrunEncodeDecode(t *testing.T) {
 			Address: basics.Address{}.String(),
 			AppsLocalState: &[]generated.ApplicationLocalState{{
 				Id:       1,
-				KeyValue: localv,
+				KeyValue: &localv,
 			}},
 		},
 	}
