@@ -112,7 +112,12 @@ func AccountDataToAccount(
 	}, nil
 }
 
-func convertTKVToGenerated(tkv *basics.TealKeyValue) (converted generated.TealKeyValueStore) {
+func convertTKVToGenerated(tkv *basics.TealKeyValue) *generated.TealKeyValueStore {
+	if tkv == nil || len(*tkv) == 0 {
+		return nil
+	}
+
+	var converted generated.TealKeyValueStore
 	for k, v := range *tkv {
 		converted = append(converted, generated.TealKeyValue{
 			Key: k,
@@ -123,7 +128,7 @@ func convertTKVToGenerated(tkv *basics.TealKeyValue) (converted generated.TealKe
 			},
 		})
 	}
-	return
+	return &converted
 }
 
 func convertGeneratedTKV(akvs *generated.TealKeyValueStore) basics.TealKeyValue {
@@ -220,7 +225,7 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 					NumUint:      ls.Schema.NumUint,
 					NumByteSlice: ls.Schema.NumByteSlice,
 				},
-				KeyValue: convertGeneratedTKV(&ls.KeyValue),
+				KeyValue: convertGeneratedTKV(ls.KeyValue),
 			}
 		}
 	}
@@ -315,7 +320,7 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 			Creator:           creator,
 			ApprovalProgram:   appParams.ApprovalProgram,
 			ClearStateProgram: appParams.ClearStateProgram,
-			GlobalState:       &globalState,
+			GlobalState:       globalState,
 			LocalStateSchema: &generated.ApplicationStateSchema{
 				NumByteSlice: appParams.LocalStateSchema.NumByteSlice,
 				NumUint:      appParams.LocalStateSchema.NumUint,
