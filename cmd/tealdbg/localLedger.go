@@ -70,31 +70,19 @@ func makeAppLedger(
 	apps := []basics.AppIndex{appIdx}
 	apps = append(apps, txn.Txn.ForeignApps...)
 
-	// first populate balances from the indexer
+	// populate balances from the indexer if not already
 	if indexerURL != "" {
 		for _, acc := range accounts {
-			fmt.Println("debug hello")
+			// only populate from indexer if balance record not specified
 			if _, ok := balances[acc]; !ok {
-				queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%v", indexerURL, acc, round) // path.Join(indexerURL, "v2", "accounts", fmt.Sprintf("%s?round=%v", acc, round))
-				fmt.Println(queryString)
-				resp, err := http.Get(queryString)
+				var err error
+				balances[acc], err = getBalanceFromIndexer(indexerURL, acc, round)
 				if err != nil {
 					return nil, appState{}, err
 				}
-				//responseData, err := ioutil.ReadAll(resp.Body)
-				//if err != nil {
-				//	return nil, appState{}, err
-				//}
-				var accountResp AccountIndexerResponse
-				//err = json.Unmarshal(responseData, &accountResp)
-				err = json.NewDecoder(resp.Body).Decode(&accountResp)
-				if err != nil {
-					return nil, appState{}, err
-				}
-				balances[acc], err = v2.AccountToAccountData(&accountResp.Account)
-				fmt.Println(balances[acc])
 			}
 		}
+		// TODO (nicholasguo): populate balances with creators of apps[]
 	}
 
 	ba := &balancesAdapter{
@@ -172,6 +160,28 @@ func makeAppLedger(
 	appGlobals := ledger.AppTealGlobals{CurrentRound: basics.Round(round), LatestTimestamp: latestTimestamp}
 	ledger, err := ledger.MakeDebugAppLedger(ba, appIdx, states.schemas, appGlobals)
 	return ledger, states, err
+}
+
+func getBalanceFromIndexer(indexerURL string, account basics.Address, round int) (basics.AccountData, error){
+	queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%d", indexerURL, account, round)
+	resp, err := http.Get(queryString)
+	if err != nil {
+		return basics.AccountData{}, err
+	}
+	if resp.StatusCode != 200 {
+		return basics.AccountData{}, fmt.Errorf("indexer error response status code %d", resp.StatusCode)
+	}
+	var accountResp AccountIndexerResponse
+	err = json.NewDecoder(resp.Body).Decode(&accountResp)
+	resp.Body.Close()
+	if err != nil {
+		return basics.AccountData{}, err
+	}
+	balance, err := v2.AccountToAccountData(&accountResp.Account)
+	if err != nil {
+		return basics.AccountData{}, err
+	}
+	return balance, nil
 }
 
 func makeSchemas() basics.StateSchemas {
