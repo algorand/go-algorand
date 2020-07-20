@@ -122,6 +122,10 @@ func Verify(root crypto.Digest, elems map[uint64]crypto.Hashable, proof []crypto
 		if err != nil {
 			return err
 		}
+
+		if l > 64 {
+			return fmt.Errorf("Verify exceeded 64 levels, more than 2^64 leaves not supported")
+		}
 	}
 
 	computedroot, ok := pl[0]
