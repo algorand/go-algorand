@@ -19,10 +19,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	//"io/ioutil"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
-	//"path"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -34,7 +33,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 )
 
-type AccountIndexerResponse struct {
+type accountIndexerResponse struct {
 	// Account information at a given round.
 	//
 	// Definition:
@@ -168,12 +167,13 @@ func getBalanceFromIndexer(indexerURL string, account basics.Address, round int)
 	if err != nil {
 		return basics.AccountData{}, err
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return basics.AccountData{}, fmt.Errorf("indexer error response status code %d", resp.StatusCode)
+		msg, _ := ioutil.ReadAll(resp.Body)
+		return basics.AccountData{}, fmt.Errorf("indexer error: %s, status code: %d, request: %s", string(msg), resp.StatusCode, queryString)
 	}
-	var accountResp AccountIndexerResponse
+	var accountResp accountIndexerResponse
 	err = json.NewDecoder(resp.Body).Decode(&accountResp)
-	resp.Body.Close()
 	if err != nil {
 		return basics.AccountData{}, err
 	}
