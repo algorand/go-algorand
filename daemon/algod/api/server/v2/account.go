@@ -113,7 +113,7 @@ func AccountDataToAccount(
 }
 
 func convertTKVToGenerated(tkv *basics.TealKeyValue) *generated.TealKeyValueStore {
-	if (tkv == nil || len(*tkv) == 0) {
+	if tkv == nil || len(*tkv) == 0 {
 		return nil
 	}
 
