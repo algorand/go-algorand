@@ -2,7 +2,6 @@ package merklearray
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/algorand/go-algorand/crypto"
 )
@@ -44,8 +43,14 @@ func (s *siblings) get(l uint64, i uint64) (res crypto.Digest, err error) {
 }
 
 // partialLayer represents a subset of a layer (i.e., nodes at some
-// level in the Merkle tree).
-type partialLayer map[uint64]crypto.Digest
+// level in the Merkle tree).  layerItem represents one element in the
+// partial layer.
+type partialLayer []layerItem
+
+type layerItem struct {
+	pos  uint64
+	hash crypto.Digest
+}
 
 // up takes a partial layer at level l, and returns the next-higher (partial)
 // level in the tree.  Since the layer is partial, up() requires siblings.
@@ -57,22 +62,18 @@ type partialLayer map[uint64]crypto.Digest
 // If doHash is false, fill in zero hashes, which suffices for constructing
 // a proof.
 func (pl partialLayer) up(s *siblings, l uint64, doHash bool) (partialLayer, error) {
-	positions := make([]uint64, 0, len(pl))
-	for pos := range pl {
-		positions = append(positions, pos)
-	}
-	sort.Slice(positions, func(i, j int) bool { return positions[i] < positions[j] })
-
-	res := make(partialLayer)
-	for i := 0; i < len(positions); i++ {
-		pos := positions[i]
-		posHash := pl[pos]
+	var res partialLayer
+	for i := 0; i < len(pl); i++ {
+		item := pl[i]
+		pos := item.pos
+		posHash := item.hash
 
 		siblingPos := pos ^ 1
-		siblingHash, ok := pl[siblingPos]
-		if ok {
+		var siblingHash crypto.Digest
+		if i+1 < len(pl) && pl[i+1].pos == siblingPos {
 			// If our sibling is also in the partial layer, use its
 			// hash (and skip over its position).
+			siblingHash = pl[i+1].hash
 			i++
 		} else {
 			// Ask for the sibling hash from the tree / proof.
@@ -100,7 +101,10 @@ func (pl partialLayer) up(s *siblings, l uint64, doHash bool) (partialLayer, err
 			nextLayerHash = crypto.HashObj(&p)
 		}
 
-		res[nextLayerPos] = nextLayerHash
+		res = append(res, layerItem{
+			pos:  nextLayerPos,
+			hash: nextLayerHash,
+		})
 	}
 
 	return res, nil

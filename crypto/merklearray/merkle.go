@@ -2,6 +2,7 @@ package merklearray
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/algorand/go-algorand/crypto"
 )
@@ -62,13 +63,23 @@ func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
 		return nil, fmt.Errorf("proving in zero-length commitment")
 	}
 
-	pl := make(partialLayer)
+	sort.Slice(idxs, func(i, j int) bool { return idxs[i] < idxs[j] })
+
+	pl := make(partialLayer, 0, len(idxs))
 	for _, pos := range idxs {
 		if pos >= uint64(len(tree.levels[0])) {
 			return nil, fmt.Errorf("pos %d larger than leaf count %d", pos, len(tree.levels[0]))
 		}
 
-		pl[pos] = tree.levels[0][pos]
+		// Discard duplicates
+		if len(pl) > 0 && pl[len(pl)-1].pos == pos {
+			continue
+		}
+
+		pl = append(pl, layerItem{
+			pos:  pos,
+			hash: tree.levels[0][pos],
+		})
 	}
 
 	s := &siblings{
@@ -89,8 +100,8 @@ func (tree *Tree) Prove(idxs []uint64) ([]crypto.Digest, error) {
 	}
 
 	if validateProof {
-		computedroot, ok := pl[0]
-		if !ok || computedroot != tree.topLayer()[0] {
+		computedroot := pl[0]
+		if computedroot.pos != 0 || computedroot.hash != tree.topLayer()[0] {
 			return nil, fmt.Errorf("internal error: root mismatch during proof")
 		}
 	}
@@ -107,10 +118,15 @@ func Verify(root crypto.Digest, elems map[uint64]crypto.Hashable, proof []crypto
 		return nil
 	}
 
-	pl := make(partialLayer)
+	pl := make(partialLayer, 0, len(elems))
 	for pos, elem := range elems {
-		pl[pos] = crypto.HashObj(elem)
+		pl = append(pl, layerItem{
+			pos:  pos,
+			hash: crypto.HashObj(elem),
+		})
 	}
+
+	sort.Slice(pl, func(i, j int) bool { return pl[i].pos < pl[j].pos })
 
 	s := &siblings{
 		hints: proof,
@@ -128,8 +144,8 @@ func Verify(root crypto.Digest, elems map[uint64]crypto.Hashable, proof []crypto
 		}
 	}
 
-	computedroot, ok := pl[0]
-	if !ok || computedroot != root {
+	computedroot := pl[0]
+	if computedroot.pos != 0 || computedroot.hash != root {
 		return fmt.Errorf("root mismatch")
 	}
 
