@@ -862,3 +862,64 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "should allow leasing payment transaction with newer FirstValid")
 	}
 }
+
+func TestLedgerDBConcurrentAccess(t *testing.T) {
+    // This test ensures that both the tracker and block DBs can be accessed
+    // independently in-memory, by adding a block full of transactions to the
+    // ledger many times, and repeatedly checking the ledger's tracker DB to
+    // cause many concurrent attempts to hold the two DBs' locks, eventually
+    // causing a memory overload if they share the lock
+    // if testing.Short() {
+    //     t.Skip()
+    // }
+    dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+    genesisInitState := getInitState()
+    const inMem = true
+    cfg := config.GetDefaultLocal()
+    cfg.Archival = true
+    log := logging.TestingLog(t)
+    l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+    require.NoError(t, err)
+    defer l.Close()
+    wl := &wrappedLedger{
+        l: l,
+    }
+
+    blk := genesisInitState.Block
+
+    var payset transactions.Payset
+    var tx transactions.Transaction
+    nTxns := 5000
+    for i := 0; i < nTxns; i++ {
+        tx, err = makeUnsignedApplicationCallTx(0, transactions.OptInOC)
+        require.NoError(t, err)
+        stxnib := makeSignedTxnInBlock(tx)
+        payset = append(payset, stxnib)
+    }
+    blk.Payset = payset
+    blk.BlockHeader.TxnCounter = uint64(nTxns)
+
+    for i := 0; i < 1000; i++ {
+        blk.BlockHeader.Round++
+        blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+
+        vb := ValidatedBlock{
+            blk: blk,
+            delta: StateDelta{
+                accts:      make(map[basics.Address]accountDelta),
+                Txids:      make(map[transactions.Txid]basics.Round),
+                txleases:   make(map[txlease]basics.Round),
+                creatables: make(map[basics.CreatableIndex]modifiedCreatable),
+                hdr:        &blk.BlockHeader},
+        }
+        wl.l.AddValidatedBlock(vb, agreement.Certificate{})
+        // wl.l.AddBlock(blk, agreement.Certificate{})
+        wl.l.WaitForCommit(blk.Round())
+        //_, err := checkTrackers(t, wl, blk.Round())
+        require.NoError(t, err)
+        if err != nil {
+            // Return early, to help with iterative debugging
+            return
+        }
+    }
+}
