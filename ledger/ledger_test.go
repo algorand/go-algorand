@@ -899,7 +899,7 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
     blk.Payset = payset
     blk.BlockHeader.TxnCounter = uint64(nTxns)
 
-    for i := 0; i < 1000; i++ {
+    for i := 0; i < 100; i++ {
         blk.BlockHeader.Round++
         blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 
