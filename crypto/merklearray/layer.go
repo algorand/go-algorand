@@ -27,7 +27,7 @@ func (p *pair) ToBeHashed() (protocol.HashID, []byte) {
 // and returns the next-higher level in the tree,
 // represented as a layer.
 func (l layer) up() layer {
-	res := make(layer, (len(l)+1)/2)
+	res := make(layer, (uint64(len(l))+1)/2)
 	for i := 0; i < len(l); i += 2 {
 		var p pair
 		p.l = l[i]
