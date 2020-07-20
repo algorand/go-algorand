@@ -868,7 +868,7 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
 	// independently in-memory, by adding a block full of transactions to the
 	// ledger many times, and repeatedly checking the ledger's tracker DB to
 	// cause many concurrent attempts to hold the two DBs' locks, eventually
-	// causing a memory overload if they share the lock.
+	// causing a memory overload if they share the lock
 	// if testing.Short() {
     //     t.Skip()
     // }
