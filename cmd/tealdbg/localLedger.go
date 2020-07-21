@@ -33,7 +33,8 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 )
 
-type accountIndexerResponse struct {
+// Account Response object from querying indexer
+type AccountIndexerResponse struct {
 	// Account information at a given round.
 	//
 	// Definition:
@@ -55,7 +56,7 @@ type balancesAdapter struct {
 func makeAppLedger(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
 	groupIndex int, proto config.ConsensusParams, round int, latestTimestamp int64,
-	appIdx basics.AppIndex, painless bool, indexerURL string, indexerToke string,
+	appIdx basics.AppIndex, painless bool, indexerURL string, indexerToken string,
 ) (logic.LedgerForLogic, appState, error) {
 
 	if groupIndex >= len(txnGroup) {
@@ -168,21 +169,21 @@ func getBalanceFromIndexer(indexerURL string, indexerToken string, account basic
 	request.Header.Set("X-Algo-API-Token", indexerToken)
 	resp, err := client.Do(request)
 	if err != nil {
-		return basics.AccountData{}, err
+		return basics.AccountData{}, fmt.Errorf("indexer request error: %s", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		msg, _ := ioutil.ReadAll(resp.Body)
-		return basics.AccountData{}, fmt.Errorf("indexer error: %s, status code: %d, request: %s", string(msg), resp.StatusCode, queryString)
+		return basics.AccountData{}, fmt.Errorf("indexer response error: %s, status code: %d, request: %s", string(msg), resp.StatusCode, queryString)
 	}
-	var accountResp accountIndexerResponse
+	var accountResp AccountIndexerResponse
 	err = json.NewDecoder(resp.Body).Decode(&accountResp)
 	if err != nil {
-		return basics.AccountData{}, err
+		return basics.AccountData{}, fmt.Errorf("indexer response decode error: %s", err)
 	}
 	balance, err := v2.AccountToAccountData(&accountResp.Account)
 	if err != nil {
-		return basics.AccountData{}, err
+		return basics.AccountData{}, fmt.Errorf("AccountToAccountData error: %s", err)
 	}
 	return balance, nil
 }

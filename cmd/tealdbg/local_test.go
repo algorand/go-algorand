@@ -17,13 +17,18 @@
 package main
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
 )
@@ -158,6 +163,11 @@ func makeSampleBalanceRecord(addr basics.Address, assetIdx basics.AssetIndex, ap
 			Total:     100,
 			UnitName:  "tok",
 			AssetName: "asset",
+			Manager: addr,
+			Reserve: addr,
+			Freeze: addr,
+			Clawback: addr,
+			URL: "http://127.0.0.1/8000",
 		},
 	}
 	br.Assets = map[basics.AssetIndex]basics.AssetHolding{
@@ -866,6 +876,119 @@ func TestLocalLedger(t *testing.T) {
 		ProgramBlobs:    [][]byte{{1}},
 		BalanceBlob:     balanceBlob,
 		TxnBlob:         txnBlob,
+		RunMode:         "application",
+		GroupIndex:      0,
+		Round:           100,
+		LatestTimestamp: 333,
+	}
+
+	err = l.Setup(&dp)
+	a.NoError(err)
+	a.Equal(2, len(l.txnGroup))
+	a.Equal(1, len(l.runs))
+	a.Equal(0, l.runs[0].groupIndex)
+	a.NotNil(l.runs[0].eval)
+	a.Equal([]byte{1}, l.runs[0].program)
+	a.NotNil(l.runs[0].ledger)
+	a.NotEqual(
+		reflect.ValueOf(logic.Eval).Pointer(),
+		reflect.ValueOf(l.runs[0].eval).Pointer(),
+	)
+	ledger := l.runs[0].ledger
+	a.Equal(basics.Round(100), ledger.Round())
+	a.Equal(int64(333), ledger.LatestTimestamp())
+
+	balance, err := ledger.Balance(sender)
+	a.NoError(err)
+	a.Equal(basics.MicroAlgos{Raw: 500000000}, balance)
+
+	holdings, err := ledger.AssetHolding(sender, assetIdx)
+	a.NoError(err)
+	a.Equal(basics.AssetHolding{Amount: 10, Frozen: false}, holdings)
+	holdings, err = ledger.AssetHolding(sender, assetIdx+1)
+	a.Error(err)
+
+	params, err := ledger.AssetParams(sender, assetIdx)
+	a.NoError(err)
+	a.Equal(uint64(100), params.Total)
+	a.Equal("tok", params.UnitName)
+	params, err = ledger.AssetParams(payTxn.Txn.Receiver, assetIdx)
+	a.Error(err)
+
+	tkv, err := ledger.AppGlobalState(0)
+	a.NoError(err)
+	a.Equal(uint64(2), tkv["gkeyint"].Uint)
+	tkv, err = ledger.AppGlobalState(appIdx)
+	a.NoError(err)
+	a.Equal("global", tkv["gkeybyte"].Bytes)
+	tkv, err = ledger.AppGlobalState(appIdx + 1)
+	a.Error(err)
+
+	tkv, err = ledger.AppLocalState(sender, 0)
+	a.NoError(err)
+	a.Equal(uint64(1), tkv["lkeyint"].Uint)
+	tkv, err = ledger.AppLocalState(sender, appIdx)
+	a.NoError(err)
+	a.Equal("local", tkv["lkeybyte"].Bytes)
+	tkv, err = ledger.AppLocalState(sender, appIdx+1)
+	a.Error(err)
+	tkv, err = ledger.AppLocalState(payTxn.Txn.Receiver, appIdx)
+	a.Error(err)
+}
+
+func TestLocalLedgerIndexer(t *testing.T) {
+	a := require.New(t)
+
+	sender, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
+	a.NoError(err)
+	// make balance records
+	appIdx := basics.AppIndex(100)
+	assetIdx := basics.AssetIndex(50)
+	brs := makeSampleBalanceRecord(sender, assetIdx, appIdx)
+	//balanceBlob := protocol.EncodeMsgp(&brs)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case regexp.MustCompile(`^/v2/accounts/`).MatchString(r.URL.Path):
+			w.WriteHeader(200)
+			if r.URL.Path[13:] == brs.Addr.String() {
+				account, err := v2.AccountDataToAccount(brs.Addr.String(), &brs.AccountData, map[basics.AssetIndex]string{}, 100, basics.MicroAlgos{0})
+				a.NoError(err)
+				accountResponse := AccountIndexerResponse{Account: account, CurrentRound: 100}
+				response, err := json.Marshal(accountResponse)
+				a.NoError(err)
+				w.Write(response)
+			}
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	// make transaction group: app call + sample payment
+	appTxn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Header: transactions.Header{
+				Sender: sender,
+			},
+			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+				ApplicationID: appIdx,
+			},
+		},
+	}
+
+	var payTxn transactions.SignedTxn
+	err = protocol.DecodeJSON([]byte(txnSample), &payTxn)
+	a.NoError(err)
+
+	txnBlob := protocol.EncodeMsgp(&appTxn)
+	txnBlob = append(txnBlob, protocol.EncodeMsgp(&payTxn)...)
+
+	l := LocalRunner{}
+	dp := DebugParams{
+		ProgramNames:    []string{"test"},
+		ProgramBlobs:    [][]byte{{1}},
+		TxnBlob:         txnBlob,
+		IndexerURL:      srv.URL,
 		RunMode:         "application",
 		GroupIndex:      0,
 		Round:           100,
