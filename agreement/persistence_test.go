@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"context"
 	"database/sql"
 	"testing"
 	"time"
@@ -85,7 +86,7 @@ func TestAgreementPersistence(t *testing.T) {
 	require.NoError(t, err)
 	defer accessor.Close()
 
-	accessor.Atomic(func(tx *sql.Tx) error {
+	accessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return agreeInstallDatabase(tx)
 	}) // ignore error
 
@@ -112,7 +113,7 @@ func BenchmarkAgreementPersistence(b *testing.B) {
 	accessor, _ := db.MakeAccessor(b.Name()+"_crash.db", false, true)
 	defer accessor.Close()
 
-	accessor.Atomic(func(tx *sql.Tx) error {
+	accessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return agreeInstallDatabase(tx)
 	}) // ignore error
 
@@ -138,7 +139,7 @@ func BenchmarkAgreementPersistenceRecovery(b *testing.B) {
 	accessor, _ := db.MakeAccessor(b.Name()+"_crash.db", false, true)
 	defer accessor.Close()
 
-	accessor.Atomic(func(tx *sql.Tx) error {
+	accessor.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return agreeInstallDatabase(tx)
 	}) // ignore error
 

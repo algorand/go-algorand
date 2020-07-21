@@ -650,7 +650,7 @@
           "apps-local-state": {
             "description": "\\[appl\\] applications local data stored in this account.\n\nNote the raw object uses `map[int] -> AppLocalState` for this type.",
             "items": {
-              "$ref": "#/components/schemas/ApplicationLocalStates"
+              "$ref": "#/components/schemas/ApplicationLocalState"
             },
             "type": "array"
           },
@@ -800,6 +800,10 @@
       "ApplicationLocalState": {
         "description": "Stores local state associated with an application.",
         "properties": {
+          "id": {
+            "description": "The application which this local state is for.",
+            "type": "integer"
+          },
           "key-value": {
             "$ref": "#/components/schemas/TealKeyValueStore"
           },
@@ -808,24 +812,8 @@
           }
         },
         "required": [
-          "key-value",
-          "schema"
-        ],
-        "type": "object"
-      },
-      "ApplicationLocalStates": {
-        "description": "Pair of application index and application local state",
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "state": {
-            "$ref": "#/components/schemas/ApplicationLocalState"
-          }
-        },
-        "required": [
           "id",
-          "state"
+          "schema"
         ],
         "type": "object"
       },
