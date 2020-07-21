@@ -138,20 +138,21 @@ func OpenLedger(
 
 func (l *Ledger) reloadLedger() error {
 	// similar to the Close function, we want to start by closing the blockQ first. The
-	// blockQ is having a sync goroutine which indirectly calls other trackers. We want to eliminate the path first,
+	// blockQ is having a sync goroutine which indirectly calls other trackers. We want to eliminate that go-routine first,
 	// and follow up by taking the trackers lock.
 	if l.blockQ != nil {
 		l.blockQ.close()
 		l.blockQ = nil
 	}
 
+	// take the trackers lock. This would ensure that no other goroutine is using the trackers.
 	l.trackerMu.Lock()
 	defer l.trackerMu.Unlock()
 
-	// close the trackers. At this point, we already have the trackers write lock which ensures that noone is current using these.
+	// close the trackers.
 	l.trackers.close()
 
-	// reload.
+	// reload -
 	var err error
 	l.blockQ, err = bqInit(l)
 	if err != nil {
@@ -168,7 +169,7 @@ func (l *Ledger) reloadLedger() error {
 
 	err = l.trackers.loadFromDisk(l)
 	if err != nil {
-		err = fmt.Errorf("reloadLedger.reloadLedger %v", err)
+		err = fmt.Errorf("reloadLedger.loadFromDisk %v", err)
 		return err
 	}
 
@@ -286,6 +287,11 @@ func (l *Ledger) Close() {
 		l.blockQ.close()
 		l.blockQ = nil
 	}
+
+	// take the trackers lock. This would ensure that no other goroutine is using the trackers.
+	l.trackerMu.Lock()
+	defer l.trackerMu.Unlock()
+
 	// then, we shut down the trackers and their corresponding goroutines.
 	l.trackers.close()
 
@@ -321,7 +327,7 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 func (l *Ledger) GetLastCatchpointLabel() string {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getLastCatchpointLabel()
+	return l.accts.GetLastCatchpointLabel()
 }
 
 // GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
@@ -347,7 +353,7 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.listAssets(maxAssetIdx, maxResults)
+	return l.accts.ListAssets(maxAssetIdx, maxResults)
 }
 
 // ListApplications takes a maximum app index and maximum result length, and
@@ -356,7 +362,7 @@ func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (r
 func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.listApplications(maxAppIdx, maxResults)
+	return l.accts.ListApplications(maxAppIdx, maxResults)
 }
 
 // Lookup uses the accounts tracker to return the account state for a
@@ -532,7 +538,7 @@ func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state Catchpoin
 func (l *Ledger) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getCatchpointStream(round)
+	return l.accts.GetCatchpointStream(round)
 }
 
 // ledgerForTracker methods

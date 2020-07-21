@@ -907,6 +907,10 @@ func TestLedgerReload(t *testing.T) {
 
 		if i%7 == 0 {
 			l.reloadLedger()
+			// if we reloaded it before it got committed, we need to roll back the round counter.
+			if l.LatestCommitted() != blk.BlockHeader.Round {
+				blk.BlockHeader.Round = l.LatestCommitted()
+			}
 		}
 		if i%13 == 0 {
 			l.WaitForCommit(blk.Round())

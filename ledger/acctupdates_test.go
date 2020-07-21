@@ -147,14 +147,14 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 	_, err := au.Totals(latest + 1)
 	require.Error(t, err)
 
-	_, err = au.lookup(latest+1, randomAddress(), false)
+	_, err = au.Lookup(latest+1, randomAddress(), false)
 	require.Error(t, err)
 
 	if base > 0 {
 		_, err := au.Totals(base - 1)
 		require.Error(t, err)
 
-		_, err = au.lookup(base-1, randomAddress(), false)
+		_, err = au.Lookup(base-1, randomAddress(), false)
 		require.Error(t, err)
 	}
 
@@ -180,7 +180,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			var totalOnline, totalOffline, totalNotPart uint64
 
 			for addr, data := range accts[rnd] {
-				d, err := au.lookup(rnd, addr, false)
+				d, err := au.Lookup(rnd, addr, false)
 				require.NoError(t, err)
 				require.Equal(t, d, data)
 
@@ -211,7 +211,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
 			require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
 
-			d, err := au.lookup(rnd, randomAddress(), false)
+			d, err := au.Lookup(rnd, randomAddress(), false)
 			require.NoError(t, err)
 			require.Equal(t, d, basics.AccountData{})
 		}
@@ -697,14 +697,14 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			updates := make(map[basics.Address]accountDelta)
 			moneyAccountsExpectedAmounts = append(moneyAccountsExpectedAmounts, make([]uint64, len(moneyAccounts)))
 			toAccount := moneyAccounts[0]
-			toAccountDataOld, err := au.lookup(i-1, toAccount, false)
+			toAccountDataOld, err := au.Lookup(i-1, toAccount, false)
 			require.NoError(t, err)
 			toAccountDataNew := toAccountDataOld
 
 			for j := 1; j < len(moneyAccounts); j++ {
 				fromAccount := moneyAccounts[j]
 
-				fromAccountDataOld, err := au.lookup(i-1, fromAccount, false)
+				fromAccountDataOld, err := au.Lookup(i-1, fromAccount, false)
 				require.NoError(t, err)
 				require.Equalf(t, moneyAccountsExpectedAmounts[i-1][j], fromAccountDataOld.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, i)
 
@@ -733,7 +733,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 					if checkRound < uint64(testback) {
 						continue
 					}
-					acct, err := au.lookup(basics.Round(checkRound-uint64(testback)), moneyAccounts[j], false)
+					acct, err := au.Lookup(basics.Round(checkRound-uint64(testback)), moneyAccounts[j], false)
 					// we might get an error like "round 2 before dbRound 5", which is the success case, so we'll ignore it.
 					if err != nil {
 						// verify it's the expected error and not anything else.
@@ -777,7 +777,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		au.waitAccountsWriting()
 
 		for idx, addr := range moneyAccounts {
-			balance, err := au.lookup(lastRound, addr, false)
+			balance, err := au.Lookup(lastRound, addr, false)
 			require.NoErrorf(t, err, "unable to retrieve balance for account idx %d %v", idx, addr)
 			if idx != 0 {
 				require.Equalf(t, 100*1000000-roundCount*(roundCount-1)/2, int(balance.MicroAlgos.Raw), "account idx %d %v has the wrong balance", idx, addr)
