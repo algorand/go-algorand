@@ -76,7 +76,7 @@ func TestAccount(t *testing.T) {
 	require.Equal(t, uint64(appIdx), ls.Id)
 	require.Equal(t, uint64(10), ls.Schema.NumUint)
 	require.Equal(t, uint64(0), ls.Schema.NumByteSlice)
-	require.Equal(t, 2, len(ls.KeyValue))
+	require.Equal(t, 2, len(*ls.KeyValue))
 	value1 := generated.TealKeyValue{
 		Key: "uint",
 		Value: generated.TealValue{
@@ -91,8 +91,8 @@ func TestAccount(t *testing.T) {
 			Bytes: "value",
 		},
 	}
-	require.Contains(t, ls.KeyValue, value1)
-	require.Contains(t, ls.KeyValue, value2)
+	require.Contains(t, *ls.KeyValue, value1)
+	require.Contains(t, *ls.KeyValue, value2)
 
 	c, err := AccountToAccountData(&conv)
 	require.NoError(t, err)
