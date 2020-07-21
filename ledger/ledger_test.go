@@ -913,7 +913,6 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
                 hdr:        &blk.BlockHeader},
         }
         wl.l.AddValidatedBlock(vb, agreement.Certificate{})
-        // wl.l.AddBlock(blk, agreement.Certificate{})
         wl.l.WaitForCommit(blk.Round())
         //_, err := checkTrackers(t, wl, blk.Round())
         require.NoError(t, err)
