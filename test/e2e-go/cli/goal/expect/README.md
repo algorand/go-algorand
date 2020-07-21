@@ -19,18 +19,22 @@ cd go-algorand
 make clean install
 ```
 
-#### Set environment variables
+#### Running the integration tests
 
-The `GOPATH` should be set to your local Go projects directory. For example:
+Running the integration tests will invoke the expect tests.  Execute the following command to run the integration tests.
 
 ```bash
-export GOPATH=~/GolandProjects/
+make integration
 ```
 
-The `PATH` environment variable should include `$GOPATH/bin`
+#### Set environment variables
+
+The `GOPATH` should be set to your local Go projects directory. 
+The `PATH` environment variable should include `$GOPATH/bin`. For example:
 
 ```bash
-export PATH=$GOPATH/bin:$PATH
+export GOPATH=~/path/to/goprojects
+export PATH=$(go env GOPATH | cut -d':' -f1 ):${PATH}
 ```
 
 
