@@ -450,6 +450,7 @@ func TestAppCallApplyGlobalStateDeltas(t *testing.T) {
 	// check global on unsupported proto
 	b.SetProto(protocol.ConsensusV23)
 	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx)
+	a.Error(err)
 	a.True(isApplyError(err))
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
@@ -463,6 +464,7 @@ func TestAppCallApplyGlobalStateDeltas(t *testing.T) {
 	// check global on supported proto
 	b.SetProto(protocol.ConsensusFuture)
 	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx)
+	a.Error(err)
 	a.True(isApplyError(err))
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
@@ -513,6 +515,7 @@ func TestAppCallApplyGlobalStateDeltas(t *testing.T) {
 	b.SetProto(protocol.ConsensusV23)
 	ed.GlobalDelta["uint"] = basics.ValueDelta{Action: basics.SetUintAction, Uint: 1}
 	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx)
+	a.Error(err)
 	a.True(isApplyError(err))
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
@@ -575,8 +578,6 @@ func TestAppCallApplyLocalsStateDeltas(t *testing.T) {
 	var params basics.AppParams
 	var appIdx basics.AppIndex
 	var b testBalances
-	errIfNotApplied := false
-	_ = errIfNotApplied
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	ed.LocalDeltas = make(map[uint64]basics.StateDelta)
@@ -586,7 +587,6 @@ func TestAppCallApplyLocalsStateDeltas(t *testing.T) {
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 
-	errIfNotApplied = true
 	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx)
 	a.NoError(err)
 	a.Equal(0, b.put)
@@ -595,11 +595,9 @@ func TestAppCallApplyLocalsStateDeltas(t *testing.T) {
 	ed.LocalDeltas[1] = basics.StateDelta{}
 
 	// non-existing account
-	errIfNotApplied = false
 	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx)
 	a.Error(err)
 
-	errIfNotApplied = true
 	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx)
 	a.Error(err)
 
@@ -616,12 +614,12 @@ func TestAppCallApplyLocalsStateDeltas(t *testing.T) {
 	ed.LocalDeltas[1] = basics.StateDelta{"bytes": basics.ValueDelta{Action: basics.DeleteAction}}
 	b.balances[sender] = basics.AccountData{}
 	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx)
+	a.Error(err)
 	a.True(isApplyError(err))
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 	a.Equal(basics.AccountData{}, b.balances[sender])
 	// not opted in
-	errIfNotApplied = true
 	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx)
 	a.Error(err)
 	a.Contains(err.Error(), "acct has not opted in to app")
@@ -636,7 +634,6 @@ func TestAppCallApplyLocalsStateDeltas(t *testing.T) {
 	b.balances[sender] = basics.AccountData{
 		AppLocalStates: cp,
 	}
-	errIfNotApplied = true
 	err = ac.applyEvalDelta(ed, params, creator, sender, &b, appIdx)
 	a.Error(err)
 	a.Contains(err.Error(), "duplicate LocalState delta")
