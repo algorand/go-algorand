@@ -786,6 +786,11 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	t.Run("DiskDB", testFunction)
 }
 
+// TestAcctUpdatesDeleteStoredCatchpoints - The goal of this test is to verify that the deleteStoredCatchpoints function works correctly.
+// it doing so by filling up the storedcatchpoints with dummy catchpoint file entries, as well as creating these dummy files on disk.
+// ( the term dummy is only because these aren't real catchpoint files, but rather a zero-length file ). Then, the test call the function
+// and ensures that it did not errored, the catchpoint files were correctly deleted, and that deleteStoredCatchpoints contains no more
+// entries.
 func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 

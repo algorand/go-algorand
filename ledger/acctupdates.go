@@ -777,6 +777,8 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 }
 
 // Initialize accounts DB if needed and return account round
+// as part of the initialization, it tests the current database schema version, and perform upgrade
+// procedures to bring it up to the database schema supported by the binary.
 func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (basics.Round, error) {
 	// check current database version.
 	dbVersion, err := db.GetUserVersion(ctx, tx)
@@ -800,11 +802,13 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 			case 0:
 				dbVersion, err = au.upgradeDatabaseSchema0(ctx, tx)
 				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 0 : %v", err)
 					return 0, err
 				}
 			case 1:
 				dbVersion, err = au.upgradeDatabaseSchema1(ctx, tx)
 				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 1 : %v", err)
 					return 0, err
 				}
 			default:
@@ -898,6 +902,25 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 }
 
 // upgradeDatabaseSchema0 upgrades the database schema from version 0 to version 1
+//
+// schema of version 0 is expected to be aligned with the schema used on version 2.0.8 or before.
+// any database of version 2.0.8 would be of version 0. The schema of the database might be empty
+// ( in case we've just created the database ) or it migth include the following tables:
+// * acctrounds
+// * accounttotals
+// * accountbase
+// * assetcreators
+// * storedcatchpoints
+// * accounthashes
+// * catchpointstate
+//
+// As the first step of the upgrade, the above tables are being created if they do not already exists.
+// Following that, the assetcreators tables is being altered and a new column named ctype is being added.
+// Last, the database was just created, it would initialize it with the following:
+// The accountbase would get initialized with the au.initAccounts
+// The accounttotals would get initialized to align with the initialization account added to accountbase
+// The acctrounds would get updated to indicate that the balance matches round 0
+//
 func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
 	au.log.Infof("accountsInitialize initializing schema")
 	err = accountsInit(tx, au.initAccounts, au.initProto)
@@ -912,6 +935,20 @@ func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx
 }
 
 // upgradeDatabaseSchema1 upgrades the database schema from version 1 to version 2
+//
+// The schema updated to verison 2 intended to ensure that the encoding of all the accounts data is
+// both canonical and identical across the entire network. On release 2.0.5 we released an upgrade to the messagepack.
+// the upgraded messagepack was decoding the message into the same datastructures, but would have different
+// encoding compared to it's predecessor. As a result, some of the account data were stored in inconsistent way ( across differrent nodes ).
+// To address this, this startup proceduce would attempt to scan all the accounts data. for each account data, we would
+// see if it's encoding aligned with the current messagepack encoder. If it doesn't we would update it's encoding.
+// than, depending if we found any such account data, we would reset the merkle trie and stored catchpoints.
+// once the upgrade is complete, the accountsInitialize would (if needed) rebuild the merke trie using the new
+// encoded accounts.
+//
+// This upgrade doesn't change any of the actual database schema ( i.e. tables, indexes ) but rather just performing
+// a functional update to it's content.
+//
 func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
 	// update accounts encoding.
 	au.log.Infof("accountsInitialize verifying accounts data encoding")
