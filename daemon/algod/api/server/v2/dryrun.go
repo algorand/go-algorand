@@ -78,7 +78,9 @@ func DryrunRequestFromGenerated(gdr *generated.DryrunRequest) (dr DryrunRequest,
 	return
 }
 
-func (dr *DryrunRequest) expandSources() error {
+// ExpandSources takes DryrunRequest.Source, compiles and
+// puts into appropriate DryrunRequest.Apps entry
+func (dr *DryrunRequest) ExpandSources() error {
 	for i, s := range dr.Sources {
 		program, err := logic.AssembleString(s.Source)
 		if err != nil {
@@ -287,8 +289,19 @@ func (dl *dryrunLedger) Get(addr basics.Address, withPendingRewards bool) (basic
 	if ok {
 		any = true
 		app := dl.dr.Apps[appi]
-		out.AppParams = make(map[basics.AppIndex]basics.AppParams)
-		out.AppParams[basics.AppIndex(app.Id)] = ApplicationParamsToAppParams(&app.Params)
+		params := ApplicationParamsToAppParams(&app.Params)
+		if out.AppParams == nil {
+			out.AppParams = make(map[basics.AppIndex]basics.AppParams)
+			out.AppParams[basics.AppIndex(app.Id)] = params
+		} else {
+			ap, ok := out.AppParams[basics.AppIndex(app.Id)]
+			if ok {
+				MergeAppParams(&ap, &params)
+				out.AppParams[basics.AppIndex(app.Id)] = ap
+			} else {
+				out.AppParams[basics.AppIndex(app.Id)] = params
+			}
+		}
 	}
 	if !any {
 		return basics.BalanceRecord{}, fmt.Errorf("no account for addr %s", addr.String())
@@ -369,8 +382,13 @@ func makeAppLedger(dl *dryrunLedger, txn *transactions.Transaction, appIdx basic
 }
 
 // unit-testable core of dryrun handler
+// programs for execution are discovered in the following way:
+// - LogicSig: stxn.Lsig.Logic
+// - Application: Apps[i].ClearStateProgram or Apps[i].ApprovalProgram for matched appIdx
+// if DryrunRequest.Sources is set it overrides appropriate entires in stxn.Lsig.Logic or Apps[i]
+// important: Accounts are not used for program lookup for application execution
 func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response *generated.DryrunResponse) {
-	err := dr.expandSources()
+	err := dr.ExpandSources()
 	if err != nil {
 		response.Error = err.Error()
 		return
@@ -494,16 +512,40 @@ func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
 
 	gsd := make(generated.StateDelta, 0, len(sd))
 	for k, v := range sd {
-		bytes := base64.StdEncoding.EncodeToString([]byte(v.Bytes))
-		gsd = append(gsd, generated.EvalDeltaKeyValue{
-			Key: k,
-			Value: generated.EvalDelta{
-				Action: uint64(v.Action),
-				Uint:   &v.Uint,
-				Bytes:  &bytes,
-			},
-		})
+		value := generated.EvalDelta{Action: uint64(v.Action)}
+		if v.Action == basics.SetBytesAction {
+			bytesVal := base64.StdEncoding.EncodeToString([]byte(v.Bytes))
+			value.Bytes = &bytesVal
+		} else if v.Action == basics.SetUintAction {
+			uintVal := v.Uint
+			value.Uint = &uintVal
+		}
+		// basics.DeleteAction does not require Uint/Bytes
+		kv := generated.EvalDeltaKeyValue{
+			Key:   k,
+			Value: value,
+		}
+		gsd = append(gsd, kv)
 	}
 
 	return &gsd
+}
+
+// MergeAppParams merges values, existing in "base" take priority over new in "update"
+func MergeAppParams(base *basics.AppParams, update *basics.AppParams) {
+	if len(base.ApprovalProgram) == 0 && len(update.ApprovalProgram) > 0 {
+		base.ApprovalProgram = update.ApprovalProgram
+	}
+	if len(base.ClearStateProgram) == 0 && len(update.ClearStateProgram) > 0 {
+		base.ClearStateProgram = update.ClearStateProgram
+	}
+	if len(base.GlobalState) == 0 && len(update.GlobalState) > 0 {
+		base.GlobalState = update.GlobalState
+	}
+	if base.LocalStateSchema == (basics.StateSchema{}) && update.LocalStateSchema != (basics.StateSchema{}) {
+		base.LocalStateSchema = update.LocalStateSchema
+	}
+	if base.GlobalStateSchema == (basics.StateSchema{}) && update.GlobalStateSchema != (basics.StateSchema{}) {
+		base.GlobalStateSchema = update.GlobalStateSchema
+	}
 }

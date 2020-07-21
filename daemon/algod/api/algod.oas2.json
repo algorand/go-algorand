@@ -1086,7 +1086,7 @@
           "description": "\\[appl\\] applications local data stored in this account.\n\nNote the raw object uses `map[int] -\u003e AppLocalState` for this type.",
           "type": "array",
           "items": {
-            "$ref": "#/definitions/ApplicationLocalStates"
+            "$ref": "#/definitions/ApplicationLocalState"
           }
         },
         "apps-total-schema": {
@@ -1316,30 +1316,18 @@
         }
       }
     },
-    "ApplicationLocalStates": {
-      "description": "Pair of application index and application local state",
-      "type": "object",
-      "required": [
-        "id",
-        "state"
-      ],
-      "properties": {
-        "id": {
-          "type": "integer"
-        },
-        "state": {
-          "$ref": "#/definitions/ApplicationLocalState"
-        }
-      }
-    },
     "ApplicationLocalState": {
       "description": "Stores local state associated with an application.",
       "type": "object",
       "required": [
-        "schema",
-        "key-value"
+        "id",
+        "schema"
       ],
       "properties": {
+        "id": {
+          "description": "The application which this local state is for.",
+          "type": "integer"
+        },
         "schema": {
           "description": "\\[hsch\\] schema.",
           "$ref": "#/definitions/ApplicationStateSchema"
