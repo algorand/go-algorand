@@ -477,6 +477,7 @@ func (l *Ledger) AddValidatedBlock(vb ValidatedBlock, cert agreement.Certificate
 	if err != nil {
 		return err
 	}
+	l.headerCache.Put(vb.blk.Round(), vb.blk.BlockHeader)
 	l.trackers.newBlock(vb.blk, vb.delta)
 	return nil
 }

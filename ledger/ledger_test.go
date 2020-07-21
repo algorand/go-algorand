@@ -862,3 +862,28 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "should allow leasing payment transaction with newer FirstValid")
 	}
 }
+
+func TestLedgerBlockHdrCaching(t *testing.T) {
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	blk := genesisInitState.Block
+
+	for i := 0; i < 2000; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		err := l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+
+		hdr, err := l.BlockHdr(blk.BlockHeader.Round)
+		require.NoError(t, err)
+		require.Equal(t, blk.BlockHeader, hdr)
+	}
+}
