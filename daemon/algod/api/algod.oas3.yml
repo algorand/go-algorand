@@ -813,7 +813,6 @@
         },
         "required": [
           "id",
-          "key-value",
           "schema"
         ],
         "type": "object"
