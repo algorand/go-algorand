@@ -903,9 +903,9 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 
 // upgradeDatabaseSchema0 upgrades the database schema from version 0 to version 1
 //
-// schema of version 0 is expected to be aligned with the schema used on version 2.0.8 or before.
-// any database of version 2.0.8 would be of version 0. The schema of the database might be empty
-// ( in case we've just created the database ) or it migth include the following tables:
+// Schema of version 0 is expected to be aligned with the schema used on version 2.0.8 or before.
+// Any database of version 2.0.8 would be of version 0. At this point, the database might
+// have the following tables : ( i.e. a newly created table would not have these )
 // * acctrounds
 // * accounttotals
 // * accountbase
@@ -915,8 +915,8 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 // * catchpointstate
 //
 // As the first step of the upgrade, the above tables are being created if they do not already exists.
-// Following that, the assetcreators tables is being altered and a new column named ctype is being added.
-// Last, the database was just created, it would initialize it with the following:
+// Following that, the assetcreators table is being altered by adding a new column to it (ctype).
+// Last, in case the database was just created, it would get initialized it with the following:
 // The accountbase would get initialized with the au.initAccounts
 // The accounttotals would get initialized to align with the initialization account added to accountbase
 // The acctrounds would get updated to indicate that the balance matches round 0
@@ -938,10 +938,11 @@ func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx
 //
 // The schema updated to verison 2 intended to ensure that the encoding of all the accounts data is
 // both canonical and identical across the entire network. On release 2.0.5 we released an upgrade to the messagepack.
-// the upgraded messagepack was decoding the message into the same datastructures, but would have different
-// encoding compared to it's predecessor. As a result, some of the account data were stored in inconsistent way ( across differrent nodes ).
+// the upgraded messagepack was decoding the account data correctly, but would have different
+// encoding compared to it's predecessor. As a result, some of the account data that was previously stored
+// would have different encoded representation than the one on disk.
 // To address this, this startup proceduce would attempt to scan all the accounts data. for each account data, we would
-// see if it's encoding aligned with the current messagepack encoder. If it doesn't we would update it's encoding.
+// see if it's encoding aligns with the current messagepack encoder. If it doesn't we would update it's encoding.
 // than, depending if we found any such account data, we would reset the merkle trie and stored catchpoints.
 // once the upgrade is complete, the accountsInitialize would (if needed) rebuild the merke trie using the new
 // encoded accounts.
