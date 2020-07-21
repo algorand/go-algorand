@@ -97,6 +97,9 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS accounthashes`,
 }
 
+// accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
+// details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
+// and their descriptions.
 var accountDBVersion = int32(2)
 
 type accountDelta struct {
