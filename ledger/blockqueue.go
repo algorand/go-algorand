@@ -63,6 +63,10 @@ func bqInit(l *Ledger) (*blockQueue, error) {
 	err := bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		bq.lastCommitted, err0 = blockLatest(tx)
+		if err0 != nil {
+			return err0
+		}
+		bq.lastCommittedEntry.block, bq.lastCommittedEntry.cert, err0 = blockGetCert(tx, bq.lastCommitted)
 		return err0
 	})
 	if err != nil {
@@ -222,7 +226,7 @@ func (bq *blockQueue) checkEntry(r basics.Round) (e *blockEntry, lastCommitted b
 	}
 
 	if r <= bq.lastCommitted {
-		if r > 0 && bq.lastCommittedEntry.block.Round() == r {
+		if bq.lastCommittedEntry.block.Round() == r {
 			return &blockEntry{block: bq.lastCommittedEntry.block, cert: bq.lastCommittedEntry.cert}, lastCommitted, latest, nil
 		}
 		return nil, lastCommitted, latest, nil
