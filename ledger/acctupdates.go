@@ -267,18 +267,20 @@ func (au *accountUpdates) close() {
 func (au *accountUpdates) Lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
-	return au.lookup(rnd, addr, withRewards)
+	return au.lookupImpl(rnd, addr, withRewards)
 }
 
-// listAssets lists the assets by their asset index, limiring to the first maxResults
-func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
+// ListAssets lists the assets by their asset index, limiting to the first maxResults
+func (au *accountUpdates) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
 	return au.listCreatables(basics.CreatableIndex(maxAssetIdx), maxResults, basics.AssetCreatable)
 }
 
-func (au *accountUpdates) listApplications(maxAppIdx basics.AppIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
+// ListApplications lists the application by their app index, limiting to the first maxResults
+func (au *accountUpdates) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
 	return au.listCreatables(basics.CreatableIndex(maxAppIdx), maxResults, basics.AppCreatable)
 }
 
+// listCreatables lists the application/asset by their app/asset index, limiting to the first maxResults
 func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) ([]basics.CreatableLocator, error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
@@ -353,7 +355,7 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 }
 
 // getLastCatchpointLabel retrieves the last catchpoint label that was stored to the database.
-func (au *accountUpdates) getLastCatchpointLabel() string {
+func (au *accountUpdates) GetLastCatchpointLabel() string {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 	return au.lastCatchpointLabel
@@ -363,7 +365,7 @@ func (au *accountUpdates) getLastCatchpointLabel() string {
 func (au *accountUpdates) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
-	return au.getCreatorForRound(rnd, cidx, ctype)
+	return au.getCreatorForRoundImpl(rnd, cidx, ctype)
 }
 
 // committedUpTo enqueues commiting the balances for round committedRound-lookback.
@@ -487,10 +489,10 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 func (au *accountUpdates) Totals(rnd basics.Round) (totals AccountTotals, err error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
-	return au.totals(rnd)
+	return au.totalsImpl(rnd)
 }
 
-func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser, error) {
+func (au *accountUpdates) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	dbFileName := ""
 	err := au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		dbFileName, _, _, err = getCatchpoint(tx, round)
@@ -576,12 +578,12 @@ func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.
 
 // Lookup returns the account balance for a given address at a given round
 func (aul *accountUpdatesLedgerEvaluator) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
-	return aul.au.lookup(rnd, addr, true)
+	return aul.au.lookupImpl(rnd, addr, true)
 }
 
 // Totals returns the totals for a given round
 func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (AccountTotals, error) {
-	return aul.au.totals(rnd)
+	return aul.au.totalsImpl(rnd)
 }
 
 func (aul *accountUpdatesLedgerEvaluator) isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error) {
@@ -597,15 +599,15 @@ func (aul *accountUpdatesLedgerEvaluator) GetRoundTxIds(rnd basics.Round) (txMap
 
 // Lookup returns the account balance for a given address at a given round, without the reward
 func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
-	return aul.au.lookup(rnd, addr, false)
+	return aul.au.lookupImpl(rnd, addr, false)
 }
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
 func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
-	return aul.au.getCreatorForRound(rnd, cidx, ctype)
+	return aul.au.getCreatorForRoundImpl(rnd, cidx, ctype)
 }
 
-func (au *accountUpdates) totals(rnd basics.Round) (totals AccountTotals, err error) {
+func (au *accountUpdates) totalsImpl(rnd basics.Round) (totals AccountTotals, err error) {
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return
@@ -1094,7 +1096,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	au.roundTotals = append(au.roundTotals, newTotals)
 }
 
-func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
+func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return
@@ -1137,8 +1139,8 @@ func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewa
 	return au.accountsq.lookup(addr)
 }
 
-// getCreatorForRound returns the asset/app creator for a given asset/app index at a given round
-func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
+// getCreatorForRoundImpl returns the asset/app creator for a given asset/app index at a given round
+func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return basics.Address{}, false, err
