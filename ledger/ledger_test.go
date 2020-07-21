@@ -881,15 +881,8 @@ func TestLedgerBlockHdrCaching(t *testing.T) {
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		err := l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
-		l.WaitForCommit(blk.Round())
-		be, lastCommitted, latest, err := l.blockQ.checkEntry(blk.BlockHeader.Round)
-		require.NoError(t, err)
-		require.NotNilf(t, be, "round : %d", blk.BlockHeader.Round)
-		require.Equal(t, blk, be.block)
-		require.LessOrEqual(t, uint64(lastCommitted), uint64(blk.BlockHeader.Round))
-		require.Equal(t, latest, blk.BlockHeader.Round)
 
-		hdr, err := l.blockQ.getBlockHdr(blk.BlockHeader.Round)
+		hdr, err := l.BlockHdr(blk.BlockHeader.Round)
 		require.NoError(t, err)
 		require.Equal(t, blk.BlockHeader, hdr)
 	}

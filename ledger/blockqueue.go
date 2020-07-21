@@ -39,15 +39,9 @@ type blockEntry struct {
 type blockQueue struct {
 	l *Ledger
 
-	// lastCommitted is the last committed round that was flushed to the block database
 	lastCommitted basics.Round
-	// q is the list of blocks that have yet to be flushed to the block database, and are still pending to be flushed.
-	q []blockEntry
-	// lastCommittedEntry is the last entry that was flushed to the block database. It's a MRU level 1 cache, allowing
-	// us to avoid disk lookup for the trivial case.
-	lastCommittedEntry blockEntry
+	q             []blockEntry
 
-	// mu is the syncronization mutex for the blockQueue
 	mu      deadlock.Mutex
 	cond    *sync.Cond
 	running bool
@@ -63,10 +57,6 @@ func bqInit(l *Ledger) (*blockQueue, error) {
 	err := bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		bq.lastCommitted, err0 = blockLatest(tx)
-		if err0 != nil {
-			return err0
-		}
-		bq.lastCommittedEntry.block, bq.lastCommittedEntry.cert, err0 = blockGetCert(tx, bq.lastCommitted)
 		return err0
 	})
 	if err != nil {
@@ -127,7 +117,6 @@ func (bq *blockQueue) syncer() {
 			bq.l.log.Warnf("blockQueue.syncer: could not flush: %v", err)
 		} else {
 			bq.lastCommitted += basics.Round(len(workQ))
-			bq.lastCommittedEntry = bq.q[len(workQ)-1]
 			bq.q = bq.q[len(workQ):]
 
 			// Sanity-check: if we wrote any blocks, then the last
@@ -181,6 +170,7 @@ func (bq *blockQueue) latestCommitted() basics.Round {
 func (bq *blockQueue) putBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
 	bq.mu.Lock()
 	defer bq.mu.Unlock()
+
 	nextRound := bq.lastCommitted + basics.Round(len(bq.q)) + 1
 
 	// As an optimization to reduce warnings in logs, return a special
@@ -226,9 +216,6 @@ func (bq *blockQueue) checkEntry(r basics.Round) (e *blockEntry, lastCommitted b
 	}
 
 	if r <= bq.lastCommitted {
-		if bq.lastCommittedEntry.block.Round() == r {
-			return &blockEntry{block: bq.lastCommittedEntry.block, cert: bq.lastCommittedEntry.cert}, lastCommitted, latest, nil
-		}
 		return nil, lastCommitted, latest, nil
 	}
 
