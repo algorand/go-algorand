@@ -669,7 +669,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 			Address: basics.Address{}.String(),
 			AppsLocalState: &[]generated.ApplicationLocalState{{
 				Id:       1,
-				KeyValue: localv,
+				KeyValue: &localv,
 			}},
 		},
 	}
@@ -721,7 +721,7 @@ func TestDryrunEncodeDecode(t *testing.T) {
 			Address: basics.Address{}.String(),
 			AppsLocalState: &[]generated.ApplicationLocalState{{
 				Id:       1,
-				KeyValue: localv,
+				KeyValue: &localv,
 			}},
 		},
 	}
@@ -924,13 +924,13 @@ func TestDryrunRequestJSON(t *testing.T) {
 func TestStateDeltaToStateDelta(t *testing.T) {
 	t.Parallel()
 	sd := basics.StateDelta{
-		"intkey": {
-			Action: basics.SetUintAction,
-			Uint:   11,
-		},
 		"byteskey": {
 			Action: basics.SetBytesAction,
 			Bytes:  "test",
+		},
+		"intkey": {
+			Action: basics.SetUintAction,
+			Uint:   11,
 		},
 		"delkey": {
 			Action: basics.DeleteAction,
@@ -942,16 +942,16 @@ func TestStateDeltaToStateDelta(t *testing.T) {
 	var keys []string
 	// test with a loop because sd is a map and iteration order is random
 	for _, item := range *gsd {
-		if item.Key == "intkey" {
+		if item.Key == "byteskey" {
 			require.Equal(t, uint64(1), item.Value.Action)
-			require.NotNil(t, item.Value.Uint)
-			require.Equal(t, uint64(11), *item.Value.Uint)
-			require.Nil(t, item.Value.Bytes)
-		} else if item.Key == "byteskey" {
-			require.Equal(t, uint64(2), item.Value.Action)
 			require.Nil(t, item.Value.Uint)
 			require.NotNil(t, item.Value.Bytes)
 			require.Equal(t, base64.StdEncoding.EncodeToString([]byte("test")), *item.Value.Bytes)
+		} else if item.Key == "intkey" {
+			require.Equal(t, uint64(2), item.Value.Action)
+			require.NotNil(t, item.Value.Uint)
+			require.Equal(t, uint64(11), *item.Value.Uint)
+			require.Nil(t, item.Value.Bytes)
 		} else if item.Key == "delkey" {
 			require.Equal(t, uint64(3), item.Value.Action)
 			require.Nil(t, item.Value.Uint)

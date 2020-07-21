@@ -1321,8 +1321,7 @@
       "type": "object",
       "required": [
         "id",
-        "schema",
-        "key-value"
+        "schema"
       ],
       "properties": {
         "id": {

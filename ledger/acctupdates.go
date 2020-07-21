@@ -39,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 const (
@@ -669,7 +670,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	lastestBlockRound = l.Latest()
 	err = au.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		au.dbRound, err0 = au.accountsInitialize(tx)
+		au.dbRound, err0 = au.accountsInitialize(ctx, tx)
 		if err0 != nil {
 			return err0
 		}
@@ -680,7 +681,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 			if err0 != nil {
 				return err0
 			}
-			au.dbRound, err0 = au.accountsInitialize(tx)
+			au.dbRound, err0 = au.accountsInitialize(ctx, tx)
 			if err0 != nil {
 				return err0
 			}
@@ -749,10 +750,46 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 }
 
 // Initialize accounts DB if needed and return account round
-func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
-	err := accountsInit(tx, au.initAccounts, au.initProto)
+// as part of the initialization, it tests the current database schema version, and perform upgrade
+// procedures to bring it up to the database schema supported by the binary.
+func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (basics.Round, error) {
+	// check current database version.
+	dbVersion, err := db.GetUserVersion(ctx, tx)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("accountsInitialize unable to read database schema version : %v", err)
+	}
+
+	// if database version is greater than supported by current binary, write a warning. This would keep the existing
+	// fallback behaviour where we could use an older binary iff the schema happen to be backward compatible.
+	if dbVersion > accountDBVersion {
+		au.log.Warnf("accountsInitialize database schema version is %d, but algod supports only %d", dbVersion, accountDBVersion)
+	}
+
+	if dbVersion < accountDBVersion {
+		au.log.Infof("accountsInitialize upgrading database schema from version %d to version %d", dbVersion, accountDBVersion)
+
+		for dbVersion < accountDBVersion {
+			au.log.Infof("accountsInitialize performing upgrade from version %d", dbVersion)
+			// perform the initialization/upgrade
+			switch dbVersion {
+			case 0:
+				dbVersion, err = au.upgradeDatabaseSchema0(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 0 : %v", err)
+					return 0, err
+				}
+			case 1:
+				dbVersion, err = au.upgradeDatabaseSchema1(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 1 : %v", err)
+					return 0, err
+				}
+			default:
+				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
+			}
+		}
+
+		au.log.Infof("accountsInitialize database schema upgrade complete")
 	}
 
 	rnd, hashRound, err := accountsRound(tx)
@@ -792,7 +829,7 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 	if rootHash.IsZero() {
 		accountIdx := 0
 		for {
-			bal, err := encodedAccountsRange(tx, accountIdx, trieRebuildAccountChunkSize)
+			bal, err := encodedAccountsRange(ctx, tx, accountIdx, trieRebuildAccountChunkSize)
 			if err != nil {
 				return rnd, err
 			}
@@ -811,7 +848,7 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 					return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
 				}
 				if !added {
-					au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.", hash)
+					au.log.Warnf("accountsInitialize attempted to add duplicate hash '%v' to merkle trie.", hash)
 				}
 			}
 
@@ -826,9 +863,150 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 			}
 			accountIdx += trieRebuildAccountChunkSize
 		}
+
+		// we've just updated the markle trie, update the hashRound to reflect that.
+		err = updateAccountsRound(tx, rnd, rnd)
+		if err != nil {
+			return 0, fmt.Errorf("accountsInitialize was unable to update the account round to %d: %v", rnd, err)
+		}
 	}
 	au.balancesTrie = trie
 	return rnd, nil
+}
+
+// upgradeDatabaseSchema0 upgrades the database schema from version 0 to version 1
+//
+// Schema of version 0 is expected to be aligned with the schema used on version 2.0.8 or before.
+// Any database of version 2.0.8 would be of version 0. At this point, the database might
+// have the following tables : ( i.e. a newly created table would not have these )
+// * acctrounds
+// * accounttotals
+// * accountbase
+// * assetcreators
+// * storedcatchpoints
+// * accounthashes
+// * catchpointstate
+//
+// As the first step of the upgrade, the above tables are being created if they do not already exists.
+// Following that, the assetcreators table is being altered by adding a new column to it (ctype).
+// Last, in case the database was just created, it would get initialized it with the following:
+// The accountbase would get initialized with the au.initAccounts
+// The accounttotals would get initialized to align with the initialization account added to accountbase
+// The acctrounds would get updated to indicate that the balance matches round 0
+//
+func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+	au.log.Infof("accountsInitialize initializing schema")
+	err = accountsInit(tx, au.initAccounts, au.initProto)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to initialize schema : %v", err)
+	}
+	_, err = db.SetUserVersion(ctx, tx, 1)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 0 to 1: %v", err)
+	}
+	return 1, nil
+}
+
+// upgradeDatabaseSchema1 upgrades the database schema from version 1 to version 2
+//
+// The schema updated to verison 2 intended to ensure that the encoding of all the accounts data is
+// both canonical and identical across the entire network. On release 2.0.5 we released an upgrade to the messagepack.
+// the upgraded messagepack was decoding the account data correctly, but would have different
+// encoding compared to it's predecessor. As a result, some of the account data that was previously stored
+// would have different encoded representation than the one on disk.
+// To address this, this startup proceduce would attempt to scan all the accounts data. for each account data, we would
+// see if it's encoding aligns with the current messagepack encoder. If it doesn't we would update it's encoding.
+// than, depending if we found any such account data, we would reset the merkle trie and stored catchpoints.
+// once the upgrade is complete, the accountsInitialize would (if needed) rebuild the merke trie using the new
+// encoded accounts.
+//
+// This upgrade doesn't change any of the actual database schema ( i.e. tables, indexes ) but rather just performing
+// a functional update to it's content.
+//
+func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+	// update accounts encoding.
+	au.log.Infof("accountsInitialize verifying accounts data encoding")
+	modifiedAccounts, err := reencodeAccounts(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
+
+	if modifiedAccounts > 0 {
+		au.log.Infof("accountsInitialize reencoded %d accounts", modifiedAccounts)
+
+		au.log.Infof("accountsInitialize resetting account hashes")
+		// reset the merkle trie
+		err = resetAccountHashes(tx)
+		if err != nil {
+			return 0, fmt.Errorf("accountsInitialize unable to reset account hashes : %v", err)
+		}
+
+		au.log.Infof("accountsInitialize preparing queries")
+		// initialize a new accountsq with the incoming transaction.
+		accountsq, err := accountsDbInit(tx, tx)
+		if err != nil {
+			return 0, fmt.Errorf("accountsInitialize unable to prepare queries : %v", err)
+		}
+
+		// close the prepared statements when we're done with them.
+		defer accountsq.close()
+
+		au.log.Infof("accountsInitialize resetting prior catchpoints")
+		// delete the last catchpoint label if we have any.
+		_, err = accountsq.writeCatchpointStateString(ctx, catchpointStateLastCatchpoint, "")
+		if err != nil {
+			return 0, fmt.Errorf("accountsInitialize unable to clear prior catchpoint : %v", err)
+		}
+
+		au.log.Infof("accountsInitialize deleting stored catchpoints")
+		// delete catchpoints.
+		err = au.deleteStoredCatchpoints(ctx, accountsq)
+		if err != nil {
+			return 0, fmt.Errorf("accountsInitialize unable to delete stored catchpoints : %v", err)
+		}
+	} else {
+		au.log.Infof("accountsInitialize found that no accounts needed to be reencoded")
+	}
+
+	// update version
+	_, err = db.SetUserVersion(ctx, tx, 2)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 1 to 2: %v", err)
+	}
+	return 2, nil
+}
+
+// deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
+// once all the files have been deleted, it would go ahead and remove the entries from the table.
+func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries *accountsDbQueries) (err error) {
+	catchpointsFilesChunkSize := 50
+	for {
+		fileNames, err := dbQueries.getOldestCatchpointFiles(ctx, catchpointsFilesChunkSize, 0)
+		if err != nil {
+			return err
+		}
+		if len(fileNames) == 0 {
+			break
+		}
+
+		for round, fileName := range fileNames {
+			absCatchpointFileName := filepath.Join(au.dbDirectory, fileName)
+			err = os.Remove(absCatchpointFileName)
+			if err == nil || os.IsNotExist(err) {
+				// it's ok if the file doesn't exist. just remove it from the database and we'll be good to go.
+				err = nil
+			} else {
+				// we can't delete the file, abort -
+				return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
+			}
+			// clear the entry from the database
+			err = dbQueries.storeCatchpoint(ctx, round, "", "", 0)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Address]accountDelta) (err error) {

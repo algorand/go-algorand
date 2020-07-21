@@ -792,3 +792,51 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	inMemory = false
 	t.Run("DiskDB", testFunction)
 }
+
+// TestAcctUpdatesDeleteStoredCatchpoints - The goal of this test is to verify that the deleteStoredCatchpoints function works correctly.
+// it doing so by filling up the storedcatchpoints with dummy catchpoint file entries, as well as creating these dummy files on disk.
+// ( the term dummy is only because these aren't real catchpoint files, but rather a zero-length file ). Then, the test call the function
+// and ensures that it did not errored, the catchpoint files were correctly deleted, and that deleteStoredCatchpoints contains no more
+// entries.
+func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	ml := makeMockLedgerForTracker(t, true)
+	defer ml.close()
+	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
+
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20)}
+	au := &accountUpdates{}
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	au.initialize(conf, ".", proto, accts[0])
+	defer au.close()
+
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+
+	dummyCatchpointFilesToCreate := 42
+
+	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
+		f, err := os.Create(fmt.Sprintf("./dummy_catchpoint_file-%d", i))
+		require.NoError(t, err)
+		err = f.Close()
+		require.NoError(t, err)
+	}
+
+	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
+		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fmt.Sprintf("./dummy_catchpoint_file-%d", i), "", 0)
+		require.NoError(t, err)
+	}
+	err = au.deleteStoredCatchpoints(context.Background(), au.accountsq)
+	require.NoError(t, err)
+
+	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
+		// ensure that all the files were deleted.
+		_, err := os.Open(fmt.Sprintf("./dummy_catchpoint_file-%d", i))
+		require.True(t, os.IsNotExist(err))
+	}
+	fileNames, err := au.accountsq.getOldestCatchpointFiles(context.Background(), dummyCatchpointFilesToCreate, 0)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fileNames))
+}
