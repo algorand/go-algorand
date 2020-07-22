@@ -77,6 +77,7 @@ func init() {
 	appCmd.AddCommand(closeOutAppCmd)
 	appCmd.AddCommand(clearAppCmd)
 	appCmd.AddCommand(readStateAppCmd)
+	appCmd.AddCommand(infoAppCmd)
 
 	appCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
 	appCmd.PersistentFlags().StringSliceVar(&appArgs, "app-arg", nil, "Args to encode for application transactions (all will be encoded to a byte slice). For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.")
@@ -115,6 +116,7 @@ func init() {
 	deleteAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 	readStateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 	updateAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
+	infoAppCmd.Flags().Uint64Var(&appIdx, "app-id", 0, "Application ID")
 
 	// Add common transaction flags to all txn-generating app commands
 	addTxnFlags(createAppCmd)
@@ -154,6 +156,8 @@ func init() {
 	updateAppCmd.MarkFlagRequired("from")
 
 	readStateAppCmd.MarkFlagRequired("app-id")
+
+	infoAppCmd.MarkFlagRequired("app-id")
 }
 
 type appCallArg struct {
@@ -1024,5 +1028,40 @@ var readStateAppCmd = &cobra.Command{
 
 		// Should be unreachable
 		return
+	},
+}
+
+var infoAppCmd = &cobra.Command{
+	Use:   "info",
+	Short: "Look up current parameters for an application",
+	Long:  `Look up application information stored on the network, such as program hash.`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		dataDir := ensureSingleDataDir()
+		client := ensureFullClient(dataDir)
+
+		meta, err := client.ApplicationInformation(appIdx)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+		params := meta.Params
+
+		gsch := params.GlobalStateSchema
+		lsch := params.LocalStateSchema
+
+		fmt.Printf("Application ID:        %d\n", appIdx)
+		fmt.Printf("Creator:               %v\n", params.Creator)
+		fmt.Printf("Approval hash:         %v\n", basics.Address(logic.HashProgram(params.ApprovalProgram)))
+		fmt.Printf("Clear hash:            %v\n", basics.Address(logic.HashProgram(params.ClearStateProgram)))
+
+		if gsch != nil {
+			fmt.Printf("Max global byteslices: %d\n", gsch.NumByteSlice)
+			fmt.Printf("Max global integers:   %d\n", gsch.NumUint)
+		}
+
+		if lsch != nil {
+			fmt.Printf("Max local byteslices:  %d\n", lsch.NumByteSlice)
+			fmt.Printf("Max local integers:    %d\n", lsch.NumUint)
+		}
 	},
 }
