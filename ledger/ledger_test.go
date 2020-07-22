@@ -916,7 +916,7 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
         wl.l.WaitForCommit(blk.Round())
         require.NoError(t, err)
         if err != nil {
-            // Return early, to help with iterative debugging
+            // Return early, to help with iterative debugging.
             return
         }
     }
