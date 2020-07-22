@@ -847,7 +847,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 		return 0, fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 	}
 
-	// we migth have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
+	// we might have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
 	// we can figure this out by examinine the hash of the root:
 	rootHash, err := trie.RootHash()
 	if err != nil {
