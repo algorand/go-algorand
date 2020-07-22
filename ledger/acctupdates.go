@@ -905,7 +905,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 //
 // Schema of version 0 is expected to be aligned with the schema used on version 2.0.8 or before.
 // Any database of version 2.0.8 would be of version 0. At this point, the database might
-// have the following tables : ( i.e. a newly created table would not have these )
+// have the following tables : ( i.e. a newly created database would not have these )
 // * acctrounds
 // * accounttotals
 // * accountbase
@@ -916,7 +916,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 //
 // As the first step of the upgrade, the above tables are being created if they do not already exists.
 // Following that, the assetcreators table is being altered by adding a new column to it (ctype).
-// Last, in case the database was just created, it would get initialized it with the following:
+// Last, in case the database was just created, it would get initialized with the following:
 // The accountbase would get initialized with the au.initAccounts
 // The accounttotals would get initialized to align with the initialization account added to accountbase
 // The acctrounds would get updated to indicate that the balance matches round 0
@@ -943,7 +943,7 @@ func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx
 // would have different encoded representation than the one on disk.
 // To address this, this startup proceduce would attempt to scan all the accounts data. for each account data, we would
 // see if it's encoding aligns with the current messagepack encoder. If it doesn't we would update it's encoding.
-// than, depending if we found any such account data, we would reset the merkle trie and stored catchpoints.
+// then, depending if we found any such account data, we would reset the merkle trie and stored catchpoints.
 // once the upgrade is complete, the accountsInitialize would (if needed) rebuild the merke trie using the new
 // encoded accounts.
 //
