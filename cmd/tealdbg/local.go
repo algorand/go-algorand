@@ -291,6 +291,14 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 		balances[record.Addr] = record.AccountData
 	}
 
+	if dp.Round == 0 && ddr.Round != 0 {
+		dp.Round = ddr.Round
+	}
+
+	if dp.LatestTimestamp == 0 && ddr.LatestTimestamp != 0 {
+		dp.LatestTimestamp = int64(ddr.LatestTimestamp)
+	}
+
 	// if program(s) specified then run from it
 	if len(dp.ProgramBlobs) > 0 {
 		if len(r.txnGroup) == 1 && dp.GroupIndex != 0 {
