@@ -104,10 +104,18 @@ if { [catch {
         timeout { ::AlgorandGoal::Abort "goal app create timeout" }
     }
 
+    # invalid app
+    set INVALID_FILE_1 "$TEST_ROOT_DIR/invalid-app.json"
+    set INVALID_FILE_1_ID [open $INVALID_FILE_1 "w"]
+    set INVALID_FILE_1_DATA "{ \"round\": -1 }"
+    puts -nonewline $INVALID_FILE_1_ID $INVALID_FILE_1_DATA
+    close $INVALID_FILE_1_ID
+
     TestGoalDryrun $DRREQ_FILE_1 $TEST_PRIMARY_NODE_DIR
     TestGoalDryrun $DRREQ_FILE_2 $TEST_PRIMARY_NODE_DIR
     TestGoalDryrun $DRREQ_FILE_3 $TEST_PRIMARY_NODE_DIR
     TestGoalDryrunFailure "" $TEST_PRIMARY_NODE_DIR 1 "Cannot read file : open : no such file or directory"
+    TestGoalDryrunFailure $INVALID_FILE_1 $TEST_PRIMARY_NODE_DIR 1 "dryrun-remote: HTTP 400 Bad Request:"
 
     # Shutdown the network
     ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
