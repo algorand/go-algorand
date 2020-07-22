@@ -21,6 +21,25 @@ proc TestGoalDryrun { DRREQ_FILE TEST_PRIMARY_NODE_DIR } {
     }
 }
 
+proc TestGoalDryrunFailure { DRREQ_FILE TEST_PRIMARY_NODE_DIR EXPECTED_STATUS_CODE EXPECTED_MESSAGE} {
+    set MESSAGE_MATCHED 0
+    spawn goal clerk dryrun-remote -d $TEST_PRIMARY_NODE_DIR -D $DRREQ_FILE -v
+    expect {
+        timeout { ::AlgorandGoal::Abort "goal clerk dryrun-remote timeout" }
+        $EXPECTED_MESSAGE {puts "message matched"; set MESSAGE_MATCHED 1; close}
+        eof
+    }
+    catch wait result
+    set STATUS_CODE [lindex $result 3]
+    if { $STATUS_CODE != $EXPECTED_STATUS_CODE } {
+        puts "Exit code: $STATUS_CODE, expected: $EXPECTED_STATUS_CODE"
+        ::AlgorandGoal::Abort "Progran exited with incorrect code"
+    }
+    if { $MESSAGE_MATCHED == 0 } {
+        ::AlgorandGoal::Abort "Progam message did not match expected"
+    }
+}
+
 if { [catch {
 
     source  goalExpectCommon.exp
@@ -88,6 +107,7 @@ if { [catch {
     TestGoalDryrun $DRREQ_FILE_1 $TEST_PRIMARY_NODE_DIR
     TestGoalDryrun $DRREQ_FILE_2 $TEST_PRIMARY_NODE_DIR
     TestGoalDryrun $DRREQ_FILE_3 $TEST_PRIMARY_NODE_DIR
+    TestGoalDryrunFailure "" $TEST_PRIMARY_NODE_DIR 1 "Cannot read file : open : no such file or directory"
 
     # Shutdown the network
     ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
