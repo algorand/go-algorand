@@ -914,7 +914,6 @@ func TestLedgerDBConcurrentAccess(t *testing.T) {
         }
         wl.l.AddValidatedBlock(vb, agreement.Certificate{})
         wl.l.WaitForCommit(blk.Round())
-        //_, err := checkTrackers(t, wl, blk.Round())
         require.NoError(t, err)
         if err != nil {
             // Return early, to help with iterative debugging
