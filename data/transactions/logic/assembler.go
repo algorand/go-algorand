@@ -707,6 +707,10 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if !ok {
 		return fmt.Errorf("txn unknown arg %s", args[0])
 	}
+	_, ok = txnaFieldSpecByField[fs.field]
+	if ok {
+		return fmt.Errorf("found txna field %s in txn op", args[0])
+	}
 	if fs.version > ops.Version {
 		return fmt.Errorf("txn %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
@@ -714,7 +718,7 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	return ops.Txn(uint64(val))
 }
 
-// assembleTxn2 generates txn or txna opcode depending on number of operands
+// assembleTxn2 delegates to assembleTxn or assembleTxna depending on number of operands
 func assembleTxn2(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 1 {
 		return assembleTxn(ops, spec, args)
@@ -759,6 +763,10 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 	fs, ok := txnFieldSpecByName[args[1]]
 	if !ok {
 		return fmt.Errorf("gtxn unknown arg %s", args[1])
+	}
+	_, ok = txnaFieldSpecByField[fs.field]
+	if ok {
+		return fmt.Errorf("found gtxna field %s in gtxn op", args[1])
 	}
 	if fs.version > ops.Version {
 		return fmt.Errorf("gtxn %s available in version %d. Missed #pragma version?", args[1], fs.version)
@@ -1541,7 +1549,7 @@ func disTxna(dis *disassembleState, spec *OpSpec) {
 		return
 	}
 	arrayFieldIdx := dis.program[dis.pc+2]
-	_, dis.err = fmt.Fprintf(dis.out, "txn %s %d\n", TxnFieldNames[txarg], arrayFieldIdx)
+	_, dis.err = fmt.Fprintf(dis.out, "txna %s %d\n", TxnFieldNames[txarg], arrayFieldIdx)
 }
 
 func disGtxn(dis *disassembleState, spec *OpSpec) {
