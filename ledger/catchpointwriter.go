@@ -222,7 +222,7 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 }
 
 func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (err error) {
-	cw.balancesChunk.Balances, err = encodedAccountsRange(tx, cw.balancesOffset, BalancesPerCatchpointFileChunk)
+	cw.balancesChunk.Balances, err = encodedAccountsRange(ctx, tx, cw.balancesOffset, BalancesPerCatchpointFileChunk)
 	if err == nil {
 		cw.balancesOffset += BalancesPerCatchpointFileChunk
 	}
