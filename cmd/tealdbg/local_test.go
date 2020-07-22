@@ -951,7 +951,7 @@ func TestLocalLedgerIndexer(t *testing.T) {
 		case regexp.MustCompile(`^/v2/accounts/`).MatchString(r.URL.Path):
 			w.WriteHeader(200)
 			if r.URL.Path[13:] == brs.Addr.String() {
-				account, err := v2.AccountDataToAccount(brs.Addr.String(), &brs.AccountData, map[basics.AssetIndex]string{}, 100, basics.MicroAlgos{0})
+				account, err := v2.AccountDataToAccount(brs.Addr.String(), &brs.AccountData, map[basics.AssetIndex]string{}, 100, basics.MicroAlgos{Raw: 0})
 				a.NoError(err)
 				accountResponse := AccountIndexerResponse{Account: account, CurrentRound: 100}
 				response, err := json.Marshal(accountResponse)

@@ -33,7 +33,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 )
 
-// Account Response object from querying indexer
+// AccountIndexerResponse represents the Account Response object from querying indexer
 type AccountIndexerResponse struct {
 	// Account information at a given round.
 	//
@@ -163,10 +163,12 @@ func makeAppLedger(
 }
 
 func getBalanceFromIndexer(indexerURL string, indexerToken string, account basics.Address, round int) (basics.AccountData, error){
+	fmt.Println(indexerURL)
+	fmt.Println(indexerToken)
 	queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%d", indexerURL, account, round)
 	client := &http.Client{}
 	request, err := http.NewRequest("GET", queryString, nil)
-	request.Header.Set("X-Algo-API-Token", indexerToken)
+	request.Header.Set("X-Indexer-API-Token", indexerToken)
 	resp, err := client.Do(request)
 	if err != nil {
 		return basics.AccountData{}, fmt.Errorf("indexer request error: %s", err)
