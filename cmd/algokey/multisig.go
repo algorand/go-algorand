@@ -41,7 +41,7 @@ var msigParams string
 
 func init() {
 
-	multisigCmd.AddCommand(convertCmd)
+	multisigCmd.AddCommand(appendAuthAddrCmd)
 
 	multisigCmd.Flags().StringVarP(&multisigKeyfile, "keyfile", "k", "", "Private key filename")
 	multisigCmd.Flags().StringVarP(&multisigMnemonic, "mnemonic", "m", "", "Private key mnemonic")
@@ -50,11 +50,11 @@ func init() {
 	multisigCmd.Flags().StringVarP(&multisigOutfile, "outfile", "o", "", "Transaction output filename")
 	multisigCmd.MarkFlagRequired("outfile")
 
-	convertCmd.Flags().StringVarP(&msigParams, "params", "p", "", "Multisig params -  Threshold PK1 PK2 ...")
-	convertCmd.MarkFlagRequired("params")
-	convertCmd.Flags().StringVarP(&multisigTxfile, "txfile", "t", "", "Transaction input filename")
-	convertCmd.MarkFlagRequired("txfile")
-	convertCmd.Flags().StringVarP(&multisigOutfile, "outfile", "o", "", "Transaction output filename. If not specified, the original file will be modified")
+	appendAuthAddrCmd.Flags().StringVarP(&msigParams, "params", "p", "", "Multisig pre image parameters - [threshold] [Address 1] [Address 2]")
+	appendAuthAddrCmd.MarkFlagRequired("params")
+	appendAuthAddrCmd.Flags().StringVarP(&multisigTxfile, "txfile", "t", "", "Transaction input filename")
+	appendAuthAddrCmd.MarkFlagRequired("txfile")
+	appendAuthAddrCmd.Flags().StringVarP(&multisigOutfile, "outfile", "o", "", "Transaction output filename. If not specified, the original file will be modified")
 
 }
 
@@ -109,8 +109,8 @@ var multisigCmd = &cobra.Command{
 	},
 }
 
-var convertCmd = &cobra.Command{
-	Use:   "convert -t [transaction file] -p \"[threshold] [PK1] [PK2] ...\"",
+var appendAuthAddrCmd = &cobra.Command{
+	Use:   "append-auth-addr -t [transaction file] -p \"[threshold] [Address 1] [Address 2] ...\"",
 	Short: "Adds the necessary fields to a transaction that is sent from an account that was rekeyed to a multisig account",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, _ []string) {
@@ -134,8 +134,8 @@ var convertCmd = &cobra.Command{
 
 		// Decode params
 		params := strings.Split(msigParams, " ")
-		if len(params) < 2 {
-			fmt.Fprint(os.Stderr, "Not enough arguments to create the multisig address.\nPlease make sure to specify the threshold and addresses")
+		if len(params) < 3 {
+			fmt.Fprint(os.Stderr, "Not enough arguments to create the multisig address.\nPlease make sure to specify the threshold and at least 2 addresses\n")
 			os.Exit(1)
 		}
 
