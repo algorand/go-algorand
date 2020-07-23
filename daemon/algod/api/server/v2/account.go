@@ -132,9 +132,9 @@ func convertTKVToGenerated(tkv *basics.TealKeyValue) *generated.TealKeyValueStor
 	return &converted
 }
 
-func convertGeneratedTKV(akvs *generated.TealKeyValueStore) basics.TealKeyValue {
+func convertGeneratedTKV(akvs *generated.TealKeyValueStore) (basics.TealKeyValue, error) {
 	if akvs == nil || len(*akvs) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	tkv := make(basics.TealKeyValue)
@@ -142,13 +142,13 @@ func convertGeneratedTKV(akvs *generated.TealKeyValueStore) basics.TealKeyValue 
 		// Decode base-64 encoded map key
 		decodedKey, err := base64.StdEncoding.DecodeString(kv.Key)
 		if err != nil {
-			decodedKey = nil
+			return nil, err
 		}
 
 		// Decode base-64 encoded map value (OK even if empty string)
 		decodedBytes, err := base64.StdEncoding.DecodeString(kv.Value.Bytes)
 		if err != nil {
-			decodedBytes = nil
+			return nil, err
 		}
 
 		tkv[string(decodedKey)] = basics.TealValue{
@@ -157,7 +157,7 @@ func convertGeneratedTKV(akvs *generated.TealKeyValueStore) basics.TealKeyValue 
 			Bytes: string(decodedBytes),
 		}
 	}
-	return tkv
+	return tkv, nil
 }
 
 // AccountToAccountData converts v2.generated.Account to basics.AccountData
@@ -233,12 +233,16 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 	if a.AppsLocalState != nil && len(*a.AppsLocalState) > 0 {
 		appLocalStates = make(map[basics.AppIndex]basics.AppLocalState, len(*a.AppsLocalState))
 		for _, ls := range *a.AppsLocalState {
+			kv, err := convertGeneratedTKV(ls.KeyValue)
+			if err != nil {
+				return basics.AccountData{}, err
+			}
 			appLocalStates[basics.AppIndex(ls.Id)] = basics.AppLocalState{
 				Schema: basics.StateSchema{
 					NumUint:      ls.Schema.NumUint,
 					NumByteSlice: ls.Schema.NumByteSlice,
 				},
-				KeyValue: convertGeneratedTKV(ls.KeyValue),
+				KeyValue: kv,
 			}
 		}
 	}
@@ -247,7 +251,11 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 	if a.CreatedApps != nil && len(*a.CreatedApps) > 0 {
 		appParams = make(map[basics.AppIndex]basics.AppParams, len(*a.CreatedApps))
 		for _, params := range *a.CreatedApps {
-			appParams[basics.AppIndex(params.Id)] = ApplicationParamsToAppParams(&params.Params)
+			ap, err := ApplicationParamsToAppParams(&params.Params)
+			if err != nil {
+				return basics.AccountData{}, err
+			}
+			appParams[basics.AppIndex(params.Id)] = ap
 		}
 	}
 
@@ -302,7 +310,7 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 }
 
 // ApplicationParamsToAppParams converts generated.ApplicationParams to basics.AppParams
-func ApplicationParamsToAppParams(gap *generated.ApplicationParams) basics.AppParams {
+func ApplicationParamsToAppParams(gap *generated.ApplicationParams) (basics.AppParams, error) {
 	ap := basics.AppParams{
 		ApprovalProgram:   gap.ApprovalProgram,
 		ClearStateProgram: gap.ClearStateProgram,
@@ -319,9 +327,13 @@ func ApplicationParamsToAppParams(gap *generated.ApplicationParams) basics.AppPa
 			NumByteSlice: gap.GlobalStateSchema.NumByteSlice,
 		}
 	}
-	ap.GlobalState = convertGeneratedTKV(gap.GlobalState)
+	kv, err := convertGeneratedTKV(gap.GlobalState)
+	if err != nil {
+		return basics.AppParams{}, err
+	}
+	ap.GlobalState = kv
 
-	return ap
+	return ap, nil
 }
 
 // AppParamsToApplication converts basics.AppParams to generated.Application

@@ -289,7 +289,10 @@ func (dl *dryrunLedger) Get(addr basics.Address, withPendingRewards bool) (basic
 	if ok {
 		any = true
 		app := dl.dr.Apps[appi]
-		params := ApplicationParamsToAppParams(&app.Params)
+		params, err := ApplicationParamsToAppParams(&app.Params)
+		if err != nil {
+			return basics.BalanceRecord{}, err
+		}
 		if out.AppParams == nil {
 			out.AppParams = make(map[basics.AppIndex]basics.AppParams)
 			out.AppParams[basics.AppIndex(app.Id)] = params
@@ -447,7 +450,11 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 			ok := false
 			for _, appt := range dr.Apps {
 				if appt.Id == uint64(appIdx) {
-					app = ApplicationParamsToAppParams(&appt.Params)
+					app, err = ApplicationParamsToAppParams(&appt.Params)
+					if err != nil {
+						response.Error = err.Error()
+						return
+					}
 					ok = true
 					break
 				}
