@@ -51,7 +51,10 @@ func init() {
 	multisigCmd.MarkFlagRequired("outfile")
 
 	convertCmd.Flags().StringVarP(&msigParams, "params", "p", "", "Multisig params -  Threshold PK1 PK2 ...")
+	convertCmd.MarkFlagRequired("params")
 	convertCmd.Flags().StringVarP(&multisigTxfile, "txfile", "t", "", "Transaction input filename")
+	convertCmd.MarkFlagRequired("txfile")
+	convertCmd.Flags().StringVarP(&multisigOutfile, "outfile", "o", "", "Transaction output filename. If not specified, the original file will be modified")
 
 }
 
@@ -108,12 +111,12 @@ var multisigCmd = &cobra.Command{
 
 var convertCmd = &cobra.Command{
 	Use:   "convert -t [transaction file] -p \"[threshold] [PK1] [PK2] ...\"",
-	Short: "Adds the necessary fields to a transaction that is sent from an account to was rekeied to a multisig account.",
+	Short: "Adds the necessary fields to a transaction that is sent from an account that was rekeyed to a multisig account",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, _ []string) {
 
 		// Read Transaction
-		txdata, err := ioutil.ReadFile(multisigTxfile)
+		txdata, err := readFile(multisigTxfile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot read transactions from %s: %v\n", multisigTxfile, err)
 			os.Exit(1)
@@ -132,7 +135,7 @@ var convertCmd = &cobra.Command{
 		// Decode params
 		params := strings.Split(msigParams, " ")
 		if len(params) < 2 {
-			_, _ = fmt.Fprint(os.Stderr, "Not enough arguments to create the multisig address.\nPlease make sure to specify the threshold and addresses")
+			fmt.Fprint(os.Stderr, "Not enough arguments to create the multisig address.\nPlease make sure to specify the threshold and addresses")
 			os.Exit(1)
 		}
 
@@ -142,8 +145,7 @@ var convertCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// convert addresses to pks
-		// convert the addresses into public keys
+		// Convert the addresses into public keys
 		pks := make([]crypto.PublicKey, len(params[1:]))
 		for i, addrStr := range params[1:] {
 			addr, err := basics.UnmarshalChecksumAddress(addrStr)
@@ -160,10 +162,10 @@ var convertCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		//gen the multisig and assign to the txn
+		// Generate the multisig and assign to the txn
 		stxn.Msig = crypto.MultisigPreimageFromPKs(1, uint8(threshold), pks)
 
-		//append the signer since it's a rekey txn
+		// Append the signer since it's a rekey txn
 		if basics.Address(addr) == stxn.Txn.Sender {
 			fmt.Fprintf(os.Stderr, "The sender at the msig address should not be the same: %v\n", err)
 			os.Exit(1)
@@ -173,7 +175,12 @@ var convertCmd = &cobra.Command{
 		// Write the txn
 		outBytes = append(outBytes, protocol.Encode(&stxn)...)
 
-		err = ioutil.WriteFile(multisigTxfile, outBytes, 0600)
+		// Check if we should override the current file or create a new one
+		if multisigOutfile == "" {
+			multisigOutfile = multisigTxfile
+		}
+
+		err = writeFile(multisigOutfile, outBytes, 0600)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Cannot write transactions to %s: %v\n", multisigOutfile, err)
 			os.Exit(1)
