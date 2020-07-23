@@ -17,6 +17,7 @@
 package v2
 
 import (
+	"encoding/base64"
 	"errors"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -120,10 +121,10 @@ func convertTKVToGenerated(tkv *basics.TealKeyValue) *generated.TealKeyValueStor
 	var converted generated.TealKeyValueStore
 	for k, v := range *tkv {
 		converted = append(converted, generated.TealKeyValue{
-			Key: k,
+			Key: base64.StdEncoding.EncodeToString([]byte(k)),
 			Value: generated.TealValue{
 				Type:  uint64(v.Type),
-				Bytes: v.Bytes,
+				Bytes: base64.StdEncoding.EncodeToString([]byte(v.Bytes)),
 				Uint:  v.Uint,
 			},
 		})
@@ -138,10 +139,22 @@ func convertGeneratedTKV(akvs *generated.TealKeyValueStore) basics.TealKeyValue 
 
 	tkv := make(basics.TealKeyValue)
 	for _, kv := range *akvs {
-		tkv[kv.Key] = basics.TealValue{
+		// Decode base-64 encoded map key
+		decodedKey, err := base64.StdEncoding.DecodeString(kv.Key)
+		if err != nil {
+			decodedKey = nil
+		}
+
+		// Decode base-64 encoded map value (OK even if empty string)
+		decodedBytes, err := base64.StdEncoding.DecodeString(kv.Value.Bytes)
+		if err != nil {
+			decodedBytes = nil
+		}
+
+		tkv[string(decodedKey)] = basics.TealValue{
 			Type:  basics.TealType(kv.Value.Type),
 			Uint:  kv.Value.Uint,
-			Bytes: kv.Value.Bytes,
+			Bytes: string(decodedBytes),
 		}
 	}
 	return tkv

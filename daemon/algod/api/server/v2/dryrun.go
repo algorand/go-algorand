@@ -522,7 +522,7 @@ func StateDeltaToStateDelta(sd basics.StateDelta) *generated.StateDelta {
 		}
 		// basics.DeleteAction does not require Uint/Bytes
 		kv := generated.EvalDeltaKeyValue{
-			Key:   k,
+			Key:   base64.StdEncoding.EncodeToString([]byte(k)),
 			Value: value,
 		}
 		gsd = append(gsd, kv)
