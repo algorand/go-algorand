@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 	"sort"
 	"strconv"
 	"sync"
@@ -382,7 +383,13 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	defer func() {
 		au.accountsMu.RUnlock()
 		if dc.offset != 0 {
-			au.committedOffset <- dc
+			//au.committedOffset <- dc
+			select {
+			case au.committedOffset <- dc:
+			case <-time.After(10 * time.Second):
+				pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
+				panic("accountUpdates was waiting for too long")
+			}
 		}
 	}()
 
