@@ -128,7 +128,7 @@ proc statefulTealAppInfoTest { TEST_ALGO_DIR TEST_DATA_DIR} {
 
     if { $errors > 0 } {
         puts "there were a total of $errors"
-        ::AlgorandGoal::Abort "ERROR in statefulTealAppInfoTest: $EXCEPTION"
+        ::AlgorandGoal::Abort "ERROR in statefulTealAppInfoTest"
     } else {
         puts "app info test was successful"
     }
