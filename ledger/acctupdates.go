@@ -1042,7 +1042,12 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Addre
 		}
 	}
 	// write it all to disk.
+	t := time.Now()
 	err = au.balancesTrie.Commit()
+	d := time.Now().Sub(t)
+	if d > 100*time.Millisecond {
+		fmt.Fprintf(os.Stdout, "%v : accountsUpdateBalances tool %v\n", time.Now(), d)
+	}
 	return
 }
 
@@ -1318,7 +1323,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 		for i := uint64(0); i < offset; i++ {
-
+			fmt.Fprintf(os.Stdout, "commitRound(%d) writing round %d : %v\n", dbRound, uint64(dbRound)+i, time.Now())
 			t1 := time.Now()
 			err = accountsNewRound(tx, deltas[i], creatableDeltas[i], roundTotals[i+1].RewardsLevel, protos[i+1])
 			if err != nil {
@@ -1332,9 +1337,9 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 				return err
 			}
 			d2 := time.Now().Sub(t1)
-			fmt.Fprintf(os.Stdout, "commitRound(%d) writing round %d : %v d1 = %v d2 = %v\n", dbRound, uint64(dbRound)+i, time.Now(), d1, d2)
 			if (d1 + d2) > 2*time.Second {
-				os.Exit(1)
+				fmt.Fprintf(os.Stdout, "commitRound(%d) writing round %d : %v d1 = %v d2 = %v\n", dbRound, uint64(dbRound)+i, time.Now(), d1, d2)
+				panic(nil)
 			}
 		}
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
