@@ -591,12 +591,6 @@ func (aul *accountUpdatesLedgerEvaluator) isDup(config.ConsensusParams, basics.R
 	return false, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initilization ")
 }
 
-// GetRoundTxIds returns the transaction ids for a given round. It's not being used by the evaluator at all, and should be (future task) be removed from
-// the ledgerForEvaluator interface
-func (aul *accountUpdatesLedgerEvaluator) GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
-	return nil
-}
-
 // Lookup returns the account balance for a given address at a given round, without the reward
 func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
 	return aul.au.lookupImpl(rnd, addr, false)
