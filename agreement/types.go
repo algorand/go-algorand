@@ -30,8 +30,12 @@ var partitionStep = next + 3
 var recoveryExtraTimeout = config.Protocol.SmallLambda
 
 // FilterTimeout is the duration of the first agreement step.
-func FilterTimeout() time.Duration {
-	return filterTimeout
+func FilterTimeout(target period) time.Duration {
+	if target != 0 {
+		return filterTimeout
+	} else {
+		return filterTimeout / 2
+	}
 }
 
 // DeadlineTimeout is the duration of the second agreement step.

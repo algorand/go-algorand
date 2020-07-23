@@ -68,7 +68,7 @@ func (i *instant) TimeoutAt(d time.Duration) <-chan time.Time {
 		return ta
 	}
 
-	if d == agreement.FilterTimeout() && !i.HasPending("pseudonode") {
+	if d == agreement.FilterTimeout(0) && !i.HasPending("pseudonode") {
 		close(ta)
 	}
 	return ta
