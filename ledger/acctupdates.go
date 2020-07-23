@@ -1333,6 +1333,9 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			}
 			d2 := time.Now().Sub(t1)
 			fmt.Fprintf(os.Stdout, "commitRound(%d) writing round %d : %v d1 = %v d2 = %v\n", dbRound, uint64(dbRound)+i, time.Now(), d1, d2)
+			if (d1 + d2) > 2*time.Second {
+				os.Exit(1)
+			}
 		}
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
 		if err != nil {
