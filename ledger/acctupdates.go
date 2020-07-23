@@ -379,6 +379,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	var isCatchpointRound, hasMultipleIntermediateCatchpoint bool
 	var offset uint64
 	var dc deferedCommit
+	fmt.Fprintf(os.Stdout, "committedUpTo(%d) before RLock : %v\n", committedRound, time.Now())
 	au.accountsMu.RLock()
 	defer func() {
 		au.accountsMu.RUnlock()
@@ -387,6 +388,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 			select {
 			case au.committedOffset <- dc:
 			case <-time.After(10 * time.Second):
+				fmt.Fprintf(os.Stdout, "committedUpTo write to channel timeout : %v\n", time.Now())
 				pprof.Lookup("goroutine").WriteTo(os.Stdout, 1)
 				panic("accountUpdates was waiting for too long")
 			}
@@ -1224,6 +1226,7 @@ func (au *accountUpdates) commitSyncer(deferedCommits chan deferedCommit) {
 
 func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookback basics.Round) {
 	defer au.accountsWriting.Done()
+	fmt.Fprintf(os.Stdout, "commitRound(%d) before RLock : %v\n", dbRound, time.Now())
 	au.accountsMu.RLock()
 
 	// we can exit right away, as this is the result of mis-ordered call to committedUpTo.
@@ -1294,7 +1297,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	var catchpointLabel string
 	beforeUpdatingBalancesTime := time.Now()
 	var trieBalancesHash crypto.Digest
-
+	fmt.Fprintf(os.Stdout, "commitRound(%d) before AtomicCommitWriteLock : %v\n", dbRound, time.Now())
 	err := au.dbs.wdb.AtomicCommitWriteLock(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
@@ -1315,6 +1318,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 		for i := uint64(0); i < offset; i++ {
+			fmt.Fprintf(os.Stdout, "commitRound(%d) writing round %d : %v\n", dbRound, uint64(dbRound)+i, time.Now())
 			err = accountsNewRound(tx, deltas[i], creatableDeltas[i], roundTotals[i+1].RewardsLevel, protos[i+1])
 			if err != nil {
 				return err
@@ -1336,7 +1340,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 				return
 			}
 		}
-
+		fmt.Fprintf(os.Stdout, "commitRound(%d) before exit AtomicCommitWriteLock : %v\n", dbRound, time.Now())
 		return nil
 	}, &au.accountsMu)
 
