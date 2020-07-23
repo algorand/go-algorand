@@ -18,7 +18,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/data/basics"
 	"io"
 	"io/ioutil"
 	"os"
@@ -28,6 +27,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
