@@ -42,14 +42,6 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-// wait for the written blocks to get flushed every so often.
-// this is not needed by the test itself, but rather helps avoiding
-// false positive failuires as disk writes on travis tend to be extreamly
-// slow. since this test requires disk writes, we want to flush the blocks
-// periodically so that the account updates won't get blocked beyond the
-// deadlock library triggeting interval.
-var blocksFlushInterval = 128
-
 type wrappedLedger struct {
 	l               *Ledger
 	minQueriedBlock basics.Round
@@ -197,10 +189,6 @@ func TestArchivalRestart(t *testing.T) {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		l.AddBlock(blk, agreement.Certificate{})
-
-		if i > blocksFlushInterval {
-			l.WaitForCommit(basics.Round(i - blocksFlushInterval))
-		}
 	}
 	l.WaitForCommit(blk.Round())
 
@@ -426,10 +414,6 @@ func TestArchivalCreatables(t *testing.T) {
 		// Add the block
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
-
-		if i > blocksFlushInterval {
-			l.WaitForCommit(basics.Round(i - blocksFlushInterval))
-		}
 	}
 	l.WaitForCommit(blk.Round())
 
@@ -612,10 +596,6 @@ func TestArchivalCreatables(t *testing.T) {
 		blk.Payset = nil
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
-
-		if i > blocksFlushInterval {
-			l.WaitForCommit(basics.Round(i - blocksFlushInterval))
-		}
 	}
 	l.WaitForCommit(blk.Round())
 
@@ -699,10 +679,6 @@ func TestArchivalFromNonArchival(t *testing.T) {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		l.AddBlock(blk, agreement.Certificate{})
-
-		if i > blocksFlushInterval {
-			l.WaitForCommit(basics.Round(i - blocksFlushInterval))
-		}
 	}
 	l.WaitForCommit(blk.Round())
 

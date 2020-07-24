@@ -885,10 +885,6 @@ func TestLedgerBlockHdrCaching(t *testing.T) {
 		hdr, err := l.BlockHdr(blk.BlockHeader.Round)
 		require.NoError(t, err)
 		require.Equal(t, blk.BlockHeader, hdr)
-
-		if i > blocksFlushInterval {
-			l.WaitForCommit(basics.Round(i - blocksFlushInterval))
-		}
 	}
 }
 
