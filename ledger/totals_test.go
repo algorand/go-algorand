@@ -69,7 +69,7 @@ func TestAlgoCountMarshalMsg(t *testing.T) {
 	inBuffer := make([]byte, 0, 128)
 	outBuffer, err := ac.MarshalMsg(inBuffer)
 	require.NoError(t, err)
-	fmt.Printf("out %d in %d\n", len(outBuffer), len(inBuffer))
+	//fmt.Printf("out %d in %d\n", len(outBuffer), len(inBuffer))
 	require.True(t, len(outBuffer) > len(inBuffer))
 
 	// allocate a buffer that is just the right size.
