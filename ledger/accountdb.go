@@ -634,20 +634,6 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creat
 	}
 	defer replaceStmt.Close()
 
-	if len(creatables) > 0 {
-		insertCreatableIdxStmt, err = tx.Prepare("INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)")
-		if err != nil {
-			return
-		}
-		defer insertCreatableIdxStmt.Close()
-
-		deleteCreatableIdxStmt, err = tx.Prepare("DELETE FROM assetcreators WHERE asset=? AND ctype=?")
-		if err != nil {
-			return
-		}
-		defer deleteCreatableIdxStmt.Close()
-	}
-
 	for addr, data := range updates {
 		if data.new.IsZero() {
 			// prune empty accounts
@@ -661,14 +647,28 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creat
 
 	}
 
-	for cidx, cdelta := range creatables {
-		if cdelta.created {
-			_, err = insertCreatableIdxStmt.Exec(cidx, cdelta.creator[:], cdelta.ctype)
-		} else {
-			_, err = deleteCreatableIdxStmt.Exec(cidx, cdelta.ctype)
-		}
+	if len(creatables) > 0 {
+		insertCreatableIdxStmt, err = tx.Prepare("INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)")
 		if err != nil {
 			return
+		}
+		defer insertCreatableIdxStmt.Close()
+
+		deleteCreatableIdxStmt, err = tx.Prepare("DELETE FROM assetcreators WHERE asset=? AND ctype=?")
+		if err != nil {
+			return
+		}
+		defer deleteCreatableIdxStmt.Close()
+
+		for cidx, cdelta := range creatables {
+			if cdelta.created {
+				_, err = insertCreatableIdxStmt.Exec(cidx, cdelta.creator[:], cdelta.ctype)
+			} else {
+				_, err = deleteCreatableIdxStmt.Exec(cidx, cdelta.ctype)
+			}
+			if err != nil {
+				return
+			}
 		}
 	}
 
