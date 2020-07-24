@@ -1910,7 +1910,8 @@
         "keyreg",
         "acfg",
         "axfer",
-        "afrz"
+        "afrz",
+        "appl"
       ],
       "type": "string",
       "name": "tx-type",
