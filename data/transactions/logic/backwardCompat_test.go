@@ -395,10 +395,10 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 
 // ensure v2 fields error in v1 program
 func TestBackwardCompatTxnFields(t *testing.T) {
-	var fields []string
+	var fields []txnFieldSpec
 	for _, fs := range txnFieldSpecs {
 		if fs.version > 1 {
-			fields = append(fields, fs.field.String())
+			fields = append(fields, fs)
 		}
 	}
 	require.Greater(t, len(fields), 1)
@@ -411,27 +411,40 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 	ledger := makeTestLedger(nil)
 	txn := makeSampleTxn()
 	txgroup := makeSampleTxnGroup(txn)
-	for _, field := range fields {
+	for _, fs := range fields {
+		field := fs.field.String()
 		for _, command := range tests {
 			text := fmt.Sprintf(command, field)
+			asmError := "available in version 2"
+			if _, ok := txnaFieldSpecByField[fs.field]; ok {
+				parts := strings.Split(text, " ")
+				op := parts[0]
+				asmError = fmt.Sprintf("found %sa field %s in %s op", op, field, op)
+			}
 			// check V1 assembler fails
 			program, err := AssembleStringWithVersion(text, 0)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "available in version 2")
+			require.Contains(t, err.Error(), asmError)
 			require.Nil(t, program)
 
 			program, err = AssembleStringWithVersion(text, 1)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "available in version 2")
+			require.Contains(t, err.Error(), asmError)
 			require.Nil(t, program)
 
 			program, err = AssembleString(text)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "available in version 2")
+			require.Contains(t, err.Error(), asmError)
 			require.Nil(t, program)
 
 			program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-			require.NoError(t, err)
+			if _, ok := txnaFieldSpecByField[fs.field]; ok {
+				// "txn Accounts" is invalid, so skip evaluation
+				require.Error(t, err, asmError)
+				continue
+			} else {
+				require.NoError(t, err)
+			}
 
 			proto := config.Consensus[protocol.ConsensusV23]
 			ep := defaultEvalParams(nil, nil)
