@@ -45,7 +45,7 @@ func init() {
 
 var ledgerCmd = &cobra.Command{
 	Use:   "ledger",
-	Short: "Access ledger-related details.",
+	Short: "Access ledger-related details",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		// If no arguments passed, we should fallback to help

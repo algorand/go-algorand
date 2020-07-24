@@ -103,7 +103,7 @@ func init() {
 
 var rootCmd = &cobra.Command{
 	Use:   "goal",
-	Short: "CLI for interacting with Algorand.",
+	Short: "CLI for interacting with Algorand",
 	Long:  `GOAL is the CLI for interacting Algorand software instance. The binary 'goal' is installed alongside the algod binary and is considered an integral part of the complete installation. The binaries should be used in tandem - you should not try to use a version of goal with a different version of algod.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -160,7 +160,7 @@ func main() {
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "The current version of the Algorand daemon (algod).",
+	Short: "The current version of the Algorand daemon (algod)",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		onDataDirs(func(dataDir string) {
@@ -184,7 +184,7 @@ var versionCmd = &cobra.Command{
 
 var licenseCmd = &cobra.Command{
 	Use:   "license",
-	Short: "Display license information.",
+	Short: "Display license information",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(config.GetLicenseInfo())
