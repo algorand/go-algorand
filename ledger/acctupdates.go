@@ -49,6 +49,9 @@ const (
 	// trieRebuildAccountChunkSize defines the number of accounts that would get read at a single chunk
 	// before added to the trie during trie construction
 	trieRebuildAccountChunkSize = 512
+	// trieAccumulatedChangesFlush defines the number of pending changes that would be applied to the merkle trie before
+	// we attempt to commit them to disk while writing a batch of rounds balances to disk.
+	trieAccumulatedChangesFlush = 256
 )
 
 // trieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory.
@@ -1036,35 +1039,54 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 	return nil
 }
 
-func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Address]accountDelta) (err error) {
+// accountsUpdateBalances applies the given deltas array to the merkle trie
+func (au *accountUpdates) accountsUpdateBalances(accountsDeltasRound []map[basics.Address]accountDelta, offset uint64) (err error) {
 	if au.catchpointInterval == 0 {
 		return nil
 	}
 	var added, deleted bool
-	for addr, delta := range accountsDeltas {
-		if !delta.old.IsZero() {
-			deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
-			deleted, err = au.balancesTrie.Delete(deleteHash)
-			if err != nil {
-				return err
+	accumulatedChanges := 0
+	for i := uint64(0); i < offset; i++ {
+		accountsDeltas := accountsDeltasRound[i]
+		for addr, delta := range accountsDeltas {
+			if !delta.old.IsZero() {
+				deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
+				deleted, err = au.balancesTrie.Delete(deleteHash)
+				if err != nil {
+					return err
+				}
+				if !deleted {
+					au.log.Warnf("failed to delete hash '%v' from merkle trie", deleteHash)
+				} else {
+					accumulatedChanges++
+				}
+
 			}
-			if !deleted {
-				au.log.Warnf("failed to delete hash '%v' from merkle trie", deleteHash)
+			if !delta.new.IsZero() {
+				addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
+				added, err = au.balancesTrie.Add(addHash)
+				if err != nil {
+					return err
+				}
+				if !added {
+					au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", addHash)
+				} else {
+					accumulatedChanges++
+				}
 			}
 		}
-		if !delta.new.IsZero() {
-			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
-			added, err = au.balancesTrie.Add(addHash)
+		if accumulatedChanges >= trieAccumulatedChangesFlush {
+			accumulatedChanges -= trieAccumulatedChangesFlush
+			err = au.balancesTrie.Commit()
 			if err != nil {
-				return err
-			}
-			if !added {
-				au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", addHash)
+				return
 			}
 		}
 	}
 	// write it all to disk.
-	err = au.balancesTrie.Commit()
+	if accumulatedChanges > 0 {
+		err = au.balancesTrie.Commit()
+	}
 	return
 }
 
@@ -1211,12 +1233,12 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			if err != nil {
 				return err
 			}
-
-			err = au.accountsUpdateBalances(deltas[i])
-			if err != nil {
-				return err
-			}
 		}
+		err = au.accountsUpdateBalances(deltas, offset)
+		if err != nil {
+			return err
+		}
+
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
 		if err != nil {
 			return err
