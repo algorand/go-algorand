@@ -64,11 +64,11 @@ type DebugParams struct {
 	GroupIndex       int
 	BalanceBlob      []byte
 	DdrBlob          []byte
-	Round            int
+	Round            uint64
 	LatestTimestamp  int64
 	RunMode          string
 	DisableSourceMap bool
-	AppID            int
+	AppID            uint64
 	Painless         bool
 }
 
