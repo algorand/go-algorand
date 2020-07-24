@@ -1076,7 +1076,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltasRound []map[basic
 			}
 		}
 		if accumulatedChanges >= trieAccumulatedChangesFlush {
-			accumulatedChanges -= trieAccumulatedChangesFlush
+			accumulatedChanges = 0
 			err = au.balancesTrie.Commit()
 			if err != nil {
 				return
