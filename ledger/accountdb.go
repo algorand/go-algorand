@@ -618,38 +618,35 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool)
 	return err
 }
 
-func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creatables map[basics.CreatableIndex]modifiedCreatable, rewardsLevel uint64, proto config.ConsensusParams) (err error) {
-	var ot basics.OverflowTracker
-	totals, err := accountsTotals(tx, false)
-	if err != nil {
-		return
-	}
+func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creatables map[basics.CreatableIndex]modifiedCreatable) (err error) {
 
-	totals.applyRewards(rewardsLevel, &ot)
+	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteStmt, replaceStmt *sql.Stmt
 
-	deleteStmt, err := tx.Prepare("DELETE FROM accountbase WHERE address=?")
+	deleteStmt, err = tx.Prepare("DELETE FROM accountbase WHERE address=?")
 	if err != nil {
 		return
 	}
 	defer deleteStmt.Close()
 
-	replaceStmt, err := tx.Prepare("REPLACE INTO accountbase (address, data) VALUES (?, ?)")
+	replaceStmt, err = tx.Prepare("REPLACE INTO accountbase (address, data) VALUES (?, ?)")
 	if err != nil {
 		return
 	}
 	defer replaceStmt.Close()
 
-	insertCreatableIdxStmt, err := tx.Prepare("INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)")
-	if err != nil {
-		return
-	}
-	defer insertCreatableIdxStmt.Close()
+	if len(creatables) > 0 {
+		insertCreatableIdxStmt, err = tx.Prepare("INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)")
+		if err != nil {
+			return
+		}
+		defer insertCreatableIdxStmt.Close()
 
-	deleteCreatableIdxStmt, err := tx.Prepare("DELETE FROM assetcreators WHERE asset=? AND ctype=?")
-	if err != nil {
-		return
+		deleteCreatableIdxStmt, err = tx.Prepare("DELETE FROM assetcreators WHERE asset=? AND ctype=?")
+		if err != nil {
+			return
+		}
+		defer deleteCreatableIdxStmt.Close()
 	}
-	defer deleteCreatableIdxStmt.Close()
 
 	for addr, data := range updates {
 		if data.new.IsZero() {
@@ -662,8 +659,6 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creat
 			return
 		}
 
-		totals.delAccount(proto, data.old, &ot)
-		totals.addAccount(proto, data.new, &ot)
 	}
 
 	for cidx, cdelta := range creatables {
@@ -674,6 +669,26 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creat
 		}
 		if err != nil {
 			return
+		}
+	}
+
+	return
+}
+
+// totalsNewRounds updates the accountsTotals by applying series of round changes
+func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, accountTotals []AccountTotals, protos []config.ConsensusParams) (err error) {
+	var ot basics.OverflowTracker
+	totals, err := accountsTotals(tx, false)
+	if err != nil {
+		return
+	}
+
+	for i := 0; i < len(updates); i++ {
+		totals.applyRewards(accountTotals[i].RewardsLevel, &ot)
+
+		for _, data := range updates[i] {
+			totals.delAccount(protos[i], data.old, &ot)
+			totals.addAccount(protos[i], data.new, &ot)
 		}
 	}
 
