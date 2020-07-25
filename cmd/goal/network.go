@@ -156,7 +156,7 @@ var networkStartCmd = &cobra.Command{
 
 var networkRestartCmd = &cobra.Command{
 	Use:   "restart",
-	Short: "Restart a deployed private network.",
+	Short: "Restart a deployed private network",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		network, binDir := getNetworkAndBinDir()
@@ -171,7 +171,7 @@ var networkRestartCmd = &cobra.Command{
 
 var networkStopCmd = &cobra.Command{
 	Use:   "stop",
-	Short: "Stop a deployed private network.",
+	Short: "Stop a deployed private network",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		network, binDir := getNetworkAndBinDir()
@@ -182,7 +182,7 @@ var networkStopCmd = &cobra.Command{
 
 var networkStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Prints status for all nodes in a deployed private network.",
+	Short: "Prints status for all nodes in a deployed private network",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		network, binDir := getNetworkAndBinDir()

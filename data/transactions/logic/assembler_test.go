@@ -789,6 +789,7 @@ bnz nowhere`
 }
 
 func TestAssembleJumpToTheEnd(t *testing.T) {
+	t.Parallel()
 	text := `intcblock 1
 intc 0
 intc 0
@@ -931,6 +932,8 @@ func TestAssembleDisassembleCycle(t *testing.T) {
 }
 
 func TestAssembleDisassembleErrors(t *testing.T) {
+	t.Parallel()
+
 	source := `txn Sender`
 	program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1040,6 +1043,7 @@ func TestAssembleDisassembleErrors(t *testing.T) {
 }
 
 func TestAssembleVersions(t *testing.T) {
+	t.Parallel()
 	text := `int 1
 txna Accounts 0
 `
@@ -1067,6 +1071,7 @@ int 1
 }
 
 func TestAssembleAsset(t *testing.T) {
+	t.Parallel()
 	source := "int 0\nint 0\nasset_holding_get ABC 1"
 	_, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.Error(t, err)
@@ -1089,6 +1094,7 @@ func TestAssembleAsset(t *testing.T) {
 }
 
 func TestDisassembleSingleOp(t *testing.T) {
+	t.Parallel()
 	// test ensures no double arg_0 entries in disassembly listing
 	sample := "// version 2\narg_0\n"
 	program, err := AssembleStringWithVersion(sample, AssemblerMaxVersion)
@@ -1100,6 +1106,7 @@ func TestDisassembleSingleOp(t *testing.T) {
 }
 
 func TestDisassembleTxna(t *testing.T) {
+	t.Parallel()
 	// check txn and txna are properly disassembled
 	txnSample := "// version 2\ntxn Sender\n"
 	program, err := AssembleStringWithVersion(txnSample, AssemblerMaxVersion)
@@ -1125,6 +1132,7 @@ func TestDisassembleTxna(t *testing.T) {
 }
 
 func TestDisassembleGtxna(t *testing.T) {
+	t.Parallel()
 	// check gtxn and gtxna are properly disassembled
 	gtxnSample := "// version 2\ngtxn 0 Sender\n"
 	program, err := AssembleStringWithVersion(gtxnSample, AssemblerMaxVersion)
@@ -1149,7 +1157,29 @@ func TestDisassembleGtxna(t *testing.T) {
 	require.Equal(t, gtxnaSample, disassembled)
 }
 
+func TestDisassembleLastLabel(t *testing.T) {
+	t.Parallel()
+
+	// starting from TEAL v2 branching to the last line are legal
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			source := fmt.Sprintf(`// version %d
+intcblock 1
+intc_0
+bnz label1
+label1:
+`, v)
+			program, err := AssembleStringWithVersion(source, v)
+			require.NoError(t, err)
+			dis, err := Disassemble(program)
+			require.NoError(t, err)
+			require.Equal(t, source, dis)
+		})
+	}
+}
+
 func TestAssembleOffsets(t *testing.T) {
+	t.Parallel()
 	source := "err"
 	program, offsets, err := AssembleStringWithVersionEx(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1247,6 +1277,7 @@ err
 }
 
 func TestHasStatefulOps(t *testing.T) {
+	t.Parallel()
 	source := "int 1"
 	program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1267,6 +1298,7 @@ err
 }
 
 func TestStringLiteralParsing(t *testing.T) {
+	t.Parallel()
 	s := `"test"`
 	e := []byte(`test`)
 	result, err := parseStringLiteral(s)
@@ -1343,6 +1375,7 @@ func TestStringLiteralParsing(t *testing.T) {
 }
 
 func TestPragmaStream(t *testing.T) {
+	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		text := fmt.Sprintf("#pragma version %d", v)
 		sr := strings.NewReader(text)
@@ -1452,6 +1485,7 @@ func TestPragmaStream(t *testing.T) {
 }
 
 func TestAssemblePragmaVersion(t *testing.T) {
+	t.Parallel()
 	text := `#pragma version 1
 int 1
 `
@@ -1513,7 +1547,6 @@ len
 
 func TestAssembleConstants(t *testing.T) {
 	t.Parallel()
-
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			_, err := AssembleStringWithVersion("intc 1", v)
