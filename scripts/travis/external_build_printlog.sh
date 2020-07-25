@@ -59,7 +59,7 @@ while [ $SECONDS -lt $end ]; do
     if [ "${TRAVIS}" = "true" ]; then
         # under travis, if we have passed the 1h:45m mark, the build is going to likely fail due to timeout.
         # instead of failing, we want to exit the build with success, indicating where the log could be retrieved later on.
-        # ( note that there migth be an issue with that build, but we don't want to cap it via travis timeouts. )
+        # ( note that there might be an issue with that build, but we don't want to cap it via travis timeouts. )
         if [ $((SECONDS-LOG_WAITING_START)) -gt $((60*105)) ]; then
             echo "Build is taking too long. Travis is going to timeout this build, so we'll tell travis that we're done for now."
             echo "Once this build is complete, you could get a complete log by typing:"

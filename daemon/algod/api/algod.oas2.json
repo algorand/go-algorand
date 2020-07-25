@@ -1481,12 +1481,14 @@
         "approval-program": {
           "description": "\\[approv\\] approval program.",
           "type": "string",
-          "format": "byte"
+          "format": "byte",
+          "x-algorand-format": "TEALProgram"
         },
         "clear-state-program": {
           "description": "\\[clearp\\] approval program.",
           "type": "string",
-          "format": "byte"
+          "format": "byte",
+          "x-algorand-format": "TEALProgram"
         },
         "local-state-schema": {
           "description": "[\\lsch\\] local schema",
@@ -1908,7 +1910,8 @@
         "keyreg",
         "acfg",
         "axfer",
-        "afrz"
+        "afrz",
+        "appl"
       ],
       "type": "string",
       "name": "tx-type",

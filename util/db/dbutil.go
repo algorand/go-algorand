@@ -340,7 +340,7 @@ func (db *Accessor) atomic(fn idemFn, commitLocker sync.Locker, extras ...interf
 	}
 
 	if time.Now().After(atomicDeadline) {
-		db.getDecoratedLogger(fn, extras).Warnf("dbatomic: tx surpassed expected deadline by %v", atomicDeadline.Sub(time.Now()))
+		db.getDecoratedLogger(fn, extras).Warnf("dbatomic: tx surpassed expected deadline by %v", time.Now().Sub(atomicDeadline))
 	}
 	return
 }
