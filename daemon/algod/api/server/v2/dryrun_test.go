@@ -60,6 +60,10 @@ func dbStack(stack []generated.TealValue) string {
 	return strings.Join(parts, " ")
 }
 
+func b64(s string) string {
+	return base64.StdEncoding.EncodeToString([]byte(s))
+}
+
 func logTrace(t *testing.T, lines []string, trace []generated.DryrunState) {
 	var disasm string
 	for _, ds := range trace {
@@ -396,8 +400,8 @@ func TestDryrunGlobal1(t *testing.T) {
 	}
 	gkv := generated.TealKeyValueStore{
 		generated.TealKeyValue{
-			Key:   "foo",
-			Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
+			Key:   b64("foo"),
+			Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
 		},
 	}
 	dr.Apps = []generated.Application{
@@ -445,8 +449,8 @@ func TestDryrunGlobal2(t *testing.T) {
 	}
 	gkv := generated.TealKeyValueStore{
 		generated.TealKeyValue{
-			Key:   "foo",
-			Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
+			Key:   b64("foo"),
+			Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
 		},
 	}
 	dr.Apps = []generated.Application{
@@ -525,10 +529,10 @@ func TestDryrunLocal1(t *testing.T) {
 		if lds.Address == "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ" {
 			addrFound = true
 			for _, ld := range lds.Delta {
-				if ld.Key == "foo" {
+				if ld.Key == b64("foo") {
 					valueFound = true
 					assert.Equal(t, ld.Value.Action, uint64(basics.SetBytesAction))
-					assert.Equal(t, *ld.Value.Bytes, "YmFy") // bar
+					assert.Equal(t, *ld.Value.Bytes, b64("bar"))
 
 				}
 			}
@@ -603,10 +607,10 @@ func TestDryrunLocal1A(t *testing.T) {
 		if lds.Address == "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ" {
 			addrFound = true
 			for _, ld := range lds.Delta {
-				if ld.Key == "foo" {
+				if ld.Key == b64("foo") {
 					valueFound = true
 					assert.Equal(t, ld.Value.Action, uint64(basics.SetBytesAction))
-					assert.Equal(t, *ld.Value.Bytes, "YmFy") // bar
+					assert.Equal(t, *ld.Value.Bytes, b64("bar"))
 
 				}
 			}
@@ -659,8 +663,11 @@ func TestDryrunLocalCheck(t *testing.T) {
 	}
 	localv := make(generated.TealKeyValueStore, 1)
 	localv[0] = generated.TealKeyValue{
-		Key:   "foo",
-		Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
+		Key: b64("foo"),
+		Value: generated.TealValue{
+			Type:  uint64(basics.TealBytesType),
+			Bytes: b64("bar"),
+		},
 	}
 
 	dr.Accounts = []generated.Account{
@@ -711,8 +718,8 @@ func TestDryrunEncodeDecode(t *testing.T) {
 	}
 	localv := make(generated.TealKeyValueStore, 1)
 	localv[0] = generated.TealKeyValue{
-		Key:   "foo",
-		Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: "bar"},
+		Key:   b64("foo"),
+		Value: generated.TealValue{Type: uint64(basics.TealBytesType), Bytes: b64("bar")},
 	}
 
 	gdr.Accounts = []generated.Account{
@@ -942,17 +949,17 @@ func TestStateDeltaToStateDelta(t *testing.T) {
 	var keys []string
 	// test with a loop because sd is a map and iteration order is random
 	for _, item := range *gsd {
-		if item.Key == "byteskey" {
+		if item.Key == b64("byteskey") {
 			require.Equal(t, uint64(1), item.Value.Action)
 			require.Nil(t, item.Value.Uint)
 			require.NotNil(t, item.Value.Bytes)
-			require.Equal(t, base64.StdEncoding.EncodeToString([]byte("test")), *item.Value.Bytes)
-		} else if item.Key == "intkey" {
+			require.Equal(t, b64("test"), *item.Value.Bytes)
+		} else if item.Key == b64("intkey") {
 			require.Equal(t, uint64(2), item.Value.Action)
 			require.NotNil(t, item.Value.Uint)
 			require.Equal(t, uint64(11), *item.Value.Uint)
 			require.Nil(t, item.Value.Bytes)
-		} else if item.Key == "delkey" {
+		} else if item.Key == b64("delkey") {
 			require.Equal(t, uint64(3), item.Value.Action)
 			require.Nil(t, item.Value.Uint)
 			require.Nil(t, item.Value.Bytes)
@@ -960,7 +967,7 @@ func TestStateDeltaToStateDelta(t *testing.T) {
 		keys = append(keys, item.Key)
 	}
 	require.Equal(t, 3, len(keys))
-	require.Contains(t, keys, "intkey")
-	require.Contains(t, keys, "byteskey")
-	require.Contains(t, keys, "delkey")
+	require.Contains(t, keys, b64("intkey"))
+	require.Contains(t, keys, b64("byteskey"))
+	require.Contains(t, keys, b64("delkey"))
 }
