@@ -559,7 +559,7 @@ var dumpCmd = &cobra.Command{
 			data := protocol.Encode(&br)
 			writeFile(dumpOutFile, data, 0644)
 		} else {
-			data := protocol.EncodeJSON(&br)
+			data := protocol.EncodeJSONStrict(&br)
 			fmt.Println(string(data))
 		}
 	},

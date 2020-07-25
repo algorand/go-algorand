@@ -46,7 +46,7 @@ const (
 
 // catchpointWriter is the struct managing the persistance of accounts data into the catchpoint file.
 // it's designed to work in a step fashion : a caller will call the WriteStep method in a loop until
-// the writing is complete. It migth take multiple steps until the operation is over, and the caller
+// the writing is complete. It might take multiple steps until the operation is over, and the caller
 // has the option of throtteling the CPU utilization in between the calls.
 type catchpointWriter struct {
 	hasher            hash.Hash
@@ -222,7 +222,7 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 }
 
 func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (err error) {
-	cw.balancesChunk.Balances, err = encodedAccountsRange(tx, cw.balancesOffset, BalancesPerCatchpointFileChunk)
+	cw.balancesChunk.Balances, err = encodedAccountsRange(ctx, tx, cw.balancesOffset, BalancesPerCatchpointFileChunk)
 	if err == nil {
 		cw.balancesOffset += BalancesPerCatchpointFileChunk
 	}
