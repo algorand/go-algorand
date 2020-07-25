@@ -33,12 +33,12 @@ type balancesAdapter struct {
 	txnGroup   []transactions.SignedTxn
 	groupIndex int
 	proto      config.ConsensusParams
-	round      int
+	round      uint64
 }
 
 func makeAppLedger(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
-	groupIndex int, proto config.ConsensusParams, round int, latestTimestamp int64,
+	groupIndex int, proto config.ConsensusParams, round uint64, latestTimestamp int64,
 	appIdx basics.AppIndex, painless bool,
 ) (logic.LedgerForLogic, appState, error) {
 

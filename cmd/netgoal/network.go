@@ -55,8 +55,8 @@ func init() {
 
 var networkBuildCmd = &cobra.Command{
 	Use:   "build",
-	Short: "build network deployment artifacts",
-	Long:  `build network deployment artifacts for modifying before deploying`,
+	Short: "Build network deployment artifacts",
+	Long:  `Build network deployment artifacts for modifying before deploying`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Similar to `goal network create`, we need to generate a genesis.json and wallets and store somewhere.
 		// We have a lot more parameters to define, so we'll support a subset of parameters on cmdline but

@@ -49,6 +49,9 @@ const (
 	// trieRebuildAccountChunkSize defines the number of accounts that would get read at a single chunk
 	// before added to the trie during trie construction
 	trieRebuildAccountChunkSize = 512
+	// trieAccumulatedChangesFlush defines the number of pending changes that would be applied to the merkle trie before
+	// we attempt to commit them to disk while writing a batch of rounds balances to disk.
+	trieAccumulatedChangesFlush = 256
 )
 
 // trieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory.
@@ -777,6 +780,8 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 }
 
 // Initialize accounts DB if needed and return account round
+// as part of the initialization, it tests the current database schema version, and perform upgrade
+// procedures to bring it up to the database schema supported by the binary.
 func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (basics.Round, error) {
 	// check current database version.
 	dbVersion, err := db.GetUserVersion(ctx, tx)
@@ -800,11 +805,13 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 			case 0:
 				dbVersion, err = au.upgradeDatabaseSchema0(ctx, tx)
 				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 0 : %v", err)
 					return 0, err
 				}
 			case 1:
 				dbVersion, err = au.upgradeDatabaseSchema1(ctx, tx)
 				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 1 : %v", err)
 					return 0, err
 				}
 			default:
@@ -843,7 +850,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 		return 0, fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 	}
 
-	// we migth have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
+	// we might have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
 	// we can figure this out by examinine the hash of the root:
 	rootHash, err := trie.RootHash()
 	if err != nil {
@@ -898,6 +905,25 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 }
 
 // upgradeDatabaseSchema0 upgrades the database schema from version 0 to version 1
+//
+// Schema of version 0 is expected to be aligned with the schema used on version 2.0.8 or before.
+// Any database of version 2.0.8 would be of version 0. At this point, the database might
+// have the following tables : ( i.e. a newly created database would not have these )
+// * acctrounds
+// * accounttotals
+// * accountbase
+// * assetcreators
+// * storedcatchpoints
+// * accounthashes
+// * catchpointstate
+//
+// As the first step of the upgrade, the above tables are being created if they do not already exists.
+// Following that, the assetcreators table is being altered by adding a new column to it (ctype).
+// Last, in case the database was just created, it would get initialized with the following:
+// The accountbase would get initialized with the au.initAccounts
+// The accounttotals would get initialized to align with the initialization account added to accountbase
+// The acctrounds would get updated to indicate that the balance matches round 0
+//
 func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
 	au.log.Infof("accountsInitialize initializing schema")
 	err = accountsInit(tx, au.initAccounts, au.initProto)
@@ -912,6 +938,21 @@ func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx
 }
 
 // upgradeDatabaseSchema1 upgrades the database schema from version 1 to version 2
+//
+// The schema updated to verison 2 intended to ensure that the encoding of all the accounts data is
+// both canonical and identical across the entire network. On release 2.0.5 we released an upgrade to the messagepack.
+// the upgraded messagepack was decoding the account data correctly, but would have different
+// encoding compared to it's predecessor. As a result, some of the account data that was previously stored
+// would have different encoded representation than the one on disk.
+// To address this, this startup proceduce would attempt to scan all the accounts data. for each account data, we would
+// see if it's encoding aligns with the current messagepack encoder. If it doesn't we would update it's encoding.
+// then, depending if we found any such account data, we would reset the merkle trie and stored catchpoints.
+// once the upgrade is complete, the accountsInitialize would (if needed) rebuild the merke trie using the new
+// encoded accounts.
+//
+// This upgrade doesn't change any of the actual database schema ( i.e. tables, indexes ) but rather just performing
+// a functional update to it's content.
+//
 func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
 	// update accounts encoding.
 	au.log.Infof("accountsInitialize verifying accounts data encoding")
@@ -998,35 +1039,54 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 	return nil
 }
 
-func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Address]accountDelta) (err error) {
+// accountsUpdateBalances applies the given deltas array to the merkle trie
+func (au *accountUpdates) accountsUpdateBalances(accountsDeltasRound []map[basics.Address]accountDelta, offset uint64) (err error) {
 	if au.catchpointInterval == 0 {
 		return nil
 	}
 	var added, deleted bool
-	for addr, delta := range accountsDeltas {
-		if !delta.old.IsZero() {
-			deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
-			deleted, err = au.balancesTrie.Delete(deleteHash)
-			if err != nil {
-				return err
+	accumulatedChanges := 0
+	for i := uint64(0); i < offset; i++ {
+		accountsDeltas := accountsDeltasRound[i]
+		for addr, delta := range accountsDeltas {
+			if !delta.old.IsZero() {
+				deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
+				deleted, err = au.balancesTrie.Delete(deleteHash)
+				if err != nil {
+					return err
+				}
+				if !deleted {
+					au.log.Warnf("failed to delete hash '%v' from merkle trie", deleteHash)
+				} else {
+					accumulatedChanges++
+				}
+
 			}
-			if !deleted {
-				au.log.Warnf("failed to delete hash '%v' from merkle trie", deleteHash)
+			if !delta.new.IsZero() {
+				addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
+				added, err = au.balancesTrie.Add(addHash)
+				if err != nil {
+					return err
+				}
+				if !added {
+					au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", addHash)
+				} else {
+					accumulatedChanges++
+				}
 			}
 		}
-		if !delta.new.IsZero() {
-			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
-			added, err = au.balancesTrie.Add(addHash)
+		if accumulatedChanges >= trieAccumulatedChangesFlush {
+			accumulatedChanges = 0
+			err = au.balancesTrie.Commit()
 			if err != nil {
-				return err
-			}
-			if !added {
-				au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", addHash)
+				return
 			}
 		}
 	}
 	// write it all to disk.
-	err = au.balancesTrie.Commit()
+	if accumulatedChanges > 0 {
+		err = au.balancesTrie.Commit()
+	}
 	return
 }
 
@@ -1173,12 +1233,12 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			if err != nil {
 				return err
 			}
-
-			err = au.accountsUpdateBalances(deltas[i])
-			if err != nil {
-				return err
-			}
 		}
+		err = au.accountsUpdateBalances(deltas, offset)
+		if err != nil {
+			return err
+		}
+
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
 		if err != nil {
 			return err
