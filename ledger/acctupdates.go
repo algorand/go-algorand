@@ -385,7 +385,13 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	defer func() {
 		au.accountsMu.RUnlock()
 		if dc.offset != 0 {
-			au.committedOffset <- dc
+			//au.committedOffset <- dc
+			select {
+			case au.committedOffset <- dc:
+			case <-time.After(10 * time.Second):
+				fmt.Printf("committedUpTo: blocked for more than 4 second : %v\n", time.Now())
+				au.committedOffset <- dc
+			}
 		}
 	}()
 
@@ -1309,7 +1315,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	var catchpointLabel string
 	beforeUpdatingBalancesTime := time.Now()
 	var trieBalancesHash crypto.Digest
-
+	fmt.Printf("commitRound: before AtomicCommitWriteLock : %v\n", time.Now())
 	err := au.dbs.wdb.AtomicCommitWriteLock(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
@@ -1329,16 +1335,19 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			}
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
+		fmt.Printf("commitRound: before accountsNewRound : %v\n", time.Now())
 		for i := uint64(0); i < offset; i++ {
 			err = accountsNewRound(tx, deltas[i], creatableDeltas[i], roundTotals[i+1].RewardsLevel, protos[i+1])
 			if err != nil {
 				return err
 			}
 		}
+		fmt.Printf("commitRound: before accountsUpdateBalances : %v\n", time.Now())
 		err = au.accountsUpdateBalances(deltas, offset)
 		if err != nil {
 			return err
 		}
+		fmt.Printf("commitRound: before updateAccountsRound : %v\n", time.Now())
 
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
 		if err != nil {
@@ -1351,6 +1360,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 				return
 			}
 		}
+		fmt.Printf("commitRound: before exiting AtomicCommitWriteLock : %v\n", time.Now())
 		return nil
 	}, &au.accountsMu)
 
