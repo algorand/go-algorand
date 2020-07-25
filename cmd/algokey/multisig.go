@@ -50,7 +50,7 @@ func init() {
 	multisigCmd.Flags().StringVarP(&multisigOutfile, "outfile", "o", "", "Transaction output filename")
 	multisigCmd.MarkFlagRequired("outfile")
 
-	appendAuthAddrCmd.Flags().StringVarP(&msigParams, "params", "p", "", "Multisig pre image parameters - [threshold] [Address 1] [Address 2]")
+	appendAuthAddrCmd.Flags().StringVarP(&msigParams, "params", "p", "", "Multisig pre image parameters - [threshold] [Address 1] [Address 2] ...")
 	appendAuthAddrCmd.MarkFlagRequired("params")
 	appendAuthAddrCmd.Flags().StringVarP(&multisigTxfile, "txfile", "t", "", "Transaction input filename")
 	appendAuthAddrCmd.MarkFlagRequired("txfile")
