@@ -255,6 +255,7 @@ func (au *accountUpdates) waitAccountsWriting() {
 	au.accountsWriting.Wait()
 }
 
+// close closes the accountUpdates, waiting for all the child go-routine to complete
 func (au *accountUpdates) close() {
 	if au.ctxCancel != nil {
 		au.ctxCancel()
@@ -357,7 +358,7 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 	return res, nil
 }
 
-// getLastCatchpointLabel retrieves the last catchpoint label that was stored to the database.
+// GetLastCatchpointLabel retrieves the last catchpoint label that was stored to the database.
 func (au *accountUpdates) GetLastCatchpointLabel() string {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
@@ -495,6 +496,7 @@ func (au *accountUpdates) Totals(rnd basics.Round) (totals AccountTotals, err er
 	return au.totalsImpl(rnd)
 }
 
+// GetCatchpointStream returns an io.Reader to the catchpoint file associated with the provided round
 func (au *accountUpdates) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	dbFileName := ""
 	err := au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -589,12 +591,13 @@ func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (AccountTotal
 	return aul.au.totalsImpl(rnd)
 }
 
+// isDup return whether a transaction is a duplicate one. It's not needed by the accountUpdatesLedgerEvaluator and implemeted as a stub.
 func (aul *accountUpdatesLedgerEvaluator) isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error) {
 	// this is a non-issue since this call will never be made on non-validating evaluation
 	return false, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initilization ")
 }
 
-// Lookup returns the account balance for a given address at a given round, without the reward
+// LookupWithoutRewards returns the account balance for a given address at a given round, without the reward
 func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
 	return aul.au.lookupImpl(rnd, addr, false)
 }
@@ -604,6 +607,7 @@ func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, c
 	return aul.au.getCreatorForRoundImpl(rnd, cidx, ctype)
 }
 
+// totalsImpl returns the totals for a given round
 func (au *accountUpdates) totalsImpl(rnd basics.Round) (totals AccountTotals, err error) {
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
@@ -748,7 +752,7 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 	return hash[:]
 }
 
-// Initialize accounts DB if needed and return account round
+// accountsInitialize initializes the accounts DB if needed and return currrent account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
 func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (basics.Round, error) {
@@ -1059,6 +1063,8 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltasRound []map[basic
 	return
 }
 
+// newBlockImpl is the accountUpdates implementation of the ledgerTracker interface. This is the "internal" facing function
+// which assumes that no lock need to be taken.
 func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) {
 	proto := config.Consensus[blk.CurrentProtocol]
 	rnd := blk.Round()
@@ -1112,6 +1118,9 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	au.roundTotals = append(au.roundTotals, newTotals)
 }
 
+// lookupImpl returns the accound data for a given address at a given round. The withRewards indicates whether the
+// rewards should be added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
+// even while it could return the AccoutData which represent the "rewarded" account data.
 func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
@@ -1190,6 +1199,7 @@ func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.C
 	return au.accountsq.lookupCreator(cidx, ctype)
 }
 
+// accountsCreateCatchpointLabel creates a catchpoint label and write it.
 func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Round, totals AccountTotals, ledgerBlockDigest crypto.Digest, trieBalancesHash crypto.Digest) (label string, err error) {
 	cpLabel := makeCatchpointLabel(committedRound, ledgerBlockDigest, trieBalancesHash, totals)
 	label = cpLabel.String()
@@ -1197,6 +1207,7 @@ func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Ro
 	return
 }
 
+// roundOffset calculates the offset of the given round compared to the current dbRound. Requires that the lock would be taken.
 func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err error) {
 	if rnd < au.dbRound {
 		err = fmt.Errorf("round %d before dbRound %d", rnd, au.dbRound)
@@ -1212,6 +1223,8 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 	return off, nil
 }
 
+// commitSyncer is the syncer go-routine function which perform the database updates. Internally, it dequeue deferedCommits and
+// send the tasks to commitRound for completing the operation.
 func (au *accountUpdates) commitSyncer(deferedCommits chan deferedCommit) {
 	defer close(au.commitSyncerClosed)
 	for {
@@ -1237,6 +1250,7 @@ func (au *accountUpdates) commitSyncer(deferedCommits chan deferedCommit) {
 	}
 }
 
+// commitRound write to the database a "chunk" of rounds, and update the dbRound accordingly.
 func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookback basics.Round) {
 	defer au.accountsWriting.Done()
 	au.accountsMu.RLock()
@@ -1435,10 +1449,12 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 }
 
+// latest returns the latest round
 func (au *accountUpdates) latest() basics.Round {
 	return au.dbRound + basics.Round(len(au.deltas))
 }
 
+// generateCatchpoint generates a single catchpoint file
 func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label string, committedRoundDigest crypto.Digest, updatingBalancesDuration time.Duration) {
 	beforeGeneratingCatchpointTime := time.Now()
 	catchpointGenerationStats := telemetryspec.CatchpointGenerationEventDetails{
@@ -1532,6 +1548,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 		Infof("Catchpoint file was generated")
 }
 
+// catchpointRoundToPath calculate the catchpoint file path for a given round
 func catchpointRoundToPath(rnd basics.Round) string {
 	irnd := int64(rnd) / 256
 	outStr := ""
