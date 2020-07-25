@@ -363,6 +363,34 @@ func TestAssembleTxna(t *testing.T) {
 	_, err = AssembleStringV2(source)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "strconv.ParseUint")
+
+	source = `txn Accounts`
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "found txna field Accounts in txn op")
+
+	source = `txn Accounts`
+	_, err = AssembleStringV1(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "found txna field Accounts in txn op")
+
+	source = `txn Accounts 0`
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(t, err)
+
+	source = `gtxn 0 Accounts`
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "found gtxna field Accounts in gtxn op")
+
+	source = `gtxn 0 Accounts`
+	_, err = AssembleStringV1(source)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "found gtxna field Accounts in gtxn op")
+
+	source = `gtxn 0 Accounts 1`
+	_, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(t, err)
 }
 
 func TestAssembleGlobal(t *testing.T) {
@@ -835,9 +863,9 @@ txn GroupIndex
 txn TxID
 txn ApplicationID
 txn OnCompletion
-txn ApplicationArgs
+txna ApplicationArgs 0
 txn NumAppArgs
-txn Accounts
+txna Accounts 0
 txn NumAccounts
 txn ApprovalProgram
 txn ClearStateProgram
@@ -1061,7 +1089,7 @@ func TestAssembleAsset(t *testing.T) {
 }
 
 func TestDisassembleSingleOp(t *testing.T) {
-	// test ensures no double arg_0 entries in disassebly listing
+	// test ensures no double arg_0 entries in disassembly listing
 	sample := "// version 2\narg_0\n"
 	program, err := AssembleStringWithVersion(sample, AssemblerMaxVersion)
 	require.NoError(t, err)
@@ -1069,6 +1097,56 @@ func TestDisassembleSingleOp(t *testing.T) {
 	disassembled, err := Disassemble(program)
 	require.NoError(t, err)
 	require.Equal(t, sample, disassembled)
+}
+
+func TestDisassembleTxna(t *testing.T) {
+	// check txn and txna are properly disassembled
+	txnSample := "// version 2\ntxn Sender\n"
+	program, err := AssembleStringWithVersion(txnSample, AssemblerMaxVersion)
+	require.NoError(t, err)
+	disassembled, err := Disassemble(program)
+	require.NoError(t, err)
+	require.Equal(t, txnSample, disassembled)
+
+	txnaSample := "// version 2\ntxna Accounts 0\n"
+	program, err = AssembleStringWithVersion(txnaSample, AssemblerMaxVersion)
+	require.NoError(t, err)
+	disassembled, err = Disassemble(program)
+	require.NoError(t, err)
+	require.Equal(t, txnaSample, disassembled)
+
+	txnSample2 := "// version 2\ntxn Accounts 0\n"
+	program, err = AssembleStringWithVersion(txnSample2, AssemblerMaxVersion)
+	require.NoError(t, err)
+	disassembled, err = Disassemble(program)
+	require.NoError(t, err)
+	// comapre with txnaSample, not txnSample2
+	require.Equal(t, txnaSample, disassembled)
+}
+
+func TestDisassembleGtxna(t *testing.T) {
+	// check gtxn and gtxna are properly disassembled
+	gtxnSample := "// version 2\ngtxn 0 Sender\n"
+	program, err := AssembleStringWithVersion(gtxnSample, AssemblerMaxVersion)
+	require.NoError(t, err)
+	disassembled, err := Disassemble(program)
+	require.NoError(t, err)
+	require.Equal(t, gtxnSample, disassembled)
+
+	gtxnaSample := "// version 2\ngtxna 0 Accounts 0\n"
+	program, err = AssembleStringWithVersion(gtxnaSample, AssemblerMaxVersion)
+	require.NoError(t, err)
+	disassembled, err = Disassemble(program)
+	require.NoError(t, err)
+	require.Equal(t, gtxnaSample, disassembled)
+
+	gtxnSample2 := "// version 2\ngtxn 0 Accounts 0\n"
+	program, err = AssembleStringWithVersion(gtxnSample2, AssemblerMaxVersion)
+	require.NoError(t, err)
+	disassembled, err = Disassemble(program)
+	require.NoError(t, err)
+	// comapre with gtxnaSample, not gtxnSample2
+	require.Equal(t, gtxnaSample, disassembled)
 }
 
 func TestAssembleOffsets(t *testing.T) {

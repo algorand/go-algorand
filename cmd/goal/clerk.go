@@ -563,7 +563,7 @@ var rawsendCmd = &cobra.Command{
 
 var inspectCmd = &cobra.Command{
 	Use:   "inspect [input file 1] [input file 2]...",
-	Short: "print a transaction file",
+	Short: "Print a transaction file",
 	Long:  `Loads a transaction file, attempts to decode the transaction, and displays the decoded information.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		for _, txFilename := range args {
@@ -851,7 +851,7 @@ func disassembleFile(fname, outname string) {
 
 var compileCmd = &cobra.Command{
 	Use:   "compile [input file 1] [input file 2]...",
-	Short: "compile a contract program",
+	Short: "Compile a contract program",
 	Long:  "Reads a TEAL contract program and compiles it to binary output and contract address.",
 	Run: func(cmd *cobra.Command, args []string) {
 		for _, fname := range args {
@@ -909,7 +909,7 @@ var compileCmd = &cobra.Command{
 
 var dryrunCmd = &cobra.Command{
 	Use:   "dryrun",
-	Short: "test a program offline",
+	Short: "Test a program offline",
 	Long:  "Test a TEAL program offline under various conditions and verbosity.",
 	Run: func(cmd *cobra.Command, args []string) {
 		data, err := readFile(txFilename)
@@ -972,7 +972,7 @@ var dryrunCmd = &cobra.Command{
 
 var dryrunRemoteCmd = &cobra.Command{
 	Use:   "dryrun-remote",
-	Short: "test a program with algod's dryrun REST endpoint",
+	Short: "Test a program with algod's dryrun REST endpoint",
 	Long:  "Test a TEAL program with algod's dryrun REST endpoint under various conditions and verbosity.",
 	Run: func(cmd *cobra.Command, args []string) {
 		data, err := readFile(txFilename)
