@@ -12,6 +12,8 @@ set -e
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 df -h
 echo "TMPDIR=$TMPDIR"
+export TMPDIR=/run
+echo "TMPDIR=$TMPDIR"
 
 if [ "${USER}" = "travis" ]; then
     # we're running on a travis machine
