@@ -13,7 +13,8 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 df -h
 echo "TMPDIR=$TMPDIR"
 mkdir -p ~/tmp
-sudo mount -F tmpfs -o size=256m swap ~/tmp
+chmod 777 ~/tmp
+sudo mount -F tmpfs -o size=256 swap ~/tmp
 export TMPDIR=~/tmp
 echo "TMPDIR=$TMPDIR"
 sudo mount -v
