@@ -16,7 +16,7 @@ if [ "${USER}" = "travis" ]; then
     "${SCRIPTPATH}/build.sh" --make_debug
     echo "TMPDIR=$TMPDIR"
     sudo mkdir /mnt/ramdisk
-    sudo mount -t tmpfs -o rw,size=256M tmpfs /mnt/ramdisk
+    sudo mount -t tmpfs -o rw,size=512M tmpfs /mnt/ramdisk
     export TMPDIR=/mnt/ramdisk
     echo "TMPDIR=$TMPDIR"
     sudo mount -v
