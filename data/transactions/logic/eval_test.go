@@ -2662,9 +2662,12 @@ func TestShortProgram(t *testing.T) {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
 			program, err := AssembleStringWithVersion(`int 1
 bnz done
-done:`, v)
+done:
+int 1
+`, v)
 			require.NoError(t, err)
-			program = program[:len(program)-1]
+			// cut two last bytes - intc_1 and last byte of bnz
+			program = program[:len(program)-2]
 			cost, err := Check(program, defaultEvalParams(nil, nil))
 			require.Error(t, err)
 			require.True(t, cost < 1000)
