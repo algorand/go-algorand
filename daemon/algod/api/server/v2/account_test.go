@@ -78,17 +78,17 @@ func TestAccount(t *testing.T) {
 	require.Equal(t, uint64(0), ls.Schema.NumByteSlice)
 	require.Equal(t, 2, len(*ls.KeyValue))
 	value1 := generated.TealKeyValue{
-		Key: "uint",
+		Key: b64("uint"),
 		Value: generated.TealValue{
 			Type: uint64(basics.TealUintType),
 			Uint: 2,
 		},
 	}
 	value2 := generated.TealKeyValue{
-		Key: "bytes",
+		Key: b64("bytes"),
 		Value: generated.TealValue{
 			Type:  uint64(basics.TealBytesType),
-			Bytes: "value",
+			Bytes: b64("value"),
 		},
 	}
 	require.Contains(t, *ls.KeyValue, value1)

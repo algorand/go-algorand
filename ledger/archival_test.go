@@ -459,7 +459,6 @@ func TestArchivalCreatables(t *testing.T) {
 	l.Close()
 	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
-	defer l.Close()
 
 	// check that we can fetch creator for all created assets and can't for
 	// deleted assets
