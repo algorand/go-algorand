@@ -1198,10 +1198,6 @@ func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 	if err != nil {
 		return
 	}
-	if addr != crypto.Digest(tx.Src()) {
-		err = errMsigWrongAddr
-		return
-	}
 
 	// Check that key is one of the ones in the preimage
 	err = errMsigWrongKey
