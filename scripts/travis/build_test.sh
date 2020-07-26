@@ -10,6 +10,7 @@
 set -e
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
+df -h
 
 if [ "${USER}" = "travis" ]; then
     # we're running on a travis machine

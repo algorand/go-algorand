@@ -37,7 +37,6 @@ jobs:
       os: linux
       name: Ubuntu AMD64 Build
       script:
-	- df -h
         - scripts/travis/build_test.sh
     - # same stage, parallel job
       os: linux
