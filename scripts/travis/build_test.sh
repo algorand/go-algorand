@@ -12,8 +12,11 @@ set -e
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 df -h
 echo "TMPDIR=$TMPDIR"
-export TMPDIR=/run
+mkdir -p ~/tmp
+sudo mount -F tmpfs -o size=256m swap ~/tmp
+export TMPDIR=~/tmp
 echo "TMPDIR=$TMPDIR"
+sudo mount -v
 
 if [ "${USER}" = "travis" ]; then
     # we're running on a travis machine
