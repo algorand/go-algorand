@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -101,11 +102,16 @@ func (bq *blockQueue) syncer() {
 		workQ := bq.q
 		bq.mu.Unlock()
 
+		blockStoreStartTime := time.Now()
 		err := bq.l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-			for _, e := range workQ {
+			for i, e := range workQ {
 				err0 := blockPut(tx, e.block, e.cert)
 				if err0 != nil {
 					return err0
+				}
+				if time.Now().Sub(blockStoreStartTime) > 250*time.Millisecond {
+					workQ = workQ[:i+1]
+					break
 				}
 			}
 			return nil
