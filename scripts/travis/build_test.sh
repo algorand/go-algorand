@@ -10,17 +10,16 @@
 set -e
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
-df -h
-echo "TMPDIR=$TMPDIR"
-sudo mkdir /mnt/ramdisk
-sudo mount -t tmpfs -o rw,size=256M tmpfs /mnt/ramdisk
-export TMPDIR=/mnt/ramdisk
-echo "TMPDIR=$TMPDIR"
-sudo mount -v
 
 if [ "${USER}" = "travis" ]; then
     # we're running on a travis machine
     "${SCRIPTPATH}/build.sh" --make_debug
+    echo "TMPDIR=$TMPDIR"
+    sudo mkdir /mnt/ramdisk
+    sudo mount -t tmpfs -o rw,size=256M tmpfs /mnt/ramdisk
+    export TMPDIR=/mnt/ramdisk
+    echo "TMPDIR=$TMPDIR"
+    sudo mount -v
     "${SCRIPTPATH}/travis_wait.sh" 90 "${SCRIPTPATH}/test.sh"
 else
     # we're running on an ephermal build machine
