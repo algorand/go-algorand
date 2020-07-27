@@ -25,6 +25,11 @@ import (
 	"github.com/algorand/go-algorand/crypto/passphrase"
 )
 
+const (
+	stdoutFilenameValue = "-"
+	stdinFileNameValue  = "-"
+)
+
 func loadKeyfileOrMnemonic(keyfile string, mnemonic string) crypto.Seed {
 	if keyfile != "" && mnemonic != "" {
 		fmt.Fprintf(os.Stderr, "Cannot specify both keyfile and mnemonic\n")
@@ -93,4 +98,27 @@ func computeMnemonic(seed crypto.Seed) string {
 		os.Exit(1)
 	}
 	return mnemonic
+}
+
+// writeFile is a wrapper of ioutil.WriteFile which considers the special
+// case of stdout filename
+func writeFile(filename string, data []byte, perm os.FileMode) error {
+	var err error
+	if filename == stdoutFilenameValue {
+		// Write to Stdout
+		if _, err = os.Stdout.Write(data); err != nil {
+			return err
+		}
+		return nil
+	}
+	return ioutil.WriteFile(filename, data, perm)
+}
+
+// readFile is a wrapper of ioutil.ReadFile which considers the
+// special case of stdin filename
+func readFile(filename string) ([]byte, error) {
+	if filename == stdinFileNameValue {
+		return ioutil.ReadAll(os.Stdin)
+	}
+	return ioutil.ReadFile(filename)
 }
