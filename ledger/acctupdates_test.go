@@ -542,7 +542,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, true)
 	defer ml.close()
 	ml.blocks = randomInitChain(testProtocolVersion, 10)
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(100000, false)}
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(100000, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}

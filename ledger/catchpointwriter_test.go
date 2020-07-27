@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -195,6 +196,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 				break
 			}
 		}
+
 		if header.Name == "content.msgpack" {
 			var fileHeader CatchpointFileHeader
 			err = protocol.Decode(balancesBlockBytes, &fileHeader)
@@ -214,9 +216,9 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	}
 }
 
-func TestCatchpointWriterWithApplicationsData(t *testing.T) {
+func TestFullCatchpointWriter(t *testing.T) {
 	// create new protocol version, which has lower back balance.
-	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestCatchpointWriterWithApplicationsData")
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestFullCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = 32
 	protoParams.SeedLookback = 2
@@ -231,7 +233,7 @@ func TestCatchpointWriterWithApplicationsData(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, true)
 	defer ml.close()
 	ml.blocks = randomInitChain(testProtocolVersion, 10)
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(300, false)}
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(BalancesPerCatchpointFileChunk*3, false)}
 
 	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
@@ -255,12 +257,22 @@ func TestCatchpointWriterWithApplicationsData(t *testing.T) {
 		}
 	}
 
+	// create a ledger.
+	l, err := OpenLedger(ml.log, "TestFullCatchpointWriter", true, InitState{}, conf)
+	require.NoError(t, err)
+	defer l.Close()
+	accessor := MakeCatchpointCatchupAccessor(l, l.log)
+
+	err = accessor.ResetStagingBalances(context.Background(), true)
+	require.NoError(t, err)
+
 	// load the file from disk.
 	fileContent, err := ioutil.ReadFile(fileName)
 	require.NoError(t, err)
 	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
 	require.NoError(t, err)
 	tarReader := tar.NewReader(gzipReader)
+	var catchupProgress CatchpointCatchupAccessorProgress
 	defer gzipReader.Close()
 	for {
 		header, err := tarReader.Next()
@@ -287,21 +299,20 @@ func TestCatchpointWriterWithApplicationsData(t *testing.T) {
 				break
 			}
 		}
-		if header.Name == "content.msgpack" {
-			var fileHeader CatchpointFileHeader
-			err = protocol.Decode(balancesBlockBytes, &fileHeader)
-			require.NoError(t, err)
-			require.Equal(t, catchpointLabel, fileHeader.Catchpoint)
-			require.Equal(t, blocksRound, fileHeader.BlocksRound)
-			require.Equal(t, blockHeaderDigest, fileHeader.BlockHeaderDigest)
-			require.Equal(t, uint64(len(accts[0])), fileHeader.TotalAccounts)
-		} else if header.Name == "balances.1.1.msgpack" {
-			var balances catchpointFileBalancesChunk
-			err = protocol.Decode(balancesBlockBytes, &balances)
-			require.NoError(t, err)
-			require.Equal(t, uint64(len(accts[0])), uint64(len(balances.Balances)))
-		} else {
-			require.Failf(t, "unexpected tar chunk name %s", header.Name)
-		}
+		err = accessor.ProgressStagingBalances(context.Background(), header.Name, balancesBlockBytes, &catchupProgress)
+		require.NoError(t, err)
+	}
+
+	err = l.trackerDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		err := applyCatchpointStagingBalances(ctx, tx, 0)
+		return err
+	})
+	require.NoError(t, err)
+
+	// verify that the account data aligns with what we originally stored :
+	for addr, acct := range accts[0] {
+		acctData, err := l.LookupWithoutRewards(0, addr)
+		require.NoError(t, err)
+		require.Equal(t, acct, acctData)
 	}
 }
