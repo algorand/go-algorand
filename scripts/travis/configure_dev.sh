@@ -17,6 +17,10 @@ if [[ "${OS}" == "linux" ]]; then
         set -e
         sudo apt-get update -y
         sudo apt-get -y install sqlite3
+    elif [[ "${ARCH}" == "amd64" ]]; then
+        sudo mkdir -p /mnt/ramdisk
+        sudo mount -t tmpfs -o rw,size=512M tmpfs /mnt/ramdisk
+        ln -s /mnt/ramdisk /tmp
     fi
 elif [[ "${OS}" == "darwin" ]]; then
     # we don't want to upgrade boost if we already have it, as it will try to update
