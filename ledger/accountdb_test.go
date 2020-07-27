@@ -56,7 +56,7 @@ func randomAccountData(rewardsLevel uint64) basics.AccountData {
 	return data
 }
 
-func randomFullAccountData(rewardsLevel uint64) basics.AccountData {
+func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.AccountData, uint64) {
 	data := randomAccountData(rewardsLevel)
 
 	crypto.RandBytes(data.VoteID[:])
@@ -82,11 +82,12 @@ func randomFullAccountData(rewardsLevel uint64) basics.AccountData {
 			crypto.RandBytes(ap.Reserve[:])
 			crypto.RandBytes(ap.Freeze[:])
 			crypto.RandBytes(ap.Clawback[:])
-			data.AssetParams[basics.AssetIndex(crypto.RandUint64()%50000)] = ap
+			lastCreatableID++
+			data.AssetParams[basics.AssetIndex(lastCreatableID)] = ap
 		}
 	}
 	if 1 == (crypto.RandUint64() % 2) {
-		// if account owns assets/applications
+		// if account owns assets
 		data.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
 		ownedAssetsCount := crypto.RandUint64()%20 + 1
 		for i := uint64(0); i < ownedAssetsCount; i++ {
@@ -94,7 +95,7 @@ func randomFullAccountData(rewardsLevel uint64) basics.AccountData {
 				Amount: crypto.RandUint64(),
 				Frozen: (crypto.RandUint64()%2 == 0),
 			}
-			data.Assets[basics.AssetIndex(crypto.RandUint64()%50000)] = ah
+			data.Assets[basics.AssetIndex(crypto.RandUint64()%lastCreatableID)] = ah
 		}
 	}
 	if 1 == (crypto.RandUint64() % 5) {
@@ -112,14 +113,16 @@ func randomFullAccountData(rewardsLevel uint64) basics.AccountData {
 				},
 				KeyValue: make(map[string]basics.TealValue),
 			}
-			appName := fmt.Sprintf("lapp%x", crypto.RandUint64())
+
 			for i := uint64(0); i < ap.Schema.NumUint; i++ {
+				appName := fmt.Sprintf("lapp%x-%x", crypto.RandUint64(), i)
 				ap.KeyValue[appName] = basics.TealValue{
 					Type: basics.TealUintType,
 					Uint: crypto.RandUint64(),
 				}
 			}
 			for i := uint64(0); i < ap.Schema.NumByteSlice; i++ {
+				appName := fmt.Sprintf("lapp%x-%x", crypto.RandUint64(), i)
 				tv := basics.TealValue{
 					Type: basics.TealBytesType,
 				}
@@ -128,7 +131,10 @@ func randomFullAccountData(rewardsLevel uint64) basics.AccountData {
 				tv.Bytes = string(bytes)
 				ap.KeyValue[appName] = tv
 			}
-			data.AppLocalStates[basics.AppIndex(crypto.RandUint64()%50000)] = ap
+			if len(ap.KeyValue) == 0 {
+				ap.KeyValue = nil
+			}
+			data.AppLocalStates[basics.AppIndex(crypto.RandUint64()%lastCreatableID)] = ap
 		}
 	}
 
@@ -140,25 +146,60 @@ func randomFullAccountData(rewardsLevel uint64) basics.AccountData {
 	}
 	if 1 == (crypto.RandUint64() % 3) {
 		data.AppParams = make(map[basics.AppIndex]basics.AppParams)
-		appParamsCount := crypto.RandUint64()%20 + 1
+		appParamsCount := crypto.RandUint64()%5 + 1
 		for i := uint64(0); i < appParamsCount; i++ {
 			ap := basics.AppParams{
-				ApprovalProgram:   make([]byte, int(crypto.RandUint64())%config.MaxAppProgramLen),
-				ClearStateProgram: make([]byte, int(crypto.RandUint64())%config.MaxAppProgramLen),
+				ApprovalProgram:   make([]byte, int(crypto.RandUint63())%config.MaxAppProgramLen),
+				ClearStateProgram: make([]byte, int(crypto.RandUint63())%config.MaxAppProgramLen),
+				GlobalState:       make(basics.TealKeyValue),
+				StateSchemas: basics.StateSchemas{
+					LocalStateSchema: basics.StateSchema{
+						NumUint:      crypto.RandUint64() % 5,
+						NumByteSlice: crypto.RandUint64() % 5,
+					},
+					GlobalStateSchema: basics.StateSchema{
+						NumUint:      crypto.RandUint64() % 5,
+						NumByteSlice: crypto.RandUint64() % 5,
+					},
+				},
 			}
-			crypto.RandBytes(ap.ApprovalProgram[:])
-			crypto.RandBytes(ap.ClearStateProgram[:])
-			data.AppParams[basics.AppIndex(crypto.RandUint64()%50000)] = ap
+			if len(ap.ApprovalProgram) > 0 {
+				crypto.RandBytes(ap.ApprovalProgram[:])
+			} else {
+				ap.ApprovalProgram = nil
+			}
+			if len(ap.ClearStateProgram) > 0 {
+				crypto.RandBytes(ap.ClearStateProgram[:])
+			} else {
+				ap.ClearStateProgram = nil
+			}
+
+			for i := uint64(0); i < ap.StateSchemas.LocalStateSchema.NumUint+ap.StateSchemas.GlobalStateSchema.NumUint; i++ {
+				appName := fmt.Sprintf("tapp%x-%x", crypto.RandUint64(), i)
+				ap.GlobalState[appName] = basics.TealValue{
+					Type: basics.TealUintType,
+					Uint: crypto.RandUint64(),
+				}
+			}
+			for i := uint64(0); i < ap.StateSchemas.LocalStateSchema.NumByteSlice+ap.StateSchemas.GlobalStateSchema.NumByteSlice; i++ {
+				appName := fmt.Sprintf("tapp%x-%x", crypto.RandUint64(), i)
+				tv := basics.TealValue{
+					Type: basics.TealBytesType,
+				}
+				bytes := make([]byte, crypto.RandUint64()%512)
+				crypto.RandBytes(bytes[:])
+				tv.Bytes = string(bytes)
+				ap.GlobalState[appName] = tv
+			}
+			if len(ap.GlobalState) == 0 {
+				ap.GlobalState = nil
+			}
+			lastCreatableID++
+			data.AppParams[basics.AppIndex(lastCreatableID)] = ap
 		}
 
 	}
-	//fmt.Printf("%v\n", data.SelectionID)
-	/*
-		// AppParams stores the global parameters and state associated with any
-		// applications that this account has created.
-		AppParams map[AppIndex]AppParams `codec:"appp,allocbound=encodedMaxAppParams"`
-	*/
-	return data
+	return data, lastCreatableID
 }
 
 func randomAccounts(niter int, simpleAccounts bool) map[basics.Address]basics.AccountData {
@@ -168,8 +209,9 @@ func randomAccounts(niter int, simpleAccounts bool) map[basics.Address]basics.Ac
 			res[randomAddress()] = randomAccountData(0)
 		}
 	} else {
+		lastCreatableID := crypto.RandUint64() % 512
 		for i := 0; i < niter; i++ {
-			res[randomAddress()] = randomFullAccountData(0)
+			res[randomAddress()], lastCreatableID = randomFullAccountData(0, lastCreatableID)
 		}
 	}
 	return res
