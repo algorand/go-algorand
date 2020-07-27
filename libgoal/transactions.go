@@ -104,7 +104,30 @@ func (c *Client) MultisigSignTransactionWithWallet(walletHandle, pw []byte, utx 
 	if err != nil {
 		return
 	}
-	resp, err := kmd.MultisigSignTransaction(walletHandle, pw, txBytes, crypto.PublicKey(addr), partial)
+	resp, err := kmd.MultisigSignTransaction(walletHandle, pw, txBytes, crypto.PublicKey(addr), partial, crypto.Digest{})
+	if err != nil {
+		return
+	}
+	err = protocol.Decode(resp.Multisig, &msig)
+	return
+}
+
+// MultisigSignTransactionWithWallet creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
+func (c *Client) MultisigSignTransactionWithWalletAndSigner(walletHandle, pw []byte, utx transactions.Transaction, signerAddr string, partial crypto.MultisigSig, signerMsig string) (msig crypto.MultisigSig, err error) {
+	txBytes := protocol.Encode(&utx)
+	addr, err := basics.UnmarshalChecksumAddress(signerAddr)
+	if err != nil {
+		return
+	}
+	msigAddr, err := basics.UnmarshalChecksumAddress(signerMsig)
+	if err != nil {
+		return
+	}
+	kmd, err := c.ensureKmdClient()
+	if err != nil {
+		return
+	}
+	resp, err := kmd.MultisigSignTransaction(walletHandle, pw, txBytes, crypto.PublicKey(addr), partial, crypto.Digest(msigAddr))
 	if err != nil {
 		return
 	}
