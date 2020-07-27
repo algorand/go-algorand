@@ -18,11 +18,20 @@ if [[ "${OS}" == "linux" ]]; then
         sudo apt-get update -y
         sudo apt-get -y install sqlite3
     elif [[ "${ARCH}" == "amd64" ]]; then
+        #sudo mv /tmp /old_tmp
+        #sudo mkdir -p /tmp
+        #sudo chmod 777 /tmp
+        #sudo mount -t tmpfs -o rw,size=768M tmpfs /tmp
+        #cp -r /old_tmp/ /tmp
+        ls -h /tmp
+        sudo df -h
         sudo mv /tmp /old_tmp
         sudo mkdir -p /tmp
-        sudo chmod 777 /tmp
-        sudo mount -t tmpfs -o rw,size=768M tmpfs /tmp
+        sudo mkdir -p /run/tmp
+        sudo chmod 777 /run/tmp
+        ln -s /tmp /run/tmp
         cp -r /old_tmp/ /tmp
+        ls -h /tmp
     fi
 elif [[ "${OS}" == "darwin" ]]; then
     # we don't want to upgrade boost if we already have it, as it will try to update
