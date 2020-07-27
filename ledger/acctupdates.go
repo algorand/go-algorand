@@ -195,7 +195,7 @@ type accountUpdates struct {
 	// accountsWriting provides syncronization around the background writing of account balances.
 	accountsWriting sync.WaitGroup
 
-	// commitSyncerWaitGroup is the blocking channel for syncronizing closing the commitSyncer goroutine. Once it's closed, the
+	// commitSyncerClosed is the blocking channel for syncronizing closing the commitSyncer goroutine. Once it's closed, the
 	// commitSyncer can be assumed to have aborted.
 	commitSyncerClosed chan struct{}
 }
@@ -222,7 +222,7 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	close(au.commitSyncerClosed)
 }
 
-// loadFromDisk is the 2nd level initializtion, and is required before the accountUpdates becomes functional
+// loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
 // The close function is expected to be call in pair with loadFromDisk
 func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	au.accountsMu.Lock()
