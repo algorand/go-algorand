@@ -52,15 +52,85 @@ func randomAccountData(rewardsLevel uint64) basics.AccountData {
 	}
 
 	data.RewardsBase = rewardsLevel
+
 	return data
 }
 
-func randomAccounts(niter int) map[basics.Address]basics.AccountData {
-	res := make(map[basics.Address]basics.AccountData)
-	for i := 0; i < niter; i++ {
-		res[randomAddress()] = randomAccountData(0)
+func randomFullAccountData(rewardsLevel uint64) basics.AccountData {
+	data := randomAccountData(rewardsLevel)
+
+	crypto.RandBytes(data.VoteID[:])
+	crypto.RandBytes(data.SelectionID[:])
+	data.VoteFirstValid = basics.Round(crypto.RandUint64())
+	data.VoteLastValid = basics.Round(crypto.RandUint64())
+	data.VoteKeyDilution = crypto.RandUint64()
+	if 1 == (crypto.RandUint64() % 2) {
+		// if account has created assets, have these defined.
+		data.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+		createdAssetsCount := crypto.RandUint64()%20 + 1
+		for i := uint64(0); i < createdAssetsCount; i++ {
+			ap := basics.AssetParams{
+				Total:         crypto.RandUint64(),
+				Decimals:      uint32(crypto.RandUint64() % 20),
+				DefaultFrozen: (crypto.RandUint64()%2 == 0),
+				UnitName:      fmt.Sprintf("un%x", uint32(crypto.RandUint64()%0x7fffffff)),
+				AssetName:     fmt.Sprintf("an%x", uint32(crypto.RandUint64()%0x7fffffff)),
+				URL:           fmt.Sprintf("url%x", uint32(crypto.RandUint64()%0x7fffffff)),
+			}
+			crypto.RandBytes(ap.MetadataHash[:])
+			crypto.RandBytes(ap.Manager[:])
+			crypto.RandBytes(ap.Reserve[:])
+			crypto.RandBytes(ap.Freeze[:])
+			crypto.RandBytes(ap.Clawback[:])
+			data.AssetParams[basics.AssetIndex(crypto.RandUint64()%50000)] = ap
+		}
+	}
+	if 1 == (crypto.RandUint64() % 2) {
+		// if account owns assets/applications
+		data.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+		ownedAssetsCount := crypto.RandUint64()%20 + 1
+		for i := uint64(0); i < ownedAssetsCount; i++ {
+			ah := basics.AssetHolding{
+				Amount: crypto.RandUint64(),
+				Frozen: (crypto.RandUint64()%2 == 0),
+			}
+			data.Assets[basics.AssetIndex(crypto.RandUint64()%50000)] = ah
+		}
+	}
+	if 1 == (crypto.RandUint64() % 5) {
+		crypto.RandBytes(data.AuthAddr[:])
 	}
 
+	//fmt.Printf("%v\n", data.SelectionID)
+	/*
+		// AppLocalStates stores the local states associated with any applications
+		// that this account has opted in to.
+		AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=encodedMaxAppLocalStates"`
+
+		// AppParams stores the global parameters and state associated with any
+		// applications that this account has created.
+		AppParams map[AppIndex]AppParams `codec:"appp,allocbound=encodedMaxAppParams"`
+
+		// TotalAppSchema stores the sum of all of the LocalStateSchemas
+		// and GlobalStateSchemas in this account (global for applications
+		// we created local for applications we opted in to), so that we don't
+		// have to iterate over all of them to compute MinBalance.
+		TotalAppSchema StateSchema `codec:"tsch"`
+	*/
+	return data
+}
+
+func randomAccounts(niter int, simpleAccounts bool) map[basics.Address]basics.AccountData {
+	res := make(map[basics.Address]basics.AccountData)
+	if simpleAccounts {
+		for i := 0; i < niter; i++ {
+			res[randomAddress()] = randomAccountData(0)
+		}
+	} else {
+		for i := 0; i < niter; i++ {
+			res[randomAddress()] = randomFullAccountData(0)
+		}
+	}
 	return res
 }
 
@@ -177,7 +247,7 @@ func TestAccountDBInit(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback()
 
-	accts := randomAccounts(20)
+	accts := randomAccounts(20, true)
 	err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
@@ -198,7 +268,7 @@ func TestAccountDBRound(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback()
 
-	accts := randomAccounts(20)
+	accts := randomAccounts(20, true)
 	err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
