@@ -254,12 +254,12 @@ func (dl *dryrunLedger) init() error {
 	return nil
 }
 
-// transactions.Balances interface
+// apply.Balances interface
 func (dl *dryrunLedger) Round() basics.Round {
 	return basics.Round(dl.dr.Round)
 }
 
-// transactions.Balances interface
+// apply.Balances interface
 func (dl *dryrunLedger) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
 	// first check accounts from a previous Put()
 	br, ok := dl.accounts[addr]
@@ -312,7 +312,7 @@ func (dl *dryrunLedger) Get(addr basics.Address, withPendingRewards bool) (basic
 	return out, nil
 }
 
-// transactions.Balances interface
+// apply.Balances interface
 func (dl *dryrunLedger) Put(br basics.BalanceRecord) error {
 	if dl.accounts == nil {
 		dl.accounts = make(map[basics.Address]basics.BalanceRecord)
