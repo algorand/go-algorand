@@ -31,11 +31,10 @@ var recoveryExtraTimeout = config.Protocol.SmallLambda
 
 // FilterTimeout is the duration of the first agreement step.
 func FilterTimeout(target period) time.Duration {
-	if target != 0 {
-		return filterTimeout
-	} else {
+	if target == 0 {
 		return filterTimeout / 2
 	}
+	return filterTimeout
 }
 
 // DeadlineTimeout is the duration of the second agreement step.
