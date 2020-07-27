@@ -112,7 +112,7 @@ func randomFullAccountData(rewardsLevel uint64) basics.AccountData {
 				},
 				KeyValue: make(map[string]basics.TealValue),
 			}
-			appName := fmt.Sprintf("app%x", crypto.RandUint64())
+			appName := fmt.Sprintf("lapp%x", crypto.RandUint64())
 			for i := uint64(0); i < ap.Schema.NumUint; i++ {
 				ap.KeyValue[appName] = basics.TealValue{
 					Type: basics.TealUintType,
@@ -132,21 +132,31 @@ func randomFullAccountData(rewardsLevel uint64) basics.AccountData {
 		}
 	}
 
+	if 1 == (crypto.RandUint64() % 3) {
+		data.TotalAppSchema = basics.StateSchema{
+			NumUint:      crypto.RandUint64() % 50,
+			NumByteSlice: crypto.RandUint64() % 50,
+		}
+	}
+	if 1 == (crypto.RandUint64() % 3) {
+		data.AppParams = make(map[basics.AppIndex]basics.AppParams)
+		appParamsCount := crypto.RandUint64()%20 + 1
+		for i := uint64(0); i < appParamsCount; i++ {
+			ap := basics.AppParams{
+				ApprovalProgram:   make([]byte, int(crypto.RandUint64())%config.MaxAppProgramLen),
+				ClearStateProgram: make([]byte, int(crypto.RandUint64())%config.MaxAppProgramLen),
+			}
+			crypto.RandBytes(ap.ApprovalProgram[:])
+			crypto.RandBytes(ap.ClearStateProgram[:])
+			data.AppParams[basics.AppIndex(crypto.RandUint64()%50000)] = ap
+		}
+
+	}
 	//fmt.Printf("%v\n", data.SelectionID)
 	/*
-		// AppLocalStates stores the local states associated with any applications
-		// that this account has opted in to.
-		AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=encodedMaxAppLocalStates"`
-
 		// AppParams stores the global parameters and state associated with any
 		// applications that this account has created.
 		AppParams map[AppIndex]AppParams `codec:"appp,allocbound=encodedMaxAppParams"`
-
-		// TotalAppSchema stores the sum of all of the LocalStateSchemas
-		// and GlobalStateSchemas in this account (global for applications
-		// we created local for applications we opted in to), so that we don't
-		// have to iterate over all of them to compute MinBalance.
-		TotalAppSchema StateSchema `codec:"tsch"`
 	*/
 	return data
 }
