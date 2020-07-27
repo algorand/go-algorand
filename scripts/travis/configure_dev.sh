@@ -21,7 +21,7 @@ if [[ "${OS}" == "linux" ]]; then
         sudo mv /tmp /old_tmp
         sudo mkdir -p /tmp
         sudo chmod 777 /tmp
-        sudo mount -t tmpfs -o rw,size=512M tmpfs /tmp
+        sudo mount -t tmpfs -o rw,size=1024M tmpfs /tmp
         cp -r /old_tmp/ /tmp
     fi
 elif [[ "${OS}" == "darwin" ]]; then
