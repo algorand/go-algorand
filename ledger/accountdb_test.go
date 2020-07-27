@@ -101,6 +101,37 @@ func randomFullAccountData(rewardsLevel uint64) basics.AccountData {
 		crypto.RandBytes(data.AuthAddr[:])
 	}
 
+	if 1 == (crypto.RandUint64() % 3) {
+		data.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+		appStatesCount := crypto.RandUint64()%20 + 1
+		for i := uint64(0); i < appStatesCount; i++ {
+			ap := basics.AppLocalState{
+				Schema: basics.StateSchema{
+					NumUint:      crypto.RandUint64() % 5,
+					NumByteSlice: crypto.RandUint64() % 5,
+				},
+				KeyValue: make(map[string]basics.TealValue),
+			}
+			appName := fmt.Sprintf("app%x", crypto.RandUint64())
+			for i := uint64(0); i < ap.Schema.NumUint; i++ {
+				ap.KeyValue[appName] = basics.TealValue{
+					Type: basics.TealUintType,
+					Uint: crypto.RandUint64(),
+				}
+			}
+			for i := uint64(0); i < ap.Schema.NumByteSlice; i++ {
+				tv := basics.TealValue{
+					Type: basics.TealBytesType,
+				}
+				bytes := make([]byte, crypto.RandUint64()%512)
+				crypto.RandBytes(bytes[:])
+				tv.Bytes = string(bytes)
+				ap.KeyValue[appName] = tv
+			}
+			data.AppLocalStates[basics.AppIndex(crypto.RandUint64()%50000)] = ap
+		}
+	}
+
 	//fmt.Printf("%v\n", data.SelectionID)
 	/*
 		// AppLocalStates stores the local states associated with any applications
