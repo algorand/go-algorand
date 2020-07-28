@@ -87,7 +87,7 @@ func init() {
 	sendCmd.Flags().StringVarP(&progByteFile, "from-program-bytes", "P", "", "Program binary to use as account logic")
 	sendCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "base64 encoded args to pass to transaction logic")
 	sendCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
-	sendCmd.Flags().StringVar(&msigParams, "msig-params", "", "Multisig pre image parameters - [threshold] [Address 1] [Address 2] ...\nUsed to add the necessary fields in case the account was rekeyed to a multisig account")
+	sendCmd.Flags().StringVar(&msigParams, "msig-params", "", "Multisig preimage parameters - [threshold] [Address 1] [Address 2] ...\nUsed to add the necessary fields in case the account was rekeyed to a multisig account")
 	sendCmd.MarkFlagRequired("to")
 	sendCmd.MarkFlagRequired("amount")
 
@@ -406,7 +406,7 @@ var sendCmd = &cobra.Command{
 			}
 
 			threshold, err := strconv.ParseUint(params[0], 10, 8)
-			if err != nil {
+			if err != nil || threshold < 1 || threshold > 255 {
 				reportErrorf(msigParseError, "Failed to parse the threshold. Make sure it's a number between 1 and 255")
 			}
 
