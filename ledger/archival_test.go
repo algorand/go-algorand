@@ -679,7 +679,6 @@ func TestArchivalFromNonArchival(t *testing.T) {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		l.AddBlock(blk, agreement.Certificate{})
-		<-l.Wait(blk.BlockHeader.Round - basics.Round(blk.BlockHeader.Round&31))
 	}
 	l.WaitForCommit(blk.Round())
 
