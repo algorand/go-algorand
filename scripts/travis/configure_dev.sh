@@ -18,6 +18,8 @@ if [[ "${OS}" == "linux" ]]; then
         sudo apt-get update -y
         sudo apt-get -y install sqlite3
     elif [[ "${ARCH}" == "amd64" ]]; then
+        echo "/etc/fstab : "
+        sudo cat /etc/fstab
         sudo mv /tmp /old_tmp
         sudo mkdir -p /tmp
         sudo chmod 777 /tmp
