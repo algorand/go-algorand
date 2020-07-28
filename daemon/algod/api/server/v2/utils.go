@@ -17,6 +17,7 @@
 package v2
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strings"
@@ -177,4 +178,53 @@ func decode(handle codec.Handle, data []byte, v interface{}) error {
 		return fmt.Errorf("failed to decode object: %v", err)
 	}
 	return nil
+}
+
+func convertToDeltas(txn node.TxnWithStatus) (*[]generated.AccountStateDelta, *generated.StateDelta) {
+	// Helper to convert basics.StateDelta -> *generated.StateDelta
+	convertDelta := func (d basics.StateDelta) *generated.StateDelta {
+		if len(d) == 0 {
+			return nil
+		}
+		var delta generated.StateDelta
+		for k, v:= range d {
+			delta = append(delta, generated.EvalDeltaKeyValue{
+				Key:   base64.StdEncoding.EncodeToString([]byte(k)),
+				Value: generated.EvalDelta{
+					Action: uint64(v.Action),
+					Bytes:  strOrNil(base64.StdEncoding.EncodeToString([]byte(v.Bytes))),
+					Uint:   numOrNil(v.Uint),
+				},
+			})
+		}
+		return &delta
+	}
+
+	var localStateDelta *[]generated.AccountStateDelta
+	if len(txn.ApplyData.EvalDelta.LocalDeltas) > 0 {
+		d := make([]generated.AccountStateDelta, 0)
+		accounts := txn.Txn.Txn.Accounts
+
+		for k, v := range txn.ApplyData.EvalDelta.LocalDeltas {
+			// Resolve address from index
+			var addr string
+			if k == 0 {
+				addr = txn.Txn.Txn.Sender.String()
+			} else {
+				if int(k - 1) < len(accounts) {
+					addr = txn.Txn.Txn.Accounts[k-1].String()
+				} else {
+					addr = fmt.Sprintf("Invalid Address Index: %d", k - 1)
+				}
+			}
+			d = append(d, generated.AccountStateDelta{
+				Address: addr,
+				Delta:   *(convertDelta(v)),
+			})
+		}
+
+		localStateDelta = &d
+	}
+
+	return localStateDelta, convertDelta(txn.ApplyData.EvalDelta.GlobalDelta)
 }
