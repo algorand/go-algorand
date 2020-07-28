@@ -41,9 +41,12 @@ type blockNotifier struct {
 	listeners     []BlockListener
 	pendingBlocks []blockDeltaPair
 	running       bool
+	// closed is used to syncronize closing the worker goroutine. It's being created during loadFromDisk, and the worker is responsible to close it once it's aborting it's goroutine. The close function waits on this to complete.
+	closed chan struct{}
 }
 
-func (bn *blockNotifier) worker() {
+func (bn *blockNotifier) worker(closed chan struct{}) {
+	defer close(closed)
 	bn.mu.Lock()
 
 	for {
@@ -73,19 +76,20 @@ func (bn *blockNotifier) worker() {
 
 func (bn *blockNotifier) close() {
 	bn.mu.Lock()
-	defer bn.mu.Unlock()
 	if bn.running {
 		bn.running = false
 		bn.cond.Broadcast()
 	}
+	bn.mu.Unlock()
+	<-bn.closed
 }
 
 func (bn *blockNotifier) loadFromDisk(l ledgerForTracker) error {
 	bn.cond = sync.NewCond(&bn.mu)
 	bn.running = true
 	bn.pendingBlocks = nil
-
-	go bn.worker()
+	bn.closed = make(chan struct{})
+	go bn.worker(bn.closed)
 	return nil
 }
 
