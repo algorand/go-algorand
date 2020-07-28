@@ -24,9 +24,11 @@ if [[ "${OS}" == "linux" ]]; then
         sudo cat /etc/fstab
         # removes the last line which is
         # none /var/ramfs tmpfs defaults,size=768m,noatime 0 2
+
+        sudo umount -l /var/ramfs
         sudo sed '3d' /etc/fstab > fstab
         sudo echo "none /var/ramfs tmpfs defaults,noatime,nosuid,nodev,size=256m,noatime,mode=0755 0 0" >> fstab
-        sudo echo "tmpfs /tmp tmpfs defaults,noatime,nosuid,nodev,size=768m,noatime,mode=0755 0 0" >> fstab
+        sudo echo "tmpfs /tmp tmpfs rw,noatime,size=768m,noatime,mode=1777 0 0" >> fstab
         sudo cp fstab /etc/fstab
         sudo rm fstab
         sudo mount -a
