@@ -615,6 +615,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 // In addition, throughout the test, we check ( using lookup ) that the historical balances, *beyond* the
 // lookback are generating either an error, or returning the correct amount.
 func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
+	t.Skip("Skipping test due to rollback")
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
 	}
