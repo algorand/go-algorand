@@ -903,10 +903,13 @@ func TestLedgerReload(t *testing.T) {
 	for i := 0; i < 128; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-		l.AddBlock(blk, agreement.Certificate{})
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
 
 		if i%7 == 0 {
-			l.reloadLedger()
+			err = l.reloadLedger()
+			require.NoError(t, err)
+
 			// if we reloaded it before it got committed, we need to roll back the round counter.
 			if l.LatestCommitted() != blk.BlockHeader.Round {
 				blk.BlockHeader.Round = l.LatestCommitted()
