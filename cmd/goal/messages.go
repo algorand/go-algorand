@@ -120,7 +120,7 @@ const (
 	msigParseError             = "Multisig information parsing error: %s"
 	failDecodeAddressError     = "Cannot decode address: %v"
 	rekeySenderTargetSameError = "The sender and the resulted multisig address are the same"
-	NoOutputFileError          = "--msig-params must be specified with an output file name (-o)"
+	noOutputFileError          = "--msig-params must be specified with an output file name (-o)"
 	infoAutoFeeSet             = "Automatically set fee to %d MicroAlgos"
 
 	loggingNotConfigured = "Remote logging is not currently configured and won't be enabled"

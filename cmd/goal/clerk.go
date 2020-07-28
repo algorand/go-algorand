@@ -282,7 +282,7 @@ var sendCmd = &cobra.Command{
 
 		// --msig-params is invalid without -o
 		if outFilename == "" && msigParams != "" {
-			reportErrorln(NoOutputFileError)
+			reportErrorln(noOutputFileError)
 		}
 
 		checkTxValidityPeriodCmdFlags(cmd)

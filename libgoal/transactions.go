@@ -112,7 +112,7 @@ func (c *Client) MultisigSignTransactionWithWallet(walletHandle, pw []byte, utx 
 	return
 }
 
-// MultisigSignTransactionWithWallet creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
+// MultisigSignTransactionWithWalletAndSigner creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
 func (c *Client) MultisigSignTransactionWithWalletAndSigner(walletHandle, pw []byte, utx transactions.Transaction, signerAddr string, partial crypto.MultisigSig, signerMsig string) (msig crypto.MultisigSig, err error) {
 	txBytes := protocol.Encode(&utx)
 	addr, err := basics.UnmarshalChecksumAddress(signerAddr)
