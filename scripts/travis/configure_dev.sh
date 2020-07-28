@@ -33,6 +33,9 @@ if [[ "${OS}" == "linux" ]]; then
         sudo chmod 777 /tmp
         sudo mount -t tmpfs -o rw,size=768M tmpfs /tmp
         sudo cp -r /old_tmp/ /tmp
+        echo "/etc/fstab (updated): "
+        sudo cat /etc/fstab
+        sudo df -H
     fi
 elif [[ "${OS}" == "darwin" ]]; then
     # we don't want to upgrade boost if we already have it, as it will try to update
