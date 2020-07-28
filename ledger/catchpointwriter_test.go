@@ -140,13 +140,13 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, true)
 	defer ml.close()
 	ml.blocks = randomInitChain(testProtocolVersion, 10)
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(300, false)}
+	accts := randomAccounts(300, false)
 
 	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
-	au.initialize(conf, ".", protoParams, accts[0])
+	au.initialize(conf, ".", protoParams, accts)
 	defer au.close()
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
@@ -204,12 +204,12 @@ func TestBasicCatchpointWriter(t *testing.T) {
 			require.Equal(t, catchpointLabel, fileHeader.Catchpoint)
 			require.Equal(t, blocksRound, fileHeader.BlocksRound)
 			require.Equal(t, blockHeaderDigest, fileHeader.BlockHeaderDigest)
-			require.Equal(t, uint64(len(accts[0])), fileHeader.TotalAccounts)
+			require.Equal(t, uint64(len(accts)), fileHeader.TotalAccounts)
 		} else if header.Name == "balances.1.1.msgpack" {
 			var balances catchpointFileBalancesChunk
 			err = protocol.Decode(balancesBlockBytes, &balances)
 			require.NoError(t, err)
-			require.Equal(t, uint64(len(accts[0])), uint64(len(balances.Balances)))
+			require.Equal(t, uint64(len(accts)), uint64(len(balances.Balances)))
 		} else {
 			require.Failf(t, "unexpected tar chunk name %s", header.Name)
 		}
@@ -233,13 +233,13 @@ func TestFullCatchpointWriter(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, true)
 	defer ml.close()
 	ml.blocks = randomInitChain(testProtocolVersion, 10)
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(BalancesPerCatchpointFileChunk*3, false)}
+	accts := randomAccounts(BalancesPerCatchpointFileChunk*3, false)
 
 	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
-	au.initialize(conf, ".", protoParams, accts[0])
+	au.initialize(conf, ".", protoParams, accts)
 	defer au.close()
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
@@ -310,7 +310,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	// verify that the account data aligns with what we originally stored :
-	for addr, acct := range accts[0] {
+	for addr, acct := range accts {
 		acctData, err := l.LookupWithoutRewards(0, addr)
 		require.NoError(t, err)
 		require.Equal(t, acct, acctData)
