@@ -31,6 +31,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -164,6 +166,9 @@ func TestArchival(t *testing.T) {
 
 func TestArchivalRestart(t *testing.T) {
 	// Start in archival mode, add 2K blocks, restart, ensure all blocks are there
+
+	// disable deadlock checking code
+	deadlock.Opts.Disable = true
 
 	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
 	require.NoError(t, err)
@@ -656,7 +661,7 @@ func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInB
 
 func TestArchivalFromNonArchival(t *testing.T) {
 	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
-
+	deadlock.Opts.Disable = true
 	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
 	require.NoError(t, err)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
