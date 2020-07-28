@@ -52,15 +52,168 @@ func randomAccountData(rewardsLevel uint64) basics.AccountData {
 	}
 
 	data.RewardsBase = rewardsLevel
+
 	return data
 }
 
-func randomAccounts(niter int) map[basics.Address]basics.AccountData {
-	res := make(map[basics.Address]basics.AccountData)
-	for i := 0; i < niter; i++ {
-		res[randomAddress()] = randomAccountData(0)
+func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.AccountData, uint64) {
+	data := randomAccountData(rewardsLevel)
+
+	crypto.RandBytes(data.VoteID[:])
+	crypto.RandBytes(data.SelectionID[:])
+	data.VoteFirstValid = basics.Round(crypto.RandUint64())
+	data.VoteLastValid = basics.Round(crypto.RandUint64())
+	data.VoteKeyDilution = crypto.RandUint64()
+	if 1 == (crypto.RandUint64() % 2) {
+		// if account has created assets, have these defined.
+		data.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+		createdAssetsCount := crypto.RandUint64()%20 + 1
+		for i := uint64(0); i < createdAssetsCount; i++ {
+			ap := basics.AssetParams{
+				Total:         crypto.RandUint64(),
+				Decimals:      uint32(crypto.RandUint64() % 20),
+				DefaultFrozen: (crypto.RandUint64()%2 == 0),
+				UnitName:      fmt.Sprintf("un%x", uint32(crypto.RandUint64()%0x7fffffff)),
+				AssetName:     fmt.Sprintf("an%x", uint32(crypto.RandUint64()%0x7fffffff)),
+				URL:           fmt.Sprintf("url%x", uint32(crypto.RandUint64()%0x7fffffff)),
+			}
+			crypto.RandBytes(ap.MetadataHash[:])
+			crypto.RandBytes(ap.Manager[:])
+			crypto.RandBytes(ap.Reserve[:])
+			crypto.RandBytes(ap.Freeze[:])
+			crypto.RandBytes(ap.Clawback[:])
+			lastCreatableID++
+			data.AssetParams[basics.AssetIndex(lastCreatableID)] = ap
+		}
+	}
+	if 1 == (crypto.RandUint64() % 2) {
+		// if account owns assets
+		data.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+		ownedAssetsCount := crypto.RandUint64()%20 + 1
+		for i := uint64(0); i < ownedAssetsCount; i++ {
+			ah := basics.AssetHolding{
+				Amount: crypto.RandUint64(),
+				Frozen: (crypto.RandUint64()%2 == 0),
+			}
+			data.Assets[basics.AssetIndex(crypto.RandUint64()%lastCreatableID)] = ah
+		}
+	}
+	if 1 == (crypto.RandUint64() % 5) {
+		crypto.RandBytes(data.AuthAddr[:])
 	}
 
+	if 1 == (crypto.RandUint64() % 3) {
+		data.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+		appStatesCount := crypto.RandUint64()%20 + 1
+		for i := uint64(0); i < appStatesCount; i++ {
+			ap := basics.AppLocalState{
+				Schema: basics.StateSchema{
+					NumUint:      crypto.RandUint64() % 5,
+					NumByteSlice: crypto.RandUint64() % 5,
+				},
+				KeyValue: make(map[string]basics.TealValue),
+			}
+
+			for i := uint64(0); i < ap.Schema.NumUint; i++ {
+				appName := fmt.Sprintf("lapp%x-%x", crypto.RandUint64(), i)
+				ap.KeyValue[appName] = basics.TealValue{
+					Type: basics.TealUintType,
+					Uint: crypto.RandUint64(),
+				}
+			}
+			for i := uint64(0); i < ap.Schema.NumByteSlice; i++ {
+				appName := fmt.Sprintf("lapp%x-%x", crypto.RandUint64(), i)
+				tv := basics.TealValue{
+					Type: basics.TealBytesType,
+				}
+				bytes := make([]byte, crypto.RandUint64()%512)
+				crypto.RandBytes(bytes[:])
+				tv.Bytes = string(bytes)
+				ap.KeyValue[appName] = tv
+			}
+			if len(ap.KeyValue) == 0 {
+				ap.KeyValue = nil
+			}
+			data.AppLocalStates[basics.AppIndex(crypto.RandUint64()%lastCreatableID)] = ap
+		}
+	}
+
+	if 1 == (crypto.RandUint64() % 3) {
+		data.TotalAppSchema = basics.StateSchema{
+			NumUint:      crypto.RandUint64() % 50,
+			NumByteSlice: crypto.RandUint64() % 50,
+		}
+	}
+	if 1 == (crypto.RandUint64() % 3) {
+		data.AppParams = make(map[basics.AppIndex]basics.AppParams)
+		appParamsCount := crypto.RandUint64()%5 + 1
+		for i := uint64(0); i < appParamsCount; i++ {
+			ap := basics.AppParams{
+				ApprovalProgram:   make([]byte, int(crypto.RandUint63())%config.MaxAppProgramLen),
+				ClearStateProgram: make([]byte, int(crypto.RandUint63())%config.MaxAppProgramLen),
+				GlobalState:       make(basics.TealKeyValue),
+				StateSchemas: basics.StateSchemas{
+					LocalStateSchema: basics.StateSchema{
+						NumUint:      crypto.RandUint64() % 5,
+						NumByteSlice: crypto.RandUint64() % 5,
+					},
+					GlobalStateSchema: basics.StateSchema{
+						NumUint:      crypto.RandUint64() % 5,
+						NumByteSlice: crypto.RandUint64() % 5,
+					},
+				},
+			}
+			if len(ap.ApprovalProgram) > 0 {
+				crypto.RandBytes(ap.ApprovalProgram[:])
+			} else {
+				ap.ApprovalProgram = nil
+			}
+			if len(ap.ClearStateProgram) > 0 {
+				crypto.RandBytes(ap.ClearStateProgram[:])
+			} else {
+				ap.ClearStateProgram = nil
+			}
+
+			for i := uint64(0); i < ap.StateSchemas.LocalStateSchema.NumUint+ap.StateSchemas.GlobalStateSchema.NumUint; i++ {
+				appName := fmt.Sprintf("tapp%x-%x", crypto.RandUint64(), i)
+				ap.GlobalState[appName] = basics.TealValue{
+					Type: basics.TealUintType,
+					Uint: crypto.RandUint64(),
+				}
+			}
+			for i := uint64(0); i < ap.StateSchemas.LocalStateSchema.NumByteSlice+ap.StateSchemas.GlobalStateSchema.NumByteSlice; i++ {
+				appName := fmt.Sprintf("tapp%x-%x", crypto.RandUint64(), i)
+				tv := basics.TealValue{
+					Type: basics.TealBytesType,
+				}
+				bytes := make([]byte, crypto.RandUint64()%512)
+				crypto.RandBytes(bytes[:])
+				tv.Bytes = string(bytes)
+				ap.GlobalState[appName] = tv
+			}
+			if len(ap.GlobalState) == 0 {
+				ap.GlobalState = nil
+			}
+			lastCreatableID++
+			data.AppParams[basics.AppIndex(lastCreatableID)] = ap
+		}
+
+	}
+	return data, lastCreatableID
+}
+
+func randomAccounts(niter int, simpleAccounts bool) map[basics.Address]basics.AccountData {
+	res := make(map[basics.Address]basics.AccountData)
+	if simpleAccounts {
+		for i := 0; i < niter; i++ {
+			res[randomAddress()] = randomAccountData(0)
+		}
+	} else {
+		lastCreatableID := crypto.RandUint64() % 512
+		for i := 0; i < niter; i++ {
+			res[randomAddress()], lastCreatableID = randomFullAccountData(0, lastCreatableID)
+		}
+	}
 	return res
 }
 
@@ -177,7 +330,7 @@ func TestAccountDBInit(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback()
 
-	accts := randomAccounts(20)
+	accts := randomAccounts(20, true)
 	err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
@@ -198,7 +351,7 @@ func TestAccountDBRound(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback()
 
-	accts := randomAccounts(20)
+	accts := randomAccounts(20, true)
 	err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
