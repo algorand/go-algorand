@@ -237,7 +237,7 @@ func TestAcctUpdates(t *testing.T) {
 	defer ml.close()
 	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(20)}
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -318,7 +318,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	defer ml.close()
 	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(20)}
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -411,7 +411,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	initialRounds := uint64(1)
 	ml.blocks = randomInitChain(protocolVersion, int(initialRounds))
 	accountsCount := 5000
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount)}
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -542,7 +542,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, true)
 	defer ml.close()
 	ml.blocks = randomInitChain(testProtocolVersion, 10)
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(100000)}
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(100000, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -635,7 +635,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		defer ml.close()
 		ml.blocks = randomInitChain(testProtocolVersion, 10)
 
-		accts := []map[basics.Address]basics.AccountData{randomAccounts(9)}
+		accts := []map[basics.Address]basics.AccountData{randomAccounts(9, true)}
 
 		pooldata := basics.AccountData{}
 		pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
@@ -798,7 +798,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	defer ml.close()
 	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(20)}
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
