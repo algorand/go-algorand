@@ -22,6 +22,7 @@ if [[ "${OS}" == "linux" ]]; then
         sudo mkdir -p /tmp
         sudo chmod 777 /tmp
         sudo mount -t tmpfs -o rw,size=768M tmpfs /tmp
+        cp -r /old_tmp/ /tmp
     fi
 elif [[ "${OS}" == "darwin" ]]; then
     # we don't want to upgrade boost if we already have it, as it will try to update
