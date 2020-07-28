@@ -537,6 +537,12 @@ type PendingTransactionResponse struct {
 	// The round where this transaction was confirmed, if present.
 	ConfirmedRound *uint64 `json:"confirmed-round,omitempty"`
 
+	// Application state delta.
+	GlobalStateDelta *StateDelta `json:"global-state-delta,omitempty"`
+
+	// \[ld\] Local state key/value changes for the application being executed by this transaction.
+	LocalStateDelta *[]AccountStateDelta `json:"local-state-delta,omitempty"`
+
 	// Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.
 	PoolError string `json:"pool-error"`
 

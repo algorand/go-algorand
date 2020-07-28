@@ -475,6 +475,16 @@
                   "description": "The round where this transaction was confirmed, if present.",
                   "type": "integer"
                 },
+                "global-state-delta": {
+                  "$ref": "#/components/schemas/StateDelta"
+                },
+                "local-state-delta": {
+                  "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+                  "items": {
+                    "$ref": "#/components/schemas/AccountStateDelta"
+                  },
+                  "type": "array"
+                },
                 "pool-error": {
                   "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
                   "type": "string"
@@ -3015,6 +3025,16 @@
                     "confirmed-round": {
                       "description": "The round where this transaction was confirmed, if present.",
                       "type": "integer"
+                    },
+                    "global-state-delta": {
+                      "$ref": "#/components/schemas/StateDelta"
+                    },
+                    "local-state-delta": {
+                      "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+                      "items": {
+                        "$ref": "#/components/schemas/AccountStateDelta"
+                      },
+                      "type": "array"
                     },
                     "pool-error": {
                       "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
