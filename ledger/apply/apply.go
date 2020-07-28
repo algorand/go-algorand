@@ -48,8 +48,10 @@ type Balances interface {
 }
 
 // StateEvaluator is an interface that provides some Stateful TEAL
-// functionality that may be passed through to Apply from ledger, avoiding a
-// circular dependency between the logic and transactions packages
+// functionality that may be passed through to Apply from ledger. It was
+// originally created to avoid a circular dependency between the logic and
+// transactions packages (when the apply methods were in the transactions
+// package).
 type StateEvaluator interface {
 	Eval(program []byte) (pass bool, stateDelta basics.EvalDelta, err error)
 	Check(program []byte) (cost int, err error)
