@@ -180,26 +180,26 @@ func decode(handle codec.Handle, data []byte, v interface{}) error {
 	return nil
 }
 
-func convertToDeltas(txn node.TxnWithStatus) (*[]generated.AccountStateDelta, *generated.StateDelta) {
-	// Helper to convert basics.StateDelta -> *generated.StateDelta
-	convertDelta := func (d basics.StateDelta) *generated.StateDelta {
-		if len(d) == 0 {
-			return nil
-		}
-		var delta generated.StateDelta
-		for k, v:= range d {
-			delta = append(delta, generated.EvalDeltaKeyValue{
-				Key:   base64.StdEncoding.EncodeToString([]byte(k)),
-				Value: generated.EvalDelta{
-					Action: uint64(v.Action),
-					Bytes:  strOrNil(base64.StdEncoding.EncodeToString([]byte(v.Bytes))),
-					Uint:   numOrNil(v.Uint),
-				},
-			})
-		}
-		return &delta
+// Helper to convert basics.StateDelta -> *generated.StateDelta
+func stateDeltaToStateDelta(d basics.StateDelta) *generated.StateDelta {
+	if len(d) == 0 {
+		return nil
 	}
+	var delta generated.StateDelta
+	for k, v:= range d {
+		delta = append(delta, generated.EvalDeltaKeyValue{
+			Key:   base64.StdEncoding.EncodeToString([]byte(k)),
+			Value: generated.EvalDelta{
+				Action: uint64(v.Action),
+				Bytes:  strOrNil(base64.StdEncoding.EncodeToString([]byte(v.Bytes))),
+				Uint:   numOrNil(v.Uint),
+			},
+		})
+	}
+	return &delta
+}
 
+func convertToDeltas(txn node.TxnWithStatus) (*[]generated.AccountStateDelta, *generated.StateDelta) {
 	var localStateDelta *[]generated.AccountStateDelta
 	if len(txn.ApplyData.EvalDelta.LocalDeltas) > 0 {
 		d := make([]generated.AccountStateDelta, 0)
@@ -219,12 +219,12 @@ func convertToDeltas(txn node.TxnWithStatus) (*[]generated.AccountStateDelta, *g
 			}
 			d = append(d, generated.AccountStateDelta{
 				Address: addr,
-				Delta:   *(convertDelta(v)),
+				Delta:   *(stateDeltaToStateDelta(v)),
 			})
 		}
 
 		localStateDelta = &d
 	}
 
-	return localStateDelta, convertDelta(txn.ApplyData.EvalDelta.GlobalDelta)
+	return localStateDelta, stateDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta)
 }
