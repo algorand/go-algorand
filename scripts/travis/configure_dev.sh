@@ -19,20 +19,24 @@ if [[ "${OS}" == "linux" ]]; then
         sudo apt-get -y install sqlite3
     elif [[ "${ARCH}" == "amd64" ]]; then
         set -x
+        sudo df -H
         echo "/etc/fstab : "
         sudo cat /etc/fstab
         # removes the last line which is
         # none /var/ramfs tmpfs defaults,size=768m,noatime 0 2
         sudo sed '3d' /etc/fstab > fstab
-        sudo echo "none /var/ramfs tmpfs rw,size=256m,noatime,mode=1777 0 2" >> fstab
+        sudo echo "none /var/ramfs tmpfs defaults,noatime,nosuid,nodev,size=256m,noatime,mode=0755 0 0" >> fstab
+        sudo echo "tmpfs /tmp tmpfs defaults,noatime,nosuid,nodev,size=768m,noatime,mode=0755 0 0" >> fstab
         sudo cp fstab /etc/fstab
         sudo rm fstab
         sudo mount -a
-        sudo mv /tmp /old_tmp
-        sudo mkdir -p /tmp
-        sudo chmod 777 /tmp
-        sudo mount -t tmpfs -o rw,size=768M tmpfs /tmp
-        sudo cp -r /old_tmp/ /tmp
+        
+        #sudo mv /tmp /old_tmp
+        #sudo mkdir -p /tmp
+        #sudo chmod 777 /tmp
+        #sudo mount -t tmpfs -o rw,size=768M tmpfs /tmp
+        #sudo cp -r /old_tmp/ /tmp
+        
         echo "/etc/fstab (updated): "
         sudo cat /etc/fstab
         sudo df -H
