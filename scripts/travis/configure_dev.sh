@@ -18,7 +18,7 @@ if [[ "${OS}" == "linux" ]]; then
         sudo apt-get update -y
         sudo apt-get -y install sqlite3
     elif [[ "${ARCH}" == "amd64" ]]; then
-        set +x
+        set -x
         echo "/etc/fstab : "
         sudo cat /etc/fstab
         # removes the last line which is
