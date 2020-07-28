@@ -53,7 +53,7 @@ fi
 export BRANCH
 export COMMIT_HASH
 export CHANNEL
-export VERSION
+export FULLVERSION
 
 for test in $(ls ./scripts/release/mule/test/tests/*.sh)
 do

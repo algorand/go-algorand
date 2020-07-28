@@ -39,8 +39,8 @@ cat<<EOF|python - > ${TEMPDIR}/pbound
 print(((${ROUND} // ${PERIOD}) * ${PERIOD}) + ${PERIOD})
 EOF
 PBOUND=$(cat ${TEMPDIR}/pbound)
-while [ ${ROUND} != ${PBOUND} ]; do
-    goal node wait
+while [ ${ROUND} -lt ${PBOUND} ]; do
+    goal node wait --waittime 30
     ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 done
 
@@ -127,7 +127,7 @@ fi
 echo "wait for valid duration to pass"
 ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 while [ ${ROUND} -lt `expr ${EXPIRE} + 1` ]; do
-    goal node wait
+    goal node wait --waittime 30
     ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 done
 

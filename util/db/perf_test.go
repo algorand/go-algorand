@@ -38,7 +38,7 @@ func BenchmarkSQLWrites(b *testing.B) {
 
 	logging.Base().SetLevel(logging.Error)
 
-	err = wdb.Atomic(func(tx *sql.Tx) error {
+	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("CREATE TABLE t (a integer primary key, b integer)")
 		if err != nil {
 			return err
@@ -50,7 +50,7 @@ func BenchmarkSQLWrites(b *testing.B) {
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		err = wdb.Atomic(func(tx *sql.Tx) error {
+		err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			_, err := tx.Exec("INSERT INTO t (a, b) VALUES (?, ?)", i, i)
 			return err
 		})
@@ -68,7 +68,7 @@ func BenchmarkSQLErasableWrites(b *testing.B) {
 
 	logging.Base().SetLevel(logging.Error)
 
-	err = wdb.Atomic(func(tx *sql.Tx) error {
+	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("CREATE TABLE t (a integer primary key, b integer)")
 		if err != nil {
 			return err
@@ -80,7 +80,7 @@ func BenchmarkSQLErasableWrites(b *testing.B) {
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		err = wdb.Atomic(func(tx *sql.Tx) error {
+		err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			_, err := tx.Exec("INSERT INTO t (a, b) VALUES (?, ?)", i, i)
 			return err
 		})
@@ -99,7 +99,7 @@ func BenchmarkSQLQueryAPIs(b *testing.B) {
 
 	logging.Base().SetLevel(logging.Error)
 
-	err = wdb.Atomic(func(tx *sql.Tx) error {
+	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("CREATE TABLE t (a integer primary key, b integer)")
 		if err != nil {
 			return err
@@ -111,7 +111,7 @@ func BenchmarkSQLQueryAPIs(b *testing.B) {
 
 	b.Run("rdb.Atomic", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			err = rdb.Atomic(func(tx *sql.Tx) error {
+			err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 				var b int
 				err := tx.QueryRow("SELECT b FROM t WHERE a=?", i).Scan(&b)
 				if err == sql.ErrNoRows {
@@ -125,7 +125,7 @@ func BenchmarkSQLQueryAPIs(b *testing.B) {
 
 	b.Run("wdb.Atomic", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			err = wdb.Atomic(func(tx *sql.Tx) error {
+			err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 				var r int
 				err := tx.QueryRow("SELECT b FROM t WHERE a=?", i).Scan(&r)
 				if err == sql.ErrNoRows {
@@ -138,7 +138,7 @@ func BenchmarkSQLQueryAPIs(b *testing.B) {
 	})
 
 	b.Run("rdb.Atomic/Batch", func(b *testing.B) {
-		err = rdb.Atomic(func(tx *sql.Tx) error {
+		err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			for i := 0; i < b.N; i++ {
 				var r int
 				err := tx.QueryRow("SELECT b FROM t WHERE a=?", i).Scan(&r)
@@ -152,7 +152,7 @@ func BenchmarkSQLQueryAPIs(b *testing.B) {
 	})
 
 	b.Run("rdb.Atomic/PrepareBatch", func(b *testing.B) {
-		err = rdb.Atomic(func(tx *sql.Tx) error {
+		err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			stmt, err := tx.Prepare("SELECT b FROM t WHERE a=?")
 			if err != nil {
 				return err

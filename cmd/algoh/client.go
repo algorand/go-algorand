@@ -28,4 +28,5 @@ type Client interface {
 	Status() (generatedV2.NodeStatusResponse, error)
 	Block(round uint64) (v1.Block, error)
 	GetGoRoutines(ctx context.Context) (string, error)
+	HealthCheck() error
 }

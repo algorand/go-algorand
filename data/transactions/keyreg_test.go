@@ -38,11 +38,15 @@ func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards b
 	return balances.addrs[addr], nil
 }
 
-func (balances keyregTestBalances) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
-	return basics.Address{}, nil
+func (balances keyregTestBalances) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	return basics.Address{}, true, nil
 }
 
 func (balances keyregTestBalances) Put(basics.BalanceRecord) error {
+	return nil
+}
+
+func (balances keyregTestBalances) PutWithCreatable(basics.BalanceRecord, *basics.CreatableLocator, *basics.CreatableLocator) error {
 	return nil
 }
 
@@ -52,6 +56,10 @@ func (balances keyregTestBalances) Move(src, dst basics.Address, amount basics.M
 
 func (balances keyregTestBalances) ConsensusParams() config.ConsensusParams {
 	return config.Consensus[balances.version]
+}
+
+func (balances keyregTestBalances) Round() basics.Round {
+	return basics.Round(4294967296)
 }
 
 func TestKeyregApply(t *testing.T) {
@@ -73,11 +81,11 @@ func TestKeyregApply(t *testing.T) {
 			SelectionPK: vrfSecrets.PK,
 		},
 	}
-	_, err := tx.Apply(mockBalances{protocol.ConsensusCurrentVersion}, SpecialAddresses{FeeSink: feeSink}, 0)
+	_, err := tx.Apply(mockBalances{protocol.ConsensusCurrentVersion}, nil, SpecialAddresses{FeeSink: feeSink}, 0)
 	require.NoError(t, err)
 
 	tx.Sender = feeSink
-	_, err = tx.Apply(mockBalances{protocol.ConsensusCurrentVersion}, SpecialAddresses{FeeSink: feeSink}, 0)
+	_, err = tx.Apply(mockBalances{protocol.ConsensusCurrentVersion}, nil, SpecialAddresses{FeeSink: feeSink}, 0)
 	require.Error(t, err)
 
 	tx.Sender = src
@@ -86,19 +94,19 @@ func TestKeyregApply(t *testing.T) {
 
 	// Going from offline to online should be okay
 	mockBal.addrs[src] = basics.BalanceRecord{Addr: src, AccountData: basics.AccountData{Status: basics.Offline}}
-	_, err = tx.Apply(mockBal, SpecialAddresses{FeeSink: feeSink}, 0)
+	_, err = tx.Apply(mockBal, nil, SpecialAddresses{FeeSink: feeSink}, 0)
 	require.NoError(t, err)
 
 	// Going from online to nonparticipatory should be okay, if the protocol supports that
 	if mockBal.ConsensusParams().SupportBecomeNonParticipatingTransactions {
 		tx.KeyregTxnFields = KeyregTxnFields{}
 		tx.KeyregTxnFields.Nonparticipation = true
-		_, err = tx.Apply(mockBal, SpecialAddresses{FeeSink: feeSink}, 0)
+		_, err = tx.Apply(mockBal, nil, SpecialAddresses{FeeSink: feeSink}, 0)
 		require.NoError(t, err)
 
 		// Nonparticipatory accounts should not be able to change status
 		mockBal.addrs[src] = basics.BalanceRecord{Addr: src, AccountData: basics.AccountData{Status: basics.NotParticipating}}
-		_, err = tx.Apply(mockBal, SpecialAddresses{FeeSink: feeSink}, 0)
+		_, err = tx.Apply(mockBal, nil, SpecialAddresses{FeeSink: feeSink}, 0)
 		require.Error(t, err)
 	}
 }

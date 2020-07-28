@@ -215,7 +215,8 @@
             "keyreg",
             "acfg",
             "axfer",
-            "afrz"
+            "afrz",
+            "appl"
           ],
           "type": "string"
         }
@@ -231,6 +232,26 @@
           }
         },
         "description": "(empty)"
+      },
+      "ApplicationResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Application"
+            }
+          }
+        },
+        "description": "Application information"
+      },
+      "AssetResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Asset"
+            }
+          }
+        },
+        "description": "Asset information"
       },
       "BlockResponse": {
         "content": {
@@ -298,6 +319,60 @@
           }
         },
         "description": "(empty)"
+      },
+      "CompileResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "hash": {
+                  "description": "base32 SHA512_256 of program bytes (Address style)",
+                  "type": "string"
+                },
+                "result": {
+                  "description": "base64 encoded program bytes",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "hash",
+                "result"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "Teal compile Result"
+      },
+      "DryrunResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "error": {
+                  "type": "string"
+                },
+                "protocol-version": {
+                  "description": "Protocol version is the protocol version Dryrun was operated under.",
+                  "type": "string"
+                },
+                "txns": {
+                  "items": {
+                    "$ref": "#/components/schemas/DryrunTxnResult"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "error",
+                "protocol-version",
+                "txns"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "DryrunResponse contains per-txn debug information from a dryrun."
       },
       "NodeStatusResponse": {
         "content": {
@@ -459,30 +534,6 @@
         },
         "description": "A potentially truncated list of transactions currently in the node's transaction pool. You can compute whether or not the list is truncated if the number of elements in the **top-transactions** array is fewer than **total-transactions**."
       },
-      "PostCompileResponse": {
-        "content": {
-          "application/json": {
-            "schema": {
-              "properties": {
-                "hash": {
-                  "description": "base32 SHA512_256 of program bytes (Address style)",
-                  "type": "string"
-                },
-                "result": {
-                  "description": "base64 encoded program bytes",
-                  "type": "string"
-                }
-              },
-              "required": [
-                "hash",
-                "result"
-              ],
-              "type": "object"
-            }
-          }
-        },
-        "description": "Teal compile Result"
-      },
       "PostTransactionsResponse": {
         "content": {
           "application/json": {
@@ -597,10 +648,32 @@
             "description": "specifies the amount of MicroAlgos in the account, without the pending rewards.",
             "type": "integer"
           },
+          "apps-local-state": {
+            "description": "\\[appl\\] applications local data stored in this account.\n\nNote the raw object uses `map[int] -> AppLocalState` for this type.",
+            "items": {
+              "$ref": "#/components/schemas/ApplicationLocalState"
+            },
+            "type": "array"
+          },
+          "apps-total-schema": {
+            "$ref": "#/components/schemas/ApplicationStateSchema"
+          },
           "assets": {
             "description": "\\[asset\\] assets held by this account.\n\nNote the raw object uses `map[int] -> AssetHolding` for this type.",
             "items": {
               "$ref": "#/components/schemas/AssetHolding"
+            },
+            "type": "array"
+          },
+          "auth-addr": {
+            "description": "\\[spend\\] the address against which signing should be checked. If empty, the address of the current account is used. This field can be updated in any transaction by setting the RekeyTo field.",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
+          "created-apps": {
+            "description": "\\[appp\\] parameters of applications created by this account including app global data.\n\nNote: the raw account uses `map[int] -> AppParams` for this type.",
+            "items": {
+              "$ref": "#/components/schemas/Application"
             },
             "type": "array"
           },
@@ -689,6 +762,116 @@
           "vote-key-dilution",
           "vote-last-valid",
           "vote-participation-key"
+        ],
+        "type": "object"
+      },
+      "AccountStateDelta": {
+        "description": "Application state delta.",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "delta": {
+            "$ref": "#/components/schemas/StateDelta"
+          }
+        },
+        "required": [
+          "address",
+          "delta"
+        ],
+        "type": "object"
+      },
+      "Application": {
+        "description": "Application index and its parameters",
+        "properties": {
+          "id": {
+            "description": "\\[appidx\\] application index.",
+            "type": "integer"
+          },
+          "params": {
+            "$ref": "#/components/schemas/ApplicationParams"
+          }
+        },
+        "required": [
+          "id",
+          "params"
+        ],
+        "type": "object"
+      },
+      "ApplicationLocalState": {
+        "description": "Stores local state associated with an application.",
+        "properties": {
+          "id": {
+            "description": "The application which this local state is for.",
+            "type": "integer"
+          },
+          "key-value": {
+            "$ref": "#/components/schemas/TealKeyValueStore"
+          },
+          "schema": {
+            "$ref": "#/components/schemas/ApplicationStateSchema"
+          }
+        },
+        "required": [
+          "id",
+          "schema"
+        ],
+        "type": "object"
+      },
+      "ApplicationParams": {
+        "description": "Stores the global information associated with an application.",
+        "properties": {
+          "approval-program": {
+            "description": "\\[approv\\] approval program.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string",
+            "x-algorand-format": "TEALProgram"
+          },
+          "clear-state-program": {
+            "description": "\\[clearp\\] approval program.",
+            "format": "byte",
+            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
+            "type": "string",
+            "x-algorand-format": "TEALProgram"
+          },
+          "creator": {
+            "description": "The address that created this application. This is the address where the parameters and global state for this application can be found.",
+            "type": "string",
+            "x-algorand-format": "Address"
+          },
+          "global-state": {
+            "$ref": "#/components/schemas/TealKeyValueStore"
+          },
+          "global-state-schema": {
+            "$ref": "#/components/schemas/ApplicationStateSchema"
+          },
+          "local-state-schema": {
+            "$ref": "#/components/schemas/ApplicationStateSchema"
+          }
+        },
+        "required": [
+          "approval-program",
+          "clear-state-program",
+          "creator"
+        ],
+        "type": "object"
+      },
+      "ApplicationStateSchema": {
+        "description": "Specifies maximums on the number of each type that may be stored.",
+        "properties": {
+          "num-byte-slice": {
+            "description": "\\[nbs\\] num of byte slices.",
+            "type": "integer"
+          },
+          "num-uint": {
+            "description": "\\[nui\\] num of uints.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "num-byte-slice",
+          "num-uint"
         ],
         "type": "object"
       },
@@ -803,6 +986,172 @@
         ],
         "type": "object"
       },
+      "DryrunRequest": {
+        "description": "Request data type for dryrun endpoint. Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.",
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/Account"
+            },
+            "type": "array"
+          },
+          "apps": {
+            "items": {
+              "$ref": "#/components/schemas/Application"
+            },
+            "type": "array"
+          },
+          "latest-timestamp": {
+            "description": "LatestTimestamp is available to some TEAL scripts. Defaults to the latest confirmed timestamp this algod is attached to.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "protocol-version": {
+            "description": "ProtocolVersion specifies a specific version string to operate under, otherwise whatever the current protocol of the network this algod is running in.",
+            "type": "string"
+          },
+          "round": {
+            "description": "Round is available to some TEAL scripts. Defaults to the current round on the network this algod is attached to.",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/DryrunSource"
+            },
+            "type": "array"
+          },
+          "txns": {
+            "items": {
+              "description": "SignedTxn object. Must be canonically encoded.",
+              "format": "json",
+              "type": "string",
+              "x-algorand-format": "SignedTransaction"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "accounts",
+          "apps",
+          "latest-timestamp",
+          "protocol-version",
+          "round",
+          "sources",
+          "txns"
+        ],
+        "type": "object"
+      },
+      "DryrunSource": {
+        "description": "DryrunSource is TEAL source text that gets uploaded, compiled, and inserted into transactions or application state.",
+        "properties": {
+          "app-index": {
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          },
+          "field-name": {
+            "description": "FieldName is what kind of sources this is. If lsig then it goes into the transactions[this.TxnIndex].LogicSig. If approv or clearp it goes into the Approval Program or Clear State Program of application[this.AppIndex].",
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "txn-index": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "app-index",
+          "field-name",
+          "source",
+          "txn-index"
+        ],
+        "type": "object"
+      },
+      "DryrunState": {
+        "description": "Stores the TEAL eval step data",
+        "properties": {
+          "error": {
+            "description": "Evaluation error if any",
+            "type": "string"
+          },
+          "line": {
+            "description": "Line number",
+            "type": "integer"
+          },
+          "pc": {
+            "description": "Program counter",
+            "type": "integer"
+          },
+          "scratch": {
+            "items": {
+              "$ref": "#/components/schemas/TealValue"
+            },
+            "type": "array"
+          },
+          "stack": {
+            "items": {
+              "$ref": "#/components/schemas/TealValue"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "line",
+          "pc",
+          "stack"
+        ],
+        "type": "object"
+      },
+      "DryrunTxnResult": {
+        "description": "DryrunTxnResult contains any LogicSig or ApplicationCall program debug information and state updates from a dryrun.",
+        "properties": {
+          "app-call-messages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "app-call-trace": {
+            "items": {
+              "$ref": "#/components/schemas/DryrunState"
+            },
+            "type": "array"
+          },
+          "disassembly": {
+            "description": "Disassembled program line by line.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "global-delta": {
+            "$ref": "#/components/schemas/StateDelta"
+          },
+          "local-deltas": {
+            "items": {
+              "$ref": "#/components/schemas/AccountStateDelta"
+            },
+            "type": "array"
+          },
+          "logic-sig-messages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "logic-sig-trace": {
+            "items": {
+              "$ref": "#/components/schemas/DryrunState"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "disassembly"
+        ],
+        "type": "object"
+      },
       "ErrorResponse": {
         "description": "An error response with optional data field.",
         "properties": {
@@ -815,6 +1164,98 @@
         },
         "required": [
           "message"
+        ],
+        "type": "object"
+      },
+      "EvalDelta": {
+        "description": "Represents a TEAL value delta.",
+        "properties": {
+          "action": {
+            "description": "\\[at\\] delta action.",
+            "type": "integer"
+          },
+          "bytes": {
+            "description": "\\[bs\\] bytes value.",
+            "type": "string"
+          },
+          "uint": {
+            "description": "\\[ui\\] uint value.",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "EvalDeltaKeyValue": {
+        "description": "Key-value pairs for StateDelta.",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/EvalDelta"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object"
+      },
+      "StateDelta": {
+        "description": "Application state delta.",
+        "items": {
+          "$ref": "#/components/schemas/EvalDeltaKeyValue"
+        },
+        "type": "array"
+      },
+      "TealKeyValue": {
+        "description": "Represents a key-value pair in an application store.",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/TealValue"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "type": "object"
+      },
+      "TealKeyValueStore": {
+        "description": "Represents a key-value store for use in an application.",
+        "items": {
+          "$ref": "#/components/schemas/TealKeyValue"
+        },
+        "type": "array"
+      },
+      "TealValue": {
+        "description": "Represents a TEAL value.",
+        "properties": {
+          "bytes": {
+            "description": "\\[tb\\] bytes value.",
+            "type": "string"
+          },
+          "type": {
+            "description": "\\[tt\\] value type.",
+            "type": "integer"
+          },
+          "uint": {
+            "description": "\\[ui\\] uint value.",
+            "type": "integer",
+            "x-algorand-format": "uint64"
+          }
+        },
+        "required": [
+          "bytes",
+          "type",
+          "uint"
         ],
         "type": "object"
       },
@@ -974,6 +1415,18 @@
         "operationId": "AccountInformation",
         "parameters": [
           {
+            "description": "Configures whether the response object is JSON or MessagePack encoded.",
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "enum": [
+                "json",
+                "msgpack"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "description": "An account public key",
             "in": "path",
             "name": "address",
@@ -991,6 +1444,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/Account"
                 }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
               }
             },
             "description": "(empty)"
@@ -998,6 +1456,11 @@
           "400": {
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -1011,6 +1474,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             },
             "description": "Invalid API Token"
@@ -1018,6 +1486,11 @@
           "500": {
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -1146,6 +1619,154 @@
           }
         },
         "summary": "Get a list of unconfirmed transactions currently in the transaction pool by address."
+      }
+    },
+    "/v2/applications/{application-id}": {
+      "get": {
+        "description": "Given a application id, it returns application information including creator, approval and clear programs, global and local schemas, and global state.",
+        "operationId": "GetApplicationByID",
+        "parameters": [
+          {
+            "description": "An application identifier",
+            "in": "path",
+            "name": "application-id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Application"
+                }
+              }
+            },
+            "description": "Application information"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Application Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get application information."
+      }
+    },
+    "/v2/assets/{asset-id}": {
+      "get": {
+        "description": "Given a asset id, it returns asset information including creator, name, total supply and special addresses.",
+        "operationId": "GetAssetByID",
+        "parameters": [
+          {
+            "description": "An asset identifier",
+            "in": "path",
+            "name": "asset-id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Asset"
+                }
+              }
+            },
+            "description": "Asset information"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Application Not Found"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Get asset information."
       }
     },
     "/v2/blocks/{round}": {
@@ -1873,6 +2494,7 @@
           "content": {
             "text/plain": {
               "schema": {
+                "format": "binary",
                 "type": "string"
               }
             }
@@ -1942,6 +2564,96 @@
         },
         "summary": "Compile TEAL source code to binary, produce its hash",
         "x-codegen-request-body-name": "source"
+      }
+    },
+    "/v2/teal/dryrun": {
+      "post": {
+        "description": "Executes TEAL program(s) in context and returns debugging information about the execution.",
+        "operationId": "TealDryrun",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DryrunRequest"
+              }
+            },
+            "application/msgpack": {
+              "schema": {
+                "$ref": "#/components/schemas/DryrunRequest"
+              }
+            }
+          },
+          "description": "Transaction (or group) and any accompanying state-simulation data.",
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    },
+                    "protocol-version": {
+                      "description": "Protocol version is the protocol version Dryrun was operated under.",
+                      "type": "string"
+                    },
+                    "txns": {
+                      "items": {
+                        "$ref": "#/components/schemas/DryrunTxnResult"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "error",
+                    "protocol-version",
+                    "txns"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "DryrunResponse contains per-txn debug information from a dryrun."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid API Token"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Error"
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Provide debugging information for a transaction (or group).",
+        "x-codegen-request-body-name": "request"
       }
     },
     "/v2/transactions": {

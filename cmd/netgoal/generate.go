@@ -79,8 +79,8 @@ var generateTemplateLines = []string{
 
 var generateCmd = &cobra.Command{
 	Use:   "generate",
-	Short: "generate network template",
-	Long: `generate network template or genesis.json
+	Short: "Generate network template",
+	Long: `Generate network template or genesis.json
 -r is required for all netgoal commands but unused by generate
 
 template modes for -t:`,

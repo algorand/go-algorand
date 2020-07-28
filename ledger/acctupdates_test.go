@@ -17,7 +17,11 @@
 package ledger
 
 import (
+	"bytes"
+	"context"
+	"database/sql"
 	"fmt"
+	"os"
 	"runtime"
 	"sync"
 	"testing"
@@ -34,21 +38,30 @@ import (
 )
 
 type mockLedgerForTracker struct {
-	dbs    dbPair
-	blocks []blockEntry
-	log    logging.Logger
+	dbs      dbPair
+	blocks   []blockEntry
+	log      logging.Logger
+	filename string
+	inMemory bool
 }
 
-func makeMockLedgerForTracker(t testing.TB) *mockLedgerForTracker {
-	dbs := dbOpenTest(t)
+func makeMockLedgerForTracker(t testing.TB, inMemory bool) *mockLedgerForTracker {
+	dbs, fileName := dbOpenTest(t, inMemory)
 	dblogger := logging.TestingLog(t)
+	dblogger.SetLevel(logging.Info)
 	dbs.rdb.SetLogger(dblogger)
 	dbs.wdb.SetLogger(dblogger)
-	return &mockLedgerForTracker{dbs: dbs, log: dblogger}
+	return &mockLedgerForTracker{dbs: dbs, log: dblogger, filename: fileName, inMemory: inMemory}
 }
 
 func (ml *mockLedgerForTracker) close() {
 	ml.dbs.close()
+	// delete the database files of non-memory instances.
+	if !ml.inMemory {
+		os.Remove(ml.filename)
+		os.Remove(ml.filename + "-shm")
+		os.Remove(ml.filename + "-wal")
+	}
 }
 
 func (ml *mockLedgerForTracker) Latest() basics.Round {
@@ -88,6 +101,36 @@ func (ml *mockLedgerForTracker) blockDB() dbPair {
 
 func (ml *mockLedgerForTracker) trackerLog() logging.Logger {
 	return ml.log
+}
+
+// this function used to be in acctupdates.go, but we were never using it for production purposes. This
+// function has a conceptual flaw in that it attempts to load the entire balances into memory. This might
+// not work if we have large number of balances. On these unit testing, however, it's not the case, and it's
+// safe to call it.
+func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address]basics.AccountData, err error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	offsetLimit, err := au.roundOffset(rnd)
+
+	if err != nil {
+		return
+	}
+
+	err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		var err0 error
+		bals, err0 = accountsAll(tx)
+		return err0
+	})
+	if err != nil {
+		return
+	}
+
+	for offset := uint64(0); offset < offsetLimit; offset++ {
+		for addr, delta := range au.deltas[offset] {
+			bals[addr] = delta.new
+		}
+	}
+	return
 }
 
 func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, latestRnd basics.Round, accts []map[basics.Address]basics.AccountData, rewards []uint64, proto config.ConsensusParams) {
@@ -190,7 +233,7 @@ func TestAcctUpdates(t *testing.T) {
 	}
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(t)
+	ml := makeMockLedgerForTracker(t, true)
 	defer ml.close()
 	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
@@ -271,7 +314,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	}
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(t)
+	ml := makeMockLedgerForTracker(t, true)
 	defer ml.close()
 	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
@@ -363,7 +406,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 	proto := config.Consensus[protocolVersion]
 
-	ml := makeMockLedgerForTracker(b)
+	ml := makeMockLedgerForTracker(b, true)
 	defer ml.close()
 	initialRounds := uint64(1)
 	ml.blocks = randomInitChain(protocolVersion, int(initialRounds))
@@ -475,4 +518,318 @@ func BenchmarkCalibrateCacheNodeSize(b *testing.B) {
 		})
 	}
 	trieCachedNodesCount = defaultTrieCachedNodesCount
+}
+
+// TestLargeAccountCountCatchpointGeneration creates a ledger containing a large set of accounts ( i.e. 100K accounts )
+// and attempts to have the accountUpdates create the associated catchpoint. It's designed precisly around setting an
+// environment which would quickly ( i.e. after 32 rounds ) would start producing catchpoints.
+func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		t.Skip("This test is too slow on ARM and causes travis builds to time out")
+	}
+	// create new protocol version, which has lower back balance.
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestLargeAccountCountCatchpointGeneration")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 32
+	protoParams.SeedLookback = 2
+	protoParams.SeedRefreshInterval = 8
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+		os.RemoveAll("./catchpoints")
+	}()
+
+	ml := makeMockLedgerForTracker(t, true)
+	defer ml.close()
+	ml.blocks = randomInitChain(testProtocolVersion, 10)
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(100000)}
+	rewardsLevels := []uint64{0}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	au := &accountUpdates{}
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	conf.Archival = true
+	au.initialize(conf, ".", protoParams, accts[0])
+	defer au.close()
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+
+	// cover 10 genesis blocks
+	rewardLevel := uint64(0)
+	for i := 1; i < 10; i++ {
+		accts = append(accts, accts[0])
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+	}
+
+	for i := basics.Round(10); i < basics.Round(protoParams.MaxBalLookback+5); i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		updates, totals := randomDeltasBalanced(1, accts[i-1], rewardLevel)
+
+		prevTotals, err := au.totals(basics.Round(i - 1))
+		require.NoError(t, err)
+
+		oldPool := accts[i-1][testPoolAddr]
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates[testPoolAddr] = accountDelta{old: oldPool, new: newPool}
+		totals[testPoolAddr] = newPool
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = testProtocolVersion
+
+		au.newBlock(blk, StateDelta{
+			accts: updates,
+			hdr:   &blk.BlockHeader,
+		})
+		accts = append(accts, totals)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+
+		au.committedUpTo(i)
+		if i%2 == 1 {
+			au.waitAccountsWriting()
+		}
+	}
+}
+
+// The TestAcctUpdatesUpdatesCorrectness conduct a correctless test for the accounts update in the following way -
+// Each account is initialized with 100 algos.
+// On every round, each account move variable amount of funds to an accumulating account.
+// The deltas for each accounts are picked by using the lookup method.
+// At the end of the test, we verify that each account has the expected amount of algos.
+// In addition, throughout the test, we check ( using lookup ) that the historical balances, *beyond* the
+// lookback are generating either an error, or returning the correct amount.
+func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		t.Skip("This test is too slow on ARM and causes travis builds to time out")
+	}
+
+	// create new protocol version, which has lower look back.
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestAcctUpdatesUpdatesCorrectness")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 5
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	inMemory := true
+
+	testFunction := func(t *testing.T) {
+		ml := makeMockLedgerForTracker(t, inMemory)
+		defer ml.close()
+		ml.blocks = randomInitChain(testProtocolVersion, 10)
+
+		accts := []map[basics.Address]basics.AccountData{randomAccounts(9)}
+
+		pooldata := basics.AccountData{}
+		pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+		pooldata.Status = basics.NotParticipating
+		accts[0][testPoolAddr] = pooldata
+
+		sinkdata := basics.AccountData{}
+		sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+		sinkdata.Status = basics.NotParticipating
+		accts[0][testSinkAddr] = sinkdata
+
+		var moneyAccounts []basics.Address
+
+		for addr := range accts[0] {
+			if bytes.Compare(addr[:], testPoolAddr[:]) == 0 || bytes.Compare(addr[:], testSinkAddr[:]) == 0 {
+				continue
+			}
+			moneyAccounts = append(moneyAccounts, addr)
+		}
+
+		moneyAccountsExpectedAmounts := make([][]uint64, 0)
+		// set all the accounts with 100 algos.
+		for _, addr := range moneyAccounts {
+			accountData := accts[0][addr]
+			accountData.MicroAlgos.Raw = 100 * 1000000
+			accts[0][addr] = accountData
+		}
+
+		au := &accountUpdates{}
+		au.initialize(config.GetDefaultLocal(), ".", protoParams, accts[0])
+		defer au.close()
+
+		err := au.loadFromDisk(ml)
+		require.NoError(t, err)
+
+		// cover 10 genesis blocks
+		rewardLevel := uint64(0)
+		for i := 1; i < 10; i++ {
+			accts = append(accts, accts[0])
+
+		}
+		for i := 0; i < 10; i++ {
+			moneyAccountsExpectedAmounts = append(moneyAccountsExpectedAmounts, make([]uint64, len(moneyAccounts)))
+			for j := range moneyAccounts {
+				moneyAccountsExpectedAmounts[i][j] = 100 * 1000000
+			}
+		}
+
+		i := basics.Round(10)
+		roundCount := 50
+		for ; i < basics.Round(10+roundCount); i++ {
+			updates := make(map[basics.Address]accountDelta)
+			moneyAccountsExpectedAmounts = append(moneyAccountsExpectedAmounts, make([]uint64, len(moneyAccounts)))
+			toAccount := moneyAccounts[0]
+			toAccountDataOld, err := au.lookup(i-1, toAccount, false)
+			require.NoError(t, err)
+			toAccountDataNew := toAccountDataOld
+
+			for j := 1; j < len(moneyAccounts); j++ {
+				fromAccount := moneyAccounts[j]
+
+				fromAccountDataOld, err := au.lookup(i-1, fromAccount, false)
+				require.NoError(t, err)
+				require.Equalf(t, moneyAccountsExpectedAmounts[i-1][j], fromAccountDataOld.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, i)
+
+				fromAccountDataNew := fromAccountDataOld
+
+				fromAccountDataNew.MicroAlgos.Raw -= uint64(i - 10)
+				toAccountDataNew.MicroAlgos.Raw += uint64(i - 10)
+				updates[fromAccount] = accountDelta{
+					old: fromAccountDataOld,
+					new: fromAccountDataNew,
+				}
+
+				moneyAccountsExpectedAmounts[i][j] = fromAccountDataNew.MicroAlgos.Raw
+			}
+
+			moneyAccountsExpectedAmounts[i][0] = moneyAccountsExpectedAmounts[i-1][0] + uint64(len(moneyAccounts)-1)*uint64(i-10)
+
+			// force to perform a test that goes directly to disk, and see if it has the expected values.
+			if uint64(i) > protoParams.MaxBalLookback+3 {
+
+				// check the status at a historical time:
+				checkRound := uint64(i) - protoParams.MaxBalLookback - 2
+
+				testback := 1
+				for j := 1; j < len(moneyAccounts); j++ {
+					if checkRound < uint64(testback) {
+						continue
+					}
+					acct, err := au.lookup(basics.Round(checkRound-uint64(testback)), moneyAccounts[j], false)
+					// we might get an error like "round 2 before dbRound 5", which is the success case, so we'll ignore it.
+					if err != nil {
+						// verify it's the expected error and not anything else.
+						var r1, r2 int
+						n, err2 := fmt.Sscanf(err.Error(), "round %d before dbRound %d", &r1, &r2)
+						require.NoErrorf(t, err2, "unable to parse : %v", err)
+						require.Equal(t, 2, n)
+						require.Less(t, r1, r2)
+						if testback > 1 {
+							testback--
+						}
+						continue
+					}
+					// if we received no error, we want to make sure the reported amount is correct.
+					require.Equalf(t, moneyAccountsExpectedAmounts[checkRound-uint64(testback)][j], acct.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, checkRound)
+					testback++
+					j--
+				}
+			}
+
+			updates[toAccount] = accountDelta{
+				old: toAccountDataOld,
+				new: toAccountDataNew,
+			}
+
+			blk := bookkeeping.Block{
+				BlockHeader: bookkeeping.BlockHeader{
+					Round: basics.Round(i),
+				},
+			}
+			blk.RewardsLevel = rewardLevel
+			blk.CurrentProtocol = testProtocolVersion
+
+			au.newBlock(blk, StateDelta{
+				accts: updates,
+				hdr:   &blk.BlockHeader,
+			})
+			au.committedUpTo(i)
+		}
+		lastRound := i - 1
+		au.waitAccountsWriting()
+
+		for idx, addr := range moneyAccounts {
+			balance, err := au.lookup(lastRound, addr, false)
+			require.NoErrorf(t, err, "unable to retrieve balance for account idx %d %v", idx, addr)
+			if idx != 0 {
+				require.Equalf(t, 100*1000000-roundCount*(roundCount-1)/2, int(balance.MicroAlgos.Raw), "account idx %d %v has the wrong balance", idx, addr)
+			} else {
+				require.Equalf(t, 100*1000000+(len(moneyAccounts)-1)*roundCount*(roundCount-1)/2, int(balance.MicroAlgos.Raw), "account idx %d %v has the wrong balance", idx, addr)
+			}
+
+		}
+	}
+
+	t.Run("InMemoryDB", testFunction)
+	inMemory = false
+	t.Run("DiskDB", testFunction)
+}
+
+// TestAcctUpdatesDeleteStoredCatchpoints - The goal of this test is to verify that the deleteStoredCatchpoints function works correctly.
+// it doing so by filling up the storedcatchpoints with dummy catchpoint file entries, as well as creating these dummy files on disk.
+// ( the term dummy is only because these aren't real catchpoint files, but rather a zero-length file ). Then, the test call the function
+// and ensures that it did not errored, the catchpoint files were correctly deleted, and that deleteStoredCatchpoints contains no more
+// entries.
+func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	ml := makeMockLedgerForTracker(t, true)
+	defer ml.close()
+	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
+
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20)}
+	au := &accountUpdates{}
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	au.initialize(conf, ".", proto, accts[0])
+	defer au.close()
+
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+
+	dummyCatchpointFilesToCreate := 42
+
+	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
+		f, err := os.Create(fmt.Sprintf("./dummy_catchpoint_file-%d", i))
+		require.NoError(t, err)
+		err = f.Close()
+		require.NoError(t, err)
+	}
+
+	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
+		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fmt.Sprintf("./dummy_catchpoint_file-%d", i), "", 0)
+		require.NoError(t, err)
+	}
+	err = au.deleteStoredCatchpoints(context.Background(), au.accountsq)
+	require.NoError(t, err)
+
+	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
+		// ensure that all the files were deleted.
+		_, err := os.Open(fmt.Sprintf("./dummy_catchpoint_file-%d", i))
+		require.True(t, os.IsNotExist(err))
+	}
+	fileNames, err := au.accountsq.getOldestCatchpointFiles(context.Background(), dummyCatchpointFilesToCreate, 0)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fileNames))
 }

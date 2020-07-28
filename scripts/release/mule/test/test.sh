@@ -2,22 +2,18 @@
 
 set -ex
 
-export WORKDIR="$6"
-
-if [ -z "$WORKDIR" ]
-then
-    echo "WORKDIR must be defined."
-    exit 1
-fi
-
-export OS_TYPE="$1"
-export ARCH_TYPE="$2"
-export ARCH_BIT="$3"
-export VERSION=${VERSION:-$4}
-export PKG_TYPE="$5"
+export PKG_TYPE="$1"
+ARCH_BIT=$(uname -m)
+export ARCH_BIT
+ARCH_TYPE=$(./scripts/archtype.sh)
+export ARCH_TYPE
+OS_TYPE=$(./scripts/ostype.sh)
+export OS_TYPE
+VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+export VERSION
 BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
 export BRANCH
-CHANNEL=${CHANNEL:-$("$WORKDIR/scripts/compute_branch_channel.sh" "$BRANCH")}
+CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
 export CHANNEL
 SHA=${SHA:-$(git rev-parse HEAD)}
 export SHA
@@ -27,5 +23,10 @@ then
     mule -f package-test.yaml "package-test-setup-$PKG_TYPE"
 fi
 
-"$WORKDIR/scripts/release/mule/test/util/test_package.sh"
+if [[ "$ARCH_TYPE" =~ "arm" ]]
+then
+    ./scripts/release/mule/test/tests/run_tests -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -r "$VERSION"
+else
+    ./scripts/release/mule/test/util/test_package.sh
+fi
 

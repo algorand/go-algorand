@@ -36,7 +36,9 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 const (
@@ -47,6 +49,9 @@ const (
 	// trieRebuildAccountChunkSize defines the number of accounts that would get read at a single chunk
 	// before added to the trie during trie construction
 	trieRebuildAccountChunkSize = 512
+	// trieAccumulatedChangesFlush defines the number of pending changes that would be applied to the merkle trie before
+	// we attempt to commit them to disk while writing a batch of rounds balances to disk.
+	trieAccumulatedChangesFlush = 256
 )
 
 // trieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory.
@@ -68,15 +73,18 @@ type modifiedAccount struct {
 	ndeltas int
 }
 
-type modifiedAsset struct {
+type modifiedCreatable struct {
+	// Type of the creatable: app or asset
+	ctype basics.CreatableType
+
 	// Created if true, deleted if false
 	created bool
 
-	// Creator is the creator of the asset
+	// creator of the app/asset
 	creator basics.Address
 
-	// Keeps track of how many times this asset appears in
-	// accountUpdates.assetDeltas
+	// Keeps track of how many times this app/asset appears in
+	// accountUpdates.creatableDeltas
 	ndeltas int
 }
 
@@ -121,12 +129,12 @@ type accountUpdates struct {
 	// address that appears in deltas.
 	accounts map[basics.Address]modifiedAccount
 
-	// assetDeltas stores asset updates for every round after dbRound.
-	assetDeltas []map[basics.AssetIndex]modifiedAsset
+	// creatableDeltas stores creatable updates for every round after dbRound.
+	creatableDeltas []map[basics.CreatableIndex]modifiedCreatable
 
-	// assets stores the most recent asset state for every asset
-	// that appears in assetDeltas
-	assets map[basics.AssetIndex]modifiedAsset
+	// creatables stores the most recent state for every creatable that
+	// appears in creatableDeltas
+	creatables map[basics.CreatableIndex]modifiedCreatable
 
 	// protos stores consensus parameters dbRound and every
 	// round after it; i.e., protos is one longer than deltas.
@@ -227,7 +235,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	writingCatchpointDigest, err = au.initializeCaches(lastBalancesRound, lastestBlockRound, basics.Round(writingCatchpointRound))
 
 	if writingCatchpointRound != 0 && au.catchpointInterval != 0 {
-		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest)
+		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest, time.Duration(0))
 	}
 
 	return nil
@@ -290,79 +298,64 @@ func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewa
 	return au.accountsq.lookup(addr)
 }
 
-func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address]basics.AccountData, err error) {
-	au.accountsMu.RLock()
-
-	offsetLimit, err := au.roundOffset(rnd)
-	au.accountsMu.RUnlock()
-	if err != nil {
-		return
-	}
-
-	err = au.dbs.rdb.Atomic(func(tx *sql.Tx) error {
-		var err0 error
-		bals, err0 = accountsAll(tx)
-		return err0
-	})
-	if err != nil {
-		return
-	}
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-	for offset := uint64(0); offset < offsetLimit; offset++ {
-		for addr, delta := range au.deltas[offset] {
-			bals[addr] = delta.new
-		}
-	}
-	return
+func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
+	return au.listCreatables(basics.CreatableIndex(maxAssetIdx), maxResults, basics.AssetCreatable)
 }
 
-func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) ([]basics.AssetLocator, error) {
+func (au *accountUpdates) listApplications(maxAppIdx basics.AppIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
+	return au.listCreatables(basics.CreatableIndex(maxAppIdx), maxResults, basics.AppCreatable)
+}
+
+func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) ([]basics.CreatableLocator, error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 
-	// Sort indices for assets that have been created/deleted. If this
+	// Sort indices for creatables that have been created/deleted. If this
 	// turns out to be too inefficient, we could keep around a heap of
 	// created/deleted asset indices in memory.
-	keys := make([]basics.AssetIndex, 0, len(au.assets))
-	for aidx := range au.assets {
-		if aidx <= maxAssetIdx {
-			keys = append(keys, aidx)
+	keys := make([]basics.CreatableIndex, 0, len(au.creatables))
+	for cidx, delta := range au.creatables {
+		if delta.ctype != ctype {
+			continue
+		}
+		if cidx <= maxCreatableIdx {
+			keys = append(keys, cidx)
 		}
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i] > keys[j] })
 
-	// Check for assets that haven't been synced to disk yet.
-	var unsyncedAssets []basics.AssetLocator
-	deletedAssets := make(map[basics.AssetIndex]bool)
-	for _, aidx := range keys {
-		delta := au.assets[aidx]
+	// Check for creatables that haven't been synced to disk yet.
+	var unsyncedCreatables []basics.CreatableLocator
+	deletedCreatables := make(map[basics.CreatableIndex]bool)
+	for _, cidx := range keys {
+		delta := au.creatables[cidx]
 		if delta.created {
-			// Created asset that only exists in memory
-			unsyncedAssets = append(unsyncedAssets, basics.AssetLocator{
-				Index:   aidx,
+			// Created but only exists in memory
+			unsyncedCreatables = append(unsyncedCreatables, basics.CreatableLocator{
+				Type:    delta.ctype,
+				Index:   cidx,
 				Creator: delta.creator,
 			})
 		} else {
-			// Mark deleted assets for exclusion from the results set
-			deletedAssets[aidx] = true
+			// Mark deleted creatables for exclusion from the results set
+			deletedCreatables[cidx] = true
 		}
 	}
 
-	// Check in-memory created assets, which will always be newer than anything
+	// Check in-memory created creatables, which will always be newer than anything
 	// in the database
-	var res []basics.AssetLocator
-	for _, loc := range unsyncedAssets {
+	var res []basics.CreatableLocator
+	for _, loc := range unsyncedCreatables {
 		if uint64(len(res)) == maxResults {
 			return res, nil
 		}
 		res = append(res, loc)
 	}
 
-	// Fetch up to maxResults - len(res) + len(deletedAssets) from the database, so we
-	// have enough extras in case assets were deleted
-	numToFetch := maxResults - uint64(len(res)) + uint64(len(deletedAssets))
-	dbResults, err := au.accountsq.listAssets(maxAssetIdx, numToFetch)
+	// Fetch up to maxResults - len(res) + len(deletedCreatables) from the database,
+	// so we have enough extras in case creatables were deleted
+	numToFetch := maxResults - uint64(len(res)) + uint64(len(deletedCreatables))
+	dbResults, err := au.accountsq.listCreatables(maxCreatableIdx, numToFetch, ctype)
 	if err != nil {
 		return nil, err
 	}
@@ -374,8 +367,8 @@ func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults u
 			return res, nil
 		}
 
-		// Asset was deleted
-		if _, ok := deletedAssets[loc.Index]; ok {
+		// Creatable was deleted
+		if _, ok := deletedCreatables[loc.Index]; ok {
 			continue
 		}
 
@@ -393,41 +386,41 @@ func (au *accountUpdates) getLastCatchpointLabel() string {
 	return au.lastCatchpointLabel
 }
 
-// getAssetCreatorForRound returns the asset creator for a given asset index at a given round
-func (au *accountUpdates) getAssetCreatorForRound(rnd basics.Round, aidx basics.AssetIndex) (basics.Address, error) {
+func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
+
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
-		return basics.Address{}, err
+		return basics.Address{}, false, err
 	}
 
-	// If this is the most recent round, au.assets has will have the latest
-	// state and we can skip scanning backwards over assetDeltas
+	// If this is the most recent round, au.creatables has will have the latest
+	// state and we can skip scanning backwards over creatableDeltas
 	if offset == uint64(len(au.deltas)) {
 		// Check if we already have the asset/creator in cache
-		assetDelta, ok := au.assets[aidx]
+		creatableDelta, ok := au.creatables[cidx]
 		if ok {
-			if assetDelta.created {
-				return assetDelta.creator, nil
+			if creatableDelta.created && creatableDelta.ctype == ctype {
+				return creatableDelta.creator, true, nil
 			}
-			return basics.Address{}, fmt.Errorf("asset %v has been deleted", aidx)
+			return basics.Address{}, false, nil
 		}
 	} else {
 		for offset > 0 {
 			offset--
-			assetDelta, ok := au.assetDeltas[offset][aidx]
+			creatableDelta, ok := au.creatableDeltas[offset][cidx]
 			if ok {
-				if assetDelta.created {
-					return assetDelta.creator, nil
+				if creatableDelta.created && creatableDelta.ctype == ctype {
+					return creatableDelta.creator, true, nil
 				}
-				return basics.Address{}, fmt.Errorf("asset %v has been deleted", aidx)
+				return basics.Address{}, false, nil
 			}
 		}
 	}
 
 	// Check the database
-	return au.accountsq.lookupAssetCreator(aidx)
+	return au.accountsq.lookupCreator(cidx, ctype)
 }
 
 // committedUpTo enqueues commiting the balances for round committedRound-lookback.
@@ -556,7 +549,7 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	}
 	au.deltas = append(au.deltas, delta.accts)
 	au.protos = append(au.protos, proto)
-	au.assetDeltas = append(au.assetDeltas, delta.assets)
+	au.creatableDeltas = append(au.creatableDeltas, delta.creatables)
 	au.roundDigest = append(au.roundDigest, blk.Digest())
 	au.deltasAccum = append(au.deltasAccum, len(delta.accts)+au.deltasAccum[len(au.deltasAccum)-1])
 
@@ -575,12 +568,13 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 		au.accounts[addr] = macct
 	}
 
-	for aidx, adelta := range delta.assets {
-		masset := au.assets[aidx]
-		masset.creator = adelta.creator
-		masset.created = adelta.created
-		masset.ndeltas++
-		au.assets[aidx] = masset
+	for cidx, cdelta := range delta.creatables {
+		mcreat := au.creatables[cidx]
+		mcreat.creator = cdelta.creator
+		mcreat.created = cdelta.created
+		mcreat.ctype = cdelta.ctype
+		mcreat.ndeltas++
+		au.creatables[cidx] = mcreat
 	}
 
 	if ot.Overflowed {
@@ -608,7 +602,7 @@ func (au *accountUpdates) totals(rnd basics.Round) (totals AccountTotals, err er
 
 func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	dbFileName := ""
-	err := au.dbs.rdb.Atomic(func(tx *sql.Tx) (err error) {
+	err := au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		dbFileName, _, _, err = getCatchpoint(tx, round)
 		return
 	})
@@ -705,9 +699,9 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	}
 
 	lastestBlockRound = l.Latest()
-	err = au.dbs.wdb.Atomic(func(tx *sql.Tx) error {
+	err = au.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
-		au.dbRound, err0 = au.accountsInitialize(tx)
+		au.dbRound, err0 = au.accountsInitialize(ctx, tx)
 		if err0 != nil {
 			return err0
 		}
@@ -718,7 +712,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 			if err0 != nil {
 				return err0
 			}
-			au.dbRound, err0 = au.accountsInitialize(tx)
+			au.dbRound, err0 = au.accountsInitialize(ctx, tx)
 			if err0 != nil {
 				return err0
 			}
@@ -752,9 +746,9 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	}
 	au.protos = []config.ConsensusParams{config.Consensus[hdr.CurrentProtocol]}
 	au.deltas = nil
-	au.assetDeltas = nil
+	au.creatableDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
-	au.assets = make(map[basics.AssetIndex]modifiedAsset)
+	au.creatables = make(map[basics.CreatableIndex]modifiedCreatable)
 	au.deltasAccum = []int{0}
 
 	// keep these channel closed if we're not generating catchpoint
@@ -786,10 +780,46 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 }
 
 // Initialize accounts DB if needed and return account round
-func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
-	err := accountsInit(tx, au.initAccounts, au.initProto)
+// as part of the initialization, it tests the current database schema version, and perform upgrade
+// procedures to bring it up to the database schema supported by the binary.
+func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (basics.Round, error) {
+	// check current database version.
+	dbVersion, err := db.GetUserVersion(ctx, tx)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("accountsInitialize unable to read database schema version : %v", err)
+	}
+
+	// if database version is greater than supported by current binary, write a warning. This would keep the existing
+	// fallback behaviour where we could use an older binary iff the schema happen to be backward compatible.
+	if dbVersion > accountDBVersion {
+		au.log.Warnf("accountsInitialize database schema version is %d, but algod supports only %d", dbVersion, accountDBVersion)
+	}
+
+	if dbVersion < accountDBVersion {
+		au.log.Infof("accountsInitialize upgrading database schema from version %d to version %d", dbVersion, accountDBVersion)
+
+		for dbVersion < accountDBVersion {
+			au.log.Infof("accountsInitialize performing upgrade from version %d", dbVersion)
+			// perform the initialization/upgrade
+			switch dbVersion {
+			case 0:
+				dbVersion, err = au.upgradeDatabaseSchema0(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 0 : %v", err)
+					return 0, err
+				}
+			case 1:
+				dbVersion, err = au.upgradeDatabaseSchema1(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 1 : %v", err)
+					return 0, err
+				}
+			default:
+				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
+			}
+		}
+
+		au.log.Infof("accountsInitialize database schema upgrade complete")
 	}
 
 	rnd, hashRound, err := accountsRound(tx)
@@ -820,7 +850,7 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 		return 0, fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 	}
 
-	// we migth have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
+	// we might have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
 	// we can figure this out by examinine the hash of the root:
 	rootHash, err := trie.RootHash()
 	if err != nil {
@@ -829,7 +859,7 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 	if rootHash.IsZero() {
 		accountIdx := 0
 		for {
-			bal, err := encodedAccountsRange(tx, accountIdx, trieRebuildAccountChunkSize)
+			bal, err := encodedAccountsRange(ctx, tx, accountIdx, trieRebuildAccountChunkSize)
 			if err != nil {
 				return rnd, err
 			}
@@ -848,7 +878,7 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 					return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
 				}
 				if !added {
-					au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie.", hash)
+					au.log.Warnf("accountsInitialize attempted to add duplicate hash '%v' to merkle trie.", hash)
 				}
 			}
 
@@ -863,54 +893,206 @@ func (au *accountUpdates) accountsInitialize(tx *sql.Tx) (basics.Round, error) {
 			}
 			accountIdx += trieRebuildAccountChunkSize
 		}
+
+		// we've just updated the markle trie, update the hashRound to reflect that.
+		err = updateAccountsRound(tx, rnd, rnd)
+		if err != nil {
+			return 0, fmt.Errorf("accountsInitialize was unable to update the account round to %d: %v", rnd, err)
+		}
 	}
 	au.balancesTrie = trie
 	return rnd, nil
 }
 
-func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Address]accountDelta) (err error) {
+// upgradeDatabaseSchema0 upgrades the database schema from version 0 to version 1
+//
+// Schema of version 0 is expected to be aligned with the schema used on version 2.0.8 or before.
+// Any database of version 2.0.8 would be of version 0. At this point, the database might
+// have the following tables : ( i.e. a newly created database would not have these )
+// * acctrounds
+// * accounttotals
+// * accountbase
+// * assetcreators
+// * storedcatchpoints
+// * accounthashes
+// * catchpointstate
+//
+// As the first step of the upgrade, the above tables are being created if they do not already exists.
+// Following that, the assetcreators table is being altered by adding a new column to it (ctype).
+// Last, in case the database was just created, it would get initialized with the following:
+// The accountbase would get initialized with the au.initAccounts
+// The accounttotals would get initialized to align with the initialization account added to accountbase
+// The acctrounds would get updated to indicate that the balance matches round 0
+//
+func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+	au.log.Infof("accountsInitialize initializing schema")
+	err = accountsInit(tx, au.initAccounts, au.initProto)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to initialize schema : %v", err)
+	}
+	_, err = db.SetUserVersion(ctx, tx, 1)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 0 to 1: %v", err)
+	}
+	return 1, nil
+}
+
+// upgradeDatabaseSchema1 upgrades the database schema from version 1 to version 2
+//
+// The schema updated to verison 2 intended to ensure that the encoding of all the accounts data is
+// both canonical and identical across the entire network. On release 2.0.5 we released an upgrade to the messagepack.
+// the upgraded messagepack was decoding the account data correctly, but would have different
+// encoding compared to it's predecessor. As a result, some of the account data that was previously stored
+// would have different encoded representation than the one on disk.
+// To address this, this startup proceduce would attempt to scan all the accounts data. for each account data, we would
+// see if it's encoding aligns with the current messagepack encoder. If it doesn't we would update it's encoding.
+// then, depending if we found any such account data, we would reset the merkle trie and stored catchpoints.
+// once the upgrade is complete, the accountsInitialize would (if needed) rebuild the merke trie using the new
+// encoded accounts.
+//
+// This upgrade doesn't change any of the actual database schema ( i.e. tables, indexes ) but rather just performing
+// a functional update to it's content.
+//
+func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+	// update accounts encoding.
+	au.log.Infof("accountsInitialize verifying accounts data encoding")
+	modifiedAccounts, err := reencodeAccounts(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
+
+	if modifiedAccounts > 0 {
+		au.log.Infof("accountsInitialize reencoded %d accounts", modifiedAccounts)
+
+		au.log.Infof("accountsInitialize resetting account hashes")
+		// reset the merkle trie
+		err = resetAccountHashes(tx)
+		if err != nil {
+			return 0, fmt.Errorf("accountsInitialize unable to reset account hashes : %v", err)
+		}
+
+		au.log.Infof("accountsInitialize preparing queries")
+		// initialize a new accountsq with the incoming transaction.
+		accountsq, err := accountsDbInit(tx, tx)
+		if err != nil {
+			return 0, fmt.Errorf("accountsInitialize unable to prepare queries : %v", err)
+		}
+
+		// close the prepared statements when we're done with them.
+		defer accountsq.close()
+
+		au.log.Infof("accountsInitialize resetting prior catchpoints")
+		// delete the last catchpoint label if we have any.
+		_, err = accountsq.writeCatchpointStateString(ctx, catchpointStateLastCatchpoint, "")
+		if err != nil {
+			return 0, fmt.Errorf("accountsInitialize unable to clear prior catchpoint : %v", err)
+		}
+
+		au.log.Infof("accountsInitialize deleting stored catchpoints")
+		// delete catchpoints.
+		err = au.deleteStoredCatchpoints(ctx, accountsq)
+		if err != nil {
+			return 0, fmt.Errorf("accountsInitialize unable to delete stored catchpoints : %v", err)
+		}
+	} else {
+		au.log.Infof("accountsInitialize found that no accounts needed to be reencoded")
+	}
+
+	// update version
+	_, err = db.SetUserVersion(ctx, tx, 2)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 1 to 2: %v", err)
+	}
+	return 2, nil
+}
+
+// deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
+// once all the files have been deleted, it would go ahead and remove the entries from the table.
+func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries *accountsDbQueries) (err error) {
+	catchpointsFilesChunkSize := 50
+	for {
+		fileNames, err := dbQueries.getOldestCatchpointFiles(ctx, catchpointsFilesChunkSize, 0)
+		if err != nil {
+			return err
+		}
+		if len(fileNames) == 0 {
+			break
+		}
+
+		for round, fileName := range fileNames {
+			absCatchpointFileName := filepath.Join(au.dbDirectory, fileName)
+			err = os.Remove(absCatchpointFileName)
+			if err == nil || os.IsNotExist(err) {
+				// it's ok if the file doesn't exist. just remove it from the database and we'll be good to go.
+				err = nil
+			} else {
+				// we can't delete the file, abort -
+				return fmt.Errorf("unable to delete old catchpoint file '%s' : %v", absCatchpointFileName, err)
+			}
+			// clear the entry from the database
+			err = dbQueries.storeCatchpoint(ctx, round, "", "", 0)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// accountsUpdateBalances applies the given deltas array to the merkle trie
+func (au *accountUpdates) accountsUpdateBalances(accountsDeltasRound []map[basics.Address]accountDelta, offset uint64) (err error) {
 	if au.catchpointInterval == 0 {
 		return nil
 	}
 	var added, deleted bool
-	for addr, delta := range accountsDeltas {
-		if !delta.old.IsZero() {
-			deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
-			deleted, err = au.balancesTrie.Delete(deleteHash)
-			if err != nil {
-				return err
+	accumulatedChanges := 0
+	for i := uint64(0); i < offset; i++ {
+		accountsDeltas := accountsDeltasRound[i]
+		for addr, delta := range accountsDeltas {
+			if !delta.old.IsZero() {
+				deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
+				deleted, err = au.balancesTrie.Delete(deleteHash)
+				if err != nil {
+					return err
+				}
+				if !deleted {
+					au.log.Warnf("failed to delete hash '%v' from merkle trie", deleteHash)
+				} else {
+					accumulatedChanges++
+				}
+
 			}
-			if !deleted {
-				au.log.Warnf("failed to delete hash '%v' from merkle trie", deleteHash)
+			if !delta.new.IsZero() {
+				addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
+				added, err = au.balancesTrie.Add(addHash)
+				if err != nil {
+					return err
+				}
+				if !added {
+					au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", addHash)
+				} else {
+					accumulatedChanges++
+				}
 			}
 		}
-		if !delta.new.IsZero() {
-			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
-			added, err = au.balancesTrie.Add(addHash)
+		if accumulatedChanges >= trieAccumulatedChangesFlush {
+			accumulatedChanges = 0
+			err = au.balancesTrie.Commit()
 			if err != nil {
-				return err
-			}
-			if !added {
-				au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", addHash)
+				return
 			}
 		}
 	}
 	// write it all to disk.
-	err = au.balancesTrie.Commit()
+	if accumulatedChanges > 0 {
+		err = au.balancesTrie.Commit()
+	}
 	return
 }
 
-func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Round, totals AccountTotals, ledgerBlockDigest crypto.Digest) (label string, err error) {
-	var balancesHash crypto.Digest
-
-	balancesHash, err = au.balancesTrie.RootHash()
-	if err != nil {
-		return
-	}
-
-	cpLabel := makeCatchpointLabel(committedRound, ledgerBlockDigest, balancesHash, totals)
+func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Round, totals AccountTotals, ledgerBlockDigest crypto.Digest, trieBalancesHash crypto.Digest) (label string, err error) {
+	cpLabel := makeCatchpointLabel(committedRound, ledgerBlockDigest, trieBalancesHash, totals)
 	label = cpLabel.String()
-
 	_, err = au.accountsq.writeCatchpointStateString(context.Background(), catchpointStateLastCatchpoint, label)
 	return
 }
@@ -983,9 +1165,11 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]map[basics.Address]accountDelta, offset, offset)
+	creatableDeltas := make([]map[basics.CreatableIndex]modifiedCreatable, offset, offset)
 	roundTotals := make([]AccountTotals, offset+1, offset+1)
 	protos := make([]config.ConsensusParams, offset+1, offset+1)
 	copy(deltas, au.deltas[:offset])
+	copy(creatableDeltas, au.creatableDeltas[:offset])
 	copy(roundTotals, au.roundTotals[:offset+1])
 	copy(protos, au.protos[:offset+1])
 
@@ -993,11 +1177,12 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	// account DB, so that we can drop the corresponding refcounts in
 	// au.accounts.
 	flushcount := make(map[basics.Address]int)
-	assetFlushcount := make(map[basics.AssetIndex]int)
-	for i := uint64(0); i < offset; i++ {
-		for aidx := range au.assetDeltas[i] {
-			assetFlushcount[aidx] = assetFlushcount[aidx] + 1
-		}
+	creatableFlushcount := make(map[basics.CreatableIndex]int)
+
+	var committedRoundDigest crypto.Digest
+
+	if isCatchpointRound {
+		committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
 	}
 
 	var committedRoundDigest crypto.Digest
@@ -1021,11 +1206,16 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		for addr := range deltas[i] {
 			flushcount[addr] = flushcount[addr] + 1
 		}
+		for cidx := range creatableDeltas[i] {
+			creatableFlushcount[cidx] = creatableFlushcount[cidx] + 1
+		}
 	}
 
 	var catchpointLabel string
+	beforeUpdatingBalancesTime := time.Now()
+	var trieBalancesHash crypto.Digest
 
-	err := au.dbs.wdb.Atomic(func(tx *sql.Tx) (err error) {
+	err := au.dbs.wdb.AtomicCommitWriteLock(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
 			mc, err0 := makeMerkleCommitter(tx, false)
@@ -1045,27 +1235,39 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 		for i := uint64(0); i < offset; i++ {
-			err = accountsNewRound(tx, deltas[i], roundTotals[i+1].RewardsLevel, protos[i+1])
-			if err != nil {
-				return err
-			}
-
-			err = au.accountsUpdateBalances(deltas[i])
+			err = accountsNewRound(tx, deltas[i], creatableDeltas[i], roundTotals[i+1].RewardsLevel, protos[i+1])
 			if err != nil {
 				return err
 			}
 		}
+		err = au.accountsUpdateBalances(deltas, offset)
+		if err != nil {
+			return err
+		}
+
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
-		return err
-	})
+		if err != nil {
+			return err
+		}
+
+		if isCatchpointRound {
+			trieBalancesHash, err = au.balancesTrie.RootHash()
+			if err != nil {
+				return
+			}
+		}
+
+		return nil
+	}, &au.accountsMu)
 
 	if err != nil {
 		au.balancesTrie = nil
 		au.log.Warnf("unable to advance account snapshot: %v", err)
 		return
 	}
+
 	if isCatchpointRound {
-		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, roundTotals[offset], committedRoundDigest)
+		catchpointLabel, err = au.accountsCreateCatchpointLabel(dbRound+basics.Round(offset)+lookback, roundTotals[offset], committedRoundDigest, trieBalancesHash)
 		if err != nil {
 			au.log.Warnf("commitRound : unable to create a catchpoint label: %v", err)
 		}
@@ -1077,10 +1279,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 	}
 
-	au.accountsMu.Lock()
 	if isCatchpointRound && catchpointLabel != "" {
 		au.lastCatchpointLabel = catchpointLabel
 	}
+	updatingBalancesDuration := time.Now().Sub(beforeUpdatingBalancesTime)
 
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
@@ -1102,21 +1304,21 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 	}
 
-	for aidx, cnt := range assetFlushcount {
-		masset, ok := au.assets[aidx]
+	for cidx, cnt := range creatableFlushcount {
+		mcreat, ok := au.creatables[cidx]
 		if !ok {
-			au.log.Panicf("inconsistency: flushed %d changes to asset %d, but not in au.assets", cnt, aidx)
+			au.log.Panicf("inconsistency: flushed %d changes to creatable %d, but not in au.creatables", cnt, cidx)
 		}
 
-		if cnt > masset.ndeltas {
-			au.log.Panicf("inconsistency: flushed %d changes to asset %d, but au.assets had %d", cnt, aidx, masset.ndeltas)
+		if cnt > mcreat.ndeltas {
+			au.log.Panicf("inconsistency: flushed %d changes to creatable %d, but au.creatables had %d", cnt, cidx, mcreat.ndeltas)
 		}
 
-		masset.ndeltas -= cnt
-		if masset.ndeltas == 0 {
-			delete(au.assets, aidx)
+		mcreat.ndeltas -= cnt
+		if mcreat.ndeltas == 0 {
+			delete(au.creatables, cidx)
 		} else {
-			au.assets[aidx] = masset
+			au.creatables[cidx] = mcreat
 		}
 	}
 
@@ -1125,14 +1327,16 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.roundDigest = au.roundDigest[offset:]
 	au.protos = au.protos[offset:]
 	au.roundTotals = au.roundTotals[offset:]
-	au.assetDeltas = au.assetDeltas[offset:]
+	au.creatableDeltas = au.creatableDeltas[offset:]
 	au.dbRound = newBase
 	au.lastFlushTime = flushTime
+
 	au.accountsMu.Unlock()
 
 	if isCatchpointRound && au.archivalLedger && catchpointLabel != "" {
-		// start generating the catchpoint on a separate goroutine.
-		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest)
+		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
+		// the generateCatchpoint expects that the accounts data would not be modified in the background during it's execution.
+		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest, updatingBalancesDuration)
 	}
 
 }
@@ -1141,7 +1345,12 @@ func (au *accountUpdates) latest() basics.Round {
 	return au.dbRound + basics.Round(len(au.deltas))
 }
 
-func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label string, committedRoundDigest crypto.Digest) {
+func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label string, committedRoundDigest crypto.Digest, updatingBalancesDuration time.Duration) {
+	beforeGeneratingCatchpointTime := time.Now()
+	catchpointGenerationStats := telemetryspec.CatchpointGenerationEventDetails{
+		BalancesWriteTime: uint64(updatingBalancesDuration.Nanoseconds()),
+	}
+
 	// the retryCatchpointCreation is used to repeat the catchpoint file generation in case the node crashed / aborted during startup
 	// before the catchpoint file generation could be completed.
 	retryCatchpointCreation := false
@@ -1179,7 +1388,10 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	}
 	for more {
 		stepCtx, stepCancelFunction := context.WithTimeout(au.ctx, chunkExecutionDuration)
+		writeStepStartTime := time.Now()
 		more, err = catchpointWriter.WriteStep(stepCtx)
+		// accumulate the actual time we've spent writing in this step.
+		catchpointGenerationStats.CPUTime += uint64(time.Now().Sub(writeStepStartTime).Nanoseconds())
 		stepCancelFunction()
 		if more && err == nil {
 			// we just wrote some data, but there is more to be written.
@@ -1212,6 +1424,18 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 		au.log.Warnf("accountUpdates: generateCatchpoint: unable to save catchpoint: %v", err)
 		return
 	}
+	catchpointGenerationStats.FileSize = uint64(catchpointWriter.GetSize())
+	catchpointGenerationStats.WritingDuration = uint64(time.Now().Sub(beforeGeneratingCatchpointTime).Nanoseconds())
+	catchpointGenerationStats.AccountsCount = catchpointWriter.GetTotalAccounts()
+	catchpointGenerationStats.CatchpointLabel = catchpointWriter.GetCatchpoint()
+	au.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.CatchpointGenerationEvent, catchpointGenerationStats)
+	au.log.With("writingDuration", catchpointGenerationStats.WritingDuration).
+		With("CPUTime", catchpointGenerationStats.CPUTime).
+		With("balancesWriteTime", catchpointGenerationStats.BalancesWriteTime).
+		With("accountsCount", catchpointGenerationStats.AccountsCount).
+		With("fileSize", catchpointGenerationStats.FileSize).
+		With("catchpointLabel", catchpointGenerationStats.CatchpointLabel).
+		Infof("Catchpoint file was generated")
 }
 
 func catchpointRoundToPath(rnd basics.Round) string {

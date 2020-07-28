@@ -114,7 +114,7 @@ func OpenLedger(
 	l.blockDBs.rdb.SetLogger(log)
 	l.blockDBs.wdb.SetLogger(log)
 
-	err = l.blockDBs.wdb.Atomic(func(tx *sql.Tx) error {
+	err = l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
 	})
 	if err != nil {
@@ -176,7 +176,7 @@ func (l *Ledger) reloadLedger() error {
 // verifyMatchingGenesisHash tests to see that the latest block header pointing to the same genesis hash provided in genesisHash.
 func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	// Check that the genesis hash, if present, matches.
-	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err := blockLatest(tx)
 		if err != nil {
 			return err
@@ -205,23 +205,20 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs 
 	var trackerDBFilename string
 	var blockDBFilename string
 
-	commonDBFilename := dbPathPrefix + ".sqlite"
 	if !dbMem {
+		commonDBFilename := dbPathPrefix + ".sqlite"
 		_, err = os.Stat(commonDBFilename)
+		if !os.IsNotExist(err) {
+			// before launch, we used to have both blocks and tracker
+			// state in a single SQLite db file. We don't have that anymore,
+			// and we want to fail when that's the case.
+			err = fmt.Errorf("A single ledger database file '%s' was detected. This is no longer supported by current binary", commonDBFilename)
+			return
+		}
 	}
 
-	if !dbMem && os.IsNotExist(err) {
-		// No common file, so use two separate files for blocks and tracker.
-		trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
-		blockDBFilename = dbPathPrefix + ".block.sqlite"
-	} else if err == nil {
-		// Legacy common file exists (or testing in-memory, where performance
-		// doesn't matter), use same database for everything.
-		trackerDBFilename = commonDBFilename
-		blockDBFilename = commonDBFilename
-	} else {
-		return
-	}
+	trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
+	blockDBFilename = dbPathPrefix + ".block.sqlite"
 
 	trackerDBs, err = dbOpen(trackerDBFilename, dbMem)
 	if err != nil {
@@ -320,30 +317,39 @@ func (l *Ledger) GetLastCatchpointLabel() string {
 	return l.accts.getLastCatchpointLabel()
 }
 
-// GetAssetCreatorForRound looks up the asset creator given the numerical asset
-// ID. This is necessary so that we can retrieve the AssetParams from the
-// creator's balance record.
-func (l *Ledger) GetAssetCreatorForRound(rnd basics.Round, assetIdx basics.AssetIndex) (basics.Address, error) {
+// GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
+// look up a creator address, setting ok to false if the query succeeded but no
+// creator was found.
+func (l *Ledger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getAssetCreatorForRound(rnd, assetIdx)
+	return l.accts.getCreatorForRound(rnd, cidx, ctype)
 }
 
-// GetAssetCreator is like GetAssetCreatorForRound, but for the latest round
-// and race free with respect to ledger.Latest()
-func (l *Ledger) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+// GetCreator is like GetCreatorForRound, but for the latest round and race-free
+// with respect to ledger.Latest()
+func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getAssetCreatorForRound(l.blockQ.latest(), assetIdx)
+	return l.accts.getCreatorForRound(l.blockQ.latest(), cidx, ctype)
 }
 
 // ListAssets takes a maximum asset index and maximum result length, and
-// returns up to that many asset AssetIDs from the database where asset id is
+// returns up to that many CreatableLocators from the database where app idx is
 // less than or equal to the maximum.
-func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.AssetLocator, err error) {
+func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.listAssets(maxAssetIdx, maxResults)
+}
+
+// ListApplications takes a maximum app index and maximum result length, and
+// returns up to that many CreatableLocators from the database where app idx is
+// less than or equal to the maximum.
+func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.listApplications(maxAppIdx, maxResults)
 }
 
 // Lookup uses the accounts tracker to return the account state for a
@@ -390,6 +396,7 @@ func (l *Ledger) isDup(currentProto config.ConsensusParams, current basics.Round
 }
 
 // GetRoundTxIds returns a map of the transactions ids that we have for the given round
+// this function is currently not being used, but remains here as it migth be useful in the future.
 func (l *Ledger) GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
@@ -471,6 +478,7 @@ func (l *Ledger) AddValidatedBlock(vb ValidatedBlock, cert agreement.Certificate
 	if err != nil {
 		return err
 	}
+	l.headerCache.Put(vb.blk.Round(), vb.blk.BlockHeader)
 	l.trackers.newBlock(vb.blk, vb.delta)
 	return nil
 }
@@ -498,13 +506,6 @@ func (l *Ledger) Timestamp(r basics.Round) (int64, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.time.timestamp(r)
-}
-
-// AllBalances returns a map of every account balance as of round rnd.
-func (l *Ledger) AllBalances(rnd basics.Round) (map[basics.Address]basics.AccountData, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.accts.allBalances(rnd)
 }
 
 // GenesisHash returns the genesis hash for this ledger.

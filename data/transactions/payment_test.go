@@ -76,12 +76,20 @@ type mockBalances struct {
 	protocol.ConsensusVersion
 }
 
+func (balances mockBalances) Round() basics.Round {
+	return basics.Round(8675309)
+}
+
+func (balances mockBalances) PutWithCreatable(basics.BalanceRecord, *basics.CreatableLocator, *basics.CreatableLocator) error {
+	return nil
+}
+
 func (balances mockBalances) Get(basics.Address, bool) (basics.BalanceRecord, error) {
 	return basics.BalanceRecord{}, nil
 }
 
-func (balances mockBalances) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
-	return basics.Address{}, nil
+func (balances mockBalances) GetCreator(idx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	return basics.Address{}, true, nil
 }
 
 func (balances mockBalances) Put(basics.BalanceRecord) error {
@@ -118,7 +126,7 @@ func TestPaymentApply(t *testing.T) {
 			Amount:   basics.MicroAlgos{Raw: uint64(50)},
 		},
 	}
-	_, err := tx.Apply(mockBalV0, SpecialAddresses{FeeSink: feeSink}, 0)
+	_, err := tx.Apply(mockBalV0, nil, SpecialAddresses{FeeSink: feeSink}, 0)
 	require.NoError(t, err)
 }
 
