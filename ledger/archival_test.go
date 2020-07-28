@@ -190,7 +190,6 @@ func TestArchivalRestart(t *testing.T) {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		l.AddBlock(blk, agreement.Certificate{})
-		<-l.Wait(blk.BlockHeader.Round - basics.Round(blk.BlockHeader.Round&31))
 	}
 	l.WaitForCommit(blk.Round())
 
@@ -416,10 +415,8 @@ func TestArchivalCreatables(t *testing.T) {
 		// Add the block
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
-
-		<-l.Wait(blk.BlockHeader.Round - basics.Round(blk.BlockHeader.Round&31))
 	}
-	<-l.Wait(blk.Round())
+	l.WaitForCommit(blk.Round())
 
 	// check that we can fetch creator for all created assets/apps and
 	// can't for deleted assets/apps
@@ -599,9 +596,8 @@ func TestArchivalCreatables(t *testing.T) {
 		blk.Payset = nil
 		err = l.AddBlock(blk, agreement.Certificate{})
 		require.NoError(t, err)
-		<-l.Wait(blk.BlockHeader.Round - basics.Round(blk.BlockHeader.Round&31))
 	}
-	<-l.Wait(blk.Round())
+	l.WaitForCommit(blk.Round())
 
 	// close and reopen the same DB
 	l.Close()

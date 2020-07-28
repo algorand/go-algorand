@@ -81,7 +81,10 @@ func (bn *blockNotifier) close() {
 		bn.cond.Broadcast()
 	}
 	bn.mu.Unlock()
-	<-bn.closed
+	// we use select here so that we can read from nil channels - it's being used in our unit testing.
+	select {
+	case <-bn.closed:
+	}
 }
 
 func (bn *blockNotifier) loadFromDisk(l ledgerForTracker) error {
