@@ -316,6 +316,7 @@ func TestDebugEnvironment(t *testing.T) {
 				ApplicationArgs: [][]byte{[]byte("ALGO"), []byte("RAND")},
 				Accounts:        []basics.Address{receiver},
 				ForeignApps:     []basics.AppIndex{appIdx1},
+				ForeignAssets:   []basics.AssetIndex{assetIdx},
 			},
 		},
 	}
@@ -434,7 +435,6 @@ int 10
 ==
 &&
 int 0
-int 50
 asset_params_get AssetTotal
 bnz ok4
 err
