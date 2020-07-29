@@ -242,6 +242,9 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	}
 
 	writingCatchpointDigest, err = au.initializeCaches(lastBalancesRound, lastestBlockRound, basics.Round(writingCatchpointRound))
+	if err != nil {
+		return err
+	}
 
 	if writingCatchpointRound != 0 && au.catchpointInterval != 0 {
 		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest, time.Duration(0))
