@@ -85,7 +85,7 @@ func byteOrNil(data []byte) *[]byte {
 	return &data
 }
 
-func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (aidx *uint64) {
+func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (cidx *uint64) {
 	// Compute transaction index in block
 	offset := -1
 	for idx, stxnib := range payset {
@@ -104,6 +104,8 @@ func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, pay
 	idx := txnCounter - uint64(len(payset)) + uint64(offset) + 1
 	return &idx
 }
+
+
 
 // computeAssetIndexFromTxn returns the created asset index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
@@ -140,10 +142,10 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint
 	return computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
 }
 
-// computeAssetIndexFromTxn returns the created asset index given a confirmed
+// computeAppIndexFromTxn returns the created app index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
-func computeApplicationIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint64) {
+func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint64) {
 	// Must have ledger
 	if l == nil {
 		return nil
@@ -152,12 +154,12 @@ func computeApplicationIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx
 	if tx.ConfirmedRound == 0 {
 		return nil
 	}
-	// Transaction must be AssetConfig transaction
-	if tx.Txn.Txn.ApplicationID == 0 {
+	// Transaction must be ApplicationCall transaction
+	if tx.Txn.Txn.ApplicationCallTxnFields.Empty() {
 		return nil
 	}
-	// Transaction must be creating an asset
-	if tx.Txn.Txn.AssetConfigTxnFields.ConfigAsset != 0 {
+	// Transaction must be creating an application
+	if tx.Txn.Txn.ApplicationCallTxnFields.ApplicationID != 0 {
 		return nil
 	}
 
@@ -174,6 +176,7 @@ func computeApplicationIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx
 
 	return computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
 }
+
 
 // getCodecHandle converts a format string into the encoder + content type
 func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
