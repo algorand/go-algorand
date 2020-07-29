@@ -882,7 +882,7 @@ func validateTransaction(txn transactions.SignedTxn, block bookkeeping.Block, pr
 // Validate: eval(ctx, blk, true, txcache, executionPool)
 // AddBlock: eval(context.Background(), blk, false, nil, nil)
 // tracker:  eval(context.Background(), blk, false, nil, nil)
-func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (StateDelta, error) {
+func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (StateDelta, error) {
 	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
 	if err != nil {
 		return StateDelta{}, err
@@ -962,7 +962,7 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool,
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
-	delta, err := l.eval(ctx, blk, true, txcache, executionPool)
+	delta, err := eval(ctx, l, blk, true, txcache, executionPool)
 	if err != nil {
 		return nil, err
 	}
