@@ -165,6 +165,9 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 	if ac.ForeignApps != nil {
 		return false
 	}
+	if ac.ForeignAssets != nil {
+		return false
+	}
 	if ac.LocalStateSchema != (basics.StateSchema{}) {
 		return false
 	}
