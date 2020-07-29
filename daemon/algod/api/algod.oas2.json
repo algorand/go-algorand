@@ -2073,6 +2073,10 @@
             "description": "The asset index if the transaction was found and it created an asset.",
             "type": "integer"
           },
+          "application-index": {
+            "description": "The application index if the transaction was found and it created an application.",
+            "type": "integer"
+          },
           "close-rewards": {
             "description": "Rewards in microalgos applied to the close remainder to account.",
             "type": "integer"

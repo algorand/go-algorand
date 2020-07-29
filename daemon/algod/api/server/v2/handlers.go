@@ -443,6 +443,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 	// Encoding wasn't working well without embedding "real" objects.
 	response := struct {
 		AssetIndex       *uint64                        `codec:"asset-index,omitempty"`
+		ApplicationIndex *uint64                        `codec:"application-index,omitempty"`
 		CloseRewards     *uint64                        `codec:"close-rewards,omitempty"`
 		ClosingAmount    *uint64                        `codec:"closing-amount,omitempty"`
 		ConfirmedRound   *uint64                        `codec:"confirmed-round,omitempty"`
@@ -471,6 +472,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
 
 		response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.Ledger())
+		response.ApplicationIndex = computeApplicationIndexFromTxn(txn, v2.Node.Ledger())
 
 		response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
 	}
