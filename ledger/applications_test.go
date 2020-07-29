@@ -183,14 +183,14 @@ func TestAppLedgerAsset(t *testing.T) {
 
 	assetIdx := basics.AssetIndex(2)
 	b.balances = map[basics.Address]basics.AccountData{addr1: {}}
-	_, err = l.AssetParams(addr1, assetIdx)
+	_, err = l.AssetParams(assetIdx)
 	a.Error(err)
 	a.Contains(err.Error(), "has not created asset")
 
 	b.balances[addr1] = basics.AccountData{
 		AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}},
 	}
-	ap, err := l.AssetParams(addr1, assetIdx)
+	ap, err := l.AssetParams(assetIdx)
 	a.NoError(err)
 	a.Equal(uint64(1000), ap.Total)
 	delete(b.balances, addr1)
