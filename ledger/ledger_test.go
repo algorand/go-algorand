@@ -876,7 +876,7 @@ func TestLedgerBlockHdrCaching(t *testing.T) {
 
 	blk := genesisInitState.Block
 
-	for i := 0; i < 2000; i++ {
+	for i := 0; i < 128; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 		err := l.AddBlock(blk, agreement.Certificate{})
