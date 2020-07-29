@@ -85,7 +85,7 @@ func byteOrNil(data []byte) *[]byte {
 	return &data
 }
 
-func computeAssetIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (aidx *uint64) {
+func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (aidx *uint64) {
 	// Compute transaction index in block
 	offset := -1
 	for idx, stxnib := range payset {
@@ -137,7 +137,42 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint
 		return nil
 	}
 
-	return computeAssetIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
+	return computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
+}
+
+// computeAssetIndexFromTxn returns the created asset index given a confirmed
+// transaction whose confirmation block is available in the ledger. Note that
+// 0 is an invalid asset index (they start at 1).
+func computeApplicationIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint64) {
+	// Must have ledger
+	if l == nil {
+		return nil
+	}
+	// Transaction must be confirmed
+	if tx.ConfirmedRound == 0 {
+		return nil
+	}
+	// Transaction must be AssetConfig transaction
+	if tx.Txn.Txn.ApplicationID == 0 {
+		return nil
+	}
+	// Transaction must be creating an asset
+	if tx.Txn.Txn.AssetConfigTxnFields.ConfigAsset != 0 {
+		return nil
+	}
+
+	// Look up block where transaction was confirmed
+	blk, err := l.Block(tx.ConfirmedRound)
+	if err != nil {
+		return nil
+	}
+
+	payset, err := blk.DecodePaysetFlat()
+	if err != nil {
+		return nil
+	}
+
+	return computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
 }
 
 // getCodecHandle converts a format string into the encoder + content type

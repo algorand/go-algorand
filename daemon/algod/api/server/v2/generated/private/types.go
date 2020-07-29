@@ -525,6 +525,9 @@ type NodeStatusResponse struct {
 // PendingTransactionResponse defines model for PendingTransactionResponse.
 type PendingTransactionResponse struct {
 
+	// The application index if the transaction was found and it created an application.
+	ApplicationIndex *uint64 `json:"application-index,omitempty"`
+
 	// The asset index if the transaction was found and it created an asset.
 	AssetIndex *uint64 `json:"asset-index,omitempty"`
 

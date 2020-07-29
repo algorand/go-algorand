@@ -459,6 +459,10 @@
             "schema": {
               "description": "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.",
               "properties": {
+                "application-index": {
+                  "description": "The application index if the transaction was found and it created an application.",
+                  "type": "integer"
+                },
                 "asset-index": {
                   "description": "The asset index if the transaction was found and it created an asset.",
                   "type": "integer"
@@ -3010,6 +3014,10 @@
                 "schema": {
                   "description": "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.",
                   "properties": {
+                    "application-index": {
+                      "description": "The application index if the transaction was found and it created an application.",
+                      "type": "integer"
+                    },
                     "asset-index": {
                       "description": "The asset index if the transaction was found and it created an asset.",
                       "type": "integer"
