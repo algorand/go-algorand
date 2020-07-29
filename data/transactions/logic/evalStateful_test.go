@@ -156,7 +156,7 @@ func (l *testLedger) AssetParams(assetID basics.AssetIndex) (basics.AssetParams,
 	if asset, ok := l.assets[assetID]; ok {
 		return asset, nil
 	}
-	return basics.AssetParams{}, fmt.Errorf("No such asset")
+	return basics.AssetParams{}, fmt.Errorf("no such asset")
 }
 
 func (l *testLedger) ApplicationID() basics.AppIndex {
