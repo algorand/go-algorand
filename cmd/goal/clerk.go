@@ -22,6 +22,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -53,6 +54,7 @@ var (
 	disassemble     bool
 	verbose         bool
 	progByteFile    string
+	msigParams      string
 	logicSigFile    string
 	timeStamp       int64
 	protoVersion    string
@@ -85,6 +87,7 @@ func init() {
 	sendCmd.Flags().StringVarP(&progByteFile, "from-program-bytes", "P", "", "Program binary to use as account logic")
 	sendCmd.Flags().StringSliceVar(&argB64Strings, "argb64", nil, "base64 encoded args to pass to transaction logic")
 	sendCmd.Flags().StringVarP(&logicSigFile, "logic-sig", "L", "", "LogicSig to apply to transaction")
+	sendCmd.Flags().StringVar(&msigParams, "msig-params", "", "Multisig preimage parameters - [threshold] [Address 1] [Address 2] ...\nUsed to add the necessary fields in case the account was rekeyed to a multisig account")
 	sendCmd.MarkFlagRequired("to")
 	sendCmd.MarkFlagRequired("amount")
 
@@ -277,6 +280,11 @@ var sendCmd = &cobra.Command{
 			reportErrorln(soFlagError)
 		}
 
+		// --msig-params is invalid without -o
+		if outFilename == "" && msigParams != "" {
+			reportErrorln(noOutputFileError)
+		}
+
 		checkTxValidityPeriodCmdFlags(cmd)
 
 		dataDir := ensureSingleDataDir()
@@ -387,6 +395,44 @@ var sendCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf(errorSigningTX, err)
 			}
+		}
+
+		// Handle the case where the user wants to send to an account that was rekeyed to a multisig account
+		if msigParams != "" {
+			// Decode params
+			params := strings.Split(msigParams, " ")
+			if len(params) < 3 {
+				reportErrorf(msigParseError, "Not enough arguments to create the multisig address.\nPlease make sure to specify the threshold and at least 2 addresses\n")
+			}
+
+			threshold, err := strconv.ParseUint(params[0], 10, 8)
+			if err != nil || threshold < 1 || threshold > 255 {
+				reportErrorf(msigParseError, "Failed to parse the threshold. Make sure it's a number between 1 and 255")
+			}
+
+			// Convert the addresses into public keys
+			pks := make([]crypto.PublicKey, len(params[1:]))
+			for i, addrStr := range params[1:] {
+				addr, err := basics.UnmarshalChecksumAddress(addrStr)
+				if err != nil {
+					reportErrorf(failDecodeAddressError, err)
+				}
+				pks[i] = crypto.PublicKey(addr)
+			}
+
+			addr, err := crypto.MultisigAddrGen(1, uint8(threshold), pks)
+			if err != nil {
+				reportErrorf(msigParseError, err)
+			}
+
+			// Generate the multisig and assign to the txn
+			stx.Msig = crypto.MultisigPreimageFromPKs(1, uint8(threshold), pks)
+
+			// Append the signer since it's a rekey txn
+			if basics.Address(addr) == stx.Txn.Sender {
+				reportWarnln(rekeySenderTargetSameError)
+			}
+			stx.AuthAddr = basics.Address(addr)
 		}
 
 		if outFilename == "" {
