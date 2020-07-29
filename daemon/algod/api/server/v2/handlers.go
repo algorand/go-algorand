@@ -444,6 +444,7 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 	response := struct {
 		AssetIndex       *uint64                        `codec:"asset-index,omitempty"`
 		ApplicationIndex *uint64                        `codec:"application-index,omitempty"`
+		Test             *uint64                        `codec:"test,omitempty"`
 		CloseRewards     *uint64                        `codec:"close-rewards,omitempty"`
 		ClosingAmount    *uint64                        `codec:"closing-amount,omitempty"`
 		ConfirmedRound   *uint64                        `codec:"confirmed-round,omitempty"`
@@ -473,6 +474,8 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 
 		response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.Ledger())
 		response.ApplicationIndex = computeApplicationIndexFromTxn(txn, v2.Node.Ledger())
+		var number uint64 = 5
+		response.Test = &number
 
 		response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
 	}
