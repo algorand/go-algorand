@@ -28,8 +28,9 @@ import (
 )
 
 type testBalances struct {
-	appCreators map[basics.AppIndex]basics.Address
-	balances    map[basics.Address]basics.AccountData
+	appCreators   map[basics.AppIndex]basics.Address
+	assetCreators map[basics.AssetIndex]basics.Address
+	balances      map[basics.Address]basics.AccountData
 }
 
 type testBalancesPass struct {
@@ -63,6 +64,11 @@ func (b *testBalances) GetCreator(cidx basics.CreatableIndex, ctype basics.Creat
 		}
 
 		creator, ok := b.appCreators[aidx]
+		return creator, ok, nil
+	}
+	if ctype == basics.AssetCreatable {
+		aidx := basics.AssetIndex(cidx)
+		creator, ok := b.assetCreators[aidx]
 		return creator, ok, nil
 	}
 	return basics.Address{}, false, nil
@@ -183,6 +189,7 @@ func TestAppLedgerAsset(t *testing.T) {
 
 	assetIdx := basics.AssetIndex(2)
 	b.balances = map[basics.Address]basics.AccountData{addr1: {}}
+	b.assetCreators = map[basics.AssetIndex]basics.Address{assetIdx: addr1}
 	_, err = l.AssetParams(assetIdx)
 	a.Error(err)
 	a.Contains(err.Error(), "has not created asset")
