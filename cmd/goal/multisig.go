@@ -117,7 +117,11 @@ var addSigCmd = &cobra.Command{
 					reportErrorf(msigParseError, err)
 				}
 			} else {
-				msig, err = client.MultisigSignTransactionWithWallet(wh, pw, stxn.Txn, addr, stxn.Msig)
+				if stxn.AuthAddr.IsZero() {
+					msig, err = client.MultisigSignTransactionWithWallet(wh, pw, stxn.Txn, addr, stxn.Msig)
+				} else {
+					msig, err = client.MultisigSignTransactionWithWalletAndSigner(wh, pw, stxn.Txn, addr, stxn.Msig, stxn.AuthAddr.GetUserAddress())
+				}
 				if err != nil {
 					reportErrorf(errorSigningTX, err)
 				}
