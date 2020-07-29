@@ -1229,11 +1229,16 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 		for i := uint64(0); i < offset; i++ {
-			err = accountsNewRound(tx, deltas[i], creatableDeltas[i], roundTotals[i+1].RewardsLevel, protos[i+1])
+			err = accountsNewRound(tx, deltas[i], creatableDeltas[i])
 			if err != nil {
 				return err
 			}
 		}
+		err = totalsNewRounds(tx, deltas[:offset], roundTotals[1:offset+1], protos[1:offset+1])
+		if err != nil {
+			return err
+		}
+
 		err = au.accountsUpdateBalances(deltas, offset)
 		if err != nil {
 			return err
