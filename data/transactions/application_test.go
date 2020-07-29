@@ -1396,5 +1396,8 @@ func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 		if proto.MaxAppTxnForeignApps > encodedMaxForeignApps {
 			require.Failf(t, "proto.MaxAppTxnForeignApps > encodedMaxForeignApps", "protocol version = %s", protoVer)
 		}
+		if proto.MaxAppTxnForeignAssets > encodedMaxForeignAssets {
+			require.Failf(t, "proto.MaxAppTxnForeignAssets > encodedMaxForeignAssets", "protocol version = %s", protoVer)
+		}
 	}
 }

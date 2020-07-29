@@ -106,7 +106,7 @@ type LedgerForLogic interface {
 	AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error)
 	AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error)
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
-	AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error)
+	AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams, error)
 	ApplicationID() basics.AppIndex
 	LocalSchema() basics.StateSchema
 	GlobalSchema() basics.StateSchema
@@ -586,12 +586,16 @@ func (cx *evalContext) step() {
 			if len(spec.Returns) > 1 {
 				num = len(spec.Returns)
 			}
-			if len(cx.stack) < num {
-				cx.err = fmt.Errorf("stack underflow: expected %d, have %d", num, len(cx.stack))
-				return
-			}
-			for i := 1; i <= num; i++ {
-				stackString += fmt.Sprintf("(%s) ", cx.stack[len(cx.stack)-i].String())
+			// check for nil error here, because we might not return
+			// values if we encounter an error in the opcode
+			if cx.err == nil {
+				if len(cx.stack) < num {
+					cx.err = fmt.Errorf("stack underflow: expected %d, have %d", num, len(cx.stack))
+					return
+				}
+				for i := 1; i <= num; i++ {
+					stackString += fmt.Sprintf("(%s) ", cx.stack[len(cx.stack)-i].String())
+				}
 			}
 		}
 		fmt.Fprintf(cx.Trace, "%3d %s%s=> %s\n", cx.pc, spec.Name, immArgsString, stackString)
@@ -2137,11 +2141,9 @@ func opAssetHoldingGet(cx *evalContext) {
 }
 
 func opAssetParamsGet(cx *evalContext) {
-	last := len(cx.stack) - 1 // asset id
-	prev := last - 1          // account offset
+	last := len(cx.stack) - 1 // foreign asset id
 
-	assetID := cx.stack[last].Uint
-	accountIdx := cx.stack[prev].Uint
+	foreignAssetsIndex := cx.stack[last].Uint
 	paramIdx := uint64(cx.program[cx.pc+1])
 
 	if cx.Ledger == nil {
@@ -2149,15 +2151,15 @@ func opAssetParamsGet(cx *evalContext) {
 		return
 	}
 
-	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
-	if err != nil {
-		cx.err = err
+	if foreignAssetsIndex >= uint64(len(cx.Txn.Txn.ForeignAssets)) {
+		cx.err = fmt.Errorf("invalid ForeignAssets index %d", foreignAssetsIndex)
 		return
 	}
+	assetID := cx.Txn.Txn.ForeignAssets[foreignAssetsIndex]
 
 	var exist uint64 = 0
 	var value stackValue
-	if params, err := cx.Ledger.AssetParams(addr, basics.AssetIndex(assetID)); err == nil {
+	if params, err := cx.Ledger.AssetParams(basics.AssetIndex(assetID)); err == nil {
 		// params exist, read the value
 		exist = 1
 		value, err = cx.assetParamsEnumToValue(&params, paramIdx)
@@ -2167,8 +2169,8 @@ func opAssetParamsGet(cx *evalContext) {
 		}
 	}
 
-	cx.stack[prev] = value
-	cx.stack[last].Uint = exist
+	cx.stack[last] = value
+	cx.stack = append(cx.stack, stackValue{Uint: exist})
 
 	cx.nextpc = cx.pc + 2
 }

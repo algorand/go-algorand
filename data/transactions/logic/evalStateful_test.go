@@ -34,12 +34,12 @@ type balanceRecord struct {
 	balance  uint64
 	apps     map[basics.AppIndex]map[string]basics.TealValue
 	holdings map[uint64]basics.AssetHolding
-	assets   map[uint64]basics.AssetParams
 }
 
 type testLedger struct {
 	balances     map[basics.Address]balanceRecord
 	applications map[basics.AppIndex]map[string]basics.TealValue
+	assets       map[basics.AssetIndex]basics.AssetParams
 	localCount   int
 	globalCount  int
 	appID        uint64
@@ -51,7 +51,6 @@ func makeBalanceRecord(addr basics.Address, balance uint64) balanceRecord {
 		balance:  balance,
 		apps:     make(map[basics.AppIndex]map[string]basics.TealValue),
 		holdings: make(map[uint64]basics.AssetHolding),
-		assets:   make(map[uint64]basics.AssetParams),
 	}
 	return br
 }
@@ -63,6 +62,7 @@ func makeTestLedger(balances map[basics.Address]uint64) *testLedger {
 		l.balances[addr] = makeBalanceRecord(addr, balance)
 	}
 	l.applications = make(map[basics.AppIndex]map[string]basics.TealValue)
+	l.assets = make(map[basics.AssetIndex]basics.AssetParams)
 	return l
 }
 
@@ -83,13 +83,8 @@ func (l *testLedger) newApp(addr basics.Address, appID uint64) {
 	l.balances[addr] = br
 }
 
-func (l *testLedger) setAsset(addr basics.Address, assetID uint64, params basics.AssetParams) {
-	br, ok := l.balances[addr]
-	if !ok {
-		br = makeBalanceRecord(addr, 0)
-	}
-	br.assets[assetID] = params
-	l.balances[addr] = br
+func (l *testLedger) newAsset(assetID uint64, params basics.AssetParams) {
+	l.assets[basics.AssetIndex(assetID)] = params
 }
 
 func (l *testLedger) setHolding(addr basics.Address, assetID uint64, holding basics.AssetHolding) {
@@ -157,14 +152,11 @@ func (l *testLedger) AssetHolding(addr basics.Address, assetID basics.AssetIndex
 	return basics.AssetHolding{}, fmt.Errorf("no such address")
 }
 
-func (l *testLedger) AssetParams(addr basics.Address, assetID basics.AssetIndex) (basics.AssetParams, error) {
-	if br, ok := l.balances[addr]; ok {
-		if asset, ok := br.assets[uint64(assetID)]; ok {
-			return asset, nil
-		}
-		return basics.AssetParams{}, fmt.Errorf("No asset for account")
+func (l *testLedger) AssetParams(assetID basics.AssetIndex) (basics.AssetParams, error) {
+	if asset, ok := l.assets[assetID]; ok {
+		return asset, nil
 	}
-	return basics.AssetParams{}, fmt.Errorf("no such address")
+	return basics.AssetParams{}, fmt.Errorf("No such asset")
 }
 
 func (l *testLedger) ApplicationID() basics.AppIndex {
@@ -299,7 +291,6 @@ asset_holding_get AssetBalance
 pop
 &&
 intc_0
-intc 5
 asset_params_get AssetTotal
 pop
 &&
@@ -356,7 +347,7 @@ pop
 	)
 	ledger.newApp(txn.Txn.Sender, 100)
 	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
-	ledger.setAsset(txn.Txn.Receiver, 5, params)
+	ledger.newAsset(5, params)
 	ledger.setHolding(txn.Txn.Sender, 5, basics.AssetHolding{Amount: 123, Frozen: true})
 
 	for mode, test := range tests {
@@ -924,40 +915,35 @@ bnz error
 int 1
 ==
 &&
-int 1
-int 55
+int 0
 asset_params_get AssetTotal
 !
 bnz error
 int 1000
 ==
 &&
-int 1
-int 55
+int 0
 asset_params_get AssetDecimals
 !
 bnz error
 int 2
 ==
 &&
-int 1
-int 55
+int 0
 asset_params_get AssetDefaultFrozen
 !
 bnz error
 int 0
 ==
 &&
-int 1
-int 55
+int 0
 asset_params_get AssetUnitName
 !
 bnz error
 byte 0x414c474f
 ==
 &&
-int 1
-int 55
+int 0
 asset_params_get AssetName
 !
 bnz error
@@ -965,48 +951,42 @@ len
 int 0
 ==
 &&
-int 1
-int 55
+int 0
 asset_params_get AssetURL
 !
 bnz error
 txna ApplicationArgs 0
 ==
 &&
-int 1
-int 55
+int 0
 asset_params_get AssetMetadataHash
 !
 bnz error
 byte 0x0000000000000000000000000000000000000000000000000000000000000000
 ==
 &&
-int 1
-int 55
+int 0
 asset_params_get AssetManager
 !
 bnz error
 txna Accounts 0
 ==
 &&
-int 1
-int 55
+int 0
 asset_params_get AssetReserve
 !
 bnz error
 txna Accounts 1
 ==
 &&
-int 1
-int 55
+int 0
 asset_params_get AssetFreeze
 !
 bnz error
 txna Accounts 1
 ==
 &&
-int 1
-int 55
+int 0
 asset_params_get AssetClawback
 !
 bnz error
@@ -1033,14 +1013,17 @@ func TestAssets(t *testing.T) {
 		}
 	}
 
-	// check generic errors
-	sources := []string{
-		"int 5\nint 55\nasset_holding_get AssetBalance",
-		"int 5\nint 55\nasset_params_get AssetTotal",
+	type sourceError struct {
+		src string
+		err string
 	}
-	for _, source := range sources {
-
-		program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	// check generic errors
+	sources := []sourceError{
+		sourceError{"int 5\nint 55\nasset_holding_get AssetBalance", "cannot load account[5]"},
+		sourceError{"int 5\nasset_params_get AssetTotal", "invalid ForeignAssets index 5"},
+	}
+	for _, sourceErr := range sources {
+		program, err := AssembleStringWithVersion(sourceErr.src, AssemblerMaxVersion)
 		require.NoError(t, err)
 
 		txn := makeSampleTxn()
@@ -1062,7 +1045,7 @@ func TestAssets(t *testing.T) {
 
 		_, _, err = EvalStateful(program, ep)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "cannot load account[5]")
+		require.Contains(t, err.Error(), sourceErr.err)
 	}
 
 	program, err := AssembleStringWithVersion(assetsTestProgram, AssemblerMaxVersion)
@@ -1090,7 +1073,7 @@ func TestAssets(t *testing.T) {
 		Freeze:        txn.Txn.Receiver,
 		Clawback:      txn.Txn.Receiver,
 	}
-	ledger.setAsset(txn.Txn.Receiver, 55, params)
+	ledger.newAsset(55, params)
 	ledger.setHolding(txn.Txn.Sender, 55, basics.AssetHolding{Amount: 123, Frozen: true})
 
 	ep := defaultEvalParams(&sb, &txn)
@@ -1138,8 +1121,7 @@ int 1
 	require.Contains(t, err.Error(), "invalid asset holding field 2")
 
 	// check holdings bool value
-	source = `int 1
-int 55
+	source = `int 0
 asset_params_get AssetDefaultFrozen
 !
 bnz error
@@ -1154,21 +1136,21 @@ int 1
 	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	params.DefaultFrozen = true
-	ledger.setAsset(txn.Txn.Receiver, 55, params)
+	ledger.newAsset(55, params)
 	pass, _, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
-
+	t.Logf("%x", program)
 	// check holdings invalid offsets
-	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_params_get"].Opcode, program[7])
-	program[8] = 0x20
+	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_params_get"].Opcode, program[6])
+	program[7] = 0x20
+	t.Logf("%x", program)
 	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset params field 32")
 
 	// check empty string
-	source = `int 1  // account idx (txn.Accounts[1])
-int 55
+	source = `int 0  // foreign asset idx (txn.ForeignAssets[0])
 asset_params_get AssetURL
 !
 bnz error
@@ -1184,13 +1166,12 @@ int 1
 	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	params.URL = ""
-	ledger.setAsset(txn.Txn.Receiver, 55, params)
+	ledger.newAsset(55, params)
 	pass, _, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
-	source = `int 1
-int 55
+	source = `int 0
 asset_params_get AssetURL
 !
 bnz error
@@ -1205,7 +1186,7 @@ int 1
 	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	params.URL = ""
-	ledger.setAsset(txn.Txn.Receiver, 55, params)
+	ledger.newAsset(55, params)
 	cost, err = CheckStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
@@ -2450,7 +2431,7 @@ func TestEnumFieldErrors(t *testing.T) {
 		Freeze:        txn.Txn.Receiver,
 		Clawback:      txn.Txn.Receiver,
 	}
-	ledger.setAsset(txn.Txn.Receiver, 55, params)
+	ledger.newAsset(55, params)
 	ledger.setHolding(txn.Txn.Sender, 55, basics.AssetHolding{Amount: 123, Frozen: true})
 
 	ep.Txn = &txn
@@ -2473,8 +2454,7 @@ pop
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "AssetBalance expected field type is []byte but got uint64")
 
-	source = `int 1
-int 55
+	source = `int 0
 asset_params_get AssetTotal
 pop
 `
@@ -2506,6 +2486,7 @@ func TestReturnTypes(t *testing.T) {
 	ep.TxnGroup = txgroup
 	ep.Txn.Txn.ApplicationID = 1
 	ep.Txn.Txn.ForeignApps = []basics.AppIndex{txn.Txn.ApplicationID}
+	ep.Txn.Txn.ForeignAssets = []basics.AssetIndex{basics.AssetIndex(1), basics.AssetIndex(1)}
 	txn.Lsig.Args = [][]byte{
 		[]byte("aoeu"),
 		[]byte("aoeu"),
@@ -2529,7 +2510,7 @@ func TestReturnTypes(t *testing.T) {
 		Freeze:        txn.Txn.Receiver,
 		Clawback:      txn.Txn.Receiver,
 	}
-	ledger.setAsset(txn.Txn.Receiver, 1, params)
+	ledger.newAsset(1, params)
 	ledger.setHolding(txn.Txn.Sender, 1, basics.AssetHolding{Amount: 123, Frozen: true})
 	ledger.newApp(txn.Txn.Sender, 1)
 	ledger.balances[txn.Txn.Receiver] = makeBalanceRecord(txn.Txn.Receiver, 1)

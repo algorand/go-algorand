@@ -898,12 +898,10 @@ func TestLocalLedger(t *testing.T) {
 	holdings, err = ledger.AssetHolding(sender, assetIdx+1)
 	a.Error(err)
 
-	params, err := ledger.AssetParams(sender, assetIdx)
+	params, err := ledger.AssetParams(assetIdx)
 	a.NoError(err)
 	a.Equal(uint64(100), params.Total)
 	a.Equal("tok", params.UnitName)
-	params, err = ledger.AssetParams(payTxn.Txn.Receiver, assetIdx)
-	a.Error(err)
 
 	tkv, err := ledger.AppGlobalState(0)
 	a.NoError(err)

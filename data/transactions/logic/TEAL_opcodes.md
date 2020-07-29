@@ -699,9 +699,9 @@ params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherw
 ## asset_params_get
 
 - Opcode: 0x71 {uint8 asset params field index}
-- Pops: *... stack*, {uint64 A}, {uint64 B}
+- Pops: *... stack*, uint64
 - Pushes: uint64, any
-- read from account specified by Txn.Accounts[A] and asset B params field X (imm arg) => {0 or 1 (top), value}
+- read from asset Txn.ForeignAssets[A] params field X (imm arg) => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
 
@@ -722,4 +722,4 @@ params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherw
 | 10 | AssetClawback | []byte | Clawback address |
 
 
-params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherwise), value.
+params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 otherwise), value.
