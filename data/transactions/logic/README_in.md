@@ -121,8 +121,9 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 
 The assembler parses line by line. Ops that just use the stack appear on a line by themselves. Ops that take arguments are the op and then whitespace and then any argument or arguments.
 
-The first line may contain a special version pragma `#pragma version X`.
-By default the assembler generates TEAL v1. So that all TEAL v2 programs must start with `#pragma version 2`
+The first line may contain a special version pragma `#pragma version X`, which directs the assembler to generate TEAL bytecode targeting a certain version. For instance, `#pragma version 2` produces bytecode targeting TEAL v2. By default, the assembler targets TEAL v1.
+
+Subsequent lines may contain other pragma declarations (i.e., `#pragma <some-specification>`), pertaining to checks that the assembler should perform before agreeing to emit the program bytes, specific optimizations, etc. Those declarations are optional and cannot alter the semantics as described in this document.
 
 "`//`" prefixes a line comment.
 

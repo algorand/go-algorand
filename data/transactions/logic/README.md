@@ -53,14 +53,17 @@ Constants are pushed onto the stack by `intc`, `intc_[0123]`, `bytec`, and `byte
 ### Named Integer Constants
 
 #### OnComplete
+
+An application transaction must indicate the action to be taken following the execution of its approvalProgram or clearStateProgram. The constants below describe the available actions.
+
 | Value | Constant name | Description |
 | --- | --- | --- |
-| 0 | NoOp | Application transaction will simply call its ApprovalProgram. |
-| 1 | OptIn | Application transaction will allocate some LocalState for the application in the sender's account. |
-| 2 | CloseOut | Application transaction will deallocate some LocalState for the application from the user's account. |
-| 3 | ClearState | Similar to CloseOut, but may never fail. This allows users to reclaim their minimum balance from an application they no longer wish to opt in to. |
-| 4 | UpdateApplication | Application transaction will update the ApprovalProgram and ClearStateProgram for the application. |
-| 5 | DeleteApplication | Application transaction will delete the AppParams for the application from the creator's balance. |
+| 0 | NoOp | Only execute the `ApprovalProgram` associated with this application ID, with no additional effects. |
+| 1 | OptIn | Before executing the `ApprovalProgram`, allocate local state for this application into the sender's account data. |
+| 2 | CloseOut | After executing the `ApprovalProgram`, clear any local state for this application out of the sender's account data. |
+| 3 | ClearState | Don't execute the `ApprovalProgram`, and instead execute the `ClearStateProgram` (which may not reject this transaction). Additionally, clear any local state for this application out of the sender's account data as in `CloseOutOC`. |
+| 4 | UpdateApplication | After executing the `ApprovalProgram`, replace the `ApprovalProgram` and `ClearStateProgram` associated with this application ID with the programs specified in this transaction. |
+| 5 | DeleteApplication | After executing the `ApprovalProgram`, delete the application parameters from the account data of the application's creator. |
 
 #### TypeEnum constants
 | Value | Constant name | Description |
@@ -129,8 +132,8 @@ For two-argument ops, `A` is the previous element on the stack and `B` is the la
 | `mulw` | A times B out to 128-bit long result as low (top) and high uint64 values on the stack |
 | `addw` | A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack |
 | `concat` | pop two byte strings A and B and join them, push the result |
-| `substring` | pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to but not including M, push the substring result |
-| `substring3` | pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result |
+| `substring` | pop a byte string X. For immediate values in 0..255 M and N: extract a range of bytes from it starting at M up to but not including N, push the substring result. If N <= M, or either is larger than the string length, the program fails |
+| `substring3` | pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C <= B, or either is larger than the string length, the program fails |
 
 ### Loading Values
 
@@ -297,8 +300,9 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 
 The assembler parses line by line. Ops that just use the stack appear on a line by themselves. Ops that take arguments are the op and then whitespace and then any argument or arguments.
 
-The first line may contain a special version pragma `#pragma version X`.
-By default the assembler generates TEAL v1. So that all TEAL v2 programs must start with `#pragma version 2`
+The first line may contain a special version pragma `#pragma version X`, which directs the assembler to generate TEAL bytecode targeting a certain version. For instance, `#pragma version 2` produces bytecode targeting TEAL v2. By default, the assembler targets TEAL v1.
+
+Subsequent lines may contain other pragma declarations (i.e., `#pragma <some-specification>`), pertaining to checks that the assembler should perform before agreeing to emit the program bytes, specific optimizations, etc. Those declarations are optional and cannot alter the semantics as described in this document.
 
 "`//`" prefixes a line comment.
 
