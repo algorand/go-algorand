@@ -28,7 +28,7 @@
     $ tealdbg debug samples/calls_count.teal --balance samples/calls_count_balance.json --txn samples/calls_count_txn.json --proto=future
     $ tealdbg debug samples/calls_count.teal --proto=future --painless
     ```
-    It prints out the URL to follow: `chrome-devtools://devtools/bundled/js_app.html?...`
+    It prints out the URL to follow: `devtools://devtools/bundled/js_app.html?...`
 2. Open the URL in Google Chrome.
   If you see the `This site can’t be reached` page, open Chrome DevTools [as explained](https://developers.google.com/web/tools/chrome-devtools/open) and refresh the page.
 

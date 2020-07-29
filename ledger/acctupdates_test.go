@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -115,7 +116,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 		return
 	}
 
-	err = au.dbs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		bals, err0 = accountsAll(tx)
 		return err0
@@ -236,7 +237,7 @@ func TestAcctUpdates(t *testing.T) {
 	defer ml.close()
 	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(20)}
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -317,7 +318,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	defer ml.close()
 	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(20)}
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -410,7 +411,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	initialRounds := uint64(1)
 	ml.blocks = randomInitChain(protocolVersion, int(initialRounds))
 	accountsCount := 5000
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount)}
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -541,7 +542,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, true)
 	defer ml.close()
 	ml.blocks = randomInitChain(testProtocolVersion, 10)
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(100000)}
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(100000, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -634,7 +635,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		defer ml.close()
 		ml.blocks = randomInitChain(testProtocolVersion, 10)
 
-		accts := []map[basics.Address]basics.AccountData{randomAccounts(9)}
+		accts := []map[basics.Address]basics.AccountData{randomAccounts(9, true)}
 
 		pooldata := basics.AccountData{}
 		pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
@@ -783,4 +784,52 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	t.Run("InMemoryDB", testFunction)
 	inMemory = false
 	t.Run("DiskDB", testFunction)
+}
+
+// TestAcctUpdatesDeleteStoredCatchpoints - The goal of this test is to verify that the deleteStoredCatchpoints function works correctly.
+// it doing so by filling up the storedcatchpoints with dummy catchpoint file entries, as well as creating these dummy files on disk.
+// ( the term dummy is only because these aren't real catchpoint files, but rather a zero-length file ). Then, the test call the function
+// and ensures that it did not errored, the catchpoint files were correctly deleted, and that deleteStoredCatchpoints contains no more
+// entries.
+func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	ml := makeMockLedgerForTracker(t, true)
+	defer ml.close()
+	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
+
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
+	au := &accountUpdates{}
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	au.initialize(conf, ".", proto, accts[0])
+	defer au.close()
+
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+
+	dummyCatchpointFilesToCreate := 42
+
+	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
+		f, err := os.Create(fmt.Sprintf("./dummy_catchpoint_file-%d", i))
+		require.NoError(t, err)
+		err = f.Close()
+		require.NoError(t, err)
+	}
+
+	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
+		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fmt.Sprintf("./dummy_catchpoint_file-%d", i), "", 0)
+		require.NoError(t, err)
+	}
+	err = au.deleteStoredCatchpoints(context.Background(), au.accountsq)
+	require.NoError(t, err)
+
+	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
+		// ensure that all the files were deleted.
+		_, err := os.Open(fmt.Sprintf("./dummy_catchpoint_file-%d", i))
+		require.True(t, os.IsNotExist(err))
+	}
+	fileNames, err := au.accountsq.getOldestCatchpointFiles(context.Background(), dummyCatchpointFilesToCreate, 0)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fileNames))
 }

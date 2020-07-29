@@ -82,18 +82,17 @@ func (c *Client) chooseParticipation(address basics.Address, round basics.Round)
 		return
 	}
 
-	nilParticipation := account.Participation{}
 	// Loop through each of the files; pick the one that expires farthest in the future.
 	var expiry basics.Round
 	for _, info := range files {
 		// Use above lambda so the deferred handle closure happens each loop
 		partCandidate, err := checkIfFileIsDesiredKey(info, expiry)
-		if err == nil && partCandidate != nilParticipation {
+		if err == nil && (!partCandidate.Parent.IsZero()) {
 			part = partCandidate
 			expiry = part.LastValid
 		}
 	}
-	if part == nilParticipation {
+	if part.Parent.IsZero() {
 		// Couldn't find one
 		err = fmt.Errorf("Couldn't find a participation key database for address %v valid at round %v in directory %v", address.GetUserAddress(), round, keyDir)
 		return
