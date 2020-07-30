@@ -887,3 +887,36 @@ func TestLedgerBlockHdrCaching(t *testing.T) {
 		require.Equal(t, blk.BlockHeader, hdr)
 	}
 }
+
+func TestLedgerReload(t *testing.T) {
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	blk := genesisInitState.Block
+	for i := 0; i < 128; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+
+		if i%7 == 0 {
+			err = l.reloadLedger()
+			require.NoError(t, err)
+
+			// if we reloaded it before it got committed, we need to roll back the round counter.
+			if l.LatestCommitted() != blk.BlockHeader.Round {
+				blk.BlockHeader.Round = l.LatestCommitted()
+			}
+		}
+		if i%13 == 0 {
+			l.WaitForCommit(blk.Round())
+		}
+	}
+}

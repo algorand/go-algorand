@@ -2,8 +2,8 @@ github.com/algorand/go-codec v1.1.2 h1:QWS9YC3EEWBpJq5AqFPELcCJ2QPpTIg9aqR2K/sRD
 github.com/algorand/go-codec v1.1.2/go.mod h1:A3YI4V24jUUnU1eNekNmx2fLi60FvlNssqOiUsyfNM8=
 github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d h1:W9MgGUodEl4Y4+CxeEr+T3fZ26kOcWA4yfqhjbFxxmI=
 github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d/go.mod h1:qm6LyXvDa1+uZJxaVg8X+OEjBqt/zDinDa2EohtTDxU=
-github.com/algorand/go-deadlock v0.0.0-20181221160745-78d8cb5e2759 h1:IiCuOE1YCReVyEr1IQHKTBTvFLKdeBCfQuxrqhniq+I=
-github.com/algorand/go-deadlock v0.0.0-20181221160745-78d8cb5e2759/go.mod h1:Kve3O9VpxZIHsPzpfxNdyFltFU9jBTeVYMYxSC99tdg=
+github.com/algorand/go-deadlock v0.2.1 h1:TQPQwWAB133bS5uwHpmrgH5hCMyZK5hnUW26aqWMvq4=
+github.com/algorand/go-deadlock v0.2.1/go.mod h1:HgdF2cwtBIBCL7qmUaozuG/UIZFR6PLpSMR58pvWiXE=
 github.com/algorand/msgp v1.1.45 h1:uLEPvg0BfTrb2JjBcXexON8il4vv0EsD7HYFaA7e5jg=
 github.com/algorand/msgp v1.1.45/go.mod h1:LtOntbYiCHj/Sl/Sqxtf8CZOrDt2a8Dv3tLaS6mcnUE=
 github.com/algorand/oapi-codegen v1.3.5-algorand5 h1:y576Ca2/guQddQrQA7dtL5KcOx5xQgPeIupiuFMGyCI=

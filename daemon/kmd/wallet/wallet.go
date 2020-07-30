@@ -53,7 +53,7 @@ type Wallet interface {
 
 	SignTransaction(tx transactions.Transaction, pk crypto.PublicKey, pw []byte) ([]byte, error)
 
-	MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (crypto.MultisigSig, error)
+	MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte, signer crypto.Digest) (crypto.MultisigSig, error)
 
 	SignProgram(program []byte, src crypto.Digest, pw []byte) ([]byte, error)
 	MultisigSignProgram(program []byte, src crypto.Digest, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (crypto.MultisigSig, error)
