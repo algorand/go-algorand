@@ -4,7 +4,7 @@ node_types = {"R":8, "N":20, "NPN":10}
 node_size = {"R":"-m5d.4xl", "N":"-m5d.4xl", "NPN":"-m5d.4xl"}
 partitions = {"A":50, "B":20, "C":10, "D":10, "E":5, "F":5}
 regions = [
-    "AWS-US-EAST-2"
+    "AWS-US-EAST-2",
     "AWS-US-WEST-1"
 ]
 
@@ -34,7 +34,7 @@ def gen_topology(ranges):
 
 
 def get_partition(ranges):
-    random_value = random.randint(0,101)
+    random_value = random.randint(1,100)
     for partition_name  in ranges:
         partition_value = ranges[partition_name]
         if random_value >= partition_value['start']  and random_value <= partition_value['end'] :
