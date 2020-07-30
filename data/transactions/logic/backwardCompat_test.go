@@ -415,6 +415,10 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 
 	ledger := makeTestLedger(nil)
 	txn := makeSampleTxn()
+	// We'll reject too early if we have a nonzero RekeyTo, because that
+	// field must be zero for every txn in the group if this is an old
+	// TEAL version
+	txn.Txn.RekeyTo = basics.Address{}
 	txgroup := makeSampleTxnGroup(txn)
 	for _, fs := range fields {
 		field := fs.field.String()
@@ -456,9 +460,6 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			ep.Proto = &proto
 			ep.Ledger = ledger
 			ep.TxnGroup = txgroup
-
-			var minTealVersion uint64
-			ep.MinTealVersion = &minTealVersion
 
 			// check failure with version check
 			_, err = Eval(program, ep)
