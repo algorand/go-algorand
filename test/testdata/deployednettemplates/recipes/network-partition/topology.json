@@ -2,7 +2,7 @@
   [
     {
       "Name": "R1",
-      "Group": "B",
+      "Group": "A",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
@@ -12,17 +12,17 @@
     },
     {
       "Name": "R3",
-      "Group": "D",
+      "Group": "A",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
       "Name": "R4",
-      "Group": "C",
+      "Group": "A",
       "Template": "AWS-US-WEST-1-m5d.4xl"
     },
     {
       "Name": "R5",
-      "Group": "C",
+      "Group": "A",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
@@ -37,7 +37,7 @@
     },
     {
       "Name": "R8",
-      "Group": "A",
+      "Group": "B",
       "Template": "AWS-US-WEST-1-m5d.4xl"
     },
     {
@@ -47,12 +47,12 @@
     },
     {
       "Name": "N2",
-      "Group": "A",
+      "Group": "C",
       "Template": "AWS-US-WEST-1-m5d.4xl"
     },
     {
       "Name": "N3",
-      "Group": "A",
+      "Group": "D",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
@@ -62,7 +62,7 @@
     },
     {
       "Name": "N5",
-      "Group": "A",
+      "Group": "D",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
@@ -72,7 +72,7 @@
     },
     {
       "Name": "N7",
-      "Group": "D",
+      "Group": "B",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
@@ -82,57 +82,57 @@
     },
     {
       "Name": "N9",
-      "Group": "A",
+      "Group": "E",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
       "Name": "N10",
-      "Group": "A",
+      "Group": "F",
       "Template": "AWS-US-WEST-1-m5d.4xl"
     },
     {
       "Name": "N11",
-      "Group": "F",
+      "Group": "B",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
       "Name": "N12",
-      "Group": "A",
-      "Template": "AWS-US-WEST-1-m5d.4xl"
-    },
-    {
-      "Name": "N13",
-      "Group": "F",
-      "Template": "AWS-US-EAST-2-m5d.4xl"
-    },
-    {
-      "Name": "N14",
       "Group": "C",
       "Template": "AWS-US-WEST-1-m5d.4xl"
     },
     {
+      "Name": "N13",
+      "Group": "D",
+      "Template": "AWS-US-EAST-2-m5d.4xl"
+    },
+    {
+      "Name": "N14",
+      "Group": "A",
+      "Template": "AWS-US-WEST-1-m5d.4xl"
+    },
+    {
       "Name": "N15",
-      "Group": "B",
+      "Group": "A",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
       "Name": "N16",
-      "Group": "A",
+      "Group": "B",
       "Template": "AWS-US-WEST-1-m5d.4xl"
     },
     {
       "Name": "N17",
-      "Group": "A",
+      "Group": "D",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
       "Name": "N18",
-      "Group": "D",
+      "Group": "A",
       "Template": "AWS-US-WEST-1-m5d.4xl"
     },
     {
       "Name": "N19",
-      "Group": "B",
+      "Group": "A",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
@@ -142,12 +142,12 @@
     },
     {
       "Name": "NPN1",
-      "Group": "A",
+      "Group": "D",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
       "Name": "NPN2",
-      "Group": "C",
+      "Group": "B",
       "Template": "AWS-US-WEST-1-m5d.4xl"
     },
     {
@@ -157,12 +157,12 @@
     },
     {
       "Name": "NPN4",
-      "Group": "B",
+      "Group": "A",
       "Template": "AWS-US-WEST-1-m5d.4xl"
     },
     {
       "Name": "NPN5",
-      "Group": "A",
+      "Group": "D",
       "Template": "AWS-US-EAST-2-m5d.4xl"
     },
     {
@@ -177,7 +177,7 @@
     },
     {
       "Name": "NPN8",
-      "Group": "A",
+      "Group": "B",
       "Template": "AWS-US-WEST-1-m5d.4xl"
     },
     {
@@ -187,7 +187,7 @@
     },
     {
       "Name": "NPN10",
-      "Group": "A",
+      "Group": "C",
       "Template": "AWS-US-WEST-1-m5d.4xl"
     }
   ]

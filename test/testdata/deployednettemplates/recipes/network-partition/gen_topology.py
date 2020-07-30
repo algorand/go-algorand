@@ -11,6 +11,7 @@ regions = [
 def gen_topology(ranges):
     f = open("topology.json", "w")
     f.write("{ \"Hosts\":\n  [")
+    node_groups = {}
 
     region_count = len(regions)
     first = True
@@ -23,6 +24,7 @@ def gen_topology(ranges):
             region = regions[i%region_count]
             # randomly assign the node to a partition
             partition = get_partition(ranges)
+            node_groups.setdefault(partition,[]).append(node_name);
             if (first ):
                 first = False
             else:
@@ -31,6 +33,12 @@ def gen_topology(ranges):
 
     f.write("\n  ]\n}\n")
     f.close()
+
+    for node_group in node_groups:
+        f = open("group_" + node_group + ".txt", "w")
+        for node in node_groups[node_group]:
+            f.write(node +"\n")
+        f.close()
 
 
 def get_partition(ranges):
