@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
@@ -85,11 +86,12 @@ type ledgerForTracker interface {
 	trackerDB() dbPair
 	blockDB() dbPair
 	trackerLog() logging.Logger
-	trackerEvalVerified(bookkeeping.Block) (StateDelta, error)
+	trackerEvalVerified(bookkeeping.Block, ledgerForEvaluator) (StateDelta, error)
 
 	Latest() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	GenesisHash() crypto.Digest
 }
 
 type trackerRegistry struct {

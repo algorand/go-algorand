@@ -117,7 +117,7 @@ var nodeCmd = &cobra.Command{
 var catchupCmd = &cobra.Command{
 	Use:     "catchup",
 	Short:   "Catchup the Algorand node to a specific catchpoint",
-	Long:    "Catchup allows making large jumps over round ranges without the need to incremently validate each individual round.",
+	Long:    "Catchup allows making large jumps over round ranges without the need to incrementally validate each individual round.",
 	Example: "goal node catchup 6500000#1234567890ABCDEF01234567890ABCDEF0\tStart catching up to round 6500000 with the provided catchpoint\ngoal node catchup --abort\t\t\t\t\tAbort the current catchup",
 	Args:    catchpointCmdArgument,
 	Run: func(cmd *cobra.Command, args []string) {
