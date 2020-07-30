@@ -3658,6 +3658,7 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 
 	txn := makeSampleTxn()
 	txn.Txn.Type = protocol.ApplicationCallTx
+	txn.Txn.RekeyTo = basics.Address{}
 	txngroup := []transactions.SignedTxn{txn}
 	ep.TxnGroup = txngroup
 
