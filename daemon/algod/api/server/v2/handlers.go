@@ -442,14 +442,17 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 
 	// Encoding wasn't working well without embedding "real" objects.
 	response := struct {
-		AssetIndex      *uint64                `codec:"asset-index,omitempty"`
-		CloseRewards    *uint64                `codec:"close-rewards,omitempty"`
-		ClosingAmount   *uint64                `codec:"closing-amount,omitempty"`
-		ConfirmedRound  *uint64                `codec:"confirmed-round,omitempty"`
-		PoolError       string                 `codec:"pool-error"`
-		ReceiverRewards *uint64                `codec:"receiver-rewards,omitempty"`
-		SenderRewards   *uint64                `codec:"sender-rewards,omitempty"`
-		Txn             transactions.SignedTxn `codec:"txn"`
+		AssetIndex       *uint64                        `codec:"asset-index,omitempty"`
+		ApplicationIndex *uint64                        `codec:"application-index,omitempty"`
+		CloseRewards     *uint64                        `codec:"close-rewards,omitempty"`
+		ClosingAmount    *uint64                        `codec:"closing-amount,omitempty"`
+		ConfirmedRound   *uint64                        `codec:"confirmed-round,omitempty"`
+		GlobalStateDelta *generated.StateDelta          `codec:"global-state-delta,omitempty"`
+		LocalStateDelta  *[]generated.AccountStateDelta `codec:"local-state-delta,omitempty"`
+		PoolError        string                         `codec:"pool-error"`
+		ReceiverRewards  *uint64                        `codec:"receiver-rewards,omitempty"`
+		SenderRewards    *uint64                        `codec:"sender-rewards,omitempty"`
+		Txn              transactions.SignedTxn         `codec:"txn"`
 	}{
 		Txn: txn.Txn,
 	}
@@ -469,6 +472,9 @@ func (v2 *Handlers) PendingTransactionInformation(ctx echo.Context, txid string,
 		response.CloseRewards = &txn.ApplyData.CloseRewards.Raw
 
 		response.AssetIndex = computeAssetIndexFromTxn(txn, v2.Node.Ledger())
+		response.ApplicationIndex = computeAppIndexFromTxn(txn, v2.Node.Ledger())
+
+		response.LocalStateDelta, response.GlobalStateDelta = convertToDeltas(txn)
 	}
 
 	data, err := encode(handle, response)
