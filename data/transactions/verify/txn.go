@@ -41,8 +41,9 @@ var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_l
 // on a signed transaction.
 type Context struct {
 	Params
-	Group      []transactions.SignedTxn
-	GroupIndex int
+	Group          []transactions.SignedTxn
+	GroupIndex     int
+	MinTealVersion uint64
 }
 
 // Params is the set of parameters external to a transaction which
@@ -62,6 +63,7 @@ type Params struct {
 // group.
 func PrepareContexts(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader) []Context {
 	ctxs := make([]Context, len(group))
+	minTealVersion := logic.ComputeMinTealVersion(group)
 	for i := range group {
 		spec := transactions.SpecialAddresses{
 			FeeSink:     contextHdr.FeeSink,
@@ -72,8 +74,9 @@ func PrepareContexts(group []transactions.SignedTxn, contextHdr bookkeeping.Bloc
 				CurrSpecAddrs: spec,
 				CurrProto:     contextHdr.CurrentProtocol,
 			},
-			Group:      group,
-			GroupIndex: i,
+			Group:          group,
+			GroupIndex:     i,
+			MinTealVersion: minTealVersion,
 		}
 		ctxs[i] = ctx
 	}
@@ -282,10 +285,11 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 	}
 
 	ep := logic.EvalParams{
-		Txn:        txn,
-		Proto:      &proto,
-		TxnGroup:   ctx.Group,
-		GroupIndex: ctx.GroupIndex,
+		Txn:            txn,
+		Proto:          &proto,
+		TxnGroup:       ctx.Group,
+		GroupIndex:     ctx.GroupIndex,
+		MinTealVersion: &ctx.MinTealVersion,
 	}
 	pass, err := logic.Eval(txn.Lsig.Logic, ep)
 	if err != nil {

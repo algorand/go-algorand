@@ -1890,7 +1890,6 @@ int 1
 			require.NoError(t, err)
 			require.True(t, cost < 1000)
 			txn := makeSampleTxn()
-			txgroup := makeSampleTxnGroup(txn)
 			// RekeyTo not allowed in TEAL v1
 			if v < rekeyingEnabledVersion {
 				txn.Txn.RekeyTo = basics.Address{}
@@ -1904,6 +1903,7 @@ int 1
 				txn.Txn.SelectionPK[:],
 				txn.Txn.Note,
 			}
+			txgroup := makeSampleTxnGroup(txn)
 			sb = strings.Builder{}
 			ep := defaultEvalParams(&sb, &txn)
 			ep.TxnGroup = txgroup
@@ -3655,17 +3655,23 @@ func TestArgType(t *testing.T) {
 func TestApplicationsDisallowOldTeal(t *testing.T) {
 	const source = "int 1"
 	ep := defaultEvalParams(nil, nil)
+
+	txn := makeSampleTxn()
+	txn.Txn.Type = protocol.ApplicationCallTx
+	txngroup := []transactions.SignedTxn{txn}
+	ep.TxnGroup = txngroup
+
 	for v := uint64(0); v < appsEnabledVersion; v++ {
 		program, err := AssembleStringWithVersion(source, v)
 		require.NoError(t, err)
 
 		_, err = CheckStateful(program, ep)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "program version must be at least")
+		require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
 
 		_, _, err = EvalStateful(program, ep)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "program version must be at least")
+		require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
 	}
 
 	program, err := AssembleStringWithVersion(source, appsEnabledVersion)
@@ -3770,13 +3776,14 @@ func TestRekeyFailsOnOldVersion(t *testing.T) {
 			sb := strings.Builder{}
 			proto := defaultEvalProto()
 			ep := defaultEvalParams(&sb, &txn)
+			ep.TxnGroup = []transactions.SignedTxn{txn}
 			ep.Proto = &proto
 			_, err = Check(program, ep)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "nonzero RekeyTo field")
+			require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", rekeyingEnabledVersion))
 			pass, err := Eval(program, ep)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "nonzero RekeyTo field")
+			require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", rekeyingEnabledVersion))
 			require.False(t, pass)
 		})
 	}
