@@ -14,7 +14,7 @@ gcmd="goal -w ${WALLET}"
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 GLOBAL_INTS=2
 
-echo 'int 1' > "${TEMPDIR}/simple.teal"
+echo -e '#pragma version 2\nint 1' > "${TEMPDIR}/simple.teal"
 PROGRAM=($(${gcmd} clerk compile "${TEMPDIR}/simple.teal"))
 
 # Succeed in creating app that approves all transactions

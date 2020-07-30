@@ -3652,6 +3652,32 @@ func TestArgType(t *testing.T) {
 	require.Equal(t, StackUint64, sv.argType())
 }
 
+func TestApplicationsDisallowOldTeal(t *testing.T) {
+	const source = "int 1"
+	ep := defaultEvalParams(nil, nil)
+	for v := uint64(0); v < appsEnabledVersion; v++ {
+		program, err := AssembleStringWithVersion(source, v)
+		require.NoError(t, err)
+
+		_, err = CheckStateful(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "program version must be at least")
+
+		_, _, err = EvalStateful(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "program version must be at least")
+	}
+
+	program, err := AssembleStringWithVersion(source, appsEnabledVersion)
+	require.NoError(t, err)
+
+	_, err = CheckStateful(program, ep)
+	require.NoError(t, err)
+
+	_, _, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+}
+
 // check all v2 opcodes: allowed in v2 and not allowed in v1 and v0
 func TestAllowedOpcodesV2(t *testing.T) {
 	t.Parallel()
@@ -3716,16 +3742,13 @@ func TestAllowedOpcodesV2(t *testing.T) {
 					strings.Contains(err.Error(), "illegal opcode") ||
 						strings.Contains(err.Error(), "pc did not advance"),
 				)
-				_, err = CheckStateful(program, ep)
+				_, err = Check(program, ep)
 				require.Error(t, err, source)
 				require.True(t,
 					strings.Contains(err.Error(), "illegal opcode") ||
 						strings.Contains(err.Error(), "pc did not advance"),
 				)
 				_, err = Eval(program, ep)
-				require.Error(t, err, source)
-				require.Contains(t, err.Error(), "illegal opcode")
-				_, _, err = EvalStateful(program, ep)
 				require.Error(t, err, source)
 				require.Contains(t, err.Error(), "illegal opcode")
 			}
