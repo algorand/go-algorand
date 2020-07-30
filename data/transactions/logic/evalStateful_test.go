@@ -1140,11 +1140,9 @@ int 1
 	pass, _, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
-	t.Logf("%x", program)
 	// check holdings invalid offsets
 	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_params_get"].Opcode, program[6])
 	program[7] = 0x20
-	t.Logf("%x", program)
 	_, _, err = EvalStateful(program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset params field 32")
