@@ -386,6 +386,11 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 		return
 	}
 
+	err = cx.checkApplicationsAllowed()
+	if err != nil {
+		return
+	}
+
 	if cx.Debugger != nil {
 		cx.debugState = makeDebugState(cx)
 		if err = cx.Debugger.Register(cx.refreshDebugState()); err != nil {
@@ -487,6 +492,11 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 		return
 	}
 
+	err = cx.checkApplicationsAllowed()
+	if err != nil {
+		return
+	}
+
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
 		prevpc := cx.pc
 		cost += cx.checkStep()
@@ -508,6 +518,17 @@ func (cx *evalContext) checkRekeyAllowed() error {
 	// who could ordinarily spend from them.
 	if cx.version < rekeyingEnabledVersion && !cx.EvalParams.Txn.Txn.RekeyTo.IsZero() {
 		return fmt.Errorf("program version %d doesn't allow transactions with nonzero RekeyTo field", cx.version)
+	}
+	return nil
+}
+
+func (cx *evalContext) checkApplicationsAllowed() error {
+	// Require the use of TEAL v2 or greater for an application's
+	// ApprovalProgram or ClearStateProgram.
+	if cx.version < appsEnabledVersion && (cx.runModeFlags&runModeApplication) != 0 {
+		// Don't prompt to just use `#pragma version 2`, because that
+		// might not be safe, depending on the program.
+		return fmt.Errorf("program version must be at least %d to be used with Applications", appsEnabledVersion)
 	}
 	return nil
 }
