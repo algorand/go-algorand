@@ -277,6 +277,8 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	})
 
 	txn := makeSampleTxn()
+	// RekeyTo disallowed on TEAL v0/v1
+	txn.Txn.RekeyTo = basics.Address{}
 	txgroup := makeSampleTxnGroup(txn)
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], txn.Txn.Sender[:], txn.Txn.Note}
@@ -454,6 +456,9 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			ep.Proto = &proto
 			ep.Ledger = ledger
 			ep.TxnGroup = txgroup
+
+			var minTealVersion uint64
+			ep.MinTealVersion = &minTealVersion
 
 			// check failure with version check
 			_, err = Eval(program, ep)
