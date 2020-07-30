@@ -371,7 +371,7 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "greater than protocol supported version")
-		_, _, err = EvalStateful(program, ep)
+		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "greater than protocol supported version")
 
@@ -380,7 +380,7 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global[")
-		_, _, err = EvalStateful(program, ep)
+		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global[")
 
@@ -389,7 +389,7 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global[")
-		_, _, err = EvalStateful(program, ep)
+		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global[")
 	}
@@ -459,7 +459,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "greater than protocol supported version")
-			_, _, err = EvalStateful(program, ep)
+			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "greater than protocol supported version")
 
@@ -468,7 +468,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
-			_, _, err = EvalStateful(program, ep)
+			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
 
@@ -477,7 +477,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
-			_, _, err = EvalStateful(program, ep)
+			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
 		}
