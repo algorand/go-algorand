@@ -1169,6 +1169,27 @@ int 1
 	require.NoError(t, err)
 	require.True(t, pass)
 
+	source = `int 1  // foreign asset idx (txn.ForeignAssets[1])
+asset_params_get AssetURL
+!
+bnz error
+len
+int 9
+==
+bnz ok
+error:
+err
+ok:
+int 1
+`
+	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	require.NoError(t, err)
+	params.URL = "foobarbaz"
+	ledger.newAsset(77, params)
+	pass, _, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
 	source = `int 0
 asset_params_get AssetURL
 !
