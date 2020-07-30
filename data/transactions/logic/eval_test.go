@@ -1649,7 +1649,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.FreezeAsset = 34
 	copy(txn.Txn.FreezeAccount[:], freezeAccAddr)
 	txn.Txn.AssetFrozen = true
-	txn.Txn.ForeignAssets = []basics.AssetIndex{55}
+	txn.Txn.ForeignAssets = []basics.AssetIndex{55, 77}
 	return txn
 }
 
