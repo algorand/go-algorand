@@ -294,7 +294,7 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 | `app_local_del` | delete from account specified by Txn.Accounts[A] local state key B of the current application |
 | `app_global_del` | delete key A from a global state of the current application |
 | `asset_holding_get` | read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value} |
-| `asset_params_get` | read from account specified by Txn.Accounts[A] and asset B params field X (imm arg) => {0 or 1 (top), value} |
+| `asset_params_get` | read from asset Txn.ForeignAssets[A] params field X (imm arg) => {0 or 1 (top), value} |
 
 # Assembler Syntax
 
