@@ -137,6 +137,9 @@ type ConsensusParams struct {
 	DownCommitteeSize      uint64
 	DownCommitteeThreshold uint64
 
+	FilterTimeoutSmallLambdas             uint64
+	FilterTimeoutPeriod0SmallLambdas      uint64
+
 	FastRecoveryLambda    time.Duration // time between fast recovery attempts
 	FastPartitionRecovery bool          // set when fast partition recovery is enabled
 
@@ -487,6 +490,9 @@ func initConsensusProtocols() {
 		RedoCommitteeThreshold: 7750,
 		DownCommitteeSize:      10000,
 		DownCommitteeThreshold: 7750,
+
+		FilterTimeoutSmallLambdas:        2,
+		FilterTimeoutPeriod0SmallLambdas: 2,
 
 		FastRecoveryLambda: 5 * time.Minute,
 

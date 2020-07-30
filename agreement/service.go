@@ -19,6 +19,7 @@ package agreement
 //go:generate dbgen -i agree.sql -p agreement -n agree -o agreeInstall.go -h ../scripts/LICENSE_HEADER
 import (
 	"context"
+	"github.com/algorand/go-algorand/protocol"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -201,7 +202,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 	if err != nil || status.Round < s.Ledger.NextRound() {
 		// in this case, we don't have fresh and valid state
 		// pretend a new round has just started, and propose a block
-		status = player{Round: s.Ledger.NextRound(), Step: soft, Deadline: FilterTimeout(0)}
+		status = player{Round: s.Ledger.NextRound(), Step: soft, Deadline: FilterTimeout(0, protocol.ConsensusCurrentVersion)}
 		router = makeRootRouter(status)
 
 		a1 := pseudonodeAction{T: assemble, Round: s.Ledger.NextRound()}

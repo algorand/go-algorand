@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"github.com/algorand/go-algorand/protocol"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -30,11 +31,14 @@ var partitionStep = next + 3
 var recoveryExtraTimeout = config.Protocol.SmallLambda
 
 // FilterTimeout is the duration of the first agreement step.
-func FilterTimeout(target period) time.Duration {
-	if target == 0 {
-		return filterTimeout / 2
+func FilterTimeout(p period, v protocol.ConsensusVersion) time.Duration {
+	var smallLambdas uint64
+	if p == 0 {
+		smallLambdas = config.Consensus[v].FilterTimeoutPeriod0SmallLambdas
+	} else {
+		smallLambdas = config.Consensus[v].FilterTimeoutSmallLambdas
 	}
-	return filterTimeout
+	return config.Protocol.SmallLambda * time.Duration(smallLambdas)
 }
 
 // DeadlineTimeout is the duration of the second agreement step.
