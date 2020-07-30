@@ -171,7 +171,7 @@ A program starts with a varuint declaring the version of the compiled code. Any 
 
 For version 1, subsequent bytes after the varuint are program opcode bytes. Future versions could put other metadata following the version identifier.
 
-To prevent newly-introduced transaction fields from breaking assumptions made by older versions of TEAL, the TEAL environment prohibits the execution of TEAL on transaction groups where any transaction sets a field not present at the time the old TEAL version was introduced, and it instead causes those programs to fail.  For example, executing a TEAL version 1 program on a transaction with RekeyTo set to a nonzero address will cause the program to fail, regardless of the other contents of the program itself.
+It is important to prevent newly-introduced transaction fields from breaking assumptions made by older versions of TEAL. If one of the transactions in a group will execute a TEAL program whose version predates a given field, that field must not be set anywhere in the transaction group, or the group will be rejected. For example, executing a TEAL version 1 program on a transaction with RekeyTo set to a nonzero address will cause the program to fail, regardless of the other contents of the program itself.
 
 ## Varuint
 
