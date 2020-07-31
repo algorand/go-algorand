@@ -2073,6 +2073,10 @@
             "description": "The asset index if the transaction was found and it created an asset.",
             "type": "integer"
           },
+          "application-index": {
+            "description": "The application index if the transaction was found and it created an application.",
+            "type": "integer"
+          },
           "close-rewards": {
             "description": "Rewards in microalgos applied to the close remainder to account.",
             "type": "integer"
@@ -2096,6 +2100,17 @@
           "sender-rewards": {
             "description": "Rewards in microalgos applied to the sender account.",
             "type": "integer"
+          },
+          "local-state-delta": {
+            "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/AccountStateDelta"
+            }
+          },
+          "global-state-delta": {
+            "description": "\\[gd\\] Global state key/value changes for the application being executed by this transaction.",
+            "$ref": "#/definitions/StateDelta"
           },
           "txn": {
             "description": "The raw signed transaction.",
