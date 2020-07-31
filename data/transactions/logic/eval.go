@@ -487,9 +487,12 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 		return
 	}
 
-	for (cx.err == nil) && (cx.pc < len(cx.program)) {
+	for cx.pc < len(cx.program) {
 		prevpc := cx.pc
 		cost += cx.checkStep()
+		if cx.err != nil {
+			break
+		}
 		if cx.pc <= prevpc {
 			err = fmt.Errorf("pc did not advance, stuck at %d", cx.pc)
 			return
