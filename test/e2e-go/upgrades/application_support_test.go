@@ -35,7 +35,7 @@ import (
 
 // consensusTestUnupgradedProtocol is a version of ConsensusCurrentVersion
 // that allows the control of the upgrade from consensusTestUnupgradedProtocol to
-// consensusTestUnupgradedProtocol
+// test-fast-upgrade-future
 const consensusTestUnupgradedProtocol = protocol.ConsensusVersion("test-unupgraded-protocol")
 
 func makeApplicationUpgradeConsensus(t *testing.T) (appConsensus config.ConsensusProtocols) {
