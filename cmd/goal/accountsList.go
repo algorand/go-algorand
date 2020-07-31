@@ -231,6 +231,21 @@ func (accountList *AccountsList) outputAccount(addr string, acctInfo v1.Account,
 		}
 		fmt.Printf("]")
 	}
+	if len(acctInfo.AppParams) > 0 {
+		fmt.Printf("\t[created apps:")
+		for aid := range acctInfo.AppParams {
+			fmt.Printf(" %d", aid)
+		}
+		fmt.Printf("]")
+	}
+	if len(acctInfo.AppLocalStates) > 0 {
+		fmt.Printf("\t[opted in apps:")
+		for aid := range acctInfo.AppLocalStates {
+			fmt.Printf(" %d", aid)
+		}
+		fmt.Printf("]")
+	}
+
 	if accountList.isDefault(addr) {
 		fmt.Printf("\t*Default")
 	}
