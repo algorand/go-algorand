@@ -735,7 +735,7 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 
 	// system state setup: keygen, stake initialization
 	accounts, balances := createTestAccountsAndBalances(t, numNodes, (&[32]byte{})[:])
-	baseLedger := makeTestLedger(balances)
+	baseLedger := ledgerFactory(balances)
 
 	// logging
 	log := logging.Base()
@@ -895,6 +895,13 @@ func simulateAgreement(t *testing.T, numNodes int, numRounds int, traceLevel tra
 	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, makeTestLedger)
 }
 
+func simulateAgreementWithConsensusVersion(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, consensusVersion func(basics.Round) (protocol.ConsensusVersion, error)) {
+	ledgerFactory := func (balance map[basics.Address]basics.BalanceRecord) Ledger {
+		return makeTestLedgerWithConsensusVersion(balance, consensusVersion)
+	}
+	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, ledgerFactory)
+}
+
 func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.BalanceRecord) Ledger) {
 	_, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, traceLevel, ledgerFactory)
 	startRound := baseLedger.NextRound()
@@ -973,6 +980,31 @@ func TestAgreementSynchronous5_50(t *testing.T) {
 	}
 
 	simulateAgreement(t, 5, 50, disabled)
+}
+
+func TestAgreementSynchronousFuture5(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping agreement integration test")
+	}
+
+	consensusVersion := func (r basics.Round) (protocol.ConsensusVersion, error) {
+		return protocol.ConsensusFuture, nil
+	}
+	simulateAgreementWithConsensusVersion(t, 5, 5, disabled, consensusVersion)
+}
+
+func TestAgreementSynchronousFutureUpgrade(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping agreement integration test")
+	}
+
+	consensusVersion := func (r basics.Round) (protocol.ConsensusVersion, error) {
+		if r >= 5 {
+			return protocol.ConsensusFuture, nil
+		}
+		return protocol.ConsensusCurrentVersion, nil
+	}
+	simulateAgreementWithConsensusVersion(t, 5, 10, disabled, consensusVersion)
 }
 
 func TestAgreementFastRecoveryDownEarly(t *testing.T) {
