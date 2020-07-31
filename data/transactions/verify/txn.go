@@ -41,9 +41,8 @@ var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_l
 // on a signed transaction.
 type Context struct {
 	Params
-	Group          []transactions.SignedTxn
-	GroupIndex     int
-	MinTealVersion uint64
+	Group      []transactions.SignedTxn
+	GroupIndex int
 }
 
 // Params is the set of parameters external to a transaction which
@@ -55,8 +54,9 @@ type Context struct {
 // Group data are omitted because they are committed to in the
 // transaction and its ID.
 type Params struct {
-	CurrSpecAddrs transactions.SpecialAddresses
-	CurrProto     protocol.ConsensusVersion
+	CurrSpecAddrs  transactions.SpecialAddresses
+	CurrProto      protocol.ConsensusVersion
+	MinTealVersion uint64
 }
 
 // PrepareContexts prepares verification contexts for a transaction
@@ -71,12 +71,12 @@ func PrepareContexts(group []transactions.SignedTxn, contextHdr bookkeeping.Bloc
 		}
 		ctx := Context{
 			Params: Params{
-				CurrSpecAddrs: spec,
-				CurrProto:     contextHdr.CurrentProtocol,
+				CurrSpecAddrs:  spec,
+				CurrProto:      contextHdr.CurrentProtocol,
+				MinTealVersion: minTealVersion,
 			},
 			Group:          group,
 			GroupIndex:     i,
-			MinTealVersion: minTealVersion,
 		}
 		ctxs[i] = ctx
 	}
