@@ -63,10 +63,9 @@ def get_ranges():
     print(ranges)
     return ranges
 
+
+# create the group ranges based on group percent size
 ranges = get_ranges()
 
-# for i in range(10):
-#     partition_name = get_partition(ranges)
-#     print(i, partition_name)
-
+# gen the topology.json file based and assign groups
 gen_topology(ranges)
