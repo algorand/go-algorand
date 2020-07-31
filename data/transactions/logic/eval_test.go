@@ -3840,14 +3840,18 @@ func TestAllowedOpcodesV2(t *testing.T) {
 					strings.Contains(err.Error(), "illegal opcode") ||
 						strings.Contains(err.Error(), "pc did not advance"),
 				)
+				_, err = CheckStateful(program, ep)
+				require.Error(t, err, source)
+				require.True(t,
+					strings.Contains(err.Error(), "illegal opcode") ||
+						strings.Contains(err.Error(), "pc did not advance"),
+				)
 				_, err = Eval(program, ep)
 				require.Error(t, err, source)
 				require.Contains(t, err.Error(), "illegal opcode")
-
-				// It is not necessary to test CheckStateful and EvalStateful
-				// here, because we separately test that CheckStateful and
-				// EvalStateful will always fail if called on a version <
-				// appsEnabledVersion
+				_, _, err = EvalStateful(program, ep)
+				require.Error(t, err, source)
+				require.Contains(t, err.Error(), "illegal opcode")
 			}
 			cnt++
 		}
