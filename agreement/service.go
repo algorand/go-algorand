@@ -19,11 +19,11 @@ package agreement
 //go:generate dbgen -i agree.sql -p agreement -n agree -o agreeInstall.go -h ../scripts/LICENSE_HEADER
 import (
 	"context"
-	"github.com/algorand/go-algorand/protocol"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/timers"
