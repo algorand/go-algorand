@@ -47,8 +47,8 @@ def get_partition(ranges):
         partition_value = ranges[partition_name]
         if random_value >= partition_value['start']  and random_value <= partition_value['end'] :
             return partition_name
-
     print("error, partition not found for random_value ", random_value)
+    exit(1)
 
 def get_ranges():
     ranges = {}

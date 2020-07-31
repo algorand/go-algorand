@@ -2,6 +2,7 @@
 	"Hosts": [
 		{
 			"Name": "R1",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "relay1",
@@ -21,6 +22,7 @@
 		},
 		{
 			"Name": "R2",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "relay2",
@@ -40,6 +42,7 @@
 		},
 		{
 			"Name": "R3",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "relay3",
@@ -59,6 +62,7 @@
 		},
 		{
 			"Name": "R4",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "relay4",
@@ -78,6 +82,7 @@
 		},
 		{
 			"Name": "R5",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "relay5",
@@ -97,6 +102,7 @@
 		},
 		{
 			"Name": "R6",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "relay6",
@@ -116,6 +122,7 @@
 		},
 		{
 			"Name": "R7",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "relay7",
@@ -135,6 +142,7 @@
 		},
 		{
 			"Name": "R8",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "relay8",
@@ -154,6 +162,7 @@
 		},
 		{
 			"Name": "N1",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node1",
@@ -244,6 +253,7 @@
 		},
 		{
 			"Name": "N2",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node2",
@@ -334,6 +344,7 @@
 		},
 		{
 			"Name": "N3",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node3",
@@ -424,6 +435,7 @@
 		},
 		{
 			"Name": "N4",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node4",
@@ -514,6 +526,7 @@
 		},
 		{
 			"Name": "N5",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node5",
@@ -604,6 +617,7 @@
 		},
 		{
 			"Name": "N6",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node6",
@@ -694,6 +708,7 @@
 		},
 		{
 			"Name": "N7",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node7",
@@ -784,6 +799,7 @@
 		},
 		{
 			"Name": "N8",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node8",
@@ -874,6 +890,7 @@
 		},
 		{
 			"Name": "N9",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node9",
@@ -964,6 +981,7 @@
 		},
 		{
 			"Name": "N10",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node10",
@@ -1054,6 +1072,7 @@
 		},
 		{
 			"Name": "N11",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node11",
@@ -1144,6 +1163,7 @@
 		},
 		{
 			"Name": "N12",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node12",
@@ -1234,6 +1254,7 @@
 		},
 		{
 			"Name": "N13",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node13",
@@ -1324,6 +1345,7 @@
 		},
 		{
 			"Name": "N14",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node14",
@@ -1414,6 +1436,7 @@
 		},
 		{
 			"Name": "N15",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node15",
@@ -1504,6 +1527,7 @@
 		},
 		{
 			"Name": "N16",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node16",
@@ -1594,6 +1618,7 @@
 		},
 		{
 			"Name": "N17",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node17",
@@ -1684,6 +1709,7 @@
 		},
 		{
 			"Name": "N18",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node18",
@@ -1774,6 +1800,7 @@
 		},
 		{
 			"Name": "N19",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node19",
@@ -1864,6 +1891,7 @@
 		},
 		{
 			"Name": "N20",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "node20",
@@ -1954,6 +1982,7 @@
 		},
 		{
 			"Name": "NPN1",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "nonParticipatingNode1",
@@ -2011,6 +2040,7 @@
 		},
 		{
 			"Name": "NPN2",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "nonParticipatingNode2",
@@ -2068,6 +2098,7 @@
 		},
 		{
 			"Name": "NPN3",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "nonParticipatingNode3",
@@ -2125,6 +2156,7 @@
 		},
 		{
 			"Name": "NPN4",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "nonParticipatingNode4",
@@ -2182,6 +2214,7 @@
 		},
 		{
 			"Name": "NPN5",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "nonParticipatingNode5",
@@ -2239,6 +2272,7 @@
 		},
 		{
 			"Name": "NPN6",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "nonParticipatingNode6",
@@ -2296,6 +2330,7 @@
 		},
 		{
 			"Name": "NPN7",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "nonParticipatingNode7",
@@ -2353,6 +2388,7 @@
 		},
 		{
 			"Name": "NPN8",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "nonParticipatingNode8",
@@ -2410,6 +2446,7 @@
 		},
 		{
 			"Name": "NPN9",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "nonParticipatingNode9",
@@ -2467,6 +2504,7 @@
 		},
 		{
 			"Name": "NPN10",
+			"Group": "",
 			"Nodes": [
 				{
 					"Name": "nonParticipatingNode10",
