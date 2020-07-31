@@ -85,33 +85,33 @@ func TestApplicationsUpgradeOverREST(t *testing.T) {
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes100SecondTestUnupgradedProtocol.json"))
 	defer fixture.Shutdown()
 
-	secondaryClient := fixture.GetLibGoalClientForNamedNode("Node")
-	accountList, err := fixture.GetNodeWalletsSortedByBalance(secondaryClient.DataDir())
+	client := fixture.GetLibGoalClientForNamedNode("Node")
+	accountList, err := fixture.GetNodeWalletsSortedByBalance(client.DataDir())
 	require.NoError(t, err)
 
 	creator := accountList[0].Address
-	wh, err := secondaryClient.GetUnencryptedWalletHandle()
+	wh, err := client.GetUnencryptedWalletHandle()
 	require.NoError(t, err)
 
-	user, err := secondaryClient.GenerateAddress(wh)
+	user, err := client.GenerateAddress(wh)
 	require.NoError(t, err)
 
 	fee := uint64(1000)
 
-	round, err := secondaryClient.CurrentRound()
+	round, err := client.CurrentRound()
 	require.NoError(t, err)
 
 	// Fund the manager, so it can issue transactions later on
-	_, err = secondaryClient.SendPaymentFromUnencryptedWallet(creator, user, fee, 10000000000, nil)
+	_, err = client.SendPaymentFromUnencryptedWallet(creator, user, fee, 10000000000, nil)
 	require.NoError(t, err)
-	secondaryClient.WaitForRound(round + 2)
+	client.WaitForRound(round + 2)
 
 	// There should be no apps to start with
-	ad, err := secondaryClient.AccountData(creator)
+	ad, err := client.AccountData(creator)
 	require.NoError(t, err)
 	require.Zero(t, len(ad.AppParams))
 
-	ad, err = secondaryClient.AccountData(user)
+	ad, err = client.AccountData(user)
 	require.NoError(t, err)
 	require.Zero(t, len(ad.AppParams))
 	require.Equal(t, basics.MicroAlgos{Raw: 10000000000}, ad.MicroAlgos)
@@ -149,22 +149,22 @@ int 1
 	}
 
 	// create the app
-	tx, err := secondaryClient.MakeUnsignedAppCreateTx(
+	tx, err := client.MakeUnsignedAppCreateTx(
 		transactions.OptInOC, approval, clearstate, schema, schema, nil, nil, nil,
 	)
 	require.NoError(t, err)
-	tx, err = secondaryClient.FillUnsignedTxTemplate(creator, 0, 0, fee, tx)
+	tx, err = client.FillUnsignedTxTemplate(creator, 0, 0, fee, tx)
 	require.NoError(t, err)
-	signedTxn, err := secondaryClient.SignTransactionWithWallet(wh, nil, tx)
+	signedTxn, err := client.SignTransactionWithWallet(wh, nil, tx)
 	require.NoError(t, err)
-	round, err = secondaryClient.CurrentRound()
+	round, err = client.CurrentRound()
 	require.NoError(t, err)
 
-	_, err = secondaryClient.BroadcastTransaction(signedTxn)
+	_, err = client.BroadcastTransaction(signedTxn)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "application transaction not supported")
 
-	curStatus, err := secondaryClient.Status()
+	curStatus, err := client.Status()
 	require.NoError(t, err)
 	initialStatus := curStatus
 
@@ -172,16 +172,116 @@ int 1
 
 	// wait until the network upgrade : this can take a while.
 	for curStatus.LastVersion == initialStatus.LastVersion {
-		curStatus, err = secondaryClient.Status()
+		curStatus, err = client.Status()
 		require.NoError(t, err)
 
 		require.Less(t, int64(time.Now().Sub(startLoopTime)), int64(3*time.Minute))
 		time.Sleep(time.Duration(roundTimeMs) * time.Millisecond)
+		round = curStatus.LastRound
 	}
 
 	// now, that we have upgraded to the new protocol which supports applications, try again.
-	_, err = secondaryClient.BroadcastTransaction(signedTxn)
+	_, err = client.BroadcastTransaction(signedTxn)
 	require.NoError(t, err)
 
+	curStatus, err = client.Status()
+	require.NoError(t, err)
+
+	round = curStatus.LastRound
+
+	client.WaitForRound(round + 2)
+	pendingTx, err := client.GetPendingTransactions(1)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), pendingTx.TotalTxns)
+
+	// check creator's balance record for the app entry and the state changes
+	ad, err = client.AccountData(creator)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(ad.AppParams))
+	var appIdx basics.AppIndex
+	var params basics.AppParams
+	for i, p := range ad.AppParams {
+		appIdx = i
+		params = p
+		break
+	}
+	require.Equal(t, approval, params.ApprovalProgram)
+	require.Equal(t, clearstate, params.ClearStateProgram)
+	require.Equal(t, schema, params.LocalStateSchema)
+	require.Equal(t, schema, params.GlobalStateSchema)
+	require.Equal(t, 1, len(params.GlobalState))
+	value, ok := params.GlobalState["counter"]
+	require.True(t, ok)
+	require.Equal(t, uint64(1), value.Uint)
+
+	require.Equal(t, 1, len(ad.AppLocalStates))
+	state, ok := ad.AppLocalStates[appIdx]
+	require.True(t, ok)
+	require.Equal(t, schema, state.Schema)
+	require.Equal(t, 1, len(state.KeyValue))
+	value, ok = state.KeyValue["counter"]
+	require.True(t, ok)
+	require.Equal(t, uint64(1), value.Uint)
+
+	// call the app
+	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil)
+	require.NoError(t, err)
+	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
+	require.NoError(t, err)
+	signedTxn, err = client.SignTransactionWithWallet(wh, nil, tx)
+	require.NoError(t, err)
+	round, err = client.CurrentRound()
+	require.NoError(t, err)
+	_, err = client.BroadcastTransaction(signedTxn)
+	require.NoError(t, err)
+
+	client.WaitForRound(round + 2)
+
+	// check creator's balance record for the app entry and the state changes
+	ad, err = client.AccountData(creator)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(ad.AppParams))
+	params, ok = ad.AppParams[appIdx]
+	require.True(t, ok)
+	require.Equal(t, approval, params.ApprovalProgram)
+	require.Equal(t, clearstate, params.ClearStateProgram)
+	require.Equal(t, schema, params.LocalStateSchema)
+	require.Equal(t, schema, params.GlobalStateSchema)
+	require.Equal(t, 1, len(params.GlobalState))
+	value, ok = params.GlobalState["counter"]
+	require.True(t, ok)
+	require.Equal(t, uint64(2), value.Uint)
+
+	require.Equal(t, 1, len(ad.AppLocalStates))
+	state, ok = ad.AppLocalStates[appIdx]
+	require.True(t, ok)
+	require.Equal(t, schema, state.Schema)
+	require.Equal(t, 1, len(state.KeyValue))
+	value, ok = state.KeyValue["counter"]
+	require.True(t, ok)
+	require.Equal(t, uint64(1), value.Uint)
+
+	require.Equal(t, uint64(2), ad.TotalAppSchema.NumUint)
+
+	// check user's balance record for the app entry and the state changes
+	ad, err = client.AccountData(user)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(ad.AppParams))
+
+	require.Equal(t, 1, len(ad.AppLocalStates))
+	state, ok = ad.AppLocalStates[appIdx]
+	require.True(t, ok)
+	require.Equal(t, schema, state.Schema)
+	require.Equal(t, 1, len(state.KeyValue))
+	value, ok = state.KeyValue["counter"]
+	require.True(t, ok)
+	require.Equal(t, uint64(1), value.Uint)
+
+	require.Equal(t, basics.MicroAlgos{Raw: 10000000000 - fee}, ad.MicroAlgos)
+
+	app, err := client.ApplicationInformation(uint64(appIdx))
+	require.NoError(t, err)
+	require.Equal(t, uint64(appIdx), app.Id)
+	require.Equal(t, creator, app.Params.Creator)
 	return
 }
