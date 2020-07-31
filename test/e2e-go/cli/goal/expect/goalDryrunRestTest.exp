@@ -78,7 +78,7 @@ if { [catch {
     puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
 
     set TEAL_PROG_FILE "$TEST_ROOT_DIR/trivial.teal"
-    exec echo -e '#pragma version 2\nint 1' > $TEAL_PROG_FILE
+    exec echo -e "#pragma version 2\nint 1" > $TEAL_PROG_FILE
 
     # no format parameter
     set DRREQ_FILE_1 "$TEST_ROOT_DIR/app-create-drreq-1.json"
