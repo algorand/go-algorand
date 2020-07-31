@@ -101,3 +101,24 @@ if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+app-create-test FAIL clearing state twice should fail %Y%m%d_%H%M%S'
     false
 fi
+
+# Fund a v1 and v2 escrow
+ESCROWV1=$(${gcmd} clerk compile ${TEMPDIR}/simplev1.teal -o ${TEMPDIR}/simplev1.tealsig | awk '{ print $2 }')
+ESCROWV2=$(${gcmd} clerk compile ${TEMPDIR}/simple.teal -o ${TEMPDIR}/simple.tealsig | awk '{ print $2 }')
+${gcmd} clerk send -a 10000000 -f ${ACCOUNT} -t ${ESCROWV1}
+${gcmd} clerk send -a 10000000 -f ${ACCOUNT} -t ${ESCROWV2}
+
+# Creating an app from a v2 escrow should succeed
+${gcmd} app create --creator $ESCROWV2 --approval-prog ${TEMPDIR}/simple.teal --clear-prog ${TEMPDIR}/simple.teal --global-byteslices 0 --global-ints ${GLOBAL_INTS} --local-byteslices 0 --local-ints 0 -o ${TEMPDIR}/v2appcreate.tx
+${gcmd} clerk sign -p ${TEMPDIR}/simple.teal -i ${TEMPDIR}/v2appcreate.tx -o ${TEMPDIR}/v2appcreate.stx
+${gcmd} clerk rawsend -f ${TEMPDIR}/v2appcreate.stx
+
+# Creating an app from a v1 escrow should fail
+${gcmd} app create --creator $ESCROWV1 --approval-prog ${TEMPDIR}/simple.teal --clear-prog ${TEMPDIR}/simple.teal --global-byteslices 0 --global-ints ${GLOBAL_INTS} --local-byteslices 0 --local-ints 0 -o ${TEMPDIR}/v1appcreate.tx
+${gcmd} clerk sign -p ${TEMPDIR}/simplev1.teal -i ${TEMPDIR}/v1appcreate.tx -o ${TEMPDIR}/v1appcreate.stx
+RES=$(${gcmd} clerk rawsend -f ${TEMPDIR}/v1appcreate.stx 2>&1 || true)
+EXPERROR='program version must be >= 2 for this transaction group'
+if [[ $RES != *"${EXPERROR}"* ]]; then
+    date '+app-create-test FAIL app create txn from v1 escrow should fail %Y%m%d_%H%M%S'
+    false
+fi
