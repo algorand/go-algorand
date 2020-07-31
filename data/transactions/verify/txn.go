@@ -75,8 +75,8 @@ func PrepareContexts(group []transactions.SignedTxn, contextHdr bookkeeping.Bloc
 				CurrProto:      contextHdr.CurrentProtocol,
 				MinTealVersion: minTealVersion,
 			},
-			Group:          group,
-			GroupIndex:     i,
+			Group:      group,
+			GroupIndex: i,
 		}
 		ctxs[i] = ctx
 	}

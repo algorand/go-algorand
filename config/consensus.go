@@ -495,7 +495,7 @@ func initConsensusProtocols() {
 
 		MaxBalLookback: 320,
 
-		MaxTxGroupSize:               1,
+		MaxTxGroupSize: 1,
 	}
 
 	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
