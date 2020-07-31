@@ -223,10 +223,11 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, ctx *Context) error {
 	}
 
 	ep := logic.EvalParams{
-		Txn:        txn,
-		Proto:      &proto,
-		TxnGroup:   ctx.Group,
-		GroupIndex: ctx.GroupIndex,
+		Txn:            txn,
+		Proto:          &proto,
+		TxnGroup:       ctx.Group,
+		GroupIndex:     ctx.GroupIndex,
+		MinTealVersion: &ctx.MinTealVersion,
 	}
 	cost, err := logic.Check(lsig.Logic, ep)
 	if err != nil {
