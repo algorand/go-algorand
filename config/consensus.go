@@ -754,7 +754,7 @@ func initConsensusProtocols() {
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
-	vFuture := v23
+	vFuture := v24
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	Consensus[protocol.ConsensusFuture] = vFuture
