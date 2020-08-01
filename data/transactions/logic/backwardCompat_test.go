@@ -363,6 +363,7 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		require.NoError(t, err)
 
 		proto := config.Consensus[protocol.ConsensusV23]
+		require.False(t, proto.Application)
 		ep := defaultEvalParams(nil, nil)
 		ep.Proto = &proto
 		ep.Ledger = ledger
@@ -450,6 +451,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			}
 
 			proto := config.Consensus[protocol.ConsensusV23]
+			require.False(t, proto.Application)
 			ep := defaultEvalParams(nil, nil)
 			ep.Proto = &proto
 			ep.Ledger = ledger
