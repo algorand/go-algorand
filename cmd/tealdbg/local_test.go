@@ -316,6 +316,7 @@ func TestDebugEnvironment(t *testing.T) {
 				ApplicationArgs: [][]byte{[]byte("ALGO"), []byte("RAND")},
 				Accounts:        []basics.Address{receiver},
 				ForeignApps:     []basics.AppIndex{appIdx1},
+				ForeignAssets:   []basics.AssetIndex{assetIdx},
 			},
 		},
 	}
@@ -434,7 +435,6 @@ int 10
 ==
 &&
 int 0
-int 50
 asset_params_get AssetTotal
 bnz ok4
 err
@@ -898,12 +898,10 @@ func TestLocalLedger(t *testing.T) {
 	holdings, err = ledger.AssetHolding(sender, assetIdx+1)
 	a.Error(err)
 
-	params, err := ledger.AssetParams(sender, assetIdx)
+	params, err := ledger.AssetParams(assetIdx)
 	a.NoError(err)
 	a.Equal(uint64(100), params.Total)
 	a.Equal("tok", params.UnitName)
-	params, err = ledger.AssetParams(payTxn.Txn.Receiver, assetIdx)
-	a.Error(err)
 
 	tkv, err := ledger.AppGlobalState(0)
 	a.NoError(err)

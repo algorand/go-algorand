@@ -278,6 +278,11 @@ func applicationCallTxEncode(tx transactions.Transaction, ad transactions.ApplyD
 		encodedForeignApps = append(encodedForeignApps, uint64(aidx))
 	}
 
+	encodedForeignAssets := make([]uint64, 0, len(tx.ForeignAssets))
+	for _, aidx := range tx.ForeignAssets {
+		encodedForeignAssets = append(encodedForeignAssets, uint64(aidx))
+	}
+
 	encodedArgs := make([]string, 0, len(tx.ApplicationArgs))
 	for _, arg := range tx.ApplicationArgs {
 		encodedArgs = append(encodedArgs, b64.EncodeToString([]byte(arg)))
@@ -286,6 +291,7 @@ func applicationCallTxEncode(tx transactions.Transaction, ad transactions.ApplyD
 	app.Accounts = encodedAccounts
 	app.ApplicationArgs = encodedArgs
 	app.ForeignApps = encodedForeignApps
+	app.ForeignAssets = encodedForeignAssets
 	return v1.Transaction{
 		ApplicationCall: &app,
 	}

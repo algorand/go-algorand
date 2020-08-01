@@ -557,6 +557,7 @@ var appExecuteCmd = &cobra.Command{
 		onCompletion := mustParseOnCompletion(proc.OnCompletion)
 		appAccounts := inputs.Accounts
 		foreignApps := inputs.ForeignApps
+		foreignAssets := inputs.ForeignAssets
 
 		appArgs := make([][]byte, len(inputs.Args))
 		for i, arg := range inputs.Args {
@@ -581,7 +582,7 @@ var appExecuteCmd = &cobra.Command{
 			localSchema = header.Query.Local.ToStateSchema()
 			globalSchema = header.Query.Global.ToStateSchema()
 		}
-		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, onCompletion, approvalProg, clearProg, globalSchema, localSchema)
+		tx, err := client.MakeUnsignedApplicationCallTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, onCompletion, approvalProg, clearProg, globalSchema, localSchema)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
