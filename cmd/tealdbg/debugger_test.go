@@ -90,6 +90,7 @@ func (d *testDbgAdapter) eventLoop() {
 
 func TestDebuggerSimple(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusV23]
+	require.False(t, proto.Application)
 	debugger := MakeDebugger()
 
 	da := makeTestDbgAdapter(t)
