@@ -237,6 +237,11 @@ type ConsensusParams struct {
 	// which global state may be read in the transaction
 	MaxAppTxnForeignApps int
 
+	// maximum number of asset ids in the ApplicationCall ForeignAssets
+	// field. these are the only assets for which the asset parameters may
+	// be read in the transaction
+	MaxAppTxnForeignAssets int
+
 	// maximum cost of application approval program or clear state program
 	MaxAppProgramCost int
 
@@ -495,7 +500,7 @@ func initConsensusProtocols() {
 
 		MaxBalLookback: 320,
 
-		MaxTxGroupSize:               1,
+		MaxTxGroupSize: 1,
 	}
 
 	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
@@ -716,6 +721,9 @@ func initConsensusProtocols() {
 
 	// Can look up 2 other app creator balance records to see global state
 	vFuture.MaxAppTxnForeignApps = 2
+
+	// Can look up 2 assets to see asset parameters
+	vFuture.MaxAppTxnForeignAssets = 2
 
 	// 64 byte keys @ ~333 microAlgos/byte + delta
 	vFuture.SchemaMinBalancePerEntry = 25000

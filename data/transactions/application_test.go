@@ -30,8 +30,8 @@ func TestApplicationCallFieldsNotChanged(t *testing.T) {
 	af := ApplicationCallTxnFields{}
 	s := reflect.ValueOf(&af).Elem()
 
-	if s.NumField() != 10 {
-		t.Errorf("You added or removed a field from ApplicationCallTxnFields. " +
+	if s.NumField() != 11 {
+		t.Errorf("You added or removed a field from transactions.ApplicationCallTxnFields. " +
 			"Please ensure you have updated the Empty() method and then " +
 			"fix this test")
 	}
@@ -63,6 +63,10 @@ func TestApplicationCallFieldsEmpty(t *testing.T) {
 	a.False(ac.Empty())
 
 	ac.ForeignApps = nil
+	ac.ForeignAssets = make([]basics.AssetIndex, 1)
+	a.False(ac.Empty())
+
+	ac.ForeignAssets = nil
 	ac.LocalStateSchema = basics.StateSchema{NumUint: 1}
 	a.False(ac.Empty())
 
@@ -100,6 +104,9 @@ func TestEncodedAppTxnAllocationBounds(t *testing.T) {
 		}
 		if proto.MaxAppTxnForeignApps > encodedMaxForeignApps {
 			require.Failf(t, "proto.MaxAppTxnForeignApps > encodedMaxForeignApps", "protocol version = %s", protoVer)
+		}
+		if proto.MaxAppTxnForeignAssets > encodedMaxForeignAssets {
+			require.Failf(t, "proto.MaxAppTxnForeignAssets > encodedMaxForeignAssets", "protocol version = %s", protoVer)
 		}
 	}
 }

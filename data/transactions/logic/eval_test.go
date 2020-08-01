@@ -1649,6 +1649,7 @@ func makeSampleTxn() transactions.SignedTxn {
 	txn.Txn.FreezeAsset = 34
 	copy(txn.Txn.FreezeAccount[:], freezeAccAddr)
 	txn.Txn.AssetFrozen = true
+	txn.Txn.ForeignAssets = []basics.AssetIndex{55, 77}
 	return txn
 }
 
@@ -3712,16 +3713,10 @@ func TestAllowedOpcodesV2(t *testing.T) {
 				program[0] = v
 				_, err = Check(program, ep)
 				require.Error(t, err, source)
-				require.True(t,
-					strings.Contains(err.Error(), "illegal opcode") ||
-						strings.Contains(err.Error(), "pc did not advance"),
-				)
+				require.Contains(t, err.Error(), "illegal opcode")
 				_, err = CheckStateful(program, ep)
 				require.Error(t, err, source)
-				require.True(t,
-					strings.Contains(err.Error(), "illegal opcode") ||
-						strings.Contains(err.Error(), "pc did not advance"),
-				)
+				require.Contains(t, err.Error(), "illegal opcode")
 				_, err = Eval(program, ep)
 				require.Error(t, err, source)
 				require.Contains(t, err.Error(), "illegal opcode")

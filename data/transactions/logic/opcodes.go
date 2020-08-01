@@ -158,7 +158,7 @@ var OpSpecs = []OpSpec{
 	{0x69, "app_global_del", opAppDeleteGlobalState, asmDefault, disDefault, oneBytes, nil, 2, runModeApplication, opSizeDefault},
 
 	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, twoInts, oneInt.plus(oneAny), 2, runModeApplication, opSize{1, 2, nil}},
-	{0x71, "asset_params_get", opAssetParamsGet, assembleAssetParams, disAssetParams, twoInts, oneInt.plus(oneAny), 2, runModeApplication, opSize{1, 2, nil}},
+	{0x71, "asset_params_get", opAssetParamsGet, assembleAssetParams, disAssetParams, oneInt, oneInt.plus(oneAny), 2, runModeApplication, opSize{1, 2, nil}},
 }
 
 type sortByOpcode []OpSpec
