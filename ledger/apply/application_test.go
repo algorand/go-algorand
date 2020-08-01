@@ -19,7 +19,6 @@ package apply
 import (
 	"fmt"
 	"math/rand"
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -30,17 +29,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 )
-
-func TestApplicationCallFieldsNotChanged(t *testing.T) {
-	af := transactions.ApplicationCallTxnFields{}
-	s := reflect.ValueOf(&af).Elem()
-
-	if s.NumField() != 10 {
-		t.Errorf("You added or removed a field from transactions.ApplicationCallTxnFields. " +
-			"Please ensure you have updated the Empty() method and then " +
-			"fix this test")
-	}
-}
 
 func TestApplicationCallFieldsEmpty(t *testing.T) {
 	a := require.New(t)
