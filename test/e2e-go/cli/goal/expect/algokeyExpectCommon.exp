@@ -1,0 +1,36 @@
+# Algorand Algokey Expect Utility Package
+namespace eval ::AlgorandAlgokey {
+  namespace export GenerateKey
+  namespace export GetKey
+  namespace export GetMnemonic
+
+  # My Variables
+   set version 1.0
+   set description "Algorand Algokey Expect Package"
+
+  # Variable for the path of the script
+   variable home [file join [pwd] [file dirname [info script]]]
+}
+
+package provide AlgorandAlgokey $AlgorandAlgokey::version
+package require Tcl 8.0
+
+proc ::AlgorandAlgokey::GenerateKey {} {
+    log_user 0
+    spawn algokey generate
+    expect -re "Private key mnemonic: (.*)\nPublic key: (.*)\n"
+    set ::GLOBAL_MNEMONIC [string trim $expect_out(1,string)]
+    set ::GLOBAL_KEY [string trim $expect_out(2,string)]
+    log_user 1
+}
+
+proc ::AlgorandAlgokey::GetKey {} {
+    puts "KEY $::GLOBAL_KEY"
+    return $::GLOBAL_KEY
+}
+
+proc ::AlgorandAlgokey::GetMnemonic {} {
+    puts "MNEMONIC $::GLOBAL_MNEMONIC"
+    return $::GLOBAL_MNEMONIC
+}
+

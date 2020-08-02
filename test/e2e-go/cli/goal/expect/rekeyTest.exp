@@ -3,19 +3,26 @@
 set err 0
 log_user 1
 
-source  goalExpectCommon.exp
+source goalExpectCommon.exp
+source algokeyExpectCommon.exp
 
 set TEST_ALGO_DIR [lindex $argv 0]
 set TEST_DATA_DIR [lindex $argv 1]
 
-proc rekeyTest { TEST_ALGO_DIR TEST_DATA_DIR} {
-
+proc rekeyTest { TEST_ALGO_DIR TEST_DATA_DIR } {
     set TIME_STAMP [clock seconds]
-
     set TEST_ROOT_DIR $TEST_ALGO_DIR/root_$TIME_STAMP
     set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
     set NETWORK_NAME test_net_expect_$TIME_STAMP
     set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+    set PRIMARY_WALLET_PASSWORD ""
+    set TRANSFER_AMOUNT 100000
+    set FEE_AMOUNT 1000
+    set RETURN_VALUE 0
+    set TMP_DIR [exec mktemp -d]
+    set TXN_OUTFILE $TMP_DIR/ntxn
+    set SIGNED_TXN_OUTFILE $TMP_DIR/nstxn
 
     exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
 
@@ -25,42 +32,78 @@ proc rekeyTest { TEST_ALGO_DIR TEST_DATA_DIR} {
     # Start network
     ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
 
-    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
-    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+    set PRIMARY_NODE_ADDRESS [::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR]
 
-    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Address: $PRIMARY_ACCOUNT_ADDRESS"
 
-    # Determine primary account
-    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+    set SECONDARY_ACCOUNT_ADDRESS [::AlgorandGoal::CreateAccountForWallet $PRIMARY_WALLET_NAME $PRIMARY_WALLET_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    puts "Secondary Account Address: $SECONDARY_ACCOUNT_ADDRESS"
 
-    # Check the balance of the primary account
-    set PRIMARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
-    puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
+    # Print starting balances
+    set ACCOUNTS { $PRIMARY_ACCOUNT_ADDRESS $SECONDARY_ACCOUNT_ADDRESS }
+    foreach e $ACCOUNTS {
+        set ACCOUNT $e
+        ::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME [subst $ACCOUNT] $TEST_PRIMARY_NODE_DIR
+    }
 
-    ::AlgorandGoal::WaitForRound 1 $TEST_PRIMARY_NODE_DIR
+    # Create and import new account
+    ::AlgorandAlgokey::GenerateKey
+    set MNEMONIC [::AlgorandAlgokey::GetMnemonic]
+    set IMPORTED_ACCOUNT_ADDRESS [::AlgorandAlgokey::GetKey]
+    ::AlgorandGoal::ImportAccountKey $PRIMARY_WALLET_NAME $MNEMONIC
 
+    # Send transaction, rekey
+    set TXN_ID [::AlgorandGoal::AccountTransferRekey $PRIMARY_WALLET_NAME $PRIMARY_WALLET_PASSWORD $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $SECONDARY_ACCOUNT_ADDRESS $FEE_AMOUNT $IMPORTED_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Transaction ID: $TXN_ID"
+
+    ::AlgorandGoal::WaitForAccountBalance $PRIMARY_WALLET_NAME $SECONDARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $TEST_PRIMARY_NODE_DIR
+
+    # Print balances after transfer
+    lappend ACCOUNTS $IMPORTED_ACCOUNT_ADDRESS
+    foreach e $ACCOUNTS {
+        set ACCOUNT $e
+        ::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME [subst $ACCOUNT] $TEST_PRIMARY_NODE_DIR
+    }
+
+    # Create new transaction and output to file
+    ::AlgorandGoal::CreateTransaction $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $SECONDARY_ACCOUNT_ADDRESS $TXN_OUTFILE $TEST_PRIMARY_NODE_DIR
     puts "app info test was successful"
+
+    # Sign the latest transaction with the rekeyed account
+    ::AlgorandGoal::SignTransactionRekey $PRIMARY_WALLET_NAME $IMPORTED_ACCOUNT_ADDRESS $TXN_OUTFILE $SIGNED_TXN_OUTFILE $TEST_PRIMARY_NODE_DIR
+
+    # Send the signed transaction to the node
+    ::AlgorandGoal::RawSend $SIGNED_TXN_OUTFILE $TEST_PRIMARY_NODE_DIR
+
+    ::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $SECONDARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR
+
+    ::AlgorandGoal::WaitForAccountBalance $PRIMARY_WALLET_NAME $SECONDARY_ACCOUNT_ADDRESS [expr $TRANSFER_AMOUNT * 2] $TEST_PRIMARY_NODE_DIR
+    set SECONDARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $SECONDARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+
+    if { $SECONDARY_ACCOUNT_BALANCE == [expr $TRANSFER_AMOUNT * 2] } {
+        puts "Goal rekeyTest Successful"
+    } else {
+        RETURN_VALUE = 1
+        puts "Goal rekeyTest Not Successful"
+    }
 
     # Shutdown the network
     ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
-
-    puts "Goal rekeyTest Successful"
-
+    exit $RETURN_VALUE
 }
 
-
 if { [catch {
-    source  goalExpectCommon.exp
+    source goalExpectCommon.exp
 
     puts "starting rekeyTest"
 
     puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
     puts "TEST_DATA_DIR: $TEST_DATA_DIR"
 
-    rekeyTest  $TEST_ALGO_DIR  $TEST_DATA_DIR
+    rekeyTest $TEST_ALGO_DIR $TEST_DATA_DIR
 
     exit 0
-
 } EXCEPTION ] } {
    ::AlgorandGoal::Abort "ERROR in rekeyTest: $EXCEPTION"
 }

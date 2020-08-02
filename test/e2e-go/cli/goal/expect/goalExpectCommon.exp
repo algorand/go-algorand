@@ -13,7 +13,9 @@ namespace eval ::AlgorandGoal {
   namespace export GetAccountAddress
   namespace export GetAccountBalance
   namespace export GetAccountRewards
+  namespace export ImportAccountKey
   namespace export AccountTransfer
+  namespace export AccountTransferRekey
   namespace export WaitForAccountBalance
   namespace export GetHighestFundedAccountForWallet
   namespace export GetAlgodNetworkAddress
@@ -24,6 +26,9 @@ namespace eval ::AlgorandGoal {
   namespace export ListParticipationKeys
   namespace export AddParticipationKey
   namespace export TakeAccountOnline
+  namespace export CreateTransaction
+  namespace export SignTransaction
+  namespace export SignTransactionRekey
 
   # My Variables
    set version 1.0
@@ -376,6 +381,20 @@ proc ::AlgorandGoal::GetAccountRewards { WALLET_NAME ACCOUNT_ADDRESS TEST_PRIMAR
     return $ACCOUNT_EARNINGS
 }
 
+# Import account key from mnemonic
+proc ::AlgorandGoal::ImportAccountKey { WALLET_NAME MNEMONIC } {
+    set timeout 60
+    log_user 0
+    spawn goal account import -m $MNEMONIC
+    expect {
+        timeout { ::AlgorandGoal::Abort "Timed out retrieving importing account from mnemonic $MNEMONIC" }
+        -re {Imported\s.*} { set OUTPUT $expect_out(0,string) }
+        -re {Problem with mnemonic:\s.*} { set OUTPUT $expect_out(0,string); exit 1 }
+    }
+    puts $OUTPUT
+    log_user 1
+}
+
 # Account Transfer
 proc ::AlgorandGoal::AccountTransfer { FROM_WALLET_NAME FROM_WALLET_PASSWORD FROM_ACCOUNT_ADDRESS TRANSFER_AMOUNT TO_ACCOUNT_ADDRESS FEE_AMOUNT TEST_PRIMARY_NODE_DIR } {
     set timeout 60
@@ -389,6 +408,23 @@ proc ::AlgorandGoal::AccountTransfer { FROM_WALLET_NAME FROM_WALLET_PASSWORD FRO
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in AccountTransfer: $EXCEPTION"
+    }
+    return $TRANSACTION_ID
+}
+
+# Account Transfer, rekey
+proc ::AlgorandGoal::AccountTransferRekey { FROM_WALLET_NAME FROM_WALLET_PASSWORD FROM_ACCOUNT_ADDRESS TRANSFER_AMOUNT TO_ACCOUNT_ADDRESS FEE_AMOUNT REKEY_ACCOUNT_ADDRESS TEST_PRIMARY_NODE_DIR } {
+    set timeout 60
+    if { [ catch {
+        set TRANSACTION_ID "NOT SET"
+        spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS --rekey-to $REKEY_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
+        expect {
+            timeout { close; ::AlgorandGoal::Abort "Timed out transferring funds"  }
+            "Please enter the password for wallet '$FROM_WALLET_NAME':" { send "$FROM_WALLET_PASSWORD\r" }
+            -re {transaction ID: ([A-Z0-9]{52})} {set TRANSACTION_ID $expect_out(1,string); close }
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in AccountTransferRekey: $EXCEPTION"
     }
     return $TRANSACTION_ID
 }
@@ -551,6 +587,19 @@ proc ::AlgorandGoal::TealTxnCreate { TEAL_SOURCE TO_ADDR CLOSE_TO SEND_AMOUNT NO
     }
 }
 
+# create txn with logic sig
+proc ::AlgorandGoal::CreateTransaction { FROM_WALLET_NAME FROM_ACCOUNT_ADDRESS TRANSFER_AMOUNT TO_ACCOUNT_ADDRESS OUTFILE TEST_PRIMARY_NODE_DIR } {
+    if { [ catch {
+        spawn goal clerk send --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -o $OUTFILE -d $TEST_PRIMARY_NODE_DIR
+	expect {
+            timeout { ::AlgorandGoal::Abort "Timed out transaction create"  }
+	    close
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in CreateTransaction: $EXCEPTION"
+    }
+}
+
 # Transfer asset
 proc ::AlgorandGoal::SignTransaction { WALLET_NAME WALLET_PASSWORD INPUT_TXN OUTPUT_TXN TEST_PRIMARY_NODE_DIR} {
     if { [ catch {
@@ -565,14 +614,27 @@ proc ::AlgorandGoal::SignTransaction { WALLET_NAME WALLET_PASSWORD INPUT_TXN OUT
     }
 }
 
+# Transfer asset, rekey
+proc ::AlgorandGoal::SignTransactionRekey { WALLET_NAME REKEY_ACCOUNT_ADDRESS INPUT_TXN OUTPUT_TXN TEST_PRIMARY_NODE_DIR} {
+    if { [ catch {
+        spawn goal clerk sign -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME -S $REKEY_ACCOUNT_ADDRESS -i $INPUT_TXN -o $OUTPUT_TXN
+        expect {
+            timeout { ::AlgorandGoal::Abort "Timed out signing transaction"  }
+	    close
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in SignTransactionRekey: $EXCEPTION"
+    }
+}
+
 # Raw send
-proc ::AlgorandGoal::RawSend { TXN_FILE TEST_PRIMARY_NODE_DIR } {
+proc ::AlgorandGoal::RawSend { SIGNED_TXN_FILE TEST_PRIMARY_NODE_DIR } {
     set timeout 30
     if { [ catch {
         set TRANSACTION_ID "NOT SET"
-        spawn goal clerk rawsend -f $TXN_FILE -d $TEST_PRIMARY_NODE_DIR
+        spawn goal clerk rawsend -f $SIGNED_TXN_FILE -d $TEST_PRIMARY_NODE_DIR
         expect {
-            timeout { close; ::AlgorandGoal::Abort "Timed out rawsend $TXN_FILE"  }
+            timeout { close; ::AlgorandGoal::Abort "Timed out rawsend $SIGNED_TXN_FILE"  }
             -re {Transaction ([A-Z0-9]{52}) committed} {set TRANSACTION_ID $expect_out(1,string); close }
 	    -re {Rejected transactions written to (.+rej)} {::AlgorandGoal::Abort "RawSend rejected."}
         }
@@ -1044,3 +1106,4 @@ proc ::AlgorandGoal::CheckEOF { { ERROR_STRING "" } } {
         exit 1
     }
 }
+
