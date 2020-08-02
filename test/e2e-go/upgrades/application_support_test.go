@@ -150,7 +150,7 @@ int 1
 
 	// create the app
 	tx, err := client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approval, clearstate, schema, schema, nil, nil, nil,
+		transactions.OptInOC, approval, clearstate, schema, schema, nil, nil, nil, nil,
 	)
 	require.NoError(t, err)
 	tx, err = client.FillUnsignedTxTemplate(creator, 0, 0, fee, tx)
@@ -224,7 +224,7 @@ int 1
 	require.Equal(t, uint64(1), value.Uint)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil)
+	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil)
 	require.NoError(t, err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	require.NoError(t, err)
@@ -390,7 +390,7 @@ int 1
 
 	// create the app
 	tx, err := client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approval, clearstate, schema, schema, nil, nil, nil,
+		transactions.OptInOC, approval, clearstate, schema, schema, nil, nil, nil, nil,
 	)
 	require.NoError(t, err)
 	tx, err = client.FillUnsignedTxTemplate(creator, round, round+primaryNodeUnupgradedProtocol.DefaultUpgradeWaitRounds, fee, tx)
@@ -487,7 +487,7 @@ int 1
 	require.Equal(t, uint64(1), value.Uint)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil)
+	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil)
 	require.NoError(t, err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	require.NoError(t, err)
