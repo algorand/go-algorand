@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
@@ -225,25 +226,28 @@ func (accountList *AccountsList) outputAccount(addr string, acctInfo v1.Account,
 		fmt.Printf("\t[%d/%d multisig]", multisigInfo.Threshold, len(multisigInfo.PKs))
 	}
 	if len(acctInfo.AssetParams) > 0 {
-		fmt.Printf("\t[created assets:")
+		fmt.Printf("\t[created asset IDs: ")
+		var out []string
 		for curid, params := range acctInfo.AssetParams {
-			fmt.Printf(" %d (%d %s)", curid, params.Total, params.UnitName)
+			out = append(out, fmt.Sprintf("%d (%d %s)", curid, params.Total, params.UnitName))
 		}
-		fmt.Printf("]")
+		fmt.Printf("%s]", strings.Join(out, ", "))
 	}
 	if len(acctInfo.AppParams) > 0 {
-		fmt.Printf("\t[created app IDs:")
+		fmt.Printf("\t[created app IDs: ")
+		var out []string
 		for aid := range acctInfo.AppParams {
-			fmt.Printf(" %d", aid)
+			out = append(out, fmt.Sprintf("%d", aid))
 		}
-		fmt.Printf("]")
+		fmt.Printf("%s]", strings.Join(out, ", "))
 	}
 	if len(acctInfo.AppLocalStates) > 0 {
-		fmt.Printf("\t[opted in app IDs:")
+		fmt.Printf("\t[opted in app IDs: ")
+		var out []string
 		for aid := range acctInfo.AppLocalStates {
-			fmt.Printf(" %d", aid)
+			out = append(out, fmt.Sprintf("%d", aid))
 		}
-		fmt.Printf("]")
+		fmt.Printf("%s]", strings.Join(out, ", "))
 	}
 
 	if accountList.isDefault(addr) {
