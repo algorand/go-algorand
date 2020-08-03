@@ -1,0 +1,37 @@
+diff --git a/node/node.go b/node/node.go
+index a02828e..50095d4 100644
+--- a/node/node.go
++++ b/node/node.go
+@@ -420,12 +420,12 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
+ 		enc = append(enc, protocol.Encode(tx)...)
+ 		txids = append(txids, tx.ID())
+ 	}
+-	err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, true, nil)
+-	if err != nil {
+-		node.log.Infof("failure broadcasting transaction to network: %v - transaction group was %+v", err, txgroup)
+-		return err
+-	}
+-	node.log.Infof("Sent signed tx group with IDs %v", txids)
++	// err = node.net.Broadcast(context.TODO(), protocol.TxnTag, enc, true, nil)
++	// if err != nil {
++	// 	node.log.Infof("failure broadcasting transaction to network: %v - transaction group was %+v", err, txgroup)
++	// 	return err
++	// }
++	// node.log.Infof("Sent signed tx group with IDs %v", txids)
+ 	return nil
+ }
+ 
+diff --git a/rpcs/txService.go b/rpcs/txService.go
+index 7dec5e2..0f4ec6e 100644
+--- a/rpcs/txService.go
++++ b/rpcs/txService.go
+@@ -50,7 +50,8 @@ type TxService struct {
+ 	responseSizeLimit int
+ }
+ 
+-const updateInterval = int64(30)
++// const updateInterval = int64(30)
++const updateInterval = int64(0)
+ const responseContentType = "application/x-algorand-ptx-v1"
+ 
+ // calculate the number of bytes that would be consumed when packing a n-bytes buffer into a base64 buffer.
