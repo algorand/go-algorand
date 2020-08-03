@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -854,7 +855,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
 				}
 				if !added {
-					au.log.Warnf("accountsInitialize attempted to add duplicate hash '%v' to merkle trie.", hash)
+					au.log.Warnf("accountsInitialize attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(hash), balance.Address)
 				}
 			}
 
@@ -1032,11 +1033,10 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltasRound []map[basic
 					return err
 				}
 				if !deleted {
-					au.log.Warnf("failed to delete hash '%v' from merkle trie", deleteHash)
+					au.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
 				} else {
 					accumulatedChanges++
 				}
-
 			}
 			if !delta.new.IsZero() {
 				addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
@@ -1045,7 +1045,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltasRound []map[basic
 					return err
 				}
 				if !added {
-					au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", addHash)
+					au.log.Warnf("attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
 				} else {
 					accumulatedChanges++
 				}

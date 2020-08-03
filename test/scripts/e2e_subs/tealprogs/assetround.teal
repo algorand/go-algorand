@@ -6,7 +6,7 @@
 // Check sender's account
 int 0
 
-// Check app ID as passed in
+// Check asset ID as passed in
 txna ApplicationArgs 0
 btoi
 
@@ -23,7 +23,7 @@ bz fail
 // Check sender's account
 int 0
 
-// Check app ID as passed in
+// Check asset ID as passed in
 txna ApplicationArgs 0
 btoi
 
@@ -46,12 +46,8 @@ bnz round
 // Params
 //
 
-// Check sender's account (creator)
+// Check foreign asset 0
 int 0
-
-// Check app ID as passed in
-txna ApplicationArgs 0
-btoi
 
 // Check total against arg 4
 asset_params_get AssetTotal
@@ -61,12 +57,8 @@ btoi
 ==
 bz fail
 
-// Check sender's account
+// Check foreign asset 0
 int 0
-
-// Check app ID as passed in
-txna ApplicationArgs 0
-btoi
 
 // Check name against arg 5
 asset_params_get AssetUnitName
