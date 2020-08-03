@@ -142,7 +142,7 @@ int 1
 `
 	approval, err := logic.AssembleString(counter)
 	require.NoError(t, err)
-	clearstate, err := logic.AssembleString("int 1")
+	clearstate, err := logic.AssembleString("#pragma version 2\nint 1")
 	require.NoError(t, err)
 	schema := basics.StateSchema{
 		NumUint: 1,
@@ -382,7 +382,7 @@ int 1
 `
 	approval, err := logic.AssembleString(counter)
 	require.NoError(t, err)
-	clearstate, err := logic.AssembleString("int 1")
+	clearstate, err := logic.AssembleString("#pragma version 2\nint 1")
 	require.NoError(t, err)
 	schema := basics.StateSchema{
 		NumUint: 1,
