@@ -193,7 +193,8 @@ func (r *testResolver) query(ctx context.Context, domain string, qtype uint16) (
 				msg.Answer = append(msg.Answer, rr)
 			}
 			for _, rr := range entry.sig {
-				msg.Answer = append(msg.Answer, &rr)
+				var rrsig dns.RRSIG = rr
+				msg.Answer = append(msg.Answer, &rrsig)
 			}
 		}
 	}

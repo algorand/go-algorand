@@ -172,9 +172,10 @@ func TestArchivalRestart(t *testing.T) {
 	// Start in archival mode, add 2K blocks, restart, ensure all blocks are there
 
 	// disable deadlock checking code
+	deadlockDisable := deadlock.Opts.Disable
 	deadlock.Opts.Disable = true
 	defer func() {
-		deadlock.Opts.Disable = false
+		deadlock.Opts.Disable = deadlockDisable
 	}()
 
 	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
@@ -317,6 +318,13 @@ func TestArchivalCreatables(t *testing.T) {
 	// Start in archival mode, add 2K blocks with asset + app txns
 	// restart, ensure all assets are there in index unless they were
 	// deleted
+
+	// disable deadlock checking code
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() {
+		deadlock.Opts.Disable = deadlockDisable
+	}()
 
 	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
 	require.NoError(t, err)
@@ -664,9 +672,10 @@ func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInB
 
 func TestArchivalFromNonArchival(t *testing.T) {
 	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
+	deadlockDisable := deadlock.Opts.Disable
 	deadlock.Opts.Disable = true
 	defer func() {
-		deadlock.Opts.Disable = false
+		deadlock.Opts.Disable = deadlockDisable
 	}()
 	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
 	require.NoError(t, err)
