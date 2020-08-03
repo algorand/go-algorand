@@ -104,7 +104,7 @@ int 1
 `
 	approval, err := logic.AssembleString(counter)
 	a.NoError(err)
-	clearstate, err := logic.AssembleString("int 1")
+	clearstate, err := logic.AssembleString("#pragma version 2\nint 1")
 	a.NoError(err)
 	schema := basics.StateSchema{
 		NumUint: 1,

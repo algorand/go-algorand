@@ -277,6 +277,8 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	})
 
 	txn := makeSampleTxn()
+	// RekeyTo disallowed on TEAL v0/v1
+	txn.Txn.RekeyTo = basics.Address{}
 	txgroup := makeSampleTxnGroup(txn)
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], txn.Txn.Sender[:], txn.Txn.Note}
@@ -372,7 +374,7 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "greater than protocol supported version")
-		_, _, err = EvalStateful(program, ep)
+		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "greater than protocol supported version")
 
@@ -381,7 +383,7 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global[")
-		_, _, err = EvalStateful(program, ep)
+		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global[")
 
@@ -390,7 +392,7 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global[")
-		_, _, err = EvalStateful(program, ep)
+		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global[")
 	}
@@ -414,6 +416,10 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 
 	ledger := makeTestLedger(nil)
 	txn := makeSampleTxn()
+	// We'll reject too early if we have a nonzero RekeyTo, because that
+	// field must be zero for every txn in the group if this is an old
+	// TEAL version
+	txn.Txn.RekeyTo = basics.Address{}
 	txgroup := makeSampleTxnGroup(txn)
 	for _, fs := range fields {
 		field := fs.field.String()
@@ -461,7 +467,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "greater than protocol supported version")
-			_, _, err = EvalStateful(program, ep)
+			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "greater than protocol supported version")
 
@@ -470,7 +476,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
-			_, _, err = EvalStateful(program, ep)
+			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
 
@@ -479,7 +485,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
-			_, _, err = EvalStateful(program, ep)
+			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
 		}

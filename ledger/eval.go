@@ -463,6 +463,7 @@ func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithA
 // transaction in the group
 func (eval *BlockEvaluator) prepareAppEvaluators(txgroup []transactions.SignedTxnWithAD) (res []*appTealEvaluator) {
 	var groupNoAD []transactions.SignedTxn
+	var minTealVersion uint64
 	res = make([]*appTealEvaluator, len(txgroup))
 	for i, txn := range txgroup {
 		// Ignore any non-ApplicationCall transactions
@@ -476,16 +477,18 @@ func (eval *BlockEvaluator) prepareAppEvaluators(txgroup []transactions.SignedTx
 			for j := range txgroup {
 				groupNoAD[j] = txgroup[j].SignedTxn
 			}
+			minTealVersion = logic.ComputeMinTealVersion(groupNoAD)
 		}
 
 		// Construct an appTealEvaluator (implements
 		// apply.StateEvaluator) for use in ApplicationCall transactions.
 		steva := appTealEvaluator{
 			evalParams: logic.EvalParams{
-				Txn:        &groupNoAD[i],
-				Proto:      &eval.proto,
-				TxnGroup:   groupNoAD,
-				GroupIndex: i,
+				Txn:            &groupNoAD[i],
+				Proto:          &eval.proto,
+				TxnGroup:       groupNoAD,
+				GroupIndex:     i,
+				MinTealVersion: &minTealVersion,
 			},
 			AppTealGlobals: AppTealGlobals{
 				CurrentRound:    eval.prevHeader.Round + 1,

@@ -121,8 +121,9 @@ Asset fields include `AssetHolding` and `AssetParam` fields that are used in `as
 
 The assembler parses line by line. Ops that just use the stack appear on a line by themselves. Ops that take arguments are the op and then whitespace and then any argument or arguments.
 
-The first line may contain a special version pragma `#pragma version X`.
-By default the assembler generates TEAL v1. So that all TEAL v2 programs must start with `#pragma version 2`
+The first line may contain a special version pragma `#pragma version X`, which directs the assembler to generate TEAL bytecode targeting a certain version. For instance, `#pragma version 2` produces bytecode targeting TEAL v2. By default, the assembler targets TEAL v1.
+
+Subsequent lines may contain other pragma declarations (i.e., `#pragma <some-specification>`), pertaining to checks that the assembler should perform before agreeing to emit the program bytes, specific optimizations, etc. Those declarations are optional and cannot alter the semantics as described in this document.
 
 "`//`" prefixes a line comment.
 
@@ -169,6 +170,8 @@ pop
 A program starts with a varuint declaring the version of the compiled code. Any addition, removal, or change of opcode behavior increments the version. For the most part opcode behavior should not change, addition will be infrequent (not likely more often than every three months and less often as the language matures), and removal should be very rare.
 
 For version 1, subsequent bytes after the varuint are program opcode bytes. Future versions could put other metadata following the version identifier.
+
+It is important to prevent newly-introduced transaction fields from breaking assumptions made by older versions of TEAL. If one of the transactions in a group will execute a TEAL program whose version predates a given field, that field must not be set anywhere in the transaction group, or the group will be rejected. For example, executing a TEAL version 1 program on a transaction with RekeyTo set to a nonzero address will cause the program to fail, regardless of the other contents of the program itself.
 
 ## Varuint
 
