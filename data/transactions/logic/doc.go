@@ -157,7 +157,7 @@ func OpImmediateNote(opName string) string {
 // further documentation on the function of the opcode
 var opDocExtraList = []stringString{
 	{"ed25519verify", "The 32 byte public key is the last element on the stack, preceded by the 64 byte signature at the second-to-last element on the stack, preceded by the data which was signed at the third-to-last element on the stack."},
-	{"bnz", "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are currently limited to forward branches only, 0-0x7fff. A future expansion might make this a signed 16 bit integer allowing for backward branches and looping.\n\nAt LogicSigVersion 2 it became allowed to branch to the end of the program exactly after the last instruction, removing the need for a last instruction or no-op as a branch target at the end. Branching beyond that may still fail the program."},
+	{"bnz", "The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are currently limited to forward branches only, 0-0x7fff. A future expansion might make this a signed 16 bit integer allowing for backward branches and looping.\n\nAt LogicSigVersion 2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before LogicSigVersion 2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)"},
 	{"bz", "See `bnz` for details on how branches work. `bz` inverts the behavior of `bnz`."},
 	{"b", "See `bnz` for details on how branches work. `b` always jumps to the offset."},
 	{"intcblock", "`intcblock` loads following program bytes into an array of integer constants in the evaluator. These integer constants can be referred to by `intc` and `intc_*` which will push the value onto the stack. Subsequent calls to `intcblock` reset and replace the integer constants available to the script."},
@@ -260,12 +260,12 @@ func TypeNameDescription(typeName string) string {
 // see assembler.go TxnTypeNames
 // also used to parse symbolic constants for `int`
 var onCompletionDescriptions = map[OnCompletionConstType]string{
-	NoOp:              "Application transaction will simply call its ApprovalProgram.",
-	OptIn:             "Application transaction will allocate some LocalState for the application in the sender's account.",
-	CloseOut:          "Application transaction will deallocate some LocalState for the application from the user's account.",
-	ClearState:        "Similar to CloseOut, but may never fail. This allows users to reclaim their minimum balance from an application they no longer wish to opt in to.",
-	UpdateApplication: "Application transaction will update the ApprovalProgram and ClearStateProgram for the application.",
-	DeleteApplication: "Application transaction will delete the AppParams for the application from the creator's balance.",
+	NoOp:              "Only execute the `ApprovalProgram` associated with this application ID, with no additional effects.",
+	OptIn:             "Before executing the `ApprovalProgram`, allocate local state for this application into the sender's account data.",
+	CloseOut:          "After executing the `ApprovalProgram`, clear any local state for this application out of the sender's account data.",
+	ClearState:        "Don't execute the `ApprovalProgram`, and instead execute the `ClearStateProgram` (which may not reject this transaction). Additionally, clear any local state for this application out of the sender's account data as in `CloseOutOC`.",
+	UpdateApplication: "After executing the `ApprovalProgram`, replace the `ApprovalProgram` and `ClearStateProgram` associated with this application ID with the programs specified in this transaction.",
+	DeleteApplication: "After executing the `ApprovalProgram`, delete the application parameters from the account data of the application's creator.",
 }
 
 // OnCompletionDescription returns extra description about OnCompletion constants
@@ -276,6 +276,9 @@ func OnCompletionDescription(value uint64) string {
 	}
 	return "invalid constant value"
 }
+
+// OnCompletionPreamble describes what the OnCompletion constants represent.
+const OnCompletionPreamble = "An application transaction must indicate the action to be taken following the execution of its approvalProgram or clearStateProgram. The constants below describe the available actions."
 
 var txnFieldDocList = []stringString{
 	{"Sender", "32 byte address"},

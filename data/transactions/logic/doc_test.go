@@ -119,7 +119,7 @@ func TestTypeNameDescription(t *testing.T) {
 
 func TestOnCompletionDescription(t *testing.T) {
 	desc := OnCompletionDescription(0)
-	require.Equal(t, "Application transaction will simply call its ApprovalProgram.", desc)
+	require.Equal(t, "Only execute the `ApprovalProgram` associated with this application ID, with no additional effects.", desc)
 
 	desc = OnCompletionDescription(100)
 	require.Equal(t, "invalid constant value", desc)
