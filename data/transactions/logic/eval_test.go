@@ -1891,7 +1891,6 @@ int 1
 			require.NoError(t, err)
 			require.True(t, cost < 1000)
 			txn := makeSampleTxn()
-			txgroup := makeSampleTxnGroup(txn)
 			// RekeyTo not allowed in TEAL v1
 			if v < rekeyingEnabledVersion {
 				txn.Txn.RekeyTo = basics.Address{}
@@ -1905,6 +1904,7 @@ int 1
 				txn.Txn.SelectionPK[:],
 				txn.Txn.Note,
 			}
+			txgroup := makeSampleTxnGroup(txn)
 			sb = strings.Builder{}
 			ep := defaultEvalParams(&sb, &txn)
 			ep.TxnGroup = txgroup
@@ -3661,6 +3661,130 @@ func TestArgType(t *testing.T) {
 	require.Equal(t, StackUint64, sv.argType())
 }
 
+func TestApplicationsDisallowOldTeal(t *testing.T) {
+	const source = "int 1"
+	ep := defaultEvalParams(nil, nil)
+
+	txn := makeSampleTxn()
+	txn.Txn.Type = protocol.ApplicationCallTx
+	txn.Txn.RekeyTo = basics.Address{}
+	txngroup := []transactions.SignedTxn{txn}
+	ep.TxnGroup = txngroup
+
+	for v := uint64(0); v < appsEnabledVersion; v++ {
+		program, err := AssembleStringWithVersion(source, v)
+		require.NoError(t, err)
+
+		_, err = CheckStateful(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
+
+		_, _, err = EvalStateful(program, ep)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
+	}
+
+	program, err := AssembleStringWithVersion(source, appsEnabledVersion)
+	require.NoError(t, err)
+
+	_, err = CheckStateful(program, ep)
+	require.NoError(t, err)
+
+	_, _, err = EvalStateful(program, ep)
+	require.NoError(t, err)
+}
+
+func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
+	const source = "int 1"
+
+	// Construct a group of two payments, no rekeying
+	txn0 := makeSampleTxn()
+	txn0.Txn.Type = protocol.PaymentTx
+	txn0.Txn.RekeyTo = basics.Address{}
+	txn1 := txn0
+	txngroup0 := []transactions.SignedTxn{txn0, txn1}
+
+	// Construct a group of one payment, one ApplicationCall, no rekeying
+	txn2 := makeSampleTxn()
+	txn2.Txn.Type = protocol.PaymentTx
+	txn2.Txn.RekeyTo = basics.Address{}
+	txn3 := txn2
+	txn3.Txn.Type = protocol.ApplicationCallTx
+	txngroup1 := []transactions.SignedTxn{txn2, txn3}
+
+	// Construct a group of one payment, one rekeying payment
+	txn4 := makeSampleTxn()
+	txn4.Txn.Type = protocol.PaymentTx
+	txn5 := txn4
+	txn4.Txn.RekeyTo = basics.Address{}
+	txn5.Txn.RekeyTo = basics.Address{1}
+	txngroup2 := []transactions.SignedTxn{txn4, txn5}
+
+	type testcase struct {
+		group            []transactions.SignedTxn
+		validFromVersion uint64
+	}
+
+	cases := []testcase{
+		testcase{txngroup0, 0},
+		testcase{txngroup1, appsEnabledVersion},
+		testcase{txngroup2, rekeyingEnabledVersion},
+	}
+
+	for ci, cse := range cases {
+		t.Run(fmt.Sprintf("ci=%d", ci), func(t *testing.T) {
+			ep := defaultEvalParams(nil, nil)
+			ep.TxnGroup = cse.group
+			ep.Txn = &cse.group[0]
+
+			// Computed MinTealVersion should be == validFromVersion
+			calc := ComputeMinTealVersion(cse.group)
+			require.Equal(t, calc, cse.validFromVersion)
+
+			// Should fail for all versions < validFromVersion
+			expected := fmt.Sprintf("program version must be >= %d", cse.validFromVersion)
+			for v := uint64(0); v < cse.validFromVersion; v++ {
+				program, err := AssembleStringWithVersion(source, v)
+				require.NoError(t, err)
+
+				_, err = CheckStateful(program, ep)
+				require.Error(t, err)
+				require.Contains(t, err.Error(), expected)
+
+				_, _, err = EvalStateful(program, ep)
+				require.Error(t, err)
+				require.Contains(t, err.Error(), expected)
+
+				_, err = Check(program, ep)
+				require.Error(t, err)
+				require.Contains(t, err.Error(), expected)
+
+				_, err = Eval(program, ep)
+				require.Error(t, err)
+				require.Contains(t, err.Error(), expected)
+			}
+
+			// Should succeed for all versions >= validFromVersionn
+			for v := cse.validFromVersion; v <= AssemblerMaxVersion; v++ {
+				program, err := AssembleStringWithVersion(source, v)
+				require.NoError(t, err)
+
+				_, err = CheckStateful(program, ep)
+				require.NoError(t, err)
+
+				_, _, err = EvalStateful(program, ep)
+				require.NoError(t, err)
+
+				_, err = Check(program, ep)
+				require.NoError(t, err)
+
+				_, err = Eval(program, ep)
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 // check all v2 opcodes: allowed in v2 and not allowed in v1 and v0
 func TestAllowedOpcodesV2(t *testing.T) {
 	t.Parallel()
@@ -3750,13 +3874,14 @@ func TestRekeyFailsOnOldVersion(t *testing.T) {
 			sb := strings.Builder{}
 			proto := defaultEvalProto()
 			ep := defaultEvalParams(&sb, &txn)
+			ep.TxnGroup = []transactions.SignedTxn{txn}
 			ep.Proto = &proto
 			_, err = Check(program, ep)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "nonzero RekeyTo field")
+			require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", rekeyingEnabledVersion))
 			pass, err := Eval(program, ep)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "nonzero RekeyTo field")
+			require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", rekeyingEnabledVersion))
 			require.False(t, pass)
 		})
 	}
