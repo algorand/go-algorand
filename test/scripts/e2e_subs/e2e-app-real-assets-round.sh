@@ -23,7 +23,7 @@ ASSET_ID=$(${gcmd} asset info --creator $ACCOUNT --asset bogo|grep 'Asset ID'|aw
 # Create app that reads asset balance and checks asset details and checks round
 ROUND=$(goal node status | grep 'Last committed' | awk '{ print $4 }')
 TIMESTAMP=$(goal ledger block --strict ${ROUND} | jq .block.ts)
-APP_ID=$(${gcmd} app create --creator ${ACCOUNT} --app-arg "int:$ASSET_ID" --app-arg "int:1337" --app-arg "int:0" --app-arg "int:0" --app-arg "int:1337" --app-arg "str:bogo" --app-arg "int:$ROUND" --app-arg "int:$TIMESTAMP" --approval-prog ${DIR}/tealprogs/assetround.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(printf "#pragma version 2\nint 1") | grep Created | awk '{ print $6 }')
+APP_ID=$(${gcmd} app create --creator ${ACCOUNT} --foreign-asset $ASSET_ID --app-arg "int:$ASSET_ID" --app-arg "int:1337" --app-arg "int:0" --app-arg "int:0" --app-arg "int:1337" --app-arg "str:bogo" --app-arg "int:$ROUND" --app-arg "int:$TIMESTAMP" --approval-prog ${DIR}/tealprogs/assetround.teal --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --clear-prog <(printf "#pragma version 2\nint 1") | grep Created | awk '{ print $6 }')
 
 # Create another account, fund it, send it some asset
 ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
