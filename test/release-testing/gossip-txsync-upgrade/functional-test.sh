@@ -13,22 +13,36 @@ fi
 BASE_VERSION="1.0.29"
 RELEASE_V1="rel/stable-${BASE_VERSION}"
 
-CURRENT_VERSION="1.1.304"
+BASE_VERSION="2.0.6"
+RELEASE_V2="v${BASE_VERSION}-stable"
+
 CURRENT_VERSION="2.0.323"
+CURRENT="rel/nightly-${CURRENT_VERSION}"
+# after build 399 there is no nightly tags
+# use the code below to get the latest nightly build version and create a branch
+<< COMMENT
+COMMIT=$(git log upstream/rel/nightly -1 --format=oneline -- buildnumber.dat | cut -d' ' -f 1-1)
+BUILD=$(echo $COMMIT | xargs git show $1 --format=oneline | tail -1 | cut -c 2-)
+CURRENT_VERSION="2.0.$BUILD"
+git checkout $COMMIT -b rel/nightly-$CURRENT_VERSION
+COMMENT
+CURRENT_VERSION="2.0.574"
 CURRENT="rel/nightly-${CURRENT_VERSION}"
 
 # Parameters
 # git revision of the previous release
-STABLE=$RELEASE_V1
+STABLE=$RELEASE_V2
 # git revision of the current (new) release
 TESTING=$CURRENT
 
 # Protocol versions
 V17="https://github.com/algorandfoundation/specs/tree/5615adc36bad610c7f165fa2967f4ecfa75125f0"
 V19="https://github.com/algorandfoundation/specs/tree/03ae4eac54f1325377d0a2df62b5ef7cc08c5e18"
+V23="https://github.com/algorandfoundation/specs/tree/e5f565421d720c6f75cdd186f7098495caf9101f"
+VFU="future"
 
-BASE_PROTO=$V17
-NEXT_PROTO=$V19
+BASE_PROTO=$V23
+NEXT_PROTO=$VFU
 
 # if testing against stable-1.0.29 release, ensure go-algorand is in $GOPATH/src/github.com/algorand
 if [ "${STABLE}" = "${RELEASE_V1}" ]; then
@@ -181,7 +195,8 @@ function build_algorand_by_rev() {
     mkdir -p "$target_dir"
 
     # build
-    make install > "$target_dir/build.log" 2>&1
+    git diff > "$target_dir/build.log"
+    make install >> "$target_dir/build.log" 2>&1
 
     trap - ERR
 
@@ -190,7 +205,7 @@ function build_algorand_by_rev() {
 
     popd
 
-    bin_files=("algod" "carpenter" "goal" "kmd" "msgpacktool")
+    bin_files=("algod" "carpenter" "goal" "kmd" "msgpacktool" "algokey")
     for bin in "${bin_files[@]}"; do
         cp "${GO_BIN}/${bin}" $target_dir
         if [ $? -ne 0 ]; then exit 1; fi
@@ -271,8 +286,8 @@ DESCRIPTION
 function update_network_node_config_for_gossip() {
     update_network_node_config "$network_dir" TxSyncIntervalSeconds 3600
     update_network_node_config "$network_dir" BaseLoggerDebugLevel 5
-    update_network_node_config "$network_dir" IncomingConnectionsLimit -1
-    update_network_node_config "$network_dir" Version 4
+    update_network_node_config "$network_dir" IncomingConnectionsLimit 10240
+    update_network_node_config "$network_dir" Version 6
 }
 
 << DESCRIPTION
@@ -283,8 +298,8 @@ DESCRIPTION
 function update_network_node_config_for_txsync() {
     update_network_node_config "$network_dir" TxSyncIntervalSeconds 1
     update_network_node_config "$network_dir" BaseLoggerDebugLevel 5
-    update_network_node_config "$network_dir" IncomingConnectionsLimit -1
-    update_network_node_config "$network_dir" Version 4
+    update_network_node_config "$network_dir" IncomingConnectionsLimit 10240
+    update_network_node_config "$network_dir" Version 6
 }
 
 function fresh_temp_net() {
@@ -962,7 +977,7 @@ Parameters:
     emit_info - an array (encoded map) with sender, receiver and update initiator nodes names and tx count expectations
     network_dir - a path to the directory with running network
     tx_dir - a path to the directory with pre-generated transactions to submit
-    proto - a protocol version is being test. If it is '$NEXT_PROTO' then submit asset transaction
+    proto - a protocol version is being test. If it is '$NEXT_PROTO' then submit new transaction
 Returns:
     0 on success
     __submit_and_check is set to amount of txsync requests found in the log
@@ -1026,9 +1041,9 @@ function submit_and_check() {
         fi
     done
 
-    check_asset_transactions "$(echo ${nodes[@]})" "$(echo ${emit_info[@]})" "$network_dir" "$proto"
-    local asset_txids=( ${__check_asset_transactions[@]} )
-    local txids=( "${txids[@]}" "${asset_txids[@]}" )
+    # check_new_transactions "$(echo ${nodes[@]})" "$(echo ${emit_info[@]})" "$network_dir" "$proto"
+    # local new_txids=( ${__check_new_transactions[@]} )
+    # local txids=( "${txids[@]}" "${new_txids[@]}" )
 
     # wait to let all tx get propagated
     "$bin_dir/goal" node wait -w 30 -d "$network_dir/$sender_name"
@@ -1092,8 +1107,12 @@ function generate_transactions() {
 
     trap "network_cleanup $bin_dir $network_dir" ERR
 
+    # echo "To stop type"
+    # echo "$bin_dir/goal" network stop -r "$network_dir"
+    # echo "$bin_dir/goal" network delete -r "$network_dir"
+
     "$bin_dir/goal" network start -r "$network_dir"
-    "$bin_dir/goal" node wait -w 30 -d "$network_dir/Primary"
+    "$bin_dir/goal" node wait -w 60 -d "$network_dir/Primary"
 
     if [ "$proto" == "$NEXT_PROTO" ]; then
         local cmd="$bin_dir/goal node status -d $network_dir/$sender_name"
@@ -1129,27 +1148,42 @@ function generate_transactions() {
     "$bin_dir/goal" account changeonlinestatus --fee $fee --address $src_addr -o -t "$tx_dir/keyreg.tx" --firstRound "$firstvalid" --validRounds "$validrounds" -d "$network_dir/$sender_name"
     "$bin_dir/goal" clerk sign -i "$tx_dir/keyreg.tx" -o "$tx_dir/keyreg.stx" -d "$network_dir/$sender_name"
 
+    trace_if_needed "Creating logic sig payset tx"
+    fee=$(get_random_fee)
+    echo "int 1" > "$tx_dir/int1.teal"
+    "$bin_dir/goal" clerk compile "$tx_dir/int1.teal" -s -a $src_addr -o "$tx_dir/int1.lsig" -d "$network_dir/$sender_name"
+    "$bin_dir/goal" clerk send --fee $fee -a 1000 -f $src_addr -t $dst_addr --firstvalid "$firstvalid" --lastvalid "$lastvalid" -o "$tx_dir/payset-teal.tx" -d "$network_dir/$sender_name"
+    "$bin_dir/goal" clerk sign -P "$proto" -L "$tx_dir/int1.lsig" -i "$tx_dir/payset-teal.tx" -o "$tx_dir/payset-teal.stx" -d "$network_dir/$sender_name"
+
+    trace_if_needed "Creating payset group tx"
+    fee=$(get_random_fee)
+    "$bin_dir/goal" clerk send --fee $fee -a 1000 -f $src_addr -t $dst_addr --firstvalid "$firstvalid" --lastvalid "$lastvalid" -o "$tx_dir/payset-again.tx" -d "$network_dir/$sender_name"
+    cat "$tx_dir/payset.tx" "$tx_dir/payset-again.tx" > "$tx_dir/payset-concat.tx"
+    "$bin_dir/goal" clerk group -i "$tx_dir/payset-concat.tx" -o "$tx_dir/payset-group.tx"
+    "$bin_dir/goal" clerk sign -P "$proto" -i "$tx_dir/payset-group.tx" -o "$tx_dir/payset-group.stx" -d "$network_dir/$sender_name"
+
+    trace_if_needed "Creating asset create tx"
+    fee=$(get_random_fee)
+    "$bin_dir/goal" asset create --fee $fee --creator $src_addr --name $ASSET_NAME --total 100 --unitname $ASSET_TOKEN --firstvalid "$firstvalid" --validrounds "$validrounds" -o "$tx_dir/asset-create.tx" -d "$network_dir/$sender_name"
+    "$bin_dir/goal" clerk sign -P "$proto" -i "$tx_dir/asset-create.tx" -o "$tx_dir/asset-create.stx" -d "$network_dir/$sender_name"
+
     if version_gt "$alogd_version" "$BASE_VERSION" ; then
         if [ "$proto" == "$NEXT_PROTO" ]; then
-            trace_if_needed "Creating logic sig payset tx"
-            fee=$(get_random_fee)
-            echo "int 1" > "$tx_dir/int1.teal"
-            # local escrow_addr="$("$bin_dir/goal" clerk compile "$tx_dir/int1.teal" | cut -f 2 -d ':' | sed -e 's/[[:space:]]//g')"
-            "$bin_dir/goal" clerk compile "$tx_dir/int1.teal" -s -a $src_addr -o "$tx_dir/int1.lsig" -d "$network_dir/$sender_name"
-            "$bin_dir/goal" clerk send --fee $fee -a 1000 -f $src_addr -t $dst_addr --firstvalid "$firstvalid" --lastvalid "$lastvalid" -o "$tx_dir/payset-teal.tx" -d "$network_dir/$sender_name"
-            "$bin_dir/goal" clerk sign -P "$proto" -L "$tx_dir/int1.lsig" -i "$tx_dir/payset-teal.tx" -o "$tx_dir/payset-teal.stx" -d "$network_dir/$sender_name"
+            trace_if_needed "Creating app create tx"
+            printf "#pragma version 2\nint 1" > "$tx_dir/int1.teal"
+            "$bin_dir/goal" app create --creator $src_addr --approval-prog "$tx_dir/int1.teal" --clear-prog "$tx_dir/int1.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --firstvalid "$firstvalid" --lastvalid "$lastvalid" -o "$tx_dir/app-create.tx" -d "$network_dir/$sender_name"
+            "$bin_dir/goal" clerk sign -P "$proto" -i "$tx_dir/app-create.tx" -o "$tx_dir/app-create.stx" -d "$network_dir/$sender_name"
 
-            trace_if_needed "Creating payset group tx"
-            fee=$(get_random_fee)
-            "$bin_dir/goal" clerk send --fee $fee -a 1000 -f $src_addr -t $dst_addr --firstvalid "$firstvalid" --lastvalid "$lastvalid" -o "$tx_dir/payset-again.tx" -d "$network_dir/$sender_name"
-            cat "$tx_dir/payset.tx" "$tx_dir/payset-again.tx" > "$tx_dir/payset-concat.tx"
-            "$bin_dir/goal" clerk group -i "$tx_dir/payset-concat.tx" -o "$tx_dir/payset-group.tx"
-            "$bin_dir/goal" clerk sign -P "$proto" -i "$tx_dir/payset-group.tx" -o "$tx_dir/payset-group.stx" -d "$network_dir/$sender_name"
+            local rekey_src_addr=$("$bin_dir/goal" account list -d "$network_dir/$sender_name" | tail -1 | awk '{ print $2 }')
+            local rekey_to_addr=$src_addr
 
-            trace_if_needed "Creating asset create tx"
-            fee=$(get_random_fee)
-            "$bin_dir/goal" asset create --fee $fee --creator $src_addr --name $ASSET_NAME --total 100 --unitname $ASSET_TOKEN --firstvalid "$firstvalid" --validrounds "$validrounds" -o "$tx_dir/asset-create.tx" -d "$network_dir/$sender_name"
-            "$bin_dir/goal" clerk sign -P "$proto" -i "$tx_dir/asset-create.tx" -o "$tx_dir/asset-create.stx" -d "$network_dir/$sender_name"
+            trace_if_needed "Creating rekey txn"
+            "$bin_dir/goal" clerk send --fee $fee -a 1000 -f $rekey_src_addr -t $dst_addr --firstvalid "$firstvalid" --lastvalid "$lastvalid" --rekey-to $rekey_to_addr -o "$tx_dir/rekey-payset-1.tx" -d "$network_dir/$sender_name"
+            "$bin_dir/goal" clerk sign -P "$proto" -i "$tx_dir/rekey-payset-1.tx" -o "$tx_dir/rekey-payset-1.stx" -d "$network_dir/$sender_name"
+
+            trace_if_needed "Creating rekeyed txn that also rekeys it back"
+            "$bin_dir/goal" clerk send --fee $fee -a 1000 -f $rekey_src_addr -t $dst_addr --firstvalid "$firstvalid" --lastvalid "$lastvalid" --rekey-to $rekey_src_addr -o "$tx_dir/rekey-payset-2.tx" -d "$network_dir/$sender_name"
+            "$bin_dir/goal" clerk sign -S $rekey_to_addr -P "$proto" -i "$tx_dir/rekey-payset-2.tx" -o "$tx_dir/rekey-payset-2.stx" -d "$network_dir/$sender_name"
         fi
     fi
 
@@ -1157,21 +1191,21 @@ function generate_transactions() {
     network_cleanup "$bin_dir" "$network_dir"
 }
 
-__check_asset_transactions=()
+__check_new_transactions=()
 
 << DESCRIPTION
-Submits asset transactions
+Submits transactions of new type - that are only valid after upgrade
 Parameters:
     nodes - an array (encoded map) of node names and binary paths
     emit_info - an array (encoded map) with sender, receiver and update initiator nodes names and tx count expectations
     network_dir - a path to the directory with running network
-    proto - a protocol version is being test. If it is '$NEXT_PROTO' then submit asset transaction
+    proto - a protocol version is being test. If it is '$NEXT_PROTO' then submit new transaction
 Returns:
     0 on success
-    __check_asset_transactions contains an array of submitted tx ids
+    __check_new_transactions contains an array of submitted tx ids
 
 DESCRIPTION
-function check_asset_transactions() {
+function check_new_transactions() {
     local nodes=( $1 )
     local emit_info=( $2 )
     local network_dir=$3
@@ -1222,39 +1256,36 @@ function check_asset_transactions() {
         "$bin_dir/goal" node wait -w 30 -d "$network_dir/$sender_name"
         "$bin_dir/goal" node wait -w 30 -d "$network_dir/$receiver_name"
 
+        local rekey_src_addr=$("$bin_dir/goal" account list -d "$network_dir/$sender_name" | tail -1 | awk '{ print $2 }')
+        local rekey_to_addr=$src_addr
+
         local regex='txid ([A-Z0-9=]{52,52})'
         # Issued transaction from account AKMIEYU64TDLTDER6LTGPRMAXUMDQQFKVMH5QTYECBWIXT7V4KZ6GFTI2I, txid ITJPKM7JW57HTJUWIZH3VDUYJ6VVAHPASMKGKIFXZT2P6M3IEKAA (fee 1000)
 
-        trace_if_needed "Sending asset config tx"
-        local output=$("$bin_dir/goal" asset config --asset $ASSET_TOKEN --creator $src_addr --manager $src_addr --new-manager $src_addr -N --firstvalid 1 --validrounds 1000 -d "$network_dir/$sender_name")
-        trace_if_needed "Sent asset config tx" "$output" $?
+        printf "#pragma version 2\nint 1" > "$tx_dir/int1.teal"
+        trace_if_needed "Sending app create tx"
+        local output=$("$bin_dir/goal" app create --creator $src_addr --approval-prog "$tx_dir/int1.teal" --clear-prog "$tx_dir/int1.teal" --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 --firstvalid 1 --lastvalid 1000 -d "$network_dir/$sender_name")
+        trace_if_needed "Sent app create tx" "$output" $?
 
         [[ $output =~ $regex ]]
         local txid=${BASH_REMATCH[1]}
         trace_if_needed $txid
         txids+=($txid)
 
-        trace_if_needed "Sending asset send tx"
-        local output=$("$bin_dir/goal" asset send --asset $ASSET_TOKEN --creator $src_addr -a 1 -f $src_addr -t $src_addr -N --firstvalid 1 --validrounds 1000 -d "$network_dir/$sender_name")
-        trace_if_needed "Sent asset send tx" "$output" $?
+        trace_if_needed "Sending rekey txn"
+        local output=$("$bin_dir/goal" clerk send --fee 1000 -a 1000 -f $rekey_src_addr -t $dst_addr --firstvalid 1 --lastvalid 1000 --rekey-to $rekey_to_addr -d "$network_dir/$sender_name")
+        trace_if_needed "Sent rekey tx" "$output" $?
 
         [[ $output =~ $regex ]]
         local txid=${BASH_REMATCH[1]}
         trace_if_needed $txid
         txids+=($txid)
 
-        trace_if_needed "Sending asset freeze tx"
-        local output=$("$bin_dir/goal" asset freeze --asset $ASSET_TOKEN --creator $src_addr --freezer $src_addr --account $src_addr -N --freeze --firstvalid 1 --validrounds 1000 -d "$network_dir/$sender_name")
-        trace_if_needed "Sent asset freeze tx" "$output" $?
-
-        [[ $output =~ $regex ]]
-        local txid=${BASH_REMATCH[1]}
-        trace_if_needed $txid
-        txids+=($txid)
-
-        trace_if_needed "Sending asset destroy tx"
-        local output=$("$bin_dir/goal" asset destroy --asset $ASSET_TOKEN --creator $src_addr --manager $src_addr -N --firstvalid 1 --validrounds 1000 -d "$network_dir/$sender_name")
-        trace_if_needed "Sent asset destroy tx" "$output" $?
+        trace_if_needed "Sending rekeyed txn"
+        mkdir -p "$tx_dir/tmp"
+        "$bin_dir/goal" clerk send --fee 1000 -a 1000 -f $rekey_src_addr -t $dst_addr --firstvalid 1 --lastvalid 1000 --rekey-to $rekey_src_addr -o "$tx_dir/tmp/rekeyed-send-payset.tx" -d "$network_dir/$sender_name"
+        "$bin_dir/goal" clerk sign -S $rekey_to_addr -P "$proto" -i "$tx_dir/tmp/rekeyed-send-payset.tx" -o "$tx_dir/tmp/rekeyed-send-payset.stx" -d "$network_dir/$sender_name"
+        local output=$("$bin_dir/goal" clerk rawsend -f "$tx_dir/tmp/rekeyed-send-payset.stx") -d "$network_dir/$sender_name"
 
         [[ $output =~ $regex ]]
         local txid=${BASH_REMATCH[1]}
@@ -1262,7 +1293,7 @@ function check_asset_transactions() {
         txids+=($txid)
     fi
 
-    __check_asset_transactions=( ${txids[@]} )
+    __check_new_transactions=( ${txids[@]} )
 }
 
 TESTING_BIN_DIR="${SCRIPTPATH}/tests/$(revision_to_name $TESTING)/bin"
@@ -1283,16 +1314,26 @@ if [ ! -d "$VANILLA_STABLE_BIN_DIR" ]; then
     build_binaries "$SRC_DIR" "$STABLE" "$VANILLA_STABLE_BIN_DIR"
 fi
 
+# flag indicating the need of txn generation
+# usually it is done only once at the beginning
+init_generate_network_and_txn=""
+
+# payset, keyreg, lsig, group, asset
+TXN_BASE_COUNT=5
+# base + app call, rekey, rekeyed
+TXN_ALL_COUNT=8
+
+# test flags - see details at each test below
 test_new_pre_upgrade=""
 test_old_pre_upgrade=""
 test_new_upgrade_proposed=""
-test_new_upgrade_applied="1"
-test_at_upgrade_round="1"
-test_next_proto_standalone="1"
-test_old_node_after_upgrade=""
+test_new_upgrade_applied=""
+test_at_upgrade_round=""
+test_next_proto_standalone=""  # !!! <-- this test breaks all pre-generated transactions !!!
 
+if [ -n "$init_generate_network_and_txn" ]; then
 # generate sample network once to have the same genesis for all subsequent tests (except the separate future test)
-generate_network "$VANILLA_TESTING_BIN_DIR" "$V17"
+generate_network "$VANILLA_TESTING_BIN_DIR" "$BASE_PROTO"
 
 # pre-generate old transactions
 SENDER="Node1"
@@ -1304,12 +1345,12 @@ generate_transactions "$VANILLA_STABLE_BIN_DIR" "$SENDER" "$RECEIVER" "$TX_DIR"
 # generate tx with valid round=UPGRADE_ROUND for at upgrade test
 TX_DIR="$TX_BASE_DIR/$(revision_to_name $STABLE)/$SENDER/Round$UPGRADE_ROUND"
 trace_if_needed "Creating tx $SENDER -> $RECEIVER by version $STABLE with validity round=$UPGRADE_ROUND"
-generate_transactions "$VANILLA_STABLE_BIN_DIR" "$SENDER" "$RECEIVER" "$TX_DIR" "$V17" "$UPGRADE_ROUND"
+generate_transactions "$VANILLA_STABLE_BIN_DIR" "$SENDER" "$RECEIVER" "$TX_DIR" "$BASE_PROTO" "$UPGRADE_ROUND"
 
 # generate tx with valid round=UPGRADE_ROUND+1 for at upgrade+1 test
 TX_DIR="$TX_BASE_DIR/$(revision_to_name $STABLE)/$SENDER/Round$UPGRADE_ROUND_NEXT"
 trace_if_needed "Creating tx $SENDER -> $RECEIVER by version $STABLE transaction with validity round=$UPGRADE_ROUND_NEXT"
-generate_transactions "$VANILLA_STABLE_BIN_DIR" "$SENDER" "$RECEIVER" "$TX_DIR" "$V17" "$UPGRADE_ROUND_NEXT"
+generate_transactions "$VANILLA_STABLE_BIN_DIR" "$SENDER" "$RECEIVER" "$TX_DIR" "$BASE_PROTO" "$UPGRADE_ROUND_NEXT"
 
 SENDER="Primary"
 RECEIVER="Node2"
@@ -1320,12 +1361,12 @@ generate_transactions "$VANILLA_STABLE_BIN_DIR" "$SENDER" "$RECEIVER" "$TX_DIR"
 # generate tx with valid round=UPGRADE_ROUND for at upgrade test
 TX_DIR="$TX_BASE_DIR/$(revision_to_name $STABLE)/$SENDER/Round$UPGRADE_ROUND"
 trace_if_needed "Creating tx $SENDER -> $RECEIVER by version $STABLE with validity round=$UPGRADE_ROUND"
-generate_transactions "$VANILLA_STABLE_BIN_DIR" "$SENDER" "$RECEIVER" "$TX_DIR" "$V17" "$UPGRADE_ROUND"
+generate_transactions "$VANILLA_STABLE_BIN_DIR" "$SENDER" "$RECEIVER" "$TX_DIR" "$BASE_PROTO" "$UPGRADE_ROUND"
 
 # generate tx with valid round=UPGRADE_ROUND+1 for at upgrade test
 TX_DIR="$TX_BASE_DIR/$(revision_to_name $STABLE)/$SENDER/Round$UPGRADE_ROUND_NEXT"
 trace_if_needed "Creating tx $SENDER -> $RECEIVER by version $STABLE with validity round=$UPGRADE_ROUND_NEXT"
-generate_transactions "$VANILLA_STABLE_BIN_DIR" "$SENDER" "$RECEIVER" "$TX_DIR" "$V17" "$UPGRADE_ROUND_NEXT"
+generate_transactions "$VANILLA_STABLE_BIN_DIR" "$SENDER" "$RECEIVER" "$TX_DIR" "$BASE_PROTO" "$UPGRADE_ROUND_NEXT"
 
 SENDER="Node2"
 RECEIVER="Primary"
@@ -1373,12 +1414,17 @@ RECEIVER="Primary"
 TX_DIR="$TX_BASE_DIR/$(revision_to_name $TESTING)/$SENDER"
 trace_if_needed "Creating tx $SENDER -> $RECEIVER by version $TESTING transaction"
 generate_transactions "$TESTING_BIN_DIR" "$SENDER" "$RECEIVER" "$TX_DIR" "$NEXT_PROTO"
+fi
 
+####################################################################################################
+#
 # Tests
 # Note set -e handles exit after each failed tests
+#
+####################################################################################################
 if [ -n "$test_new_pre_upgrade" ]; then
 echo "============================================================================================="
-echo "1. Check v1.1.0 accepts old and new basic transactions (pre upgrade)"
+echo "1. Check NEW ALGOD accepts old and new basic transactions (pre upgrade)"
 echo
 
 NODES=(
@@ -1386,7 +1432,7 @@ NODES=(
     "Node1:$TESTING_BIN_DIR"
     "Node2:$TESTING_BIN_DIR"
 )
-COUNT=2
+COUNT=$TXN_BASE_COUNT
 
 echo "---------------------------------------------------------------------------------------------"
 echo "1.1. TxSync disabled"
@@ -1437,7 +1483,7 @@ fi
 
 if [ -n "$test_old_pre_upgrade" ]; then
 echo "============================================================================================="
-echo "2. Check v1.0.29 accepts old and new basic transactions (pre upgrade)"
+echo "2. Check OLD ALGOD accepts old and new basic transactions (pre upgrade)"
 echo
 
 NODES=(
@@ -1445,7 +1491,7 @@ NODES=(
     "Node1:$STABLE_BIN_DIR"
     "Node2:$STABLE_BIN_DIR"
 )
-COUNT=2
+COUNT=$TXN_BASE_COUNT
 
 echo "---------------------------------------------------------------------------------------------"
 echo "2.1. TxSync disabled"
@@ -1496,7 +1542,7 @@ fi
 
 if [ -n "$test_new_upgrade_proposed" ]; then
 echo "============================================================================================="
-echo "3. Check v1.1.0 and v1.0.29 accept old and new basic transactions (upgrade proposed)"
+echo "3. Check NEW algod and OLD algod accept old and new basic transactions (upgrade proposed)"
 echo
 
 NODES=(
@@ -1504,7 +1550,7 @@ NODES=(
     "Node1:$TESTING_BIN_DIR"
     "Node2:$STABLE_BIN_DIR"
 )
-COUNT=2
+COUNT=$TXN_BASE_COUNT
 PROPOSER="Node1"
 
 echo "---------------------------------------------------------------------------------------------"
@@ -1594,7 +1640,7 @@ fi
 
 if [ -n "$test_new_upgrade_applied" ]; then
 echo "============================================================================================="
-echo "4. Check v1.1.0 accepts all old and new transactions (post upgrade)"
+echo "4. Check NEW ALGOD accepts old basic and all new transactions (post upgrade)"
 echo
 
 NODES=(
@@ -1602,7 +1648,8 @@ NODES=(
     "Node1:$TESTING_BIN_DIR"
     "Node2:$TESTING_BIN_DIR"
 )
-COUNT=9
+COUNT=$TXN_ALL_COUNT
+OLD_COUNT=$TXN_BASE_COUNT
 
 echo "---------------------------------------------------------------------------------------------"
 echo "4.1. TxSync disabled"
@@ -1625,8 +1672,8 @@ test_upgrade_applied_gossip "$(echo ${NODES[@]})" "$(echo ${EMIT_INFO[@]})" "$TX
 
 # test new binaries with old transactions
 EMIT_INFO=(
-    "snd:$SENDER@2"
-    "rcv:$RECEIVER@2"
+    "snd:$SENDER@$OLD_COUNT"
+    "rcv:$RECEIVER@$OLD_COUNT"
 )
 TX_DIR="$TX_BASE_DIR/$(revision_to_name $STABLE)"
 test_upgrade_applied_gossip "$(echo ${NODES[@]})" "$(echo ${EMIT_INFO[@]})" "$TX_DIR"
@@ -1652,8 +1699,8 @@ test_upgrade_applied_txsync "$(echo ${NODES[@]})" "$(echo ${EMIT_INFO[@]})" "$TX
 
 # test new binaries with old transactions
 EMIT_INFO=(
-    "snd:$SENDER@2"
-    "rcv:$RECEIVER@2"
+    "snd:$SENDER@$OLD_COUNT"
+    "rcv:$RECEIVER@$OLD_COUNT"
 )
 TX_DIR="$TX_BASE_DIR/$(revision_to_name $STABLE)"
 test_upgrade_applied_txsync "$(echo ${NODES[@]})" "$(echo ${EMIT_INFO[@]})" "$TX_DIR"
@@ -1661,7 +1708,7 @@ fi
 
 if [ -n "$test_at_upgrade_round" ]; then
 echo "============================================================================================="
-echo "5. Check v1.1.0 accepts all old and new transactions (upgrade and upgrade+1)"
+echo "5. Check NEW algod accepts all old and new transactions (upgrade and upgrade+1)"
 echo
 
 NODES=(
@@ -1669,7 +1716,7 @@ NODES=(
     "Node1:$TESTING_BIN_DIR"
     "Node2:$TESTING_BIN_DIR"
 )
-COUNT=2
+COUNT=$TXN_BASE_COUNT
 ((SUBMIT_ROUND=$UPGRADE_ROUND-1))
 
 echo "---------------------------------------------------------------------------------------------"
@@ -1688,7 +1735,7 @@ trace_if_needed "check upgrade round"
 ((TX_VALID_ROUND=$UPGRADE_ROUND))
 
 trace_if_needed "test new binaries with old transactions"
-COUNT=2
+COUNT=$TXN_BASE_COUNT
 EMIT_INFO=(
     "snd:$SENDER@$COUNT"
     "rcv:$RECEIVER@$COUNT"
@@ -1697,7 +1744,7 @@ TX_DIR="$TX_BASE_DIR/$(revision_to_name $TESTING)/$SENDER/Round$TX_VALID_ROUND"
 test_at_upgrade_gossip "$(echo ${NODES[@]})" "$(echo ${EMIT_INFO[@]})" "$TX_DIR" "$UPGRADE_ROUND" "$SUBMIT_ROUND"
 
 trace_if_needed "test new binaries with old transactions"
-COUNT=2
+COUNT=$TXN_BASE_COUNT
 EMIT_INFO=(
     "snd:$SENDER@$COUNT"
     "rcv:$RECEIVER@$COUNT"
@@ -1710,8 +1757,8 @@ trace_if_needed "check upgrade+1 round"
 SUBMIT_ROUND="$UPGRADE_ROUND"
 ((TX_VALID_ROUND=$UPGRADE_ROUND+1))
 
-trace_if_needed "test new binaries with old transactions"
-COUNT=9
+trace_if_needed "test new binaries with all transactions"
+COUNT=$TXN_ALL_COUNT
 EMIT_INFO=(
     "snd:$SENDER@$COUNT"
     "rcv:$RECEIVER@$COUNT"
@@ -1720,7 +1767,7 @@ TX_DIR="$TX_BASE_DIR/$(revision_to_name $TESTING)/$SENDER/Round$TX_VALID_ROUND"
 test_at_upgrade_gossip "$(echo ${NODES[@]})" "$(echo ${EMIT_INFO[@]})" "$TX_DIR" "$UPGRADE_ROUND" "$SUBMIT_ROUND"
 
 trace_if_needed "test new binaries with old transactions"
-COUNT=2
+COUNT=$TXN_BASE_COUNT
 EMIT_INFO=(
     "snd:$SENDER@$COUNT"
     "rcv:$RECEIVER@$COUNT"
@@ -1743,7 +1790,7 @@ trace_if_needed "check upgrade round"
 ((SUBMIT_ROUND=$UPGRADE_ROUND-1))
 ((TX_VALID_ROUND=$UPGRADE_ROUND))
 # test new binaries with old transactions
-COUNT=2
+COUNT=$TXN_BASE_COUNT
 EMIT_INFO=(
     "snd:$SENDER@$COUNT"
     "rcv:$RECEIVER@$COUNT"
@@ -1752,7 +1799,7 @@ TX_DIR="$TX_BASE_DIR/$(revision_to_name $TESTING)/$SENDER/Round$TX_VALID_ROUND"
 test_at_upgrade_txsync "$(echo ${NODES[@]})" "$(echo ${EMIT_INFO[@]})" "$TX_DIR" "$UPGRADE_ROUND" "$SUBMIT_ROUND"
 
 trace_if_needed "test new binaries with old transactions"
-COUNT=2
+COUNT=$TXN_BASE_COUNT
 EMIT_INFO=(
     "snd:$SENDER@$COUNT"
     "rcv:$RECEIVER@$COUNT"
@@ -1765,8 +1812,8 @@ trace_if_needed "check upgrade+1 round"
 SUBMIT_ROUND="$UPGRADE_ROUND"
 ((TX_VALID_ROUND=$UPGRADE_ROUND+1))
 
-trace_if_needed "test new binaries with old transactions"
-COUNT=9
+trace_if_needed "test new binaries with all transactions"
+COUNT=$TXN_ALL_COUNT
 EMIT_INFO=(
     "snd:$SENDER@$COUNT"
     "rcv:$RECEIVER@$COUNT"
@@ -1775,7 +1822,7 @@ TX_DIR="$TX_BASE_DIR/$(revision_to_name $TESTING)/$SENDER/Round$TX_VALID_ROUND"
 test_at_upgrade_txsync "$(echo ${NODES[@]})" "$(echo ${EMIT_INFO[@]})" "$TX_DIR" "$UPGRADE_ROUND" "$SUBMIT_ROUND"
 
 trace_if_needed "test new binaries with old transactions"
-COUNT=2
+COUNT=$TXN_BASE_COUNT
 EMIT_INFO=(
     "snd:$SENDER@$COUNT"
     "rcv:$RECEIVER@$COUNT"
@@ -1786,7 +1833,7 @@ fi
 
 if [ -n "$test_next_proto_standalone" ]; then
 echo "============================================================================================="
-echo "6. Check v1.1.0 accepts all transactions (create a fresh v=NEXT_PROTO network)"
+echo "6. Check NEW algod accepts all transactions (create a fresh v=NEXT_PROTO network)"
 echo "This test re-generates the network so that no pre-generated transactions are valid"
 
 NODES=(
@@ -1794,7 +1841,7 @@ NODES=(
     "Node1:$TESTING_BIN_DIR"
     "Node2:$TESTING_BIN_DIR"
 )
-COUNT=9
+COUNT=$TXN_ALL_COUNT
 
 generate_network "$VANILLA_TESTING_BIN_DIR" "$NEXT_PROTO"
 
@@ -1837,38 +1884,4 @@ generate_transactions "$TESTING_BIN_DIR" "$SENDER" "$RECEIVER" "$TX_DIR" "$NEXT_
 
 build_binaries "$SRC_DIR" "$TESTING" "$TESTING_BIN_DIR" patch_agg_remember_and_disable_gossip
 test_pre_upgrade_txsync "$(echo ${NODES[@]})" "$(echo ${EMIT_INFO[@]})" "$TX_DIR" "$NEXT_PROTO"
-fi
-
-
-if [ -n "$test_old_node_after_upgrade" ]; then
-echo "============================================================================================="
-echo "7. Check v1.0.29 does not crash after upgrade (post upgrade)"
-echo
-
-NODES=(
-    "Primary:$TESTING_BIN_DIR"
-    "Node1:$TESTING_BIN_DIR"
-    "Node2:$STABLE_BIN_DIR"
-)
-COUNT=9
-
-echo "---------------------------------------------------------------------------------------------"
-echo "7.1. TxSync disabled"
-
-SENDER="Node1"
-RECEIVER="Primary"
-echo "Will be sending from $SENDER to $RECEIVER"
-echo
-
-EMIT_INFO=(
-    "snd:$SENDER@$COUNT"
-    "rcv:$RECEIVER@$COUNT"
-)
-
-# build_binaries "$SRC_DIR" "$STABLE" "$STABLE_BIN_DIR" patch_log_txpool_remember
-# build_binaries "$SRC_DIR" "$TESTING" "$TESTING_BIN_DIR" patch_agg_remember_and_fast_upgrade_to_next_proto
-
-# test new binaries with new transactions
-TX_DIR="$TX_BASE_DIR/$(revision_to_name $TESTING)"
-test_upgrade_applied_gossip "$(echo ${NODES[@]})" "$(echo ${EMIT_INFO[@]})" "$TX_DIR"
 fi
