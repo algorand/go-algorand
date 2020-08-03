@@ -747,6 +747,9 @@ func initConsensusProtocols() {
 	// Maximum number of apps a single account can opt into
 	vFuture.MaxAppsOptedIn = 10
 	Consensus[protocol.ConsensusFuture] = vFuture
+
+	// FilterTimeout 2s instead of 4s for period 0
+	vFuture.FilterTimeoutPeriod0SmallLambdas = 1
 }
 
 // Global defines global Algorand protocol parameters which should not be overriden.
