@@ -320,6 +320,7 @@ func signAndBroadcastTransaction(accounts map[string]uint64, sender string, tx t
 
 func genBigNoOp(numOps uint32) []byte {
 	var progParts []string
+	progParts = append(progParts, `#pragma version 2`)
 	for i := uint32(0); i < numOps/2; i++ {
 		progParts = append(progParts, `int 1`)
 		progParts = append(progParts, `pop`)
@@ -336,6 +337,7 @@ func genBigNoOp(numOps uint32) []byte {
 
 func genBigHashes(numHashes int, numPad int, hash string) []byte {
 	var progParts []string
+	progParts = append(progParts, `#pragma version 2`)
 	progParts = append(progParts, `byte base64 AA==`)
 	for i := 0; i < numHashes; i++ {
 		progParts = append(progParts, hash)

@@ -493,7 +493,7 @@ for notes on transaction fields available, see `txn`. If this transaction is _i_
 
 The `bnz` instruction opcode 0x40 is followed by two immediate data bytes which are a high byte first and low byte second which together form a 16 bit offset which the instruction may branch to. For a bnz instruction at `pc`, if the last element of the stack is not zero then branch to instruction at `pc + 3 + N`, else proceed to next instruction at `pc + 3`. Branch targets must be well aligned instructions. (e.g. Branching to the second byte of a 2 byte op will be rejected.) Branch offsets are currently limited to forward branches only, 0-0x7fff. A future expansion might make this a signed 16 bit integer allowing for backward branches and looping.
 
-At LogicSigVersion 2 it became allowed to branch to the end of the program exactly after the last instruction, removing the need for a last instruction or no-op as a branch target at the end. Branching beyond that may still fail the program.
+At LogicSigVersion 2 it became allowed to branch to the end of the program exactly after the last instruction: bnz to byte N (with 0-indexing) was illegal for a TEAL program with N bytes before LogicSigVersion 2, and is legal after it. This change eliminates the need for a last instruction of no-op as a branch target at the end. (Branching beyond the end--in other words, to a byte larger than N--is still illegal and will cause the program to fail.)
 
 ## bz
 
@@ -560,7 +560,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Opcode: 0x51 {uint8 start position}{uint8 end position}
 - Pops: *... stack*, []byte
 - Pushes: []byte
-- pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to but not including M, push the substring result
+- pop a byte string X. For immediate values in 0..255 M and N: extract a range of bytes from it starting at M up to but not including N, push the substring result. If N < M, or either is larger than the string length, the program fails
 - LogicSigVersion >= 2
 
 ## substring3
@@ -568,7 +568,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Opcode: 0x52
 - Pops: *... stack*, {[]byte A}, {uint64 B}, {uint64 C}
 - Pushes: []byte
-- pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result
+- pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the string length, the program fails
 - LogicSigVersion >= 2
 
 ## balance
