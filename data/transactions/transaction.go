@@ -330,6 +330,10 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 			return fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is %d", proto.MaxAppTxnForeignApps)
 		}
 
+		if len(tx.ForeignAssets) > proto.MaxAppTxnForeignAssets {
+			return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
+		}
+
 		if len(tx.ApprovalProgram) > proto.MaxAppProgramLen {
 			return fmt.Errorf("approval program too long. max len %d bytes", proto.MaxAppProgramLen)
 		}

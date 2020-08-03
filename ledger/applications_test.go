@@ -28,8 +28,9 @@ import (
 )
 
 type testBalances struct {
-	appCreators map[basics.AppIndex]basics.Address
-	balances    map[basics.Address]basics.AccountData
+	appCreators   map[basics.AppIndex]basics.Address
+	assetCreators map[basics.AssetIndex]basics.Address
+	balances      map[basics.Address]basics.AccountData
 }
 
 type testBalancesPass struct {
@@ -63,6 +64,11 @@ func (b *testBalances) GetCreator(cidx basics.CreatableIndex, ctype basics.Creat
 		}
 
 		creator, ok := b.appCreators[aidx]
+		return creator, ok, nil
+	}
+	if ctype == basics.AssetCreatable {
+		aidx := basics.AssetIndex(cidx)
+		creator, ok := b.assetCreators[aidx]
 		return creator, ok, nil
 	}
 	return basics.Address{}, false, nil
@@ -183,14 +189,15 @@ func TestAppLedgerAsset(t *testing.T) {
 
 	assetIdx := basics.AssetIndex(2)
 	b.balances = map[basics.Address]basics.AccountData{addr1: {}}
-	_, err = l.AssetParams(addr1, assetIdx)
+	b.assetCreators = map[basics.AssetIndex]basics.Address{assetIdx: addr1}
+	_, err = l.AssetParams(assetIdx)
 	a.Error(err)
 	a.Contains(err.Error(), "has not created asset")
 
 	b.balances[addr1] = basics.AccountData{
 		AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}},
 	}
-	ap, err := l.AssetParams(addr1, assetIdx)
+	ap, err := l.AssetParams(assetIdx)
 	a.NoError(err)
 	a.Equal(uint64(1000), ap.Total)
 	delete(b.balances, addr1)

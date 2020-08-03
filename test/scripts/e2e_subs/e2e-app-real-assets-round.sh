@@ -34,7 +34,7 @@ ${gcmd} asset send --assetid $ASSET_ID -a 17 -f $ACCOUNT -t $ACCOUNTB
 # Call app from account B, do some checks on asset balance
 ROUND=$(goal node status | grep 'Last committed' | awk '{ print $4 }')
 TIMESTAMP=$(goal ledger block --strict ${ROUND} | jq .block.ts)
-${gcmd} app call --app-id $APP_ID --from $ACCOUNTB --app-arg "int:$ASSET_ID" --app-arg "int:17" --app-arg "int:0" --app-arg "int:1" --app-arg "str:" --app-arg "str:" --app-arg "int:$ROUND" --app-arg "int:$TIMESTAMP"
+${gcmd} app call --app-id $APP_ID --from $ACCOUNTB --foreign-asset $ASSET_ID --app-arg "int:$ASSET_ID" --app-arg "int:17" --app-arg "int:0" --app-arg "int:1" --app-arg "str:" --app-arg "str:" --app-arg "int:$ROUND" --app-arg "int:$TIMESTAMP"
 
 # Freeze account B's holding
 ${gcmd} asset freeze --assetid $ASSET_ID --freeze=true --freezer $ACCOUNT --account $ACCOUNTB
@@ -42,4 +42,4 @@ ${gcmd} asset freeze --assetid $ASSET_ID --freeze=true --freezer $ACCOUNT --acco
 # Check bit flipped
 ROUND=$(goal node status | grep 'Last committed' | awk '{ print $4 }')
 TIMESTAMP=$(goal ledger block --strict ${ROUND} | jq .block.ts)
-${gcmd} app call --app-id $APP_ID --from $ACCOUNTB --app-arg "int:$ASSET_ID" --app-arg "int:17" --app-arg "int:1" --app-arg "int:1" --app-arg "str:" --app-arg "str:" --app-arg "int:$ROUND" --app-arg "int:$TIMESTAMP"
+${gcmd} app call --app-id $APP_ID --from $ACCOUNTB --foreign-asset $ASSET_ID --app-arg "int:$ASSET_ID" --app-arg "int:17" --app-arg "int:1" --app-arg "int:1" --app-arg "str:" --app-arg "str:" --app-arg "int:$ROUND" --app-arg "int:$TIMESTAMP"

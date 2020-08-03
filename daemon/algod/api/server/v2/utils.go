@@ -17,6 +17,7 @@
 package v2
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strings"
@@ -84,7 +85,7 @@ func byteOrNil(data []byte) *[]byte {
 	return &data
 }
 
-func computeAssetIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (aidx *uint64) {
+func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset []transactions.SignedTxnWithAD) (cidx *uint64) {
 	// Compute transaction index in block
 	offset := -1
 	for idx, stxnib := range payset {
@@ -103,6 +104,8 @@ func computeAssetIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, payset 
 	idx := txnCounter - uint64(len(payset)) + uint64(offset) + 1
 	return &idx
 }
+
+
 
 // computeAssetIndexFromTxn returns the created asset index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
@@ -136,8 +139,44 @@ func computeAssetIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint
 		return nil
 	}
 
-	return computeAssetIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
+	return computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
 }
+
+// computeAppIndexFromTxn returns the created app index given a confirmed
+// transaction whose confirmation block is available in the ledger. Note that
+// 0 is an invalid asset index (they start at 1).
+func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint64) {
+	// Must have ledger
+	if l == nil {
+		return nil
+	}
+	// Transaction must be confirmed
+	if tx.ConfirmedRound == 0 {
+		return nil
+	}
+	// Transaction must be ApplicationCall transaction
+	if tx.Txn.Txn.ApplicationCallTxnFields.Empty() {
+		return nil
+	}
+	// Transaction must be creating an application
+	if tx.Txn.Txn.ApplicationCallTxnFields.ApplicationID != 0 {
+		return nil
+	}
+
+	// Look up block where transaction was confirmed
+	blk, err := l.Block(tx.ConfirmedRound)
+	if err != nil {
+		return nil
+	}
+
+	payset, err := blk.DecodePaysetFlat()
+	if err != nil {
+		return nil
+	}
+
+	return computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
+}
+
 
 // getCodecHandle converts a format string into the encoder + content type
 func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
@@ -177,4 +216,53 @@ func decode(handle codec.Handle, data []byte, v interface{}) error {
 		return fmt.Errorf("failed to decode object: %v", err)
 	}
 	return nil
+}
+
+// Helper to convert basics.StateDelta -> *generated.StateDelta
+func stateDeltaToStateDelta(d basics.StateDelta) *generated.StateDelta {
+	if len(d) == 0 {
+		return nil
+	}
+	var delta generated.StateDelta
+	for k, v:= range d {
+		delta = append(delta, generated.EvalDeltaKeyValue{
+			Key:   base64.StdEncoding.EncodeToString([]byte(k)),
+			Value: generated.EvalDelta{
+				Action: uint64(v.Action),
+				Bytes:  strOrNil(base64.StdEncoding.EncodeToString([]byte(v.Bytes))),
+				Uint:   numOrNil(v.Uint),
+			},
+		})
+	}
+	return &delta
+}
+
+func convertToDeltas(txn node.TxnWithStatus) (*[]generated.AccountStateDelta, *generated.StateDelta) {
+	var localStateDelta *[]generated.AccountStateDelta
+	if len(txn.ApplyData.EvalDelta.LocalDeltas) > 0 {
+		d := make([]generated.AccountStateDelta, 0)
+		accounts := txn.Txn.Txn.Accounts
+
+		for k, v := range txn.ApplyData.EvalDelta.LocalDeltas {
+			// Resolve address from index
+			var addr string
+			if k == 0 {
+				addr = txn.Txn.Txn.Sender.String()
+			} else {
+				if int(k - 1) < len(accounts) {
+					addr = txn.Txn.Txn.Accounts[k-1].String()
+				} else {
+					addr = fmt.Sprintf("Invalid Address Index: %d", k - 1)
+				}
+			}
+			d = append(d, generated.AccountStateDelta{
+				Address: addr,
+				Delta:   *(stateDeltaToStateDelta(v)),
+			})
+		}
+
+		localStateDelta = &d
+	}
+
+	return localStateDelta, stateDeltaToStateDelta(txn.ApplyData.EvalDelta.GlobalDelta)
 }

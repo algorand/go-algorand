@@ -58,6 +58,7 @@ var (
 	// uint64s from strings for now. 4bn transactions and using a 32-bit
 	// platform seems not so far-fetched?
 	foreignApps    []string
+	foreignAssets  []string
 	appStrAccounts []string
 
 	appArgs          []string
@@ -82,6 +83,7 @@ func init() {
 	appCmd.PersistentFlags().StringVarP(&walletName, "wallet", "w", "", "Set the wallet to be used for the selected operation")
 	appCmd.PersistentFlags().StringSliceVar(&appArgs, "app-arg", nil, "Args to encode for application transactions (all will be encoded to a byte slice). For ints, use the form 'int:1234'. For raw bytes, use the form 'b64:A=='. For printable strings, use the form 'str:hello'. For addresses, use the form 'addr:XYZ...'.")
 	appCmd.PersistentFlags().StringSliceVar(&foreignApps, "foreign-app", nil, "Indexes of other apps whose global state is read in this transaction")
+	appCmd.PersistentFlags().StringSliceVar(&foreignAssets, "foreign-asset", nil, "Indexes of assets whose parameters are read in this transaction")
 	appCmd.PersistentFlags().StringSliceVar(&appStrAccounts, "app-account", nil, "Accounts that may be accessed from application logic")
 	appCmd.PersistentFlags().StringVarP(&appInputFilename, "app-input", "i", "", "JSON file containing encoded arguments and inputs (mutually exclusive with app-arg-b64 and app-account)")
 
@@ -166,21 +168,30 @@ type appCallArg struct {
 }
 
 type appCallInputs struct {
-	Accounts    []string     `codec:"accounts"`
-	ForeignApps []uint64     `codec:"foreignapps"`
-	Args        []appCallArg `codec:"args"`
+	Accounts      []string     `codec:"accounts"`
+	ForeignApps   []uint64     `codec:"foreignapps"`
+	ForeignAssets []uint64     `codec:"foreignassets"`
+	Args          []appCallArg `codec:"args"`
 }
 
-func getForeignApps() []uint64 {
-	out := make([]uint64, len(foreignApps))
-	for i, app := range foreignApps {
-		parsed, err := strconv.ParseUint(app, 10, 64)
+func stringsToUint64(strs []string) []uint64 {
+	out := make([]uint64, len(strs))
+	for i, idstr := range strs {
+		parsed, err := strconv.ParseUint(idstr, 10, 64)
 		if err != nil {
 			reportErrorf("Could not parse foreign app id: %v", err)
 		}
 		out[i] = parsed
 	}
 	return out
+}
+
+func getForeignAssets() []uint64 {
+	return stringsToUint64(foreignAssets)
+}
+
+func getForeignApps() []uint64 {
+	return stringsToUint64(foreignApps)
 }
 
 func parseAppArg(arg appCallArg) (rawValue []byte, parseErr error) {
@@ -223,9 +234,10 @@ func parseAppArg(arg appCallArg) (rawValue []byte, parseErr error) {
 	return
 }
 
-func parseAppInputs(inputs appCallInputs) (args [][]byte, accounts []string, foreignApps []uint64) {
+func parseAppInputs(inputs appCallInputs) (args [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) {
 	accounts = inputs.Accounts
 	foreignApps = inputs.ForeignApps
+	foreignAssets = inputs.ForeignAssets
 	args = make([][]byte, len(inputs.Args))
 	for i, arg := range inputs.Args {
 		rawValue, err := parseAppArg(arg)
@@ -237,7 +249,7 @@ func parseAppInputs(inputs appCallInputs) (args [][]byte, accounts []string, for
 	return
 }
 
-func processAppInputFile() (args [][]byte, accounts []string, foreignApps []uint64) {
+func processAppInputFile() (args [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) {
 	var inputs appCallInputs
 	f, err := os.Open(appInputFilename)
 	if err != nil {
@@ -253,7 +265,7 @@ func processAppInputFile() (args [][]byte, accounts []string, foreignApps []uint
 	return parseAppInputs(inputs)
 }
 
-func getAppInputs() (args [][]byte, accounts []string, foreignApps []uint64) {
+func getAppInputs() (args [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) {
 	if (appArgs != nil || appStrAccounts != nil || foreignApps != nil) && appInputFilename != "" {
 		reportErrorf("Cannot specify both command-line arguments/accounts and JSON input filename")
 	}
@@ -275,9 +287,10 @@ func getAppInputs() (args [][]byte, accounts []string, foreignApps []uint64) {
 	}
 
 	inputs := appCallInputs{
-		Accounts:    appStrAccounts,
-		ForeignApps: getForeignApps(),
-		Args:        encodedArgs,
+		Accounts:      appStrAccounts,
+		ForeignApps:   getForeignApps(),
+		ForeignAssets: getForeignAssets(),
+		Args:          encodedArgs,
 	}
 
 	return parseAppInputs(inputs)
@@ -360,14 +373,14 @@ var createAppCmd = &cobra.Command{
 		// Parse transaction parameters
 		approvalProg, clearProg := mustParseProgArgs()
 		onCompletion := mustParseOnCompletion(createOnCompletion)
-		appArgs, appAccounts, foreignApps := getAppInputs()
+		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
 
 		switch onCompletion {
 		case transactions.CloseOutOC, transactions.ClearStateOC:
 			reportWarnf("'--on-completion %s' may be ill-formed for 'goal app create'", createOnCompletion)
 		}
 
-		tx, err := client.MakeUnsignedAppCreateTx(onCompletion, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps)
+		tx, err := client.MakeUnsignedAppCreateTx(onCompletion, approvalProg, clearProg, globalSchema, localSchema, appArgs, appAccounts, foreignApps, foreignAssets)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -448,9 +461,9 @@ var updateAppCmd = &cobra.Command{
 
 		// Parse transaction parameters
 		approvalProg, clearProg := mustParseProgArgs()
-		appArgs, appAccounts, foreignApps := getAppInputs()
+		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppUpdateTx(appIdx, appArgs, appAccounts, foreignApps, approvalProg, clearProg)
+		tx, err := client.MakeUnsignedAppUpdateTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets, approvalProg, clearProg)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -526,9 +539,9 @@ var optInAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		appArgs, appAccounts, foreignApps := getAppInputs()
+		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppOptInTx(appIdx, appArgs, appAccounts, foreignApps)
+		tx, err := client.MakeUnsignedAppOptInTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -604,9 +617,9 @@ var closeOutAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		appArgs, appAccounts, foreignApps := getAppInputs()
+		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppCloseOutTx(appIdx, appArgs, appAccounts, foreignApps)
+		tx, err := client.MakeUnsignedAppCloseOutTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -682,9 +695,9 @@ var clearAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		appArgs, appAccounts, foreignApps := getAppInputs()
+		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppClearStateTx(appIdx, appArgs, appAccounts, foreignApps)
+		tx, err := client.MakeUnsignedAppClearStateTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -760,9 +773,9 @@ var callAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		appArgs, appAccounts, foreignApps := getAppInputs()
+		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppNoOpTx(appIdx, appArgs, appAccounts, foreignApps)
+		tx, err := client.MakeUnsignedAppNoOpTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
@@ -838,9 +851,9 @@ var deleteAppCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 
 		// Parse transaction parameters
-		appArgs, appAccounts, foreignApps := getAppInputs()
+		appArgs, appAccounts, foreignApps, foreignAssets := getAppInputs()
 
-		tx, err := client.MakeUnsignedAppDeleteTx(appIdx, appArgs, appAccounts, foreignApps)
+		tx, err := client.MakeUnsignedAppDeleteTx(appIdx, appArgs, appAccounts, foreignApps, foreignAssets)
 		if err != nil {
 			reportErrorf("Cannot create application txn: %v", err)
 		}
