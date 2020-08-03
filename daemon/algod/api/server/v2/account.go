@@ -183,33 +183,58 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 	var assetParams map[basics.AssetIndex]basics.AssetParams
 	if a.CreatedAssets != nil && len(*a.CreatedAssets) > 0 {
 		assetParams = make(map[basics.AssetIndex]basics.AssetParams, len(*a.CreatedAssets))
+		var err error
 		for _, ca := range *a.CreatedAssets {
 			var metadataHash [32]byte
-			copy(metadataHash[:], *ca.Params.MetadataHash)
-			manager, err := basics.UnmarshalChecksumAddress(*ca.Params.Manager)
-			if err != nil {
-				return basics.AccountData{}, err
+			if ca.Params.MetadataHash != nil {
+				copy(metadataHash[:], *ca.Params.MetadataHash)
 			}
-			reserve, err := basics.UnmarshalChecksumAddress(*ca.Params.Reserve)
-			if err != nil {
-				return basics.AccountData{}, err
+			var manager, reserve, freeze, clawback basics.Address
+			if ca.Params.Manager != nil {
+				if manager, err = basics.UnmarshalChecksumAddress(*ca.Params.Manager); err != nil {
+					return basics.AccountData{}, err
+				}
 			}
-			freeze, err := basics.UnmarshalChecksumAddress(*ca.Params.Freeze)
-			if err != nil {
-				return basics.AccountData{}, err
+			if ca.Params.Reserve != nil {
+				if reserve, err = basics.UnmarshalChecksumAddress(*ca.Params.Reserve); err != nil {
+					return basics.AccountData{}, err
+				}
 			}
-			clawback, err := basics.UnmarshalChecksumAddress(*ca.Params.Clawback)
-			if err != nil {
-				return basics.AccountData{}, err
+			if ca.Params.Freeze != nil {
+				if freeze, err = basics.UnmarshalChecksumAddress(*ca.Params.Freeze); err != nil {
+					return basics.AccountData{}, err
+				}
+			}
+			if ca.Params.Clawback != nil {
+				if clawback, err = basics.UnmarshalChecksumAddress(*ca.Params.Clawback); err != nil {
+					return basics.AccountData{}, err
+				}
+			}
+
+			var defaultFrozen bool
+			if ca.Params.DefaultFrozen != nil {
+				defaultFrozen = *ca.Params.DefaultFrozen
+			}
+			var url string
+			if ca.Params.Url != nil {
+				url = *ca.Params.Url
+			}
+			var unitName string
+			if ca.Params.UnitName != nil {
+				unitName = *ca.Params.UnitName
+			}
+			var name string
+			if ca.Params.Name != nil {
+				name = *ca.Params.Name
 			}
 
 			assetParams[basics.AssetIndex(ca.Index)] = basics.AssetParams{
 				Total:         ca.Params.Total,
 				Decimals:      uint32(ca.Params.Decimals),
-				DefaultFrozen: *ca.Params.DefaultFrozen,
-				UnitName:      *ca.Params.UnitName,
-				AssetName:     *ca.Params.Name,
-				URL:           *ca.Params.Url,
+				DefaultFrozen: defaultFrozen,
+				UnitName:      unitName,
+				AssetName:     name,
+				URL:           url,
 				MetadataHash:  metadataHash,
 				Manager:       manager,
 				Reserve:       reserve,
@@ -360,12 +385,12 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 
 // AssetParamsToAsset converts basics.AssetParams to generated.Asset
 func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.AssetParams) generated.Asset {
+	frozen := params.DefaultFrozen
 	assetParams := generated.AssetParams{
 		Creator:       creator,
 		Total:         params.Total,
 		Decimals:      uint64(params.Decimals),
-		DefaultFrozen: &params.DefaultFrozen,
-		MetadataHash:  byteOrNil(params.MetadataHash[:]),
+		DefaultFrozen: &frozen,
 		Name:          strOrNil(params.AssetName),
 		UnitName:      strOrNil(params.UnitName),
 		Url:           strOrNil(params.URL),
@@ -373,6 +398,11 @@ func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.As
 		Freeze:        addrOrNil(params.Freeze),
 		Manager:       addrOrNil(params.Manager),
 		Reserve:       addrOrNil(params.Reserve),
+	}
+	if params.MetadataHash != ([32]byte{}) {
+		metadataHash := make([]byte, len(params.MetadataHash))
+		copy(metadataHash, params.MetadataHash[:])
+		assetParams.MetadataHash = &metadataHash
 	}
 
 	return generated.Asset{

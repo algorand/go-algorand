@@ -31,6 +31,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -63,8 +65,8 @@ func (wl *wrappedLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, er
 	return wl.l.BlockHdr(rnd)
 }
 
-func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block) (StateDelta, error) {
-	return wl.l.trackerEvalVerified(blk)
+func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
+	return wl.l.trackerEvalVerified(blk, accUpdatesLedger)
 }
 
 func (wl *wrappedLedger) Latest() basics.Round {
@@ -81,6 +83,10 @@ func (wl *wrappedLedger) blockDB() dbPair {
 
 func (wl *wrappedLedger) trackerLog() logging.Logger {
 	return wl.l.trackerLog()
+}
+
+func (wl *wrappedLedger) GenesisHash() crypto.Digest {
+	return wl.l.GenesisHash()
 }
 
 func getInitState() (genesisInitState InitState) {
@@ -164,6 +170,13 @@ func TestArchival(t *testing.T) {
 
 func TestArchivalRestart(t *testing.T) {
 	// Start in archival mode, add 2K blocks, restart, ensure all blocks are there
+
+	// disable deadlock checking code
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() {
+		deadlock.Opts.Disable = deadlockDisable
+	}()
 
 	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
 	require.NoError(t, err)
@@ -305,6 +318,13 @@ func TestArchivalCreatables(t *testing.T) {
 	// Start in archival mode, add 2K blocks with asset + app txns
 	// restart, ensure all assets are there in index unless they were
 	// deleted
+
+	// disable deadlock checking code
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() {
+		deadlock.Opts.Disable = deadlockDisable
+	}()
 
 	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
 	require.NoError(t, err)
@@ -652,7 +672,11 @@ func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInB
 
 func TestArchivalFromNonArchival(t *testing.T) {
 	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
-
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() {
+		deadlock.Opts.Disable = deadlockDisable
+	}()
 	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
 	require.NoError(t, err)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
@@ -660,6 +684,23 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	defer os.RemoveAll(dbTempDir)
 
 	genesisInitState := getInitState()
+
+	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{}
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
+	genesisInitState.GenesisHash = crypto.Digest{1}
+	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
+
+	balanceRecords := []basics.BalanceRecord{}
+
+	for i := 0; i < 50; i++ {
+		addr := basics.Address{}
+		_, err = rand.Read(addr[:])
+		require.NoError(t, err)
+		br := basics.BalanceRecord{AccountData: basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890}), Addr: addr}
+		genesisInitState.Accounts[addr] = br.AccountData
+		balanceRecords = append(balanceRecords, br)
+	}
+
 	const inMem = false // use persistent storage
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = false
@@ -673,7 +714,21 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-		l.AddBlock(blk, agreement.Certificate{})
+		blk.Payset = transactions.Payset{}
+
+		for j := 0; j < 5; j++ {
+			x := (j + i) % len(balanceRecords)
+			creatorEncoded := balanceRecords[x].Addr.String()
+			tx, err := makeUnsignedAssetCreateTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, 100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
+			require.NoError(t, err)
+			tx.Sender = balanceRecords[x].Addr
+			stxnib := makeSignedTxnInBlock(tx)
+			blk.Payset = append(blk.Payset, stxnib)
+			blk.BlockHeader.TxnCounter++
+		}
+
+		err := l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
 	}
 	l.WaitForCommit(blk.Round())
 
@@ -716,13 +771,13 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 	var minSave basics.Round
 	var cleanTracker ledgerTracker
 	var trackerType reflect.Type
+	wl.l.trackerMu.RLock()
+	defer wl.l.trackerMu.RUnlock()
 	for _, trk := range wl.l.trackers.trackers {
-		wl.l.trackerMu.RLock()
 		if au, ok := trk.(*accountUpdates); ok {
 			au.waitAccountsWriting()
 			minSave = trk.committedUpTo(rnd)
 			au.waitAccountsWriting()
-			wl.l.trackerMu.RUnlock()
 			if minSave < minMinSave {
 				minMinSave = minSave
 			}
@@ -737,7 +792,6 @@ func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Ro
 			au.initialize(cfg, "", au.initProto, wl.l.accts.initAccounts)
 		} else {
 			minSave = trk.committedUpTo(rnd)
-			wl.l.trackerMu.RUnlock()
 			if minSave < minMinSave {
 				minMinSave = minSave
 			}
