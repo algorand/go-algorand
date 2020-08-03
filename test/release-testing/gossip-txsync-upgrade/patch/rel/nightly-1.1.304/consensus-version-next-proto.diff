@@ -1,0 +1,13 @@
+diff --git a/protocol/consensus.go b/protocol/consensus.go
+index f81b9f7..7da20ac 100644
+--- a/protocol/consensus.go
++++ b/protocol/consensus.go
+@@ -111,7 +111,7 @@ const ConsensusFuture = ConsensusVersion(
+ 
+ // ConsensusCurrentVersion is the latest version and should be used
+ // when a specific version is not provided.
+-const ConsensusCurrentVersion = ConsensusV17
++const ConsensusCurrentVersion = ConsensusFuture
+ 
+ // ConsensusTest0 is a version of ConsensusV0 used for testing
+ // (it has different approved upgrade paths).
