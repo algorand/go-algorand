@@ -389,7 +389,8 @@ proc ::AlgorandGoal::ImportAccountKey { WALLET_NAME MNEMONIC } {
     expect {
         timeout { ::AlgorandGoal::Abort "Timed out retrieving importing account from mnemonic $MNEMONIC" }
         -re {Imported\s.*} { set OUTPUT $expect_out(0,string) }
-        -re {Problem with mnemonic:\s.*} { set OUTPUT $expect_out(0,string); exit 1 }
+        -re {Problem with mnemonic:\s.*} { puts $expect_out(0,string); exit 1 }
+        -re {Error processing command:\s.*} { puts $expect_out(0,string); exit 1 }
     }
     puts $OUTPUT
     log_user 1

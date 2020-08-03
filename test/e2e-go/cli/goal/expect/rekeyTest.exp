@@ -4,7 +4,6 @@ set err 0
 log_user 1
 
 source goalExpectCommon.exp
-source algokeyExpectCommon.exp
 
 set TEST_ALGO_DIR [lindex $argv 0]
 set TEST_DATA_DIR [lindex $argv 1]
@@ -23,6 +22,7 @@ proc rekeyTest { TEST_ALGO_DIR TEST_DATA_DIR } {
     set TMP_DIR [exec mktemp -d]
     set TXN_OUTFILE $TMP_DIR/ntxn
     set SIGNED_TXN_OUTFILE $TMP_DIR/nstxn
+    set KEY_FILENAME ./keys/rekeyTest.key
 
     exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
 
@@ -48,9 +48,14 @@ proc rekeyTest { TEST_ALGO_DIR TEST_DATA_DIR } {
     }
 
     # Create and import new account
-    ::AlgorandAlgokey::GenerateKey
-    set MNEMONIC [::AlgorandAlgokey::GetMnemonic]
-    set IMPORTED_ACCOUNT_ADDRESS [::AlgorandAlgokey::GetKey]
+    set fp [open $KEY_FILENAME r]
+    set FILE_DATA [read $fp]
+    close $fp
+    set re {Private key mnemonic: (.*)\nPublic key: (.*)\n}
+    if { [regexp $re $FILE_DATA -> MNEMONIC KEY] } {
+        set MNEMONIC [string trim $MNEMONIC]
+        set IMPORTED_ACCOUNT_ADDRESS [string trim $KEY]
+    }
     ::AlgorandGoal::ImportAccountKey $PRIMARY_WALLET_NAME $MNEMONIC
 
     # Send transaction, rekey
