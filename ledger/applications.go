@@ -200,9 +200,20 @@ func (al *appLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetInde
 	return holding, nil
 }
 
-func (al *appLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error) {
+func (al *appLedger) AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams, error) {
+	// Find asset creator
+	creator, ok, err := al.balances.GetCreator(basics.CreatableIndex(assetIdx), basics.AssetCreatable)
+	if err != nil {
+		return basics.AssetParams{}, err
+	}
+
+	// Ensure asset exists
+	if !ok {
+		return basics.AssetParams{}, fmt.Errorf("asset %d does not exist", assetIdx)
+	}
+
 	// Fetch the requested balance record
-	record, err := al.balances.Get(addr, false)
+	record, err := al.balances.Get(creator, false)
 	if err != nil {
 		return basics.AssetParams{}, err
 	}
@@ -210,7 +221,7 @@ func (al *appLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex
 	// Ensure account created the requested asset
 	params, ok := record.AssetParams[assetIdx]
 	if !ok {
-		err = fmt.Errorf("account %s has not created asset %d", addr.String(), assetIdx)
+		err = fmt.Errorf("account %s has not created asset %d", creator, assetIdx)
 		return basics.AssetParams{}, err
 	}
 

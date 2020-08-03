@@ -40,6 +40,12 @@ const (
 	// contain. Its value is verified against consensus parameters in
 	// TestEncodedAppTxnAllocationBounds
 	encodedMaxForeignApps = 32
+
+	// encodedMaxForeignAssets sets the allocation bound for the maximum
+	// number of ForeignAssets that a transaction decoded off of the wire
+	// can contain. Its value is verified against consensus parameters in
+	// TestEncodedAppTxnAllocationBounds
+	encodedMaxForeignAssets = 32
 )
 
 // OnCompletion is an enum representing some layer 1 side effect that an
@@ -107,6 +113,10 @@ type ApplicationCallTxnFields struct {
 	// ClearStateProgram.
 	ForeignApps []basics.AppIndex `codec:"apfa,allocbound=encodedMaxForeignApps"`
 
+	// ForeignAssets are asset IDs for assets whose AssetParams may be read
+	// by the executing ApprovalProgram or ClearStateProgram.
+	ForeignAssets []basics.AssetIndex `codec:"apas,allocbound=encodedMaxForeignAssets"`
+
 	// LocalStateSchema specifies the maximum number of each type that may
 	// appear in the local key/value store of users who opt in to this
 	// application. This field is only used during application creation
@@ -153,6 +163,9 @@ func (ac *ApplicationCallTxnFields) Empty() bool {
 		return false
 	}
 	if ac.ForeignApps != nil {
+		return false
+	}
+	if ac.ForeignAssets != nil {
 		return false
 	}
 	if ac.LocalStateSchema != (basics.StateSchema{}) {

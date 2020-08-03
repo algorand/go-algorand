@@ -449,7 +449,7 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 
 		globSchema := basics.StateSchema{NumByteSlice: 64}
 		locSchema := basics.StateSchema{}
-		tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil)
+		tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil)
 		if err != nil {
 			fmt.Printf("Cannot create app txn\n")
 			return
