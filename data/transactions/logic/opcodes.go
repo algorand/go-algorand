@@ -25,8 +25,13 @@ const LogicVersion = 2
 
 // rekeyingEnabledVersion is the version of TEAL where RekeyTo functionality
 // was enabled. This is important to remember so that old TEAL accounts cannot
-// be maliciously or accidentally rekeyed.
+// be maliciously or accidentally rekeyed. Do not edit!
 const rekeyingEnabledVersion = 2
+
+// appsEnabledVersion is the version of TEAL where ApplicationCall
+// functionality was enabled. We use this to disallow v0 and v1 TEAL programs
+// from being used with applications. Do not edit!
+const appsEnabledVersion = 2
 
 // opSize records the length in bytes for an op that is constant-length but not length 1
 type opSize struct {
