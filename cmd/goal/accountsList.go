@@ -226,28 +226,25 @@ func (accountList *AccountsList) outputAccount(addr string, acctInfo v1.Account,
 		fmt.Printf("\t[%d/%d multisig]", multisigInfo.Threshold, len(multisigInfo.PKs))
 	}
 	if len(acctInfo.AssetParams) > 0 {
-		fmt.Printf("\t[created asset IDs: ")
 		var out []string
 		for curid, params := range acctInfo.AssetParams {
 			out = append(out, fmt.Sprintf("%d (%d %s)", curid, params.Total, params.UnitName))
 		}
-		fmt.Printf("%s]", strings.Join(out, ", "))
+		fmt.Printf("\t[created asset IDs: %s]", strings.Join(out, ", "))
 	}
 	if len(acctInfo.AppParams) > 0 {
-		fmt.Printf("\t[created app IDs: ")
 		var out []string
 		for aid := range acctInfo.AppParams {
 			out = append(out, fmt.Sprintf("%d", aid))
 		}
-		fmt.Printf("%s]", strings.Join(out, ", "))
+		fmt.Printf("\t[created app IDs: %s]", strings.Join(out, ", "))
 	}
 	if len(acctInfo.AppLocalStates) > 0 {
-		fmt.Printf("\t[opted in app IDs: ")
 		var out []string
 		for aid := range acctInfo.AppLocalStates {
 			out = append(out, fmt.Sprintf("%d", aid))
 		}
-		fmt.Printf("%s]", strings.Join(out, ", "))
+		fmt.Printf("\t[opted in app IDs: %s]", strings.Join(out, ", "))
 	}
 
 	if accountList.isDefault(addr) {
