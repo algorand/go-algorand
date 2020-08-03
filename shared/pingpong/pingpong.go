@@ -452,7 +452,7 @@ func constructTxn(from, to string, fee, amt, aidx uint64, client libgoal.Client,
 	}
 
 	if cfg.NumApp > 0 { // Construct app transaction
-		txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, nil, nil)
+		txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, nil, nil, nil)
 		if err != nil {
 			return
 		}
