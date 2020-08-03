@@ -21,8 +21,8 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
-// TesthWithExpect Process all expect script files with suffix Test.exp within the test/e2e-go/cli/algod/expect directory
-func TestGoalWithExpect(t *testing.T) {
+// TestAlgodWithExpect Process all expect script files with suffix Test.exp within the test/e2e-go/cli/algod/expect directory
+func TestAlgodWithExpect(t *testing.T) {
 	et := fixtures.MakeExpectTest(t)
 	et.Run()
 }
