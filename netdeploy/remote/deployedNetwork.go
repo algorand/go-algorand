@@ -406,12 +406,7 @@ func (cfg DeployedNetwork) GenerateCloudTemplate(templates HostTemplates, target
 			return
 		}
 
-		group := strings.TrimSpace(cloudHost.Group)
-		if group == "" {
-			hostSpec.Group = "default"
-		} else {
-			hostSpec.Group = group
-		}
+		hostSpec.Group = strings.TrimSpace(cloudHost.Group)
 
 		topology.Hosts = append(topology.Hosts, hostSpec)
 	}

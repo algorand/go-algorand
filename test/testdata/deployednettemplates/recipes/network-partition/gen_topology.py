@@ -1,6 +1,6 @@
 import random
 
-node_types = {"R":8, "N":20, "NPN":10}
+node_types = {"R":8, "N":20, "NPN":2}
 node_size = {"R":"-m5d.4xl", "N":"-m5d.4xl", "NPN":"-m5d.4xl"}
 partitions = {"A":50, "B":20, "C":10, "D":10, "E":5, "F":5}
 regions = [
