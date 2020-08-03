@@ -45,6 +45,16 @@ type AccountIndexerResponse struct {
 	CurrentRound uint64 `json:"current-round"`
 }
 
+// ApplicationIndexerResponse represents the Application Response object from querying indexer
+type ApplicationIndexerResponse struct {
+
+	// Application index and its parameters
+	Application *generated.Application `json:"application,omitempty"`
+
+	// Round at which the results were computed.
+	CurrentRound uint64 `json:"current-round"`
+}
+
 type balancesAdapter struct {
 	balances   map[basics.Address]basics.AccountData
 	txnGroup   []transactions.SignedTxn
@@ -83,6 +93,16 @@ func makeAppLedger(
 			}
 		}
 		// TODO (nicholasguo): populate balances with creators of apps[]
+		for _, app := range apps {
+			creator, err := getAppCreatorFromIndexer(indexerURL, indexerToken, app)
+			if err != nil {
+				return nil, appState{}, err
+			}
+			balances[creator], err = getBalanceFromIndexer(indexerURL, indexerToken, creator, round)
+			if err != nil {
+				return nil, appState{}, err
+			}
+		}
 	}
 
 	ba := &balancesAdapter{
@@ -162,9 +182,35 @@ func makeAppLedger(
 	return ledger, states, err
 }
 
+func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics.AppIndex) (basics.Address, error) {
+	queryString := fmt.Sprintf("%s/v2/applications/%d", indexerURL, app)
+	client := &http.Client{}
+	request, err := http.NewRequest("GET", queryString, nil)
+	request.Header.Set("X-Indexer-API-Token", indexerToken)
+	resp, err := client.Do(request)
+	if err != nil {
+		return basics.Address{}, fmt.Errorf("indexer request error: %s", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		msg, _ := ioutil.ReadAll(resp.Body)
+		return basics.Address{}, fmt.Errorf("indexer response error: %s, status code: %d, request: %s", string(msg), resp.StatusCode, queryString)
+	}
+	var appResp ApplicationIndexerResponse
+	err = json.NewDecoder(resp.Body).Decode(&appResp)
+	if err != nil {
+		return basics.Address{}, fmt.Errorf("indexer response decode error: %s", err)
+	}
+
+	creator, err := basics.UnmarshalChecksumAddress(appResp.Application.Params.Creator)
+
+	if err != nil {
+		return basics.Address{}, fmt.Errorf("UnmarshalChecksumAddress error: %s", err)
+	}
+	return creator, nil
+}
+
 func getBalanceFromIndexer(indexerURL string, indexerToken string, account basics.Address, round int) (basics.AccountData, error){
-	fmt.Println(indexerURL)
-	fmt.Println(indexerToken)
 	queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%d", indexerURL, account, round)
 	client := &http.Client{}
 	request, err := http.NewRequest("GET", queryString, nil)
