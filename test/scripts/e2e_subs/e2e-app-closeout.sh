@@ -21,7 +21,7 @@ ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 ${gcmd} clerk send -a 100000000 -f ${ACCOUNT} -t ${ACCOUNTB}
 
 # Create an application that uses some global/local state
-APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog <(echo -e '#pragma version 2\nint 1') --global-byteslices 1 --global-ints 1 --local-byteslices 1 --local-ints 1 --clear-prog <(echo -e '#pragma version 2\nint 1') | grep Created | awk '{ print $6 }')
+APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog <(printf '#pragma version 2\nint 1') --global-byteslices 1 --global-ints 1 --local-byteslices 1 --local-ints 1 --clear-prog <(printf '#pragma version 2\nint 1') | grep Created | awk '{ print $6 }')
 
 # Should succeed to opt in
 ${gcmd} app optin --app-id $APPID --from $ACCOUNTB

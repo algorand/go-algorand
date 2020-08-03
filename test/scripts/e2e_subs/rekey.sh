@@ -17,11 +17,11 @@ ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 # Rekeying should fail if in a txn group with a < v2 TEAL program
 
 # Make v1 program
-echo -e 'int 1' > "${TEMPDIR}/simplev1.teal"
+printf 'int 1' > "${TEMPDIR}/simplev1.teal"
 ESCROWV1=$(${gcmd} clerk compile ${TEMPDIR}/simplev1.teal -o ${TEMPDIR}/simplev1.tealc | awk '{ print $2 }')
 
 # Make a > v1 program
-echo -e '#pragma version 2\nint 1' > "${TEMPDIR}/simple.teal"
+printf '#pragma version 2\nint 1' > "${TEMPDIR}/simple.teal"
 ESCROWV2=$(${gcmd} clerk compile ${TEMPDIR}/simple.teal -o ${TEMPDIR}/simple.tealc | awk '{ print $2 }')
 
 # Fund v1 escrow, v2 escrow, and ACCOUNTD
