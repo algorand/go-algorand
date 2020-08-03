@@ -713,6 +713,13 @@ type ApplicationCallTransactionType struct {
 	// required: true
 	ForeignApps []uint64 `json:"foreignapps"`
 
+	// ForeignAssets lists the assets whose parameters may be accessed by
+	// this application's ApprovalProgram and ClearStateProgram. The access
+	// is read-only.
+	//
+	// required: true
+	ForeignAssets []uint64 `json:"foreignassets"`
+
 	// ApplicationArgs lists some transaction-specific arguments accessible
 	// from application logic
 	//
