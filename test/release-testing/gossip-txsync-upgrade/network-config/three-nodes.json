@@ -8,12 +8,27 @@
                 "Online": true
             },
             {
+                "Name": "WalletPR",
+                "Stake": 1,
+                "Online": true
+            },
+            {
                 "Name": "Wallet1",
-                "Stake": 98,
+                "Stake": 95,
+                "Online": true
+            },
+            {
+                "Name": "Wallet1R",
+                "Stake": 1,
                 "Online": true
             },
             {
                 "Name": "Wallet2",
+                "Stake": 1,
+                "Online": true
+            },
+            {
+                "Name": "Wallet2R",
                 "Stake": 1,
                 "Online": true
             }
@@ -27,6 +42,10 @@
                 {
                     "Name": "WalletP",
                     "ParticipationOnly": false
+                },
+                {
+                    "Name": "WalletPR",
+                    "ParticipationOnly": false
                 }
             ]
         },
@@ -37,6 +56,10 @@
                 {
                     "Name": "Wallet1",
                     "ParticipationOnly": false
+                },
+                {
+                    "Name": "Wallet1R",
+                    "ParticipationOnly": false
                 }
             ]
         },
@@ -46,6 +69,10 @@
             "Wallets": [
                 {
                     "Name": "Wallet2",
+                    "ParticipationOnly": false
+                },
+                {
+                    "Name": "Wallet2R",
                     "ParticipationOnly": false
                 }
             ]
