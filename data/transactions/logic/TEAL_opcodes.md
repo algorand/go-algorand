@@ -560,7 +560,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Opcode: 0x51 {uint8 start position}{uint8 end position}
 - Pops: *... stack*, []byte
 - Pushes: []byte
-- pop a byte string X. For immediate values in 0..255 N and M: extract a range of bytes from it starting at N up to but not including M, push the substring result
+- pop a byte string X. For immediate values in 0..255 M and N: extract a range of bytes from it starting at M up to but not including N, push the substring result. If N < M, or either is larger than the string length, the program fails
 - LogicSigVersion >= 2
 
 ## substring3
@@ -568,7 +568,7 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 - Opcode: 0x52
 - Pops: *... stack*, {[]byte A}, {uint64 B}, {uint64 C}
 - Pushes: []byte
-- pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result
+- pop a byte string A and two integers B and C. Extract a range of bytes from A starting at B up to but not including C, push the substring result. If C < B, or either is larger than the string length, the program fails
 - LogicSigVersion >= 2
 
 ## balance

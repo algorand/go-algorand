@@ -2147,6 +2147,14 @@ int 3
 substring3
 byte 0x3456
 ==
+&&
+byte 0x123456789abc
+int 3
+int 3
+substring3
+len
+int 0
+==
 &&`, 2)
 	require.NoError(t, err)
 	cost, err := Check(program, defaultEvalParams(nil, nil))

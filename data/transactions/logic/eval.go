@@ -1650,7 +1650,7 @@ func opConcat(cx *evalContext) {
 
 func substring(x []byte, start, end int) (out []byte, err error) {
 	out = x
-	if end <= start {
+	if end < start {
 		err = errors.New("substring end before start")
 		return
 	}
