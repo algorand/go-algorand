@@ -31,6 +31,7 @@ func TestStateDeltaValid(t *testing.T) {
 
 	// test pre-applications proto
 	protoPreF := config.Consensus[protocol.ConsensusV23]
+	a.False(protoPreF.Application)
 	sd := StateDelta{"key": ValueDelta{Action: SetBytesAction, Bytes: "val"}}
 	err := sd.Valid(&protoPreF)
 	a.Error(err)
