@@ -46,7 +46,7 @@ const (
 
 // catchpointWriter is the struct managing the persistance of accounts data into the catchpoint file.
 // it's designed to work in a step fashion : a caller will call the WriteStep method in a loop until
-// the writing is complete. It migth take multiple steps until the operation is over, and the caller
+// the writing is complete. It might take multiple steps until the operation is over, and the caller
 // has the option of throtteling the CPU utilization in between the calls.
 type catchpointWriter struct {
 	hasher            hash.Hash
@@ -59,7 +59,7 @@ type catchpointWriter struct {
 	headerWritten     bool
 	balancesOffset    int
 	balancesChunk     catchpointFileBalancesChunk
-	fileHeader        *catchpointFileHeader
+	fileHeader        *CatchpointFileHeader
 	balancesChunkNum  uint64
 	writtenBytes      int64
 	blocksRound       basics.Round
@@ -74,7 +74,9 @@ type encodedBalanceRecord struct {
 	AccountData msgp.Raw       `codec:"ad,allocbound=basics.MaxEncodedAccountDataSize"`
 }
 
-type catchpointFileHeader struct {
+// CatchpointFileHeader is the content we would have in the "content.msgpack" file in the catchpoint tar archive.
+// we need it to be public, as it's being decoded externaly by the catchpointdump utility.
+type CatchpointFileHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Version           uint64        `codec:"version"`
@@ -219,16 +221,16 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 	}
 }
 
-func (cw *catchpointWriter) readDatabaseStep(tx *sql.Tx) (err error) {
-	cw.balancesChunk.Balances, err = encodedAccountsRange(tx, cw.balancesOffset, BalancesPerCatchpointFileChunk)
+func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (err error) {
+	cw.balancesChunk.Balances, err = encodedAccountsRange(ctx, tx, cw.balancesOffset, BalancesPerCatchpointFileChunk)
 	if err == nil {
 		cw.balancesOffset += BalancesPerCatchpointFileChunk
 	}
 	return
 }
 
-func (cw *catchpointWriter) readHeaderFromDatabase(tx *sql.Tx) (err error) {
-	var header catchpointFileHeader
+func (cw *catchpointWriter) readHeaderFromDatabase(ctx context.Context, tx *sql.Tx) (err error) {
+	var header CatchpointFileHeader
 	header.BalancesRound, _, err = accountsRound(tx)
 	if err != nil {
 		return
@@ -261,6 +263,14 @@ func (cw *catchpointWriter) GetBalancesRound() basics.Round {
 		return cw.fileHeader.BalancesRound
 	}
 	return basics.Round(0)
+}
+
+// GetBalancesCount returns the number of balances written to this catchpoint file.
+func (cw *catchpointWriter) GetTotalAccounts() uint64 {
+	if cw.fileHeader != nil {
+		return cw.fileHeader.TotalAccounts
+	}
+	return 0
 }
 
 // GetCatchpoint returns the catchpoint string to which this catchpoint file was generated for.

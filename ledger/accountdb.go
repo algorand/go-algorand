@@ -17,9 +17,11 @@
 package ledger
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/mattn/go-sqlite3"
 
@@ -32,9 +34,9 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	listAssetsStmt               *sql.Stmt
+	listCreatablesStmt           *sql.Stmt
 	lookupStmt                   *sql.Stmt
-	lookupAssetCreatorStmt       *sql.Stmt
+	lookupCreatorStmt            *sql.Stmt
 	deleteStoredCatchpoint       *sql.Stmt
 	insertStoredCatchpoint       *sql.Stmt
 	selectOldestsCatchpointFiles *sql.Stmt
@@ -79,6 +81,12 @@ var accountsSchema = []string{
 		strval text)`,
 }
 
+// TODO: Post applications, rename assetcreators -> creatables and rename
+// 'asset' column -> 'creatable'
+var creatablesMigration = []string{
+	`ALTER TABLE assetcreators ADD COLUMN ctype INTEGER DEFAULT 0`,
+}
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -88,6 +96,11 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS catchpointstate`,
 	`DROP TABLE IF EXISTS accounthashes`,
 }
+
+// accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
+// details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
+// and their descriptions.
+var accountDBVersion = int32(2)
 
 type accountDelta struct {
 	old basics.AccountData
@@ -115,8 +128,8 @@ const (
 	catchpointStateCatchupBalancesRound = catchpointState("catchpointCatchupBalancesRound")
 )
 
-func writeCatchpointStagingAssets(ctx context.Context, tx *sql.Tx, addr basics.Address, assetIdx basics.AssetIndex) error {
-	_, err := tx.ExecContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator) VALUES(?, ?)", assetIdx, addr[:])
+func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) error {
+	_, err := tx.ExecContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)", cidx, addr[:], ctype)
 	if err != nil {
 		return err
 	}
@@ -152,7 +165,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 	s += "DROP TABLE IF EXISTS catchpointaccounthashes;"
 	s += "DELETE FROM accounttotals where id='catchpointStaging';"
 	if newCatchup {
-		s += "CREATE TABLE IF NOT EXISTS catchpointassetcreators(asset integer primary key, creator blob);"
+		s += "CREATE TABLE IF NOT EXISTS catchpointassetcreators(asset integer primary key, creator blob, ctype integer);"
 		s += "CREATE TABLE IF NOT EXISTS catchpointbalances(address blob primary key, data blob);"
 		s += "CREATE TABLE IF NOT EXISTS catchpointaccounthashes(id integer primary key, data blob);"
 	}
@@ -172,6 +185,7 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 	s += "DROP TABLE IF EXISTS accountbase_old;"
 	s += "DROP TABLE IF EXISTS assetcreators_old;"
 	s += "DROP TABLE IF EXISTS accounthashes_old;"
+
 	_, err = tx.Exec(s)
 	if err != nil {
 		return err
@@ -205,7 +219,22 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		}
 	}
 
-	_, err := tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
+	// Run creatables migration if it hasn't run yet
+	var creatableMigrated bool
+	err := tx.QueryRow("SELECT 1 FROM pragma_table_info('assetcreators') WHERE name='ctype'").Scan(&creatableMigrated)
+	if err == sql.ErrNoRows {
+		// Run migration
+		for _, migrateCmd := range creatablesMigration {
+			_, err = tx.Exec(migrateCmd)
+			if err != nil {
+				return err
+			}
+		}
+	} else if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
 	if err == nil {
 		var ot basics.OverflowTracker
 		var totals AccountTotals
@@ -252,7 +281,8 @@ func accountsReset(tx *sql.Tx) error {
 			return err
 		}
 	}
-	return nil
+	_, err := db.SetUserVersion(context.Background(), tx, 0)
+	return err
 }
 
 // accountsRound returns the tracker balances round number, and the round of the hash tree
@@ -275,7 +305,7 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 	var err error
 	qs := &accountsDbQueries{}
 
-	qs.listAssetsStmt, err = r.Prepare("SELECT asset, creator FROM assetcreators WHERE asset <= ? ORDER BY asset desc LIMIT ?")
+	qs.listCreatablesStmt, err = r.Prepare("SELECT asset, creator, ctype FROM assetcreators WHERE asset <= ? AND ctype = ? ORDER BY asset desc LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
@@ -285,7 +315,7 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 		return nil, err
 	}
 
-	qs.lookupAssetCreatorStmt, err = r.Prepare("SELECT creator FROM assetcreators WHERE asset=?")
+	qs.lookupCreatorStmt, err = r.Prepare("SELECT creator FROM assetcreators WHERE asset = ? AND ctype = ?")
 	if err != nil {
 		return nil, err
 	}
@@ -332,43 +362,48 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 	return qs, nil
 }
 
-func (qs *accountsDbQueries) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.AssetLocator, err error) {
+func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, err error) {
 	err = db.Retry(func() error {
 		// Query for assets in range
-		rows, err := qs.listAssetsStmt.Query(maxAssetIdx, maxResults)
+		rows, err := qs.listCreatablesStmt.Query(maxIdx, ctype, maxResults)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 
-		// For each row, copy into a new AssetLocator and append to results
+		// For each row, copy into a new CreatableLocator and append to results
 		var buf []byte
-		var al basics.AssetLocator
+		var cl basics.CreatableLocator
 		for rows.Next() {
-			err := rows.Scan(&al.Index, &buf)
+			err := rows.Scan(&cl.Index, &buf)
 			if err != nil {
 				return err
 			}
-			copy(al.Creator[:], buf)
-			results = append(results, al)
+			copy(cl.Creator[:], buf)
+			cl.Type = ctype
+			results = append(results, cl)
 		}
 		return nil
 	})
 	return
 }
 
-func (qs *accountsDbQueries) lookupAssetCreator(assetIdx basics.AssetIndex) (addr basics.Address, err error) {
+func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
-		err := qs.lookupAssetCreatorStmt.QueryRow(assetIdx).Scan(&buf)
+		err := qs.lookupCreatorStmt.QueryRow(cidx, ctype).Scan(&buf)
 
+		// Common error: creatable does not exist
 		if err == sql.ErrNoRows {
-			err = fmt.Errorf("asset %d does not exist or has been deleted", assetIdx)
+			return nil
 		}
 
+		// Some other database error
 		if err != nil {
 			return err
 		}
+
+		ok = true
 		copy(addr[:], buf)
 		return nil
 	})
@@ -497,6 +532,28 @@ func (qs *accountsDbQueries) writeCatchpointStateString(ctx context.Context, sta
 	return cleared, err
 }
 
+func (qs *accountsDbQueries) close() {
+	preparedQueries := []**sql.Stmt{
+		&qs.listCreatablesStmt,
+		&qs.lookupStmt,
+		&qs.lookupCreatorStmt,
+		&qs.deleteStoredCatchpoint,
+		&qs.insertStoredCatchpoint,
+		&qs.selectOldestsCatchpointFiles,
+		&qs.selectCatchpointStateUint64,
+		&qs.deleteCatchpointState,
+		&qs.insertCatchpointStateUint64,
+		&qs.selectCatchpointStateString,
+		&qs.insertCatchpointStateString,
+	}
+	for _, preparedQuery := range preparedQueries {
+		if (*preparedQuery) != nil {
+			(*preparedQuery).Close()
+			*preparedQuery = nil
+		}
+	}
+}
+
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
 	rows, err := tx.Query("SELECT address, data FROM accountbase")
 	if err != nil {
@@ -561,68 +618,22 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool)
 	return err
 }
 
-// getChangedAssetIndices takes an accountDelta and returns which AssetIndices
-// were created and which were deleted
-func getChangedAssetIndices(creator basics.Address, delta accountDelta) map[basics.AssetIndex]modifiedAsset {
-	assetMods := make(map[basics.AssetIndex]modifiedAsset)
+// accountsNewRound updates the accountbase and assetcreators by applying the provided deltas to the accounts / creatables.
+func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creatables map[basics.CreatableIndex]modifiedCreatable) (err error) {
 
-	// Get assets that were created
-	for idx := range delta.new.AssetParams {
-		// AssetParams are in now the balance record now, but _weren't_ before
-		if _, ok := delta.old.AssetParams[idx]; !ok {
-			assetMods[idx] = modifiedAsset{
-				created: true,
-				creator: creator,
-			}
-		}
-	}
+	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteStmt, replaceStmt *sql.Stmt
 
-	// Get assets that were deleted
-	for idx := range delta.old.AssetParams {
-		// AssetParams were in the balance record, but _aren't_ anymore
-		if _, ok := delta.new.AssetParams[idx]; !ok {
-			assetMods[idx] = modifiedAsset{
-				created: false,
-				creator: creator,
-			}
-		}
-	}
-
-	return assetMods
-}
-
-func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, rewardsLevel uint64, proto config.ConsensusParams) (err error) {
-	var ot basics.OverflowTracker
-	totals, err := accountsTotals(tx, false)
-	if err != nil {
-		return
-	}
-
-	totals.applyRewards(rewardsLevel, &ot)
-
-	deleteStmt, err := tx.Prepare("DELETE FROM accountbase WHERE address=?")
+	deleteStmt, err = tx.Prepare("DELETE FROM accountbase WHERE address=?")
 	if err != nil {
 		return
 	}
 	defer deleteStmt.Close()
 
-	replaceStmt, err := tx.Prepare("REPLACE INTO accountbase (address, data) VALUES (?, ?)")
+	replaceStmt, err = tx.Prepare("REPLACE INTO accountbase (address, data) VALUES (?, ?)")
 	if err != nil {
 		return
 	}
 	defer replaceStmt.Close()
-
-	insertAssetIdxStmt, err := tx.Prepare("INSERT INTO assetcreators (asset, creator) VALUES (?, ?)")
-	if err != nil {
-		return
-	}
-	defer insertAssetIdxStmt.Close()
-
-	deleteAssetIdxStmt, err := tx.Prepare("DELETE FROM assetcreators WHERE asset=?")
-	if err != nil {
-		return
-	}
-	defer deleteAssetIdxStmt.Close()
 
 	for addr, data := range updates {
 		if data.new.IsZero() {
@@ -635,19 +646,50 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, rewar
 			return
 		}
 
-		totals.delAccount(proto, data.old, &ot)
-		totals.addAccount(proto, data.new, &ot)
+	}
 
-		adeltas := getChangedAssetIndices(addr, data)
-		for aidx, delta := range adeltas {
-			if delta.created {
-				_, err = insertAssetIdxStmt.Exec(aidx, addr[:])
+	if len(creatables) > 0 {
+		insertCreatableIdxStmt, err = tx.Prepare("INSERT INTO assetcreators (asset, creator, ctype) VALUES (?, ?, ?)")
+		if err != nil {
+			return
+		}
+		defer insertCreatableIdxStmt.Close()
+
+		deleteCreatableIdxStmt, err = tx.Prepare("DELETE FROM assetcreators WHERE asset=? AND ctype=?")
+		if err != nil {
+			return
+		}
+		defer deleteCreatableIdxStmt.Close()
+
+		for cidx, cdelta := range creatables {
+			if cdelta.created {
+				_, err = insertCreatableIdxStmt.Exec(cidx, cdelta.creator[:], cdelta.ctype)
 			} else {
-				_, err = deleteAssetIdxStmt.Exec(aidx)
+				_, err = deleteCreatableIdxStmt.Exec(cidx, cdelta.ctype)
 			}
 			if err != nil {
 				return
 			}
+		}
+	}
+
+	return
+}
+
+// totalsNewRounds updates the accountsTotals by applying series of round changes
+func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, accountTotals []AccountTotals, protos []config.ConsensusParams) (err error) {
+	var ot basics.OverflowTracker
+	totals, err := accountsTotals(tx, false)
+	if err != nil {
+		return
+	}
+
+	for i := 0; i < len(updates); i++ {
+		totals.applyRewards(accountTotals[i].RewardsLevel, &ot)
+
+		for _, data := range updates[i] {
+			totals.delAccount(protos[i], data.old, &ot)
+			totals.addAccount(protos[i], data.new, &ot)
 		}
 	}
 
@@ -711,8 +753,8 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (
 
 // encodedAccountsRange returns an array containing the account data, in the same way it appear in the database
 // starting at entry startAccountIndex, and up to accountCount accounts long.
-func encodedAccountsRange(tx *sql.Tx, startAccountIndex, accountCount int) (bals []encodedBalanceRecord, err error) {
-	rows, err := tx.Query("SELECT address, data FROM accountbase ORDER BY rowid LIMIT ? OFFSET ?", accountCount, startAccountIndex)
+func encodedAccountsRange(ctx context.Context, tx *sql.Tx, startAccountIndex, accountCount int) (bals []encodedBalanceRecord, err error) {
+	rows, err := tx.QueryContext(ctx, "SELECT address, data FROM accountbase ORDER BY rowid LIMIT ? OFFSET ?", accountCount, startAccountIndex)
 	if err != nil {
 		return
 	}
@@ -739,6 +781,14 @@ func encodedAccountsRange(tx *sql.Tx, startAccountIndex, accountCount int) (bals
 	}
 
 	err = rows.Err()
+	if err == nil {
+		// the encodedAccountsRange typically called in a loop iterating over all the accounts. This could clearly take more than the
+		// "standard" 1 second, so we want to extend the timeout on each iteration. If the last iteration takes more than a second, then
+		// it should be noted. The one second here is quite liberal to ensure symmetrical behaviour on low-power devices.
+		// The return value from ResetTransactionWarnDeadline can be safely ignored here since it would only default to writing the warnning
+		// message, which would let us know that it failed anyway.
+		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(time.Second))
+	}
 	return
 }
 
@@ -750,6 +800,82 @@ func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
 		err = nil
 		return
 	}
+	return
+}
+
+// reencodeAccounts reads all the accounts in the accountbase table, decode and reencode the account data.
+// if the account data is found to have a different encoding, it would update the encoded account on disk.
+// on return, it returns the number of modified accounts as well as an error ( if we had any )
+func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, err error) {
+	modifiedAccounts = 0
+	scannedAccounts := 0
+
+	updateStmt, err := tx.PrepareContext(ctx, "UPDATE accountbase SET data = ? WHERE address = ?")
+	if err != nil {
+		return 0, err
+	}
+
+	rows, err := tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	var addr basics.Address
+	for rows.Next() {
+		// once every 1000 accounts we scan through, update the warning deadline.
+		// as long as the last "chunk" takes less than one second, we should be good to go.
+		// note that we should be quite liberal on timing here, since it might perform much slower
+		// on low-power devices.
+		if scannedAccounts%1000 == 0 {
+			// The return value from ResetTransactionWarnDeadline can be safely ignored here since it would only default to writing the warnning
+			// message, which would let us know that it failed anyway.
+			db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(time.Second))
+		}
+
+		var addrbuf []byte
+		var preencodedAccountData []byte
+		err = rows.Scan(&addrbuf, &preencodedAccountData)
+		if err != nil {
+			return
+		}
+
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return
+		}
+		copy(addr[:], addrbuf[:])
+		scannedAccounts++
+
+		// decode and re-encode:
+		var decodedAccountData basics.AccountData
+		err = protocol.Decode(preencodedAccountData, &decodedAccountData)
+		if err != nil {
+			return
+		}
+		reencodedAccountData := protocol.Encode(&decodedAccountData)
+		if bytes.Compare(preencodedAccountData, reencodedAccountData) == 0 {
+			// these are identical, no need to store re-encoded account data
+			continue
+		}
+
+		// we need to update the encoded data.
+		result, err := updateStmt.ExecContext(ctx, reencodedAccountData, addrbuf)
+		if err != nil {
+			return 0, err
+		}
+		rowsUpdated, err := result.RowsAffected()
+		if err != nil {
+			return 0, err
+		}
+		if rowsUpdated != 1 {
+			return 0, fmt.Errorf("failed to update account %v, number of rows updated was %d instead of 1", addr, rowsUpdated)
+		}
+		modifiedAccounts++
+	}
+
+	err = rows.Err()
+	updateStmt.Close()
 	return
 }
 

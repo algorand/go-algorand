@@ -26,10 +26,12 @@ import (
 
 var toolsDestFile string
 var toolsBucket string
+var toolsPackage string
 
 func init() {
 	getToolsCmd.Flags().StringVarP(&toolsDestFile, "outputFile", "o", "", "Path for downloaded file (required)")
 	getToolsCmd.Flags().StringVarP(&toolsBucket, "bucket", "b", "", "S3 bucket to check for tools.")
+	getToolsCmd.Flags().StringVarP(&toolsPackage, "package", "p", "tools", "Download a specific package.")
 	getToolsCmd.MarkFlagRequired("outputFile")
 }
 
@@ -46,7 +48,7 @@ var getToolsCmd = &cobra.Command{
 			exitErrorf("Error creating s3 session %s\n", err.Error())
 		}
 
-		version, name, err := s3Session.GetPackageVersion(channel, "tools", specificVersion)
+		version, name, err := s3Session.GetPackageVersion(channel, toolsPackage, specificVersion)
 		if err != nil {
 			exitErrorf("Error getting latest tools version from s3 %s\n", err.Error())
 		}

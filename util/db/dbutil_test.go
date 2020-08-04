@@ -17,6 +17,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -31,18 +32,19 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/logging"
 )
 
 func TestInMemoryDisposal(t *testing.T) {
 	acc, err := MakeAccessor("fn.db", false, true)
 	require.NoError(t, err)
-	err = acc.Atomic(func(tx *sql.Tx) error {
+	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("create table Service (data blob)")
 		return err
 	})
 	require.NoError(t, err)
 
-	err = acc.Atomic(func(tx *sql.Tx) error {
+	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		raw := []byte{0, 1, 2}
 		_, err := tx.Exec("insert or replace into Service (rowid, data) values (1, ?)", raw)
 		return err
@@ -51,7 +53,7 @@ func TestInMemoryDisposal(t *testing.T) {
 
 	anotherAcc, err := MakeAccessor("fn.db", false, true)
 	require.NoError(t, err)
-	err = anotherAcc.Atomic(func(tx *sql.Tx) error {
+	err = anotherAcc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var nrows int
 		row := tx.QueryRow("select count(*) from Service")
 		err := row.Scan(&nrows)
@@ -64,7 +66,7 @@ func TestInMemoryDisposal(t *testing.T) {
 
 	acc, err = MakeAccessor("fn.db", false, true)
 	require.NoError(t, err)
-	err = acc.Atomic(func(tx *sql.Tx) error {
+	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var nrows int
 		row := tx.QueryRow("select count(*) from Service")
 		err := row.Scan(&nrows)
@@ -82,13 +84,13 @@ func TestInMemoryUniqueDB(t *testing.T) {
 	acc, err := MakeAccessor("fn.db", false, true)
 	require.NoError(t, err)
 	defer acc.Close()
-	err = acc.Atomic(func(tx *sql.Tx) error {
+	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("create table Service (data blob)")
 		return err
 	})
 	require.NoError(t, err)
 
-	err = acc.Atomic(func(tx *sql.Tx) error {
+	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		raw := []byte{0, 1, 2}
 		_, err := tx.Exec("insert or replace into Service (rowid, data) values (1, ?)", raw)
 		return err
@@ -98,7 +100,7 @@ func TestInMemoryUniqueDB(t *testing.T) {
 	anotherAcc, err := MakeAccessor("fn2.db", false, true)
 	require.NoError(t, err)
 	defer anotherAcc.Close()
-	err = anotherAcc.Atomic(func(tx *sql.Tx) error {
+	err = anotherAcc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var nrows int
 		row := tx.QueryRow("select count(*) from Service")
 		err := row.Scan(&nrows)
@@ -122,13 +124,13 @@ func TestDBConcurrency(t *testing.T) {
 	require.NoError(t, err)
 	defer acc2.Close()
 
-	err = acc.Atomic(func(tx *sql.Tx) error {
+	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("CREATE TABLE foo (a INTEGER, b INTEGER)")
 		return err
 	})
 	require.NoError(t, err)
 
-	err = acc.Atomic(func(tx *sql.Tx) error {
+	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("INSERT INTO foo (a, b) VALUES (?, ?)", 1, 1)
 		return err
 	})
@@ -137,7 +139,7 @@ func TestDBConcurrency(t *testing.T) {
 	c1 := make(chan struct{})
 	c2 := make(chan struct{})
 	go func() {
-		err := acc.Atomic(func(tx *sql.Tx) error {
+		err := acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			<-c2
 
 			_, err := tx.Exec("INSERT INTO foo (a, b) VALUES (?, ?)", 2, 2)
@@ -160,7 +162,7 @@ func TestDBConcurrency(t *testing.T) {
 		c1 <- struct{}{}
 	}()
 
-	err = acc2.Atomic(func(tx *sql.Tx) error {
+	err = acc2.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var nrows int64
 		err := tx.QueryRow("SELECT COUNT(*) FROM foo").Scan(&nrows)
 		if err != nil {
@@ -178,7 +180,7 @@ func TestDBConcurrency(t *testing.T) {
 	c2 <- struct{}{}
 	<-c1
 
-	err = acc2.Atomic(func(tx *sql.Tx) error {
+	err = acc2.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var nrows int64
 		err := tx.QueryRow("SELECT COUNT(*) FROM foo").Scan(&nrows)
 		if err != nil {
@@ -196,7 +198,7 @@ func TestDBConcurrency(t *testing.T) {
 	c2 <- struct{}{}
 	<-c1
 
-	err = acc2.Atomic(func(tx *sql.Tx) error {
+	err = acc2.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var nrows int64
 		err := tx.QueryRow("SELECT COUNT(*) FROM foo").Scan(&nrows)
 		if err != nil {
@@ -249,7 +251,7 @@ func TestDBConcurrencyRW(t *testing.T) {
 	require.NoError(t, err)
 	defer acc2.Close()
 
-	err = acc.Atomic(func(tx *sql.Tx) error {
+	err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("CREATE TABLE t (a INTEGER PRIMARY KEY)")
 		return err
 	})
@@ -266,7 +268,7 @@ func TestDBConcurrencyRW(t *testing.T) {
 		}()
 		var errw error
 		for i, timedLoop := int64(1), true; timedLoop && errw == nil; i++ {
-			errw = acc.Atomic(func(tx *sql.Tx) error {
+			errw = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 				_, err := tx.Exec("INSERT INTO t (a) VALUES (?)", i)
 				return err
 			})
@@ -309,7 +311,7 @@ func TestDBConcurrencyRW(t *testing.T) {
 					break
 				}
 				var x int64
-				errsel := acc2.Atomic(func(tx *sql.Tx) error {
+				errsel := acc2.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 					return tx.QueryRow("SELECT a FROM t WHERE a=?", id).Scan(&x)
 				})
 				if errsel != nil {
@@ -332,4 +334,54 @@ func TestDBConcurrencyRW(t *testing.T) {
 		}
 	}
 
+}
+
+type WarningLogCounter struct {
+	logging.Logger
+	warningsCounter int
+}
+
+func (wlc *WarningLogCounter) Warnf(string, ...interface{}) {
+	wlc.warningsCounter++
+}
+
+func (wlc *WarningLogCounter) With(key string, value interface{}) logging.Logger {
+	return wlc
+}
+
+// Test resetting warning notification
+func TestResettingTransactionWarnDeadline(t *testing.T) {
+	t.Run("expectedWarning", func(t *testing.T) {
+		t.Parallel()
+		acc, err := MakeAccessor("fn-expectedWarning.db", false, true)
+		require.NoError(t, err)
+		defer acc.Close()
+		logger := WarningLogCounter{
+			Logger: logging.Base(),
+		}
+		acc.log = &logger
+		err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			time.Sleep(1001 * time.Millisecond)
+			return err
+		})
+		require.NoError(t, err)
+		require.Equal(t, 1, logger.warningsCounter)
+	})
+	t.Run("expectedNoWarning", func(t *testing.T) {
+		t.Parallel()
+		acc, err := MakeAccessor("fn-expectedNoWarning.db", false, true)
+		require.NoError(t, err)
+		defer acc.Close()
+		logger := WarningLogCounter{
+			Logger: logging.Base(),
+		}
+		acc.log = &logger
+		err = acc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+			ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(30*time.Second))
+			time.Sleep(1001 * time.Millisecond)
+			return err
+		})
+		require.NoError(t, err)
+		require.Equal(t, 0, logger.warningsCounter)
+	})
 }

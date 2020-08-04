@@ -9,7 +9,7 @@ then
     exit 1
 fi
 
-BRANCH=build_packages
+BRANCH=build-packages
 EC2_INSTANCE_KEY=ReleaseBuildInstanceKey.pem
 
 # Get the ec2 instance name and the ephemeral private key from the Jenkins server.
