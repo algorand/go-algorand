@@ -40,7 +40,7 @@ func TestConsensusParams(t *testing.T) {
 // TestConsensusUpgradeWindow ensures that the upgrade window is a non-zero value, and confirm to be within the valid range.
 func TestConsensusUpgradeWindow(t *testing.T) {
 	for proto, params := range Consensus {
-		require.GreaterOrEqualf(t, params.MinUpgradeWaitRounds, params.MinUpgradeWaitRounds, "Version :%v", proto)
+		require.GreaterOrEqualf(t, params.MaxUpgradeWaitRounds, params.MinUpgradeWaitRounds, "Version :%v", proto)
 		for toVersion, delay := range params.ApprovedUpgrades {
 			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
 				require.NotZerof(t, delay, "From :%v\nTo :%v", proto, toVersion)
