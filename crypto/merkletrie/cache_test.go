@@ -30,6 +30,17 @@ func verifyCacheNodeCount(t *testing.T, trie *Trie) {
 		count += len(pageNodes)
 	}
 	require.Equal(t, count, trie.cache.cachedNodeCount)
+
+	// make sure that the pagesPrioritizationMap aligns with pagesPrioritizationList
+	require.Equal(t, len(trie.cache.pagesPrioritizationMap), trie.cache.pagesPrioritizationList.Len())
+
+	for e := trie.cache.pagesPrioritizationList.Back(); e != nil; e = e.Next() {
+		page := e.Value.(uint64)
+		_, has := trie.cache.pagesPrioritizationMap[page]
+		require.True(t, has)
+		_, has = trie.cache.pageToNIDsPtr[page]
+		require.True(t, has)
+	}
 }
 
 func TestCacheEviction1(t *testing.T) {
