@@ -46,6 +46,10 @@ func TestConsensusUpgradeWindow(t *testing.T) {
 				require.GreaterOrEqualf(t, delay, params.MinUpgradeWaitRounds, "From :%v\nTo :%v", proto, toVersion)
 				require.LessOrEqualf(t, delay, params.MaxUpgradeWaitRounds, "From :%v\nTo :%v", proto, toVersion)
 			}
+		} else {
+			for toVersion, delay := range params.ApprovedUpgrades {
+				require.Zerof(t, delay, "From :%v\nTo :%v", proto, toVersion)
+			}
 		}
 	}
 }
