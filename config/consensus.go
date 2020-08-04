@@ -691,63 +691,72 @@ func initConsensusProtocols() {
 	// v21 can be upgraded to v23.
 	v21.ApprovedUpgrades[protocol.ConsensusV23] = 0
 
-	// ConsensusFuture is used to test features that are implemented
-	// but not yet released in a production protocol version.
-	vFuture := v23
-	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	vFuture.LogicSigVersion = 2
+	// v24 is the stateful teal and rekeying upgrade
+	v24 := v23
+	v24.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+	v24.LogicSigVersion = 2
 
 	// Enable application support
-	vFuture.Application = true
+	v24.Application = true
 
 	// Enable rekeying
-	vFuture.SupportRekeying = true
+	v24.SupportRekeying = true
 
 	// 100.1 Algos (MinBalance for creating 1,000 assets)
-	vFuture.MaximumMinimumBalance = 100100000
+	v24.MaximumMinimumBalance = 100100000
 
-	vFuture.MaxAppArgs = 16
-	vFuture.MaxAppTotalArgLen = 2048
-	vFuture.MaxAppProgramLen = 1024
-	vFuture.MaxAppKeyLen = 64
-	vFuture.MaxAppBytesValueLen = 64
+	v24.MaxAppArgs = 16
+	v24.MaxAppTotalArgLen = 2048
+	v24.MaxAppProgramLen = 1024
+	v24.MaxAppKeyLen = 64
+	v24.MaxAppBytesValueLen = 64
 
 	// 0.1 Algos (Same min balance cost as an Asset)
-	vFuture.AppFlatParamsMinBalance = 100000
-	vFuture.AppFlatOptInMinBalance = 100000
+	v24.AppFlatParamsMinBalance = 100000
+	v24.AppFlatOptInMinBalance = 100000
 
 	// Can look up Sender + 4 other balance records per Application txn
-	vFuture.MaxAppTxnAccounts = 4
+	v24.MaxAppTxnAccounts = 4
 
 	// Can look up 2 other app creator balance records to see global state
-	vFuture.MaxAppTxnForeignApps = 2
+	v24.MaxAppTxnForeignApps = 2
 
 	// Can look up 2 assets to see asset parameters
-	vFuture.MaxAppTxnForeignAssets = 2
+	v24.MaxAppTxnForeignAssets = 2
 
 	// 64 byte keys @ ~333 microAlgos/byte + delta
-	vFuture.SchemaMinBalancePerEntry = 25000
+	v24.SchemaMinBalancePerEntry = 25000
 
 	// 9 bytes @ ~333 microAlgos/byte + delta
-	vFuture.SchemaUintMinBalance = 3500
+	v24.SchemaUintMinBalance = 3500
 
 	// 64 byte values @ ~333 microAlgos/byte + delta
-	vFuture.SchemaBytesMinBalance = 25000
+	v24.SchemaBytesMinBalance = 25000
 
 	// Maximum number of key/value pairs per local key/value store
-	vFuture.MaxLocalSchemaEntries = 16
+	v24.MaxLocalSchemaEntries = 16
 
 	// Maximum number of key/value pairs per global key/value store
-	vFuture.MaxGlobalSchemaEntries = 64
+	v24.MaxGlobalSchemaEntries = 64
 
 	// Maximum cost of ApprovalProgram/ClearStateProgram
-	vFuture.MaxAppProgramCost = 700
+	v24.MaxAppProgramCost = 700
 
 	// Maximum number of apps a single account can create
-	vFuture.MaxAppsCreated = 10
+	v24.MaxAppsCreated = 10
 
 	// Maximum number of apps a single account can opt into
-	vFuture.MaxAppsOptedIn = 10
+	v24.MaxAppsOptedIn = 10
+	Consensus[protocol.ConsensusV24] = v24
+
+	// v23 can be upgraded to v24, with an update delay of 7 days ( see calculation above )
+	v23.ApprovedUpgrades[protocol.ConsensusV24] = 140000
+
+	// ConsensusFuture is used to test features that are implemented
+	// but not yet released in a production protocol version.
+	vFuture := v24
+	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
