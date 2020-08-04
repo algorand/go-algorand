@@ -1303,12 +1303,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
 	}
 
-	var committedRoundDigest crypto.Digest
-
-	if isCatchpointRound {
-		committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
-	}
-
 	au.accountsMu.RUnlock()
 
 	// in committedUpTo, we expect that this function we close the catchpointWriting when
