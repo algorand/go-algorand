@@ -52,7 +52,8 @@ func typeEnumTableMarkdown(out io.Writer) {
 }
 
 func integerConstantsTableMarkdown(out io.Writer) {
-	fmt.Fprintf(out, "#### OnComplete\n")
+	fmt.Fprintf(out, "#### OnComplete\n\n")
+	fmt.Fprintf(out, "%s\n\n", logic.OnCompletionPreamble)
 	fmt.Fprintf(out, "| Value | Constant name | Description |\n")
 	fmt.Fprintf(out, "| --- | --- | --- |\n")
 	for i, name := range logic.OnCompletionNames {

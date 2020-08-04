@@ -11,7 +11,7 @@ set TEST_DATA_DIR [lindex $argv 1]
 
 proc statefulTealTest { TEST_ALGO_DIR TEST_DATA_DIR TEAL_PROGRAM} {
 
-
+    set timeout 60
     set TIME_STAMP [clock seconds]
 
     set TEST_ROOT_DIR $TEST_ALGO_DIR/root_$TIME_STAMP

@@ -91,6 +91,29 @@ func stackValueFromTealValue(tv *basics.TealValue) (sv stackValue, err error) {
 	return
 }
 
+// ComputeMinTealVersion calculates the minimum safe TEAL version that may be
+// used by a transaction in this group. It is important to prevent
+// newly-introduced transaction fields from breaking assumptions made by older
+// versions of TEAL. If one of the transactions in a group will execute a TEAL
+// program whose version predates a given field, that field must not be set
+// anywhere in the transaction group, or the group will be rejected.
+func ComputeMinTealVersion(group []transactions.SignedTxn) uint64 {
+	var minVersion uint64
+	for _, txn := range group {
+		if !txn.Txn.RekeyTo.IsZero() {
+			if minVersion < rekeyingEnabledVersion {
+				minVersion = rekeyingEnabledVersion
+			}
+		}
+		if txn.Txn.Type == protocol.ApplicationCallTx {
+			if minVersion < appsEnabledVersion {
+				minVersion = appsEnabledVersion
+			}
+		}
+	}
+	return minVersion
+}
+
 func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 	if sv.argType() == StackBytes {
 		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(sv.Bytes)}
@@ -132,6 +155,11 @@ type EvalParams struct {
 
 	// optional debugger
 	Debugger DebuggerHook
+
+	// MinTealVersion is the minimum allowed TEAL version of this program.
+	// The program must reject if its version is less than this version. If
+	// MinTealVersion is nil, we will compute it ourselves
+	MinTealVersion *uint64
 
 	// determines eval mode: runModeSignature or runModeApplication
 	runModeFlags runMode
@@ -371,20 +399,21 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 		return false, cx.err
 	}
 
-	// TODO: if EvalMaxVersion > version, ensure that inaccessible
-	// fields as of the program's version are zero or other
-	// default value so that no one is hiding unexpected
-	// operations from an old program.
+	var minVersion uint64
+	if cx.EvalParams.MinTealVersion == nil {
+		minVersion = ComputeMinTealVersion(cx.EvalParams.TxnGroup)
+	} else {
+		minVersion = *cx.EvalParams.MinTealVersion
+	}
+	if version < minVersion {
+		err = fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
+		return
+	}
 
 	cx.version = version
 	cx.pc = vlen
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
-
-	err = cx.checkRekeyAllowed()
-	if err != nil {
-		return
-	}
 
 	if cx.Debugger != nil {
 		cx.debugState = makeDebugState(cx)
@@ -477,15 +506,21 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 		return
 	}
 
+	var minVersion uint64
+	if params.MinTealVersion == nil {
+		minVersion = ComputeMinTealVersion(params.TxnGroup)
+	} else {
+		minVersion = *params.MinTealVersion
+	}
+	if version < minVersion {
+		err = fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
+		return
+	}
+
 	cx.version = version
 	cx.pc = vlen
 	cx.EvalParams = params
 	cx.program = program
-
-	err = cx.checkRekeyAllowed()
-	if err != nil {
-		return
-	}
 
 	for cx.pc < len(cx.program) {
 		prevpc := cx.pc
@@ -503,16 +538,6 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 		return
 	}
 	return
-}
-
-func (cx *evalContext) checkRekeyAllowed() error {
-	// A transaction may not have a nonzero RekeyTo field set before TEAL
-	// v2, otherwise TEAL v0 or v1 accounts could be rekeyed by an anyone
-	// who could ordinarily spend from them.
-	if cx.version < rekeyingEnabledVersion && !cx.EvalParams.Txn.Txn.RekeyTo.IsZero() {
-		return fmt.Errorf("program version %d doesn't allow transactions with nonzero RekeyTo field", cx.version)
-	}
-	return nil
 }
 
 func opCompat(expected, got StackType) bool {
@@ -1650,7 +1675,7 @@ func opConcat(cx *evalContext) {
 
 func substring(x []byte, start, end int) (out []byte, err error) {
 	out = x
-	if end <= start {
+	if end < start {
 		err = errors.New("substring end before start")
 		return
 	}

@@ -17,7 +17,8 @@ gcmd="goal -w ${WALLET}"
 ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 
 # Succeed in creating app that approves transactions with arg[0] == 'hello'
-APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs/globcheck.teal --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 --app-arg "str:hello" --clear-prog <(echo 'int 1') | grep Created | awk '{ print $6 }')
+printf '#pragma version 2\nint 1' > "${TEMPDIR}/int1.teal"
+APPID=$(${gcmd} app create --creator ${ACCOUNT} --approval-prog ${DIR}/tealprogs/globcheck.teal --global-byteslices 1 --global-ints 0 --local-byteslices 0 --local-ints 0 --app-arg "str:hello" --clear-prog "${TEMPDIR}/int1.teal" | grep Created | awk '{ print $6 }')
 
 # Application call with no args should fail
 EXPERROR='invalid ApplicationArgs index 0'

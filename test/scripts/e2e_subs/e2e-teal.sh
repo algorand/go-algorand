@@ -72,6 +72,7 @@ done
 ${gcmd} clerk send --from-program ${TEMPDIR}/tlhc.teal --to ${ACCOUNT} --close-to ${ACCOUNT} --amount 1 --argb64 AA==
 
 cat >${TEMPDIR}/true.teal<<EOF
+#pragma version 2
 int 1
 EOF
 

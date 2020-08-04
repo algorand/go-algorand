@@ -33,10 +33,11 @@ import (
 type inspectSignedTxn struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Sig  crypto.Signature         `codec:"sig"`
-	Msig inspectMultisigSig       `codec:"msig"`
-	Lsig inspectLogicSig          `codec:"lsig"`
-	Txn  transactions.Transaction `codec:"txn"`
+	Sig      crypto.Signature         `codec:"sig"`
+	Msig     inspectMultisigSig       `codec:"msig"`
+	Lsig     inspectLogicSig          `codec:"lsig"`
+	Txn      transactions.Transaction `codec:"txn"`
+	AuthAddr basics.Address           `codec:"sgnr"`
 }
 
 // inspectMultisigSig is isomorphic to MultisigSig but uses different
@@ -115,19 +116,21 @@ func inspectTxn(stxn transactions.SignedTxn) (sti inspectSignedTxn, err error) {
 
 func stxnToInspect(stxn transactions.SignedTxn) inspectSignedTxn {
 	return inspectSignedTxn{
-		Txn:  stxn.Txn,
-		Sig:  stxn.Sig,
-		Msig: msigToInspect(stxn.Msig),
-		Lsig: lsigToInspect(stxn.Lsig),
+		Txn:      stxn.Txn,
+		Sig:      stxn.Sig,
+		Msig:     msigToInspect(stxn.Msig),
+		Lsig:     lsigToInspect(stxn.Lsig),
+		AuthAddr: stxn.AuthAddr,
 	}
 }
 
 func stxnFromInspect(sti inspectSignedTxn) transactions.SignedTxn {
 	return transactions.SignedTxn{
-		Txn:  sti.Txn,
-		Sig:  sti.Sig,
-		Msig: msigFromInspect(sti.Msig),
-		Lsig: lsigFromInspect(sti.Lsig),
+		Txn:      sti.Txn,
+		Sig:      sti.Sig,
+		Msig:     msigFromInspect(sti.Msig),
+		Lsig:     lsigFromInspect(sti.Lsig),
+		AuthAddr: sti.AuthAddr,
 	}
 }
 
