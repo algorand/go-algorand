@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -331,7 +332,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			hash := accountHashBuilder(balance.Address, accountData, balance.AccountData)
 			added, err := trie.Add(hash)
 			if !added {
-				return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingBalances: The provided catchpoint file contained the same account more than once. Account address %#v, account data %#v", balance.Address, accountData)
+				return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingBalances: The provided catchpoint file contained the same account more than once. Account address %#v, account data %#v, hash '%s'", balance.Address, accountData, hex.EncodeToString(hash))
 			}
 			if err != nil {
 				return err

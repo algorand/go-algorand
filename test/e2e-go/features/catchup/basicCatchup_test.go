@@ -178,7 +178,7 @@ func runCatchupOverGossip(t *testing.T,
 
 // consensusTestUnupgradedProtocol is a version of ConsensusCurrentVersion
 // that allows the control of the upgrade from consensusTestUnupgradedProtocol to
-// consensusTestUnupgradedProtocol
+// consensusTestUnupgradedToProtocol
 const consensusTestUnupgradedProtocol = protocol.ConsensusVersion("test-unupgraded-protocol")
 
 // consensusTestUnupgradedToProtocol is a version of ConsensusCurrentVersion

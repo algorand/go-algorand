@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package transactions
+package apply
 
 import (
 	"testing"
@@ -22,6 +22,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
 )
@@ -68,24 +69,24 @@ func TestKeyregApply(t *testing.T) {
 	vrfSecrets := crypto.GenerateVRFSecrets()
 	secretParticipation := keypair()
 
-	tx := Transaction{
+	tx := transactions.Transaction{
 		Type: protocol.KeyRegistrationTx,
-		Header: Header{
+		Header: transactions.Header{
 			Sender:     src,
 			Fee:        basics.MicroAlgos{Raw: 1},
 			FirstValid: basics.Round(100),
 			LastValid:  basics.Round(1000),
 		},
-		KeyregTxnFields: KeyregTxnFields{
+		KeyregTxnFields: transactions.KeyregTxnFields{
 			VotePK:      crypto.OneTimeSignatureVerifier(secretParticipation.SignatureVerifier),
 			SelectionPK: vrfSecrets.PK,
 		},
 	}
-	_, err := tx.Apply(mockBalances{protocol.ConsensusCurrentVersion}, nil, SpecialAddresses{FeeSink: feeSink}, 0)
+	err := Keyreg(tx.KeyregTxnFields, tx.Header, mockBalances{protocol.ConsensusCurrentVersion}, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
 	require.NoError(t, err)
 
 	tx.Sender = feeSink
-	_, err = tx.Apply(mockBalances{protocol.ConsensusCurrentVersion}, nil, SpecialAddresses{FeeSink: feeSink}, 0)
+	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBalances{protocol.ConsensusCurrentVersion}, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
 	require.Error(t, err)
 
 	tx.Sender = src
@@ -94,19 +95,19 @@ func TestKeyregApply(t *testing.T) {
 
 	// Going from offline to online should be okay
 	mockBal.addrs[src] = basics.BalanceRecord{Addr: src, AccountData: basics.AccountData{Status: basics.Offline}}
-	_, err = tx.Apply(mockBal, nil, SpecialAddresses{FeeSink: feeSink}, 0)
+	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
 	require.NoError(t, err)
 
 	// Going from online to nonparticipatory should be okay, if the protocol supports that
 	if mockBal.ConsensusParams().SupportBecomeNonParticipatingTransactions {
-		tx.KeyregTxnFields = KeyregTxnFields{}
+		tx.KeyregTxnFields = transactions.KeyregTxnFields{}
 		tx.KeyregTxnFields.Nonparticipation = true
-		_, err = tx.Apply(mockBal, nil, SpecialAddresses{FeeSink: feeSink}, 0)
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
 		require.NoError(t, err)
 
 		// Nonparticipatory accounts should not be able to change status
 		mockBal.addrs[src] = basics.BalanceRecord{Addr: src, AccountData: basics.AccountData{Status: basics.NotParticipating}}
-		_, err = tx.Apply(mockBal, nil, SpecialAddresses{FeeSink: feeSink}, 0)
+		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
 		require.Error(t, err)
 	}
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -78,7 +79,7 @@ func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
 }
 
-// wrappers for roundCowState to satisfy the (current) transactions.Balances interface
+// wrappers for roundCowState to satisfy the (current) apply.Balances interface
 func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
 	acctdata, err := cs.lookup(addr)
 	if err != nil {
@@ -462,6 +463,7 @@ func (eval *BlockEvaluator) TransactionGroup(txads []transactions.SignedTxnWithA
 // transaction in the group
 func (eval *BlockEvaluator) prepareAppEvaluators(txgroup []transactions.SignedTxnWithAD) (res []*appTealEvaluator) {
 	var groupNoAD []transactions.SignedTxn
+	var minTealVersion uint64
 	res = make([]*appTealEvaluator, len(txgroup))
 	for i, txn := range txgroup {
 		// Ignore any non-ApplicationCall transactions
@@ -475,16 +477,18 @@ func (eval *BlockEvaluator) prepareAppEvaluators(txgroup []transactions.SignedTx
 			for j := range txgroup {
 				groupNoAD[j] = txgroup[j].SignedTxn
 			}
+			minTealVersion = logic.ComputeMinTealVersion(groupNoAD)
 		}
 
 		// Construct an appTealEvaluator (implements
-		// transactions.StateEvaluator) for use in ApplicationCall transactions.
+		// apply.StateEvaluator) for use in ApplicationCall transactions.
 		steva := appTealEvaluator{
 			evalParams: logic.EvalParams{
-				Txn:        &groupNoAD[i],
-				Proto:      &eval.proto,
-				TxnGroup:   groupNoAD,
-				GroupIndex: i,
+				Txn:            &groupNoAD[i],
+				Proto:          &eval.proto,
+				TxnGroup:       groupNoAD,
+				GroupIndex:     i,
+				MinTealVersion: &minTealVersion,
 			},
 			AppTealGlobals: AppTealGlobals{
 				CurrentRound:    eval.prevHeader.Round + 1,
@@ -614,7 +618,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *app
 	}
 
 	// Apply the transaction, updating the cow balances
-	applyData, err := txn.Txn.Apply(cow, appEval, spec, cow.txnCounter())
+	applyData, err := applyTransaction(txn.Txn, cow, appEval, spec, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
@@ -682,6 +686,71 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *app
 	cow.addTx(txn.Txn, txid)
 
 	return nil
+}
+
+// applyTransaction changes the balances according to this transaction.
+func applyTransaction(tx transactions.Transaction, balances apply.Balances, steva apply.StateEvaluator, spec transactions.SpecialAddresses, ctr uint64) (ad transactions.ApplyData, err error) {
+	params := balances.ConsensusParams()
+
+	// move fee to pool
+	err = balances.Move(tx.Sender, spec.FeeSink, tx.Fee, &ad.SenderRewards, nil)
+	if err != nil {
+		return
+	}
+
+	// rekeying: update balrecord.AuthAddr to tx.RekeyTo if provided
+	if (tx.RekeyTo != basics.Address{}) {
+		var record basics.BalanceRecord
+		record, err = balances.Get(tx.Sender, false)
+		if err != nil {
+			return
+		}
+		// Special case: rekeying to the account's actual address just sets balrecord.AuthAddr to 0
+		// This saves 32 bytes in your balance record if you want to go back to using your original key
+		if tx.RekeyTo == tx.Sender {
+			record.AuthAddr = basics.Address{}
+		} else {
+			record.AuthAddr = tx.RekeyTo
+		}
+
+		err = balances.Put(record)
+		if err != nil {
+			return
+		}
+	}
+
+	switch tx.Type {
+	case protocol.PaymentTx:
+		err = apply.Payment(tx.PaymentTxnFields, tx.Header, balances, spec, &ad)
+
+	case protocol.KeyRegistrationTx:
+		err = apply.Keyreg(tx.KeyregTxnFields, tx.Header, balances, spec, &ad)
+
+	case protocol.AssetConfigTx:
+		err = apply.AssetConfig(tx.AssetConfigTxnFields, tx.Header, balances, spec, &ad, ctr)
+
+	case protocol.AssetTransferTx:
+		err = apply.AssetTransfer(tx.AssetTransferTxnFields, tx.Header, balances, spec, &ad)
+
+	case protocol.AssetFreezeTx:
+		err = apply.AssetFreeze(tx.AssetFreezeTxnFields, tx.Header, balances, spec, &ad)
+
+	case protocol.ApplicationCallTx:
+		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, ctr, steva)
+
+	default:
+		err = fmt.Errorf("Unknown transaction type %v", tx.Type)
+	}
+
+	// If the protocol does not support rewards in ApplyData,
+	// clear them out.
+	if !params.RewardsInApplyData {
+		ad.SenderRewards = basics.MicroAlgos{}
+		ad.ReceiverRewards = basics.MicroAlgos{}
+		ad.CloseRewards = basics.MicroAlgos{}
+	}
+
+	return
 }
 
 // Call "endOfBlock" after all the block's rewards and transactions are processed.
@@ -816,7 +885,7 @@ func validateTransaction(txn transactions.SignedTxn, block bookkeeping.Block, pr
 // Validate: eval(ctx, blk, true, txcache, executionPool)
 // AddBlock: eval(context.Background(), blk, false, nil, nil)
 // tracker:  eval(context.Background(), blk, false, nil, nil)
-func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (StateDelta, error) {
+func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (StateDelta, error) {
 	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
 	if err != nil {
 		return StateDelta{}, err
@@ -896,7 +965,7 @@ func (l *Ledger) eval(ctx context.Context, blk bookkeeping.Block, validate bool,
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
-	delta, err := l.eval(ctx, blk, true, txcache, executionPool)
+	delta, err := eval(ctx, l, blk, true, txcache, executionPool)
 	if err != nil {
 		return nil, err
 	}

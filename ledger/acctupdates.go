@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -35,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -176,10 +178,10 @@ type accountUpdates struct {
 	// otherwise, it would take it's time and perform periodic sleeps between chunks processing.
 	catchpointSlowWriting chan struct{}
 
-	// ctx is the context for canceling any pending catchpoint generation operation
+	// ctx is the context for the committing go-routine. It's also used as the "parent" of the catchpoint generation operation.
 	ctx context.Context
 
-	// ctxCancel is the canceling function canceling any pending catchpoint generation operation
+	// ctxCancel is the canceling function for canceling the commiting go-routine ( i.e. signaling the commiting go-routine that it's time to abort )
 	ctxCancel context.CancelFunc
 
 	// deltasAccum stores the accumulated deltas for every round starting dbRound-1.
@@ -193,6 +195,10 @@ type accountUpdates struct {
 
 	// accountsWriting provides syncronization around the background writing of account balances.
 	accountsWriting sync.WaitGroup
+
+	// commitSyncerClosed is the blocking channel for syncronizing closing the commitSyncer goroutine. Once it's closed, the
+	// commitSyncer can be assumed to have aborted.
+	commitSyncerClosed chan struct{}
 }
 
 type deferedCommit struct {
@@ -212,11 +218,16 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	if cfg.CatchpointFileHistoryLength < -1 {
 		au.catchpointFileHistoryLength = -1
 	}
+	// initialize the commitSyncerClosed with a closed channel ( since the commitSyncer go-routine is not active )
+	au.commitSyncerClosed = make(chan struct{})
+	close(au.commitSyncerClosed)
 }
 
-// loadFromDisk is the 2nd level initializtion, and is required before the accountUpdates becomes functional
+// loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
 // The close function is expected to be call in pair with loadFromDisk
 func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
+	au.accountsMu.Lock()
+	defer au.accountsMu.Unlock()
 	var writingCatchpointRound uint64
 	lastBalancesRound, lastestBlockRound, err := au.initializeFromDisk(l)
 
@@ -228,11 +239,13 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 
 	writingCatchpointRound, _, err = au.accountsq.readCatchpointStateUint64(context.Background(), catchpointStateWritingCatchpoint)
 	if err != nil {
-		au.accountsMu.Unlock()
 		return err
 	}
 
 	writingCatchpointDigest, err = au.initializeCaches(lastBalancesRound, lastestBlockRound, basics.Round(writingCatchpointRound))
+	if err != nil {
+		return err
+	}
 
 	if writingCatchpointRound != 0 && au.catchpointInterval != 0 {
 		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest, time.Duration(0))
@@ -246,66 +259,36 @@ func (au *accountUpdates) waitAccountsWriting() {
 	au.accountsWriting.Wait()
 }
 
+// close closes the accountUpdates, waiting for all the child go-routine to complete
 func (au *accountUpdates) close() {
 	if au.ctxCancel != nil {
 		au.ctxCancel()
 	}
 	au.waitAccountsWriting()
+	// this would block until the commitSyncerClosed channel get closed.
+	<-au.commitSyncerClosed
 }
 
-func (au *accountUpdates) lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
+// Lookup returns the accound data for a given address at a given round. The withRewards indicates whether the
+// rewards should be added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
+// even while it could return the AccoutData which represent the "rewarded" account data.
+func (au *accountUpdates) Lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return
-	}
-
-	offsetForRewards := offset
-
-	defer func() {
-		if withRewards {
-			totals := au.roundTotals[offsetForRewards]
-			proto := au.protos[offsetForRewards]
-			data = data.WithUpdatedRewards(proto, totals.RewardsLevel)
-		}
-	}()
-
-	// Check if this is the most recent round, in which case, we can
-	// use a cache of the most recent account state.
-	if offset == uint64(len(au.deltas)) {
-		macct, ok := au.accounts[addr]
-		if ok {
-			return macct.data, nil
-		}
-	} else {
-		// Check if the account has been updated recently.  Traverse the deltas
-		// backwards to ensure that later updates take priority if present.
-		for offset > 0 {
-			offset--
-			d, ok := au.deltas[offset][addr]
-			if ok {
-				return d.new, nil
-			}
-		}
-	}
-
-	// No updates of this account in the in-memory deltas; use on-disk DB.
-	// The check in roundOffset() made sure the round is exactly the one
-	// present in the on-disk DB.  As an optimization, we avoid creating
-	// a separate transaction here, and directly use a prepared SQL query
-	// against the database.
-	return au.accountsq.lookup(addr)
+	return au.lookupImpl(rnd, addr, withRewards)
 }
 
-func (au *accountUpdates) listAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
+// ListAssets lists the assets by their asset index, limiting to the first maxResults
+func (au *accountUpdates) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
 	return au.listCreatables(basics.CreatableIndex(maxAssetIdx), maxResults, basics.AssetCreatable)
 }
 
-func (au *accountUpdates) listApplications(maxAppIdx basics.AppIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
+// ListApplications lists the application by their app index, limiting to the first maxResults
+func (au *accountUpdates) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) ([]basics.CreatableLocator, error) {
 	return au.listCreatables(basics.CreatableIndex(maxAppIdx), maxResults, basics.AppCreatable)
 }
 
+// listCreatables lists the application/asset by their app/asset index, limiting to the first maxResults
 func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) ([]basics.CreatableLocator, error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
@@ -379,48 +362,18 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 	return res, nil
 }
 
-// getLastCatchpointLabel retrieves the last catchpoint label that was stored to the database.
-func (au *accountUpdates) getLastCatchpointLabel() string {
+// GetLastCatchpointLabel retrieves the last catchpoint label that was stored to the database.
+func (au *accountUpdates) GetLastCatchpointLabel() string {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 	return au.lastCatchpointLabel
 }
 
-func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
+// GetCreatorForRound returns the creator for a given asset/app index at a given round
+func (au *accountUpdates) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
-
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return basics.Address{}, false, err
-	}
-
-	// If this is the most recent round, au.creatables has will have the latest
-	// state and we can skip scanning backwards over creatableDeltas
-	if offset == uint64(len(au.deltas)) {
-		// Check if we already have the asset/creator in cache
-		creatableDelta, ok := au.creatables[cidx]
-		if ok {
-			if creatableDelta.created && creatableDelta.ctype == ctype {
-				return creatableDelta.creator, true, nil
-			}
-			return basics.Address{}, false, nil
-		}
-	} else {
-		for offset > 0 {
-			offset--
-			creatableDelta, ok := au.creatableDeltas[offset][cidx]
-			if ok {
-				if creatableDelta.created && creatableDelta.ctype == ctype {
-					return creatableDelta.creator, true, nil
-				}
-				return basics.Address{}, false, nil
-			}
-		}
-	}
-
-	// Check the database
-	return au.accountsq.lookupCreator(cidx, ctype)
+	return au.getCreatorForRoundImpl(rnd, cidx, ctype)
 }
 
 // committedUpTo enqueues commiting the balances for round committedRound-lookback.
@@ -532,75 +485,23 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	return
 }
 
+// newBlock is the accountUpdates implementation of the ledgerTracker interface. This is the "external" facing function
+// which invokes the internal implementation after taking the lock.
 func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	au.accountsMu.Lock()
 	defer au.accountsMu.Unlock()
-
-	proto := config.Consensus[blk.CurrentProtocol]
-	rnd := blk.Round()
-
-	if rnd <= au.latest() {
-		// Duplicate, ignore.
-		return
-	}
-
-	if rnd != au.latest()+1 {
-		au.log.Panicf("accountUpdates: newBlock %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
-	}
-	au.deltas = append(au.deltas, delta.accts)
-	au.protos = append(au.protos, proto)
-	au.creatableDeltas = append(au.creatableDeltas, delta.creatables)
-	au.roundDigest = append(au.roundDigest, blk.Digest())
-	au.deltasAccum = append(au.deltasAccum, len(delta.accts)+au.deltasAccum[len(au.deltasAccum)-1])
-
-	var ot basics.OverflowTracker
-	newTotals := au.roundTotals[len(au.roundTotals)-1]
-	allBefore := newTotals.All()
-	newTotals.applyRewards(delta.hdr.RewardsLevel, &ot)
-
-	for addr, data := range delta.accts {
-		newTotals.delAccount(proto, data.old, &ot)
-		newTotals.addAccount(proto, data.new, &ot)
-
-		macct := au.accounts[addr]
-		macct.ndeltas++
-		macct.data = data.new
-		au.accounts[addr] = macct
-	}
-
-	for cidx, cdelta := range delta.creatables {
-		mcreat := au.creatables[cidx]
-		mcreat.creator = cdelta.creator
-		mcreat.created = cdelta.created
-		mcreat.ctype = cdelta.ctype
-		mcreat.ndeltas++
-		au.creatables[cidx] = mcreat
-	}
-
-	if ot.Overflowed {
-		au.log.Panicf("accountUpdates: newBlock %d overflowed totals", rnd)
-	}
-	allAfter := newTotals.All()
-	if allBefore != allAfter {
-		au.log.Panicf("accountUpdates: sum of money changed from %d to %d", allBefore.Raw, allAfter.Raw)
-	}
-
-	au.roundTotals = append(au.roundTotals, newTotals)
+	au.newBlockImpl(blk, delta)
 }
 
-func (au *accountUpdates) totals(rnd basics.Round) (totals AccountTotals, err error) {
+// Totals returns the totals for a given round
+func (au *accountUpdates) Totals(rnd basics.Round) (totals AccountTotals, err error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return
-	}
-
-	totals = au.roundTotals[offset]
-	return
+	return au.totalsImpl(rnd)
 }
 
-func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser, error) {
+// GetCatchpointStream returns an io.Reader to the catchpoint file associated with the provided round
+func (au *accountUpdates) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	dbFileName := ""
 	err := au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		dbFileName, _, _, err = getCatchpoint(tx, round)
@@ -655,10 +556,86 @@ func (au *accountUpdates) getCatchpointStream(round basics.Round) (io.ReadCloser
 
 // functions below this line are all internal functions
 
+// accountUpdatesLedgerEvaluator is a "ledger emulator" which is used *only* by initializeCaches, as a way to shortcut
+// the locks taken by the real ledger object when making requests that are being served by the accountUpdates.
+// Using this struct allow us to take the tracker lock *before* calling the loadFromDisk, and having the operation complete
+// without taking any locks. Note that it's not only the locks performance that is gained : by having the loadFrom disk
+// not requiring any external locks, we can safely take a trackers lock on the ledger during reloadLedger, which ensures
+// that even during catchpoint catchup mode switch, we're still correctly protected by a mutex.
+type accountUpdatesLedgerEvaluator struct {
+	// au is the associated accountUpdates structure which invoking the trackerEvalVerified function, passing this structure as input.
+	// the accountUpdatesLedgerEvaluator would access the underlying accountUpdates function directly, bypassing the balances mutex lock.
+	au *accountUpdates
+	// prevHeader is the previous header to the current one. The usage of this is only in the context of initializeCaches where we iteratively
+	// building the StateDelta, which requires a peek on the "previous" header information.
+	prevHeader bookkeeping.BlockHeader
+}
+
+// GenesisHash returns the genesis hash
+func (aul *accountUpdatesLedgerEvaluator) GenesisHash() crypto.Digest {
+	return aul.au.ledger.GenesisHash()
+}
+
+// BlockHdr returns the header of the given round. When the evaluator is running, it's only referring to the previous header, which is what we
+// are providing here. Any attempt to access a different header would get denied.
+func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+	if r == aul.prevHeader.Round {
+		return aul.prevHeader, nil
+	}
+	return bookkeeping.BlockHeader{}, ErrNoEntry{}
+}
+
+// Lookup returns the account balance for a given address at a given round
+func (aul *accountUpdatesLedgerEvaluator) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+	return aul.au.lookupImpl(rnd, addr, true)
+}
+
+// Totals returns the totals for a given round
+func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (AccountTotals, error) {
+	return aul.au.totalsImpl(rnd)
+}
+
+// isDup return whether a transaction is a duplicate one. It's not needed by the accountUpdatesLedgerEvaluator and implemeted as a stub.
+func (aul *accountUpdatesLedgerEvaluator) isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error) {
+	// this is a non-issue since this call will never be made on non-validating evaluation
+	return false, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initilization ")
+}
+
+// LookupWithoutRewards returns the account balance for a given address at a given round, without the reward
+func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+	return aul.au.lookupImpl(rnd, addr, false)
+}
+
+// GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
+func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
+	return aul.au.getCreatorForRoundImpl(rnd, cidx, ctype)
+}
+
+// totalsImpl returns the totals for a given round
+func (au *accountUpdates) totalsImpl(rnd basics.Round) (totals AccountTotals, err error) {
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return
+	}
+
+	totals = au.roundTotals[offset]
+	return
+}
+
 // initializeCaches fills up the accountUpdates cache with the most recent ~320 blocks
 func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound, writingCatchpointRound basics.Round) (catchpointBlockDigest crypto.Digest, err error) {
 	var blk bookkeeping.Block
 	var delta StateDelta
+
+	accLedgerEval := accountUpdatesLedgerEvaluator{
+		au: au,
+	}
+	if lastBalancesRound < lastestBlockRound {
+		accLedgerEval.prevHeader, err = au.ledger.BlockHdr(lastBalancesRound)
+		if err != nil {
+			return
+		}
+	}
 
 	for lastBalancesRound < lastestBlockRound {
 		next := lastBalancesRound + 1
@@ -668,17 +645,19 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 			return
 		}
 
-		delta, err = au.ledger.trackerEvalVerified(blk)
+		delta, err = au.ledger.trackerEvalVerified(blk, &accLedgerEval)
 		if err != nil {
 			return
 		}
 
-		au.newBlock(blk, delta)
+		au.newBlockImpl(blk, delta)
 		lastBalancesRound = next
 
 		if next == basics.Round(writingCatchpointRound) {
 			catchpointBlockDigest = blk.Digest()
 		}
+
+		accLedgerEval.prevHeader = *delta.hdr
 	}
 	return
 }
@@ -686,15 +665,12 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 // initializeFromDisk performs the atomic operation of loading the accounts data information from disk
 // and preparing the accountUpdates for operation, including initlizating the commitSyncer goroutine.
 func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRound, lastestBlockRound basics.Round, err error) {
-	au.accountsMu.Lock()
-	defer au.accountsMu.Unlock()
-
 	au.dbs = l.trackerDB()
 	au.log = l.trackerLog()
 	au.ledger = l
 
 	if au.initAccounts == nil {
-		err = fmt.Errorf("accountUpdates.loadFromDisk: initAccounts not set")
+		err = fmt.Errorf("accountUpdates.initializeFromDisk: initAccounts not set")
 		return
 	}
 
@@ -707,7 +683,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		}
 		// Check for blocks DB and tracker DB un-sync
 		if au.dbRound > lastestBlockRound {
-			au.log.Warnf("resetting accounts DB (on round %v, but blocks DB's latest is %v)", au.dbRound, lastestBlockRound)
+			au.log.Warnf("accountUpdates.initializeFromDisk: resetting accounts DB (on round %v, but blocks DB's latest is %v)", au.dbRound, lastestBlockRound)
 			err0 = accountsReset(tx)
 			if err0 != nil {
 				return err0
@@ -758,6 +734,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	close(au.catchpointWriting)
 	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
 	au.committedOffset = make(chan deferedCommit, 1)
+	au.commitSyncerClosed = make(chan struct{})
 	go au.commitSyncer(au.committedOffset)
 
 	lastBalancesRound = au.dbRound
@@ -779,7 +756,7 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 	return hash[:]
 }
 
-// Initialize accounts DB if needed and return account round
+// accountsInitialize initializes the accounts DB if needed and return currrent account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
 func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (basics.Round, error) {
@@ -878,7 +855,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
 				}
 				if !added {
-					au.log.Warnf("accountsInitialize attempted to add duplicate hash '%v' to merkle trie.", hash)
+					au.log.Warnf("accountsInitialize attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(hash), balance.Address)
 				}
 			}
 
@@ -1056,11 +1033,10 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltasRound []map[basic
 					return err
 				}
 				if !deleted {
-					au.log.Warnf("failed to delete hash '%v' from merkle trie", deleteHash)
+					au.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
 				} else {
 					accumulatedChanges++
 				}
-
 			}
 			if !delta.new.IsZero() {
 				addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
@@ -1069,7 +1045,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltasRound []map[basic
 					return err
 				}
 				if !added {
-					au.log.Warnf("attempted to add duplicate hash '%v' to merkle trie", addHash)
+					au.log.Warnf("attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
 				} else {
 					accumulatedChanges++
 				}
@@ -1090,6 +1066,143 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltasRound []map[basic
 	return
 }
 
+// newBlockImpl is the accountUpdates implementation of the ledgerTracker interface. This is the "internal" facing function
+// which assumes that no lock need to be taken.
+func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) {
+	proto := config.Consensus[blk.CurrentProtocol]
+	rnd := blk.Round()
+
+	if rnd <= au.latest() {
+		// Duplicate, ignore.
+		return
+	}
+
+	if rnd != au.latest()+1 {
+		au.log.Panicf("accountUpdates: newBlock %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
+	}
+	au.deltas = append(au.deltas, delta.accts)
+	au.protos = append(au.protos, proto)
+	au.creatableDeltas = append(au.creatableDeltas, delta.creatables)
+	au.roundDigest = append(au.roundDigest, blk.Digest())
+	au.deltasAccum = append(au.deltasAccum, len(delta.accts)+au.deltasAccum[len(au.deltasAccum)-1])
+
+	var ot basics.OverflowTracker
+	newTotals := au.roundTotals[len(au.roundTotals)-1]
+	allBefore := newTotals.All()
+	newTotals.applyRewards(delta.hdr.RewardsLevel, &ot)
+
+	for addr, data := range delta.accts {
+		newTotals.delAccount(proto, data.old, &ot)
+		newTotals.addAccount(proto, data.new, &ot)
+
+		macct := au.accounts[addr]
+		macct.ndeltas++
+		macct.data = data.new
+		au.accounts[addr] = macct
+	}
+
+	for cidx, cdelta := range delta.creatables {
+		mcreat := au.creatables[cidx]
+		mcreat.creator = cdelta.creator
+		mcreat.created = cdelta.created
+		mcreat.ctype = cdelta.ctype
+		mcreat.ndeltas++
+		au.creatables[cidx] = mcreat
+	}
+
+	if ot.Overflowed {
+		au.log.Panicf("accountUpdates: newBlock %d overflowed totals", rnd)
+	}
+	allAfter := newTotals.All()
+	if allBefore != allAfter {
+		au.log.Panicf("accountUpdates: sum of money changed from %d to %d", allBefore.Raw, allAfter.Raw)
+	}
+
+	au.roundTotals = append(au.roundTotals, newTotals)
+}
+
+// lookupImpl returns the accound data for a given address at a given round. The withRewards indicates whether the
+// rewards should be added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
+// even while it could return the AccoutData which represent the "rewarded" account data.
+func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return
+	}
+
+	offsetForRewards := offset
+
+	defer func() {
+		if withRewards {
+			totals := au.roundTotals[offsetForRewards]
+			proto := au.protos[offsetForRewards]
+			data = data.WithUpdatedRewards(proto, totals.RewardsLevel)
+		}
+	}()
+
+	// Check if this is the most recent round, in which case, we can
+	// use a cache of the most recent account state.
+	if offset == uint64(len(au.deltas)) {
+		macct, ok := au.accounts[addr]
+		if ok {
+			return macct.data, nil
+		}
+	} else {
+		// Check if the account has been updated recently.  Traverse the deltas
+		// backwards to ensure that later updates take priority if present.
+		for offset > 0 {
+			offset--
+			d, ok := au.deltas[offset][addr]
+			if ok {
+				return d.new, nil
+			}
+		}
+	}
+
+	// No updates of this account in the in-memory deltas; use on-disk DB.
+	// The check in roundOffset() made sure the round is exactly the one
+	// present in the on-disk DB.  As an optimization, we avoid creating
+	// a separate transaction here, and directly use a prepared SQL query
+	// against the database.
+	return au.accountsq.lookup(addr)
+}
+
+// getCreatorForRoundImpl returns the asset/app creator for a given asset/app index at a given round
+func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return basics.Address{}, false, err
+	}
+
+	// If this is the most recent round, au.creatables has will have the latest
+	// state and we can skip scanning backwards over creatableDeltas
+	if offset == uint64(len(au.deltas)) {
+		// Check if we already have the asset/creator in cache
+		creatableDelta, ok := au.creatables[cidx]
+		if ok {
+			if creatableDelta.created && creatableDelta.ctype == ctype {
+				return creatableDelta.creator, true, nil
+			}
+			return basics.Address{}, false, nil
+		}
+	} else {
+		for offset > 0 {
+			offset--
+			creatableDelta, ok := au.creatableDeltas[offset][cidx]
+			if ok {
+				if creatableDelta.created && creatableDelta.ctype == ctype {
+					return creatableDelta.creator, true, nil
+				}
+				return basics.Address{}, false, nil
+			}
+		}
+	}
+
+	// Check the database
+	return au.accountsq.lookupCreator(cidx, ctype)
+}
+
+// accountsCreateCatchpointLabel creates a catchpoint label and write it.
 func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Round, totals AccountTotals, ledgerBlockDigest crypto.Digest, trieBalancesHash crypto.Digest) (label string, err error) {
 	cpLabel := makeCatchpointLabel(committedRound, ledgerBlockDigest, trieBalancesHash, totals)
 	label = cpLabel.String()
@@ -1097,6 +1210,7 @@ func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Ro
 	return
 }
 
+// roundOffset calculates the offset of the given round compared to the current dbRound. Requires that the lock would be taken.
 func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err error) {
 	if rnd < au.dbRound {
 		err = fmt.Errorf("round %d before dbRound %d", rnd, au.dbRound)
@@ -1112,7 +1226,10 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 	return off, nil
 }
 
+// commitSyncer is the syncer go-routine function which perform the database updates. Internally, it dequeue deferedCommits and
+// send the tasks to commitRound for completing the operation.
 func (au *accountUpdates) commitSyncer(deferedCommits chan deferedCommit) {
+	defer close(au.commitSyncerClosed)
 	for {
 		select {
 		case committedOffset, ok := <-deferedCommits:
@@ -1136,6 +1253,7 @@ func (au *accountUpdates) commitSyncer(deferedCommits chan deferedCommit) {
 	}
 }
 
+// commitRound write to the database a "chunk" of rounds, and update the dbRound accordingly.
 func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookback basics.Round) {
 	defer au.accountsWriting.Done()
 	au.accountsMu.RLock()
@@ -1229,11 +1347,16 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 		for i := uint64(0); i < offset; i++ {
-			err = accountsNewRound(tx, deltas[i], creatableDeltas[i], roundTotals[i+1].RewardsLevel, protos[i+1])
+			err = accountsNewRound(tx, deltas[i], creatableDeltas[i])
 			if err != nil {
 				return err
 			}
 		}
+		err = totalsNewRounds(tx, deltas[:offset], roundTotals[1:offset+1], protos[1:offset+1])
+		if err != nil {
+			return err
+		}
+
 		err = au.accountsUpdateBalances(deltas, offset)
 		if err != nil {
 			return err
@@ -1250,7 +1373,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 				return
 			}
 		}
-
 		return nil
 	}, &au.accountsMu)
 
@@ -1335,10 +1457,12 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 }
 
+// latest returns the latest round
 func (au *accountUpdates) latest() basics.Round {
 	return au.dbRound + basics.Round(len(au.deltas))
 }
 
+// generateCatchpoint generates a single catchpoint file
 func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label string, committedRoundDigest crypto.Digest, updatingBalancesDuration time.Duration) {
 	beforeGeneratingCatchpointTime := time.Now()
 	catchpointGenerationStats := telemetryspec.CatchpointGenerationEventDetails{
@@ -1432,6 +1556,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 		Infof("Catchpoint file was generated")
 }
 
+// catchpointRoundToPath calculate the catchpoint file path for a given round
 func catchpointRoundToPath(rnd basics.Round) string {
 	irnd := int64(rnd) / 256
 	outStr := ""

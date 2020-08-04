@@ -20,8 +20,8 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/apply"
 )
 
 // AppTealGlobals contains data accessible by the "global" opcode.
@@ -41,7 +41,7 @@ type appTealEvaluator struct {
 
 // appLedger implements logic.LedgerForLogic
 type appLedger struct {
-	balances transactions.Balances
+	balances apply.Balances
 	appIdx   basics.AppIndex
 	schemas  basics.StateSchemas
 	AppTealGlobals
@@ -69,7 +69,7 @@ func (ae *appTealEvaluator) Check(program []byte) (cost int, err error) {
 
 // InitLedger initializes an appLedger, which satisfies the
 // logic.LedgerForLogic interface.
-func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, appIdx basics.AppIndex, schemas basics.StateSchemas) error {
+func (ae *appTealEvaluator) InitLedger(balances apply.Balances, appIdx basics.AppIndex, schemas basics.StateSchemas) error {
 	ledger, err := newAppLedger(balances, appIdx, schemas, ae.AppTealGlobals)
 	if err != nil {
 		return err
@@ -79,7 +79,7 @@ func (ae *appTealEvaluator) InitLedger(balances transactions.Balances, appIdx ba
 	return nil
 }
 
-func newAppLedger(balances transactions.Balances, appIdx basics.AppIndex, schemas basics.StateSchemas, globals AppTealGlobals) (al *appLedger, err error) {
+func newAppLedger(balances apply.Balances, appIdx basics.AppIndex, schemas basics.StateSchemas, globals AppTealGlobals) (al *appLedger, err error) {
 	if balances == nil {
 		err = fmt.Errorf("cannot create appLedger with nil balances")
 		return
@@ -99,7 +99,7 @@ func newAppLedger(balances transactions.Balances, appIdx basics.AppIndex, schema
 }
 
 // MakeDebugAppLedger returns logic.LedgerForLogic suitable for debug or dryrun
-func MakeDebugAppLedger(balances transactions.Balances, appIdx basics.AppIndex, schemas basics.StateSchemas, globals AppTealGlobals) (logic.LedgerForLogic, error) {
+func MakeDebugAppLedger(balances apply.Balances, appIdx basics.AppIndex, schemas basics.StateSchemas, globals AppTealGlobals) (logic.LedgerForLogic, error) {
 	return newAppLedger(balances, appIdx, schemas, globals)
 }
 
@@ -200,9 +200,20 @@ func (al *appLedger) AssetHolding(addr basics.Address, assetIdx basics.AssetInde
 	return holding, nil
 }
 
-func (al *appLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error) {
+func (al *appLedger) AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams, error) {
+	// Find asset creator
+	creator, ok, err := al.balances.GetCreator(basics.CreatableIndex(assetIdx), basics.AssetCreatable)
+	if err != nil {
+		return basics.AssetParams{}, err
+	}
+
+	// Ensure asset exists
+	if !ok {
+		return basics.AssetParams{}, fmt.Errorf("asset %d does not exist", assetIdx)
+	}
+
 	// Fetch the requested balance record
-	record, err := al.balances.Get(addr, false)
+	record, err := al.balances.Get(creator, false)
 	if err != nil {
 		return basics.AssetParams{}, err
 	}
@@ -210,7 +221,7 @@ func (al *appLedger) AssetParams(addr basics.Address, assetIdx basics.AssetIndex
 	// Ensure account created the requested asset
 	params, ok := record.AssetParams[assetIdx]
 	if !ok {
-		err = fmt.Errorf("account %s has not created asset %d", addr.String(), assetIdx)
+		err = fmt.Errorf("account %s has not created asset %d", creator, assetIdx)
 		return basics.AssetParams{}, err
 	}
 

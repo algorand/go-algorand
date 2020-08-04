@@ -1,0 +1,81 @@
+{
+    "Genesis": {
+        "NetworkName": "funtestnetls",
+        "Wallets": [
+            {
+                "Name": "WalletP",
+                "Stake": 1,
+                "Online": true
+            },
+            {
+                "Name": "WalletPR",
+                "Stake": 1,
+                "Online": true
+            },
+            {
+                "Name": "Wallet1",
+                "Stake": 95,
+                "Online": true
+            },
+            {
+                "Name": "Wallet1R",
+                "Stake": 1,
+                "Online": true
+            },
+            {
+                "Name": "Wallet2",
+                "Stake": 1,
+                "Online": true
+            },
+            {
+                "Name": "Wallet2R",
+                "Stake": 1,
+                "Online": true
+            }
+        ]
+    },
+    "Nodes": [
+        {
+            "Name": "Primary",
+            "IsRelay": true,
+            "Wallets": [
+                {
+                    "Name": "WalletP",
+                    "ParticipationOnly": false
+                },
+                {
+                    "Name": "WalletPR",
+                    "ParticipationOnly": false
+                }
+            ]
+        },
+        {
+            "Name": "Node1",
+            "IsRelay": false,
+            "Wallets": [
+                {
+                    "Name": "Wallet1",
+                    "ParticipationOnly": false
+                },
+                {
+                    "Name": "Wallet1R",
+                    "ParticipationOnly": false
+                }
+            ]
+        },
+        {
+            "Name": "Node2",
+            "IsRelay": false,
+            "Wallets": [
+                {
+                    "Name": "Wallet2",
+                    "ParticipationOnly": false
+                },
+                {
+                    "Name": "Wallet2R",
+                    "ParticipationOnly": false
+                }
+            ]
+        }
+    ]
+}
