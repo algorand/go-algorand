@@ -1,9 +1,8 @@
 # This file is imported into go-algorand/Makefile.
 
-ARCH_BIT = $(shell uname -m)
-VER      = $(shell ./scripts/compute_build_number.sh -f)
+PKG_DIR = $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)
 
-.PHONY: ci-clean ci-deps ci-setup ci-build package package-deb package-rpm package-$(OS_TYPE)-$(ARCH) package-deb-$(OS_TYPE)-$(ARCH) package-rpm-$(OS_TYPE)-$(ARCH)
+.PHONY: ci-clean ci-deps ci-setup ci-build
 
 ci-clean:
 	rm -rf tmp
@@ -13,9 +12,9 @@ ci-deps:
 	scripts/check_deps.sh
 
 ci-setup:
-	mkdir -p $(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)
+	mkdir -p $(PKG_DIR)
 
-ci-test: ci-build
+ci-test:
 ifeq ($(ARCH), amd64)
 	RACE=-race
 else
@@ -26,25 +25,18 @@ endif
 	done
 
 ci-integration:
+	NODEBINDIR=/bin \
+	PATH=$(PKG_DIR)/bin:$$PATH \
+	PATH=$(PKG_DIR)/tools:$$PATH \
+	PATH=$(PKG_DIR)/test-utils:$$PATH \
+	SRCROOT=$(SRCPATH) \
+	test/scripts/e2e.sh -c $(CHANNEL) -n
 
-ifeq ($(ARCH), amd64)
-	export NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin && \
-	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin:$$PATH && \
-	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/test-utils:$$PATH && \
-	export SRCROOT=$(SRCPATH) && \
-	./test/scripts/e2e_go_tests.sh
-else
-	export NODEBINDIR=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin && \
-	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/bin:$$PATH && \
-	export PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/dev/$(OS_TYPE)-$(ARCH)/test-utils:$$PATH && \
-	export SRCROOT=$(SRCPATH) && \
-	./test/scripts/e2e_go_tests.sh -norace
-endif
-
-ci-build: ci-setup buildsrc gen
-	PKG_ROOT=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH) \
-		 NO_BUILD=True VARIATIONS=$(OS_TYPE)/$(ARCH) \
-		 scripts/build_packages.sh $(OS_TYPE)/$(ARCH)
+ci-build: buildsrc gen ci-setup
+	CHANNEL=$(CHANNEL) PKG_ROOT=$(PKG_DIR) NO_BUILD=True VARIATIONS=$(OS_TYPE)-$(ARCH) \
+	scripts/build_packages.sh $(OS_TYPE)/$(ARCH) && \
+	mkdir -p $(PKG_DIR)/data && \
+	cp gen/devnet/genesis.json $(PKG_DIR)/data
 
 # Builds targets from the sub-directories of ./scripts/release/mule/, such as `mule-package`, `mule-sign`, `mule-test`.
 # https://scene-si.org/2019/12/04/make-dynamic-makefile-targets/
@@ -52,17 +44,17 @@ mule = $(shell ls -d scripts/release/mule/*/ | awk 'BEGIN { FS="/" ; OFS="-" } {
 
 mule-deploy-%: PKG_TYPE=$*
 mule-deploy-%:
-	scripts/release/mule/deploy/$(PKG_TYPE)/deploy.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) $$WORKDIR
+	scripts/release/mule/deploy/$(PKG_TYPE)/deploy.sh
 
 mule-package-%: PKG_TYPE=$*
 mule-package-%:
-	scripts/release/mule/package/$(PKG_TYPE)/package.sh $(OS_TYPE) $(ARCH) $$WORKDIR
+	scripts/release/mule/package/$(PKG_TYPE)/package.sh
 
 mule-sign-%: PKG_TYPE=$*
 mule-sign-%:
-	scripts/release/mule/sign/sign.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) $(PKG_TYPE) $$WORKDIR
+	scripts/release/mule/sign/sign.sh $(PKG_TYPE)
 
 mule-test-%: PKG_TYPE=$*
 mule-test-%:
-	scripts/release/mule/test/test.sh $(OS_TYPE) $(ARCH) $(ARCH_BIT) $(VER) $(PKG_TYPE) $$WORKDIR
+	scripts/release/mule/test/test.sh $(PKG_TYPE)
 

@@ -1,0 +1,230 @@
+{
+    "execute" : {
+	"create" : {
+	    "create" : true,
+	    "help" : "Create a new asset.",
+	    "args" : [
+		{
+		    "name" : "manager",
+		    "kind" : "address",
+		    "help" : "The initial asset manager, if nonzero."
+		},
+		{
+		    "name" : "reserve",
+		    "kind" : "address",
+		    "help" : "The initial reserve address, if nonzero."
+		},
+		{
+		    "name" : "freezer",
+		    "kind" : "address",
+		    "help" : "The initial freezer address, if nonzero."
+		},
+		{
+		    "name" : "clawback",
+		    "kind" : "address",
+		    "help" : "The initial clawback address, if nonzero."
+		},
+		{
+		    "name" : "supply",
+		    "kind" : "integer",
+		    "help" : "The total asset supply."
+		},
+		{
+		    "name" : "default-frozen",
+		    "kind" : "integer",
+		    "help" : "The default frozen status for new accounts."
+		}
+	    ]
+	},
+	"destroy" : {
+	    "on-completion" : "DeleteApplication",
+	    "help" : "Destroy an asset. The asset creator must hold the entire supply. This transaction must be sent by the asset creator."
+	},
+	"reconfigure" : {
+	    "help" : "Reconfigure an asset's managers. A manager can be set only if it is currently not the zero address. This transaction must be set by the asset's manager.",
+	    "args" : [
+		{
+		    "name" : "manager",
+		    "kind" : "address",
+		    "help" : "The new asset manager (or zero to disable permanently)."
+		},
+		{
+		    "name" : "reserve",
+		    "kind" : "address",
+		    "help" : "The new reserve address (or zero to disable permanently)."
+		},
+		{
+		    "name" : "freezer",
+		    "kind" : "address",
+		    "help" : "The new freezer address (or zero to disable permanently)."
+		},
+		{
+		    "name" : "clawback",
+		    "kind" : "address",
+		    "help" : "The new clawback address (or zero to disable permanently)."
+		},
+		{
+		    "name" : "ignored0",
+		    "kind" : "integer",
+		    "pseudo" : true
+		},
+		{
+		    "name" : "ignored1",
+		    "kind" : "integer",
+		    "pseudo" : true
+		}
+	    ]
+	},
+	"opt-in" : {
+	    "on-completion" : "OptIn",
+	    "help" : "Opt into an asset. The asset creator is always opted in."
+	},
+	"freeze" : {
+	    "args" : [
+		{
+		    "name" : "frozen",
+		    "kind" : "integer",
+		    "help" : "The new frozen value of the account."
+		}
+	    ],
+	    "accounts" : [
+		{
+		    "name" : "target",
+		    "help" : "The target account whose frozen value to set."
+		}
+	    ],
+	    "help" : "Set the frozen value of an account. This transaction must be sent by the asset freezer."
+	},
+	"transfer" : {
+	    "args" : [
+		{
+		    "name" : "amount",
+		    "kind" : "integer",
+		    "help" : "The amount of the asset to transfer."
+		}
+	    ],
+	    "accounts" : [
+		{
+		    "name" : "receiver",
+		    "help" : "The account receiving the assets."
+		},
+		{
+		    "name" : "ignored",
+		    "pseudo" : true
+		}
+	    ],
+	    "help" : "Transfer an asset to a receiver."
+	},
+	"clawback" : {
+	    "args" : [
+		{
+		    "name" : "amount",
+		    "kind" : "integer",
+		    "help" : "The amount of the asset to transfer."
+		},
+		{
+		    "name" : "ignored",
+		    "kind" : "integer",
+		    "pseudo" : true
+		}
+	    ],
+	    "accounts" : [
+		{
+		    "name" : "sender",
+		    "help" : "The account sending the assets."
+		},
+		{
+		    "name" : "receiver",
+		    "help" : "The account receiving the assets."
+		}
+	    ],
+	    "help" : "Force the transfer of an asset from some sender to some receiver. This transaction must be sent by the asset clawback account."
+	},
+	"close-out" : {
+	    "on-completion" : "CloseOut",
+	    "args" : [
+		{
+		    "name" : "amount",
+		    "kind" : "integer",
+		    "help" : "An optional amount of the asset to transfer to a receiver before closing out."
+		}
+	    ],
+	    "accounts" : [
+		{
+		    "name" : "receiver",
+		    "help" : "An optional account to receive assets before closing out."
+		},
+		{
+		    "name" : "close-to",
+		    "help" : "The address receiving all remaining assets."
+		}
+	    ],
+	    "help" : "Close out all assets to an account, with an optional transfer beforehand."
+	},
+	"clear" : {
+	    "on-completion" : "ClearState",
+	    "help" : "Clear out all assets from the account."
+	}
+    },
+    "query" : {
+	"global" : {
+	    "creator" : {
+		"key" : "cr",
+		"kind" : "address",
+		"help" : "The asset creator created the asset. The asset creator is always opted in to the asset: its balance and freeze status are stored in global storage at \"creator-balance\" and \"creator-frozen\", respectively. This value is constant."
+	    },
+	    "manager" : {
+		"key" : "mn",
+		"kind" : "address",
+		"help" : "The asset manager can set the manager, reserve, freezer, and clawback addresses if they are nonzero."
+	    },
+	    "reserve" : {
+		"key" : "rv",
+		"kind" : "address",
+		"help" : "The asset reserve for the asset."
+	    },
+	    "freezer" : {
+		"key" : "fr",
+		"kind" : "address",
+		"help" : "The asset freezer can execute the \"freeze\" procedure on accounts."
+	    },
+	    "clawback" : {
+		"key" : "cl",
+		"kind" : "address",
+		"help" : "The asset clawback address can execute the \"clawback\" procedure on accounts."
+	    },
+	    "total-supply" : {
+		"key" : "tt",
+		"kind" : "integer",
+		"help" : "The total supply of the asset when initially created. This value is constant."
+	    },
+	    "default-frozen" : {
+		"key" : "df",
+		"kind" : "integer",
+		"help" : "The default frozen status of any created new account (excepting the creator, whose frozen status is initialized to 0). A value of 1 signifies that the account is frozen and cannot make ordinary transactions. This value is constant."
+	    },
+	    "creator-balance" : {
+		"key" : "bl",
+		"kind" : "integer",
+		"help" : "The balance of the \"creator\"."
+	    },
+	    "creator-frozen" : {
+		"key" : "fz",
+		"kind" : "integer",
+		"help" : "The frozen status of the \"creator\". This value is always initialized to 0."
+	    }
+	},
+	"local" : {
+	    "balance" : {
+		"key" : "bl",
+		"kind" : "integer",
+		"help" : "The balance of the account."
+	    },
+	    "frozen" : {
+		"key" : "fz",
+		"kind" : "integer",
+		"help" : "The frozen status of the account. This value is initialized to \"default-frozen\" when the account is first created. This value may be modified via the \"freeze\" procedure."
+	    }
+	}
+    }
+}

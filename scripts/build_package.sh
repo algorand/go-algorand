@@ -111,7 +111,7 @@ TOOLS_ROOT=${PKG_ROOT}/tools
 
 echo "Staging tools package files"
 
-bin_files=("algons" "auctionconsole" "auctionmaster" "auctionminion" "coroner" "dispenser" "netgoal" "nodecfg" "pingpong" "cc_service" "cc_agent" "cc_client" "COPYING")
+bin_files=("algons" "auctionconsole" "auctionmaster" "auctionminion" "coroner" "dispenser" "netgoal" "nodecfg" "pingpong" "cc_service" "cc_agent" "cc_client" "COPYING" "dsign")
 mkdir -p ${TOOLS_ROOT}
 for bin in "${bin_files[@]}"; do
     cp ${GOPATHBIN}/${bin} ${TOOLS_ROOT}

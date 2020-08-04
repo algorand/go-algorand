@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package rewards
+package catchup
 
 import (
 	"os"
@@ -124,41 +124,36 @@ func runCatchupOverGossip(t *testing.T,
 		cfg.SaveToDisk(dir)
 	}
 
-	fixture.Start()
 	defer fixture.Shutdown()
 	ncPrim, err := fixture.GetNodeController("Primary")
 	a.NoError(err)
-
-	// Kill the primary
-	ncPrim.FullStop()
 
 	// Get 2nd node, which makes all the progress
 	nc, err := fixture.GetNodeController("Node")
 	a.NoError(err)
 
-	// Let the network make some progress
+	// Start the secondary
+	_, err = fixture.StartNode(nc.GetDataDir())
+	a.NoError(err)
 
+	// Let the secondary make progress up to round 3, while the primary was never startred ( hence, it's on round = 0)
 	waitForRound := uint64(3)
 	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
 	a.NoError(err)
 
-	// Now, revive the primary
-	lg, err := fixture.StartNode(ncPrim.GetDataDir())
-	a.NoError(err)
-
-	status, err := lg.Status()
-	a.NoError(err)
-	a.True(status.LastRound < waitForRound)
-
-	// Now, kill the secondary and restart it to reinitiate inbound connection
+	// stop the secondary, which is on round 3 or more.
 	nc.FullStop()
-	_, err = fixture.StartNode(nc.GetDataDir())
+
+	// Now, start both primary and secondary, and let the primary catchup up.
+	fixture.Start()
+	lg, err := fixture.StartNode(ncPrim.GetDataDir())
 	a.NoError(err)
 
 	// Now, catch up
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(lg, waitForRound)
 	a.NoError(err)
 
+	waitStart := time.Now()
 	// wait until the round number on the secondary node matches the round number on the primary node.
 	for {
 		nodeLibGoalClient := fixture.LibGoalFixture.GetLibGoalClientFromDataDir(nc.GetDataDir())
@@ -167,18 +162,23 @@ func runCatchupOverGossip(t *testing.T,
 
 		primaryStatus, err := lg.Status()
 		a.NoError(err)
-		a.True(nodeStatus.LastRound >= primaryStatus.LastRound)
-		if nodeStatus.LastRound == primaryStatus.LastRound && waitForRound < nodeStatus.LastRound {
+		if nodeStatus.LastRound <= primaryStatus.LastRound && waitForRound < nodeStatus.LastRound {
 			//t.Logf("Both nodes reached round %d\n", primaryStatus.LastRound)
 			break
 		}
+
+		if time.Now().Sub(waitStart) > time.Minute {
+			// it's taking too long.
+			require.FailNow(t, "Waiting too long for catchup to complete")
+		}
+
 		time.Sleep(50 * time.Millisecond)
 	}
 }
 
 // consensusTestUnupgradedProtocol is a version of ConsensusCurrentVersion
 // that allows the control of the upgrade from consensusTestUnupgradedProtocol to
-// consensusTestUnupgradedProtocol
+// consensusTestUnupgradedToProtocol
 const consensusTestUnupgradedProtocol = protocol.ConsensusVersion("test-unupgraded-protocol")
 
 // consensusTestUnupgradedToProtocol is a version of ConsensusCurrentVersion

@@ -51,6 +51,25 @@ func typeEnumTableMarkdown(out io.Writer) {
 	out.Write([]byte("\n"))
 }
 
+func integerConstantsTableMarkdown(out io.Writer) {
+	fmt.Fprintf(out, "#### OnComplete\n\n")
+	fmt.Fprintf(out, "%s\n\n", logic.OnCompletionPreamble)
+	fmt.Fprintf(out, "| Value | Constant name | Description |\n")
+	fmt.Fprintf(out, "| --- | --- | --- |\n")
+	for i, name := range logic.OnCompletionNames {
+		value := uint64(i)
+		fmt.Fprintf(out, "| %d | %s | %s |\n", value, markdownTableEscape(name), logic.OnCompletionDescription(value))
+	}
+	fmt.Fprintf(out, "\n")
+	fmt.Fprintf(out, "#### TypeEnum constants\n")
+	fmt.Fprintf(out, "| Value | Constant name | Description |\n")
+	fmt.Fprintf(out, "| --- | --- | --- |\n")
+	for i, name := range logic.TxnTypeNames {
+		fmt.Fprintf(out, "| %d | %s | %s |\n", i, markdownTableEscape(name), logic.TypeNameDescription(name))
+	}
+	out.Write([]byte("\n"))
+}
+
 func fieldTableMarkdown(out io.Writer, names []string, types []logic.StackType, extra map[string]string) {
 	fmt.Fprintf(out, "| Index | Name | Type | Notes |\n")
 	fmt.Fprintf(out, "| --- | --- | --- | --- |\n")
@@ -64,19 +83,32 @@ func fieldTableMarkdown(out io.Writer, names []string, types []logic.StackType, 
 
 func transactionFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`txn` Fields:\n\n")
-	fieldTableMarkdown(out, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs)
+	fieldTableMarkdown(out, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs())
 }
 
 func globalFieldsMarkdown(out io.Writer) {
 	fmt.Fprintf(out, "\n`global` Fields:\n\n")
-	fieldTableMarkdown(out, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs)
+	fieldTableMarkdown(out, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs())
+}
+
+func assetHoldingFieldsMarkdown(out io.Writer) {
+	fmt.Fprintf(out, "\n`asset_holding_get` Fields:\n\n")
+	fieldTableMarkdown(out, logic.AssetHoldingFieldNames, logic.AssetHoldingFieldTypes, logic.AssetHoldingFieldDocs)
+}
+
+func assetParamsFieldsMarkdown(out io.Writer) {
+	fmt.Fprintf(out, "\n`asset_params_get` Fields:\n\n")
+	fieldTableMarkdown(out, logic.AssetParamsFieldNames, logic.AssetParamsFieldTypes, logic.AssetParamsFieldDocs)
 }
 
 func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
-
+	ws := ""
 	opextra := logic.OpImmediateNote(op.Name)
-	cost := logic.OpCost(op.Name)
-	fmt.Fprintf(out, "\n## %s\n\n- Opcode: 0x%02x %s\n", op.Name, op.Opcode, opextra)
+	if opextra != "" {
+		ws = " "
+	}
+	costs := logic.OpAllCosts(op.Name)
+	fmt.Fprintf(out, "\n## %s\n\n- Opcode: 0x%02x%s%s\n", op.Name, op.Opcode, ws, opextra)
 	if op.Args == nil {
 		fmt.Fprintf(out, "- Pops: _None_\n")
 	} else if len(op.Args) == 1 {
@@ -98,8 +130,23 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 		fmt.Fprintf(out, "\n")
 	}
 	fmt.Fprintf(out, "- %s\n", logic.OpDoc(op.Name))
-	if cost != 1 {
-		fmt.Fprintf(out, "- **Cost**: %d\n", cost)
+	// if cost changed with versions print all of them
+	if len(costs) > 1 {
+		fmt.Fprintf(out, "- **Cost**:\n")
+		for v := 1; v < len(costs); v++ {
+			fmt.Fprintf(out, "   - %d (LogicSigVersion = %d)\n", costs[v], v)
+		}
+	} else {
+		cost := costs[0]
+		if cost != 1 {
+			fmt.Fprintf(out, "- **Cost**: %d\n", cost)
+		}
+	}
+	if op.Version > 1 {
+		fmt.Fprintf(out, "- LogicSigVersion >= %d\n", op.Version)
+	}
+	if !op.Modes.Any() {
+		fmt.Fprintf(out, "- Mode: %s\n", op.Modes.String())
 	}
 	if op.Name == "global" {
 		globalFieldsMarkdown(out)
@@ -107,6 +154,10 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 		transactionFieldsMarkdown(out)
 		fmt.Fprintf(out, "\nTypeEnum mapping:\n\n")
 		typeEnumTableMarkdown(out)
+	} else if op.Name == "asset_holding_get" {
+		assetHoldingFieldsMarkdown(out)
+	} else if op.Name == "asset_params_get" {
+		assetParamsFieldsMarkdown(out)
 	}
 	ode := logic.OpDocExtra(op.Name)
 	if ode != "" {
@@ -117,8 +168,9 @@ func opToMarkdown(out io.Writer, op *logic.OpSpec) (err error) {
 
 func opsToMarkdown(out io.Writer) (err error) {
 	out.Write([]byte("# Opcodes\n\nOps have a 'cost' of 1 unless otherwise specified.\n\n"))
-	for i := range logic.OpSpecs {
-		err = opToMarkdown(out, &logic.OpSpecs[i])
+	opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
+	for _, spec := range opSpecs {
+		err = opToMarkdown(out, &spec)
 		if err != nil {
 			return
 		}
@@ -158,6 +210,15 @@ func argEnum(name string) []string {
 	if name == "global" {
 		return logic.GlobalFieldNames
 	}
+	if name == "txna" || name == "gtxna" {
+		return logic.TxnaFieldNames
+	}
+	if name == "asset_holding_get" {
+		return logic.AssetHoldingFieldNames
+	}
+	if name == "asset_params_get" {
+		return logic.AssetParamsFieldNames
+	}
 	return nil
 }
 
@@ -190,12 +251,23 @@ func argEnumTypes(name string) string {
 	if name == "global" {
 		return typeString(logic.GlobalFieldTypes)
 	}
+	if name == "txna" || name == "gtxna" {
+		return typeString(logic.TxnaFieldTypes)
+	}
+	if name == "asset_holding_get" {
+		return typeString(logic.AssetHoldingFieldTypes)
+	}
+	if name == "asset_params_get" {
+		return typeString(logic.AssetParamsFieldTypes)
+	}
+
 	return ""
 }
 
 func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
-	records := make([]OpRecord, len(logic.OpSpecs))
-	for i, spec := range logic.OpSpecs {
+	opSpecs := logic.OpcodesByVersion(logic.LogicVersion)
+	records := make([]OpRecord, len(opSpecs))
+	for i, spec := range opSpecs {
 		records[i].Opcode = spec.Opcode
 		records[i].Name = spec.Name
 		records[i].Args = typeString(spec.Args)
@@ -210,7 +282,7 @@ func buildLanguageSpec(opGroups map[string][]string) *LanguageSpec {
 		records[i].Groups = opGroups[spec.Name]
 	}
 	return &LanguageSpec{
-		EvalMaxVersion:  logic.EvalMaxVersion,
+		EvalMaxVersion:  logic.LogicVersion,
 		LogicSigVersion: config.Consensus[protocol.ConsensusCurrentVersion].LogicSigVersion,
 		Ops:             records,
 	}
@@ -231,16 +303,34 @@ func main() {
 			opGroups[opname] = append(opGroups[opname], og.GroupName)
 		}
 	}
+	constants, _ := os.Create("named_integer_constants.md")
+	integerConstantsTableMarkdown(constants)
+	constants.Close()
+
 	txnfields, _ := os.Create("txn_fields.md")
-	fieldTableMarkdown(txnfields, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs)
+	fieldTableMarkdown(txnfields, logic.TxnFieldNames, logic.TxnFieldTypes, logic.TxnFieldDocs())
 	txnfields.Close()
 
 	globalfields, _ := os.Create("global_fields.md")
-	fieldTableMarkdown(globalfields, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs)
+	fieldTableMarkdown(globalfields, logic.GlobalFieldNames, logic.GlobalFieldTypes, logic.GlobalFieldDocs())
 	globalfields.Close()
+
+	assetholding, _ := os.Create("asset_holding_fields.md")
+	fieldTableMarkdown(assetholding, logic.AssetHoldingFieldNames, logic.AssetHoldingFieldTypes, logic.AssetHoldingFieldDocs)
+	assetholding.Close()
+
+	assetparams, _ := os.Create("asset_params_fields.md")
+	fieldTableMarkdown(assetparams, logic.AssetParamsFieldNames, logic.AssetParamsFieldTypes, logic.AssetParamsFieldDocs)
+	assetparams.Close()
 
 	langspecjs, _ := os.Create("langspec.json")
 	enc := json.NewEncoder(langspecjs)
 	enc.Encode(buildLanguageSpec(opGroups))
 	langspecjs.Close()
+
+	tealtm, _ := os.Create("teal.tmLanguage.json")
+	enc = json.NewEncoder(tealtm)
+	enc.SetIndent("", "  ")
+	enc.Encode(buildSyntaxHighlight())
+	tealtm.Close()
 }

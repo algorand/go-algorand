@@ -23,6 +23,9 @@ if { [catch {
     exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
 
     # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start network
     ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
 
     # Set Primary Wallet Name
@@ -136,7 +139,8 @@ if { [catch {
 
         # Create a new account under the recovered wallet to retrieve preexisting account
         set RECOVERED_ACCOUNT_ADDRESS [::AlgorandGoal::CreateAccountForWallet $RECOVERED_WALLET_NAME $NEW_WALLET_PASSWORD $TEST_PRIMARY_NODE_DIR]
-        ::AlgorandGoal::VerifyAccount $WALLET_NAME $WALLET_PASSWORD $RECOVERED_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR
+        puts "Recovered Account Address: $RECOVERED_ACCOUNT_ADDRESS"
+        ::AlgorandGoal::VerifyAccount $RECOVERED_WALLET_NAME $NEW_WALLET_PASSWORD $RECOVERED_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR
 
         if { $RECOVERED_ACCOUNT_ADDRESS != $ACCOUNT_ADDRESS } {
            ::AlgorandGoal::Abort "Expected recovered account address $ACCOUNT_ADDRESS, but found $RECOVERED_ACCOUNT_ADDRESS"
@@ -145,7 +149,8 @@ if { [catch {
         # Create a new account under the recovered wallet, this should return a new account with zero balance since
         # only one account was created under the original wallet name.
         set RECOVERED_ACCOUNT_ADDRESS_2 [::AlgorandGoal::CreateAccountForWallet $RECOVERED_WALLET_NAME $NEW_WALLET_PASSWORD $TEST_PRIMARY_NODE_DIR]
-        ::AlgorandGoal::VerifyAccount $RECOVERED_WALLET_NAME $NEW_WALLET_PASSWORD #RECOVERED_ACCOUNT_ADDRESS_2 $TEST_PRIMARY_NODE_DIR
+        puts "Recovered Account Address 2: RECOVERED_ACCOUNT_ADDRESS_2"
+        ::AlgorandGoal::VerifyAccount $RECOVERED_WALLET_NAME $NEW_WALLET_PASSWORD $RECOVERED_ACCOUNT_ADDRESS_2 $TEST_PRIMARY_NODE_DIR
         set RECOVERED_BALANCE_2 [::AlgorandGoal::GetAccountBalance $RECOVERED_WALLET_NAME $RECOVERED_ACCOUNT_ADDRESS_2 $TEST_PRIMARY_NODE_DIR]
         if { $RECOVERED_BALANCE_2 != 0 } {
            ::AlgorandGoal::Abort "Expected recovered account address $RECOVERED_ACCOUNT_ADDRESS_2 with balance 0, but found $RECOVERED_BALANCE_2"

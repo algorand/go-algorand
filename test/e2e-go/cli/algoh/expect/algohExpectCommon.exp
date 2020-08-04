@@ -1,0 +1,109 @@
+# Algoh Expect Utility Package
+namespace eval ::Algoh {
+
+  # Export Procedures
+
+  namespace export Abort
+  namespace export Info
+  namespace export CreateNetwork
+
+  namespace export StopNode
+  namespace export StartNode
+
+
+  # My Variables
+   set version 1.0
+   set description "Algodh Expect Package"
+
+  # Variable for the path of the script
+   variable home [file join [pwd] [file dirname [info script]]]
+}
+
+# Definition of the procedure MyProcedure
+proc ::Algoh::Info {} {
+   puts Algoh::description
+}
+
+proc ::Algoh::Abort { ERROR } {
+    puts "Aborting with error: $ERROR"
+    exit 1
+}
+
+package provide Algoh $Algoh::version
+package require Tcl 8.0
+
+
+# Start the network
+proc ::Algoh::CreateNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ROOT_DIR } {
+
+    # Running on ARM64, it seems that network creation is pretty slow.
+    # 30 second won't be enough here, so I'm changing this to 90 seconds.
+    set timeout 90
+
+    if { [catch {
+        # Create network
+        puts "network create $NETWORK_NAME"
+        spawn goal network create --network $NETWORK_NAME --template $NETWORK_TEMPLATE --rootdir $TEST_ROOT_DIR
+        expect {
+            timeout { close; ::Algoh::Abort "Timed out creating network" }
+            "^Network $NETWORK_NAME created under.*" { puts "Network $NETWORK_NAME created" ; close }
+            eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to create network"; Algoh::Abort } }
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in CreateNetwork: $EXCEPTION"
+    }
+}
+
+proc ::Algoh::StartNode { TEST_ALGO_DIR } {
+
+    puts "Primary node start"
+    # Start node
+    if { [catch {
+        spawn goal node start -d $TEST_ALGO_DIR
+        expect {
+            timeout { close; ::Algoh::Abort "Timed out starting relay node"  }
+            "^Algorand node successfully started!*" { puts "Primary relay node started"; close  }
+            eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to start node"; Algoh::Abort } }
+        }
+    } EXCEPTION ] } {
+       ::Algoh::Abort "ERROR in StartNode: $EXCEPTION"
+    }
+}
+
+proc ::Algoh::StopNode { TEST_ALGO_DIR } {
+    set timeout 15
+
+    if { [catch {
+        puts "node stop with $TEST_ALGO_DIR"
+        spawn goal node stop -d $TEST_ALGO_DIR
+        expect {
+            timeout { close; ::Algoh::Abort "Did not recieve appropriate message during node stop"}
+            "*The node was successfully stopped.*" {puts "Node stopped successfully"; close}
+            eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to stop node"; Algoh::Abort } }
+
+        }
+    } EXCEPTION] } {
+       ::Algoh::Abort "ERROR in StopNode: $EXCEPTION"
+    }
+}
+
+# Stop the network
+proc ::Algoh::StopNetwork { NETWORK_NAME TEST_ROOT_DIR } {
+    set timeout 60
+    set NETWORK_STOP_MESSAGE ""
+    puts "Stopping network: $NETWORK_NAME"
+    spawn goal network stop -r $TEST_ROOT_DIR
+    expect {
+        timeout {
+	      close
+	      puts "Timed out shutting down network"
+	      puts "TEST_ROOT_DIR $::TEST_ROOT_DIR"
+	      puts "NETWORK_NAME $::NETWORK_NAME"
+	      exit 1
+	    }
+        "Network Stopped under.*" {set NETWORK_STOP_MESSAGE $expect_out(buffer); close}
+        eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to stop network"; Algoh::Abort } }
+
+    }
+    puts $NETWORK_STOP_MESSAGE
+}

@@ -16,7 +16,12 @@
 
 package main
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/spf13/cobra"
+)
 
 const (
 	stdoutFilenameValue = "-"
@@ -34,3 +39,67 @@ var lastValid uint64
 
 // numValidRounds specifies validity period for a transaction and used to calculate last valid round
 var numValidRounds uint64 // also used in account and asset
+
+var (
+	fee             uint64
+	outFilename     string
+	sign            bool
+	noteBase64      string
+	noteText        string
+	lease           string
+	noWaitAfterSend bool
+	dumpForDryrun   bool
+)
+
+var dumpForDryrunFormat cobraStringValue = *makeCobraStringValue("json", []string{"msgp"})
+
+func addTxnFlags(cmd *cobra.Command) {
+	cmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")
+	cmd.Flags().Uint64Var(&firstValid, "firstvalid", 0, "The first round where the transaction may be committed to the ledger")
+	cmd.Flags().Uint64Var(&numValidRounds, "validrounds", 0, "The number of rounds for which the transaction will be valid")
+	cmd.Flags().Uint64Var(&lastValid, "lastvalid", 0, "The last round where the transaction may be committed to the ledger")
+	cmd.Flags().StringVarP(&outFilename, "out", "o", "", "Write transaction to this file")
+	cmd.Flags().BoolVarP(&sign, "sign", "s", false, "Use with -o to indicate that the dumped transaction should be signed")
+	cmd.Flags().StringVar(&noteBase64, "noteb64", "", "Note (URL-base64 encoded)")
+	cmd.Flags().StringVarP(&noteText, "note", "n", "", "Note text (ignored if --noteb64 used also)")
+	cmd.Flags().StringVarP(&lease, "lease", "x", "", "Lease value (base64, optional): no transaction may also acquire this lease until lastvalid")
+	cmd.Flags().BoolVarP(&noWaitAfterSend, "no-wait", "N", false, "Don't wait for transaction to commit")
+	cmd.Flags().BoolVar(&dumpForDryrun, "dryrun-dump", false, "Dump in dryrun format acceptable by dryrun REST api")
+	cmd.Flags().Var(&dumpForDryrunFormat, "dryrun-dump-format", "Dryrun dump format: "+dumpForDryrunFormat.AllowedString())
+}
+
+type cobraStringValue struct {
+	value   string
+	allowed []string
+	isSet   bool
+}
+
+func makeCobraStringValue(value string, others []string) *cobraStringValue {
+	c := new(cobraStringValue)
+	c.value = value
+	c.allowed = make([]string, 0, len(others)+1)
+	c.allowed = append(c.allowed, value)
+	for _, s := range others {
+		c.allowed = append(c.allowed, s)
+	}
+	return c
+}
+
+func (c *cobraStringValue) String() string { return c.value }
+func (c *cobraStringValue) Type() string   { return "string" }
+func (c *cobraStringValue) IsSet() bool    { return c.isSet }
+
+func (c *cobraStringValue) Set(other string) error {
+	for _, s := range c.allowed {
+		if other == s {
+			c.value = other
+			c.isSet = true
+			return nil
+		}
+	}
+	return fmt.Errorf("value %s not allowed", other)
+}
+
+func (c *cobraStringValue) AllowedString() string {
+	return strings.Join(c.allowed, ", ")
+}
