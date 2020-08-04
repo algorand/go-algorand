@@ -749,8 +749,8 @@ func initConsensusProtocols() {
 	v24.MaxAppsOptedIn = 10
 	Consensus[protocol.ConsensusV24] = v24
 
-	// v23 can be upgraded to v24.
-	v23.ApprovedUpgrades[protocol.ConsensusV24] = 0
+	// v23 can be upgraded to v24, with an update delay of 7 days ( see calculation above )
+	v23.ApprovedUpgrades[protocol.ConsensusV24] = 140000
 
 	// ConsensusFuture is used to test features that are implemented
 	// but not yet released in a production protocol version.
