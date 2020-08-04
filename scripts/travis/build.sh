@@ -26,6 +26,7 @@ done
 
 # turn off exit on error
 set +e
+set -x
 
 CONFIGURE_SUCCESS=false
 
@@ -33,6 +34,16 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 OS=$("${SCRIPTPATH}/../ostype.sh")
 ARCH=$("${SCRIPTPATH}/../archtype.sh")
+# Use go version specified by get_golang_version.sh
+if ! GOLANG_VERSION=$("${SCRIPTPATH}/../get_golang_version.sh")
+then
+    echo "${GOLANG_VERSION}"
+    exit 1
+fi
+
+curl -sL -o ~/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
+chmod +x ~/gimme
+eval $(~/gimme "${GOLANG_VERSION}")
 
 # travis sometimes fail to download a dependency. trying multiple times might help.
 for (( attempt=1; attempt<=5; attempt++ ))

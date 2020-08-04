@@ -206,45 +206,6 @@ func (cred Credential) lowestOutput() *big.Int {
 	return &lowest
 }
 
-// TODO(upgrade): Please remove the entire lowestOutputBuggy function as soon as the corresponding protocol upgrade goes through.
-func (cred Credential) lowestOutputBuggy() *big.Int {
-	var lowest big.Int
-
-	h1 := cred.VrfOut
-	for i := uint64(0); i < cred.Weight; i++ {
-		var h crypto.Digest
-		if cred.DomainSeparationEnabled {
-			cred.Hashable.Iter = i
-			h = crypto.HashObj(cred.Hashable)
-		} else {
-			var h2 crypto.Digest
-			binary.BigEndian.PutUint64(h2[:], i)
-			h = crypto.Hash(append(h1[:], h2[:]...))
-		}
-
-		if i == 0 {
-			lowest.SetBytes(h[:])
-		} else {
-			var temp big.Int
-			temp.SetBytes(h[:])
-			if temp.Cmp(&lowest) < 0 {
-				lowest.Set(&temp)
-			}
-		}
-	}
-
-	return &lowest
-}
-
-// LessBuggy is the buggy version of Less
-// TODO(upgrade): Please remove the entire LessBuggy function as soon as the corresponding protocol upgrade goes through
-func (cred Credential) LessBuggy(otherCred Credential) bool {
-	i1 := cred.lowestOutputBuggy()
-	i2 := otherCred.lowestOutputBuggy()
-
-	return i1.Cmp(i2) < 0
-}
-
 // LowestOutputDigest gives the lowestOutput as a crypto.Digest, which allows
 // pretty-printing a proposal's lowest output.
 // This function is only used for debugging.
@@ -254,7 +215,7 @@ func (cred Credential) LowestOutputDigest() crypto.Digest {
 	if len(lbytes) > len(out) {
 		panic("Cred lowest output too long")
 	}
-	copy(out[len(out) - len(lbytes):], lbytes)
+	copy(out[len(out)-len(lbytes):], lbytes)
 	return out
 }
 

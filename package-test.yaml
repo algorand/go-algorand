@@ -20,7 +20,7 @@ tasks:
         AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
       ]
       volumes: [ /var/run/docker.sock:/var/run/docker.sock ]
-    target: mule-test-deb WORKDIR=/projects/go-algorand
+    target: mule-test-deb
 
   - task: docker.Make
     name: package-test-rpm
@@ -33,7 +33,7 @@ tasks:
         AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
       ]
       volumes: [ /var/run/docker.sock:/var/run/docker.sock ]
-    target: mule-test-rpm WORKDIR=/projects/go-algorand
+    target: mule-test-rpm
 
   - task: s3.DownloadFile
     name: deb

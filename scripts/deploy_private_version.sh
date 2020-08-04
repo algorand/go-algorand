@@ -83,7 +83,6 @@ fi
 
 export BRANCH=$(./scripts/compute_branch.sh)
 export CHANNEL=${CHANNEL}
-export BUILDCHANNEL=${CHANNEL}
 export DEFAULTNETWORK=${DEFAULTNETWORK}
 export FULLVERSION=$(./scripts/compute_build_number.sh -f)
 export PKG_ROOT=${HOME}/node_pkg
