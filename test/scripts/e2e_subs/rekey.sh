@@ -94,29 +94,12 @@ if [ "$BALANCEB" -ne 33000000 ]; then
     false
 fi
 
-# Rekey from A to B to D [A -> B -> D].
-ACCOUNTD=$(${gcmd} account new|awk '{ print $6 }')
-ACCOUNTE=$(${gcmd} account new|awk '{ print $6 }')
+# Fail case. Try to sign and send from A signed by C.
+${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ACCOUNTB}" -s -o "${TEMPDIR}/ntxn3"
+${gcmd} clerk sign -S "${ACCOUNTC}" -i "${TEMPDIR}/ntxn3" -o "${TEMPDIR}/nstxn3"
 
-${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ACCOUNTE}" --rekey-to "${ACCOUNTB}"
-${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ACCOUNTE}" -o "${TEMPDIR}/ntxn3"
-${gcmd} clerk sign -S "${ACCOUNTB}" -i "${TEMPDIR}/ntxn3" -o "${TEMPDIR}/nstxn3"
-${gcmd} clerk rawsend -f "${TEMPDIR}/nstxn3"
-
-BALANCEE=$(${gcmd} account balance -a "${ACCOUNTE}" | awk '{ print $1 }')
-if [ "$BALANCEE" -ne 20000000 ]; then
-    date "+e2e_subs/rekey.sh FAIL wanted balance=23000000 but got ${BALANCEE} %Y%m%d_%H%M%S"
-    false
-fi
-echo "$BALANCEE"
-
-${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ACCOUNTE}" --rekey-to "${ACCOUNTD}" -s -o "${TEMPDIR}/ntxn4"
-${gcmd} clerk sign -S "${ACCOUNTB}" -i "${TEMPDIR}/ntxn4" -o "${TEMPDIR}/nstxn4"
-${gcmd} clerk rawsend -f "${TEMPDIR}/nstxn4"
-
-BALANCEE=$(${gcmd} account balance -a "${ACCOUNTE}" | awk '{ print $1 }')
-if [ "$BALANCEE" -ne 30000000 ]; then
-    date "+e2e_subs/rekey.sh FAIL wanted balance=30000000 but got ${BALANCEE} %Y%m%d_%H%M%S"
+if ! ${gcmd} clerk rawsend -f "${TEMPDIR}/nstxn3"; then
+    date "+e2e_subs/rekey.sh rawsend should have failed because of a bad signature %Y%m%d_%H%M%S"
     false
 fi
 
