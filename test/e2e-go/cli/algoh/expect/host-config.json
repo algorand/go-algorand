@@ -1,0 +1,1 @@
+{ "DeadManTimeSec": 32, "StatusDelayMS": 45000, "StallDelayMS": 60000, "UploadOnError": true, "SendBlockStats": false }

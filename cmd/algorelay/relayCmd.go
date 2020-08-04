@@ -182,7 +182,12 @@ var checkCmd = &cobra.Command{
 		results := make([]checkResult, 0)
 		anyCheckError := false
 
+		relaysDNSAlias := make(map[string]bool)
+		enabledRelaysDNSAlias := make(map[string]bool)
+		relayHostNames := make(map[string]bool)
+
 		for _, relay := range relays {
+			relaysDNSAlias[relay.DNSAlias] = true
 			if checkOne && relay.ID != recordIDArg {
 				continue
 			}
@@ -190,6 +195,8 @@ var checkCmd = &cobra.Command{
 			if !relay.CheckSuccess {
 				continue
 			}
+			enabledRelaysDNSAlias[relay.DNSAlias] = true
+			relayHostNames[strings.Split(relay.Address, ":")[0]] = true
 
 			const checkOnly = true
 			name, port, err := ensureRelayStatus(checkOnly, relay, nameDomainArg, srvDomainArg, defaultPortArg, context)
@@ -212,6 +219,48 @@ var checkCmd = &cobra.Command{
 			if checkOne {
 				break
 			}
+		}
+
+		// look for orphan _algobootstrap records that aren't represented by this relay file.
+		if context.bootstrap.entries != nil {
+			for bootstrap := range context.bootstrap.entries {
+				alias := strings.Split(bootstrap, ".")[0]
+				if enabledRelaysDNSAlias[alias] {
+					continue
+				}
+				if relaysDNSAlias[alias] {
+					fmt.Printf("WARN : disabled relay %s has a _algobootstrap entry\n", bootstrap)
+				} else {
+					fmt.Printf("INFO : orphan relay %s has a _algobootstrap entry\n", bootstrap)
+				}
+			}
+		}
+
+		// look for orphan _metrics records that aren't represented by this relay file.
+		if context.metrics.entries != nil {
+			for metrics := range context.metrics.entries {
+				alias := strings.Split(metrics, ".")[0]
+				if enabledRelaysDNSAlias[alias] {
+					continue
+				}
+				if relaysDNSAlias[alias] {
+					fmt.Printf("WARN : disabled relay %s has a _metrics entry\n", metrics)
+				} else {
+					fmt.Printf("INFO : orphan relay %s has a _metrics entry\n", metrics)
+				}
+			}
+		}
+		for name, entry := range context.nameEntries {
+			if relayHostNames[name] {
+				continue
+			}
+			alias := strings.Split(entry, ".")[0]
+			if enabledRelaysDNSAlias[alias] {
+				// if we have an entry for that, than it just mean that it wasn't updated yet.
+				continue
+			}
+			fmt.Printf("INFO : orphan DNS entry %s -> %s\n", entry, name)
+
 		}
 
 		if outputFileArg != "" {

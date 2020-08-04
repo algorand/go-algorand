@@ -16,9 +16,9 @@
 
 package account
 
-//go:generate dbgen -i root.sql -p account -n root -o rootInstall.go
-//go:generate dbgen -i part.sql -p account -n part -o partInstall.go
+//go:generate dbgen -i root.sql -p account -n root -o rootInstall.go -h ../../scripts/LICENSE_HEADER
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -55,7 +55,7 @@ func ImportRoot(store db.Accessor, seed [32]byte) (acc Root, err error) {
 	s := crypto.GenerateSignatureSecrets(seed)
 	raw := protocol.Encode(s)
 
-	err = store.Atomic(func(tx *sql.Tx) error {
+	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := rootInstallDatabase(tx)
 		if err != nil {
 			return fmt.Errorf("ImportRoot: failed to install database: %v", err)
@@ -87,7 +87,7 @@ func ImportRoot(store db.Accessor, seed [32]byte) (acc Root, err error) {
 func RestoreRoot(store db.Accessor) (acc Root, err error) {
 	var raw []byte
 
-	err = store.Atomic(func(tx *sql.Tx) error {
+	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var nrows int
 		row := tx.QueryRow("select count(*) from RootAccount")
 		err := row.Scan(&nrows)
@@ -142,7 +142,7 @@ func RestoreParticipation(store db.Accessor) (acc Participation, err error) {
 		return
 	}
 
-	err = store.Atomic(func(tx *sql.Tx) error {
+	err = store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var nrows int
 		row := tx.QueryRow("select count(*) from ParticipationAccount")
 		err := row.Scan(&nrows)

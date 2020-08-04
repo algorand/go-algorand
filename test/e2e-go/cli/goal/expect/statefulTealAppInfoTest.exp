@@ -1,0 +1,159 @@
+#!/usr/bin/expect -f
+#exp_internal 1
+set err 0
+log_user 1
+
+source  goalExpectCommon.exp
+
+set TEST_ALGO_DIR [lindex $argv 0]
+set TEST_DATA_DIR [lindex $argv 1]
+
+proc statefulTealAppInfoTest { TEST_ALGO_DIR TEST_DATA_DIR} {
+
+    set timeout 60
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root_$TIME_STAMP
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+
+    exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    # Check the balance of the primary account
+    set PRIMARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
+
+    ::AlgorandGoal::WaitForRound 1 $TEST_PRIMARY_NODE_DIR
+
+    set TEAL_PROGS_DIR "$TEST_DATA_DIR/../scripts/e2e_subs/tealprogs"
+
+    # Network Setup complete
+    #----------------------
+
+    puts "calling app compile"
+    ::AlgorandGoal::AppCompile ${TEAL_PROGS_DIR}/upgraded.teal ${TEST_ROOT_DIR}/upgraded.tealc $TEST_PRIMARY_NODE_DIR
+    puts "computing target hash"
+
+    puts "compute target hash"
+    set TARGET_HASH [ exec  shasum -a 256 "${TEST_ROOT_DIR}/upgraded.tealc" | awk {{print $1}} ]
+    puts "TARGET_HASH ${TARGET_HASH}"
+
+    # Compile dummy, wrong contract
+    ::AlgorandGoal::AppCompile ${TEAL_PROGS_DIR}/wrongupgrade.teal ${TEST_ROOT_DIR}/wrongupgrade.tealc $TEST_PRIMARY_NODE_DIR
+
+    # Copy template
+    exec cp ${TEAL_PROGS_DIR}/bootloader.teal.tmpl ${TEST_ROOT_DIR}/bootloader.teal
+
+    # Substitute template values
+    exec sed -i"" -e "s/TMPL_APPROV_HASH/${TARGET_HASH}/g" ${TEST_ROOT_DIR}/bootloader.teal
+    exec sed -i"" -e "s/TMPL_CLEARSTATE_HASH/${TARGET_HASH}/g" ${TEST_ROOT_DIR}/bootloader.teal
+
+    # Create an app using filled-in bootloader template
+    puts "calling app create"
+    set GLOBAL_BYTE_SLICES 1
+    set LOCAL_BYTE_SLICES 0
+    set APP_ID [::AlgorandGoal::AppCreate0 $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS ${TEST_ROOT_DIR}/bootloader.teal $GLOBAL_BYTE_SLICES $LOCAL_BYTE_SLICES ${TEAL_PROGS_DIR}/clear_program_state.teal $TEST_PRIMARY_NODE_DIR]
+
+    # Application setup complete
+    #----------------------
+
+    # Calling app as an update but with right scripts should succeed
+    spawn goal app info --app-id $APP_ID -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+        -re {^Application ID:\s+(\d+)\r\n} {set APP_INFO_ID $expect_out(1,string) ; exp_continue }
+        -re {Creator:\s+([A-Z0-9]+)\r\n} {set APP_INFO_CREATOR $expect_out(1,string) ; exp_continue  }
+        -re {Approval hash:\s+([A-Z0-9]+)\r\n} {set APP_INFO_APPROVAL_HASH $expect_out(1,string); exp_continue  }
+        -re {Clear hash:\s+([A-Z0-9]+)\r\n} {set APP_INFO_CLEAR_HASH $expect_out(1,string); exp_continue  }
+        -re {Max global byteslices:\s+(\d+)\r\n} {set APP_INFO_GLOBAL_BYTESLICES $expect_out(1,string); exp_continue  }
+        -re {Max global integers:\s+(\d+)\r\n} {set APP_INFO_GLOBAL_INTEGERS $expect_out(1,string) ; exp_continue  }
+        -re {Max local byteslices:\s+(\d+)\r\n} {set APP_INFO_LOCAL_BYTESLICES $expect_out(1,string) ; exp_continue  }
+        -re {Max local integers:\s+(\d+)\r\n} {set APP_INFO_LOCAL_INTEGERS $expect_out(1,string) ; close  }
+        eof {close; ::AlgorandGoal::Abort "app update failed" }
+    }
+    puts "APP_INFO_ID $APP_INFO_ID"
+    puts "APP_INFO_CREATOR $APP_INFO_CREATOR"
+    puts "APP_INFO_APPROVAL_HASH $APP_INFO_APPROVAL_HASH"
+    puts "APP_INFO_CLEAR_HASH $APP_INFO_CLEAR_HASH"
+    puts "APP_INFO_GLOBAL_BYTESLICES $APP_INFO_GLOBAL_BYTESLICES"
+    puts "APP_INFO_GLOBAL_INTEGERS $APP_INFO_GLOBAL_INTEGERS"
+    puts "APP_INFO_LOCAL_BYTESLICES $APP_INFO_LOCAL_BYTESLICES"
+    puts "APP_INFO_LOCAL_INTEGERS $APP_INFO_LOCAL_INTEGERS"
+
+    set errors 0
+    if { $APP_INFO_ID != $APP_ID } {
+        puts "error APP_INFO_ID $APP_INFO_ID does not match expected $APP_ID" ; incr errors
+    }
+    if { $APP_INFO_CREATOR != $PRIMARY_ACCOUNT_ADDRESS } {
+        puts "error APP_INFO_CREATOR $APP_INFO_CREATOR does not match expected $PRIMARY_ACCOUNT_ADDRESS" ; incr errors
+    }
+    set EXPECTED_APP_INFO_APPROVAL_HASH "AJM7G3WXKKL6YTITFNRYT53HRFKHKWGTEZF6UZXKSUNO6GI7FOBCA7LDTU"
+    if { $APP_INFO_APPROVAL_HASH != "AJM7G3WXKKL6YTITFNRYT53HRFKHKWGTEZF6UZXKSUNO6GI7FOBCA7LDTU" } {
+        puts "error APP_INFO_APPROVAL_HASH $APP_INFO_APPROVAL_HASH does not match expected $EXPECTED_APP_INFO_APPROVAL_HASH" ; incr errors
+    }
+    set EXPECTED_APP_INFO_CLEAR_HASH "YOE6C22GHCTKAN3HU4SE5PGIPN5UKXAJTXCQUPJ3KKF5HOAH646MKKCPDA"
+    if { $APP_INFO_CLEAR_HASH !=  $EXPECTED_APP_INFO_CLEAR_HASH } {
+        puts "error APP_INFO_CLEAR_HASH $APP_INFO_CLEAR_HASH does not match expected $EXPECTED_APP_INFO_CLEAR_HASH" ; incr errors
+    }
+    set EXPECTED_APP_INFO_GLOBAL_BYTESLICES 1
+    if { $APP_INFO_GLOBAL_BYTESLICES != $EXPECTED_APP_INFO_GLOBAL_BYTESLICES } {
+        puts "error APP_INFO_GLOBAL_BYTESLICES $APP_INFO_GLOBAL_BYTESLICES does not match expected $EXPECTED_APP_INFO_GLOBAL_BYTESLICES" ; incr errors
+    }
+    set EXPECTED_APP_INFO_GLOBAL_INTEGERS 0
+    if { $APP_INFO_GLOBAL_INTEGERS != $EXPECTED_APP_INFO_GLOBAL_INTEGERS } {
+        puts "error APP_INFO_GLOBAL_INTEGERS $APP_INFO_GLOBAL_INTEGERS does not match expected $EXPECTED_APP_INFO_GLOBAL_INTEGERS" ; incr errors
+    }
+    set EXPECTED_APP_INFO_LOCAL_BYTESLICES 0
+    if { $APP_INFO_LOCAL_BYTESLICES != $EXPECTED_APP_INFO_LOCAL_BYTESLICES } {
+        puts "error APP_INFO_LOCAL_BYTESLICES $APP_INFO_LOCAL_BYTESLICES does not match expected $EXPECTED_APP_INFO_LOCAL_BYTESLICES" ; incr errors
+    }
+    set EXPECTED_APP_INFO_LOCAL_INTEGERS 0
+    if { $APP_INFO_LOCAL_INTEGERS != $EXPECTED_APP_INFO_LOCAL_INTEGERS } {
+        puts "error APP_INFO_LOCAL_INTEGERS $APP_INFO_LOCAL_INTEGERS does not match expected $EXPECTED_APP_INFO_LOCAL_INTEGERS" ; incr errors
+    }
+
+    if { $errors > 0 } {
+        puts "there were a total of $errors"
+        ::AlgorandGoal::Abort "ERROR in statefulTealAppInfoTest"
+    } else {
+        puts "app info test was successful"
+    }
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    puts "Goal statefulTealAppInfoTest Successful"
+
+}
+
+
+if { [catch {
+    source  goalExpectCommon.exp
+
+    puts "starting statefulTealAppInfoTest"
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    statefulTealAppInfoTest  $TEST_ALGO_DIR  $TEST_DATA_DIR
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in statefulTealAppInfoTest: $EXCEPTION"
+}

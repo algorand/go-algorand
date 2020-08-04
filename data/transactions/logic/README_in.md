@@ -29,7 +29,16 @@ A program can either authorize some delegated action on a normal private key sig
 
 The TEAL bytecode plus the length of any Args must add up to less than 1000 bytes (consensus parameter LogicSigMaxSize). Each TEAL op has an associated cost estimate and the program cost estimate must total less than 20000 (consensus parameter LogicSigMaxCost). Most ops have an estimated cost of 1, but a few slow crypto ops are much higher.
 
+## Execution modes
 
+Starting from version 2 TEAL evaluator can run programs in two modes:
+1. Signature verification (stateless)
+2. Application run (stateful)
+
+Differences between modes include:
+1. Max program length (consensus parameters LogicSigMaxSize, MaxApprovalProgramLen and MaxClearStateProgramLen)
+2. Max program cost (consensus parameters LogicSigMaxCost, MaxAppProgramCost)
+3. Opcodes availability. For example, all stateful operations are only available in stateful mode. Refer to [opcodes document](TEAL_opcodes.md) for details.
 
 ## Constants
 
@@ -40,6 +49,10 @@ The assembler will hide most of this, allowing simple use of `int 1234` and `byt
 Constants are loaded into the environment by two opcodes, `intcblock` and `bytecblock`. Both of these use [proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint), reproduced [here](#varuint). The `intcblock` opcode is followed by a varuint specifying the length of the array and then that number of varuint. The `bytecblock` opcode is followed by a varuint array length then that number of pairs of (varuint, bytes) length prefixed byte strings. This should efficiently load 32 and 64 byte constants which will be common as addresses, hashes, and signatures.
 
 Constants are pushed onto the stack by `intc`, `intc_[0123]`, `bytec`, and `bytec_[0123]`. The assembler will handle converting `int N` or `byte N` into the appropriate form of the instruction needed.
+
+### Named Integer Constants
+
+@@ named_integer_constants.md @@
 
 ## Operations
 
@@ -88,14 +101,29 @@ Global fields are fields that are common to all the transactions in the group. I
 
 @@ global_fields.md @@
 
+**Asset Fields**
+
+Asset fields include `AssetHolding` and `AssetParam` fields that are used in `asset_read_*` opcodes
+
+@@ asset_holding_fields.md @@
+
+@@ asset_params_fields.md @@
 
 ### Flow Control
 
 @@ Flow_Control.md @@
 
+### State Access
+
+@@ State_Access.md @@
+
 # Assembler Syntax
 
 The assembler parses line by line. Ops that just use the stack appear on a line by themselves. Ops that take arguments are the op and then whitespace and then any argument or arguments.
+
+The first line may contain a special version pragma `#pragma version X`, which directs the assembler to generate TEAL bytecode targeting a certain version. For instance, `#pragma version 2` produces bytecode targeting TEAL v2. By default, the assembler targets TEAL v1.
+
+Subsequent lines may contain other pragma declarations (i.e., `#pragma <some-specification>`), pertaining to checks that the assembler should perform before agreeing to emit the program bytes, specific optimizations, etc. Those declarations are optional and cannot alter the semantics as described in this document.
 
 "`//`" prefixes a line comment.
 
@@ -114,13 +142,15 @@ byte b32 AAAA...
 byte base32(AAAA...)
 byte b32(AAAA...)
 byte 0x0123456789abcdef...
+byte "\x01\x02"
+byte "string literal"
 ```
 
 `int` constants may be `0x` prefixed for hex, `0` prefixed for octal, or decimal numbers.
 
 `intcblock` may be explictly assembled. It will conflict with the assembler gathering `int` pseudo-ops into a `intcblock` program prefix, but may be used if code only has explicit `intc` references. `intcblock` should be followed by space separated int constants all on one line.
 
-`bytecblock` may be explicitly assembled. It will conflict with the assembler if there are any `byte` pseudo-ops but may be used if only explicit `bytec` references are used. `bytecblock` should be followed with byte constants all on one line, either 'encoding value' pairs (`b64 AAA...`) or 0x prefix or function-style values (`base64(...)`).
+`bytecblock` may be explicitly assembled. It will conflict with the assembler if there are any `byte` pseudo-ops but may be used if only explicit `bytec` references are used. `bytecblock` should be followed with byte constants all on one line, either 'encoding value' pairs (`b64 AAA...`) or 0x prefix or function-style values (`base64(...)`) or string literal values.
 
 ## Labels and Branches
 
@@ -141,6 +171,8 @@ A program starts with a varuint declaring the version of the compiled code. Any 
 
 For version 1, subsequent bytes after the varuint are program opcode bytes. Future versions could put other metadata following the version identifier.
 
+It is important to prevent newly-introduced transaction fields from breaking assumptions made by older versions of TEAL. If one of the transactions in a group will execute a TEAL program whose version predates a given field, that field must not be set anywhere in the transaction group, or the group will be rejected. For example, executing a TEAL version 1 program on a transaction with RekeyTo set to a nonzero address will cause the program to fail, regardless of the other contents of the program itself.
+
 ## Varuint
 
 A '[proto-buf style variable length unsigned int](https://developers.google.com/protocol-buffers/docs/encoding#varint)' is encoded with 7 data bits per byte and the high bit is 1 if there is a following byte and 0 for the last byte. The lowest order 7 bits are in the first byte, followed by successively higher groups of 7 bits.
@@ -150,9 +182,9 @@ A '[proto-buf style variable length unsigned int](https://developers.google.com/
 Current design and implementation limitations to be aware of.
 
 * TEAL cannot create or change a transaction, only approve or reject.
-* TEAL cannot lookup balances of Algos or other assets. (Standard transaction accounting will apply after TEAL has run and authorized a transaction. A TEAL-approved transaction could still be invalid by other accounting rules just as a standard signed transaction could be invalid. e.g. I can't give away money I don't have.)
+* Stateless TEAL cannot lookup balances of Algos or other assets. (Standard transaction accounting will apply after TEAL has run and authorized a transaction. A TEAL-approved transaction could still be invalid by other accounting rules just as a standard signed transaction could be invalid. e.g. I can't give away money I don't have.)
 * TEAL cannot access information in previous blocks. TEAL cannot access most information in other transactions in the current block. (TEAL can access fields of the transaction it is attached to and the transactions in an atomic transaction group.)
 * TEAL cannot know exactly what round the current transaction will commit in (but it is somewhere in FirstValid through LastValid).
 * TEAL cannot know exactly what time its transaction is committed.
-* TEAL cannot loop. Its branch instruction `bnz` "branch if not zero" can only branch forward so as to skip some code.
+* TEAL cannot loop. Its branch instructions `bnz` "branch if not zero", `bz` "branch if zero" and `b` "branch" can only branch forward so as to skip some code.
 * TEAL cannot recurse. There is no subroutine jump operation.

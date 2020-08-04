@@ -22,12 +22,6 @@ pipeline {
                 sh script: "scripts/release/prod/stage/sync/run.sh ${params.channel} ${params.version}"
             }
         }
-
-        stage("generate releases page") {
-            steps {
-                sh script: "scripts/release/prod/stage/generate_releases_page/run.sh"
-            }
-        }
     }
 }
 

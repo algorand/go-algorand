@@ -1,0 +1,39 @@
+{
+    "Genesis": {
+        "NetworkName": "funtestnetls",
+        "Wallets": [
+            {
+                "Name": "Wallet1",
+                "Stake": 99,
+                "Online": true
+            },
+            {
+                "Name": "Wallet2",
+                "Stake": 1,
+                "Online": true
+            }
+        ]
+    },
+    "Nodes": [
+        {
+            "Name": "Primary",
+            "IsRelay": true,
+            "Wallets": [
+                {
+                    "Name": "Wallet1",
+                    "ParticipationOnly": false
+                }
+            ]
+        },
+        {
+            "Name": "Node",
+            "IsRelay": false,
+            "Wallets": [
+                {
+                    "Name": "Wallet2",
+                    "ParticipationOnly": false
+                }
+            ]
+        }
+    ]
+}

@@ -108,7 +108,7 @@ type MockedFetcher struct {
 
 func (m *MockedFetcher) FetchBlock(ctx context.Context, round basics.Round) (*bookkeeping.Block, *agreement.Certificate, FetcherClient, error) {
 	if m.timeout {
-		time.Sleep(DefaultFetchTimeout + time.Second)
+		time.Sleep(time.Duration(config.GetDefaultLocal().CatchupHTTPBlockFetchTimeoutSec)*time.Second + time.Second)
 	}
 	time.Sleep(m.latency)
 

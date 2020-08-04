@@ -17,23 +17,17 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/tools/network"
-	"github.com/algorand/go-algorand/tools/network/cloudflare"
 )
 
 var (
-	dataDir          string
-	externalHostName string
+	dataDir string
 )
 
 func init() {
@@ -43,9 +37,6 @@ func init() {
 
 	// override the data directory, if provided in the command.
 	metricCmd.PersistentFlags().StringVarP(&dataDir, "dataDir", "d", os.ExpandEnv("$ALGORAND_DATA"), "Data directory")
-
-	metricEnableCmd.Flags().StringVarP(&externalHostName, "externalHostName", "e", "", "External host name, such as relay-us-ea-3.algodev.network; will default to external IP Address if not specified")
-	metricDisableCmd.Flags().StringVarP(&externalHostName, "externalHostName", "e", "", "External host name, such as relay-us-ea-3.algodev.network; will default to external IP Address if not specified")
 
 }
 
@@ -80,7 +71,7 @@ var metricStatusCmd = &cobra.Command{
 }
 
 var metricEnableCmd = &cobra.Command{
-	Use:   "enable -d dataDir -e externalHostName",
+	Use:   "enable -d dataDir",
 	Short: "Enable metric collection on node",
 	Long:  `Enable metric collection on node`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -89,7 +80,7 @@ var metricEnableCmd = &cobra.Command{
 }
 
 var metricDisableCmd = &cobra.Command{
-	Use:   "disable -d dataDir -e externalHostName",
+	Use:   "disable -d dataDir",
 	Short: "Disable metric collection on node",
 	Long:  `Disable metric collection on node`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -113,31 +104,7 @@ func metricEnableDisable(enable bool) {
 	if err != nil {
 		fmt.Printf(metricSaveConfigFailed, fmt.Sprintf("%v", err))
 	}
-	if !updateExternalHostName() {
-		return
-	}
-
-	domainName := strings.Replace(localConfig.DNSBootstrapID, "<network>.", "", 1)
-	cfZoneID, cfEmail, cfKey, err := getClouldflareCredentials()
-	if err != nil {
-		fmt.Printf(metricFailedSetDNS, fmt.Sprintf("%v", err))
-		return
-	}
-	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfEmail, cfKey)
-	if enable {
-		port, err := strconv.ParseInt(strings.Split(localConfig.NodeExporterListenAddress, ":")[1], 10, 64)
-		if err != nil {
-			fmt.Printf(metricFailedSetDNS, fmt.Sprintf("%v", err))
-			return
-		}
-		err = cloudflareDNS.SetSRVRecord(context.Background(), domainName, externalHostName, 1 /*ttl*/, 1 /*priority*/, uint(port) /*port*/, "_metrics", "_tcp", 1 /*weight*/)
-	} else {
-		err = cloudflareDNS.ClearSRVRecord(context.Background(), domainName, externalHostName, "_metrics", "_tcp")
-	}
-
-	if err != nil {
-		fmt.Printf(metricFailedSetDNS, fmt.Sprintf("%v", err))
-	}
+	return
 }
 
 func getConfigFilePath() (string, error) {
@@ -161,29 +128,4 @@ func getConfigFilePath() (string, error) {
 		return "", err
 	}
 	return configFilePath, nil
-}
-
-func updateExternalHostName() bool {
-	if externalHostName == "" {
-		ipList, err := network.GetExternalIPAddress(context.Background())
-		if err == nil && len(ipList) > 0 {
-			externalHostName = ipList[0].String()
-		} else {
-			fmt.Printf(metricNoExternalHostAndFailedAutoDetect, err)
-			return false
-		}
-		fmt.Printf(metricNoExternalHostUsingAutoDetectedIP, externalHostName)
-	}
-	return true
-}
-
-func getClouldflareCredentials() (string, string, string, error) {
-	zoneID := os.Getenv("CLOUDFLARE_ZONE_ID")
-	email := os.Getenv("CLOUDFLARE_EMAIL")
-	authKey := os.Getenv("CLOUDFLARE_AUTH_KEY")
-	if zoneID == "" || email == "" || authKey == "" {
-		fmt.Println(metricCloudflareCredentialMissing)
-		return "", "", "", fmt.Errorf("%s", metricCloudflareCredentialMissing)
-	}
-	return zoneID, email, authKey, nil
 }

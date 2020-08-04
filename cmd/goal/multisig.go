@@ -56,7 +56,7 @@ func init() {
 	signProgramCmd.Flags().StringVarP(&outFilename, "lsig-out", "o", "", "File to write partial Lsig to")
 	signProgramCmd.MarkFlagRequired("address")
 
-	mergeSigCmd.Flags().StringVarP(&txFilename, "out", "o", "", "Output file for merged transactions")
+	mergeSigCmd.Flags().StringVarP(&outFilename, "out", "o", "", "Output file for merged transactions")
 	mergeSigCmd.MarkFlagRequired("out")
 }
 
@@ -72,7 +72,7 @@ var multisigCmd = &cobra.Command{
 }
 
 var addSigCmd = &cobra.Command{
-	Use:   "sign -t TXFILE -a ADDR",
+	Use:   "sign -t [transaction file] -a [address]",
 	Short: "Add a signature to a multisig transaction",
 	Long:  `Start a multisig, or add a signature to an existing multisig, for a given transaction.`,
 	Args:  validateNoPosArgsFn,
@@ -117,7 +117,11 @@ var addSigCmd = &cobra.Command{
 					reportErrorf(msigParseError, err)
 				}
 			} else {
-				msig, err = client.MultisigSignTransactionWithWallet(wh, pw, stxn.Txn, addr, stxn.Msig)
+				if stxn.AuthAddr.IsZero() {
+					msig, err = client.MultisigSignTransactionWithWallet(wh, pw, stxn.Txn, addr, stxn.Msig)
+				} else {
+					msig, err = client.MultisigSignTransactionWithWalletAndSigner(wh, pw, stxn.Txn, addr, stxn.Msig, stxn.AuthAddr.GetUserAddress())
+				}
 				if err != nil {
 					reportErrorf(errorSigningTX, err)
 				}
@@ -137,7 +141,7 @@ var addSigCmd = &cobra.Command{
 }
 
 var signProgramCmd = &cobra.Command{
-	Use:   "signprogram -t TXFILE -a ADDR",
+	Use:   "signprogram -t [transaction file] -a [address]",
 	Short: "Add a signature to a multisig LogicSig",
 	Long:  `Start a multisig LogicSig, or add a signature to an existing multisig, for a given program.`,
 	Args:  validateNoPosArgsFn,
@@ -223,7 +227,7 @@ var signProgramCmd = &cobra.Command{
 }
 
 var mergeSigCmd = &cobra.Command{
-	Use:   "merge -o MERGEDTXFILE TXFILE1 TXFILE2 ...",
+	Use:   "merge -o [merged transaction file] [input file 1] [input file 2]...",
 	Short: "Merge multisig signatures on transactions",
 	Long:  `Combine multiple partially-signed multisig transactions, and write out transactions with a single merged multisig signature.`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -287,9 +291,9 @@ var mergeSigCmd = &cobra.Command{
 			mergedData = append(mergedData, protocol.Encode(&txn)...)
 		}
 
-		err := writeFile(txFilename, mergedData, 0600)
+		err := writeFile(outFilename, mergedData, 0600)
 		if err != nil {
-			reportErrorf(fileWriteError, txFilename, err)
+			reportErrorf(fileWriteError, outFilename, err)
 		}
 	},
 }
