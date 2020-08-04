@@ -84,13 +84,13 @@ if [ "$BALANCEB" -ne 23000000 ]; then
 fi
 
 # Rekey from A to C back to A [A -> C -> A].
-${gcmd} clerk send -a 10000 -f "${ACCOUNT}" -t "${ACCOUNTB}" --rekey-to "${ACCOUNT}" -s -o "${TEMPDIR}/ntxn2"
+${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ACCOUNTB}" --rekey-to "${ACCOUNT}" -s -o "${TEMPDIR}/ntxn2"
 ${gcmd} clerk sign -S "${ACCOUNTC}" -i "${TEMPDIR}/ntxn2" -o "${TEMPDIR}/nstxn2"
 ${gcmd} clerk rawsend -f "${TEMPDIR}/nstxn2"
 
 BALANCEB=$(${gcmd} account balance -a "${ACCOUNTB}" | awk '{ print $1 }')
 if [ "$BALANCEB" -ne 33000000 ]; then
-    date "+e2e_subs/rekey.sh FAIL wanted balance=23000000 but got ${BALANCEB} %Y%m%d_%H%M%S"
+    date "+e2e_subs/rekey.sh FAIL wanted balance=33000000 but got ${BALANCEB} %Y%m%d_%H%M%S"
     false
 fi
 
