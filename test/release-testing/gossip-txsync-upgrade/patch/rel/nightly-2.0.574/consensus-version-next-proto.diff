@@ -1,0 +1,13 @@
+diff --git a/protocol/consensus.go b/protocol/consensus.go
+index 86928db4..926f7a0c 100644
+--- a/protocol/consensus.go
++++ b/protocol/consensus.go
+@@ -140,7 +140,7 @@ const ConsensusFuture = ConsensusVersion(
+ 
+ // ConsensusCurrentVersion is the latest version and should be used
+ // when a specific version is not provided.
+-const ConsensusCurrentVersion = ConsensusV23
++const ConsensusCurrentVersion = ConsensusFuture
+ 
+ // Error is used to indicate that an unsupported protocol has been detected.
+ type Error ConsensusVersion

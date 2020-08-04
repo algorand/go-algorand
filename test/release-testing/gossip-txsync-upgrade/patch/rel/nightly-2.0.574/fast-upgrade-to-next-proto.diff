@@ -1,0 +1,32 @@
+diff --git a/config/consensus.go b/config/consensus.go
+index e9892d85..c55be3dd 100644
+--- a/config/consensus.go
++++ b/config/consensus.go
+@@ -495,7 +495,7 @@ func initConsensusProtocols() {
+ 
+ 		MaxBalLookback: 320,
+ 
+-		MaxTxGroupSize:               1,
++		MaxTxGroupSize: 1,
+ 	}
+ 
+ 	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+@@ -680,12 +680,18 @@ func initConsensusProtocols() {
+ 	v23 := v22
+ 	v23.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
+ 	v23.FixTransactionLeases = true
++	v23.UpgradeVoteRounds = 2
++	v23.UpgradeThreshold = 1
++	v23.MinUpgradeWaitRounds = 0
++	v23.MaxUpgradeWaitRounds = 5
+ 	Consensus[protocol.ConsensusV23] = v23
+ 	// v22 can be upgraded to v23.
+ 	v22.ApprovedUpgrades[protocol.ConsensusV23] = 10000
+ 	// v21 can be upgraded to v23.
+ 	v21.ApprovedUpgrades[protocol.ConsensusV23] = 0
+ 
++	v23.ApprovedUpgrades[protocol.ConsensusFuture] = 2  // 1 round wait
++
+ 	// ConsensusFuture is used to test features that are implemented
+ 	// but not yet released in a production protocol version.
+ 	vFuture := v23
