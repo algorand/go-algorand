@@ -49,7 +49,7 @@ type AccountIndexerResponse struct {
 type ApplicationIndexerResponse struct {
 
 	// Application index and its parameters
-	Application *generated.Application `json:"application,omitempty"`
+	Application generated.Application `json:"application,omitempty"`
 
 	// Round at which the results were computed.
 	CurrentRound uint64 `json:"current-round"`
@@ -189,17 +189,17 @@ func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics
 	request.Header.Set("X-Indexer-API-Token", indexerToken)
 	resp, err := client.Do(request)
 	if err != nil {
-		return basics.Address{}, fmt.Errorf("indexer request error: %s", err)
+		return basics.Address{}, fmt.Errorf("application request error: %s", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		msg, _ := ioutil.ReadAll(resp.Body)
-		return basics.Address{}, fmt.Errorf("indexer response error: %s, status code: %d, request: %s", string(msg), resp.StatusCode, queryString)
+		return basics.Address{}, fmt.Errorf("application response error: %s, status code: %d, request: %s", string(msg), resp.StatusCode, queryString)
 	}
 	var appResp ApplicationIndexerResponse
 	err = json.NewDecoder(resp.Body).Decode(&appResp)
 	if err != nil {
-		return basics.Address{}, fmt.Errorf("indexer response decode error: %s", err)
+		return basics.Address{}, fmt.Errorf("application response decode error: %s", err)
 	}
 
 	creator, err := basics.UnmarshalChecksumAddress(appResp.Application.Params.Creator)
@@ -217,17 +217,17 @@ func getBalanceFromIndexer(indexerURL string, indexerToken string, account basic
 	request.Header.Set("X-Indexer-API-Token", indexerToken)
 	resp, err := client.Do(request)
 	if err != nil {
-		return basics.AccountData{}, fmt.Errorf("indexer request error: %s", err)
+		return basics.AccountData{}, fmt.Errorf("account request error: %s", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		msg, _ := ioutil.ReadAll(resp.Body)
-		return basics.AccountData{}, fmt.Errorf("indexer response error: %s, status code: %d, request: %s", string(msg), resp.StatusCode, queryString)
+		return basics.AccountData{}, fmt.Errorf("account response error: %s, status code: %d, request: %s", string(msg), resp.StatusCode, queryString)
 	}
 	var accountResp AccountIndexerResponse
 	err = json.NewDecoder(resp.Body).Decode(&accountResp)
 	if err != nil {
-		return basics.AccountData{}, fmt.Errorf("indexer response decode error: %s", err)
+		return basics.AccountData{}, fmt.Errorf("account response decode error: %s", err)
 	}
 	balance, err := v2.AccountToAccountData(&accountResp.Account)
 	if err != nil {

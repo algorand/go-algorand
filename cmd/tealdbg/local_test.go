@@ -17,18 +17,20 @@
 package main
 
 import (
+	"fmt"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
 )
@@ -955,6 +957,17 @@ func TestLocalLedgerIndexer(t *testing.T) {
 				a.NoError(err)
 				accountResponse := AccountIndexerResponse{Account: account, CurrentRound: 100}
 				response, err := json.Marshal(accountResponse)
+				a.NoError(err)
+				w.Write(response)
+			}
+		case regexp.MustCompile(`^/v2/applications/`).MatchString(r.URL.Path):
+			w.WriteHeader(200)
+			if r.URL.Path[17:] == strconv.FormatUint(uint64(appIdx), 10) {
+				appParams := brs.AppParams[appIdx]
+				app := v2.AppParamsToApplication(sender.String(), appIdx, &appParams)
+				a.NoError(err)
+				applicationResponse := ApplicationIndexerResponse{Application: app, CurrentRound: 100}
+				response, err := json.Marshal(applicationResponse)
 				a.NoError(err)
 				w.Write(response)
 			}
