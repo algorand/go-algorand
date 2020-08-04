@@ -23,7 +23,7 @@ type Account struct {
 	// \[appl\] applications local data stored in this account.
 	//
 	// Note the raw object uses `map[int] -> AppLocalState` for this type.
-	AppsLocalState *[]ApplicationLocalStates `json:"apps-local-state,omitempty"`
+	AppsLocalState *[]ApplicationLocalState `json:"apps-local-state,omitempty"`
 
 	// Specifies maximums on the number of each type that may be stored.
 	AppsTotalSchema *ApplicationStateSchema `json:"apps-total-schema,omitempty"`
@@ -114,19 +114,14 @@ type Application struct {
 // ApplicationLocalState defines model for ApplicationLocalState.
 type ApplicationLocalState struct {
 
+	// The application which this local state is for.
+	Id uint64 `json:"id"`
+
 	// Represents a key-value store for use in an application.
-	KeyValue TealKeyValueStore `json:"key-value"`
+	KeyValue *TealKeyValueStore `json:"key-value,omitempty"`
 
 	// Specifies maximums on the number of each type that may be stored.
 	Schema ApplicationStateSchema `json:"schema"`
-}
-
-// ApplicationLocalStates defines model for ApplicationLocalStates.
-type ApplicationLocalStates struct {
-	Id uint64 `json:"id"`
-
-	// Stores local state associated with an application.
-	State ApplicationLocalState `json:"state"`
 }
 
 // ApplicationParams defines model for ApplicationParams.
@@ -530,6 +525,9 @@ type NodeStatusResponse struct {
 // PendingTransactionResponse defines model for PendingTransactionResponse.
 type PendingTransactionResponse struct {
 
+	// The application index if the transaction was found and it created an application.
+	ApplicationIndex *uint64 `json:"application-index,omitempty"`
+
 	// The asset index if the transaction was found and it created an asset.
 	AssetIndex *uint64 `json:"asset-index,omitempty"`
 
@@ -541,6 +539,12 @@ type PendingTransactionResponse struct {
 
 	// The round where this transaction was confirmed, if present.
 	ConfirmedRound *uint64 `json:"confirmed-round,omitempty"`
+
+	// Application state delta.
+	GlobalStateDelta *StateDelta `json:"global-state-delta,omitempty"`
+
+	// \[ld\] Local state key/value changes for the application being executed by this transaction.
+	LocalStateDelta *[]AccountStateDelta `json:"local-state-delta,omitempty"`
 
 	// Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.
 	PoolError string `json:"pool-error"`

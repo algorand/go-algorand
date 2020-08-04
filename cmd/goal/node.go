@@ -117,7 +117,7 @@ var nodeCmd = &cobra.Command{
 var catchupCmd = &cobra.Command{
 	Use:     "catchup",
 	Short:   "Catchup the Algorand node to a specific catchpoint",
-	Long:    "Catchup allows making large jumps over round ranges without the need to incremently validate each individual round.",
+	Long:    "Catchup allows making large jumps over round ranges without the need to incrementally validate each individual round.",
 	Example: "goal node catchup 6500000#1234567890ABCDEF01234567890ABCDEF0\tStart catching up to round 6500000 with the provided catchpoint\ngoal node catchup --abort\t\t\t\t\tAbort the current catchup",
 	Args:    catchpointCmdArgument,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -153,7 +153,7 @@ func catchpointCmdArgument(cmd *cobra.Command, args []string) error {
 
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Initialize the specified Algorand node.",
+	Short: "Initialize the specified Algorand node",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		if !verifyPeerDialArg() {
@@ -228,7 +228,7 @@ func getRunHostedConfigFlag(dataDir string) bool {
 
 var stopCmd = &cobra.Command{
 	Use:   "stop",
-	Short: "stop the specified Algorand node.",
+	Short: "Stop the specified Algorand node",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		binDir, err := util.ExeDir()
@@ -256,7 +256,7 @@ var stopCmd = &cobra.Command{
 
 var restartCmd = &cobra.Command{
 	Use:   "restart",
-	Short: "Stop, and then start, the specified Algorand node.",
+	Short: "Stop, and then start, the specified Algorand node",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		if !verifyPeerDialArg() {
@@ -319,7 +319,7 @@ var restartCmd = &cobra.Command{
 
 var generateTokenCmd = &cobra.Command{
 	Use:   "generatetoken",
-	Short: "Generate and install a new API token.",
+	Short: "Generate and install a new API token",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		onDataDirs(func(dataDir string) {
@@ -553,7 +553,7 @@ func isValidIP(userInput string) bool {
 
 var createCmd = &cobra.Command{
 	Use:   "create",
-	Short: "Create a node at the desired data directory for the desired network.",
+	Short: "Create a node at the desired data directory for the desired network",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 

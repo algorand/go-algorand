@@ -131,7 +131,7 @@ var balanceFile string
 var ddrFile string
 var indexerURL string
 var indexerToken string
-var roundNumber int
+var roundNumber uint64
 var timestamp int64
 var runMode runModeValue = runModeValue{makeCobraStringValue("auto", []string{"signature", "application"})}
 var port int
@@ -140,7 +140,7 @@ var noBrowserCheck bool
 var noSourceMap bool
 var verbose bool
 var painless bool
-var appID int
+var appID uint64
 
 func init() {
 	rootCmd.PersistentFlags().VarP(&frontend, "frontend", "f", "Frontend to use: "+frontend.AllowedString())
@@ -157,10 +157,10 @@ func init() {
 	debugCmd.Flags().IntVarP(&groupIndex, "group-index", "g", 0, "Transaction index in a txn group")
 	debugCmd.Flags().StringVarP(&balanceFile, "balance", "b", "", "Balance records to evaluate stateful TEAL on in form of json or msgpack file")
 	debugCmd.Flags().StringVarP(&ddrFile, "dryrun-req", "d", "", "Program(s) and state(s) in dryrun REST request format")
-	debugCmd.Flags().IntVarP(&appID, "app-id", "a", 1380011588, "Application ID for stateful TEAL if not set in transaction(s)")
+	debugCmd.Flags().Uint64VarP(&appID, "app-id", "a", 1380011588, "Application ID for stateful TEAL if not set in transaction(s)")
 	debugCmd.Flags().StringVarP(&indexerURL, "indexer-url", "i", "", "URL for indexer to fetch Balance records from to evaluate stateful TEAL")
 	debugCmd.Flags().StringVarP(&indexerToken, "indexer-token", "", "", "API token for indexer to fetch Balance records from to evaluate stateful TEAL")
-	debugCmd.Flags().IntVarP(&roundNumber, "round", "r", 1095518031, "Ledger round number to evaluate stateful TEAL on")
+	debugCmd.Flags().Uint64VarP(&roundNumber, "round", "r", 0, "Ledger round number to evaluate stateful TEAL on")
 	debugCmd.Flags().Int64VarP(&timestamp, "latest-timestamp", "l", 0, "Latest confirmed timestamp to evaluate stateful TEAL on")
 	debugCmd.Flags().VarP(&runMode, "mode", "m", "TEAL evaluation mode: "+runMode.AllowedString())
 	debugCmd.Flags().BoolVar(&painless, "painless", false, "Automatically create balance record for all accounts and applications")
@@ -254,7 +254,7 @@ func debugLocal(args []string) {
 		DdrBlob:          ddrBlob,
 		IndexerURL:       indexerURL,
 		IndexerToken:     indexerToken,
-		Round:            roundNumber,
+		Round:            uint64(roundNumber),
 		LatestTimestamp:  timestamp,
 		RunMode:          runMode.String(),
 		DisableSourceMap: noSourceMap,

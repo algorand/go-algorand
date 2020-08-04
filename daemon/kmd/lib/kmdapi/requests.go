@@ -228,6 +228,7 @@ type APIV1POSTMultisigTransactionSignRequest struct {
 	PublicKey      crypto.PublicKey   `json:"public_key"`
 	PartialMsig    crypto.MultisigSig `json:"partial_multisig"`
 	WalletPassword string             `json:"wallet_password"`
+	AuthAddr       crypto.Digest      `json:"signer"`
 }
 
 // APIV1POSTMultisigProgramSignRequest is the request for `POST /v1/multisig/signprogram`

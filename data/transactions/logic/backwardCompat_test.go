@@ -250,6 +250,7 @@ dup
 var programTEALv1 = "01200500010220ffffffffffffffffff012608014120559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd0142201f675bff07515f5df96737194ea945c36c41e7b4fcef307b7cd4d0e602a6911101432034b99f8dde1ba273c0a28cf5b2e4dbe497f8cb2453de0c8ba6d578c9431a62cb0100200000000000000000000000000000000000000000000000000000000000000000280129122a022b1210270403270512102d2e2f041022082209230a230b240c220d230e230f231022112312231314301525121617182319231a221b21041c1d12222312242512102104231210482829122a2b121027042706121048310031071331013102121022310413103105310613103108311613103109310a1210310b310f1310310c310d1210310e31101310311131121310311331141210311531171210483300003300071333000133000212102233000413103300053300061310330008330016131033000933000a121033000b33000f131033000c33000d121033000e3300101310330011330012131033001333001412103300153300171210483200320112320232041310320327071210350034001040000100234912"
 
 func TestBackwardCompatTEALv1(t *testing.T) {
+	t.Parallel()
 	var s crypto.Seed
 	crypto.RandBytes(s[:])
 	c := crypto.GenerateSignatureSecrets(s)
@@ -276,6 +277,8 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 	})
 
 	txn := makeSampleTxn()
+	// RekeyTo disallowed on TEAL v0/v1
+	txn.Txn.RekeyTo = basics.Address{}
 	txgroup := makeSampleTxnGroup(txn)
 	txn.Lsig.Logic = program
 	txn.Lsig.Args = [][]byte{data[:], sig[:], pk[:], txn.Txn.Sender[:], txn.Txn.Note}
@@ -330,6 +333,7 @@ func TestBackwardCompatTEALv1(t *testing.T) {
 // ensure v2 fields error on pre TEAL v2 logicsig version
 // ensure v2 fields error in v1 program
 func TestBackwardCompatGlobalFields(t *testing.T) {
+	t.Parallel()
 	var fields []string
 	for _, fs := range globalFieldSpecs {
 		if fs.version > 1 {
@@ -369,7 +373,7 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "greater than protocol supported version")
-		_, _, err = EvalStateful(program, ep)
+		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "greater than protocol supported version")
 
@@ -378,7 +382,7 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global[")
-		_, _, err = EvalStateful(program, ep)
+		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global[")
 
@@ -387,7 +391,7 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global[")
-		_, _, err = EvalStateful(program, ep)
+		_, err = Eval(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invalid global[")
 	}
@@ -395,10 +399,11 @@ func TestBackwardCompatGlobalFields(t *testing.T) {
 
 // ensure v2 fields error in v1 program
 func TestBackwardCompatTxnFields(t *testing.T) {
-	var fields []string
+	t.Parallel()
+	var fields []txnFieldSpec
 	for _, fs := range txnFieldSpecs {
 		if fs.version > 1 {
-			fields = append(fields, fs.field.String())
+			fields = append(fields, fs)
 		}
 	}
 	require.Greater(t, len(fields), 1)
@@ -410,28 +415,45 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 
 	ledger := makeTestLedger(nil)
 	txn := makeSampleTxn()
+	// We'll reject too early if we have a nonzero RekeyTo, because that
+	// field must be zero for every txn in the group if this is an old
+	// TEAL version
+	txn.Txn.RekeyTo = basics.Address{}
 	txgroup := makeSampleTxnGroup(txn)
-	for _, field := range fields {
+	for _, fs := range fields {
+		field := fs.field.String()
 		for _, command := range tests {
 			text := fmt.Sprintf(command, field)
+			asmError := "available in version 2"
+			if _, ok := txnaFieldSpecByField[fs.field]; ok {
+				parts := strings.Split(text, " ")
+				op := parts[0]
+				asmError = fmt.Sprintf("found %sa field %s in %s op", op, field, op)
+			}
 			// check V1 assembler fails
 			program, err := AssembleStringWithVersion(text, 0)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "available in version 2")
+			require.Contains(t, err.Error(), asmError)
 			require.Nil(t, program)
 
 			program, err = AssembleStringWithVersion(text, 1)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "available in version 2")
+			require.Contains(t, err.Error(), asmError)
 			require.Nil(t, program)
 
 			program, err = AssembleString(text)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "available in version 2")
+			require.Contains(t, err.Error(), asmError)
 			require.Nil(t, program)
 
 			program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
-			require.NoError(t, err)
+			if _, ok := txnaFieldSpecByField[fs.field]; ok {
+				// "txn Accounts" is invalid, so skip evaluation
+				require.Error(t, err, asmError)
+				continue
+			} else {
+				require.NoError(t, err)
+			}
 
 			proto := config.Consensus[protocol.ConsensusV23]
 			ep := defaultEvalParams(nil, nil)
@@ -443,7 +465,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "greater than protocol supported version")
-			_, _, err = EvalStateful(program, ep)
+			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "greater than protocol supported version")
 
@@ -452,7 +474,7 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
-			_, _, err = EvalStateful(program, ep)
+			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
 
@@ -461,9 +483,47 @@ func TestBackwardCompatTxnFields(t *testing.T) {
 			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
-			_, _, err = EvalStateful(program, ep)
+			_, err = Eval(program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "invalid txn field")
 		}
+	}
+}
+
+func TestBackwardCompatAssemble(t *testing.T) {
+	// TEAL v1 does not allow branching to the last line
+	// TEAL v2 makes such programs legal
+	t.Parallel()
+	source := `int 0
+int 1
+bnz done
+done:`
+
+	t.Run("v=default", func(t *testing.T) {
+		_, err := AssembleString(source)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), ":4 label done is too far away")
+	})
+
+	t.Run("v=0", func(t *testing.T) {
+		_, err := AssembleStringWithVersion(source, 0)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), ":4 label done is too far away")
+	})
+
+	t.Run("v=1", func(t *testing.T) {
+		_, err := AssembleStringWithVersion(source, 1)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), ":4 label done is too far away")
+	})
+
+	for v := uint64(2); v <= AssemblerMaxVersion; v++ {
+		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
+			program, err := AssembleStringWithVersion(source, v)
+			require.NoError(t, err)
+			ep := defaultEvalParams(nil, nil)
+			_, err = Eval(program, ep)
+			require.NoError(t, err)
+		})
 	}
 }

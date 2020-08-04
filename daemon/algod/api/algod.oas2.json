@@ -1086,7 +1086,7 @@
           "description": "\\[appl\\] applications local data stored in this account.\n\nNote the raw object uses `map[int] -\u003e AppLocalState` for this type.",
           "type": "array",
           "items": {
-            "$ref": "#/definitions/ApplicationLocalStates"
+            "$ref": "#/definitions/ApplicationLocalState"
           }
         },
         "apps-total-schema": {
@@ -1316,30 +1316,18 @@
         }
       }
     },
-    "ApplicationLocalStates": {
-      "description": "Pair of application index and application local state",
-      "type": "object",
-      "required": [
-        "id",
-        "state"
-      ],
-      "properties": {
-        "id": {
-          "type": "integer"
-        },
-        "state": {
-          "$ref": "#/definitions/ApplicationLocalState"
-        }
-      }
-    },
     "ApplicationLocalState": {
       "description": "Stores local state associated with an application.",
       "type": "object",
       "required": [
-        "schema",
-        "key-value"
+        "id",
+        "schema"
       ],
       "properties": {
+        "id": {
+          "description": "The application which this local state is for.",
+          "type": "integer"
+        },
         "schema": {
           "description": "\\[hsch\\] schema.",
           "$ref": "#/definitions/ApplicationStateSchema"
@@ -1493,12 +1481,14 @@
         "approval-program": {
           "description": "\\[approv\\] approval program.",
           "type": "string",
-          "format": "byte"
+          "format": "byte",
+          "x-algorand-format": "TEALProgram"
         },
         "clear-state-program": {
           "description": "\\[clearp\\] approval program.",
           "type": "string",
-          "format": "byte"
+          "format": "byte",
+          "x-algorand-format": "TEALProgram"
         },
         "local-state-schema": {
           "description": "[\\lsch\\] local schema",
@@ -1920,7 +1910,8 @@
         "keyreg",
         "acfg",
         "axfer",
-        "afrz"
+        "afrz",
+        "appl"
       ],
       "type": "string",
       "name": "tx-type",
@@ -2082,6 +2073,10 @@
             "description": "The asset index if the transaction was found and it created an asset.",
             "type": "integer"
           },
+          "application-index": {
+            "description": "The application index if the transaction was found and it created an application.",
+            "type": "integer"
+          },
           "close-rewards": {
             "description": "Rewards in microalgos applied to the close remainder to account.",
             "type": "integer"
@@ -2105,6 +2100,17 @@
           "sender-rewards": {
             "description": "Rewards in microalgos applied to the sender account.",
             "type": "integer"
+          },
+          "local-state-delta": {
+            "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/AccountStateDelta"
+            }
+          },
+          "global-state-delta": {
+            "description": "\\[gd\\] Global state key/value changes for the application being executed by this transaction.",
+            "$ref": "#/definitions/StateDelta"
           },
           "txn": {
             "description": "The raw signed transaction.",

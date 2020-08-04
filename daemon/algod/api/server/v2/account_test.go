@@ -17,6 +17,7 @@
 package v2
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -29,30 +30,58 @@ import (
 
 func TestAccount(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusFuture]
-	appIdx := basics.AppIndex(1)
+	appIdx1 := basics.AppIndex(1)
+	appIdx2 := basics.AppIndex(2)
+	assetIdx1 := basics.AssetIndex(3)
+	assetIdx2 := basics.AssetIndex(4)
 	round := basics.Round(2)
 
-	params := basics.AppParams{
+	appParams1 := basics.AppParams{
 		ApprovalProgram: []byte{1},
 		StateSchemas: basics.StateSchemas{
 			GlobalStateSchema: basics.StateSchema{NumUint: 1},
 		},
 	}
+	appParams2 := basics.AppParams{
+		ApprovalProgram: []byte{2},
+		StateSchemas: basics.StateSchemas{
+			GlobalStateSchema: basics.StateSchema{NumUint: 2},
+		},
+	}
+	assetParams1 := basics.AssetParams{
+		Total:         100,
+		DefaultFrozen: false,
+		UnitName:      "unit1",
+	}
+	assetParams2 := basics.AssetParams{
+		Total:         200,
+		DefaultFrozen: true,
+		UnitName:      "unit2",
+	}
+	copy(assetParams2.MetadataHash[:], []byte("test2"))
 	a := basics.AccountData{
 		Status:             basics.Online,
 		MicroAlgos:         basics.MicroAlgos{Raw: 80000000},
 		RewardedMicroAlgos: basics.MicroAlgos{Raw: ^uint64(0)},
 		RewardsBase:        0,
-		AppParams:          map[basics.AppIndex]basics.AppParams{appIdx: params},
+		AppParams:          map[basics.AppIndex]basics.AppParams{appIdx1: appParams1, appIdx2: appParams2},
 		AppLocalStates: map[basics.AppIndex]basics.AppLocalState{
-			appIdx: {
+			appIdx1: {
+				Schema: basics.StateSchema{NumUint: 10},
+				KeyValue: basics.TealKeyValue{
+					"uint":  basics.TealValue{Type: basics.TealUintType, Uint: 1},
+					"bytes": basics.TealValue{Type: basics.TealBytesType, Bytes: "value1"},
+				},
+			},
+			appIdx2: {
 				Schema: basics.StateSchema{NumUint: 10},
 				KeyValue: basics.TealKeyValue{
 					"uint":  basics.TealValue{Type: basics.TealUintType, Uint: 2},
-					"bytes": basics.TealValue{Type: basics.TealBytesType, Bytes: "value"},
+					"bytes": basics.TealValue{Type: basics.TealBytesType, Bytes: "value2"},
 				},
 			},
 		},
+		AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx1: assetParams1, assetIdx2: assetParams2},
 	}
 	b := a.WithUpdatedRewards(proto, 100)
 
@@ -62,37 +91,81 @@ func TestAccount(t *testing.T) {
 	require.Equal(t, conv.Address, addr)
 	require.Equal(t, conv.Amount, b.MicroAlgos.Raw)
 	require.Equal(t, conv.AmountWithoutPendingRewards, a.MicroAlgos.Raw)
-	require.NotNil(t, conv.CreatedApps)
-	require.Equal(t, 1, len(*conv.CreatedApps))
-	app := (*conv.CreatedApps)[0]
-	require.Equal(t, uint64(appIdx), app.Id)
-	require.Equal(t, params.ApprovalProgram, app.Params.ApprovalProgram)
-	require.Equal(t, params.GlobalStateSchema.NumUint, app.Params.GlobalStateSchema.NumUint)
-	require.Equal(t, params.GlobalStateSchema.NumByteSlice, app.Params.GlobalStateSchema.NumByteSlice)
-	require.NotNil(t, conv.AppsLocalState)
-	require.Equal(t, 1, len(*conv.AppsLocalState))
 
-	ls := (*conv.AppsLocalState)[0]
-	require.Equal(t, uint64(appIdx), ls.Id)
-	require.Equal(t, uint64(10), ls.State.Schema.NumUint)
-	require.Equal(t, uint64(0), ls.State.Schema.NumByteSlice)
-	require.Equal(t, 2, len(ls.State.KeyValue))
-	value1 := generated.TealKeyValue{
-		Key: "uint",
-		Value: generated.TealValue{
-			Type: uint64(basics.TealUintType),
-			Uint: 2,
-		},
+	require.NotNil(t, conv.CreatedApps)
+	require.Equal(t, 2, len(*conv.CreatedApps))
+	for _, app := range *conv.CreatedApps {
+		var params basics.AppParams
+		if app.Id == uint64(appIdx1) {
+			params = appParams1
+		} else if app.Id == uint64(appIdx2) {
+			params = appParams2
+		} else {
+			require.Fail(t, fmt.Sprintf("app idx %d not in [%d, %d]", app.Id, appIdx1, appIdx2))
+		}
+		require.Equal(t, params.ApprovalProgram, app.Params.ApprovalProgram)
+		require.Equal(t, params.GlobalStateSchema.NumUint, app.Params.GlobalStateSchema.NumUint)
+		require.Equal(t, params.GlobalStateSchema.NumByteSlice, app.Params.GlobalStateSchema.NumByteSlice)
 	}
-	value2 := generated.TealKeyValue{
-		Key: "bytes",
-		Value: generated.TealValue{
-			Type:  uint64(basics.TealBytesType),
-			Bytes: "value",
-		},
+
+	require.NotNil(t, conv.AppsLocalState)
+	require.Equal(t, 2, len(*conv.AppsLocalState))
+	makeTKV := func(k string, v interface{}) generated.TealKeyValue {
+		value := generated.TealValue{}
+		switch v.(type) {
+		case int:
+			value.Uint = uint64(v.(int))
+			value.Type = uint64(basics.TealUintType)
+		case string:
+			value.Bytes = b64(v.(string))
+			value.Type = uint64(basics.TealBytesType)
+		default:
+			panic(fmt.Sprintf("Unknown teal type %v", t))
+		}
+		return generated.TealKeyValue{
+			Key:   b64(k),
+			Value: value,
+		}
 	}
-	require.Contains(t, ls.State.KeyValue, value1)
-	require.Contains(t, ls.State.KeyValue, value2)
+	for _, ls := range *conv.AppsLocalState {
+		require.Equal(t, uint64(10), ls.Schema.NumUint)
+		require.Equal(t, uint64(0), ls.Schema.NumByteSlice)
+		require.Equal(t, 2, len(*ls.KeyValue))
+		var value1 generated.TealKeyValue
+		var value2 generated.TealKeyValue
+		if ls.Id == uint64(appIdx1) {
+			value1 = makeTKV("uint", 1)
+			value2 = makeTKV("bytes", "value1")
+		} else if ls.Id == uint64(appIdx2) {
+			value1 = makeTKV("uint", 2)
+			value2 = makeTKV("bytes", "value2")
+		} else {
+			require.Fail(t, fmt.Sprintf("local state app idx %d not in [%d, %d]", ls.Id, appIdx1, appIdx2))
+		}
+		require.Contains(t, *ls.KeyValue, value1)
+		require.Contains(t, *ls.KeyValue, value2)
+	}
+
+	require.NotNil(t, conv.CreatedAssets)
+	require.Equal(t, 2, len(*conv.CreatedAssets))
+	for _, asset := range *conv.CreatedAssets {
+		var params basics.AssetParams
+		if asset.Index == uint64(assetIdx1) {
+			params = assetParams1
+		} else if asset.Index == uint64(assetIdx2) {
+			params = assetParams2
+		} else {
+			require.Fail(t, fmt.Sprintf("asset idx %d not in [%d, %d]", asset.Index, assetIdx1, assetIdx2))
+		}
+		require.Equal(t, params.Total, asset.Params.Total)
+		require.NotNil(t, asset.Params.DefaultFrozen)
+		require.Equal(t, params.DefaultFrozen, *asset.Params.DefaultFrozen)
+		require.NotNil(t, asset.Params.UnitName)
+		require.Equal(t, params.UnitName, *asset.Params.UnitName)
+		if asset.Params.MetadataHash != nil {
+			require.Equal(t, params.MetadataHash[:], *asset.Params.MetadataHash)
+		}
+	}
 
 	c, err := AccountToAccountData(&conv)
 	require.NoError(t, err)

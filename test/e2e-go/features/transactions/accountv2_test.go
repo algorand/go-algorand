@@ -104,7 +104,7 @@ int 1
 `
 	approval, err := logic.AssembleString(counter)
 	a.NoError(err)
-	clearstate, err := logic.AssembleString("int 1")
+	clearstate, err := logic.AssembleString("#pragma version 2\nint 1")
 	a.NoError(err)
 	schema := basics.StateSchema{
 		NumUint: 1,
@@ -112,7 +112,7 @@ int 1
 
 	// create the app
 	tx, err := client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approval, clearstate, schema, schema, nil, nil, nil,
+		transactions.OptInOC, approval, clearstate, schema, schema, nil, nil, nil, nil,
 	)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(creator, 0, 0, fee, tx)
@@ -155,7 +155,7 @@ int 1
 	a.Equal(uint64(1), value.Uint)
 
 	// call the app
-	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil)
+	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil)
 	a.NoError(err)
 	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
 	a.NoError(err)

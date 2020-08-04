@@ -215,7 +215,8 @@
             "keyreg",
             "acfg",
             "axfer",
-            "afrz"
+            "afrz",
+            "appl"
           ],
           "type": "string"
         }
@@ -458,6 +459,10 @@
             "schema": {
               "description": "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.",
               "properties": {
+                "application-index": {
+                  "description": "The application index if the transaction was found and it created an application.",
+                  "type": "integer"
+                },
                 "asset-index": {
                   "description": "The asset index if the transaction was found and it created an asset.",
                   "type": "integer"
@@ -473,6 +478,16 @@
                 "confirmed-round": {
                   "description": "The round where this transaction was confirmed, if present.",
                   "type": "integer"
+                },
+                "global-state-delta": {
+                  "$ref": "#/components/schemas/StateDelta"
+                },
+                "local-state-delta": {
+                  "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+                  "items": {
+                    "$ref": "#/components/schemas/AccountStateDelta"
+                  },
+                  "type": "array"
                 },
                 "pool-error": {
                   "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
@@ -650,7 +665,7 @@
           "apps-local-state": {
             "description": "\\[appl\\] applications local data stored in this account.\n\nNote the raw object uses `map[int] -> AppLocalState` for this type.",
             "items": {
-              "$ref": "#/components/schemas/ApplicationLocalStates"
+              "$ref": "#/components/schemas/ApplicationLocalState"
             },
             "type": "array"
           },
@@ -800,6 +815,10 @@
       "ApplicationLocalState": {
         "description": "Stores local state associated with an application.",
         "properties": {
+          "id": {
+            "description": "The application which this local state is for.",
+            "type": "integer"
+          },
           "key-value": {
             "$ref": "#/components/schemas/TealKeyValueStore"
           },
@@ -808,24 +827,8 @@
           }
         },
         "required": [
-          "key-value",
-          "schema"
-        ],
-        "type": "object"
-      },
-      "ApplicationLocalStates": {
-        "description": "Pair of application index and application local state",
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "state": {
-            "$ref": "#/components/schemas/ApplicationLocalState"
-          }
-        },
-        "required": [
           "id",
-          "state"
+          "schema"
         ],
         "type": "object"
       },
@@ -836,13 +839,15 @@
             "description": "\\[approv\\] approval program.",
             "format": "byte",
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-            "type": "string"
+            "type": "string",
+            "x-algorand-format": "TEALProgram"
           },
           "clear-state-program": {
             "description": "\\[clearp\\] approval program.",
             "format": "byte",
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-            "type": "string"
+            "type": "string",
+            "x-algorand-format": "TEALProgram"
           },
           "creator": {
             "description": "The address that created this application. This is the address where the parameters and global state for this application can be found.",
@@ -3009,6 +3014,10 @@
                 "schema": {
                   "description": "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.",
                   "properties": {
+                    "application-index": {
+                      "description": "The application index if the transaction was found and it created an application.",
+                      "type": "integer"
+                    },
                     "asset-index": {
                       "description": "The asset index if the transaction was found and it created an asset.",
                       "type": "integer"
@@ -3024,6 +3033,16 @@
                     "confirmed-round": {
                       "description": "The round where this transaction was confirmed, if present.",
                       "type": "integer"
+                    },
+                    "global-state-delta": {
+                      "$ref": "#/components/schemas/StateDelta"
+                    },
+                    "local-state-delta": {
+                      "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+                      "items": {
+                        "$ref": "#/components/schemas/AccountStateDelta"
+                      },
+                      "type": "array"
                     },
                     "pool-error": {
                       "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",

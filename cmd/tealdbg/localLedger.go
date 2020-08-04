@@ -60,12 +60,12 @@ type balancesAdapter struct {
 	txnGroup   []transactions.SignedTxn
 	groupIndex int
 	proto      config.ConsensusParams
-	round      int
+	round      uint64
 }
 
 func makeAppLedger(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
-	groupIndex int, proto config.ConsensusParams, round int, latestTimestamp int64,
+	groupIndex int, proto config.ConsensusParams, round uint64, latestTimestamp int64,
 	appIdx basics.AppIndex, painless bool, indexerURL string, indexerToken string,
 ) (logic.LedgerForLogic, appState, error) {
 
@@ -210,7 +210,7 @@ func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics
 	return creator, nil
 }
 
-func getBalanceFromIndexer(indexerURL string, indexerToken string, account basics.Address, round int) (basics.AccountData, error){
+func getBalanceFromIndexer(indexerURL string, indexerToken string, account basics.Address, round uint64) (basics.AccountData, error){
 	queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%d", indexerURL, account, round)
 	client := &http.Client{}
 	request, err := http.NewRequest("GET", queryString, nil)
