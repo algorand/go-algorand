@@ -145,7 +145,8 @@ func (mtc *merkleTrieCache) getNode(nid storedNodeIdentifier) (pnode *node, err 
 	return
 }
 
-// prioritizePage make sure to adjust the priority of the given node id.
+// prioritizeNode make sure to adjust the priority of the given node id.
+// nodes are prioritized based on the page the belong to.
 // a new page would be placed on front, and an older page would get moved
 // to the front.
 func (mtc *merkleTrieCache) prioritizeNode(nid storedNodeIdentifier) {
