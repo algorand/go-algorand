@@ -273,11 +273,15 @@ func TestAcctUpdates(t *testing.T) {
 
 	checkAcctUpdates(t, au, 0, 9, accts, rewardsLevels, proto)
 
+	// lastCreatableID stores asset or app max used index to get rid of conflicts
+	lastCreatableID := crypto.RandUint64() % 512
+	knownCreatables := make(map[basics.CreatableIndex]bool)
 	for i := basics.Round(10); i < basics.Round(proto.MaxBalLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
-		updates, totals := randomDeltasBalanced(1, accts[i-1], rewardLevel)
-
+		var updates map[basics.Address]accountDelta
+		var totals map[basics.Address]basics.AccountData
+		updates, totals, lastCreatableID = randomDeltasBalancedFull(1, accts[i-1], rewardLevel, lastCreatableID)
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
@@ -296,8 +300,9 @@ func TestAcctUpdates(t *testing.T) {
 		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 
 		au.newBlock(blk, StateDelta{
-			accts: updates,
-			hdr:   &blk.BlockHeader,
+			accts:      updates,
+			hdr:        &blk.BlockHeader,
+			creatables: creatablesFromUpdates(updates, knownCreatables),
 		})
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
