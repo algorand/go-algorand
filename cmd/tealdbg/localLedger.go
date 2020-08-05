@@ -92,7 +92,6 @@ func makeAppLedger(
 				}
 			}
 		}
-		// TODO (nicholasguo): populate balances with creators of apps[]
 		for _, app := range apps {
 			creator, err := getAppCreatorFromIndexer(indexerURL, indexerToken, app)
 			if err != nil {

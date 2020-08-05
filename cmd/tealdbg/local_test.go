@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -946,10 +945,12 @@ func TestLocalLedgerIndexer(t *testing.T) {
 	brs := makeSampleBalanceRecord(sender, assetIdx, appIdx)
 	//balanceBlob := protocol.EncodeMsgp(&brs)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		accountPath := "/v2/accounts/"
+		applicationPath := "/v2/applications/"
 		switch {
-		case regexp.MustCompile(`^/v2/accounts/`).MatchString(r.URL.Path):
+		case strings.HasPrefix(r.URL.Path, accountPath):
 			w.WriteHeader(200)
-			if r.URL.Path[13:] == brs.Addr.String() {
+			if r.URL.Path[len(accountPath):] == brs.Addr.String() {
 				account, err := v2.AccountDataToAccount(brs.Addr.String(), &brs.AccountData, map[basics.AssetIndex]string{}, 100, basics.MicroAlgos{Raw: 0})
 				a.NoError(err)
 				accountResponse := AccountIndexerResponse{Account: account, CurrentRound: 100}
@@ -957,9 +958,9 @@ func TestLocalLedgerIndexer(t *testing.T) {
 				a.NoError(err)
 				w.Write(response)
 			}
-		case regexp.MustCompile(`^/v2/applications/`).MatchString(r.URL.Path):
+		case strings.HasPrefix(r.URL.Path, applicationPath):
 			w.WriteHeader(200)
-			if r.URL.Path[17:] == strconv.FormatUint(uint64(appIdx), 10) {
+			if r.URL.Path[len(applicationPath):] == strconv.FormatUint(uint64(appIdx), 10) {
 				appParams := brs.AppParams[appIdx]
 				app := v2.AppParamsToApplication(sender.String(), appIdx, &appParams)
 				a.NoError(err)
