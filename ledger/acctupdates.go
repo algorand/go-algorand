@@ -1666,6 +1666,49 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 	}
 
+	// Subtract storage inner reference counts on keys/values
+	for i, aappStorageDeltas := range storageDeltas {
+		// The actual round that this delta came from
+		deltaRound := au.dbRound + basics.Round(i) + basics.Round(1)
+
+		for aapp, sdelta := range aappStorageDeltas {
+			// Look up latest cached storage for aapp
+			mstor, ok := au.storage[aapp]
+			if !ok {
+				au.log.Panicf("inconsistency: want to flush kv changes for %+v, but not present in au.storage", aapp)
+			}
+
+			// If the modifiedStorage came from an opt-in after
+			// this delta, then we should not subtract reference
+			// counts, for values because the deltas have already
+			// been cleared.
+			if mstor.lastClearedRound > deltaRound {
+				continue
+			}
+
+			// Otherwise, subtract from the reference count for each
+			// value delta
+			for key := range sdelta.kvCow {
+				rcDelta, ok := mstor.kvDelta[key]
+				if !ok {
+					au.log.Panicf("inconsistency: want to decrement refcount for key %x, but no key delta exists for %+v", key, aapp)
+				}
+
+				if rcDelta.ndeltas < 1 {
+					au.log.Panicf("inconsistency: want to decrement refcount for key %x, but refcount was already 0 for %+v", key, aapp)
+				}
+
+				rcDelta.ndeltas--
+				if rcDelta.ndeltas == 0 {
+					delete(mstor.kvDelta, key)
+				} else {
+					mstor.kvDelta[key] = rcDelta
+				}
+			}
+		}
+	}
+
+	// Subtract storage outer reference counts on opt in/opt outs
 	for aapp, cnt := range storageFlushcount {
 		mstor, ok := au.storage[aapp]
 		if !ok {
@@ -1678,6 +1721,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 		mstor.ndeltas -= cnt
 		if mstor.ndeltas == 0 {
+			// We should have independently flushed all of the value deltas by now
+			if len(mstor.kvDelta) > 0 {
+				au.log.Panicf("inconsistency: have %d kv changes, but want to flush %+v", len(mstor.kvDelta), aapp)
+			}
 			delete(au.storage, aapp)
 		} else {
 			au.storage[aapp] = mstor
