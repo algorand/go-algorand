@@ -17,12 +17,12 @@
 package agreement
 
 import (
-	"github.com/algorand/go-algorand/protocol"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 var filterTimeout = 2 * config.Protocol.SmallLambda
