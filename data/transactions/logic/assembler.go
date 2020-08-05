@@ -435,7 +435,7 @@ func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
 			return
 		}
 		consumed = 2
-	} else if len(arg) > 2 && arg[0] == '"' && arg[len(arg)-1] == '"' {
+	} else if len(arg) > 1 && arg[0] == '"' && arg[len(arg)-1] == '"' {
 		val, err = parseStringLiteral(arg)
 		consumed = 1
 	} else {

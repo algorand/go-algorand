@@ -87,6 +87,10 @@ func TestAccountsCanSendMoneyAcrossUpgradeV22toV23(t *testing.T) {
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV22Upgrade.json"))
 }
 
+func TestAccountsCanSendMoneyAcrossUpgradeV23toV24(t *testing.T) {
+	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV23Upgrade.json"))
+}
+
 // ConsensusTestFastUpgrade is meant for testing of protocol upgrades:
 // during testing, it is equivalent to another protocol with the exception
 // of the upgrade parameters, which allow for upgrades to take place after

@@ -734,6 +734,11 @@ func TestFieldsFromLine(t *testing.T) {
 	require.Equal(t, 2, len(fields))
 	require.Equal(t, `\"test1`, fields[0])
 	require.Equal(t, `test2"`, fields[1])
+
+	line = `"" // test`
+	fields = fieldsFromLine(line)
+	require.Equal(t, 1, len(fields))
+	require.Equal(t, `""`, fields[0])
 }
 
 func TestAssembleRejectNegJump(t *testing.T) {
@@ -1333,6 +1338,12 @@ func TestStringLiteralParsing(t *testing.T) {
 
 	s = `"\x74\x65\x73\x74\x31\x32\x33"`
 	e = []byte(`test123`)
+	result, err = parseStringLiteral(s)
+	require.NoError(t, err)
+	require.Equal(t, e, result)
+
+	s = `""`
+	e = []byte("")
 	result, err = parseStringLiteral(s)
 	require.NoError(t, err)
 	require.Equal(t, e, result)

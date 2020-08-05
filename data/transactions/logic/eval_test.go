@@ -3646,6 +3646,26 @@ byte b64(Zm9vIGJhciAvLyBub3QgYSBjb21tZW50)
 	pass, err = Eval(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
+
+	text = `byte ""
+byte 0x
+==
+`
+	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	require.NoError(t, err)
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
+
+	text = `byte "" // empty string literal
+byte 0x // empty byte constant
+==
+`
+	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	require.NoError(t, err)
+	pass, err = Eval(program, ep)
+	require.NoError(t, err)
+	require.True(t, pass)
 }
 
 func TestArgType(t *testing.T) {
