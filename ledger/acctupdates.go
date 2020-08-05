@@ -1370,9 +1370,6 @@ func (au *accountUpdates) countStorageForRoundImpl(rnd basics.Round, addr basics
 			return mstor.counts, nil
 		}
 	} else {
-		// For counts, but not for keys/values, we can do the normal
-		// scan backwards over storageDeltas to find the count. This
-		// works because the absolute counts are stored in the deltas.
 		for offset > 0 {
 			offset--
 			storageDelta, ok := au.storageDeltas[offset][aapp]
@@ -1418,7 +1415,23 @@ func (au *accountUpdates) getKeyForRoundImpl(rnd basics.Round, addr basics.Addre
 		}
 	} else {
 		for offset > 0 {
-			au.log.Panicf("MAXJ historical getKeyForRound not implemented")
+			offset--
+			storageDelta, ok := au.storageDeltas[offset][aapp]
+			if ok {
+				vdelta, ok := storageDelta.kvCow[key]
+				if ok {
+					val, ok := vdelta.ToTealValue()
+					return val, ok, nil
+				}
+
+				// We have to stop if we get to a dealloc event, since that
+				// would have cleared out all values. We also stop if we hit
+				// an alloc event, since we must have been deallocated before
+				// that
+				if storageDelta.action != remainAllocAction {
+					return basics.TealValue{}, false, nil
+				}
+			}
 		}
 	}
 
