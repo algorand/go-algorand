@@ -85,6 +85,8 @@ if [ "${MAKE_DEBUG_OPTION}" != "" ]; then
     make build build-race
 else
     git config --global http.sslVerify true
+    export GIT_CURL_VERBOSE=1
+    export GIT_TRACE=1
     make build
 fi
 
