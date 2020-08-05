@@ -72,7 +72,7 @@ type merkleTrieCache struct {
 
 	// a list of the pages priorities. The item in the front has higher priority and would not get evicted as quickly as the item on the back
 	pagesPrioritizationList *list.List
-	// the list element of each of the priorities
+	// the list element of each of the priorities. The pagesPrioritizationMap maps a page id to the page priority list element.
 	pagesPrioritizationMap map[uint64]*list.Element
 	// the page to load before the nextNodeID at init time. If zero, then nothing is being reloaded.
 	deferedPageLoad uint64
@@ -145,8 +145,9 @@ func (mtc *merkleTrieCache) getNode(nid storedNodeIdentifier) (pnode *node, err 
 	return
 }
 
-// prioritizeNode make sure to move the priorities of the pages according to
-// the accessed node identifier
+// prioritizePage make sure to adjust the priority of the given node id.
+// a new page would be placed on front, and an older page would get moved
+// to the front.
 func (mtc *merkleTrieCache) prioritizeNode(nid storedNodeIdentifier) {
 	page := uint64(nid) / uint64(mtc.nodesPerPage)
 
@@ -350,6 +351,9 @@ func (mtc *merkleTrieCache) commit() error {
 		element := mtc.pagesPrioritizationMap[uint64(page)]
 		if element != nil {
 			mtc.pagesPrioritizationList.Remove(element)
+			delete(mtc.pagesPrioritizationMap, uint64(page))
+			mtc.cachedNodeCount -= len(mtc.pageToNIDsPtr[uint64(page)])
+			delete(mtc.pageToNIDsPtr, uint64(page))
 		}
 	}
 
@@ -440,6 +444,7 @@ func (mtc *merkleTrieCache) encodePage(nodeIDs map[storedNodeIdentifier]*node) [
 // evict releases the least used pages from cache until the number of elements in cache are less than cachedNodeCountTarget
 func (mtc *merkleTrieCache) evict() (removedNodes int) {
 	removedNodes = mtc.cachedNodeCount
+
 	for mtc.cachedNodeCount > mtc.cachedNodeCountTarget {
 		// get the least used page off the pagesPrioritizationList
 		element := mtc.pagesPrioritizationList.Back()
@@ -448,6 +453,7 @@ func (mtc *merkleTrieCache) evict() (removedNodes int) {
 		}
 		mtc.pagesPrioritizationList.Remove(element)
 		pageToRemove := element.Value.(uint64)
+		delete(mtc.pagesPrioritizationMap, pageToRemove)
 		mtc.cachedNodeCount -= len(mtc.pageToNIDsPtr[pageToRemove])
 		delete(mtc.pageToNIDsPtr, pageToRemove)
 	}
