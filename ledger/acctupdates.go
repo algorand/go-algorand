@@ -1329,7 +1329,7 @@ func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.C
 
 	// If this is the most recent round, au.creatables has will have the latest
 	// state and we can skip scanning backwards over creatableDeltas
-	if offset == uint64(len(au.deltas)) {
+	if offset == uint64(len(au.creatableDeltas)) {
 		// Check if we already have the asset/creator in cache
 		creatableDelta, ok := au.creatables[cidx]
 		if ok {
@@ -1356,13 +1356,67 @@ func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.C
 }
 
 func (au *accountUpdates) countStorageForRoundImpl(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
-	// TODO(app refactor, do this)
-	return basics.StateSchema{}, nil
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return basics.StateSchema{}, err
+	}
+
+	// Check if this is the most recent round, in which case, we can
+	// use a cache of the most recent storage state.
+	aapp := addrApp{addr, aidx, global}
+	if offset == uint64(len(au.storageDeltas)) {
+		mstor, ok := au.storage[aapp]
+		if ok {
+			return mstor.counts, nil
+		}
+	} else {
+		for offset > 0 {
+			au.log.Panicf("MAXJ historical countStorageForRound not implemented")
+		}
+	}
+
+	// Consult the database
+	return au.accountsq.countStorage(aapp)
 }
 
 func (au *accountUpdates) getKeyForRoundImpl(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
-	// TODO(app refactor, do this)
-	return basics.TealValue{}, false, nil
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return basics.TealValue{}, false, err
+	}
+
+	// Assumption: if called, the storage is allocated. Callers MUST check
+	// that storage is allocted (by e.g. checking for AppParams or
+	// AppLocalState) before calling this method.
+
+	// Check if this is the most recent round, in which case, we can
+	// use a cache of the most recent storage state.
+	aapp := addrApp{addr, aidx, global}
+	if offset == uint64(len(au.storageDeltas)) {
+		mstor, ok := au.storage[aapp]
+		if ok {
+			rcdelta, ok := mstor.kvDelta[key]
+			if ok {
+				val, ok := rcdelta.vdelta.ToTealValue()
+				return val, ok, nil
+			}
+
+			// It is only correct to fall back to the database if the last
+			// round where this storage was cleared did not occur within
+			// au.storageDeltas. Otherwise the key does not exist for this
+			// round, because it would have been in mstor.
+			if mstor.lastClearedRound > au.dbRound {
+				return basics.TealValue{}, false, nil
+			}
+		}
+	} else {
+		for offset > 0 {
+			au.log.Panicf("MAXJ historical getKeyForRound not implemented")
+		}
+	}
+
+	// Consult the database
+	return au.accountsq.lookupKey(aapp, key)
 }
 
 // accountsCreateCatchpointLabel creates a catchpoint label and write it.
