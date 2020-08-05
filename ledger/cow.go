@@ -55,46 +55,6 @@ type addrApp struct {
 	global bool
 }
 
-type storageAction uint64
-
-const (
-	remainAllocAction storageAction = 1
-	allocAction       storageAction = 2
-	deallocAction     storageAction = 3
-)
-
-type storageDelta struct {
-	action storageAction
-	kvCow  basics.StateDelta
-	counts *basics.StateSchema
-}
-
-func (lsd *storageDelta) merge(osd *storageDelta) {
-	if osd.action != remainAllocAction {
-		// If child state allocated or deallocated, then its deltas
-		// completely overwrite those of the parent.
-		lsd.action = osd.action
-		lsd.kvCow = osd.kvCow
-		lsd.counts = osd.counts
-	} else {
-		// Otherwise, the child's deltas get merged with those of the
-		// parent, and we keep whatever the parent's state was.
-		for key, delta := range osd.kvCow {
-			lsd.kvCow[key] = delta
-		}
-
-		// counts can just get overwritten because they are absolute
-		lsd.counts = osd.counts
-	}
-
-	// sanity checks
-	if lsd.action == deallocAction {
-		if len(lsd.kvCow) > 0 {
-			panic("dealloc state delta, but nonzero kv change")
-		}
-	}
-}
-
 // StateDelta describes the delta between a given round to the previous round
 type StateDelta struct {
 	// modified accounts
