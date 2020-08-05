@@ -170,7 +170,8 @@
       "get": {
         "description": "Get the list of pending transactions by address, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.\n",
         "produces": [
-          "application/json"
+          "application/json",
+          "application/msgpack"
         ],
         "schemes": [
           "http"
@@ -663,7 +664,8 @@
       "get": {
         "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0) - transaction still in the pool (committed round = 0, pool error = \"\") - transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
         "produces": [
-          "application/json"
+          "application/json",
+          "application/msgpack"
         ],
         "schemes": [
           "http"
