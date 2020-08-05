@@ -43,6 +43,9 @@ for LEDGER in $LEDGERS; do
       catchpointstate)
         SORT=id
         ;;
+      storage)
+        SORT=owner
+        ;;
       *)
         echo "Unknown table $T" >&2
         exit 1

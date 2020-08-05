@@ -100,7 +100,7 @@ const (
 // refCountedValueDelta is a reference counted analogue of basics.ValueDelta
 type refCountedValueDelta struct {
 	ndeltas int
-	delta   basics.ValueDelta
+	vdelta  basics.ValueDelta
 }
 
 // refCountedStateDelta is like a basics.StateDelta but with reference counted
@@ -108,6 +108,17 @@ type refCountedValueDelta struct {
 // may flush value deltas to disk and eliminate them from this map, preventing
 // refCountedStateDelta from growing unboundedly.
 type refCountedStateDelta map[string]refCountedValueDelta
+
+// applyKvDelta merges a stateDelta into a refCountedStateDelta, bumping
+// reference counts as necessary
+func (rcsd refCountedStateDelta) applyKvDelta(stateDelta basics.StateDelta) {
+	for key, vdelta := range stateDelta {
+		rcvd := rcsd[key]
+		rcvd.vdelta = vdelta
+		rcvd.ndeltas++
+		rcsd[key] = rcvd
+	}
+}
 
 type modifiedStorage struct {
 	// If this storage was opted in/out during for a round that was at one
@@ -120,7 +131,10 @@ type modifiedStorage struct {
 	state storageState
 
 	// Maps keys to reference counted value deltas
-	kvDeltas refCountedStateDelta
+	kvDelta refCountedStateDelta
+
+	// Keeps track of how much storage is used
+	counts basics.StateSchema
 
 	// Reference count
 	ndeltas int
@@ -860,6 +874,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 1 : %v", err)
 					return 0, err
 				}
+			case 2:
+				dbVersion, err = au.upgradeDatabaseSchema2(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 2 : %v", err)
+					return 0, err
+				}
 			default:
 				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
 			}
@@ -1052,6 +1072,21 @@ func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx
 	return 2, nil
 }
 
+func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+	au.log.Infof("upgradeDatabaseSchema2 initializing schema")
+	for _, migrateCmd := range storageMigration {
+		_, err = tx.Exec(migrateCmd)
+		if err != nil {
+			return
+		}
+	}
+	_, err = db.SetUserVersion(ctx, tx, 3)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 2 to 3: %v", err)
+	}
+	return 3, nil
+}
+
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
 // once all the files have been deleted, it would go ahead and remove the entries from the table.
 func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries *accountsDbQueries) (err error) {
@@ -1178,6 +1213,54 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 		mcreat.ctype = cdelta.ctype
 		mcreat.ndeltas++
 		au.creatables[cidx] = mcreat
+	}
+
+	for addrApp, sdelta := range delta.sdeltas {
+		au.log.Warnf("MAXJ: %s", addrApp.addr)
+		au.log.Warnf("MAXJ: %d", addrApp.aidx)
+		au.log.Warnf("MAXJ: %+v", sdelta.counts)
+		au.log.Warnf("MAXJ: %+v", sdelta.action)
+		au.log.Warnf("MAXJ: %+v", sdelta.kvCow)
+		au.log.Warnf("#######################")
+
+		// Grab any modifiedStorage for this addrApp already (might
+		// not exist)
+		mstor := au.storage[addrApp]
+
+		// Bump the reference count
+		mstor.ndeltas++
+
+		// Overwrite the storage counts with the delta's (absolute)
+		// storage counts
+		mstor.counts = *sdelta.counts
+
+		// Based on the delta's action, update the state of the
+		// modifiedStorage and bump reference counts on each key
+		switch sdelta.action {
+		case remainAllocAction:
+			// remain allocated: don't clear key/value
+			mstor.state = allocatedState
+			if mstor.kvDelta == nil {
+				mstor.kvDelta = make(refCountedStateDelta)
+			}
+			mstor.kvDelta.applyKvDelta(sdelta.kvCow)
+		case allocAction:
+			// allocate and apply changes
+			mstor.state = allocatedState
+			mstor.lastClearedRound = rnd
+			mstor.kvDelta = make(refCountedStateDelta)
+			mstor.kvDelta.applyKvDelta(sdelta.kvCow)
+		case deallocAction:
+			// deallocate
+			mstor.state = deallocatedState
+			mstor.lastClearedRound = rnd
+			mstor.kvDelta = nil
+		default:
+			au.log.Panic("accountUpdates: unknown storage action %v", sdelta.action)
+		}
+
+		// Write back our modified storage to the cache
+		au.storage[addrApp] = mstor
 	}
 
 	if ot.Overflowed {

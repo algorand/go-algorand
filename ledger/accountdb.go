@@ -36,6 +36,9 @@ import (
 type accountsDbQueries struct {
 	listCreatablesStmt           *sql.Stmt
 	lookupStmt                   *sql.Stmt
+	lookupKeyStmt                *sql.Stmt
+	lookupStorageStmt            *sql.Stmt
+	countStorageStmt             *sql.Stmt
 	lookupCreatorStmt            *sql.Stmt
 	deleteStoredCatchpoint       *sql.Stmt
 	insertStoredCatchpoint       *sql.Stmt
@@ -87,6 +90,18 @@ var creatablesMigration = []string{
 	`ALTER TABLE assetcreators ADD COLUMN ctype INTEGER DEFAULT 0`,
 }
 
+var storageMigration = []string {
+	`CREATE TABLE IF NOT EXISTS storage (
+		owner blob primary key,
+		aidx integer,
+		global boolean,
+		key blob,
+		vtype integer,
+		venc blob,
+		UNIQUE(owner, aidx, global, key)
+	)`,
+}
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -100,7 +115,7 @@ var accountsResetExprs = []string{
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(2)
+var accountDBVersion = int32(3)
 
 type accountDelta struct {
 	old basics.AccountData
@@ -315,6 +330,21 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 		return nil, err
 	}
 
+	qs.lookupKeyStmt, err = r.Prepare("SELECT venc FROM storage WHERE owner = ? AND aidx = ? AND global = ? AND key = ?")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.lookupStorageStmt, err = r.Prepare("SELECT key, venc FROM storage WHERE owner = ? AND aidx = ? AND global = ?")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.countStorageStmt, err = r.Prepare("SELECT COUNT(*) FROM storage WHERE owner = ? AND aidx = ? AND global = ? AND vtype = ?")
+	if err != nil {
+		return nil, err
+	}
+
 	qs.lookupCreatorStmt, err = r.Prepare("SELECT creator FROM assetcreators WHERE asset = ? AND ctype = ?")
 	if err != nil {
 		return nil, err
@@ -383,6 +413,92 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 			cl.Type = ctype
 			results = append(results, cl)
 		}
+		return nil
+	})
+	return
+}
+
+func (qs *accountsDbQueries) lookupKey(aapp addrApp, key string) (val basics.TealValue, ok bool, err error) {
+	err = db.Retry(func() error {
+		var buf []byte
+		err := qs.lookupKeyStmt.QueryRow(aapp.addr, aapp.aidx, aapp.global, key).Scan(&buf)
+		// Common error: entry does not exist
+		if err == sql.ErrNoRows {
+			return nil
+		}
+
+		// Some other database error
+		if err != nil {
+			return err
+		}
+
+		err = protocol.Decode(buf, &val)
+		if err != nil {
+			return err
+		}
+
+		// Got a legitimate value
+		ok = true
+
+		return nil
+	})
+	return
+}
+
+func (qs *accountsDbQueries) lookupStorage(aapp addrApp) (kv basics.TealKeyValue, counts basics.StateSchema, err error) {
+	rows, err := qs.lookupStorageStmt.Query(aapp.addr, aapp.aidx, aapp.global)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	kv = make(basics.TealKeyValue)
+	for rows.Next() {
+		var key, venc []byte
+		err = rows.Scan(&key, &venc)
+		if err != nil {
+			return
+		}
+
+		var val basics.TealValue
+		err = protocol.Decode(venc, &val)
+		if err != nil {
+			return
+		}
+
+		switch val.Type {
+		case basics.TealBytesType:
+			counts.NumByteSlice++
+		case basics.TealUintType:
+			counts.NumUint++
+		default:
+			err = fmt.Errorf("unexpected teal type %v for %+v", val.Type, aapp)
+			return
+		}
+
+		kv[string(key)] = val
+	}
+
+	err = rows.Err()
+	return
+}
+
+func (qs *accountsDbQueries) countStorage(aapp addrApp) (schema basics.StateSchema, err error) {
+	err = db.Retry(func() error {
+		var bytesCount, uintCount uint64
+		err := qs.countStorageStmt.QueryRow(aapp.addr, aapp.aidx, aapp.global, basics.TealBytesType).Scan(&bytesCount)
+		if err != nil {
+			return err
+		}
+
+		err = qs.countStorageStmt.QueryRow(aapp.addr, aapp.aidx, aapp.global, basics.TealUintType).Scan(&uintCount)
+		if err != nil {
+			return err
+		}
+
+		schema.NumByteSlice = bytesCount
+		schema.NumUint = uintCount
+
 		return nil
 	})
 	return
