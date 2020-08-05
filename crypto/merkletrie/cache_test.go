@@ -17,6 +17,7 @@
 package merkletrie
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -33,6 +34,11 @@ func verifyCacheNodeCount(t *testing.T, trie *Trie) {
 
 	// make sure that the pagesPrioritizationMap aligns with pagesPrioritizationList
 	require.Equal(t, len(trie.cache.pagesPrioritizationMap), trie.cache.pagesPrioritizationList.Len())
+
+	// if we're not within a transaction, the following should also hold true:
+	if !trie.cache.modified {
+		require.Equal(t, len(trie.cache.pageToNIDsPtr), trie.cache.pagesPrioritizationList.Len())
+	}
 
 	for e := trie.cache.pagesPrioritizationList.Back(); e != nil; e = e.Next() {
 		page := e.Value.(uint64)
@@ -116,4 +122,81 @@ func TestCacheEviction3(t *testing.T) {
 			verifyCacheNodeCount(t, mt1)
 		}
 	}
+}
+
+// smallPageMemoryCommitter is an InMemoryCommitter, which has a custom page size, and knows how to "fail" per request.
+type smallPageMemoryCommitter struct {
+	InMemoryCommitter
+	pageSize  int64
+	failStore int
+	failLoad  int
+}
+
+// GetNodesCountPerPage returns the page size ( number of nodes per page )
+func (spmc *smallPageMemoryCommitter) GetNodesCountPerPage() (pageSize int64) {
+	return spmc.pageSize
+}
+
+// StorePage stores a single page in an in-memory persistence.
+func (spmc *smallPageMemoryCommitter) StorePage(page uint64, content []byte) error {
+	if spmc.failStore > 0 {
+		spmc.failStore--
+		return fmt.Errorf("failStore>0")
+	}
+	return spmc.InMemoryCommitter.StorePage(page, content)
+}
+
+// LoadPage load a single page from an in-memory persistence.
+func (spmc *smallPageMemoryCommitter) LoadPage(page uint64) (content []byte, err error) {
+	if spmc.failLoad > 0 {
+		spmc.failLoad--
+		return nil, fmt.Errorf("failLoad>0")
+	}
+	return spmc.InMemoryCommitter.LoadPage(page)
+}
+
+// TestCacheEvictionFuzzer generates bursts of random Add/Delete operations on the trie, and
+// testing the correctness of the cache internal buffers priodically.
+func TestCacheEvictionFuzzer(t *testing.T) {
+	// create 2000 hashes.
+	leafsCount := 2000
+	hashes := make([]crypto.Digest, leafsCount)
+	for i := 0; i < len(hashes); i++ {
+		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
+	}
+	for _, pageSize := range []int64{2, 3, 8, 12, 17} {
+		for _, evictSize := range []int{5, 10, 13, 30} {
+			t.Run(fmt.Sprintf("Fuzzer-%d-%d", pageSize, evictSize), func(t *testing.T) {
+				var memoryCommitter smallPageMemoryCommitter
+				memoryCommitter.pageSize = pageSize
+				mt1, _ := MakeTrie(&memoryCommitter, evictSize)
+
+				// add the first 10 hashes.
+				for i := 0; i < 10; i++ {
+					mt1.Add(hashes[i][:])
+				}
+
+				for i := 10; i < len(hashes)-10; i++ {
+					for k := 0; k < int(hashes[i-2][0]%5); k++ {
+						if hashes[i+k-3][0]%7 == 0 {
+							memoryCommitter.failLoad++
+						}
+						if hashes[i+k-4][0]%7 == 0 {
+							memoryCommitter.failStore++
+						}
+						if hashes[i+k][0]%7 == 0 {
+							mt1.Delete(hashes[i+k-int(hashes[i][0]%7)][:])
+						}
+						mt1.Add(hashes[i+k+3-int(hashes[i+k-1][0]%7)][:])
+					}
+					if hashes[i][0]%5 == 0 {
+						verifyCacheNodeCount(t, mt1)
+						mt1.Evict(true)
+						verifyCacheNodeCount(t, mt1)
+					}
+				}
+			})
+		}
+	}
+
 }
