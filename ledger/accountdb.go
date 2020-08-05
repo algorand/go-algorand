@@ -422,7 +422,7 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 func (qs *accountsDbQueries) lookupKey(aapp addrApp, key string) (val basics.TealValue, ok bool, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
-		err := qs.lookupKeyStmt.QueryRow(aapp.addr, aapp.aidx, aapp.global, key).Scan(&buf)
+		err := qs.lookupKeyStmt.QueryRow(aapp.addr[:], aapp.aidx, aapp.global, key).Scan(&buf)
 		// Common error: entry does not exist
 		if err == sql.ErrNoRows {
 			return nil
@@ -447,7 +447,7 @@ func (qs *accountsDbQueries) lookupKey(aapp addrApp, key string) (val basics.Tea
 }
 
 func (qs *accountsDbQueries) lookupStorage(aapp addrApp) (kv basics.TealKeyValue, counts basics.StateSchema, err error) {
-	rows, err := qs.lookupStorageStmt.Query(aapp.addr, aapp.aidx, aapp.global)
+	rows, err := qs.lookupStorageStmt.Query(aapp.addr[:], aapp.aidx, aapp.global)
 	if err != nil {
 		return
 	}
@@ -487,12 +487,12 @@ func (qs *accountsDbQueries) lookupStorage(aapp addrApp) (kv basics.TealKeyValue
 func (qs *accountsDbQueries) countStorage(aapp addrApp) (schema basics.StateSchema, err error) {
 	err = db.Retry(func() error {
 		var bytesCount, uintCount uint64
-		err := qs.countStorageStmt.QueryRow(aapp.addr, aapp.aidx, aapp.global, basics.TealBytesType).Scan(&bytesCount)
+		err := qs.countStorageStmt.QueryRow(aapp.addr[:], aapp.aidx, aapp.global, basics.TealBytesType).Scan(&bytesCount)
 		if err != nil {
 			return err
 		}
 
-		err = qs.countStorageStmt.QueryRow(aapp.addr, aapp.aidx, aapp.global, basics.TealUintType).Scan(&uintCount)
+		err = qs.countStorageStmt.QueryRow(aapp.addr[:], aapp.aidx, aapp.global, basics.TealUintType).Scan(&uintCount)
 		if err != nil {
 			return err
 		}
@@ -869,6 +869,8 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (
 }
 
 func storageNewRound(tx *sql.Tx, sdeltas map[addrApp]*storageDelta, log logging.Logger) (err error) {
+	log.Warnf("MAXJ: storageNewRound: %d", len(sdeltas))
+
 	replaceKeyStmt, err := tx.Prepare("REPLACE INTO storage (owner, aidx, global, key, vtype, venc) VALUES (?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return
@@ -891,10 +893,14 @@ func storageNewRound(tx *sql.Tx, sdeltas map[addrApp]*storageDelta, log logging.
 		// For both alloc and dealloc, clear all existing storage.
 		switch sdelta.action {
 		case allocAction:
-			fallthrough
+			// deallocate existing storage
+			_, err = deallocStmt.Exec(aapp.addr[:], aapp.aidx, aapp.global)
+			if err != nil {
+				return
+			}
 		case deallocAction:
 			// deallocate existing storage
-			_, err = deallocStmt.Exec(aapp.addr, aapp.aidx, aapp.global)
+			_, err = deallocStmt.Exec(aapp.addr[:], aapp.aidx, aapp.global)
 			if err != nil {
 				return
 			}
@@ -916,7 +922,7 @@ func storageNewRound(tx *sql.Tx, sdeltas map[addrApp]*storageDelta, log logging.
 					log.Panic("storageNewRound: failed to encode tv: %v", vdelta)
 				}
 				venc := protocol.Encode(&tv)
-				_, err = replaceKeyStmt.Exec(aapp.addr, aapp.aidx, aapp.global, key, basics.TealUintType, venc)
+				_, err = replaceKeyStmt.Exec(aapp.addr[:], aapp.aidx, aapp.global, key, basics.TealUintType, venc)
 				if err != nil {
 					return
 				}
@@ -925,12 +931,12 @@ func storageNewRound(tx *sql.Tx, sdeltas map[addrApp]*storageDelta, log logging.
 					log.Panic("storageNewRound: failed to encode tv: %v", vdelta)
 				}
 				venc := protocol.Encode(&tv)
-				_, err = replaceKeyStmt.Exec(aapp.addr, aapp.aidx, aapp.global, key, basics.TealBytesType, venc)
+				_, err = replaceKeyStmt.Exec(aapp.addr[:], aapp.aidx, aapp.global, key, basics.TealBytesType, venc)
 				if err != nil {
 					return
 				}
 			case basics.DeleteAction:
-				_, err = deleteKeyStmt.Exec(aapp.addr, aapp.aidx, aapp.global, key)
+				_, err = deleteKeyStmt.Exec(aapp.addr[:], aapp.aidx, aapp.global, key)
 				if err != nil {
 					return
 				}

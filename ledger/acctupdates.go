@@ -1216,12 +1216,12 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	}
 
 	for addrApp, sdelta := range delta.sdeltas {
-		au.log.Warnf("MAXJ: %s", addrApp.addr)
+		/*au.log.Warnf("MAXJ: %s", addrApp.addr)
 		au.log.Warnf("MAXJ: %d", addrApp.aidx)
 		au.log.Warnf("MAXJ: %+v", sdelta.counts)
 		au.log.Warnf("MAXJ: %+v", sdelta.action)
 		au.log.Warnf("MAXJ: %+v", sdelta.kvCow)
-		au.log.Warnf("#######################")
+		au.log.Warnf("#######################")*/
 
 		// Grab any modifiedStorage for this addrApp already (might
 		// not exist)
