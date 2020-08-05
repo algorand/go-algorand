@@ -37,6 +37,9 @@ type roundCowParent interface {
 	isDup(basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
+	getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
+	Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
+	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error)
 }
 
 type roundCowState struct {
@@ -44,6 +47,52 @@ type roundCowState struct {
 	commitParent *roundCowState
 	proto        config.ConsensusParams
 	mods         StateDelta
+}
+
+type addrApp struct {
+	addr   basics.Address
+	aidx   basics.AppIndex
+	global bool
+}
+
+type storageAction uint64
+
+const (
+	remainAllocAction storageAction = 1
+	allocAction       storageAction = 2
+	deallocAction     storageAction = 3
+)
+
+type storageDelta struct {
+	action storageAction
+	kvCow  basics.StateDelta
+	counts *basics.StateSchema
+}
+
+func (lsd *storageDelta) merge(osd *storageDelta) {
+	if osd.action != remainAllocAction {
+		// If child state allocated or deallocated, then its deltas
+		// completely overwrite those of the parent.
+		lsd.action = osd.action
+		lsd.kvCow = osd.kvCow
+		lsd.counts = osd.counts
+	} else {
+		// Otherwise, the child's deltas get merged with those of the
+		// parent, and we keep whatever the parent's state was.
+		for key, delta := range osd.kvCow {
+			lsd.kvCow[key] = delta
+		}
+
+		// counts can just get overwritten because they are absolute
+		lsd.counts = osd.counts
+	}
+
+	// sanity checks
+	if lsd.action == deallocAction {
+		if len(lsd.kvCow) > 0 {
+			panic("dealloc state delta, but nonzero kv change")
+		}
+	}
 }
 
 // StateDelta describes the delta between a given round to the previous round
@@ -62,19 +111,27 @@ type StateDelta struct {
 
 	// new block header; read-only
 	hdr *bookkeeping.BlockHeader
+
+	// previous block timestamp
+	prevTimestamp int64
+
+	// storage deltas
+	sdeltas map[addrApp]*storageDelta
 }
 
-func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader) *roundCowState {
+func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64) *roundCowState {
 	return &roundCowState{
 		lookupParent: b,
 		commitParent: nil,
 		proto:        config.Consensus[hdr.CurrentProtocol],
 		mods: StateDelta{
-			accts:      make(map[basics.Address]accountDelta),
-			Txids:      make(map[transactions.Txid]basics.Round),
-			txleases:   make(map[txlease]basics.Round),
-			creatables: make(map[basics.CreatableIndex]modifiedCreatable),
-			hdr:        &hdr,
+			accts:         make(map[basics.Address]accountDelta),
+			Txids:         make(map[transactions.Txid]basics.Round),
+			txleases:      make(map[txlease]basics.Round),
+			creatables:    make(map[basics.CreatableIndex]modifiedCreatable),
+			sdeltas:       make(map[addrApp]*storageDelta),
+			hdr:           &hdr,
+			prevTimestamp: prevTimestamp,
 		},
 	}
 }
@@ -159,11 +216,13 @@ func (cb *roundCowState) child() *roundCowState {
 		commitParent: cb,
 		proto:        cb.proto,
 		mods: StateDelta{
-			accts:      make(map[basics.Address]accountDelta),
-			Txids:      make(map[transactions.Txid]basics.Round),
-			txleases:   make(map[txlease]basics.Round),
-			creatables: make(map[basics.CreatableIndex]modifiedCreatable),
-			hdr:        cb.mods.hdr,
+			accts:         make(map[basics.Address]accountDelta),
+			Txids:         make(map[transactions.Txid]basics.Round),
+			txleases:      make(map[txlease]basics.Round),
+			creatables:    make(map[basics.CreatableIndex]modifiedCreatable),
+			sdeltas:       make(map[addrApp]*storageDelta),
+			hdr:           cb.mods.hdr,
+			prevTimestamp: cb.mods.prevTimestamp,
 		},
 	}
 }
@@ -189,6 +248,14 @@ func (cb *roundCowState) commitToParent() {
 	}
 	for cidx, delta := range cb.mods.creatables {
 		cb.commitParent.mods.creatables[cidx] = delta
+	}
+	for aapp, nsd := range cb.mods.sdeltas {
+		lsd, ok := cb.commitParent.mods.sdeltas[aapp]
+		if ok {
+			lsd.merge(nsd)
+		} else {
+			cb.commitParent.mods.sdeltas[aapp] = nsd
+		}
 	}
 }
 

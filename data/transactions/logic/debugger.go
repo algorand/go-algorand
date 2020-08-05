@@ -216,6 +216,8 @@ func (cx *evalContext) refreshDebugState() *DebugState {
 	ds.Stack = stack
 	ds.Scratch = scratch
 
+// TODO(app refactor, fix)
+/*
 	if (cx.runModeFlags & runModeApplication) != 0 {
 		if cx.globalStateCow != nil {
 			for k, v := range cx.globalStateCow.delta {
@@ -230,6 +232,7 @@ func (cx *evalContext) refreshDebugState() *DebugState {
 			ds.LocalStateChanges[addr] = delta
 		}
 	}
+*/
 
 	return ds
 }

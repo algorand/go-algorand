@@ -201,7 +201,7 @@ func MakeLocalRunner(debugger *Debugger) *LocalRunner {
 
 func determineEvalMode(program []byte, modeIn string) (eval evalFn, mode string, err error) {
 	statefulEval := func(program []byte, ep logic.EvalParams) (bool, error) {
-		pass, _, err := logic.EvalStateful(program, ep)
+		pass, err := logic.EvalStateful(program, ep)
 		return pass, err
 	}
 	mode = modeIn
@@ -377,7 +377,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			var ledger logic.LedgerForLogic
 			var states appState
 			eval := func(program []byte, ep logic.EvalParams) (bool, error) {
-				pass, _, err := logic.EvalStateful(program, ep)
+				pass, err := logic.EvalStateful(program, ep)
 				return pass, err
 			}
 			appIdx := stxn.Txn.ApplicationID

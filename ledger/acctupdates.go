@@ -500,6 +500,18 @@ func (au *accountUpdates) Totals(rnd basics.Round) (totals AccountTotals, err er
 	return au.totalsImpl(rnd)
 }
 
+func (au *accountUpdates) CountStorageForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	return au.countStorageForRoundImpl(rnd, addr, aidx, global)
+}
+
+func (au *accountUpdates) GetKeyForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	return au.getKeyForRoundImpl(rnd, addr, aidx, global, key)
+}
+
 // GetCatchpointStream returns an io.Reader to the catchpoint file associated with the provided round
 func (au *accountUpdates) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	dbFileName := ""
@@ -609,6 +621,14 @@ func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round,
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
 func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	return aul.au.getCreatorForRoundImpl(rnd, cidx, ctype)
+}
+
+func (aul *accountUpdatesLedgerEvaluator) CountStorageForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
+	return aul.au.countStorageForRoundImpl(rnd, addr, aidx, global)
+}
+
+func (aul *accountUpdatesLedgerEvaluator) GetKeyForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+	return aul.au.getKeyForRoundImpl(rnd, addr, aidx, global, key)
 }
 
 // totalsImpl returns the totals for a given round
@@ -1200,6 +1220,16 @@ func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.C
 
 	// Check the database
 	return au.accountsq.lookupCreator(cidx, ctype)
+}
+
+func (au *accountUpdates) countStorageForRoundImpl(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
+	// TODO(app refactor, do this)
+	return basics.StateSchema{}, nil
+}
+
+func (au *accountUpdates) getKeyForRoundImpl(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+	// TODO(app refactor, do this)
+	return basics.TealValue{}, false, nil
 }
 
 // accountsCreateCatchpointLabel creates a catchpoint label and write it.

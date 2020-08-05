@@ -25,7 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger"
+	_ "github.com/algorand/go-algorand/ledger"
 )
 
 type balancesAdapter struct {
@@ -60,6 +60,7 @@ func makeAppLedger(
 		proto:      proto,
 		round:      round,
 	}
+	_ = ba
 
 	appsExist := make(map[basics.AppIndex]bool, len(apps))
 	states := makeAppState()
@@ -125,9 +126,11 @@ func makeAppLedger(
 		}
 	}
 
-	appGlobals := ledger.AppTealGlobals{CurrentRound: basics.Round(round), LatestTimestamp: latestTimestamp}
-	ledger, err := ledger.MakeDebugAppLedger(ba, appIdx, states.schemas, appGlobals)
-	return ledger, states, err
+//	appGlobals := ledger.AppTealGlobals{CurrentRound: basics.Round(round), LatestTimestamp: latestTimestamp}
+//	ledger, err := ledger.MakeDebugAppLedger(ba, appIdx, states.schemas, appGlobals)
+//	return ledger, states, err
+//	TODO app refactor, fix
+	return nil, states, nil
 }
 
 func makeSchemas() basics.StateSchemas {

@@ -28,11 +28,11 @@ import (
 type DeltaAction uint64
 
 const (
-	// SetBytesAction indicates that a TEAL byte slice should be stored at a key
-	SetBytesAction DeltaAction = 1
-
 	// SetUintAction indicates that a Uint should be stored at a key
-	SetUintAction DeltaAction = 2
+	SetUintAction DeltaAction = 1
+
+	// SetBytesAction indicates that a TEAL byte slice should be stored at a key
+	SetBytesAction DeltaAction = 2
 
 	// DeleteAction indicates that the value for a particular key should be deleted
 	DeleteAction DeltaAction = 3
@@ -73,6 +73,17 @@ func (vd *ValueDelta) ToTealValue() (value TealValue, ok bool) {
 // what should happen for that key
 //msgp:allocbound StateDelta config.MaxStateDeltaKeys
 type StateDelta map[string]ValueDelta
+
+func (sd StateDelta) Clone() StateDelta {
+	if sd == nil {
+		return nil
+	}
+	out := make(StateDelta, len(sd))
+	for key, vdelta := range sd {
+		out[key] = vdelta
+	}
+	return out
+}
 
 // Equal checks whether two StateDeltas are equal. We don't check for nilness
 // equality because an empty map will encode/decode as nil. So if our generated

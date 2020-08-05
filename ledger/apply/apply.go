@@ -19,6 +19,7 @@ package apply
 import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
 // Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records
@@ -38,6 +39,10 @@ type Balances interface {
 	// GetCreator gets the address of the account that created a given creatable
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 
+	Allocate(addr basics.Address, aidx basics.AppIndex, global bool) error
+	Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error
+	StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta basics.EvalDelta, err error)
+
 	// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
 	// TODO: Does this need to be part of the balances interface, or can it just be implemented here as a function that calls Put and Get?
 	Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards *basics.MicroAlgos, dstRewards *basics.MicroAlgos) error
@@ -45,15 +50,4 @@ type Balances interface {
 	// Balances correspond to a Round, which mean that they also correspond
 	// to a ConsensusParams.  This returns those parameters.
 	ConsensusParams() config.ConsensusParams
-}
-
-// StateEvaluator is an interface that provides some Stateful TEAL
-// functionality that may be passed through to Apply from ledger. It was
-// originally created to avoid a circular dependency between the logic and
-// transactions packages (when the apply methods were in the transactions
-// package).
-type StateEvaluator interface {
-	Eval(program []byte) (pass bool, stateDelta basics.EvalDelta, err error)
-	Check(program []byte) (cost int, err error)
-	InitLedger(balances Balances, appIdx basics.AppIndex, schemas basics.StateSchemas) error
 }

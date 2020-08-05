@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger"
+	//"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -374,7 +374,7 @@ func (dl *dryrunLedger) ConsensusParams() config.ConsensusParams {
 }
 
 func makeAppLedger(dl *dryrunLedger, txn *transactions.Transaction, appIdx basics.AppIndex) (l logic.LedgerForLogic, err error) {
-	globals := ledger.AppTealGlobals{
+/*	globals := ledger.AppTealGlobals{
 		CurrentRound:    basics.Round(dl.dr.Round),
 		LatestTimestamp: dl.dr.LatestTimestamp,
 	}
@@ -382,6 +382,9 @@ func makeAppLedger(dl *dryrunLedger, txn *transactions.Transaction, appIdx basic
 	globalSchema := basics.StateSchema{NumUint: 64, NumByteSlice: 64}
 	schemas := basics.StateSchemas{LocalStateSchema: localSchema, GlobalStateSchema: globalSchema}
 	return ledger.MakeDebugAppLedger(dl, appIdx, schemas, globals)
+*/
+	// TODO(app refactor, fix)
+	return nil, nil
 }
 
 // unit-testable core of dryrun handler
@@ -467,7 +470,9 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 				messages = make([]string, 1)
 				messages[0] = fmt.Sprintf("uploaded state did not include app id %d referenced in txn[%d]", appIdx, ti)
 			} else {
-				var debug dryrunDebugReceiver
+				_ = app
+				// TODO app refactor, fix
+				/*var debug dryrunDebugReceiver
 				ep.Debugger = &debug
 				var program []byte
 				messages = make([]string, 1)
@@ -503,7 +508,7 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 				}
 				if err != nil {
 					messages = append(messages, err.Error())
-				}
+				}*/
 			}
 			result.AppCallMessages = &messages
 		}
