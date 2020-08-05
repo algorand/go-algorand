@@ -27,6 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -865,6 +866,80 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (
 		return
 	}
 	return
+}
+
+func storageNewRound(tx *sql.Tx, sdeltas map[addrApp]*storageDelta, log logging.Logger) (err error) {
+	replaceKeyStmt, err := tx.Prepare("REPLACE INTO storage (owner, aidx, global, key, vtype, venc) VALUES (?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		return
+	}
+	defer replaceKeyStmt.Close()
+
+	deleteKeyStmt, err := tx.Prepare("DELETE FROM storage WHERE owner=? AND aidx=? AND global=? AND key=?")
+	if err != nil {
+		return
+	}
+	defer deleteKeyStmt.Close()
+
+	deallocStmt, err := tx.Prepare("DELETE FROM storage WHERE owner=? AND aidx=? AND global=?")
+	if err != nil {
+		return
+	}
+	defer deallocStmt.Close()
+
+	for aapp, sdelta := range sdeltas {
+		// For both alloc and dealloc, clear all existing storage.
+		switch sdelta.action {
+		case allocAction:
+			fallthrough
+		case deallocAction:
+			// deallocate existing storage
+			_, err = deallocStmt.Exec(aapp.addr, aapp.aidx, aapp.global)
+			if err != nil {
+				return
+			}
+			if len(sdelta.kvCow) > 0 {
+				log.Warnf("storageNewRound: kvCow len > 0 but dealloc? %+v %+v", aapp, sdelta)
+			}
+		case remainAllocAction:
+			// noop
+		default:
+			log.Panic("storageNewRound: unknown storage action %v", sdelta.action)
+		}
+
+		// Then, apply any key/value deltas
+		for key, vdelta := range sdelta.kvCow {
+			tv, tvok := vdelta.ToTealValue()
+			switch vdelta.Action {
+			case basics.SetUintAction:
+				if !tvok {
+					log.Panic("storageNewRound: failed to encode tv: %v", vdelta)
+				}
+				venc := protocol.Encode(&tv)
+				_, err = replaceKeyStmt.Exec(aapp.addr, aapp.aidx, aapp.global, key, basics.TealUintType, venc)
+				if err != nil {
+					return
+				}
+			case basics.SetBytesAction:
+				if !tvok {
+					log.Panic("storageNewRound: failed to encode tv: %v", vdelta)
+				}
+				venc := protocol.Encode(&tv)
+				_, err = replaceKeyStmt.Exec(aapp.addr, aapp.aidx, aapp.global, key, basics.TealBytesType, venc)
+				if err != nil {
+					return
+				}
+			case basics.DeleteAction:
+				_, err = deleteKeyStmt.Exec(aapp.addr, aapp.aidx, aapp.global, key)
+				if err != nil {
+					return
+				}
+			default:
+				log.Panic("storageNewRound: unknown delta action %v", vdelta.Action)
+			}
+		}
+	}
+	return nil
 }
 
 // encodedAccountsRange returns an array containing the account data, in the same way it appear in the database

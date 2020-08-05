@@ -1574,6 +1574,11 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			if err != nil {
 				return err
 			}
+
+			err = storageNewRound(tx, storageDeltas[i], au.log)
+			if err != nil {
+				return err
+			}
 		}
 		err = totalsNewRounds(tx, deltas[:offset], roundTotals[1:offset+1], protos[1:offset+1])
 		if err != nil {
