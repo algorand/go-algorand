@@ -106,3 +106,19 @@ else
     false
 fi
 
+# Account balance should be the same amount as before.
+BALANCEB=$(${gcmd} account balance -a "${ACCOUNTB}" | awk '{ print $1 }')
+if [ "$BALANCEB" -ne 33000000 ]; then
+    date "+e2e_subs/rekey.sh FAIL wanted balance=33000000 but got ${BALANCEB} %Y%m%d_%H%M%S"
+    false
+fi
+
+# After restoring, let's just do a trivial transfer as a sanity.
+${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ACCOUNTB}"
+
+BALANCEB=$(${gcmd} account balance -a "${ACCOUNTB}" | awk '{ print $1 }')
+if [ "$BALANCEB" -ne 43000000 ]; then
+    date "+e2e_subs/rekey.sh FAIL wanted balance=43000000 but got ${BALANCEB} %Y%m%d_%H%M%S"
+    false
+fi
+
