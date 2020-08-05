@@ -90,6 +90,42 @@ type modifiedCreatable struct {
 	ndeltas int
 }
 
+type storageState uint64
+
+const (
+	allocatedState   storageState = 1
+	deallocatedState storageState = 2
+)
+
+// refCountedValueDelta is a reference counted analogue of basics.ValueDelta
+type refCountedValueDelta struct {
+	ndeltas int
+	delta   basics.ValueDelta
+}
+
+// refCountedStateDelta is like a basics.StateDelta but with reference counted
+// basics.ValueDeltas. We use this instead of a basics.StateDelta so that we
+// may flush value deltas to disk and eliminate them from this map, preventing
+// refCountedStateDelta from growing unboundedly.
+type refCountedStateDelta map[string]refCountedValueDelta
+
+type modifiedStorage struct {
+	// If this storage was opted in/out during for a round that was at one
+	// point in storageDeltas, lastClearedRound contains that round number.
+	// Otherwise, it is set to 0. This field is used to determine if a lookup
+	// should propagate to the database or not.
+	lastClearedRound basics.Round
+
+	// Marks if storage is currently allocated or deallocated
+	state storageState
+
+	// Maps keys to reference counted value deltas
+	kvDeltas refCountedStateDelta
+
+	// Reference count
+	ndeltas int
+}
+
 type accountUpdates struct {
 	// constant variables ( initialized on initialize, and never changed afterward )
 
@@ -134,9 +170,20 @@ type accountUpdates struct {
 	// creatableDeltas stores creatable updates for every round after dbRound.
 	creatableDeltas []map[basics.CreatableIndex]modifiedCreatable
 
+	// storageDeltas holds storage updates for every round after dbRound.
+	// TODO(app refactor) make these storageDeltas and not *storageDeltas
+	storageDeltas []map[addrApp]*storageDelta
+
 	// creatables stores the most recent state for every creatable that
 	// appears in creatableDeltas
 	creatables map[basics.CreatableIndex]modifiedCreatable
+
+	// storage stores the most recent state for every storageDelta that
+	// appears in storageDeltas. However, in the event that there is not
+	// an `allocate` storage event in storageDeltas, we may still hit the
+	// disk. In other words, `modifiedStorage` does not necessarily contain
+	// all of the keys in a given TEAL key/value store.
+	storage map[addrApp]modifiedStorage
 
 	// protos stores consensus parameters dbRound and every
 	// round after it; i.e., protos is one longer than deltas.
@@ -743,8 +790,10 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	au.protos = []config.ConsensusParams{config.Consensus[hdr.CurrentProtocol]}
 	au.deltas = nil
 	au.creatableDeltas = nil
+	au.storageDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
 	au.creatables = make(map[basics.CreatableIndex]modifiedCreatable)
+	au.storage = make(map[addrApp]modifiedStorage)
 	au.deltasAccum = []int{0}
 
 	// keep these channel closed if we're not generating catchpoint
@@ -1103,6 +1152,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	au.deltas = append(au.deltas, delta.accts)
 	au.protos = append(au.protos, proto)
 	au.creatableDeltas = append(au.creatableDeltas, delta.creatables)
+	au.storageDeltas = append(au.storageDeltas, delta.sdeltas)
 	au.roundDigest = append(au.roundDigest, blk.Digest())
 	au.deltasAccum = append(au.deltasAccum, len(delta.accts)+au.deltasAccum[len(au.deltasAccum)-1])
 
@@ -1314,10 +1364,12 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]map[basics.Address]accountDelta, offset, offset)
 	creatableDeltas := make([]map[basics.CreatableIndex]modifiedCreatable, offset, offset)
+	storageDeltas := make([]map[addrApp]*storageDelta, offset, offset)
 	roundTotals := make([]AccountTotals, offset+1, offset+1)
 	protos := make([]config.ConsensusParams, offset+1, offset+1)
 	copy(deltas, au.deltas[:offset])
 	copy(creatableDeltas, au.creatableDeltas[:offset])
+	copy(storageDeltas, au.storageDeltas[:offset])
 	copy(roundTotals, au.roundTotals[:offset+1])
 	copy(protos, au.protos[:offset+1])
 
@@ -1326,6 +1378,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	// au.accounts.
 	flushcount := make(map[basics.Address]int)
 	creatableFlushcount := make(map[basics.CreatableIndex]int)
+	storageFlushcount := make(map[addrApp]int)
 
 	var committedRoundDigest crypto.Digest
 
@@ -1350,6 +1403,9 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 		for cidx := range creatableDeltas[i] {
 			creatableFlushcount[cidx] = creatableFlushcount[cidx] + 1
+		}
+		for aapp := range storageDeltas[i] {
+			storageFlushcount[aapp] = storageFlushcount[aapp] + 1
 		}
 	}
 
@@ -1468,12 +1524,31 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 	}
 
+	for aapp, cnt := range storageFlushcount {
+		mstor, ok := au.storage[aapp]
+		if !ok {
+			au.log.Panicf("inconsistency: flushed %d changes to storage %+v, but not in au.storage", cnt, aapp)
+		}
+
+		if cnt > mstor.ndeltas {
+			au.log.Panicf("inconsistency: flushed %d changes to storage %+v, but au.storage had %d", cnt, aapp, mstor.ndeltas)
+		}
+
+		mstor.ndeltas -= cnt
+		if mstor.ndeltas == 0 {
+			delete(au.storage, aapp)
+		} else {
+			au.storage[aapp] = mstor
+		}
+	}
+
 	au.deltas = au.deltas[offset:]
 	au.deltasAccum = au.deltasAccum[offset:]
 	au.roundDigest = au.roundDigest[offset:]
 	au.protos = au.protos[offset:]
 	au.roundTotals = au.roundTotals[offset:]
 	au.creatableDeltas = au.creatableDeltas[offset:]
+	au.storageDeltas = au.storageDeltas[offset:]
 	au.dbRound = newBase
 	au.lastFlushTime = flushTime
 
