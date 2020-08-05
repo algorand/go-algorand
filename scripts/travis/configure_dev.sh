@@ -16,7 +16,7 @@ if [[ "${OS}" == "linux" ]]; then
         sudo sh -c 'echo "CONF_SWAPSIZE=1024" > /etc/dphys-swapfile; dphys-swapfile setup; dphys-swapfile swapon'
         set -e
         sudo apt-get update -y
-        sudo apt-get -y install sqlite3
+        sudo apt-get -y install sqlite3 git
     fi
 elif [[ "${OS}" == "darwin" ]]; then
     # we don't want to upgrade boost if we already have it, as it will try to update
