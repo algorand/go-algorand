@@ -98,10 +98,11 @@ fi
 ${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ACCOUNTB}" -s -o "${TEMPDIR}/ntxn3"
 ${gcmd} clerk sign -S "${ACCOUNTC}" -i "${TEMPDIR}/ntxn3" -o "${TEMPDIR}/nstxn3"
 
+# This should fail because $ACCOUNT should have signed the transaction.
 if ! ${gcmd} clerk rawsend -f "${TEMPDIR}/nstxn3"; then
+    date '+e2e_subs/rekey.sh OK %Y%m%d_%H%M%S'
+else
     date "+e2e_subs/rekey.sh rawsend should have failed because of a bad signature %Y%m%d_%H%M%S"
     false
 fi
-
-date '+e2e_subs/rekey.sh OK %Y%m%d_%H%M%S'
 
