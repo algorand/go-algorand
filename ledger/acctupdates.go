@@ -1370,8 +1370,15 @@ func (au *accountUpdates) countStorageForRoundImpl(rnd basics.Round, addr basics
 			return mstor.counts, nil
 		}
 	} else {
+		// For counts, but not for keys/values, we can do the normal
+		// scan backwards over storageDeltas to find the count. This
+		// works because the absolute counts are stored in the deltas.
 		for offset > 0 {
-			au.log.Panicf("MAXJ historical countStorageForRound not implemented")
+			offset--
+			storageDelta, ok := au.storageDeltas[offset][aapp]
+			if ok {
+				return *storageDelta.counts, nil
+			}
 		}
 	}
 
