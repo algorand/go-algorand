@@ -84,6 +84,7 @@ if [ "${MAKE_DEBUG_OPTION}" != "" ]; then
     make msgp
     make build build-race
 else
+    git config --global http.sslVerify true
     make build
 fi
 
