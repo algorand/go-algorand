@@ -50,6 +50,18 @@ func (ml *mockLedger) getCreator(cidx basics.CreatableIndex, ctype basics.Creata
 	return basics.Address{}, false, nil
 }
 
+func (ml *mockLedger) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
+	return basics.StateSchema{}, nil
+}
+
+func (ml *mockLedger) Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
+	return true, nil
+}
+
+func (ml *mockLedger) GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+	return basics.TealValue{}, false, nil
+}
+
 func (ml *mockLedger) txnCounter() uint64 {
 	return 0
 }
@@ -76,7 +88,7 @@ func TestCowBalance(t *testing.T) {
 	accts0 := randomAccounts(20, true)
 	ml := mockLedger{balanceMap: accts0}
 
-	c0 := makeRoundCowState(&ml, bookkeeping.BlockHeader{})
+	c0 := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, 0)
 	checkCow(t, c0, accts0)
 
 	c1 := c0.child()

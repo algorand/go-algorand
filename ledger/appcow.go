@@ -325,7 +325,7 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 			if aapp.global {
 				// Check that there is at most one global delta
 				if foundGlobal {
-					err = fmt.Errorf("found more than one global delta during StatefulEval: %d")
+					err = fmt.Errorf("found more than one global delta during StatefulEval: %d", aapp.aidx)
 					return false, basics.EvalDelta{}, err
 				}
 				evalDelta.GlobalDelta = sdelta.kvCow.Clone()

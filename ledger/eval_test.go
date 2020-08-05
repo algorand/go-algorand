@@ -223,7 +223,7 @@ func TestRekeying(t *testing.T) {
 	// TODO: More tests
 }
 
-func TestPrepareAppEvaluators(t *testing.T) {
+func TestPrepareEvalParams(t *testing.T) {
 	eval := BlockEvaluator{
 		prevHeader: bookkeeping.BlockHeader{
 			TimeStamp: 1234,
@@ -290,7 +290,7 @@ func TestPrepareAppEvaluators(t *testing.T) {
 
 	for i, testCase := range cases {
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
-			res := eval.prepareAppEvaluators(testCase.group)
+			res := eval.prepareEvalParams(testCase.group)
 			require.Equal(t, len(res), len(testCase.group))
 
 			// Compute the expected transaction group without ApplyData for
@@ -305,12 +305,10 @@ func TestPrepareAppEvaluators(t *testing.T) {
 			for j, present := range testCase.expected {
 				if present {
 					require.NotNil(t, res[j])
-					require.Equal(t, res[j].evalParams.GroupIndex, j)
-					require.Equal(t, res[j].evalParams.TxnGroup, expGroupNoAD)
-					require.Equal(t, *res[j].evalParams.Proto, eval.proto)
-					require.Equal(t, *res[j].evalParams.Txn, testCase.group[j].SignedTxn)
-					require.Equal(t, res[j].AppTealGlobals.CurrentRound, eval.prevHeader.Round+1)
-					require.Equal(t, res[j].AppTealGlobals.LatestTimestamp, eval.prevHeader.TimeStamp)
+					require.Equal(t, res[j].GroupIndex, j)
+					require.Equal(t, res[j].TxnGroup, expGroupNoAD)
+					require.Equal(t, *res[j].Proto, eval.proto)
+					require.Equal(t, *res[j].Txn, testCase.group[j].SignedTxn)
 				} else {
 					require.Nil(t, res[j])
 				}

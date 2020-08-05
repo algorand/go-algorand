@@ -16,6 +16,7 @@
 
 package ledger
 
+/*
 import (
 	"crypto/rand"
 	"fmt"
@@ -26,7 +27,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/stretchr/testify/require"
 )
-
 type testBalances struct {
 	appCreators   map[basics.AppIndex]basics.Address
 	assetCreators map[basics.AssetIndex]basics.Address
@@ -276,3 +276,4 @@ func TestAppLedgerAppLocalState(t *testing.T) {
 	a.NoError(err)
 	a.NotNil(kv)
 }
+*/
