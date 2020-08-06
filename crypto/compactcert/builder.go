@@ -8,11 +8,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
-type Participants interface {
-	Lookup(pos uint64) (Participant, error)
-	Length() uint64
-}
-
 //msgp:ignore sigslot
 type sigslot struct {
 	// part is the participant signing this message.  The participant
@@ -30,12 +25,12 @@ type Builder struct {
 
 	sigs         []sigslot // Indexed by pos in participants
 	signedWeight uint64    // Total weight of signatures so far
-	participants Participants
+	participants []Participant
 	parttree     *merklearray.Tree
 }
 
-func MkBuilder(param Params, part Participants, parttree *merklearray.Tree) (*Builder, error) {
-	npart := part.Length()
+func MkBuilder(param Params, part []Participant, parttree *merklearray.Tree) (*Builder, error) {
+	npart := len(part)
 
 	b := &Builder{
 		Params:       param,
@@ -63,10 +58,11 @@ func (b *Builder) Add(pos uint64, sig crypto.OneTimeSignature, verifySig bool) e
 	}
 
 	// Check participants array
-	p, err := b.participants.Lookup(pos)
-	if err != nil {
-		return err
+	if pos >= uint64(len(b.participants)) {
+		return fmt.Errorf("pos %d >= len(participants) %d", pos, len(b.participants))
 	}
+
+	p := b.participants[pos]
 
 	if p.Weight == 0 {
 		return fmt.Errorf("position %d has zero weight", pos)
@@ -171,6 +167,10 @@ func (b *Builder) Build() (*Cert, error) {
 			return nil, err
 		}
 
+		if pos >= uint64(len(b.participants)) {
+			return nil, fmt.Errorf("pos %d >= len(participants) %d", pos, len(b.participants))
+		}
+
 		// If we already revealed pos, no need to do it again
 		alreadyRevealed := false
 		for _, r := range c.Reveals {
@@ -184,16 +184,10 @@ func (b *Builder) Build() (*Cert, error) {
 		}
 
 		// Generate the reveal for pos
-		sig := b.sigs[pos].sigslotCommit
-		part, err := b.participants.Lookup(pos)
-		if err != nil {
-			return nil, err
-		}
-
 		r := Reveal{
 			Pos:     pos,
-			SigSlot: sig,
-			Part:    part,
+			SigSlot: b.sigs[pos].sigslotCommit,
+			Part:    b.participants[pos],
 		}
 
 		c.Reveals = append(c.Reveals, r)
