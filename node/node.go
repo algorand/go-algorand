@@ -979,6 +979,10 @@ func (vb validatedBlock) Block() bookkeeping.Block {
 func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
 	lvb, err := node.transactionPool.AssembleBlock(round, deadline)
 	if err != nil {
+		if err == pools.ErrTxPoolStaleBlockAssembly {
+			// convert specific error to one that would have special handling in the agreement code.
+			err = agreement.ErrAssembleBlockRoundStale
+		}
 		return nil, err
 	}
 	return validatedBlock{vb: lvb}, nil

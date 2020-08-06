@@ -266,7 +266,19 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 	deadline := time.Now().Add(AssemblyTime)
 	ve, err := n.factory.AssembleBlock(round, deadline)
 	if err != nil {
-		n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)
+		if err == ErrAssembleBlockRoundStale {
+			// check to see if we're truely stale.
+			ledgerNextRound := n.ledger.NextRound()
+			if ledgerNextRound == round {
+				// we've asked for the right round.. and the ledger doesn't think it's stale.
+				n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d, ledger and proposal generation are synced: %v", round, err)
+			} else if ledgerNextRound < round {
+				// from some reason, the ledger is behind the round that we're asking. That shouldn't happen, but error if it does.
+				n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d, ledger next round is %d: %v", round, ledgerNextRound, err)
+			}
+		} else {
+			n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)
+		}
 		return nil, nil
 	}
 
