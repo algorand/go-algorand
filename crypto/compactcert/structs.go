@@ -37,6 +37,7 @@ type Participant struct {
 	KeyDilution uint64 `codec:"d"`
 }
 
+// ToBeHashed implements the crypto.Hashable interface.
 func (p Participant) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.CompactCertPart, protocol.Encode(&p)
 }
@@ -64,6 +65,9 @@ func (ssc sigslotCommit) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.CompactCertSig, protocol.Encode(&ssc)
 }
 
+// Reveal is a single array position revealed as part of a compact
+// certificate.  It reveals an element of the signature array and
+// the corresponding element of the participants array.
 type Reveal struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
@@ -76,6 +80,7 @@ type Reveal struct {
 const maxReveals = 1024
 const maxProofDigests = 20 * maxReveals
 
+// Cert represents a compact certificate.
 type Cert struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 

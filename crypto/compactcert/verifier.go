@@ -8,12 +8,16 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 )
 
+// Verifier is used to verify a compact certificate.
 type Verifier struct {
 	Params
 
 	partcom crypto.Digest
 }
 
+// MkVerifier constructs a verifier to check the compact certificate
+// on the message specified in p, with partcom specifying the Merkle
+// root of the participants that must sign the message.
 func MkVerifier(p Params, partcom crypto.Digest) *Verifier {
 	return &Verifier{
 		Params:  p,
@@ -21,6 +25,8 @@ func MkVerifier(p Params, partcom crypto.Digest) *Verifier {
 	}
 }
 
+// Verify checks if c is a valid compact certificate for the message
+// and participants that were used to construct the Verifier.
 func (v *Verifier) Verify(c *Cert) error {
 	if c.SignedWeight < v.ProvenWeight {
 		return fmt.Errorf("cert signed weight %d < proven weight %d", c.SignedWeight, v.ProvenWeight)

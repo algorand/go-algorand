@@ -18,7 +18,7 @@ func TestHashCoin(t *testing.T) {
 			t.Errorf("hashCoin out of bounds")
 		}
 
-		slots[coin] += 1
+		slots[coin]++
 	}
 
 	for i, count := range slots {

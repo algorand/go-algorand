@@ -63,7 +63,7 @@ func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound ui
 
 		lhs.Mul(lhs, sw)
 		rhs.Mul(rhs, pw)
-		n += 1
+		n++
 	}
 }
 
