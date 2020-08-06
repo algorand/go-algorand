@@ -16,32 +16,20 @@ func (m TestMessage) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.Message, []byte(m)
 }
 
-type TestParticipants struct {
-	p []Participant
-}
-
-func (tp TestParticipants) Lookup(pos uint64) (Participant, error) {
-	if pos >= uint64(len(tp.p)) {
-		return Participant{}, fmt.Errorf("pos %d too high", pos)
-	}
-
-	return tp.p[pos], nil
-}
-
-func (tp TestParticipants) Length() uint64 {
-	return uint64(len(tp.p))
-}
-
 type PartCommit struct {
-	participants Participants
+	participants []Participant
 }
 
 func (pc PartCommit) Length() uint64 {
-	return pc.participants.Length()
+	return uint64(len(pc.participants))
 }
 
 func (pc PartCommit) Get(pos uint64) (crypto.Hashable, error) {
-	return pc.participants.Lookup(pos)
+	if pos >= uint64(len(pc.participants)) {
+		return nil, fmt.Errorf("pos %d >= len %d", pos, len(pc.participants))
+	}
+
+	return pc.participants[pos], nil
 }
 
 func TestBuildVerify(t *testing.T) {
@@ -60,7 +48,7 @@ func TestBuildVerify(t *testing.T) {
 	// Share the key; we allow the same vote key to appear in multiple accounts..
 	key := crypto.GenerateOneTimeSignatureSecrets(0, 1)
 
-	parts := TestParticipants{}
+	var parts []Participant
 	var sigs []crypto.OneTimeSignature
 	for i := 0; i < npartHi; i++ {
 		part := Participant{
@@ -69,7 +57,7 @@ func TestBuildVerify(t *testing.T) {
 			KeyDilution: 10000,
 		}
 
-		parts.p = append(parts.p, part)
+		parts = append(parts, part)
 	}
 
 	for i := 0; i < npartLo; i++ {
@@ -79,10 +67,10 @@ func TestBuildVerify(t *testing.T) {
 			KeyDilution: 10000,
 		}
 
-		parts.p = append(parts.p, part)
+		parts = append(parts, part)
 	}
 
-	ephID := basics.OneTimeIDForRound(0, parts.p[0].KeyDilution)
+	ephID := basics.OneTimeIDForRound(0, parts[0].KeyDilution)
 	sig := key.Sign(ephID, param.Msg)
 
 	for i := 0; i < npart; i++ {
@@ -141,7 +129,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 		SecKQ:        128,
 	}
 
-	parts := TestParticipants{}
+	var parts []Participant
 	var partkeys []*crypto.OneTimeSignatureSecrets
 	var sigs []crypto.OneTimeSignature
 	for i := 0; i < npart; i++ {
@@ -157,7 +145,7 @@ func BenchmarkBuildVerify(b *testing.B) {
 
 		partkeys = append(partkeys, key)
 		sigs = append(sigs, sig)
-		parts.p = append(parts.p, part)
+		parts = append(parts, part)
 	}
 
 	var cert *Cert
