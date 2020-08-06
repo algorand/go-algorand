@@ -48,7 +48,7 @@ type ValueDelta struct {
 }
 
 // ToTealValue converts a ValueDelta into a TealValue if possible, and returns
-// ok = false with a value of 0 TealUint if the conversion is not possible.
+// ok = false if the conversion is not possible.
 func (vd *ValueDelta) ToTealValue() (value TealValue, ok bool) {
 	switch vd.Action {
 	case SetBytesAction:
@@ -60,10 +60,8 @@ func (vd *ValueDelta) ToTealValue() (value TealValue, ok bool) {
 		value.Uint = vd.Uint
 		ok = true
 	case DeleteAction:
-		value.Type = TealUintType
 		ok = false
 	default:
-		value.Type = TealUintType
 		ok = false
 	}
 	return value, ok
