@@ -13,7 +13,7 @@ export HOME=/root
 
 mkdir -p "${HOME}/go/src/github.com/algorand"
 cd "${HOME}/go/src/github.com/algorand"
-if ! git clone --single-branch --branch "${BRANCH}" https://github.com/algorand/go-algorand go-algorand
+if ! git clone --single-branch --branch "${BRANCH}" https://github.com/egieseke/go-algorand go-algorand
 then
     echo There has been a problem cloning the "$BRANCH" branch.
     exit 1
