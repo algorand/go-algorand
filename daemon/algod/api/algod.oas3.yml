@@ -1583,6 +1583,31 @@
                   ],
                   "type": "object"
                 }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "description": "PendingTransactions is an array of signed transactions exactly as they were submitted.",
+                  "properties": {
+                    "top-transactions": {
+                      "description": "An array of signed transaction objects.",
+                      "items": {
+                        "properties": {},
+                        "type": "object",
+                        "x-algorand-format": "SignedTransaction"
+                      },
+                      "type": "array"
+                    },
+                    "total-transactions": {
+                      "description": "Total number of transactions in the pool.",
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "top-transactions",
+                    "total-transactions"
+                  ],
+                  "type": "object"
+                }
               }
             },
             "description": "A potentially truncated list of transactions currently in the node's transaction pool. You can compute whether or not the list is truncated if the number of elements in the **top-transactions** array is fewer than **total-transactions**."
@@ -1590,6 +1615,11 @@
           "400": {
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -1603,6 +1633,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             },
             "description": "Invalid API Token"
@@ -1613,6 +1648,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             },
             "description": "Internal Error"
@@ -1620,6 +1660,11 @@
           "503": {
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -3069,6 +3114,66 @@
                   ],
                   "type": "object"
                 }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "description": "Details about a pending transaction. If the transaction was recently confirmed, includes confirmation details like the round and reward details.",
+                  "properties": {
+                    "application-index": {
+                      "description": "The application index if the transaction was found and it created an application.",
+                      "type": "integer"
+                    },
+                    "asset-index": {
+                      "description": "The asset index if the transaction was found and it created an asset.",
+                      "type": "integer"
+                    },
+                    "close-rewards": {
+                      "description": "Rewards in microalgos applied to the close remainder to account.",
+                      "type": "integer"
+                    },
+                    "closing-amount": {
+                      "description": "Closing amount for the transaction.",
+                      "type": "integer"
+                    },
+                    "confirmed-round": {
+                      "description": "The round where this transaction was confirmed, if present.",
+                      "type": "integer"
+                    },
+                    "global-state-delta": {
+                      "$ref": "#/components/schemas/StateDelta"
+                    },
+                    "local-state-delta": {
+                      "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+                      "items": {
+                        "$ref": "#/components/schemas/AccountStateDelta"
+                      },
+                      "type": "array"
+                    },
+                    "pool-error": {
+                      "description": "Indicates that the transaction was kicked out of this node's transaction pool (and specifies why that happened).  An empty string indicates the transaction wasn't kicked out of this node's txpool due to an error.\n",
+                      "type": "string"
+                    },
+                    "receiver-rewards": {
+                      "description": "Rewards in microalgos applied to the receiver account.",
+                      "type": "integer"
+                    },
+                    "sender-rewards": {
+                      "description": "Rewards in microalgos applied to the sender account.",
+                      "type": "integer"
+                    },
+                    "txn": {
+                      "description": "The raw signed transaction.",
+                      "properties": {},
+                      "type": "object",
+                      "x-algorand-format": "SignedTransaction"
+                    }
+                  },
+                  "required": [
+                    "pool-error",
+                    "txn"
+                  ],
+                  "type": "object"
+                }
               }
             },
             "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\n\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error."
@@ -3076,6 +3181,11 @@
           "400": {
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
@@ -3089,6 +3199,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
+              },
+              "application/msgpack": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
               }
             },
             "description": "Invalid API Token"
@@ -3096,6 +3211,11 @@
           "404": {
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              },
+              "application/msgpack": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }

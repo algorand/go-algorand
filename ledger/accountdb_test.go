@@ -218,6 +218,16 @@ func randomAccounts(niter int, simpleAccounts bool) map[basics.Address]basics.Ac
 }
 
 func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData, imbalance int64) {
+	updates, totals, imbalance, _ = randomDeltasImpl(niter, base, rewardsLevel, true, 0)
+	return
+}
+
+func randomDeltasFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData, imbalance int64, lastCreatableID uint64) {
+	updates, totals, imbalance, lastCreatableID = randomDeltasImpl(niter, base, rewardsLevel, false, lastCreatableIDIn)
+	return
+}
+
+func randomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData, imbalance int64, lastCreatableID uint64) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	updates = make(map[basics.Address]accountDelta)
 	totals = make(map[basics.Address]basics.AccountData)
@@ -225,6 +235,23 @@ func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewards
 	// copy base -> totals
 	for addr, data := range base {
 		totals[addr] = data
+	}
+
+	// if making a full delta then need to determine max asset/app id to get rid of conflicts
+	lastCreatableID = lastCreatableIDIn
+	if !simple {
+		for _, ad := range base {
+			for aid := range ad.AssetParams {
+				if uint64(aid) > lastCreatableID {
+					lastCreatableID = uint64(aid)
+				}
+			}
+			for aid := range ad.AppParams {
+				if uint64(aid) > lastCreatableID {
+					lastCreatableID = uint64(aid)
+				}
+			}
+		}
 	}
 
 	// Change some existing accounts
@@ -240,7 +267,12 @@ func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewards
 			}
 			i++
 
-			new := randomAccountData(rewardsLevel)
+			var new basics.AccountData
+			if simple {
+				new = randomAccountData(rewardsLevel)
+			} else {
+				new, lastCreatableID = randomFullAccountData(rewardsLevel, lastCreatableID)
+			}
 			updates[addr] = accountDelta{old: old, new: new}
 			imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 			totals[addr] = new
@@ -252,7 +284,12 @@ func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewards
 	for i := 0; i < niter; i++ {
 		addr := randomAddress()
 		old := totals[addr]
-		new := randomAccountData(rewardsLevel)
+		var new basics.AccountData
+		if simple {
+			new = randomAccountData(rewardsLevel)
+		} else {
+			new, lastCreatableID = randomFullAccountData(rewardsLevel, lastCreatableID)
+		}
 		updates[addr] = accountDelta{old: old, new: new}
 		imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 		totals[addr] = new
@@ -262,7 +299,22 @@ func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewards
 }
 
 func randomDeltasBalanced(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData) {
-	updates, totals, imbalance := randomDeltas(niter, base, rewardsLevel)
+	updates, totals, _ = randomDeltasBalancedImpl(niter, base, rewardsLevel, true, 0)
+	return
+}
+
+func randomDeltasBalancedFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData, lastCreatableID uint64) {
+	updates, totals, lastCreatableID = randomDeltasBalancedImpl(niter, base, rewardsLevel, false, lastCreatableIDIn)
+	return
+}
+
+func randomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData, lastCreatableID uint64) {
+	var imbalance int64
+	if simple {
+		updates, totals, imbalance = randomDeltas(niter, base, rewardsLevel)
+	} else {
+		updates, totals, imbalance, lastCreatableID = randomDeltasFull(niter, base, rewardsLevel, lastCreatableIDIn)
+	}
 
 	oldPool := base[testPoolAddr]
 	newPool := oldPool
@@ -271,7 +323,7 @@ func randomDeltasBalanced(niter int, base map[basics.Address]basics.AccountData,
 	updates[testPoolAddr] = accountDelta{old: oldPool, new: newPool}
 	totals[testPoolAddr] = newPool
 
-	return updates, totals
+	return updates, totals, lastCreatableID
 }
 
 func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
@@ -340,6 +392,59 @@ func TestAccountDBInit(t *testing.T) {
 	checkAccounts(t, tx, 0, accts)
 }
 
+// creatablesFromUpdates calculates creatables from updates
+func creatablesFromUpdates(updates map[basics.Address]accountDelta, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]modifiedCreatable {
+	creatables := make(map[basics.CreatableIndex]modifiedCreatable)
+	for addr, update := range updates {
+		// no sets in Go, so iterate over
+		for idx := range update.old.Assets {
+			if _, ok := update.new.Assets[idx]; !ok {
+				creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
+					ctype:   basics.AssetCreatable,
+					created: false, // exists in old, not in new => deleted
+					creator: addr,
+				}
+			}
+		}
+		for idx := range update.new.Assets {
+			if seen[basics.CreatableIndex(idx)] {
+				continue
+			}
+			if _, ok := update.old.Assets[idx]; !ok {
+				creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
+					ctype:   basics.AssetCreatable,
+					created: true, // exists in new, not in old => created
+					creator: addr,
+				}
+			}
+			seen[basics.CreatableIndex(idx)] = true
+		}
+		for idx := range update.old.AppParams {
+			if _, ok := update.new.AppParams[idx]; !ok {
+				creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
+					ctype:   basics.AppCreatable,
+					created: false, // exists in old, not in new => deleted
+					creator: addr,
+				}
+			}
+		}
+		for idx := range update.new.AppParams {
+			if seen[basics.CreatableIndex(idx)] {
+				continue
+			}
+			if _, ok := update.old.AppParams[idx]; !ok {
+				creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
+					ctype:   basics.AppCreatable,
+					created: true, // exists in new, not in old => created
+					creator: addr,
+				}
+			}
+			seen[basics.CreatableIndex(idx)] = true
+		}
+	}
+	return creatables
+}
+
 func TestAccountDBRound(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -356,12 +461,18 @@ func TestAccountDBRound(t *testing.T) {
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
 
+	// lastCreatableID stores asset or app max used index to get rid of conflicts
+	lastCreatableID := crypto.RandUint64() % 512
+	knownCreatables := make(map[basics.CreatableIndex]bool)
 	for i := 1; i < 10; i++ {
-		updates, newaccts, _ := randomDeltas(20, accts, 0)
+		var updates map[basics.Address]accountDelta
+		var newaccts map[basics.Address]basics.AccountData
+		updates, newaccts, _, lastCreatableID = randomDeltasFull(20, accts, 0, lastCreatableID)
 		accts = newaccts
-		err = accountsNewRound(tx, updates, nil)
+		creatables := creatablesFromUpdates(updates, knownCreatables)
+		err = accountsNewRound(tx, updates, creatables)
 		require.NoError(t, err)
-		err = totalsNewRounds(tx, []map[basics.Address]accountDelta{updates}, []AccountTotals{AccountTotals{}}, []config.ConsensusParams{proto})
+		err = totalsNewRounds(tx, []map[basics.Address]accountDelta{updates}, []AccountTotals{{}}, []config.ConsensusParams{proto})
 		require.NoError(t, err)
 		err = updateAccountsRound(tx, basics.Round(i), 0)
 		require.NoError(t, err)
