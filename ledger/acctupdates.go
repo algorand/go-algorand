@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"container/heap"
 	"context"
 	"database/sql"
 	"encoding/hex"
@@ -357,6 +358,106 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 
 		// We're OK to include this result
 		res = append(res, loc)
+	}
+
+	return res, nil
+}
+
+// onlineTop returns the top n online accounts, sorted by their normalized
+// balance and address, whose voting keys are valid in voteRnd.  See the
+// normalization description in onlineAccount.normBalance().
+func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n uint64) ([]onlineAccountWithAddress, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return nil, err
+	}
+
+	proto := au.protos[offset]
+
+	// Determine how many accounts have been modified in-memory,
+	// so that we obtain enough top accounts from disk (accountdb).
+	modifiedAccounts := make(map[basics.Address]struct{})
+	for o := uint64(0); o < offset; o++ {
+		for addr := range au.deltas[o] {
+			modifiedAccounts[addr] = struct{}{}
+		}
+	}
+
+	// Build up a set of candidate accounts.  Start by loading the
+	// top N + len(modifiedAccounts) accounts from disk (accountdb).
+	// This ensures that, even if the worst case if all in-memory
+	// changes are deleting the top accounts in accountdb, we still
+	// will have top N left.
+	//
+	// Keep asking for more accounts until we get the desired number,
+	// or there are no more accounts left.
+	candidates := make(map[basics.Address]*onlineAccount)
+	batchOffset := uint64(0)
+	batchSize := uint64(1024)
+	for uint64(len(candidates)) < n+uint64(len(modifiedAccounts)) {
+		var accts map[basics.Address]*onlineAccount
+		err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			accts, err = accountsOnlineTop(tx, batchOffset, batchSize)
+			return
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		for addr, data := range accts {
+			if !(data.VoteFirstValid <= voteRnd && voteRnd <= data.VoteLastValid) {
+				continue
+			}
+			candidates[addr] = data
+		}
+
+		// If we got fewer than batchSize accounts, there are no
+		// more accounts to look at.
+		if uint64(len(accts)) < batchSize {
+			break
+		}
+
+		batchOffset += batchSize
+	}
+
+	// Now update the candidates based on the in-memory deltas.
+	for o := uint64(0); o < offset; o++ {
+		for addr, d := range au.deltas[o] {
+			if d.new.Status != basics.Online {
+				delete(candidates, addr)
+				continue
+			}
+
+			if !(d.new.VoteFirstValid <= voteRnd && voteRnd <= d.new.VoteLastValid) {
+				delete(candidates, addr)
+				continue
+			}
+
+			candidates[addr] = accountDataToOnline(&d.new)
+		}
+	}
+
+	// Get the top N accounts from the candidate set, by inserting all of
+	// the accounts into a heap and then pulling out N elements from the
+	// heap.
+	topHeap := &onlineTopHeap{
+		accts: nil,
+	}
+
+	for addr, data := range candidates {
+		heap.Push(topHeap, onlineAccountWithAddress{
+			oa:          data,
+			addr:        addr,
+			normBalance: data.normBalance(proto),
+		})
+	}
+
+	var res []onlineAccountWithAddress
+	for topHeap.Len() > 0 && uint64(len(res)) < n {
+		acctaddr := heap.Pop(topHeap).(onlineAccountWithAddress)
+		res = append(res, acctaddr)
 	}
 
 	return res, nil
@@ -1347,7 +1448,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 		for i := uint64(0); i < offset; i++ {
-			err = accountsNewRound(tx, deltas[i], creatableDeltas[i])
+			err = accountsNewRound(tx, deltas[i], creatableDeltas[i], protos[i+1])
 			if err != nil {
 				return err
 			}

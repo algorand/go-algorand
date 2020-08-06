@@ -17,9 +17,11 @@
 package ledger
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -52,7 +54,8 @@ func randomAccountData(rewardsLevel uint64) basics.AccountData {
 	}
 
 	data.RewardsBase = rewardsLevel
-
+	data.VoteFirstValid = 0
+	data.VoteLastValid = 1000
 	return data
 }
 
@@ -369,6 +372,53 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	d, err := aq.lookup(randomAddress())
 	require.NoError(t, err)
 	require.Equal(t, d, basics.AccountData{})
+
+	onlineAccounts := make(map[basics.Address]*onlineAccount)
+	for addr, data := range accts {
+		if data.Status == basics.Online {
+			onlineAccounts[addr] = accountDataToOnline(&data)
+		}
+	}
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	for i := 0; i < len(onlineAccounts); i++ {
+		dbtop, err := accountsOnlineTop(tx, 0, uint64(i))
+		require.NoError(t, err)
+		require.Equal(t, len(dbtop), i)
+
+		// Compute the top-N accounts ourselves
+		var testtop []onlineAccountWithAddress
+		for addr, data := range onlineAccounts {
+			aa := onlineAccountWithAddress{
+				oa:          data,
+				addr:        addr,
+				normBalance: data.normBalance(proto),
+			}
+
+			testtop = append(testtop, aa)
+		}
+
+		sort.Slice(testtop, func(i, j int) bool {
+			ibal := testtop[i].normBalance
+			jbal := testtop[j].normBalance
+			if ibal > jbal {
+				return true
+			}
+			if ibal < jbal {
+				return false
+			}
+			return bytes.Compare(testtop[i].addr[:], testtop[j].addr[:]) > 0
+		})
+
+		for j := 0; j < i; j++ {
+			_, ok := dbtop[testtop[j].addr]
+			require.True(t, ok)
+		}
+	}
+
+	top, err := accountsOnlineTop(tx, 0, uint64(len(onlineAccounts)+1))
+	require.NoError(t, err)
+	require.Equal(t, len(top), len(onlineAccounts))
 }
 
 func TestAccountDBInit(t *testing.T) {
@@ -470,7 +520,7 @@ func TestAccountDBRound(t *testing.T) {
 		updates, newaccts, _, lastCreatableID = randomDeltasFull(20, accts, 0, lastCreatableID)
 		accts = newaccts
 		creatables := creatablesFromUpdates(updates, knownCreatables)
-		err = accountsNewRound(tx, updates, creatables)
+		err = accountsNewRound(tx, updates, creatables, proto)
 		require.NoError(t, err)
 		err = totalsNewRounds(tx, []map[basics.Address]accountDelta{updates}, []AccountTotals{{}}, []config.ConsensusParams{proto})
 		require.NoError(t, err)

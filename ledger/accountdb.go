@@ -63,6 +63,12 @@ var accountsSchema = []string{
 	`CREATE TABLE IF NOT EXISTS accountbase (
 		address blob primary key,
 		data blob)`,
+	`CREATE TABLE IF NOT EXISTS onlineaccountbase (
+		address blob primary key,
+		normalizedbalance integer,
+		data blob)`,
+	`CREATE INDEX IF NOT EXISTS onlineaccountbals
+		ON onlineaccountbase ( normalizedbalance, address, data )`,
 	`CREATE TABLE IF NOT EXISTS assetcreators (
 		asset integer primary key,
 		creator blob)`,
@@ -91,6 +97,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
 	`DROP TABLE IF EXISTS accountbase`,
+	`DROP TABLE IF EXISTS onlineaccountbase`,
 	`DROP TABLE IF EXISTS assetcreators`,
 	`DROP TABLE IF EXISTS storedcatchpoints`,
 	`DROP TABLE IF EXISTS catchpointstate`,
@@ -266,7 +273,75 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		}
 	}
 
+	// Populate online accounts table, if it hasn't been created yet.
+	err = accountsPopulateOnline(tx, proto)
+	if err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// accountsPopulateOnline fills in the table of online accounts,
+// indexed by balance, which is used for top-N queries as part of
+// compact certificate support.
+func accountsPopulateOnline(tx *sql.Tx, proto config.ConsensusParams) error {
+	var onlineAccountRows uint64
+	err := tx.QueryRow("SELECT COUNT(*) FROM onlineaccountbase").Scan(&onlineAccountRows)
+	if err != nil {
+		return err
+	}
+
+	if onlineAccountRows > 0 {
+		return nil
+	}
+
+	rows, err := tx.Query("SELECT address, data FROM accountbase")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		err = rows.Scan(&addrbuf, &buf)
+		if err != nil {
+			return err
+		}
+
+		var data basics.AccountData
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return err
+		}
+
+		if data.Status != basics.Online {
+			continue
+		}
+
+		onlineData := accountDataToOnline(&data)
+		normBalance := onlineData.normBalance(proto)
+		_, err = tx.Exec("INSERT INTO onlineaccountbase (address, normalizedbalance, data) VALUES (?, ?, ?)",
+			addrbuf, normBalance, protocol.Encode(onlineData))
+		if err != nil {
+			return err
+		}
+	}
+
+	return rows.Err()
+}
+
+// accountDataToOnline returns the part of the AccountData that should
+// be stored for online accounts (to answer top-N queries).
+func accountDataToOnline(ad *basics.AccountData) *onlineAccount {
+	return &onlineAccount{
+		MicroAlgos:      ad.MicroAlgos,
+		VoteID:          ad.VoteID,
+		VoteFirstValid:  ad.VoteFirstValid,
+		VoteLastValid:   ad.VoteLastValid,
+		VoteKeyDilution: ad.VoteKeyDilution,
+	}
 }
 
 func resetAccountHashes(tx *sql.Tx) (err error) {
@@ -554,6 +629,50 @@ func (qs *accountsDbQueries) close() {
 	}
 }
 
+// accountsOnlineTop returns the top n online accounts starting at position offset
+// (that is, the top offset'th account through the top offset+n-1'th account).
+//
+// The accounts are sorted by their normalized balance and address.  The normalized
+// address has to do with the reward parts of online account balances.  See the
+// normalization procedure in onlineAccount.normBalance().
+//
+// Note that this does not check if the accounts have a vote key valid for any
+// particular round (past, present, or future).
+func accountsOnlineTop(tx *sql.Tx, offset, n uint64) (map[basics.Address]*onlineAccount, error) {
+	rows, err := tx.Query("SELECT address, data FROM onlineaccountbase ORDER BY normalizedbalance DESC, address DESC LIMIT ? OFFSET ?", n, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make(map[basics.Address]*onlineAccount, n)
+	for rows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		err = rows.Scan(&addrbuf, &buf)
+		if err != nil {
+			return nil, err
+		}
+
+		var data onlineAccount
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return nil, err
+		}
+
+		var addr basics.Address
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return nil, err
+		}
+
+		copy(addr[:], addrbuf)
+		res[addr] = &data
+	}
+
+	return res, rows.Err()
+}
+
 func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
 	rows, err := tx.Query("SELECT address, data FROM accountbase")
 	if err != nil {
@@ -619,7 +738,7 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool)
 }
 
 // accountsNewRound updates the accountbase and assetcreators by applying the provided deltas to the accounts / creatables.
-func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creatables map[basics.CreatableIndex]modifiedCreatable) (err error) {
+func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creatables map[basics.CreatableIndex]modifiedCreatable, proto config.ConsensusParams) (err error) {
 
 	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteStmt, replaceStmt *sql.Stmt
 
@@ -635,6 +754,18 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creat
 	}
 	defer replaceStmt.Close()
 
+	deleteOnlineStmt, err := tx.Prepare("DELETE FROM onlineaccountbase WHERE address=?")
+	if err != nil {
+		return
+	}
+	defer deleteOnlineStmt.Close()
+
+	replaceOnlineStmt, err := tx.Prepare("REPLACE INTO onlineaccountbase (address, normalizedbalance, data) VALUES (?, ?, ?)")
+	if err != nil {
+		return
+	}
+	defer replaceOnlineStmt.Close()
+
 	for addr, data := range updates {
 		if data.new.IsZero() {
 			// prune empty accounts
@@ -646,6 +777,25 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creat
 			return
 		}
 
+		// Delete online accounts if they are no longer online.
+		// This takes advantage of the fact that a zero account
+		// value has Status=Offline, so this covers both deletion
+		// of accounts as well as switching to non-online state.
+		if data.old.Status == basics.Online && data.new.Status != basics.Online {
+			_, err = deleteOnlineStmt.Exec(addr[:])
+			if err != nil {
+				return
+			}
+		}
+
+		if data.new.Status == basics.Online {
+			onlineData := accountDataToOnline(&data.new)
+			normBalance := onlineData.normBalance(proto)
+			_, err = replaceOnlineStmt.Exec(addr[:], normBalance, protocol.Encode(onlineData))
+			if err != nil {
+				return
+			}
+		}
 	}
 
 	if len(creatables) > 0 {
