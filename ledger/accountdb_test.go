@@ -392,6 +392,59 @@ func TestAccountDBInit(t *testing.T) {
 	checkAccounts(t, tx, 0, accts)
 }
 
+// creatablesFromUpdates calculates creatables from updates
+func creatablesFromUpdates(updates map[basics.Address]accountDelta, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]modifiedCreatable {
+	creatables := make(map[basics.CreatableIndex]modifiedCreatable)
+	for addr, update := range updates {
+		// no sets in Go, so iterate over
+		for idx := range update.old.Assets {
+			if _, ok := update.new.Assets[idx]; !ok {
+				creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
+					ctype:   basics.AssetCreatable,
+					created: false, // exists in old, not in new => deleted
+					creator: addr,
+				}
+			}
+		}
+		for idx := range update.new.Assets {
+			if seen[basics.CreatableIndex(idx)] {
+				continue
+			}
+			if _, ok := update.old.Assets[idx]; !ok {
+				creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
+					ctype:   basics.AssetCreatable,
+					created: true, // exists in new, not in old => created
+					creator: addr,
+				}
+			}
+			seen[basics.CreatableIndex(idx)] = true
+		}
+		for idx := range update.old.AppParams {
+			if _, ok := update.new.AppParams[idx]; !ok {
+				creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
+					ctype:   basics.AppCreatable,
+					created: false, // exists in old, not in new => deleted
+					creator: addr,
+				}
+			}
+		}
+		for idx := range update.new.AppParams {
+			if seen[basics.CreatableIndex(idx)] {
+				continue
+			}
+			if _, ok := update.old.AppParams[idx]; !ok {
+				creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
+					ctype:   basics.AppCreatable,
+					created: true, // exists in new, not in old => created
+					creator: addr,
+				}
+			}
+			seen[basics.CreatableIndex(idx)] = true
+		}
+	}
+	return creatables
+}
+
 func TestAccountDBRound(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -408,16 +461,20 @@ func TestAccountDBRound(t *testing.T) {
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
 
+	// used to determine how many creatables element will be in the test per iteration
+	numElementsPerSegement := 10
+
 	// lastCreatableID stores asset or app max used index to get rid of conflicts
 	lastCreatableID := crypto.RandUint64() % 512
-	ctbsList, randomCtbs := randomCreatables()
+	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
 	expectedDbImage := make(map[basics.CreatableIndex]modifiedCreatable)
 	for i := 1; i < 10; i++ {
 		var updates map[basics.Address]accountDelta
 		var newaccts map[basics.Address]basics.AccountData
 		updates, newaccts, _, lastCreatableID = randomDeltasFull(20, accts, 0, lastCreatableID)
 		accts = newaccts
-		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs, expectedDbImage)		
+		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
+			expectedDbImage, numElementsPerSegement)
 		err = accountsNewRound(tx, updates, ctbsWithDeletes)
 		require.NoError(t, err)
 		err = totalsNewRounds(tx, []map[basics.Address]accountDelta{updates}, []AccountTotals{{}}, []config.ConsensusParams{proto})
@@ -442,21 +499,21 @@ func checkCreatables(t *testing.T,
 	if err != sql.ErrNoRows {
 		require.NoError(t, err)
 	}
-	defer rows.Close()	
+	defer rows.Close()
 	counter := 0
 	for rows.Next() {
 		counter++
 		mc := modifiedCreatable{}
-		var buf[]byte
+		var buf []byte
 		var asset basics.CreatableIndex
 		err := rows.Scan(&asset, &buf, &mc.ctype)
 		require.NoError(t, err)
 		copy(mc.creator[:], buf)
 
 		require.NotNil(t, expectedDbImage[asset])
-		require.Equal(t, mc.creator, expectedDbImage[asset].creator)
-		require.Equal(t, mc.ctype, expectedDbImage[asset].ctype)
-		require.Equal(t, expectedDbImage[asset].created, true)
+		require.Equal(t, expectedDbImage[asset].creator, mc.creator)
+		require.Equal(t, expectedDbImage[asset].ctype, mc.ctype)
+		require.True(t, expectedDbImage[asset].created)
 	}
 	require.Equal(t, len(expectedDbImage), counter)
 }
@@ -468,12 +525,11 @@ func checkCreatables(t *testing.T,
 //                  * random sample of elements from the first 10: created changed from true -> false
 // loop 2: returns: * the elements 20->30
 //                  * random sample of elements from 10->20: created changed from true -> false
-func randomCreatableSampling(iteration int, crtbsList[]basics.CreatableIndex,
+func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
 	creatables map[basics.CreatableIndex]modifiedCreatable,
-	expectedDbImage map[basics.CreatableIndex]modifiedCreatable) (
-	map[basics.CreatableIndex]modifiedCreatable) {
+	expectedDbImage map[basics.CreatableIndex]modifiedCreatable,
+	numElementsPerSegement int) map[basics.CreatableIndex]modifiedCreatable {
 
-	numElementsPerSegement := 10
 	iteration-- // 0-based here
 
 	delSegmentEnd := iteration * numElementsPerSegement
@@ -487,12 +543,10 @@ func randomCreatableSampling(iteration int, crtbsList[]basics.CreatableIndex,
 
 	for i := delSegmentStart; i < delSegmentEnd; i++ {
 		ctb := creatables[crtbsList[i]]
-		if ctb.created == true {
-			if 1 == (crypto.RandUint64() % 2) {
-				ctb.created = false
-				newSample[crtbsList[i]] = ctb
-				delete(expectedDbImage, crtbsList[i])
-			}
+		if ctb.created && 1 == (crypto.RandUint64()%2) {
+			ctb.created = false
+			newSample[crtbsList[i]] = ctb
+			delete(expectedDbImage, crtbsList[i])
 		}
 	}
 
@@ -502,16 +556,18 @@ func randomCreatableSampling(iteration int, crtbsList[]basics.CreatableIndex,
 			expectedDbImage[crtbsList[i]] = creatables[crtbsList[i]]
 		}
 	}
-	
+
 	return newSample
 }
 
-func randomCreatables() ([]basics.CreatableIndex, map[basics.CreatableIndex]modifiedCreatable) {
-	numElementsPerSegement := 10
+func randomCreatables(numElementsPerSegement int) ([]basics.CreatableIndex,
+	map[basics.CreatableIndex]modifiedCreatable) {
 	creatables := make(map[basics.CreatableIndex]modifiedCreatable)
 	creatablesList := make([]basics.CreatableIndex, numElementsPerSegement*10)
+	uniqueAssetIds := make(map[basics.CreatableIndex]bool)
+	
 	for i := 0; i < numElementsPerSegement*10; i++ {
-		assetIndex, mc := randomCreatable()
+		assetIndex, mc := randomCreatable(uniqueAssetIds)
 		creatables[assetIndex] = mc
 		creatablesList[i] = assetIndex
 	}
@@ -519,7 +575,9 @@ func randomCreatables() ([]basics.CreatableIndex, map[basics.CreatableIndex]modi
 }
 
 // randomCreatable generates a random creatable.
-func randomCreatable() (assetIndex basics.CreatableIndex, mc modifiedCreatable) {
+func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
+	assetIndex basics.CreatableIndex, mc modifiedCreatable) {
+
 	var ctype basics.CreatableType
 
 	switch crypto.RandUint64() % 2 {
@@ -535,7 +593,16 @@ func randomCreatable() (assetIndex basics.CreatableIndex, mc modifiedCreatable) 
 		creator: randomAddress(),
 		ndeltas: 1,
 	}
-	assetIdx := basics.CreatableIndex(crypto.RandUint64() % (uint64(2) << 50))
+
+	var assetIdx basics.CreatableIndex
+	for {
+		assetIdx := basics.CreatableIndex(crypto.RandUint64() % (uint64(2) << 50))
+		_, found := uniqueAssetIds[assetIdx]
+		if !found {
+			uniqueAssetIds[assetIdx] = true
+			break
+		}
+	}
 	return assetIdx, creatable
 }
 
