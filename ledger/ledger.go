@@ -233,9 +233,8 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs 
 	// 		return
 	// 	}
 	// }
-
-	trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
-	blockDBFilename = dbPathPrefix + ".block.sqlite"
+	// trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
+	// blockDBFilename = dbPathPrefix + ".block.sqlite"
 
 	trackerDBs, err = dbOpen(trackerDBFilename, dbMem)
 	if err != nil {
