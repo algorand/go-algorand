@@ -365,8 +365,8 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 
 // onlineTop returns the top n online accounts, sorted by their normalized
 // balance and address, whose voting keys are valid in voteRnd.  See the
-// normalization description in onlineAccount.normBalance().
-func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n uint64) ([]onlineAccountWithAddress, error) {
+// normalization description in AccountData.NormalizedOnlineBalance().
+func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*onlineAccount, error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 	offset, err := au.roundOffset(rnd)
@@ -399,7 +399,7 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 	for uint64(len(candidates)) < n+uint64(len(modifiedAccounts)) {
 		var accts map[basics.Address]*onlineAccount
 		err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			accts, err = accountsOnlineTop(tx, batchOffset, batchSize)
+			accts, err = accountsOnlineTop(tx, batchOffset, batchSize, proto)
 			return
 		})
 		if err != nil {
@@ -435,7 +435,7 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 				continue
 			}
 
-			candidates[addr] = accountDataToOnline(&d.new)
+			candidates[addr] = accountDataToOnline(addr, &d.new, proto)
 		}
 	}
 
@@ -446,18 +446,14 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 		accts: nil,
 	}
 
-	for addr, data := range candidates {
-		heap.Push(topHeap, onlineAccountWithAddress{
-			oa:          data,
-			addr:        addr,
-			normBalance: data.normBalance(proto),
-		})
+	for _, data := range candidates {
+		heap.Push(topHeap, data)
 	}
 
-	var res []onlineAccountWithAddress
+	var res []*onlineAccount
 	for topHeap.Len() > 0 && uint64(len(res)) < n {
-		acctaddr := heap.Pop(topHeap).(onlineAccountWithAddress)
-		res = append(res, acctaddr)
+		acct := heap.Pop(topHeap).(*onlineAccount)
+		res = append(res, acct)
 	}
 
 	return res, nil
@@ -892,6 +888,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 1 : %v", err)
 					return 0, err
 				}
+			case 2:
+				dbVersion, err = au.upgradeDatabaseSchema2(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 2 : %v", err)
+					return 0, err
+				}
 			default:
 				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
 			}
@@ -1082,6 +1084,22 @@ func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx
 		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 1 to 2: %v", err)
 	}
 	return 2, nil
+}
+
+// upgradeDatabaseSchema2 upgrades the database schema from version 2 to version 3,
+// adding the normalizedonlinebalance column to the accountbase table.
+func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+	err = accountsAddNormalizedBalance(tx, au.ledger.GenesisProto())
+	if err != nil {
+		return 0, err
+	}
+
+	// update version
+	_, err = db.SetUserVersion(ctx, tx, 3)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 2 to 3: %v", err)
+	}
+	return 3, nil
 }
 
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.

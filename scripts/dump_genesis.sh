@@ -22,9 +22,6 @@ for LEDGER in $LEDGERS; do
       accountbase)
         SORT=address
         ;;
-      onlineaccountbase)
-        SORT=address
-        ;;
       accounttotals)
         SORT=id
         ;;

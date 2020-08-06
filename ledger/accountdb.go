@@ -63,12 +63,6 @@ var accountsSchema = []string{
 	`CREATE TABLE IF NOT EXISTS accountbase (
 		address blob primary key,
 		data blob)`,
-	`CREATE TABLE IF NOT EXISTS onlineaccountbase (
-		address blob primary key,
-		normalizedbalance integer,
-		data blob)`,
-	`CREATE INDEX IF NOT EXISTS onlineaccountbals
-		ON onlineaccountbase ( normalizedbalance, address, data )`,
 	`CREATE TABLE IF NOT EXISTS assetcreators (
 		asset integer primary key,
 		creator blob)`,
@@ -93,6 +87,14 @@ var creatablesMigration = []string{
 	`ALTER TABLE assetcreators ADD COLUMN ctype INTEGER DEFAULT 0`,
 }
 
+var createOnlineAccountIndex = []string{
+	`ALTER TABLE accountbase
+		ADD COLUMN normalizedonlinebalance INTEGER`,
+	`CREATE INDEX IF NOT EXISTS onlineaccountbals
+		ON accountbase ( normalizedonlinebalance, address, data )
+		WHERE normalizedonlinebalance>0`,
+}
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -107,7 +109,7 @@ var accountsResetExprs = []string{
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(2)
+var accountDBVersion = int32(3)
 
 type accountDelta struct {
 	old basics.AccountData
@@ -273,27 +275,27 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		}
 	}
 
-	// Populate online accounts table, if it hasn't been created yet.
-	err = accountsPopulateOnline(tx, proto)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
-// accountsPopulateOnline fills in the table of online accounts,
-// indexed by balance, which is used for top-N queries as part of
-// compact certificate support.
-func accountsPopulateOnline(tx *sql.Tx, proto config.ConsensusParams) error {
-	var onlineAccountRows uint64
-	err := tx.QueryRow("SELECT COUNT(*) FROM onlineaccountbase").Scan(&onlineAccountRows)
-	if err != nil {
+// accountsAddNormalizedBalance adds the normalizedonlinebalance column
+// to the accountbase table.
+func accountsAddNormalizedBalance(tx *sql.Tx, proto config.ConsensusParams) error {
+	var exists bool
+	err := tx.QueryRow("SELECT 1 FROM pragma_table_info('accountbase') WHERE name='normalizedonlinebalance'").Scan(&exists)
+	if err == nil {
+		// Already exists.
+		return nil
+	}
+	if err != sql.ErrNoRows {
 		return err
 	}
 
-	if onlineAccountRows > 0 {
-		return nil
+	for _, stmt := range createOnlineAccountIndex {
+		_, err := tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
 	}
 
 	rows, err := tx.Query("SELECT address, data FROM accountbase")
@@ -316,31 +318,33 @@ func accountsPopulateOnline(tx *sql.Tx, proto config.ConsensusParams) error {
 			return err
 		}
 
-		if data.Status != basics.Online {
-			continue
-		}
-
-		onlineData := accountDataToOnline(&data)
-		normBalance := onlineData.normBalance(proto)
-		_, err = tx.Exec("INSERT INTO onlineaccountbase (address, normalizedbalance, data) VALUES (?, ?, ?)",
-			addrbuf, normBalance, protocol.Encode(onlineData))
-		if err != nil {
-			return err
+		normBalance := data.NormalizedOnlineBalance(proto)
+		if normBalance > 0 {
+			_, err = tx.Exec("UPDATE accountbase SET normalizedonlinebalance=? WHERE address=?", normBalance, addrbuf)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	return rows.Err()
 }
 
-// accountDataToOnline returns the part of the AccountData that should
-// be stored for online accounts (to answer top-N queries).
-func accountDataToOnline(ad *basics.AccountData) *onlineAccount {
+// accountDataToOnline returns the part of the AccountData that matters
+// for online accounts (to answer top-N queries).  We store a subset of
+// the full AccountData because we need to store a large number of these
+// in memory (say, 1M), and storing that many AccountData could easily
+// cause us to run out of memory.
+func accountDataToOnline(address basics.Address, ad *basics.AccountData, proto config.ConsensusParams) *onlineAccount {
 	return &onlineAccount{
-		MicroAlgos:      ad.MicroAlgos,
-		VoteID:          ad.VoteID,
-		VoteFirstValid:  ad.VoteFirstValid,
-		VoteLastValid:   ad.VoteLastValid,
-		VoteKeyDilution: ad.VoteKeyDilution,
+		Address:                 address,
+		MicroAlgos:              ad.MicroAlgos,
+		RewardsBase:             ad.RewardsBase,
+		NormalizedOnlineBalance: ad.NormalizedOnlineBalance(proto),
+		VoteID:                  ad.VoteID,
+		VoteFirstValid:          ad.VoteFirstValid,
+		VoteLastValid:           ad.VoteLastValid,
+		VoteKeyDilution:         ad.VoteKeyDilution,
 	}
 }
 
@@ -633,13 +637,13 @@ func (qs *accountsDbQueries) close() {
 // (that is, the top offset'th account through the top offset+n-1'th account).
 //
 // The accounts are sorted by their normalized balance and address.  The normalized
-// address has to do with the reward parts of online account balances.  See the
-// normalization procedure in onlineAccount.normBalance().
+// balance has to do with the reward parts of online account balances.  See the
+// normalization procedure in AccountData.NormalizedOnlineBalance().
 //
 // Note that this does not check if the accounts have a vote key valid for any
 // particular round (past, present, or future).
-func accountsOnlineTop(tx *sql.Tx, offset, n uint64) (map[basics.Address]*onlineAccount, error) {
-	rows, err := tx.Query("SELECT address, data FROM onlineaccountbase ORDER BY normalizedbalance DESC, address DESC LIMIT ? OFFSET ?", n, offset)
+func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParams) (map[basics.Address]*onlineAccount, error) {
+	rows, err := tx.Query("SELECT address, data FROM accountbase WHERE normalizedonlinebalance>0 ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?", n, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -654,7 +658,7 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64) (map[basics.Address]*online
 			return nil, err
 		}
 
-		var data onlineAccount
+		var data basics.AccountData
 		err = protocol.Decode(buf, &data)
 		if err != nil {
 			return nil, err
@@ -667,7 +671,7 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64) (map[basics.Address]*online
 		}
 
 		copy(addr[:], addrbuf)
-		res[addr] = &data
+		res[addr] = accountDataToOnline(addr, &data, proto)
 	}
 
 	return res, rows.Err()
@@ -748,53 +752,22 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creat
 	}
 	defer deleteStmt.Close()
 
-	replaceStmt, err = tx.Prepare("REPLACE INTO accountbase (address, data) VALUES (?, ?)")
+	replaceStmt, err = tx.Prepare("REPLACE INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
 	if err != nil {
 		return
 	}
 	defer replaceStmt.Close()
-
-	deleteOnlineStmt, err := tx.Prepare("DELETE FROM onlineaccountbase WHERE address=?")
-	if err != nil {
-		return
-	}
-	defer deleteOnlineStmt.Close()
-
-	replaceOnlineStmt, err := tx.Prepare("REPLACE INTO onlineaccountbase (address, normalizedbalance, data) VALUES (?, ?, ?)")
-	if err != nil {
-		return
-	}
-	defer replaceOnlineStmt.Close()
 
 	for addr, data := range updates {
 		if data.new.IsZero() {
 			// prune empty accounts
 			_, err = deleteStmt.Exec(addr[:])
 		} else {
-			_, err = replaceStmt.Exec(addr[:], protocol.Encode(&data.new))
+			normBalance := data.new.NormalizedOnlineBalance(proto)
+			_, err = replaceStmt.Exec(addr[:], normBalance, protocol.Encode(&data.new))
 		}
 		if err != nil {
 			return
-		}
-
-		// Delete online accounts if they are no longer online.
-		// This takes advantage of the fact that a zero account
-		// value has Status=Offline, so this covers both deletion
-		// of accounts as well as switching to non-online state.
-		if data.old.Status == basics.Online && data.new.Status != basics.Online {
-			_, err = deleteOnlineStmt.Exec(addr[:])
-			if err != nil {
-				return
-			}
-		}
-
-		if data.new.Status == basics.Online {
-			onlineData := accountDataToOnline(&data.new)
-			normBalance := onlineData.normBalance(proto)
-			_, err = replaceOnlineStmt.Exec(addr[:], normBalance, protocol.Encode(onlineData))
-			if err != nil {
-				return
-			}
 		}
 	}
 

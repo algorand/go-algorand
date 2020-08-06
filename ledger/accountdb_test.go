@@ -338,6 +338,10 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.NoError(t, err)
 	defer aq.close()
 
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	err = accountsAddNormalizedBalance(tx, proto)
+	require.NoError(t, err)
+
 	var totalOnline, totalOffline, totalNotPart uint64
 
 	for addr, data := range accts {
@@ -376,47 +380,40 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	onlineAccounts := make(map[basics.Address]*onlineAccount)
 	for addr, data := range accts {
 		if data.Status == basics.Online {
-			onlineAccounts[addr] = accountDataToOnline(&data)
+			onlineAccounts[addr] = accountDataToOnline(addr, &data, proto)
 		}
 	}
 
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	for i := 0; i < len(onlineAccounts); i++ {
-		dbtop, err := accountsOnlineTop(tx, 0, uint64(i))
+		dbtop, err := accountsOnlineTop(tx, 0, uint64(i), proto)
 		require.NoError(t, err)
-		require.Equal(t, len(dbtop), i)
+		require.Equal(t, i, len(dbtop))
 
 		// Compute the top-N accounts ourselves
-		var testtop []onlineAccountWithAddress
-		for addr, data := range onlineAccounts {
-			aa := onlineAccountWithAddress{
-				oa:          data,
-				addr:        addr,
-				normBalance: data.normBalance(proto),
-			}
-
-			testtop = append(testtop, aa)
+		var testtop []onlineAccount
+		for _, data := range onlineAccounts {
+			testtop = append(testtop, *data)
 		}
 
 		sort.Slice(testtop, func(i, j int) bool {
-			ibal := testtop[i].normBalance
-			jbal := testtop[j].normBalance
+			ibal := testtop[i].NormalizedOnlineBalance
+			jbal := testtop[j].NormalizedOnlineBalance
 			if ibal > jbal {
 				return true
 			}
 			if ibal < jbal {
 				return false
 			}
-			return bytes.Compare(testtop[i].addr[:], testtop[j].addr[:]) > 0
+			return bytes.Compare(testtop[i].Address[:], testtop[j].Address[:]) > 0
 		})
 
 		for j := 0; j < i; j++ {
-			_, ok := dbtop[testtop[j].addr]
+			_, ok := dbtop[testtop[j].Address]
 			require.True(t, ok)
 		}
 	}
 
-	top, err := accountsOnlineTop(tx, 0, uint64(len(onlineAccounts)+1))
+	top, err := accountsOnlineTop(tx, 0, uint64(len(onlineAccounts)+1), proto)
 	require.NoError(t, err)
 	require.Equal(t, len(top), len(onlineAccounts))
 }
