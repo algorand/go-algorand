@@ -128,6 +128,10 @@ const timeoutOnNewBlock = time.Second
 // deadline before giving up.
 const assemblyWaitEps = 10 * time.Millisecond
 
+// ErrTxPoolStaleBlockAssembly returned by AssembleBlock when requested block number is older than the current transaction pool round
+// i.e. typically it means that we're trying to make a proposal for an older round than what the ledger is currently pointing at.
+var ErrTxPoolStaleBlockAssembly = fmt.Errorf("AssembleBlock: requested block assembly specified a round that is older than current transaction pool round")
+
 // Reset resets the content of the transaction pool
 func (pool *TransactionPool) Reset() {
 	pool.pendingTxids = make(map[transactions.Txid]txPoolVerifyCacheVal)
@@ -731,7 +735,10 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	if pool.assemblyResults.err != nil {
 		return nil, fmt.Errorf("AssemblyBlock: encountered error for round %d: %v", round, pool.assemblyResults.err)
 	}
-	if pool.assemblyResults.blk.Block().Round() != round {
+	if pool.assemblyResults.blk.Block().Round() > round {
+		logging.Base().Infof("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.blk.Block().Round())
+		return nil, ErrTxPoolStaleBlockAssembly
+	} else if pool.assemblyResults.blk.Block().Round() != round {
 		return nil, fmt.Errorf("AssembleBlock: assembled block round does not match: %d != %d",
 			pool.assemblyResults.blk.Block().Round(), round)
 	}
