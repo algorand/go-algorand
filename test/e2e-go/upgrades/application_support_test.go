@@ -48,6 +48,7 @@ func makeApplicationUpgradeConsensus(t *testing.T) (appConsensus config.Consensu
 
 	// ensure it's disabled.
 	currentProtocolParams.Application = false
+	currentProtocolParams.SupportRekeying = false
 
 	// verify that the future protocol supports applications.
 	require.True(t, futureProtocolParams.Application)
