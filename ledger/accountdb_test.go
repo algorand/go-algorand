@@ -565,7 +565,7 @@ func randomCreatables(numElementsPerSegement int) ([]basics.CreatableIndex,
 	creatables := make(map[basics.CreatableIndex]modifiedCreatable)
 	creatablesList := make([]basics.CreatableIndex, numElementsPerSegement*10)
 	uniqueAssetIds := make(map[basics.CreatableIndex]bool)
-	
+
 	for i := 0; i < numElementsPerSegement*10; i++ {
 		assetIndex, mc := randomCreatable(uniqueAssetIds)
 		creatables[assetIndex] = mc
@@ -596,7 +596,7 @@ func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
 
 	var assetIdx basics.CreatableIndex
 	for {
-		assetIdx := basics.CreatableIndex(crypto.RandUint64() % (uint64(2) << 50))
+		assetIdx = basics.CreatableIndex(crypto.RandUint64() % (uint64(2) << 50))
 		_, found := uniqueAssetIds[assetIdx]
 		if !found {
 			uniqueAssetIds[assetIdx] = true
