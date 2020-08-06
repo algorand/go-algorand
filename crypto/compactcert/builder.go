@@ -20,6 +20,8 @@ type sigslot struct {
 	sigslotCommit
 }
 
+// Builder keeps track of signatures on a message and eventually produces
+// a compact certificate for that message.
 type Builder struct {
 	Params
 
@@ -29,6 +31,10 @@ type Builder struct {
 	parttree     *merklearray.Tree
 }
 
+// MkBuilder constructs an empty builder (with no signatures).  The message
+// to be signed, as well as other security parameters, are specified in
+// param.  The participants that will sign the message are in part and
+// parttree.
 func MkBuilder(param Params, part []Participant, parttree *merklearray.Tree) (*Builder, error) {
 	npart := len(part)
 
@@ -131,6 +137,8 @@ func (b *Builder) coinIndex(coinWeight uint64, lo uint64, hi uint64) (uint64, er
 	return b.coinIndex(coinWeight, mid+1, hi)
 }
 
+// Build returns a compact certificate, if the builder has accumulated
+// enough signatures to construct it.
 func (b *Builder) Build() (*Cert, error) {
 	if b.signedWeight < b.Params.ProvenWeight {
 		return nil, fmt.Errorf("not enough signed weight: %d < %d", b.signedWeight, b.Params.ProvenWeight)
