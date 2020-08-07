@@ -14,9 +14,8 @@ if [ "${BRANCH}" = "rel/stable" ]; then
     exit 0
 fi
 
-#get parent of current branch
-#credit to https://stackoverflow.com/questions/3161204/find-the-parent-branch-of-a-git-branch
-BRANCHPARENT="$(git show-branch | grep '\*' | grep -v '${BRANCH}' | head -n1 | sed 's/.*\[\(.*\)\].*/\1/' | sed 's/[\^~].*//')"
+# Get branch that owns head commit
+BRANCHPARENT="$(git branch --contains HEAD | grep -v 'HEAD' | head -n1 | grep -Eo '\w+(\/\w*)*')"
 
 if [ "${BRANCHPARENT}" = "rel/stable" ]; then
     echo "testnet"
