@@ -45,6 +45,10 @@ type Builder struct {
 	signedWeight uint64    // Total weight of signatures so far
 	participants []Participant
 	parttree     *merklearray.Tree
+
+	// Cached cert, if Build() was called and no subsequent
+	// Add() calls were made.
+	cert *Cert
 }
 
 // MkBuilder constructs an empty builder (with no signatures).  The message
@@ -100,6 +104,7 @@ func (b *Builder) Add(pos uint64, sig crypto.OneTimeSignature, verifySig bool) e
 	b.sigs[pos].part = p
 	b.sigs[pos].Sig.OneTimeSignature = sig
 	b.signedWeight += p.Weight
+	b.cert = nil
 	return nil
 }
 
@@ -156,6 +161,10 @@ func (b *Builder) coinIndex(coinWeight uint64, lo uint64, hi uint64) (uint64, er
 // Build returns a compact certificate, if the builder has accumulated
 // enough signatures to construct it.
 func (b *Builder) Build() (*Cert, error) {
+	if b.cert != nil {
+		return b.cert, nil
+	}
+
 	if b.signedWeight < b.Params.ProvenWeight {
 		return nil, fmt.Errorf("not enough signed weight: %d < %d", b.signedWeight, b.Params.ProvenWeight)
 	}
