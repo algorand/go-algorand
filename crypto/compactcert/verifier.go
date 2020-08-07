@@ -52,6 +52,11 @@ func (v *Verifier) Verify(c *Cert) error {
 	sigs := make(map[uint64]crypto.Hashable)
 	parts := make(map[uint64]crypto.Hashable)
 	for i, r := range c.Reveals {
+		_, ok := sigs[r.Pos]
+		if ok {
+			return fmt.Errorf("duplicate reveal for %d", r.Pos)
+		}
+
 		sigs[r.Pos] = r.SigSlot
 		parts[r.Pos] = r.Part
 
