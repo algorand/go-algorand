@@ -378,10 +378,25 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 
 	// Determine how many accounts have been modified in-memory,
 	// so that we obtain enough top accounts from disk (accountdb).
-	modifiedAccounts := make(map[basics.Address]struct{})
+	// If the *onlineAccount is nil, that means the account is offline
+	// as of the most recent change to that account, or its vote key
+	// is not valid in voteRnd.  Otherwise, the *onlineAccount is the
+	// representation of the most recent state of the account, and it
+	// is online and can vote in voteRnd.
+	modifiedAccounts := make(map[basics.Address]*onlineAccount)
 	for o := uint64(0); o < offset; o++ {
-		for addr := range au.deltas[o] {
-			modifiedAccounts[addr] = struct{}{}
+		for addr, d := range au.deltas[o] {
+			if d.new.Status != basics.Online {
+				modifiedAccounts[addr] = nil
+				continue
+			}
+
+			if !(d.new.VoteFirstValid <= voteRnd && voteRnd <= d.new.VoteLastValid) {
+				modifiedAccounts[addr] = nil
+				continue
+			}
+
+			modifiedAccounts[addr] = accountDataToOnline(addr, &d.new, proto)
 		}
 	}
 
@@ -423,19 +438,11 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 	}
 
 	// Now update the candidates based on the in-memory deltas.
-	for o := uint64(0); o < offset; o++ {
-		for addr, d := range au.deltas[o] {
-			if d.new.Status != basics.Online {
-				delete(candidates, addr)
-				continue
-			}
-
-			if !(d.new.VoteFirstValid <= voteRnd && voteRnd <= d.new.VoteLastValid) {
-				delete(candidates, addr)
-				continue
-			}
-
-			candidates[addr] = accountDataToOnline(addr, &d.new, proto)
+	for addr, oa := range modifiedAccounts {
+		if oa == nil {
+			delete(candidates, addr)
+		} else {
+			candidates[addr] = oa
 		}
 	}
 
