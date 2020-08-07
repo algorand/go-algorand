@@ -266,7 +266,9 @@ func (n asyncPseudonode) makeProposals(round basics.Round, period period, accoun
 	deadline := time.Now().Add(AssemblyTime)
 	ve, err := n.factory.AssembleBlock(round, deadline)
 	if err != nil {
-		n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)
+		if err != ErrAssembleBlockRoundStale {
+			n.log.Errorf("pseudonode.makeProposals: could not generate a proposal for round %d: %v", round, err)
+		}
 		return nil, nil
 	}
 
