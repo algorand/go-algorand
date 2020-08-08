@@ -133,7 +133,7 @@ KMD_API_SWAGGER_INJECT := daemon/kmd/lib/kmdapi/bundledSpecInject.go
 
 $(KMD_API_SWAGGER_SPEC): $(KMD_API_FILES) crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a
 	cd daemon/kmd/lib/kmdapi && \
-		python genSwaggerWrappers.py $(KMD_API_SWAGGER_WRAPPER)
+		python3 genSwaggerWrappers.py $(KMD_API_SWAGGER_WRAPPER)
 	cd daemon/kmd && \
 		PATH=$(GOPATH1)/bin:$$PATH \
 		go generate ./...
