@@ -17,15 +17,6 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 printf '#pragma version 2\nint 1' > "${TEMPDIR}/simple.teal"
 PROGRAM_FILE="${TEMPDIR}/simple.teal"
 
-####printf '#pragma version 2\nint 1' > "${TEMPDIR}/simple.teal"
-####echo "(((((((((****************************"
-####cat "${TEMPDIR}/simple.teal"
-####echo "****************************)))))))))"
-####
-####PROGRAM=($(${gcmd} clerk compile "${TEMPDIR}/simple.teal"))
-####echo $PROGRAM
-####cat $PROGRAM
-####echo "****************************==========="
 GLOBAL_INTS=2
 
 # Succeed in creating app with on-completion delete
