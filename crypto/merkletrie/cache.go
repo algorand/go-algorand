@@ -199,10 +199,11 @@ func (mtc *merkleTrieCache) deleteNode(nid storedNodeIdentifier) {
 		page := uint64(nid) / uint64(mtc.nodesPerPage)
 		delete(mtc.pageToNIDsPtr[page], nid)
 		if len(mtc.pageToNIDsPtr[page]) == 0 {
-			mtc.pageToNIDsPtr[page] = nil
+			delete(mtc.pageToNIDsPtr, page)
 		}
 		mtc.cachedNodeCount--
 	} else {
+
 		mtc.txDeletedNodeIDs[nid] = true
 	}
 	mtc.modified = true
@@ -236,7 +237,7 @@ func (mtc *merkleTrieCache) commitTransaction() {
 		page := uint64(nodeID) / uint64(mtc.nodesPerPage)
 		delete(mtc.pageToNIDsPtr[page], nodeID)
 		if len(mtc.pageToNIDsPtr[page]) == 0 {
-			mtc.pageToNIDsPtr[page] = nil
+			delete(mtc.pageToNIDsPtr, page)
 		}
 	}
 	mtc.cachedNodeCount -= len(mtc.txDeletedNodeIDs)
@@ -252,7 +253,7 @@ func (mtc *merkleTrieCache) rollbackTransaction() {
 		page := uint64(nodeID) / uint64(mtc.nodesPerPage)
 		delete(mtc.pageToNIDsPtr[page], nodeID)
 		if len(mtc.pageToNIDsPtr[page]) == 0 {
-			mtc.pageToNIDsPtr[page] = nil
+			delete(mtc.pageToNIDsPtr, page)
 		}
 	}
 	mtc.cachedNodeCount -= len(mtc.txCreatedNodeIDs)
