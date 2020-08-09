@@ -203,7 +203,6 @@ func (mtc *merkleTrieCache) deleteNode(nid storedNodeIdentifier) {
 		}
 		mtc.cachedNodeCount--
 	} else {
-
 		mtc.txDeletedNodeIDs[nid] = true
 	}
 	mtc.modified = true
