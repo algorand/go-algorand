@@ -349,8 +349,8 @@ func (mtc *merkleTrieCache) commit() error {
 		if element != nil {
 			mtc.pagesPrioritizationList.Remove(element)
 			delete(mtc.pagesPrioritizationMap, uint64(page))
-			mtc.cachedNodeCount -= len(mtc.pageToNIDsPtr[uint64(page)])
 		}
+		mtc.cachedNodeCount -= len(mtc.pageToNIDsPtr[uint64(page)])
 		delete(mtc.pageToNIDsPtr, uint64(page))
 	}
 
