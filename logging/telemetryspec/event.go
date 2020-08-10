@@ -305,3 +305,21 @@ type CatchpointGenerationEventDetails struct {
 	// CatchpointLabel is the catchpoint label for which the catchpoint file was generated.
 	CatchpointLabel string
 }
+
+// BalancesAccountVacuumEvent event
+const BalancesAccountVacuumEvent Event = "VacuumBalances"
+
+// BalancesAccountVacuumEventDetails is generated once the balances account get vacuumed, and provides
+// some statistics about that event.
+type BalancesAccountVacuumEventDetails struct {
+	// VacuumTimeNanoseconds is the total amount of time, in nanoseconds, that the vacuum operation took
+	VacuumTimeNanoseconds int64
+	// BeforeVacuumPageCount is the number of pages that the balances database had prior of running the vacuuming process.
+	BeforeVacuumPageCount uint64
+	// AfterVacuumPageCount is the number of pages that the balances database had after running the vacuuming process.
+	AfterVacuumPageCount uint64
+	// BeforeVacuumSpaceBytes is the number of bytes used by the database prior of running the vacuuming process.
+	BeforeVacuumSpaceBytes uint64
+	// AfterVacuumSpaceBytes is the number of bytes used by the database after running the vacuuming process.
+	AfterVacuumSpaceBytes uint64
+}
