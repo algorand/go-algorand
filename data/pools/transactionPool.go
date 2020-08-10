@@ -273,7 +273,7 @@ func (pool *TransactionPool) CurrentFeePerByte() uint64 {
 // checkSufficientFee take a set of signed transactions and verifies that each transaction has
 // sufficient fee to get into the transaction pool
 func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
-	// get
+	// get the current fee per byte
 	feePerByte := pool.CurrentFeePerByte()
 
 	for _, t := range txgroup {
