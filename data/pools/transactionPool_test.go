@@ -932,7 +932,7 @@ func TestTransactionPool_CurrentFeePerByte(t *testing.T) {
 	}
 
 	// The fee should be 1^(number of whole blocks - 1)
-	require.Equal(t, uint64(1<<(transactionPool.numPendingWholeBlocks-1)), transactionPool.CurrentFeePerByte())
+	require.Equal(t, uint64(1<<(transactionPool.numPendingWholeBlocks-1)), transactionPool.FeePerByte())
 
 }
 
