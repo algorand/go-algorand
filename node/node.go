@@ -979,6 +979,21 @@ func (vb validatedBlock) Block() bookkeeping.Block {
 func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
 	lvb, err := node.transactionPool.AssembleBlock(round, deadline)
 	if err != nil {
+		if err == pools.ErrTxPoolStaleBlockAssembly {
+			// convert specific error to one that would have special handling in the agreement code.
+			err = agreement.ErrAssembleBlockRoundStale
+
+			ledgerNextRound := node.ledger.NextRound()
+			if ledgerNextRound == round {
+				// we've asked for the right round.. and the ledger doesn't think it's stale.
+				node.log.Errorf("AlgorandFullNode.AssembleBlock: could not generate a proposal for round %d, ledger and proposal generation are synced: %v", round, err)
+			} else if ledgerNextRound < round {
+				// from some reason, the ledger is behind the round that we're asking. That shouldn't happen, but error if it does.
+				node.log.Errorf("AlgorandFullNode.AssembleBlock: could not generate a proposal for round %d, ledger next round is %d: %v", round, ledgerNextRound, err)
+			}
+			// the case where ledgerNextRound > round was not implemented here on purpose. This is the "normal case" where the
+			// ledger was advancing faster then the agreement by the catchup.
+		}
 		return nil, err
 	}
 	return validatedBlock{vb: lvb}, nil
