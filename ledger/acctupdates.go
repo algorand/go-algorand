@@ -112,6 +112,9 @@ type accountUpdates struct {
 	// 0 means don't store any, -1 mean unlimited and positive number suggest the number of most recent catchpoint files.
 	catchpointFileHistoryLength int
 
+	// vacuumOnStartup controls whether the accounts database would get vacuumed on startup.
+	vacuumOnStartup bool
+
 	// dynamic variables
 
 	// Connection to the database.
@@ -218,6 +221,7 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	if cfg.CatchpointFileHistoryLength < -1 {
 		au.catchpointFileHistoryLength = -1
 	}
+	au.vacuumOnStartup = cfg.OptimizeAccountsDatabaseOnStartup
 	// initialize the commitSyncerClosed with a closed channel ( since the commitSyncer go-routine is not active )
 	au.commitSyncerClosed = make(chan struct{})
 	close(au.commitSyncerClosed)
@@ -706,10 +710,13 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		return
 	}
 
-	au.accountsq, err = accountsDbInit(au.dbs.rdb.Handle, au.dbs.wdb.Handle)
+	// the VacuumDatabase would be a no-op if au.vacuumOnStartup is cleared.
+	au.vacuumDatabase(context.Background())
 	if err != nil {
 		return
 	}
+
+	au.accountsq, err = accountsDbInit(au.dbs.rdb.Handle, au.dbs.wdb.Handle)
 
 	au.lastCatchpointLabel, _, err = au.accountsq.readCatchpointStateString(context.Background(), catchpointStateLastCatchpoint)
 	if err != nil {
@@ -1609,5 +1616,54 @@ func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string
 			return fmt.Errorf("unable to delete old catchpoint entry '%s' : %v", fileToDelete, err)
 		}
 	}
+	return
+}
+
+// the vacuumDatabase performs a full vacuum of the accounts database.
+func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
+	if !au.vacuumOnStartup {
+		return
+	}
+
+	startTime := time.Now()
+	vacuumExitCh := make(chan struct{}, 1)
+	vacuumLoggingAbort := sync.WaitGroup{}
+	vacuumLoggingAbort.Add(1)
+	// vacuuming the database can take a while. A long while. We want to have a logging function running in a separate go-routine that would log the progress to the log file.
+	// also, when we're done vacuuming, we should sent an event notifying of the total time it took to vacuum the database.
+	go func() {
+		defer vacuumLoggingAbort.Done()
+		au.log.Infof("Vacuuming accounts database started")
+		for {
+			select {
+			case <-time.After(5 * time.Second):
+				au.log.Infof("Vacuuming accounts database in progress")
+			case <-vacuumExitCh:
+				return
+			}
+		}
+	}()
+
+	vacuumStats, err := au.dbs.wdb.Vacuum(ctx)
+	close(vacuumExitCh)
+	vacuumLoggingAbort.Wait()
+
+	if err != nil {
+		au.log.Warnf("Vacuuming account database failed : %v", err)
+		return err
+	}
+	vacuumElapsedTime := time.Now().Sub(startTime)
+
+	au.log.Infof("Vacuuming accounts database completed within %v, reducing number of pages from %d to %d and size from %d to %d", vacuumElapsedTime, vacuumStats.PagesBefore, vacuumStats.PagesAfter, vacuumStats.SizeBefore, vacuumStats.SizeAfter)
+
+	vacuumTelemetryStats := telemetryspec.BalancesAccountVacuumEventDetails{
+		VacuumTimeNanoseconds:  vacuumElapsedTime.Nanoseconds(),
+		BeforeVacuumPageCount:  vacuumStats.PagesBefore,
+		AfterVacuumPageCount:   vacuumStats.PagesAfter,
+		BeforeVacuumSpaceBytes: vacuumStats.SizeBefore,
+		AfterVacuumSpaceBytes:  vacuumStats.SizeAfter,
+	}
+
+	au.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.BalancesAccountVacuumEvent, vacuumTelemetryStats)
 	return
 }
