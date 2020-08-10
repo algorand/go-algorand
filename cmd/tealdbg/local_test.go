@@ -163,11 +163,11 @@ func makeSampleBalanceRecord(addr basics.Address, assetIdx basics.AssetIndex, ap
 			Total:     100,
 			UnitName:  "tok",
 			AssetName: "asset",
-			Manager: addr,
-			Reserve: addr,
-			Freeze: addr,
-			Clawback: addr,
-			URL: "http://127.0.0.1/8000",
+			Manager:   addr,
+			Reserve:   addr,
+			Freeze:    addr,
+			Clawback:  addr,
+			URL:       "http://127.0.0.1/8000",
 		},
 	}
 	br.Assets = map[basics.AssetIndex]basics.AssetHolding{

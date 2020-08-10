@@ -209,7 +209,7 @@ func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics
 	return creator, nil
 }
 
-func getBalanceFromIndexer(indexerURL string, indexerToken string, account basics.Address, round uint64) (basics.AccountData, error){
+func getBalanceFromIndexer(indexerURL string, indexerToken string, account basics.Address, round uint64) (basics.AccountData, error) {
 	queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%d", indexerURL, account, round)
 	client := &http.Client{}
 	request, err := http.NewRequest("GET", queryString, nil)
