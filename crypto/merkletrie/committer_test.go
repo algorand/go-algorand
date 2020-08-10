@@ -17,7 +17,6 @@
 package merkletrie
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -172,65 +171,4 @@ func TestMultipleCommits(t *testing.T) {
 		storageSize2 += len(bytes)
 	}
 	require.Equal(t, storageSize1, storageSize2)
-}
-
-func TestCommittedPagesDeletion(t *testing.T) {
-
-	testSize := 100000
-	hashes := make([]crypto.Digest, testSize)
-	for i := 0; i < len(hashes); i++ {
-		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
-	}
-
-	var memoryCommitter1 InMemoryCommitter
-	mt1, _ := MakeTrie(&memoryCommitter1, defaultTestEvictSize)
-	for i := 0; i < len(hashes); i++ {
-		mt1.Add(hashes[i][:])
-		if i%300 == 0 {
-			mt1.Commit()
-		}
-	}
-
-	leftNodes := 9
-	for i := leftNodes; i < len(hashes); i++ {
-		mt1.Delete(hashes[i][:])
-		if i%300 == 0 {
-			mt1.Commit()
-		}
-	}
-	mt1.Commit()
-	maxExpectedNodes := 2 * leftNodes
-
-	stats, err := mt1.GetStats()
-	require.NoError(t, err)
-
-	require.Equal(t, leftNodes, int(stats.leafCount))
-	require.LessOrEqual(t, int(stats.nodesCount), maxExpectedNodes)
-
-	fmt.Printf("%#v\n", stats)
-
-	fmt.Printf("disk dump:\n")
-	for page, pageContent := range memoryCommitter1.memStore {
-		if page == storedNodeIdentifierNull {
-			continue
-		}
-		fmt.Printf("page %d:\n", page)
-		decodedPage, err := decodePage(pageContent)
-		require.NoError(t, err)
-		for nodeid, pNode := range decodedPage {
-			fmt.Printf("\tnode id %d leaf(%v) \n", nodeid, pNode.leaf)
-		}
-	}
-
-	fmt.Printf("\nmemory dump:\n")
-	for page, pageContent := range mt1.cache.pageToNIDsPtr {
-		fmt.Printf("page %d:\n", page)
-		for nodeid, pNode := range pageContent {
-			fmt.Printf("\tnode id %d leaf(%v) \n", nodeid, pNode.leaf)
-		}
-	}
-
-	fmt.Printf("cache node count = %d\n", mt1.cache.cachedNodeCount)
-	//require.Equal(t, mt1.cache.cachedNodeCount
-	require.LessOrEqual(t, len(memoryCommitter1.memStore), int(stats.nodesCount))
 }

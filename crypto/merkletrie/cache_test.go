@@ -35,16 +35,9 @@ func verifyCacheNodeCount(t *testing.T, trie *Trie) {
 	// make sure that the pagesPrioritizationMap aligns with pagesPrioritizationList
 	require.Equal(t, len(trie.cache.pagesPrioritizationMap), trie.cache.pagesPrioritizationList.Len())
 
-	// if we're not within a transaction, the following should also hold true:
-	if !trie.cache.modified {
-		require.Equal(t, len(trie.cache.pageToNIDsPtr), trie.cache.pagesPrioritizationList.Len())
-	}
-
 	for e := trie.cache.pagesPrioritizationList.Back(); e != nil; e = e.Next() {
 		page := e.Value.(uint64)
 		_, has := trie.cache.pagesPrioritizationMap[page]
-		require.True(t, has)
-		_, has = trie.cache.pageToNIDsPtr[page]
 		require.True(t, has)
 	}
 }
