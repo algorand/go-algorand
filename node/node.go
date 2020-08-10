@@ -658,7 +658,7 @@ func (node *AlgorandFullNode) PoolStats() PoolStats {
 // SuggestedFee returns the suggested fee per byte recommended to ensure a new transaction is processed in a timely fashion.
 // Caller should set fee to max(MinTxnFee, SuggestedFee() * len(encoded SignedTxn))
 func (node *AlgorandFullNode) SuggestedFee() basics.MicroAlgos {
-	return basics.MicroAlgos{Raw: node.transactionPool.CurrentFeePerByte()}
+	return basics.MicroAlgos{Raw: node.transactionPool.FeePerByte()}
 }
 
 // GetPendingTxnsFromPool returns a snapshot of every pending transactions from the node's transaction pool in a slice.

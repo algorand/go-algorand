@@ -19,6 +19,7 @@ package pools
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -60,6 +61,7 @@ type TransactionPool struct {
 	pendingBlockEvaluator  *ledger.BlockEvaluator
 	numPendingWholeBlocks  basics.Round
 	feeThresholdMultiplier uint64
+	feePerByte             uint64
 	statusCache            *statusCache
 
 	assemblyMu       deadlock.Mutex
@@ -235,9 +237,16 @@ func (pool *TransactionPool) checkPendingQueueSize() error {
 	return nil
 }
 
-// CurrentFeePerByte returns the current minimum microalgos per byte a trans
+// FeePerByte returns the current minimum microalgos per byte a transaction
 // needs to pay in order to get into the pool.
-func (pool *TransactionPool) CurrentFeePerByte() uint64 {
+func (pool *TransactionPool) FeePerByte() uint64 {
+	return pool.feePerByte
+}
+
+// computeFeePerByte computes and returns the current minimum microalgos per byte a transaction
+// needs to pay in order to get into the pool. It also updates the atomic counter that holds
+// the current fee per byte
+func (pool *TransactionPool) computeFeePerByte() uint64 {
 	// The baseline threshold fee per byte is 1, the smallest fee we can
 	// represent.  This amounts to a fee of 100 for a 100-byte txn, which
 	// is well below MinTxnFee (1000).  This means that, when the pool
@@ -267,6 +276,9 @@ func (pool *TransactionPool) CurrentFeePerByte() uint64 {
 		feePerByte *= pool.expFeeFactor
 	}
 
+	// Update the counter for fast reads
+	atomic.StoreUint64(&pool.feePerByte, feePerByte)
+
 	return feePerByte
 }
 
@@ -274,7 +286,7 @@ func (pool *TransactionPool) CurrentFeePerByte() uint64 {
 // sufficient fee to get into the transaction pool
 func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
 	// get the current fee per byte
-	feePerByte := pool.CurrentFeePerByte()
+	feePerByte := pool.computeFeePerByte()
 
 	for _, t := range txgroup {
 		feeThreshold := feePerByte * uint64(t.GetEncodedLength())
