@@ -240,7 +240,7 @@ func (pool *TransactionPool) checkPendingQueueSize() error {
 // FeePerByte returns the current minimum microalgos per byte a transaction
 // needs to pay in order to get into the pool.
 func (pool *TransactionPool) FeePerByte() uint64 {
-	return pool.feePerByte
+	return atomic.LoadUint64(&pool.feePerByte)
 }
 
 // computeFeePerByte computes and returns the current minimum microalgos per byte a transaction
