@@ -67,8 +67,8 @@ type merkleTrieCache struct {
 
 	// pendingCreatedNID contains a list of the node ids that has been created since the last commit and need to be stored.
 	pendingCreatedNID map[storedNodeIdentifier]bool
-	// pendingDeletionPage contains a map of pages to delete, each pointing to a map of all the nodes ids that need to be removed.
-	pendingDeletionPages map[uint64]map[storedNodeIdentifier]*node
+	// pendingDeletionPage contains a map of pages to delete once committed.
+	pendingDeletionPages map[uint64]bool
 
 	// a list of the pages priorities. The item in the front has higher priority and would not get evicted as quickly as the item on the back
 	pagesPrioritizationList *list.List
@@ -86,7 +86,7 @@ func (mtc *merkleTrieCache) initialize(mt *Trie, committer Committer, cachedNode
 	mtc.committer = committer
 	mtc.cachedNodeCount = 0
 	mtc.pendingCreatedNID = make(map[storedNodeIdentifier]bool)
-	mtc.pendingDeletionPages = make(map[uint64]map[storedNodeIdentifier]*node)
+	mtc.pendingDeletionPages = make(map[uint64]bool)
 	mtc.pagesPrioritizationList = list.New()
 	mtc.pagesPrioritizationMap = make(map[uint64]*list.Element)
 	mtc.cachedNodeCountTarget = cachedNodeCountTarget
@@ -233,14 +233,11 @@ func (mtc *merkleTrieCache) commitTransaction() {
 			delete(mtc.pageToNIDsPtr[page], nodeID)
 			// if the page is empty, and it's not on the pendingDeletionPages, it means that we have no further references to it,
 			// so we can delete it right away.
-			if len(mtc.pageToNIDsPtr[page]) == 0 && mtc.pendingDeletionPages[page] == nil {
+			if len(mtc.pageToNIDsPtr[page]) == 0 && mtc.pendingDeletionPages[page] == false {
 				delete(mtc.pageToNIDsPtr, page)
 			}
 		} else {
-			if mtc.pendingDeletionPages[page] == nil {
-				mtc.pendingDeletionPages[page] = make(map[storedNodeIdentifier]*node)
-			}
-			mtc.pendingDeletionPages[page][nodeID] = nil
+			mtc.pendingDeletionPages[page] = true
 			delete(mtc.pageToNIDsPtr[page], nodeID)
 			// no need to clear out the mtc.pageToNIDsPtr page, since it will be taken care by the commit() function.
 		}
@@ -370,7 +367,7 @@ func (mtc *merkleTrieCache) commit() error {
 	}
 
 	mtc.pendingCreatedNID = make(map[storedNodeIdentifier]bool)
-	mtc.pendingDeletionPages = make(map[uint64]map[storedNodeIdentifier]*node)
+	mtc.pendingDeletionPages = make(map[uint64]bool)
 	mtc.modified = false
 	return nil
 }
