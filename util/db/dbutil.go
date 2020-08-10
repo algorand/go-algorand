@@ -57,7 +57,6 @@ type Accessor struct {
 	Handle   *sql.DB
 	readOnly bool
 	inMemory bool
-	filename string
 	log      logging.Logger
 }
 
@@ -82,7 +81,6 @@ type txExecutionContext struct {
 
 // MakeAccessor creates a new Accessor.
 func MakeAccessor(dbfilename string, readOnly bool, inMemory bool) (Accessor, error) {
-	//return makeAccessorImpl(dbfilename, readOnly, inMemory, []string{"_journal_mode=wal"})
 	return makeAccessorImpl(dbfilename, readOnly, inMemory, []string{"_journal_mode=wal"})
 }
 
@@ -97,7 +95,6 @@ func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []
 	var db Accessor
 	db.readOnly = readOnly
 	db.inMemory = inMemory
-	db.filename = dbfilename
 
 	// SQLite3 driver we use (mattn/go-sqlite3) does not implement driver.DriverContext interface
 	// that forces sql.Open calling sql.OpenDB and return a struct without any touches to the underlying driver.
