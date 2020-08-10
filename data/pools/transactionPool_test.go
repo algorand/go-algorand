@@ -885,6 +885,57 @@ func TestLogicSigOK(t *testing.T) {
 	require.NoError(t, transactionPool.RememberOne(signedTx, verify.Params{}))
 }
 
+func TestTransactionPool_CurrentFeePerByte(t *testing.T) {
+	numOfAccounts := 5
+	// Generate accounts
+	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
+	addresses := make([]basics.Address, numOfAccounts)
+
+	for i := 0; i < numOfAccounts; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+	}
+
+	l := makeMockLedger(t, initAccFixed(addresses, 1<<32))
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize * 15
+	cfg.EnableProcessBlockStats = false
+	transactionPool := MakeTransactionPool(l, cfg)
+
+	for i, sender := range addresses {
+		for j := 0; j < testPoolSize*15/len(addresses); j++ {
+			var receiver basics.Address
+			crypto.RandBytes(receiver[:])
+			tx := transactions.Transaction{
+				Type: protocol.PaymentTx,
+				Header: transactions.Header{
+					Sender:      sender,
+					Fee:         basics.MicroAlgos{Raw: uint64(rand.Int()%10000) + proto.MinTxnFee},
+					FirstValid:  0,
+					LastValid:   basics.Round(proto.MaxTxnLife),
+					Note:        make([]byte, 2),
+					GenesisHash: l.GenesisHash(),
+				},
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: receiver,
+					Amount:   basics.MicroAlgos{Raw: proto.MinBalance},
+				},
+			}
+			tx.Note = make([]byte, 8, 8)
+			crypto.RandBytes(tx.Note)
+			signedTx := tx.Sign(secrets[i])
+			err := transactionPool.RememberOne(signedTx, verify.Params{})
+			require.NoError(t, err)
+		}
+	}
+
+	// The fee should be 1^(number of whole blocks - 1)
+	require.Equal(t, uint64(1<<(transactionPool.numPendingWholeBlocks-1)), transactionPool.CurrentFeePerByte())
+
+}
+
 func BenchmarkTransactionPoolRememberOne(b *testing.B) {
 	numOfAccounts := 5
 	// Generate accounts

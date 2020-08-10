@@ -235,7 +235,9 @@ func (pool *TransactionPool) checkPendingQueueSize() error {
 	return nil
 }
 
-func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
+// CurrentFeePerByte returns the current minimum microalgos per byte a trans
+// needs to pay in order to get into the pool.
+func (pool *TransactionPool) CurrentFeePerByte() uint64 {
 	// The baseline threshold fee per byte is 1, the smallest fee we can
 	// represent.  This amounts to a fee of 100 for a 100-byte txn, which
 	// is well below MinTxnFee (1000).  This means that, when the pool
@@ -264,6 +266,15 @@ func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn
 	for i := 0; i < int(pool.numPendingWholeBlocks)-1; i++ {
 		feePerByte *= pool.expFeeFactor
 	}
+
+	return feePerByte
+}
+
+// checkSufficientFee take a set of signed transactions and verifies that each transaction has
+// sufficient fee to get into the transaction pool
+func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
+	// get
+	feePerByte := pool.CurrentFeePerByte()
 
 	for _, t := range txgroup {
 		feeThreshold := feePerByte * uint64(t.GetEncodedLength())
