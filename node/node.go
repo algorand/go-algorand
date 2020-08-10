@@ -98,7 +98,6 @@ type AlgorandFullNode struct {
 	transactionPool *pools.TransactionPool
 	txHandler       *data.TxHandler
 	accountManager  *data.AccountManager
-	feeTracker      *pools.FeeTracker
 
 	agreementService         *agreement.Service
 	catchupService           *catchup.Service
@@ -204,11 +203,6 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	}
 	node.ledger.RegisterBlockListeners(blockListeners)
 	node.txHandler = data.MakeTxHandler(node.transactionPool, node.ledger, node.net, node.genesisID, node.genesisHash, node.lowPriorityCryptoVerificationPool)
-	node.feeTracker, err = pools.MakeFeeTracker()
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
 
 	// Indexer setup
 	if cfg.IsIndexerActive && cfg.Archival {
@@ -664,7 +658,7 @@ func (node *AlgorandFullNode) PoolStats() PoolStats {
 // SuggestedFee returns the suggested fee per byte recommended to ensure a new transaction is processed in a timely fashion.
 // Caller should set fee to max(MinTxnFee, SuggestedFee() * len(encoded SignedTxn))
 func (node *AlgorandFullNode) SuggestedFee() basics.MicroAlgos {
-	return node.feeTracker.EstimateFee()
+	return basics.MicroAlgos{Raw: node.transactionPool.CurrentFeePerByte()}
 }
 
 // GetPendingTxnsFromPool returns a snapshot of every pending transactions from the node's transaction pool in a slice.
@@ -761,9 +755,6 @@ func (node *AlgorandFullNode) IsArchival() bool {
 
 // OnNewBlock implements the BlockListener interface so we're notified after each block is written to the ledger
 func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta) {
-	// Update fee tracker
-	node.feeTracker.ProcessBlock(block)
-
 	node.mu.Lock()
 	node.lastRoundTimestamp = time.Now()
 	node.hasSyncedSinceStartup = true
