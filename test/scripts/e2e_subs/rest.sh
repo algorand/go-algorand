@@ -43,7 +43,7 @@ function test_applications_endpoint {
   APPID=$(${gcmd} app create --creator "${ACCOUNT}" --approval-prog "${TEMPDIR}/simple.teal" --clear-prog "${TEMPDIR}/simple.teal" --global-byteslices 0 --global-ints 2 --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
 
   # Good request, non-existant app id
-  call_and_verify "Should not find app." "/v2/applications/$(("$APPID" + 1))" 'application does not exist'
+  call_and_verify "Should not find app." "/v2/applications/987654321" 'application does not exist'
   # Good request
   call_and_verify "Should contain app data." "/v2/applications/$APPID" '"global-state-schema":{"num-byte-slice":0,"num-uint":2}'
   # Good request, pretty response
