@@ -17,16 +17,43 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
+	"net/http"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
 )
+
+// AccountIndexerResponse represents the Account Response object from querying indexer
+type AccountIndexerResponse struct {
+	// Account information at a given round.
+	//
+	// Definition:
+	// data/basics/userBalance.go : AccountData
+	Account generated.Account `json:"account"`
+
+	// Round at which the results were computed.
+	CurrentRound uint64 `json:"current-round"`
+}
+
+// ApplicationIndexerResponse represents the Application Response object from querying indexer
+type ApplicationIndexerResponse struct {
+
+	// Application index and its parameters
+	Application generated.Application `json:"application,omitempty"`
+
+	// Round at which the results were computed.
+	CurrentRound uint64 `json:"current-round"`
+}
 
 type balancesAdapter struct {
 	balances   map[basics.Address]basics.AccountData
@@ -39,7 +66,7 @@ type balancesAdapter struct {
 func makeAppLedger(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
 	groupIndex int, proto config.ConsensusParams, round uint64, latestTimestamp int64,
-	appIdx basics.AppIndex, painless bool,
+	appIdx basics.AppIndex, painless bool, indexerURL string, indexerToken string,
 ) (logic.LedgerForLogic, appState, error) {
 
 	if groupIndex >= len(txnGroup) {
@@ -52,6 +79,30 @@ func makeAppLedger(
 
 	apps := []basics.AppIndex{appIdx}
 	apps = append(apps, txn.Txn.ForeignApps...)
+
+	// populate balances from the indexer if not already
+	if indexerURL != "" {
+		for _, acc := range accounts {
+			// only populate from indexer if balance record not specified
+			if _, ok := balances[acc]; !ok {
+				var err error
+				balances[acc], err = getBalanceFromIndexer(indexerURL, indexerToken, acc, round)
+				if err != nil {
+					return nil, appState{}, err
+				}
+			}
+		}
+		for _, app := range apps {
+			creator, err := getAppCreatorFromIndexer(indexerURL, indexerToken, app)
+			if err != nil {
+				return nil, appState{}, err
+			}
+			balances[creator], err = getBalanceFromIndexer(indexerURL, indexerToken, creator, round)
+			if err != nil {
+				return nil, appState{}, err
+			}
+		}
+	}
 
 	ba := &balancesAdapter{
 		balances:   balances,
@@ -128,6 +179,60 @@ func makeAppLedger(
 	appGlobals := ledger.AppTealGlobals{CurrentRound: basics.Round(round), LatestTimestamp: latestTimestamp}
 	ledger, err := ledger.MakeDebugAppLedger(ba, appIdx, states.schemas, appGlobals)
 	return ledger, states, err
+}
+
+func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics.AppIndex) (basics.Address, error) {
+	queryString := fmt.Sprintf("%s/v2/applications/%d", indexerURL, app)
+	client := &http.Client{}
+	request, err := http.NewRequest("GET", queryString, nil)
+	request.Header.Set("X-Indexer-API-Token", indexerToken)
+	resp, err := client.Do(request)
+	if err != nil {
+		return basics.Address{}, fmt.Errorf("application request error: %s", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		msg, _ := ioutil.ReadAll(resp.Body)
+		return basics.Address{}, fmt.Errorf("application response error: %s, status code: %d, request: %s", string(msg), resp.StatusCode, queryString)
+	}
+	var appResp ApplicationIndexerResponse
+	err = json.NewDecoder(resp.Body).Decode(&appResp)
+	if err != nil {
+		return basics.Address{}, fmt.Errorf("application response decode error: %s", err)
+	}
+
+	creator, err := basics.UnmarshalChecksumAddress(appResp.Application.Params.Creator)
+
+	if err != nil {
+		return basics.Address{}, fmt.Errorf("UnmarshalChecksumAddress error: %s", err)
+	}
+	return creator, nil
+}
+
+func getBalanceFromIndexer(indexerURL string, indexerToken string, account basics.Address, round uint64) (basics.AccountData, error) {
+	queryString := fmt.Sprintf("%s/v2/accounts/%s?round=%d", indexerURL, account, round)
+	client := &http.Client{}
+	request, err := http.NewRequest("GET", queryString, nil)
+	request.Header.Set("X-Indexer-API-Token", indexerToken)
+	resp, err := client.Do(request)
+	if err != nil {
+		return basics.AccountData{}, fmt.Errorf("account request error: %s", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		msg, _ := ioutil.ReadAll(resp.Body)
+		return basics.AccountData{}, fmt.Errorf("account response error: %s, status code: %d, request: %s", string(msg), resp.StatusCode, queryString)
+	}
+	var accountResp AccountIndexerResponse
+	err = json.NewDecoder(resp.Body).Decode(&accountResp)
+	if err != nil {
+		return basics.AccountData{}, fmt.Errorf("account response decode error: %s", err)
+	}
+	balance, err := v2.AccountToAccountData(&accountResp.Account)
+	if err != nil {
+		return basics.AccountData{}, fmt.Errorf("AccountToAccountData error: %s", err)
+	}
+	return balance, nil
 }
 
 func makeSchemas() basics.StateSchemas {
