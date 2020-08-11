@@ -4,16 +4,16 @@ set -ex
 
 echo "Building RPM package"
 
-REPO_DIR=/projects/go-algorand
+REPO_DIR=$(pwd)
 ARCH=$(./scripts/archtype.sh)
 OS_TYPE=$(./scripts/ostype.sh)
 FULLVERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
 CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
-ALGO_BIN="$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH/$CHANNEL/${OS_TYPE}-${ARCH}/bin"
+ALGO_BIN="$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH/$CHANNEL/$OS_TYPE-$ARCH/bin"
 # TODO: Should there be a default network?
 DEFAULTNETWORK=devnet
-DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "${DEFAULTNETWORK}")
+DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "$DEFAULTNETWORK")
 PKG_NAME=$(./scripts/compute_package_name.sh "${CHANNEL:-stable}")
 
 # The following need to be exported for use in ./go-algorand/installer/rpm/algorand.spec.
@@ -28,7 +28,7 @@ trap 'rm -rf $RPMTMP' 0
 TEMPDIR=$(mktemp -d)
 trap 'rm -rf $TEMPDIR' 0
 < "./installer/rpm/algorand.spec" \
-    sed -e "s,@PKG_NAME@,${PKG_NAME}," \
+    sed -e "s,@PKG_NAME@,$PKG_NAME," \
         -e "s,@VER@,$FULLVERSION," \
     > "$TEMPDIR/algorand.spec"
 

@@ -1,38 +1,26 @@
-tasks:
-  - task: docker.Version
-    configFilePath: scripts/configure_dev-deps.sh
-
-  - task: shell.docker.Ensure
-    name: package
-    image: algorand/mule-linux-debian
-    version: '{{ docker.Version.outputs.version }}'
+agents:
+  - name: deb
     dockerFilePath: docker/build/mule.go.debian.Dockerfile
-    dependencies: docker.Version
+    image: algorand/mule-linux-debian
+    version: scripts/configure_dev-deps.sh
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    env:
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+      - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    workDir: $HOME/projects/go-algorand
 
+tasks:
   - task: docker.Make
     name: package-test-deb
-    docker:
-      image: algorand/mule-linux-debian
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
-      env: [
-        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-      ]
-      volumes: [ /var/run/docker.sock:/var/run/docker.sock ]
+    agent: deb
     target: mule-test-deb
 
   - task: docker.Make
     name: package-test-rpm
-    docker:
-      image: algorand/mule-linux-debian
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
-      env: [
-        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-      ]
-      volumes: [ /var/run/docker.sock:/var/run/docker.sock ]
+    agent: deb
     target: mule-test-rpm
 
   - task: s3.DownloadFile
@@ -49,24 +37,15 @@ tasks:
 
 jobs:
   package-test-deb:
-    configs:
-      arch: amd64
     tasks:
-      - shell.docker.Ensure.package
       - docker.Make.package-test-deb
 
   package-test-rpm:
-    configs:
-      arch: amd64
     tasks:
-      - shell.docker.Ensure.package
       - docker.Make.package-test-rpm
 
   package-test:
-    configs:
-      arch: amd64
     tasks:
-      - shell.docker.Ensure.package
       - docker.Make.package-test-deb
       - docker.Make.package-test-rpm
 

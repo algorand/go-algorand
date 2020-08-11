@@ -71,31 +71,31 @@ mnemonic=$(grep 'Private key mnemonic:' < "${TEMPDIR}/rekey" | sed 's/Private ke
 ACCOUNTC=$(grep 'Public key:' < "${TEMPDIR}/rekey" | sed 's/Public key: //')
 ${gcmd} account import -m "${mnemonic}"
 
-${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ACCOUNTB}" --rekey-to "${ACCOUNTC}"
+${gcmd} clerk send -a 100000 -f "${ACCOUNT}" -t "${ACCOUNTB}" --rekey-to "${ACCOUNTC}"
 
-${gcmd} clerk send -a 13000000 -f "${ACCOUNT}" -t "${ACCOUNTB}" -o "${TEMPDIR}/ntxn"
+${gcmd} clerk send -a 100000 -f "${ACCOUNT}" -t "${ACCOUNTB}" -o "${TEMPDIR}/ntxn"
 ${gcmd} clerk sign -S "${ACCOUNTC}" -i "${TEMPDIR}/ntxn" -o "${TEMPDIR}/nstxn"
 ${gcmd} clerk rawsend -f "${TEMPDIR}/nstxn"
 
 BALANCEB=$(${gcmd} account balance -a "${ACCOUNTB}" | awk '{ print $1 }')
-if [ "$BALANCEB" -ne 23000000 ]; then
-    date "+e2e_subs/rekey.sh FAIL wanted balance=23000000 but got ${BALANCEB} %Y%m%d_%H%M%S"
+if [ "$BALANCEB" -ne 200000 ]; then
+    date "+e2e_subs/rekey.sh FAIL wanted balance=200000 but got ${BALANCEB} %Y%m%d_%H%M%S"
     false
 fi
 
 # Rekey from A to C back to A [A -> C -> A].
-${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ACCOUNTB}" --rekey-to "${ACCOUNT}" -s -o "${TEMPDIR}/ntxn2"
+${gcmd} clerk send -a 100000 -f "${ACCOUNT}" -t "${ACCOUNTB}" --rekey-to "${ACCOUNT}" -s -o "${TEMPDIR}/ntxn2"
 ${gcmd} clerk sign -S "${ACCOUNTC}" -i "${TEMPDIR}/ntxn2" -o "${TEMPDIR}/nstxn2"
 ${gcmd} clerk rawsend -f "${TEMPDIR}/nstxn2"
 
 BALANCEB=$(${gcmd} account balance -a "${ACCOUNTB}" | awk '{ print $1 }')
-if [ "$BALANCEB" -ne 33000000 ]; then
-    date "+e2e_subs/rekey.sh FAIL wanted balance=33000000 but got ${BALANCEB} %Y%m%d_%H%M%S"
+if [ "$BALANCEB" -ne 300000 ]; then
+    date "+e2e_subs/rekey.sh FAIL wanted balance=300000 but got ${BALANCEB} %Y%m%d_%H%M%S"
     false
 fi
 
 # Fail case. Try to sign and send from A signed by C.
-${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ACCOUNTB}" -s -o "${TEMPDIR}/ntxn3"
+${gcmd} clerk send -a 100000 -f "${ACCOUNT}" -t "${ACCOUNTB}" -s -o "${TEMPDIR}/ntxn3"
 ${gcmd} clerk sign -S "${ACCOUNTC}" -i "${TEMPDIR}/ntxn3" -o "${TEMPDIR}/nstxn3"
 
 # This should fail because $ACCOUNT should have signed the transaction.
@@ -108,17 +108,17 @@ fi
 
 # Account balance should be the same amount as before.
 BALANCEB=$(${gcmd} account balance -a "${ACCOUNTB}" | awk '{ print $1 }')
-if [ "$BALANCEB" -ne 33000000 ]; then
-    date "+e2e_subs/rekey.sh FAIL wanted balance=33000000 but got ${BALANCEB} %Y%m%d_%H%M%S"
+if [ "$BALANCEB" -ne 300000 ]; then
+    date "+e2e_subs/rekey.sh FAIL wanted balance=300000 but got ${BALANCEB} %Y%m%d_%H%M%S"
     false
 fi
 
 # After restoring, let's just do a trivial transfer as a sanity.
-${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ACCOUNTB}"
+${gcmd} clerk send -a 100000 -f "${ACCOUNT}" -t "${ACCOUNTB}"
 
 BALANCEB=$(${gcmd} account balance -a "${ACCOUNTB}" | awk '{ print $1 }')
-if [ "$BALANCEB" -ne 43000000 ]; then
-    date "+e2e_subs/rekey.sh FAIL wanted balance=43000000 but got ${BALANCEB} %Y%m%d_%H%M%S"
+if [ "$BALANCEB" -ne 400000 ]; then
+    date "+e2e_subs/rekey.sh FAIL wanted balance=400000 but got ${BALANCEB} %Y%m%d_%H%M%S"
     false
 fi
 
