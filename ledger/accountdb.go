@@ -938,3 +938,66 @@ func (mc *merkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 func (mc *merkleCommitter) GetNodesCountPerPage() (pageSize int64) {
 	return merkleCommitterNodesPerPage
 }
+
+type encodedAccountsIterator struct {
+	rows            *sql.Rows
+	orederByAddress bool
+}
+
+// encodedAccountsRange returns an array containing the account data, in the same way it appear in the database
+// starting at entry startAccountIndex, and up to accountCount accounts long.
+func (iterator *encodedAccountsIterator) Iterate(ctx context.Context, tx *sql.Tx, accountCount int) (bals []encodedBalanceRecord, err error) {
+	if iterator.rows == nil {
+		if iterator.orederByAddress {
+			iterator.rows, err = tx.QueryContext(ctx, "SELECT address, data FROM accountbase ORDER BY address")
+		} else {
+			iterator.rows, err = tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
+		}
+
+		if err != nil {
+			return
+		}
+	}
+
+	// gather up to accountCount encoded accounts.
+	bals = make([]encodedBalanceRecord, 0, accountCount)
+	var addr basics.Address
+	for iterator.rows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		err = iterator.rows.Scan(&addrbuf, &buf)
+		if err != nil {
+			iterator.Close()
+			return
+		}
+
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return
+		}
+
+		copy(addr[:], addrbuf)
+
+		bals = append(bals, encodedBalanceRecord{Address: addr, AccountData: buf})
+		if len(bals) == accountCount {
+			// we're done with this iteration.
+			return
+		}
+	}
+
+	err = iterator.rows.Err()
+	if err != nil {
+		iterator.Close()
+		return
+	}
+	// we just finished reading the table.
+	iterator.Close()
+	return
+}
+
+func (iterator *encodedAccountsIterator) Close() {
+	if iterator.rows != nil {
+		iterator.rows.Close()
+		iterator.rows = nil
+	}
+}
