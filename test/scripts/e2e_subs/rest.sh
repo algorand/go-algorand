@@ -30,12 +30,12 @@ function call {
 function call_and_verify {
   local RES
   RES=$(call "$2")
-  if [[ "$RES" == *"$3"* ]]; then
-    return 0
+  if [[ "$RES" != *"$3"* ]]; then
+    echo "Failed test - $2: $1"
+    exit 1
   fi
-  echo "Failed test: $1"
-  false
 }
+
 
 function test_applications_endpoint {
   # Create an application
