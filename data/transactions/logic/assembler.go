@@ -435,7 +435,7 @@ func parseBinaryArgs(args []string) (val []byte, consumed int, err error) {
 			return
 		}
 		consumed = 2
-	} else if len(arg) > 2 && arg[0] == '"' && arg[len(arg)-1] == '"' {
+	} else if len(arg) > 1 && arg[0] == '"' && arg[len(arg)-1] == '"' {
 		val, err = parseStringLiteral(arg)
 		consumed = 1
 	} else {
@@ -707,6 +707,10 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	if !ok {
 		return fmt.Errorf("txn unknown arg %s", args[0])
 	}
+	_, ok = txnaFieldSpecByField[fs.field]
+	if ok {
+		return fmt.Errorf("found txna field %s in txn op", args[0])
+	}
 	if fs.version > ops.Version {
 		return fmt.Errorf("txn %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
@@ -714,7 +718,7 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 	return ops.Txn(uint64(val))
 }
 
-// assembleTxn2 generates txn or txna opcode depending on number of operands
+// assembleTxn2 delegates to assembleTxn or assembleTxna depending on number of operands
 func assembleTxn2(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) == 1 {
 		return assembleTxn(ops, spec, args)
@@ -759,6 +763,10 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 	fs, ok := txnFieldSpecByName[args[1]]
 	if !ok {
 		return fmt.Errorf("gtxn unknown arg %s", args[1])
+	}
+	_, ok = txnaFieldSpecByField[fs.field]
+	if ok {
+		return fmt.Errorf("found gtxna field %s in gtxn op", args[1])
 	}
 	if fs.version > ops.Version {
 		return fmt.Errorf("gtxn %s available in version %d. Missed #pragma version?", args[1], fs.version)
@@ -1064,6 +1072,16 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 		err := fmt.Errorf("unknown opcode %v", opstring)
 		return lineErr(ops.sourceLine, err)
 	}
+
+	// backward compatibility: do not allow jumps behind last instruction in TEAL v1
+	if ops.Version <= 1 {
+		for label, dest := range ops.labels {
+			if dest == ops.Out.Len() {
+				return fmt.Errorf(":%d label %v is too far away", ops.sourceLine, label)
+			}
+		}
+	}
+
 	// TODO: warn if expected resulting stack is not len==1 ?
 	return ops.resolveLabels()
 }
@@ -1288,6 +1306,13 @@ func (dis *disassembleState) putLabel(label string, target int) {
 		dis.pendingLabels = make(map[int]string)
 	}
 	dis.pendingLabels[target] = label
+}
+
+func (dis *disassembleState) outputLabelIfNeeded() (err error) {
+	if label, hasLabel := dis.pendingLabels[dis.pc]; hasLabel {
+		_, err = fmt.Fprintf(dis.out, "%s:\n", label)
+	}
+	return
 }
 
 type disassembleFunc func(dis *disassembleState, spec *OpSpec)
@@ -1541,7 +1566,7 @@ func disTxna(dis *disassembleState, spec *OpSpec) {
 		return
 	}
 	arrayFieldIdx := dis.program[dis.pc+2]
-	_, dis.err = fmt.Fprintf(dis.out, "txn %s %d\n", TxnFieldNames[txarg], arrayFieldIdx)
+	_, dis.err = fmt.Fprintf(dis.out, "txna %s %d\n", TxnFieldNames[txarg], arrayFieldIdx)
 }
 
 func disGtxn(dis *disassembleState, spec *OpSpec) {
@@ -1676,7 +1701,7 @@ type disInfo struct {
 	hasStatefulOps bool
 }
 
-// DisassembleInstrumented is like Disassemble, but additionally returns where
+// disassembleInstrumented is like Disassemble, but additionally returns where
 // each program counter value maps in the disassembly
 func disassembleInstrumented(program []byte) (text string, ds disInfo, err error) {
 	out := strings.Builder{}
@@ -1695,13 +1720,9 @@ func disassembleInstrumented(program []byte) (text string, ds disInfo, err error
 	fmt.Fprintf(dis.out, "// version %d\n", version)
 	dis.pc = vlen
 	for dis.pc < len(program) {
-		label, hasLabel := dis.pendingLabels[dis.pc]
-		if hasLabel {
-			_, dis.err = fmt.Fprintf(dis.out, "%s:\n", label)
-			if dis.err != nil {
-				err = dis.err
-				return
-			}
+		err = dis.outputLabelIfNeeded()
+		if err != nil {
+			return
 		}
 		op := opsByOpcode[version][program[dis.pc]]
 		if op.Modes == runModeApplication {
@@ -1728,6 +1749,11 @@ func disassembleInstrumented(program []byte) (text string, ds disInfo, err error
 		}
 		dis.pc = dis.nextpc
 	}
+	err = dis.outputLabelIfNeeded()
+	if err != nil {
+		return
+	}
+
 	text = out.String()
 	return
 }

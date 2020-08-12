@@ -1,0 +1,16 @@
+diff --git a/config/config.go b/config/config.go
+index 752bd4f..c6de011 100644
+--- a/config/config.go
++++ b/config/config.go
+@@ -410,6 +410,11 @@ func initConsensusProtocols() {
+ 	// ConsensusV17 points to 'final' spec commit
+ 	v17 := v16
+ 	v17.ApprovedUpgrades = map[protocol.ConsensusVersion]bool{}
++
++	v17.UpgradeVoteRounds = 2
++	v17.UpgradeThreshold = 1
++	v17.UpgradeWaitRounds = 2
++
+ 	Consensus[protocol.ConsensusV17] = v17
+ 
+ 	// v16 can be upgraded to v17.

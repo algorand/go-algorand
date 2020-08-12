@@ -170,7 +170,8 @@
       "get": {
         "description": "Get the list of pending transactions by address, sorted by priority, in decreasing order, truncated at the end at MAX. If MAX = 0, returns all pending transactions.\n",
         "produces": [
-          "application/json"
+          "application/json",
+          "application/msgpack"
         ],
         "schemes": [
           "http"
@@ -663,7 +664,8 @@
       "get": {
         "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0) - transaction still in the pool (committed round = 0, pool error = \"\") - transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
         "produces": [
-          "application/json"
+          "application/json",
+          "application/msgpack"
         ],
         "schemes": [
           "http"
@@ -1321,8 +1323,7 @@
       "type": "object",
       "required": [
         "id",
-        "schema",
-        "key-value"
+        "schema"
       ],
       "properties": {
         "id": {
@@ -1482,12 +1483,14 @@
         "approval-program": {
           "description": "\\[approv\\] approval program.",
           "type": "string",
-          "format": "byte"
+          "format": "byte",
+          "x-algorand-format": "TEALProgram"
         },
         "clear-state-program": {
           "description": "\\[clearp\\] approval program.",
           "type": "string",
-          "format": "byte"
+          "format": "byte",
+          "x-algorand-format": "TEALProgram"
         },
         "local-state-schema": {
           "description": "[\\lsch\\] local schema",
@@ -1909,7 +1912,8 @@
         "keyreg",
         "acfg",
         "axfer",
-        "afrz"
+        "afrz",
+        "appl"
       ],
       "type": "string",
       "name": "tx-type",
@@ -2071,6 +2075,10 @@
             "description": "The asset index if the transaction was found and it created an asset.",
             "type": "integer"
           },
+          "application-index": {
+            "description": "The application index if the transaction was found and it created an application.",
+            "type": "integer"
+          },
           "close-rewards": {
             "description": "Rewards in microalgos applied to the close remainder to account.",
             "type": "integer"
@@ -2094,6 +2102,17 @@
           "sender-rewards": {
             "description": "Rewards in microalgos applied to the sender account.",
             "type": "integer"
+          },
+          "local-state-delta": {
+            "description": "\\[ld\\] Local state key/value changes for the application being executed by this transaction.",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/AccountStateDelta"
+            }
+          },
+          "global-state-delta": {
+            "description": "\\[gd\\] Global state key/value changes for the application being executed by this transaction.",
+            "$ref": "#/definitions/StateDelta"
           },
           "txn": {
             "description": "The raw signed transaction.",

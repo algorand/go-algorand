@@ -19,6 +19,7 @@ package ledger
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -183,6 +184,7 @@ func (c *CatchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context
 			if err != nil {
 				return fmt.Errorf("unable to initialize accountsDbInit: %v", err)
 			}
+			defer sq.close()
 			_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupBalancesRound, 0)
 			if err != nil {
 				return err
@@ -252,6 +254,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to initialize accountsDbInit: %v", err)
 		}
+		defer sq.close()
 		_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupBlockRound, uint64(fileHeader.BlocksRound))
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingContent: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupBlockRound, err)
@@ -329,7 +332,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			hash := accountHashBuilder(balance.Address, accountData, balance.AccountData)
 			added, err := trie.Add(hash)
 			if !added {
-				return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingBalances: The provided catchpoint file contained the same account more than once. Account address %#v, account data %#v", balance.Address, accountData)
+				return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingBalances: The provided catchpoint file contained the same account more than once. Account address %#v, account data %#v, hash '%s'", balance.Address, accountData, hex.EncodeToString(hash))
 			}
 			if err != nil {
 				return err
@@ -425,6 +428,10 @@ func (c *CatchpointCatchupAccessorImpl) StoreBalancesRound(ctx context.Context, 
 	wdb := c.ledger.trackerDB().wdb
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		sq, err := accountsDbInit(tx, tx)
+		if err != nil {
+			return fmt.Errorf("CatchpointCatchupAccessorImpl::StoreBalancesRound: unable to initialize accountsDbInit: %v", err)
+		}
+		defer sq.close()
 		_, err = sq.writeCatchpointStateUint64(ctx, catchpointStateCatchupBalancesRound, uint64(balancesRound))
 		if err != nil {
 			return fmt.Errorf("CatchpointCatchupAccessorImpl::StoreBalancesRound: unable to write catchpoint catchup state '%s': %v", catchpointStateCatchupBalancesRound, err)
@@ -512,6 +519,7 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 		if err != nil {
 			return fmt.Errorf("unable to initialize accountsDbInit: %v", err)
 		}
+		defer sq.close()
 
 		balancesRound, _, err = sq.readCatchpointStateUint64(ctx, catchpointStateCatchupBalancesRound)
 		if err != nil {

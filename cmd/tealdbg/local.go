@@ -230,7 +230,19 @@ func determineEvalMode(program []byte, modeIn string) (eval evalFn, mode string,
 	return
 }
 
-// Setup validates input params
+// Setup validates input params and resolves inputs into canonical balance record structures.
+// Programs for execution are discovered in the following way:
+// - Sources from command line file names.
+// - Programs mentioned in transaction group txnGroup.
+// - if DryrunRequest present and no sources or transaction group set in command line then:
+//   1. DryrunRequest.Sources are expanded to DryrunRequest.Apps or DryrunRequest.Txns.
+//   2. DryrunRequest.Apps are expanded into DryrunRequest.Txns.
+//   3. txnGroup is set to DryrunRequest.Txns
+// Application search by id:
+//  - Balance records from CLI or DryrunRequest.Accounts
+//  - If no balance records set in CLI then DryrunRequest.Accounts and DryrunRequest.Apps are used.
+//    In this case Accounts data is used as a base for balance records creation,
+//    and Apps supply updates to AppParams field.
 func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 	ddr, err := ddrFromParams(dp)
 	if err != nil {
@@ -256,6 +268,14 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 		}
 	}
 
+	// if no sources provided, check dryrun request object
+	if len(dp.ProgramBlobs) == 0 && len(ddr.Sources) > 0 {
+		err = ddr.ExpandSources()
+		if err != nil {
+			return
+		}
+	}
+
 	var records []basics.BalanceRecord
 	if len(dp.BalanceBlob) > 0 {
 		records, err = balanceRecordsFromParams(dp)
@@ -269,6 +289,14 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 	balances := make(map[basics.Address]basics.AccountData)
 	for _, record := range records {
 		balances[record.Addr] = record.AccountData
+	}
+
+	if dp.Round == 0 && ddr.Round != 0 {
+		dp.Round = ddr.Round
+	}
+
+	if dp.LatestTimestamp == 0 && ddr.LatestTimestamp != 0 {
+		dp.LatestTimestamp = int64(ddr.LatestTimestamp)
 	}
 
 	// if program(s) specified then run from it
@@ -321,7 +349,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 				ledger, states, err = makeAppLedger(
 					balances, r.txnGroup, dp.GroupIndex,
 					r.proto, dp.Round, dp.LatestTimestamp, appIdx,
-					dp.Painless,
+					dp.Painless, dp.IndexerURL, dp.IndexerToken,
 				)
 				if err != nil {
 					return
@@ -359,7 +387,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 					ledger, states, err = makeAppLedger(
 						balances, r.txnGroup, gi,
 						r.proto, dp.Round, dp.LatestTimestamp,
-						appIdx, dp.Painless,
+						appIdx, dp.Painless, dp.IndexerURL, dp.IndexerToken,
 					)
 					if err != nil {
 						return
@@ -393,7 +421,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 							ledger, states, err = makeAppLedger(
 								balances, r.txnGroup, gi,
 								r.proto, dp.Round, dp.LatestTimestamp,
-								appIdx, dp.Painless,
+								appIdx, dp.Painless, dp.IndexerURL, dp.IndexerToken,
 							)
 							if err != nil {
 								return

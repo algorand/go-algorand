@@ -19,6 +19,7 @@ package pools
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -60,6 +61,7 @@ type TransactionPool struct {
 	pendingBlockEvaluator  *ledger.BlockEvaluator
 	numPendingWholeBlocks  basics.Round
 	feeThresholdMultiplier uint64
+	feePerByte             uint64
 	statusCache            *statusCache
 
 	assemblyMu       deadlock.Mutex
@@ -127,6 +129,10 @@ const timeoutOnNewBlock = time.Second
 // assemblyWaitEps is the extra time AssembleBlock() waits past the
 // deadline before giving up.
 const assemblyWaitEps = 10 * time.Millisecond
+
+// ErrTxPoolStaleBlockAssembly returned by AssembleBlock when requested block number is older than the current transaction pool round
+// i.e. typically it means that we're trying to make a proposal for an older round than what the ledger is currently pointing at.
+var ErrTxPoolStaleBlockAssembly = fmt.Errorf("AssembleBlock: requested block assembly specified a round that is older than current transaction pool round")
 
 // Reset resets the content of the transaction pool
 func (pool *TransactionPool) Reset() {
@@ -231,7 +237,16 @@ func (pool *TransactionPool) checkPendingQueueSize() error {
 	return nil
 }
 
-func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
+// FeePerByte returns the current minimum microalgos per byte a transaction
+// needs to pay in order to get into the pool.
+func (pool *TransactionPool) FeePerByte() uint64 {
+	return atomic.LoadUint64(&pool.feePerByte)
+}
+
+// computeFeePerByte computes and returns the current minimum microalgos per byte a transaction
+// needs to pay in order to get into the pool. It also updates the atomic counter that holds
+// the current fee per byte
+func (pool *TransactionPool) computeFeePerByte() uint64 {
 	// The baseline threshold fee per byte is 1, the smallest fee we can
 	// represent.  This amounts to a fee of 100 for a 100-byte txn, which
 	// is well below MinTxnFee (1000).  This means that, when the pool
@@ -260,6 +275,18 @@ func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn
 	for i := 0; i < int(pool.numPendingWholeBlocks)-1; i++ {
 		feePerByte *= pool.expFeeFactor
 	}
+
+	// Update the counter for fast reads
+	atomic.StoreUint64(&pool.feePerByte, feePerByte)
+
+	return feePerByte
+}
+
+// checkSufficientFee take a set of signed transactions and verifies that each transaction has
+// sufficient fee to get into the transaction pool
+func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
+	// get the current fee per byte
+	feePerByte := pool.computeFeePerByte()
 
 	for _, t := range txgroup {
 		feeThreshold := feePerByte * uint64(t.GetEncodedLength())
@@ -731,7 +758,10 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	if pool.assemblyResults.err != nil {
 		return nil, fmt.Errorf("AssemblyBlock: encountered error for round %d: %v", round, pool.assemblyResults.err)
 	}
-	if pool.assemblyResults.blk.Block().Round() != round {
+	if pool.assemblyResults.blk.Block().Round() > round {
+		logging.Base().Infof("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.blk.Block().Round())
+		return nil, ErrTxPoolStaleBlockAssembly
+	} else if pool.assemblyResults.blk.Block().Round() != round {
 		return nil, fmt.Errorf("AssembleBlock: assembled block round does not match: %d != %d",
 			pool.assemblyResults.blk.Block().Round(), round)
 	}

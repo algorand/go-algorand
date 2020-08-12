@@ -152,6 +152,15 @@ If default/empty local and global state are OK for the application, the use `--p
 to automatically create necessary balance records for the application(s) so that `app_` opcodes
 do not fail due to absent data in ledger.
 
+### Indexer Support
+
+You can also supply balance records through an indexer https://github.com/algorand/indexer.
+Specify the indexer api endpoint, round number at which to fetch balance records, and an api token if necessary.
+
+```
+$ tealdbg debug myprog.teal --round roundnumber -i apiendpoint --indexer-token token
+```
+
 ### Execution mode
 
 Execution mode, either **signature** or **application** matches to **Algod**'s evaluation mode

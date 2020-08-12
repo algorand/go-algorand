@@ -135,9 +135,12 @@ func (vc *alwaysVerifiedCache) Verified(txn transactions.SignedTxn, params verif
 }
 
 func benchmarkFullBlocks(params testParams, b *testing.B) {
-	// Disable deadlock checking library (we do this here and not in init
-	// because we want deadlock detection for unit tests)
+	// disable deadlock checking code
+	deadlockDisable := deadlock.Opts.Disable
 	deadlock.Opts.Disable = true
+	defer func() {
+		deadlock.Opts.Disable = deadlockDisable
+	}()
 
 	dbTempDir, err := ioutil.TempDir("", "testdir"+b.Name())
 	require.NoError(b, err)
@@ -322,7 +325,7 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	vc := alwaysVerifiedCache{}
 	b.ResetTimer()
 	for _, blk := range blocks {
-		_, err = l1.eval(context.Background(), blk, true, &vc, nil)
+		_, err = eval(context.Background(), l1, blk, true, &vc, nil)
 		require.NoError(b, err)
 		err = l1.AddBlock(blk, cert)
 		require.NoError(b, err)

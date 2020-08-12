@@ -17,6 +17,7 @@
 package v2
 
 import (
+	"encoding/base64"
 	"errors"
 
 	"github.com/algorand/go-algorand/crypto"
@@ -112,34 +113,51 @@ func AccountDataToAccount(
 	}, nil
 }
 
-func convertTKVToGenerated(tkv *basics.TealKeyValue) (converted generated.TealKeyValueStore) {
+func convertTKVToGenerated(tkv *basics.TealKeyValue) *generated.TealKeyValueStore {
+	if tkv == nil || len(*tkv) == 0 {
+		return nil
+	}
+
+	var converted generated.TealKeyValueStore
 	for k, v := range *tkv {
 		converted = append(converted, generated.TealKeyValue{
-			Key: k,
+			Key: base64.StdEncoding.EncodeToString([]byte(k)),
 			Value: generated.TealValue{
 				Type:  uint64(v.Type),
-				Bytes: v.Bytes,
+				Bytes: base64.StdEncoding.EncodeToString([]byte(v.Bytes)),
 				Uint:  v.Uint,
 			},
 		})
 	}
-	return
+	return &converted
 }
 
-func convertGeneratedTKV(akvs *generated.TealKeyValueStore) basics.TealKeyValue {
+func convertGeneratedTKV(akvs *generated.TealKeyValueStore) (basics.TealKeyValue, error) {
 	if akvs == nil || len(*akvs) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	tkv := make(basics.TealKeyValue)
 	for _, kv := range *akvs {
-		tkv[kv.Key] = basics.TealValue{
+		// Decode base-64 encoded map key
+		decodedKey, err := base64.StdEncoding.DecodeString(kv.Key)
+		if err != nil {
+			return nil, err
+		}
+
+		// Decode base-64 encoded map value (OK even if empty string)
+		decodedBytes, err := base64.StdEncoding.DecodeString(kv.Value.Bytes)
+		if err != nil {
+			return nil, err
+		}
+
+		tkv[string(decodedKey)] = basics.TealValue{
 			Type:  basics.TealType(kv.Value.Type),
 			Uint:  kv.Value.Uint,
-			Bytes: kv.Value.Bytes,
+			Bytes: string(decodedBytes),
 		}
 	}
-	return tkv
+	return tkv, nil
 }
 
 // AccountToAccountData converts v2.generated.Account to basics.AccountData
@@ -165,33 +183,58 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 	var assetParams map[basics.AssetIndex]basics.AssetParams
 	if a.CreatedAssets != nil && len(*a.CreatedAssets) > 0 {
 		assetParams = make(map[basics.AssetIndex]basics.AssetParams, len(*a.CreatedAssets))
+		var err error
 		for _, ca := range *a.CreatedAssets {
 			var metadataHash [32]byte
-			copy(metadataHash[:], *ca.Params.MetadataHash)
-			manager, err := basics.UnmarshalChecksumAddress(*ca.Params.Manager)
-			if err != nil {
-				return basics.AccountData{}, err
+			if ca.Params.MetadataHash != nil {
+				copy(metadataHash[:], *ca.Params.MetadataHash)
 			}
-			reserve, err := basics.UnmarshalChecksumAddress(*ca.Params.Reserve)
-			if err != nil {
-				return basics.AccountData{}, err
+			var manager, reserve, freeze, clawback basics.Address
+			if ca.Params.Manager != nil {
+				if manager, err = basics.UnmarshalChecksumAddress(*ca.Params.Manager); err != nil {
+					return basics.AccountData{}, err
+				}
 			}
-			freeze, err := basics.UnmarshalChecksumAddress(*ca.Params.Freeze)
-			if err != nil {
-				return basics.AccountData{}, err
+			if ca.Params.Reserve != nil {
+				if reserve, err = basics.UnmarshalChecksumAddress(*ca.Params.Reserve); err != nil {
+					return basics.AccountData{}, err
+				}
 			}
-			clawback, err := basics.UnmarshalChecksumAddress(*ca.Params.Clawback)
-			if err != nil {
-				return basics.AccountData{}, err
+			if ca.Params.Freeze != nil {
+				if freeze, err = basics.UnmarshalChecksumAddress(*ca.Params.Freeze); err != nil {
+					return basics.AccountData{}, err
+				}
+			}
+			if ca.Params.Clawback != nil {
+				if clawback, err = basics.UnmarshalChecksumAddress(*ca.Params.Clawback); err != nil {
+					return basics.AccountData{}, err
+				}
+			}
+
+			var defaultFrozen bool
+			if ca.Params.DefaultFrozen != nil {
+				defaultFrozen = *ca.Params.DefaultFrozen
+			}
+			var url string
+			if ca.Params.Url != nil {
+				url = *ca.Params.Url
+			}
+			var unitName string
+			if ca.Params.UnitName != nil {
+				unitName = *ca.Params.UnitName
+			}
+			var name string
+			if ca.Params.Name != nil {
+				name = *ca.Params.Name
 			}
 
 			assetParams[basics.AssetIndex(ca.Index)] = basics.AssetParams{
 				Total:         ca.Params.Total,
 				Decimals:      uint32(ca.Params.Decimals),
-				DefaultFrozen: *ca.Params.DefaultFrozen,
-				UnitName:      *ca.Params.UnitName,
-				AssetName:     *ca.Params.Name,
-				URL:           *ca.Params.Url,
+				DefaultFrozen: defaultFrozen,
+				UnitName:      unitName,
+				AssetName:     name,
+				URL:           url,
 				MetadataHash:  metadataHash,
 				Manager:       manager,
 				Reserve:       reserve,
@@ -215,12 +258,16 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 	if a.AppsLocalState != nil && len(*a.AppsLocalState) > 0 {
 		appLocalStates = make(map[basics.AppIndex]basics.AppLocalState, len(*a.AppsLocalState))
 		for _, ls := range *a.AppsLocalState {
+			kv, err := convertGeneratedTKV(ls.KeyValue)
+			if err != nil {
+				return basics.AccountData{}, err
+			}
 			appLocalStates[basics.AppIndex(ls.Id)] = basics.AppLocalState{
 				Schema: basics.StateSchema{
 					NumUint:      ls.Schema.NumUint,
 					NumByteSlice: ls.Schema.NumByteSlice,
 				},
-				KeyValue: convertGeneratedTKV(&ls.KeyValue),
+				KeyValue: kv,
 			}
 		}
 	}
@@ -229,7 +276,11 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 	if a.CreatedApps != nil && len(*a.CreatedApps) > 0 {
 		appParams = make(map[basics.AppIndex]basics.AppParams, len(*a.CreatedApps))
 		for _, params := range *a.CreatedApps {
-			appParams[basics.AppIndex(params.Id)] = ApplicationParamsToAppParams(&params.Params)
+			ap, err := ApplicationParamsToAppParams(&params.Params)
+			if err != nil {
+				return basics.AccountData{}, err
+			}
+			appParams[basics.AppIndex(params.Id)] = ap
 		}
 	}
 
@@ -284,7 +335,7 @@ func AccountToAccountData(a *generated.Account) (basics.AccountData, error) {
 }
 
 // ApplicationParamsToAppParams converts generated.ApplicationParams to basics.AppParams
-func ApplicationParamsToAppParams(gap *generated.ApplicationParams) basics.AppParams {
+func ApplicationParamsToAppParams(gap *generated.ApplicationParams) (basics.AppParams, error) {
 	ap := basics.AppParams{
 		ApprovalProgram:   gap.ApprovalProgram,
 		ClearStateProgram: gap.ClearStateProgram,
@@ -301,9 +352,13 @@ func ApplicationParamsToAppParams(gap *generated.ApplicationParams) basics.AppPa
 			NumByteSlice: gap.GlobalStateSchema.NumByteSlice,
 		}
 	}
-	ap.GlobalState = convertGeneratedTKV(gap.GlobalState)
+	kv, err := convertGeneratedTKV(gap.GlobalState)
+	if err != nil {
+		return basics.AppParams{}, err
+	}
+	ap.GlobalState = kv
 
-	return ap
+	return ap, nil
 }
 
 // AppParamsToApplication converts basics.AppParams to generated.Application
@@ -315,7 +370,7 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 			Creator:           creator,
 			ApprovalProgram:   appParams.ApprovalProgram,
 			ClearStateProgram: appParams.ClearStateProgram,
-			GlobalState:       &globalState,
+			GlobalState:       globalState,
 			LocalStateSchema: &generated.ApplicationStateSchema{
 				NumByteSlice: appParams.LocalStateSchema.NumByteSlice,
 				NumUint:      appParams.LocalStateSchema.NumUint,
@@ -330,12 +385,12 @@ func AppParamsToApplication(creator string, appIdx basics.AppIndex, appParams *b
 
 // AssetParamsToAsset converts basics.AssetParams to generated.Asset
 func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.AssetParams) generated.Asset {
+	frozen := params.DefaultFrozen
 	assetParams := generated.AssetParams{
 		Creator:       creator,
 		Total:         params.Total,
 		Decimals:      uint64(params.Decimals),
-		DefaultFrozen: &params.DefaultFrozen,
-		MetadataHash:  byteOrNil(params.MetadataHash[:]),
+		DefaultFrozen: &frozen,
 		Name:          strOrNil(params.AssetName),
 		UnitName:      strOrNil(params.UnitName),
 		Url:           strOrNil(params.URL),
@@ -343,6 +398,11 @@ func AssetParamsToAsset(creator string, idx basics.AssetIndex, params *basics.As
 		Freeze:        addrOrNil(params.Freeze),
 		Manager:       addrOrNil(params.Manager),
 		Reserve:       addrOrNil(params.Reserve),
+	}
+	if params.MetadataHash != ([32]byte{}) {
+		metadataHash := make([]byte, len(params.MetadataHash))
+		copy(metadataHash, params.MetadataHash[:])
+		assetParams.MetadataHash = &metadataHash
 	}
 
 	return generated.Asset{

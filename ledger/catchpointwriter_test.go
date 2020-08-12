@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -130,37 +131,44 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	protoParams.SeedLookback = 2
 	protoParams.SeedRefreshInterval = 8
 	config.Consensus[testProtocolVersion] = protoParams
+	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), "catchpoints")
 	defer func() {
 		delete(config.Consensus, testProtocolVersion)
-		os.RemoveAll("./catchpoints")
+		os.RemoveAll(temporaryDirectroy)
 	}()
 
 	ml := makeMockLedgerForTracker(t, true)
 	defer ml.close()
 	ml.blocks = randomInitChain(testProtocolVersion, 10)
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(300)}
+	accts := randomAccounts(300, false)
 
 	au := &accountUpdates{}
 	conf := config.GetDefaultLocal()
 	conf.CatchpointInterval = 1
 	conf.Archival = true
-	au.initialize(conf, ".", protoParams, accts[0])
+	au.initialize(conf, ".", protoParams, accts)
 	defer au.close()
 	err := au.loadFromDisk(ml)
 	require.NoError(t, err)
 	au.close()
-	fileName := filepath.Join("./catchpoints", "15.catchpoint")
+	fileName := filepath.Join(temporaryDirectroy, "15.catchpoint")
 	blocksRound := basics.Round(12345)
 	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
 	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
-	writer := makeCatchpointWriter(fileName, ml.trackerDB().rdb, blocksRound, blockHeaderDigest, catchpointLabel)
-	for {
-		more, err := writer.WriteStep(context.Background())
-		require.NoError(t, err)
-		if !more {
-			break
+
+	readDb := ml.trackerDB().rdb
+	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		writer := makeCatchpointWriter(context.Background(), fileName, tx, blocksRound, blockHeaderDigest, catchpointLabel)
+		for {
+			more, err := writer.WriteStep(context.Background())
+			require.NoError(t, err)
+			if !more {
+				break
+			}
 		}
-	}
+		return
+	})
+	require.NoError(t, err)
 
 	// load the file from disk.
 	fileContent, err := ioutil.ReadFile(fileName)
@@ -194,6 +202,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 				break
 			}
 		}
+
 		if header.Name == "content.msgpack" {
 			var fileHeader CatchpointFileHeader
 			err = protocol.Decode(balancesBlockBytes, &fileHeader)
@@ -201,14 +210,120 @@ func TestBasicCatchpointWriter(t *testing.T) {
 			require.Equal(t, catchpointLabel, fileHeader.Catchpoint)
 			require.Equal(t, blocksRound, fileHeader.BlocksRound)
 			require.Equal(t, blockHeaderDigest, fileHeader.BlockHeaderDigest)
-			require.Equal(t, uint64(len(accts[0])), fileHeader.TotalAccounts)
+			require.Equal(t, uint64(len(accts)), fileHeader.TotalAccounts)
 		} else if header.Name == "balances.1.1.msgpack" {
 			var balances catchpointFileBalancesChunk
 			err = protocol.Decode(balancesBlockBytes, &balances)
 			require.NoError(t, err)
-			require.Equal(t, uint64(len(accts[0])), uint64(len(balances.Balances)))
+			require.Equal(t, uint64(len(accts)), uint64(len(balances.Balances)))
 		} else {
 			require.Failf(t, "unexpected tar chunk name %s", header.Name)
 		}
+	}
+}
+
+func TestFullCatchpointWriter(t *testing.T) {
+	// create new protocol version, which has lower back balance.
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestFullCatchpointWriter")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 32
+	protoParams.SeedLookback = 2
+	protoParams.SeedRefreshInterval = 8
+	config.Consensus[testProtocolVersion] = protoParams
+	temporaryDirectroy, _ := ioutil.TempDir(os.TempDir(), "catchpoints")
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+		os.RemoveAll(temporaryDirectroy)
+	}()
+
+	ml := makeMockLedgerForTracker(t, true)
+	defer ml.close()
+	ml.blocks = randomInitChain(testProtocolVersion, 10)
+	accts := randomAccounts(BalancesPerCatchpointFileChunk*3, false)
+
+	au := &accountUpdates{}
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	conf.Archival = true
+	au.initialize(conf, ".", protoParams, accts)
+	defer au.close()
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+	au.close()
+	fileName := filepath.Join(temporaryDirectroy, "15.catchpoint")
+	blocksRound := basics.Round(12345)
+	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
+	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
+	readDb := ml.trackerDB().rdb
+	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		writer := makeCatchpointWriter(context.Background(), fileName, tx, blocksRound, blockHeaderDigest, catchpointLabel)
+		for {
+			more, err := writer.WriteStep(context.Background())
+			require.NoError(t, err)
+			if !more {
+				break
+			}
+		}
+		return
+	})
+	require.NoError(t, err)
+
+	// create a ledger.
+	l, err := OpenLedger(ml.log, "TestFullCatchpointWriter", true, InitState{}, conf)
+	require.NoError(t, err)
+	defer l.Close()
+	accessor := MakeCatchpointCatchupAccessor(l, l.log)
+
+	err = accessor.ResetStagingBalances(context.Background(), true)
+	require.NoError(t, err)
+
+	// load the file from disk.
+	fileContent, err := ioutil.ReadFile(fileName)
+	require.NoError(t, err)
+	gzipReader, err := gzip.NewReader(bytes.NewBuffer(fileContent))
+	require.NoError(t, err)
+	tarReader := tar.NewReader(gzipReader)
+	var catchupProgress CatchpointCatchupAccessorProgress
+	defer gzipReader.Close()
+	for {
+		header, err := tarReader.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+			break
+		}
+		balancesBlockBytes := make([]byte, header.Size)
+		readComplete := int64(0)
+
+		for readComplete < header.Size {
+			bytesRead, err := tarReader.Read(balancesBlockBytes[readComplete:])
+			readComplete += int64(bytesRead)
+			if err != nil {
+				if err == io.EOF {
+					if readComplete == header.Size {
+						break
+					}
+					require.NoError(t, err)
+				}
+				break
+			}
+		}
+		err = accessor.ProgressStagingBalances(context.Background(), header.Name, balancesBlockBytes, &catchupProgress)
+		require.NoError(t, err)
+	}
+
+	err = l.trackerDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		err := applyCatchpointStagingBalances(ctx, tx, 0)
+		return err
+	})
+	require.NoError(t, err)
+
+	// verify that the account data aligns with what we originally stored :
+	for addr, acct := range accts {
+		acctData, err := l.LookupWithoutRewards(0, addr)
+		require.NoError(t, err)
+		require.Equal(t, acct, acctData)
 	}
 }

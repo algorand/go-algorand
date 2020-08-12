@@ -1,0 +1,146 @@
+#!/usr/bin/expect -f
+#exp_internal 1
+set err 0
+log_user 1
+
+source  goalExpectCommon.exp
+
+set TEST_ALGO_DIR [lindex $argv 0]
+set TEST_DATA_DIR [lindex $argv 1]
+
+proc statefulTealAppReadTest { TEST_ALGO_DIR TEST_DATA_DIR} {
+
+    set timeout 60
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root_$TIME_STAMP
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+
+    exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    # Check the balance of the primary account
+    set PRIMARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
+
+    ::AlgorandGoal::WaitForRound 1 $TEST_PRIMARY_NODE_DIR
+
+    set TEAL_PROGS_DIR "$TEST_DATA_DIR/../scripts/e2e_subs/tealprogs"
+
+    # Network Setup complete
+    #----------------------
+
+    puts "calling app compile"
+    ::AlgorandGoal::AppCompile ${TEAL_PROGS_DIR}/upgraded.teal ${TEST_ROOT_DIR}/upgraded.tealc $TEST_PRIMARY_NODE_DIR
+    puts "computing target hash"
+
+    puts "compute target hash"
+    set TARGET_HASH [ exec  shasum -a 256 "${TEST_ROOT_DIR}/upgraded.tealc" | awk {{print $1}} ]
+    puts "TARGET_HASH ${TARGET_HASH}"
+
+    # Compile dummy, wrong contract
+    ::AlgorandGoal::AppCompile ${TEAL_PROGS_DIR}/wrongupgrade.teal ${TEST_ROOT_DIR}/wrongupgrade.tealc $TEST_PRIMARY_NODE_DIR
+
+    # Copy template
+    exec cp ${TEAL_PROGS_DIR}/bootloader.teal.tmpl ${TEST_ROOT_DIR}/bootloader.teal
+
+    # Substitute template values
+    exec sed -i"" -e "s/TMPL_APPROV_HASH/${TARGET_HASH}/g" ${TEST_ROOT_DIR}/bootloader.teal
+    exec sed -i"" -e "s/TMPL_CLEARSTATE_HASH/${TARGET_HASH}/g" ${TEST_ROOT_DIR}/bootloader.teal
+
+    # Create an app using filled-in bootloader template
+    puts "calling app create"
+    set GLOBAL_BYTE_SLICES 1
+    set LOCAL_BYTE_SLICES 0
+    set APP_ID [::AlgorandGoal::AppCreate0 $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS ${TEST_ROOT_DIR}/bootloader.teal $GLOBAL_BYTE_SLICES $LOCAL_BYTE_SLICES ${TEAL_PROGS_DIR}/clear_program_state.teal $TEST_PRIMARY_NODE_DIR]
+
+    # Calling app without args and wrong OnCompletion should fail
+    puts "calling goal app call with no args"
+    spawn goal app call --app-id $APP_ID --from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+        "Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: transaction*" {puts "received expected error"; close}
+        eof { close; ::AlgorandGoal::Abort "did not receive expected error" }
+    }
+
+    # Calling app as an update but with wrong scripts should fail
+    puts "calling goal app call with wrong scripts"
+    spawn goal app call --app-id $APP_ID --from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME --approval-prog-raw ${TEAL_PROGS_DIR}/wrongupgrade.tealc --clear-prog-raw ${TEAL_PROGS_DIR}/wrongupgrade.tealc -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+        "Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: transaction*" {puts "received expected error"; close}
+        eof { close; ::AlgorandGoal::Abort "did not receive expected error" }
+    }
+
+    # Calling app as an update but with right scripts should succeed
+    spawn goal app update --app-id $APP_ID --from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR --approval-prog-raw ${TEST_ROOT_DIR}/upgraded.tealc  --clear-prog-raw ${TEST_ROOT_DIR}/upgraded.tealc
+    expect {
+        timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+        "Please enter the password for wallet '$PRIMARY_WALLET_NAME':" {send "$PRIMARY_WALLET_PASSWORD\r" ; exp_continue}
+        "*committed in round*" {puts "app update succeeded"; close}
+        eof {close; ::AlgorandGoal::Abort "app update failed" }
+    }
+
+    # Global state should be empty
+    spawn goal app read --guess-format --app-id $APP_ID --global -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+        -re {^\{\}$} {puts "app read succeeded"}
+        eof {close; ::AlgorandGoal::Abort "app read failed" }
+    }
+
+    # Calling app should succeed
+    spawn goal app call --app-id $APP_ID --from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+        "Please enter the password for wallet '$PRIMARY_WALLET_NAME':" {send "$PRIMARY_WALLET_PASSWORD\r" ; exp_continue}
+        "*committed in round*" {puts "app call succeeded"}
+        eof {close; ::AlgorandGoal::Abort "app call failed" }
+    }
+
+    # Global state should now have 'foo': 'foo' key
+    spawn goal app read --guess-format --app-id $APP_ID --global -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+        "*foo*" {puts "app read succeeded"}
+        eof {close; ::AlgorandGoal::Abort "app read failed" }
+    }
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    puts "Goal statefulTealAppReadTest Successful"
+
+}
+
+
+if { [catch {
+    source  goalExpectCommon.exp
+
+    puts "starting statefulTealAppReadTest"
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    statefulTealAppReadTest  $TEST_ALGO_DIR  $TEST_DATA_DIR
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in statefulTealAppReadTest: $EXCEPTION"
+}

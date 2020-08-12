@@ -272,7 +272,7 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 	}
 	cache.deleteNode(childNodeID)
 
-	// at this point, we migth end up with a single leaf child. collapse that.
+	// at this point, we might end up with a single leaf child. collapse that.
 	if pnode.childrenNext[pnode.firstChild] == pnode.firstChild {
 		childNode, err = cache.getNode(pnode.children[pnode.firstChild])
 		if err != nil {

@@ -1,53 +1,41 @@
-tasks:
-  - task: docker.Version
-    configFilePath: scripts/configure_dev-deps.sh
-
-  - task: shell.docker.Ensure
-    name: deb
-    image: algorand/mule-linux-ubuntu
-    version: '{{ docker.Version.outputs.version }}'
+agents:
+  - name: deb
     dockerFilePath: docker/build/docker.ubuntu.Dockerfile
-    dependencies: docker.Version
+    image: algorand/mule-linux-ubuntu
+    version: scripts/configure_dev-deps.sh
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    env:
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+      - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    workDir: $HOME/projects/go-algorand
 
-  - task: shell.docker.Ensure
-    name: rpm
-    image: algorand/mule-linux-centos
-    version: '{{ docker.Version.outputs.version }}'
+  - name: rpm
     dockerFilePath: docker/build/mule.go.centos.Dockerfile
-    dependencies: docker.Version
+    image: algorand/mule-linux-centos
+    version: scripts/configure_dev-deps.sh
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    env:
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+      - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+    volumes:
+      - $HOME/packages:/root/packages,
+      - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
+      - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
+    workDir: $HOME/projects/go-algorand
 
+tasks:
   - task: docker.Make
     name: deb
-    docker:
-      image: algorand/mule-linux-ubuntu
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
-      env: [
-        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-      ]
-      volumes: [
-        $HOME/packages:/root/packages,
-        $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
-        $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
-      ]
+    agent: deb
     target: mule-deploy-deb
 
   - task: docker.Make
     name: rpm
-    docker:
-      image: algorand/mule-linux-centos
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
-      env: [
-        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-      ]
-      volumes: [
-        $HOME/packages:/root/packages,
-        $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
-        $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
-      ]
+    agent: rpm
     target: mule-deploy-rpm
 
   - task: s3.BucketCopy
@@ -79,11 +67,7 @@ tasks:
 
 jobs:
   package-deploy:
-    configs:
-      arch: amd64
     tasks:
-      - shell.docker.Ensure.deb
-      - shell.docker.Ensure.rpm
       - docker.Make.deb
       - docker.Make.rpm
 

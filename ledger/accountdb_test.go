@@ -17,7 +17,9 @@
 package ledger
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -50,19 +52,182 @@ func randomAccountData(rewardsLevel uint64) basics.AccountData {
 	}
 
 	data.RewardsBase = rewardsLevel
+
 	return data
 }
 
-func randomAccounts(niter int) map[basics.Address]basics.AccountData {
-	res := make(map[basics.Address]basics.AccountData)
-	for i := 0; i < niter; i++ {
-		res[randomAddress()] = randomAccountData(0)
+func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.AccountData, uint64) {
+	data := randomAccountData(rewardsLevel)
+
+	crypto.RandBytes(data.VoteID[:])
+	crypto.RandBytes(data.SelectionID[:])
+	data.VoteFirstValid = basics.Round(crypto.RandUint64())
+	data.VoteLastValid = basics.Round(crypto.RandUint64())
+	data.VoteKeyDilution = crypto.RandUint64()
+	if 1 == (crypto.RandUint64() % 2) {
+		// if account has created assets, have these defined.
+		data.AssetParams = make(map[basics.AssetIndex]basics.AssetParams)
+		createdAssetsCount := crypto.RandUint64()%20 + 1
+		for i := uint64(0); i < createdAssetsCount; i++ {
+			ap := basics.AssetParams{
+				Total:         crypto.RandUint64(),
+				Decimals:      uint32(crypto.RandUint64() % 20),
+				DefaultFrozen: (crypto.RandUint64()%2 == 0),
+				UnitName:      fmt.Sprintf("un%x", uint32(crypto.RandUint64()%0x7fffffff)),
+				AssetName:     fmt.Sprintf("an%x", uint32(crypto.RandUint64()%0x7fffffff)),
+				URL:           fmt.Sprintf("url%x", uint32(crypto.RandUint64()%0x7fffffff)),
+			}
+			crypto.RandBytes(ap.MetadataHash[:])
+			crypto.RandBytes(ap.Manager[:])
+			crypto.RandBytes(ap.Reserve[:])
+			crypto.RandBytes(ap.Freeze[:])
+			crypto.RandBytes(ap.Clawback[:])
+			lastCreatableID++
+			data.AssetParams[basics.AssetIndex(lastCreatableID)] = ap
+		}
+	}
+	if 1 == (crypto.RandUint64() % 2) {
+		// if account owns assets
+		data.Assets = make(map[basics.AssetIndex]basics.AssetHolding)
+		ownedAssetsCount := crypto.RandUint64()%20 + 1
+		for i := uint64(0); i < ownedAssetsCount; i++ {
+			ah := basics.AssetHolding{
+				Amount: crypto.RandUint64(),
+				Frozen: (crypto.RandUint64()%2 == 0),
+			}
+			data.Assets[basics.AssetIndex(crypto.RandUint64()%lastCreatableID)] = ah
+		}
+	}
+	if 1 == (crypto.RandUint64() % 5) {
+		crypto.RandBytes(data.AuthAddr[:])
 	}
 
+	if 1 == (crypto.RandUint64() % 3) {
+		data.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+		appStatesCount := crypto.RandUint64()%20 + 1
+		for i := uint64(0); i < appStatesCount; i++ {
+			ap := basics.AppLocalState{
+				Schema: basics.StateSchema{
+					NumUint:      crypto.RandUint64() % 5,
+					NumByteSlice: crypto.RandUint64() % 5,
+				},
+				KeyValue: make(map[string]basics.TealValue),
+			}
+
+			for i := uint64(0); i < ap.Schema.NumUint; i++ {
+				appName := fmt.Sprintf("lapp%x-%x", crypto.RandUint64(), i)
+				ap.KeyValue[appName] = basics.TealValue{
+					Type: basics.TealUintType,
+					Uint: crypto.RandUint64(),
+				}
+			}
+			for i := uint64(0); i < ap.Schema.NumByteSlice; i++ {
+				appName := fmt.Sprintf("lapp%x-%x", crypto.RandUint64(), i)
+				tv := basics.TealValue{
+					Type: basics.TealBytesType,
+				}
+				bytes := make([]byte, crypto.RandUint64()%512)
+				crypto.RandBytes(bytes[:])
+				tv.Bytes = string(bytes)
+				ap.KeyValue[appName] = tv
+			}
+			if len(ap.KeyValue) == 0 {
+				ap.KeyValue = nil
+			}
+			data.AppLocalStates[basics.AppIndex(crypto.RandUint64()%lastCreatableID)] = ap
+		}
+	}
+
+	if 1 == (crypto.RandUint64() % 3) {
+		data.TotalAppSchema = basics.StateSchema{
+			NumUint:      crypto.RandUint64() % 50,
+			NumByteSlice: crypto.RandUint64() % 50,
+		}
+	}
+	if 1 == (crypto.RandUint64() % 3) {
+		data.AppParams = make(map[basics.AppIndex]basics.AppParams)
+		appParamsCount := crypto.RandUint64()%5 + 1
+		for i := uint64(0); i < appParamsCount; i++ {
+			ap := basics.AppParams{
+				ApprovalProgram:   make([]byte, int(crypto.RandUint63())%config.MaxAppProgramLen),
+				ClearStateProgram: make([]byte, int(crypto.RandUint63())%config.MaxAppProgramLen),
+				GlobalState:       make(basics.TealKeyValue),
+				StateSchemas: basics.StateSchemas{
+					LocalStateSchema: basics.StateSchema{
+						NumUint:      crypto.RandUint64() % 5,
+						NumByteSlice: crypto.RandUint64() % 5,
+					},
+					GlobalStateSchema: basics.StateSchema{
+						NumUint:      crypto.RandUint64() % 5,
+						NumByteSlice: crypto.RandUint64() % 5,
+					},
+				},
+			}
+			if len(ap.ApprovalProgram) > 0 {
+				crypto.RandBytes(ap.ApprovalProgram[:])
+			} else {
+				ap.ApprovalProgram = nil
+			}
+			if len(ap.ClearStateProgram) > 0 {
+				crypto.RandBytes(ap.ClearStateProgram[:])
+			} else {
+				ap.ClearStateProgram = nil
+			}
+
+			for i := uint64(0); i < ap.StateSchemas.LocalStateSchema.NumUint+ap.StateSchemas.GlobalStateSchema.NumUint; i++ {
+				appName := fmt.Sprintf("tapp%x-%x", crypto.RandUint64(), i)
+				ap.GlobalState[appName] = basics.TealValue{
+					Type: basics.TealUintType,
+					Uint: crypto.RandUint64(),
+				}
+			}
+			for i := uint64(0); i < ap.StateSchemas.LocalStateSchema.NumByteSlice+ap.StateSchemas.GlobalStateSchema.NumByteSlice; i++ {
+				appName := fmt.Sprintf("tapp%x-%x", crypto.RandUint64(), i)
+				tv := basics.TealValue{
+					Type: basics.TealBytesType,
+				}
+				bytes := make([]byte, crypto.RandUint64()%512)
+				crypto.RandBytes(bytes[:])
+				tv.Bytes = string(bytes)
+				ap.GlobalState[appName] = tv
+			}
+			if len(ap.GlobalState) == 0 {
+				ap.GlobalState = nil
+			}
+			lastCreatableID++
+			data.AppParams[basics.AppIndex(lastCreatableID)] = ap
+		}
+
+	}
+	return data, lastCreatableID
+}
+
+func randomAccounts(niter int, simpleAccounts bool) map[basics.Address]basics.AccountData {
+	res := make(map[basics.Address]basics.AccountData)
+	if simpleAccounts {
+		for i := 0; i < niter; i++ {
+			res[randomAddress()] = randomAccountData(0)
+		}
+	} else {
+		lastCreatableID := crypto.RandUint64() % 512
+		for i := 0; i < niter; i++ {
+			res[randomAddress()], lastCreatableID = randomFullAccountData(0, lastCreatableID)
+		}
+	}
 	return res
 }
 
 func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData, imbalance int64) {
+	updates, totals, imbalance, _ = randomDeltasImpl(niter, base, rewardsLevel, true, 0)
+	return
+}
+
+func randomDeltasFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData, imbalance int64, lastCreatableID uint64) {
+	updates, totals, imbalance, lastCreatableID = randomDeltasImpl(niter, base, rewardsLevel, false, lastCreatableIDIn)
+	return
+}
+
+func randomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData, imbalance int64, lastCreatableID uint64) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	updates = make(map[basics.Address]accountDelta)
 	totals = make(map[basics.Address]basics.AccountData)
@@ -70,6 +235,23 @@ func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewards
 	// copy base -> totals
 	for addr, data := range base {
 		totals[addr] = data
+	}
+
+	// if making a full delta then need to determine max asset/app id to get rid of conflicts
+	lastCreatableID = lastCreatableIDIn
+	if !simple {
+		for _, ad := range base {
+			for aid := range ad.AssetParams {
+				if uint64(aid) > lastCreatableID {
+					lastCreatableID = uint64(aid)
+				}
+			}
+			for aid := range ad.AppParams {
+				if uint64(aid) > lastCreatableID {
+					lastCreatableID = uint64(aid)
+				}
+			}
+		}
 	}
 
 	// Change some existing accounts
@@ -85,7 +267,12 @@ func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewards
 			}
 			i++
 
-			new := randomAccountData(rewardsLevel)
+			var new basics.AccountData
+			if simple {
+				new = randomAccountData(rewardsLevel)
+			} else {
+				new, lastCreatableID = randomFullAccountData(rewardsLevel, lastCreatableID)
+			}
 			updates[addr] = accountDelta{old: old, new: new}
 			imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 			totals[addr] = new
@@ -97,7 +284,12 @@ func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewards
 	for i := 0; i < niter; i++ {
 		addr := randomAddress()
 		old := totals[addr]
-		new := randomAccountData(rewardsLevel)
+		var new basics.AccountData
+		if simple {
+			new = randomAccountData(rewardsLevel)
+		} else {
+			new, lastCreatableID = randomFullAccountData(rewardsLevel, lastCreatableID)
+		}
 		updates[addr] = accountDelta{old: old, new: new}
 		imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 		totals[addr] = new
@@ -107,7 +299,22 @@ func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewards
 }
 
 func randomDeltasBalanced(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData) {
-	updates, totals, imbalance := randomDeltas(niter, base, rewardsLevel)
+	updates, totals, _ = randomDeltasBalancedImpl(niter, base, rewardsLevel, true, 0)
+	return
+}
+
+func randomDeltasBalancedFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData, lastCreatableID uint64) {
+	updates, totals, lastCreatableID = randomDeltasBalancedImpl(niter, base, rewardsLevel, false, lastCreatableIDIn)
+	return
+}
+
+func randomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData, lastCreatableID uint64) {
+	var imbalance int64
+	if simple {
+		updates, totals, imbalance = randomDeltas(niter, base, rewardsLevel)
+	} else {
+		updates, totals, imbalance, lastCreatableID = randomDeltasFull(niter, base, rewardsLevel, lastCreatableIDIn)
+	}
 
 	oldPool := base[testPoolAddr]
 	newPool := oldPool
@@ -116,7 +323,7 @@ func randomDeltasBalanced(niter int, base map[basics.Address]basics.AccountData,
 	updates[testPoolAddr] = accountDelta{old: oldPool, new: newPool}
 	totals[testPoolAddr] = newPool
 
-	return updates, totals
+	return updates, totals, lastCreatableID
 }
 
 func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.Address]basics.AccountData) {
@@ -126,6 +333,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 
 	aq, err := accountsDbInit(tx, tx)
 	require.NoError(t, err)
+	defer aq.close()
 
 	var totalOnline, totalOffline, totalNotPart uint64
 
@@ -174,7 +382,7 @@ func TestAccountDBInit(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback()
 
-	accts := randomAccounts(20)
+	accts := randomAccounts(20, true)
 	err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
@@ -182,6 +390,59 @@ func TestAccountDBInit(t *testing.T) {
 	err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
+}
+
+// creatablesFromUpdates calculates creatables from updates
+func creatablesFromUpdates(updates map[basics.Address]accountDelta, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]modifiedCreatable {
+	creatables := make(map[basics.CreatableIndex]modifiedCreatable)
+	for addr, update := range updates {
+		// no sets in Go, so iterate over
+		for idx := range update.old.Assets {
+			if _, ok := update.new.Assets[idx]; !ok {
+				creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
+					ctype:   basics.AssetCreatable,
+					created: false, // exists in old, not in new => deleted
+					creator: addr,
+				}
+			}
+		}
+		for idx := range update.new.Assets {
+			if seen[basics.CreatableIndex(idx)] {
+				continue
+			}
+			if _, ok := update.old.Assets[idx]; !ok {
+				creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
+					ctype:   basics.AssetCreatable,
+					created: true, // exists in new, not in old => created
+					creator: addr,
+				}
+			}
+			seen[basics.CreatableIndex(idx)] = true
+		}
+		for idx := range update.old.AppParams {
+			if _, ok := update.new.AppParams[idx]; !ok {
+				creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
+					ctype:   basics.AppCreatable,
+					created: false, // exists in old, not in new => deleted
+					creator: addr,
+				}
+			}
+		}
+		for idx := range update.new.AppParams {
+			if seen[basics.CreatableIndex(idx)] {
+				continue
+			}
+			if _, ok := update.old.AppParams[idx]; !ok {
+				creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
+					ctype:   basics.AppCreatable,
+					created: true, // exists in new, not in old => created
+					creator: addr,
+				}
+			}
+			seen[basics.CreatableIndex(idx)] = true
+		}
+	}
+	return creatables
 }
 
 func TestAccountDBRound(t *testing.T) {
@@ -195,20 +456,154 @@ func TestAccountDBRound(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback()
 
-	accts := randomAccounts(20)
+	accts := randomAccounts(20, true)
 	err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 	checkAccounts(t, tx, 0, accts)
 
+	// used to determine how many creatables element will be in the test per iteration
+	numElementsPerSegement := 10
+
+	// lastCreatableID stores asset or app max used index to get rid of conflicts
+	lastCreatableID := crypto.RandUint64() % 512
+	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
+	expectedDbImage := make(map[basics.CreatableIndex]modifiedCreatable)
 	for i := 1; i < 10; i++ {
-		updates, newaccts, _ := randomDeltas(20, accts, 0)
+		var updates map[basics.Address]accountDelta
+		var newaccts map[basics.Address]basics.AccountData
+		updates, newaccts, _, lastCreatableID = randomDeltasFull(20, accts, 0, lastCreatableID)
 		accts = newaccts
-		err = accountsNewRound(tx, updates, nil, 0, proto)
+		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
+			expectedDbImage, numElementsPerSegement)
+		err = accountsNewRound(tx, updates, ctbsWithDeletes)
+		require.NoError(t, err)
+		err = totalsNewRounds(tx, []map[basics.Address]accountDelta{updates}, []AccountTotals{{}}, []config.ConsensusParams{proto})
 		require.NoError(t, err)
 		err = updateAccountsRound(tx, basics.Round(i), 0)
 		require.NoError(t, err)
 		checkAccounts(t, tx, basics.Round(i), accts)
+		checkCreatables(t, tx, i, expectedDbImage)
 	}
+}
+
+// checkCreatables compares the expected database image to the actual databse content
+func checkCreatables(t *testing.T,
+	tx *sql.Tx, iteration int,
+	expectedDbImage map[basics.CreatableIndex]modifiedCreatable) {
+
+	stmt, err := tx.Prepare("SELECT asset, creator, ctype FROM assetcreators")
+	require.NoError(t, err)
+
+	defer stmt.Close()
+	rows, err := stmt.Query()
+	if err != sql.ErrNoRows {
+		require.NoError(t, err)
+	}
+	defer rows.Close()
+	counter := 0
+	for rows.Next() {
+		counter++
+		mc := modifiedCreatable{}
+		var buf []byte
+		var asset basics.CreatableIndex
+		err := rows.Scan(&asset, &buf, &mc.ctype)
+		require.NoError(t, err)
+		copy(mc.creator[:], buf)
+
+		require.NotNil(t, expectedDbImage[asset])
+		require.Equal(t, expectedDbImage[asset].creator, mc.creator)
+		require.Equal(t, expectedDbImage[asset].ctype, mc.ctype)
+		require.True(t, expectedDbImage[asset].created)
+	}
+	require.Equal(t, len(expectedDbImage), counter)
+}
+
+// randomCreatableSampling sets elements to delete from previous iteration
+// It consideres 10 elements in an iteration.
+// loop 0: returns the first 10 elements
+// loop 1: returns: * the second 10 elements
+//                  * random sample of elements from the first 10: created changed from true -> false
+// loop 2: returns: * the elements 20->30
+//                  * random sample of elements from 10->20: created changed from true -> false
+func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
+	creatables map[basics.CreatableIndex]modifiedCreatable,
+	expectedDbImage map[basics.CreatableIndex]modifiedCreatable,
+	numElementsPerSegement int) map[basics.CreatableIndex]modifiedCreatable {
+
+	iteration-- // 0-based here
+
+	delSegmentEnd := iteration * numElementsPerSegement
+	delSegmentStart := delSegmentEnd - numElementsPerSegement
+	if delSegmentStart < 0 {
+		delSegmentStart = 0
+	}
+
+	newSample := make(map[basics.CreatableIndex]modifiedCreatable)
+	stop := delSegmentEnd + numElementsPerSegement
+
+	for i := delSegmentStart; i < delSegmentEnd; i++ {
+		ctb := creatables[crtbsList[i]]
+		if ctb.created && 1 == (crypto.RandUint64()%2) {
+			ctb.created = false
+			newSample[crtbsList[i]] = ctb
+			delete(expectedDbImage, crtbsList[i])
+		}
+	}
+
+	for i := delSegmentEnd; i < stop; i++ {
+		newSample[crtbsList[i]] = creatables[crtbsList[i]]
+		if creatables[crtbsList[i]].created {
+			expectedDbImage[crtbsList[i]] = creatables[crtbsList[i]]
+		}
+	}
+
+	return newSample
+}
+
+func randomCreatables(numElementsPerSegement int) ([]basics.CreatableIndex,
+	map[basics.CreatableIndex]modifiedCreatable) {
+	creatables := make(map[basics.CreatableIndex]modifiedCreatable)
+	creatablesList := make([]basics.CreatableIndex, numElementsPerSegement*10)
+	uniqueAssetIds := make(map[basics.CreatableIndex]bool)
+
+	for i := 0; i < numElementsPerSegement*10; i++ {
+		assetIndex, mc := randomCreatable(uniqueAssetIds)
+		creatables[assetIndex] = mc
+		creatablesList[i] = assetIndex
+	}
+	return creatablesList, creatables // creatablesList is needed for maintaining the order
+}
+
+// randomCreatable generates a random creatable.
+func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
+	assetIndex basics.CreatableIndex, mc modifiedCreatable) {
+
+	var ctype basics.CreatableType
+
+	switch crypto.RandUint64() % 2 {
+	case 0:
+		ctype = basics.AssetCreatable
+	case 1:
+		ctype = basics.AppCreatable
+	}
+
+	creatable := modifiedCreatable{
+		ctype:   ctype,
+		created: (crypto.RandUint64() % 2) == 1,
+		creator: randomAddress(),
+		ndeltas: 1,
+	}
+
+	var assetIdx basics.CreatableIndex
+	for {
+		assetIdx = basics.CreatableIndex(crypto.RandUint64() % (uint64(2) << 50))
+		_, found := uniqueAssetIds[assetIdx]
+		if !found {
+			uniqueAssetIds[assetIdx] = true
+			break
+		}
+	}
+	return assetIdx, creatable
 }
 
 func BenchmarkReadingAllBalances(b *testing.B) {
@@ -277,4 +672,113 @@ func BenchmarkReadingAllBalances(b *testing.B) {
 		prevHash = crypto.Hash(append(encodedAccountBalance, ([]byte(prevHash[:]))...))
 	}
 	require.Equal(b, b.N, len(bal))
+}
+
+func TestAccountsReencoding(t *testing.T) {
+	oldEncodedAccountsData := [][]byte{
+		{132, 164, 97, 108, 103, 111, 206, 5, 234, 236, 80, 164, 97, 112, 97, 114, 129, 206, 0, 3, 60, 164, 137, 162, 97, 109, 196, 32, 49, 54, 101, 102, 97, 97, 51, 57, 50, 52, 97, 54, 102, 100, 57, 100, 51, 97, 52, 56, 50, 52, 55, 57, 57, 97, 52, 97, 99, 54, 53, 100, 162, 97, 110, 167, 65, 80, 84, 75, 73, 78, 71, 162, 97, 117, 174, 104, 116, 116, 112, 58, 47, 47, 115, 111, 109, 101, 117, 114, 108, 161, 99, 196, 32, 183, 97, 139, 76, 1, 45, 180, 52, 183, 186, 220, 252, 85, 135, 185, 87, 156, 87, 158, 83, 49, 200, 133, 169, 43, 205, 26, 148, 50, 121, 28, 105, 161, 102, 196, 32, 183, 97, 139, 76, 1, 45, 180, 52, 183, 186, 220, 252, 85, 135, 185, 87, 156, 87, 158, 83, 49, 200, 133, 169, 43, 205, 26, 148, 50, 121, 28, 105, 161, 109, 196, 32, 60, 69, 244, 159, 234, 26, 168, 145, 153, 184, 85, 182, 46, 124, 227, 144, 84, 113, 176, 206, 109, 204, 245, 165, 100, 23, 71, 49, 32, 242, 146, 68, 161, 114, 196, 32, 183, 97, 139, 76, 1, 45, 180, 52, 183, 186, 220, 252, 85, 135, 185, 87, 156, 87, 158, 83, 49, 200, 133, 169, 43, 205, 26, 148, 50, 121, 28, 105, 161, 116, 205, 3, 32, 162, 117, 110, 163, 65, 80, 75, 165, 97, 115, 115, 101, 116, 129, 206, 0, 3, 60, 164, 130, 161, 97, 0, 161, 102, 194, 165, 101, 98, 97, 115, 101, 205, 98, 54},
+		{132, 164, 97, 108, 103, 111, 206, 5, 230, 217, 88, 164, 97, 112, 97, 114, 129, 206, 0, 3, 60, 175, 137, 162, 97, 109, 196, 32, 49, 54, 101, 102, 97, 97, 51, 57, 50, 52, 97, 54, 102, 100, 57, 100, 51, 97, 52, 56, 50, 52, 55, 57, 57, 97, 52, 97, 99, 54, 53, 100, 162, 97, 110, 167, 65, 80, 84, 75, 105, 110, 103, 162, 97, 117, 174, 104, 116, 116, 112, 58, 47, 47, 115, 111, 109, 101, 117, 114, 108, 161, 99, 196, 32, 111, 157, 243, 205, 146, 155, 167, 149, 44, 226, 153, 150, 6, 105, 206, 72, 182, 218, 38, 146, 98, 94, 57, 205, 145, 152, 12, 60, 175, 149, 94, 13, 161, 102, 196, 32, 111, 157, 243, 205, 146, 155, 167, 149, 44, 226, 153, 150, 6, 105, 206, 72, 182, 218, 38, 146, 98, 94, 57, 205, 145, 152, 12, 60, 175, 149, 94, 13, 161, 109, 196, 32, 60, 69, 244, 159, 234, 26, 168, 145, 153, 184, 85, 182, 46, 124, 227, 144, 84, 113, 176, 206, 109, 204, 245, 165, 100, 23, 71, 49, 32, 242, 146, 68, 161, 114, 196, 32, 111, 157, 243, 205, 146, 155, 167, 149, 44, 226, 153, 150, 6, 105, 206, 72, 182, 218, 38, 146, 98, 94, 57, 205, 145, 152, 12, 60, 175, 149, 94, 13, 161, 116, 205, 1, 44, 162, 117, 110, 164, 65, 80, 84, 75, 165, 97, 115, 115, 101, 116, 130, 206, 0, 3, 56, 153, 130, 161, 97, 10, 161, 102, 194, 206, 0, 3, 60, 175, 130, 161, 97, 0, 161, 102, 194, 165, 101, 98, 97, 115, 101, 205, 98, 54},
+		{131, 164, 97, 108, 103, 111, 206, 5, 233, 179, 208, 165, 97, 115, 115, 101, 116, 130, 206, 0, 3, 60, 164, 130, 161, 97, 2, 161, 102, 194, 206, 0, 3, 60, 175, 130, 161, 97, 30, 161, 102, 194, 165, 101, 98, 97, 115, 101, 205, 98, 54},
+		{131, 164, 97, 108, 103, 111, 206, 0, 3, 48, 104, 165, 97, 115, 115, 101, 116, 129, 206, 0, 1, 242, 159, 130, 161, 97, 0, 161, 102, 194, 165, 101, 98, 97, 115, 101, 205, 98, 54},
+	}
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.close()
+
+	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
+	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
+
+	err := dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
+		if err != nil {
+			return err
+		}
+
+		for _, oldAccData := range oldEncodedAccountsData {
+			addr := randomAddress()
+			_, err = tx.ExecContext(ctx, "INSERT INTO accountbase (address, data) VALUES (?, ?)", addr[:], oldAccData)
+			if err != nil {
+				return err
+			}
+		}
+		for i := 0; i < 100; i++ {
+			addr := randomAddress()
+			accData := basics.AccountData{
+				MicroAlgos:         basics.MicroAlgos{Raw: 0x000ffffffffffffff},
+				Status:             basics.NotParticipating,
+				RewardsBase:        uint64(i),
+				RewardedMicroAlgos: basics.MicroAlgos{Raw: 0x000ffffffffffffff},
+				VoteID:             secrets.OneTimeSignatureVerifier,
+				SelectionID:        pubVrfKey,
+				VoteFirstValid:     basics.Round(0x000ffffffffffffff),
+				VoteLastValid:      basics.Round(0x000ffffffffffffff),
+				VoteKeyDilution:    0x000ffffffffffffff,
+				AssetParams: map[basics.AssetIndex]basics.AssetParams{
+					0x000ffffffffffffff: basics.AssetParams{
+						Total:         0x000ffffffffffffff,
+						Decimals:      0x2ffffff,
+						DefaultFrozen: true,
+						UnitName:      "12345678",
+						AssetName:     "12345678901234567890123456789012",
+						URL:           "12345678901234567890123456789012",
+						MetadataHash:  pubVrfKey,
+						Manager:       addr,
+						Reserve:       addr,
+						Freeze:        addr,
+						Clawback:      addr,
+					},
+				},
+				Assets: map[basics.AssetIndex]basics.AssetHolding{
+					0x000ffffffffffffff: basics.AssetHolding{
+						Amount: 0x000ffffffffffffff,
+						Frozen: true,
+					},
+				},
+			}
+
+			_, err = tx.ExecContext(ctx, "INSERT INTO accountbase (address, data) VALUES (?, ?)", addr[:], protocol.Encode(&accData))
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	err = dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		modifiedAccounts, err := reencodeAccounts(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if len(oldEncodedAccountsData) != int(modifiedAccounts) {
+			return fmt.Errorf("len(oldEncodedAccountsData) != int(modifiedAccounts) %d != %d", len(oldEncodedAccountsData), int(modifiedAccounts))
+		}
+		require.Equal(t, len(oldEncodedAccountsData), int(modifiedAccounts))
+		return nil
+	})
+	require.NoError(t, err)
+}
+
+// TestAccountsDbQueriesCreateClose tests to see that we can create the accountsDbQueries and close it.
+// it also verify that double-closing it doesn't create an issue.
+func TestAccountsDbQueriesCreateClose(t *testing.T) {
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.close()
+
+	err := dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	qs, err := accountsDbInit(dbs.rdb.Handle, dbs.wdb.Handle)
+	require.NoError(t, err)
+	require.NotNil(t, qs.listCreatablesStmt)
+	qs.close()
+	require.Nil(t, qs.listCreatablesStmt)
+	qs.close()
+	require.Nil(t, qs.listCreatablesStmt)
 }

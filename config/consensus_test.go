@@ -18,6 +18,8 @@ package config
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestConsensusParams(t *testing.T) {
@@ -31,6 +33,23 @@ func TestConsensusParams(t *testing.T) {
 		// ApplyData requires PaysetCommitFlat.
 		if params.ApplyData && !params.PaysetCommitFlat {
 			t.Errorf("Protocol %s: ApplyData without PaysetCommitFlat", proto)
+		}
+	}
+}
+
+// TestConsensusUpgradeWindow ensures that the upgrade window is a non-zero value, and confirm to be within the valid range.
+func TestConsensusUpgradeWindow(t *testing.T) {
+	for proto, params := range Consensus {
+		require.GreaterOrEqualf(t, params.MaxUpgradeWaitRounds, params.MinUpgradeWaitRounds, "Version :%v", proto)
+		for toVersion, delay := range params.ApprovedUpgrades {
+			if params.MinUpgradeWaitRounds != 0 || params.MaxUpgradeWaitRounds != 0 {
+				require.NotZerof(t, delay, "From :%v\nTo :%v", proto, toVersion)
+				require.GreaterOrEqualf(t, delay, params.MinUpgradeWaitRounds, "From :%v\nTo :%v", proto, toVersion)
+				require.LessOrEqualf(t, delay, params.MaxUpgradeWaitRounds, "From :%v\nTo :%v", proto, toVersion)
+			} else {
+				require.Zerof(t, delay, "From :%v\nTo :%v", proto, toVersion)
+
+			}
 		}
 	}
 }

@@ -68,7 +68,7 @@ func (ml *mockLedgerForTracker) Latest() basics.Round {
 	return basics.Round(len(ml.blocks)) - 1
 }
 
-func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block) (StateDelta, error) {
+func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
 	delta := StateDelta{
 		hdr: &bookkeeping.BlockHeader{},
 	}
@@ -101,6 +101,13 @@ func (ml *mockLedgerForTracker) blockDB() dbPair {
 
 func (ml *mockLedgerForTracker) trackerLog() logging.Logger {
 	return ml.log
+}
+
+func (ml *mockLedgerForTracker) GenesisHash() crypto.Digest {
+	if len(ml.blocks) > 0 {
+		return ml.blocks[0].block.GenesisHash()
+	}
+	return crypto.Digest{}
 }
 
 // this function used to be in acctupdates.go, but we were never using it for production purposes. This
@@ -137,17 +144,17 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 	latest := au.latest()
 	require.Equal(t, latest, latestRnd)
 
-	_, err := au.totals(latest + 1)
+	_, err := au.Totals(latest + 1)
 	require.Error(t, err)
 
-	_, err = au.lookup(latest+1, randomAddress(), false)
+	_, err = au.Lookup(latest+1, randomAddress(), false)
 	require.Error(t, err)
 
 	if base > 0 {
-		_, err := au.totals(base - 1)
+		_, err := au.Totals(base - 1)
 		require.Error(t, err)
 
-		_, err = au.lookup(base-1, randomAddress(), false)
+		_, err = au.Lookup(base-1, randomAddress(), false)
 		require.Error(t, err)
 	}
 
@@ -173,7 +180,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			var totalOnline, totalOffline, totalNotPart uint64
 
 			for addr, data := range accts[rnd] {
-				d, err := au.lookup(rnd, addr, false)
+				d, err := au.Lookup(rnd, addr, false)
 				require.NoError(t, err)
 				require.Equal(t, d, data)
 
@@ -196,7 +203,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			require.NoError(t, err)
 			require.Equal(t, all, accts[rnd])
 
-			totals, err := au.totals(rnd)
+			totals, err := au.Totals(rnd)
 			require.NoError(t, err)
 			require.Equal(t, totals.Online.Money.Raw, totalOnline)
 			require.Equal(t, totals.Offline.Money.Raw, totalOffline)
@@ -204,7 +211,7 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
 			require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
 
-			d, err := au.lookup(rnd, randomAddress(), false)
+			d, err := au.Lookup(rnd, randomAddress(), false)
 			require.NoError(t, err)
 			require.Equal(t, d, basics.AccountData{})
 		}
@@ -237,7 +244,7 @@ func TestAcctUpdates(t *testing.T) {
 	defer ml.close()
 	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(20)}
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -266,12 +273,16 @@ func TestAcctUpdates(t *testing.T) {
 
 	checkAcctUpdates(t, au, 0, 9, accts, rewardsLevels, proto)
 
+	// lastCreatableID stores asset or app max used index to get rid of conflicts
+	lastCreatableID := crypto.RandUint64() % 512
+	knownCreatables := make(map[basics.CreatableIndex]bool)
 	for i := basics.Round(10); i < basics.Round(proto.MaxBalLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
-		updates, totals := randomDeltasBalanced(1, accts[i-1], rewardLevel)
-
-		prevTotals, err := au.totals(basics.Round(i - 1))
+		var updates map[basics.Address]accountDelta
+		var totals map[basics.Address]basics.AccountData
+		updates, totals, lastCreatableID = randomDeltasBalancedFull(1, accts[i-1], rewardLevel, lastCreatableID)
+		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
 		oldPool := accts[i-1][testPoolAddr]
@@ -289,8 +300,9 @@ func TestAcctUpdates(t *testing.T) {
 		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
 
 		au.newBlock(blk, StateDelta{
-			accts: updates,
-			hdr:   &blk.BlockHeader,
+			accts:      updates,
+			hdr:        &blk.BlockHeader,
+			creatables: creatablesFromUpdates(updates, knownCreatables),
 		})
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
@@ -318,7 +330,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	defer ml.close()
 	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(20)}
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -356,7 +368,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		rewardLevel += rewardLevelDelta
 		updates, totals := randomDeltasBalanced(1, accts[i-1], rewardLevel)
 
-		prevTotals, err := au.totals(basics.Round(i - 1))
+		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
 		oldPool := accts[i-1][testPoolAddr]
@@ -411,7 +423,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 	initialRounds := uint64(1)
 	ml.blocks = randomInitChain(protocolVersion, int(initialRounds))
 	accountsCount := 5000
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount)}
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -446,7 +458,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		}
 
 		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
-		prevTotals, err := au.totals(basics.Round(i - 1))
+		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(b, err)
 
 		oldPool := accts[i-1][testPoolAddr]
@@ -542,7 +554,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 	ml := makeMockLedgerForTracker(t, true)
 	defer ml.close()
 	ml.blocks = randomInitChain(testProtocolVersion, 10)
-	accts := []map[basics.Address]basics.AccountData{randomAccounts(100000)}
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(100000, true)}
 	rewardsLevels := []uint64{0}
 
 	pooldata := basics.AccountData{}
@@ -576,7 +588,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		rewardLevel += rewardLevelDelta
 		updates, totals := randomDeltasBalanced(1, accts[i-1], rewardLevel)
 
-		prevTotals, err := au.totals(basics.Round(i - 1))
+		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
 		oldPool := accts[i-1][testPoolAddr]
@@ -635,7 +647,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		defer ml.close()
 		ml.blocks = randomInitChain(testProtocolVersion, 10)
 
-		accts := []map[basics.Address]basics.AccountData{randomAccounts(9)}
+		accts := []map[basics.Address]basics.AccountData{randomAccounts(9, true)}
 
 		pooldata := basics.AccountData{}
 		pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
@@ -690,14 +702,14 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			updates := make(map[basics.Address]accountDelta)
 			moneyAccountsExpectedAmounts = append(moneyAccountsExpectedAmounts, make([]uint64, len(moneyAccounts)))
 			toAccount := moneyAccounts[0]
-			toAccountDataOld, err := au.lookup(i-1, toAccount, false)
+			toAccountDataOld, err := au.Lookup(i-1, toAccount, false)
 			require.NoError(t, err)
 			toAccountDataNew := toAccountDataOld
 
 			for j := 1; j < len(moneyAccounts); j++ {
 				fromAccount := moneyAccounts[j]
 
-				fromAccountDataOld, err := au.lookup(i-1, fromAccount, false)
+				fromAccountDataOld, err := au.Lookup(i-1, fromAccount, false)
 				require.NoError(t, err)
 				require.Equalf(t, moneyAccountsExpectedAmounts[i-1][j], fromAccountDataOld.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, i)
 
@@ -726,7 +738,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 					if checkRound < uint64(testback) {
 						continue
 					}
-					acct, err := au.lookup(basics.Round(checkRound-uint64(testback)), moneyAccounts[j], false)
+					acct, err := au.Lookup(basics.Round(checkRound-uint64(testback)), moneyAccounts[j], false)
 					// we might get an error like "round 2 before dbRound 5", which is the success case, so we'll ignore it.
 					if err != nil {
 						// verify it's the expected error and not anything else.
@@ -770,7 +782,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		au.waitAccountsWriting()
 
 		for idx, addr := range moneyAccounts {
-			balance, err := au.lookup(lastRound, addr, false)
+			balance, err := au.Lookup(lastRound, addr, false)
 			require.NoErrorf(t, err, "unable to retrieve balance for account idx %d %v", idx, addr)
 			if idx != 0 {
 				require.Equalf(t, 100*1000000-roundCount*(roundCount-1)/2, int(balance.MicroAlgos.Raw), "account idx %d %v has the wrong balance", idx, addr)
@@ -784,4 +796,52 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	t.Run("InMemoryDB", testFunction)
 	inMemory = false
 	t.Run("DiskDB", testFunction)
+}
+
+// TestAcctUpdatesDeleteStoredCatchpoints - The goal of this test is to verify that the deleteStoredCatchpoints function works correctly.
+// it doing so by filling up the storedcatchpoints with dummy catchpoint file entries, as well as creating these dummy files on disk.
+// ( the term dummy is only because these aren't real catchpoint files, but rather a zero-length file ). Then, the test call the function
+// and ensures that it did not errored, the catchpoint files were correctly deleted, and that deleteStoredCatchpoints contains no more
+// entries.
+func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	ml := makeMockLedgerForTracker(t, true)
+	defer ml.close()
+	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
+
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
+	au := &accountUpdates{}
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	au.initialize(conf, ".", proto, accts[0])
+	defer au.close()
+
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+
+	dummyCatchpointFilesToCreate := 42
+
+	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
+		f, err := os.Create(fmt.Sprintf("./dummy_catchpoint_file-%d", i))
+		require.NoError(t, err)
+		err = f.Close()
+		require.NoError(t, err)
+	}
+
+	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
+		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fmt.Sprintf("./dummy_catchpoint_file-%d", i), "", 0)
+		require.NoError(t, err)
+	}
+	err = au.deleteStoredCatchpoints(context.Background(), au.accountsq)
+	require.NoError(t, err)
+
+	for i := 0; i < dummyCatchpointFilesToCreate; i++ {
+		// ensure that all the files were deleted.
+		_, err := os.Open(fmt.Sprintf("./dummy_catchpoint_file-%d", i))
+		require.True(t, os.IsNotExist(err))
+	}
+	fileNames, err := au.accountsq.getOldestCatchpointFiles(context.Background(), dummyCatchpointFilesToCreate, 0)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(fileNames))
 }

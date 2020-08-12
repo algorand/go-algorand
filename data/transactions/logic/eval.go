@@ -91,6 +91,29 @@ func stackValueFromTealValue(tv *basics.TealValue) (sv stackValue, err error) {
 	return
 }
 
+// ComputeMinTealVersion calculates the minimum safe TEAL version that may be
+// used by a transaction in this group. It is important to prevent
+// newly-introduced transaction fields from breaking assumptions made by older
+// versions of TEAL. If one of the transactions in a group will execute a TEAL
+// program whose version predates a given field, that field must not be set
+// anywhere in the transaction group, or the group will be rejected.
+func ComputeMinTealVersion(group []transactions.SignedTxn) uint64 {
+	var minVersion uint64
+	for _, txn := range group {
+		if !txn.Txn.RekeyTo.IsZero() {
+			if minVersion < rekeyingEnabledVersion {
+				minVersion = rekeyingEnabledVersion
+			}
+		}
+		if txn.Txn.Type == protocol.ApplicationCallTx {
+			if minVersion < appsEnabledVersion {
+				minVersion = appsEnabledVersion
+			}
+		}
+	}
+	return minVersion
+}
+
 func (sv *stackValue) toTealValue() (tv basics.TealValue) {
 	if sv.argType() == StackBytes {
 		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(sv.Bytes)}
@@ -106,7 +129,7 @@ type LedgerForLogic interface {
 	AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error)
 	AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error)
 	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
-	AssetParams(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetParams, error)
+	AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams, error)
 	ApplicationID() basics.AppIndex
 	LocalSchema() basics.StateSchema
 	GlobalSchema() basics.StateSchema
@@ -132,6 +155,11 @@ type EvalParams struct {
 
 	// optional debugger
 	Debugger DebuggerHook
+
+	// MinTealVersion is the minimum allowed TEAL version of this program.
+	// The program must reject if its version is less than this version. If
+	// MinTealVersion is nil, we will compute it ourselves
+	MinTealVersion *uint64
 
 	// determines eval mode: runModeSignature or runModeApplication
 	runModeFlags runMode
@@ -371,20 +399,21 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 		return false, cx.err
 	}
 
-	// TODO: if EvalMaxVersion > version, ensure that inaccessible
-	// fields as of the program's version are zero or other
-	// default value so that no one is hiding unexpected
-	// operations from an old program.
+	var minVersion uint64
+	if cx.EvalParams.MinTealVersion == nil {
+		minVersion = ComputeMinTealVersion(cx.EvalParams.TxnGroup)
+	} else {
+		minVersion = *cx.EvalParams.MinTealVersion
+	}
+	if version < minVersion {
+		err = fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
+		return
+	}
 
 	cx.version = version
 	cx.pc = vlen
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
-
-	err = cx.checkRekeyAllowed()
-	if err != nil {
-		return
-	}
 
 	if cx.Debugger != nil {
 		cx.debugState = makeDebugState(cx)
@@ -477,19 +506,28 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 		return
 	}
 
+	var minVersion uint64
+	if params.MinTealVersion == nil {
+		minVersion = ComputeMinTealVersion(params.TxnGroup)
+	} else {
+		minVersion = *params.MinTealVersion
+	}
+	if version < minVersion {
+		err = fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
+		return
+	}
+
 	cx.version = version
 	cx.pc = vlen
 	cx.EvalParams = params
 	cx.program = program
 
-	err = cx.checkRekeyAllowed()
-	if err != nil {
-		return
-	}
-
-	for (cx.err == nil) && (cx.pc < len(cx.program)) {
+	for cx.pc < len(cx.program) {
 		prevpc := cx.pc
 		cost += cx.checkStep()
+		if cx.err != nil {
+			break
+		}
 		if cx.pc <= prevpc {
 			err = fmt.Errorf("pc did not advance, stuck at %d", cx.pc)
 			return
@@ -500,16 +538,6 @@ func check(program []byte, params EvalParams) (cost int, err error) {
 		return
 	}
 	return
-}
-
-func (cx *evalContext) checkRekeyAllowed() error {
-	// A transaction may not have a nonzero RekeyTo field set before TEAL
-	// v2, otherwise TEAL v0 or v1 accounts could be rekeyed by an anyone
-	// who could ordinarily spend from them.
-	if cx.version < rekeyingEnabledVersion && !cx.EvalParams.Txn.Txn.RekeyTo.IsZero() {
-		return fmt.Errorf("program version %d doesn't allow transactions with nonzero RekeyTo field", cx.version)
-	}
-	return nil
 }
 
 func opCompat(expected, got StackType) bool {
@@ -586,12 +614,16 @@ func (cx *evalContext) step() {
 			if len(spec.Returns) > 1 {
 				num = len(spec.Returns)
 			}
-			if len(cx.stack) < num {
-				cx.err = fmt.Errorf("stack underflow: expected %d, have %d", num, len(cx.stack))
-				return
-			}
-			for i := 1; i <= num; i++ {
-				stackString += fmt.Sprintf("(%s) ", cx.stack[len(cx.stack)-i].String())
+			// check for nil error here, because we might not return
+			// values if we encounter an error in the opcode
+			if cx.err == nil {
+				if len(cx.stack) < num {
+					cx.err = fmt.Errorf("stack underflow: expected %d, have %d", num, len(cx.stack))
+					return
+				}
+				for i := 1; i <= num; i++ {
+					stackString += fmt.Sprintf("(%s) ", cx.stack[len(cx.stack)-i].String())
+				}
 			}
 		}
 		fmt.Fprintf(cx.Trace, "%3d %s%s=> %s\n", cx.pc, spec.Name, immArgsString, stackString)
@@ -1643,7 +1675,7 @@ func opConcat(cx *evalContext) {
 
 func substring(x []byte, start, end int) (out []byte, err error) {
 	out = x
-	if end <= start {
+	if end < start {
 		err = errors.New("substring end before start")
 		return
 	}
@@ -2137,11 +2169,9 @@ func opAssetHoldingGet(cx *evalContext) {
 }
 
 func opAssetParamsGet(cx *evalContext) {
-	last := len(cx.stack) - 1 // asset id
-	prev := last - 1          // account offset
+	last := len(cx.stack) - 1 // foreign asset id
 
-	assetID := cx.stack[last].Uint
-	accountIdx := cx.stack[prev].Uint
+	foreignAssetsIndex := cx.stack[last].Uint
 	paramIdx := uint64(cx.program[cx.pc+1])
 
 	if cx.Ledger == nil {
@@ -2149,15 +2179,15 @@ func opAssetParamsGet(cx *evalContext) {
 		return
 	}
 
-	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
-	if err != nil {
-		cx.err = err
+	if foreignAssetsIndex >= uint64(len(cx.Txn.Txn.ForeignAssets)) {
+		cx.err = fmt.Errorf("invalid ForeignAssets index %d", foreignAssetsIndex)
 		return
 	}
+	assetID := cx.Txn.Txn.ForeignAssets[foreignAssetsIndex]
 
 	var exist uint64 = 0
 	var value stackValue
-	if params, err := cx.Ledger.AssetParams(addr, basics.AssetIndex(assetID)); err == nil {
+	if params, err := cx.Ledger.AssetParams(basics.AssetIndex(assetID)); err == nil {
 		// params exist, read the value
 		exist = 1
 		value, err = cx.assetParamsEnumToValue(&params, paramIdx)
@@ -2167,8 +2197,8 @@ func opAssetParamsGet(cx *evalContext) {
 		}
 	}
 
-	cx.stack[prev] = value
-	cx.stack[last].Uint = exist
+	cx.stack[last] = value
+	cx.stack = append(cx.stack, stackValue{Uint: exist})
 
 	cx.nextpc = cx.pc + 2
 }

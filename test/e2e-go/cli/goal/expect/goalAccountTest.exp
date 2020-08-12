@@ -1,0 +1,141 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+if { [catch {
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+
+    exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    set MN "advice pudding treat near rule blouse same whisper inner electric quit surface sunny dismiss leader blood seat clown cost exist hospital century reform able sponsor"
+    spawn goal account import -m $MN --datadir $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "goal account import timeout" }
+        -re {Imported ([A-Z0-9]+)} {set NEW_ACCOUNT_ADDRESS $expect_out(1,string); close }
+        eof { ::AlgorandGoal::CheckEOF "Failed to import account" }
+    }
+
+    puts "Imported account $NEW_ACCOUNT_ADDRESS"
+
+    set MIN_BALANCE 100000
+    set TRANSFER_AMOUNT  [expr {3 * $MIN_BALANCE}]
+    set FEE_AMOUNT 1000
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $NEW_ACCOUNT_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+
+    set GLOBAL_BYTE_SLICES 1
+    set LOCAL_BYTE_SLICES 0
+    set TEAL_PROGS_DIR "$TEST_DATA_DIR/../scripts/e2e_subs/tealprogs"
+    set APP_ID [::AlgorandGoal::AppCreate0 $PRIMARY_WALLET_NAME "" $NEW_ACCOUNT_ADDRESS ${TEAL_PROGS_DIR}/clear_program_state.teal $GLOBAL_BYTE_SLICES $LOCAL_BYTE_SLICES ${TEAL_PROGS_DIR}/clear_program_state.teal $TEST_PRIMARY_NODE_DIR]
+
+    # expect app idx = 2 since a pre-recorded response is checked down the road
+    if { $APP_ID != 2 } {
+        ::AlgorandGoal::Abort "Expected app id to be 2 but got $APP_ID. Have you posted additional transactions? Only transfer txn is expected before app call txn"
+    }
+
+    # check JSON output to stdout
+    set JSON_EXPECTED "{
+  \"addr\": \"47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU\",
+  \"algo\": 299000,
+  \"appp\": {
+    \"2\": {
+      \"approv\": \"AiABASI=\",
+      \"clearp\": \"AiABASI=\",
+      \"gsch\": {
+        \"nbs\": 1
+      }
+    }
+  },
+  \"tsch\": {
+    \"nbs\": 1
+  }
+}"
+
+    set JSON_ACTUAL [exec goal account dump -a $NEW_ACCOUNT_ADDRESS --datadir $TEST_PRIMARY_NODE_DIR]
+    if { $JSON_ACTUAL != $JSON_EXPECTED } {
+        ::AlgorandGoal::Abort "json actual output '$JSON_ACTUAL' does not match expected '$JSON_EXPECTED'"
+    }
+
+    # check msgpack output to a file with zero exit code
+    set MSGP_EXPECTED_BASE64 "hKRhZGRyxCDn8PhNBoEd+fMcjYeLEVX0Zx1RoYXCAJCGZ/RJWHBooaRhbGdvzgAEj/ikYXBwcIECg6ZhcHByb3bEBQIgAQEipmNsZWFycMQFAiABASKkZ3NjaIGjbmJzAaR0c2NogaNuYnMB"
+    set MSGP_EXPECTED [ exec echo -n $MSGP_EXPECTED_BASE64 | base64 --decode ]
+    set BALREC_FILE "$TEST_ROOT_DIR/brec.msgp"
+    spawn goal account dump -a $NEW_ACCOUNT_ADDRESS -o $BALREC_FILE --datadir $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "goal account dump timeout" }
+        eof { ::AlgorandGoal::CheckEOF "Failed to dump account" }
+    }
+    set MSGP_ACTUAL [exec cat "$BALREC_FILE"]
+    if { $MSGP_ACTUAL != $MSGP_EXPECTED } {
+        ::AlgorandGoal::Abort "msgp actual output '$MSGP_ACTUAL' does not match expected '$MSGP_EXPECTED'"
+    }
+
+    # check some empty response on non-existing address with zero exit code
+    set PASSED 0
+    set NONEXISTING_ADDR "42NJMHTPFVPXVSDGA6JGKUV6TARV5UZTMPFIREMLXHETRKIVW34QFSDFRE"
+    spawn goal account dump -a $NONEXISTING_ADDR --datadir $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "goal account dump timeout" }
+        "\"addr\": \"$NONEXISTING_ADDR\"" { set PASSED 1; close;}
+        eof { ::AlgorandGoal::CheckEOF "Failed to dump account" }
+    }
+    if { $PASSED == 0 } {
+        ::AlgorandGoal::Abort "Non-existing addr... Failed"
+    }
+
+    # check failure if no address provided, non-zero exit code
+    set PASSED 0
+    spawn goal account dump --datadir $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "goal account dump timeout" }
+        "^Failed to parse addr: decoded bad addr:" { set PASSED 1; close;}
+        eof { catch wait result; if { [lindex $result 3] == 0 } { puts "Expected non-zero exit code"; AlgorandGoal::Abort } }
+    }
+    if { $PASSED == 0 } {
+        ::AlgorandGoal::Abort "No addr... Failed"
+    }
+
+    # check failure if invalid address provided, non-zero exit code
+    set PASSED 0
+    set INVALID_ADDR "NOTANADDR"
+    spawn goal account dump -a $INVALID_ADDR --datadir $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "goal account dump timeout" }
+        "^Failed to parse addr: decoded bad addr:" { set PASSED 1; close;}
+        eof { catch wait result; if { [lindex $result 3] == 0 } { puts "Expected non-zero exit code"; AlgorandGoal::Abort } }
+    }
+    if { $PASSED == 0 } {
+        ::AlgorandGoal::Abort "Invalid addr... Failed"
+    }
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in goalAccountTest: $EXCEPTION"
+}
