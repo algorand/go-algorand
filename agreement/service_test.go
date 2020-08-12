@@ -985,9 +985,9 @@ func TestAgreementSynchronous5_50(t *testing.T) {
 }
 
 func TestAgreementSynchronousFuture1(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping agreement integration test")
-	}
+	//if testing.Short() {
+	//	t.Skip("Skipping agreement integration test")
+	//}
 
 	consensusVersion := func (r basics.Round) (protocol.ConsensusVersion, error) {
 		return protocol.ConsensusFuture, nil

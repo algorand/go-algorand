@@ -19,7 +19,6 @@ package agreementtest
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/protocol"
 	"strconv"
 	"time"
 
@@ -32,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/timers"
 )
@@ -69,7 +69,7 @@ func (i *instant) TimeoutAt(d time.Duration) <-chan time.Time {
 		return ta
 	}
 
-	if d == agreement.FilterTimeout(1, protocol.ConsensusCurrentVersion) && !i.HasPending("pseudonode") {
+	if d == agreement.FilterTimeout(0, protocol.ConsensusCurrentVersion) && !i.HasPending("pseudonode") {
 		close(ta)
 	}
 	return ta

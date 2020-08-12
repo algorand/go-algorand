@@ -209,7 +209,6 @@ func makeTestLedger(state map[basics.Address]basics.BalanceRecord) Ledger {
 	l.certs = make(map[basics.Round]Certificate)
 	l.nextRound = 1
 
-	// deep copy of state
 	l.state = make(map[basics.Address]basics.BalanceRecord)
 	for k, v := range state {
 		l.state[k] = v
@@ -229,7 +228,6 @@ func makeTestLedgerWithConsensusVersion(state map[basics.Address]basics.BalanceR
 	l.certs = make(map[basics.Round]Certificate)
 	l.nextRound = 1
 
-	// deep copy of state
 	l.state = make(map[basics.Address]basics.BalanceRecord)
 	for k, v := range state {
 		l.state[k] = v
