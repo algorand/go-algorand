@@ -87,12 +87,16 @@ var creatablesMigration = []string{
 	`ALTER TABLE assetcreators ADD COLUMN ctype INTEGER DEFAULT 0`,
 }
 
+func createNormalizedOnlineBalanceIndex(idxname string, tablename string) string {
+	return fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %s
+		ON %s ( normalizedonlinebalance, address, data )
+		WHERE normalizedonlinebalance>0`, idxname, tablename)
+}
+
 var createOnlineAccountIndex = []string{
 	`ALTER TABLE accountbase
 		ADD COLUMN normalizedonlinebalance INTEGER`,
-	`CREATE INDEX IF NOT EXISTS onlineaccountbals
-		ON accountbase ( normalizedonlinebalance, address, data )
-		WHERE normalizedonlinebalance>0`,
+	createNormalizedOnlineBalanceIndex("onlineaccountbals", "accountbase"),
 }
 
 var accountsResetExprs = []string{
@@ -144,17 +148,26 @@ func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, addr basic
 	return nil
 }
 
-func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []encodedBalanceRecord) error {
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, data) VALUES(?, ?)")
+func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []encodedBalanceRecord, proto config.ConsensusParams) error {
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
 	}
 
 	for _, balance := range bals {
-		result, err := insertStmt.ExecContext(ctx, balance.Address[:], balance.AccountData)
+		var data basics.AccountData
+		err = protocol.Decode(balance.AccountData, &data)
 		if err != nil {
 			return err
 		}
+
+		normBalance := data.NormalizedOnlineBalance(proto)
+
+		result, err := insertStmt.ExecContext(ctx, balance.Address[:], normBalance, balance.AccountData)
+		if err != nil {
+			return err
+		}
+
 		aff, err := result.RowsAffected()
 		if err != nil {
 			return err
@@ -162,42 +175,68 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []enco
 		if aff != 1 {
 			return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
 		}
-
 	}
 	return nil
 }
 
 func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup bool) (err error) {
-	s := "DROP TABLE IF EXISTS catchpointbalances;"
-	s += "DROP TABLE IF EXISTS catchpointassetcreators;"
-	s += "DROP TABLE IF EXISTS catchpointaccounthashes;"
-	s += "DELETE FROM accounttotals where id='catchpointStaging';"
-	if newCatchup {
-		s += "CREATE TABLE IF NOT EXISTS catchpointassetcreators(asset integer primary key, creator blob, ctype integer);"
-		s += "CREATE TABLE IF NOT EXISTS catchpointbalances(address blob primary key, data blob);"
-		s += "CREATE TABLE IF NOT EXISTS catchpointaccounthashes(id integer primary key, data blob);"
+	s := []string{
+		"DROP TABLE IF EXISTS catchpointbalances",
+		"DROP TABLE IF EXISTS catchpointassetcreators",
+		"DROP TABLE IF EXISTS catchpointaccounthashes",
+		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
-	_, err = tx.Exec(s)
-	return err
+
+	if newCatchup {
+		// SQLite has no way to rename an existing index.  So, we need
+		// to cook up a fresh name for the index, which will be kept
+		// around after we rename the table from "catchpointbalances"
+		// to "accountbase".  To construct a unique index name, we
+		// use the current time.
+		idxname := fmt.Sprintf("onlineaccountbals%d", time.Now().UnixNano())
+
+		s = append(s,
+			"CREATE TABLE IF NOT EXISTS catchpointassetcreators (asset integer primary key, creator blob, ctype integer)",
+			"CREATE TABLE IF NOT EXISTS catchpointbalances (address blob primary key, data blob, normalizedonlinebalance integer)",
+			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
+			createNormalizedOnlineBalanceIndex(idxname, "catchpointbalances"),
+		)
+	}
+
+	for _, stmt := range s {
+		_, err = tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // applyCatchpointStagingBalances switches the staged catchpoint catchup tables onto the actual
 // tables and update the correct balance round. This is the final step in switching onto the new catchpoint round.
 func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRound basics.Round) (err error) {
-	s := "ALTER TABLE accountbase RENAME TO accountbase_old;"
-	s += "ALTER TABLE assetcreators RENAME TO assetcreators_old;"
-	s += "ALTER TABLE accounthashes RENAME TO accounthashes_old;"
-	s += "ALTER TABLE catchpointbalances RENAME TO accountbase;"
-	s += "ALTER TABLE catchpointassetcreators RENAME TO assetcreators;"
-	s += "ALTER TABLE catchpointaccounthashes RENAME TO accounthashes;"
-	s += "DROP TABLE IF EXISTS accountbase_old;"
-	s += "DROP TABLE IF EXISTS assetcreators_old;"
-	s += "DROP TABLE IF EXISTS accounthashes_old;"
+	stmts := []string{
+		"ALTER TABLE accountbase RENAME TO accountbase_old",
+		"ALTER TABLE assetcreators RENAME TO assetcreators_old",
+		"ALTER TABLE accounthashes RENAME TO accounthashes_old",
 
-	_, err = tx.Exec(s)
-	if err != nil {
-		return err
+		"ALTER TABLE catchpointbalances RENAME TO accountbase",
+		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
+		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
+
+		"DROP TABLE IF EXISTS accountbase_old",
+		"DROP TABLE IF EXISTS assetcreators_old",
+		"DROP TABLE IF EXISTS accounthashes_old",
 	}
+
+	for _, stmt := range stmts {
+		_, err = tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+
 	_, err = tx.Exec("INSERT OR REPLACE INTO acctrounds(id, rnd) VALUES('acctbase', ?)", balancesRound)
 	if err != nil {
 		return err
