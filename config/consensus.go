@@ -292,6 +292,27 @@ type ConsensusParams struct {
 	// maximum total minimum balance requirement for an account, used
 	// to limit the maximum size of a single balance record
 	MaximumMinimumBalance uint64
+
+	// CompactCertRounds defines the frequency with with compact
+	// certificates are generated.  Every round that is a multiple
+	// of CompactCertRounds, the block header will include a Merkle
+	// commitment to the set of online accounts (that can vote after
+	// another CompactCertRounds rounds), and that block will be signed
+	// (forming a compact certificate) by the voters from the previous
+	// such Merkle tree commitment.  A value of zero means no compact
+	// certificates.
+	CompactCertRounds uint64
+
+	// CompactCertWeightThreshold is the percentage of top voters weight
+	// that must sign the message (block header) for security.  The compact
+	// certificate ensures this threshold holds; however, forming a valid
+	// compact certificate requires a somewhat higher number of signatures,
+	// and the more signatures are collected, the smaller the compact cert
+	// can be.
+	//
+	// This threshold can be thought of as the maximum percentage of
+	// malicious weight that compact certificates defend against.
+	CompactCertWeightThreshold uint64
 }
 
 // ConsensusProtocols defines a set of supported protocol versions and their
