@@ -862,7 +862,7 @@ func listAndCompareComb(t *testing.T, au *accountUpdates, expected map[basics.Cr
 	for a, b := range expected {
 		if b.ctype == basics.AssetCreatable {
 			if maxAss2 < a {
-				maxAss1 = maxAss1
+				maxAss1 = maxAss2
 				maxAss2 = a
 			} else if maxAss1 < a {
 				maxAss1 = a
@@ -870,7 +870,7 @@ func listAndCompareComb(t *testing.T, au *accountUpdates, expected map[basics.Cr
 		}
 		if b.ctype == basics.AppCreatable {
 			if maxApp2 < a {
-				maxApp1 = maxApp1
+				maxApp1 = maxApp2
 				maxApp2 = a
 			} else if maxApp1 < a {
 				maxApp1 = a
