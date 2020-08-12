@@ -186,16 +186,22 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 	requestedCompressedResponse := strings.Contains(request.Header.Get("Accept-Encoding"), "gzip")
 	if requestedCompressedResponse {
 		response.Header().Set("Content-Encoding", "gzip")
-		io.Copy(response, cs)
+		written, err := io.Copy(response, cs)
+		if err != nil {
+			logging.Base().Infof("LedgerService.ServeHTTP : unable to write compressed catchpoint file for round %d, written bytes %d : %v", round, written, err)
+		}
 		return
 	}
 	decompressedGzip, err := gzip.NewReader(cs)
 	if err != nil {
-		logging.Base().Warnf("ServeHTTP : failed to decompress catchpoint %d %v", round, err)
+		logging.Base().Warnf("LedgerService.ServeHTTP : failed to decompress catchpoint %d %v", round, err)
 		response.WriteHeader(http.StatusInternalServerError)
 		response.Write([]byte(fmt.Sprintf("catchpoint file for round %d could not be decompressed due to internal error : %v", round, err)))
 		return
 	}
 	defer decompressedGzip.Close()
-	io.Copy(response, decompressedGzip)
+	written, err := io.Copy(response, decompressedGzip)
+	if err != nil {
+		logging.Base().Infof("LedgerService.ServeHTTP : unable to write compressed catchpoint file for round %d, written bytes %d : %v", round, written, err)
+	}
 }

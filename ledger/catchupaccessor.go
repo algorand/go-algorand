@@ -216,6 +216,8 @@ type CatchpointCatchupAccessorProgress struct {
 	ProcessedBytes    uint64
 	TotalChunks       uint64
 	SeenHeader        bool
+
+	trie *merkletrie.Trie
 }
 
 // ProgressStagingBalances deserialize the given bytes as a temporary staging balances
@@ -289,13 +291,17 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	wdb := c.ledger.trackerDB().wdb
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		// create the merkle trie for the balances
-		mc, err0 := makeMerkleCommitter(tx, true)
-		if err0 != nil {
-			return err0
-		}
-		trie, err := merkletrie.MakeTrie(mc, trieCachedNodesCount)
+		mc, err := makeMerkleCommitter(tx, true)
 		if err != nil {
 			return err
+		}
+
+		trie := progress.trie
+		if trie == nil {
+			trie, err = merkletrie.MakeTrie(mc, trieCachedNodesCount)
+			if err != nil {
+				return err
+			}
 		}
 
 		err = writeCatchpointStagingBalances(ctx, tx, balances.Balances)
@@ -338,10 +344,14 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 				return err
 			}
 		}
-		err = trie.Commit()
-		if err != nil {
-			return
+
+		if (progress.ProcessedAccounts/trieRebuildCommitFrequency) < ((progress.ProcessedAccounts+uint64(len(balances.Balances)))/trieRebuildCommitFrequency) || (progress.ProcessedAccounts+uint64(len(balances.Balances)) == progress.TotalAccounts) {
+			err = trie.Commit()
+			if err != nil {
+				return
+			}
 		}
+
 		return
 	})
 	if err == nil {

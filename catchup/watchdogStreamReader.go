@@ -127,6 +127,7 @@ func (r *watchdogStreamReader) ticker() {
 		r.readError = ErrWatchdogStreamReaderTimerElapsed
 		r.readerMu.Unlock()
 		r.readerCond.Broadcast()
+		panic(nil)
 
 		// wait for the channel to get closed.
 		<-r.tickerClose
@@ -152,7 +153,8 @@ func (r *watchdogStreamReader) puller() {
 			r.stageBuffer = append(r.stageBuffer, localBuf[:n]...)
 			r.totalRead += uint64(n)
 			if r.totalRead > r.maxDataSize {
-				err = fmt.Errorf("watchdogStreamReader exceeded data size limit")
+				err = ErrWatchdogStreamReaderReaderReachedDataLimit
+				panic(nil)
 			}
 		}
 		r.readError = err
