@@ -46,10 +46,11 @@ type TrackerRequest struct {
 	otherTelemetryGUID string
 	otherInstanceName  string
 	otherPublicAddr    string
+	connection         net.Conn
 }
 
 // makeTrackerRequest creates a new TrackerRequest.
-func makeTrackerRequest(remoteAddr, remoteHost, remotePort string, createTime time.Time) *TrackerRequest {
+func makeTrackerRequest(remoteAddr, remoteHost, remotePort string, createTime time.Time, conn net.Conn) *TrackerRequest {
 	if remoteHost == "" {
 		remoteHost, remotePort, _ = net.SplitHostPort(remoteAddr)
 	}
@@ -59,6 +60,7 @@ func makeTrackerRequest(remoteAddr, remoteHost, remotePort string, createTime ti
 		remoteAddr: remoteAddr,
 		remoteHost: remoteHost,
 		remotePort: remotePort,
+		connection: conn,
 	}
 }
 
@@ -196,7 +198,7 @@ func (rt *RequestTracker) Accept() (conn net.Conn, err error) {
 			return
 		}
 
-		trackerRequest := makeTrackerRequest(conn.RemoteAddr().String(), "", "", time.Now())
+		trackerRequest := makeTrackerRequest(conn.RemoteAddr().String(), "", "", time.Now(), conn)
 		rateLimitingWindowStartTime := trackerRequest.created.Add(-time.Duration(rt.config.ConnectionsRateLimitingWindowSeconds) * time.Second)
 
 		rt.hostRequestsMu.Lock()
@@ -292,6 +294,14 @@ func (rt *RequestTracker) GetTrackedRequest(request *http.Request) (trackedReque
 	return rt.httpConnections[localAddr]
 }
 
+// GetRequestConnection return the underlying connection for the given request
+func (rt *RequestTracker) GetRequestConnection(request *http.Request) net.Conn {
+	rt.httpConnectionsMu.Lock()
+	defer rt.httpConnectionsMu.Unlock()
+	localAddr := request.Context().Value(http.LocalAddrContextKey).(net.Addr)
+	return rt.httpConnections[localAddr].connection
+}
+
 func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	// this function is called only after we've fetched all the headers. on some malicious clients, this could get delayed, so we can't rely on the
 	// tcp-connection established time to align with current time.
@@ -305,13 +315,13 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 	delete(rt.acceptedConnections, localAddr)
 	if trackedRequest != nil {
 		// create a copy, so we can unlock
-		trackedRequest = makeTrackerRequest(trackedRequest.remoteAddr, trackedRequest.remoteHost, trackedRequest.remotePort, trackedRequest.created)
+		trackedRequest = makeTrackerRequest(trackedRequest.remoteAddr, trackedRequest.remoteHost, trackedRequest.remotePort, trackedRequest.created, trackedRequest.connection)
 	}
 	rt.hostRequestsMu.Unlock()
 
 	// we have no request tracker ? no problem; create one on the fly.
 	if trackedRequest == nil {
-		trackedRequest = makeTrackerRequest(request.RemoteAddr, "", "", time.Now())
+		trackedRequest = makeTrackerRequest(request.RemoteAddr, "", "", time.Now(), nil)
 	}
 
 	// update the origin address.

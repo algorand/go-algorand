@@ -185,6 +185,10 @@ type GossipNode interface {
 	// arrive very quickly, but might be missing some votes. The usage of this call is expected to have similar
 	// characteristics as with a watchdog timer.
 	OnNetworkAdvance()
+
+	// GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
+	// request that was provided to the http handler ( or provide a fallback Context() to that )
+	GetHTTPRequestConnection(request *http.Request) (conn net.Conn)
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -945,6 +949,14 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 		return http.StatusLoopDetected
 	}
 	return http.StatusOK
+}
+
+// GetHTTPRequestConnection todo
+func (wn *WebsocketNetwork) GetHTTPRequestConnection(request *http.Request) (conn net.Conn) {
+	if wn.requestsTracker != nil {
+		conn = wn.requestsTracker.GetRequestConnection(request)
+	}
+	return
 }
 
 // ServerHTTP handles the gossip network functions over websockets
