@@ -845,14 +845,14 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 
 	if rootHash.IsZero() {
 		au.log.Infof("accountsInitialize rebuilding merkle trie for round %d", rnd)
-		var accountsIterator encodedAccountsIterator
+		var accountsIterator encodedAccountsBatchIter
 		defer accountsIterator.Close()
 		startTrieBuildTime := time.Now()
 		accountsCount := 0
 		lastRebuildTime := startTrieBuildTime
 		pendingAccounts := 0
 		for {
-			bal, err := accountsIterator.Iterate(ctx, tx, trieRebuildAccountChunkSize)
+			bal, err := accountsIterator.Next(ctx, tx, trieRebuildAccountChunkSize)
 			if err != nil {
 				return rnd, err
 			}

@@ -898,16 +898,17 @@ func (mc *merkleCommitter) GetNodesCountPerPage() (pageSize int64) {
 	return merkleCommitterNodesPerPage
 }
 
-type encodedAccountsIterator struct {
-	rows            *sql.Rows
-	orederByAddress bool
+// encodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.
+type encodedAccountsBatchIter struct {
+	rows           *sql.Rows
+	orderByAddress bool
 }
 
-// encodedAccountsRange returns an array containing the account data, in the same way it appear in the database
-// starting at entry startAccountIndex, and up to accountCount accounts long.
-func (iterator *encodedAccountsIterator) Iterate(ctx context.Context, tx *sql.Tx, accountCount int) (bals []encodedBalanceRecord, err error) {
+// Next returns an array containing the account data, in the same way it appear in the database
+// returning accountCount accounts data at a time.
+func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int) (bals []encodedBalanceRecord, err error) {
 	if iterator.rows == nil {
-		if iterator.orederByAddress {
+		if iterator.orderByAddress {
 			iterator.rows, err = tx.QueryContext(ctx, "SELECT address, data FROM accountbase ORDER BY address")
 		} else {
 			iterator.rows, err = tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
@@ -954,7 +955,8 @@ func (iterator *encodedAccountsIterator) Iterate(ctx context.Context, tx *sql.Tx
 	return
 }
 
-func (iterator *encodedAccountsIterator) Close() {
+// Close shuts down the encodedAccountsBatchIter, releasing database resources.
+func (iterator *encodedAccountsBatchIter) Close() {
 	if iterator.rows != nil {
 		iterator.rows.Close()
 		iterator.rows = nil

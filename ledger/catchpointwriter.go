@@ -65,7 +65,7 @@ type catchpointWriter struct {
 	blocksRound       basics.Round
 	blockHeaderDigest crypto.Digest
 	label             string
-	accountsIterator  encodedAccountsIterator
+	accountsIterator  encodedAccountsBatchIter
 }
 
 type encodedBalanceRecord struct {
@@ -103,7 +103,7 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, bloc
 		blocksRound:       blocksRound,
 		blockHeaderDigest: blockHeaderDigest,
 		label:             label,
-		accountsIterator:  encodedAccountsIterator{orederByAddress: true},
+		accountsIterator:  encodedAccountsBatchIter{orderByAddress: true},
 	}
 }
 
@@ -226,7 +226,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 }
 
 func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (err error) {
-	cw.balancesChunk.Balances, err = cw.accountsIterator.Iterate(ctx, tx, BalancesPerCatchpointFileChunk)
+	cw.balancesChunk.Balances, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk)
 	if err == nil {
 		cw.balancesOffset += BalancesPerCatchpointFileChunk
 	}
