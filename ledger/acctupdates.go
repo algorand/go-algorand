@@ -50,7 +50,9 @@ const (
 	pendingDeltasFlushThreshold = 128
 	// trieRebuildAccountChunkSize defines the number of accounts that would get read at a single chunk
 	// before added to the trie during trie construction
-	trieRebuildAccountChunkSize = 512
+	trieRebuildAccountChunkSize = 16384
+	// trieRebuildCommitFrequency defines the number of accounts that would get added before we call evict to commit the changes and adjust the memory cache.
+	trieRebuildCommitFrequency = 65536
 	// trieAccumulatedChangesFlush defines the number of pending changes that would be applied to the merkle trie before
 	// we attempt to commit them to disk while writing a batch of rounds balances to disk.
 	trieAccumulatedChangesFlush = 256
@@ -840,16 +842,25 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 	if err != nil {
 		return rnd, fmt.Errorf("accountsInitialize was unable to retrieve trie root hash: %v", err)
 	}
+
 	if rootHash.IsZero() {
-		accountIdx := 0
+		au.log.Infof("accountsInitialize rebuilding merkle trie for round %d", rnd)
+		var accountsIterator encodedAccountsBatchIter
+		defer accountsIterator.Close()
+		startTrieBuildTime := time.Now()
+		accountsCount := 0
+		lastRebuildTime := startTrieBuildTime
+		pendingAccounts := 0
 		for {
-			bal, err := encodedAccountsRange(ctx, tx, accountIdx, trieRebuildAccountChunkSize)
+			bal, err := accountsIterator.Next(ctx, tx, trieRebuildAccountChunkSize)
 			if err != nil {
 				return rnd, err
 			}
 			if len(bal) == 0 {
 				break
 			}
+			accountsCount += len(bal)
+			pendingAccounts += len(bal)
 			for _, balance := range bal {
 				var accountData basics.AccountData
 				err = protocol.Decode(balance.AccountData, &accountData)
@@ -866,16 +877,32 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 				}
 			}
 
-			// this trie Evict will commit using the current transaction.
-			// if anything goes wrong, it will still get rolled back.
-			_, err = trie.Evict(true)
-			if err != nil {
-				return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
+			if pendingAccounts >= trieRebuildCommitFrequency {
+				// this trie Evict will commit using the current transaction.
+				// if anything goes wrong, it will still get rolled back.
+				_, err = trie.Evict(true)
+				if err != nil {
+					return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
+				}
+				pendingAccounts = 0
 			}
+
 			if len(bal) < trieRebuildAccountChunkSize {
 				break
 			}
-			accountIdx += trieRebuildAccountChunkSize
+
+			if time.Now().Sub(lastRebuildTime) > 5*time.Second {
+				// let the user know that the trie is still being rebuilt.
+				au.log.Infof("accountsInitialize still building the trie, and processed so far %d accounts", accountsCount)
+				lastRebuildTime = time.Now()
+			}
+		}
+
+		// this trie Evict will commit using the current transaction.
+		// if anything goes wrong, it will still get rolled back.
+		_, err = trie.Evict(true)
+		if err != nil {
+			return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
 		}
 
 		// we've just updated the markle trie, update the hashRound to reflect that.
@@ -883,6 +910,8 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 		if err != nil {
 			return 0, fmt.Errorf("accountsInitialize was unable to update the account round to %d: %v", rnd, err)
 		}
+
+		au.log.Infof("accountsInitialize rebuilt the merkle trie with %d entries in %v", accountsCount, time.Now().Sub(startTrieBuildTime))
 	}
 	au.balancesTrie = trie
 	return rnd, nil
@@ -1499,8 +1528,6 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	relCatchpointFileName := filepath.Join("catchpoints", catchpointRoundToPath(committedRound))
 	absCatchpointFileName := filepath.Join(au.dbDirectory, relCatchpointFileName)
 
-	catchpointWriter := makeCatchpointWriter(absCatchpointFileName, au.dbs.rdb, committedRound, committedRoundDigest, label)
-
 	more := true
 	const shortChunkExecutionDuration = 50 * time.Millisecond
 	const longChunkExecutionDuration = 1 * time.Second
@@ -1511,37 +1538,54 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	default:
 		chunkExecutionDuration = shortChunkExecutionDuration
 	}
-	for more {
-		stepCtx, stepCancelFunction := context.WithTimeout(au.ctx, chunkExecutionDuration)
-		writeStepStartTime := time.Now()
-		more, err = catchpointWriter.WriteStep(stepCtx)
-		// accumulate the actual time we've spent writing in this step.
-		catchpointGenerationStats.CPUTime += uint64(time.Now().Sub(writeStepStartTime).Nanoseconds())
-		stepCancelFunction()
-		if more && err == nil {
-			// we just wrote some data, but there is more to be written.
-			// go to sleep for while.
-			select {
-			case <-time.After(100 * time.Millisecond):
-			case <-au.ctx.Done():
-				retryCatchpointCreation = true
+
+	var catchpointWriter *catchpointWriter
+	err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		catchpointWriter = makeCatchpointWriter(au.ctx, absCatchpointFileName, tx, committedRound, committedRoundDigest, label)
+		for more {
+			stepCtx, stepCancelFunction := context.WithTimeout(au.ctx, chunkExecutionDuration)
+			writeStepStartTime := time.Now()
+			more, err = catchpointWriter.WriteStep(stepCtx)
+			// accumulate the actual time we've spent writing in this step.
+			catchpointGenerationStats.CPUTime += uint64(time.Now().Sub(writeStepStartTime).Nanoseconds())
+			stepCancelFunction()
+			if more && err == nil {
+				// we just wrote some data, but there is more to be written.
+				// go to sleep for while.
+				// before going to sleep, extend the transaction timeout so that we won't get warnings:
+				db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(1*time.Second))
+				select {
+				case <-time.After(100 * time.Millisecond):
+				case <-au.ctx.Done():
+					retryCatchpointCreation = true
+					err2 := catchpointWriter.Abort()
+					if err2 != nil {
+						return fmt.Errorf("error removing catchpoint file : %v", err2)
+					}
+					return nil
+				case <-au.catchpointSlowWriting:
+					chunkExecutionDuration = longChunkExecutionDuration
+				}
+			}
+			if err != nil {
+				err = fmt.Errorf("unable to create catchpoint : %v", err)
 				err2 := catchpointWriter.Abort()
 				if err2 != nil {
 					au.log.Warnf("accountUpdates: generateCatchpoint: error removing catchpoint file : %v", err2)
 				}
 				return
-			case <-au.catchpointSlowWriting:
-				chunkExecutionDuration = longChunkExecutionDuration
 			}
 		}
-		if err != nil {
-			au.log.Warnf("accountUpdates: generateCatchpoint: unable to create catchpoint : %v", err)
-			err2 := catchpointWriter.Abort()
-			if err2 != nil {
-				au.log.Warnf("accountUpdates: generateCatchpoint: error removing catchpoint file : %v", err2)
-			}
-			return
-		}
+		return
+	})
+
+	if err != nil {
+		au.log.Warnf("accountUpdates: generateCatchpoint: %v", err)
+		return
+	}
+	if catchpointWriter == nil {
+		au.log.Warnf("accountUpdates: generateCatchpoint: nil catchpointWriter")
+		return
 	}
 
 	err = au.saveCatchpointFile(committedRound, relCatchpointFileName, catchpointWriter.GetSize(), catchpointWriter.GetCatchpoint())
