@@ -24,6 +24,8 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
+
+	"github.com/stretchr/testify/require"
 )
 
 type TestMessage string
@@ -200,4 +202,22 @@ func BenchmarkBuildVerify(b *testing.B) {
 			}
 		}
 	})
+}
+
+func TestCoinIndex(t *testing.T) {
+	n := 1000
+	b := &Builder{
+		sigs: make([]sigslot, n),
+	}
+
+	for i := 0; i < n; i++ {
+		b.sigs[i].L = uint64(i)
+		b.sigs[i].part.Weight = 1
+	}
+
+	for i := 0; i < n; i++ {
+		pos, err := b.coinIndex(uint64(i), 0, uint64(len(b.sigs)))
+		require.NoError(t, err)
+		require.Equal(t, pos, uint64(i))
+	}
 }
