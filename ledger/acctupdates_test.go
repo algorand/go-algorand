@@ -860,6 +860,7 @@ func listAndCompareComb(t *testing.T, au *accountUpdates, expected map[basics.Cr
 	maxApp1 := basics.CreatableIndex(0)
 	maxApp2 := basics.CreatableIndex(0)
 	for a, b := range expected {
+		// A moving window of the last two largest indexes: [maxAss1, maxAss2]
 		if b.ctype == basics.AssetCreatable {
 			if maxAss2 < a {
 				maxAss1 = maxAss2
@@ -878,10 +879,17 @@ func listAndCompareComb(t *testing.T, au *accountUpdates, expected map[basics.Cr
 		}
 	}
 
-	// Limit with max asset index and max app index (max results to effect)
-	maxAssetIdx := basics.AssetIndex(maxAss1)
-	maxAppIdx := basics.AppIndex(maxApp1)
+	// No limits. max asset index, max app index and max results have no effect
+	// This is to make sure the deleted elements do not show up
+	maxAssetIdx := basics.AssetIndex(maxAss2)
+	maxAppIdx := basics.AppIndex(maxApp2)
 	maxResults := uint64(len(expected))
+	listAndCompare(t, maxAssetIdx, maxAppIdx, maxResults, au, expected)
+
+	// Limit with max asset index and max app index (max results has no effect)
+	maxAssetIdx = basics.AssetIndex(maxAss1)
+	maxAppIdx = basics.AppIndex(maxApp1)
+	maxResults = uint64(len(expected))
 	listAndCompare(t, maxAssetIdx, maxAppIdx, maxResults, au, expected)
 
 	// Limit with max results
@@ -974,32 +982,41 @@ func TestListCreatables(t *testing.T) {
 	au.accountsq, err = accountsDbInit(tx, tx)
 	require.NoError(t, err)
 
-	// get random data
+	// ******* All results are obtained from the cache. Empty database *******
+	// ******* No deletes                                              *******
+	// get random data. Inital batch, no deletes
 	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
 	expectedDbImage := make(map[basics.CreatableIndex]modifiedCreatable)
 	ctbsWithDeletes := randomCreatableSampling(1, ctbsList, randomCtbs,
 		expectedDbImage, numElementsPerSegement)
-
 	// set the cache
 	au.creatables = ctbsWithDeletes
-
-	// all in cache
 	listAndCompareComb(t, au, expectedDbImage)
 
-	// sync with the database (nothing in cache)
+	// ******* All results are obtained from the database. Empty cache *******
+	// ******* No deletes	                                           *******
+	// sync with the database
 	var updates map[basics.Address]accountDelta
 	err = accountsNewRound(tx, updates, ctbsWithDeletes)
 	require.NoError(t, err)
+	// nothing left in cache
 	au.creatables = make(map[basics.CreatableIndex]modifiedCreatable)
-
-	// all in database
 	listAndCompareComb(t, au, expectedDbImage)
 
-	// get new updates
+	// ******* Results are obtained from the database and from the cache *******
+	// ******* No deletes in the database.                               *******
+	// ******* Data in the database deleted in the cache                 *******
 	au.creatables = randomCreatableSampling(2, ctbsList, randomCtbs,
 		expectedDbImage, numElementsPerSegement)
-
-	// in cache and in database
 	listAndCompareComb(t, au, expectedDbImage)
 
+	// ******* Results are obtained from the database and from the cache *******
+	// ******* Deletes are in the database and in the cache              *******
+	// sync with the database. This has deletes synced to the database.
+	err = accountsNewRound(tx, updates, au.creatables)
+	require.NoError(t, err)
+	// get new creatables in the cache. There will be deletes in the cache from the previous batch.
+	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
+		expectedDbImage, numElementsPerSegement)
+	listAndCompareComb(t, au, expectedDbImage)
 }
