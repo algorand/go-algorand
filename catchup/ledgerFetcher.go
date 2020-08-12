@@ -143,9 +143,6 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 			if err == io.EOF {
 				return nil
 			}
-			if err != context.Canceled && err != context.DeadlineExceeded {
-				err = fmt.Errorf("getPeerLedger received an error when reading next tar chunk: %v", err)
-			}
 			return err
 		}
 		if header.Size > maxCatchpointFileChunkSize || header.Size < 1 {
@@ -163,9 +160,6 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 						break
 					}
 					err = fmt.Errorf("getPeerLedger received io.EOF while reading from tar file stream prior of reaching chunk size %d / %d", readComplete, header.Size)
-				}
-				if err != context.Canceled && err != context.DeadlineExceeded {
-					err = fmt.Errorf("getPeerLedger received an error when reading tar data chunk: %v", err)
 				}
 				return err
 			}
