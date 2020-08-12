@@ -69,7 +69,7 @@ const httpServerReadHeaderTimeout = time.Second * 10
 // httpServerWriteTimeout is the maximum duration before timing out
 // writes of the response. It is reset whenever a new
 // request's header is read.
-const httpServerWriteTimeout = time.Second * 600
+const httpServerWriteTimeout = time.Second * 60
 
 // httpServerIdleTimeout is the maximum amount of time to wait for the
 // next request when keep-alives are enabled. If httpServerIdleTimeout

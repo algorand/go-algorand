@@ -51,7 +51,7 @@ const (
 	maxCatchpointFileSize = 512 * 1024 * 1024 // 512MB
 
 	// expectedWorstDownloadSpeedBytesPerSecond defines the worst case-scenario upload speed we expect to get while uploading a catchpoint file
-	expectedWorstDownloadSpeedBytesPerSecond = 20 * 1024
+	expectedWorstDownloadSpeedBytesPerSecond = 200 * 1024
 
 	// maxCatchpointFileChunkDownloadDuration is the maximum amount of time we would wait to download a single chunk off a catchpoint file
 	maxCatchpointFileWritingDuration = 2*time.Minute + maxCatchpointFileSize*time.Second/expectedWorstDownloadSpeedBytesPerSecond
@@ -179,6 +179,8 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 	}
 	if conn := ls.net.GetHTTPRequestConnection(request); conn != nil {
 		conn.SetWriteDeadline(time.Now().Add(maxCatchpointFileWritingDuration))
+	} else {
+		logging.Base().Warnf("LedgerService.ServeHTTP unable to set connection timeout")
 	}
 	cs, err := ls.ledger.GetCatchpointStream(basics.Round(round))
 	if err != nil {

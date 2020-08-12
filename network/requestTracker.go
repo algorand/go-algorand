@@ -187,6 +187,21 @@ func makeRequestsTracker(downstreamHandler http.Handler, log logging.Logger, con
 	}
 }
 
+// requestTrackedConnection used to track the active connections. In particular, it used to remove the
+// tracked connection entry from the RequestTracker once a connection is closed.
+type requestTrackedConnection struct {
+	net.Conn
+	tracker *RequestTracker
+}
+
+// Close removes the connection from the tracker's connections map and call the underlaying Close function.
+func (c *requestTrackedConnection) Close() error {
+	c.tracker.hostRequestsMu.Lock()
+	delete(c.tracker.acceptedConnections, c.Conn.LocalAddr())
+	c.tracker.hostRequestsMu.Unlock()
+	return c.Conn.Close()
+}
+
 // Accept waits for and returns the next connection to the listener.
 func (rt *RequestTracker) Accept() (conn net.Conn, err error) {
 	// the following for loop is a bit tricky :
@@ -234,6 +249,7 @@ func (rt *RequestTracker) Accept() (conn net.Conn, err error) {
 		// add an entry to the acceptedConnections so that the ServeHTTP could find the connection quickly.
 		rt.acceptedConnections[conn.LocalAddr()] = trackerRequest
 		rt.hostRequestsMu.Unlock()
+		conn = &requestTrackedConnection{Conn: conn, tracker: rt}
 		return
 	}
 }
@@ -257,10 +273,11 @@ func (rt *RequestTracker) sendBlockedConnectionResponse(conn net.Conn, requestTi
 }
 
 // pruneAcceptedConnections clean stale items form the acceptedConnections map; it's syncornized via the acceptedConnectionsMu mutex which is expected to be taken by the caller.
+// in case the created is 0, the pruning is disabled for this connection. The HTTP handlers would call Close to have this entry cleared out.
 func (rt *RequestTracker) pruneAcceptedConnections(pruneStartDate time.Time) {
 	localAddrToRemove := []net.Addr{}
 	for localAddr, request := range rt.acceptedConnections {
-		if request.created.Before(pruneStartDate) {
+		if (!request.created.IsZero()) && request.created.Before(pruneStartDate) {
 			localAddrToRemove = append(localAddrToRemove, localAddr)
 		}
 	}
@@ -312,8 +329,10 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 
 	rt.hostRequestsMu.Lock()
 	trackedRequest := rt.acceptedConnections[localAddr]
-	delete(rt.acceptedConnections, localAddr)
 	if trackedRequest != nil {
+		// update the original request creation time to 0 so that the pruning would get disabled for this entry.
+		// the HTTP handles would ensure to call Close on the connection so that it would get removed correctly.
+		trackedRequest.created = time.Time{}
 		// create a copy, so we can unlock
 		trackedRequest = makeTrackerRequest(trackedRequest.remoteAddr, trackedRequest.remoteHost, trackedRequest.remotePort, trackedRequest.created, trackedRequest.connection)
 	}
