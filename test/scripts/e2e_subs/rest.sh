@@ -70,15 +70,8 @@ function test_applications_endpoint {
 }
 
 function test_assets_endpoint {
-  local DIR
   local ASSET_ID
-
-  # Directory of helper TEAL programs
-  DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )/tealprogs"
-  RES=$(${gcmd} asset create --creator "${ACCOUNT}" --total 10000 --decimals 19 --name "spanish coin" --unitname "doubloon")
-  echo $RES
-  ASSET_ID=$(echo $RES | grep "Created asset with asset index" | rev | cut -d ' ' -f 1 | rev)
-  echo "ASSET_ID: $ASSET_ID"
+  ASSET_ID=$(${gcmd} asset create --creator "${ACCOUNT}" --total 10000 --decimals 19 --name "spanish coin" --unitname "doubloon" | grep "Created asset with asset index" | rev | cut -d ' ' -f 1 | rev)
 
   # Good request, non-existant asset id
   call_and_verify "Should not find asset." "/v2/assets/987654321" 'asset does not exist'
@@ -105,8 +98,8 @@ test_assets_endpoint & pids+=($!)
 # Wait for them to complete and propogate the error code
 EXIT=0
 for pid in ${pids[*]}; do
-  wait $pid
-  if [ $? -ne 0 ]; then
+  wait "$pid"
+  if wait "$pid" -ne 0 ; then
     EXIT=1
   fi
 done
