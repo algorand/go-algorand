@@ -167,7 +167,7 @@ func blockReplaceIfExists(tx *sql.Tx, log logging.Logger, blk bookkeeping.Block,
 	newCert := protocol.Encode(&cert)
 
 	// if the header hasn't been modified, just return.
-	if bytes.Compare(oldHdr[:], newHdr[:]) == 0 {
+	if bytes.Equal(oldHdr[:], newHdr[:]) {
 		return false, nil
 	}
 
