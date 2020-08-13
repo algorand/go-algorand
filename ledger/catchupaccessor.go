@@ -216,6 +216,10 @@ type CatchpointCatchupAccessorProgress struct {
 	ProcessedBytes    uint64
 	TotalChunks       uint64
 	SeenHeader        bool
+
+	// Having the cachedTrie here would help to accelarate the catchup process since the trie maintain an internal cache of nodes.
+	// While rebuilding the trie, we don't want to force and reload (some) of these nodes into the cache for each catchpoint file chunk.
+	cachedTrie *merkletrie.Trie
 }
 
 // ProgressStagingBalances deserialize the given bytes as a temporary staging balances
@@ -289,13 +293,19 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	wdb := c.ledger.trackerDB().wdb
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		// create the merkle trie for the balances
-		mc, err0 := makeMerkleCommitter(tx, true)
-		if err0 != nil {
-			return err0
-		}
-		trie, err := merkletrie.MakeTrie(mc, trieCachedNodesCount)
+		var mc *merkleCommitter
+		mc, err = makeMerkleCommitter(tx, true)
 		if err != nil {
 			return err
+		}
+
+		if progress.cachedTrie == nil {
+			progress.cachedTrie, err = merkletrie.MakeTrie(mc, trieCachedNodesCount)
+			if err != nil {
+				return err
+			}
+		} else {
+			progress.cachedTrie.SetCommitter(mc)
 		}
 
 		err = writeCatchpointStagingBalances(ctx, tx, balances.Balances)
@@ -307,7 +317,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			var accountData basics.AccountData
 			err = protocol.Decode(balance.AccountData, &accountData)
 			if err != nil {
-				return err
+				return
 			}
 
 			// if the account has any asset params, it means that it's the creator of an asset.
@@ -315,7 +325,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 				for aidx := range accountData.AssetParams {
 					err = writeCatchpointStagingCreatable(ctx, tx, balance.Address, basics.CreatableIndex(aidx), basics.AssetCreatable)
 					if err != nil {
-						return err
+						return
 					}
 				}
 			}
@@ -324,29 +334,38 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 				for aidx := range accountData.AppParams {
 					err = writeCatchpointStagingCreatable(ctx, tx, balance.Address, basics.CreatableIndex(aidx), basics.AppCreatable)
 					if err != nil {
-						return err
+						return
 					}
 				}
 			}
 
 			hash := accountHashBuilder(balance.Address, accountData, balance.AccountData)
-			added, err := trie.Add(hash)
+			added, err2 := progress.cachedTrie.Add(hash)
 			if !added {
 				return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingBalances: The provided catchpoint file contained the same account more than once. Account address %#v, account data %#v, hash '%s'", balance.Address, accountData, hex.EncodeToString(hash))
 			}
-			if err != nil {
-				return err
+			if err2 != nil {
+				return err2
 			}
 		}
-		err = trie.Commit()
-		if err != nil {
-			return
+
+		// periodically, perform commit & evict to flush it to the disk and rebalance the cache memory utilization.
+		if (progress.ProcessedAccounts/trieRebuildCommitFrequency) < ((progress.ProcessedAccounts+uint64(len(balances.Balances)))/trieRebuildCommitFrequency) ||
+			(progress.ProcessedAccounts+uint64(len(balances.Balances)) == progress.TotalAccounts) {
+			_, err = progress.cachedTrie.Evict(true)
+			if err != nil {
+				return
+			}
 		}
 		return
 	})
 	if err == nil {
 		progress.ProcessedAccounts += uint64(len(balances.Balances))
 		progress.ProcessedBytes += uint64(len(bytes))
+	}
+	// not strictly required, but clean up the pointer in case of either a failuire or when we're done.
+	if err != nil || progress.ProcessedAccounts == progress.TotalAccounts {
+		progress.cachedTrie = nil
 	}
 	return err
 }
