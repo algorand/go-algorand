@@ -296,7 +296,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		var mc *merkleCommitter
 		mc, err = makeMerkleCommitter(tx, true)
 		if err != nil {
-			return err
+			return
 		}
 
 		if progress.cachedTrie == nil {
