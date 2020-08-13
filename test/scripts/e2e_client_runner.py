@@ -66,6 +66,7 @@ def read_script_for_timeout(fname):
     return 200
 
 def _script_thread_inner(runset, scriptname):
+    time.sleep(20)
     start = time.time()
     algod, kmd = runset.connect()
     pubw, maxpubaddr = runset.get_pub_wallet()
