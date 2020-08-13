@@ -175,7 +175,7 @@ class RunSet:
         if self.algod and self.kmd:
             return
         # should run from inside self.lock
-        xrun(['goal', 'kmd', 'start', '-t', '200'], env=self.env, timeout=20)
+        xrun(['goal', 'kmd', 'start', '-t', '0'], env=self.env, timeout=20)
         algodata = self.env['ALGORAND_DATA']
         self.kmd = openkmd(algodata)
         self.algod = openalgod(algodata)
