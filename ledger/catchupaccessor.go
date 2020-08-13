@@ -302,7 +302,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		if progress.cachedTrie == nil {
 			progress.cachedTrie, err = merkletrie.MakeTrie(mc, trieCachedNodesCount)
 			if err != nil {
-				return err
+				return
 			}
 		} else {
 			progress.cachedTrie.SetCommitter(mc)
@@ -340,23 +340,18 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			}
 
 			hash := accountHashBuilder(balance.Address, accountData, balance.AccountData)
-			added, err2 := progress.cachedTrie.Add(hash)
+			var added bool
+			added, err = progress.cachedTrie.Add(hash)
 			if !added {
 				return fmt.Errorf("CatchpointCatchupAccessorImpl::processStagingBalances: The provided catchpoint file contained the same account more than once. Account address %#v, account data %#v, hash '%s'", balance.Address, accountData, hex.EncodeToString(hash))
 			}
-			if err2 != nil {
-				return err2
-			}
-		}
-
-		// periodically, perform commit & evict to flush it to the disk and rebalance the cache memory utilization.
-		if (progress.ProcessedAccounts/trieRebuildCommitFrequency) < ((progress.ProcessedAccounts+uint64(len(balances.Balances)))/trieRebuildCommitFrequency) ||
-			(progress.ProcessedAccounts+uint64(len(balances.Balances)) == progress.TotalAccounts) {
-			_, err = progress.cachedTrie.Evict(true)
 			if err != nil {
 				return
 			}
 		}
+
+		// periodically, perform commit & evict to flush it to the disk and rebalance the cache memory utilization.
+		err = progress.EvictAsNeeded(uint64(len(balances.Balances)))
 		return
 	})
 	if err == nil {
@@ -368,6 +363,19 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		progress.cachedTrie = nil
 	}
 	return err
+}
+
+// EvictAsNeeded calls Evict on the cachedTrie priodically, or once we're done updating the trie.
+func (progress *CatchpointCatchupAccessorProgress) EvictAsNeeded(balancesCount uint64) (err error) {
+	if progress.cachedTrie == nil {
+		return nil
+	}
+	// periodically, perform commit & evict to flush it to the disk and rebalance the cache memory utilization.
+	if (progress.ProcessedAccounts/trieRebuildCommitFrequency) < ((progress.ProcessedAccounts+balancesCount)/trieRebuildCommitFrequency) ||
+		(progress.ProcessedAccounts+balancesCount) == progress.TotalAccounts {
+		_, err = progress.cachedTrie.Evict(true)
+	}
+	return
 }
 
 // GetCatchupBlockRound returns the latest block round matching the current catchpoint
