@@ -47,6 +47,7 @@ type TrackerRequest struct {
 	otherInstanceName  string
 	otherPublicAddr    string
 	connection         net.Conn
+	noPrune            bool
 }
 
 // makeTrackerRequest creates a new TrackerRequest.
@@ -66,8 +67,9 @@ func makeTrackerRequest(remoteAddr, remoteHost, remotePort string, createTime ti
 
 // hostIncomingRequests holds all the requests that are originating from a single host.
 type hostIncomingRequests struct {
-	remoteHost string
-	requests   []*TrackerRequest // this is an ordered list, according to the requestsHistory.created
+	remoteHost             string
+	requests               []*TrackerRequest            // this is an ordered list, according to the requestsHistory.created
+	additionalHostRequests map[*TrackerRequest]struct{} // additional requests that aren't included in the "requests", and always assumed to be "alive".
 }
 
 // findTimestampIndex finds the first an index (i) in the sorted requests array, where requests[i].created is greater than t.
@@ -77,9 +79,48 @@ func (ard *hostIncomingRequests) findTimestampIndex(t time.Time) int {
 		return 0
 	}
 	i := sort.Search(len(ard.requests), func(i int) bool {
-		return ard.requests[i].created.After(t) || ard.requests[i].created.IsZero()
+		return ard.requests[i].created.After(t)
 	})
 	return i
+}
+
+// convertToAdditionalRequest converts the given trackerRequest into a "additional request".
+// unlike regular tracker requests, additional requests does not get pruned.
+func (ard *hostIncomingRequests) convertToAdditionalRequest(trackerRequest *TrackerRequest) {
+	if _, has := ard.additionalHostRequests[trackerRequest]; has {
+		return
+	}
+
+	i := sort.Search(len(ard.requests), func(i int) bool {
+		return ard.requests[i].created.After(trackerRequest.created)
+	})
+	i--
+	if i < 0 {
+		return
+	}
+	// we could have several entries with the same timestamp, so we need to consider all of them.
+	for ; i >= 0; i-- {
+		if ard.requests[i] == trackerRequest {
+			break
+		}
+		if ard.requests[i].created != trackerRequest.created {
+			// we can't find the item in the list.
+			return
+		}
+	}
+	if i < 0 {
+		return
+	}
+	// ok, item was found at index i.
+	copy(ard.requests[i:], ard.requests[i+1:])
+	ard.requests[len(ard.requests)-1] = nil
+	ard.requests = ard.requests[:len(ard.requests)-1]
+	ard.additionalHostRequests[trackerRequest] = struct{}{}
+}
+
+// removeTrackedConnection removes a trackerRequest from the additional requests map
+func (ard *hostIncomingRequests) removeTrackedConnection(trackerRequest *TrackerRequest) {
+	delete(ard.additionalHostRequests, trackerRequest)
 }
 
 // add adds the trackerRequest at the correct index within the sorted array.
@@ -104,7 +145,7 @@ func (ard *hostIncomingRequests) add(trackerRequest *TrackerRequest) {
 // countConnections counts the number of connection that we have that occured after the provided specified time
 func (ard *hostIncomingRequests) countConnections(rateLimitingWindowStartTime time.Time) (count uint) {
 	i := ard.findTimestampIndex(rateLimitingWindowStartTime)
-	return uint(len(ard.requests) - i)
+	return uint(len(ard.requests) - i + len(ard.additionalHostRequests))
 }
 
 type hostsIncomingMap map[string]*hostIncomingRequests
@@ -138,8 +179,9 @@ func (him *hostsIncomingMap) addRequest(trackerRequest *TrackerRequest) {
 	requestData, has := (*him)[trackerRequest.remoteHost]
 	if !has {
 		requestData = &hostIncomingRequests{
-			remoteHost: trackerRequest.remoteHost,
-			requests:   make([]*TrackerRequest, 0, 1),
+			remoteHost:             trackerRequest.remoteHost,
+			requests:               make([]*TrackerRequest, 0, 1),
+			additionalHostRequests: make(map[*TrackerRequest]struct{}),
 		}
 		(*him)[trackerRequest.remoteHost] = requestData
 	}
@@ -153,6 +195,24 @@ func (him *hostsIncomingMap) countOriginConnections(remoteHost string, rateLimit
 		return requestData.countConnections(rateLimitingWindowStartTime)
 	}
 	return 0
+}
+
+// convertToAdditionalRequest converts the given trackerRequest into a "additional request".
+func (him *hostsIncomingMap) convertToAdditionalRequest(trackerRequest *TrackerRequest) {
+	requestData, has := (*him)[trackerRequest.remoteHost]
+	if !has {
+		return
+	}
+	requestData.convertToAdditionalRequest(trackerRequest)
+}
+
+// removeTrackedConnection removes a trackerRequest from the additional requests map
+func (him *hostsIncomingMap) removeTrackedConnection(trackerRequest *TrackerRequest) {
+	requestData, has := (*him)[trackerRequest.remoteHost]
+	if !has {
+		return
+	}
+	requestData.removeTrackedConnection(trackerRequest)
 }
 
 // RequestTracker tracks the incoming request connections
@@ -197,7 +257,11 @@ type requestTrackedConnection struct {
 // Close removes the connection from the tracker's connections map and call the underlaying Close function.
 func (c *requestTrackedConnection) Close() error {
 	c.tracker.hostRequestsMu.Lock()
+	trackerRequest := c.tracker.acceptedConnections[c.Conn.LocalAddr()]
 	delete(c.tracker.acceptedConnections, c.Conn.LocalAddr())
+	if trackerRequest != nil {
+		c.tracker.hostRequests.removeTrackedConnection(trackerRequest)
+	}
 	c.tracker.hostRequestsMu.Unlock()
 	return c.Conn.Close()
 }
@@ -277,7 +341,7 @@ func (rt *RequestTracker) sendBlockedConnectionResponse(conn net.Conn, requestTi
 func (rt *RequestTracker) pruneAcceptedConnections(pruneStartDate time.Time) {
 	localAddrToRemove := []net.Addr{}
 	for localAddr, request := range rt.acceptedConnections {
-		if (!request.created.IsZero()) && request.created.Before(pruneStartDate) {
+		if request.noPrune == false && request.created.Before(pruneStartDate) {
 			localAddrToRemove = append(localAddrToRemove, localAddr)
 		}
 	}
@@ -330,9 +394,11 @@ func (rt *RequestTracker) ServeHTTP(response http.ResponseWriter, request *http.
 	rt.hostRequestsMu.Lock()
 	trackedRequest := rt.acceptedConnections[localAddr]
 	if trackedRequest != nil {
-		// update the original request creation time to 0 so that the pruning would get disabled for this entry.
-		// the HTTP handles would ensure to call Close on the connection so that it would get removed correctly.
-		trackedRequest.created = time.Time{}
+		// update the original tracker request so that it won't get pruned.
+		if trackedRequest.noPrune == false {
+			trackedRequest.noPrune = true
+			rt.hostRequests.convertToAdditionalRequest(trackedRequest)
+		}
 		// create a copy, so we can unlock
 		trackedRequest = makeTrackerRequest(trackedRequest.remoteAddr, trackedRequest.remoteHost, trackedRequest.remotePort, trackedRequest.created, trackedRequest.connection)
 	}
