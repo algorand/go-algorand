@@ -166,6 +166,11 @@ func blockReplaceIfExists(tx *sql.Tx, log logging.Logger, blk bookkeeping.Block,
 	newBlk := protocol.Encode(&blk)
 	newCert := protocol.Encode(&cert)
 
+	// if the header hasn't been modified, just return.
+	if bytes.Compare(oldHdr[:], newHdr[:]) == 0 {
+		return false, nil
+	}
+
 	// Log if protocol version or certificate changed for the block we're replacing
 	if newProto != oldProto {
 		log.Warnf("blockReplaceIfExists(%v): old proto %v != new proto %v", blk.Round(), oldProto, newProto)
