@@ -77,7 +77,7 @@ func (ard *hostIncomingRequests) findTimestampIndex(t time.Time) int {
 		return 0
 	}
 	i := sort.Search(len(ard.requests), func(i int) bool {
-		return ard.requests[i].created.After(t)
+		return ard.requests[i].created.After(t) || ard.requests[i].created.IsZero()
 	})
 	return i
 }
