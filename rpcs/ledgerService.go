@@ -50,7 +50,7 @@ const (
 	// maxCatchpointFileSize is a rough estimate for the worst-case scenario we're going to have of all the accounts data per a single catchpoint file chunk.
 	maxCatchpointFileSize = 512 * 1024 * 1024 // 512MB
 
-	// expectedWorstDownloadSpeedBytesPerSecond defines the worst case-scenario upload speed we expect to get while uploading a catchpoint file
+	// expectedWorstDownloadSpeedBytesPerSecond defines the worst-case scenario upload speed we expect to get while uploading a catchpoint file
 	expectedWorstDownloadSpeedBytesPerSecond = 200 * 1024
 
 	// maxCatchpointFileChunkDownloadDuration is the maximum amount of time we would wait to download a single chunk off a catchpoint file
