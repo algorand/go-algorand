@@ -896,7 +896,7 @@ func simulateAgreement(t *testing.T, numNodes int, numRounds int, traceLevel tra
 }
 
 func simulateAgreementWithConsensusVersion(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, consensusVersion func(basics.Round) (protocol.ConsensusVersion, error)) {
-	ledgerFactory := func (balance map[basics.Address]basics.BalanceRecord) Ledger {
+	ledgerFactory := func(balance map[basics.Address]basics.BalanceRecord) Ledger {
 		return makeTestLedgerWithConsensusVersion(balance, consensusVersion)
 	}
 	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, ledgerFactory)
@@ -989,7 +989,7 @@ func TestAgreementSynchronousFuture1(t *testing.T) {
 	//	t.Skip("Skipping agreement integration test")
 	//}
 
-	consensusVersion := func (r basics.Round) (protocol.ConsensusVersion, error) {
+	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
 		return protocol.ConsensusFuture, nil
 	}
 	simulateAgreementWithConsensusVersion(t, 1, 5, disabled, consensusVersion)
@@ -1000,7 +1000,7 @@ func TestAgreementSynchronousFuture5(t *testing.T) {
 		t.Skip("Skipping agreement integration test")
 	}
 
-	consensusVersion := func (r basics.Round) (protocol.ConsensusVersion, error) {
+	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
 		return protocol.ConsensusFuture, nil
 	}
 	simulateAgreementWithConsensusVersion(t, 5, 5, disabled, consensusVersion)
@@ -1011,7 +1011,7 @@ func TestAgreementSynchronousFutureUpgrade(t *testing.T) {
 		t.Skip("Skipping agreement integration test")
 	}
 
-	consensusVersion := func (r basics.Round) (protocol.ConsensusVersion, error) {
+	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
 		if r >= 5 {
 			return protocol.ConsensusFuture, nil
 		}
@@ -2195,7 +2195,6 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 	//}
 	zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(1, version))
 	zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
-
 
 	for i := 0; i < numNodes; i++ {
 		services[i].Shutdown()

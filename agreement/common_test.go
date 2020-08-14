@@ -216,7 +216,7 @@ func makeTestLedger(state map[basics.Address]basics.BalanceRecord) Ledger {
 
 	l.notifications = make(map[basics.Round]signal)
 
-	l.consensusVersion = func (r basics.Round) (protocol.ConsensusVersion, error) {
+	l.consensusVersion = func(r basics.Round) (protocol.ConsensusVersion, error) {
 		return protocol.ConsensusCurrentVersion, nil
 	}
 	return l
