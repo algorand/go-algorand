@@ -27,6 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -91,7 +92,7 @@ var creatablesMigration = []string{
 	`ALTER TABLE assetcreators ADD COLUMN ctype INTEGER DEFAULT 0`,
 }
 
-var storageMigration = []string {
+var storageMigration = []string{
 	`CREATE TABLE IF NOT EXISTS storage (
 		owner blob primary key,
 		aidx integer,
@@ -262,7 +263,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 				return err
 			}
 
-			totals.addAccount(proto, data, &ot)
+			totals.addAccount(proto, apply.AccountData(data).WithoutAppKV(), &ot)
 		}
 
 		if ot.Overflowed {
@@ -527,7 +528,7 @@ func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype bas
 	return
 }
 
-func (qs *accountsDbQueries) lookup(addr basics.Address) (data basics.AccountData, err error) {
+func (qs *accountsDbQueries) lookup(addr basics.Address) (data apply.MiniAccountData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&buf)
@@ -671,42 +672,6 @@ func (qs *accountsDbQueries) close() {
 	}
 }
 
-func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
-	rows, err := tx.Query("SELECT address, data FROM accountbase")
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-
-	bals = make(map[basics.Address]basics.AccountData)
-	for rows.Next() {
-		var addrbuf []byte
-		var buf []byte
-		err = rows.Scan(&addrbuf, &buf)
-		if err != nil {
-			return
-		}
-
-		var data basics.AccountData
-		err = protocol.Decode(buf, &data)
-		if err != nil {
-			return
-		}
-
-		var addr basics.Address
-		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-			return
-		}
-
-		copy(addr[:], addrbuf)
-		bals[addr] = data
-	}
-
-	err = rows.Err()
-	return
-}
-
 func accountsTotals(tx *sql.Tx, catchpointStaging bool) (totals AccountTotals, err error) {
 	id := ""
 	if catchpointStaging {
@@ -736,7 +701,7 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool)
 }
 
 // accountsNewRound updates the accountbase and assetcreators by applying the provided deltas to the accounts / creatables.
-func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creatables map[basics.CreatableIndex]modifiedCreatable) (err error) {
+func accountsNewRound(tx *sql.Tx, updates map[basics.Address]miniAccountDelta, creatables map[basics.CreatableIndex]modifiedCreatable) (err error) {
 
 	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteStmt, replaceStmt *sql.Stmt
 
@@ -794,7 +759,7 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creat
 }
 
 // totalsNewRounds updates the accountsTotals by applying series of round changes
-func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, accountTotals []AccountTotals, protos []config.ConsensusParams) (err error) {
+func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]miniAccountDelta, accountTotals []AccountTotals, protos []config.ConsensusParams) (err error) {
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx, false)
 	if err != nil {

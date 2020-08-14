@@ -8,11 +8,11 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
-// Allocate the map of AppParams if it is nil, and return a copy. We do *not*
-// call clone on each AppParams -- callers must do that for any values where
+// Allocate the map of AppParamsSansKV if it is nil, and return a copy. We do *not*
+// call clone on each AppParamsSansKV -- callers must do that for any values where
 // they intend to modify a contained reference type.
-func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]basics.AppParams {
-	res := make(map[basics.AppIndex]basics.AppParams, len(m))
+func cloneAppParams(m map[basics.AppIndex]AppParamsSansKV) map[basics.AppIndex]AppParamsSansKV {
+	res := make(map[basics.AppIndex]AppParamsSansKV, len(m))
 	for k, v := range m {
 		res[k] = v
 	}
@@ -22,18 +22,18 @@ func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]
 // Allocate the map of LocalStates if it is nil, and return a copy. We do *not*
 // call clone on each AppLocalState -- callers must do that for any values
 // where they intend to modify a contained reference type.
-func cloneAppLocalStates(m map[basics.AppIndex]basics.AppLocalState) map[basics.AppIndex]basics.AppLocalState {
-	res := make(map[basics.AppIndex]basics.AppLocalState, len(m))
+func cloneAppLocalStates(m map[basics.AppIndex]AppLocalStateSansKV) map[basics.AppIndex]AppLocalStateSansKV {
+	res := make(map[basics.AppIndex]AppLocalStateSansKV, len(m))
 	for k, v := range m {
 		res[k] = v
 	}
 	return res
 }
 
-// getAppParams fetches the creator address and AppParams for the app index,
-// if they exist. It does *not* clone the AppParams, so the returned params
+// getAppParams fetches the creator address and AppParamsSansKV for the app index,
+// if they exist. It does *not* clone the AppParamsSansKV, so the returned params
 // must not be modified directly.
-func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppParams, creator basics.Address, exists bool, err error) {
+func getAppParams(balances Balances, aidx basics.AppIndex) (params AppParamsSansKV, creator basics.Address, exists bool, err error) {
 	creator, exists, err = balances.GetCreator(basics.CreatableIndex(aidx), basics.AppCreatable)
 	if err != nil {
 		return
@@ -81,7 +81,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 
 	// Allocate the new app params (+ 1 to match Assets Idx namespace)
 	appIdx = basics.AppIndex(txnCounter + 1)
-	record.AppParams[appIdx] = basics.AppParams{
+	record.AppParams[appIdx] = AppParamsSansKV{
 		ApprovalProgram:   ac.ApprovalProgram,
 		ClearStateProgram: ac.ClearStateProgram,
 		StateSchemas: basics.StateSchemas{
@@ -105,7 +105,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	}
 
 	// Write back to the creator's balance record
-	err = balances.PutWithCreatable(record, created, nil)
+	err = balances.PutWithCreatable(creator, record, created, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -143,7 +143,7 @@ func deleteApplication(balances Balances, creator basics.Address, appIdx basics.
 		Type:    basics.AppCreatable,
 		Index:   basics.CreatableIndex(appIdx),
 	}
-	err = balances.PutWithCreatable(record, nil, deleted)
+	err = balances.PutWithCreatable(creator, record, nil, deleted)
 	if err != nil {
 		return err
 	}
@@ -171,10 +171,10 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	params.ClearStateProgram = ac.ClearStateProgram
 
 	record.AppParams[appIdx] = params
-	return balances.Put(record)
+	return balances.Put(creator, record)
 }
 
-func optInApplication(balances Balances, sender basics.Address, appIdx basics.AppIndex, params basics.AppParams) error {
+func optInApplication(balances Balances, sender basics.Address, appIdx basics.AppIndex, params AppParamsSansKV) error {
 	record, err := balances.Get(sender, false)
 	if err != nil {
 		return err
@@ -194,7 +194,7 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 
 	// Write an AppLocalState, opting in the user
 	record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
-	record.AppLocalStates[appIdx] = basics.AppLocalState{
+	record.AppLocalStates[appIdx] = AppLocalStateSansKV{
 		Schema: params.LocalStateSchema,
 	}
 
@@ -205,7 +205,7 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 	record.TotalAppSchema = totalSchema
 
 	// Write opted-in user back to cow
-	err = balances.Put(record)
+	err = balances.Put(sender, record)
 	if err != nil {
 		return err
 	}
@@ -243,7 +243,7 @@ func closeOutApplication(balances Balances, sender basics.Address, appIdx basics
 	delete(record.AppLocalStates, appIdx)
 
 	// Write closed-out user back to cow
-	err = balances.Put(record)
+	err = balances.Put(sender, record)
 	if err != nil {
 		return err
 	}

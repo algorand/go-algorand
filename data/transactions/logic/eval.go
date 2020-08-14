@@ -132,11 +132,11 @@ type LedgerForLogic interface {
 	ApplicationID() basics.AppIndex
 	OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error)
 
-	GetLocal(addr basics.Address, appIdx basics.AppIndex, key string) (basics.TealValue, bool, error)
+	GetLocal(addr basics.Address, appIdx basics.AppIndex, key string) (value basics.TealValue, exists bool, err error)
 	SetLocal(addr basics.Address, key string, value basics.TealValue) error
 	DelLocal(addr basics.Address, key string) error
 
-	GetGlobal(appIdx basics.AppIndex, key string) (basics.TealValue, bool, error)
+	GetGlobal(appIdx basics.AppIndex, key string) (value basics.TealValue, exists bool, err error)
 	SetGlobal(key string, value basics.TealValue) error
 	DelGlobal(key string) error
 }

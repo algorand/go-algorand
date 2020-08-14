@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/logging"
 )
 
@@ -404,28 +405,55 @@ func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) 
 // Lookup uses the accounts tracker to return the account state for a
 // given account in a particular round.  The account values reflect
 // the changes of all blocks up to and including rnd.
+//
+// Note: Lookup will omit application key-value pairs.  To get the
+// all application key-value pairs corresponding to an account, call
+// FullLookup.
 func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+	mini, err := l.lookup(rnd, addr)
+	if err != nil {
+		return basics.AccountData{}, err
+	}
+	return mini.ToAccountData(), nil
+}
+
+// LookupWithoutRewards is like Lookup but does not apply pending rewards up
+// to the requested round rnd.
+//
+// Note: LookupWithoutRewards will omit application key-value pairs.
+func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+	mini, err := l.lookupWithoutRewards(rnd, addr)
+	if err != nil {
+		return basics.AccountData{}, err
+	}
+	return mini.ToAccountData(), nil
+}
+
+// lookup uses the accounts tracker to return the account state for a
+// given account in a particular round.  The account values reflect
+// the changes of all blocks up to and including rnd.
+func (l *Ledger) lookup(rnd basics.Round, addr basics.Address) (apply.MiniAccountData, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
 	data, err := l.accts.Lookup(rnd, addr, true)
 	if err != nil {
-		return basics.AccountData{}, err
+		return apply.MiniAccountData{}, err
 	}
 
 	return data, nil
 }
 
-// LookupWithoutRewards is like Lookup but does not apply pending rewards up
+// lookupWithoutRewards is like lookup but does not apply pending rewards up
 // to the requested round rnd.
-func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+func (l *Ledger) lookupWithoutRewards(rnd basics.Round, addr basics.Address) (apply.MiniAccountData, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
 	data, err := l.accts.Lookup(rnd, addr, false)
 	if err != nil {
-		return basics.AccountData{}, err
+		return apply.MiniAccountData{}, err
 	}
 
 	return data, nil

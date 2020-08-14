@@ -21,6 +21,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/apply"
 )
 
 //   ___________________
@@ -33,7 +34,7 @@ import (
 //                  ||     ||
 
 type roundCowParent interface {
-	lookup(basics.Address) (basics.AccountData, error)
+	lookup(basics.Address) (apply.MiniAccountData, error)
 	isDup(basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
@@ -55,10 +56,16 @@ type addrApp struct {
 	global bool
 }
 
+// miniAccountDelta is like accountDelta, but it omits key-value stores.
+type miniAccountDelta struct {
+	old apply.MiniAccountData
+	new apply.MiniAccountData
+}
+
 // StateDelta describes the delta between a given round to the previous round
 type StateDelta struct {
 	// modified accounts
-	accts map[basics.Address]accountDelta
+	accts map[basics.Address]miniAccountDelta
 
 	// new Txids for the txtail and TxnCounter, mapped to txn.LastValid
 	Txids map[transactions.Txid]basics.Round
@@ -85,7 +92,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimest
 		commitParent: nil,
 		proto:        config.Consensus[hdr.CurrentProtocol],
 		mods: StateDelta{
-			accts:         make(map[basics.Address]accountDelta),
+			accts:         make(map[basics.Address]miniAccountDelta),
 			Txids:         make(map[transactions.Txid]basics.Round),
 			txleases:      make(map[txlease]basics.Round),
 			creatables:    make(map[basics.CreatableIndex]modifiedCreatable),
@@ -111,7 +118,7 @@ func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.Cre
 	return cb.lookupParent.getCreator(cidx, ctype)
 }
 
-func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, err error) {
+func (cb *roundCowState) lookup(addr basics.Address) (data apply.MiniAccountData, err error) {
 	d, ok := cb.mods.accts[addr]
 	if ok {
 		return d.new, nil
@@ -140,12 +147,12 @@ func (cb *roundCowState) txnCounter() uint64 {
 	return cb.lookupParent.txnCounter() + uint64(len(cb.mods.Txids))
 }
 
-func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) {
+func (cb *roundCowState) put(addr basics.Address, old apply.MiniAccountData, new apply.MiniAccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) {
 	prev, present := cb.mods.accts[addr]
 	if present {
-		cb.mods.accts[addr] = accountDelta{old: prev.old, new: new}
+		cb.mods.accts[addr] = miniAccountDelta{old: prev.old, new: new}
 	} else {
-		cb.mods.accts[addr] = accountDelta{old: old, new: new}
+		cb.mods.accts[addr] = miniAccountDelta{old: old, new: new}
 	}
 
 	if newCreatable != nil {
@@ -176,7 +183,7 @@ func (cb *roundCowState) child() *roundCowState {
 		commitParent: cb,
 		proto:        cb.proto,
 		mods: StateDelta{
-			accts:         make(map[basics.Address]accountDelta),
+			accts:         make(map[basics.Address]miniAccountDelta),
 			Txids:         make(map[transactions.Txid]basics.Round),
 			txleases:      make(map[txlease]basics.Round),
 			creatables:    make(map[basics.CreatableIndex]modifiedCreatable),
@@ -191,7 +198,7 @@ func (cb *roundCowState) commitToParent() {
 	for addr, delta := range cb.mods.accts {
 		prev, present := cb.commitParent.mods.accts[addr]
 		if present {
-			cb.commitParent.mods.accts[addr] = accountDelta{
+			cb.commitParent.mods.accts[addr] = miniAccountDelta{
 				old: prev.old,
 				new: delta.new,
 			}

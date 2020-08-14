@@ -28,11 +28,11 @@ import (
 type DeltaAction uint64
 
 const (
-	// SetUintAction indicates that a Uint should be stored at a key
-	SetUintAction DeltaAction = 1
-
 	// SetBytesAction indicates that a TEAL byte slice should be stored at a key
-	SetBytesAction DeltaAction = 2
+	SetBytesAction DeltaAction = 1
+
+	// SetUintAction indicates that a Uint should be stored at a key
+	SetUintAction DeltaAction = 2
 
 	// DeleteAction indicates that the value for a particular key should be deleted
 	DeleteAction DeltaAction = 3

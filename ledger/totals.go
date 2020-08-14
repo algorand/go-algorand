@@ -19,6 +19,7 @@ package ledger
 import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/logging"
 )
 
@@ -68,14 +69,14 @@ func (at *AccountTotals) statusField(status basics.Status) *AlgoCount {
 	}
 }
 
-func (at *AccountTotals) addAccount(proto config.ConsensusParams, data basics.AccountData, ot *basics.OverflowTracker) {
+func (at *AccountTotals) addAccount(proto config.ConsensusParams, data apply.MiniAccountData, ot *basics.OverflowTracker) {
 	sum := at.statusField(data.Status)
 	algos, _ := data.Money(proto, at.RewardsLevel)
 	sum.Money = ot.AddA(sum.Money, algos)
 	sum.RewardUnits = ot.Add(sum.RewardUnits, data.MicroAlgos.RewardUnits(proto))
 }
 
-func (at *AccountTotals) delAccount(proto config.ConsensusParams, data basics.AccountData, ot *basics.OverflowTracker) {
+func (at *AccountTotals) delAccount(proto config.ConsensusParams, data apply.MiniAccountData, ot *basics.OverflowTracker) {
 	sum := at.statusField(data.Status)
 	algos, _ := data.Money(proto, at.RewardsLevel)
 	sum.Money = ot.SubA(sum.Money, algos)

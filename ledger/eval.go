@@ -67,8 +67,8 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 	return x.l.GetCreatorForRound(x.rnd, cidx, ctype)
 }
 
-func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
-	return x.l.LookupWithoutRewards(x.rnd, addr)
+func (x *roundCowBase) lookup(addr basics.Address) (apply.MiniAccountData, error) {
+	return x.l.lookupWithoutRewards(x.rnd, addr)
 }
 
 func (x *roundCowBase) isDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
@@ -80,7 +80,7 @@ func (x *roundCowBase) txnCounter() uint64 {
 }
 
 func (x *roundCowBase) Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
-	acct, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	acct, err := x.l.lookupWithoutRewards(x.rnd, addr)
 	if err != nil {
 		return false, err
 	}
@@ -104,32 +104,32 @@ func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppInde
 	return x.l.CountStorageForRound(x.rnd, addr, aidx, global)
 }
 
-// wrappers for roundCowState to satisfy the (current) transactions.Balances interface
-func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
-	acctdata, err := cs.lookup(addr)
+// wrappers for roundCowState to satisfy the (current) apply.Balances interface
+func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (apply.MiniAccountData, error) {
+	acct, err := cs.lookup(addr)
 	if err != nil {
-		return basics.BalanceRecord{}, err
+		return apply.MiniAccountData{}, err
 	}
 	if withPendingRewards {
-		acctdata = acctdata.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
+		acct = acct.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
 	}
-	return basics.BalanceRecord{Addr: addr, AccountData: acctdata}, nil
+	return acct, nil
 }
 
 func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return cs.getCreator(cidx, ctype)
 }
 
-func (cs *roundCowState) Put(record basics.BalanceRecord) error {
-	return cs.PutWithCreatable(record, nil, nil)
+func (cs *roundCowState) Put(addr basics.Address, acct apply.MiniAccountData) error {
+	return cs.PutWithCreatable(addr, acct, nil, nil)
 }
 
-func (cs *roundCowState) PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
-	olddata, err := cs.lookup(record.Addr)
+func (cs *roundCowState) PutWithCreatable(addr basics.Address, acct apply.MiniAccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
+	olddata, err := cs.lookup(addr)
 	if err != nil {
 		return err
 	}
-	cs.put(record.Addr, olddata, record.AccountData, newCreatable, deletedCreatable)
+	cs.put(addr, olddata, acct, newCreatable, deletedCreatable)
 	return nil
 }
 
@@ -208,10 +208,10 @@ type BlockEvaluator struct {
 type ledgerForEvaluator interface {
 	GenesisHash() crypto.Digest
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	Lookup(basics.Round, basics.Address) (basics.AccountData, error)
+	lookup(basics.Round, basics.Address) (apply.MiniAccountData, error)
 	Totals(basics.Round) (AccountTotals, error)
 	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
-	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
+	lookupWithoutRewards(basics.Round, basics.Address) (apply.MiniAccountData, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 	GetKeyForRound(basics.Round, basics.Address, basics.AppIndex, bool, string) (basics.TealValue, bool, error)
 	CountStorageForRound(basics.Round, basics.Address, basics.AppIndex, bool) (basics.StateSchema, error)
@@ -275,7 +275,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 	}
 
 	poolAddr := eval.prevHeader.RewardsPool
-	incentivePoolData, err := l.Lookup(eval.prevHeader.Round, poolAddr)
+	incentivePoolData, err := l.lookup(eval.prevHeader.Round, poolAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +332,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		return nil, fmt.Errorf("overflowed subtracting reward unit for block %v", hdr.Round)
 	}
 
-	err = eval.state.Put(poolNew)
+	err = eval.state.Put(poolAddr, poolNew)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +349,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 
 // hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
 // hotfix for testnet stall 11/07/2019; do the same thing
-func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.BalanceRecord, headerRound basics.Round) (poolOld basics.BalanceRecord, err error) {
+func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance apply.MiniAccountData, headerRound basics.Round) (poolOld apply.MiniAccountData, err error) {
 	// verify that we patch the correct round.
 	if headerRound != 1499995 && headerRound != 2926564 {
 		return rewardPoolBalance, nil
@@ -717,20 +717,20 @@ func applyTransaction(tx transactions.Transaction, balances apply.Balances, eval
 
 	// rekeying: update balrecord.AuthAddr to tx.RekeyTo if provided
 	if (tx.RekeyTo != basics.Address{}) {
-		var record basics.BalanceRecord
-		record, err = balances.Get(tx.Sender, false)
+		var acct apply.MiniAccountData
+		acct, err = balances.Get(tx.Sender, false)
 		if err != nil {
 			return
 		}
-		// Special case: rekeying to the account's actual address just sets balrecord.AuthAddr to 0
+		// Special case: rekeying to the account's actual address just sets acct.AuthAddr to 0
 		// This saves 32 bytes in your balance record if you want to go back to using your original key
 		if tx.RekeyTo == tx.Sender {
-			record.AuthAddr = basics.Address{}
+			acct.AuthAddr = basics.Address{}
 		} else {
-			record.AuthAddr = tx.RekeyTo
+			acct.AuthAddr = tx.RekeyTo
 		}
 
-		err = balances.Put(record)
+		err = balances.Put(tx.Sender, acct)
 		if err != nil {
 			return
 		}

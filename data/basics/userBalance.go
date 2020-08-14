@@ -94,7 +94,8 @@ func UnmarshalStatus(value string) (s Status, err error) {
 
 // AccountData contains the data associated with a given address.
 //
-// This includes the account balance, delegation keys, delegation status, and a custom note.
+// This includes the account balance, cryptographic public keys,
+// consensus delegation status, asset data, and application data.
 type AccountData struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 

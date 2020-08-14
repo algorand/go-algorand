@@ -37,6 +37,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -66,7 +67,7 @@ var trieCachedNodesCount = 9000
 type modifiedAccount struct {
 	// data stores the most recent AccountData for this modified
 	// account.
-	data basics.AccountData
+	data apply.MiniAccountData
 
 	// ndelta keeps track of how many times this account appears in
 	// accountUpdates.deltas.  This is used to evict modifiedAccount
@@ -175,7 +176,7 @@ type accountUpdates struct {
 	dbRound basics.Round
 
 	// deltas stores updates for every round after dbRound.
-	deltas []map[basics.Address]accountDelta
+	deltas []map[basics.Address]miniAccountDelta
 
 	// accounts stores the most recent account state for every
 	// address that appears in deltas.
@@ -333,7 +334,7 @@ func (au *accountUpdates) close() {
 // Lookup returns the accound data for a given address at a given round. The withRewards indicates whether the
 // rewards should be added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it could return the AccoutData which represent the "rewarded" account data.
-func (au *accountUpdates) Lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
+func (au *accountUpdates) Lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data apply.MiniAccountData, err error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 	return au.lookupImpl(rnd, addr, withRewards)
@@ -659,7 +660,7 @@ func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.
 }
 
 // Lookup returns the account balance for a given address at a given round
-func (aul *accountUpdatesLedgerEvaluator) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+func (aul *accountUpdatesLedgerEvaluator) lookup(rnd basics.Round, addr basics.Address) (apply.MiniAccountData, error) {
 	return aul.au.lookupImpl(rnd, addr, true)
 }
 
@@ -674,8 +675,8 @@ func (aul *accountUpdatesLedgerEvaluator) isDup(config.ConsensusParams, basics.R
 	return false, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initilization ")
 }
 
-// LookupWithoutRewards returns the account balance for a given address at a given round, without the reward
-func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+// lookupWithoutRewards returns the account balance for a given address at a given round, without the reward
+func (aul *accountUpdatesLedgerEvaluator) lookupWithoutRewards(rnd basics.Round, addr basics.Address) (apply.MiniAccountData, error) {
 	return aul.au.lookupImpl(rnd, addr, false)
 }
 
@@ -1277,7 +1278,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 // lookupImpl returns the accound data for a given address at a given round. The withRewards indicates whether the
 // rewards should be added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it could return the AccoutData which represent the "rewarded" account data.
-func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
+func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, withRewards bool) (data apply.MiniAccountData, err error) {
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return
@@ -1519,7 +1520,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+dbRound))) % au.catchpointInterval))
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
-	deltas := make([]map[basics.Address]accountDelta, offset, offset)
+	deltas := make([]map[basics.Address]miniAccountDelta, offset, offset)
 	creatableDeltas := make([]map[basics.CreatableIndex]modifiedCreatable, offset, offset)
 	storageDeltas := make([]map[addrApp]*storageDelta, offset, offset)
 	roundTotals := make([]AccountTotals, offset+1, offset+1)
@@ -1605,10 +1606,13 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			return err
 		}
 
-		err = au.accountsUpdateBalances(deltas, offset)
-		if err != nil {
-			return err
-		}
+		// TODO must reconstitute deltas correctly here
+		// note: is it ever true that accountdata is missing where a kv delta exists,
+		// which would prevent this reconstitution?
+		// err = au.accountsUpdateBalances(deltas, offset)
+		// if err != nil {
+		// 	return err
+		// }
 
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
 		if err != nil {

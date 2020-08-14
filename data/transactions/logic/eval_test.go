@@ -1235,7 +1235,7 @@ func TestGlobal(t *testing.T) {
 		2: {
 			CurrentApplicationID, globalV1TestProgram + globalV2TestProgram,
 			func(p []byte, ep EvalParams) (bool, error) {
-				pass, _, err := EvalStateful(p, ep)
+				pass, err := EvalStateful(p, ep)
 				return pass, err
 			},
 			func(program []byte, ep EvalParams) (int, error) { return CheckStateful(program, ep) },
@@ -3699,7 +3699,7 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
 
-		_, _, err = EvalStateful(program, ep)
+		_, err = EvalStateful(program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
 	}
@@ -3710,7 +3710,7 @@ func TestApplicationsDisallowOldTeal(t *testing.T) {
 	_, err = CheckStateful(program, ep)
 	require.NoError(t, err)
 
-	_, _, err = EvalStateful(program, ep)
+	_, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 }
 
@@ -3771,7 +3771,7 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), expected)
 
-				_, _, err = EvalStateful(program, ep)
+				_, err = EvalStateful(program, ep)
 				require.Error(t, err)
 				require.Contains(t, err.Error(), expected)
 
@@ -3792,7 +3792,7 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 				_, err = CheckStateful(program, ep)
 				require.NoError(t, err)
 
-				_, _, err = EvalStateful(program, ep)
+				_, err = EvalStateful(program, ep)
 				require.NoError(t, err)
 
 				_, err = Check(program, ep)
@@ -3854,7 +3854,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 			// all opcodes allowed in stateful mode so use CheckStateful/EvalStateful
 			_, err = CheckStateful(program, ep)
 			require.NoError(t, err, source)
-			_, _, err = EvalStateful(program, ep)
+			_, err = EvalStateful(program, ep)
 			if spec.Name != "return" {
 				// "return" opcode is always succeed so ignore it
 				require.Error(t, err, source)
@@ -3872,7 +3872,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 				_, err = Eval(program, ep)
 				require.Error(t, err, source)
 				require.Contains(t, err.Error(), "illegal opcode")
-				_, _, err = EvalStateful(program, ep)
+				_, err = EvalStateful(program, ep)
 				require.Error(t, err, source)
 				require.Contains(t, err.Error(), "illegal opcode")
 			}

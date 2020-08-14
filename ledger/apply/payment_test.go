@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -84,19 +85,31 @@ func (balances mockBalances) Round() basics.Round {
 	return basics.Round(8675309)
 }
 
-func (balances mockBalances) PutWithCreatable(basics.BalanceRecord, *basics.CreatableLocator, *basics.CreatableLocator) error {
+func (balances mockBalances) Allocate(basics.Address, basics.AppIndex, bool) error {
 	return nil
 }
 
-func (balances mockBalances) Get(basics.Address, bool) (basics.BalanceRecord, error) {
-	return basics.BalanceRecord{}, nil
+func (balances mockBalances) Deallocate(basics.Address, basics.AppIndex, bool) error {
+	return nil
+}
+
+func (balances mockBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []byte) (bool, basics.EvalDelta, error) {
+	return false, basics.EvalDelta{}, nil
+}
+
+func (balances mockBalances) PutWithCreatable(basics.Address, MiniAccountData, *basics.CreatableLocator, *basics.CreatableLocator) error {
+	return nil
+}
+
+func (balances mockBalances) Get(basics.Address, bool) (MiniAccountData, error) {
+	return MiniAccountData{}, nil
 }
 
 func (balances mockBalances) GetCreator(idx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return basics.Address{}, true, nil
 }
 
-func (balances mockBalances) Put(basics.BalanceRecord) error {
+func (balances mockBalances) Put(basics.Address, MiniAccountData) error {
 	return nil
 }
 

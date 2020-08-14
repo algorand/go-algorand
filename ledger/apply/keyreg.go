@@ -66,7 +66,7 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 	}
 
 	// Write the updated entry
-	err = balances.Put(record)
+	err = balances.Put(header.Sender, record)
 	if err != nil {
 		return err
 	}

@@ -25,22 +25,33 @@ import (
 // Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records
 // After a call to Put (or Move), future calls to Get or Move will reflect the updated balance record(s)
 type Balances interface {
-	// Get looks up the balance record for an address
+	// Get looks up the account data for an address, ignoring application state
 	// If the account is known to be empty, then err should be nil and the returned balance record should have the given address and empty AccountData
 	// withPendingRewards specifies whether pending rewards should be applied.
 	// A non-nil error means the lookup is impossible (e.g., if the database doesn't have necessary state anymore)
-	Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error)
+	Get(addr basics.Address, withPendingRewards bool) (MiniAccountData, error)
 
-	Put(basics.BalanceRecord) error
+	Put(basics.Address, MiniAccountData) error
 
 	// PutWithCreatable is like Put, but should be used when creating or deleting an asset or application.
-	PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error
+	PutWithCreatable(addr basics.Address, acct MiniAccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error
 
 	// GetCreator gets the address of the account that created a given creatable
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 
+	// Allocate or Deallocate either global or address-local app storage.
+	//
+	// PutWithCreatable(...) and then {Allocate/Deallocate}(..., ..., global=true)
+	// creates/destroys an application.
+	//
+	// Put(...) and then {Allocate/Deallocate}(..., ..., global=false)
+	// opts into/closes out of an application.
 	Allocate(addr basics.Address, aidx basics.AppIndex, global bool) error
 	Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error
+
+	// StatefulEval executes a TEAL program in stateful mode on the balances.
+	// It returns whether the program passed and its error.  It alo returns
+	// an EvalDelta that contains the changes made by the program.
 	StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta basics.EvalDelta, err error)
 
 	// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
