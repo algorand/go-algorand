@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                               9,
+	Version:                               10,
 	AnnounceParticipationKey:              true,
 	Archival:                              false,
 	BaseLoggerDebugLevel:                  4,
@@ -71,6 +71,7 @@ var defaultLocal = Local{
 	NetworkProtocolVersion:                "",
 	NodeExporterListenAddress:             ":9100",
 	NodeExporterPath:                      "./node_exporter",
+	OptimizeAccountsDatabaseOnStartup:     false,
 	OutgoingMessageFilterBucketCount:      3,
 	OutgoingMessageFilterBucketSize:       128,
 	PeerConnectionsUpdateInterval:         3600,

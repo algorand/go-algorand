@@ -181,7 +181,7 @@ A number of packages provide utilities for the various components:
   - `util` contains a variety of utilities, including a codec, a sqlite wrapper,
     a goroutine pool, a timer interface, node metrics, and more.
 
-`test` contains end-to-end tests for the above components.
+`test` ([README](test/README.md)) contains end-to-end tests and utilities for the above components.
 
 
 ## License
