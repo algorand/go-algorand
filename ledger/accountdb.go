@@ -94,14 +94,14 @@ var creatablesMigration = []string{
 
 var storageMigration = []string{
 	`CREATE TABLE IF NOT EXISTS storage (
-		owner blob primary key,
+		owner blob,
 		aidx integer,
 		global boolean,
 		key blob,
 		vtype integer,
 		venc blob,
-		UNIQUE(owner, aidx, global, key)
-	)`,
+		PRIMARY KEY(owner, aidx, global, key)
+	)`, // TODO WITHOUT ROWID?
 }
 
 var accountsResetExprs = []string{
@@ -122,6 +122,104 @@ var accountDBVersion = int32(3)
 type accountDelta struct {
 	old basics.AccountData
 	new basics.AccountData
+}
+
+func (delta accountDelta) applyMiniDelta(mini miniAccountDelta) (accountDelta, error) {
+	// TODO sanity check?
+	// newMini := apply.AccountData(delta.new).WithoutAppKV()
+	// if !newMini.Equals(mini.old) {
+	// 	return accountDelta{}, fmt.Errorf("newMini != mini.old: %+v != %+v", newMini, mini.old)
+	// }
+	delta.new = apply.AccountData(delta.new).Set(mini.new)
+	return delta, nil
+}
+
+func (delta accountDelta) applyStorageDelta(aapp addrApp, store *storageDelta) (accountDelta, error) {
+	data := delta.new
+	if aapp.global {
+		owned := make(map[basics.AppIndex]basics.AppParams, len(data.AppParams))
+		for k, v := range data.AppParams {
+			owned[k] = v
+		}
+
+		switch store.action {
+		case deallocAction:
+			delete(owned, aapp.aidx)
+		case allocAction, remainAllocAction:
+			// TODO encapsulate this in some kind of application function
+			// TODO verify this assertion
+			// note: these should always exist because they were
+			// at least preceded by a call to PutWithCreatable???
+			params, ok := owned[aapp.aidx]
+			if !ok {
+				return accountDelta{}, fmt.Errorf("could not find existing params for %v", aapp.aidx)
+			}
+			params = params.Clone()
+			// note: if this is an allocAction, there will be no
+			// DeleteActions below
+			for k, v := range store.kvCow {
+				switch v.Action {
+				case basics.DeleteAction:
+					delete(params.GlobalState, k)
+				case basics.SetUintAction:
+					params.GlobalState[k] = basics.TealValue{
+						Type: basics.TealUintType,
+						Uint: v.Uint,
+					}
+				case basics.SetBytesAction:
+					params.GlobalState[k] = basics.TealValue{
+						Type:  basics.TealBytesType,
+						Bytes: v.Bytes,
+					}
+				}
+			}
+			owned[aapp.aidx] = params
+		}
+
+		delta.new.AppParams = owned
+
+	} else {
+		owned := make(map[basics.AppIndex]basics.AppLocalState, len(data.AppLocalStates))
+		for k, v := range data.AppLocalStates {
+			owned[k] = v
+		}
+
+		switch store.action {
+		case deallocAction:
+			delete(owned, aapp.aidx)
+		case allocAction, remainAllocAction:
+			// TODO verify this assertion
+			// note: these should always exist because they were
+			// at least preceded by a call to Put???
+			states, ok := owned[aapp.aidx]
+			if !ok {
+				return accountDelta{}, fmt.Errorf("could not find existing states for %v", aapp.aidx)
+			}
+			states = states.Clone()
+			// note: if this is an allocAction, there will be no
+			// DeleteActions below
+			for k, v := range store.kvCow {
+				switch v.Action {
+				case basics.DeleteAction:
+					delete(states.KeyValue, k)
+				case basics.SetUintAction:
+					states.KeyValue[k] = basics.TealValue{
+						Type: basics.TealUintType,
+						Uint: v.Uint,
+					}
+				case basics.SetBytesAction:
+					states.KeyValue[k] = basics.TealValue{
+						Type:  basics.TealBytesType,
+						Bytes: v.Bytes,
+					}
+				}
+			}
+			owned[aapp.aidx] = states
+		}
+
+		delta.new.AppLocalStates = owned
+	}
+	return delta, nil
 }
 
 // catchpointState is used to store catchpoint related varaibles into the catchpointstate table.

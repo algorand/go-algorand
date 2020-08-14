@@ -209,6 +209,39 @@ func (u AccountData) WithoutAppKV() (res MiniAccountData) {
 	return
 }
 
+func (u AccountData) Set(mini MiniAccountData) (res basics.AccountData) {
+	res.Status = mini.Status
+	res.MicroAlgos = mini.MicroAlgos
+	res.RewardsBase = mini.RewardsBase
+	res.RewardedMicroAlgos = mini.RewardedMicroAlgos
+	res.VoteID = mini.VoteID
+	res.SelectionID = mini.SelectionID
+	res.VoteFirstValid = mini.VoteFirstValid
+	res.VoteLastValid = mini.VoteLastValid
+	res.VoteKeyDilution = mini.VoteKeyDilution
+	res.AssetParams = mini.AssetParams
+	res.Assets = mini.Assets
+	res.AuthAddr = mini.AuthAddr
+	res.TotalAppSchema = mini.TotalAppSchema
+
+	// TODO what if a deletion happens here? or creation? does this still work?
+	res.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, len(mini.AppLocalStates))
+	for k, v := range mini.AppLocalStates {
+		state := v.ToAppLocalState()
+		state.KeyValue = u.AppLocalStates[k].KeyValue
+		res.AppLocalStates[k] = state
+	}
+
+	res.AppParams = make(map[basics.AppIndex]basics.AppParams, len(mini.AppParams))
+	for k, v := range mini.AppParams {
+		params := v.ToAppParams()
+		params.GlobalState = u.AppParams[k].GlobalState
+		res.AppParams[k] = params
+	}
+
+	return
+}
+
 func (u MiniAccountData) ToAccountData() (res basics.AccountData) {
 	res.Status = u.Status
 	res.MicroAlgos = u.MicroAlgos

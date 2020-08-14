@@ -1546,6 +1546,40 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	au.accountsMu.RUnlock()
 
+	// accountUpdates stores account and app deltas separately, but
+	// catchpoints expect unified deltas, keyed off of address.
+	// Unify the deltas here.
+	fullDeltas := make([]map[basics.Address]accountDelta, len(deltas))
+	for i, rndDelta := range deltas {
+		fullRndDelta := make(map[basics.Address]accountDelta, len(rndDelta))
+		for addr, mini := range rndDelta {
+			old := au.fullLookup(dbRound+basics.Round(i), addr)
+			delta := accountDelta{old: old, new: old}
+			delta, err := delta.applyMiniDelta(mini)
+			if err != nil {
+				au.log.Warnf("commitRound: unable to apply mini delta: %v", err)
+				return
+			}
+			fullRndDelta[addr] = delta
+		}
+	}
+	for i, rndDelta := range storageDeltas {
+		for aapp, storeDelta := range rndDelta {
+			addr := aapp.addr
+			delta, ok := fullDeltas[i][addr]
+			if !ok {
+				old := au.fullLookup(dbRound+basics.Round(i), addr)
+				delta = accountDelta{old: old, new: old}
+			}
+			delta, err := delta.applyStorageDelta(aapp, storeDelta)
+			if err != nil {
+				au.log.Warnf("commitRound: unable to apply storage delta: %v", err)
+				return
+			}
+			fullDeltas[i][addr] = delta
+		}
+	}
+
 	// in committedUpTo, we expect that this function we close the catchpointWriting when
 	// it's on a catchpoint round and it's an archival ledger. Doing this in a defered function
 	// here would prevent us from "forgetting" to close that channel later on.
@@ -1606,13 +1640,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			return err
 		}
 
-		// TODO must reconstitute deltas correctly here
-		// note: is it ever true that accountdata is missing where a kv delta exists,
-		// which would prevent this reconstitution?
-		// err = au.accountsUpdateBalances(deltas, offset)
-		// if err != nil {
-		// 	return err
-		// }
+		err = au.accountsUpdateBalances(fullDeltas, offset)
+		if err != nil {
+			return err
+		}
 
 		err = updateAccountsRound(tx, dbRound+basics.Round(offset), treeTargetRound)
 		if err != nil {
