@@ -28,8 +28,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-type selectionParameterFn func(addr basics.Address) (bool, basics.BalanceRecord, Seed, basics.MicroAlgos)
-type selectionParameterListFn func(addr []basics.Address) (bool, []basics.BalanceRecord, Seed, basics.MicroAlgos)
+type selectionParameterFn func(addr basics.Address) (bool, BalanceRecord, Seed, basics.MicroAlgos)
+type selectionParameterListFn func(addr []basics.Address) (bool, []BalanceRecord, Seed, basics.MicroAlgos)
 
 var proto = config.Consensus[protocol.ConsensusCurrentVersion]
 
@@ -119,18 +119,18 @@ func testingenvMoreKeys(t testing.TB, numAccounts, numTxs int, keyBatchesForward
 		tx[i] = t.Sign(secrets[send])
 	}
 
-	selParams := func(addr basics.Address) (bool, basics.BalanceRecord, Seed, basics.MicroAlgos) {
+	selParams := func(addr basics.Address) (bool, BalanceRecord, Seed, basics.MicroAlgos) {
 		data, ok := genesis[addr]
 		if !ok {
-			return false, basics.BalanceRecord{}, Seed{}, basics.MicroAlgos{Raw: 0}
+			return false, BalanceRecord{}, Seed{}, basics.MicroAlgos{Raw: 0}
 		}
-		return true, basics.BalanceRecord{Addr: addr, AccountData: data}, seed, total
+		return true, BalanceRecord{Addr: addr, AccountData: data}, seed, total
 	}
 
-	selParamsList := func(addrs []basics.Address) (ok bool, records []basics.BalanceRecord, seed Seed, total basics.MicroAlgos) {
-		records = make([]basics.BalanceRecord, len(addrs))
+	selParamsList := func(addrs []basics.Address) (ok bool, records []BalanceRecord, seed Seed, total basics.MicroAlgos) {
+		records = make([]BalanceRecord, len(addrs))
 		for i, addr := range addrs {
-			var record basics.BalanceRecord
+			var record BalanceRecord
 			ok, record, seed, total = selParams(addr)
 			if !ok {
 				return false, nil, Seed{}, basics.MicroAlgos{Raw: 0}

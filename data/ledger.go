@@ -186,17 +186,9 @@ func (l *Ledger) NextRound() basics.Round {
 	return l.LastRound() + 1
 }
 
-// BalanceRecord implements Ledger.BalanceRecord. It applies pending rewards to returned amounts.
-func (l *Ledger) BalanceRecord(r basics.Round, addr basics.Address) (basics.BalanceRecord, error) {
-	data, err := l.Lookup(r, addr)
-	if err != nil {
-		return basics.BalanceRecord{}, err
-	}
-
-	return basics.BalanceRecord{
-		Addr:        addr,
-		AccountData: data,
-	}, nil
+// AccountData implements agreement.Ledger.AccountData. It applies pending rewards to returned amounts.
+func (l *Ledger) AccountData(r basics.Round, addr basics.Address) (basics.AccountData, error) {
+	return l.Lookup(r, addr)
 }
 
 // Circulation implements agreement.Ledger.Circulation.
