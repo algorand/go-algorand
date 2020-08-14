@@ -800,6 +800,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 1 : %v", err)
 					return 0, err
 				}
+			case 2:
+				dbVersion, err = au.upgradeDatabaseSchema2(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 2 : %v", err)
+					return 0, err
+				}
 			default:
 				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
 			}
@@ -1017,6 +1023,23 @@ func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx
 		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 1 to 2: %v", err)
 	}
 	return 2, nil
+}
+
+// upgradeDatabaseSchema2 upgrades the database schema from version 2 to version 3
+//
+// This upgrade only enables the database vacuuming which will take place once the upgrade process is complete.
+// If the user has already specified the OptimizeAccountsDatabaseOnStartup flag in the configuration file, this
+// step becomes a no-op.
+//
+func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+	au.vacuumOnStartup = true
+
+	// update version
+	_, err = db.SetUserVersion(ctx, tx, 3)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 2 to 3: %v", err)
+	}
+	return 3, nil
 }
 
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
