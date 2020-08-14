@@ -29,7 +29,10 @@ if { [catch {
 
     source  /expectdir/goalExpectCommon.exp
 
-   # Create network
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start network
     ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
 
     set TEST_ROOT_DIR_LS_OUTPUT [ eval exec ls $TEST_ROOT_DIR ]

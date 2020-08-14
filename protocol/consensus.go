@@ -128,6 +128,11 @@ const ConsensusV23 = ConsensusVersion(
 	"https://github.com/algorandfoundation/specs/tree/e5f565421d720c6f75cdd186f7098495caf9101f",
 )
 
+// ConsensusV24 include the applications, rekeying and teal v2
+const ConsensusV24 = ConsensusVersion(
+	"https://github.com/algorandfoundation/specs/tree/3a83c4c743f8b17adfd73944b4319c25722a6782",
+)
+
 // ConsensusFuture is a protocol that should not appear in any production
 // network, but is used to test features before they are released.
 const ConsensusFuture = ConsensusVersion(
@@ -140,7 +145,7 @@ const ConsensusFuture = ConsensusVersion(
 
 // ConsensusCurrentVersion is the latest version and should be used
 // when a specific version is not provided.
-const ConsensusCurrentVersion = ConsensusV23
+const ConsensusCurrentVersion = ConsensusV24
 
 // Error is used to indicate that an unsupported protocol has been detected.
 type Error ConsensusVersion

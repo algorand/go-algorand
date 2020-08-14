@@ -22,7 +22,7 @@ set FILE_COUNTER 1
 proc TestLastValidInTx { CMD TX_FILE EXPECTED_LAST_VALID } {
     set PASSED 0
     set LAST_VALID 0
-    set timeout 5
+    set timeout 60
 
     eval spawn $CMD
     expect
@@ -46,6 +46,9 @@ proc TestLastValidInTx { CMD TX_FILE EXPECTED_LAST_VALID } {
 
 if { [catch {
     # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start network
     ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
 
     # use goal node status command to wait for round 0

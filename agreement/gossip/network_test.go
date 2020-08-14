@@ -18,6 +18,7 @@ package gossip
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -152,6 +153,9 @@ func (w *whiteholeNetwork) GetPeers(options ...network.PeerOption) []network.Pee
 	return nil
 }
 func (w *whiteholeNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
+}
+func (w *whiteholeNetwork) GetHTTPRequestConnection(request *http.Request) (conn net.Conn) {
+	return nil
 }
 
 func (w *whiteholeNetwork) Start() {

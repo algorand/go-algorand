@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -36,14 +37,25 @@ import (
 	"github.com/algorand/go-algorand/network"
 )
 
-// LedgerResponseContentType is the HTTP Content-Type header for a raw ledger block
-const LedgerResponseContentType = "application/x-algorand-ledger-v2.1"
+const (
+	// LedgerResponseContentType is the HTTP Content-Type header for a raw ledger block
+	LedgerResponseContentType = "application/x-algorand-ledger-v2.1"
 
-const ledgerServerMaxBodyLength = 512 // we don't really pass meaningful content here, so 512 bytes should be a safe limit
+	ledgerServerMaxBodyLength = 512 // we don't really pass meaningful content here, so 512 bytes should be a safe limit
 
-// LedgerServiceLedgerPath is the path to register LedgerService as a handler for when using gorilla/mux
-// e.g. .Handle(LedgerServiceLedgerPath, &ls)
-const LedgerServiceLedgerPath = "/v{version:[0-9.]+}/{genesisID}/ledger/{round:[0-9a-z]+}"
+	// LedgerServiceLedgerPath is the path to register LedgerService as a handler for when using gorilla/mux
+	// e.g. .Handle(LedgerServiceLedgerPath, &ls)
+	LedgerServiceLedgerPath = "/v{version:[0-9.]+}/{genesisID}/ledger/{round:[0-9a-z]+}"
+
+	// maxCatchpointFileSize is a rough estimate for the worst-case scenario we're going to have of all the accounts data per a single catchpoint file chunk.
+	maxCatchpointFileSize = 512 * 1024 * 1024 // 512MB
+
+	// expectedWorstDownloadSpeedBytesPerSecond defines the worst-case scenario upload speed we expect to get while uploading a catchpoint file
+	expectedWorstDownloadSpeedBytesPerSecond = 200 * 1024
+
+	// maxCatchpointFileChunkDownloadDuration is the maximum amount of time we would wait to download a single chunk off a catchpoint file
+	maxCatchpointFileWritingDuration = 2*time.Minute + maxCatchpointFileSize*time.Second/expectedWorstDownloadSpeedBytesPerSecond
+)
 
 // LedgerService represents the Ledger RPC API
 type LedgerService struct {
@@ -165,6 +177,11 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		response.Write([]byte(fmt.Sprintf("specified round number could not be parsed using base 36 : %v", err)))
 		return
 	}
+	if conn := ls.net.GetHTTPRequestConnection(request); conn != nil {
+		conn.SetWriteDeadline(time.Now().Add(maxCatchpointFileWritingDuration))
+	} else {
+		logging.Base().Warnf("LedgerService.ServeHTTP unable to set connection timeout")
+	}
 	cs, err := ls.ledger.GetCatchpointStream(basics.Round(round))
 	if err != nil {
 		switch err.(type) {
@@ -186,16 +203,22 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 	requestedCompressedResponse := strings.Contains(request.Header.Get("Accept-Encoding"), "gzip")
 	if requestedCompressedResponse {
 		response.Header().Set("Content-Encoding", "gzip")
-		io.Copy(response, cs)
+		written, err := io.Copy(response, cs)
+		if err != nil {
+			logging.Base().Infof("LedgerService.ServeHTTP : unable to write compressed catchpoint file for round %d, written bytes %d : %v", round, written, err)
+		}
 		return
 	}
 	decompressedGzip, err := gzip.NewReader(cs)
 	if err != nil {
-		logging.Base().Warnf("ServeHTTP : failed to decompress catchpoint %d %v", round, err)
+		logging.Base().Warnf("LedgerService.ServeHTTP : failed to decompress catchpoint %d %v", round, err)
 		response.WriteHeader(http.StatusInternalServerError)
 		response.Write([]byte(fmt.Sprintf("catchpoint file for round %d could not be decompressed due to internal error : %v", round, err)))
 		return
 	}
 	defer decompressedGzip.Close()
-	io.Copy(response, decompressedGzip)
+	written, err := io.Copy(response, decompressedGzip)
+	if err != nil {
+		logging.Base().Infof("LedgerService.ServeHTTP : unable to write decompressed catchpoint file for round %d, written bytes %d : %v", round, written, err)
+	}
 }

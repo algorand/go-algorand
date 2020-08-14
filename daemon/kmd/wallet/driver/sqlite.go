@@ -1151,7 +1151,7 @@ func (sw *SQLiteWallet) SignProgram(data []byte, src crypto.Digest, pw []byte) (
 // MultisigSignTransaction starts a multisig signature or adds a signature to a
 // partially signed multisig transaction signature of the passed transaction
 // using the key
-func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (sig crypto.MultisigSig, err error) {
+func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte, signer crypto.Digest) (sig crypto.MultisigSig, err error) {
 	// Check the password
 	err = sw.CheckPassword(pw)
 	if err != nil {
@@ -1198,7 +1198,9 @@ func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 	if err != nil {
 		return
 	}
-	if addr != crypto.Digest(tx.Src()) {
+
+	// Check that the multisig address equals to either sender or signer
+	if addr != crypto.Digest(tx.Src()) && addr != signer {
 		err = errMsigWrongAddr
 		return
 	}

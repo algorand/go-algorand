@@ -45,7 +45,7 @@ func TestHostIncomingRequestsOrdering(t *testing.T) {
 	now := time.Now()
 	perm := rand.Perm(100)
 	for i := 0; i < 100; i++ {
-		trackedRequest := makeTrackerRequest("remoteaddr", "host", "port", now.Add(time.Duration(perm[i])*time.Minute))
+		trackedRequest := makeTrackerRequest("remoteaddr", "host", "port", now.Add(time.Duration(perm[i])*time.Minute), nil)
 		hir.add(trackedRequest)
 	}
 	require.Equal(t, 100, len(hir.requests))
@@ -78,7 +78,7 @@ func TestRateLimiting(t *testing.T) {
 	wn := &WebsocketNetwork{
 		log:       log,
 		config:    defaultConfig,
-		phonebook: MakePhonebook(1,1),
+		phonebook: MakePhonebook(1, 1),
 		GenesisID: "go-test-network-genesis",
 		NetworkID: config.Devtestnet,
 	}

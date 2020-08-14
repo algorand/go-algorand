@@ -4,6 +4,18 @@ package logspec
 
 import "strconv"
 
+func _() {
+	// An "invalid array index" compiler error signifies that the constant values have changed.
+	// Re-run the stringer command to generate them again.
+	var x [1]struct{}
+	_ = x[Agreement-0]
+	_ = x[Catchup-1]
+	_ = x[Network-2]
+	_ = x[Ledger-3]
+	_ = x[Frontend-4]
+	_ = x[numComponents-5]
+}
+
 const _Component_name = "AgreementCatchupNetworkLedgerFrontendnumComponents"
 
 var _Component_index = [...]uint8{0, 9, 16, 23, 29, 37, 50}

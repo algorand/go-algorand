@@ -42,10 +42,13 @@ import (
 )
 
 // EvalMaxVersion is the max version we can interpret and run
-const EvalMaxVersion = 1
+const EvalMaxVersion = LogicVersion
 
 // EvalMaxScratchSize is the maximum number of scratch slots.
 const EvalMaxScratchSize = 255
+
+// MaxStringSize is the limit of byte strings created by `concat`
+const MaxStringSize = 4096
 
 // stackValue is the type for the operand stack.
 // Each stackValue is either a valid []byte value or a uint64 value.
@@ -76,6 +79,62 @@ func (sv *stackValue) String() string {
 	return fmt.Sprintf("%d 0x%x", sv.Uint, sv.Uint)
 }
 
+func stackValueFromTealValue(tv *basics.TealValue) (sv stackValue, err error) {
+	switch tv.Type {
+	case basics.TealBytesType:
+		sv.Bytes = []byte(tv.Bytes)
+	case basics.TealUintType:
+		sv.Uint = tv.Uint
+	default:
+		err = fmt.Errorf("invalid TealValue type: %d", tv.Type)
+	}
+	return
+}
+
+// ComputeMinTealVersion calculates the minimum safe TEAL version that may be
+// used by a transaction in this group. It is important to prevent
+// newly-introduced transaction fields from breaking assumptions made by older
+// versions of TEAL. If one of the transactions in a group will execute a TEAL
+// program whose version predates a given field, that field must not be set
+// anywhere in the transaction group, or the group will be rejected.
+func ComputeMinTealVersion(group []transactions.SignedTxn) uint64 {
+	var minVersion uint64
+	for _, txn := range group {
+		if !txn.Txn.RekeyTo.IsZero() {
+			if minVersion < rekeyingEnabledVersion {
+				minVersion = rekeyingEnabledVersion
+			}
+		}
+		if txn.Txn.Type == protocol.ApplicationCallTx {
+			if minVersion < appsEnabledVersion {
+				minVersion = appsEnabledVersion
+			}
+		}
+	}
+	return minVersion
+}
+
+func (sv *stackValue) toTealValue() (tv basics.TealValue) {
+	if sv.argType() == StackBytes {
+		return basics.TealValue{Type: basics.TealBytesType, Bytes: string(sv.Bytes)}
+	}
+	return basics.TealValue{Type: basics.TealUintType, Uint: sv.Uint}
+}
+
+// LedgerForLogic represents ledger API for Stateful TEAL program
+type LedgerForLogic interface {
+	Balance(addr basics.Address) (basics.MicroAlgos, error)
+	Round() basics.Round
+	LatestTimestamp() int64
+	AppGlobalState(appIdx basics.AppIndex) (basics.TealKeyValue, error)
+	AppLocalState(addr basics.Address, appIdx basics.AppIndex) (basics.TealKeyValue, error)
+	AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (basics.AssetHolding, error)
+	AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams, error)
+	ApplicationID() basics.AppIndex
+	LocalSchema() basics.StateSchema
+	GlobalSchema() basics.StateSchema
+}
+
 // EvalParams contains data that comes into condition evaluation.
 type EvalParams struct {
 	// the transaction being evaluated
@@ -91,6 +150,52 @@ type EvalParams struct {
 	GroupIndex int
 
 	Logger logging.Logger
+
+	Ledger LedgerForLogic
+
+	// optional debugger
+	Debugger DebuggerHook
+
+	// MinTealVersion is the minimum allowed TEAL version of this program.
+	// The program must reject if its version is less than this version. If
+	// MinTealVersion is nil, we will compute it ourselves
+	MinTealVersion *uint64
+
+	// determines eval mode: runModeSignature or runModeApplication
+	runModeFlags runMode
+}
+
+type opEvalFunc func(cx *evalContext)
+type opCheckFunc func(cx *evalContext) int
+
+type runMode uint64
+
+const (
+	// runModeSignature is TEAL in LogicSig execution
+	runModeSignature runMode = 1 << iota
+
+	// runModeApplication is TEAL in application/stateful mode
+	runModeApplication
+
+	// local constant, run in any mode
+	modeAny = runModeSignature | runModeApplication
+)
+
+func (r runMode) Any() bool {
+	return r == modeAny
+}
+
+func (r runMode) String() string {
+	switch r {
+	case runModeSignature:
+		return "Signature"
+	case runModeApplication:
+		return "Application"
+	case modeAny:
+		return "Any"
+	default:
+	}
+	return "Unknown"
 }
 
 func (ep EvalParams) log() logging.Logger {
@@ -98,6 +203,16 @@ func (ep EvalParams) log() logging.Logger {
 		return ep.Logger
 	}
 	return logging.Base()
+}
+
+type ckey struct {
+	app  uint64
+	addr basics.Address
+}
+
+type indexedCow struct {
+	accountIdx uint64
+	cow        *keyValueCow
 }
 
 type evalContext struct {
@@ -120,13 +235,24 @@ type evalContext struct {
 	// If Check pc skips a target, the source branch was invalid!
 	branchTargets []int
 
-	programHash crypto.Digest
-}
+	programHashCached crypto.Digest
+	txidCache         map[int]transactions.Txid
 
-type opFunc func(cx *evalContext)
+	globalStateCow       *keyValueCow
+	readOnlyGlobalStates map[uint64]basics.TealKeyValue
+	localStateCows       map[basics.Address]*indexedCow
+	readOnlyLocalStates  map[ckey]basics.TealKeyValue
+	appEvalDelta         basics.EvalDelta
+
+	// Stores state & disassembly for the optional debugger
+	debugState DebugState
+}
 
 // StackType describes the type of a value on the operand stack
 type StackType byte
+
+// StackTypes is an alias for a list of StackType with syntactic sugar
+type StackTypes []StackType
 
 // StackNone in an OpSpec shows that the op pops or yields nothing
 const StackNone StackType = 0
@@ -154,6 +280,10 @@ func (st StackType) String() string {
 	return "internal error, unknown type"
 }
 
+func (sts StackTypes) plus(other StackTypes) StackTypes {
+	return append(sts, other...)
+}
+
 // PanicError wraps a recover() catching a panic()
 type PanicError struct {
 	PanicValue interface{}
@@ -165,37 +295,96 @@ func (pe PanicError) Error() string {
 }
 
 var errLoopDetected = errors.New("loop detected")
-var errCostTooHigh = errors.New("LogicSigMaxCost exceded")
 var errLogicSignNotSupported = errors.New("LogicSig not supported")
 var errTooManyArgs = errors.New("LogicSig has too many arguments")
 
+// EvalStateful executes stateful TEAL program
+func EvalStateful(program []byte, params EvalParams) (pass bool, delta basics.EvalDelta, err error) {
+	var cx evalContext
+	cx.EvalParams = params
+	cx.runModeFlags = runModeApplication
+
+	cx.appEvalDelta = basics.EvalDelta{
+		GlobalDelta: make(basics.StateDelta),
+		LocalDeltas: make(map[uint64]basics.StateDelta, len(params.Txn.Txn.Accounts)+1),
+	}
+
+	// Allocate global delta cow lazily to avoid ledger lookups
+	cx.globalStateCow = nil
+
+	// Stores read-only global key/value stores keyed off app
+	cx.readOnlyGlobalStates = make(map[uint64]basics.TealKeyValue)
+
+	// Stores state cows for each modified LocalState for this app
+	cx.localStateCows = make(map[basics.Address]*indexedCow)
+
+	// Stores read-only local key/value stores keyed off of <addr, app>
+	cx.readOnlyLocalStates = make(map[ckey]basics.TealKeyValue)
+
+	// Evaluate the program
+	pass, err = eval(program, &cx)
+
+	// Fill in state deltas
+	for _, idxCow := range cx.localStateCows {
+		if len(idxCow.cow.delta) > 0 {
+			cx.appEvalDelta.LocalDeltas[idxCow.accountIdx] = idxCow.cow.delta
+		}
+	}
+
+	return pass, cx.appEvalDelta, err
+}
+
 // Eval checks to see if a transaction passes logic
-// A program passes succesfully if it finishes with one int element on the stack that is non-zero.
+// A program passes successfully if it finishes with one int element on the stack that is non-zero.
 func Eval(program []byte, params EvalParams) (pass bool, err error) {
+	var cx evalContext
+	cx.EvalParams = params
+	cx.runModeFlags = runModeSignature
+	return eval(program, &cx)
+}
+
+// eval implementation
+// A program passes successfully if it finishes with one int element on the stack that is non-zero.
+func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			buf := make([]byte, 16*1024)
 			stlen := runtime.Stack(buf, false)
 			pass = false
 			errstr := string(buf[:stlen])
-			if params.Trace != nil {
-				if sb, ok := params.Trace.(*strings.Builder); ok {
+			if cx.EvalParams.Trace != nil {
+				if sb, ok := cx.EvalParams.Trace.(*strings.Builder); ok {
 					errstr += sb.String()
 				}
 			}
 			err = PanicError{x, errstr}
-			params.log().Errorf("recovered panic in Eval: %s", err)
+			cx.EvalParams.log().Errorf("recovered panic in Eval: %s", err)
 		}
 	}()
-	if (params.Proto == nil) || (params.Proto.LogicSigVersion == 0) {
+
+	defer func() {
+		// Ensure we update the debugger before exiting
+		if cx.Debugger != nil {
+			errDbg := cx.Debugger.Complete(cx.refreshDebugState())
+			if err == nil {
+				err = errDbg
+			}
+		}
+	}()
+
+	if (cx.EvalParams.Proto == nil) || (cx.EvalParams.Proto.LogicSigVersion == 0) {
 		err = errLogicSignNotSupported
 		return
 	}
-	if params.Txn.Lsig.Args != nil && len(params.Txn.Lsig.Args) > transactions.EvalMaxArgs {
+	if cx.EvalParams.Txn.Lsig.Args != nil && len(cx.EvalParams.Txn.Lsig.Args) > transactions.EvalMaxArgs {
 		err = errTooManyArgs
 		return
 	}
-	var cx evalContext
+
+	if len(program) == 0 {
+		cx.err = errors.New("invalid program (empty)")
+		return false, cx.err
+	}
 	version, vlen := binary.Uvarint(program)
 	if vlen <= 0 {
 		cx.err = errors.New("invalid version")
@@ -205,39 +394,52 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 		cx.err = fmt.Errorf("program version %d greater than max supported version %d", version, EvalMaxVersion)
 		return false, cx.err
 	}
-	if version > params.Proto.LogicSigVersion {
-		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
+	if version > cx.EvalParams.Proto.LogicSigVersion {
+		cx.err = fmt.Errorf("program version %d greater than protocol supported version %d", version, cx.EvalParams.Proto.LogicSigVersion)
 		return false, cx.err
 	}
-	if (params.Txn.Txn.RekeyTo != basics.Address{}) { // Currently no TEAL version knows about the RekeyTo field, but this may change in a future TEAL version
-		cx.err = fmt.Errorf("program version %d doesn't allow transactions with nonzero RekeyTo field", version)
-		return false, cx.err
+
+	var minVersion uint64
+	if cx.EvalParams.MinTealVersion == nil {
+		minVersion = ComputeMinTealVersion(cx.EvalParams.TxnGroup)
+	} else {
+		minVersion = *cx.EvalParams.MinTealVersion
 	}
-	// TODO: if EvalMaxVersion > version, ensure that inaccessible
-	// fields as of the program's version are zero or other
-	// default value so that no one is hiding unexpected
-	// operations from an old program.
+	if version < minVersion {
+		err = fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
+		return
+	}
 
 	cx.version = version
 	cx.pc = vlen
-	cx.EvalParams = params
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
-	cx.programHash = crypto.HashObj(Program(program))
+
+	if cx.Debugger != nil {
+		cx.debugState = makeDebugState(cx)
+		if err = cx.Debugger.Register(cx.refreshDebugState()); err != nil {
+			return
+		}
+	}
+
 	for (cx.err == nil) && (cx.pc < len(cx.program)) {
+		if cx.Debugger != nil {
+			if err = cx.Debugger.Update(cx.refreshDebugState()); err != nil {
+				return
+			}
+		}
+
 		cx.step()
 		cx.stepCount++
 		if cx.stepCount > len(cx.program) {
 			return false, errLoopDetected
-		}
-		if uint64(cx.cost) > params.Proto.LogicSigMaxCost {
-			return false, errCostTooHigh
 		}
 	}
 	if cx.err != nil {
 		if cx.Trace != nil {
 			fmt.Fprintf(cx.Trace, "%3d %s\n", cx.pc, cx.err)
 		}
+
 		return false, cx.err
 	}
 	if len(cx.stack) != 1 {
@@ -255,9 +457,21 @@ func Eval(program []byte, params EvalParams) (pass bool, err error) {
 	return cx.stack[0].Uint != 0, nil
 }
 
+// CheckStateful should be faster than EvalStateful.
+// Returns 'cost' which is an estimate of relative execution time.
+func CheckStateful(program []byte, params EvalParams) (cost int, err error) {
+	params.runModeFlags = runModeApplication
+	return check(program, params)
+}
+
 // Check should be faster than Eval.
 // Returns 'cost' which is an estimate of relative execution time.
 func Check(program []byte, params EvalParams) (cost int, err error) {
+	params.runModeFlags = runModeSignature
+	return check(program, params)
+}
+
+func check(program []byte, params EvalParams) (cost int, err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			buf := make([]byte, 16*1024)
@@ -291,150 +505,39 @@ func Check(program []byte, params EvalParams) (cost int, err error) {
 		err = fmt.Errorf("program version %d greater than protocol supported version %d", version, params.Proto.LogicSigVersion)
 		return
 	}
+
+	var minVersion uint64
+	if params.MinTealVersion == nil {
+		minVersion = ComputeMinTealVersion(params.TxnGroup)
+	} else {
+		minVersion = *params.MinTealVersion
+	}
+	if version < minVersion {
+		err = fmt.Errorf("program version must be >= %d for this transaction group, but have version %d", minVersion, version)
+		return
+	}
+
 	cx.version = version
 	cx.pc = vlen
 	cx.EvalParams = params
 	cx.program = program
-	for (cx.err == nil) && (cx.pc < len(cx.program)) {
+
+	for cx.pc < len(cx.program) {
+		prevpc := cx.pc
 		cost += cx.checkStep()
+		if cx.err != nil {
+			break
+		}
+		if cx.pc <= prevpc {
+			err = fmt.Errorf("pc did not advance, stuck at %d", cx.pc)
+			return
+		}
 	}
 	if cx.err != nil {
 		err = fmt.Errorf("%3d %s", cx.pc, cx.err)
 		return
 	}
 	return
-}
-
-// OpSpec defines one byte opcode
-type OpSpec struct {
-	Opcode  byte
-	Name    string
-	op      opFunc      // evaluate the op
-	Args    []StackType // what gets popped from the stack
-	Returns []StackType // what gets pushed to the stack
-}
-
-var oneBytes = []StackType{StackBytes}
-var threeBytes = []StackType{StackBytes, StackBytes, StackBytes}
-var oneInt = []StackType{StackUint64}
-var twoInts = []StackType{StackUint64, StackUint64}
-var oneAny = []StackType{StackAny}
-var twoAny = []StackType{StackAny, StackAny}
-
-// OpSpecs is the table of operations that can be assembled and evaluated.
-//
-// Any changes should be reflected in README.md which serves as the language spec.
-var OpSpecs = []OpSpec{
-	{0x00, "err", opErr, nil, nil},
-	{0x01, "sha256", opSHA256, oneBytes, oneBytes},
-	{0x02, "keccak256", opKeccak256, oneBytes, oneBytes},
-	{0x03, "sha512_256", opSHA512_256, oneBytes, oneBytes},
-	{0x04, "ed25519verify", opEd25519verify, threeBytes, oneInt},
-	{0x08, "+", opPlus, twoInts, oneInt},
-	{0x09, "-", opMinus, twoInts, oneInt},
-	{0x0a, "/", opDiv, twoInts, oneInt},
-	{0x0b, "*", opMul, twoInts, oneInt},
-	{0x0c, "<", opLt, twoInts, oneInt},
-	{0x0d, ">", opGt, twoInts, oneInt},
-	{0x0e, "<=", opLe, twoInts, oneInt},
-	{0x0f, ">=", opGe, twoInts, oneInt},
-	{0x10, "&&", opAnd, twoInts, oneInt},
-	{0x11, "||", opOr, twoInts, oneInt},
-	{0x12, "==", opEq, twoAny, oneInt},
-	{0x13, "!=", opNeq, twoAny, oneInt},
-	{0x14, "!", opNot, oneInt, oneInt},
-	{0x15, "len", opLen, oneBytes, oneInt},
-	{0x16, "itob", opItob, oneInt, oneBytes},
-	{0x17, "btoi", opBtoi, oneBytes, oneInt},
-	{0x18, "%", opModulo, twoInts, oneInt},
-	{0x19, "|", opBitOr, twoInts, oneInt},
-	{0x1a, "&", opBitAnd, twoInts, oneInt},
-	{0x1b, "^", opBitXor, twoInts, oneInt},
-	{0x1c, "~", opBitNot, oneInt, oneInt},
-	{0x1d, "mulw", opMulw, twoInts, twoInts},
-
-	{0x20, "intcblock", opIntConstBlock, nil, nil},
-	{0x21, "intc", opIntConstLoad, nil, oneInt},
-	{0x22, "intc_0", opIntConst0, nil, oneInt},
-	{0x23, "intc_1", opIntConst1, nil, oneInt},
-	{0x24, "intc_2", opIntConst2, nil, oneInt},
-	{0x25, "intc_3", opIntConst3, nil, oneInt},
-	{0x26, "bytecblock", opByteConstBlock, nil, nil},
-	{0x27, "bytec", opByteConstLoad, nil, oneBytes},
-	{0x28, "bytec_0", opByteConst0, nil, oneBytes},
-	{0x29, "bytec_1", opByteConst1, nil, oneBytes},
-	{0x2a, "bytec_2", opByteConst2, nil, oneBytes},
-	{0x2b, "bytec_3", opByteConst3, nil, oneBytes},
-	{0x2c, "arg", opArg, nil, oneBytes},
-	{0x2d, "arg_0", opArg0, nil, oneBytes},
-	{0x2e, "arg_1", opArg1, nil, oneBytes},
-	{0x2f, "arg_2", opArg2, nil, oneBytes},
-	{0x30, "arg_3", opArg3, nil, oneBytes},
-	{0x31, "txn", opTxn, nil, oneAny},       // TODO: check output type by subfield retrieved in txn,global,account,txid
-	{0x32, "global", opGlobal, nil, oneAny}, // TODO: check output type against specific field
-	{0x33, "gtxn", opGtxn, nil, oneAny},     // TODO: check output type by subfield retrieved in txn,global,account,txid
-	{0x34, "load", opLoad, nil, oneAny},
-	{0x35, "store", opStore, oneAny, nil},
-
-	{0x40, "bnz", opBnz, oneInt, nil},
-	{0x48, "pop", opPop, oneAny, nil},
-	{0x49, "dup", opDup, oneAny, twoAny},
-}
-
-// direct opcode bytes
-var opsByOpcode []OpSpec
-
-type opCheckFunc func(cx *evalContext) int
-
-// opSize records the length in bytes for an op that is constant-length but not length 1
-type opSize struct {
-	name      string
-	cost      int
-	size      int
-	checkFunc opCheckFunc
-}
-
-// opSizes records the size of ops that are constant size but not 1
-// Also records time 'cost' and custom check functions.
-var opSizes = []opSize{
-	{"sha256", 7, 1, nil},
-	{"keccak256", 26, 1, nil},
-	{"sha512_256", 9, 1, nil},
-	{"ed25519verify", 1900, 1, nil},
-	{"bnz", 1, 3, checkBnz},
-	{"intc", 1, 2, nil},
-	{"bytec", 1, 2, nil},
-	{"arg", 1, 2, nil},
-	{"txn", 1, 2, nil},
-	{"gtxn", 1, 3, nil},
-	{"global", 1, 2, nil},
-	{"intcblock", 1, 0, checkIntConstBlock},
-	{"bytecblock", 1, 0, checkByteConstBlock},
-	{"load", 1, 2, nil},
-	{"store", 1, 2, nil},
-}
-
-var opSizeByOpcode []opSize
-
-func init() {
-	opsByOpcode = make([]OpSpec, 256)
-	for _, oi := range OpSpecs {
-		opsByOpcode[oi.Opcode] = oi
-	}
-
-	opSizeByName := make(map[string]*opSize, len(opSizes))
-	for i, oz := range opSizes {
-		opSizeByName[oz.name] = &opSizes[i]
-	}
-	opSizeByOpcode = make([]opSize, 256)
-	for _, oi := range OpSpecs {
-		oz := opSizeByName[oi.Name]
-		if oz == nil {
-			opSizeByOpcode[oi.Opcode] = opSize{oi.Name, 1, 1, nil}
-		} else {
-			opSizeByOpcode[oi.Opcode] = *oz
-		}
-	}
 }
 
 func opCompat(expected, got StackType) bool {
@@ -451,47 +554,84 @@ func nilToEmpty(x []byte) []byte {
 	return x
 }
 
+func boolToUint(x bool) uint64 {
+	if x {
+		return 1
+	}
+	return 0
+}
+
 // MaxStackDepth should move to consensus params
 const MaxStackDepth = 1000
 
 func (cx *evalContext) step() {
 	opcode := cx.program[cx.pc]
-	if opsByOpcode[opcode].op == nil {
-		cx.err = fmt.Errorf("%3d illegal opcode %02x", cx.pc, opcode)
+	spec := &opsByOpcode[cx.version][opcode]
+
+	// this check also ensures TEAL versioning: v2 opcodes are not in opsByOpcode[1] array
+	if spec.op == nil {
+		cx.err = fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 		return
 	}
-	argsTypes := opsByOpcode[opcode].Args
-	if len(argsTypes) >= 0 {
-		// check args for stack underflow and types
-		if len(cx.stack) < len(argsTypes) {
-			cx.err = fmt.Errorf("stack underflow in %s", opsByOpcode[opcode].Name)
+	if (cx.runModeFlags & spec.Modes) == 0 {
+		cx.err = fmt.Errorf("%s not allowed in current mode", spec.Name)
+		return
+	}
+	argsTypes := spec.Args
+
+	// check args for stack underflow and types
+	if len(cx.stack) < len(argsTypes) {
+		cx.err = fmt.Errorf("stack underflow in %s", spec.Name)
+		return
+	}
+	first := len(cx.stack) - len(argsTypes)
+	for i, argType := range argsTypes {
+		if !opCompat(argType, cx.stack[first+i].argType()) {
+			cx.err = fmt.Errorf("%s arg %d wanted %s but got %s", spec.Name, i, argType.String(), cx.stack[first+i].typeName())
 			return
 		}
-		first := len(cx.stack) - len(argsTypes)
-		for i, argType := range argsTypes {
-			if !opCompat(argType, cx.stack[first+i].argType()) {
-				cx.err = fmt.Errorf("%s arg %d wanted %s but got %s", opsByOpcode[opcode].Name, i, argType.String(), cx.stack[first+i].typeName())
-				return
-			}
-		}
 	}
-	oz := opSizeByOpcode[opcode]
+
+	oz := spec.opSize
 	if oz.size != 0 && (cx.pc+oz.size > len(cx.program)) {
-		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, opsByOpcode[opcode].Name)
+		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 		return
 	}
 	cx.cost += oz.cost
-	opsByOpcode[opcode].op(cx)
+	spec.op(cx)
 	if cx.Trace != nil {
-		if len(cx.stack) == 0 {
-			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].Name, "<empty stack>")
-		} else {
-			fmt.Fprintf(cx.Trace, "%3d %s => %s\n", cx.pc, opsByOpcode[opcode].Name, cx.stack[len(cx.stack)-1].String())
+		immArgsString := " "
+		if spec.Name != "bnz" {
+			for i := 1; i < spec.opSize.size; i++ {
+				immArgsString += fmt.Sprintf("0x%02x ", cx.program[cx.pc+i])
+			}
 		}
+		var stackString string
+		if len(cx.stack) == 0 {
+			stackString = "<empty stack>"
+		} else {
+			num := 1
+			if len(spec.Returns) > 1 {
+				num = len(spec.Returns)
+			}
+			// check for nil error here, because we might not return
+			// values if we encounter an error in the opcode
+			if cx.err == nil {
+				if len(cx.stack) < num {
+					cx.err = fmt.Errorf("stack underflow: expected %d, have %d", num, len(cx.stack))
+					return
+				}
+				for i := 1; i <= num; i++ {
+					stackString += fmt.Sprintf("(%s) ", cx.stack[len(cx.stack)-i].String())
+				}
+			}
+		}
+		fmt.Fprintf(cx.Trace, "%3d %s%s=> %s\n", cx.pc, spec.Name, immArgsString, stackString)
 	}
 	if cx.err != nil {
 		return
 	}
+
 	if len(cx.stack) > MaxStackDepth {
 		cx.err = errors.New("stack overflow")
 		return
@@ -506,15 +646,21 @@ func (cx *evalContext) step() {
 
 func (cx *evalContext) checkStep() (cost int) {
 	opcode := cx.program[cx.pc]
-	if opsByOpcode[opcode].op == nil {
-		cx.err = fmt.Errorf("%3d illegal opcode %02x", cx.pc, opcode)
+	spec := &opsByOpcode[cx.version][opcode]
+	if spec.op == nil {
+		cx.err = fmt.Errorf("%3d illegal opcode 0x%02x", cx.pc, opcode)
 		return 1
 	}
-	oz := opSizeByOpcode[opcode]
+	if (cx.runModeFlags & spec.Modes) == 0 {
+		cx.err = fmt.Errorf("%s not allowed in current mode", spec.Name)
+		return
+	}
+	oz := spec.opSize
 	if oz.size != 0 && (cx.pc+oz.size > len(cx.program)) {
-		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, opsByOpcode[opcode].Name)
+		cx.err = fmt.Errorf("%3d %s program ends short of immediate values", cx.pc, spec.Name)
 		return 1
 	}
+	prevpc := cx.pc
 	if oz.checkFunc != nil {
 		cost = oz.checkFunc(cx)
 		if cx.nextpc != 0 {
@@ -526,6 +672,9 @@ func (cx *evalContext) checkStep() (cost int) {
 	} else {
 		cost = oz.cost
 		cx.pc += oz.size
+	}
+	if cx.Trace != nil {
+		fmt.Fprintf(cx.Trace, "%3d %s\n", prevpc, spec.Name)
 	}
 	if cx.err != nil {
 		return 1
@@ -544,7 +693,17 @@ func (cx *evalContext) checkStep() (cost int) {
 }
 
 func opErr(cx *evalContext) {
-	cx.err = errors.New("error")
+	cx.err = errors.New("TEAL runtime encountered err opcode")
+}
+
+func opReturn(cx *evalContext) {
+	// Achieve the end condition:
+	// Take the last element on the stack and make it the return value (only element on the stack)
+	// Move the pc to the end of the program
+	last := len(cx.stack) - 1
+	cx.stack[0] = cx.stack[last]
+	cx.stack = cx.stack[:1]
+	cx.nextpc = len(cx.program)
 }
 
 func opSHA256(cx *evalContext) {
@@ -584,6 +743,22 @@ func opPlus(cx *evalContext) {
 		return
 	}
 	cx.stack = cx.stack[:last]
+}
+
+func opAddwImpl(x, y uint64) (carry uint64, sum uint64) {
+	sum = x + y
+	if sum < x {
+		carry = 1
+	}
+	return
+}
+
+func opAddw(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	carry, sum := opAddwImpl(cx.stack[prev].Uint, cx.stack[last].Uint)
+	cx.stack[prev].Uint = carry
+	cx.stack[last].Uint = sum
 }
 
 func opMinus(cx *evalContext) {
@@ -805,6 +980,8 @@ func opItob(cx *evalContext) {
 	last := len(cx.stack) - 1
 	ibytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(ibytes, cx.stack[last].Uint)
+	// cx.stack[last].Uint is not cleared out as optimization
+	// stackValue.argType() checks Bytes field first
 	cx.stack[last].Bytes = ibytes
 }
 
@@ -916,6 +1093,7 @@ func opArgN(cx *evalContext, n uint64) {
 	val := nilToEmpty(cx.Txn.Lsig.Args[n])
 	cx.stack = append(cx.stack, stackValue{Bytes: val})
 }
+
 func opArg(cx *evalContext) {
 	n := uint64(cx.program[cx.pc+1])
 	opArgN(cx, n)
@@ -934,16 +1112,24 @@ func opArg3(cx *evalContext) {
 	opArgN(cx, 3)
 }
 
-func checkBnz(cx *evalContext) int {
+// checks any branch that is {op} {int16 be offset}
+func checkBranch(cx *evalContext) int {
 	offset := (uint(cx.program[cx.pc+1]) << 8) | uint(cx.program[cx.pc+2])
 	if offset > 0x7fff {
-		cx.err = fmt.Errorf("bnz offset %x too large", offset)
+		cx.err = fmt.Errorf("branch offset %x too large", offset)
 		return 1
 	}
 	cx.nextpc = cx.pc + 3
 	target := cx.nextpc + int(offset)
-	if target >= len(cx.program) {
-		cx.err = errors.New("bnz target beyond end of program")
+	var branchTooFar bool
+	if cx.version >= 2 {
+		// branching to exactly the end of the program (target == len(cx.program)), the next pc after the last instruction, is okay and ends normally
+		branchTooFar = target > len(cx.program)
+	} else {
+		branchTooFar = target >= len(cx.program)
+	}
+	if branchTooFar {
+		cx.err = errors.New("branch target beyond end of program")
 		return 1
 	}
 	cx.branchTargets = append(cx.branchTargets, target)
@@ -965,6 +1151,30 @@ func opBnz(cx *evalContext) {
 	}
 }
 
+func opBz(cx *evalContext) {
+	last := len(cx.stack) - 1
+	cx.nextpc = cx.pc + 3
+	isZero := cx.stack[last].Uint == 0
+	cx.stack = cx.stack[:last] // pop
+	if isZero {
+		offset := (uint(cx.program[cx.pc+1]) << 8) | uint(cx.program[cx.pc+2])
+		if offset > 0x7fff {
+			cx.err = fmt.Errorf("bz offset %x too large", offset)
+			return
+		}
+		cx.nextpc += int(offset)
+	}
+}
+
+func opB(cx *evalContext) {
+	offset := (uint(cx.program[cx.pc+1]) << 8) | uint(cx.program[cx.pc+2])
+	if offset > 0x7fff {
+		cx.err = fmt.Errorf("b offset %x too large", offset)
+		return
+	}
+	cx.nextpc = cx.pc + 3 + int(offset)
+}
+
 func opPop(cx *evalContext) {
 	last := len(cx.stack) - 1
 	cx.stack = cx.stack[:last]
@@ -976,9 +1186,94 @@ func opDup(cx *evalContext) {
 	cx.stack = append(cx.stack, sv)
 }
 
-func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint64) (sv stackValue, err error) {
+func opDup2(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	cx.stack = append(cx.stack, cx.stack[prev:]...)
+}
+
+func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, field uint64) (sv stackValue, err error) {
+	switch AssetHoldingField(field) {
+	case AssetBalance:
+		sv.Uint = holding.Amount
+	case AssetFrozen:
+		sv.Uint = boolToUint(holding.Frozen)
+	default:
+		err = fmt.Errorf("invalid asset holding field %d", field)
+		return
+	}
+
+	assetHoldingField := AssetHoldingField(field)
+	assetHoldingFieldType := AssetHoldingFieldTypes[assetHoldingField]
+	if assetHoldingFieldType != sv.argType() {
+		err = fmt.Errorf("%s expected field type is %s but got %s", assetHoldingField.String(), assetHoldingFieldType.String(), sv.argType().String())
+	}
+	return
+}
+
+func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field uint64) (sv stackValue, err error) {
+	switch AssetParamsField(field) {
+	case AssetTotal:
+		sv.Uint = params.Total
+	case AssetDecimals:
+		sv.Uint = uint64(params.Decimals)
+	case AssetDefaultFrozen:
+		sv.Uint = boolToUint(params.DefaultFrozen)
+	case AssetUnitName:
+		sv.Bytes = []byte(params.UnitName)
+	case AssetName:
+		sv.Bytes = []byte(params.AssetName)
+	case AssetURL:
+		sv.Bytes = []byte(params.URL)
+	case AssetMetadataHash:
+		sv.Bytes = params.MetadataHash[:]
+	case AssetManager:
+		sv.Bytes = params.Manager[:]
+	case AssetReserve:
+		sv.Bytes = params.Reserve[:]
+	case AssetFreeze:
+		sv.Bytes = params.Freeze[:]
+	case AssetClawback:
+		sv.Bytes = params.Clawback[:]
+	default:
+		err = fmt.Errorf("invalid asset params field %d", field)
+		return
+	}
+
+	assetParamsField := AssetParamsField(field)
+	assetParamsFieldType := AssetParamsFieldTypes[assetParamsField]
+	if assetParamsFieldType != sv.argType() {
+		err = fmt.Errorf("%s expected field type is %s but got %s", assetParamsField.String(), assetParamsFieldType.String(), sv.argType().String())
+	}
+	return
+}
+
+// TxnFieldToTealValue is a thin wrapper for txnFieldToStack for external use
+func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field TxnField) (basics.TealValue, error) {
+	cx := evalContext{EvalParams: EvalParams{GroupIndex: groupIndex}}
+	sv, err := cx.txnFieldToStack(txn, field, 0, groupIndex)
+	return sv.toTealValue(), err
+}
+
+func (cx *evalContext) getTxID(txn *transactions.Transaction, groupIndex int) transactions.Txid {
+	// Initialize txidCache if necessary
+	if cx.txidCache == nil {
+		cx.txidCache = make(map[int]transactions.Txid, len(cx.TxnGroup))
+	}
+
+	// Hashes are expensive, so we cache computed TxIDs
+	txid, ok := cx.txidCache[groupIndex]
+	if !ok {
+		txid = txn.ID()
+		cx.txidCache[groupIndex] = txid
+	}
+
+	return txid
+}
+
+func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnField, arrayFieldIdx uint64, groupIndex int) (sv stackValue, err error) {
 	err = nil
-	switch TxnField(field) {
+	switch field {
 	case Sender:
 		sv.Bytes = txn.Sender[:]
 	case Fee:
@@ -1020,29 +1315,131 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field uint
 	case AssetCloseTo:
 		sv.Bytes = txn.AssetCloseTo[:]
 	case GroupIndex:
-		sv.Uint = uint64(cx.GroupIndex)
+		sv.Uint = uint64(groupIndex)
 	case TxID:
-		txid := txn.ID()
+		txid := cx.getTxID(txn, groupIndex)
 		sv.Bytes = txid[:]
 	case Lease:
 		sv.Bytes = txn.Lease[:]
+	case ApplicationID:
+		sv.Uint = uint64(txn.ApplicationID)
+	case OnCompletion:
+		sv.Uint = uint64(txn.OnCompletion)
+	case ApplicationArgs:
+		if arrayFieldIdx >= uint64(len(txn.ApplicationArgs)) {
+			err = fmt.Errorf("invalid ApplicationArgs index %d", arrayFieldIdx)
+			return
+		}
+		sv.Bytes = nilToEmpty(txn.ApplicationArgs[arrayFieldIdx])
+	case NumAppArgs:
+		sv.Uint = uint64(len(txn.ApplicationArgs))
+	case Accounts:
+		if arrayFieldIdx == 0 {
+			// special case: sender
+			sv.Bytes = txn.Sender[:]
+		} else {
+			if arrayFieldIdx > uint64(len(txn.Accounts)) {
+				err = fmt.Errorf("invalid Accounts index %d", arrayFieldIdx)
+				return
+			}
+			sv.Bytes = txn.Accounts[arrayFieldIdx-1][:]
+		}
+	case NumAccounts:
+		sv.Uint = uint64(len(txn.Accounts))
+	case ApprovalProgram:
+		sv.Bytes = nilToEmpty(txn.ApprovalProgram)
+	case ClearStateProgram:
+		sv.Bytes = nilToEmpty(txn.ClearStateProgram)
+	case RekeyTo:
+		sv.Bytes = txn.RekeyTo[:]
+	case ConfigAsset:
+		sv.Uint = uint64(txn.ConfigAsset)
+	case ConfigAssetTotal:
+		sv.Uint = uint64(txn.AssetParams.Total)
+	case ConfigAssetDecimals:
+		sv.Uint = uint64(txn.AssetParams.Decimals)
+	case ConfigAssetDefaultFrozen:
+		sv.Uint = boolToUint(txn.AssetParams.DefaultFrozen)
+	case ConfigAssetUnitName:
+		sv.Bytes = nilToEmpty([]byte(txn.AssetParams.UnitName))
+	case ConfigAssetName:
+		sv.Bytes = nilToEmpty([]byte(txn.AssetParams.AssetName))
+	case ConfigAssetURL:
+		sv.Bytes = nilToEmpty([]byte(txn.AssetParams.URL))
+	case ConfigAssetMetadataHash:
+		sv.Bytes = nilToEmpty(txn.AssetParams.MetadataHash[:])
+	case ConfigAssetManager:
+		sv.Bytes = txn.AssetParams.Manager[:]
+	case ConfigAssetReserve:
+		sv.Bytes = txn.AssetParams.Reserve[:]
+	case ConfigAssetFreeze:
+		sv.Bytes = txn.AssetParams.Freeze[:]
+	case ConfigAssetClawback:
+		sv.Bytes = txn.AssetParams.Clawback[:]
+	case FreezeAsset:
+		sv.Uint = uint64(txn.FreezeAsset)
+	case FreezeAssetAccount:
+		sv.Bytes = txn.FreezeAccount[:]
+	case FreezeAssetFrozen:
+		sv.Uint = boolToUint(txn.AssetFrozen)
 	default:
 		err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+
+	txnField := TxnField(field)
+	txnFieldType := TxnFieldTypes[txnField]
+	if txnFieldType != sv.argType() {
+		err = fmt.Errorf("%s expected field type is %s but got %s", txnField.String(), txnFieldType.String(), sv.argType().String())
 	}
 	return
 }
 
 func opTxn(cx *evalContext) {
-	field := uint64(cx.program[cx.pc+1])
+	field := TxnField(uint64(cx.program[cx.pc+1]))
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if ok {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
 	var sv stackValue
 	var err error
-	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field)
+	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, 0, cx.GroupIndex)
 	if err != nil {
 		cx.err = err
 		return
 	}
 	cx.stack = append(cx.stack, sv)
 	cx.nextpc = cx.pc + 2
+}
+
+func opTxna(cx *evalContext) {
+	field := TxnField(uint64(cx.program[cx.pc+1]))
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
+		cx.err = fmt.Errorf("txna unsupported field %d", field)
+		return
+	}
+	var sv stackValue
+	var err error
+	arrayFieldIdx := uint64(cx.program[cx.pc+2])
+	sv, err = cx.txnFieldToStack(&cx.Txn.Txn, field, arrayFieldIdx, cx.GroupIndex)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack = append(cx.stack, sv)
+	cx.nextpc = cx.pc + 3
 }
 
 func opGtxn(cx *evalContext) {
@@ -1052,14 +1449,24 @@ func opGtxn(cx *evalContext) {
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := uint64(cx.program[cx.pc+2])
+	field := TxnField(uint64(cx.program[cx.pc+2]))
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if ok {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
 	var sv stackValue
 	var err error
 	if TxnField(field) == GroupIndex {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
 	} else {
-		sv, err = cx.txnFieldToStack(tx, field)
+		sv, err = cx.txnFieldToStack(tx, field, 0, gtxid)
 		if err != nil {
 			cx.err = err
 			return
@@ -1069,12 +1476,69 @@ func opGtxn(cx *evalContext) {
 	cx.nextpc = cx.pc + 3
 }
 
+func opGtxna(cx *evalContext) {
+	gtxid := int(uint(cx.program[cx.pc+1]))
+	if gtxid >= len(cx.TxnGroup) {
+		cx.err = fmt.Errorf("gtxna lookup TxnGroup[%d] but it only has %d", gtxid, len(cx.TxnGroup))
+		return
+	}
+	tx := &cx.TxnGroup[gtxid].Txn
+	field := TxnField(uint64(cx.program[cx.pc+2]))
+	fs, ok := txnFieldSpecByField[field]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid txn field %d", field)
+		return
+	}
+	_, ok = txnaFieldSpecByField[field]
+	if !ok {
+		cx.err = fmt.Errorf("gtxna unsupported field %d", field)
+		return
+	}
+	var sv stackValue
+	var err error
+	arrayFieldIdx := uint64(cx.program[cx.pc+3])
+	sv, err = cx.txnFieldToStack(tx, field, arrayFieldIdx, gtxid)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack = append(cx.stack, sv)
+	cx.nextpc = cx.pc + 4
+}
+
+func (cx *evalContext) getRound() (rnd uint64, err error) {
+	if cx.Ledger == nil {
+		err = fmt.Errorf("ledger not available")
+		return
+	}
+	return uint64(cx.Ledger.Round()), nil
+}
+
+func (cx *evalContext) getLatestTimestamp() (timestamp uint64, err error) {
+	if cx.Ledger == nil {
+		err = fmt.Errorf("ledger not available")
+		return
+	}
+	ts := cx.Ledger.LatestTimestamp()
+	if ts < 0 {
+		err = fmt.Errorf("latest timestamp %d < 0", ts)
+		return
+	}
+	return uint64(ts), nil
+}
+
+func (cx *evalContext) getApplicationID() (rnd uint64, err error) {
+	if cx.Ledger == nil {
+		err = fmt.Errorf("ledger not available")
+		return
+	}
+	return uint64(cx.Ledger.ApplicationID()), nil
+}
+
 var zeroAddress basics.Address
 
-func opGlobal(cx *evalContext) {
-	gindex := uint64(cx.program[cx.pc+1])
-	var sv stackValue
-	switch GlobalField(gindex) {
+func (cx *evalContext) globalFieldToStack(field GlobalField) (sv stackValue, err error) {
+	switch field {
 	case MinTxnFee:
 		sv.Uint = cx.Proto.MinTxnFee
 	case MinBalance:
@@ -1085,10 +1549,45 @@ func opGlobal(cx *evalContext) {
 		sv.Bytes = zeroAddress[:]
 	case GroupSize:
 		sv.Uint = uint64(len(cx.TxnGroup))
+	case LogicSigVersion:
+		sv.Uint = cx.Proto.LogicSigVersion
+	case Round:
+		sv.Uint, err = cx.getRound()
+	case LatestTimestamp:
+		sv.Uint, err = cx.getLatestTimestamp()
+	case CurrentApplicationID:
+		sv.Uint, err = cx.getApplicationID()
 	default:
-		cx.err = fmt.Errorf("invalid global[%d]", gindex)
+		err = fmt.Errorf("invalid global[%d]", field)
+	}
+	return sv, err
+}
+
+func opGlobal(cx *evalContext) {
+	gindex := uint64(cx.program[cx.pc+1])
+	globalField := GlobalField(gindex)
+	fs, ok := globalFieldSpecByField[globalField]
+	if !ok || fs.version > cx.version {
+		cx.err = fmt.Errorf("invalid global[%d]", globalField)
 		return
 	}
+	if (cx.runModeFlags & fs.mode) == 0 {
+		cx.err = fmt.Errorf("global[%d] not allowed in current mode", globalField)
+		return
+	}
+
+	sv, err := cx.globalFieldToStack(globalField)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	globalFieldType := GlobalFieldTypes[globalField]
+	if globalFieldType != sv.argType() {
+		cx.err = fmt.Errorf("%s expected field type is %s but got %s", globalField.String(), globalFieldType.String(), sv.argType().String())
+		return
+	}
+
 	cx.stack = append(cx.stack, sv)
 	cx.nextpc = cx.pc + 2
 }
@@ -1104,6 +1603,14 @@ type Msg struct {
 // ToBeHashed implements crypto.Hashable
 func (msg Msg) ToBeHashed() (protocol.HashID, []byte) {
 	return protocol.ProgramData, append(msg.ProgramHash[:], msg.Data...)
+}
+
+// programHash lets us lazily compute H(cx.program)
+func (cx *evalContext) programHash() crypto.Digest {
+	if cx.programHashCached == (crypto.Digest{}) {
+		cx.programHashCached = crypto.HashObj(Program(cx.program))
+	}
+	return cx.programHashCached
 }
 
 func opEd25519verify(cx *evalContext) {
@@ -1125,7 +1632,7 @@ func opEd25519verify(cx *evalContext) {
 	}
 	copy(sig[:], cx.stack[prev].Bytes)
 
-	msg := Msg{ProgramHash: cx.programHash, Data: cx.stack[pprev].Bytes}
+	msg := Msg{ProgramHash: cx.programHash(), Data: cx.stack[pprev].Bytes}
 	if sv.Verify(msg, sig) {
 		cx.stack[pprev].Uint = 1
 	} else {
@@ -1146,5 +1653,552 @@ func opStore(cx *evalContext) {
 	last := len(cx.stack) - 1
 	cx.scratch[gindex] = cx.stack[last]
 	cx.stack = cx.stack[:last]
+	cx.nextpc = cx.pc + 2
+}
+
+func opConcat(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	a := cx.stack[prev].Bytes
+	b := cx.stack[last].Bytes
+	newlen := len(a) + len(b)
+	if newlen > MaxStringSize {
+		cx.err = errors.New("concat resulted in string too long")
+		return
+	}
+	newvalue := make([]byte, newlen)
+	copy(newvalue, a)
+	copy(newvalue[len(a):], b)
+	cx.stack[prev].Bytes = newvalue
+	cx.stack = cx.stack[:last]
+}
+
+func substring(x []byte, start, end int) (out []byte, err error) {
+	out = x
+	if end < start {
+		err = errors.New("substring end before start")
+		return
+	}
+	if start > len(x) || end > len(x) {
+		err = errors.New("substring range beyond length of string")
+		return
+	}
+	out = x[start:end]
+	err = nil
+	return
+}
+
+func opSubstring(cx *evalContext) {
+	last := len(cx.stack) - 1
+	start := cx.program[cx.pc+1]
+	end := cx.program[cx.pc+2]
+	cx.stack[last].Bytes, cx.err = substring(cx.stack[last].Bytes, int(start), int(end))
+	cx.nextpc = cx.pc + 3
+}
+
+func opSubstring3(cx *evalContext) {
+	last := len(cx.stack) - 1 // end
+	prev := last - 1          // start
+	pprev := prev - 1         // bytes
+	start := cx.stack[prev].Uint
+	end := cx.stack[last].Uint
+	if start > math.MaxInt32 || end > math.MaxInt32 {
+		cx.err = errors.New("substring range beyond length of string")
+		return
+	}
+	cx.stack[pprev].Bytes, cx.err = substring(cx.stack[pprev].Bytes, int(start), int(end))
+	cx.stack = cx.stack[:prev]
+}
+
+func opBalance(cx *evalContext) {
+	last := len(cx.stack) - 1 // account offset
+
+	accountIdx := cx.stack[last].Uint
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	microAlgos, err := cx.Ledger.Balance(addr)
+	if err != nil {
+		cx.err = fmt.Errorf("failed to fetch balance of %v: %s", addr, err.Error())
+		return
+	}
+
+	cx.stack[last].Uint = microAlgos.Raw
+}
+
+func opAppCheckOptedIn(cx *evalContext) {
+	last := len(cx.stack) - 1 // app id
+	prev := last - 1          // account offset
+
+	appID := cx.stack[last].Uint
+	accountIdx := cx.stack[prev].Uint
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	_, err = cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
+	if err != nil {
+		cx.stack[prev].Uint = 0
+	} else {
+		cx.stack[prev].Uint = 1
+	}
+
+	cx.stack = cx.stack[:last]
+}
+
+func (cx *evalContext) getReadOnlyLocalState(appID uint64, accountIdx uint64) (basics.TealKeyValue, error) {
+	// Convert the account offset to an address
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
+	if err != nil {
+		return nil, err
+	}
+
+	kvIdx := ckey{appID, addr}
+	localKV, ok := cx.readOnlyLocalStates[kvIdx]
+	if !ok {
+		var err error
+		localKV, err = cx.Ledger.AppLocalState(addr, basics.AppIndex(appID))
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch app local state for acct %v, app %d: %v", addr, appID, err)
+		}
+		cx.readOnlyLocalStates[kvIdx] = localKV
+	}
+	return localKV, nil
+}
+
+func (cx *evalContext) getLocalStateCow(accountIdx uint64) (*keyValueCow, error) {
+	// Convert the account offset to an address
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
+	if err != nil {
+		return nil, err
+	}
+
+	// We key localStateCows by address and not accountIdx, because
+	// multiple accountIdxs may refer to the same address
+	idxCow, ok := cx.localStateCows[addr]
+	if !ok {
+		// No cached cow for this address. Make one.
+		localKV, err := cx.Ledger.AppLocalState(addr, basics.AppIndex(cx.Txn.Txn.ApplicationID))
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch app local state for acct %v: %v", addr, err)
+		}
+
+		localDelta := make(basics.StateDelta)
+		kvCow, err := makeKeyValueCow(localKV, localDelta, cx.Ledger.LocalSchema(), cx.Proto)
+		if err != nil {
+			return nil, err
+		}
+		idxCow = &indexedCow{accountIdx, kvCow}
+		cx.localStateCows[addr] = idxCow
+	}
+	return idxCow.cow, nil
+}
+
+func (cx *evalContext) appReadLocalKey(appID uint64, accountIdx uint64, key string) (basics.TealValue, bool, error) {
+	// If this is for the application mentioned in the transaction header,
+	// return the result from a LocalState cow, since we may have written
+	// to it
+	if appID == 0 || appID == uint64(cx.Ledger.ApplicationID()) {
+		kvCow, err := cx.getLocalStateCow(accountIdx)
+		if err != nil {
+			return basics.TealValue{}, false, err
+		}
+		tv, ok := kvCow.read(key)
+		return tv, ok, nil
+	}
+
+	// Otherwise, the state is read only, so return from the read only cache
+	kv, err := cx.getReadOnlyLocalState(appID, accountIdx)
+	if err != nil {
+		return basics.TealValue{}, false, err
+	}
+	tv, ok := kv[key]
+	return tv, ok, nil
+}
+
+// appWriteLocalKey writes value to local key/value cow
+func (cx *evalContext) appWriteLocalKey(accountIdx uint64, key string, tv basics.TealValue) error {
+	kvCow, err := cx.getLocalStateCow(accountIdx)
+	if err != nil {
+		return err
+	}
+	return kvCow.write(key, tv)
+}
+
+// appDeleteLocalKey deletes a value from the key/value cow
+func (cx *evalContext) appDeleteLocalKey(accountIdx uint64, key string) error {
+	kvCow, err := cx.getLocalStateCow(accountIdx)
+	if err != nil {
+		return err
+	}
+	return kvCow.del(key)
+}
+
+func (cx *evalContext) getReadOnlyGlobalState(appID uint64) (basics.TealKeyValue, error) {
+	globalKV, ok := cx.readOnlyGlobalStates[appID]
+	if !ok {
+		var err error
+		globalKV, err = cx.Ledger.AppGlobalState(basics.AppIndex(appID))
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch global state for app %d: %v", appID, err)
+		}
+		cx.readOnlyGlobalStates[appID] = globalKV
+	}
+	return globalKV, nil
+}
+
+func (cx *evalContext) getGlobalStateCow() (*keyValueCow, error) {
+	if cx.globalStateCow == nil {
+		appIdx := cx.Ledger.ApplicationID()
+		globalKV, err := cx.Ledger.AppGlobalState(appIdx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch global state: %v", err)
+		}
+		cx.globalStateCow, err = makeKeyValueCow(globalKV, cx.appEvalDelta.GlobalDelta, cx.Ledger.GlobalSchema(), cx.Proto)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return cx.globalStateCow, nil
+}
+
+func (cx *evalContext) appReadGlobalKey(foreignAppsIndex uint64, key string) (basics.TealValue, bool, error) {
+	// If this is for the current app (ForeignApps index zero),
+	// return the result from a GlobalState cow, since we may have written
+	// to it
+	if foreignAppsIndex > uint64(len(cx.Txn.Txn.ForeignApps)) {
+		err := fmt.Errorf("invalid ForeignApps index %d", foreignAppsIndex)
+		return basics.TealValue{}, false, err
+	}
+
+	var appIdx basics.AppIndex
+	if foreignAppsIndex == 0 {
+		appIdx = 0
+	} else {
+		appIdx = cx.Txn.Txn.ForeignApps[foreignAppsIndex-1]
+		if appIdx == cx.Ledger.ApplicationID() {
+			appIdx = 0
+		}
+	}
+	if appIdx == 0 {
+		kvCow, err := cx.getGlobalStateCow()
+		if err != nil {
+			return basics.TealValue{}, false, err
+		}
+		tv, ok := kvCow.read(key)
+		return tv, ok, nil
+	}
+
+	// Otherwise, the state is read only, so return from the read only cache
+	kv, err := cx.getReadOnlyGlobalState(uint64(appIdx))
+	if err != nil {
+		return basics.TealValue{}, false, err
+	}
+	tv, ok := kv[key]
+	return tv, ok, nil
+}
+
+// appWriteGlobalKey adds value to StateDelta
+func (cx *evalContext) appWriteGlobalKey(key string, tv basics.TealValue) error {
+	kvCow, err := cx.getGlobalStateCow()
+	if err != nil {
+		return err
+	}
+	return kvCow.write(key, tv)
+}
+
+// appDeleteGlobalKey deletes a value from the cache and adds it to StateDelta
+func (cx *evalContext) appDeleteGlobalKey(key string) error {
+	kvCow, err := cx.getGlobalStateCow()
+	if err != nil {
+		return err
+	}
+	return kvCow.del(key)
+}
+
+func opAppGetLocalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // state key
+	prev := last - 1          // account offset
+
+	key := cx.stack[last].Bytes
+	accountIdx := cx.stack[prev].Uint
+
+	var appID uint64 = 0
+	result, _, err := opAppGetLocalStateImpl(cx, appID, key, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack[prev] = result
+	cx.stack = cx.stack[:last]
+}
+
+func opAppGetLocalStateEx(cx *evalContext) {
+	last := len(cx.stack) - 1 // state key
+	prev := last - 1          // app id
+	pprev := prev - 1         // account offset
+
+	key := cx.stack[last].Bytes
+	appID := cx.stack[prev].Uint
+	accountIdx := cx.stack[pprev].Uint
+
+	result, ok, err := opAppGetLocalStateImpl(cx, appID, key, accountIdx)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	var isOk stackValue
+	if ok {
+		isOk.Uint = 1
+	}
+
+	cx.stack[pprev] = result
+	cx.stack[prev] = isOk
+	cx.stack = cx.stack[:last]
+}
+
+func opAppGetLocalStateImpl(cx *evalContext, appID uint64, key []byte, accountIdx uint64) (result stackValue, ok bool, err error) {
+	if cx.Ledger == nil {
+		err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	tv, ok, err := cx.appReadLocalKey(appID, accountIdx, string(key))
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	if ok {
+		result, err = stackValueFromTealValue(&tv)
+	}
+	return
+}
+
+func opAppGetGlobalStateImpl(cx *evalContext, appIndex uint64, key []byte) (result stackValue, ok bool, err error) {
+	if cx.Ledger == nil {
+		err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	tv, ok, err := cx.appReadGlobalKey(appIndex, string(key))
+	if err != nil {
+		return
+	}
+
+	if ok {
+		result, err = stackValueFromTealValue(&tv)
+	}
+	return
+}
+
+func opAppGetGlobalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // state key
+
+	key := cx.stack[last].Bytes
+
+	var index uint64 = 0 // index in txn.ForeignApps
+	result, _, err := opAppGetGlobalStateImpl(cx, index, key)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack[last] = result
+}
+
+func opAppGetGlobalStateEx(cx *evalContext) {
+	last := len(cx.stack) - 1 // state key
+	prev := last - 1
+
+	key := cx.stack[last].Bytes
+	index := cx.stack[prev].Uint // index in txn.ForeignApps
+
+	result, ok, err := opAppGetGlobalStateImpl(cx, index, key)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	var isOk stackValue
+	if ok {
+		isOk.Uint = 1
+	}
+
+	cx.stack[prev] = result
+	cx.stack[last] = isOk
+}
+
+func opAppPutLocalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // value
+	prev := last - 1          // state key
+	pprev := prev - 1         // account offset
+
+	sv := cx.stack[last]
+	key := string(cx.stack[prev].Bytes)
+	accountIdx := cx.stack[pprev].Uint
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	err := cx.appWriteLocalKey(accountIdx, key, sv.toTealValue())
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack = cx.stack[:pprev]
+}
+
+func opAppPutGlobalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // value
+	prev := last - 1          // state key
+
+	sv := cx.stack[last]
+	key := string(cx.stack[prev].Bytes)
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	err := cx.appWriteGlobalKey(key, sv.toTealValue())
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack = cx.stack[:prev]
+}
+
+func opAppDeleteLocalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // key
+	prev := last - 1          // account offset
+
+	key := string(cx.stack[last].Bytes)
+	accountIdx := cx.stack[prev].Uint
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	err := cx.appDeleteLocalKey(accountIdx, key)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	cx.stack = cx.stack[:prev]
+}
+
+func opAppDeleteGlobalState(cx *evalContext) {
+	last := len(cx.stack) - 1 // key
+
+	key := string(cx.stack[last].Bytes)
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	err := cx.appDeleteGlobalKey(key)
+	if err != nil {
+		cx.err = err
+		return
+	}
+	cx.stack = cx.stack[:last]
+}
+
+func opAssetHoldingGet(cx *evalContext) {
+	last := len(cx.stack) - 1 // asset id
+	prev := last - 1          // account offset
+
+	assetID := cx.stack[last].Uint
+	accountIdx := cx.stack[prev].Uint
+	fieldIdx := uint64(cx.program[cx.pc+1])
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	addr, err := cx.Txn.Txn.AddressByIndex(accountIdx, cx.Txn.Txn.Sender)
+	if err != nil {
+		cx.err = err
+		return
+	}
+
+	var exist uint64 = 0
+	var value stackValue
+	if holding, err := cx.Ledger.AssetHolding(addr, basics.AssetIndex(assetID)); err == nil {
+		// the holding exist, read the value
+		exist = 1
+		value, err = cx.assetHoldingEnumToValue(&holding, fieldIdx)
+		if err != nil {
+			cx.err = err
+			return
+		}
+	}
+
+	cx.stack[prev] = value
+	cx.stack[last].Uint = exist
+
+	cx.nextpc = cx.pc + 2
+}
+
+func opAssetParamsGet(cx *evalContext) {
+	last := len(cx.stack) - 1 // foreign asset id
+
+	foreignAssetsIndex := cx.stack[last].Uint
+	paramIdx := uint64(cx.program[cx.pc+1])
+
+	if cx.Ledger == nil {
+		cx.err = fmt.Errorf("ledger not available")
+		return
+	}
+
+	if foreignAssetsIndex >= uint64(len(cx.Txn.Txn.ForeignAssets)) {
+		cx.err = fmt.Errorf("invalid ForeignAssets index %d", foreignAssetsIndex)
+		return
+	}
+	assetID := cx.Txn.Txn.ForeignAssets[foreignAssetsIndex]
+
+	var exist uint64 = 0
+	var value stackValue
+	if params, err := cx.Ledger.AssetParams(basics.AssetIndex(assetID)); err == nil {
+		// params exist, read the value
+		exist = 1
+		value, err = cx.assetParamsEnumToValue(&params, paramIdx)
+		if err != nil {
+			cx.err = err
+			return
+		}
+	}
+
+	cx.stack[last] = value
+	cx.stack = append(cx.stack, stackValue{Uint: exist})
+
 	cx.nextpc = cx.pc + 2
 }
