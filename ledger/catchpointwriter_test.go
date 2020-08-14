@@ -155,14 +155,20 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	blocksRound := basics.Round(12345)
 	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
 	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
-	writer := makeCatchpointWriter(fileName, ml.trackerDB().rdb, blocksRound, blockHeaderDigest, catchpointLabel)
-	for {
-		more, err := writer.WriteStep(context.Background())
-		require.NoError(t, err)
-		if !more {
-			break
+
+	readDb := ml.trackerDB().rdb
+	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		writer := makeCatchpointWriter(context.Background(), fileName, tx, blocksRound, blockHeaderDigest, catchpointLabel)
+		for {
+			more, err := writer.WriteStep(context.Background())
+			require.NoError(t, err)
+			if !more {
+				break
+			}
 		}
-	}
+		return
+	})
+	require.NoError(t, err)
 
 	// load the file from disk.
 	fileContent, err := ioutil.ReadFile(fileName)
@@ -248,14 +254,19 @@ func TestFullCatchpointWriter(t *testing.T) {
 	blocksRound := basics.Round(12345)
 	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
 	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
-	writer := makeCatchpointWriter(fileName, ml.trackerDB().rdb, blocksRound, blockHeaderDigest, catchpointLabel)
-	for {
-		more, err := writer.WriteStep(context.Background())
-		require.NoError(t, err)
-		if !more {
-			break
+	readDb := ml.trackerDB().rdb
+	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		writer := makeCatchpointWriter(context.Background(), fileName, tx, blocksRound, blockHeaderDigest, catchpointLabel)
+		for {
+			more, err := writer.WriteStep(context.Background())
+			require.NoError(t, err)
+			if !more {
+				break
+			}
 		}
-	}
+		return
+	})
+	require.NoError(t, err)
 
 	// create a ledger.
 	l, err := OpenLedger(ml.log, "TestFullCatchpointWriter", true, InitState{}, conf)
