@@ -100,7 +100,7 @@ var accountsResetExprs = []string{
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(2)
+var accountDBVersion = int32(3)
 
 type accountDelta struct {
 	old basics.AccountData
@@ -305,7 +305,7 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 	var err error
 	qs := &accountsDbQueries{}
 
-	qs.listCreatablesStmt, err = r.Prepare("SELECT asset, creator, ctype FROM assetcreators WHERE asset <= ? AND ctype = ? ORDER BY asset desc LIMIT ?")
+	qs.listCreatablesStmt, err = r.Prepare("SELECT asset, creator FROM assetcreators WHERE asset <= ? AND ctype = ? ORDER BY asset desc LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
@@ -751,47 +751,6 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (
 	return
 }
 
-// encodedAccountsRange returns an array containing the account data, in the same way it appear in the database
-// starting at entry startAccountIndex, and up to accountCount accounts long.
-func encodedAccountsRange(ctx context.Context, tx *sql.Tx, startAccountIndex, accountCount int) (bals []encodedBalanceRecord, err error) {
-	rows, err := tx.QueryContext(ctx, "SELECT address, data FROM accountbase ORDER BY rowid LIMIT ? OFFSET ?", accountCount, startAccountIndex)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-
-	bals = make([]encodedBalanceRecord, 0, accountCount)
-	var addr basics.Address
-	for rows.Next() {
-		var addrbuf []byte
-		var buf []byte
-		err = rows.Scan(&addrbuf, &buf)
-		if err != nil {
-			return
-		}
-
-		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-			return
-		}
-
-		copy(addr[:], addrbuf)
-
-		bals = append(bals, encodedBalanceRecord{Address: addr, AccountData: buf})
-	}
-
-	err = rows.Err()
-	if err == nil {
-		// the encodedAccountsRange typically called in a loop iterating over all the accounts. This could clearly take more than the
-		// "standard" 1 second, so we want to extend the timeout on each iteration. If the last iteration takes more than a second, then
-		// it should be noted. The one second here is quite liberal to ensure symmetrical behaviour on low-power devices.
-		// The return value from ResetTransactionWarnDeadline can be safely ignored here since it would only default to writing the warnning
-		// message, which would let us know that it failed anyway.
-		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(time.Second))
-	}
-	return
-}
-
 // totalAccounts returns the total number of accounts
 func totalAccounts(ctx context.Context, tx *sql.Tx) (total uint64, err error) {
 	err = tx.QueryRowContext(ctx, "SELECT count(*) FROM accountbase").Scan(&total)
@@ -937,4 +896,69 @@ func (mc *merkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 // GetNodesCountPerPage returns the page size ( number of nodes per page )
 func (mc *merkleCommitter) GetNodesCountPerPage() (pageSize int64) {
 	return merkleCommitterNodesPerPage
+}
+
+// encodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.
+type encodedAccountsBatchIter struct {
+	rows           *sql.Rows
+	orderByAddress bool
+}
+
+// Next returns an array containing the account data, in the same way it appear in the database
+// returning accountCount accounts data at a time.
+func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int) (bals []encodedBalanceRecord, err error) {
+	if iterator.rows == nil {
+		if iterator.orderByAddress {
+			iterator.rows, err = tx.QueryContext(ctx, "SELECT address, data FROM accountbase ORDER BY address")
+		} else {
+			iterator.rows, err = tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
+		}
+
+		if err != nil {
+			return
+		}
+	}
+
+	// gather up to accountCount encoded accounts.
+	bals = make([]encodedBalanceRecord, 0, accountCount)
+	var addr basics.Address
+	for iterator.rows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		err = iterator.rows.Scan(&addrbuf, &buf)
+		if err != nil {
+			iterator.Close()
+			return
+		}
+
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return
+		}
+
+		copy(addr[:], addrbuf)
+
+		bals = append(bals, encodedBalanceRecord{Address: addr, AccountData: buf})
+		if len(bals) == accountCount {
+			// we're done with this iteration.
+			return
+		}
+	}
+
+	err = iterator.rows.Err()
+	if err != nil {
+		iterator.Close()
+		return
+	}
+	// we just finished reading the table.
+	iterator.Close()
+	return
+}
+
+// Close shuts down the encodedAccountsBatchIter, releasing database resources.
+func (iterator *encodedAccountsBatchIter) Close() {
+	if iterator.rows != nil {
+		iterator.rows.Close()
+		iterator.rows = nil
+	}
 }

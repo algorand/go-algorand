@@ -60,6 +60,18 @@ type Accessor struct {
 	log      logging.Logger
 }
 
+// VacuumStats returns the database statistics before and after a vacuum operation
+type VacuumStats struct {
+	// PagesBefore is the number of pages in the database before the vacuum operation
+	PagesBefore uint64
+	// SizeBefore is the amount of data used by the database ( number of pages * size of a page) before the vacuum operation
+	SizeBefore uint64
+	// PagesAfter is the number of pages in the database after the vacuum operation
+	PagesAfter uint64
+	// SizeAfter is the amount of data used by the database ( number of pages * size of a page) after the vacuum operation
+	SizeAfter uint64
+}
+
 // txExecutionContext contains the data that is associated with every created transaction
 // before sending it to the user-defined callback. This allows the callback function to
 // make changes to the execution setting of an ongoing transaction.
@@ -369,6 +381,37 @@ func (db *Accessor) AtomicCommitWriteLock(fn idemFn, commitLocker sync.Locker, e
 	return db.atomic(fn, commitLocker, extras...)
 }
 
+// Vacuum perform a full-vacuum on the given database. In order for the vacuum to succeed, the storage needs to have
+// double the amount of the current database size ( roughly ), and we cannot have any other transaction ( either read
+// or write ) being active.
+func (db *Accessor) Vacuum(ctx context.Context) (stats VacuumStats, err error) {
+	if db.readOnly {
+		return stats, fmt.Errorf("read-only database was used to attempt and perform vacuuming")
+	}
+	if db.inMemory {
+		return stats, nil
+	}
+	pageSize, err2 := db.GetPageSize(ctx)
+	if err2 != nil {
+		return stats, err2
+	}
+	stats.PagesBefore, err = db.GetPageCount(ctx)
+	if err != nil {
+		return stats, err
+	}
+	stats.SizeBefore = pageSize * stats.PagesBefore
+	_, err = db.Handle.ExecContext(ctx, "VACUUM")
+	if err != nil {
+		return stats, err
+	}
+	stats.PagesAfter, err = db.GetPageCount(ctx)
+	if err != nil {
+		return stats, err
+	}
+	stats.SizeAfter = pageSize * stats.PagesAfter
+	return
+}
+
 // URI returns the sqlite URI given a db filename as an input.
 func URI(filename string, readOnly bool, memory bool) string {
 	uri := fmt.Sprintf("file:%s?_busy_timeout=%d&_synchronous=full", filename, busy)
@@ -380,6 +423,24 @@ func URI(filename string, readOnly bool, memory bool) string {
 		uri += "&cache=shared"
 	}
 	return uri
+}
+
+// GetPageCount returns the total number of pages in the database
+func (db *Accessor) GetPageCount(ctx context.Context) (pageCount uint64, err error) {
+	err = db.Handle.QueryRowContext(ctx, "PRAGMA page_count").Scan(&pageCount)
+	if err == sql.ErrNoRows {
+		err = fmt.Errorf("sqlite database doesn't support `PRAGMA page_count`")
+	}
+	return
+}
+
+// GetPageSize returns the number of bytes per database page
+func (db *Accessor) GetPageSize(ctx context.Context) (pageSize uint64, err error) {
+	err = db.Handle.QueryRowContext(ctx, "PRAGMA page_size").Scan(&pageSize)
+	if err == sql.ErrNoRows {
+		err = fmt.Errorf("sqlite database doesn't support `PRAGMA page_size`")
+	}
+	return
 }
 
 // dbretry returns true if the error might be temporary

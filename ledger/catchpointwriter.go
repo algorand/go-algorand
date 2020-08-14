@@ -32,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/db"
 )
 
 const (
@@ -49,9 +48,10 @@ const (
 // the writing is complete. It might take multiple steps until the operation is over, and the caller
 // has the option of throtteling the CPU utilization in between the calls.
 type catchpointWriter struct {
+	ctx               context.Context
 	hasher            hash.Hash
 	innerWriter       io.WriteCloser
-	dbr               db.Accessor
+	tx                *sql.Tx
 	filePath          string
 	file              *os.File
 	gzip              *gzip.Writer
@@ -65,6 +65,7 @@ type catchpointWriter struct {
 	blocksRound       basics.Round
 	blockHeaderDigest crypto.Digest
 	label             string
+	accountsIterator  encodedAccountsBatchIter
 }
 
 type encodedBalanceRecord struct {
@@ -94,17 +95,20 @@ type catchpointFileBalancesChunk struct {
 	Balances []encodedBalanceRecord `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
-func makeCatchpointWriter(filePath string, dbr db.Accessor, blocksRound basics.Round, blockHeaderDigest crypto.Digest, label string) *catchpointWriter {
+func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, blocksRound basics.Round, blockHeaderDigest crypto.Digest, label string) *catchpointWriter {
 	return &catchpointWriter{
+		ctx:               ctx,
 		filePath:          filePath,
-		dbr:               dbr,
+		tx:                tx,
 		blocksRound:       blocksRound,
 		blockHeaderDigest: blockHeaderDigest,
 		label:             label,
+		accountsIterator:  encodedAccountsBatchIter{orderByAddress: true},
 	}
 }
 
 func (cw *catchpointWriter) Abort() error {
+	cw.accountsIterator.Close()
 	if cw.tar != nil {
 		cw.tar.Close()
 	}
@@ -118,7 +122,7 @@ func (cw *catchpointWriter) Abort() error {
 	return err
 }
 
-func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error) {
+func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err error) {
 	if cw.file == nil {
 		err = os.MkdirAll(filepath.Dir(cw.filePath), 0700)
 		if err != nil {
@@ -133,19 +137,19 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 	}
 
 	// have we timed-out / canceled by that point ?
-	if more, err = hasContextDeadlineExceeded(ctx); more == true || err != nil {
+	if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
 		return
 	}
 
 	if cw.fileHeader == nil {
-		err = cw.dbr.Atomic(cw.readHeaderFromDatabase)
+		err = cw.readHeaderFromDatabase(cw.ctx, cw.tx)
 		if err != nil {
 			return
 		}
 	}
 
 	// have we timed-out / canceled by that point ?
-	if more, err = hasContextDeadlineExceeded(ctx); more == true || err != nil {
+	if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
 		return
 	}
 
@@ -168,19 +172,19 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 
 	for {
 		// have we timed-out / canceled by that point ?
-		if more, err = hasContextDeadlineExceeded(ctx); more == true || err != nil {
+		if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
 			return
 		}
 
 		if len(cw.balancesChunk.Balances) == 0 {
-			err = cw.dbr.Atomic(cw.readDatabaseStep)
+			err = cw.readDatabaseStep(cw.ctx, cw.tx)
 			if err != nil {
 				return
 			}
 		}
 
 		// have we timed-out / canceled by that point ?
-		if more, err = hasContextDeadlineExceeded(ctx); more == true || err != nil {
+		if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
 			return
 		}
 
@@ -222,7 +226,7 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 }
 
 func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (err error) {
-	cw.balancesChunk.Balances, err = encodedAccountsRange(ctx, tx, cw.balancesOffset, BalancesPerCatchpointFileChunk)
+	cw.balancesChunk.Balances, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk)
 	if err == nil {
 		cw.balancesOffset += BalancesPerCatchpointFileChunk
 	}

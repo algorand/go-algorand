@@ -1,6 +1,6 @@
 #!/bin/bash
 
-date '+keyreg-teal-test start %Y%m%d_%H%M%S'
+date '+app-real-assets-round-test start %Y%m%d_%H%M%S'
 
 set -e
 set -x
