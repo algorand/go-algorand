@@ -39,6 +39,7 @@ type Selector interface {
 // BalanceRecord pairs an account's address with its associated data.
 //
 // This struct is used to decouple LedgerReader.AccountData from basics.BalanceRecord.
+//msgp:ignore BalanceRecord
 type BalanceRecord struct {
 	basics.AccountData
 	Addr basics.Address
