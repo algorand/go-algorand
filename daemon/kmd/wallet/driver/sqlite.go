@@ -362,16 +362,16 @@ func checkDBError(err error) error {
 	return nil
 }
 
-func (swd *SQLiteWalletDriver) claimWalletNameId(name []byte, id []byte) (dbPath string, err error) {
+func (swd *SQLiteWalletDriver) claimWalletNameID(name []byte, id []byte) (dbPath string, err error) {
 	// Grab our lock to avoid races with duplicate wallet names/ids
 	swd.mux.Lock()
 	defer swd.mux.Unlock()
 
-	for _, name_id := range swd.claimedWallets {
-		if bytes.Equal(name_id[0], name) {
+	for _, nameID := range swd.claimedWallets {
+		if bytes.Equal(nameID[0], name) {
 			return "", errSameName
 		}
-		if bytes.Equal(name_id[1], id) {
+		if bytes.Equal(nameID[1], id) {
 			return "", errSameID
 		}
 	}
@@ -421,7 +421,7 @@ func (swd *SQLiteWalletDriver) CreateWallet(name []byte, id []byte, pw []byte, m
 		return errIDTooLong
 	}
 
-	dbPath, err := swd.claimWalletNameId(name, id)
+	dbPath, err := swd.claimWalletNameID(name, id)
 	if err != nil {
 		return err
 	}
