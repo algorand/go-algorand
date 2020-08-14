@@ -134,7 +134,7 @@ func (delta accountDelta) applyMiniDelta(mini miniAccountDelta) (accountDelta, e
 	return delta, nil
 }
 
-func (delta accountDelta) applyStorageDelta(aapp addrApp, store *storageDelta) (accountDelta, error) {
+func (delta accountDelta) applyStorageDelta(aapp storagePtr, store *storageDelta) (accountDelta, error) {
 	data := delta.new
 	if aapp.global {
 		owned := make(map[basics.AppIndex]basics.AppParams, len(data.AppParams))
@@ -518,10 +518,10 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 	return
 }
 
-func (qs *accountsDbQueries) lookupKey(aapp addrApp, key string) (val basics.TealValue, ok bool, err error) {
+func (qs *accountsDbQueries) lookupKey(addr basics.Address, aapp storagePtr, key string) (val basics.TealValue, ok bool, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
-		err := qs.lookupKeyStmt.QueryRow(aapp.addr[:], aapp.aidx, aapp.global, key).Scan(&buf)
+		err := qs.lookupKeyStmt.QueryRow(addr[:], aapp.aidx, aapp.global, key).Scan(&buf)
 		// Common error: entry does not exist
 		if err == sql.ErrNoRows {
 			return nil
@@ -545,8 +545,8 @@ func (qs *accountsDbQueries) lookupKey(aapp addrApp, key string) (val basics.Tea
 	return
 }
 
-func (qs *accountsDbQueries) lookupStorage(aapp addrApp) (kv basics.TealKeyValue, counts basics.StateSchema, err error) {
-	rows, err := qs.lookupStorageStmt.Query(aapp.addr[:], aapp.aidx, aapp.global)
+func (qs *accountsDbQueries) lookupStorage(addr basics.Address, aapp storagePtr) (kv basics.TealKeyValue, counts basics.StateSchema, err error) {
+	rows, err := qs.lookupStorageStmt.Query(addr[:], aapp.aidx, aapp.global)
 	if err != nil {
 		return
 	}
@@ -583,15 +583,15 @@ func (qs *accountsDbQueries) lookupStorage(aapp addrApp) (kv basics.TealKeyValue
 	return
 }
 
-func (qs *accountsDbQueries) countStorage(aapp addrApp) (schema basics.StateSchema, err error) {
+func (qs *accountsDbQueries) countStorage(addr basics.Address, aapp storagePtr) (schema basics.StateSchema, err error) {
 	err = db.Retry(func() error {
 		var bytesCount, uintCount uint64
-		err := qs.countStorageStmt.QueryRow(aapp.addr[:], aapp.aidx, aapp.global, basics.TealBytesType).Scan(&bytesCount)
+		err := qs.countStorageStmt.QueryRow(addr[:], aapp.aidx, aapp.global, basics.TealBytesType).Scan(&bytesCount)
 		if err != nil {
 			return err
 		}
 
-		err = qs.countStorageStmt.QueryRow(aapp.addr[:], aapp.aidx, aapp.global, basics.TealUintType).Scan(&uintCount)
+		err = qs.countStorageStmt.QueryRow(addr[:], aapp.aidx, aapp.global, basics.TealUintType).Scan(&uintCount)
 		if err != nil {
 			return err
 		}
@@ -931,7 +931,7 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (
 	return
 }
 
-func storageNewRound(tx *sql.Tx, sdeltas map[addrApp]*storageDelta, log logging.Logger) (err error) {
+func storageNewRound(tx *sql.Tx, sdeltas map[basics.Address]map[storagePtr]*storageDelta, log logging.Logger) (err error) {
 	log.Warnf("MAXJ: storageNewRound: %d", len(sdeltas))
 
 	replaceKeyStmt, err := tx.Prepare("REPLACE INTO storage (owner, aidx, global, key, vtype, venc) VALUES (?, ?, ?, ?, ?, ?)")
@@ -952,59 +952,61 @@ func storageNewRound(tx *sql.Tx, sdeltas map[addrApp]*storageDelta, log logging.
 	}
 	defer deallocStmt.Close()
 
-	for aapp, sdelta := range sdeltas {
-		// For both alloc and dealloc, clear all existing storage.
-		switch sdelta.action {
-		case allocAction:
-			// deallocate existing storage
-			_, err = deallocStmt.Exec(aapp.addr[:], aapp.aidx, aapp.global)
-			if err != nil {
-				return
-			}
-		case deallocAction:
-			// deallocate existing storage
-			_, err = deallocStmt.Exec(aapp.addr[:], aapp.aidx, aapp.global)
-			if err != nil {
-				return
-			}
-			if len(sdelta.kvCow) > 0 {
-				log.Warnf("storageNewRound: kvCow len > 0 but dealloc? %+v %+v", aapp, sdelta)
-			}
-		case remainAllocAction:
-			// noop
-		default:
-			log.Panic("storageNewRound: unknown storage action %v", sdelta.action)
-		}
-
-		// Then, apply any key/value deltas
-		for key, vdelta := range sdelta.kvCow {
-			tv, tvok := vdelta.ToTealValue()
-			switch vdelta.Action {
-			case basics.SetUintAction:
-				if !tvok {
-					log.Panic("storageNewRound: failed to encode tv: %v", vdelta)
-				}
-				venc := protocol.Encode(&tv)
-				_, err = replaceKeyStmt.Exec(aapp.addr[:], aapp.aidx, aapp.global, key, basics.TealUintType, venc)
+	for addr, smap := range sdeltas {
+		for aapp, sdelta := range smap {
+			// For both alloc and dealloc, clear all existing storage.
+			switch sdelta.action {
+			case allocAction:
+				// deallocate existing storage
+				_, err = deallocStmt.Exec(addr[:], aapp.aidx, aapp.global)
 				if err != nil {
 					return
 				}
-			case basics.SetBytesAction:
-				if !tvok {
-					log.Panic("storageNewRound: failed to encode tv: %v", vdelta)
-				}
-				venc := protocol.Encode(&tv)
-				_, err = replaceKeyStmt.Exec(aapp.addr[:], aapp.aidx, aapp.global, key, basics.TealBytesType, venc)
+			case deallocAction:
+				// deallocate existing storage
+				_, err = deallocStmt.Exec(addr[:], aapp.aidx, aapp.global)
 				if err != nil {
 					return
 				}
-			case basics.DeleteAction:
-				_, err = deleteKeyStmt.Exec(aapp.addr[:], aapp.aidx, aapp.global, key)
-				if err != nil {
-					return
+				if len(sdelta.kvCow) > 0 {
+					log.Warnf("storageNewRound: kvCow len > 0 but dealloc? %+v %+v", aapp, sdelta)
 				}
+			case remainAllocAction:
+				// noop
 			default:
-				log.Panic("storageNewRound: unknown delta action %v", vdelta.Action)
+				log.Panic("storageNewRound: unknown storage action %v", sdelta.action)
+			}
+
+			// Then, apply any key/value deltas
+			for key, vdelta := range sdelta.kvCow {
+				tv, tvok := vdelta.ToTealValue()
+				switch vdelta.Action {
+				case basics.SetUintAction:
+					if !tvok {
+						log.Panic("storageNewRound: failed to encode tv: %v", vdelta)
+					}
+					venc := protocol.Encode(&tv)
+					_, err = replaceKeyStmt.Exec(addr[:], aapp.aidx, aapp.global, key, basics.TealUintType, venc)
+					if err != nil {
+						return
+					}
+				case basics.SetBytesAction:
+					if !tvok {
+						log.Panic("storageNewRound: failed to encode tv: %v", vdelta)
+					}
+					venc := protocol.Encode(&tv)
+					_, err = replaceKeyStmt.Exec(addr[:], aapp.aidx, aapp.global, key, basics.TealBytesType, venc)
+					if err != nil {
+						return
+					}
+				case basics.DeleteAction:
+					_, err = deleteKeyStmt.Exec(addr[:], aapp.aidx, aapp.global, key)
+					if err != nil {
+						return
+					}
+				default:
+					log.Panic("storageNewRound: unknown delta action %v", vdelta.Action)
+				}
 			}
 		}
 	}

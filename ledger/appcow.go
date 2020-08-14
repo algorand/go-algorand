@@ -65,8 +65,8 @@ func (lsd *storageDelta) merge(osd *storageDelta) {
 
 func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.AppIndex, global bool, defaultAction storageAction) (*storageDelta, error) {
 	// If we already have a storageDelta, return it
-	aapp := addrApp{addr, aidx, global}
-	lsd, ok := cb.mods.sdeltas[aapp]
+	aapp := storagePtr{aidx, global}
+	lsd, ok := cb.mods.sdeltas[addr][aapp]
 	if ok {
 		return lsd, nil
 	}
@@ -84,7 +84,7 @@ func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.App
 		counts: &counts,
 	}
 
-	cb.mods.sdeltas[aapp] = lsd
+	cb.mods.sdeltas[addr][aapp] = lsd
 	return lsd, nil
 }
 
@@ -99,8 +99,8 @@ func (cb *roundCowState) getStorageCounts(addr basics.Address, aidx basics.AppIn
 	}
 
 	// If we already have a storageDelta, return the counts from it
-	aapp := addrApp{addr, aidx, global}
-	lsd, ok := cb.mods.sdeltas[aapp]
+	aapp := storagePtr{aidx, global}
+	lsd, ok := cb.mods.sdeltas[addr][aapp]
 	if ok {
 		return *lsd.counts, nil
 	}
@@ -111,8 +111,8 @@ func (cb *roundCowState) getStorageCounts(addr basics.Address, aidx basics.AppIn
 
 func (cb *roundCowState) Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
 	// Check if we've allocated or deallocate within this very cow
-	aapp := addrApp{addr, aidx, global}
-	lsd, ok := cb.mods.sdeltas[aapp]
+	aapp := storagePtr{aidx, global}
+	lsd, ok := cb.mods.sdeltas[addr][aapp]
 	if ok {
 		if lsd.action == allocAction {
 			return true, nil
@@ -195,7 +195,7 @@ func (cb *roundCowState) GetKey(addr basics.Address, aidx basics.AppIndex, globa
 	// Check if key is in a storage delta, if so return it (the "hasDelta"
 	// boolean will be true if the kvCow holds _any_ delta for the key,
 	// including if that delta is a "delete" delta)
-	lsd, ok := cb.mods.sdeltas[addrApp{addr, aidx, global}]
+	lsd, ok := cb.mods.sdeltas[addr][storagePtr{aidx, global}]
 	if ok {
 		delta, hasDelta := lsd.kvCow[key]
 		if hasDelta {
@@ -316,38 +316,40 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 	// If program passed, build our eval delta and commit to state changes
 	if pass {
 		foundGlobal := false
-		for aapp, sdelta := range calf.mods.sdeltas {
-			// Check that all of these deltas are for the correct app
-			if aapp.aidx != aidx {
-				err = fmt.Errorf("found storage delta for different app during StatefulEval: %d != %d", aapp.aidx, aidx)
-				return false, basics.EvalDelta{}, err
-			}
-			if aapp.global {
-				// Check that there is at most one global delta
-				if foundGlobal {
-					err = fmt.Errorf("found more than one global delta during StatefulEval: %d", aapp.aidx)
+		for addr, smod := range calf.mods.sdeltas {
+			for aapp, sdelta := range smod {
+				// Check that all of these deltas are for the correct app
+				if aapp.aidx != aidx {
+					err = fmt.Errorf("found storage delta for different app during StatefulEval: %d != %d", aapp.aidx, aidx)
 					return false, basics.EvalDelta{}, err
 				}
-				evalDelta.GlobalDelta = sdelta.kvCow.Clone()
-				foundGlobal = true
-			} else {
-				if evalDelta.LocalDeltas == nil {
-					evalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
+				if aapp.global {
+					// Check that there is at most one global delta
+					if foundGlobal {
+						err = fmt.Errorf("found more than one global delta during StatefulEval: %d", aapp.aidx)
+						return false, basics.EvalDelta{}, err
+					}
+					evalDelta.GlobalDelta = sdelta.kvCow.Clone()
+					foundGlobal = true
+				} else {
+					if evalDelta.LocalDeltas == nil {
+						evalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
+					}
+					// It is impossible for there to be more than one local delta for
+					// a particular (address, app ID) in sdeltas, because the appAddr
+					// type consists only of (address, appID, global=false). So if
+					// IndexByAddress is deterministic (and it is), there is no need
+					// to check for duplicates here.
+					//
+					// TODO(app refactor): minimize eval deltas
+					var addrOffset uint64
+					sender := params.Txn.Txn.Sender
+					addrOffset, err = params.Txn.Txn.IndexByAddress(addr, sender)
+					if err != nil {
+						return false, basics.EvalDelta{}, err
+					}
+					evalDelta.LocalDeltas[addrOffset] = sdelta.kvCow.Clone()
 				}
-				// It is impossible for there to be more than one local delta for
-				// a particular (address, app ID) in sdeltas, because the appAddr
-				// type consists only of (address, appID, global=false). So if
-				// IndexByAddress is deterministic (and it is), there is no need
-				// to check for duplicates here.
-				//
-				// TODO(app refactor): minimize eval deltas
-				var addrOffset uint64
-				sender := params.Txn.Txn.Sender
-				addrOffset, err = params.Txn.Txn.IndexByAddress(aapp.addr, sender)
-				if err != nil {
-					return false, basics.EvalDelta{}, err
-				}
-				evalDelta.LocalDeltas[addrOffset] = sdelta.kvCow.Clone()
 			}
 		}
 		calf.commitToParent()

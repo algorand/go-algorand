@@ -187,7 +187,7 @@ type accountUpdates struct {
 
 	// storageDeltas holds storage updates for every round after dbRound.
 	// TODO(app refactor) make these storageDeltas and not *storageDeltas
-	storageDeltas []map[addrApp]*storageDelta
+	storageDeltas []map[basics.Address]map[storagePtr]*storageDelta
 
 	// creatables stores the most recent state for every creatable that
 	// appears in creatableDeltas
@@ -1216,52 +1216,55 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 		au.creatables[cidx] = mcreat
 	}
 
-	for addrApp, sdelta := range delta.sdeltas {
-		/*au.log.Warnf("MAXJ: %s", addrApp.addr)
-		au.log.Warnf("MAXJ: %d", addrApp.aidx)
-		au.log.Warnf("MAXJ: %+v", sdelta.counts)
-		au.log.Warnf("MAXJ: %+v", sdelta.action)
-		au.log.Warnf("MAXJ: %+v", sdelta.kvCow)
-		au.log.Warnf("#######################")*/
+	for addr, smap := range delta.sdeltas {
+		for storagePtr, sdelta := range smap {
+			/*au.log.Warnf("MAXJ: %s", storagePtr.addr)
+			au.log.Warnf("MAXJ: %d", storagePtr.aidx)
+			au.log.Warnf("MAXJ: %+v", sdelta.counts)
+			au.log.Warnf("MAXJ: %+v", sdelta.action)
+			au.log.Warnf("MAXJ: %+v", sdelta.kvCow)
+			au.log.Warnf("#######################")*/
 
-		// Grab any modifiedStorage for this addrApp already (might
-		// not exist)
-		mstor := au.storage[addrApp]
+			// Grab any modifiedStorage for this storagePtr already (might
+			// not exist)
+			aapp0 := addrApp{addr: addr, aidx: storagePtr.aidx, global: storagePtr.global}
+			mstor := au.storage[aapp0]
 
-		// Bump the reference count
-		mstor.ndeltas++
+			// Bump the reference count
+			mstor.ndeltas++
 
-		// Overwrite the storage counts with the delta's (absolute)
-		// storage counts
-		mstor.counts = *sdelta.counts
+			// Overwrite the storage counts with the delta's (absolute)
+			// storage counts
+			mstor.counts = *sdelta.counts
 
-		// Based on the delta's action, update the state of the
-		// modifiedStorage and bump reference counts on each key
-		switch sdelta.action {
-		case remainAllocAction:
-			// remain allocated: don't clear key/value
-			mstor.state = allocatedState
-			if mstor.kvDelta == nil {
+			// Based on the delta's action, update the state of the
+			// modifiedStorage and bump reference counts on each key
+			switch sdelta.action {
+			case remainAllocAction:
+				// remain allocated: don't clear key/value
+				mstor.state = allocatedState
+				if mstor.kvDelta == nil {
+					mstor.kvDelta = make(refCountedStateDelta)
+				}
+				mstor.kvDelta.applyKvDelta(sdelta.kvCow)
+			case allocAction:
+				// allocate and apply changes
+				mstor.state = allocatedState
+				mstor.lastClearedRound = rnd
 				mstor.kvDelta = make(refCountedStateDelta)
+				mstor.kvDelta.applyKvDelta(sdelta.kvCow)
+			case deallocAction:
+				// deallocate
+				mstor.state = deallocatedState
+				mstor.lastClearedRound = rnd
+				mstor.kvDelta = nil
+			default:
+				au.log.Panic("accountUpdates: unknown storage action %v", sdelta.action)
 			}
-			mstor.kvDelta.applyKvDelta(sdelta.kvCow)
-		case allocAction:
-			// allocate and apply changes
-			mstor.state = allocatedState
-			mstor.lastClearedRound = rnd
-			mstor.kvDelta = make(refCountedStateDelta)
-			mstor.kvDelta.applyKvDelta(sdelta.kvCow)
-		case deallocAction:
-			// deallocate
-			mstor.state = deallocatedState
-			mstor.lastClearedRound = rnd
-			mstor.kvDelta = nil
-		default:
-			au.log.Panic("accountUpdates: unknown storage action %v", sdelta.action)
-		}
 
-		// Write back our modified storage to the cache
-		au.storage[addrApp] = mstor
+			// Write back our modified storage to the cache
+			au.storage[aapp0] = mstor
+		}
 	}
 
 	if ot.Overflowed {
@@ -1364,16 +1367,17 @@ func (au *accountUpdates) countStorageForRoundImpl(rnd basics.Round, addr basics
 
 	// Check if this is the most recent round, in which case, we can
 	// use a cache of the most recent storage state.
-	aapp := addrApp{addr, aidx, global}
+	aapp := storagePtr{aidx, global}
+	aapp0 := addrApp{addr, aidx, global}
 	if offset == uint64(len(au.storageDeltas)) {
-		mstor, ok := au.storage[aapp]
+		mstor, ok := au.storage[aapp0]
 		if ok {
 			return mstor.counts, nil
 		}
 	} else {
 		for offset > 0 {
 			offset--
-			storageDelta, ok := au.storageDeltas[offset][aapp]
+			storageDelta, ok := au.storageDeltas[offset][addr][aapp]
 			if ok {
 				return *storageDelta.counts, nil
 			}
@@ -1381,7 +1385,7 @@ func (au *accountUpdates) countStorageForRoundImpl(rnd basics.Round, addr basics
 	}
 
 	// Consult the database
-	return au.accountsq.countStorage(aapp)
+	return au.accountsq.countStorage(addr, aapp)
 }
 
 func (au *accountUpdates) getKeyForRoundImpl(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
@@ -1396,9 +1400,10 @@ func (au *accountUpdates) getKeyForRoundImpl(rnd basics.Round, addr basics.Addre
 
 	// Check if this is the most recent round, in which case, we can
 	// use a cache of the most recent storage state.
-	aapp := addrApp{addr, aidx, global}
+	aapp := storagePtr{aidx, global}
+	aapp0 := addrApp{addr, aidx, global}
 	if offset == uint64(len(au.storageDeltas)) {
-		mstor, ok := au.storage[aapp]
+		mstor, ok := au.storage[aapp0]
 		if ok {
 			rcdelta, ok := mstor.kvDelta[key]
 			if ok {
@@ -1417,7 +1422,7 @@ func (au *accountUpdates) getKeyForRoundImpl(rnd basics.Round, addr basics.Addre
 	} else {
 		for offset > 0 {
 			offset--
-			storageDelta, ok := au.storageDeltas[offset][aapp]
+			storageDelta, ok := au.storageDeltas[offset][addr][aapp]
 			if ok {
 				vdelta, ok := storageDelta.kvCow[key]
 				if ok {
@@ -1437,7 +1442,7 @@ func (au *accountUpdates) getKeyForRoundImpl(rnd basics.Round, addr basics.Addre
 	}
 
 	// Consult the database
-	return au.accountsq.lookupKey(aapp, key)
+	return au.accountsq.lookupKey(addr, aapp, key)
 }
 
 // accountsCreateCatchpointLabel creates a catchpoint label and write it.
@@ -1522,7 +1527,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]map[basics.Address]miniAccountDelta, offset, offset)
 	creatableDeltas := make([]map[basics.CreatableIndex]modifiedCreatable, offset, offset)
-	storageDeltas := make([]map[addrApp]*storageDelta, offset, offset)
+	storageDeltas := make([]map[basics.Address]map[storagePtr]*storageDelta, offset, offset)
 	roundTotals := make([]AccountTotals, offset+1, offset+1)
 	protos := make([]config.ConsensusParams, offset+1, offset+1)
 	copy(deltas, au.deltas[:offset])
@@ -1563,20 +1568,21 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			fullRndDelta[addr] = delta
 		}
 	}
-	for i, rndDelta := range storageDeltas {
-		for aapp, storeDelta := range rndDelta {
-			addr := aapp.addr
-			delta, ok := fullDeltas[i][addr]
-			if !ok {
-				old := au.fullLookup(dbRound+basics.Round(i), addr)
-				delta = accountDelta{old: old, new: old}
+	for i, smap := range storageDeltas {
+		for addr, rndDelta := range smap {
+			for aapp, storeDelta := range rndDelta {
+				delta, ok := fullDeltas[i][addr]
+				if !ok {
+					old := au.fullLookup(dbRound+basics.Round(i), addr)
+					delta = accountDelta{old: old, new: old}
+				}
+				delta, err := delta.applyStorageDelta(aapp, storeDelta)
+				if err != nil {
+					au.log.Warnf("commitRound: unable to apply storage delta: %v", err)
+					return
+				}
+				fullDeltas[i][addr] = delta
 			}
-			delta, err := delta.applyStorageDelta(aapp, storeDelta)
-			if err != nil {
-				au.log.Warnf("commitRound: unable to apply storage delta: %v", err)
-				return
-			}
-			fullDeltas[i][addr] = delta
 		}
 	}
 
@@ -1596,8 +1602,11 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		for cidx := range creatableDeltas[i] {
 			creatableFlushcount[cidx] = creatableFlushcount[cidx] + 1
 		}
-		for aapp := range storageDeltas[i] {
-			storageFlushcount[aapp] = storageFlushcount[aapp] + 1
+		for addr, smap := range storageDeltas[i] {
+			for aapp := range smap {
+				aapp0 := addrApp{addr: addr, aidx: aapp.aidx, global: aapp.global}
+				storageFlushcount[aapp0] = storageFlushcount[aapp0] + 1
+			}
 		}
 	}
 
@@ -1726,38 +1735,41 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		// The actual round that this delta came from
 		deltaRound := au.dbRound + basics.Round(i) + basics.Round(1)
 
-		for aapp, sdelta := range aappStorageDeltas {
-			// Look up latest cached storage for aapp
-			mstor, ok := au.storage[aapp]
-			if !ok {
-				au.log.Panicf("inconsistency: want to flush kv changes for %+v, but not present in au.storage", aapp)
-			}
-
-			// If the modifiedStorage came from an opt-in after
-			// this delta, then we should not subtract reference
-			// counts, for values because the deltas have already
-			// been cleared.
-			if mstor.lastClearedRound > deltaRound {
-				continue
-			}
-
-			// Otherwise, subtract from the reference count for each
-			// value delta
-			for key := range sdelta.kvCow {
-				rcDelta, ok := mstor.kvDelta[key]
+		for addr, smap := range aappStorageDeltas {
+			for aapp, sdelta := range smap {
+				// Look up latest cached storage for aapp
+				aapp0 := addrApp{addr: addr, aidx: aapp.aidx, global: aapp.global}
+				mstor, ok := au.storage[aapp0]
 				if !ok {
-					au.log.Panicf("inconsistency: want to decrement refcount for key %x, but no key delta exists for %+v", key, aapp)
+					au.log.Panicf("inconsistency: want to flush kv changes for %+v, but not present in au.storage", aapp)
 				}
 
-				if rcDelta.ndeltas < 1 {
-					au.log.Panicf("inconsistency: want to decrement refcount for key %x, but refcount was already 0 for %+v", key, aapp)
+				// If the modifiedStorage came from an opt-in after
+				// this delta, then we should not subtract reference
+				// counts, for values because the deltas have already
+				// been cleared.
+				if mstor.lastClearedRound > deltaRound {
+					continue
 				}
 
-				rcDelta.ndeltas--
-				if rcDelta.ndeltas == 0 {
-					delete(mstor.kvDelta, key)
-				} else {
-					mstor.kvDelta[key] = rcDelta
+				// Otherwise, subtract from the reference count for each
+				// value delta
+				for key := range sdelta.kvCow {
+					rcDelta, ok := mstor.kvDelta[key]
+					if !ok {
+						au.log.Panicf("inconsistency: want to decrement refcount for key %x, but no key delta exists for %+v", key, aapp)
+					}
+
+					if rcDelta.ndeltas < 1 {
+						au.log.Panicf("inconsistency: want to decrement refcount for key %x, but refcount was already 0 for %+v", key, aapp)
+					}
+
+					rcDelta.ndeltas--
+					if rcDelta.ndeltas == 0 {
+						delete(mstor.kvDelta, key)
+					} else {
+						mstor.kvDelta[key] = rcDelta
+					}
 				}
 			}
 		}

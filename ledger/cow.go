@@ -50,6 +50,11 @@ type roundCowState struct {
 	mods         StateDelta
 }
 
+type storagePtr struct {
+	aidx   basics.AppIndex
+	global bool
+}
+
 type addrApp struct {
 	addr   basics.Address
 	aidx   basics.AppIndex
@@ -83,7 +88,7 @@ type StateDelta struct {
 	prevTimestamp int64
 
 	// storage deltas
-	sdeltas map[addrApp]*storageDelta
+	sdeltas map[basics.Address]map[storagePtr]*storageDelta
 }
 
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64) *roundCowState {
@@ -96,7 +101,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimest
 			Txids:         make(map[transactions.Txid]basics.Round),
 			txleases:      make(map[txlease]basics.Round),
 			creatables:    make(map[basics.CreatableIndex]modifiedCreatable),
-			sdeltas:       make(map[addrApp]*storageDelta),
+			sdeltas:       make(map[basics.Address]map[storagePtr]*storageDelta),
 			hdr:           &hdr,
 			prevTimestamp: prevTimestamp,
 		},
@@ -187,7 +192,7 @@ func (cb *roundCowState) child() *roundCowState {
 			Txids:         make(map[transactions.Txid]basics.Round),
 			txleases:      make(map[txlease]basics.Round),
 			creatables:    make(map[basics.CreatableIndex]modifiedCreatable),
-			sdeltas:       make(map[addrApp]*storageDelta),
+			sdeltas:       make(map[basics.Address]map[storagePtr]*storageDelta),
 			hdr:           cb.mods.hdr,
 			prevTimestamp: cb.mods.prevTimestamp,
 		},
@@ -216,12 +221,14 @@ func (cb *roundCowState) commitToParent() {
 	for cidx, delta := range cb.mods.creatables {
 		cb.commitParent.mods.creatables[cidx] = delta
 	}
-	for aapp, nsd := range cb.mods.sdeltas {
-		lsd, ok := cb.commitParent.mods.sdeltas[aapp]
-		if ok {
-			lsd.merge(nsd)
-		} else {
-			cb.commitParent.mods.sdeltas[aapp] = nsd
+	for addr, smod := range cb.mods.sdeltas {
+		for aapp, nsd := range smod {
+			lsd, ok := cb.commitParent.mods.sdeltas[addr][aapp]
+			if ok {
+				lsd.merge(nsd)
+			} else {
+				cb.commitParent.mods.sdeltas[addr][aapp] = nsd
+			}
 		}
 	}
 }

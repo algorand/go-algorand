@@ -71,25 +71,25 @@ func (ml *emptyLedger) txnCounter() uint64 {
 // stateTracker tracks the expected state of an account's storage after a
 // series of allocs, dallocs, reads, writes, and deletes
 type stateTracker struct {
-	// Expected keys/values for addrApp
-	storage map[addrApp]basics.TealKeyValue
+	// Expected keys/values for storagePtr
+	storage map[storagePtr]basics.TealKeyValue
 
-	// Expected allocation state for addrApp
-	allocState map[addrApp]bool
+	// Expected allocation state for storagePtr
+	allocState map[storagePtr]bool
 
-	// max StateSchema for addrApp
-	schemas map[addrApp]basics.StateSchema
+	// max StateSchema for storagePtr
+	schemas map[storagePtr]basics.StateSchema
 }
 
 func makeStateTracker() stateTracker {
 	return stateTracker{
-		storage:    make(map[addrApp]basics.TealKeyValue),
-		allocState: make(map[addrApp]bool),
-		schemas:    make(map[addrApp]basics.StateSchema),
+		storage:    make(map[storagePtr]basics.TealKeyValue),
+		allocState: make(map[storagePtr]bool),
+		schemas:    make(map[storagePtr]basics.StateSchema),
 	}
 }
 
-func (st *stateTracker) alloc(aapp addrApp, schema basics.StateSchema) error {
+func (st *stateTracker) alloc(aapp storagePtr, schema basics.StateSchema) error {
 	if st.allocated(aapp) {
 		return fmt.Errorf("already allocated")
 	}
@@ -99,7 +99,7 @@ func (st *stateTracker) alloc(aapp addrApp, schema basics.StateSchema) error {
 	return nil
 }
 
-func (st *stateTracker) dealloc(aapp addrApp) error {
+func (st *stateTracker) dealloc(aapp storagePtr) error {
 	if !st.allocated(aapp) {
 		return fmt.Errorf("not allocated")
 	}
@@ -109,11 +109,11 @@ func (st *stateTracker) dealloc(aapp addrApp) error {
 	return nil
 }
 
-func (st *stateTracker) allocated(aapp addrApp) bool {
+func (st *stateTracker) allocated(aapp storagePtr) bool {
 	return st.allocState[aapp]
 }
 
-func (st *stateTracker) get(aapp addrApp, key string) (basics.TealValue, bool, error) {
+func (st *stateTracker) get(aapp storagePtr, key string) (basics.TealValue, bool, error) {
 	if !st.allocated(aapp) {
 		return basics.TealValue{}, false, fmt.Errorf("not allocated")
 	}
@@ -121,7 +121,7 @@ func (st *stateTracker) get(aapp addrApp, key string) (basics.TealValue, bool, e
 	return val, ok, nil
 }
 
-func (st *stateTracker) set(aapp addrApp, key string, val basics.TealValue) error {
+func (st *stateTracker) set(aapp storagePtr, key string, val basics.TealValue) error {
 	if !st.allocated(aapp) {
 		return fmt.Errorf("not allocated")
 	}
@@ -129,7 +129,7 @@ func (st *stateTracker) set(aapp addrApp, key string, val basics.TealValue) erro
 	return nil
 }
 
-func (st *stateTracker) del(aapp addrApp, key string) error {
+func (st *stateTracker) del(aapp storagePtr, key string) error {
 	if !st.allocated(aapp) {
 		return fmt.Errorf("not allocated")
 	}
@@ -137,22 +137,23 @@ func (st *stateTracker) del(aapp addrApp, key string) error {
 	return nil
 }
 
-func randomAddrApps(n int) []addrApp {
-	out := make([]addrApp, n)
+func randomAddrApps(n int) ([]storagePtr, []basics.Address) {
+	out := make([]storagePtr, n)
+	outa := make([]basics.Address, n)
 	for i := 0; i < n; i++ {
-		out[i] = addrApp{
-			addr:   randomAddress(),
+		out[i] = storagePtr{
 			aidx:   basics.AppIndex(rand.Intn(100000) + 1),
 			global: rand.Intn(2) == 0,
 		}
+		outa[i] = randomAddress()
 	}
-	return out
+	return out, outa
 }
 
 func TestCowStorage(t *testing.T) {
 	ml := emptyLedger{}
 	cow := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, 0)
-	allAapps := randomAddrApps(10)
+	allAapps, allAddrs := randomAddrApps(10)
 
 	st := makeStateTracker()
 
@@ -175,7 +176,9 @@ func TestCowStorage(t *testing.T) {
 
 	for i := 0; i < 1000; i++ {
 		// Pick a random aapp
-		aapp := allAapps[rand.Intn(len(allAapps))]
+		r := rand.Intn(len(allAapps))
+		aapp := allAapps[r]
+		addr := allAddrs[r]
 
 		// Do some random, valid actions and check that the behavior is
 		// what we expect
@@ -183,7 +186,7 @@ func TestCowStorage(t *testing.T) {
 		// Allocate
 		if rand.Float32() < 0.25 {
 			actuallyAllocated := st.allocated(aapp)
-			err := cow.Allocate(aapp.addr, aapp.aidx, aapp.global)
+			err := cow.Allocate(addr, aapp.aidx, aapp.global)
 			if actuallyAllocated {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), "cannot allocate")
@@ -201,7 +204,7 @@ func TestCowStorage(t *testing.T) {
 		// Deallocate
 		if rand.Float32() < 0.25 {
 			actuallyAllocated := st.allocated(aapp)
-			err := cow.Deallocate(aapp.addr, aapp.aidx, aapp.global)
+			err := cow.Deallocate(addr, aapp.aidx, aapp.global)
 			if actuallyAllocated {
 				require.NoError(t, err)
 				err := st.dealloc(aapp)
@@ -217,7 +220,7 @@ func TestCowStorage(t *testing.T) {
 			actuallyAllocated := st.allocated(aapp)
 			rkey := allKeys[rand.Intn(len(allKeys))]
 			rval := allValues[rand.Intn(len(allValues))]
-			err := cow.SetKey(aapp.addr, aapp.aidx, aapp.global, rkey, rval)
+			err := cow.SetKey(addr, aapp.aidx, aapp.global, rkey, rval)
 			if actuallyAllocated {
 				require.NoError(t, err)
 				err = st.set(aapp, rkey, rval)
@@ -232,7 +235,7 @@ func TestCowStorage(t *testing.T) {
 		if rand.Float32() < 0.25 {
 			actuallyAllocated := st.allocated(aapp)
 			rkey := allKeys[rand.Intn(len(allKeys))]
-			err := cow.DelKey(aapp.addr, aapp.aidx, aapp.global, rkey)
+			err := cow.DelKey(addr, aapp.aidx, aapp.global, rkey)
 			if actuallyAllocated {
 				require.NoError(t, err)
 				err = st.del(aapp, rkey)
@@ -261,7 +264,7 @@ func TestCowStorage(t *testing.T) {
 		for _, aapp := range allAapps {
 			// Allocations should match
 			actuallyAllocated := st.allocated(aapp)
-			cowAllocated, err := cow.Allocated(aapp.addr, aapp.aidx, aapp.global)
+			cowAllocated, err := cow.Allocated(addr, aapp.aidx, aapp.global)
 			require.NoError(t, err)
 			require.Equal(t, actuallyAllocated, cowAllocated)
 
@@ -271,7 +274,7 @@ func TestCowStorage(t *testing.T) {
 					tval, tok, err := st.get(aapp, key)
 					require.NoError(t, err)
 
-					cval, cok, err := cow.GetKey(aapp.addr, aapp.aidx, aapp.global, key)
+					cval, cok, err := cow.GetKey(addr, aapp.aidx, aapp.global, key)
 					require.NoError(t, err)
 					require.Equal(t, tok, cok)
 					require.Equal(t, tval, cval)
@@ -280,7 +283,7 @@ func TestCowStorage(t *testing.T) {
 				tcounts := basics.StateSchema{
 					NumByteSlice: uint64(len(st.storage[aapp])),
 				}
-				ccounts, err := cow.getStorageCounts(aapp.addr, aapp.aidx, aapp.global)
+				ccounts, err := cow.getStorageCounts(addr, aapp.aidx, aapp.global)
 				require.NoError(t, err)
 				require.Equal(t, tcounts, ccounts)
 			}
