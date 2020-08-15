@@ -459,6 +459,13 @@ func (l *Ledger) lookupWithoutRewards(rnd basics.Round, addr basics.Address) (ap
 	return data, nil
 }
 
+// FullLookup is like Lookup but it includes application key-value pairs.
+func (l *Ledger) FullLookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.FullLookup(rnd, addr, true)
+}
+
 // Totals returns the totals of all accounts at the end of round rnd.
 func (l *Ledger) Totals(rnd basics.Round) (AccountTotals, error) {
 	l.trackerMu.RLock()

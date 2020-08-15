@@ -124,18 +124,30 @@ type accountDelta struct {
 	new basics.AccountData
 }
 
-func (delta accountDelta) applyMiniDelta(mini miniAccountDelta) (accountDelta, error) {
+func applyMiniDelta(data basics.AccountData, delta miniAccountDelta) basics.AccountData {
+	return apply.AccountData(data).Set(delta.new)
+}
+
+func (delta accountDelta) foldMiniDelta(mini miniAccountDelta) (accountDelta, error) {
 	// TODO sanity check?
 	// newMini := apply.AccountData(delta.new).WithoutAppKV()
 	// if !newMini.Equals(mini.old) {
 	// 	return accountDelta{}, fmt.Errorf("newMini != mini.old: %+v != %+v", newMini, mini.old)
 	// }
-	delta.new = apply.AccountData(delta.new).Set(mini.new)
+	delta.new = applyMiniDelta(delta.new, mini)
 	return delta, nil
 }
 
-func (delta accountDelta) applyStorageDelta(aapp storagePtr, store *storageDelta) (accountDelta, error) {
-	data := delta.new
+func (delta accountDelta) foldStorageDelta(aapp storagePtr, store *storageDelta) (accountDelta, error) {
+	var err error
+	delta.new, err = applyStorageDelta(delta.new, aapp, store)
+	if err != nil {
+		return accountDelta{}, err
+	}
+	return delta, nil
+}
+
+func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageDelta) (basics.AccountData, error) {
 	if aapp.global {
 		owned := make(map[basics.AppIndex]basics.AppParams, len(data.AppParams))
 		for k, v := range data.AppParams {
@@ -152,7 +164,7 @@ func (delta accountDelta) applyStorageDelta(aapp storagePtr, store *storageDelta
 			// at least preceded by a call to PutWithCreatable???
 			params, ok := owned[aapp.aidx]
 			if !ok {
-				return accountDelta{}, fmt.Errorf("could not find existing params for %v", aapp.aidx)
+				return basics.AccountData{}, fmt.Errorf("could not find existing params for %v", aapp.aidx)
 			}
 			params = params.Clone()
 			// note: if this is an allocAction, there will be no
@@ -176,7 +188,7 @@ func (delta accountDelta) applyStorageDelta(aapp storagePtr, store *storageDelta
 			owned[aapp.aidx] = params
 		}
 
-		delta.new.AppParams = owned
+		data.AppParams = owned
 
 	} else {
 		owned := make(map[basics.AppIndex]basics.AppLocalState, len(data.AppLocalStates))
@@ -193,7 +205,7 @@ func (delta accountDelta) applyStorageDelta(aapp storagePtr, store *storageDelta
 			// at least preceded by a call to Put???
 			states, ok := owned[aapp.aidx]
 			if !ok {
-				return accountDelta{}, fmt.Errorf("could not find existing states for %v", aapp.aidx)
+				return basics.AccountData{}, fmt.Errorf("could not find existing states for %v", aapp.aidx)
 			}
 			states = states.Clone()
 			// note: if this is an allocAction, there will be no
@@ -217,9 +229,9 @@ func (delta accountDelta) applyStorageDelta(aapp storagePtr, store *storageDelta
 			owned[aapp.aidx] = states
 		}
 
-		delta.new.AppLocalStates = owned
+		data.AppLocalStates = owned
 	}
-	return delta, nil
+	return data, nil
 }
 
 // catchpointState is used to store catchpoint related varaibles into the catchpointstate table.

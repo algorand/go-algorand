@@ -331,6 +331,79 @@ func (au *accountUpdates) close() {
 	<-au.commitSyncerClosed
 }
 
+// FullLookup is like Lookup except that it also looks up application data.
+func (au *accountUpdates) FullLookup(rnd basics.Round, addr basics.Address, withRewards bool) (basics.AccountData, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	return au.fullLookup(rnd, addr, withRewards)
+}
+
+func (au *accountUpdates) fullLookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return
+	}
+
+	offsetForRewards := offset
+
+	defer func() {
+		if withRewards {
+			totals := au.roundTotals[offsetForRewards]
+			proto := au.protos[offsetForRewards]
+			data = data.WithUpdatedRewards(proto, totals.RewardsLevel)
+		}
+	}()
+
+	mini, err := au.accountsq.lookup(addr)
+	if err != nil {
+		return basics.AccountData{}, fmt.Errorf("fullLookup: could not look up %v: %v", addr, err)
+	}
+	res := mini.ToAccountData()
+
+	for aidx := range res.AppLocalStates {
+		state := res.AppLocalStates[aidx]
+
+		kv, _, err := au.accountsq.lookupStorage(addr, storagePtr{aidx: aidx, global: false})
+		if err != nil {
+			return basics.AccountData{}, fmt.Errorf("fullLookup: lookupStorage for %v on local %v failed: %v", addr, aidx, err)
+		}
+
+		state.KeyValue = kv
+		res.AppLocalStates[aidx] = state
+	}
+	for aidx := range res.AppParams {
+		params := res.AppParams[aidx]
+
+		kv, _, err := au.accountsq.lookupStorage(addr, storagePtr{aidx: aidx, global: true})
+		if err != nil {
+			return basics.AccountData{}, fmt.Errorf("fullLookup: lookupStorage for %v on global %v failed: %v", addr, aidx, err)
+		}
+
+		params.GlobalState = kv
+		res.AppParams[aidx] = params
+	}
+	// as of this point, res contains AccountData as of au.dbRound
+
+	for i := uint64(0); i < offset; i++ {
+		deltas, sdeltas := au.deltas[i], au.storageDeltas[i]
+		mini, ok := deltas[addr]
+		if ok {
+			res = applyMiniDelta(res, mini)
+		}
+		smap, ok := sdeltas[addr]
+		if ok {
+			for aapp, storeDelta := range smap {
+				res, err = applyStorageDelta(res, aapp, storeDelta)
+				if err != nil {
+					return basics.AccountData{}, fmt.Errorf("fullLookup: failed to apply storage delta for %v under %v at offset %v, dbRound %v: %v", addr, aapp.aidx, offset, au.dbRound, err)
+				}
+			}
+		}
+	}
+
+	return res, nil
+}
+
 // Lookup returns the accound data for a given address at a given round. The withRewards indicates whether the
 // rewards should be added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it could return the AccoutData which represent the "rewarded" account data.
@@ -1549,34 +1622,61 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
 	}
 
+	// accountUpdates stores account and app deltas separately, but
+	// catchpoints expect unified deltas, keyed off of address.
+	// Look up initial account states here.
+	fullDeltas := make([]map[basics.Address]accountDelta, len(deltas))
+	for i := range deltas {
+		rndDelta := deltas[i]
+		smap := storageDeltas[i]
+
+		fullRndDelta := make(map[basics.Address]accountDelta, len(rndDelta)+len(smap))
+		for addr := range rndDelta {
+			old, err := au.fullLookup(dbRound+basics.Round(i), addr, false)
+			if err != nil {
+				au.log.Warnf("commitRound: fullLookup failed for %v at %d: %v", addr, dbRound+basics.Round(i), err)
+				return
+			}
+			delta := accountDelta{old: old, new: old}
+			fullRndDelta[addr] = delta
+		}
+
+		for addr := range smap {
+			if _, ok := fullRndDelta[addr]; ok {
+				continue
+			}
+			old, err := au.fullLookup(dbRound+basics.Round(i), addr, false)
+			if err != nil {
+				au.log.Warnf("commitRound: fullLookup failed for %v at %d: %v", addr, dbRound+basics.Round(i), err)
+				return
+			}
+			delta := accountDelta{old: old, new: old}
+			fullRndDelta[addr] = delta
+		}
+		fullDeltas[i] = fullRndDelta
+	}
+
 	au.accountsMu.RUnlock()
 
 	// accountUpdates stores account and app deltas separately, but
 	// catchpoints expect unified deltas, keyed off of address.
 	// Unify the deltas here.
-	fullDeltas := make([]map[basics.Address]accountDelta, len(deltas))
 	for i, rndDelta := range deltas {
-		fullRndDelta := make(map[basics.Address]accountDelta, len(rndDelta))
 		for addr, mini := range rndDelta {
-			old := au.fullLookup(dbRound+basics.Round(i), addr)
-			delta := accountDelta{old: old, new: old}
-			delta, err := delta.applyMiniDelta(mini)
+			delta := fullDeltas[i][addr]
+			delta, err := delta.foldMiniDelta(mini)
 			if err != nil {
 				au.log.Warnf("commitRound: unable to apply mini delta: %v", err)
 				return
 			}
-			fullRndDelta[addr] = delta
+			fullDeltas[i][addr] = delta
 		}
-	}
-	for i, smap := range storageDeltas {
+
+		smap := storageDeltas[i]
 		for addr, rndDelta := range smap {
 			for aapp, storeDelta := range rndDelta {
-				delta, ok := fullDeltas[i][addr]
-				if !ok {
-					old := au.fullLookup(dbRound+basics.Round(i), addr)
-					delta = accountDelta{old: old, new: old}
-				}
-				delta, err := delta.applyStorageDelta(aapp, storeDelta)
+				delta := fullDeltas[i][addr]
+				delta, err := delta.foldStorageDelta(aapp, storeDelta)
 				if err != nil {
 					au.log.Warnf("commitRound: unable to apply storage delta: %v", err)
 					return
