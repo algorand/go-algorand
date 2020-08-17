@@ -275,11 +275,11 @@ func (au *accountUpdates) close() {
 	<-au.commitSyncerClosed
 }
 
-// IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service so
-// that the memory pressure could be decreased until the catchpoint file writing is complete.
+// IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
+// to avoid memory pressure until the catchpoint file writing is complete.
 func (au *accountUpdates) IsWritingCatchpointFile() bool {
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
+	au.accountsMu.Lock()
+	defer au.accountsMu.Unlock()
 	// if we're still writing the previous balances, we can't move forward yet.
 	select {
 	case <-au.catchpointWriting:
@@ -1595,6 +1595,8 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 				db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(1*time.Second))
 				select {
 				case <-time.After(100 * time.Millisecond):
+					// increase the time slot allocated for writing the catchpoint, but stop when we get to the longChunkExecutionDuration limit.
+					// this would allow the catchpoint writing speed to ramp up while still leaving some cpu available.
 					chunkExecutionDuration *= 2
 					if chunkExecutionDuration > longChunkExecutionDuration {
 						chunkExecutionDuration = longChunkExecutionDuration

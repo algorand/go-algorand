@@ -584,8 +584,8 @@ func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger led
 	return eval(context.Background(), accUpdatesLedger, blk, false, nil, nil)
 }
 
-// IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service so
-// that the memory pressure could be decreased until the catchpoint file writing is complete.
+// IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
+// to avoid memory pressure until the catchpoint file writing is complete.
 func (l *Ledger) IsWritingCatchpointFile() bool {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
