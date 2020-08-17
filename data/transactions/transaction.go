@@ -46,30 +46,6 @@ type SpecialAddresses struct {
 	RewardsPool basics.Address
 }
 
-// Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records
-// After a call to Put (or Move), future calls to Get or Move will reflect the updated balance record(s)
-type Balances interface {
-	// Get looks up the balance record for an address
-	// If the account is known to be empty, then err should be nil and the returned balance record should have the given address and empty AccountData
-	// withPendingRewards specifies whether pending rewards should be applied.
-	// A non-nil error means the lookup is impossible (e.g., if the database doesn't have necessary state anymore)
-	Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error)
-
-	// GetAssetCreator gets the address of the account whose balance record
-	// contains the asset params
-	GetAssetCreator(aidx basics.AssetIndex) (basics.Address, error)
-
-	Put(basics.BalanceRecord) error
-
-	// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
-	// TODO: Does this need to be part of the balances interface, or can it just be implemented here as a function that calls Put and Get?
-	Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards *basics.MicroAlgos, dstRewards *basics.MicroAlgos) error
-
-	// Balances correspond to a Round, which mean that they also correspond
-	// to a ConsensusParams.  This returns those parameters.
-	ConsensusParams() config.ConsensusParams
-}
-
 // Header captures the fields common to every transaction type.
 type Header struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -78,7 +54,7 @@ type Header struct {
 	Fee         basics.MicroAlgos `codec:"fee"`
 	FirstValid  basics.Round      `codec:"fv"`
 	LastValid   basics.Round      `codec:"lv"`
-	Note        []byte            `codec:"note"` // Uniqueness or app-level data about txn
+	Note        []byte            `codec:"note,allocbound=config.MaxTxnNoteBytes"` // Uniqueness or app-level data about txn
 	GenesisID   string            `codec:"gen"`
 	GenesisHash crypto.Digest     `codec:"gh"`
 
@@ -117,6 +93,7 @@ type Transaction struct {
 	AssetConfigTxnFields
 	AssetTransferTxnFields
 	AssetFreezeTxnFields
+	ApplicationCallTxnFields
 }
 
 // ApplyData contains information about the transaction's execution.
@@ -130,6 +107,28 @@ type ApplyData struct {
 	SenderRewards   basics.MicroAlgos `codec:"rs"`
 	ReceiverRewards basics.MicroAlgos `codec:"rr"`
 	CloseRewards    basics.MicroAlgos `codec:"rc"`
+	EvalDelta       basics.EvalDelta  `codec:"dt"`
+}
+
+// Equal returns true if two ApplyDatas are equal, ignoring nilness equality on
+// EvalDelta's internal deltas (see EvalDelta.Equal for more information)
+func (ad ApplyData) Equal(o ApplyData) bool {
+	if ad.ClosingAmount != o.ClosingAmount {
+		return false
+	}
+	if ad.SenderRewards != o.SenderRewards {
+		return false
+	}
+	if ad.ReceiverRewards != o.ReceiverRewards {
+		return false
+	}
+	if ad.CloseRewards != o.CloseRewards {
+		return false
+	}
+	if !ad.EvalDelta.Equal(o.EvalDelta) {
+		return false
+	}
+	return true
 }
 
 // TxGroup describes a group of transactions that must appear
@@ -141,7 +140,7 @@ type TxGroup struct {
 	// together, sequentially, in a block in order for the group to be
 	// valid.  Each hash in the list is a hash of a transaction with
 	// the `Group` field omitted.
-	TxGroupHashes []crypto.Digest `codec:"txlist,allocbound=-"`
+	TxGroupHashes []crypto.Digest `codec:"txlist,allocbound=config.MaxTxGroupSize"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
@@ -273,7 +272,83 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		if !proto.Asset {
 			return fmt.Errorf("asset transaction not supported")
 		}
+	case protocol.ApplicationCallTx:
+		if !proto.Application {
+			return fmt.Errorf("application transaction not supported")
+		}
 
+		// Ensure requested action is valid
+		switch tx.OnCompletion {
+		case NoOpOC:
+		case OptInOC:
+		case CloseOutOC:
+		case ClearStateOC:
+		case UpdateApplicationOC:
+		case DeleteApplicationOC:
+		default:
+			return fmt.Errorf("invalid application OnCompletion")
+		}
+
+		// Programs may only be set for creation or update
+		if tx.ApplicationID != 0 && tx.OnCompletion != UpdateApplicationOC {
+			if len(tx.ApprovalProgram) != 0 || len(tx.ClearStateProgram) != 0 {
+				return fmt.Errorf("programs may only be specified during application creation or update")
+			}
+		}
+
+		// Schemas may only be set during application creation
+		if tx.ApplicationID != 0 {
+			if tx.LocalStateSchema != (basics.StateSchema{}) ||
+				tx.GlobalStateSchema != (basics.StateSchema{}) {
+				return fmt.Errorf("local and global state schemas are immutable")
+			}
+		}
+
+		// Limit total number of arguments
+		if len(tx.ApplicationArgs) > proto.MaxAppArgs {
+			return fmt.Errorf("too many application args, max %d", proto.MaxAppArgs)
+		}
+
+		// Sum up argument lengths
+		var argSum uint64
+		for _, arg := range tx.ApplicationArgs {
+			argSum = basics.AddSaturate(argSum, uint64(len(arg)))
+		}
+
+		// Limit total length of all arguments
+		if argSum > uint64(proto.MaxAppTotalArgLen) {
+			return fmt.Errorf("application args total length too long, max len %d bytes", proto.MaxAppTotalArgLen)
+		}
+
+		// Limit number of accounts referred to in a single ApplicationCall
+		if len(tx.Accounts) > proto.MaxAppTxnAccounts {
+			return fmt.Errorf("tx.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts)
+		}
+
+		// Limit number of other app global states referred to
+		if len(tx.ForeignApps) > proto.MaxAppTxnForeignApps {
+			return fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is %d", proto.MaxAppTxnForeignApps)
+		}
+
+		if len(tx.ForeignAssets) > proto.MaxAppTxnForeignAssets {
+			return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
+		}
+
+		if len(tx.ApprovalProgram) > proto.MaxAppProgramLen {
+			return fmt.Errorf("approval program too long. max len %d bytes", proto.MaxAppProgramLen)
+		}
+
+		if len(tx.ClearStateProgram) > proto.MaxAppProgramLen {
+			return fmt.Errorf("clear state program too long. max len %d bytes", proto.MaxAppProgramLen)
+		}
+
+		if tx.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {
+			return fmt.Errorf("tx.LocalStateSchema too large, max number of keys is %d", proto.MaxLocalSchemaEntries)
+		}
+
+		if tx.GlobalStateSchema.NumEntries() > proto.MaxGlobalSchemaEntries {
+			return fmt.Errorf("tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxGlobalSchemaEntries)
+		}
 	default:
 		return fmt.Errorf("unknown tx type %v", tx.Type)
 	}
@@ -297,6 +372,10 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 	if tx.AssetFreezeTxnFields != (AssetFreezeTxnFields{}) {
 		nonZeroFields[protocol.AssetFreezeTx] = true
+	}
+
+	if !tx.ApplicationCallTxnFields.Empty() {
+		nonZeroFields[protocol.ApplicationCallTx] = true
 	}
 
 	for t, nonZero := range nonZeroFields {
@@ -421,68 +500,6 @@ func (tx Transaction) EstimateEncodedSize() int {
 		Sig: crypto.Signature{1},
 	}
 	return stx.GetEncodedLength()
-}
-
-// Apply changes the balances according to this transaction.
-func (tx Transaction) Apply(balances Balances, spec SpecialAddresses, ctr uint64) (ad ApplyData, err error) {
-	params := balances.ConsensusParams()
-
-	// move fee to pool
-	err = balances.Move(tx.Sender, spec.FeeSink, tx.Fee, &ad.SenderRewards, nil)
-	if err != nil {
-		return
-	}
-
-	// rekeying: update balrecord.AuthAddr to tx.RekeyTo if provided
-	if (tx.RekeyTo != basics.Address{}) {
-		var record basics.BalanceRecord
-		record, err = balances.Get(tx.Sender, false)
-		if err != nil {
-			return
-		}
-		// Special case: rekeying to the account's actual address just sets balrecord.AuthAddr to 0
-		// This saves 32 bytes in your balance record if you want to go back to using your original key
-		if tx.RekeyTo == tx.Sender {
-			record.AuthAddr = basics.Address{}
-		} else {
-			record.AuthAddr = tx.RekeyTo
-		}
-
-		err = balances.Put(record)
-		if err != nil {
-			return
-		}
-	}
-
-	switch tx.Type {
-	case protocol.PaymentTx:
-		err = tx.PaymentTxnFields.apply(tx.Header, balances, spec, &ad)
-
-	case protocol.KeyRegistrationTx:
-		err = tx.KeyregTxnFields.apply(tx.Header, balances, spec, &ad)
-
-	case protocol.AssetConfigTx:
-		err = tx.AssetConfigTxnFields.apply(tx.Header, balances, spec, &ad, ctr)
-
-	case protocol.AssetTransferTx:
-		err = tx.AssetTransferTxnFields.apply(tx.Header, balances, spec, &ad)
-
-	case protocol.AssetFreezeTx:
-		err = tx.AssetFreezeTxnFields.apply(tx.Header, balances, spec, &ad)
-
-	default:
-		err = fmt.Errorf("Unknown transaction type %v", tx.Type)
-	}
-
-	// If the protocol does not support rewards in ApplyData,
-	// clear them out.
-	if !params.RewardsInApplyData {
-		ad.SenderRewards = basics.MicroAlgos{}
-		ad.ReceiverRewards = basics.MicroAlgos{}
-		ad.CloseRewards = basics.MicroAlgos{}
-	}
-
-	return
 }
 
 // TxnContext describes the context in which a transaction can appear

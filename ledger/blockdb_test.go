@@ -19,23 +19,26 @@ package ledger
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func dbOpenTest(t testing.TB) dbPair {
-	fn := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
-	dbs, err := dbOpen(fn, true)
-	require.NoError(t, err)
-	return dbs
+func dbOpenTest(t testing.TB, inMemory bool) (dbPair, string) {
+	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
+	dbs, err := dbOpen(fn, inMemory)
+	require.NoErrorf(t, err, "Filename : %s\nInMemory: %v", fn, inMemory)
+	return dbs, fn
 }
 
 func randomBlock(r basics.Round) blockEntry {
@@ -116,7 +119,7 @@ func setDbLogging(t testing.TB, dbs dbPair) {
 }
 
 func TestBlockDBEmpty(t *testing.T) {
-	dbs := dbOpenTest(t)
+	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.close()
 
@@ -130,7 +133,7 @@ func TestBlockDBEmpty(t *testing.T) {
 }
 
 func TestBlockDBInit(t *testing.T) {
-	dbs := dbOpenTest(t)
+	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.close()
 
@@ -150,7 +153,7 @@ func TestBlockDBInit(t *testing.T) {
 }
 
 func TestBlockDBAppend(t *testing.T) {
-	dbs := dbOpenTest(t)
+	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
 	defer dbs.close()
 
@@ -172,4 +175,50 @@ func TestBlockDBAppend(t *testing.T) {
 		blocks = append(blocks, blkent)
 		checkBlockDB(t, tx, blocks)
 	}
+}
+
+func TestFixGenesisPaysetHash(t *testing.T) {
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.close()
+
+	tx, err := dbs.wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	// Fetch some consensus params
+	params := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	// Make a genesis block with a good payset hash
+	goodGenesis := randomBlock(basics.Round(0))
+	goodGenesis.block.BlockHeader.TxnRoot = transactions.Payset{}.CommitGenesis(params.PaysetCommitFlat)
+	require.NoError(t, err)
+
+	// Copy the genesis block and replace its payset hash with the buggy value
+	badGenesis := goodGenesis
+	badGenesis.block.BlockHeader.TxnRoot = transactions.Payset{}.Commit(params.PaysetCommitFlat)
+
+	// Assert that the buggy value is different from the good value
+	require.NotEqual(t, goodGenesis.block.BlockHeader.TxnRoot, badGenesis.block.BlockHeader.TxnRoot)
+
+	// Insert the buggy block
+	err = blockInit(tx, []bookkeeping.Block{badGenesis.block})
+	require.NoError(t, err)
+	checkBlockDB(t, tx, []blockEntry{badGenesis})
+
+	// Check that it has the bad TxnRoot
+	blk, err := blockGet(tx, basics.Round(0))
+	require.NoError(t, err)
+	require.Equal(t, blk.BlockHeader.TxnRoot, badGenesis.block.BlockHeader.TxnRoot)
+
+	// Pretend to initBlocksDB for an archival node with the good genesis
+	l := &Ledger{log: logging.Base()}
+	err = initBlocksDB(tx, l, []bookkeeping.Block{goodGenesis.block}, true)
+	require.NoError(t, err)
+	checkBlockDB(t, tx, []blockEntry{goodGenesis})
+
+	// Check that it has the good TxnRoot
+	blk, err = blockGet(tx, basics.Round(0))
+	require.NoError(t, err)
+	require.Equal(t, blk.BlockHeader.TxnRoot, goodGenesis.block.BlockHeader.TxnRoot)
 }

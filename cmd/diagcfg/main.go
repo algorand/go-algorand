@@ -21,6 +21,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/cobra/doc"
 )
 
 func init() {
@@ -36,6 +37,17 @@ var rootCmd = &cobra.Command{
 }
 
 func main() {
+	// Hidden command to generate docs in a given directory
+	// diagcfg generate-docs [path]
+	if len(os.Args) == 3 && os.Args[1] == "generate-docs" {
+		err := doc.GenMarkdownTree(rootCmd, os.Args[2])
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

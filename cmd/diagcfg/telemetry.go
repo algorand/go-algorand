@@ -169,7 +169,7 @@ var telemetryNameCmd = &cobra.Command{
 
 var telemetryEndpointCmd = &cobra.Command{
 	Use:   "endpoint -e <url>",
-	Short: "sets the \"URI\" property",
+	Short: "Sets the \"URI\" property",
 	Long:  `Sets the "URI" property in the telemetry configuration`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := readTelemetryConfigOrExit()

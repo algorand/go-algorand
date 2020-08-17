@@ -1,0 +1,13 @@
+diff --git a/data/pools/transactionPool.go b/data/pools/transactionPool.go
+index 79aa4a9..8ad4f93 100644
+--- a/data/pools/transactionPool.go
++++ b/data/pools/transactionPool.go
+@@ -233,6 +233,8 @@ func (pool *TransactionPool) Remember(t transactions.SignedTxn) error {
+ 	// last, update the spent algos from the sender account
+ 	pool.algosPendingSpend.accountForTransactionDeductions(t.Txn, deductions)
+ 
++	logging.Base().Infof("Transaction remembered %s", t.ID())
++
+ 	return nil
+ }
+ 

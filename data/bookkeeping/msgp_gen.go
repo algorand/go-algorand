@@ -7,6 +7,64 @@ import (
 	"github.com/algorand/msgp/msgp"
 )
 
+// The following msgp objects are implemented in this file:
+// Block
+//   |-----> (*) MarshalMsg
+//   |-----> (*) CanMarshalMsg
+//   |-----> (*) UnmarshalMsg
+//   |-----> (*) CanUnmarshalMsg
+//   |-----> (*) Msgsize
+//   |-----> (*) MsgIsZero
+//
+// BlockHash
+//     |-----> (*) MarshalMsg
+//     |-----> (*) CanMarshalMsg
+//     |-----> (*) UnmarshalMsg
+//     |-----> (*) CanUnmarshalMsg
+//     |-----> (*) Msgsize
+//     |-----> (*) MsgIsZero
+//
+// BlockHeader
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
+// Genesis
+//    |-----> (*) MarshalMsg
+//    |-----> (*) CanMarshalMsg
+//    |-----> (*) UnmarshalMsg
+//    |-----> (*) CanUnmarshalMsg
+//    |-----> (*) Msgsize
+//    |-----> (*) MsgIsZero
+//
+// GenesisAllocation
+//         |-----> (*) MarshalMsg
+//         |-----> (*) CanMarshalMsg
+//         |-----> (*) UnmarshalMsg
+//         |-----> (*) CanUnmarshalMsg
+//         |-----> (*) Msgsize
+//         |-----> (*) MsgIsZero
+//
+// RewardsState
+//       |-----> (*) MarshalMsg
+//       |-----> (*) CanMarshalMsg
+//       |-----> (*) UnmarshalMsg
+//       |-----> (*) CanUnmarshalMsg
+//       |-----> (*) Msgsize
+//       |-----> (*) MsgIsZero
+//
+// UpgradeVote
+//      |-----> (*) MarshalMsg
+//      |-----> (*) CanMarshalMsg
+//      |-----> (*) UnmarshalMsg
+//      |-----> (*) CanUnmarshalMsg
+//      |-----> (*) Msgsize
+//      |-----> (*) MsgIsZero
+//
+
 // MarshalMsg implements msgp.Marshaler
 func (z *Block) MarshalMsg(b []byte) (o []byte, err error) {
 	o = msgp.Require(b, z.Msgsize())
@@ -1507,6 +1565,11 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Allocation")
 				return
 			}
+			if zb0004 > MaxInitialGenesisAllocationSize {
+				err = msgp.ErrOverflow(uint64(zb0004), uint64(MaxInitialGenesisAllocationSize))
+				err = msgp.WrapError(err, "struct-from-array", "Allocation")
+				return
+			}
 			if zb0005 {
 				(*z).Allocation = nil
 			} else if (*z).Allocation != nil && cap((*z).Allocation) >= zb0004 {
@@ -1600,6 +1663,11 @@ func (z *Genesis) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				var zb0007 bool
 				zb0006, zb0007, bts, err = msgp.ReadArrayHeaderBytes(bts)
 				if err != nil {
+					err = msgp.WrapError(err, "Allocation")
+					return
+				}
+				if zb0006 > MaxInitialGenesisAllocationSize {
+					err = msgp.ErrOverflow(uint64(zb0006), uint64(MaxInitialGenesisAllocationSize))
 					err = msgp.WrapError(err, "Allocation")
 					return
 				}

@@ -68,6 +68,24 @@ func MulSaturate(a uint64, b uint64) uint64 {
 	return res
 }
 
+// AddSaturate adds 2 values with saturation on overflow
+func AddSaturate(a uint64, b uint64) uint64 {
+	res, overflowed := OAdd(a, b)
+	if overflowed {
+		return math.MaxUint64
+	}
+	return res
+}
+
+// SubSaturate subtracts 2 values with saturation on underflow
+func SubSaturate(a uint64, b uint64) uint64 {
+	res, overflowed := OSub(a, b)
+	if overflowed {
+		return 0
+	}
+	return res
+}
+
 // Add16 adds 2 uint16 values with overflow detection
 func (t *OverflowTracker) Add16(a uint16, b uint16) uint16 {
 	res, overflowed := OAdd16(a, b)

@@ -1,0 +1,12 @@
+{
+    "sig": "",
+    "txn": {
+        "apid": 100,
+        "fee": 1176,
+        "gen": "devnet-v33.0",
+        "gh": "JgsgCaCTqIaLeVhyL6XlRu3n7Rfk2FxMeK+wRSaQ7dI=",
+        "note": "6gAVR0Nsv5Y=",
+        "snd": "47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU",
+        "type": "appl"
+    }
+}

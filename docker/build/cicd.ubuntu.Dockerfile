@@ -1,7 +1,7 @@
 ARG ARCH="amd64"
 
 FROM ${ARCH}/ubuntu:18.04
-ENV GOLANG_VERSION 1.12
+ARG GOLANG_VERSION
 ARG ARCH="amd64"
 RUN apt-get update && apt-get install -y build-essential git libboost-all-dev wget sqlite3 autoconf jq bsdmainutils shellcheck
 WORKDIR /root
@@ -15,7 +15,6 @@ COPY . $GOPATH/src/github.com/algorand/go-algorand
 ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \
     BRANCH=${BRANCH} \
     CHANNEL=${CHANNEL} \
-    BUILDCHANNEL=${BUILDCHANNEL} \
     DEFAULTNETWORK=${DEFAULTNETWORK} \
     FULLVERSION=${FULLVERSION} \
     GOPROXY=https://gocenter.io \
