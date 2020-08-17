@@ -1,0 +1,532 @@
+#pragma version 2
+txn NumAppArgs
+int 6
+==
+bnz if0
+txn ApplicationID
+int 0
+==
+!
+bnz assert2
+err
+assert2:
+txn NumAccounts
+int 0
+==
+bnz cond4
+txn NumAccounts
+int 1
+==
+bnz cond5
+txn NumAppArgs
+int 2
+==
+bnz cond6
+// transfer asset
+txna ApplicationArgs 0
+btoi
+store 1
+load 1
+int 0
+==
+bnz unless7
+// cannot modify frozen asset
+txn Sender
+byte base64 Y3I=
+app_global_get
+==
+bnz if9
+int 0
+byte base64 Zno=
+app_local_get
+int 1
+==
+int 1
+bnz if_end10
+if9:
+byte base64 Zno=
+app_global_get
+int 1
+==
+if_end10:
+!
+bnz assert8
+err
+assert8:
+txn Sender
+byte base64 Y3I=
+app_global_get
+==
+bnz if11
+int 0
+byte base64 Ymw=
+int 0
+byte base64 Ymw=
+app_local_get
+load 1
+-
+app_local_put
+int 1
+bnz if_end12
+if11:
+byte base64 Ymw=
+byte base64 Ymw=
+app_global_get
+load 1
+-
+app_global_put
+if_end12:
+unless7:
+load 1
+int 0
+==
+bnz unless13
+// cannot modify frozen asset
+txna Accounts 1
+byte base64 Y3I=
+app_global_get
+==
+bnz if15
+int 1
+byte base64 Zno=
+app_local_get
+int 1
+==
+int 1
+bnz if_end16
+if15:
+byte base64 Zno=
+app_global_get
+int 1
+==
+if_end16:
+!
+bnz assert14
+err
+assert14:
+txna Accounts 1
+byte base64 Y3I=
+app_global_get
+==
+bnz if17
+int 1
+byte base64 Ymw=
+int 1
+byte base64 Ymw=
+app_local_get
+load 1
++
+app_local_put
+int 1
+bnz if_end18
+if17:
+byte base64 Ymw=
+byte base64 Ymw=
+app_global_get
+load 1
++
+app_global_put
+if_end18:
+unless13:
+txna Accounts 2
+global ZeroAddress
+==
+bnz unless19
+int 0
+byte base64 Ymw=
+app_local_get
+store 2
+load 2
+int 0
+==
+bnz unless20
+// cannot modify frozen asset
+txn Sender
+byte base64 Y3I=
+app_global_get
+==
+bnz if22
+int 0
+byte base64 Zno=
+app_local_get
+int 1
+==
+int 1
+bnz if_end23
+if22:
+byte base64 Zno=
+app_global_get
+int 1
+==
+if_end23:
+!
+bnz assert21
+err
+assert21:
+txn Sender
+byte base64 Y3I=
+app_global_get
+==
+bnz if24
+int 0
+byte base64 Ymw=
+int 0
+byte base64 Ymw=
+app_local_get
+load 2
+-
+app_local_put
+int 1
+bnz if_end25
+if24:
+byte base64 Ymw=
+byte base64 Ymw=
+app_global_get
+load 2
+-
+app_global_put
+if_end25:
+unless20:
+load 2
+int 0
+==
+bnz unless26
+// cannot modify frozen asset
+txna Accounts 2
+byte base64 Y3I=
+app_global_get
+==
+bnz if28
+int 2
+byte base64 Zno=
+app_local_get
+int 1
+==
+int 1
+bnz if_end29
+if28:
+byte base64 Zno=
+app_global_get
+int 1
+==
+if_end29:
+!
+bnz assert27
+err
+assert27:
+txna Accounts 2
+byte base64 Y3I=
+app_global_get
+==
+bnz if30
+int 2
+byte base64 Ymw=
+int 2
+byte base64 Ymw=
+app_local_get
+load 2
++
+app_local_put
+int 1
+bnz if_end31
+if30:
+byte base64 Ymw=
+byte base64 Ymw=
+app_global_get
+load 2
++
+app_global_put
+if_end31:
+unless26:
+unless19:
+txn NumAppArgs
+int 1
+==
+txn NumAccounts
+int 2
+==
+&&
+txn OnCompletion
+int 0
+==
+bnz if32
+txn OnCompletion
+int 2
+==
+int 0
+byte base64 Ymw=
+app_local_get
+int 0
+==
+&&
+txna Accounts 2
+global ZeroAddress
+==
+!
+&&
+int 1
+bnz if_end33
+if32:
+txna Accounts 2
+global ZeroAddress
+==
+if_end33:
+&&
+int 1
+bnz cond_end3
+cond6:
+// clawback asset
+txna ApplicationArgs 0
+btoi
+store 0
+txna Accounts 1
+byte base64 Y3I=
+app_global_get
+==
+bnz if34
+int 1
+byte base64 Ymw=
+int 1
+byte base64 Ymw=
+app_local_get
+load 0
+-
+app_local_put
+int 1
+bnz if_end35
+if34:
+byte base64 Ymw=
+byte base64 Ymw=
+app_global_get
+load 0
+-
+app_global_put
+if_end35:
+txna Accounts 2
+byte base64 Y3I=
+app_global_get
+==
+bnz if36
+int 2
+byte base64 Ymw=
+int 2
+byte base64 Ymw=
+app_local_get
+load 0
++
+app_local_put
+int 1
+bnz if_end37
+if36:
+byte base64 Ymw=
+byte base64 Ymw=
+app_global_get
+load 0
++
+app_global_put
+if_end37:
+txn NumAccounts
+int 2
+==
+txn OnCompletion
+int 0
+==
+&&
+txn Sender
+byte base64 Y2w=
+app_global_get
+==
+&&
+int 1
+bnz cond_end3
+cond5:
+// freeze asset holding
+txna Accounts 1
+byte base64 Y3I=
+app_global_get
+==
+bnz if38
+int 1
+byte base64 Zno=
+txna ApplicationArgs 0
+btoi
+app_local_put
+int 1
+bnz if_end39
+if38:
+byte base64 Zno=
+txna ApplicationArgs 0
+btoi
+app_global_put
+if_end39:
+txn NumAppArgs
+int 1
+==
+txn OnCompletion
+int 0
+==
+&&
+txn Sender
+byte base64 ZnI=
+app_global_get
+==
+&&
+int 1
+bnz cond_end3
+cond4:
+// asset deletion or opt-in
+txn OnCompletion
+int 1
+==
+!
+bnz when40
+// opting in to implicit zero bl
+int 0
+byte base64 Zno=
+byte base64 ZGY=
+app_global_get
+app_local_put
+when40:
+txn NumAppArgs
+int 0
+==
+txn OnCompletion
+int 5
+==
+txn Sender
+byte base64 bW4=
+app_global_get
+==
+&&
+byte base64 dHQ=
+app_global_get
+byte base64 Ymw=
+app_global_get
+==
+&&
+txn OnCompletion
+int 1
+==
+txn Sender
+byte base64 Y3I=
+app_global_get
+==
+!
+&&
+||
+&&
+cond_end3:
+int 1
+bnz if_end1
+if0:
+// asset configuration
+txn ApplicationID
+int 0
+==
+bnz if41
+txn Sender
+byte base64 bW4=
+app_global_get
+==
+txna ApplicationArgs 0
+global ZeroAddress
+==
+byte base64 bW4=
+app_global_get
+global ZeroAddress
+==
+!
+||
+&&
+txna ApplicationArgs 1
+global ZeroAddress
+==
+byte base64 cnY=
+app_global_get
+global ZeroAddress
+==
+!
+||
+&&
+txna ApplicationArgs 2
+global ZeroAddress
+==
+byte base64 ZnI=
+app_global_get
+global ZeroAddress
+==
+!
+||
+&&
+txna ApplicationArgs 3
+global ZeroAddress
+==
+byte base64 Y2w=
+app_global_get
+global ZeroAddress
+==
+!
+||
+&&
+bnz assert43
+err
+assert43:
+int 1
+bnz if_end42
+if41:
+byte base64 Y3I=
+txn Sender
+app_global_put
+byte base64 dHQ=
+txna ApplicationArgs 4
+btoi
+app_global_put
+byte base64 Ymw=
+txna ApplicationArgs 4
+btoi
+app_global_put
+byte base64 ZGY=
+txna ApplicationArgs 5
+btoi
+app_global_put
+if_end42:
+byte base64 bW4=
+txna ApplicationArgs 0
+app_global_put
+byte base64 cnY=
+txna ApplicationArgs 1
+app_global_put
+byte base64 ZnI=
+txna ApplicationArgs 2
+app_global_put
+byte base64 Y2w=
+txna ApplicationArgs 3
+app_global_put
+txn NumAccounts
+int 0
+==
+txn OnCompletion
+int 0
+==
+&&
+txna ApplicationArgs 0
+len
+int 32
+==
+&&
+txna ApplicationArgs 1
+len
+int 32
+==
+&&
+txna ApplicationArgs 2
+len
+int 32
+==
+&&
+txna ApplicationArgs 3
+len
+int 32
+==
+&&
+if_end1:

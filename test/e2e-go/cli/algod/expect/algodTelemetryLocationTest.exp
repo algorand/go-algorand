@@ -1,0 +1,37 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+
+
+if { [catch {
+    source algodExpectCommon.exp
+
+    set TEST_ALGO_DIR [lindex $argv 0]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary
+
+    #allows script to be run outside of go context
+    exec mkdir -p $TEST_PRIMARY_NODE_DIR
+
+    exec goal node stop -d $TEST_PRIMARY_NODE_DIR
+    
+    exec rm -f $TEST_PRIMARY_NODE_DIR/logging.config
+
+    ::Algod::ReadTelemetry $TEST_PRIMARY_NODE_DIR
+
+
+    exec rm -d -r -f $TEST_ALGO_DIR
+    puts "Basic Algod Test Successful"
+    exit 0
+} EXCEPTION ] } {
+    puts "ERROR in algod test: $EXCEPTION"
+
+    exec rm -d -r -f $TEST_ALGO_DIR
+    exit 1
+}

@@ -54,14 +54,16 @@ type Context struct {
 // Group data are omitted because they are committed to in the
 // transaction and its ID.
 type Params struct {
-	CurrSpecAddrs transactions.SpecialAddresses
-	CurrProto     protocol.ConsensusVersion
+	CurrSpecAddrs  transactions.SpecialAddresses
+	CurrProto      protocol.ConsensusVersion
+	MinTealVersion uint64
 }
 
 // PrepareContexts prepares verification contexts for a transaction
 // group.
 func PrepareContexts(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader) []Context {
 	ctxs := make([]Context, len(group))
+	minTealVersion := logic.ComputeMinTealVersion(group)
 	for i := range group {
 		spec := transactions.SpecialAddresses{
 			FeeSink:     contextHdr.FeeSink,
@@ -69,8 +71,9 @@ func PrepareContexts(group []transactions.SignedTxn, contextHdr bookkeeping.Bloc
 		}
 		ctx := Context{
 			Params: Params{
-				CurrSpecAddrs: spec,
-				CurrProto:     contextHdr.CurrentProtocol,
+				CurrSpecAddrs:  spec,
+				CurrProto:      contextHdr.CurrentProtocol,
+				MinTealVersion: minTealVersion,
 			},
 			Group:      group,
 			GroupIndex: i,
@@ -220,10 +223,11 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, ctx *Context) error {
 	}
 
 	ep := logic.EvalParams{
-		Txn:        txn,
-		Proto:      &proto,
-		TxnGroup:   ctx.Group,
-		GroupIndex: ctx.GroupIndex,
+		Txn:            txn,
+		Proto:          &proto,
+		TxnGroup:       ctx.Group,
+		GroupIndex:     ctx.GroupIndex,
+		MinTealVersion: &ctx.MinTealVersion,
 	}
 	cost, err := logic.Check(lsig.Logic, ep)
 	if err != nil {
@@ -282,10 +286,11 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 	}
 
 	ep := logic.EvalParams{
-		Txn:        txn,
-		Proto:      &proto,
-		TxnGroup:   ctx.Group,
-		GroupIndex: ctx.GroupIndex,
+		Txn:            txn,
+		Proto:          &proto,
+		TxnGroup:       ctx.Group,
+		GroupIndex:     ctx.GroupIndex,
+		MinTealVersion: &ctx.MinTealVersion,
 	}
 	pass, err := logic.Eval(txn.Lsig.Logic, ep)
 	if err != nil {

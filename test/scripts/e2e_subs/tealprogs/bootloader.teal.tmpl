@@ -1,0 +1,42 @@
+#pragma version 2
+// Creation: always succeed, since this can only happen once
+txn ApplicationID
+int 0
+==
+
+// TODO: allow initializing GlobalState?
+// TODO: care about sender?
+bnz success
+
+// Not creation: update programs
+
+// Ensure OnCompletion is UpdateApplication
+txn OnCompletion
+int 4
+==
+bz fail
+
+// Ensure txn's ApprovalProgram is correct
+txn ApprovalProgram
+sha256
+byte 0xTMPL_APPROV_HASH
+==
+bz fail
+
+// Ensure txn's ClearStateProgram is correct
+txn ClearStateProgram
+sha256
+byte 0xTMPL_CLEARSTATE_HASH
+==
+bz fail
+
+// Approved
+b success
+
+success:
+int 1
+return
+
+fail:
+int 0
+return

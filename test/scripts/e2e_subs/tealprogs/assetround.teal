@@ -1,0 +1,113 @@
+#pragma version 2
+//
+// Balance
+//
+
+// Check sender's account
+int 0
+
+// Check asset ID as passed in
+txna ApplicationArgs 0
+btoi
+
+// Check balance
+asset_holding_get AssetBalance
+pop
+
+// Sender should have correct balance (arg 1)
+txna ApplicationArgs 1
+btoi
+==
+bz fail
+
+// Check sender's account
+int 0
+
+// Check asset ID as passed in
+txna ApplicationArgs 0
+btoi
+
+// Check frozen status
+asset_holding_get AssetFrozen
+pop
+
+// Sender should have correct frozen status (arg 2)
+txna ApplicationArgs 2
+btoi
+==
+bz fail
+
+// If we shouldn't check params (arg 3), then skip to check round
+txna ApplicationArgs 3
+btoi
+bnz round
+
+//
+// Params
+//
+
+// Check foreign asset 0
+int 0
+
+// Check total against arg 4
+asset_params_get AssetTotal
+pop
+txna ApplicationArgs 4
+btoi
+==
+bz fail
+
+// Check foreign asset 0
+int 0
+
+// Check name against arg 5
+asset_params_get AssetUnitName
+pop
+txna ApplicationArgs 5
+==
+bz fail
+
+round:
+
+// Check round against arg 6 (arg < global Round, arg + 4 > global Round)
+txna ApplicationArgs 6
+btoi
+
+global Round
+<
+bz fail
+
+txna ApplicationArgs 6
+btoi
+
+int 4
++
+
+// Check timestamp against arg 7 (arg < global LatestTimestamp + 60, arg + 60 > global LatestTimestamp)
+txna ApplicationArgs 7
+btoi
+
+global LatestTimestamp
+int 60
++
+
+<
+bz fail
+
+txna ApplicationArgs 7
+btoi
+
+int 60
++
+
+global LatestTimestamp
+>
+bz fail
+
+success:
+int 1
+return
+
+fail:
+int 0
+return

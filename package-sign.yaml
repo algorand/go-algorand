@@ -1,73 +1,38 @@
-tasks:
-  - task: docker.Version
-    configFilePath: scripts/configure_dev-deps.sh
-
-  - task: shell.docker.Ensure
-    name: mule-debian
-    image: algorand/go-algorand-ci-mule-debian
-    version: '{{ docker.Version.outputs.version }}'
+agents:
+  - name: deb
     dockerFilePath: docker/build/mule.go.debian.Dockerfile
-    dependencies: docker.Version
+    image: algorand/go-algorand-ci-mule-debian
+    version: scripts/configure_dev-deps.sh
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    env:
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+      - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+    volumes:
+      - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
+      - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
+    workDir: $HOME/projects/go-algorand
 
+tasks:
   - task: docker.Make
     name: package-sign-deb
-    docker:
-      image: algorand/go-algorand-ci-mule-debian
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
-      env: [
-        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-      ]
-      volumes: [
-        $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
-        $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
-      ]
-    target: mule-sign-deb WORKDIR=/projects/go-algorand
+    agent: deb
+    target: mule-sign-deb
 
   - task: docker.Make
     name: package-sign-rpm
-    docker:
-      image: algorand/go-algorand-ci-mule-debian
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
-      env: [
-        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-      ]
-      volumes: [
-        $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
-        $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
-      ]
-    target: mule-sign-rpm WORKDIR=/projects/go-algorand
+    agent: deb
+    target: mule-sign-rpm
 
   - task: docker.Make
     name: package-sign-tarball
-    docker:
-      image: algorand/go-algorand-ci-mule-debian
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
-      env: [
-        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-      ]
-      volumes: [
-        $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
-        $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
-      ]
-    target: mule-sign-tar.gz WORKDIR=/projects/go-algorand
+    agent: deb
+    target: mule-sign-tar.gz
 
   - task: docker.Make
     name: package-sign-source
-    docker:
-      image: algorand/go-algorand-ci-mule-debian
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
-      volumes: [
-        $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
-        $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
-      ]
-    target: mule-sign-source WORKDIR=/projects/go-algorand
+    agent: deb
+    target: mule-sign-source
 
   - task: s3.DownloadFile
     name: deb
@@ -90,10 +55,7 @@ tasks:
 
 jobs:
   package-sign:
-    configs:
-      arch: amd64
     tasks:
-      - shell.docker.Ensure.mule-debian
       - docker.Make.package-sign-deb
       - docker.Make.package-sign-rpm
       - docker.Make.package-sign-tarball

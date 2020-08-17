@@ -1,76 +1,52 @@
-tasks:
-  - task: docker.Version
-    configFilePath: scripts/configure_dev-deps.sh
-
-  - task: shell.docker.Ensure
-    name: deb
-    image: algorand/mule-linux-ubuntu
-    version: '{{ docker.Version.outputs.version }}'
+agents:
+  - name: deb
     dockerFilePath: docker/build/docker.ubuntu.Dockerfile
-    dependencies: docker.Version
+    image: algorand/mule-linux-ubuntu
+    version: scripts/configure_dev-deps.sh
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    env:
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+      - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    workDir: $HOME/projects/go-algorand
 
-  - task: shell.docker.Ensure
-    name: rpm
-    image: algorand/mule-linux-centos
-    version: '{{ docker.Version.outputs.version }}'
+  - name: rpm
     dockerFilePath: docker/build/mule.go.centos.Dockerfile
-    dependencies: docker.Version
+    image: algorand/mule-linux-centos
+    version: scripts/configure_dev-deps.sh
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    env:
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+      - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+    volumes:
+      - $HOME/packages:/root/packages,
+      - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
+      - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
+    workDir: $HOME/projects/go-algorand
 
-  - task: docker.Make
-    name: generate-releases-page
-    docker:
-      image: algorand/mule-linux-ubuntu
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
-      env: [
-        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-      ]
-    target: mule-deploy-generate_releases_page WORKDIR=/projects/go-algorand
-
+tasks:
   - task: docker.Make
     name: deb
-    docker:
-      image: algorand/mule-linux-ubuntu
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
-      env: [
-        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-      ]
-      volumes: [
-        $HOME/packages:/root/packages,
-        $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
-        $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
-      ]
-    target: mule-deploy-deb WORKDIR=/projects/go-algorand
+    agent: deb
+    target: mule-deploy-deb
 
   - task: docker.Make
     name: rpm
-    docker:
-      image: algorand/mule-linux-centos
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
-      env: [
-        AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
-        AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-      ]
-      volumes: [
-        $HOME/packages:/root/packages,
-        $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
-        $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
-      ]
-    target: mule-deploy-rpm WORKDIR=/projects/go-algorand
+    agent: rpm
+    target: mule-deploy-rpm
 
   - task: s3.BucketCopy
     name: deb
     src: s3://algorand-staging/releases/$CHANNEL/$VERSION/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb
-    dest: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
+    dest: /projects/go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE
 
   - task: s3.BucketCopy
     name: rpm
     src: s3://algorand-staging/releases/$CHANNEL/$VERSION/algorand-${VERSION}-1.${ARCH_BIT}.rpm
-    dest: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
+    dest: /projects/go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE
 
   - task: s3.BucketCopy
     name: gnupg
@@ -78,28 +54,20 @@ tasks:
     dest: /root
 
   - task: s3.BucketCopy
-    name: releases-page
-    src: /tmp/index.html
-    dest: s3://algorand-releases
-
-  - task: s3.BucketCopy
     name: deploy-dev-deb-repo
-    src: s3://algorand-staging/releases/${CHANNEL}/${VERSION}
-    dest: s3://algorand-dev-deb-repo/releases/${CHANNEL}/${VERSION}
+    src: s3://algorand-staging/releases/$CHANNEL/$VERSION
+    dest: s3://algorand-dev-deb-repo/releases/$CHANNEL/$VERSION
 
+    # TODO: For now, we're hardcoding the channel until the beta
+    # releases are sorted out.  This will then be updated.
   - task: s3.BucketCopy
     name: deploy-rpm-repo
     src: /root/rpmrepo
-    dest: s3://algorand-releases/rpm/${CHANNEL}/${VERSION}
+    dest: s3://algorand-releases/rpm/stable
 
 jobs:
   package-deploy:
-    configs:
-      arch: amd64
     tasks:
-      - shell.docker.Ensure.deb
-      - shell.docker.Ensure.rpm
-      - docker.Make.generate-releases-page
       - docker.Make.deb
       - docker.Make.rpm
 
@@ -119,11 +87,7 @@ jobs:
     tasks:
       - s3.BucketCopy.gnupg
 
-  package-deploy-releases-page:
-    tasks:
-      - s3.BucketCopy.releases-page
-
   package-deploy-rpm-repo:
     tasks:
-      - s3.BucketCopy.rpm-repo
+      - s3.BucketCopy.deploy-rpm-repo
 
