@@ -3,9 +3,8 @@
 set -e
 
 PKG_NAME=@PKG_NAME@
-INDEXER=algorand-indexer
 
-if [ "$1" != install ] || [ "$PKG_NAME" == $INDEXER ]
+if [ "$1" != install ]
 then
     exit 0
 fi
@@ -13,7 +12,7 @@ fi
 if dpkg-query --list 'algorand*' &> /dev/null
 then
     PKG_INFO=$(dpkg-query --show --showformat='${Package} ${Status}\n' 'algorand*' | grep "install ok installed")
-    INSTALLED_PKG=$(grep -v $INDEXER <<< "$PKG_INFO" | awk '{print $1}')
+    INSTALLED_PKG=$(grep -v algorand-indexer <<< "$PKG_INFO" | awk '{print $1}')
 
     if [ -n "$INSTALLED_PKG" ]
     then
