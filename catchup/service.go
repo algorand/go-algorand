@@ -56,6 +56,7 @@ type Ledger interface {
 	EnsureBlock(block *bookkeeping.Block, c agreement.Certificate)
 	LastRound() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
+	IsWritingCatchpointFile() bool
 }
 
 // Service represents the catchup service. Once started and until it is stopped, it ensures that the ledger is up to date with network.
@@ -385,6 +386,12 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 				// there was an error
 				return
 			}
+			// if we're writing a catchpoint file, stop catching up to reduce the memory pressure. Once we finish writing the file we
+			// could resume with the catchup.
+			if s.ledger.IsWritingCatchpointFile() {
+				s.log.Info("Catchup is stopping due to catchpoint file being written")
+				return
+			}
 			completedRounds[round] = true
 			// fetch rounds we can validate
 			for completedRounds[nextRound-basics.Round(parallelRequests)] {
@@ -434,6 +441,11 @@ func (s *Service) periodicSync() {
 		case <-time.After(sleepDuration):
 			if sleepDuration < s.deadlineTimeout {
 				sleepDuration = s.deadlineTimeout
+				continue
+			}
+			// check to see if we're currently writing a catchpoint file. If so, wait longer before attempting again.
+			if s.ledger.IsWritingCatchpointFile() {
+				// keep the existing sleep duration and try again later.
 				continue
 			}
 			s.log.Info("It's been too long since our ledger advanced; resyncing")

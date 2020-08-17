@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                               10,
+	Version:                               11,
 	AnnounceParticipationKey:              true,
 	Archival:                              false,
 	BaseLoggerDebugLevel:                  4,
@@ -28,6 +28,7 @@ var defaultLocal = Local{
 	CadaverSizeTarget:                     1073741824,
 	CatchpointFileHistoryLength:           365,
 	CatchpointInterval:                    10000,
+	CatchpointTracking:                    0,
 	CatchupBlockDownloadRetryAttempts:     1000,
 	CatchupFailurePeerRefreshRate:         10,
 	CatchupGossipBlockFetchTimeoutSec:     4,
