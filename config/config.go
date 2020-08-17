@@ -63,7 +63,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
@@ -328,6 +328,13 @@ type Local struct {
 	// OptimizeAccountsDatabaseOnStartup controls whether the accounts database would be optimized
 	// on algod startup.
 	OptimizeAccountsDatabaseOnStartup bool `version[10]:"false"`
+
+	// CatchpointTracking determines if catchpoints are going to be tracked. The value is interpreted as follows:
+	// A of -1 means "don't track catchpoints".
+	// A value of 1 means "track catchpoints as long as CatchpointInterval is also set to a positive non-zero value". If CatchpointInterval <= 0, no catchpoint tracking would be performed.
+	// A value of 0 means automatic, which is the default value. In this mode, a non archival node would not track the catchpoints, and an archival node would track the catchpoints as long as CatchpointInterval > 0.
+	// Other values of CatchpointTracking would give a warning in the log file, and would behave as if the default value was provided.
+	CatchpointTracking int64 `version[11]:"0"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

@@ -218,7 +218,23 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	au.initAccounts = genesisAccounts
 	au.dbDirectory = filepath.Dir(dbPathPrefix)
 	au.archivalLedger = cfg.Archival
-	au.catchpointInterval = cfg.CatchpointInterval
+	switch cfg.CatchpointTracking {
+	case -1:
+		au.catchpointInterval = 0
+	default:
+		// give a warning, then fall thought
+		logging.Base().Warnf("accountUpdates: the CatchpointTracking field in the config.json file contains an invalid value (%d). The default value of 0 would be used instead.", cfg.CatchpointTracking)
+		fallthrough
+	case 0:
+		if au.archivalLedger {
+			au.catchpointInterval = cfg.CatchpointInterval
+		} else {
+			au.catchpointInterval = 0
+		}
+	case 1:
+		au.catchpointInterval = cfg.CatchpointInterval
+	}
+
 	au.catchpointFileHistoryLength = cfg.CatchpointFileHistoryLength
 	if cfg.CatchpointFileHistoryLength < -1 {
 		au.catchpointFileHistoryLength = -1
