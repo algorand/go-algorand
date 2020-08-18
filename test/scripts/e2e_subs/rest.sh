@@ -116,5 +116,3 @@ function test_assets_endpoint {
 # Run the tests.
 test_applications_endpoint
 test_assets_endpoint
-
-exit $EXIT
