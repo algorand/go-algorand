@@ -46,13 +46,13 @@ function call_and_verify {
   local CODE
 
   set +e
-  CODE=$(call "$2" curl_out.txt)
+  CODE=$(call "$2" "${TEMPDIR}/curl_out.txt")
   if [[ $? != 0 ]]; then
     fail_and_exit "$1" "$2" "curl had a non-zero exit code."
   fi
   set -e
 
-  RES=$(cat curl_out.txt)
+  RES=$(cat "${TEMPDIR}/curl_out.txt")
   if [[ "$CODE" != "$3" ]]; then
     fail_and_exit "$1" "$2" "unexpected HTTP status code expected $3 (actual $CODE)"
   fi
