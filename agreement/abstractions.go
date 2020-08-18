@@ -18,6 +18,7 @@ package agreement
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -64,6 +65,10 @@ type ValidatedBlock interface {
 	// Block returns the underlying block that has been validated.
 	Block() bookkeeping.Block
 }
+
+// ErrAssembleBlockRoundStale is returned by AssembleBlock when the requested round number is not the
+// one that matches the ledger last committed round + 1.
+var ErrAssembleBlockRoundStale = errors.New("requested round for AssembleBlock is stale")
 
 // An BlockFactory produces an Block which is suitable for proposal for a given
 // Round.

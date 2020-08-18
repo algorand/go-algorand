@@ -37,12 +37,27 @@ type (
 // depends on the order in which the Txids appear, and that Txids do NOT cover
 // transaction signatures.
 func (payset Payset) Commit(flat bool) crypto.Digest {
+	return payset.commit(flat, false)
+}
+
+// CommitGenesis is like Commit, but with special handling for zero-length
+// but non-nil paysets.
+func (payset Payset) CommitGenesis(flat bool) crypto.Digest {
+	return payset.commit(flat, true)
+}
+
+// commit handles the logic for both Commit and CommitGenesis
+func (payset Payset) commit(flat bool, genesis bool) crypto.Digest {
 	// We used to build up Paysets from a nil slice with `append` during
 	// block evaluation, meaning zero-length paysets would remain nil.
 	// After we started allocating them up front, we started calling Commit
 	// on zero-length but non-nil Paysets. However, we want payset
 	// encodings to remain the same with or without this optimization.
-	if len(payset) == 0 {
+	//
+	// Additionally, the genesis block commits to a zero-length but non-nil
+	// payset (the only block to do so), so we have to let the nil value
+	// pass through.
+	if !genesis && len(payset) == 0 {
 		payset = nil
 	}
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=2035
 
 set -exo pipefail
 
@@ -6,23 +7,14 @@ echo
 date "+build_release begin SIGN stage %Y%m%d_%H%M%S"
 echo
 
-WORKDIR="$6"
-
-if [ -z "$WORKDIR" ]
-then
-    echo "WORKDIR variable must be defined."
-    exit 1
-fi
-
-OS_TYPE="$1"
-ARCH_TYPE="$2"
-ARCH_BIT="$3"
-VERSION=${VERSION:-$4}
-PKG_TYPE="$5"
-
+PKG_TYPE="$1"
+ARCH_BIT=$(uname -m)
+ARCH_TYPE=$(./scripts/archtype.sh)
+OS_TYPE=$(./scripts/ostype.sh)
+VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
-CHANNEL=${CHANNEL:-$("$WORKDIR/scripts/compute_branch_channel.sh" "$BRANCH")}
-PKG_DIR="$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
+CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
+PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 SIGNING_KEY_ADDR=dev@algorand.com
 
 if ! $USE_CACHE
@@ -51,9 +43,9 @@ make_hashes () {
     rm -f "$HASHFILE"*
 
     {
-        md5sum ./*"$VERSION"*."$PACKAGE_TYPE" ;
-        shasum -a 256 ./*"$VERSION"*."$PACKAGE_TYPE" ;
-        shasum -a 512 ./*"$VERSION"*."$PACKAGE_TYPE" ;
+        md5sum *"$VERSION"*."$PACKAGE_TYPE" ;
+        shasum -a 256 *"$VERSION"*."$PACKAGE_TYPE" ;
+        shasum -a 512 *"$VERSION"*."$PACKAGE_TYPE" ;
     } >> "$HASHFILE"
 
     gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$HASHFILE"

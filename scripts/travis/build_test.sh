@@ -9,6 +9,8 @@
 # Examples: scripts/travis/build_test.sh
 set -e
 
+ALGORAND_DEADLOCK=enable
+export ALGORAND_DEADLOCK
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 if [ "${USER}" = "travis" ]; then

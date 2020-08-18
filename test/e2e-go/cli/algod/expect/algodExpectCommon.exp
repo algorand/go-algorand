@@ -1,0 +1,49 @@
+# Algod Expect Utility Package
+namespace eval ::Algod {
+
+  # Export Procedures
+  namespace export Info
+  namespace export ReadTelemetry
+
+
+  # My Variables
+   set version 1.0
+   set description "Algod Expect Package"
+
+  # Variable for the path of the script
+   variable home [file join [pwd] [file dirname [info script]]]
+}
+
+# Definition of the procedure MyProcedure
+proc ::Algod::Info {} {
+   puts Algod::description
+}
+
+package provide Algod $Algod::version
+package require Tcl 8.0
+
+
+# Start a node, and confirm it pulls telemetry config from the correct location
+proc ::Algod::ReadTelemetry { TEST_ALGO_DIR } {
+    set timeout 5
+
+    if { [catch {
+        puts "algod start with $TEST_ALGO_DIR"
+        spawn $env(GOPATH)/bin/algod -d $TEST_ALGO_DIR -g ../../../../../gen/testnet/genesis.json
+        expect {
+            "^Telemetry configured from '$::env(HOME)/.algorand/logging.config'*" {puts "Telemetry config correctly pulled from global location"; send '\003'; close}
+            "^Telemetry configured from *" {puts "Telemetry config pulled from unexpected location"; send '\003'; close; exit 1}
+            timeout {puts "timeout occurred waiting for telemetry log"; send '\003'; close; exit 1}
+        }
+
+        exec cp $::env(HOME)/.algorand/logging.config $TEST_ALGO_DIR
+        spawn $env(GOPATH)/bin/algod -d $TEST_ALGO_DIR -g ../../../../../gen/testnet/genesis.json
+        expect {
+            timeout {send '\003'; close; puts "timeout occurred waiting for telemetry log"; exit 1}
+            "^Telemetry configured from '$TEST_ALGO_DIR/logging.config'*" {puts "Telemetry config correctly pulled from local location"; send '\003'; close}
+            "^Telemetry configured from *" {puts "Telemetry config pulled from unexpected location, not $TEST_ALGO_DIR/logging.config"; send '\003'; close; exit 1}
+        }
+    } EXCEPTION] } {
+        puts "ERROR in ReadTelemetry: $EXCEPTION"
+    }
+}

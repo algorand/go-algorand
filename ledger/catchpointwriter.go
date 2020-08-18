@@ -32,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/db"
 )
 
 const (
@@ -46,12 +45,13 @@ const (
 
 // catchpointWriter is the struct managing the persistance of accounts data into the catchpoint file.
 // it's designed to work in a step fashion : a caller will call the WriteStep method in a loop until
-// the writing is complete. It migth take multiple steps until the operation is over, and the caller
+// the writing is complete. It might take multiple steps until the operation is over, and the caller
 // has the option of throtteling the CPU utilization in between the calls.
 type catchpointWriter struct {
+	ctx               context.Context
 	hasher            hash.Hash
 	innerWriter       io.WriteCloser
-	dbr               db.Accessor
+	tx                *sql.Tx
 	filePath          string
 	file              *os.File
 	gzip              *gzip.Writer
@@ -59,12 +59,13 @@ type catchpointWriter struct {
 	headerWritten     bool
 	balancesOffset    int
 	balancesChunk     catchpointFileBalancesChunk
-	fileHeader        *catchpointFileHeader
+	fileHeader        *CatchpointFileHeader
 	balancesChunkNum  uint64
 	writtenBytes      int64
 	blocksRound       basics.Round
 	blockHeaderDigest crypto.Digest
 	label             string
+	accountsIterator  encodedAccountsBatchIter
 }
 
 type encodedBalanceRecord struct {
@@ -74,7 +75,9 @@ type encodedBalanceRecord struct {
 	AccountData msgp.Raw       `codec:"ad,allocbound=basics.MaxEncodedAccountDataSize"`
 }
 
-type catchpointFileHeader struct {
+// CatchpointFileHeader is the content we would have in the "content.msgpack" file in the catchpoint tar archive.
+// we need it to be public, as it's being decoded externaly by the catchpointdump utility.
+type CatchpointFileHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
 	Version           uint64        `codec:"version"`
@@ -92,17 +95,20 @@ type catchpointFileBalancesChunk struct {
 	Balances []encodedBalanceRecord `codec:"bl,allocbound=BalancesPerCatchpointFileChunk"`
 }
 
-func makeCatchpointWriter(filePath string, dbr db.Accessor, blocksRound basics.Round, blockHeaderDigest crypto.Digest, label string) *catchpointWriter {
+func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, blocksRound basics.Round, blockHeaderDigest crypto.Digest, label string) *catchpointWriter {
 	return &catchpointWriter{
+		ctx:               ctx,
 		filePath:          filePath,
-		dbr:               dbr,
+		tx:                tx,
 		blocksRound:       blocksRound,
 		blockHeaderDigest: blockHeaderDigest,
 		label:             label,
+		accountsIterator:  encodedAccountsBatchIter{orderByAddress: true},
 	}
 }
 
 func (cw *catchpointWriter) Abort() error {
+	cw.accountsIterator.Close()
 	if cw.tar != nil {
 		cw.tar.Close()
 	}
@@ -116,7 +122,7 @@ func (cw *catchpointWriter) Abort() error {
 	return err
 }
 
-func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error) {
+func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err error) {
 	if cw.file == nil {
 		err = os.MkdirAll(filepath.Dir(cw.filePath), 0700)
 		if err != nil {
@@ -131,19 +137,19 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 	}
 
 	// have we timed-out / canceled by that point ?
-	if more, err = hasContextDeadlineExceeded(ctx); more == true || err != nil {
+	if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
 		return
 	}
 
 	if cw.fileHeader == nil {
-		err = cw.dbr.Atomic(cw.readHeaderFromDatabase)
+		err = cw.readHeaderFromDatabase(cw.ctx, cw.tx)
 		if err != nil {
 			return
 		}
 	}
 
 	// have we timed-out / canceled by that point ?
-	if more, err = hasContextDeadlineExceeded(ctx); more == true || err != nil {
+	if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
 		return
 	}
 
@@ -166,19 +172,19 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 
 	for {
 		// have we timed-out / canceled by that point ?
-		if more, err = hasContextDeadlineExceeded(ctx); more == true || err != nil {
+		if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
 			return
 		}
 
 		if len(cw.balancesChunk.Balances) == 0 {
-			err = cw.dbr.Atomic(cw.readDatabaseStep)
+			err = cw.readDatabaseStep(cw.ctx, cw.tx)
 			if err != nil {
 				return
 			}
 		}
 
 		// have we timed-out / canceled by that point ?
-		if more, err = hasContextDeadlineExceeded(ctx); more == true || err != nil {
+		if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
 			return
 		}
 
@@ -219,16 +225,16 @@ func (cw *catchpointWriter) WriteStep(ctx context.Context) (more bool, err error
 	}
 }
 
-func (cw *catchpointWriter) readDatabaseStep(tx *sql.Tx) (err error) {
-	cw.balancesChunk.Balances, err = encodedAccountsRange(tx, cw.balancesOffset, BalancesPerCatchpointFileChunk)
+func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (err error) {
+	cw.balancesChunk.Balances, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk)
 	if err == nil {
 		cw.balancesOffset += BalancesPerCatchpointFileChunk
 	}
 	return
 }
 
-func (cw *catchpointWriter) readHeaderFromDatabase(tx *sql.Tx) (err error) {
-	var header catchpointFileHeader
+func (cw *catchpointWriter) readHeaderFromDatabase(ctx context.Context, tx *sql.Tx) (err error) {
+	var header CatchpointFileHeader
 	header.BalancesRound, _, err = accountsRound(tx)
 	if err != nil {
 		return
@@ -261,6 +267,14 @@ func (cw *catchpointWriter) GetBalancesRound() basics.Round {
 		return cw.fileHeader.BalancesRound
 	}
 	return basics.Round(0)
+}
+
+// GetBalancesCount returns the number of balances written to this catchpoint file.
+func (cw *catchpointWriter) GetTotalAccounts() uint64 {
+	if cw.fileHeader != nil {
+		return cw.fileHeader.TotalAccounts
+	}
+	return 0
 }
 
 // GetCatchpoint returns the catchpoint string to which this catchpoint file was generated for.

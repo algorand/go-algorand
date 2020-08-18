@@ -108,7 +108,7 @@ type MockedFetcher struct {
 
 func (m *MockedFetcher) FetchBlock(ctx context.Context, round basics.Round) (*bookkeeping.Block, *agreement.Certificate, FetcherClient, error) {
 	if m.timeout {
-		time.Sleep(DefaultFetchTimeout + time.Second)
+		time.Sleep(time.Duration(config.GetDefaultLocal().CatchupHTTPBlockFetchTimeoutSec)*time.Second + time.Second)
 	}
 	time.Sleep(m.latency)
 
@@ -575,6 +575,10 @@ func (m *mockedLedger) Seed(basics.Round) (committee.Seed, error) {
 
 func (m *mockedLedger) LookupDigest(basics.Round) (crypto.Digest, error) {
 	return crypto.Digest{}, errors.New("not needed for mockedLedger")
+}
+
+func (m *mockedLedger) IsWritingCatchpointFile() bool {
+	return false
 }
 
 func testingenv(t testing.TB, numBlocks int) (ledger, emptyLedger Ledger) {

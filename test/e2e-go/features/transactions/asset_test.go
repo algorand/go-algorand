@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
@@ -454,6 +454,12 @@ func TestAssetInformation(t *testing.T) {
 	a.NoError(err)
 	a.Equal(len(info.AssetParams), 0)
 
+	// There should be no assets to start with
+	info2, err := client.AccountInformationV2(account0)
+	a.NoError(err)
+	a.NotNil(info2.CreatedAssets)
+	a.Equal(len(*info2.CreatedAssets), 0)
+
 	// Create some assets
 	txids := make(map[string]string)
 	for i := 0; i < 16; i++ {
@@ -474,6 +480,16 @@ func TestAssetInformation(t *testing.T) {
 		assetInfo, err := client.AssetInformation(idx)
 		a.NoError(err)
 		a.Equal(cp, assetInfo)
+	}
+
+	// Check that AssetInformationV2 returns the correct AssetParams
+	info2, err = client.AccountInformationV2(account0)
+	a.NoError(err)
+	a.NotNil(info2.CreatedAssets)
+	for _, cp := range *info2.CreatedAssets {
+		asset, err := client.AssetInformationV2(cp.Index)
+		a.NoError(err)
+		a.Equal(cp, asset)
 	}
 
 	// Destroy assets
@@ -792,13 +808,13 @@ func TestAssetSend(t *testing.T) {
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
 	a.Error(err)
-	a.True(strings.Contains(err.Error(), "underflow on subtracting 11 from sender amount"))
+	a.True(strings.Contains(err.Error(), "underflow on subtracting 11 from sender amount 10"))
 
 	// Should not be able to clawback more than is available
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 11, account0, "", extra)
 	_, err = helperFillSignBroadcast(client, wh, clawback, tx, err)
 	a.Error(err)
-	a.True(strings.Contains(err.Error(), "underflow on subtracting 11 from sender amount"))
+	a.True(strings.Contains(err.Error(), "underflow on subtracting 11 from sender amount 10"))
 
 	tx, err = client.MakeUnsignedAssetSendTx(nonFrozenIdx, 10, extra, "", "")
 	_, err = helperFillSignBroadcast(client, wh, extra, tx, err)
