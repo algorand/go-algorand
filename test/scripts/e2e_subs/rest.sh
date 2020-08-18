@@ -16,17 +16,27 @@ PUB_TOKEN=$(cat "$ALGORAND_DATA"/algod.token)
 ADMIN_TOKEN=$(cat "$ALGORAND_DATA"/algod.admin.token)
 NET=$(cat "$ALGORAND_DATA"/algod.net)
 
+
 function base_call {
   curl -o "$3" -w "%{http_code}" -q -s -H "Authorization: Bearer $1" "$NET$2"
 }
+
 
 function call_admin {
   base_call "$ADMIN_TOKEN" "$1" "$2"
 }
 
+
 function call {
   base_call "$PUB_TOKEN" "$1" "$2"
 }
+
+
+function fail_and_exit {
+  printf "\n\nFailed test - $1 ($2): $3\n\n"
+  exit 1
+}
+
 
 # $1 - test description.
 # $2 - query
@@ -34,15 +44,20 @@ function call {
 # $4 - substring that should be in the response
 function call_and_verify {
   local CODE
-  CODE=$(call "$2" out.txt)
-  RES=$(cat out.txt)
+
+  set +e
+  CODE=$(call "$2" curl_out.txt)
+  if [[ $? != 0 ]]; then
+    fail_and_exit "$1" "$2" "curl had a non-zero exit code."
+  fi
+  set -e
+
+  RES=$(cat curl_out.txt)
   if [[ "$CODE" != "$3" ]]; then
-    printf "\n\nFailed test - $2 ($1): unexpected status code $CODE != $3\n\n"
-    exit 1
+    fail_and_exit "$1" "$2" "unexpected HTTP status code expected $3 (actual $CODE)"
   fi
   if [[ "$RES" != *"$4"* ]]; then
-    printf "\n\nFailed test - $2 ($1): unexpected response '$RES' != *'$4'*\n\n"
-    exit 1
+    fail_and_exit "$1" "$2" "unexpected response. should contain '$4', actual: $RES"
   fi
 }
 
@@ -53,7 +68,7 @@ function test_applications_endpoint {
   APPID=$(${gcmd} app create --creator "${ACCOUNT}" --approval-prog "${TEMPDIR}/simple.teal" --clear-prog "${TEMPDIR}/simple.teal" --global-byteslices 0 --global-ints 2 --local-byteslices 0 --local-ints 0 | grep Created | awk '{ print $6 }')
 
   # Good request, non-existant app id
-  call_and_verify "Should not find app." "/v2/applications/987654321" 404 'application does not exist'
+  call_and_verify "Should not find app." "/v2/applications/987654321" 404 'asset does not exist'
   # Good request
   call_and_verify "Should contain app data." "/v2/applications/$APPID" 200 '"global-state-schema":{"num-byte-slice":0,"num-uint":2}'
   # Good request, pretty response
@@ -75,6 +90,7 @@ function test_applications_endpoint {
   call_and_verify "App invalid parameter" "/v2/applications/$APPID?this-should-fail=200" 400 'Unknown parameter detected: this-should-fail'
 }
 
+
 function test_assets_endpoint {
   local ASSET_ID
   ASSET_ID=$(${gcmd} asset create --creator "${ACCOUNT}" --total 10000 --decimals 19 --name "spanish coin" --unitname "doubloon" | grep "Created asset with asset index" | rev | cut -d ' ' -f 1 | rev)
@@ -95,6 +111,7 @@ function test_assets_endpoint {
   # Good request, but invalid query parameters
   call_and_verify "Asset invalid parameter" "/v2/assets/$ASSET_ID?this-should-fail=200" 400 'parameter detected: this-should-fail'
 }
+
 
 # Run the tests.
 test_applications_endpoint
