@@ -32,13 +32,14 @@ sudo rngd -r /dev/urandom
 mkdir -p "${HOME}"/{.gnupg,dummyaptly,dummyrepo,go,gpgbin,keys,node_pkg,prodrepo}
 mkdir -p "${HOME}"/go/bin
 
-BRANCH=${1:-"master"}
+#BRANCH=${1:-"master"}
+BRANCH=rel/beta
 export BRANCH
 
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"
 cd "${HOME}/go/src/github.com/algorand"
-if ! git clone --single-branch --branch "${BRANCH}" https://github.com/algorand/go-algorand go-algorand
+if ! git clone --single-branch --branch "$BRANCH" https://github.com/algorand/go-algorand go-algorand
 then
     echo There has been a problem cloning the "$BRANCH" branch.
     exit 1
