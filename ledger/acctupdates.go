@@ -218,7 +218,23 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	au.initAccounts = genesisAccounts
 	au.dbDirectory = filepath.Dir(dbPathPrefix)
 	au.archivalLedger = cfg.Archival
-	au.catchpointInterval = cfg.CatchpointInterval
+	switch cfg.CatchpointTracking {
+	case -1:
+		au.catchpointInterval = 0
+	default:
+		// give a warning, then fall thought
+		logging.Base().Warnf("accountUpdates: the CatchpointTracking field in the config.json file contains an invalid value (%d). The default value of 0 would be used instead.", cfg.CatchpointTracking)
+		fallthrough
+	case 0:
+		if au.archivalLedger {
+			au.catchpointInterval = cfg.CatchpointInterval
+		} else {
+			au.catchpointInterval = 0
+		}
+	case 1:
+		au.catchpointInterval = cfg.CatchpointInterval
+	}
+
 	au.catchpointFileHistoryLength = cfg.CatchpointFileHistoryLength
 	if cfg.CatchpointFileHistoryLength < -1 {
 		au.catchpointFileHistoryLength = -1
@@ -273,6 +289,22 @@ func (au *accountUpdates) close() {
 	au.waitAccountsWriting()
 	// this would block until the commitSyncerClosed channel get closed.
 	<-au.commitSyncerClosed
+}
+
+// IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
+// to avoid memory pressure until the catchpoint file writing is complete.
+func (au *accountUpdates) IsWritingCatchpointFile() bool {
+	au.accountsMu.Lock()
+	defer au.accountsMu.Unlock()
+	// if we're still writing the previous balances, we can't move forward yet.
+	select {
+	case <-au.catchpointWriting:
+		// the channel catchpointWriting is currently closed, meaning that we're currently not writing any
+		// catchpoint file.
+		return false
+	default:
+		return true
+	}
 }
 
 // Lookup returns the accound data for a given address at a given round. The withRewards indicates whether the
@@ -1579,6 +1611,12 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 				db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(1*time.Second))
 				select {
 				case <-time.After(100 * time.Millisecond):
+					// increase the time slot allocated for writing the catchpoint, but stop when we get to the longChunkExecutionDuration limit.
+					// this would allow the catchpoint writing speed to ramp up while still leaving some cpu available.
+					chunkExecutionDuration *= 2
+					if chunkExecutionDuration > longChunkExecutionDuration {
+						chunkExecutionDuration = longChunkExecutionDuration
+					}
 				case <-au.ctx.Done():
 					retryCatchpointCreation = true
 					err2 := catchpointWriter.Abort()
