@@ -31,7 +31,7 @@ func init() {
 
 var rootCmd = &cobra.Command{
 	Use:   "algocfg",
-	Short: "tool for inspecting and updating algod's config.json file",
+	Short: "Tool for inspecting and updating algod's config.json file",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.HelpFunc()(cmd, args)

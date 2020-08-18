@@ -14,8 +14,8 @@ about using and installing the algorand platform.
 
 ## Building from source ##
 
-Development is done using the [Go Programming Language](https://golang.org/)
-version 1.12.x, and this document assumes that you have a functioning
+Development is done using the [Go Programming Language](https://golang.org/).
+The version of go is specified in the project's [go.mod](go.mod) file. This document assumes that you have a functioning
 environment setup. If you need assistance setting up an environment please visit
 the [official Go documentation website](https://golang.org/doc/).
 
@@ -181,7 +181,7 @@ A number of packages provide utilities for the various components:
   - `util` contains a variety of utilities, including a codec, a sqlite wrapper,
     a goroutine pool, a timer interface, node metrics, and more.
 
-`test` contains end-to-end tests for the above components.
+`test` ([README](test/README.md)) contains end-to-end tests and utilities for the above components.
 
 
 ## License

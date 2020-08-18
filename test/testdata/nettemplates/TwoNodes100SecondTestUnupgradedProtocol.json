@@ -5,12 +5,12 @@
     "Wallets": [
       {
         "Name": "Wallet1",
-        "Stake": 0,
-        "Online": true
+        "Stake": 10,
+        "Online": false
       },
       {
         "Name": "Wallet2",
-        "Stake": 100,
+        "Stake": 90,
         "Online": true
       }
     ]

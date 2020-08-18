@@ -1,0 +1,144 @@
+#!/usr/bin/expect -f
+#exp_internal 1
+set err 0
+log_user 1
+
+source  goalExpectCommon.exp
+
+
+set TEST_ALGO_DIR [lindex $argv 0]
+set TEST_DATA_DIR [lindex $argv 1]
+
+proc statefulTealTest { TEST_ALGO_DIR TEST_DATA_DIR TEAL_PROGRAM} {
+
+    set timeout 60
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root_$TIME_STAMP
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+
+    exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    # Check the balance of the primary account
+    set PRIMARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
+
+    ::AlgorandGoal::WaitForRound 1 $TEST_PRIMARY_NODE_DIR
+
+    # Create wallet #1
+    set WALLET_1_NAME Wallet_1_$TIME_STAMP
+    set WALLET_1_PASSWORD 1234
+    set WALLET_1_PASSPHRASE [::AlgorandGoal::CreateWallet $WALLET_1_NAME $WALLET_1_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    puts "WALLET_1_PASSPHRASE: $WALLET_1_PASSPHRASE"
+    ::AlgorandGoal::VerifyWallet $WALLET_1_NAME  $TEST_PRIMARY_NODE_DIR
+
+    # Associate a new account with the wallet
+    set ACCOUNT_1_ADDRESS [::AlgorandGoal::CreateAccountForWallet $WALLET_1_NAME $WALLET_1_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    ::AlgorandGoal::VerifyAccount $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS $TEST_PRIMARY_NODE_DIR
+
+    # Transfer Algos from primary account to account 1
+    set MIN_BALANCE 1000000
+    set TRANSFER_AMOUNT  [expr {1000 * $MIN_BALANCE}]
+    set FEE_AMOUNT 1000
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_1_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+
+    set TEAL_PROGS_DIR "$TEST_DATA_DIR/../scripts/e2e_subs/tealprogs"
+
+    if { $TEAL_PROGRAM == "loccheck.teal" } {
+        set GLOBAL_BYTE_SLICES 0
+        set LOCAL_BYTE_SLICES 1
+    } else {
+        set GLOBAL_BYTE_SLICES 1
+        set LOCAL_BYTE_SLICES 0
+    }
+
+    set APP_ID [::AlgorandGoal::AppCreate $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS ${TEAL_PROGS_DIR}/${TEAL_PROGRAM} "str:hello" $GLOBAL_BYTE_SLICES $LOCAL_BYTE_SLICES ${TEAL_PROGS_DIR}/clear_program_state.teal $TEST_PRIMARY_NODE_DIR]
+
+    # Application call with no args should fail
+    puts "calling goal app call with no args"
+    spawn goal app call --app-id $APP_ID --from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+        "Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: transaction*" {puts "received expected error"; close}
+        eof { close; ::AlgorandGoal::Abort "did not receive expected error" }
+    }
+
+    if { $TEAL_PROGRAM == "loccheck.teal" } {
+        # Application call with arg0 == "write" should fail before we opt in
+        puts "calling goal app call with account that has not opted in"
+        spawn goal app call --app-id $APP_ID --app-arg "str:write" -w $WALLET_1_NAME --from $ACCOUNT_1_ADDRESS -d $TEST_PRIMARY_NODE_DIR
+        expect {
+            timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+            "Please enter the password for wallet '$WALLET_1_NAME':" {send "$WALLET_1_PASSWORD\r" ; exp_continue }
+            "*not opted in to app*" {puts "received expected error"; close}
+            "*exceeds schema bytes count*" {puts "received expected error"; close}
+            "Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: transaction*" {puts "received expected error"; close}
+            eof { close; ::AlgorandGoal::Abort "did not receive expected error" }
+        }
+    }
+
+    # Optin account to app
+    ::AlgorandGoal::AppOptIn $APP_ID $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS "str:hello" $TEST_PRIMARY_NODE_DIR
+
+    # Application call with arg0 == "write" should succeed after opt in
+    ::AlgorandGoal::AppCall $APP_ID $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS "str:write"  $TEST_PRIMARY_NODE_DIR
+
+    # Check should now succeed with value "bar"
+    ::AlgorandGoal::AppCall2 $APP_ID $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS "str:check" "str:bar"  $TEST_PRIMARY_NODE_DIR
+
+    # Should succeed to close out with first arg hello
+    ::AlgorandGoal::AppCloseout $APP_ID $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS "str:hello"  $TEST_PRIMARY_NODE_DIR
+
+    # Should succeed to opt in with first arg write
+    ::AlgorandGoal::AppOptIn $APP_ID $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS "str:write" $TEST_PRIMARY_NODE_DIR
+
+    # Check should still succeed
+    ::AlgorandGoal::AppCall2 $APP_ID $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS "str:check" "str:bar"  $TEST_PRIMARY_NODE_DIR
+
+    # Delete application should still succeed
+    ::AlgorandGoal::AppDelete $APP_ID $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS "str:hello" $TEST_PRIMARY_NODE_DIR
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    puts "Goal Stateful Teal test Successful"
+}
+
+
+if { [catch {
+    source  goalExpectCommon.exp
+
+    puts "starting test"
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    puts "calling statefulTealTest with loccheck.teal"
+
+    statefulTealTest  $TEST_ALGO_DIR  $TEST_DATA_DIR loccheck.teal
+
+    puts "calling statefulTealTest with globcheck.teal"
+
+    statefulTealTest  $TEST_ALGO_DIR  $TEST_DATA_DIR globcheck.teal
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in statefulTealCreateAppTest: $EXCEPTION"
+}

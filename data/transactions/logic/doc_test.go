@@ -80,7 +80,7 @@ func TestOpImmediateNote(t *testing.T) {
 func TestOpDocExtra(t *testing.T) {
 	xd := OpDocExtra("bnz")
 	require.NotEmpty(t, xd)
-	xd = OpDocExtra("+")
+	xd = OpDocExtra("-")
 	require.Empty(t, xd)
 }
 
@@ -89,6 +89,16 @@ func TestOpCost(t *testing.T) {
 	require.Equal(t, 1, c)
 	c = OpCost("sha256")
 	require.True(t, c > 1)
+
+	a := OpAllCosts("+")
+	require.Equal(t, 1, len(a))
+	require.Equal(t, 1, a[0])
+
+	a = OpAllCosts("sha256")
+	require.True(t, len(a) > 1)
+	for v := 1; v <= LogicVersion; v++ {
+		require.True(t, a[v] > 1)
+	}
 }
 
 func TestOpSize(t *testing.T) {
@@ -105,4 +115,27 @@ func TestTypeNameDescription(t *testing.T) {
 		require.Equal(t, b, typeEnumDescriptions[i].b)
 	}
 	require.Equal(t, "invalid type name", TypeNameDescription("invalid type name"))
+}
+
+func TestOnCompletionDescription(t *testing.T) {
+	desc := OnCompletionDescription(0)
+	require.Equal(t, "Only execute the `ApprovalProgram` associated with this application ID, with no additional effects.", desc)
+
+	desc = OnCompletionDescription(100)
+	require.Equal(t, "invalid constant value", desc)
+}
+
+func TestFieldDocs(t *testing.T) {
+	txnFields := TxnFieldDocs()
+	require.Greater(t, len(txnFields), 0)
+
+	globalFields := GlobalFieldDocs()
+	require.Greater(t, len(globalFields), 0)
+
+	doc := globalFields["MinTxnFee"]
+	require.NotContains(t, doc, "LogicSigVersion >= 2")
+
+	doc = globalFields["Round"]
+	require.Contains(t, doc, "LogicSigVersion >= 2")
+
 }

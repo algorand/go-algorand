@@ -114,7 +114,7 @@ func OpenLedger(
 	l.blockDBs.rdb.SetLogger(log)
 	l.blockDBs.wdb.SetLogger(log)
 
-	err = l.blockDBs.wdb.Atomic(func(tx *sql.Tx) error {
+	err = l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
 	})
 	if err != nil {
@@ -137,14 +137,22 @@ func OpenLedger(
 }
 
 func (l *Ledger) reloadLedger() error {
-	// close first.
-	l.trackers.close()
+	// similar to the Close function, we want to start by closing the blockQ first. The
+	// blockQ is having a sync goroutine which indirectly calls other trackers. We want to eliminate that go-routine first,
+	// and follow up by taking the trackers lock.
 	if l.blockQ != nil {
 		l.blockQ.close()
 		l.blockQ = nil
 	}
 
-	// reload.
+	// take the trackers lock. This would ensure that no other goroutine is using the trackers.
+	l.trackerMu.Lock()
+	defer l.trackerMu.Unlock()
+
+	// close the trackers.
+	l.trackers.close()
+
+	// reload -
 	var err error
 	l.blockQ, err = bqInit(l)
 	if err != nil {
@@ -176,7 +184,7 @@ func (l *Ledger) reloadLedger() error {
 // verifyMatchingGenesisHash tests to see that the latest block header pointing to the same genesis hash provided in genesisHash.
 func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	// Check that the genesis hash, if present, matches.
-	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err := blockLatest(tx)
 		if err != nil {
 			return err
@@ -205,23 +213,20 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs 
 	var trackerDBFilename string
 	var blockDBFilename string
 
-	commonDBFilename := dbPathPrefix + ".sqlite"
 	if !dbMem {
+		commonDBFilename := dbPathPrefix + ".sqlite"
 		_, err = os.Stat(commonDBFilename)
+		if !os.IsNotExist(err) {
+			// before launch, we used to have both blocks and tracker
+			// state in a single SQLite db file. We don't have that anymore,
+			// and we want to fail when that's the case.
+			err = fmt.Errorf("A single ledger database file '%s' was detected. This is no longer supported by current binary", commonDBFilename)
+			return
+		}
 	}
 
-	if !dbMem && os.IsNotExist(err) {
-		// No common file, so use two separate files for blocks and tracker.
-		trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
-		blockDBFilename = dbPathPrefix + ".block.sqlite"
-	} else if err == nil {
-		// Legacy common file exists (or testing in-memory, where performance
-		// doesn't matter), use same database for everything.
-		trackerDBFilename = commonDBFilename
-		blockDBFilename = commonDBFilename
-	} else {
-		return
-	}
+	trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
+	blockDBFilename = dbPathPrefix + ".block.sqlite"
 
 	trackerDBs, err = dbOpen(trackerDBFilename, dbMem)
 	if err != nil {
@@ -235,10 +240,9 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs 
 	return
 }
 
-// initLedgerDB performs DB initialization:
+// initBlocksDB performs DB initialization:
 // - creates and populates it with genesis blocks
 // - ensures DB is in good shape for archival mode and resets it if not
-// - does nothing if everything looks good
 func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchival bool) (err error) {
 	err = blockInit(tx, initBlocks)
 	if err != nil {
@@ -269,7 +273,28 @@ func initBlocksDB(tx *sql.Tx, l *Ledger, initBlocks []bookkeeping.Block, isArchi
 				return err
 			}
 		}
+
+		// Manually replace block 0, even if we already had it
+		// (necessary to normalize the payset commitment because of a
+		// bug that caused its value to change)
+		//
+		// Don't bother for non-archival nodes since they will toss
+		// block 0 almost immediately
+		//
+		// TODO remove this once a version containing this code has
+		// been deployed to archival nodes
+		if len(initBlocks) > 0 && initBlocks[0].Round() == basics.Round(0) {
+			updated, err := blockReplaceIfExists(tx, l.log, initBlocks[0], agreement.Certificate{})
+			if err != nil {
+				err = fmt.Errorf("initBlocksDB.blockReplaceIfExists %v", err)
+				return err
+			}
+			if updated {
+				l.log.Infof("initBlocksDB replaced block 0")
+			}
+		}
 	}
+
 	return nil
 }
 
@@ -282,6 +307,11 @@ func (l *Ledger) Close() {
 		l.blockQ.close()
 		l.blockQ = nil
 	}
+
+	// take the trackers lock. This would ensure that no other goroutine is using the trackers.
+	l.trackerMu.Lock()
+	defer l.trackerMu.Unlock()
+
 	// then, we shut down the trackers and their corresponding goroutines.
 	l.trackers.close()
 
@@ -317,33 +347,42 @@ func (l *Ledger) notifyCommit(r basics.Round) basics.Round {
 func (l *Ledger) GetLastCatchpointLabel() string {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getLastCatchpointLabel()
+	return l.accts.GetLastCatchpointLabel()
 }
 
-// GetAssetCreatorForRound looks up the asset creator given the numerical asset
-// ID. This is necessary so that we can retrieve the AssetParams from the
-// creator's balance record.
-func (l *Ledger) GetAssetCreatorForRound(rnd basics.Round, assetIdx basics.AssetIndex) (basics.Address, error) {
+// GetCreatorForRound takes a CreatableIndex and a CreatableType and tries to
+// look up a creator address, setting ok to false if the query succeeded but no
+// creator was found.
+func (l *Ledger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getAssetCreatorForRound(rnd, assetIdx)
+	return l.accts.GetCreatorForRound(rnd, cidx, ctype)
 }
 
-// GetAssetCreator is like GetAssetCreatorForRound, but for the latest round
-// and race free with respect to ledger.Latest()
-func (l *Ledger) GetAssetCreator(assetIdx basics.AssetIndex) (basics.Address, error) {
+// GetCreator is like GetCreatorForRound, but for the latest round and race-free
+// with respect to ledger.Latest()
+func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getAssetCreatorForRound(l.blockQ.latest(), assetIdx)
+	return l.accts.GetCreatorForRound(l.blockQ.latest(), cidx, ctype)
 }
 
 // ListAssets takes a maximum asset index and maximum result length, and
-// returns up to that many asset AssetIDs from the database where asset id is
+// returns up to that many CreatableLocators from the database where app idx is
 // less than or equal to the maximum.
-func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.AssetLocator, err error) {
+func (l *Ledger) ListAssets(maxAssetIdx basics.AssetIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.listAssets(maxAssetIdx, maxResults)
+	return l.accts.ListAssets(maxAssetIdx, maxResults)
+}
+
+// ListApplications takes a maximum app index and maximum result length, and
+// returns up to that many CreatableLocators from the database where app idx is
+// less than or equal to the maximum.
+func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) (results []basics.CreatableLocator, err error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.ListApplications(maxAppIdx, maxResults)
 }
 
 // Lookup uses the accounts tracker to return the account state for a
@@ -354,7 +393,7 @@ func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	data, err := l.accts.lookup(rnd, addr, true)
+	data, err := l.accts.Lookup(rnd, addr, true)
 	if err != nil {
 		return basics.AccountData{}, err
 	}
@@ -368,7 +407,7 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ba
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	data, err := l.accts.lookup(rnd, addr, false)
+	data, err := l.accts.Lookup(rnd, addr, false)
 	if err != nil {
 		return basics.AccountData{}, err
 	}
@@ -380,7 +419,7 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ba
 func (l *Ledger) Totals(rnd basics.Round) (AccountTotals, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.totals(rnd)
+	return l.accts.Totals(rnd)
 }
 
 func (l *Ledger) isDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
@@ -390,6 +429,7 @@ func (l *Ledger) isDup(currentProto config.ConsensusParams, current basics.Round
 }
 
 // GetRoundTxIds returns a map of the transactions ids that we have for the given round
+// this function is currently not being used, but remains here as it migth be useful in the future.
 func (l *Ledger) GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
@@ -444,7 +484,7 @@ func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreem
 func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
 
-	updates, err := l.eval(context.Background(), blk, false, nil, nil)
+	updates, err := eval(context.Background(), l, blk, false, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -471,6 +511,7 @@ func (l *Ledger) AddValidatedBlock(vb ValidatedBlock, cert agreement.Certificate
 	if err != nil {
 		return err
 	}
+	l.headerCache.Put(vb.blk.Round(), vb.blk.BlockHeader)
 	l.trackers.newBlock(vb.blk, vb.delta)
 	return nil
 }
@@ -500,13 +541,6 @@ func (l *Ledger) Timestamp(r basics.Round) (int64, error) {
 	return l.time.timestamp(r)
 }
 
-// AllBalances returns a map of every account balance as of round rnd.
-func (l *Ledger) AllBalances(rnd basics.Round) (map[basics.Address]basics.AccountData, error) {
-	l.trackerMu.RLock()
-	defer l.trackerMu.RUnlock()
-	return l.accts.allBalances(rnd)
-}
-
 // GenesisHash returns the genesis hash for this ledger.
 func (l *Ledger) GenesisHash() crypto.Digest {
 	return l.genesisHash
@@ -525,7 +559,7 @@ func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state Catchpoin
 func (l *Ledger) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.accts.getCatchpointStream(round)
+	return l.accts.GetCatchpointStream(round)
 }
 
 // ledgerForTracker methods
@@ -542,10 +576,20 @@ func (l *Ledger) trackerLog() logging.Logger {
 	return l.log
 }
 
-func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block) (StateDelta, error) {
+// trackerEvalVerified is used by the accountUpdates to reconstruct the StateDelta from a given block during it's loadFromDisk execution.
+// when this function is called, the trackers mutex is expected alredy to be taken. The provided accUpdatesLedger would allow the
+// evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
+func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
-	delta, err := l.eval(context.Background(), blk, false, nil, nil)
-	return delta, err
+	return eval(context.Background(), accUpdatesLedger, blk, false, nil, nil)
+}
+
+// IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
+// to avoid memory pressure until the catchpoint file writing is complete.
+func (l *Ledger) IsWritingCatchpointFile() bool {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.IsWritingCatchpointFile()
 }
 
 // A txlease is a transaction (sender, lease) pair which uniquely specifies a

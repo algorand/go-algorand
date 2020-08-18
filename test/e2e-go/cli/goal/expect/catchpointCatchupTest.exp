@@ -1,0 +1,174 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+# catchpointCatchupTest - test overview
+#
+# The goal of the test is to demonstrate the catchpoint catchup functionality using the goal command line interface.
+# It does that by deploying a single relay, which advances until it generates a catchpoint.
+# Once it does, another node is started, and instructred to catchup using the catchpoint from the first relay.
+# To make sure that the second node won't be using the "regular" catchup, we tunnel all the communication between the two using a proxy.
+# The proxy is responsible to filter out block number 2. This would prevent the "regular" catchup from working,
+# and would be a good test ground for the catchpoint catchup.
+#
+# The second test is a variation of the first one, but we also stop the node that is catching up in the middle of it's catchup process.
+# That allows us to verify that the node persist it's catchpoint catchup mode correctly.
+#
+
+proc spawnCatchpointCatchupWebProxy { TARGET_ENDPOINT RUNTIME REQUEST_DELAY } {
+    upvar WP_SPAWN_ID WP_SPAWN_ID
+    set WEBPROXY_LISTEN_ADDRESS ""
+
+    # the timeout is set here to take a long while since the command below would end up compiling the go source code before running it.
+    # on slow machines, this could take a long while.
+    set timeout 60
+    spawn go run ./catchpointCatchupWebProxy -targetEndpoint "$TARGET_ENDPOINT" -runtime $RUNTIME -requestDelay $REQUEST_DELAY
+    set WP_SPAWN_ID $spawn_id
+    expect {
+        -re {(^[0-9\.]+:[0-9]+)} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
+        timeout {::AlgorandGoal::Abort "timed out waiting for web proxy listen address"}
+        eof { ::AlgorandGoal::CheckEOF "web proxy failed to start"}
+    }
+
+    puts "Web proxy listening address is $WEBPROXY_LISTEN_ADDRESS"
+    return $WEBPROXY_LISTEN_ADDRESS
+}
+
+if { [catch {
+    source goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/CatchpointCatchupTestNetwork.json"
+
+    # copy the consensus protocol to this data directory.
+    exec mkdir -p $TEST_ALGO_DIR
+    exec cp $TEST_DATA_DIR/consensus/catchpointtestingprotocol.json $TEST_ALGO_DIR/consensus.json
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Update the Primary Node configuration
+    exec -- cat "$TEST_ROOT_DIR/Primary/config.json" | jq {. |= . + {"CatchpointInterval":4,"EnableRequestLogger":true}} > $TEST_ROOT_DIR/Primary/config.json.new
+    exec rm $TEST_ROOT_DIR/Primary/config.json
+    exec mv $TEST_ROOT_DIR/Primary/config.json.new $TEST_ROOT_DIR/Primary/config.json
+
+    # Update the Second Node configuration
+    exec -- cat "$TEST_ROOT_DIR/Node/config.json" | jq {. |= . + {"CatchupParallelBlocks":2}} > $TEST_ROOT_DIR/Node/config.json.new
+    exec rm $TEST_ROOT_DIR/Node/config.json
+    exec mv $TEST_ROOT_DIR/Node/config.json.new $TEST_ROOT_DIR/Node/config.json
+
+
+    set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
+    set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
+    set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
+
+    set ::env(ALGOSMALLLAMBDAMSEC) 500
+
+    # Start the Primary Node
+    ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Primary
+
+
+    # Wait until the primary node reaches round 37. At that point, the catchpoint for round 36 is already done.
+    ::AlgorandGoal::WaitForRound 37 $TEST_ROOT_DIR/Primary
+
+    # Get primary node listening address:
+    set PRIMARY_LISTEN_ADDRESS ""
+    spawn cat $TEST_ROOT_DIR/Primary/algod-listen.net
+    expect {
+        -re {http:\/\/([0-9\.]+:[0-9]+)} { set PRIMARY_LISTEN_ADDRESS $expect_out(1,string); exp_continue;}
+        timeout {::AlgorandGoal::Abort "timed out listing $TEST_ROOT_DIR/Primary/algod-listen.net"}
+        eof { ::AlgorandGoal::CheckEOF "Unable to list $TEST_ROOT_DIR/Primary/algod-listen.net" }
+    }
+    
+    if { $PRIMARY_LISTEN_ADDRESS == "" } {
+        ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Primary
+        puts "Primary node listening address could not be retrieved."
+        exit 1
+    }
+
+    puts "Primary node listening address is $PRIMARY_LISTEN_ADDRESS"
+
+    # start the web proxy
+    set WP_SPAWN_ID 0
+    set WEBPROXY_LISTEN_ADDRESS [spawnCatchpointCatchupWebProxy $PRIMARY_LISTEN_ADDRESS 30 20]
+
+    ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Node False $WEBPROXY_LISTEN_ADDRESS
+
+    ::AlgorandGoal::WaitForRound 1 $TEST_ROOT_DIR/Node
+
+    set CATCHPOINT [::AlgorandGoal::GetNodeLastCatchpoint $TEST_ROOT_DIR/Primary]
+
+    puts "Catchpoint is $CATCHPOINT"
+
+    ::AlgorandGoal::StartCatchup $TEST_ROOT_DIR/Node $CATCHPOINT
+
+    ::AlgorandGoal::WaitForRound 37 $TEST_ROOT_DIR/Node
+
+    ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Node
+
+    # close the web proxy
+    close -i $WP_SPAWN_ID
+
+    puts "catchpointCatchupTest basic test completed"
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in catchpointCatchupTest - basic test: $EXCEPTION"
+}
+
+    # basic testing is done. Now, let's try to see if we can stop and resume a node.
+if { [catch {
+    # delete the genesis directory, so that the node would be on round 0 again.
+    file delete -force $TEST_ROOT_DIR/Node/node.log
+    foreach path [glob $TEST_ROOT_DIR/Node/test_net*] {
+        file delete -force -- $path
+    }
+
+    # start the proxy. this time, make it go really slow
+    set WEBPROXY_LISTEN_ADDRESS [spawnCatchpointCatchupWebProxy $PRIMARY_LISTEN_ADDRESS 30 1500]
+
+    ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Node False $WEBPROXY_LISTEN_ADDRESS
+
+    set NODE_ROUND [::AlgorandGoal::WaitForRound 1 $TEST_ROOT_DIR/Node]
+
+    if { $NODE_ROUND >= 35 } {
+        # it means that we haven't reset the directory correctly.
+        ::AlgorandGoal::Abort "Node $TEST_ROOT_DIR/Node should have been reset, but it didn't"
+    }
+
+    ::AlgorandGoal::StartCatchup $TEST_ROOT_DIR/Node $CATCHPOINT
+
+    # wait for the node to start catching up for up to 35 seconds. ( it won't take that long, but it's not immediately either ).
+    ::AlgorandGoal::WaitCatchup $TEST_ROOT_DIR/Node 35
+
+    ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Node
+
+    # close the web proxy
+    close -i $WP_SPAWN_ID
+
+    # restart the web proxy, without the delaying part.
+    set WEBPROXY_LISTEN_ADDRESS [spawnCatchpointCatchupWebProxy $PRIMARY_LISTEN_ADDRESS 30 20]
+
+    ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Node False $WEBPROXY_LISTEN_ADDRESS
+
+    ::AlgorandGoal::WaitForRound 38 $TEST_ROOT_DIR/Node
+
+    ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Node
+
+    # close the web proxy
+    close -i $WP_SPAWN_ID
+
+    ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Primary
+
+    puts "catchpointCatchupTest stop/start test completed"
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in catchpointCatchupTest - stop/start: $EXCEPTION"
+}

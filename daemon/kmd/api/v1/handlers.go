@@ -1127,7 +1127,7 @@ func postMultisigTransactionSignHandler(ctx reqContext, w http.ResponseWriter, r
 	}
 
 	// Sign the transaction
-	msig, err := wallet.MultisigSignTransaction(tx, req.PublicKey, req.PartialMsig, []byte(req.WalletPassword))
+	msig, err := wallet.MultisigSignTransaction(tx, req.PublicKey, req.PartialMsig, []byte(req.WalletPassword), req.AuthAddr)
 	if err != nil {
 		errorResponse(w, http.StatusBadRequest, err)
 		return

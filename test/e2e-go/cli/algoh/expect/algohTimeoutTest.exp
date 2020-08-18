@@ -1,0 +1,87 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+
+
+if { [catch {
+    source algohExpectCommon.exp
+
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    exec mkdir -p $TEST_ALGO_DIR
+    
+    set TIME_STAMP [clock seconds]
+    set timeout 5
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary
+    set TEST_NODE_DIR $TEST_ROOT_DIR/Node
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50Each.json"
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+
+
+    ::Algoh::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
+
+    ::Algoh::StartNode $TEST_PRIMARY_NODE_DIR
+
+    exec cat ./disabled_profiler_config.json > $TEST_NODE_DIR/config.json
+    exec cat ./host-config.json > $TEST_NODE_DIR/host-config.json
+    
+    set PRIMARY_ADDR ""
+    spawn cat $TEST_ROOT_DIR/Primary/algod-listen.net
+    expect {
+        -regexp {http://[0-9\.]+:[0-9]+} { regexp -- {[0-9.]+:[0-9]+} $expect_out(0,string) PRIMARY_ADDR; close;}
+        timeout {puts "missed our case"; close; exit 1}
+    }
+
+    puts "regex match: $PRIMARY_ADDR"
+
+    #start hosted node in the background
+    spawn $env(GOPATH)/bin/algoh -d $TEST_NODE_DIR -p $PRIMARY_ADDR
+    expect {
+        "^Logging to: *" {puts "algoh startup successful"}
+        timeout {puts "algoh failed to start"; close; exit 1}
+    }
+
+    #allow algoh time to put files in Node dir
+    spawn sleep 5
+    set timeout 5
+    expect {
+        timeout {puts "algod should be fully running"; close}
+    }
+
+    #wait until Node approves blocks to the network
+    set timeout 60
+    spawn $env(GOPATH)/bin/goal node wait -d $TEST_NODE_DIR -w 61
+    expect {
+        eof {puts "successfully communicating with relay node"}
+        "Timed out waiting for node to make progress" {puts "timed out waiting for connection to relay node"; close; exit 1}
+        timeout {puts "should not reached this case"; close; exit 1}
+    }
+
+
+    ::Algoh::StopNode $TEST_PRIMARY_NODE_DIR
+
+
+    set timeout 201
+    spawn $env(GOPATH)/bin/goal node wait -d $TEST_NODE_DIR -w 200
+    expect {
+        "^Cannot contact Algorand node: open $TEST_NODE_DIR/algod.net: no such file or directory." {puts "ERROR: node shutdown"; close; exit 1}
+        "^Timed out waiting for node to make progress" {puts "node correctly continued running despite relay shutdown"; close}
+        timeout {puts "should not reached this case", close; exit 1}
+    }
+    
+    ::Algoh::StopNetwork $NETWORK_NAME $TEST_ROOT_DIR
+
+    exec rm -d -r -f $TEST_ALGO_DIR
+    puts "Basic Algoh Test Successful"
+    exit 0
+} EXCEPTION ] } {
+    puts "ERROR in algoh test: $EXCEPTION"
+
+    exec rm -d -r -f $TEST_ALGO_DIR
+    exit 1
+}

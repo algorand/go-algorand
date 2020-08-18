@@ -45,6 +45,7 @@ const (
 	pmMaxMessageWaitTime            = 15 * time.Second
 	pmUndeliveredMessagePenaltyTime = 5 * time.Second
 	pmDesiredMessegeDelayThreshold  = 50 * time.Millisecond
+	pmMessageBucketDuration         = time.Second
 )
 
 // pmMessage is the internal storage for a single message. We save the time the message arrived from each of the peers.
@@ -66,21 +67,28 @@ type pmStatistics struct {
 	messageCount   int64              // the number of messages used to calculate the above statistics
 }
 
+// pmPendingMessageBucket is used to buffer messages in time ranges blocks.
+type pmPendingMessageBucket struct {
+	messages  map[crypto.Digest]*pmMessage // the pendingMessages map contains messages that haven't been received from all the peers within the pmMaxMessageWaitTime, and belong to the timerange of this bucket.
+	startTime int64                        // the inclusive start-range of the timestamp which bounds the messages ranges which would go into this bucket. Time is in nano seconds UTC epoch time.
+	endTime   int64                        // the inclusive end-range of the timestamp which bounds the messages ranges which would go into this bucket. Time is in nano seconds UTC epoch time.
+}
+
 // connectionPerformanceMonitor is the connection monitor datatype. We typically would like to have a single monitor for all
 // the outgoing connections.
 type connectionPerformanceMonitor struct {
 	deadlock.Mutex
-	monitoredConnections map[Peer]bool                // the map of the connection we're going to monitor. Messages coming from other connections would be ignored.
-	monitoredMessageTags map[Tag]bool                 // the map of the message tags we're interested in monitoring. Messages that aren't broadcast-type typically would be a good choice here.
-	stage                pmStage                      // the performance monitoring stage.
-	peerLastMsgTime      map[Peer]int64               // the map describing the last time we received a message from each of the peers.
-	lastIncomingMsgTime  int64                        // the time at which the last message was received from any of the peers.
-	stageStartTime       int64                        // the timestamp at which we switched to the current stage.
-	pendingMessages      map[crypto.Digest]*pmMessage // the pendingMessages map contains messages that haven't been received from all the peers within the pmMaxMessageWaitTime
-	connectionDelay      map[Peer]int64               // contains the total delay we've sustained by each peer when we're in stages pmStagePresync-pmStageStopping and the average delay after that. ( in nano seconds )
-	firstMessageCount    map[Peer]int64               // maps the peers to their accumulated first messages ( the number of times a message seen coming from this peer first )
-	msgCount             int64                        // total number of messages that we've accumulated.
-	accumulationTime     int64                        // the duration of which we're going to accumulate messages. This will get randomized to prevent cross-node syncronization.
+	monitoredConnections   map[Peer]bool             // the map of the connection we're going to monitor. Messages coming from other connections would be ignored.
+	monitoredMessageTags   map[Tag]bool              // the map of the message tags we're interested in monitoring. Messages that aren't broadcast-type typically would be a good choice here.
+	stage                  pmStage                   // the performance monitoring stage.
+	peerLastMsgTime        map[Peer]int64            // the map describing the last time we received a message from each of the peers.
+	lastIncomingMsgTime    int64                     // the time at which the last message was received from any of the peers.
+	stageStartTime         int64                     // the timestamp at which we switched to the current stage.
+	pendingMessagesBuckets []*pmPendingMessageBucket // the pendingMessagesBuckets array contains messages buckets for messages that haven't been received from all the peers within the pmMaxMessageWaitTime
+	connectionDelay        map[Peer]int64            // contains the total delay we've sustained by each peer when we're in stages pmStagePresync-pmStageStopping and the average delay after that. ( in nano seconds )
+	firstMessageCount      map[Peer]int64            // maps the peers to their accumulated first messages ( the number of times a message seen coming from this peer first )
+	msgCount               int64                     // total number of messages that we've accumulated.
+	accumulationTime       int64                     // the duration of which we're going to accumulate messages. This will get randomized to prevent cross-node syncronization.
 }
 
 // makeConnectionPerformanceMonitor creates a new performance monitor instance, that is configured for monitoring the given message tags.
@@ -145,7 +153,6 @@ func (pm *connectionPerformanceMonitor) ComparePeers(peers []Peer) bool {
 func (pm *connectionPerformanceMonitor) Reset(peers []Peer) {
 	pm.Lock()
 	defer pm.Unlock()
-	pm.pendingMessages = make(map[crypto.Digest]*pmMessage, 0)
 	pm.monitoredConnections = make(map[Peer]bool, len(peers))
 	pm.peerLastMsgTime = make(map[Peer]int64, len(peers))
 	pm.connectionDelay = make(map[Peer]int64, len(peers))
@@ -265,7 +272,7 @@ func (pm *connectionPerformanceMonitor) notifyAccumulate(msg *IncomingMessage) {
 func (pm *connectionPerformanceMonitor) notifyStopping(msg *IncomingMessage) {
 	pm.accumulateMessage(msg, false)
 	pm.pruneOldMessages(msg.Received)
-	if len(pm.pendingMessages) > 0 {
+	if len(pm.pendingMessagesBuckets) > 0 {
 		return
 	}
 	// time to wrap up.
@@ -298,31 +305,58 @@ func (pm *connectionPerformanceMonitor) updateMessageIdlingInterval(now int64) (
 
 func (pm *connectionPerformanceMonitor) pruneOldMessages(now int64) {
 	oldestMessage := now - int64(pmMaxMessageWaitTime)
-	for digest, pendingMsg := range pm.pendingMessages {
-		if oldestMessage < pendingMsg.firstPeerTime {
+	prunedBucketsCount := 0
+	for bucketIdx, currentMsgBucket := range pm.pendingMessagesBuckets {
+		if currentMsgBucket.endTime > oldestMessage {
+			pm.pendingMessagesBuckets[bucketIdx-prunedBucketsCount] = currentMsgBucket
 			continue
 		}
-		for peer := range pm.monitoredConnections {
-			if msgTime, hasPeer := pendingMsg.peerMsgTime[peer]; hasPeer {
-				msgDelayInterval := msgTime - pendingMsg.firstPeerTime
-				pm.connectionDelay[peer] += msgDelayInterval
-			} else {
-				// we never received this message from this peer.
-				pm.connectionDelay[peer] += int64(pmUndeliveredMessagePenaltyTime)
+		for _, pendingMsg := range currentMsgBucket.messages {
+			for peer := range pm.monitoredConnections {
+				if msgTime, hasPeer := pendingMsg.peerMsgTime[peer]; hasPeer {
+					msgDelayInterval := msgTime - pendingMsg.firstPeerTime
+					pm.connectionDelay[peer] += msgDelayInterval
+				} else {
+					// we never received this message from this peer.
+					pm.connectionDelay[peer] += int64(pmUndeliveredMessagePenaltyTime)
+				}
 			}
 		}
-		delete(pm.pendingMessages, digest)
+		prunedBucketsCount++
 	}
+	pm.pendingMessagesBuckets = pm.pendingMessagesBuckets[:len(pm.pendingMessagesBuckets)-prunedBucketsCount]
 }
 
 func (pm *connectionPerformanceMonitor) accumulateMessage(msg *IncomingMessage, newMessages bool) {
 	msgDigest := generateMessageDigest(msg.Tag, msg.Data)
 
-	pendingMsg := pm.pendingMessages[msgDigest]
+	var msgBucket *pmPendingMessageBucket
+	var pendingMsg *pmMessage
+	var msgFound bool
+	// try to find the message. It's more likely to be found in the most recent bucket, so start there and go backward.
+	for bucketIndex := range pm.pendingMessagesBuckets {
+		currentMsgBucket := pm.pendingMessagesBuckets[len(pm.pendingMessagesBuckets)-1-bucketIndex]
+		if pendingMsg, msgFound = currentMsgBucket.messages[msgDigest]; msgFound {
+			msgBucket = currentMsgBucket
+			break
+		}
+		if msg.Received >= currentMsgBucket.startTime && msg.Received <= currentMsgBucket.endTime {
+			msgBucket = currentMsgBucket
+		}
+	}
 	if pendingMsg == nil {
 		if newMessages {
+			if msgBucket == nil {
+				// no bucket was found. create one.
+				msgBucket = &pmPendingMessageBucket{
+					messages:  make(map[crypto.Digest]*pmMessage),
+					startTime: msg.Received - (msg.Received % int64(pmMessageBucketDuration)), // align with pmMessageBucketDuration
+				}
+				msgBucket.endTime = msgBucket.startTime + int64(pmMessageBucketDuration) - 1
+				pm.pendingMessagesBuckets = append(pm.pendingMessagesBuckets, msgBucket)
+			}
 			// we don't have this one yet, add it.
-			pm.pendingMessages[msgDigest] = &pmMessage{
+			msgBucket.messages[msgDigest] = &pmMessage{
 				peerMsgTime: map[Peer]int64{
 					msg.Sender: msg.Received,
 				},
@@ -346,6 +380,6 @@ func (pm *connectionPerformanceMonitor) accumulateMessage(msg *IncomingMessage, 
 		for peer, msgTime := range pendingMsg.peerMsgTime {
 			pm.connectionDelay[peer] += msgTime - pendingMsg.firstPeerTime
 		}
-		delete(pm.pendingMessages, msgDigest)
+		delete(msgBucket.messages, msgDigest)
 	}
 }

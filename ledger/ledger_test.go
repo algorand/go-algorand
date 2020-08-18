@@ -539,6 +539,164 @@ func TestLedgerSingleTx(t *testing.T) {
 	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "added duplicate tx")
 }
 
+func TestLedgerSingleTxV24(t *testing.T) {
+	a := require.New(t)
+
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+
+	protoName := protocol.ConsensusV24
+	genesisInitState, initSecrets := testGenerateInitState(t, protoName)
+	const inMem = true
+	log := logging.TestingLog(t)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	a.NoError(err, "could not open ledger")
+	defer l.Close()
+
+	proto := config.Consensus[protoName]
+	poolAddr := testPoolAddr
+	sinkAddr := testSinkAddr
+
+	initAccounts := genesisInitState.Accounts
+	var addrList []basics.Address
+	for addr := range initAccounts {
+		if addr != poolAddr && addr != sinkAddr {
+			addrList = append(addrList, addr)
+		}
+	}
+
+	correctTxHeader := transactions.Header{
+		Sender:      addrList[0],
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
+		GenesisID:   t.Name(),
+		GenesisHash: genesisInitState.GenesisHash,
+	}
+
+	assetParam := basics.AssetParams{
+		Total:    100,
+		UnitName: "unit",
+		Manager:  addrList[0],
+	}
+	correctAssetConfigFields := transactions.AssetConfigTxnFields{
+		AssetParams: assetParam,
+	}
+	correctAssetConfig := transactions.Transaction{
+		Type:                 protocol.AssetConfigTx,
+		Header:               correctTxHeader,
+		AssetConfigTxnFields: correctAssetConfigFields,
+	}
+	correctAssetTransferFields := transactions.AssetTransferTxnFields{
+		AssetAmount:   10,
+		AssetReceiver: addrList[1],
+	}
+	correctAssetTransfer := transactions.Transaction{
+		Type:                   protocol.AssetTransferTx,
+		Header:                 correctTxHeader,
+		AssetTransferTxnFields: correctAssetTransferFields,
+	}
+
+	approvalProgram := []byte("\x02\x20\x01\x01\x22") // int 1
+	clearStateProgram := []byte("\x02")               // empty
+	correctAppCreateFields := transactions.ApplicationCallTxnFields{
+		ApprovalProgram:   approvalProgram,
+		ClearStateProgram: clearStateProgram,
+	}
+	correctAppCreate := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   correctTxHeader,
+		ApplicationCallTxnFields: correctAppCreateFields,
+	}
+
+	correctAppCallFields := transactions.ApplicationCallTxnFields{
+		OnCompletion: 0,
+	}
+	correctAppCall := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   correctTxHeader,
+		ApplicationCallTxnFields: correctAppCallFields,
+	}
+
+	var badTx transactions.Transaction
+	var ad transactions.ApplyData
+
+	var assetIdx basics.AssetIndex
+	var appIdx basics.AppIndex
+
+	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctAssetConfig, ad))
+	assetIdx = 1 // the first txn
+
+	badTx = correctAssetConfig
+	badTx.ConfigAsset = 2
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "asset 2 does not exist or has been deleted")
+
+	badTx = correctAssetConfig
+	badTx.ConfigAsset = assetIdx
+	badTx.AssetFrozen = true
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "type acfg has non-zero fields for type afrz")
+
+	badTx = correctAssetConfig
+	badTx.ConfigAsset = assetIdx
+	badTx.Sender = addrList[1]
+	badTx.AssetParams.Freeze = addrList[0]
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "this transaction should be issued by the manager")
+
+	badTx = correctAssetConfig
+	badTx.AssetParams.UnitName = "very long unit name that exceeds the limit"
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "transaction asset unit name too big: 42 > 8")
+
+	badTx = correctAssetTransfer
+	badTx.XferAsset = assetIdx
+	badTx.AssetAmount = 101
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "underflow on subtracting 101 from sender amount 100")
+
+	badTx = correctAssetTransfer
+	badTx.XferAsset = assetIdx
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), fmt.Sprintf("asset %d missing from", assetIdx))
+
+	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctAppCreate, ad))
+	appIdx = 2 // the first txn
+
+	badTx = correctAppCreate
+	program := make([]byte, len(approvalProgram))
+	copy(program, approvalProgram)
+	program[0] = '\x01'
+	badTx.ApprovalProgram = program
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "program version must be >= 2")
+
+	badTx = correctAppCreate
+	badTx.ApplicationID = appIdx
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "programs may only be specified during application creation or update")
+
+	badTx = correctAppCall
+	badTx.ApplicationID = 0
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "ApprovalProgram: invalid version")
+
+	correctAppCall.ApplicationID = appIdx
+	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctAppCall, ad))
+}
+
 func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion) {
 	a := require.New(t)
 
@@ -860,5 +1018,63 @@ func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, versio
 		a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with overlapping lease")
 	} else {
 		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "should allow leasing payment transaction with newer FirstValid")
+	}
+}
+
+func TestLedgerBlockHdrCaching(t *testing.T) {
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	blk := genesisInitState.Block
+
+	for i := 0; i < 128; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		err := l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+
+		hdr, err := l.BlockHdr(blk.BlockHeader.Round)
+		require.NoError(t, err)
+		require.Equal(t, blk.BlockHeader, hdr)
+	}
+}
+
+func TestLedgerReload(t *testing.T) {
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	blk := genesisInitState.Block
+	for i := 0; i < 128; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+
+		if i%7 == 0 {
+			err = l.reloadLedger()
+			require.NoError(t, err)
+
+			// if we reloaded it before it got committed, we need to roll back the round counter.
+			if l.LatestCommitted() != blk.BlockHeader.Round {
+				blk.BlockHeader.Round = l.LatestCommitted()
+			}
+		}
+		if i%13 == 0 {
+			l.WaitForCommit(blk.Round())
+		}
 	}
 }

@@ -1,0 +1,124 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+proc TestGoalDryrun { DRREQ_FILE TEST_PRIMARY_NODE_DIR } {
+    set PASSED 0
+    set PROGRAM_TYPE ""
+    spawn goal clerk dryrun-remote -d $TEST_PRIMARY_NODE_DIR -D $DRREQ_FILE -v
+    expect {
+        timeout { ::AlgorandGoal::Abort "goal clerk dryrun-remote timeout" }
+        -re {(ApprovalProgram)} {set PROGRAM_TYPE $expect_out(1,string); exp_continue}
+        "PASS" {set PASSED 1; close}
+    }
+    if { $PASSED == 0 } {
+        ::AlgorandGoal::Abort "Program did not pass"
+    }
+    if { $PROGRAM_TYPE != "ApprovalProgram" } {
+        puts "Program type: $PROGRAM_TYPE"
+        ::AlgorandGoal::Abort "Invalid program type"
+    }
+}
+
+proc TestGoalDryrunExitCode { DRREQ_FILE TEST_PRIMARY_NODE_DIR EXPECTED_STATUS_CODE EXPECTED_MESSAGE} {
+    set MESSAGE_MATCHED 0
+    spawn goal clerk dryrun-remote -d $TEST_PRIMARY_NODE_DIR -D $DRREQ_FILE -v
+    expect {
+        timeout { ::AlgorandGoal::Abort "goal clerk dryrun-remote timeout" }
+        $EXPECTED_MESSAGE {puts "message matched"; set MESSAGE_MATCHED 1; exp_continue}
+        eof { catch wait result; set STATUS_CODE [lindex $result 3]; }
+    }
+    if { $STATUS_CODE != $EXPECTED_STATUS_CODE } {
+        puts "Exit code: $STATUS_CODE, expected: $EXPECTED_STATUS_CODE"
+        ::AlgorandGoal::Abort "Progran exited with incorrect code"
+    }
+    if { $MESSAGE_MATCHED == 0 } {
+        ::AlgorandGoal::Abort "Progam message did not match expected"
+    }
+}
+
+if { [catch {
+
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+
+    exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Update the Primary Node configuration
+    exec -- cat "$TEST_ROOT_DIR/Primary/config.json" | jq {. |= . + {"EnableDeveloperAPI":true}} > $TEST_ROOT_DIR/Primary/config.json.new
+    exec rm $TEST_ROOT_DIR/Primary/config.json
+    exec mv $TEST_ROOT_DIR/Primary/config.json.new $TEST_ROOT_DIR/Primary/config.json
+
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    # Check the balance of the primary account
+    set PRIMARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
+
+    set TEAL_PROG_FILE "$TEST_ROOT_DIR/trivial.teal"
+    exec printf "#pragma version 2\nint 1" > $TEAL_PROG_FILE
+
+    # no format parameter
+    set DRREQ_FILE_1 "$TEST_ROOT_DIR/app-create-drreq-1.json"
+    spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog $TEAL_PROG_FILE --clear-prog $TEAL_PROG_FILE --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 -d $TEST_PRIMARY_NODE_DIR -o $DRREQ_FILE_1 --dryrun-dump
+    expect {
+        timeout { ::AlgorandGoal::Abort "goal app create timeout" }
+    }
+
+    # explicit json
+    set DRREQ_FILE_2 "$TEST_ROOT_DIR/app-create-drreq-2.json"
+    spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog $TEAL_PROG_FILE --clear-prog $TEAL_PROG_FILE --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 -d $TEST_PRIMARY_NODE_DIR -o $DRREQ_FILE_2 --dryrun-dump --dryrun-dump-format=json
+    expect {
+        timeout { ::AlgorandGoal::Abort "goal app create timeout" }
+    }
+
+    # explicit msgp
+    set DRREQ_FILE_3 "$TEST_ROOT_DIR/app-create-drreq.msgp"
+    spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog $TEAL_PROG_FILE --clear-prog $TEAL_PROG_FILE --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 -d $TEST_PRIMARY_NODE_DIR -o $DRREQ_FILE_3 --dryrun-dump --dryrun-dump-format=msgp
+    expect {
+        timeout { ::AlgorandGoal::Abort "goal app create timeout" }
+    }
+
+    # invalid app
+    set INVALID_FILE_1 "$TEST_ROOT_DIR/invalid-app.json"
+    set INVALID_FILE_1_ID [open $INVALID_FILE_1 "w"]
+    set INVALID_FILE_1_DATA "{ \"round\": -1 }"
+    puts -nonewline $INVALID_FILE_1_ID $INVALID_FILE_1_DATA
+    close $INVALID_FILE_1_ID
+
+    TestGoalDryrun $DRREQ_FILE_1 $TEST_PRIMARY_NODE_DIR
+    TestGoalDryrun $DRREQ_FILE_2 $TEST_PRIMARY_NODE_DIR
+    TestGoalDryrun $DRREQ_FILE_3 $TEST_PRIMARY_NODE_DIR
+    TestGoalDryrunExitCode $DRREQ_FILE_3 $TEST_PRIMARY_NODE_DIR 0 "PASS"
+    TestGoalDryrunExitCode "" $TEST_PRIMARY_NODE_DIR 1 "Cannot read file : open : no such file or directory"
+    TestGoalDryrunExitCode $INVALID_FILE_1 $TEST_PRIMARY_NODE_DIR 1 "dryrun-remote: HTTP 400 Bad Request:"
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in goalDryrunRestTest: $EXCEPTION"
+}

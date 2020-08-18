@@ -11,24 +11,33 @@ SCRIPT_PATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 SRCROOT="$(pwd -P)"
 
-# Use same PKG_ROOT location as local_install.sh uses.
-PKG_ROOT=$(pwd)/tmp/dev_pkg
-rm -rf ${PKG_ROOT} # Purge existing dir if present
-
 export CHANNEL=master
 
-while [ "$1" != "" ]; do
-    case "$1" in
-        -c)
-            shift
-            export CHANNEL="$1"
-            ;;
-        *)
-            echo "Unknown option" "$1"
-            exit 1
-            ;;
-    esac
-    shift
+HELP="Usage: $0 [-v] [-u]
+Script for running go-algorand e2e tests
+Requires:
+    * pip
+    * python 3
+    * go
+Options:
+    -c        Channel of build you are building binaries with this script
+    -n        Run tests without building binaries (Binaries are expected in PATH)
+"
+NO_BUILD=false
+while getopts ":c:nh" opt; do
+  case ${opt} in
+    c ) CHANNEL=$OPTARG
+      ;;
+    n ) NO_BUILD=true
+        GO_TEST_ARGS="-norace"
+      ;;
+    h ) echo "${HELP}"
+        exit 0
+      ;;
+    \? ) echo "${HELP}"
+        exit 2
+      ;;
+  esac
 done
 
 # export TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
@@ -53,15 +62,19 @@ reset_dirs
 echo Killing all instances and installing current build
 
 pkill -u $(whoami) -x algod || true
-./scripts/local_install.sh -c ${CHANNEL} -p ${BINDIR} -d ${DATADIR}
 
+if ! ${NO_BUILD} ; then
+    ./scripts/local_install.sh -c ${CHANNEL} -p ${BINDIR} -d ${DATADIR}
+    export PATH=${BINDIR}:${PATH}
+fi
+
+cp gen/devnet/genesis.json ${DATADIR}
 # check our install
-${BINDIR}/algod -v
-${BINDIR}/goal -v
+algod -v
+goal -v
 
-./test/scripts/goal_subcommand_sanity.sh "${BINDIR}" "${TEMPDIR}"
+./test/scripts/goal_subcommand_sanity.sh "${TEMPDIR}"
 
-export PATH=${BINDIR}:${PATH}
 export GOPATH=$(go env GOPATH)
 
 # Change current directory to test/scripts so we can just use ./test.sh to exec.
@@ -72,7 +85,7 @@ cd "${SCRIPT_PATH}"
 python3 -m venv ${TEMPDIR}/ve
 . ${TEMPDIR}/ve/bin/activate
 ${TEMPDIR}/ve/bin/pip3 install --upgrade pip
-${TEMPDIR}/ve/bin/pip3 install py-algorand-sdk cryptography
+${TEMPDIR}/ve/bin/pip3 install --upgrade py-algorand-sdk cryptography
 ${TEMPDIR}/ve/bin/python3 e2e_client_runner.py e2e_subs/*.sh
 deactivate
 
@@ -82,10 +95,13 @@ export TESTDIR=${TEMPDIR}
 export TESTDATADIR=${SRCROOT}/test/testdata
 export SRCROOT=${SRCROOT}
 
-./e2e_go_tests.sh
+./e2e_go_tests.sh ${GO_TEST_ARGS}
 
 rm -rf ${TEMPDIR}
-rm -rf ${PKG_ROOT}
+
+if ! ${NO_BUILD} ; then
+    rm -rf ${PKG_ROOT}
+fi
 
 echo "----------------------------------------------------------------------"
 echo "  DONE: E2E"

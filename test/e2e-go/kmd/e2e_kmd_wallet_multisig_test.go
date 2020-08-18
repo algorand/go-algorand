@@ -224,6 +224,141 @@ func TestMultisigSign(t *testing.T) {
 	// require.NoError(t, err)
 }
 
+func TestMultisigSignWithSigner(t *testing.T) {
+	t.Parallel()
+	var f fixtures.KMDFixture
+	walletHandleToken := f.SetupWithWallet(t)
+	defer f.Shutdown()
+
+	resp, err := f.Client.GenerateKey([]byte(walletHandleToken))
+	require.NoError(t, err)
+	pk1 := addrToPK(t, resp.Address)
+	resp, err = f.Client.GenerateKey([]byte(walletHandleToken))
+	require.NoError(t, err)
+	pk2 := addrToPK(t, resp.Address)
+	pk3 := crypto.PublicKey{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1} // some public key we haven't imported
+
+	sender, err := f.Client.GenerateKey([]byte(walletHandleToken))
+	require.NoError(t, err)
+	pkSender := addrToPK(t, sender.Address)
+
+	// Create a 2-of-3 multisig account from the three public keys
+	resp1, err := f.Client.ImportMultisigAddr([]byte(walletHandleToken), 1, 2, []crypto.PublicKey{pk1, pk2, pk3})
+
+	require.NoError(t, err)
+	msigAddr := addrToPK(t, resp1.Address)
+
+	// Make a transaction spending from the multisig address
+	tx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:     basics.Address(pkSender),
+			Fee:        basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
+			FirstValid: basics.Round(1),
+			LastValid:  basics.Round(1),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: basics.Address{},
+			Amount:   basics.MicroAlgos{},
+		},
+	}
+
+	// Try to sign
+	req2 := kmdapi.APIV1POSTMultisigTransactionSignRequest{
+		WalletHandleToken: walletHandleToken,
+		Transaction:       protocol.Encode(&tx),
+		PublicKey:         pk1,
+		PartialMsig: crypto.MultisigSig{
+			Threshold: 2,
+			Version:   1,
+			Subsigs:   []crypto.MultisigSubsig{{Key: pk1}, {Key: pk2}, {Key: pk3}},
+		},
+		WalletPassword: f.WalletPassword,
+		AuthAddr:       crypto.Digest(msigAddr),
+	}
+	resp2 := kmdapi.APIV1POSTMultisigTransactionSignResponse{}
+	err = f.Client.DoV1Request(req2, &resp2)
+	require.NoError(t, err)
+
+	var msig crypto.MultisigSig
+	err = protocol.Decode(resp2.Multisig, &msig)
+	require.NoError(t, err)
+
+	// Try to add another signature
+	req3 := kmdapi.APIV1POSTMultisigTransactionSignRequest{
+		WalletHandleToken: walletHandleToken,
+		Transaction:       protocol.Encode(&tx),
+		PublicKey:         pk2,
+		PartialMsig:       msig,
+		WalletPassword:    f.WalletPassword,
+		AuthAddr:          crypto.Digest(msigAddr),
+	}
+	resp3 := kmdapi.APIV1POSTMultisigTransactionSignResponse{}
+	err = f.Client.DoV1Request(req3, &resp3)
+	require.NoError(t, err)
+
+	// Assemble them into a signed transaction and see if it verifies
+	_, err = transactions.AssembleSignedTxn(tx, crypto.Signature{}, msig)
+	require.NoError(t, err)
+
+}
+
+func TestMultisigSignWithWrongSigner(t *testing.T) {
+	t.Parallel()
+	var f fixtures.KMDFixture
+	walletHandleToken := f.SetupWithWallet(t)
+	defer f.Shutdown()
+
+	resp, err := f.Client.GenerateKey([]byte(walletHandleToken))
+	require.NoError(t, err)
+	pk1 := addrToPK(t, resp.Address)
+	resp, err = f.Client.GenerateKey([]byte(walletHandleToken))
+	require.NoError(t, err)
+	pk2 := addrToPK(t, resp.Address)
+	pk3 := crypto.PublicKey{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1} // some public key we haven't imported
+
+	sender, err := f.Client.GenerateKey([]byte(walletHandleToken))
+	require.NoError(t, err)
+	pkSender := addrToPK(t, sender.Address)
+
+	// Create a 2-of-3 multisig account from the three public keys
+	_, err = f.Client.ImportMultisigAddr([]byte(walletHandleToken), 1, 2, []crypto.PublicKey{pk1, pk2, pk3})
+	require.NoError(t, err)
+
+	// Make a transaction spending from the multisig address
+	tx := transactions.Transaction{
+		Type: protocol.PaymentTx,
+		Header: transactions.Header{
+			Sender:     basics.Address(pkSender),
+			Fee:        basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee},
+			FirstValid: basics.Round(1),
+			LastValid:  basics.Round(1),
+		},
+		PaymentTxnFields: transactions.PaymentTxnFields{
+			Receiver: basics.Address{},
+			Amount:   basics.MicroAlgos{},
+		},
+	}
+
+	// Try to sign
+	req2 := kmdapi.APIV1POSTMultisigTransactionSignRequest{
+		WalletHandleToken: walletHandleToken,
+		Transaction:       protocol.Encode(&tx),
+		PublicKey:         pk1,
+		PartialMsig: crypto.MultisigSig{
+			Threshold: 2,
+			Version:   1,
+			Subsigs:   []crypto.MultisigSubsig{{Key: pk1}, {Key: pk2}, {Key: pk3}},
+		},
+		WalletPassword: f.WalletPassword,
+	}
+
+	resp2 := kmdapi.APIV1POSTMultisigTransactionSignResponse{}
+	err = f.Client.DoV1Request(req2, &resp2)
+	require.Error(t, err)
+
+}
+
 func TestMultisigSignProgram(t *testing.T) {
 	t.Parallel()
 	var f fixtures.KMDFixture
