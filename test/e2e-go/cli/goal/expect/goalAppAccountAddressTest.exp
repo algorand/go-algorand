@@ -1,0 +1,178 @@
+#!/usr/bin/expect -f
+#exp_internal 1
+set err 0
+log_user 1
+
+###
+# * The test creates four additional accounts, opt-in one to the app, then passes the four accounts
+#   as --app-account flag to goal app call.
+# * The teal program writes the four passed account addresses into the local state of the caller and one
+# * additional account. 
+# * The test verifies the correct addresses are written to the local states of both.
+# * It also tests for the error when one flag is missing
+###
+
+source  goalExpectCommon.exp
+
+
+set TEST_ALGO_DIR [lindex $argv 0]
+set TEST_DATA_DIR [lindex $argv 1]
+
+proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
+
+    # Setup the test
+    set timeout 60
+    set TIME_STAMP [clock seconds]
+
+    # Setup the network
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root_$TIME_STAMP
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+
+    set TEAL_PROGRAM "appAccountParams.teal"
+
+    exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    # Check the balance of the primary account
+    set PRIMARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
+
+    ::AlgorandGoal::WaitForRound 1 $TEST_PRIMARY_NODE_DIR
+
+    # Create wallet #1
+    set WALLET_1_NAME Wallet_1_$TIME_STAMP
+    set WALLET_1_PASSWORD 1234
+    set WALLET_1_PASSPHRASE [::AlgorandGoal::CreateWallet $WALLET_1_NAME $WALLET_1_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    puts "WALLET_1_PASSPHRASE: $WALLET_1_PASSPHRASE"
+    ::AlgorandGoal::VerifyWallet $WALLET_1_NAME  $TEST_PRIMARY_NODE_DIR
+
+    # Associate 4 new accounts with the wallet
+    set ACCOUNT_1_ADDRESS [::AlgorandGoal::CreateAccountForWallet $WALLET_1_NAME $WALLET_1_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    set ACCOUNT_2_ADDRESS [::AlgorandGoal::CreateAccountForWallet $WALLET_1_NAME $WALLET_1_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    set ACCOUNT_3_ADDRESS [::AlgorandGoal::CreateAccountForWallet $WALLET_1_NAME $WALLET_1_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    set ACCOUNT_4_ADDRESS [::AlgorandGoal::CreateAccountForWallet $WALLET_1_NAME $WALLET_1_PASSWORD $TEST_PRIMARY_NODE_DIR]
+
+    # Transfer Algos from primary account to accounts 1-4
+    set MIN_BALANCE 1000000
+    set TRANSFER_AMOUNT  [expr {1000 * $MIN_BALANCE}]
+    set FEE_AMOUNT 1000
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_1_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_2_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_3_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_4_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+
+    set TEAL_PROGS_DIR "$TEST_DATA_DIR/../scripts/e2e_subs/tealprogs"
+    set GLOBAL_BYTE_SLICES 0
+    set LOCAL_BYTE_SLICES 5
+
+    # Create the app
+    puts "calling goal app create"
+    set APP_ID [::AlgorandGoal::AppCreateOnCompletion \
+		    $PRIMARY_WALLET_NAME \
+		    "" \
+		    $PRIMARY_ACCOUNT_ADDRESS \
+		    ${TEAL_PROGS_DIR}/${TEAL_PROGRAM} \
+		    "" \
+		    $GLOBAL_BYTE_SLICES \
+		    $LOCAL_BYTE_SLICES \
+		    ${TEAL_PROGS_DIR}/clear_program_state.teal \
+		    $TEST_PRIMARY_NODE_DIR \
+		    "OptIn"]
+
+    # Let account 2 opt in so it's local state is also written
+    ::AlgorandGoal::AppOptIn $APP_ID $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_2_ADDRESS "" $TEST_PRIMARY_NODE_DIR
+
+    # call the app
+    puts "Calling goal app call to get the local state params"
+    spawn goal app call --app-id $APP_ID --from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR \
+	--app-account $ACCOUNT_1_ADDRESS \
+	--app-account $ACCOUNT_2_ADDRESS \
+	--app-account $ACCOUNT_3_ADDRESS \
+	--app-account $ACCOUNT_4_ADDRESS
+    expect {
+	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+	"*committed in round*" {puts "app call successful"; close}
+	eof {close; ::AlgorandGoal::Abort "app call failed" }
+    }
+
+    puts "Checking the results"
+    set EXPECTED_OUTPUT "Account0*$PRIMARY_ACCOUNT_ADDRESS"
+    set EXPECTED_OUTPUT "$EXPECTED_OUTPUT*Account1*$ACCOUNT_1_ADDRESS"
+    set EXPECTED_OUTPUT "$EXPECTED_OUTPUT*Account2*$ACCOUNT_2_ADDRESS"
+    set EXPECTED_OUTPUT "$EXPECTED_OUTPUT*Account3*$ACCOUNT_3_ADDRESS"
+    set EXPECTED_OUTPUT "$EXPECTED_OUTPUT*Account4*$ACCOUNT_4_ADDRESS"
+    set EXPECTED_OUTPUT "$EXPECTED_OUTPUT*Num Accounts*ui*4"
+
+    # check the local state of the caller
+    spawn goal app read --app-id $APP_ID --local --guess-format \
+	--from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
+    expect {
+	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+	"*$EXPECTED_OUTPUT*" {puts "Local state read correctly"; close}
+	eof {close; ::AlgorandGoal::Abort "app read failed" }
+    }
+
+    # check the local state of account 2
+    spawn goal app read --app-id $APP_ID --local --guess-format \
+	--from $ACCOUNT_2_ADDRESS -w $WALLET_1_NAME -d $TEST_PRIMARY_NODE_DIR
+
+    expect {
+	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+	"Please enter the password for wallet '$WALLET_1_NAME':" {send "$WALLET_1_PASSWORD\r" ; exp_continue}
+	"*$EXPECTED_OUTPUT*" {puts "Local state read correctly"; close}
+	eof {close; ::AlgorandGoal::Abort "app read failed" }
+    }
+    
+    # call the app with a missing app-account. It should fail
+    puts "Calling goal app call to get the local state params"
+    spawn goal app call --app-id $APP_ID --from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR \
+	--app-account $ACCOUNT_1_ADDRESS \
+	--app-account $ACCOUNT_2_ADDRESS \
+	--app-account $ACCOUNT_4_ADDRESS
+    expect {
+	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+	"*Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: transaction*invalid Accounts index 4*" \
+	    {puts "Error received successfully "; close}
+	eof {close; ::AlgorandGoal::Abort "failed to get the expected error" }
+    }
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    puts "Goal Stateful Teal test Successful"
+}
+
+
+
+if { [catch {
+    source  goalExpectCommon.exp
+
+    puts "starting test"
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    puts "calling goalAppAccountAddressTest"
+
+    goalAppAccountAddress  $TEST_ALGO_DIR  $TEST_DATA_DIR
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in goalAppAccountAddressTest: $EXCEPTION"
+}
