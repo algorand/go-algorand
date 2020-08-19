@@ -152,7 +152,7 @@ func TestAuth(t *testing.T) {
 
 		// There is no router to update the context based on the url, so do it manually.
 		if test.header == "" && test.token != "" {
-			ctx.SetParamNames("token")
+			ctx.SetParamNames(TokenPathParam)
 			ctx.SetParamValues(test.token)
 		}
 		ctx.SetPath("")
