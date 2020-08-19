@@ -195,7 +195,7 @@ type GossipNode interface {
 	// this node to send corresponding MsgOfInterest notifications to any
 	// newly connecting peers.  This should be called before the network
 	// is started.
-	RegisterMessageInterest(protocol.Tag)
+	RegisterMessageInterest(protocol.Tag) error
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -372,8 +372,16 @@ type WebsocketNetwork struct {
 	messagesOfInterest map[protocol.Tag]bool
 
 	// messagesOfInterestEnc is the encoding of messagesOfInterest,
-	// to be sent to new peers.
-	messagesOfInterestEnc []byte
+	// to be sent to new peers.  This is filled in at network start,
+	// at which point messagesOfInterestEncoded is set to prevent
+	// further changes.
+	messagesOfInterestEnc     []byte
+	messagesOfInterestEncoded bool
+
+	// messagesOfInterestMu protects messagesOfInterest and ensures
+	// that messagesOfInterestEnc does not change once it is set during
+	// network start.
+	messagesOfInterestMu deadlock.Mutex
 }
 
 type broadcastRequest struct {
@@ -689,6 +697,13 @@ func (wn *WebsocketNetwork) Start() {
 	var err error
 	if wn.config.IncomingConnectionsLimit < 0 {
 		wn.config.IncomingConnectionsLimit = MaxInt
+	}
+
+	wn.messagesOfInterestMu.Lock()
+	defer wn.messagesOfInterestMu.Unlock()
+	wn.messagesOfInterestEncoded = true
+	if wn.messagesOfInterest != nil {
+		wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
 	}
 
 	// Make sure we do not accept more incoming connections than our
@@ -2055,7 +2070,14 @@ func SetUserAgentHeader(header http.Header) {
 	header.Set(UserAgentHeader, ua)
 }
 
-func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) {
+func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) error {
+	wn.messagesOfInterestMu.Lock()
+	defer wn.messagesOfInterestMu.Unlock()
+
+	if wn.messagesOfInterestEncoded {
+		return fmt.Errorf("network already started")
+	}
+
 	if wn.messagesOfInterest == nil {
 		wn.messagesOfInterest = make(map[protocol.Tag]bool)
 		for tag, flag := range defaultSendMessageTags {
@@ -2064,5 +2086,5 @@ func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) {
 	}
 
 	wn.messagesOfInterest[t] = true
-	wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
+	return nil
 }
