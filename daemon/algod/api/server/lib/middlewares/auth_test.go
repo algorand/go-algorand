@@ -1,42 +1,59 @@
+// Copyright (C) 2019-2020 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
 package middlewares
 
 import (
 	"errors"
-	"github.com/labstack/echo/v4"
-	"github.com/stretchr/testify/require"
 	"net/http"
 	"testing"
+
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/require"
 )
 
-var successError = errors.New("unexpected success")
+var errSuccess = errors.New("unexpected success")
 var invalidTokenError = echo.NewHTTPError(http.StatusUnauthorized, InvalidTokenMessage)
 var e = echo.New()
 var testAPIHeader = "API-Header-Whatever"
 
 // success is the "next" handler, it is only called when auth allows the request to continue
 func success(ctx echo.Context) error {
-	return successError
+	return errSuccess
 }
 
 func TestAuth(t *testing.T) {
-	tokens := []string{ "token1", "token2" }
+	tokens := []string{"token1", "token2"}
 
 	tests := []struct {
-		name string
-		url string
-		header string
-		token string
-		method string
+		name           string
+		url            string
+		header         string
+		token          string
+		method         string
 		expectResponse error
-		finalPath string
-	} {
+		finalPath      string
+	}{
 		{
 			"Valid token (1)",
 			"N/A",
 			testAPIHeader,
 			tokens[0],
 			"GET",
-			successError,
+			errSuccess,
 			"",
 		},
 		{
@@ -45,7 +62,7 @@ func TestAuth(t *testing.T) {
 			testAPIHeader,
 			tokens[1],
 			"GET",
-			successError,
+			errSuccess,
 			"",
 		},
 		{
@@ -54,7 +71,7 @@ func TestAuth(t *testing.T) {
 			"Authorization",
 			"Bearer " + tokens[0],
 			"GET",
-			successError,
+			errSuccess,
 			"",
 		},
 		{
@@ -63,7 +80,7 @@ func TestAuth(t *testing.T) {
 			"Authorization",
 			"Bearer " + tokens[1],
 			"GET",
-			successError,
+			errSuccess,
 			"",
 		},
 		{
@@ -99,7 +116,7 @@ func TestAuth(t *testing.T) {
 			testAPIHeader,
 			"invalid_token",
 			"OPTIONS",
-			successError,
+			errSuccess,
 			"",
 		},
 		{
@@ -108,7 +125,7 @@ func TestAuth(t *testing.T) {
 			"Authorization",
 			"Bearer invalid_token",
 			"OPTIONS",
-			successError,
+			errSuccess,
 			"",
 		},
 		{
@@ -117,7 +134,7 @@ func TestAuth(t *testing.T) {
 			"",
 			tokens[0],
 			"GET",
-			successError,
+			errSuccess,
 			"/v2/status",
 		},
 		{
@@ -126,7 +143,7 @@ func TestAuth(t *testing.T) {
 			"",
 			tokens[1],
 			"GET",
-			successError,
+			errSuccess,
 			"/v2/status",
 		},
 		{

@@ -25,9 +25,12 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// URLAuthPrefix is the echo formatted url/path param which can be used for supplying an API token.
 const URLAuthPrefix = "/urlAuth/:" + TokenPathParam
 const urlAuthFormatter = "/urlAuth/%s"
+// InvalidTokenMessage is the message set when an invalid / missing token is found.
 const InvalidTokenMessage = "Invalid API Token"
+// TokenPathParam is the name of the path parameter used by URLAuthPrefix
 const TokenPathParam = "token"
 
 // AuthMiddleware provides some data to the handler.
