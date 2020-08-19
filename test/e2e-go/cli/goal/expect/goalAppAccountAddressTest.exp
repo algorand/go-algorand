@@ -4,10 +4,11 @@ set err 0
 log_user 1
 
 ###
-# * The test creates four additional accounts to opt-in to the app, then passes the four accounts
+# * The test creates four additional accounts, opt-in one to the app, then passes the four accounts
 #   as --app-account flag to goal app call.
-# * The teal program writes the four passed account addresses into the local state of the account app. 
-# * The test verifies the correct addresses are written to the local state. 
+# * The teal program writes the four passed account addresses into the local state of the caller and one
+# * additional account. 
+# * The test verifies the correct addresses are written to the local states of both.
 # * It also tests for the error when one flag is missing
 ###
 
@@ -93,7 +94,7 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
 		    $TEST_PRIMARY_NODE_DIR \
 		    "OptIn"]
 
-    # Let account 2 opt in so it's local stat is also written
+    # Let account 2 opt in so it's local state is also written
     ::AlgorandGoal::AppOptIn $APP_ID $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_2_ADDRESS "" $TEST_PRIMARY_NODE_DIR
 
     # call the app

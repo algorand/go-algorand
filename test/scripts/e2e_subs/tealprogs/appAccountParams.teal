@@ -1,6 +1,7 @@
 #pragma version 2
 
-// Writes the passed account addresses to the caller's local space
+// Writes the passed account addresses to the caller's and
+// account_2's local spaces. 
 
 int OptIn
 txn OnCompletion
