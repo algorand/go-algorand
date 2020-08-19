@@ -290,7 +290,7 @@ type Local struct {
 	// NetworkProtocolVersion overrides network protocol version ( if present )
 	NetworkProtocolVersion string `version[6]:""`
 
-	// CatchpointInterval set the interval at which catchpoint are being generated. Setting this to 0 disable the catchpoint from being generated.
+	// CatchpointInterval sets the interval at which catchpoint are being generated. Setting this to 0 disables the catchpoint from being generated.
 	// See CatchpointTracking for more details.
 	CatchpointInterval uint64 `version[7]:"10000"`
 
