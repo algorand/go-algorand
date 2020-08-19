@@ -84,7 +84,7 @@ if { [catch {
     # Check to make sure that the transfer is reflected in the to account
     ::AlgorandGoal::WaitForAccountBalance $WALLET_2_NAME $ACCOUNT_2_ADDRESS $TRANSFER_AMOUNT $TEST_PRIMARY_NODE_DIR
 
-    # -------------------------- asset setup  ----------------------------------
+    # -------------------------- setup application ----------------------------------
 
     set TEAL_SOURCE "$TEST_ROOT_DIR/simple.teal"
 
@@ -98,38 +98,28 @@ if { [catch {
     puts [exec cat $TEAL_SOURCE]
 
     # compile teal assembly to bytecode
-    set APP_ACCOUNT_ADDRESS [::AlgorandGoal::TealCompile $TEAL_SOURCE]
+    set ESCROW_ADDRESS [::AlgorandGoal::TealCompile $TEAL_SOURCE]
 
     # -------------------------- create mixed teal and stateful teal transaction  ----------------------------------
 
-    set TRANSACTION_ID_APP [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $APP_ACCOUNT_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+    set TRANSACTION_ID_APP [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ESCROW_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
 
     # Print the transaction id
-    puts "TRANSACTION_ID_APP: $TRANSACTION_ID_APP, APP_ACCOUNT_ADDRESS: $APP_ACCOUNT_ADDRESS"
+    puts "TRANSACTION_ID_APP: $TRANSACTION_ID_APP, APP_ACCOUNT_ADDRESS: $ESCROW_ADDRESS"
 
     # Check to make sure that the transfer is reflected in the to account
-    ::AlgorandGoal::WaitForAccountBalance $WALLET_1_NAME $APP_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $TEST_PRIMARY_NODE_DIR
+    ::AlgorandGoal::WaitForAccountBalance $WALLET_1_NAME $ESCROW_ADDRESS $TRANSFER_AMOUNT $TEST_PRIMARY_NODE_DIR
 
     puts "calling app create"
     set GLOBAL_BYTE_SLICES 1
     set LOCAL_BYTE_SLICES 0
     set APP_ID [::AlgorandGoal::AppCreate0 $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TEAL_SOURCE $GLOBAL_BYTE_SLICES $LOCAL_BYTE_SLICES $TEAL_SOURCE $TEST_PRIMARY_NODE_DIR]
 
-    spawn goal app call --app-id $APP_ID --from $ACCOUNT_1_ADDRESS  --out=unsginedtransaction1.tx -d $TEST_PRIMARY_NODE_DIR
-    expect {
-        eof
-    }
+    exec goal app call --app-id $APP_ID --from $ACCOUNT_1_ADDRESS  --out=unsginedtransaction1.tx -d $TEST_PRIMARY_NODE_DIR
 
-    spawn goal clerk send --to=$ACCOUNT_1_ADDRESS --close-to=$ACCOUNT_1_ADDRESS --from-program=$TEAL_SOURCE --amount=409000 --out=unsginedtransaction2.tx -d $TEST_PRIMARY_NODE_DIR
-    expect {
-        eof
-    }
+    exec goal clerk send --to=$ACCOUNT_1_ADDRESS --close-to=$ACCOUNT_1_ADDRESS --from-program=$TEAL_SOURCE --amount=409000 --out=unsginedtransaction2.tx -d $TEST_PRIMARY_NODE_DIR
 
     ::AlgorandGoal::SignTransaction $WALLET_1_NAME $WALLET_1_PASSWORD unsginedtransaction1.tx sginedtransaction1.tx $TEST_PRIMARY_NODE_DIR
-
-    ::AlgorandGoal::InspectTransactionFile unsginedtransaction1.tx
-
-    ::AlgorandGoal::InspectTransactionFile unsginedtransaction2.tx
 
     puts "form combined transaction"
     exec cat unsginedtransaction1.tx unsginedtransaction2.tx > combinedtransactions.tx
@@ -145,16 +135,8 @@ if { [catch {
     set RAW_STX_1 signout-0.tx
     ::AlgorandGoal::SignTransaction $WALLET_1_NAME $WALLET_1_PASSWORD $RAW_TX_1 $RAW_STX_1 $TEST_PRIMARY_NODE_DIR
 
-    ::AlgorandGoal::InspectTransactionFile split-0.tx
-
-    ::AlgorandGoal::InspectTransactionFile split-1.tx
-
-    ::AlgorandGoal::InspectTransactionFile signout-0.tx
-
     puts "\ncombine into the sign out transaction"
     exec cat signout-0.tx split-1.tx > signout.tx
-
-    ::AlgorandGoal::InspectTransactionFile  signout.tx
 
     puts "submit the signout transaction"
     ::AlgorandGoal::RawSend signout.tx $TEST_PRIMARY_NODE_DIR
