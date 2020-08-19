@@ -616,6 +616,14 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	pool.assemblyMu.Lock()
 	pool.assemblyResults = poolAsmResults{}
+	lateStart := false
+	if (pool.assemblyDeadline != time.Time{}) && time.Now().After(pool.assemblyDeadline) {
+		// are we already late to the game ?
+		//pool.assemblyResults.ok = true
+		//stats.StopReason = telemetryspec.AssembleBlockTimeout
+		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: late to game")
+		lateStart = true
+	}
 	pool.assemblyMu.Unlock()
 
 	next := bookkeeping.MakeBlock(prev)
@@ -624,6 +632,14 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	if err != nil {
 		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
+	}
+
+	if !lateStart {
+		pool.assemblyMu.Lock()
+		if (pool.assemblyDeadline != time.Time{}) && time.Now().After(pool.assemblyDeadline) {
+			logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: late to game 2")
+		}
+		pool.assemblyMu.Unlock()
 	}
 
 	var asmStats telemetryspec.AssembleBlockMetrics
