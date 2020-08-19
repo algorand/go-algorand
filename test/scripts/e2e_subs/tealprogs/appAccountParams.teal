@@ -13,7 +13,7 @@ byte "Num Accounts" // key
 txn NumAccounts // get number of accounts passed (value)
 app_local_put
 
-// Write the passed accounts to the local space
+// Write the passed accounts to the local space of the caller
 int 0
 byte "Account0"
 txn Accounts 0
@@ -37,6 +37,38 @@ app_local_put
 int 0
 byte "Account4"
 txn Accounts 4
+app_local_put
+
+// Write the passed accounts to the local space of account 2
+int 2
+byte "Account0"
+txn Accounts 0
+app_local_put
+
+int 2
+byte "Account1"
+txn Accounts 1
+app_local_put
+
+int 2
+byte "Account2"
+txn Accounts 2
+app_local_put
+
+int 2
+byte "Account3"
+txn Accounts 3
+app_local_put
+
+int 2
+byte "Account4"
+txn Accounts 4
+app_local_put
+
+// Write the number of accounts passed as parameters
+int 2
+byte "Num Accounts" // key
+txn NumAccounts // get number of accounts passed (value)
 app_local_put
 
 skipped:

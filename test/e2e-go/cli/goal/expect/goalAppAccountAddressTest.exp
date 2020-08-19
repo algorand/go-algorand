@@ -93,11 +93,8 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
 		    $TEST_PRIMARY_NODE_DIR \
 		    "OptIn"]
 
-    # Let all other 4 accounts opt in
-    ::AlgorandGoal::AppOptIn $APP_ID $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS "" $TEST_PRIMARY_NODE_DIR
+    # Let account 2 opt in so it's local stat is also written
     ::AlgorandGoal::AppOptIn $APP_ID $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_2_ADDRESS "" $TEST_PRIMARY_NODE_DIR
-    ::AlgorandGoal::AppOptIn $APP_ID $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_3_ADDRESS "" $TEST_PRIMARY_NODE_DIR
-    ::AlgorandGoal::AppOptIn $APP_ID $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_4_ADDRESS "" $TEST_PRIMARY_NODE_DIR
 
     # call the app
     puts "Calling goal app call to get the local state params"
@@ -120,6 +117,7 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
     set EXPECTED_OUTPUT "$EXPECTED_OUTPUT*Account4*$ACCOUNT_4_ADDRESS"
     set EXPECTED_OUTPUT "$EXPECTED_OUTPUT*Num Accounts*ui*4"
 
+    # check the local state of the caller
     spawn goal app read --app-id $APP_ID --local --guess-format \
 	--from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
     expect {
@@ -128,6 +126,17 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
 	eof {close; ::AlgorandGoal::Abort "app read failed" }
     }
 
+    # check the local state of account 2
+    spawn goal app read --app-id $APP_ID --local --guess-format \
+	--from $ACCOUNT_2_ADDRESS -w $WALLET_1_NAME -d $TEST_PRIMARY_NODE_DIR
+
+    expect {
+	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+	"Please enter the password for wallet '$WALLET_1_NAME':" {send "$WALLET_1_PASSWORD\r" ; exp_continue}
+	"*$EXPECTED_OUTPUT*" {puts "Local state read correctly"; close}
+	eof {close; ::AlgorandGoal::Abort "app read failed" }
+    }
+    
     # call the app with a missing app-account. It should fail
     puts "Calling goal app call to get the local state params"
     spawn goal app call --app-id $APP_ID --from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR \
