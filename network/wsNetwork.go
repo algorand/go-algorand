@@ -189,6 +189,13 @@ type GossipNode interface {
 	// GetHTTPRequestConnection returns the underlying connection for the given request. Note that the request must be the same
 	// request that was provided to the http handler ( or provide a fallback Context() to that )
 	GetHTTPRequestConnection(request *http.Request) (conn net.Conn)
+
+	// RegisterMessageInterest notifies the network library that this node
+	// wants to receive messages with the specified tag.  This will cause
+	// this node to send corresponding MsgOfInterest notifications to any
+	// newly connecting peers.  This should be called before the network
+	// is started.
+	RegisterMessageInterest(protocol.Tag)
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -358,6 +365,15 @@ type WebsocketNetwork struct {
 	// connection in compliance with connectionsRateLimitingCount.
 	transport rateLimitingTransport
 	dialer    Dialer
+
+	// messagesOfInterest specifies the message types that this node
+	// wants to receive.  nil means default.  non-nil causes this
+	// map to be sent to new peers as a MsgOfInterest message type.
+	messagesOfInterest map[protocol.Tag]bool
+
+	// messagesOfInterestEnc is the encoding of messagesOfInterest,
+	// to be sent to new peers.
+	messagesOfInterestEnc []byte
 }
 
 type broadcastRequest struct {
@@ -1035,6 +1051,13 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 			Incoming:     true,
 			InstanceName: trackedRequest.otherInstanceName,
 		})
+
+	if wn.messagesOfInterestEnc != nil {
+		err = peer.Unicast(wn.ctx, wn.messagesOfInterestEnc, protocol.MsgOfInterestTag)
+		if err != nil {
+			wn.log.Infof("ws send msgOfInterest: %v", err)
+		}
+	}
 
 	peers.Set(float64(wn.NumPeers()), nil)
 	incomingPeers.Set(float64(wn.numIncomingPeers()), nil)
@@ -2030,4 +2053,16 @@ func SetUserAgentHeader(header http.Header) {
 	version := config.GetCurrentVersion()
 	ua := fmt.Sprintf("algod/%d.%d (%s; commit=%s; %d) %s(%s)", version.Major, version.Minor, version.Channel, version.CommitHash, version.BuildNumber, runtime.GOOS, runtime.GOARCH)
 	header.Set(UserAgentHeader, ua)
+}
+
+func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) {
+	if wn.messagesOfInterest == nil {
+		wn.messagesOfInterest = make(map[protocol.Tag]bool)
+		for tag, flag := range defaultSendMessageTags {
+			wn.messagesOfInterest[tag] = flag
+		}
+	}
+
+	wn.messagesOfInterest[t] = true
+	wn.messagesOfInterestEnc = MarshallMessageOfInterestMap(wn.messagesOfInterest)
 }

@@ -63,3 +63,19 @@ func MarshallMessageOfInterest(messageTags []protocol.Tag) []byte {
 	topics := Topics{Topic{key: "tags", data: []byte(tags)}}
 	return topics.MarshallTopics()
 }
+
+// MarshallMessageOfInterestMap generates a message of interest message body
+// for the message tags that map to "true" in the map argument.
+func MarshallMessageOfInterestMap(tagmap map[protocol.Tag]bool) []byte {
+	tags := ""
+	for tag, flag := range tagmap {
+		if flag {
+			tags += "," + string(tag)
+		}
+	}
+	if len(tags) > 0 {
+		tags = tags[1:]
+	}
+	topics := Topics{Topic{key: "tags", data: []byte(tags)}}
+	return topics.MarshallTopics()
+}
