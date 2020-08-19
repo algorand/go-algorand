@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
@@ -234,13 +234,17 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 
 		var totalSent, totalSucceeded uint64
 		for !time.Now().After(stopTime) {
+			minimumAmount := cfg.MinAccountFunds + (cfg.MaxAmt+cfg.MaxFee)*2
+			fromList := listSufficientAccounts(accounts, minimumAmount, cfg.SrcAccount)
+			// in group tests txns are sent back and forth, so both parties need funds
+			if cfg.GroupSize == 1 {
+				minimumAmount = 0
+			}
+			toList := listSufficientAccounts(accounts, minimumAmount, cfg.SrcAccount)
 
-			fromList := listSufficientAccounts(accounts, cfg.MinAccountFunds+(cfg.MaxAmt+cfg.MaxFee)*2, cfg.SrcAccount)
-			toList := listSufficientAccounts(accounts, 0, cfg.SrcAccount)
-
-			sent, succeded, err := sendFromTo(fromList, toList, accounts, assetParam, appParam, ac, cfg)
+			sent, succeeded, err := sendFromTo(fromList, toList, accounts, assetParam, appParam, ac, cfg)
 			totalSent += sent
-			totalSucceeded += succeded
+			totalSucceeded += succeeded
 			if err != nil {
 				_, _ = fmt.Fprintf(os.Stderr, "error sending transactions: %v\n", err)
 			}
@@ -266,9 +270,40 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 	}
 }
 
-func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetParams map[uint64]v1.AssetParams, appParams map[uint64]v1.AppParams, client libgoal.Client, cfg PpConfig) (sentCount, successCount uint64, err error) {
+func getCreatableID(cfg PpConfig, assetParams map[uint64]v1.AssetParams, appParams map[uint64]v1.AppParams) (aidx uint64) {
+	if cfg.NumAsset > 0 {
+		rindex := rand.Intn(len(assetParams))
+		i := 0
+		for k := range assetParams {
+			if i == rindex {
+				aidx = k
+				break
+			}
+			i++
+		}
+	} else if cfg.NumApp > 0 {
+		rindex := rand.Intn(len(appParams))
+		i := 0
+		for k := range appParams {
+			if i == rindex {
+				aidx = k
+				break
+			}
+			i++
+		}
+	}
+	return
+}
+
+func sendFromTo(
+	fromList, toList []string, accounts map[string]uint64,
+	assetParams map[uint64]v1.AssetParams, appParams map[uint64]v1.AppParams,
+	client libgoal.Client, cfg PpConfig,
+) (sentCount, successCount uint64, err error) {
+
 	amt := cfg.MaxAmt
 	fee := cfg.MaxFee
+
 	for i, from := range fromList {
 		if cfg.RandomizeAmt {
 			amt = rand.Uint64()%cfg.MaxAmt + 1
@@ -293,33 +328,9 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetPara
 			amt = 1
 		}
 
-		// app or asset ID
-		var aidx uint64
 		if cfg.GroupSize == 1 {
-			if cfg.NumAsset > 0 { // generate random assetID if we send asset txns
-				rindex := rand.Intn(len(assetParams))
-				i := 0
-				for k := range assetParams {
-					if i == rindex {
-						aidx = k
-						break
-					}
-					i++
-				}
-			} else if cfg.NumApp > 0 {
-				rindex := rand.Intn(len(appParams))
-				i := 0
-				for k := range appParams {
-					if i == rindex {
-						aidx = k
-						break
-					}
-					i++
-				}
-			} else {
-				aidx = 0
-			}
-
+			// generate random assetID or appId if we send asset/app txns
+			aidx := getCreatableID(cfg, assetParams, appParams)
 			// Construct single txn
 			txn, consErr := constructTxn(from, to, fee, amt, aidx, client, cfg)
 			if consErr != nil {
@@ -333,6 +344,7 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetPara
 				_, _ = fmt.Fprintf(os.Stdout, "Skipping sending %d : %s -> %s; Current cost too high.\n", amt, from, to)
 				continue
 			}
+
 			fromBalanceChange = -int64(txn.Fee.Raw + amt)
 			toBalanceChange = int64(amt)
 
@@ -348,23 +360,55 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetPara
 			_, sendErr = client.BroadcastTransaction(stxn)
 		} else {
 			// Generate txn group
+
+			// In rekeying test there are two txns sent in a group
+			// the first is  from -> to with RekeyTo=to
+			// the second is from -> to with RekeyTo=from and AuthAddr=to
+			// So that rekeying test only supports groups of two
+
 			var txGroup []transactions.Transaction
+			var txSigners []string
 			for j := 0; j < int(cfg.GroupSize); j++ {
 				var txn transactions.Transaction
+				var signer string
 				if j%2 == 0 {
 					txn, err = constructTxn(from, to, fee, amt, 0, client, cfg)
 					fromBalanceChange -= int64(txn.Fee.Raw + amt)
 					toBalanceChange += int64(amt)
+					signer = from
+				} else if cfg.GroupSize == 2 && cfg.Rekey {
+					txn, err = constructTxn(from, to, fee, amt, 0, client, cfg)
+					fromBalanceChange -= int64(txn.Fee.Raw + amt)
+					toBalanceChange += int64(amt)
+					signer = to
 				} else {
 					txn, err = constructTxn(to, from, fee, amt, 0, client, cfg)
 					toBalanceChange -= int64(txn.Fee.Raw + amt)
 					fromBalanceChange += int64(amt)
+					signer = to
 				}
 				if err != nil {
 					_, _ = fmt.Fprintf(os.Stderr, "group tx failed: %v\n", err)
 					return
 				}
+				if cfg.RandomizeAmt {
+					amt = rand.Uint64()%cfg.MaxAmt + 1
+				}
+				if cfg.Rekey {
+					if from == signer {
+						// rekey to the receiver the first txn of the rekeying pair
+						txn.RekeyTo, err = basics.UnmarshalChecksumAddress(to)
+					} else {
+						// rekey to the sender the second txn of the rekeying pair
+						txn.RekeyTo, err = basics.UnmarshalChecksumAddress(from)
+					}
+					if err != nil {
+						_, _ = fmt.Fprintf(os.Stderr, "Address unmarshalling failed: %v\n", err)
+						return
+					}
+				}
 				txGroup = append(txGroup, txn)
+				txSigners = append(txSigners, signer)
 			}
 
 			// would we have enough money after taking into account the current updated fees ?
@@ -392,13 +436,7 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetPara
 			var stxGroup []transactions.SignedTxn
 			for j, txn := range txGroup {
 				txn.Group = gid
-				var lf string
-				if j%2 == 0 {
-					lf = from
-				} else {
-					lf = to
-				}
-				stxn, signErr := signTxn(lf, txn, client, cfg)
+				stxn, signErr := signTxn(txSigners[j], txn, client, cfg)
 				if signErr != nil {
 					err = signErr
 					return
@@ -410,19 +448,16 @@ func sendFromTo(fromList, toList []string, accounts map[string]uint64, assetPara
 			sendErr = client.BroadcastTransactionGroup(stxGroup)
 		}
 
-		if sendErr != nil && !cfg.Quiet {
-			_, _ = fmt.Fprintf(os.Stderr, "error sending transaction: %v\n", sendErr)
-		} else {
-			successCount++
-			accounts[from] = uint64(fromBalanceChange + int64(accounts[from]))
-			accounts[to] = uint64(toBalanceChange + int64(accounts[to]))
-		}
 		if sendErr != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "error sending Transaction, sleeping .5 seconds: %v\n", sendErr)
 			err = sendErr
 			time.Sleep(500 * time.Millisecond)
 			return
 		}
+
+		successCount++
+		accounts[from] = uint64(fromBalanceChange + int64(accounts[from]))
+		accounts[to] = uint64(toBalanceChange + int64(accounts[to]))
 		if cfg.DelayBetweenTxn > 0 {
 			time.Sleep(cfg.DelayBetweenTxn)
 		}
@@ -503,7 +538,7 @@ func constructTxn(from, to string, fee, amt, aidx uint64, client libgoal.Client,
 	return
 }
 
-func signTxn(from string, txn transactions.Transaction, client libgoal.Client, cfg PpConfig) (stxn transactions.SignedTxn, err error) {
+func signTxn(signer string, txn transactions.Transaction, client libgoal.Client, cfg PpConfig) (stxn transactions.SignedTxn, err error) {
 	// Get wallet handle token
 	var h []byte
 	h, err = client.GetUnencryptedWalletHandle()
@@ -513,9 +548,11 @@ func signTxn(from string, txn transactions.Transaction, client libgoal.Client, c
 
 	var psig crypto.Signature
 
-	if len(cfg.Program) > 0 {
+	if cfg.Rekey {
+		stxn, err = client.SignTransactionWithWalletAndSigner(h, nil, signer, txn)
+	} else if len(cfg.Program) > 0 {
 		// If there's a program, sign it and use that in a lsig
-		psig, err = client.SignProgramWithWallet(h, nil, from, cfg.Program)
+		psig, err = client.SignProgramWithWallet(h, nil, signer, cfg.Program)
 		if err != nil {
 			return
 		}
@@ -527,9 +564,6 @@ func signTxn(from string, txn transactions.Transaction, client libgoal.Client, c
 	} else {
 		// Otherwise, just sign the transaction like normal
 		stxn, err = client.SignTransactionWithWallet(h, nil, txn)
-		if err != nil {
-			return
-		}
 	}
 	return
 }
