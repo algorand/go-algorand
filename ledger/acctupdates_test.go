@@ -1004,7 +1004,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* No deletes	                                           *******
 	// sync with the database
 	var updates map[basics.Address]accountDelta
-	err = accountsNewRound(tx, updates, ctbsWithDeletes)
+	err = accountsNewRound(tx, updates, ctbsWithDeletes, proto)
 	require.NoError(t, err)
 	// nothing left in cache
 	au.creatables = make(map[basics.CreatableIndex]modifiedCreatable)
@@ -1020,7 +1020,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* Results are obtained from the database and from the cache *******
 	// ******* Deletes are in the database and in the cache              *******
 	// sync with the database. This has deletes synced to the database.
-	err = accountsNewRound(tx, updates, au.creatables)
+	err = accountsNewRound(tx, updates, au.creatables, proto)
 	require.NoError(t, err)
 	// get new creatables in the cache. There will be deletes in the cache from the previous batch.
 	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
