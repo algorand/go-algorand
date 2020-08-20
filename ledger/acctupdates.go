@@ -1544,6 +1544,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	beforeUpdatingBalancesTime := time.Now()
 	var trieBalancesHash crypto.Digest
 
+	genesisProto := au.ledger.GenesisProto()
+
 	err := au.dbs.wdb.AtomicCommitWriteLock(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
@@ -1564,7 +1566,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 		for i := uint64(0); i < offset; i++ {
-			err = accountsNewRound(tx, deltas[i], creatableDeltas[i], protos[i+1])
+			err = accountsNewRound(tx, deltas[i], creatableDeltas[i], genesisProto)
 			if err != nil {
 				return err
 			}
