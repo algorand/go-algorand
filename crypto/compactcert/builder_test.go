@@ -51,9 +51,18 @@ func (pc PartCommit) Get(pos uint64) (crypto.Hashable, error) {
 }
 
 func TestBuildVerify(t *testing.T) {
+	// Doing a full test of 1M accounts takes too much CPU time in CI.
+	doLargeTest := false
+
 	totalWeight := 10000000
-	npartHi := 1000
-	npartLo := 999000
+	npartHi := 10
+	npartLo := 9990
+
+	if doLargeTest {
+		npartHi *= 100
+		npartLo *= 100
+	}
+
 	npart := npartHi + npartLo
 
 	param := Params{
@@ -106,7 +115,7 @@ func TestBuildVerify(t *testing.T) {
 	}
 
 	for i := 0; i < npart; i++ {
-		err = b.Add(uint64(i), sigs[i], false)
+		err = b.Add(uint64(i), sigs[i], !doLargeTest)
 		if err != nil {
 			t.Error(err)
 		}
