@@ -2076,6 +2076,11 @@ func SetUserAgentHeader(header http.Header) {
 	header.Set(UserAgentHeader, ua)
 }
 
+// RegisterMessageInterest notifies the network library that this node
+// wants to receive messages with the specified tag.  This will cause
+// this node to send corresponding MsgOfInterest notifications to any
+// newly connecting peers.  This should be called before the network
+// is started.
 func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) error {
 	wn.messagesOfInterestMu.Lock()
 	defer wn.messagesOfInterestMu.Unlock()
