@@ -985,6 +985,9 @@ func TestListCreatables(t *testing.T) {
 	err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 
+	err = accountsAddNormalizedBalance(tx, proto)
+	require.NoError(t, err)
+
 	au := &accountUpdates{}
 	au.accountsq, err = accountsDbInit(tx, tx)
 	require.NoError(t, err)
