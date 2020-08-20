@@ -33,6 +33,7 @@ const (
 	BalanceRecord     HashID = "BR"
 	Credential        HashID = "CR"
 	Genesis           HashID = "GE"
+	MerkleArrayNode   HashID = "MA"
 	Message           HashID = "MX"
 	NetPrioResponse   HashID = "NPR"
 	OneTimeSigKey1    HashID = "OT1"
