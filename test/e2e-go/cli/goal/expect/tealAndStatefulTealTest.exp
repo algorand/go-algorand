@@ -84,9 +84,19 @@ if { [catch {
     # Check to make sure that the transfer is reflected in the to account
     ::AlgorandGoal::WaitForAccountBalance $WALLET_2_NAME $ACCOUNT_2_ADDRESS $TRANSFER_AMOUNT $TEST_PRIMARY_NODE_DIR
 
+    # -------------------------- setup working dir ----------------------------------
+
+    set TEST_WORKING_DIR $TEST_ROOT_DIR/work
+
+    puts "setting up working dir $TEST_WORKING_DIR"
+
+    exec mkdir -p $TEST_WORKING_DIR
+
+    catch { cd $TEST_WORKING_DIR }
+
     # -------------------------- setup application ----------------------------------
 
-    set TEAL_SOURCE "$TEST_ROOT_DIR/simple.teal"
+    set TEAL_SOURCE "$TEST_WORKING_DIR/simple.teal"
 
     puts "\nwriting teal script to file '$TEAL_SOURCE'"
 
