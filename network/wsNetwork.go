@@ -814,6 +814,12 @@ func (wn *WebsocketNetwork) Stop() {
 	if wn.listener != nil {
 		wn.log.Debugf("closed %s", listenAddr)
 	}
+
+	wn.messagesOfInterestMu.Lock()
+	defer wn.messagesOfInterestMu.Unlock()
+	wn.messagesOfInterestEncoded = false
+	wn.messagesOfInterestEnc = nil
+	wn.messagesOfInterest = nil
 }
 
 // RegisterHandlers registers the set of given message handlers.
