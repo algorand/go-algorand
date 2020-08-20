@@ -648,6 +648,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	// Feed the transactions in order
 	for i, txgroup := range txgroups {
+		txStart := time.Now()
 		if len(txgroup) == 0 {
 			asmStats.InvalidCount++
 			continue
@@ -678,6 +679,9 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 				stats.RemovedInvalidCount++
 				logging.Base().Warnf("Cannot re-add pending transaction to pool: %v", err)
 			}
+		}
+		if time.Now().Sub(txStart) > 5*time.Millisecond {
+			logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: transaction group processing time was %v", time.Now().Sub(txStart))
 		}
 	}
 
