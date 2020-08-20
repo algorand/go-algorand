@@ -16,12 +16,12 @@ ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 ZERO_ADDRESS=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ
 LEASE=YmxhaCBibGFoIGxlYXNlIHdoYXRldmVyIGJsYWghISE=
 
-sed s/TMPL_RCV/${ACCOUNTB}/g < ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/periodic-payment-escrow.teal.tmpl | sed s/TMPL_PERIOD/5/g | sed s/TMPL_DUR/2/g | sed s/TMPL_AMT/1000000/g | sed s/TMPL_LEASE/${LEASE}/g | sed s/TMPL_TIMEOUT/16/g | sed s/TMPL_FEE/10000/g > ${TEMPDIR}/periodic.teal
+sed s/TMPL_RCV/${ACCOUNTB}/g < ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/periodic-payment-escrow.teal.tmpl | sed s/TMPL_PERIOD/5/g | sed s/TMPL_DUR/4/g | sed s/TMPL_AMT/1000000/g | sed s/TMPL_LEASE/${LEASE}/g | sed s/TMPL_TIMEOUT/16/g | sed s/TMPL_FEE/10000/g > ${TEMPDIR}/periodic.teal
 
 ACCOUNT_PERIODIC=$(${gcmd} clerk compile ${TEMPDIR}/periodic.teal -o ${TEMPDIR}/periodic.tealc|awk '{ print $2 }')
 
 ROUND=5
-DUR_ROUND=$((${ROUND} + 2))
+DUR_ROUND=$((${ROUND} + 4))
 ${gcmd} clerk send -a 1000000 -t ${ACCOUNTB} --from-program ${TEMPDIR}/periodic.teal --firstvalid ${ROUND} --lastvalid ${DUR_ROUND} -x ${LEASE} -o ${TEMPDIR}/a.tx
 ${gcmd} clerk dryrun -t ${TEMPDIR}/a.tx
 
@@ -37,7 +37,7 @@ while [ $sendcount -lt 3 ]; do
 	false
     fi
     ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
-    DUR_ROUND=$((${ROUND} + 2))
+    DUR_ROUND=$((${ROUND} + 4))
     if ${gcmd} clerk send -a 1000000 -t ${ACCOUNTB} --from-program ${TEMPDIR}/periodic.teal --firstvalid ${ROUND} --lastvalid ${DUR_ROUND} -x ${LEASE}; then
 	sendcount=$(($sendcount + 1))
 	date '+periodic-teal-test sent one at ${ROUND} %Y%m%d_%H%M%S'
@@ -53,7 +53,7 @@ if [ $BALANCEB -ne 3000000 ]; then
 fi
 
 ROUND=40
-DUR_ROUND=$((${ROUND} + 2))
+DUR_ROUND=$((${ROUND} + 4))
 ${gcmd} clerk send -a 0 -t ${ZERO_ADDRESS} -c ${ACCOUNTB} --from-program ${TEMPDIR}/periodic.teal --firstvalid ${ROUND} --lastvalid ${DUR_ROUND} -x ${LEASE} -o ${TEMPDIR}/a.tx
 ${gcmd} clerk dryrun -t ${TEMPDIR}/a.tx
 
@@ -66,7 +66,7 @@ while [ $sendcount -lt 1 ]; do
 	false
     fi
     ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
-    DUR_ROUND=$((${ROUND} + 2))
+    DUR_ROUND=$((${ROUND} + 4))
     if ${gcmd} clerk send -a 0 -t ${ZERO_ADDRESS} -c ${ACCOUNTB} --from-program ${TEMPDIR}/periodic.teal --firstvalid ${ROUND} --lastvalid ${DUR_ROUND} -x ${LEASE}; then
 	sendcount=$(($sendcount + 1))
 	date '+periodic-teal-test sent one at ${ROUND} %Y%m%d_%H%M%S'
