@@ -852,3 +852,178 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fileNames))
 }
+
+// listAndCompareComb lists the assets/applications and then compares against the expected
+// It repeats with different combinations of the limit parameters
+func listAndCompareComb(t *testing.T, au *accountUpdates, expected map[basics.CreatableIndex]modifiedCreatable) {
+
+	// test configuration parameters
+
+	// pick the second largest index for the app and asset
+	// This is to make sure exactly one element is left out
+	// as a result of max index
+	maxAss1 := basics.CreatableIndex(0)
+	maxAss2 := basics.CreatableIndex(0)
+	maxApp1 := basics.CreatableIndex(0)
+	maxApp2 := basics.CreatableIndex(0)
+	for a, b := range expected {
+		// A moving window of the last two largest indexes: [maxAss1, maxAss2]
+		if b.ctype == basics.AssetCreatable {
+			if maxAss2 < a {
+				maxAss1 = maxAss2
+				maxAss2 = a
+			} else if maxAss1 < a {
+				maxAss1 = a
+			}
+		}
+		if b.ctype == basics.AppCreatable {
+			if maxApp2 < a {
+				maxApp1 = maxApp2
+				maxApp2 = a
+			} else if maxApp1 < a {
+				maxApp1 = a
+			}
+		}
+	}
+
+	// No limits. max asset index, max app index and max results have no effect
+	// This is to make sure the deleted elements do not show up
+	maxAssetIdx := basics.AssetIndex(maxAss2)
+	maxAppIdx := basics.AppIndex(maxApp2)
+	maxResults := uint64(len(expected))
+	listAndCompare(t, maxAssetIdx, maxAppIdx, maxResults, au, expected)
+
+	// Limit with max asset index and max app index (max results has no effect)
+	maxAssetIdx = basics.AssetIndex(maxAss1)
+	maxAppIdx = basics.AppIndex(maxApp1)
+	maxResults = uint64(len(expected))
+	listAndCompare(t, maxAssetIdx, maxAppIdx, maxResults, au, expected)
+
+	// Limit with max results
+	maxResults = 1
+	listAndCompare(t, maxAssetIdx, maxAppIdx, maxResults, au, expected)
+}
+
+// listAndCompareComb lists the assets/applications and then compares against the expected
+// It uses the provided limit parameters
+func listAndCompare(t *testing.T,
+	maxAssetIdx basics.AssetIndex,
+	maxAppIdx basics.AppIndex,
+	maxResults uint64,
+	au *accountUpdates,
+	expected map[basics.CreatableIndex]modifiedCreatable) {
+
+	// get the results with the given parameters
+	assetRes, err := au.ListAssets(maxAssetIdx, maxResults)
+	require.NoError(t, err)
+	appRes, err := au.ListApplications(maxAppIdx, maxResults)
+	require.NoError(t, err)
+
+	// count the expected number of results
+	expectedAssetCount := uint64(0)
+	expectedAppCount := uint64(0)
+	for a, b := range expected {
+		if b.created {
+			if b.ctype == basics.AssetCreatable &&
+				a <= basics.CreatableIndex(maxAssetIdx) &&
+				expectedAssetCount < maxResults {
+				expectedAssetCount++
+			}
+			if b.ctype == basics.AppCreatable &&
+				a <= basics.CreatableIndex(maxAppIdx) &&
+				expectedAppCount < maxResults {
+				expectedAppCount++
+			}
+		}
+	}
+
+	// check the total counts are as expected
+	require.Equal(t, int(expectedAssetCount), len(assetRes))
+	require.Equal(t, int(expectedAppCount), len(appRes))
+
+	// verify the results are correct
+	for _, respCrtor := range assetRes {
+		crtor := expected[respCrtor.Index]
+		require.NotNil(t, crtor)
+		require.Equal(t, basics.AssetCreatable, crtor.ctype)
+		require.Equal(t, true, crtor.created)
+
+		require.Equal(t, basics.AssetCreatable, respCrtor.Type)
+		require.Equal(t, crtor.creator, respCrtor.Creator)
+	}
+	for _, respCrtor := range appRes {
+		crtor := expected[respCrtor.Index]
+		require.NotNil(t, crtor)
+		require.Equal(t, basics.AppCreatable, crtor.ctype)
+		require.Equal(t, true, crtor.created)
+
+		require.Equal(t, basics.AppCreatable, respCrtor.Type)
+		require.Equal(t, crtor.creator, respCrtor.Creator)
+	}
+}
+
+// TestListCreatables tests ListAssets and ListApplications
+// It tests with all elements in cache, all synced to database, and combination of both
+// It also tests the max results, max app index and max asset index
+func TestListCreatables(t *testing.T) {
+
+	// test configuration parameters
+	numElementsPerSegement := 25
+
+	// set up the database
+	dbs, _ := dbOpenTest(t, true)
+	setDbLogging(t, dbs)
+	defer dbs.close()
+
+	tx, err := dbs.wdb.Handle.Begin()
+	require.NoError(t, err)
+	defer tx.Rollback()
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	accts := make(map[basics.Address]basics.AccountData)
+	err = accountsInit(tx, accts, proto)
+	require.NoError(t, err)
+
+	au := &accountUpdates{}
+	au.accountsq, err = accountsDbInit(tx, tx)
+	require.NoError(t, err)
+
+	// ******* All results are obtained from the cache. Empty database *******
+	// ******* No deletes                                              *******
+	// get random data. Inital batch, no deletes
+	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
+	expectedDbImage := make(map[basics.CreatableIndex]modifiedCreatable)
+	ctbsWithDeletes := randomCreatableSampling(1, ctbsList, randomCtbs,
+		expectedDbImage, numElementsPerSegement)
+	// set the cache
+	au.creatables = ctbsWithDeletes
+	listAndCompareComb(t, au, expectedDbImage)
+
+	// ******* All results are obtained from the database. Empty cache *******
+	// ******* No deletes	                                           *******
+	// sync with the database
+	var updates map[basics.Address]accountDelta
+	err = accountsNewRound(tx, updates, ctbsWithDeletes)
+	require.NoError(t, err)
+	// nothing left in cache
+	au.creatables = make(map[basics.CreatableIndex]modifiedCreatable)
+	listAndCompareComb(t, au, expectedDbImage)
+
+	// ******* Results are obtained from the database and from the cache *******
+	// ******* No deletes in the database.                               *******
+	// ******* Data in the database deleted in the cache                 *******
+	au.creatables = randomCreatableSampling(2, ctbsList, randomCtbs,
+		expectedDbImage, numElementsPerSegement)
+	listAndCompareComb(t, au, expectedDbImage)
+
+	// ******* Results are obtained from the database and from the cache *******
+	// ******* Deletes are in the database and in the cache              *******
+	// sync with the database. This has deletes synced to the database.
+	err = accountsNewRound(tx, updates, au.creatables)
+	require.NoError(t, err)
+	// get new creatables in the cache. There will be deletes in the cache from the previous batch.
+	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
+		expectedDbImage, numElementsPerSegement)
+	listAndCompareComb(t, au, expectedDbImage)
+}

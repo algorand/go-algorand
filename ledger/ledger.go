@@ -589,6 +589,14 @@ func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger led
 	return eval(context.Background(), accUpdatesLedger, blk, false, nil, nil)
 }
 
+// IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
+// to avoid memory pressure until the catchpoint file writing is complete.
+func (l *Ledger) IsWritingCatchpointFile() bool {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.IsWritingCatchpointFile()
+}
+
 // A txlease is a transaction (sender, lease) pair which uniquely specifies a
 // transaction lease.
 type txlease struct {

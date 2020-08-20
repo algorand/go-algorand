@@ -112,7 +112,7 @@ var accountsResetExprs = []string{
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(3)
+var accountDBVersion = int32(4)
 
 type accountDelta struct {
 	old basics.AccountData
