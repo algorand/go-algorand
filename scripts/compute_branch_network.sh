@@ -15,7 +15,7 @@ if [ "${BRANCH}" = "rel/stable" ]; then
 fi
 
 # Get branch that owns head commit
-BRANCHPARENT="$(git branch --contains HEAD | grep -v 'HEAD' | head -n1 | grep -Eo '\w+(\/\w*)*')"
+BRANCHPARENT="$(git branch --contains HEAD | grep -v 'HEAD' | head -n1 | grep -Eo '\S+(\/\S*)*' | tail -1)"
 
 if [ "${BRANCHPARENT}" = "rel/stable" ]; then
     echo "testnet"
