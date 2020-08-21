@@ -667,8 +667,9 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	}
 
 	pool.assemblyMu.Lock()
-	if !pool.assemblyResults.ok && pool.assemblyRound == pool.pendingBlockEvaluator.Round() {
+	if !pool.assemblyResults.ok && pool.assemblyRound <= pool.pendingBlockEvaluator.Round() {
 		pool.assemblyResults.ok = true
+		pool.assemblyResults.stats = asmStats
 		lvb, err := pool.pendingBlockEvaluator.GenerateBlock()
 		if err != nil {
 			pool.assemblyResults.err = fmt.Errorf("could not generate block for %d (end): %v", pool.assemblyResults.round, err)
