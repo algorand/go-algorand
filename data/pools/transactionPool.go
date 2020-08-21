@@ -48,6 +48,10 @@ import (
 // TransactionPool.AssembleBlock constructs a valid block for
 // proposal given a deadline.
 type TransactionPool struct {
+	// feePerByte is stored at the begining of this struct to ensure it has a 64 bit aligned address. This is needed as it's being used
+	// with atomic operations which require 64 bit alignment on arm.
+	feePerByte uint64
+
 	// const
 	logProcessBlockStats bool
 	logAssembleStats     bool
@@ -61,7 +65,6 @@ type TransactionPool struct {
 	pendingBlockEvaluator  *ledger.BlockEvaluator
 	numPendingWholeBlocks  basics.Round
 	feeThresholdMultiplier uint64
-	feePerByte             uint64
 	statusCache            *statusCache
 
 	assemblyMu       deadlock.Mutex
