@@ -67,8 +67,9 @@ type TransactionPool struct {
 	assemblyMu       deadlock.Mutex
 	assemblyCond     sync.Cond
 	assemblyDeadline time.Time
-	assemblyRound    basics.Round
-	assemblyResults  poolAsmResults
+	// assemblyRound indicates which round number we're currently waiting for or waited for last.
+	assemblyRound   basics.Round
+	assemblyResults poolAsmResults
 
 	// pendingMu protects pendingTxGroups and pendingTxids
 	pendingMu           deadlock.RWMutex
@@ -118,6 +119,8 @@ type poolAsmResults struct {
 	blk   *ledger.ValidatedBlock
 	stats telemetryspec.AssembleBlockMetrics
 	err   error
+	// round is the round which we were attempted to evaluate last. It's a good measure for
+	// which round we started evaluating, but not a measure to whether the evaluation is complete.
 	round basics.Round
 }
 
@@ -581,7 +584,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluator(txgroup []transactions.S
 
 // recomputeBlockEvaluator constructs a new BlockEvaluator and feeds all
 // in-pool transactions to it (removing any transactions that are rejected
-// by the BlockEvaluator).
+// by the BlockEvaluator). Expects that the pool.mu mutex would be already taken.
 func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transactions.Txid]basics.Round) (stats telemetryspec.ProcessBlockMetrics) {
 	pool.pendingBlockEvaluator = nil
 
@@ -747,9 +750,9 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	pool.assemblyMu.Lock()
 
 	// if the transaction pool is more than two rounds behind, we don't want to wait.
-	if pool.assemblyResults.round <= round-2 {
-		logging.Base().Warnf("AssembleBlock: requested round is more than a single round ahead of the transaction pool %d <= %d", pool.assemblyResults.round, round-2)
-		// todo - handle stats.
+	if pool.assemblyResults.round <= round.SubSaturate(2) {
+		logging.Base().Warnf("AssembleBlock: requested round is more than a single round ahead of the transaction pool %d <= %d-2", pool.assemblyResults.round, round)
+		stats.StopReason = telemetryspec.AssembleBlockEmpty
 		pool.assemblyMu.Unlock()
 		return pool.assembleEmptyBlock(round)
 	}
@@ -774,6 +777,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	if !pool.assemblyResults.ok {
 		// we've passed the deadline, so we're either going to have a partial block, or that we won't make it on time.
 		// start preparing an empty block in case we'll miss the extra time (assemblyWaitEps).
+		// the assembleEmptyBlock is using the database, so we want to unlock here and take the lock again later on.
 		pool.assemblyMu.Unlock()
 		emptyBlock, emptyBlockErr := pool.assembleEmptyBlock(round)
 		pool.assemblyMu.Lock()
@@ -786,7 +790,10 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		if !pool.assemblyResults.ok {
 			// it didn't. Lucky us - we already prepared an empty block, so we can return this right now.
 			logging.Base().Warnf("AssembleBlock: ran out of time for round %d", round)
-			pool.assemblyResults.stats.StopReason = telemetryspec.AssembleBlockTimeout
+			stats.StopReason = telemetryspec.AssembleBlockTimeout
+			if emptyBlockErr != nil {
+				emptyBlockErr = fmt.Errorf("AssembleBlock: failed to construct empty block : %v", emptyBlockErr)
+			}
 			return emptyBlock, emptyBlockErr
 		}
 	}
@@ -807,6 +814,8 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	return pool.assemblyResults.blk, nil
 }
 
+// assembleEmptyBlock construct a new block for the given round. Internally it's using the ledger database calls, so callers
+// need to be aware that it might take a while before it would return.
 func (pool *TransactionPool) assembleEmptyBlock(round basics.Round) (assembled *ledger.ValidatedBlock, err error) {
 	prevRound := round - 1
 	prev, err := pool.ledger.BlockHdr(prevRound)
