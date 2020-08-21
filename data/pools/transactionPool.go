@@ -554,6 +554,8 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 				} else {
 					stats.StopReason = telemetryspec.AssembleBlockTimeout
 				}
+				pool.assemblyResults.stats = *stats
+
 				lvb, gerr := pool.pendingBlockEvaluator.GenerateBlock()
 				if gerr != nil {
 					pool.assemblyResults.err = fmt.Errorf("could not generate block for %d: %v", pool.assemblyResults.round, gerr)
