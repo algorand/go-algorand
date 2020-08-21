@@ -1,0 +1,163 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+if { [catch {
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    # Check the balance of the primary account
+    set PRIMARY_ACCOUNT_BALANCE [::AlgorandGoal::GetAccountBalance $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Balance: $PRIMARY_ACCOUNT_BALANCE"
+
+    # Check the rewards of the primary account
+    set PRIMARY_ACCOUNT_EARNINGS [::AlgorandGoal::GetAccountRewards $PRIMARY_WALLET_NAME $PRIMARY_ACCOUNT_ADDRESS $TEST_PRIMARY_NODE_DIR]
+    puts "Primary Account Rewards: $PRIMARY_ACCOUNT_EARNINGS"
+
+    # Create wallet #1
+    set WALLET_1_NAME Wallet_1_$TIME_STAMP
+    set WALLET_1_PASSWORD 1234
+    set WALLET_1_PASSPHRASE [::AlgorandGoal::CreateWallet $WALLET_1_NAME $WALLET_1_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    puts "WALLET_1_PASSPHRASE: $WALLET_1_PASSPHRASE"
+    ::AlgorandGoal::VerifyWallet $WALLET_1_NAME  $TEST_PRIMARY_NODE_DIR
+
+    # Associate a new account with the wallet
+    set ACCOUNT_1_ADDRESS [::AlgorandGoal::CreateAccountForWallet $WALLET_1_NAME $WALLET_1_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    ::AlgorandGoal::VerifyAccount $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS $TEST_PRIMARY_NODE_DIR
+
+    # Create wallet #2
+    set WALLET_2_NAME Wallet_2_$TIME_STAMP
+    set WALLET_2_PASSWORD 12345678
+    set WALLET_2_PASSPHRASE [::AlgorandGoal::CreateWallet $WALLET_2_NAME $WALLET_2_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    puts "WALLET_2_PASSPHRASE: $WALLET_2_PASSPHRASE"
+    ::AlgorandGoal::VerifyWallet $WALLET_2_NAME  $TEST_PRIMARY_NODE_DIR
+
+    # Associate a new account with the wallet
+    set ACCOUNT_2_ADDRESS [::AlgorandGoal::CreateAccountForWallet $WALLET_2_NAME $WALLET_2_PASSWORD $TEST_PRIMARY_NODE_DIR]
+    ::AlgorandGoal::VerifyAccount $WALLET_2_NAME $WALLET_2_PASSWORD $ACCOUNT_2_ADDRESS $TEST_PRIMARY_NODE_DIR
+
+    # -------------------------- setup accounts ----------------------------------
+
+    # Transfer Algos from primary account to account 1
+    set MIN_BALANCE 1000000
+    set TRANSFER_AMOUNT  [expr {1000 * $MIN_BALANCE}]
+    set FEE_AMOUNT 1000
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_1_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+
+    # Print the transaction id
+    puts "TRANSACTION_ID 1: $TRANSACTION_ID"
+
+    # Check to make sure that the transfer is reflected in the to account
+    ::AlgorandGoal::WaitForAccountBalance $WALLET_1_NAME $ACCOUNT_1_ADDRESS $TRANSFER_AMOUNT $TEST_PRIMARY_NODE_DIR
+
+    # Transfer Algos from primary account to account 2
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_2_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+
+    # Print the transaction id
+    puts "TRANSACTION_ID 2: $TRANSACTION_ID"
+
+    # Check to make sure that the transfer is reflected in the to account
+    ::AlgorandGoal::WaitForAccountBalance $WALLET_2_NAME $ACCOUNT_2_ADDRESS $TRANSFER_AMOUNT $TEST_PRIMARY_NODE_DIR
+
+    # -------------------------- setup working dir ----------------------------------
+
+    set TEST_WORKING_DIR $TEST_ROOT_DIR/work
+
+    puts "setting up working dir $TEST_WORKING_DIR"
+
+    exec mkdir -p $TEST_WORKING_DIR
+
+    catch { cd $TEST_WORKING_DIR }
+
+    # -------------------------- setup application ----------------------------------
+
+    set TEAL_SOURCE "$TEST_WORKING_DIR/simple.teal"
+
+    puts "\nwriting teal script to file '$TEAL_SOURCE'"
+
+    set CHAN [open $TEAL_SOURCE w]
+    puts $CHAN "#pragma version 2\nint 1\n"
+    close $CHAN
+
+    puts "reading from file $TEAL_SOURCE"
+    puts [exec cat $TEAL_SOURCE]
+
+    # compile teal assembly to bytecode
+    set ESCROW_ADDRESS [::AlgorandGoal::TealCompile $TEAL_SOURCE]
+
+    # -------------------------- create mixed teal and stateful teal transaction  ----------------------------------
+
+    set TRANSACTION_ID_APP [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ESCROW_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+
+    # Print the transaction id
+    puts "TRANSACTION_ID_APP: $TRANSACTION_ID_APP, APP_ACCOUNT_ADDRESS: $ESCROW_ADDRESS"
+
+    # Check to make sure that the transfer is reflected in the to account
+    ::AlgorandGoal::WaitForAccountBalance $WALLET_1_NAME $ESCROW_ADDRESS $TRANSFER_AMOUNT $TEST_PRIMARY_NODE_DIR
+
+    puts "calling app create"
+    set GLOBAL_BYTE_SLICES 1
+    set LOCAL_BYTE_SLICES 0
+    set APP_ID [::AlgorandGoal::AppCreate0 $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TEAL_SOURCE $GLOBAL_BYTE_SLICES $LOCAL_BYTE_SLICES $TEAL_SOURCE $TEST_PRIMARY_NODE_DIR]
+
+    exec goal app call --app-id $APP_ID --from $ACCOUNT_1_ADDRESS  --out=unsginedtransaction1.tx -d $TEST_PRIMARY_NODE_DIR
+
+    exec goal clerk send --to=$ACCOUNT_1_ADDRESS --close-to=$ACCOUNT_1_ADDRESS --from-program=$TEAL_SOURCE --amount=409000 --out=unsginedtransaction2.tx -d $TEST_PRIMARY_NODE_DIR
+
+    ::AlgorandGoal::SignTransaction $WALLET_1_NAME $WALLET_1_PASSWORD unsginedtransaction1.tx sginedtransaction1.tx $TEST_PRIMARY_NODE_DIR
+
+    puts "form combined transaction"
+    exec cat unsginedtransaction1.tx unsginedtransaction2.tx > combinedtransactions.tx
+
+    puts "create group transaction"
+    ::AlgorandGoal::AssembleGroup combinedtransactions.tx groupedtransactions.tx
+
+    puts "split transaction"
+    ::AlgorandGoal::SplitGroup groupedtransactions.tx split.tx
+
+    puts "sign the split transaction"
+    set RAW_TX_1 split-0.tx
+    set RAW_STX_1 signout-0.tx
+    ::AlgorandGoal::SignTransaction $WALLET_1_NAME $WALLET_1_PASSWORD $RAW_TX_1 $RAW_STX_1 $TEST_PRIMARY_NODE_DIR
+
+    puts "\ncombine into the sign out transaction"
+    exec cat signout-0.tx split-1.tx > signout.tx
+
+    puts "submit the signout transaction"
+    ::AlgorandGoal::RawSend signout.tx $TEST_PRIMARY_NODE_DIR
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    puts "Mixed Teal Test Successful"
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in Mixed Teal Test: $EXCEPTION"
+}
