@@ -751,7 +751,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 
 	// if the transaction pool is more than two rounds behind, we don't want to wait.
 	if pool.assemblyResults.round <= round.SubSaturate(2) {
-		logging.Base().Warnf("AssembleBlock: requested round is more than a single round ahead of the transaction pool %d <= %d-2", pool.assemblyResults.round, round)
+		logging.Base().Infof("AssembleBlock: requested round is more than a single round ahead of the transaction pool %d <= %d-2", pool.assemblyResults.round, round)
 		stats.StopReason = telemetryspec.AssembleBlockEmpty
 		pool.assemblyMu.Unlock()
 		return pool.assembleEmptyBlock(round)
@@ -803,7 +803,10 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		return nil, fmt.Errorf("AssemblyBlock: encountered error for round %d: %v", round, pool.assemblyResults.err)
 	}
 	if pool.assemblyResults.round > round {
-		logging.Base().Infof("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.round)
+		// this scenario should not happen unless the txpool is receiving the new blocks via OnNewBlocks
+		// with "jumps" between consecutive blocks ( which is why it's a warning )
+		// The "normal" usecase is evaluated on the top of the function.
+		logging.Base().Warnf("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.round)
 		return nil, ErrStaleBlockAssemblyRequest
 	} else if pool.assemblyResults.round != round {
 		return nil, fmt.Errorf("AssembleBlock: assembled block round does not match: %d != %d",
