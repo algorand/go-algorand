@@ -9,6 +9,11 @@ echo
 date "+build_release begin TEST stage %Y%m%d_%H%M%S"
 echo
 
+if [ "$CHANNEL" = beta ]; then
+    echo "There is currently no support for RPM beta packages. Exiting RPM test stage..."
+    exit 0
+fi
+
 # Run RPM build in Centos7 Docker container
 sg docker "docker build -t algocentosbuild - < ${HOME}/go/src/github.com/algorand/go-algorand/scripts/release/common/docker/centos.Dockerfile"
 
