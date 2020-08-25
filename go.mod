@@ -1,6 +1,6 @@
 module github.com/algorand/go-algorand
 
-go 1.12
+go 1.14
 
 require (
 	github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d

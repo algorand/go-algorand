@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Required GOLANG Version for project specified here
-GOLANG_VERSION="1.12.17"
+GOLANG_VERSION="1.14.7"
 
 # Check to make sure that it matches what is specified in go.mod
 

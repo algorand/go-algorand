@@ -28,6 +28,7 @@ var errInvalidMessageOfInterest = errors.New("unmarshalMessageOfInterest: messag
 var errInvalidMessageOfInterestLength = errors.New("unmarshalMessageOfInterest: message length is too long")
 
 const maxMessageOfInterestTags = 1024
+const topicsEncodingSeparator = ","
 
 func unmarshallMessageOfInterest(data []byte) (map[protocol.Tag]bool, error) {
 	// decode the message, and ensure it's a valid message.
@@ -44,7 +45,7 @@ func unmarshallMessageOfInterest(data []byte) (map[protocol.Tag]bool, error) {
 	}
 	// convert the tags into a tags map.
 	msgTagsMap := make(map[protocol.Tag]bool, len(tags))
-	for _, tag := range strings.Split(string(tags), ",") {
+	for _, tag := range strings.Split(string(tags), topicsEncodingSeparator) {
 		msgTagsMap[protocol.Tag(tag)] = true
 	}
 	return msgTagsMap, nil
@@ -55,10 +56,26 @@ func MarshallMessageOfInterest(messageTags []protocol.Tag) []byte {
 	// create a long string with all these messages.
 	tags := ""
 	for _, tag := range messageTags {
-		tags += "," + string(tag)
+		tags += topicsEncodingSeparator + string(tag)
 	}
 	if len(tags) > 0 {
-		tags = tags[1:]
+		tags = tags[len(topicsEncodingSeparator):]
+	}
+	topics := Topics{Topic{key: "tags", data: []byte(tags)}}
+	return topics.MarshallTopics()
+}
+
+// MarshallMessageOfInterestMap generates a message of interest message body
+// for the message tags that map to "true" in the map argument.
+func MarshallMessageOfInterestMap(tagmap map[protocol.Tag]bool) []byte {
+	tags := ""
+	for tag, flag := range tagmap {
+		if flag {
+			tags += topicsEncodingSeparator + string(tag)
+		}
+	}
+	if len(tags) > 0 {
+		tags = tags[len(topicsEncodingSeparator):]
 	}
 	topics := Topics{Topic{key: "tags", data: []byte(tags)}}
 	return topics.MarshallTopics()
