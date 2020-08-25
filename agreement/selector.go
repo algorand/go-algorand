@@ -64,7 +64,7 @@ func membership(l LedgerReader, addr basics.Address, r basics.Round, p period, s
 	balanceRound := balanceRound(r, cparams)
 	seedRound := seedRound(r, cparams)
 
-	record, err := l.AccountData(balanceRound, addr)
+	record, err := l.Lookup(balanceRound, addr)
 	if err != nil {
 		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain balance record for address %v in round %d: %v", r, addr, balanceRound, err)
 		return

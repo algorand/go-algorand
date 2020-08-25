@@ -101,9 +101,9 @@ func (i ledgerImpl) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	return crypto.Digest(blockhdr.Hash()), nil
 }
 
-// AccountData implements Ledger.AccountData.
-func (i ledgerImpl) AccountData(r basics.Round, addr basics.Address) (basics.AccountData, error) {
-	return i.l.AccountData(r, addr)
+// Lookup implements Ledger.Lookup.
+func (i ledgerImpl) Lookup(r basics.Round, addr basics.Address) (basics.AccountData, error) {
+	return i.l.Lookup(r, addr)
 }
 
 // Circulation implements Ledger.Circulation.

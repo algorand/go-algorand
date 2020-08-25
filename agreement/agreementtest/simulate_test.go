@@ -202,12 +202,12 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	return l.entries[r].Digest(), nil
 }
 
-func (l *testLedger) AccountData(r basics.Round, a basics.Address) (basics.AccountData, error) {
+func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountData, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	if r >= l.nextRound {
-		err := fmt.Errorf("AccountData called on future round: %v > %v! (this is probably a bug)", r, l.nextRound)
+		err := fmt.Errorf("Lookup called on future round: %v > %v! (this is probably a bug)", r, l.nextRound)
 		panic(err)
 	}
 	return l.state[a], nil

@@ -557,7 +557,7 @@ func (m *mockedLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 	return m.blocks[r], nil
 }
 
-func (m *mockedLedger) AccountData(basics.Round, basics.Address) (basics.AccountData, error) {
+func (m *mockedLedger) Lookup(basics.Round, basics.Address) (basics.AccountData, error) {
 	return basics.AccountData{}, errors.New("not needed for mockedLedger")
 }
 func (m *mockedLedger) Circulation(basics.Round) (basics.MicroAlgos, error) {

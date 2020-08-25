@@ -481,7 +481,7 @@ func (t *demuxTester) LookupDigest(basics.Round) (crypto.Digest, error) {
 }
 
 // implement Ledger
-func (t *demuxTester) AccountData(basics.Round, basics.Address) (basics.AccountData, error) {
+func (t *demuxTester) Lookup(basics.Round, basics.Address) (basics.AccountData, error) {
 	// we don't care about this function in this test.
 	return basics.AccountData{}, nil
 }

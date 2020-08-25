@@ -135,7 +135,7 @@ type LedgerReader interface {
 	// confirmed. It may also return an error if the given Round is
 	// unavailable by the storage device. In that case, the agreement
 	// protocol may lose liveness.
-	AccountData(basics.Round, basics.Address) (basics.AccountData, error)
+	Lookup(basics.Round, basics.Address) (basics.AccountData, error)
 
 	// Circulation returns the total amount of money in circulation at the
 	// conclusion of a given round.

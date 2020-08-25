@@ -184,7 +184,7 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	}
 
 	balanceRound := balanceRound(rnd, cparams)
-	proposerRecord, err := ledger.AccountData(balanceRound, value.OriginalProposer)
+	proposerRecord, err := ledger.Lookup(balanceRound, value.OriginalProposer)
 	if err != nil {
 		return fmt.Errorf("failed to obtain balance record for address %v in round %d: %v", value.OriginalProposer, balanceRound, err)
 	}
