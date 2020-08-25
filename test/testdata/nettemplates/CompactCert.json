@@ -1,0 +1,40 @@
+{
+    "Genesis": {
+        "NetworkName": "tbd",
+        "ConsensusProtocol": "test-fast-compactcert",
+        "Wallets": [
+            { "Name": "Wallet0", "Stake": 10, "Online": true },
+            { "Name": "Wallet1", "Stake": 10, "Online": true },
+            { "Name": "Wallet2", "Stake": 10, "Online": true },
+            { "Name": "Wallet3", "Stake": 10, "Online": true },
+            { "Name": "Wallet4", "Stake": 10, "Online": true },
+            { "Name": "Wallet5", "Stake": 10, "Online": true },
+            { "Name": "Wallet6", "Stake": 10, "Online": true },
+            { "Name": "Wallet7", "Stake": 10, "Online": true },
+            { "Name": "Wallet8", "Stake": 10, "Online": true },
+            { "Name": "Wallet9", "Stake": 10, "Online": true }
+        ]
+    },
+    "Nodes": [
+        {
+            "Name": "Relay0",
+            "IsRelay": true,
+            "Wallets": []
+        },
+        {
+            "Name": "Relay1",
+            "IsRelay": true,
+            "Wallets": []
+        },
+        { "Name": "Node0", "Wallets": [ { "Name": "Wallet0", "ParticipationOnly": false } ] },
+        { "Name": "Node1", "Wallets": [ { "Name": "Wallet1", "ParticipationOnly": false } ] },
+        { "Name": "Node2", "Wallets": [ { "Name": "Wallet2", "ParticipationOnly": false } ] },
+        { "Name": "Node3", "Wallets": [ { "Name": "Wallet3", "ParticipationOnly": false } ] },
+        { "Name": "Node4", "Wallets": [ { "Name": "Wallet4", "ParticipationOnly": false } ] },
+        { "Name": "Node5", "Wallets": [ { "Name": "Wallet5", "ParticipationOnly": false } ] },
+        { "Name": "Node6", "Wallets": [ { "Name": "Wallet6", "ParticipationOnly": false } ] },
+        { "Name": "Node7", "Wallets": [ { "Name": "Wallet7", "ParticipationOnly": false } ] },
+        { "Name": "Node8", "Wallets": [ { "Name": "Wallet8", "ParticipationOnly": false } ] },
+        { "Name": "Node9", "Wallets": [ { "Name": "Wallet9", "ParticipationOnly": false } ] }
+    ]
+}

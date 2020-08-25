@@ -26,6 +26,7 @@ type Tag string
 const (
 	UnknownMsgTag      Tag = "??"
 	AgreementVoteTag   Tag = "AV"
+	CompactCertSigTag  Tag = "CS"
 	MsgOfInterestTag   Tag = "MI"
 	MsgDigestSkipTag   Tag = "MS"
 	NetPrioResponseTag Tag = "NP"

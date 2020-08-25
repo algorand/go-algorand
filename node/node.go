@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/agreement/gossip"
 	"github.com/algorand/go-algorand/catchup"
+	"github.com/algorand/go-algorand/compactcert"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
@@ -125,6 +126,8 @@ type AlgorandFullNode struct {
 
 	oldKeyDeletionNotify        chan struct{}
 	monitoringRoutinesWaitGroup sync.WaitGroup
+
+	compactCert *compactcert.Worker
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -268,6 +271,14 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		}
 	}
 
+	compactCertPathname := filepath.Join(genesisDir, config.CompactCertFilename)
+	compactCertAccess, err := db.MakeAccessor(compactCertPathname, false, false)
+	if err != nil {
+		log.Errorf("Cannot load compact cert data: %v", err)
+		return nil, err
+	}
+	node.compactCert = compactcert.MkWorker(compactCertAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
+
 	return node, err
 }
 
@@ -332,6 +343,7 @@ func (node *AlgorandFullNode) Start() {
 		node.blockService.Start()
 		node.ledgerService.Start()
 		node.txHandler.Start()
+		node.compactCert.Start()
 
 		// start indexer
 		if idx, err := node.Indexer(); err == nil {
@@ -406,6 +418,7 @@ func (node *AlgorandFullNode) Stop() {
 	node.lowPriorityCryptoVerificationPool.Shutdown()
 	node.cryptoPool.Shutdown()
 	node.cancelCtx()
+	node.compactCert.Shutdown()
 	if node.indexer != nil {
 		node.indexer.Shutdown()
 	}

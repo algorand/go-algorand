@@ -796,6 +796,12 @@ func initConsensusProtocols() {
 	vFuture := v24
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
+	// Enable compact certificates.
+	vFuture.CompactCertRounds = 128
+	vFuture.CompactCertTopVoters = 1024 * 1024
+	vFuture.CompactCertVotersLookback = 16
+	vFuture.CompactCertWeightThreshold = 30
+
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
 
