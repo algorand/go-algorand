@@ -381,6 +381,14 @@ func (u AccountData) Money(proto config.ConsensusParams, rewardsLevel uint64) (m
 	return e.MicroAlgos, e.RewardedMicroAlgos
 }
 
+// PendingRewards computes the amount of rewards (in microalgos) that
+// have yet to be added to the account balance.
+func PendingRewards(ot *OverflowTracker, microAlgos MicroAlgos, rewardsBase uint64, proto config.ConsensusParams, rewardsLevel uint64) MicroAlgos {
+	rewardsUnits := microAlgos.RewardUnits(proto)
+	rewardsDelta := ot.Sub(rewardsLevel, rewardsBase)
+	return MicroAlgos{Raw: ot.Mul(rewardsUnits, rewardsDelta)}
+}
+
 // WithUpdatedRewards returns an updated number of algos in an AccountData
 // to reflect rewards up to some rewards level.
 func (u AccountData) WithUpdatedRewards(proto config.ConsensusParams, rewardsLevel uint64) AccountData {

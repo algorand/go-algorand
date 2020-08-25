@@ -188,6 +188,7 @@ type ledgerForEvaluator interface {
 	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+	CompactCertVoters(basics.Round) (*VotersForRound, error)
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header
@@ -762,6 +763,18 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		} else {
 			eval.block.TxnCounter = 0
 		}
+
+		if eval.proto.CompactCertRounds > 0 && eval.block.Round()%basics.Round(eval.proto.CompactCertRounds) == 0 {
+			lookback := eval.block.Round().SubSaturate(basics.Round(eval.proto.CompactCertVotersLookback))
+			voters, err := eval.l.CompactCertVoters(lookback)
+			if err != nil {
+				return err
+			}
+			if voters != nil {
+				eval.block.CompactCertVoters = voters.Tree.Root()
+				eval.block.CompactCertVotersTotal = voters.TotalWeight
+			}
+		}
 	}
 
 	return nil
@@ -782,6 +795,30 @@ func (eval *BlockEvaluator) finalValidation() error {
 		}
 		if eval.block.TxnCounter != expectedTxnCount {
 			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
+		}
+
+		var expectedVoters crypto.Digest
+		var expectedVotersWeight basics.MicroAlgos
+		if eval.proto.CompactCertRounds > 0 && eval.block.Round()%basics.Round(eval.proto.CompactCertRounds) == 0 {
+			lookback := eval.block.Round().SubSaturate(basics.Round(eval.proto.CompactCertVotersLookback))
+			voters, err := eval.l.CompactCertVoters(lookback)
+			if err != nil {
+				return err
+			}
+
+			if voters != nil {
+				expectedVoters = voters.Tree.Root()
+				expectedVotersWeight = voters.TotalWeight
+			}
+		}
+		if eval.block.CompactCertVoters != expectedVoters {
+			return fmt.Errorf("CompactCertVoters wrong: %v != %v", eval.block.CompactCertVoters, expectedVoters)
+		}
+		if eval.block.CompactCertVotersTotal != expectedVotersWeight {
+			return fmt.Errorf("CompactCertVotersTotal wrong: %v != %v", eval.block.CompactCertVotersTotal, expectedVotersWeight)
+		}
+		if eval.block.CompactCertLastRound != 0 {
+			return fmt.Errorf("CompactCertLastRound wrong: %v != %v", eval.block.CompactCertLastRound, 0)
 		}
 	}
 

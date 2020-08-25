@@ -292,6 +292,34 @@ type ConsensusParams struct {
 	// maximum total minimum balance requirement for an account, used
 	// to limit the maximum size of a single balance record
 	MaximumMinimumBalance uint64
+
+	// CompactCertRounds defines the frequency with with compact
+	// certificates are generated.  Every round that is a multiple
+	// of CompactCertRounds, the block header will include a Merkle
+	// commitment to the set of online accounts (that can vote after
+	// another CompactCertRounds rounds), and that block will be signed
+	// (forming a compact certificate) by the voters from the previous
+	// such Merkle tree commitment.  A value of zero means no compact
+	// certificates.
+	CompactCertRounds uint64
+
+	// CompactCertTopVoters is a bound on how many online accounts get to
+	// participate in forming the compact certificate, by including the
+	// top CompactCertTopVoters accounts (by normalized balance) into the
+	// Merkle commitment.
+	CompactCertTopVoters uint64
+
+	// CompactCertVotersLookback is the number of blocks we skip before
+	// publishing a Merkle commitment to the online accounts.  Namely,
+	// if block number N contains a Merkle commitment to the online
+	// accounts (which, incidentally, means N%CompactCertRounds=0),
+	// then the balances reflected in that commitment must come from
+	// block N-CompactCertVotersLookback.  This gives each node some
+	// time (CompactCertVotersLookback blocks worth of time) to
+	// construct this Merkle tree, so as to avoid placing the
+	// construction of this Merkle tree (and obtaining the requisite
+	// accounts and balances) in the critical path.
+	CompactCertVotersLookback uint64
 }
 
 // ConsensusProtocols defines a set of supported protocol versions and their
