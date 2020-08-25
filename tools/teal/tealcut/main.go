@@ -32,6 +32,23 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
+// Usage:
+//
+//   tealcut <filename> 0x<number separator>
+//     Prints the program before and after the number separator,
+//     as well as a hash of both these components in base 16.
+//
+//   tealcut <filename> 0x<number separator> b64
+//     Like the above, but print in base 64 instead of base 16.
+//
+//   tealcut <filename> 0x<number separator> 0x<inserted number>
+//     In addition to the program before and after the separator,
+//     also print the program where the first occurrence of the
+//     separator is replaced by the inserted number, along with
+//     the program's hash.
+//
+// Note that all command-line number arguments are in base 16.
+
 func main() {
 	splitnum, err := strconv.ParseUint(os.Args[2], 0, 64)
 	if err != nil {
