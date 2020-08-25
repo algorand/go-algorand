@@ -186,11 +186,6 @@ func (l *Ledger) NextRound() basics.Round {
 	return l.LastRound() + 1
 }
 
-// AccountData implements agreement.Ledger.AccountData. It applies pending rewards to returned amounts.
-func (l *Ledger) AccountData(r basics.Round, addr basics.Address) (basics.AccountData, error) {
-	return l.Lookup(r, addr)
-}
-
 // Circulation implements agreement.Ledger.Circulation.
 func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 	totals, err := l.Totals(r)
