@@ -9,6 +9,9 @@
 # Examples: scripts/travis/integration_test.sh
 set -e
 
+ALGORAND_DEADLOCK=enable
+export ALGORAND_DEADLOCK
+
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 export BUILD_TYPE="integration"

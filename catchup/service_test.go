@@ -577,6 +577,10 @@ func (m *mockedLedger) LookupDigest(basics.Round) (crypto.Digest, error) {
 	return crypto.Digest{}, errors.New("not needed for mockedLedger")
 }
 
+func (m *mockedLedger) IsWritingCatchpointFile() bool {
+	return false
+}
+
 func testingenv(t testing.TB, numBlocks int) (ledger, emptyLedger Ledger) {
 	mLedger := new(mockedLedger)
 	mEmptyLedger := new(mockedLedger)
