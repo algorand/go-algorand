@@ -320,6 +320,17 @@ type ConsensusParams struct {
 	// construction of this Merkle tree (and obtaining the requisite
 	// accounts and balances) in the critical path.
 	CompactCertVotersLookback uint64
+
+	// CompactCertWeightThreshold is the percentage of top voters weight
+	// that must sign the message (block header) for security.  The compact
+	// certificate ensures this threshold holds; however, forming a valid
+	// compact certificate requires a somewhat higher number of signatures,
+	// and the more signatures are collected, the smaller the compact cert
+	// can be.
+	//
+	// This threshold can be thought of as the maximum percentage of
+	// malicious weight that compact certificates defend against.
+	CompactCertWeightThreshold uint64
 }
 
 // ConsensusProtocols defines a set of supported protocol versions and their
