@@ -119,9 +119,9 @@ type poolAsmResults struct {
 	blk   *ledger.ValidatedBlock
 	stats telemetryspec.AssembleBlockMetrics
 	err   error
-	// round is the round which we were attempted to evaluate last. It's a good measure for
+	// roundStartedEvaluating is the round which we were attempted to evaluate last. It's a good measure for
 	// which round we started evaluating, but not a measure to whether the evaluation is complete.
-	round basics.Round
+	roundStartedEvaluating basics.Round
 }
 
 // TODO I moved this number to be a constant in the module, we should consider putting it in the local config
@@ -561,7 +561,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 
 				lvb, gerr := pool.pendingBlockEvaluator.GenerateBlock()
 				if gerr != nil {
-					pool.assemblyResults.err = fmt.Errorf("could not generate block for %d: %v", pool.assemblyResults.round, gerr)
+					pool.assemblyResults.err = fmt.Errorf("could not generate block for %d: %v", pool.assemblyResults.roundStartedEvaluating, gerr)
 				} else {
 					pool.assemblyResults.blk = lvb
 				}
@@ -620,7 +620,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	pool.assemblyMu.Lock()
 	pool.assemblyResults = poolAsmResults{
-		round: prev.Round + basics.Round(1),
+		roundStartedEvaluating: prev.Round + basics.Round(1),
 	}
 	pool.assemblyMu.Unlock()
 
@@ -677,7 +677,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 		pool.assemblyResults.stats = asmStats
 		lvb, err := pool.pendingBlockEvaluator.GenerateBlock()
 		if err != nil {
-			pool.assemblyResults.err = fmt.Errorf("could not generate block for %d (end): %v", pool.assemblyResults.round, err)
+			pool.assemblyResults.err = fmt.Errorf("could not generate block for %d (end): %v", pool.assemblyResults.roundStartedEvaluating, err)
 		} else {
 			pool.assemblyResults.blk = lvb
 		}
@@ -750,8 +750,8 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	pool.assemblyMu.Lock()
 
 	// if the transaction pool is more than two rounds behind, we don't want to wait.
-	if pool.assemblyResults.round <= round.SubSaturate(2) {
-		logging.Base().Infof("AssembleBlock: requested round is more than a single round ahead of the transaction pool %d <= %d-2", pool.assemblyResults.round, round)
+	if pool.assemblyResults.roundStartedEvaluating <= round.SubSaturate(2) {
+		logging.Base().Infof("AssembleBlock: requested round is more than a single round ahead of the transaction pool %d <= %d-2", pool.assemblyResults.roundStartedEvaluating, round)
 		stats.StopReason = telemetryspec.AssembleBlockEmpty
 		pool.assemblyMu.Unlock()
 		return pool.assembleEmptyBlock(round)
@@ -759,18 +759,18 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 
 	defer pool.assemblyMu.Unlock()
 
-	if pool.assemblyResults.round > round {
+	if pool.assemblyResults.roundStartedEvaluating > round {
 		// we've already assembled a round in the future. Since we're clearly won't go backward, it means
 		// that the agreement is far behind us, so we're going to return here with error code to let
 		// the agreement know about it.
 		// since the network is already ahead of us, there is no issue here in not generating a block ( since the block would get discarded anyway )
-		logging.Base().Infof("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.round)
+		logging.Base().Infof("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
 		return nil, ErrStaleBlockAssemblyRequest
 	}
 
 	pool.assemblyDeadline = deadline
 	pool.assemblyRound = round
-	for time.Now().Before(deadline) && (!pool.assemblyResults.ok || pool.assemblyResults.round != round) {
+	for time.Now().Before(deadline) && (!pool.assemblyResults.ok || pool.assemblyResults.roundStartedEvaluating != round) {
 		condvar.TimedWait(&pool.assemblyCond, deadline.Sub(time.Now()))
 	}
 
@@ -781,8 +781,17 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		pool.assemblyMu.Unlock()
 		emptyBlock, emptyBlockErr := pool.assembleEmptyBlock(round)
 		pool.assemblyMu.Lock()
+
+		if pool.assemblyResults.roundStartedEvaluating > round {
+			// this case is expected to happen only if the transaction pool was able to construct *two* rounds during the time we were trying to assemble the empty block.
+			// while this is extreamly unlikely, we need to handle this. the handling it quite straight-forward :
+			// since the network is already ahead of us, there is no issue here in not generating a block ( since the block would get discarded anyway )
+			logging.Base().Infof("AssembleBlock: requested round is behind transaction pool round after timing out %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
+			return nil, ErrStaleBlockAssemblyRequest
+		}
+
 		deadline = deadline.Add(assemblyWaitEps)
-		for time.Now().Before(deadline) && (!pool.assemblyResults.ok || pool.assemblyResults.round != round) {
+		for time.Now().Before(deadline) && (!pool.assemblyResults.ok || pool.assemblyResults.roundStartedEvaluating != round) {
 			condvar.TimedWait(&pool.assemblyCond, deadline.Sub(time.Now()))
 		}
 
@@ -802,15 +811,15 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 	if pool.assemblyResults.err != nil {
 		return nil, fmt.Errorf("AssemblyBlock: encountered error for round %d: %v", round, pool.assemblyResults.err)
 	}
-	if pool.assemblyResults.round > round {
+	if pool.assemblyResults.roundStartedEvaluating > round {
 		// this scenario should not happen unless the txpool is receiving the new blocks via OnNewBlocks
 		// with "jumps" between consecutive blocks ( which is why it's a warning )
 		// The "normal" usecase is evaluated on the top of the function.
-		logging.Base().Warnf("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.round)
+		logging.Base().Warnf("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
 		return nil, ErrStaleBlockAssemblyRequest
-	} else if pool.assemblyResults.round != round {
+	} else if pool.assemblyResults.roundStartedEvaluating != round {
 		return nil, fmt.Errorf("AssembleBlock: assembled block round does not match: %d != %d",
-			pool.assemblyResults.round, round)
+			pool.assemblyResults.roundStartedEvaluating, round)
 	}
 
 	stats = pool.assemblyResults.stats
