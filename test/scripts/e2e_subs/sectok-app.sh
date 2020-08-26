@@ -158,7 +158,7 @@ if [[ $RES != *"$ERR_APP_REJ_STR1"* ]]; then
 fi
 
 RES=$(${xcmd} --from $BOB set-contract-admin --target $BOB --status 1 2>&1 || true)
-if [[ $RES != *"$ERR_APP_REJ_STR1"* ]]; then
+if [[ $RES != *"$ERR_APP_REJ_STR2"* ]]; then
     date '+sectok-app FAIL non-admins cannot set own contract admin status %Y%m%d_%H%M%S'
     false
 fi
