@@ -128,7 +128,7 @@ type LedgerReader interface {
 	// protocol may lose liveness.
 	Seed(basics.Round) (committee.Seed, error)
 
-	// AccountData returns the AccountData associated with some Address
+	// Lookup returns the AccountData associated with some Address
 	// at the conclusion of a given round.
 	//
 	// This method returns an error if the given Round has not yet been
