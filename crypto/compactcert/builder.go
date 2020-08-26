@@ -42,10 +42,11 @@ type sigslot struct {
 type Builder struct {
 	Params
 
-	sigs         []sigslot // Indexed by pos in participants
-	signedWeight uint64    // Total weight of signatures so far
-	participants []Participant
-	parttree     *merklearray.Tree
+	sigs          []sigslot // Indexed by pos in participants
+	sigsHasValidL bool      // The L values in sigs are consistent with weights
+	signedWeight  uint64    // Total weight of signatures so far
+	participants  []Participant
+	parttree      *merklearray.Tree
 
 	// Cached cert, if Build() was called and no subsequent
 	// Add() calls were made.
@@ -60,11 +61,12 @@ func MkBuilder(param Params, part []Participant, parttree *merklearray.Tree) (*B
 	npart := len(part)
 
 	b := &Builder{
-		Params:       param,
-		sigs:         make([]sigslot, npart),
-		signedWeight: 0,
-		participants: part,
-		parttree:     parttree,
+		Params:        param,
+		sigs:          make([]sigslot, npart),
+		sigsHasValidL: false,
+		signedWeight:  0,
+		participants:  part,
+		parttree:      parttree,
 	}
 
 	return b, nil
@@ -106,6 +108,7 @@ func (b *Builder) Add(pos uint64, sig crypto.OneTimeSignature, verifySig bool) e
 	b.sigs[pos].Sig.OneTimeSignature = sig
 	b.signedWeight += p.Weight
 	b.cert = nil
+	b.sigsHasValidL = false
 	return nil
 }
 
@@ -139,9 +142,12 @@ func (sc sigCommit) Get(pos uint64) (crypto.Hashable, error) {
 // but the sum of all signature weights up to and including pos exceeds
 // coinWeight.
 //
-// coinIndex works by doing a binary search on the sigs array.  The caller
-// should make sure that sigs[*].L is initialized before using coinIndex().
+// coinIndex works by doing a binary search on the sigs array.
 func (b *Builder) coinIndex(coinWeight uint64) (uint64, error) {
+	if !b.sigsHasValidL {
+		return 0, fmt.Errorf("coinIndex: need valid L values")
+	}
+
 	lo := uint64(0)
 	hi := uint64(len(b.sigs))
 
@@ -179,6 +185,7 @@ func (b *Builder) Build() (*Cert, error) {
 	for i := 1; i < len(b.sigs); i++ {
 		b.sigs[i].L = b.sigs[i-1].L + b.sigs[i-1].Weight
 	}
+	b.sigsHasValidL = true
 
 	sigtree, err := merklearray.Build(sigCommit(b.sigs))
 	if err != nil {

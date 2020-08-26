@@ -222,7 +222,8 @@ func BenchmarkBuildVerify(b *testing.B) {
 func TestCoinIndex(t *testing.T) {
 	n := 1000
 	b := &Builder{
-		sigs: make([]sigslot, n),
+		sigs:          make([]sigslot, n),
+		sigsHasValidL: true,
 	}
 
 	for i := 0; i < n; i++ {
