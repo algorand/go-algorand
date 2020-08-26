@@ -666,7 +666,7 @@ params: account index, state key, value.
 
 params: account index, state key.
 
-Deleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)
+Deleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)
 
 ## app_global_del
 
@@ -679,7 +679,7 @@ Deleting a key which is already absent has no effect on the application global s
 
 params: state key.
 
-Deleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)
+Deleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)
 
 ## asset_holding_get
 
