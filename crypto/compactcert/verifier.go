@@ -44,8 +44,8 @@ func MkVerifier(p Params, partcom crypto.Digest) *Verifier {
 // Verify checks if c is a valid compact certificate for the message
 // and participants that were used to construct the Verifier.
 func (v *Verifier) Verify(c *Cert) error {
-	if c.SignedWeight < v.ProvenWeight {
-		return fmt.Errorf("cert signed weight %d < proven weight %d", c.SignedWeight, v.ProvenWeight)
+	if c.SignedWeight <= v.ProvenWeight {
+		return fmt.Errorf("cert signed weight %d <= proven weight %d", c.SignedWeight, v.ProvenWeight)
 	}
 
 	// Verify all of the reveals

@@ -114,7 +114,7 @@ func (b *Builder) Add(pos uint64, sig crypto.OneTimeSignature, verifySig bool) e
 
 // Ready returns whether the certificate is ready to be built.
 func (b *Builder) Ready() bool {
-	return b.signedWeight >= b.Params.ProvenWeight
+	return b.signedWeight > b.Params.ProvenWeight
 }
 
 // SignedWeight returns the total weight of signatures added so far.
@@ -177,8 +177,8 @@ func (b *Builder) Build() (*Cert, error) {
 		return b.cert, nil
 	}
 
-	if b.signedWeight < b.Params.ProvenWeight {
-		return nil, fmt.Errorf("not enough signed weight: %d < %d", b.signedWeight, b.Params.ProvenWeight)
+	if b.signedWeight <= b.Params.ProvenWeight {
+		return nil, fmt.Errorf("not enough signed weight: %d <= %d", b.signedWeight, b.Params.ProvenWeight)
 	}
 
 	// Commit to the sigs array
