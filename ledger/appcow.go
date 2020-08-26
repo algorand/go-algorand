@@ -31,30 +31,80 @@ const (
 	deallocAction     storageAction = 3
 )
 
+type valueDelta struct {
+	old, new basics.TealValue
+
+	oldExists, newExists bool
+}
+
+// ok is false if the provided valueDelta is redundant,
+// which means that it encodes no update.
+func (vd valueDelta) serialize() (vdelta basics.ValueDelta, ok bool) {
+	if !vd.newExists {
+		if vd.oldExists {
+			vdelta.Action = basics.DeleteAction
+			ok = true
+		}
+		return
+	}
+	if vd.oldExists && vd.old == vd.new {
+		return
+	}
+	ok = true
+	if vd.new.Type == basics.TealBytesType {
+		vdelta.Action = basics.SetBytesAction
+		vdelta.Bytes = vd.new.Bytes
+	} else {
+		vdelta.Action = basics.SetUintAction
+		vdelta.Uint = vd.new.Uint
+	}
+	return
+}
+
+type stateDelta map[string]valueDelta
+
+func (sd stateDelta) serialize() basics.StateDelta {
+	delta := make(basics.StateDelta)
+	for key, vd := range sd {
+		vdelta, ok := vd.serialize()
+		if ok {
+			delta[key] = vdelta
+		}
+	}
+	return delta
+}
+
 type storageDelta struct {
 	action storageAction
-	kvCow  basics.StateDelta
+	kvCow  stateDelta
 
 	counts, maxCounts *basics.StateSchema
 }
 
-func (lsd *storageDelta) merge(osd *storageDelta) {
-	if osd.action != remainAllocAction {
+func (lsd *storageDelta) applyChild(child *storageDelta) {
+	if child.action != remainAllocAction {
 		// If child state allocated or deallocated, then its deltas
 		// completely overwrite those of the parent.
-		lsd.action = osd.action
-		lsd.kvCow = osd.kvCow
-		lsd.counts = osd.counts
-		lsd.maxCounts = osd.maxCounts
+		lsd.action = child.action
+		lsd.kvCow = child.kvCow
+		lsd.counts = child.counts
+		lsd.maxCounts = child.maxCounts
 	} else {
 		// Otherwise, the child's deltas get merged with those of the
 		// parent, and we keep whatever the parent's state was.
-		for key, delta := range osd.kvCow {
-			lsd.kvCow[key] = delta
+		for key := range child.kvCow {
+			delta, ok := lsd.kvCow[key]
+			if !ok {
+				lsd.kvCow[key] = child.kvCow[key]
+				continue
+			}
+
+			delta.new = child.kvCow[key].new
+			delta.newExists = child.kvCow[key].newExists
 		}
 
 		// counts can just get overwritten because they are absolute
-		lsd.counts = osd.counts
+		lsd.counts = child.counts
 	}
 
 	// sanity checks
@@ -87,7 +137,7 @@ func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.App
 
 	lsd = &storageDelta{
 		action:    defaultAction,
-		kvCow:     make(basics.StateDelta),
+		kvCow:     make(stateDelta),
 		counts:    &counts,
 		maxCounts: &maxCounts,
 	}
@@ -218,7 +268,7 @@ func (cb *roundCowState) Deallocate(addr basics.Address, aidx basics.AppIndex, g
 	lsd.action = deallocAction
 	lsd.counts = &basics.StateSchema{}
 	lsd.maxCounts = &basics.StateSchema{}
-	lsd.kvCow = make(basics.StateDelta)
+	lsd.kvCow = make(stateDelta)
 	return nil
 }
 
@@ -238,10 +288,9 @@ func (cb *roundCowState) GetKey(addr basics.Address, aidx basics.AppIndex, globa
 	// including if that delta is a "delete" delta)
 	lsd, ok := cb.mods.sdeltas[addr][storagePtr{aidx, global}]
 	if ok {
-		delta, hasDelta := lsd.kvCow[key]
+		vdelta, hasDelta := lsd.kvCow[key]
 		if hasDelta {
-			val, ok := delta.ToTealValue()
-			return val, ok, nil
+			return vdelta.new, vdelta.newExists, nil
 		}
 
 		// If this storage delta is remainAllocAction, then check our
@@ -280,7 +329,7 @@ func (cb *roundCowState) SetKey(addr basics.Address, aidx basics.AppIndex, globa
 		return err
 	}
 
-	// Fetch the old value + presence so we know how to update counts
+	// Fetch the old value + presence so we know how to update
 	oldValue, oldOk, err := cb.GetKey(addr, aidx, global, key)
 	if err != nil {
 		return err
@@ -291,9 +340,16 @@ func (cb *roundCowState) SetKey(addr basics.Address, aidx basics.AppIndex, globa
 	if err != nil {
 		return err
 	}
-	lsd.kvCow[key] = value.ToValueDelta()
 
-	// Fetch the new value + presence so we know how to update counts
+	vdelta, ok := lsd.kvCow[key]
+	if !ok {
+		vdelta = valueDelta{old: oldValue, oldExists: oldOk}
+	}
+	vdelta.new = value
+	vdelta.newExists = true
+	lsd.kvCow[key] = vdelta
+
+	// Fetch the new value + presence so we know how to update
 	newValue, newOk, err := cb.GetKey(addr, aidx, global, key)
 	if err != nil {
 		return err
@@ -331,9 +387,12 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 		return nil
 	}
 
-	lsd.kvCow[key] = basics.ValueDelta{
-		Action: basics.DeleteAction,
+	vdelta, ok := lsd.kvCow[key]
+	if !ok {
+		vdelta = valueDelta{old: oldValue, oldExists: oldOk}
 	}
+	vdelta.newExists = false
+	lsd.kvCow[key] = vdelta
 
 	// Fetch the new value + presence so we know how to update counts
 	newValue, newOk, err := cb.GetKey(addr, aidx, global, key)
@@ -380,7 +439,7 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 						err = fmt.Errorf("found more than one global delta during StatefulEval: %d", aapp.aidx)
 						return false, basics.EvalDelta{}, err
 					}
-					evalDelta.GlobalDelta = sdelta.kvCow.Clone()
+					evalDelta.GlobalDelta = sdelta.kvCow.serialize()
 					foundGlobal = true
 				} else {
 					if evalDelta.LocalDeltas == nil {
@@ -391,15 +450,13 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 					// type consists only of (address, appID, global=false). So if
 					// IndexByAddress is deterministic (and it is), there is no need
 					// to check for duplicates here.
-					//
-					// TODO(app refactor): minimize eval deltas
 					var addrOffset uint64
 					sender := params.Txn.Txn.Sender
 					addrOffset, err = params.Txn.Txn.IndexByAddress(addr, sender)
 					if err != nil {
 						return false, basics.EvalDelta{}, err
 					}
-					evalDelta.LocalDeltas[addrOffset] = sdelta.kvCow.Clone()
+					evalDelta.LocalDeltas[addrOffset] = sdelta.kvCow.serialize()
 				}
 			}
 		}

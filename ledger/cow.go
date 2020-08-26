@@ -225,7 +225,7 @@ func (cb *roundCowState) commitToParent() {
 		for aapp, nsd := range smod {
 			lsd, ok := cb.commitParent.mods.sdeltas[addr][aapp]
 			if ok {
-				lsd.merge(nsd)
+				lsd.applyChild(nsd)
 			} else {
 				cb.commitParent.mods.sdeltas[addr][aapp] = nsd
 			}

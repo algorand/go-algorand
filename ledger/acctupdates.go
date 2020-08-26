@@ -112,12 +112,15 @@ type refCountedStateDelta map[string]refCountedValueDelta
 
 // applyKvDelta merges a stateDelta into a refCountedStateDelta, bumping
 // reference counts as necessary
-func (rcsd refCountedStateDelta) applyKvDelta(stateDelta basics.StateDelta) {
-	for key, vdelta := range stateDelta {
-		rcvd := rcsd[key]
-		rcvd.vdelta = vdelta
-		rcvd.ndeltas++
-		rcsd[key] = rcvd
+func (rcsd refCountedStateDelta) applyKvDelta(stateDelta stateDelta) {
+	for key, vd := range stateDelta {
+		vdelta, ok := vd.serialize()
+		if ok {
+			rcvd := rcsd[key]
+			rcvd.vdelta = vdelta
+			rcvd.ndeltas++
+			rcsd[key] = rcvd
+		}
 	}
 }
 
@@ -1499,8 +1502,7 @@ func (au *accountUpdates) getKeyForRoundImpl(rnd basics.Round, addr basics.Addre
 			if ok {
 				vdelta, ok := storageDelta.kvCow[key]
 				if ok {
-					val, ok := vdelta.ToTealValue()
-					return val, ok, nil
+					return vdelta.new, vdelta.newExists, nil
 				}
 
 				// We have to stop if we get to a dealloc event, since that

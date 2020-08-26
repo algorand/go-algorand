@@ -170,19 +170,10 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 			// note: if this is an allocAction, there will be no
 			// DeleteActions below
 			for k, v := range store.kvCow {
-				switch v.Action {
-				case basics.DeleteAction:
+				if !v.newExists {
 					delete(params.GlobalState, k)
-				case basics.SetUintAction:
-					params.GlobalState[k] = basics.TealValue{
-						Type: basics.TealUintType,
-						Uint: v.Uint,
-					}
-				case basics.SetBytesAction:
-					params.GlobalState[k] = basics.TealValue{
-						Type:  basics.TealBytesType,
-						Bytes: v.Bytes,
-					}
+				} else {
+					params.GlobalState[k] = v.new
 				}
 			}
 			owned[aapp.aidx] = params
@@ -211,19 +202,10 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 			// note: if this is an allocAction, there will be no
 			// DeleteActions below
 			for k, v := range store.kvCow {
-				switch v.Action {
-				case basics.DeleteAction:
+				if !v.newExists {
 					delete(states.KeyValue, k)
-				case basics.SetUintAction:
-					states.KeyValue[k] = basics.TealValue{
-						Type: basics.TealUintType,
-						Uint: v.Uint,
-					}
-				case basics.SetBytesAction:
-					states.KeyValue[k] = basics.TealValue{
-						Type:  basics.TealBytesType,
-						Bytes: v.Bytes,
-					}
+				} else {
+					states.KeyValue[k] = v.new
 				}
 			}
 			owned[aapp.aidx] = states
@@ -990,7 +972,11 @@ func storageNewRound(tx *sql.Tx, sdeltas map[basics.Address]map[storagePtr]*stor
 			}
 
 			// Then, apply any key/value deltas
-			for key, vdelta := range sdelta.kvCow {
+			for key, vd := range sdelta.kvCow {
+				vdelta, ok := vd.serialize()
+				if !ok {
+					continue
+				}
 				tv, tvok := vdelta.ToTealValue()
 				switch vdelta.Action {
 				case basics.SetUintAction:
