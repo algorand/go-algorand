@@ -114,6 +114,10 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 		res.Lease = tx.Lease[:]
 	}
 
+	if !tx.RekeyTo.IsZero() {
+		res.RekeyTo = tx.RekeyTo.String()
+	}
+
 	return res, nil
 }
 

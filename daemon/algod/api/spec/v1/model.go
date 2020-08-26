@@ -546,6 +546,11 @@ type Transaction struct {
 	// required: false
 	// swagger:strfmt byte
 	Group []byte `json:"group,omitempty"`
+
+	// RekeyTo
+	//
+	// required: false
+	RekeyTo string `json:"rekeyto,omitempty"`
 }
 
 // PaymentTransactionType contains the additional fields for a payment Transaction
