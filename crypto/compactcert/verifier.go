@@ -51,18 +51,13 @@ func (v *Verifier) Verify(c *Cert) error {
 	// Verify all of the reveals
 	sigs := make(map[uint64]crypto.Hashable)
 	parts := make(map[uint64]crypto.Hashable)
-	for i, r := range c.Reveals {
-		_, ok := sigs[r.Pos]
-		if ok {
-			return fmt.Errorf("duplicate reveal for %d", r.Pos)
-		}
-
-		sigs[r.Pos] = r.SigSlot
-		parts[r.Pos] = r.Part
+	for pos, r := range c.Reveals {
+		sigs[pos] = r.SigSlot
+		parts[pos] = r.Part
 
 		ephID := basics.OneTimeIDForRound(v.SigRound, r.Part.KeyDilution)
 		if !r.Part.PK.Verify(ephID, v.Msg, r.SigSlot.Sig.OneTimeSignature) {
-			return fmt.Errorf("signature in reveal %d does not verify", i)
+			return fmt.Errorf("signature in reveal pos %d does not verify", pos)
 		}
 	}
 

@@ -189,7 +189,7 @@ func (b *Builder) Build() (*Cert, error) {
 	c := &Cert{
 		SigCommit:    sigtree.Root(),
 		SignedWeight: b.signedWeight,
-		Reveals:      nil,
+		Reveals:      make(map[uint64]Reveal),
 	}
 
 	nr, err := b.numReveals(b.signedWeight)
@@ -211,25 +211,17 @@ func (b *Builder) Build() (*Cert, error) {
 		}
 
 		// If we already revealed pos, no need to do it again
-		alreadyRevealed := false
-		for _, r := range c.Reveals {
-			if r.Pos == pos {
-				alreadyRevealed = true
-			}
-		}
-
+		_, alreadyRevealed := c.Reveals[pos]
 		if alreadyRevealed {
 			continue
 		}
 
 		// Generate the reveal for pos
-		r := Reveal{
-			Pos:     pos,
+		c.Reveals[pos] = Reveal{
 			SigSlot: b.sigs[pos].sigslotCommit,
 			Part:    b.participants[pos],
 		}
 
-		c.Reveals = append(c.Reveals, r)
 		proofPositions = append(proofPositions, pos)
 	}
 
