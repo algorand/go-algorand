@@ -1330,6 +1330,18 @@ func TestStringLiteralParsing(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, e, result)
 
+	s = `"test\ra"`
+	e = []byte("test\x0da")
+	result, err = parseStringLiteral(s)
+	require.NoError(t, err)
+	require.Equal(t, e, result)
+
+	s = `"test\\"`
+	e = []byte(`test\`)
+	result, err = parseStringLiteral(s)
+	require.NoError(t, err)
+	require.Equal(t, e, result)
+
 	s = `"test 123"`
 	e = []byte(`test 123`)
 	result, err = parseStringLiteral(s)
