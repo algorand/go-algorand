@@ -26,10 +26,11 @@ import (
 
 //msgp:ignore sigslot
 type sigslot struct {
-	// part is the participant signing this message.  The participant
-	// information is tracked here for convenience, but it does not
-	// appear in the commitment to the sigs array.
-	part Participant
+	// Weight is the weight of the participant signing this message.
+	// This information is tracked here for convenience, but it does
+	// not appear in the commitment to the sigs array; it comes from
+	// the Weight field of the corresponding participant.
+	Weight uint64
 
 	// Include the parts of the sigslot that form the commitment to
 	// the sigs array.
@@ -72,7 +73,7 @@ func MkBuilder(param Params, part []Participant, parttree *merklearray.Tree) (*B
 // Present checks if the builder already contains a signature at a particular
 // offset.
 func (b *Builder) Present(pos uint64) bool {
-	return b.sigs[pos].part.Weight != 0
+	return b.sigs[pos].Weight != 0
 }
 
 // Add a signature to the set of signatures available for building a certificate.
@@ -101,7 +102,7 @@ func (b *Builder) Add(pos uint64, sig crypto.OneTimeSignature, verifySig bool) e
 	}
 
 	// Remember the signature
-	b.sigs[pos].part = p
+	b.sigs[pos].Weight = p.Weight
 	b.sigs[pos].Sig.OneTimeSignature = sig
 	b.signedWeight += p.Weight
 	b.cert = nil
@@ -153,7 +154,7 @@ again:
 		goto again
 	}
 
-	if coinWeight < b.sigs[mid].L+b.sigs[mid].part.Weight {
+	if coinWeight < b.sigs[mid].L+b.sigs[mid].Weight {
 		return mid, nil
 	}
 
@@ -174,7 +175,7 @@ func (b *Builder) Build() (*Cert, error) {
 
 	// Commit to the sigs array
 	for i := 1; i < len(b.sigs); i++ {
-		b.sigs[i].L = b.sigs[i-1].L + b.sigs[i-1].part.Weight
+		b.sigs[i].L = b.sigs[i-1].L + b.sigs[i-1].Weight
 	}
 
 	sigtree, err := merklearray.Build(sigCommit(b.sigs))
