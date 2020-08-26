@@ -77,8 +77,13 @@ type VotersForRound struct {
 	// tree, and totalWeight) could be nil/zero while a background thread
 	// is computing them.  Once the fields are set, however, they are
 	// immutable, and it is no longer necessary to acquire the lock.
-	mu   deadlock.Mutex
-	cond *sync.Cond
+	//
+	// If an error occurs while computing the tree in the background,
+	// loadTreeError might be set to non-nil instead.  That also finalizes
+	// the state of this VotersForRound.
+	mu            deadlock.Mutex
+	cond          *sync.Cond
+	loadTreeError error
 
 	// Proto is the ConsensusParams for the round whose balances are reflected
 	// in participants.
@@ -184,6 +189,11 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) error {
 		err := tr.loadTree(vt.l, vt.au, hdr)
 		if err != nil {
 			vt.au.log.Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
+
+			tr.mu.Lock()
+			tr.loadTreeError = err
+			tr.cond.Broadcast()
+			tr.mu.Unlock()
 		}
 	}()
 	return nil
@@ -311,10 +321,14 @@ func (vt *votersTracker) getVoters(r basics.Round) (*VotersForRound, error) {
 
 	// Wait for the Merkle tree to be constructed.
 	tr.mu.Lock()
+	defer tr.mu.Unlock()
 	for tr.Tree == nil {
+		if tr.loadTreeError != nil {
+			return nil, tr.loadTreeError
+		}
+
 		tr.cond.Wait()
 	}
-	tr.mu.Unlock()
 
 	return tr, nil
 }
