@@ -56,6 +56,8 @@ There are three (optional) environment variables that can be used to control the
           set the filter to be `export TESTFILTER=[b,c]ar`.
     - Defaults to all tests (`.*`).
 
+NOTE: the file name shoud have the suffix: "Test.exp"
+
 To run the Goal Expect test, run the following command from the top level go-algorand directory:
 
 ```
