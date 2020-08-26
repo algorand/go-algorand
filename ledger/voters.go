@@ -20,14 +20,14 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-
-	"github.com/algorand/go-deadlock"
 )
 
 // The votersTracker maintains the Merkle tree for the most recent
@@ -213,7 +213,7 @@ func (tr *VotersForRound) loadTree(l ledgerForTracker, au *accountUpdates, hdr b
 
 	for i, acct := range top {
 		var ot basics.OverflowTracker
-		rewards := basics.PendingRewards(&ot, acct.MicroAlgos, acct.RewardsBase, tr.Proto, hdr.RewardsLevel)
+		rewards := basics.PendingRewards(&ot, tr.Proto, acct.MicroAlgos, acct.RewardsBase, hdr.RewardsLevel)
 		money := ot.AddA(acct.MicroAlgos, rewards)
 		if ot.Overflowed {
 			return fmt.Errorf("votersTracker.loadTree: overflow adding rewards %d + %d", acct.MicroAlgos, rewards)
