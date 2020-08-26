@@ -1,0 +1,10 @@
+#pragma version 2
+byte base64 cmM=
+byte base64 cmM=
+app_global_get
+int 0
+byte base64 YnI=
+app_local_get
+-
+app_global_put
+int 1

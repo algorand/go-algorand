@@ -1,0 +1,545 @@
+#pragma version 2
+txn ApplicationID
+int 0
+==
+bnz cond1
+txn OnCompletion
+int 1
+==
+txn OnCompletion
+int 5
+==
+||
+bnz cond2
+txn OnCompletion
+int 0
+==
+bnz assert3
+err
+assert3:
+txn NumAccounts
+int 1
+==
+bnz cond5
+txn NumAccounts
+int 0
+==
+txn NumAppArgs
+int 3
+<
+&&
+bnz assert6
+err
+assert6:
+txn NumAppArgs
+int 1
+==
+bnz cond8
+txn NumAppArgs
+int 2
+==
+bnz cond9
+// enter bid
+int 0
+byte base64 YnI=
+int 0
+byte base64 YnI=
+app_local_get
+gtxn 0 AssetAmount
++
+app_local_put
+byte base64 cmM=
+byte base64 cmM=
+app_global_get
+gtxn 0 AssetAmount
++
+app_global_put
+byte base64 YXI=
+byte base64 YXI=
+app_global_get
+gtxn 0 AssetAmount
++
+app_global_put
+txn GroupIndex
+int 1
+==
+gtxn 0 TypeEnum
+int 4
+==
+&&
+gtxn 0 XferAsset
+byte base64 YiQ=
+app_global_get
+==
+&&
+gtxn 0 AssetReceiver
+byte base64 ZXM=
+app_global_get
+==
+&&
+int 1
+bnz cond_end7
+cond9:
+// close auction
+byte base64 dGk=
+app_global_get
+byte base64 bGs=
+app_global_get
+%
+itob
+store 14
+byte base64 dV8=
+byte base64 dV8=
+app_global_get
+byte 0x0001
+load 14
+concat
+app_global_get
+-
+byte base64 YXI=
+app_global_get
++
+app_global_put
+byte 0x0001
+load 14
+concat
+byte base64 YXI=
+app_global_get
+app_global_put
+byte base64 dF8=
+byte base64 dF8=
+app_global_get
+byte 0x0002
+load 14
+concat
+app_global_get
+-
+byte base64 YXM=
+app_global_get
++
+app_global_put
+byte 0x0002
+load 14
+concat
+byte base64 YXM=
+app_global_get
+app_global_put
+byte base64 dGk=
+int 1
+byte base64 dGk=
+app_global_get
++
+app_global_put
+byte base64 YXI=
+app_global_del
+byte base64 YXM=
+app_global_del
+byte base64 YWQ=
+app_global_del
+txn GroupIndex
+int 1
+==
+txn Sender
+byte base64 YXg=
+app_global_get
+==
+&&
+byte base64 cmM=
+app_global_get
+int 0
+==
+&&
+gtxn 2 Sender
+byte base64 ZXM=
+app_global_get
+==
+&&
+gtxn 2 XferAsset
+byte base64 YiQ=
+app_global_get
+==
+&&
+gtxn 2 AssetCloseTo
+byte base64 c3g=
+app_global_get
+==
+&&
+gtxn 3 XferAsset
+byte base64 cyQ=
+app_global_get
+==
+&&
+gtxn 3 AssetCloseTo
+byte base64 c3g=
+app_global_get
+==
+&&
+gtxn 4 CloseRemainderTo
+byte base64 c3g=
+app_global_get
+==
+&&
+int 1
+bnz cond_end7
+cond8:
+// open auction
+byte base64 YWQ=
+app_global_get
+int 0
+==
+byte base64 dGk=
+app_global_get
+byte base64 bnQ=
+app_global_get
+<
+&&
+bnz assert10
+err
+assert10:
+byte base64 YXM=
+gtxn 4 AssetAmount
+app_global_put
+byte base64 YWQ=
+global LatestTimestamp
+byte base64 ZHI=
+app_global_get
++
+app_global_put
+txn GroupIndex
+int 1
+==
+txn Sender
+byte base64 YXg=
+app_global_get
+==
+&&
+gtxn 2 Sender
+byte base64 ZXM=
+app_global_get
+==
+&&
+gtxn 2 XferAsset
+byte base64 YiQ=
+app_global_get
+==
+&&
+gtxn 3 XferAsset
+byte base64 cyQ=
+app_global_get
+==
+&&
+gtxn 4 TypeEnum
+int 4
+==
+&&
+gtxn 4 XferAsset
+byte base64 cyQ=
+app_global_get
+==
+&&
+gtxn 4 AssetReceiver
+byte base64 ZXM=
+app_global_get
+==
+&&
+// correct tranche size check
+byte base64 bGs=
+app_global_get
+byte base64 YWM=
+app_global_get
+*
+byte base64 cnM=
+app_global_get
+*
+byte base64 bnQ=
+app_global_get
+byte base64 dV8=
+app_global_get
+*
++
+store 7
+byte base64 dGk=
+app_global_get
+byte base64 bGs=
+app_global_get
+<
+bnz cond12
+byte base64 dV8=
+app_global_get
+int 0
+==
+byte base64 c3A=
+app_global_get
+byte base64 cnM=
+app_global_get
+*
+byte base64 dF8=
+app_global_get
+<=
+||
+bnz cond13
+txna ApplicationArgs 0
+btoi
+load 7
+>=
+bnz cond14
+// 128-bit div
+int 2
+byte base64 dV8=
+app_global_get
+*
+byte base64 c3A=
+app_global_get
+byte base64 cnM=
+app_global_get
+*
+byte base64 dF8=
+app_global_get
+-
+mulw
+store 8
+store 9
+load 7
+gtxn 4 AssetAmount
+mulw
+store 10
+store 11
+txna ApplicationArgs 0
+btoi
+load 10
+plusw
+store 12
+store 13
+load 9
+load 11
+load 13
++
+==
+load 8
+load 12
+==
+&&
+int 1
+bnz cond_end11
+cond14:
+int 0
+int 1
+bnz cond_end11
+cond13:
+gtxn 4 AssetAmount
+byte base64 bXM=
+app_global_get
+==
+int 1
+bnz cond_end11
+cond12:
+gtxn 4 AssetAmount
+byte base64 ZnM=
+app_global_get
+==
+cond_end11:
+&&
+cond_end7:
+int 1
+bnz cond_end4
+cond5:
+// payout/invalidate bid
+txn NumAppArgs
+int 0
+==
+bnz unless15
+txna ApplicationArgs 0
+btoi
+byte base64 YXI=
+app_global_get
+<
+// 128-bit div
+byte base64 YXM=
+app_global_get
+int 1
+byte base64 YnI=
+app_local_get
+mulw
+store 0
+store 1
+byte base64 YXI=
+app_global_get
+gtxn 2 AssetAmount
+mulw
+store 2
+store 3
+txna ApplicationArgs 0
+btoi
+load 2
+plusw
+store 4
+store 5
+load 1
+load 3
+load 5
++
+==
+load 0
+load 4
+==
+&&
+&&
+bnz assert16
+err
+assert16:
+unless15:
+byte base64 cmM=
+byte base64 cmM=
+app_global_get
+int 1
+byte base64 YnI=
+app_local_get
+-
+app_global_put
+int 1
+byte base64 YnI=
+app_local_del
+int 1
+txn NumAppArgs
+int 1
+==
+bnz if17
+txn NumAppArgs
+int 0
+==
+int 1
+byte base64 cyQ=
+app_global_get
+asset_holding_get AssetBalance
+store 6
+pop
+load 6
+int 0
+==
+&&
+int 1
+bnz if_end18
+if17:
+txn GroupIndex
+int 1
+==
+gtxn 2 Sender
+byte base64 ZXM=
+app_global_get
+==
+&&
+gtxn 2 XferAsset
+byte base64 cyQ=
+app_global_get
+==
+&&
+gtxn 2 AssetReceiver
+txna Accounts 1
+==
+&&
+if_end18:
+&&
+cond_end4:
+int 1
+bnz cond_end0
+cond2:
+// optin/destroy
+txn NumAppArgs
+int 0
+==
+txn NumAccounts
+int 0
+==
+&&
+txn OnCompletion
+int 1
+==
+byte base64 dGk=
+app_global_get
+byte base64 bnQ=
+app_global_get
+==
+||
+&&
+int 1
+bnz cond_end0
+cond1:
+// create
+byte base64 YXg=
+txn Sender
+app_global_put
+byte base64 c3g=
+txna ApplicationArgs 0
+app_global_put
+byte base64 ZXM=
+byte "Program"
+byte TMPL_EPREFIX
+concat
+global CurrentApplicationID
+itob
+concat
+txna ApplicationArgs 11
+concat
+sha512_256
+app_global_put
+byte base64 YiQ=
+txna ApplicationArgs 1
+btoi
+app_global_put
+byte base64 cyQ=
+txna ApplicationArgs 2
+btoi
+app_global_put
+byte base64 YWM=
+txna ApplicationArgs 3
+btoi
+app_global_put
+byte base64 bnQ=
+txna ApplicationArgs 4
+btoi
+app_global_put
+byte base64 c3A=
+txna ApplicationArgs 5
+btoi
+app_global_put
+byte base64 cnM=
+txna ApplicationArgs 6
+btoi
+app_global_put
+byte base64 ZnM=
+txna ApplicationArgs 7
+btoi
+app_global_put
+byte base64 bGs=
+txna ApplicationArgs 8
+btoi
+app_global_put
+byte base64 bXM=
+txna ApplicationArgs 9
+btoi
+app_global_put
+byte base64 ZHI=
+txna ApplicationArgs 10
+btoi
+app_global_put
+txna ApplicationArgs 11
+sha512_256
+byte TMPL_ESUFFIXH
+==
+txn ApplicationID
+int 0
+==
+&&
+txn NumAppArgs
+int 12
+==
+&&
+txn NumAccounts
+int 0
+==
+&&
+txn OnCompletion
+int 0
+==
+&&
+cond_end0:

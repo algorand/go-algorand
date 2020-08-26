@@ -1,0 +1,164 @@
+#pragma version 2
+gtxn 1 NumAccounts
+int 1
+==
+bnz cond1
+gtxn 1 NumAppArgs
+int 1
+==
+bnz cond2
+txn GroupIndex
+int 5
+<
+txn GroupIndex
+int 1
+>
+&&
+txn RekeyTo
+global ZeroAddress
+==
+&&
+gtxn 2 Sender
+gtxn 3 Sender
+==
+&&
+gtxn 3 Sender
+gtxn 4 Sender
+==
+&&
+gtxn 1 TypeEnum
+int 6
+==
+&&
+gtxn 1 ApplicationID
+byte TMPL_APPID
+btoi
+==
+&&
+gtxn 1 NumAccounts
+int 0
+==
+&&
+gtxn 1 NumAppArgs
+int 2
+==
+&&
+gtxn 1 OnCompletion
+int 0
+==
+&&
+gtxn 2 TypeEnum
+int 4
+==
+&&
+gtxn 2 AssetAmount
+int 0
+==
+&&
+gtxn 3 TypeEnum
+int 4
+==
+&&
+gtxn 3 AssetAmount
+int 0
+==
+&&
+gtxn 4 TypeEnum
+int 1
+==
+&&
+gtxn 4 Amount
+int 0
+==
+&&
+int 1
+bnz cond_end0
+cond2:
+txn GroupIndex
+int 4
+<
+txn GroupIndex
+int 1
+>
+&&
+txn RekeyTo
+global ZeroAddress
+==
+&&
+gtxn 2 Sender
+gtxn 3 Sender
+==
+&&
+gtxn 1 TypeEnum
+int 6
+==
+&&
+gtxn 1 ApplicationID
+byte TMPL_APPID
+btoi
+==
+&&
+gtxn 1 NumAccounts
+int 0
+==
+&&
+gtxn 1 OnCompletion
+int 0
+==
+&&
+gtxn 2 TypeEnum
+int 4
+==
+&&
+gtxn 2 AssetAmount
+int 0
+==
+&&
+gtxn 2 AssetCloseTo
+global ZeroAddress
+==
+&&
+gtxn 3 TypeEnum
+int 4
+==
+&&
+gtxn 3 AssetAmount
+int 0
+==
+&&
+gtxn 3 AssetCloseTo
+global ZeroAddress
+==
+&&
+int 1
+bnz cond_end0
+cond1:
+txn GroupIndex
+int 2
+==
+txn RekeyTo
+global ZeroAddress
+==
+&&
+gtxn 1 TypeEnum
+int 6
+==
+&&
+gtxn 1 ApplicationID
+byte TMPL_APPID
+btoi
+==
+&&
+gtxn 1 NumAppArgs
+int 1
+==
+&&
+gtxn 1 OnCompletion
+int 0
+==
+&&
+gtxn 2 TypeEnum
+int 4
+==
+&&
+cond_end0:
