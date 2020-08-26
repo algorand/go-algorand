@@ -110,4 +110,6 @@ type Cert struct {
 	Reveals map[uint64]Reveal `codec:"r,allocbound=maxReveals"`
 }
 
+// SortUint64 implements sorting by uint64 keys for
+// canonical encoding of maps in msgpack format.
 type SortUint64 = basics.SortUint64
