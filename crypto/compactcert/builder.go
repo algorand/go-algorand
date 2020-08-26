@@ -140,9 +140,11 @@ func (sc sigCommit) Get(pos uint64) (crypto.Hashable, error) {
 // coinWeight.
 //
 // coinIndex works by doing a binary search on the sigs array.  The caller
-// should invoke it with lo=0 and hi=len(b.sigs).  The caller should make
-// sure that sigs[*].L is initialized before using coinIndex().
-func (b *Builder) coinIndex(coinWeight uint64, lo uint64, hi uint64) (uint64, error) {
+// should make sure that sigs[*].L is initialized before using coinIndex().
+func (b *Builder) coinIndex(coinWeight uint64) (uint64, error) {
+	lo := uint64(0)
+	hi := uint64(len(b.sigs))
+
 again:
 	if lo >= hi {
 		return 0, fmt.Errorf("coinIndex: lo %d >= hi %d", lo, hi)
@@ -199,7 +201,7 @@ func (b *Builder) Build() (*Cert, error) {
 
 	for j := uint64(0); j < nr; j++ {
 		coin := hashCoin(j, c.SigCommit, c.SignedWeight)
-		pos, err := b.coinIndex(coin, 0, uint64(len(b.sigs)))
+		pos, err := b.coinIndex(coin)
 		if err != nil {
 			return nil, err
 		}

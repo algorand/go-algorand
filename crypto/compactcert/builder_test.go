@@ -225,7 +225,7 @@ func TestCoinIndex(t *testing.T) {
 	}
 
 	for i := 0; i < n; i++ {
-		pos, err := b.coinIndex(uint64(i), 0, uint64(len(b.sigs)))
+		pos, err := b.coinIndex(uint64(i))
 		require.NoError(t, err)
 		require.Equal(t, pos, uint64(i))
 	}
