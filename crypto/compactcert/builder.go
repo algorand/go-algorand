@@ -122,14 +122,14 @@ func (b *Builder) SignedWeight() uint64 {
 	return b.signedWeight
 }
 
-//msgp:ignore sigCommit
-type sigCommit []sigslot
+//msgp:ignore sigsToCommit
+type sigsToCommit []sigslot
 
-func (sc sigCommit) Length() uint64 {
+func (sc sigsToCommit) Length() uint64 {
 	return uint64(len(sc))
 }
 
-func (sc sigCommit) Get(pos uint64) (crypto.Hashable, error) {
+func (sc sigsToCommit) Get(pos uint64) (crypto.Hashable, error) {
 	if pos >= uint64(len(sc)) {
 		return nil, fmt.Errorf("pos %d past end %d", pos, len(sc))
 	}
@@ -187,7 +187,7 @@ func (b *Builder) Build() (*Cert, error) {
 	}
 	b.sigsHasValidL = true
 
-	sigtree, err := merklearray.Build(sigCommit(b.sigs))
+	sigtree, err := merklearray.Build(sigsToCommit(b.sigs))
 	if err != nil {
 		return nil, err
 	}
