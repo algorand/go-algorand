@@ -111,7 +111,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	}
 
 	// Allocate global storage
-	err = balances.Allocate(creator, appIdx, true)
+	err = balances.Allocate(creator, appIdx, true, ac.GlobalStateSchema)
 	if err != nil {
 		return 0, err
 	}
@@ -211,7 +211,7 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 	}
 
 	// Allocate local storage
-	err = balances.Allocate(sender, appIdx, false)
+	err = balances.Allocate(sender, appIdx, false, params.LocalStateSchema)
 	if err != nil {
 		return err
 	}

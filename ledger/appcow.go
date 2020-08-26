@@ -34,7 +34,8 @@ const (
 type storageDelta struct {
 	action storageAction
 	kvCow  basics.StateDelta
-	counts *basics.StateSchema
+
+	counts, maxCounts *basics.StateSchema
 }
 
 func (lsd *storageDelta) merge(osd *storageDelta) {
@@ -44,6 +45,7 @@ func (lsd *storageDelta) merge(osd *storageDelta) {
 		lsd.action = osd.action
 		lsd.kvCow = osd.kvCow
 		lsd.counts = osd.counts
+		lsd.maxCounts = osd.maxCounts
 	} else {
 		// Otherwise, the child's deltas get merged with those of the
 		// parent, and we keep whatever the parent's state was.
@@ -78,10 +80,16 @@ func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.App
 		return nil, err
 	}
 
+	maxCounts, err := cb.getStorageLimits(aidx, global)
+	if err != nil {
+		return nil, err
+	}
+
 	lsd = &storageDelta{
-		action: defaultAction,
-		kvCow:  make(basics.StateDelta),
-		counts: &counts,
+		action:    defaultAction,
+		kvCow:     make(basics.StateDelta),
+		counts:    &counts,
+		maxCounts: &maxCounts,
 	}
 
 	cb.mods.sdeltas[addr][aapp] = lsd
@@ -107,6 +115,37 @@ func (cb *roundCowState) getStorageCounts(addr basics.Address, aidx basics.AppIn
 
 	// Otherwise, check our parent
 	return cb.lookupParent.getStorageCounts(addr, aidx, global)
+}
+
+func (cb *roundCowState) getStorageLimits(aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
+	creator, exists, err := cb.getCreator(basics.CreatableIndex(aidx), basics.AppCreatable)
+	if err != nil {
+		return basics.StateSchema{}, err
+	}
+
+	// App doesn't exist, so no storage may be allocated.
+	if !exists {
+		return basics.StateSchema{}, nil
+	}
+
+	record, err := cb.lookup(creator)
+	if err != nil {
+		return basics.StateSchema{}, err
+	}
+
+	params, ok := record.AppParams[aidx]
+	if !ok {
+		// This should never happen. If app exists then we should have
+		// found the creator successfully.
+		err = fmt.Errorf("app %d not found in account %s", aidx, creator.String())
+		return basics.StateSchema{}, err
+	}
+
+	if global {
+		return params.GlobalStateSchema, nil
+	} else {
+		return params.LocalStateSchema, nil
+	}
 }
 
 func (cb *roundCowState) Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
@@ -139,7 +178,7 @@ func errAlreadyStorage(addr basics.Address, aidx basics.AppIndex, global bool) e
 	return fmt.Errorf("%v has already opted in to app %d", addr, aidx)
 }
 
-func (cb *roundCowState) Allocate(addr basics.Address, aidx basics.AppIndex, global bool) error {
+func (cb *roundCowState) Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
 	// Check that account is not already opted in
 	allocated, err := cb.Allocated(addr, aidx, global)
 	if err != nil {
@@ -156,6 +195,7 @@ func (cb *roundCowState) Allocate(addr basics.Address, aidx basics.AppIndex, glo
 	}
 
 	lsd.action = allocAction
+	lsd.maxCounts = &space
 	return nil
 }
 
@@ -177,6 +217,7 @@ func (cb *roundCowState) Deallocate(addr basics.Address, aidx basics.AppIndex, g
 
 	lsd.action = deallocAction
 	lsd.counts = &basics.StateSchema{}
+	lsd.maxCounts = &basics.StateSchema{}
 	lsd.kvCow = make(basics.StateDelta)
 	return nil
 }
@@ -219,6 +260,16 @@ func (cb *roundCowState) GetKey(addr basics.Address, aidx basics.AppIndex, globa
 }
 
 func (cb *roundCowState) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue) error {
+	// Enforce maximum key length
+	if len(key) > cb.proto.MaxAppKeyLen {
+		return fmt.Errorf("key too long: length was %d, maximum is %d", len(key), cb.proto.MaxAppKeyLen)
+	}
+
+	// Enforce maximum value length
+	if value.Type == basics.TealBytesType && len(value.Bytes) > cb.proto.MaxAppBytesValueLen {
+		return fmt.Errorf("value too long for key 0x%x: length was %d, maximum is %d", key, len(value.Bytes), cb.proto.MaxAppBytesValueLen)
+	}
+
 	// Check that account has allocated storage
 	allocated, err := cb.Allocated(addr, aidx, global)
 	if err != nil {
@@ -254,7 +305,7 @@ func (cb *roundCowState) SetKey(addr basics.Address, aidx basics.AppIndex, globa
 		return err
 	}
 
-	return nil
+	return checkCounts(lsd)
 }
 
 func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) error {
@@ -296,7 +347,7 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 		return err
 	}
 
-	return nil
+	return nil // note: deletion cannot cause us to violate maxCount
 }
 
 func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta basics.EvalDelta, err error) {
@@ -381,6 +432,17 @@ func updateCounts(lsd *storageDelta, bv basics.TealValue, bok bool, av basics.Te
 		default:
 			return fmt.Errorf("unknown after type: %v", av.Type)
 		}
+	}
+	return nil
+}
+
+func checkCounts(lsd *storageDelta) error {
+	// Check against the max schema
+	if lsd.counts.NumUint > lsd.maxCounts.NumUint {
+		return fmt.Errorf("store integer count %d exceeds schema integer count %d", lsd.counts.NumUint, lsd.maxCounts.NumUint)
+	}
+	if lsd.counts.NumByteSlice > lsd.maxCounts.NumByteSlice {
+		return fmt.Errorf("store bytes count %d exceeds schema bytes count %d", lsd.counts.NumByteSlice, lsd.maxCounts.NumByteSlice)
 	}
 	return nil
 }

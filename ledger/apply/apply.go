@@ -46,7 +46,7 @@ type Balances interface {
 	//
 	// Put(...) and then {Allocate/Deallocate}(..., ..., global=false)
 	// opts into/closes out of an application.
-	Allocate(addr basics.Address, aidx basics.AppIndex, global bool) error
+	Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error
 	Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error
 
 	// StatefulEval executes a TEAL program in stateful mode on the balances.

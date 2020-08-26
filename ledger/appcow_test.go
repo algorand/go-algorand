@@ -186,16 +186,16 @@ func TestCowStorage(t *testing.T) {
 		// Allocate
 		if rand.Float32() < 0.25 {
 			actuallyAllocated := st.allocated(aapp)
-			err := cow.Allocate(addr, aapp.aidx, aapp.global)
+			rschema := basics.StateSchema{
+				NumUint:      rand.Uint64(),
+				NumByteSlice: rand.Uint64(),
+			}
+			err := cow.Allocate(addr, aapp.aidx, aapp.global, rschema)
 			if actuallyAllocated {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), "cannot allocate")
 			} else {
 				require.NoError(t, err)
-				rschema := basics.StateSchema{
-					NumUint:      rand.Uint64(),
-					NumByteSlice: rand.Uint64(),
-				}
 				err = st.alloc(aapp, rschema)
 				require.NoError(t, err)
 			}
