@@ -25,32 +25,47 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
+func rand32() uint32 {
+	return uint32(crypto.RandUint64() & 0xffffffff)
+}
+
 func TestApproxBigFloat(t *testing.T) {
 	a := &approxBigFloat{}
 	b := &approxBigFloat{}
 
 	a.setu64(1)
-	require.Equal(t, a.base, uint64(1<<63))
-	require.Equal(t, a.exp, int64(-63))
+	require.Equal(t, a.base, uint32(1<<31))
+	require.Equal(t, a.exp, int32(-31))
 
-	for i := int64(-256); i < 256; i++ {
+	a.setu32(1)
+	require.Equal(t, a.base, uint32(1<<31))
+	require.Equal(t, a.exp, int32(-31))
+
+	for i := int32(-256); i < 256; i++ {
 		a.setpow2(i)
-		require.Equal(t, a.base, uint64(1<<63))
-		require.Equal(t, a.exp, i-63)
+		require.Equal(t, a.base, uint32(1<<31))
+		require.Equal(t, a.exp, i-31)
 	}
 
 	for i := 0; i < 8192; i++ {
-		x := crypto.RandUint64()
-		a.setu64(x)
+		x := rand32()
+		a.setu32(x)
 		require.True(t, a.exp <= 0)
-		require.Equal(t, x, a.base >> (-a.exp))
+		require.Equal(t, x, a.base>>(-a.exp))
 	}
 
 	for i := 0; i < 8192; i++ {
-		x := crypto.RandUint64()
-		y := crypto.RandUint64()
-		a.setu64(x)
-		b.setu64(y)
+		x := rand32()
+		a.setu64(uint64(x))
+		require.True(t, a.exp <= 0)
+		require.Equal(t, x, a.base>>(-a.exp))
+	}
+
+	for i := 0; i < 8192; i++ {
+		x := rand32()
+		y := rand32()
+		a.setu64(uint64(x))
+		b.setu64(uint64(y))
 
 		require.Equal(t, x >= y, a.ge(b))
 		require.Equal(t, x < y, b.ge(a))
@@ -62,14 +77,14 @@ func TestApproxBigFloat(t *testing.T) {
 	yy := &big.Int{}
 
 	for i := 0; i < 8192; i++ {
-		x := crypto.RandUint64()
-		y := crypto.RandUint64()
-		a.setu64(x)
-		b.setu64(y)
+		x := rand32()
+		y := rand32()
+		a.setu64(uint64(x))
+		b.setu64(uint64(y))
 		a.mul(b)
 
-		xx.SetUint64(x)
-		yy.SetUint64(y)
+		xx.SetUint64(uint64(x))
+		yy.SetUint64(uint64(y))
 		xx.Mul(xx, yy)
 		if a.exp > 0 {
 			xx.Rsh(xx, uint(a.exp))
@@ -77,6 +92,6 @@ func TestApproxBigFloat(t *testing.T) {
 		if a.exp < 0 {
 			xx.Lsh(xx, uint(-a.exp))
 		}
-		require.Equal(t, a.base, xx.Uint64())
+		require.Equal(t, a.base, uint32(xx.Uint64()))
 	}
 }

@@ -24,10 +24,13 @@ import (
 // An approxBigFloat represents the number base*2^exp.  A canonical
 // representation is one where the highest bit of base is set, or
 // where base=0 and exp=0.  Every operation enforces canonicality
-// of results.
+// of results.  We use 32-bit values here to avoid requiring access
+// to a 64bit-by-64bit-to-128bit multiply operation for anyone that
+// needs to implement this (even though Go has this operation, as
+// bits.Mul64).
 type approxBigFloat struct {
-	base uint64
-	exp  int64
+	base uint32
+	exp  int32
 }
 
 // canonicalize() ensures that the approxBigFloat is canonical.
@@ -37,7 +40,7 @@ func (a *approxBigFloat) canonicalize() {
 		return
 	}
 
-	for (a.base & (1<<63)) == 0 {
+	for (a.base & (1 << 31)) == 0 {
 		a.base = a.base << 1
 		a.exp = a.exp - 1
 	}
@@ -56,30 +59,45 @@ func (a *approxBigFloat) ge(b *approxBigFloat) bool {
 	return a.base >= b.base
 }
 
-// setu64 sets the value to the supplied uint64.
+// setu64 sets the value to the supplied uint64 (which
+// might get rounded down in the process).
 func (a *approxBigFloat) setu64(x uint64) {
+	e := int32(0)
+
+	for x >= (1 << 32) {
+		x = x >> 1
+		e = e + 1
+	}
+
+	a.base = uint32(x)
+	a.exp = e
+	a.canonicalize()
+}
+
+// setu32 sets the value to the supplied uint32.
+func (a *approxBigFloat) setu32(x uint32) {
 	a.base = x
 	a.exp = 0
 	a.canonicalize()
 }
 
 // setpow2 sets the value to 2^x.
-func (a *approxBigFloat) setpow2(x int64) {
+func (a *approxBigFloat) setpow2(x int32) {
 	a.base = 1
 	a.exp = x
 	a.canonicalize()
 }
 
-// mul sets a to the product a*b, keeping the most significant 64 bits
+// mul sets a to the product a*b, keeping the most significant 32 bits
 // of the product's base.
 func (a *approxBigFloat) mul(b *approxBigFloat) {
-	hi, lo := bits.Mul64(a.base, b.base)
+	hi, lo := bits.Mul32(a.base, b.base)
 
 	a.base = hi
-	a.exp = a.exp + b.exp + 64
+	a.exp = a.exp + b.exp + 32
 
-	if (a.base & (1<<63)) == 0 {
-		a.base = (a.base << 1) | (lo >> 63)
+	if (a.base & (1 << 31)) == 0 {
+		a.base = (a.base << 1) | (lo >> 31)
 		a.exp = a.exp - 1
 	}
 }

@@ -57,14 +57,14 @@ func hashCoin(j uint64, sigcom crypto.Digest, signedWeight uint64) uint64 {
 // signedWeight ^ numReveals >= 2^(k+q) * provenWeight ^ numReveals
 //
 // We use approxBigFloat for this computation, which is deterministic but adds
-// an error factor (rounding-down) of at most 1-2^-63 at each multiplication step.
+// an error factor (rounding-down) of at most 1-2^-31 at each multiplication step.
 // The second-order (multiplied) error factors are negligible, but the additive
-// error factors add up to at most a multiplicative factor of 1-numReveals*2^-63.
+// error factors add up to at most a multiplicative factor of 1-numReveals*2^-31.
 //
 // This is negligible in terms of the effect on the security parameter (k+q).
 // In order to reduce the security parameter by just one bit, it would need to
-// be the case that numReveals*2^-63=1/2, which would mean the loop ran for
-// numReveals=2^62 iterations.
+// be the case that numReveals*2^-31=1/2, which would mean the loop ran for
+// numReveals=2^30 iterations.
 func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound uint64) (uint64, error) {
 	n := uint64(0)
 
@@ -78,7 +78,7 @@ func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound ui
 	lhs.setu64(1)
 
 	rhs := &approxBigFloat{}
-	rhs.setpow2(int64(secKQ))
+	rhs.setpow2(int32(secKQ))
 
 	for {
 		if lhs.ge(rhs) {
