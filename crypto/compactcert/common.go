@@ -58,18 +58,20 @@ func hashCoin(j uint64, sigcom crypto.Digest, signedWeight uint64) uint64 {
 func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound uint64) (uint64, error) {
 	n := uint64(0)
 
-	sw := &big.Int{}
-	sw.SetUint64(signedWeight)
+	sw := &approxBigFloat{}
+	sw.setu64(signedWeight)
 
-	pw := &big.Int{}
-	pw.SetUint64(provenWeight)
+	pw := &approxBigFloat{}
+	pw.setu64(provenWeight)
 
-	lhs := big.NewInt(1)
-	rhs := &big.Int{}
-	rhs.SetBit(rhs, int(secKQ), 1)
+	lhs := &approxBigFloat{}
+	lhs.setu64(1)
+
+	rhs := &approxBigFloat{}
+	rhs.setpow2(int64(secKQ))
 
 	for {
-		if lhs.Cmp(rhs) >= 0 {
+		if lhs.ge(rhs) {
 			return n, nil
 		}
 
@@ -77,8 +79,8 @@ func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound ui
 			return 0, fmt.Errorf("numReveals(%d, %d, %d) > %d", signedWeight, provenWeight, secKQ, bound)
 		}
 
-		lhs.Mul(lhs, sw)
-		rhs.Mul(rhs, pw)
+		lhs.mul(sw)
+		rhs.mul(pw)
 		n++
 	}
 }

@@ -1,0 +1,90 @@
+// Copyright (C) 2019-2020 Algorand, Inc.
+// This file is part of go-algorand
+//
+// go-algorand is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// go-algorand is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
+
+package compactcert
+
+import (
+	"fmt"
+	"math/bits"
+)
+
+// An approxBigFloat represents the number base*2^exp.  A canonical
+// representation is one where the highest bit of base is set, or
+// where base=0 and exp=0.  Every operation enforces canonicality
+// of results.
+type approxBigFloat struct {
+	base uint64
+	exp  int64
+}
+
+// canonicalize() ensures that the approxBigFloat is canonical.
+func (a *approxBigFloat) canonicalize() {
+	if a.base == 0 {
+		a.exp = 0
+		return
+	}
+
+	for (a.base & (1<<63)) == 0 {
+		a.base = a.base << 1
+		a.exp = a.exp - 1
+	}
+}
+
+// ge returns whether a>=b.
+func (a *approxBigFloat) ge(b *approxBigFloat) bool {
+	if a.exp > b.exp {
+		return true
+	}
+
+	if a.exp < b.exp {
+		return false
+	}
+
+	return a.base >= b.base
+}
+
+// setu64 sets the value to the supplied uint64.
+func (a *approxBigFloat) setu64(x uint64) {
+	a.base = x
+	a.exp = 0
+	a.canonicalize()
+}
+
+// setpow2 sets the value to 2^x.
+func (a *approxBigFloat) setpow2(x int64) {
+	a.base = 1
+	a.exp = x
+	a.canonicalize()
+}
+
+// mul sets a to the product a*b, keeping the most significant 64 bits
+// of the product's base.
+func (a *approxBigFloat) mul(b *approxBigFloat) {
+	hi, lo := bits.Mul64(a.base, b.base)
+
+	a.base = hi
+	a.exp = a.exp + b.exp + 64
+
+	if (a.base & (1<<63)) == 0 {
+		a.base = (a.base << 1) | (lo >> 63)
+		a.exp = a.exp - 1
+	}
+}
+
+// String returns a string representation of a.
+func (a *approxBigFloat) String() string {
+	return fmt.Sprintf("%d*2^%d", a.base, a.exp)
+}
