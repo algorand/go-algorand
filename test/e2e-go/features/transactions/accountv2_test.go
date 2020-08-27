@@ -66,7 +66,7 @@ func TestAccountInformationV2(t *testing.T) {
 	// Fund the manager, so it can issue transactions later on
 	_, err = client.SendPaymentFromUnencryptedWallet(creator, user, fee, 10000000000, nil)
 	a.NoError(err)
-	client.WaitForRound(round + 2)
+	client.WaitForRound(round + 4)
 
 	// There should be no apps to start with
 	ad, err := client.AccountData(creator)
