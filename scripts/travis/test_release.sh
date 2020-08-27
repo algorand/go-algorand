@@ -8,6 +8,8 @@
 
 set -e
 
+ALGORAND_DEADLOCK=enable
+export ALGORAND_DEADLOCK
 BRANCH=$(./scripts/compute_branch.sh)
 CHANNEL=$(./scripts/compute_branch_channel.sh "$BRANCH")
 
