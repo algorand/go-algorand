@@ -29,9 +29,9 @@ func rand32() uint32 {
 	return uint32(crypto.RandUint64() & 0xffffffff)
 }
 
-func TestApproxBigFloat(t *testing.T) {
-	a := &approxBigFloat{}
-	b := &approxBigFloat{}
+func TestBigFloat(t *testing.T) {
+	a := &bigFloat{}
+	b := &bigFloat{}
 
 	a.setu64(1)
 	require.Equal(t, a.base, uint32(1<<31))

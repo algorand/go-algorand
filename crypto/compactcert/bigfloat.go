@@ -21,20 +21,20 @@ import (
 	"math/bits"
 )
 
-// An approxBigFloat represents the number base*2^exp.  A canonical
+// A bigFloat represents the number base*2^exp.  A canonical
 // representation is one where the highest bit of base is set, or
 // where base=0 and exp=0.  Every operation enforces canonicality
 // of results.  We use 32-bit values here to avoid requiring access
 // to a 64bit-by-64bit-to-128bit multiply operation for anyone that
 // needs to implement this (even though Go has this operation, as
 // bits.Mul64).
-type approxBigFloat struct {
+type bigFloat struct {
 	base uint32
 	exp  int32
 }
 
-// canonicalize() ensures that the approxBigFloat is canonical.
-func (a *approxBigFloat) canonicalize() {
+// canonicalize() ensures that the bigFloat is canonical.
+func (a *bigFloat) canonicalize() {
 	if a.base == 0 {
 		a.exp = 0
 		return
@@ -47,7 +47,7 @@ func (a *approxBigFloat) canonicalize() {
 }
 
 // ge returns whether a>=b.
-func (a *approxBigFloat) ge(b *approxBigFloat) bool {
+func (a *bigFloat) ge(b *bigFloat) bool {
 	if a.exp > b.exp {
 		return true
 	}
@@ -61,7 +61,7 @@ func (a *approxBigFloat) ge(b *approxBigFloat) bool {
 
 // setu64 sets the value to the supplied uint64 (which
 // might get rounded down in the process).
-func (a *approxBigFloat) setu64(x uint64) {
+func (a *bigFloat) setu64(x uint64) {
 	e := int32(0)
 
 	for x >= (1 << 32) {
@@ -75,14 +75,14 @@ func (a *approxBigFloat) setu64(x uint64) {
 }
 
 // setu32 sets the value to the supplied uint32.
-func (a *approxBigFloat) setu32(x uint32) {
+func (a *bigFloat) setu32(x uint32) {
 	a.base = x
 	a.exp = 0
 	a.canonicalize()
 }
 
 // setpow2 sets the value to 2^x.
-func (a *approxBigFloat) setpow2(x int32) {
+func (a *bigFloat) setpow2(x int32) {
 	a.base = 1
 	a.exp = x
 	a.canonicalize()
@@ -90,7 +90,7 @@ func (a *approxBigFloat) setpow2(x int32) {
 
 // mul sets a to the product a*b, keeping the most significant 32 bits
 // of the product's base.
-func (a *approxBigFloat) mul(b *approxBigFloat) {
+func (a *bigFloat) mul(b *bigFloat) {
 	hi, lo := bits.Mul32(a.base, b.base)
 
 	a.base = hi
@@ -103,6 +103,6 @@ func (a *approxBigFloat) mul(b *approxBigFloat) {
 }
 
 // String returns a string representation of a.
-func (a *approxBigFloat) String() string {
+func (a *bigFloat) String() string {
 	return fmt.Sprintf("%d*2^%d", a.base, a.exp)
 }
