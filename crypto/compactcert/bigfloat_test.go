@@ -55,10 +55,25 @@ func TestBigFloat(t *testing.T) {
 	}
 
 	for i := 0; i < 8192; i++ {
-		x := rand32()
-		a.setu64(uint64(x))
-		require.True(t, a.exp <= 0)
-		require.Equal(t, x, a.mantissa>>(-a.exp))
+		x := uint64(rand32())
+		a.setu64(x)
+		if a.exp <= 0 {
+			require.Equal(t, x, uint64(a.mantissa>>(-a.exp)))
+		}
+		if a.exp >= 0 {
+			require.Equal(t, x >> a.exp, uint64(a.mantissa))
+		}
+	}
+
+	for i := 0; i < 8192; i++ {
+		x := crypto.RandUint64()
+		a.setu64(x)
+		if a.exp <= 0 {
+			require.Equal(t, x, uint64(a.mantissa>>(-a.exp)))
+		}
+		if a.exp >= 0 {
+			require.Equal(t, x >> a.exp, uint64(a.mantissa))
+		}
 	}
 
 	for i := 0; i < 8192; i++ {
