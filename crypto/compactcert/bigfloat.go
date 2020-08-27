@@ -23,11 +23,10 @@ import (
 
 // A bigFloat represents the number mantissa*2^exp, which must be non-zero.
 // A canonical representation is one where the highest bit of mantissa is
-// set, or where mantissa=0 and exp=0.  Every operation enforces canonicality
-// of results.  We use 32-bit values here to avoid requiring access
-// to a 64bit-by-64bit-to-128bit multiply operation for anyone that
-// needs to implement this (even though Go has this operation, as
-// bits.Mul64).
+// set.  Every operation enforces canonicality of results.  We use 32-bit
+// values here to avoid requiring access to a 64bit-by-64bit-to-128bit
+// multiply operation for anyone that needs to implement this (even
+// though Go has this operation, as bits.Mul64).
 type bigFloat struct {
 	mantissa uint32
 	exp      int32
