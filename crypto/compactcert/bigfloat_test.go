@@ -34,16 +34,16 @@ func TestBigFloat(t *testing.T) {
 	b := &bigFloat{}
 
 	a.setu64(1)
-	require.Equal(t, a.base, uint32(1<<31))
+	require.Equal(t, a.mantissa, uint32(1<<31))
 	require.Equal(t, a.exp, int32(-31))
 
 	a.setu32(1)
-	require.Equal(t, a.base, uint32(1<<31))
+	require.Equal(t, a.mantissa, uint32(1<<31))
 	require.Equal(t, a.exp, int32(-31))
 
 	for i := int32(-256); i < 256; i++ {
 		a.setpow2(i)
-		require.Equal(t, a.base, uint32(1<<31))
+		require.Equal(t, a.mantissa, uint32(1<<31))
 		require.Equal(t, a.exp, i-31)
 	}
 
@@ -51,14 +51,14 @@ func TestBigFloat(t *testing.T) {
 		x := rand32()
 		a.setu32(x)
 		require.True(t, a.exp <= 0)
-		require.Equal(t, x, a.base>>(-a.exp))
+		require.Equal(t, x, a.mantissa>>(-a.exp))
 	}
 
 	for i := 0; i < 8192; i++ {
 		x := rand32()
 		a.setu64(uint64(x))
 		require.True(t, a.exp <= 0)
-		require.Equal(t, x, a.base>>(-a.exp))
+		require.Equal(t, x, a.mantissa>>(-a.exp))
 	}
 
 	for i := 0; i < 8192; i++ {
@@ -92,6 +92,6 @@ func TestBigFloat(t *testing.T) {
 		if a.exp < 0 {
 			xx.Lsh(xx, uint(-a.exp))
 		}
-		require.Equal(t, a.base, uint32(xx.Uint64()))
+		require.Equal(t, a.mantissa, uint32(xx.Uint64()))
 	}
 }
