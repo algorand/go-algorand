@@ -666,6 +666,8 @@ params: account index, state key, value.
 
 params: account index, state key.
 
+Deleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)
+
 ## app_global_del
 
 - Opcode: 0x69
@@ -676,6 +678,8 @@ params: account index, state key.
 - Mode: Application
 
 params: state key.
+
+Deleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)
 
 ## asset_holding_get
 
