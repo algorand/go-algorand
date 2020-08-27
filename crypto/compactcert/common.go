@@ -69,13 +69,22 @@ func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound ui
 	n := uint64(0)
 
 	sw := &bigFloat{}
-	sw.setu64(signedWeight)
+	err := sw.setu64(signedWeight)
+	if err != nil {
+		return 0, err
+	}
 
 	pw := &bigFloat{}
-	pw.setu64(provenWeight)
+	err = pw.setu64(provenWeight)
+	if err != nil {
+		return 0, err
+	}
 
 	lhs := &bigFloat{}
-	lhs.setu64(1)
+	err = lhs.setu64(1)
+	if err != nil {
+		return 0, err
+	}
 
 	rhs := &bigFloat{}
 	rhs.setpow2(int32(secKQ))

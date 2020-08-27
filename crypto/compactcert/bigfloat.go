@@ -21,9 +21,9 @@ import (
 	"math/bits"
 )
 
-// A bigFloat represents the number base*2^exp.  A canonical
-// representation is one where the highest bit of base is set, or
-// where base=0 and exp=0.  Every operation enforces canonicality
+// A bigFloat represents the number base*2^exp, which must be non-zero.
+// A canonical representation is one where the highest bit of base is
+// set, or where base=0 and exp=0.  Every operation enforces canonicality
 // of results.  We use 32-bit values here to avoid requiring access
 // to a 64bit-by-64bit-to-128bit multiply operation for anyone that
 // needs to implement this (even though Go has this operation, as
@@ -36,7 +36,7 @@ type bigFloat struct {
 // canonicalize() ensures that the bigFloat is canonical.
 func (a *bigFloat) canonicalize() {
 	if a.base == 0 {
-		a.exp = 0
+		// Just to avoid infinite loops in some error case.
 		return
 	}
 
@@ -59,9 +59,13 @@ func (a *bigFloat) ge(b *bigFloat) bool {
 	return a.base >= b.base
 }
 
-// setu64 sets the value to the supplied uint64 (which
-// might get rounded down in the process).
-func (a *bigFloat) setu64(x uint64) {
+// setu64 sets the value to the supplied uint64 (which might get
+// rounded down in the process).  x must not be zero.
+func (a *bigFloat) setu64(x uint64) error {
+	if x == 0 {
+		return fmt.Errorf("bigFloat cannot be zero")
+	}
+
 	e := int32(0)
 
 	for x >= (1 << 32) {
@@ -72,13 +76,19 @@ func (a *bigFloat) setu64(x uint64) {
 	a.base = uint32(x)
 	a.exp = e
 	a.canonicalize()
+	return nil
 }
 
 // setu32 sets the value to the supplied uint32.
-func (a *bigFloat) setu32(x uint32) {
+func (a *bigFloat) setu32(x uint32) error {
+	if x == 0 {
+		return fmt.Errorf("bigFloat cannot be zero")
+	}
+
 	a.base = x
 	a.exp = 0
 	a.canonicalize()
+	return nil
 }
 
 // setpow2 sets the value to 2^x.
