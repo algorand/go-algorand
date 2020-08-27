@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/shared/pingpong"
 )
@@ -59,6 +59,7 @@ var groupSize uint32
 var numAsset uint32
 var numApp uint32
 var appProgOps uint32
+var rekey bool
 
 func init() {
 	rootCmd.AddCommand(runCmd)
@@ -91,6 +92,7 @@ func init() {
 	runCmd.Flags().Uint32Var(&numApp, "numapp", 0, "The number of apps each account opts in to")
 	runCmd.Flags().Uint32Var(&appProgOps, "appprogops", 0, "The approximate number of TEAL operations to perform in each ApplicationCall transaction")
 	runCmd.Flags().BoolVar(&randomLease, "randomlease", false, "set the lease to contain a random value")
+	runCmd.Flags().BoolVar(&rekey, "rekey", false, "Create RekeyTo transactions. Requires groupsize=2 and any of random flags exc random dst")
 }
 
 var runCmd = &cobra.Command{
@@ -254,7 +256,17 @@ var runCmd = &cobra.Command{
 		}
 
 		if numAsset != 0 && numApp != 0 {
-			reportErrorf("only one of numapp and numasset may be specified")
+			reportErrorf("only one of numapp and numasset may be specified\n")
+		}
+
+		if rekey {
+			cfg.Rekey = rekey
+			if !cfg.RandomLease && !cfg.RandomNote && !cfg.RandomizeFee && !cfg.RandomizeAmt {
+				reportErrorf("RandomNote, RandomLease, RandomizeFee or RandomizeAmt must be used with rekeying\n")
+			}
+			if cfg.GroupSize != 2 {
+				reportErrorf("Rekeying requires txn groups of size 2\n")
+			}
 		}
 
 		reportInfof("Preparing to initialize PingPong with config:\n")
