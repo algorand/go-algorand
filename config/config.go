@@ -290,7 +290,8 @@ type Local struct {
 	// NetworkProtocolVersion overrides network protocol version ( if present )
 	NetworkProtocolVersion string `version[6]:""`
 
-	// CatchpointInterval set the interval at which catchpoint are being generated.
+	// CatchpointInterval sets the interval at which catchpoint are being generated. Setting this to 0 disables the catchpoint from being generated.
+	// See CatchpointTracking for more details.
 	CatchpointInterval uint64 `version[7]:"10000"`
 
 	// CatchpointFileHistoryLength defines how many catchpoint files we want to store back.
@@ -330,7 +331,7 @@ type Local struct {
 	OptimizeAccountsDatabaseOnStartup bool `version[10]:"false"`
 
 	// CatchpointTracking determines if catchpoints are going to be tracked. The value is interpreted as follows:
-	// A of -1 means "don't track catchpoints".
+	// A value of -1 means "don't track catchpoints".
 	// A value of 1 means "track catchpoints as long as CatchpointInterval is also set to a positive non-zero value". If CatchpointInterval <= 0, no catchpoint tracking would be performed.
 	// A value of 0 means automatic, which is the default value. In this mode, a non archival node would not track the catchpoints, and an archival node would track the catchpoints as long as CatchpointInterval > 0.
 	// Other values of CatchpointTracking would give a warning in the log file, and would behave as if the default value was provided.
