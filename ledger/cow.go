@@ -38,6 +38,9 @@ type roundCowParent interface {
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
+	// note: getStorageLimits is redundant with the other methods
+	// and is provided to optimize state schema lookups
+	getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
 	Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
 	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error)
 }
@@ -226,6 +229,10 @@ func (cb *roundCowState) commitToParent() {
 			if ok {
 				lsd.applyChild(nsd)
 			} else {
+				_, ok = cb.commitParent.mods.sdeltas[addr]
+				if !ok {
+					cb.commitParent.mods.sdeltas[addr] = make(map[storagePtr]*storageDelta)
+				}
 				cb.commitParent.mods.sdeltas[addr][aapp] = nsd
 			}
 		}

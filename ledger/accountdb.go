@@ -197,6 +197,10 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 				return basics.AccountData{}, fmt.Errorf("could not find existing params for %v", aapp.aidx)
 			}
 			params = params.Clone()
+			if store.action == allocAction {
+				// TODO does this ever accidentally clobber?
+				params.GlobalState = make(basics.TealKeyValue)
+			}
 			// note: if this is an allocAction, there will be no
 			// DeleteActions below
 			for k, v := range store.kvCow {
@@ -229,6 +233,10 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 				return basics.AccountData{}, fmt.Errorf("could not find existing states for %v", aapp.aidx)
 			}
 			states = states.Clone()
+			if store.action == allocAction {
+				// TODO does this ever accidentally clobber?
+				states.KeyValue = make(basics.TealKeyValue)
+			}
 			// note: if this is an allocAction, there will be no
 			// DeleteActions below
 			for k, v := range store.kvCow {
@@ -373,6 +381,21 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		return err
 	}
 
+	// Run storage migration if it hasn't run yet
+	var storageMigrated bool
+	err = tx.QueryRow("SELECT 1 FROM sqlite_master WHERE type='table' AND name='storage'").Scan(&storageMigrated)
+	if err == sql.ErrNoRows {
+		for _, migrateCmd := range storageMigration {
+			_, err = tx.Exec(migrateCmd)
+			if err != nil {
+				return err
+			}
+		}
+	} else if err != nil {
+		return err
+	}
+
+	// TODO strip out app key data and dump into storage table
 	_, err = tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
 	if err == nil {
 		var ot basics.OverflowTracker

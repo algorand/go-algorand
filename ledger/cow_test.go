@@ -54,6 +54,10 @@ func (ml *mockLedger) getStorageCounts(addr basics.Address, aidx basics.AppIndex
 	return basics.StateSchema{}, nil
 }
 
+func (ml *mockLedger) getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
+	return basics.StateSchema{}, nil
+}
+
 func (ml *mockLedger) Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
 	return true, nil
 }

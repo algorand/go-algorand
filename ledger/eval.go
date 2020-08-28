@@ -104,6 +104,37 @@ func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppInde
 	return x.l.CountStorageForRound(x.rnd, addr, aidx, global)
 }
 
+func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
+	creator, exists, err := x.getCreator(basics.CreatableIndex(aidx), basics.AppCreatable)
+	if err != nil {
+		return basics.StateSchema{}, err
+	}
+
+	// App doesn't exist, so no storage may be allocated.
+	if !exists {
+		return basics.StateSchema{}, nil
+	}
+
+	record, err := x.lookup(creator)
+	if err != nil {
+		return basics.StateSchema{}, err
+	}
+
+	params, ok := record.AppParams[aidx]
+	if !ok {
+		// This should never happen. If app exists then we should have
+		// found the creator successfully.
+		err = fmt.Errorf("app %d not found in account %s", aidx, creator.String())
+		return basics.StateSchema{}, err
+	}
+
+	if global {
+		return params.GlobalStateSchema, nil
+	} else {
+		return params.LocalStateSchema, nil
+	}
+}
+
 // wrappers for roundCowState to satisfy the (current) apply.Balances interface
 func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	acct, err := cs.lookup(addr)

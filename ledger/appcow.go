@@ -130,7 +130,7 @@ func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.App
 		return nil, err
 	}
 
-	maxCounts, err := cb.getStorageLimits(aidx, global)
+	maxCounts, err := cb.getStorageLimits(addr, aidx, global)
 	if err != nil {
 		return nil, err
 	}
@@ -142,6 +142,10 @@ func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.App
 		maxCounts: &maxCounts,
 	}
 
+	_, ok = cb.mods.sdeltas[addr]
+	if !ok {
+		cb.mods.sdeltas[addr] = make(map[storagePtr]*storageDelta)
+	}
 	cb.mods.sdeltas[addr][aapp] = lsd
 	return lsd, nil
 }
@@ -167,35 +171,25 @@ func (cb *roundCowState) getStorageCounts(addr basics.Address, aidx basics.AppIn
 	return cb.lookupParent.getStorageCounts(addr, aidx, global)
 }
 
-func (cb *roundCowState) getStorageLimits(aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
-	creator, exists, err := cb.getCreator(basics.CreatableIndex(aidx), basics.AppCreatable)
+func (cb *roundCowState) getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
+	// If we haven't allocated storage, then our storage limit is zero
+	allocated, err := cb.Allocated(addr, aidx, global)
 	if err != nil {
 		return basics.StateSchema{}, err
 	}
-
-	// App doesn't exist, so no storage may be allocated.
-	if !exists {
+	if !allocated {
 		return basics.StateSchema{}, nil
 	}
 
-	record, err := cb.lookup(creator)
-	if err != nil {
-		return basics.StateSchema{}, err
+	// If we already have a storageDelta, return the counts from it
+	aapp := storagePtr{aidx, global}
+	lsd, ok := cb.mods.sdeltas[addr][aapp]
+	if ok {
+		return *lsd.maxCounts, nil
 	}
 
-	params, ok := record.AppParams[aidx]
-	if !ok {
-		// This should never happen. If app exists then we should have
-		// found the creator successfully.
-		err = fmt.Errorf("app %d not found in account %s", aidx, creator.String())
-		return basics.StateSchema{}, err
-	}
-
-	if global {
-		return params.GlobalStateSchema, nil
-	} else {
-		return params.LocalStateSchema, nil
-	}
+	// Otherwise, check our parent
+	return cb.lookupParent.getStorageLimits(addr, aidx, global)
 }
 
 func (cb *roundCowState) Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
@@ -246,6 +240,7 @@ func (cb *roundCowState) Allocate(addr basics.Address, aidx basics.AppIndex, glo
 
 	lsd.action = allocAction
 	lsd.maxCounts = &space
+
 	return nil
 }
 
@@ -324,6 +319,7 @@ func (cb *roundCowState) SetKey(addr basics.Address, aidx basics.AppIndex, globa
 	if err != nil {
 		return err
 	}
+
 	if !allocated {
 		err = fmt.Errorf("cannot set key, %v", errNoStorage(addr, aidx, global))
 		return err
@@ -391,6 +387,7 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 	if !ok {
 		vdelta = valueDelta{old: oldValue, oldExists: oldOk}
 	}
+	vdelta.new = basics.TealValue{}
 	vdelta.newExists = false
 	lsd.kvCow[key] = vdelta
 
