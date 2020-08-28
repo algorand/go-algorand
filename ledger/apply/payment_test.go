@@ -85,7 +85,7 @@ func (balances mockBalances) Round() basics.Round {
 	return basics.Round(8675309)
 }
 
-func (balances mockBalances) Allocate(basics.Address, basics.AppIndex, bool) error {
+func (balances mockBalances) Allocate(basics.Address, basics.AppIndex, bool, basics.StateSchema) error {
 	return nil
 }
 
@@ -97,19 +97,19 @@ func (balances mockBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []b
 	return false, basics.EvalDelta{}, nil
 }
 
-func (balances mockBalances) PutWithCreatable(basics.Address, MiniAccountData, *basics.CreatableLocator, *basics.CreatableLocator) error {
+func (balances mockBalances) PutWithCreatable(basics.Address, basics.AccountData, *basics.CreatableLocator, *basics.CreatableLocator) error {
 	return nil
 }
 
-func (balances mockBalances) Get(basics.Address, bool) (MiniAccountData, error) {
-	return MiniAccountData{}, nil
+func (balances mockBalances) Get(basics.Address, bool) (basics.AccountData, error) {
+	return basics.AccountData{}, nil
 }
 
 func (balances mockBalances) GetCreator(idx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return basics.Address{}, true, nil
 }
 
-func (balances mockBalances) Put(basics.Address, MiniAccountData) error {
+func (balances mockBalances) Put(basics.Address, basics.AccountData) error {
 	return nil
 }
 

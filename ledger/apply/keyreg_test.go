@@ -32,11 +32,11 @@ var feeSink = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1
 
 // mock balances that support looking up particular balance records
 type keyregTestBalances struct {
-	addrs   map[basics.Address]MiniAccountData
+	addrs   map[basics.Address]basics.AccountData
 	version protocol.ConsensusVersion
 }
 
-func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards bool) (MiniAccountData, error) {
+func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	return balances.addrs[addr], nil
 }
 
@@ -44,11 +44,11 @@ func (balances keyregTestBalances) GetCreator(cidx basics.CreatableIndex, ctype 
 	return basics.Address{}, true, nil
 }
 
-func (balances keyregTestBalances) Put(basics.Address, MiniAccountData) error {
+func (balances keyregTestBalances) Put(basics.Address, basics.AccountData) error {
 	return nil
 }
 
-func (balances keyregTestBalances) PutWithCreatable(basics.Address, MiniAccountData, *basics.CreatableLocator, *basics.CreatableLocator) error {
+func (balances keyregTestBalances) PutWithCreatable(basics.Address, basics.AccountData, *basics.CreatableLocator, *basics.CreatableLocator) error {
 	return nil
 }
 
@@ -64,7 +64,7 @@ func (balances keyregTestBalances) Round() basics.Round {
 	return basics.Round(4294967296)
 }
 
-func (balances keyregTestBalances) Allocate(basics.Address, basics.AppIndex, bool) error {
+func (balances keyregTestBalances) Allocate(basics.Address, basics.AppIndex, bool, basics.StateSchema) error {
 	return nil
 }
 
@@ -104,10 +104,10 @@ func TestKeyregApply(t *testing.T) {
 
 	tx.Sender = src
 
-	mockBal := keyregTestBalances{make(map[basics.Address]MiniAccountData), protocol.ConsensusCurrentVersion}
+	mockBal := keyregTestBalances{make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion}
 
 	// Going from offline to online should be okay
-	mockBal.addrs[src] = MiniAccountData{Status: basics.Offline}
+	mockBal.addrs[src] = basics.AccountData{Status: basics.Offline}
 	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
 	require.NoError(t, err)
 
@@ -119,7 +119,7 @@ func TestKeyregApply(t *testing.T) {
 		require.NoError(t, err)
 
 		// Nonparticipatory accounts should not be able to change status
-		mockBal.addrs[src] = MiniAccountData{Status: basics.NotParticipating}
+		mockBal.addrs[src] = basics.AccountData{Status: basics.NotParticipating}
 		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
 		require.Error(t, err)
 	}
