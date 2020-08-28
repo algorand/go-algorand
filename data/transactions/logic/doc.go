@@ -174,8 +174,8 @@ var opDocExtraList = []stringString{
 	{"app_global_get_ex", "params: application index, state key. Return: value. Application index is"},
 	{"app_global_get", "params: state key. Return: value. The value is zero if the key does not exist."},
 	{"app_local_put", "params: account index, state key, value."},
-	{"app_local_del", "params: account index, state key."},
-	{"app_global_del", "params: state key."},
+	{"app_local_del", "params: account index, state key.\n\nDeleting a key which is already absent has no effect on the application local state. (In particular, it does _not_ cause the program to fail.)"},
+	{"app_global_del", "params: state key.\n\nDeleting a key which is already absent has no effect on the application global state. (In particular, it does _not_ cause the program to fail.)"},
 	{"asset_holding_get", "params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherwise), value."},
 	{"asset_params_get", "params: txn.ForeignAssets offset. Return: did_exist flag (1 if exist and 0 otherwise), value."},
 }

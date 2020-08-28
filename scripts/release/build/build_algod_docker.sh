@@ -39,11 +39,13 @@ RESULT_DIR="${HOME}/node_pkg/"
 DOCKERFILE="${HOME}/go/src/github.com/algorand/go-algorand/docker/build/algod.Dockerfile"
 START_ALGOD_FILE="start_algod_docker.sh"
 # Use go version specified by get_golang_version.sh
-if ! GOLANG_VERSION=$("${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_golang_version.sh")
+pushd "${HOME}/go/src/github.com/algorand/go-algorand"
+if ! GOLANG_VERSION=$("./scripts/get_golang_version.sh")
 then
     echo "${GOLANG_VERSION}"
     exit 1
 fi
+popd
 
 echo "building '${DOCKERFILE}' with install file $ALGOD_INSTALL_TAR_FILE"
 cp "${ALGOD_INSTALL_TAR_FILE}" "./${INPUT_ALGOD_TAR_FILE}"

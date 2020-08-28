@@ -557,8 +557,8 @@ func (m *mockedLedger) Block(r basics.Round) (bookkeeping.Block, error) {
 	return m.blocks[r], nil
 }
 
-func (m *mockedLedger) BalanceRecord(basics.Round, basics.Address) (basics.BalanceRecord, error) {
-	return basics.BalanceRecord{}, errors.New("not needed for mockedLedger")
+func (m *mockedLedger) Lookup(basics.Round, basics.Address) (basics.AccountData, error) {
+	return basics.AccountData{}, errors.New("not needed for mockedLedger")
 }
 func (m *mockedLedger) Circulation(basics.Round) (basics.MicroAlgos, error) {
 	return basics.MicroAlgos{}, errors.New("not needed for mockedLedger")
@@ -575,6 +575,10 @@ func (m *mockedLedger) Seed(basics.Round) (committee.Seed, error) {
 
 func (m *mockedLedger) LookupDigest(basics.Round) (crypto.Digest, error) {
 	return crypto.Digest{}, errors.New("not needed for mockedLedger")
+}
+
+func (m *mockedLedger) IsWritingCatchpointFile() bool {
+	return false
 }
 
 func testingenv(t testing.TB, numBlocks int) (ledger, emptyLedger Ledger) {

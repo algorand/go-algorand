@@ -1,75 +1,53 @@
-tasks:
-  - task: docker.Version
-    configFilePath: scripts/configure_dev-deps.sh
-
-  - task: shell.docker.Ensure
-    name: docker-ubuntu
-    image: algorand/go-algorand-docker-linux-ubuntu
-    version: '{{ docker.Version.outputs.version }}'
-    dockerFilePath: docker/build/docker.ubuntu.Dockerfile
-    dependencies: docker.Version
-
-  - task: shell.docker.Ensure
-    name: rpm
-    image: algorand/go-algorand-ci-linux-centos
-    version: '{{ docker.Version.outputs.version }}'
-    dockerFilePath: docker/build/cicd.centos.Dockerfile
-    dependencies: docker.Version
-
-  - task: shell.docker.Ensure
-    name: deb
-    image: algorand/go-algorand-ci-linux-ubuntu
-    version: '{{ docker.Version.outputs.version }}'
+agents:
+  - name: deb
     dockerFilePath: docker/build/cicd.ubuntu.Dockerfile
-    dependencies: docker.Version
+    image: algorand/go-algorand-ci-linux-ubuntu
+    version: scripts/configure_dev-deps.sh
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    workDir: $HOME/projects/go-algorand
 
-  - task: docker.Make
-    name: build
-    docker:
-      image: algorand/go-algorand-ci-linux-centos
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
-    target: ci-build
+  - name: rpm
+    dockerFilePath: docker/build/cicd.centos.Dockerfile
+    image: algorand/go-algorand-ci-linux-centos
+    version: scripts/configure_dev-deps.sh
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    workDir: $HOME/projects/go-algorand
 
+  - name: docker-ubuntu
+    dockerFilePath: docker/build/docker.ubuntu.Dockerfile
+    image: algorand/go-algorand-docker-linux-ubuntu
+    version: scripts/configure_dev-deps.sh
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    workDir: $HOME/projects/go-algorand
+
+tasks:
   - task: docker.Make
     name: rpm
-    docker:
-      image: algorand/go-algorand-ci-linux-centos
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
+    agent: rpm
     target: mule-package-rpm
 
   - task: docker.Make
     name: deb
-    docker:
-      image: algorand/go-algorand-ci-linux-ubuntu
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
+    agent: deb
     target: mule-package-deb
 
   - task: docker.Make
     name: docker-image
-    docker:
-      image: algorand/go-algorand-docker-linux-ubuntu
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /projects/go-algorand
-      volumes: [ /var/run/docker.sock:/var/run/docker.sock ]
+    agent: docker-ubuntu
     target: mule-package-docker
 
 jobs:
   package:
-    configs:
-      arch: amd64
     tasks:
-      - shell.docker.Ensure.rpm
       - docker.Make.rpm
-      - shell.docker.Ensure.deb
       - docker.Make.deb
 
   package-docker:
-    configs:
-      arch: amd64
     tasks:
-      - shell.docker.Ensure.docker-ubuntu
       - docker.Make.docker-image
 

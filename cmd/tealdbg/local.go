@@ -349,7 +349,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 				ledger, states, err = makeAppLedger(
 					balances, r.txnGroup, dp.GroupIndex,
 					r.proto, dp.Round, dp.LatestTimestamp, appIdx,
-					dp.Painless,
+					dp.Painless, dp.IndexerURL, dp.IndexerToken,
 				)
 				if err != nil {
 					return
@@ -387,7 +387,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 					ledger, states, err = makeAppLedger(
 						balances, r.txnGroup, gi,
 						r.proto, dp.Round, dp.LatestTimestamp,
-						appIdx, dp.Painless,
+						appIdx, dp.Painless, dp.IndexerURL, dp.IndexerToken,
 					)
 					if err != nil {
 						return
@@ -421,7 +421,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 							ledger, states, err = makeAppLedger(
 								balances, r.txnGroup, gi,
 								r.proto, dp.Round, dp.LatestTimestamp,
-								appIdx, dp.Painless,
+								appIdx, dp.Painless, dp.IndexerURL, dp.IndexerToken,
 							)
 							if err != nil {
 								return

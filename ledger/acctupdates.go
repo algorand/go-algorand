@@ -50,7 +50,9 @@ const (
 	pendingDeltasFlushThreshold = 128
 	// trieRebuildAccountChunkSize defines the number of accounts that would get read at a single chunk
 	// before added to the trie during trie construction
-	trieRebuildAccountChunkSize = 512
+	trieRebuildAccountChunkSize = 16384
+	// trieRebuildCommitFrequency defines the number of accounts that would get added before we call evict to commit the changes and adjust the memory cache.
+	trieRebuildCommitFrequency = 65536
 	// trieAccumulatedChangesFlush defines the number of pending changes that would be applied to the merkle trie before
 	// we attempt to commit them to disk while writing a batch of rounds balances to disk.
 	trieAccumulatedChangesFlush = 256
@@ -147,6 +149,9 @@ type accountUpdates struct {
 	// catchpointFileHistoryLength defines how many catchpoint files we want to store back.
 	// 0 means don't store any, -1 mean unlimited and positive number suggest the number of most recent catchpoint files.
 	catchpointFileHistoryLength int
+
+	// vacuumOnStartup controls whether the accounts database would get vacuumed on startup.
+	vacuumOnStartup bool
 
 	// dynamic variables
 
@@ -261,11 +266,28 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	au.initAccounts = genesisAccounts
 	au.dbDirectory = filepath.Dir(dbPathPrefix)
 	au.archivalLedger = cfg.Archival
-	au.catchpointInterval = cfg.CatchpointInterval
+	switch cfg.CatchpointTracking {
+	case -1:
+		au.catchpointInterval = 0
+	default:
+		// give a warning, then fall thought
+		logging.Base().Warnf("accountUpdates: the CatchpointTracking field in the config.json file contains an invalid value (%d). The default value of 0 would be used instead.", cfg.CatchpointTracking)
+		fallthrough
+	case 0:
+		if au.archivalLedger {
+			au.catchpointInterval = cfg.CatchpointInterval
+		} else {
+			au.catchpointInterval = 0
+		}
+	case 1:
+		au.catchpointInterval = cfg.CatchpointInterval
+	}
+
 	au.catchpointFileHistoryLength = cfg.CatchpointFileHistoryLength
 	if cfg.CatchpointFileHistoryLength < -1 {
 		au.catchpointFileHistoryLength = -1
 	}
+	au.vacuumOnStartup = cfg.OptimizeAccountsDatabaseOnStartup
 	// initialize the commitSyncerClosed with a closed channel ( since the commitSyncer go-routine is not active )
 	au.commitSyncerClosed = make(chan struct{})
 	close(au.commitSyncerClosed)
@@ -387,6 +409,22 @@ func (au *accountUpdates) fullLookup(rnd basics.Round, addr basics.Address, with
 	}
 
 	return res, nil
+}
+
+// IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
+// to avoid memory pressure until the catchpoint file writing is complete.
+func (au *accountUpdates) IsWritingCatchpointFile() bool {
+	au.accountsMu.Lock()
+	defer au.accountsMu.Unlock()
+	// if we're still writing the previous balances, we can't move forward yet.
+	select {
+	case <-au.catchpointWriting:
+		// the channel catchpointWriting is currently closed, meaning that we're currently not writing any
+		// catchpoint file.
+		return false
+	default:
+		return true
+	}
 }
 
 // Lookup returns the accound data for a given address at a given round. The withRewards indicates whether the
@@ -846,10 +884,13 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		return
 	}
 
-	au.accountsq, err = accountsDbInit(au.dbs.rdb.Handle, au.dbs.wdb.Handle)
+	// the VacuumDatabase would be a no-op if au.vacuumOnStartup is cleared.
+	au.vacuumDatabase(context.Background())
 	if err != nil {
 		return
 	}
+
+	au.accountsq, err = accountsDbInit(au.dbs.rdb.Handle, au.dbs.wdb.Handle)
 
 	au.lastCatchpointLabel, _, err = au.accountsq.readCatchpointStateString(context.Background(), catchpointStateLastCatchpoint)
 	if err != nil {
@@ -940,6 +981,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 2 : %v", err)
 					return 0, err
 				}
+			case 2:
+				dbVersion, err = au.upgradeDatabaseSchema3(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
+					return 0, err
+				}
 			default:
 				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
 			}
@@ -982,16 +1029,25 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 	if err != nil {
 		return rnd, fmt.Errorf("accountsInitialize was unable to retrieve trie root hash: %v", err)
 	}
+
 	if rootHash.IsZero() {
-		accountIdx := 0
+		au.log.Infof("accountsInitialize rebuilding merkle trie for round %d", rnd)
+		var accountsIterator encodedAccountsBatchIter
+		defer accountsIterator.Close()
+		startTrieBuildTime := time.Now()
+		accountsCount := 0
+		lastRebuildTime := startTrieBuildTime
+		pendingAccounts := 0
 		for {
-			bal, err := encodedAccountsRange(ctx, tx, accountIdx, trieRebuildAccountChunkSize)
+			bal, err := accountsIterator.Next(ctx, tx, trieRebuildAccountChunkSize)
 			if err != nil {
 				return rnd, err
 			}
 			if len(bal) == 0 {
 				break
 			}
+			accountsCount += len(bal)
+			pendingAccounts += len(bal)
 			for _, balance := range bal {
 				var accountData basics.AccountData
 				err = protocol.Decode(balance.AccountData, &accountData)
@@ -1008,16 +1064,32 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 				}
 			}
 
-			// this trie Evict will commit using the current transaction.
-			// if anything goes wrong, it will still get rolled back.
-			_, err = trie.Evict(true)
-			if err != nil {
-				return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
+			if pendingAccounts >= trieRebuildCommitFrequency {
+				// this trie Evict will commit using the current transaction.
+				// if anything goes wrong, it will still get rolled back.
+				_, err = trie.Evict(true)
+				if err != nil {
+					return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
+				}
+				pendingAccounts = 0
 			}
+
 			if len(bal) < trieRebuildAccountChunkSize {
 				break
 			}
-			accountIdx += trieRebuildAccountChunkSize
+
+			if time.Now().Sub(lastRebuildTime) > 5*time.Second {
+				// let the user know that the trie is still being rebuilt.
+				au.log.Infof("accountsInitialize still building the trie, and processed so far %d accounts", accountsCount)
+				lastRebuildTime = time.Now()
+			}
+		}
+
+		// this trie Evict will commit using the current transaction.
+		// if anything goes wrong, it will still get rolled back.
+		_, err = trie.Evict(true)
+		if err != nil {
+			return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
 		}
 
 		// we've just updated the markle trie, update the hashRound to reflect that.
@@ -1025,6 +1097,8 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 		if err != nil {
 			return 0, fmt.Errorf("accountsInitialize was unable to update the account round to %d: %v", rnd, err)
 		}
+
+		au.log.Infof("accountsInitialize rebuilt the merkle trie with %d entries in %v", accountsCount, time.Now().Sub(startTrieBuildTime))
 	}
 	au.balancesTrie = trie
 	return rnd, nil
@@ -1132,9 +1206,26 @@ func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx
 	return 2, nil
 }
 
+// upgradeDatabaseSchema2 upgrades the database schema from version 2 to version 3
+//
+// This upgrade only enables the database vacuuming which will take place once the upgrade process is complete.
+// If the user has already specified the OptimizeAccountsDatabaseOnStartup flag in the configuration file, this
+// step becomes a no-op.
+//
 func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+	au.vacuumOnStartup = true
+
+	// update version
+	_, err = db.SetUserVersion(ctx, tx, 3)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 2 to 3: %v", err)
+	}
+	return 3, nil
+}
+
+func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
 	// upgrade schema
-	au.log.Infof("upgradeDatabaseSchema2: initializing schema")
+	au.log.Infof("upgradeDatabaseSchema3: initializing schema")
 	for _, migrateCmd := range storageMigration {
 		_, err = tx.Exec(migrateCmd)
 		if err != nil {
@@ -1143,7 +1234,7 @@ func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx
 	}
 	_, err = db.SetUserVersion(ctx, tx, 3)
 	if err != nil {
-		return 0, fmt.Errorf("upgradeDatabaseSchema2: unable to update database schema version from 2 to 3: %v", err)
+		return 0, fmt.Errorf("upgradeDatabaseSchema3: unable to update database schema version from 2 to 3: %v", err)
 	}
 
 	// migrate data
@@ -1158,7 +1249,7 @@ func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx
 	}
 	defer insertAcctStmt.Close()
 
-	au.log.Infof("upgradeDatabaseSchema2: begin data migration")
+	au.log.Infof("upgradeDatabaseSchema3: begin data migration")
 	rows, err := tx.Query("SELECT * FROM accountbase")
 	if err != nil {
 		return
@@ -1167,7 +1258,7 @@ func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx
 	for rows.Next() {
 		count += 1
 		if count%10000 == 0 {
-			au.log.Infof("upgradeDatabaseSchema2: count=%d", count)
+			au.log.Infof("upgradeDatabaseSchema3: count=%d", count)
 		}
 
 		var addrBuf, dataBuf []byte
@@ -1213,15 +1304,15 @@ func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx
 	}
 
 	// fixup tables
-	au.log.Infof("upgradeDatabaseSchema2: table rename")
+	au.log.Infof("upgradeDatabaseSchema3: table rename")
 	_, err = tx.Exec("DROP TABLE accountbase; ALTER TABLE miniaccountbase RENAME TO accountbase")
 	if err != nil {
 		return
 	}
 
-	au.log.Infof("upgradeDatabaseSchema2: done")
+	au.log.Infof("upgradeDatabaseSchema3: done")
 
-	return 3, nil
+	return 4, nil
 }
 
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
@@ -2003,8 +2094,6 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	relCatchpointFileName := filepath.Join("catchpoints", catchpointRoundToPath(committedRound))
 	absCatchpointFileName := filepath.Join(au.dbDirectory, relCatchpointFileName)
 
-	catchpointWriter := makeCatchpointWriter(absCatchpointFileName, au.dbs.rdb, committedRound, committedRoundDigest, label)
-
 	more := true
 	const shortChunkExecutionDuration = 50 * time.Millisecond
 	const longChunkExecutionDuration = 1 * time.Second
@@ -2015,37 +2104,60 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	default:
 		chunkExecutionDuration = shortChunkExecutionDuration
 	}
-	for more {
-		stepCtx, stepCancelFunction := context.WithTimeout(au.ctx, chunkExecutionDuration)
-		writeStepStartTime := time.Now()
-		more, err = catchpointWriter.WriteStep(stepCtx)
-		// accumulate the actual time we've spent writing in this step.
-		catchpointGenerationStats.CPUTime += uint64(time.Now().Sub(writeStepStartTime).Nanoseconds())
-		stepCancelFunction()
-		if more && err == nil {
-			// we just wrote some data, but there is more to be written.
-			// go to sleep for while.
-			select {
-			case <-time.After(100 * time.Millisecond):
-			case <-au.ctx.Done():
-				retryCatchpointCreation = true
+
+	var catchpointWriter *catchpointWriter
+	err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		catchpointWriter = makeCatchpointWriter(au.ctx, absCatchpointFileName, tx, committedRound, committedRoundDigest, label)
+		for more {
+			stepCtx, stepCancelFunction := context.WithTimeout(au.ctx, chunkExecutionDuration)
+			writeStepStartTime := time.Now()
+			more, err = catchpointWriter.WriteStep(stepCtx)
+			// accumulate the actual time we've spent writing in this step.
+			catchpointGenerationStats.CPUTime += uint64(time.Now().Sub(writeStepStartTime).Nanoseconds())
+			stepCancelFunction()
+			if more && err == nil {
+				// we just wrote some data, but there is more to be written.
+				// go to sleep for while.
+				// before going to sleep, extend the transaction timeout so that we won't get warnings:
+				db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(1*time.Second))
+				select {
+				case <-time.After(100 * time.Millisecond):
+					// increase the time slot allocated for writing the catchpoint, but stop when we get to the longChunkExecutionDuration limit.
+					// this would allow the catchpoint writing speed to ramp up while still leaving some cpu available.
+					chunkExecutionDuration *= 2
+					if chunkExecutionDuration > longChunkExecutionDuration {
+						chunkExecutionDuration = longChunkExecutionDuration
+					}
+				case <-au.ctx.Done():
+					retryCatchpointCreation = true
+					err2 := catchpointWriter.Abort()
+					if err2 != nil {
+						return fmt.Errorf("error removing catchpoint file : %v", err2)
+					}
+					return nil
+				case <-au.catchpointSlowWriting:
+					chunkExecutionDuration = longChunkExecutionDuration
+				}
+			}
+			if err != nil {
+				err = fmt.Errorf("unable to create catchpoint : %v", err)
 				err2 := catchpointWriter.Abort()
 				if err2 != nil {
 					au.log.Warnf("accountUpdates: generateCatchpoint: error removing catchpoint file : %v", err2)
 				}
 				return
-			case <-au.catchpointSlowWriting:
-				chunkExecutionDuration = longChunkExecutionDuration
 			}
 		}
-		if err != nil {
-			au.log.Warnf("accountUpdates: generateCatchpoint: unable to create catchpoint : %v", err)
-			err2 := catchpointWriter.Abort()
-			if err2 != nil {
-				au.log.Warnf("accountUpdates: generateCatchpoint: error removing catchpoint file : %v", err2)
-			}
-			return
-		}
+		return
+	})
+
+	if err != nil {
+		au.log.Warnf("accountUpdates: generateCatchpoint: %v", err)
+		return
+	}
+	if catchpointWriter == nil {
+		au.log.Warnf("accountUpdates: generateCatchpoint: nil catchpointWriter")
+		return
 	}
 
 	err = au.saveCatchpointFile(committedRound, relCatchpointFileName, catchpointWriter.GetSize(), catchpointWriter.GetCatchpoint())
@@ -2120,5 +2232,54 @@ func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string
 			return fmt.Errorf("unable to delete old catchpoint entry '%s' : %v", fileToDelete, err)
 		}
 	}
+	return
+}
+
+// the vacuumDatabase performs a full vacuum of the accounts database.
+func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
+	if !au.vacuumOnStartup {
+		return
+	}
+
+	startTime := time.Now()
+	vacuumExitCh := make(chan struct{}, 1)
+	vacuumLoggingAbort := sync.WaitGroup{}
+	vacuumLoggingAbort.Add(1)
+	// vacuuming the database can take a while. A long while. We want to have a logging function running in a separate go-routine that would log the progress to the log file.
+	// also, when we're done vacuuming, we should sent an event notifying of the total time it took to vacuum the database.
+	go func() {
+		defer vacuumLoggingAbort.Done()
+		au.log.Infof("Vacuuming accounts database started")
+		for {
+			select {
+			case <-time.After(5 * time.Second):
+				au.log.Infof("Vacuuming accounts database in progress")
+			case <-vacuumExitCh:
+				return
+			}
+		}
+	}()
+
+	vacuumStats, err := au.dbs.wdb.Vacuum(ctx)
+	close(vacuumExitCh)
+	vacuumLoggingAbort.Wait()
+
+	if err != nil {
+		au.log.Warnf("Vacuuming account database failed : %v", err)
+		return err
+	}
+	vacuumElapsedTime := time.Now().Sub(startTime)
+
+	au.log.Infof("Vacuuming accounts database completed within %v, reducing number of pages from %d to %d and size from %d to %d", vacuumElapsedTime, vacuumStats.PagesBefore, vacuumStats.PagesAfter, vacuumStats.SizeBefore, vacuumStats.SizeAfter)
+
+	vacuumTelemetryStats := telemetryspec.BalancesAccountVacuumEventDetails{
+		VacuumTimeNanoseconds:  vacuumElapsedTime.Nanoseconds(),
+		BeforeVacuumPageCount:  vacuumStats.PagesBefore,
+		AfterVacuumPageCount:   vacuumStats.PagesAfter,
+		BeforeVacuumSpaceBytes: vacuumStats.SizeBefore,
+		AfterVacuumSpaceBytes:  vacuumStats.SizeAfter,
+	}
+
+	au.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.BalancesAccountVacuumEvent, vacuumTelemetryStats)
 	return
 }

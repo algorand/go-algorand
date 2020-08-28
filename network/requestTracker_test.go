@@ -45,7 +45,7 @@ func TestHostIncomingRequestsOrdering(t *testing.T) {
 	now := time.Now()
 	perm := rand.Perm(100)
 	for i := 0; i < 100; i++ {
-		trackedRequest := makeTrackerRequest("remoteaddr", "host", "port", now.Add(time.Duration(perm[i])*time.Minute))
+		trackedRequest := makeTrackerRequest("remoteaddr", "host", "port", now.Add(time.Duration(perm[i])*time.Minute), nil)
 		hir.add(trackedRequest)
 	}
 	require.Equal(t, 100, len(hir.requests))

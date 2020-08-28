@@ -625,7 +625,7 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 }
 
 // GetAssetByID returns application information by app idx.
-// (GET /v2/asset/{asset-id})
+// (GET /v2/assets/{asset-id})
 func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
 	assetIdx := basics.AssetIndex(assetID)
 	ledger := v2.Node.Ledger()
