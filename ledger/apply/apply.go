@@ -29,12 +29,12 @@ type Balances interface {
 	// If the account is known to be empty, then err should be nil and the returned balance record should have the given address and empty AccountData
 	// withPendingRewards specifies whether pending rewards should be applied.
 	// A non-nil error means the lookup is impossible (e.g., if the database doesn't have necessary state anymore)
-	Get(addr basics.Address, withPendingRewards bool) (MiniAccountData, error)
+	Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error)
 
-	Put(basics.Address, MiniAccountData) error
+	Put(basics.Address, basics.AccountData) error
 
 	// PutWithCreatable is like Put, but should be used when creating or deleting an asset or application.
-	PutWithCreatable(addr basics.Address, acct MiniAccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error
+	PutWithCreatable(addr basics.Address, acct basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error
 
 	// GetCreator gets the address of the account that created a given creatable
 	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)

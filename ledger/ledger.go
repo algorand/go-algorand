@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/logging"
 )
 
@@ -414,7 +413,7 @@ func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 	if err != nil {
 		return basics.AccountData{}, err
 	}
-	return mini.ToAccountData(), nil
+	return mini, nil
 }
 
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up
@@ -426,20 +425,20 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ba
 	if err != nil {
 		return basics.AccountData{}, err
 	}
-	return mini.ToAccountData(), nil
+	return mini, nil
 }
 
 // lookup uses the accounts tracker to return the account state for a
 // given account in a particular round.  The account values reflect
 // the changes of all blocks up to and including rnd.
-func (l *Ledger) lookup(rnd basics.Round, addr basics.Address) (apply.MiniAccountData, error) {
+func (l *Ledger) lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
 	data, err := l.accts.Lookup(rnd, addr, true)
 	if err != nil {
-		return apply.MiniAccountData{}, err
+		return basics.AccountData{}, err
 	}
 
 	return data, nil
@@ -447,13 +446,13 @@ func (l *Ledger) lookup(rnd basics.Round, addr basics.Address) (apply.MiniAccoun
 
 // lookupWithoutRewards is like lookup but does not apply pending rewards up
 // to the requested round rnd.
-func (l *Ledger) lookupWithoutRewards(rnd basics.Round, addr basics.Address) (apply.MiniAccountData, error) {
+func (l *Ledger) lookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
 	data, err := l.accts.Lookup(rnd, addr, false)
 	if err != nil {
-		return apply.MiniAccountData{}, err
+		return basics.AccountData{}, err
 	}
 
 	return data, nil

@@ -37,7 +37,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -67,7 +66,7 @@ var trieCachedNodesCount = 9000
 type modifiedAccount struct {
 	// data stores the most recent AccountData for this modified
 	// account.
-	data apply.MiniAccountData
+	data basics.AccountData
 
 	// ndelta keeps track of how many times this account appears in
 	// accountUpdates.deltas.  This is used to evict modifiedAccount
@@ -341,11 +340,10 @@ func (au *accountUpdates) fullLookup(rnd basics.Round, addr basics.Address, with
 		}
 	}()
 
-	mini, err := au.accountsq.lookup(addr)
+	res, err := au.accountsq.lookup(addr)
 	if err != nil {
 		return basics.AccountData{}, fmt.Errorf("fullLookup: could not look up %v: %v", addr, err)
 	}
-	res := mini.ToAccountData()
 
 	for aidx := range res.AppLocalStates {
 		state := res.AppLocalStates[aidx]
@@ -394,7 +392,7 @@ func (au *accountUpdates) fullLookup(rnd basics.Round, addr basics.Address, with
 // Lookup returns the accound data for a given address at a given round. The withRewards indicates whether the
 // rewards should be added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it could return the AccoutData which represent the "rewarded" account data.
-func (au *accountUpdates) Lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data apply.MiniAccountData, err error) {
+func (au *accountUpdates) Lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 	return au.lookupImpl(rnd, addr, withRewards)
@@ -720,7 +718,7 @@ func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.
 }
 
 // Lookup returns the account balance for a given address at a given round
-func (aul *accountUpdatesLedgerEvaluator) lookup(rnd basics.Round, addr basics.Address) (apply.MiniAccountData, error) {
+func (aul *accountUpdatesLedgerEvaluator) lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
 	return aul.au.lookupImpl(rnd, addr, true)
 }
 
@@ -736,7 +734,7 @@ func (aul *accountUpdatesLedgerEvaluator) isDup(config.ConsensusParams, basics.R
 }
 
 // lookupWithoutRewards returns the account balance for a given address at a given round, without the reward
-func (aul *accountUpdatesLedgerEvaluator) lookupWithoutRewards(rnd basics.Round, addr basics.Address) (apply.MiniAccountData, error) {
+func (aul *accountUpdatesLedgerEvaluator) lookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
 	return aul.au.lookupImpl(rnd, addr, false)
 }
 
@@ -1179,21 +1177,20 @@ func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx
 		}
 
 		var addr basics.Address
-		var data basics.AccountData
+		var miniData basics.AccountData
 		copy(addr[:], addrBuf)
-		err = protocol.Decode(dataBuf, &data)
+		err = protocol.Decode(dataBuf, &miniData)
 		if err != nil {
 			return
 		}
 
-		miniData := apply.AccountData(data).WithoutAppKV()
 		_, err = insertAcctStmt.Exec(addr[:], protocol.Encode(&miniData))
 		if err != nil {
 			return
 		}
 
 		global := true
-		for aidx, params := range data.AppParams {
+		for aidx, params := range miniData.AppParams {
 			for key, tv := range params.GlobalState {
 				venc := protocol.Encode(&tv)
 				_, err = insertKeyStmt.Exec(addr[:], aidx, global, key, tv.Type, venc)
@@ -1204,7 +1201,7 @@ func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx
 		}
 
 		global = false
-		for aidx, state := range data.AppLocalStates {
+		for aidx, state := range miniData.AppLocalStates {
 			for key, tv := range state.KeyValue {
 				venc := protocol.Encode(&tv)
 				_, err = insertKeyStmt.Exec(addr[:], aidx, global, key, tv.Type, venc)
@@ -1425,7 +1422,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 // lookupImpl returns the accound data for a given address at a given round. The withRewards indicates whether the
 // rewards should be added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it could return the AccoutData which represent the "rewarded" account data.
-func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, withRewards bool) (data apply.MiniAccountData, err error) {
+func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return

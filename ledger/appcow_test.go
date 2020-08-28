@@ -26,14 +26,13 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/apply"
 )
 
 type emptyLedger struct {
 }
 
-func (ml *emptyLedger) lookup(addr basics.Address) (apply.MiniAccountData, error) {
-	return apply.MiniAccountData{}, nil
+func (ml *emptyLedger) lookup(addr basics.Address) (basics.AccountData, error) {
+	return basics.AccountData{}, nil
 }
 
 func (ml *emptyLedger) isDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl txlease) (bool, error) {

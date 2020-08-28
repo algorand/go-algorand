@@ -27,19 +27,18 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/protocol"
 )
 
-func randomDeltas(niter int, base map[basics.Address]apply.MiniAccountData, rewardsLevel uint64) (updates map[basics.Address]miniAccountDelta, totals map[basics.Address]apply.MiniAccountData, imbalance int64) {
+func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates map[basics.Address]miniAccountDelta, totals map[basics.Address]basics.AccountData, imbalance int64) {
 	updates, totals, imbalance, _ = randomDeltasImpl(niter, base, rewardsLevel, true, 0)
 	return
 }
 
-func randomDeltasImpl(niter int, base map[basics.Address]apply.MiniAccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates map[basics.Address]miniAccountDelta, totals map[basics.Address]apply.MiniAccountData, imbalance int64, lastCreatableID uint64) {
+func randomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates map[basics.Address]miniAccountDelta, totals map[basics.Address]basics.AccountData, imbalance int64, lastCreatableID uint64) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	updates = make(map[basics.Address]miniAccountDelta)
-	totals = make(map[basics.Address]apply.MiniAccountData)
+	totals = make(map[basics.Address]basics.AccountData)
 
 	// copy base -> totals
 	for addr, data := range base {
@@ -82,9 +81,9 @@ func randomDeltasImpl(niter int, base map[basics.Address]apply.MiniAccountData, 
 			} else {
 				new, lastCreatableID = randomFullAccountData(rewardsLevel, lastCreatableID)
 			}
-			updates[addr] = miniAccountDelta{old: old, new: apply.AccountData(new).WithoutAppKV()}
+			updates[addr] = miniAccountDelta{old: old, new: new}
 			imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
-			totals[addr] = apply.AccountData(new).WithoutAppKV()
+			totals[addr] = new
 			break
 		}
 	}
@@ -99,19 +98,19 @@ func randomDeltasImpl(niter int, base map[basics.Address]apply.MiniAccountData, 
 		} else {
 			new, lastCreatableID = randomFullAccountData(rewardsLevel, lastCreatableID)
 		}
-		updates[addr] = miniAccountDelta{old: old, new: apply.AccountData(new).WithoutAppKV()}
+		updates[addr] = miniAccountDelta{old: old, new: new}
 		imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
-		totals[addr] = apply.AccountData(new).WithoutAppKV()
+		totals[addr] = new
 	}
 
 	return
 }
 
 type mockLedger struct {
-	balanceMap map[basics.Address]apply.MiniAccountData
+	balanceMap map[basics.Address]basics.AccountData
 }
 
-func (ml *mockLedger) lookup(addr basics.Address) (apply.MiniAccountData, error) {
+func (ml *mockLedger) lookup(addr basics.Address) (basics.AccountData, error) {
 	return ml.balanceMap[addr], nil
 }
 
@@ -147,7 +146,7 @@ func (ml *mockLedger) txnCounter() uint64 {
 	return 0
 }
 
-func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]apply.MiniAccountData) {
+func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.AccountData) {
 	for addr, data := range accts {
 		d, err := cow.lookup(addr)
 		require.NoError(t, err)
@@ -374,18 +373,18 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 	return data, lastCreatableID
 }
 
-func randomMiniAccounts(niter int, simpleAccounts bool) map[basics.Address]apply.MiniAccountData {
-	res := make(map[basics.Address]apply.MiniAccountData)
+func randomMiniAccounts(niter int, simpleAccounts bool) map[basics.Address]basics.AccountData {
+	res := make(map[basics.Address]basics.AccountData)
 	if simpleAccounts {
 		for i := 0; i < niter; i++ {
-			res[randomAddress()] = apply.AccountData(randomAccountData(0)).WithoutAppKV()
+			res[randomAddress()] = randomAccountData(0)
 		}
 	} else {
 		lastCreatableID := crypto.RandUint64() % 512
 		for i := 0; i < niter; i++ {
 			x, id := randomFullAccountData(0, lastCreatableID)
 			lastCreatableID = id
-			res[randomAddress()] = apply.AccountData(x).WithoutAppKV()
+			res[randomAddress()] = x
 		}
 	}
 	return res

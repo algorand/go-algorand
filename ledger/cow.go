@@ -21,7 +21,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/apply"
 )
 
 //   ___________________
@@ -34,7 +33,7 @@ import (
 //                  ||     ||
 
 type roundCowParent interface {
-	lookup(basics.Address) (apply.MiniAccountData, error)
+	lookup(basics.Address) (basics.AccountData, error)
 	isDup(basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
@@ -63,8 +62,8 @@ type addrApp struct {
 
 // miniAccountDelta is like accountDelta, but it omits key-value stores.
 type miniAccountDelta struct {
-	old apply.MiniAccountData
-	new apply.MiniAccountData
+	old basics.AccountData
+	new basics.AccountData
 }
 
 // StateDelta describes the delta between a given round to the previous round
@@ -123,7 +122,7 @@ func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.Cre
 	return cb.lookupParent.getCreator(cidx, ctype)
 }
 
-func (cb *roundCowState) lookup(addr basics.Address) (data apply.MiniAccountData, err error) {
+func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, err error) {
 	d, ok := cb.mods.accts[addr]
 	if ok {
 		return d.new, nil
@@ -152,7 +151,7 @@ func (cb *roundCowState) txnCounter() uint64 {
 	return cb.lookupParent.txnCounter() + uint64(len(cb.mods.Txids))
 }
 
-func (cb *roundCowState) put(addr basics.Address, old apply.MiniAccountData, new apply.MiniAccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) {
+func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) {
 	prev, present := cb.mods.accts[addr]
 	if present {
 		cb.mods.accts[addr] = miniAccountDelta{old: prev.old, new: new}

@@ -27,7 +27,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/apply"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -127,8 +126,36 @@ type accountDelta struct {
 	new basics.AccountData
 }
 
-func applyMiniDelta(data basics.AccountData, delta miniAccountDelta) basics.AccountData {
-	return apply.AccountData(data).Set(delta.new)
+func applyMiniDelta(data basics.AccountData, delta miniAccountDelta) (res basics.AccountData) {
+	res.Status = delta.new.Status
+	res.MicroAlgos = delta.new.MicroAlgos
+	res.RewardsBase = delta.new.RewardsBase
+	res.RewardedMicroAlgos = delta.new.RewardedMicroAlgos
+	res.VoteID = delta.new.VoteID
+	res.SelectionID = delta.new.SelectionID
+	res.VoteFirstValid = delta.new.VoteFirstValid
+	res.VoteLastValid = delta.new.VoteLastValid
+	res.VoteKeyDilution = delta.new.VoteKeyDilution
+	res.AssetParams = delta.new.AssetParams
+	res.Assets = delta.new.Assets
+	res.AuthAddr = delta.new.AuthAddr
+	res.TotalAppSchema = delta.new.TotalAppSchema
+
+	// TODO what if a deletion happens here? or creation? does this still work?
+	res.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, len(delta.new.AppLocalStates))
+	for k, v := range delta.new.AppLocalStates {
+		state := v
+		state.KeyValue = data.AppLocalStates[k].KeyValue
+		res.AppLocalStates[k] = state
+	}
+
+	res.AppParams = make(map[basics.AppIndex]basics.AppParams, len(delta.new.AppParams))
+	for k, v := range delta.new.AppParams {
+		params := v
+		params.GlobalState = data.AppParams[k].GlobalState
+		res.AppParams[k] = params
+	}
+	return
 }
 
 func (delta accountDelta) foldMiniDelta(mini miniAccountDelta) (accountDelta, error) {
@@ -358,7 +385,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 				return err
 			}
 
-			totals.addAccount(proto, apply.AccountData(data).WithoutAppKV(), &ot)
+			totals.addAccount(proto, data, &ot)
 		}
 
 		if ot.Overflowed {
@@ -623,7 +650,7 @@ func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype bas
 	return
 }
 
-func (qs *accountsDbQueries) lookup(addr basics.Address) (data apply.MiniAccountData, err error) {
+func (qs *accountsDbQueries) lookup(addr basics.Address) (data basics.AccountData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&buf)

@@ -8,11 +8,11 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
-// Allocate the map of AppParamsSansKV if it is nil, and return a copy. We do *not*
-// call clone on each AppParamsSansKV -- callers must do that for any values where
+// Allocate the map of basics.AppParams if it is nil, and return a copy. We do *not*
+// call clone on each basics.AppParams -- callers must do that for any values where
 // they intend to modify a contained reference type.
-func cloneAppParams(m map[basics.AppIndex]AppParamsSansKV) map[basics.AppIndex]AppParamsSansKV {
-	res := make(map[basics.AppIndex]AppParamsSansKV, len(m))
+func cloneAppParams(m map[basics.AppIndex]basics.AppParams) map[basics.AppIndex]basics.AppParams {
+	res := make(map[basics.AppIndex]basics.AppParams, len(m))
 	for k, v := range m {
 		res[k] = v
 	}
@@ -22,18 +22,18 @@ func cloneAppParams(m map[basics.AppIndex]AppParamsSansKV) map[basics.AppIndex]A
 // Allocate the map of LocalStates if it is nil, and return a copy. We do *not*
 // call clone on each AppLocalState -- callers must do that for any values
 // where they intend to modify a contained reference type.
-func cloneAppLocalStates(m map[basics.AppIndex]AppLocalStateSansKV) map[basics.AppIndex]AppLocalStateSansKV {
-	res := make(map[basics.AppIndex]AppLocalStateSansKV, len(m))
+func cloneAppLocalStates(m map[basics.AppIndex]basics.AppLocalState) map[basics.AppIndex]basics.AppLocalState {
+	res := make(map[basics.AppIndex]basics.AppLocalState, len(m))
 	for k, v := range m {
 		res[k] = v
 	}
 	return res
 }
 
-// getAppParams fetches the creator address and AppParamsSansKV for the app index,
-// if they exist. It does *not* clone the AppParamsSansKV, so the returned params
+// getAppParams fetches the creator address and basics.AppParams for the app index,
+// if they exist. It does *not* clone the basics.AppParams, so the returned params
 // must not be modified directly.
-func getAppParams(balances Balances, aidx basics.AppIndex) (params AppParamsSansKV, creator basics.Address, exists bool, err error) {
+func getAppParams(balances Balances, aidx basics.AppIndex) (params basics.AppParams, creator basics.Address, exists bool, err error) {
 	creator, exists, err = balances.GetCreator(basics.CreatableIndex(aidx), basics.AppCreatable)
 	if err != nil {
 		return
@@ -81,7 +81,7 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 
 	// Allocate the new app params (+ 1 to match Assets Idx namespace)
 	appIdx = basics.AppIndex(txnCounter + 1)
-	record.AppParams[appIdx] = AppParamsSansKV{
+	record.AppParams[appIdx] = basics.AppParams{
 		ApprovalProgram:   ac.ApprovalProgram,
 		ClearStateProgram: ac.ClearStateProgram,
 		StateSchemas: basics.StateSchemas{
@@ -174,7 +174,7 @@ func updateApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 	return balances.Put(creator, record)
 }
 
-func optInApplication(balances Balances, sender basics.Address, appIdx basics.AppIndex, params AppParamsSansKV) error {
+func optInApplication(balances Balances, sender basics.Address, appIdx basics.AppIndex, params basics.AppParams) error {
 	record, err := balances.Get(sender, false)
 	if err != nil {
 		return err
@@ -194,7 +194,7 @@ func optInApplication(balances Balances, sender basics.Address, appIdx basics.Ap
 
 	// Write an AppLocalState, opting in the user
 	record.AppLocalStates = cloneAppLocalStates(record.AppLocalStates)
-	record.AppLocalStates[appIdx] = AppLocalStateSansKV{
+	record.AppLocalStates[appIdx] = basics.AppLocalState{
 		Schema: params.LocalStateSchema,
 	}
 

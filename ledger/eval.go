@@ -67,7 +67,7 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 	return x.l.GetCreatorForRound(x.rnd, cidx, ctype)
 }
 
-func (x *roundCowBase) lookup(addr basics.Address) (apply.MiniAccountData, error) {
+func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
 	return x.l.lookupWithoutRewards(x.rnd, addr)
 }
 
@@ -105,10 +105,10 @@ func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppInde
 }
 
 // wrappers for roundCowState to satisfy the (current) apply.Balances interface
-func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (apply.MiniAccountData, error) {
+func (cs *roundCowState) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	acct, err := cs.lookup(addr)
 	if err != nil {
-		return apply.MiniAccountData{}, err
+		return basics.AccountData{}, err
 	}
 	if withPendingRewards {
 		acct = acct.WithUpdatedRewards(cs.proto, cs.rewardsLevel())
@@ -120,11 +120,11 @@ func (cs *roundCowState) GetCreator(cidx basics.CreatableIndex, ctype basics.Cre
 	return cs.getCreator(cidx, ctype)
 }
 
-func (cs *roundCowState) Put(addr basics.Address, acct apply.MiniAccountData) error {
+func (cs *roundCowState) Put(addr basics.Address, acct basics.AccountData) error {
 	return cs.PutWithCreatable(addr, acct, nil, nil)
 }
 
-func (cs *roundCowState) PutWithCreatable(addr basics.Address, acct apply.MiniAccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
+func (cs *roundCowState) PutWithCreatable(addr basics.Address, acct basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
 	olddata, err := cs.lookup(addr)
 	if err != nil {
 		return err
@@ -208,10 +208,10 @@ type BlockEvaluator struct {
 type ledgerForEvaluator interface {
 	GenesisHash() crypto.Digest
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	lookup(basics.Round, basics.Address) (apply.MiniAccountData, error)
+	lookup(basics.Round, basics.Address) (basics.AccountData, error)
 	Totals(basics.Round) (AccountTotals, error)
 	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
-	lookupWithoutRewards(basics.Round, basics.Address) (apply.MiniAccountData, error)
+	lookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 	GetKeyForRound(basics.Round, basics.Address, basics.AppIndex, bool, string) (basics.TealValue, bool, error)
 	CountStorageForRound(basics.Round, basics.Address, basics.AppIndex, bool) (basics.StateSchema, error)
@@ -349,7 +349,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 
 // hotfix for testnet stall 08/26/2019; move some algos from testnet bank to rewards pool to give it enough time until protocol upgrade occur.
 // hotfix for testnet stall 11/07/2019; do the same thing
-func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance apply.MiniAccountData, headerRound basics.Round) (poolOld apply.MiniAccountData, err error) {
+func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.AccountData, headerRound basics.Round) (poolOld basics.AccountData, err error) {
 	// verify that we patch the correct round.
 	if headerRound != 1499995 && headerRound != 2926564 {
 		return rewardPoolBalance, nil
@@ -717,7 +717,7 @@ func applyTransaction(tx transactions.Transaction, balances apply.Balances, eval
 
 	// rekeying: update balrecord.AuthAddr to tx.RekeyTo if provided
 	if (tx.RekeyTo != basics.Address{}) {
-		var acct apply.MiniAccountData
+		var acct basics.AccountData
 		acct, err = balances.Get(tx.Sender, false)
 		if err != nil {
 			return
