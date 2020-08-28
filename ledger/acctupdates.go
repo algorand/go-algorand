@@ -1150,7 +1150,8 @@ func (au *accountUpdates) upgradeDatabaseSchema1(ctx context.Context, tx *sql.Tx
 }
 
 func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
-	au.log.Infof("upgradeDatabaseSchema2 initializing schema")
+	// upgrade schema
+	au.log.Infof("upgradeDatabaseSchema2: initializing schema")
 	for _, migrateCmd := range storageMigration {
 		_, err = tx.Exec(migrateCmd)
 		if err != nil {
@@ -1159,8 +1160,85 @@ func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx
 	}
 	_, err = db.SetUserVersion(ctx, tx, 3)
 	if err != nil {
-		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 2 to 3: %v", err)
+		return 0, fmt.Errorf("upgradeDatabaseSchema2: unable to update database schema version from 2 to 3: %v", err)
 	}
+
+	// migrate data
+	insertKeyStmt, err := tx.Prepare("INSERT INTO storage (owner, aidx, global, key, vtype, venc) VALUES (?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		return
+	}
+	defer insertKeyStmt.Close()
+	insertAcctStmt, err := tx.Prepare("INSERT INTO miniaccountbase (address, data) VALUES (?, ?)")
+	if err != nil {
+		return
+	}
+	defer insertAcctStmt.Close()
+
+	au.log.Infof("upgradeDatabaseSchema2: begin data migration")
+	rows, err := tx.Query("SELECT * FROM accountbase")
+	if err != nil {
+		return
+	}
+	count := 0
+	for rows.Next() {
+		count += 1
+		if count%10000 == 0 {
+			au.log.Infof("upgradeDatabaseSchema2: count=%d", count)
+		}
+
+		var addrBuf, dataBuf []byte
+		err = rows.Scan(&addrBuf, &dataBuf)
+		if err != nil {
+			return
+		}
+
+		var addr basics.Address
+		var data basics.AccountData
+		copy(addr[:], addrBuf)
+		err = protocol.Decode(dataBuf, &data)
+		if err != nil {
+			return
+		}
+
+		miniData := apply.AccountData(data).WithoutAppKV()
+		_, err = insertAcctStmt.Exec(addr[:], protocol.Encode(&miniData))
+		if err != nil {
+			return
+		}
+
+		global := true
+		for aidx, params := range data.AppParams {
+			for key, tv := range params.GlobalState {
+				venc := protocol.Encode(&tv)
+				_, err = insertKeyStmt.Exec(addr[:], aidx, global, key, tv.Type, venc)
+				if err != nil {
+					return
+				}
+			}
+		}
+
+		global = false
+		for aidx, state := range data.AppLocalStates {
+			for key, tv := range state.KeyValue {
+				venc := protocol.Encode(&tv)
+				_, err = insertKeyStmt.Exec(addr[:], aidx, global, key, tv.Type, venc)
+				if err != nil {
+					return
+				}
+			}
+		}
+	}
+
+	// fixup tables
+	au.log.Infof("upgradeDatabaseSchema2: table rename")
+	_, err = tx.Exec("DROP TABLE accountbase; ALTER TABLE miniaccountbase RENAME TO accountbase")
+	if err != nil {
+		return
+	}
+
+	au.log.Infof("upgradeDatabaseSchema2: done")
+
 	return 3, nil
 }
 

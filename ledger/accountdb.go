@@ -102,6 +102,9 @@ var storageMigration = []string{
 		venc blob,
 		PRIMARY KEY(owner, aidx, global, key)
 	)`, // TODO WITHOUT ROWID?
+	`CREATE TABLE IF NOT EXISTS miniaccountbase (
+		address blob primary key,
+		data blob)`,
 }
 
 var accountsResetExprs = []string{
