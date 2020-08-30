@@ -51,8 +51,8 @@ func TestBigFloatRounding(t *testing.T) {
 	require.False(t, a.ge(&b.bigFloat))
 	require.True(t, b.ge(&a.bigFloat))
 
-	a.setu32((1<<32)-1)
-	b.setu32((1<<32)-1)
+	a.setu32((1 << 32) - 1)
+	b.setu32((1 << 32) - 1)
 
 	a.mul(a)
 	b.mul(b)
@@ -93,7 +93,7 @@ func TestBigFloat(t *testing.T) {
 			require.Equal(t, x, uint64(a.mantissa>>(-a.exp)))
 		}
 		if a.exp >= 0 {
-			require.Equal(t, x >> a.exp, uint64(a.mantissa))
+			require.Equal(t, x>>a.exp, uint64(a.mantissa))
 		}
 	}
 
@@ -104,7 +104,7 @@ func TestBigFloat(t *testing.T) {
 			require.Equal(t, x, uint64(a.mantissa>>(-a.exp)))
 		}
 		if a.exp >= 0 {
-			require.Equal(t, x >> a.exp, uint64(a.mantissa))
+			require.Equal(t, x>>a.exp, uint64(a.mantissa))
 		}
 	}
 
@@ -145,7 +145,7 @@ func TestBigFloat(t *testing.T) {
 
 func BenchmarkBigFloatMulUp(b *testing.B) {
 	a := &bigFloatUp{}
-	a.setu32(1<<32-1)
+	a.setu32((1 << 32) - 1)
 
 	for i := 0; i < b.N; i++ {
 		a.mul(a)
@@ -154,7 +154,7 @@ func BenchmarkBigFloatMulUp(b *testing.B) {
 
 func BenchmarkBigFloatMulDn(b *testing.B) {
 	a := &bigFloatDn{}
-	a.setu32(1<<32-1)
+	a.setu32((1 << 32) - 1)
 
 	for i := 0; i < b.N; i++ {
 		a.mul(a)

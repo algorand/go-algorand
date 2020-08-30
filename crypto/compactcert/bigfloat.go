@@ -61,7 +61,7 @@ func (a *bigFloat) canonicalize() {
 // to implement the rounding-up when there are leftover low bits.
 func (a *bigFloatUp) doRoundUp() {
 	if a.mantissa == (1<<32)-1 {
-		a.mantissa = 1<<31
+		a.mantissa = 1 << 31
 		a.exp++
 	} else {
 		a.mantissa++
