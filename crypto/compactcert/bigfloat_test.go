@@ -110,3 +110,12 @@ func TestBigFloat(t *testing.T) {
 		require.Equal(t, a.mantissa, uint32(xx.Uint64()))
 	}
 }
+
+func BenchmarkBigFloatMul(b *testing.B) {
+	a := &bigFloat{}
+	a.setu32(1<<32-1)
+
+	for i := 0; i < b.N; i++ {
+		a.mul(a)
+	}
+}
