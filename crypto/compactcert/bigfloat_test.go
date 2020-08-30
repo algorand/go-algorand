@@ -29,9 +29,41 @@ func rand32() uint32 {
 	return uint32(crypto.RandUint64() & 0xffffffff)
 }
 
+func TestBigFloatRounding(t *testing.T) {
+	a := &bigFloatDn{}
+	b := &bigFloatUp{}
+
+	a.setu64(1 << 63)
+	b.setu64(1 << 63)
+
+	require.True(t, a.ge(&b.bigFloat))
+	require.True(t, b.ge(&a.bigFloat))
+
+	a.mul(a)
+	b.mul(b)
+
+	require.True(t, a.ge(&b.bigFloat))
+	require.True(t, b.ge(&a.bigFloat))
+
+	a.setu64((1 << 64) - 1)
+	b.setu64((1 << 64) - 1)
+
+	require.False(t, a.ge(&b.bigFloat))
+	require.True(t, b.ge(&a.bigFloat))
+
+	a.setu32((1<<32)-1)
+	b.setu32((1<<32)-1)
+
+	a.mul(a)
+	b.mul(b)
+
+	require.False(t, a.ge(&b.bigFloat))
+	require.True(t, b.ge(&a.bigFloat))
+}
+
 func TestBigFloat(t *testing.T) {
-	a := &bigFloat{}
-	b := &bigFloat{}
+	a := &bigFloatDn{}
+	b := &bigFloatDn{}
 
 	a.setu64(1)
 	require.Equal(t, a.mantissa, uint32(1<<31))
@@ -82,10 +114,10 @@ func TestBigFloat(t *testing.T) {
 		a.setu64(uint64(x))
 		b.setu64(uint64(y))
 
-		require.Equal(t, x >= y, a.ge(b))
-		require.Equal(t, x < y, b.ge(a))
-		require.True(t, a.ge(a))
-		require.True(t, b.ge(b))
+		require.Equal(t, x >= y, a.ge(&b.bigFloat))
+		require.Equal(t, x < y, b.ge(&a.bigFloat))
+		require.True(t, a.ge(&a.bigFloat))
+		require.True(t, b.ge(&b.bigFloat))
 	}
 
 	xx := &big.Int{}
@@ -111,8 +143,17 @@ func TestBigFloat(t *testing.T) {
 	}
 }
 
-func BenchmarkBigFloatMul(b *testing.B) {
-	a := &bigFloat{}
+func BenchmarkBigFloatMulUp(b *testing.B) {
+	a := &bigFloatUp{}
+	a.setu32(1<<32-1)
+
+	for i := 0; i < b.N; i++ {
+		a.mul(a)
+	}
+}
+
+func BenchmarkBigFloatMulDn(b *testing.B) {
+	a := &bigFloatDn{}
 	a.setu32(1<<32-1)
 
 	for i := 0; i < b.N; i++ {

@@ -52,37 +52,39 @@ func hashCoin(j uint64, sigcom crypto.Digest, signedWeight uint64) uint64 {
 //
 // 2^-k >= 2^q * (provenWeight / signedWeight) ^ numReveals
 //
-// which is equivalent to the following, which avoids any floating-point math:
+// which is equivalent to the following:
 //
 // signedWeight ^ numReveals >= 2^(k+q) * provenWeight ^ numReveals
 //
-// See section 8.1 for the analysis of the rounding errors.
+// To ensure that rounding errors do not reduce the security parameter,
+// we compute the left-hand side with rounding-down, and compute the
+// right-hand side with rounding-up.
 func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound uint64) (uint64, error) {
 	n := uint64(0)
 
-	sw := &bigFloat{}
+	sw := &bigFloatDn{}
 	err := sw.setu64(signedWeight)
 	if err != nil {
 		return 0, err
 	}
 
-	pw := &bigFloat{}
+	pw := &bigFloatUp{}
 	err = pw.setu64(provenWeight)
 	if err != nil {
 		return 0, err
 	}
 
-	lhs := &bigFloat{}
+	lhs := &bigFloatDn{}
 	err = lhs.setu64(1)
 	if err != nil {
 		return 0, err
 	}
 
-	rhs := &bigFloat{}
+	rhs := &bigFloatUp{}
 	rhs.setpow2(int32(secKQ))
 
 	for {
-		if lhs.ge(rhs) {
+		if lhs.ge(&rhs.bigFloat) {
 			return n, nil
 		}
 

@@ -22,14 +22,26 @@ import (
 )
 
 // A bigFloat represents the number mantissa*2^exp, which must be non-zero.
+//
 // A canonical representation is one where the highest bit of mantissa is
-// set.  Every operation enforces canonicality of results.  We use 32-bit
-// values here to avoid requiring access to a 64bit-by-64bit-to-128bit
-// multiply operation for anyone that needs to implement this (even
-// though Go has this operation, as bits.Mul64).
+// set.  Every operation enforces canonicality of results.
+//
+// We use 32-bit values here to avoid requiring a 64bit-by-64bit-to-128bit
+// multiply operation for anyone that needs to implement this (even though
+// Go has this operation, as bits.Mul64).
 type bigFloat struct {
 	mantissa uint32
 	exp      int32
+}
+
+// Each bigFloat is associated with a rounding mode (up, away from zero, or
+// down, towards zero).  This is reflected by these two types of bigFloat.
+type bigFloatUp struct {
+	bigFloat
+}
+
+type bigFloatDn struct {
+	bigFloat
 }
 
 // canonicalize() ensures that the bigFloat is canonical.
@@ -42,6 +54,17 @@ func (a *bigFloat) canonicalize() {
 	for (a.mantissa & (1 << 31)) == 0 {
 		a.mantissa = a.mantissa << 1
 		a.exp = a.exp - 1
+	}
+}
+
+// doRoundUp adds one to the mantissa of a canonical bigFloat
+// to implement the rounding-up when there are leftover low bits.
+func (a *bigFloatUp) doRoundUp() {
+	if a.mantissa == (1<<32)-1 {
+		a.mantissa = 1<<31
+		a.exp++
+	} else {
+		a.mantissa++
 	}
 }
 
@@ -58,16 +81,21 @@ func (a *bigFloat) ge(b *bigFloat) bool {
 	return a.mantissa >= b.mantissa
 }
 
-// setu64 sets the value to the supplied uint64 (which might get
-// rounded down in the process).  x must not be zero.
-func (a *bigFloat) setu64(x uint64) error {
+// setu64_dn sets the value to the supplied uint64 (which might get
+// rounded down in the process).  x must not be zero.  truncated
+// returns whether any non-zero bits were truncated (rounded down).
+func (a *bigFloat) setu64_dn(x uint64) (truncated bool, err error) {
 	if x == 0 {
-		return fmt.Errorf("bigFloat cannot be zero")
+		return false, fmt.Errorf("bigFloat cannot be zero")
 	}
 
 	e := int32(0)
 
 	for x >= (1 << 32) {
+		if (x & 1) != 0 {
+			truncated = true
+		}
+
 		x = x >> 1
 		e = e + 1
 	}
@@ -75,7 +103,21 @@ func (a *bigFloat) setu64(x uint64) error {
 	a.mantissa = uint32(x)
 	a.exp = e
 	a.canonicalize()
-	return nil
+	return
+}
+
+// setu64 calls setu64_dn and implements rounding based on the type.
+func (a *bigFloatUp) setu64(x uint64) error {
+	truncated, err := a.setu64_dn(x)
+	if truncated {
+		a.doRoundUp()
+	}
+	return err
+}
+
+func (a *bigFloatDn) setu64(x uint64) error {
+	_, err := a.setu64_dn(x)
+	return err
 }
 
 // setu32 sets the value to the supplied uint32.
@@ -97,9 +139,10 @@ func (a *bigFloat) setpow2(x int32) {
 	a.canonicalize()
 }
 
-// mul sets a to the product a*b, keeping the most significant 32 bits
-// of the product's mantissa.
-func (a *bigFloat) mul(b *bigFloat) {
+// mul_dn sets a to the product a*b, keeping the most significant 32 bits
+// of the product's mantissa.  The return value indicates if any non-zero
+// bits were discarded (rounded down).
+func (a *bigFloat) mul_dn(b *bigFloat) bool {
 	hi, lo := bits.Mul32(a.mantissa, b.mantissa)
 
 	a.mantissa = hi
@@ -108,7 +151,23 @@ func (a *bigFloat) mul(b *bigFloat) {
 	if (a.mantissa & (1 << 31)) == 0 {
 		a.mantissa = (a.mantissa << 1) | (lo >> 31)
 		a.exp = a.exp - 1
+		lo = lo << 1
 	}
+
+	return lo != 0
+}
+
+// mul calls mul_dn and implements appropriate rounding.
+// Types prevent multiplying two values with different rounding types.
+func (a *bigFloatUp) mul(b *bigFloatUp) {
+	truncated := a.mul_dn(&b.bigFloat)
+	if truncated {
+		a.doRoundUp()
+	}
+}
+
+func (a *bigFloatDn) mul(b *bigFloatDn) {
+	a.mul_dn(&b.bigFloat)
 }
 
 // String returns a string representation of a.
