@@ -913,26 +913,32 @@ func TestLocalLedger(t *testing.T) {
 	a.Equal(uint64(100), params.Total)
 	a.Equal("tok", params.UnitName)
 
-	// TODO
-	// tkv, err := ledger.AppGlobalState(0)
-	// a.NoError(err)
-	// a.Equal(uint64(2), tkv["gkeyint"].Uint)
-	// tkv, err = ledger.AppGlobalState(appIdx)
-	// a.NoError(err)
-	// a.Equal("global", tkv["gkeybyte"].Bytes)
-	// tkv, err = ledger.AppGlobalState(appIdx + 1)
-	// a.Error(err)
+	v, ok, err := ledger.GetGlobal(0, "gkeyint")
+	a.NoError(err)
+	a.True(ok)
+	a.Equal(uint64(2), v.Uint)
 
-	// tkv, err = ledger.AppLocalState(sender, 0)
-	// a.NoError(err)
-	// a.Equal(uint64(1), tkv["lkeyint"].Uint)
-	// tkv, err = ledger.AppLocalState(sender, appIdx)
-	// a.NoError(err)
-	// a.Equal("local", tkv["lkeybyte"].Bytes)
-	// tkv, err = ledger.AppLocalState(sender, appIdx+1)
-	// a.Error(err)
-	// tkv, err = ledger.AppLocalState(payTxn.Txn.Receiver, appIdx)
-	// a.Error(err)
+	v, ok, err = ledger.GetGlobal(appIdx, "gkeybyte")
+	a.NoError(err)
+	a.True(ok)
+	a.Equal("global", v.Bytes)
+
+	_, _, err = ledger.GetGlobal(appIdx+1, "")
+	a.Error(err)
+
+	v, ok, err = ledger.GetLocal(sender, 0, "lkeyint")
+	a.NoError(err)
+	a.Equal(uint64(1), v.Uint)
+
+	v, ok, err = ledger.GetLocal(sender, appIdx, "lkeybyte")
+	a.NoError(err)
+	a.Equal("local", v.Bytes)
+
+	_, _, err = ledger.GetLocal(sender, appIdx+1, "")
+	a.Error(err)
+
+	_, _, err = ledger.GetLocal(payTxn.Txn.Receiver, appIdx, "")
+	a.Error(err)
 }
 
 func TestLocalLedgerIndexer(t *testing.T) {
@@ -1038,23 +1044,30 @@ func TestLocalLedgerIndexer(t *testing.T) {
 	a.Equal(uint64(100), params.Total)
 	a.Equal("tok", params.UnitName)
 
-	tkv, err := ledger.AppGlobalState(0)
+	v, ok, err := ledger.GetGlobal(0, "gkeyint")
 	a.NoError(err)
-	a.Equal(uint64(2), tkv["gkeyint"].Uint)
-	tkv, err = ledger.AppGlobalState(appIdx)
+	a.True(ok)
+	a.Equal(uint64(2), v.Uint)
+
+	v, ok, err = ledger.GetGlobal(appIdx, "gkeybyte")
 	a.NoError(err)
-	a.Equal("global", tkv["gkeybyte"].Bytes)
-	tkv, err = ledger.AppGlobalState(appIdx + 1)
+	a.True(ok)
+	a.Equal("global", v.Bytes)
+
+	_, _, err = ledger.GetGlobal(appIdx+1, "")
 	a.Error(err)
 
-	tkv, err = ledger.AppLocalState(sender, 0)
+	v, ok, err = ledger.GetLocal(sender, 0, "lkeyint")
 	a.NoError(err)
-	a.Equal(uint64(1), tkv["lkeyint"].Uint)
-	tkv, err = ledger.AppLocalState(sender, appIdx)
+	a.Equal(uint64(1), v.Uint)
+
+	v, ok, err = ledger.GetLocal(sender, appIdx, "lkeybyte")
 	a.NoError(err)
-	a.Equal("local", tkv["lkeybyte"].Bytes)
-	tkv, err = ledger.AppLocalState(sender, appIdx+1)
+	a.Equal("local", v.Bytes)
+
+	_, _, err = ledger.GetLocal(sender, appIdx+1, "")
 	a.Error(err)
-	tkv, err = ledger.AppLocalState(payTxn.Txn.Receiver, appIdx)
+
+	_, _, err = ledger.GetLocal(payTxn.Txn.Receiver, appIdx, "")
 	a.Error(err)
 }

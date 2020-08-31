@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	_ "github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger"
 )
 
 // AccountIndexerResponse represents the Account Response object from querying indexer
@@ -56,11 +56,13 @@ type ApplicationIndexerResponse struct {
 }
 
 type balancesAdapter struct {
-	balances   map[basics.Address]basics.AccountData
-	txnGroup   []transactions.SignedTxn
-	groupIndex int
-	proto      config.ConsensusParams
-	round      uint64
+	balances        map[basics.Address]basics.AccountData
+	txnGroup        []transactions.SignedTxn
+	groupIndex      int
+	proto           config.ConsensusParams
+	round           uint64
+	appIdx          basics.AppIndex
+	latestTimestamp int64
 }
 
 func makeAppLedger(
@@ -111,7 +113,6 @@ func makeAppLedger(
 		proto:      proto,
 		round:      round,
 	}
-	_ = ba
 
 	appsExist := make(map[basics.AppIndex]bool, len(apps))
 	states := makeAppState()
@@ -177,11 +178,9 @@ func makeAppLedger(
 		}
 	}
 
-//	appGlobals := ledger.AppTealGlobals{CurrentRound: basics.Round(round), LatestTimestamp: latestTimestamp}
-//	ledger, err := ledger.MakeDebugAppLedger(ba, appIdx, states.schemas, appGlobals)
-//	return ledger, states, err
-//	TODO app refactor, fix
-	return nil, states, nil
+	ba.appIdx = appIdx
+	ba.latestTimestamp = latestTimestamp
+	return ba, states, nil
 }
 
 func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics.AppIndex) (basics.Address, error) {
@@ -320,3 +319,101 @@ func (ba *balancesAdapter) Put(basics.BalanceRecord) error {
 func (ba *balancesAdapter) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards, dstRewards *basics.MicroAlgos) error {
 	return nil
 }
+
+func (ba *balancesAdapter) ApplicationID() basics.AppIndex {
+	return ba.appIdx
+}
+
+func (ba *balancesAdapter) LatestTimestamp() int64 {
+	return ba.latestTimestamp
+}
+
+func (ba *balancesAdapter) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (holding basics.AssetHolding, err error) {
+	br, ok := ba.balances[addr]
+	if !ok {
+		err = fmt.Errorf("account %s has not opted in to asset %d", addr.String(), assetIdx)
+		return
+	}
+
+	holding, ok = br.Assets[assetIdx]
+	if !ok {
+		err = fmt.Errorf("account %s has not opted in to asset %d", addr.String(), assetIdx)
+	}
+
+	return
+}
+
+func (ba *balancesAdapter) AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams, error) {
+	for _, br := range ba.balances {
+		params, ok := br.AssetParams[assetIdx]
+		if ok {
+			return params, nil
+		}
+	}
+
+	return basics.AssetParams{}, nil
+}
+
+func (ba *balancesAdapter) Balance(addr basics.Address) (basics.MicroAlgos, error) {
+	br := ba.balances[addr]
+	return br.MicroAlgos, nil
+}
+
+func (ba *balancesAdapter) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
+	if appIdx == 0 {
+		appIdx = ba.appIdx
+	}
+
+	br, ok := ba.balances[addr]
+	if !ok {
+		return false, nil
+	}
+
+	_, ok = br.AppLocalStates[appIdx]
+	return ok, nil
+}
+
+func (ba *balancesAdapter) GetGlobal(appIdx basics.AppIndex, key string) (value basics.TealValue, exists bool, err error) {
+	if appIdx == 0 {
+		appIdx = ba.appIdx
+	}
+
+	for _, br := range ba.balances {
+		params, ok := br.AppParams[appIdx]
+		if ok {
+			value, exists = params.GlobalState[key]
+			return
+		}
+	}
+	err = fmt.Errorf("app %d does not exist", appIdx)
+	return
+}
+
+func (ba *balancesAdapter) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string) (value basics.TealValue, exists bool, err error) {
+	if appIdx == 0 {
+		appIdx = ba.appIdx
+	}
+
+	br, ok := ba.balances[addr]
+	if !ok {
+		err = fmt.Errorf("addr %s not opted in to app %d, cannot fetch state", addr.String(), appIdx)
+		return
+	}
+
+	local, ok := br.AppLocalStates[appIdx]
+	if !ok {
+		err = fmt.Errorf("addr %s not opted in to app %d, cannot fetch state", addr.String(), appIdx)
+		return
+	}
+
+	value, exists = local.KeyValue[key]
+	return
+}
+
+func (ba *balancesAdapter) SetLocal(addr basics.Address, key string, value basics.TealValue) error {
+	return nil
+}
+func (ba *balancesAdapter) DelLocal(addr basics.Address, key string) error { return nil }
+
+func (ba *balancesAdapter) SetGlobal(key string, value basics.TealValue) error { return nil }
+func (ba *balancesAdapter) DelGlobal(key string) error                         { return nil }

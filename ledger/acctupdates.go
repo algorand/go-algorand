@@ -1837,7 +1837,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 				var err error
 				delta := fullDeltas[i][addr]
 				delta.new, err = applyStorageDelta(delta.new, aapp, storeDelta)
-				// delta, err := delta.foldStorageDelta(aapp, storeDelta)
 				if err != nil {
 					au.log.Warnf("commitRound: unable to apply storage delta: %v", err)
 					return
