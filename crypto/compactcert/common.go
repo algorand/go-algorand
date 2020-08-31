@@ -84,7 +84,7 @@ func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound ui
 	rhs.setpow2(int32(secKQ))
 
 	for {
-		if lhs.ge(&rhs.bigFloat) {
+		if lhs.ge(rhs) {
 			return n, nil
 		}
 

@@ -68,8 +68,10 @@ func (a *bigFloatUp) doRoundUp() {
 	}
 }
 
-// ge returns whether a>=b.
-func (a *bigFloat) ge(b *bigFloat) bool {
+// ge_raw returns whether a>=b.  The raw suffix indicates that
+// this comparison does not take rounding into account, and might
+// not be true if done with arbitrary-precision numbers.
+func (a *bigFloat) ge_raw(b *bigFloat) bool {
 	if a.exp > b.exp {
 		return true
 	}
@@ -79,6 +81,14 @@ func (a *bigFloat) ge(b *bigFloat) bool {
 	}
 
 	return a.mantissa >= b.mantissa
+}
+
+// ge returns whether a>=b.  It requires that a was computed with
+// rounding-down and b was computed with rounding-up, so that if
+// ge returns true, the arbitrary-precision computation would have
+// also been >=.
+func (a *bigFloatDn) ge(b *bigFloatUp) bool {
+	return a.ge_raw(&b.bigFloat)
 }
 
 // setu64_dn sets the value to the supplied uint64 (which might get
