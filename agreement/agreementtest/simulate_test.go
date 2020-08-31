@@ -104,12 +104,12 @@ type testLedger struct {
 	nextRound basics.Round
 
 	// constant
-	state map[basics.Address]basics.BalanceRecord
+	state map[basics.Address]basics.AccountData
 
 	notifications map[basics.Round]signal
 }
 
-func makeTestLedger(state map[basics.Address]basics.BalanceRecord) agreement.Ledger {
+func makeTestLedger(state map[basics.Address]basics.AccountData) agreement.Ledger {
 	l := new(testLedger)
 	l.entries = make(map[basics.Round]bookkeeping.Block)
 	l.certs = make(map[basics.Round]agreement.Certificate)
@@ -124,7 +124,7 @@ func (l *testLedger) copy() *testLedger {
 
 	dup.entries = make(map[basics.Round]bookkeeping.Block)
 	dup.certs = make(map[basics.Round]agreement.Certificate)
-	dup.state = make(map[basics.Address]basics.BalanceRecord)
+	dup.state = make(map[basics.Address]basics.AccountData)
 	dup.notifications = make(map[basics.Round]signal)
 
 	for k, v := range l.entries {
@@ -202,12 +202,12 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	return l.entries[r].Digest(), nil
 }
 
-func (l *testLedger) BalanceRecord(r basics.Round, a basics.Address) (basics.BalanceRecord, error) {
+func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountData, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	if r >= l.nextRound {
-		err := fmt.Errorf("BalanceRecord called on future round: %v > %v! (this is probably a bug)", r, l.nextRound)
+		err := fmt.Errorf("Lookup called on future round: %v > %v! (this is probably a bug)", r, l.nextRound)
 		panic(err)
 	}
 	return l.state[a], nil
@@ -305,24 +305,21 @@ func TestSimulate(t *testing.T) {
 	E := basics.Round(50)     // max round
 
 	// generate accounts
-	genesis := make(map[basics.Address]basics.BalanceRecord)
+	genesis := make(map[basics.Address]basics.AccountData)
 	incentivePoolAtStart := uint64(1000 * 1000)
 	accData := basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: incentivePoolAtStart})
-	genesis[poolAddr] = basics.BalanceRecord{Addr: poolAddr, AccountData: accData}
+	genesis[poolAddr] = accData
 	gen := rand.New(rand.NewSource(2))
 
 	_, accs, release := generateNAccounts(t, numAccounts, 0, E, minMoneyAtStart)
 	defer release()
 	for _, account := range accs {
 		amount := basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))}
-		genesis[account.Address()] = basics.BalanceRecord{
-			Addr: account.Address(),
-			AccountData: basics.AccountData{
-				Status:      basics.Online,
-				MicroAlgos:  amount,
-				SelectionID: account.VRFSecrets().PK,
-				VoteID:      account.VotingSecrets().OneTimeSignatureVerifier,
-			},
+		genesis[account.Address()] = basics.AccountData{
+			Status:      basics.Online,
+			MicroAlgos:  amount,
+			SelectionID: account.VRFSecrets().PK,
+			VoteID:      account.VotingSecrets().OneTimeSignatureVerifier,
 		}
 	}
 
