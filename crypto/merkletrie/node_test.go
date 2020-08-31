@@ -46,6 +46,10 @@ func TestNodeSerialization(t *testing.T) {
 			require.Equal(t, consumedWrite, consumedRead)
 			require.Equal(t, pnode.leaf(), outNode.leaf())
 			require.Equal(t, len(pnode.children), len(outNode.children))
+			reencodedBuffer := make([]byte, 10000)
+			renecodedConsumedWrite := outNode.serialize(reencodedBuffer[:])
+			require.Equal(t, consumedWrite, renecodedConsumedWrite)
+			require.Equal(t, buf, reencodedBuffer)
 		}
 	}
 }
