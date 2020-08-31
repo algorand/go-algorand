@@ -145,39 +145,21 @@ func applyMiniDelta(data basics.AccountData, delta miniAccountDelta) (res basics
 	res.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, len(delta.new.AppLocalStates))
 	for k, v := range delta.new.AppLocalStates {
 		state := v
-		state.KeyValue = data.AppLocalStates[k].KeyValue
+		state.KeyValue = data.AppLocalStates[k].KeyValue // TODO is cloning required here?
 		res.AppLocalStates[k] = state
 	}
 
 	res.AppParams = make(map[basics.AppIndex]basics.AppParams, len(delta.new.AppParams))
 	for k, v := range delta.new.AppParams {
 		params := v
-		params.GlobalState = data.AppParams[k].GlobalState
+		params.GlobalState = data.AppParams[k].GlobalState // TODO is cloning required here?
 		res.AppParams[k] = params
 	}
 	return
 }
 
-func (delta accountDelta) foldMiniDelta(mini miniAccountDelta) (accountDelta, error) {
-	// TODO sanity check?
-	// newMini := apply.AccountData(delta.new).WithoutAppKV()
-	// if !newMini.Equals(mini.old) {
-	// 	return accountDelta{}, fmt.Errorf("newMini != mini.old: %+v != %+v", newMini, mini.old)
-	// }
-	delta.new = applyMiniDelta(delta.new, mini)
-	return delta, nil
-}
-
-func (delta accountDelta) foldStorageDelta(aapp storagePtr, store *storageDelta) (accountDelta, error) {
-	var err error
-	delta.new, err = applyStorageDelta(delta.new, aapp, store)
-	if err != nil {
-		return accountDelta{}, err
-	}
-	return delta, nil
-}
-
 func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageDelta) (basics.AccountData, error) {
+	// TODO de-duplicate redundant code across branches
 	if aapp.global {
 		owned := make(map[basics.AppIndex]basics.AppParams, len(data.AppParams))
 		for k, v := range data.AppParams {
@@ -188,10 +170,9 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 		case deallocAction:
 			delete(owned, aapp.aidx)
 		case allocAction, remainAllocAction:
-			// TODO encapsulate this in some kind of application function
 			// TODO verify this assertion
 			// note: these should always exist because they were
-			// at least preceded by a call to PutWithCreatable???
+			// at least preceded by a call to PutWithCreatable?
 			params, ok := owned[aapp.aidx]
 			if !ok {
 				return basics.AccountData{}, fmt.Errorf("could not find existing params for %v", aapp.aidx)
@@ -227,7 +208,7 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 		case allocAction, remainAllocAction:
 			// TODO verify this assertion
 			// note: these should always exist because they were
-			// at least preceded by a call to Put???
+			// at least preceded by a call to Put?
 			states, ok := owned[aapp.aidx]
 			if !ok {
 				return basics.AccountData{}, fmt.Errorf("could not find existing states for %v", aapp.aidx)
@@ -252,6 +233,37 @@ func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageD
 		data.AppLocalStates = owned
 	}
 	return data, nil
+}
+
+func withoutAppKV(u basics.AccountData) (res basics.AccountData) {
+	res.Status = u.Status
+	res.MicroAlgos = u.MicroAlgos
+	res.RewardsBase = u.RewardsBase
+	res.RewardedMicroAlgos = u.RewardedMicroAlgos
+	res.VoteID = u.VoteID
+	res.SelectionID = u.SelectionID
+	res.VoteFirstValid = u.VoteFirstValid
+	res.VoteLastValid = u.VoteLastValid
+	res.VoteKeyDilution = u.VoteKeyDilution
+	res.AssetParams = u.AssetParams
+	res.Assets = u.Assets
+	res.AuthAddr = u.AuthAddr
+	res.TotalAppSchema = u.TotalAppSchema
+
+	res.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, len(u.AppLocalStates))
+	for k, v := range u.AppLocalStates {
+		res.AppLocalStates[k] = basics.AppLocalState{Schema: v.Schema}
+	}
+
+	res.AppParams = make(map[basics.AppIndex]basics.AppParams, len(u.AppParams))
+	for k, v := range u.AppParams {
+		res.AppParams[k] = basics.AppParams{
+			ApprovalProgram:   v.ApprovalProgram,
+			ClearStateProgram: v.ClearStateProgram,
+			StateSchemas:      v.StateSchemas,
+		}
+	}
+	return
 }
 
 // catchpointState is used to store catchpoint related varaibles into the catchpointstate table.
@@ -395,15 +407,41 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		return err
 	}
 
-	// TODO strip out app key data and dump into storage table
+	insertKeyStmt, err := tx.Prepare("INSERT INTO storage (owner, aidx, global, key, vtype, venc) VALUES (?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
 	_, err = tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
 	if err == nil {
 		var ot basics.OverflowTracker
 		var totals AccountTotals
 
 		for addr, data := range initAccounts {
+			global := true
+			for aidx, params := range data.AppParams {
+				for key, tv := range params.GlobalState {
+					venc := protocol.Encode(&tv)
+					_, err = insertKeyStmt.Exec(addr[:], aidx, global, key, tv.Type, venc)
+					if err != nil {
+						return err
+					}
+				}
+			}
+
+			global = false
+			for aidx, state := range data.AppLocalStates {
+				for key, tv := range state.KeyValue {
+					venc := protocol.Encode(&tv)
+					_, err = insertKeyStmt.Exec(addr[:], aidx, global, key, tv.Type, venc)
+					if err != nil {
+						return err
+					}
+				}
+			}
+
+			miniData := withoutAppKV(data)
 			_, err = tx.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
-				addr[:], protocol.Encode(&data))
+				addr[:], protocol.Encode(&miniData))
 			if err != nil {
 				return err
 			}

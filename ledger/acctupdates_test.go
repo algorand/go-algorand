@@ -996,7 +996,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* All results are obtained from the database. Empty cache *******
 	// ******* No deletes	                                           *******
 	// sync with the database
-	var updates map[basics.Address]accountDelta
+	var updates map[basics.Address]miniAccountDelta
 	err = accountsNewRound(tx, updates, ctbsWithDeletes)
 	require.NoError(t, err)
 	// nothing left in cache

@@ -981,7 +981,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 2 : %v", err)
 					return 0, err
 				}
-			case 2:
+			case 3:
 				dbVersion, err = au.upgradeDatabaseSchema3(ctx, tx)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
@@ -1268,13 +1268,14 @@ func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx
 		}
 
 		var addr basics.Address
-		var miniData basics.AccountData
+		var data basics.AccountData
 		copy(addr[:], addrBuf)
-		err = protocol.Decode(dataBuf, &miniData)
+		err = protocol.Decode(dataBuf, &data)
 		if err != nil {
 			return
 		}
 
+		miniData := withoutAppKV(data)
 		_, err = insertAcctStmt.Exec(addr[:], protocol.Encode(&miniData))
 		if err != nil {
 			return
@@ -1826,19 +1827,17 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	for i, rndDelta := range deltas {
 		for addr, mini := range rndDelta {
 			delta := fullDeltas[i][addr]
-			delta, err := delta.foldMiniDelta(mini)
-			if err != nil {
-				au.log.Warnf("commitRound: unable to apply mini delta: %v", err)
-				return
-			}
+			delta.new = applyMiniDelta(delta.new, mini)
 			fullDeltas[i][addr] = delta
 		}
 
 		smap := storageDeltas[i]
 		for addr, rndDelta := range smap {
 			for aapp, storeDelta := range rndDelta {
+				var err error
 				delta := fullDeltas[i][addr]
-				delta, err := delta.foldStorageDelta(aapp, storeDelta)
+				delta.new, err = applyStorageDelta(delta.new, aapp, storeDelta)
+				// delta, err := delta.foldStorageDelta(aapp, storeDelta)
 				if err != nil {
 					au.log.Warnf("commitRound: unable to apply storage delta: %v", err)
 					return
