@@ -68,10 +68,10 @@ func (a *bigFloatUp) doRoundUp() {
 	}
 }
 
-// ge_raw returns whether a>=b.  The raw suffix indicates that
+// geRaw returns whether a>=b.  The Raw suffix indicates that
 // this comparison does not take rounding into account, and might
 // not be true if done with arbitrary-precision numbers.
-func (a *bigFloat) ge_raw(b *bigFloat) bool {
+func (a *bigFloat) geRaw(b *bigFloat) bool {
 	if a.exp > b.exp {
 		return true
 	}
@@ -88,13 +88,13 @@ func (a *bigFloat) ge_raw(b *bigFloat) bool {
 // ge returns true, the arbitrary-precision computation would have
 // also been >=.
 func (a *bigFloatDn) ge(b *bigFloatUp) bool {
-	return a.ge_raw(&b.bigFloat)
+	return a.geRaw(&b.bigFloat)
 }
 
-// setu64_dn sets the value to the supplied uint64 (which might get
+// setu64Dn sets the value to the supplied uint64 (which might get
 // rounded down in the process).  x must not be zero.  truncated
 // returns whether any non-zero bits were truncated (rounded down).
-func (a *bigFloat) setu64_dn(x uint64) (truncated bool, err error) {
+func (a *bigFloat) setu64Dn(x uint64) (truncated bool, err error) {
 	if x == 0 {
 		return false, fmt.Errorf("bigFloat cannot be zero")
 	}
@@ -116,9 +116,9 @@ func (a *bigFloat) setu64_dn(x uint64) (truncated bool, err error) {
 	return
 }
 
-// setu64 calls setu64_dn and implements rounding based on the type.
+// setu64 calls setu64Dn and implements rounding based on the type.
 func (a *bigFloatUp) setu64(x uint64) error {
-	truncated, err := a.setu64_dn(x)
+	truncated, err := a.setu64Dn(x)
 	if truncated {
 		a.doRoundUp()
 	}
@@ -126,7 +126,7 @@ func (a *bigFloatUp) setu64(x uint64) error {
 }
 
 func (a *bigFloatDn) setu64(x uint64) error {
-	_, err := a.setu64_dn(x)
+	_, err := a.setu64Dn(x)
 	return err
 }
 
@@ -149,10 +149,10 @@ func (a *bigFloat) setpow2(x int32) {
 	a.canonicalize()
 }
 
-// mul_dn sets a to the product a*b, keeping the most significant 32 bits
+// mulDn sets a to the product a*b, keeping the most significant 32 bits
 // of the product's mantissa.  The return value indicates if any non-zero
 // bits were discarded (rounded down).
-func (a *bigFloat) mul_dn(b *bigFloat) bool {
+func (a *bigFloat) mulDn(b *bigFloat) bool {
 	hi, lo := bits.Mul32(a.mantissa, b.mantissa)
 
 	a.mantissa = hi
@@ -167,17 +167,17 @@ func (a *bigFloat) mul_dn(b *bigFloat) bool {
 	return lo != 0
 }
 
-// mul calls mul_dn and implements appropriate rounding.
+// mul calls mulDn and implements appropriate rounding.
 // Types prevent multiplying two values with different rounding types.
 func (a *bigFloatUp) mul(b *bigFloatUp) {
-	truncated := a.mul_dn(&b.bigFloat)
+	truncated := a.mulDn(&b.bigFloat)
 	if truncated {
 		a.doRoundUp()
 	}
 }
 
 func (a *bigFloatDn) mul(b *bigFloatDn) {
-	a.mul_dn(&b.bigFloat)
+	a.mulDn(&b.bigFloat)
 }
 
 // String returns a string representation of a.

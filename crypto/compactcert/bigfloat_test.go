@@ -36,20 +36,20 @@ func TestBigFloatRounding(t *testing.T) {
 	a.setu64(1 << 63)
 	b.setu64(1 << 63)
 
-	require.True(t, a.ge_raw(&b.bigFloat))
-	require.True(t, b.ge_raw(&a.bigFloat))
+	require.True(t, a.geRaw(&b.bigFloat))
+	require.True(t, b.geRaw(&a.bigFloat))
 
 	a.mul(a)
 	b.mul(b)
 
-	require.True(t, a.ge_raw(&b.bigFloat))
-	require.True(t, b.ge_raw(&a.bigFloat))
+	require.True(t, a.geRaw(&b.bigFloat))
+	require.True(t, b.geRaw(&a.bigFloat))
 
 	a.setu64((1 << 64) - 1)
 	b.setu64((1 << 64) - 1)
 
-	require.False(t, a.ge_raw(&b.bigFloat))
-	require.True(t, b.ge_raw(&a.bigFloat))
+	require.False(t, a.geRaw(&b.bigFloat))
+	require.True(t, b.geRaw(&a.bigFloat))
 
 	a.setu32((1 << 32) - 1)
 	b.setu32((1 << 32) - 1)
@@ -57,8 +57,8 @@ func TestBigFloatRounding(t *testing.T) {
 	a.mul(a)
 	b.mul(b)
 
-	require.False(t, a.ge_raw(&b.bigFloat))
-	require.True(t, b.ge_raw(&a.bigFloat))
+	require.False(t, a.geRaw(&b.bigFloat))
+	require.True(t, b.geRaw(&a.bigFloat))
 }
 
 func TestBigFloat(t *testing.T) {
@@ -114,10 +114,10 @@ func TestBigFloat(t *testing.T) {
 		a.setu64(uint64(x))
 		b.setu64(uint64(y))
 
-		require.Equal(t, x >= y, a.ge_raw(&b.bigFloat))
-		require.Equal(t, x < y, b.ge_raw(&a.bigFloat))
-		require.True(t, a.ge_raw(&a.bigFloat))
-		require.True(t, b.ge_raw(&b.bigFloat))
+		require.Equal(t, x >= y, a.geRaw(&b.bigFloat))
+		require.Equal(t, x < y, b.geRaw(&a.bigFloat))
+		require.True(t, a.geRaw(&a.bigFloat))
+		require.True(t, b.geRaw(&b.bigFloat))
 	}
 
 	xx := &big.Int{}
