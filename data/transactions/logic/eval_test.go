@@ -115,7 +115,7 @@ func TestMinTealVersionParamEvalCheck(t *testing.T) {
 	t.Parallel()
 	params := defaultEvalParams(nil, nil)
 	version2 := uint64(rekeyingEnabledVersion)
-	params.MinTealVersion = &version
+	params.MinTealVersion = &version2
 	program := make([]byte, binary.MaxVarintLen64)
 	// set the teal program version to 1
 	binary.PutUvarint(program, 1)
