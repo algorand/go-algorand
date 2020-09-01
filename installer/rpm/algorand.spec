@@ -27,7 +27,7 @@ This package provides an implementation of the Algorand protocol.
 mkdir -p %{buildroot}/usr/bin
 # NOTE: keep in sync with scripts/build_deb.sh bin_files
 # NOTE: keep in sync with %files section below
-for f in algocfg algod algoh algokey carpenter catchupsrv ddconfig.sh diagcfg goal kmd msgpacktool node_exporter; do
+for f in algocfg algod algoh algokey carpenter catchupsrv ddconfig.sh diagcfg goal kmd msgpacktool node_exporter tealdbg; do
   install -m 755 ${ALGO_BIN}/${f} %{buildroot}/usr/bin/${f}
 done
 
@@ -80,6 +80,7 @@ fi
 /usr/bin/kmd
 /usr/bin/msgpacktool
 /usr/bin/node_exporter
+/usr/bin/tealdbg
 /var/lib/algorand/config.json.example
 %config(noreplace) /var/lib/algorand/system.json
 %config(noreplace) /var/lib/algorand/genesis.json
