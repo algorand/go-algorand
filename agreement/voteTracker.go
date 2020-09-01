@@ -241,11 +241,11 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 		step := e.Vote.R.Step
 		switch {
 		case step == soft:
-			res = thresholdEvent{T: softThreshold, Round: round, Period: period, Step: step, Proposal: prop}
+			res = thresholdEvent{T: softThreshold, Round: round, Period: period, Step: step, Proposal: prop, Proto: e.Proto}
 		case step == cert:
-			res = thresholdEvent{T: certThreshold, Round: round, Period: period, Step: step, Proposal: prop}
+			res = thresholdEvent{T: certThreshold, Round: round, Period: period, Step: step, Proposal: prop, Proto: e.Proto}
 		default: // next vote
-			res = thresholdEvent{T: nextThreshold, Round: round, Period: period, Step: step, Proposal: prop}
+			res = thresholdEvent{T: nextThreshold, Round: round, Period: period, Step: step, Proposal: prop, Proto: e.Proto}
 		}
 
 		res.Bundle = tracker.genBundle(proto, proposalVote)
