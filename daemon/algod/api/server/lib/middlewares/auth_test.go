@@ -161,26 +161,28 @@ func TestAuth(t *testing.T) {
 	handler := authFn(success)
 
 	for _, test := range tests {
-		req, _ := http.NewRequest(test.method, test.url, nil)
-		if test.header != "" {
-			req.Header.Set(test.header, test.token)
-		}
-		ctx := e.NewContext(req, nil)
+		t.Run(test.name, func(t *testing.T) {
+			req, _ := http.NewRequest(test.method, test.url, nil)
+			if test.header != "" {
+				req.Header.Set(test.header, test.token)
+			}
+			ctx := e.NewContext(req, nil)
 
-		// There is no router to update the context based on the url, so do it manually.
-		if test.header == "" && test.token != "" {
-			ctx.SetParamNames(TokenPathParam)
-			ctx.SetParamValues(test.token)
-		}
-		ctx.SetPath("")
+			// There is no router to update the context based on the url, so do it manually.
+			if test.header == "" && test.token != "" {
+				ctx.SetParamNames(TokenPathParam)
+				ctx.SetParamValues(test.token)
+			}
+			ctx.SetPath("")
 
-		err := handler(ctx)
-		require.Equal(t, test.expectResponse, err, test.name)
+			err := handler(ctx)
+			require.Equal(t, test.expectResponse, err, test.name)
 
-		// In some cases the auth rewrites the path, make sure the path has been rewritten
-		if test.finalPath != "" {
-			require.Equal(t, test.finalPath, ctx.Path())
-			require.Equal(t, test.finalPath, ctx.Request().URL.Path)
-		}
+			// In some cases the auth rewrites the path, make sure the path has been rewritten
+			if test.finalPath != "" {
+				require.Equal(t, test.finalPath, ctx.Path())
+				require.Equal(t, test.finalPath, ctx.Request().URL.Path)
+			}
+		})
 	}
 }
