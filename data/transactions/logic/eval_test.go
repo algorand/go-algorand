@@ -110,6 +110,41 @@ func TestEmptyProgram(t *testing.T) {
 	require.False(t, pass)
 }
 
+// TestMinTealVersionParamEval tests eval/check reading the MinTealVersion from the param
+func TestMinTealVersionParamEvalCheck(t *testing.T) {
+	t.Parallel()
+	params := defaultEvalParams(nil, nil)
+	version_2 := uint64(rekeyingEnabledVersion)
+	params.MinTealVersion = &version_2
+	program := make([]byte, binary.MaxVarintLen64)
+	// set the teal program version to 1
+	binary.PutUvarint(program, 1)
+
+	_, err := Check(program, params)
+	require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
+	
+	// If the param is read correctly, the eval should fail
+	pass, err := Eval(program, params)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
+	require.False(t, pass)
+}
+
+func TestTxnFieldToTealValue(t *testing.T) {
+	
+	txn := transactions.Transaction{}
+	value := uint64(9999)
+	txn.FirstValid = basics.Round(value)
+	groupIndex := 0
+	field := FirstValid
+
+	tealValue, err := TxnFieldToTealValue(&txn, groupIndex, field)
+	require.Equal(t, basics.TealUintType, tealValue.Type)
+	require.Equal(t, value, tealValue.Uint)
+	fmt.Printf("%+v\n", tealValue)
+	require.NoError(t, err)
+}
+
 func TestWrongProtoVersion(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {

@@ -35,6 +35,12 @@ func TestOpSpecs(t *testing.T) {
 func TestOpcodesByVersion(t *testing.T) {
 	t.Parallel()
 
+	// To test the case where a newer version opcode is before an older version
+	// Change the order of opcode 0x01 so that version 2 comes before version 1
+	tmp := OpSpecs[1]
+	OpSpecs[1] = OpSpecs[4]
+	OpSpecs[4] = tmp
+
 	opSpecs := make([][]OpSpec, 2)
 	for v := uint64(1); v <= LogicVersion; v++ {
 		t.Run(fmt.Sprintf("v=%d", v), func(t *testing.T) {
