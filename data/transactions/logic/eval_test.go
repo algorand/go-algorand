@@ -141,7 +141,6 @@ func TestTxnFieldToTealValue(t *testing.T) {
 	tealValue, err := TxnFieldToTealValue(&txn, groupIndex, field)
 	require.Equal(t, basics.TealUintType, tealValue.Type)
 	require.Equal(t, value, tealValue.Uint)
-	fmt.Printf("%+v\n", tealValue)
 	require.NoError(t, err)
 }
 

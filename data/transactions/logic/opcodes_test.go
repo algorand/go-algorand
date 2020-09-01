@@ -55,7 +55,7 @@ func (os *OpSpec) equals(oso *OpSpec) bool {
 	return true
 }
 
-func TestOpcodesByVersion(t *testing.T) {
+func TestOpcodesByVersionReordered(t *testing.T) {
 
 	// Make a copy to restore to the original
 	OpSpecsOrig := make([]OpSpec, len(OpSpecs))
@@ -73,6 +73,10 @@ func TestOpcodesByVersion(t *testing.T) {
 	OpSpecs[1] = OpSpecs[4]
 	OpSpecs[4] = tmp
 
+	t.Run("TestOpcodesByVersion", TestOpcodesByVersion)
+}
+
+func TestOpcodesByVersion(t *testing.T) {
 	// Make a copy of the OpSpecs to check if OpcodesByVersion will change it
 	OpSpecs2 := make([]OpSpec, len(OpSpecs))
 	for idx, opspec := range OpSpecs {
