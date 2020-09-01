@@ -33,6 +33,8 @@
     "RedoCommitteeThreshold": 1768,
     "DownCommitteeSize": 6000,
     "DownCommitteeThreshold": 4560,
+    "FilterTimeoutSmallLambdas": 2,
+    "FilterTimeoutPeriod0SmallLambdas": 2,
     "FastRecoveryLambda": 300000000000,
     "FastPartitionRecovery": true,
     "PaysetCommitFlat": true,
