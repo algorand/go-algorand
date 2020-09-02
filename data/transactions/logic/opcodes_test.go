@@ -63,9 +63,9 @@ func TestOpcodesByVersionReordered(t *testing.T) {
 		cp := opspec
 		OpSpecsOrig[idx] = cp
 	}
-	defer (func() {
+	defer func() {
 		OpSpecs = OpSpecsOrig
-	})()
+	}()
 
 	// To test the case where a newer version opcode is before an older version
 	// Change the order of opcode 0x01 so that version 2 comes before version 1

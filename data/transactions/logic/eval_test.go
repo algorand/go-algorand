@@ -133,15 +133,17 @@ func TestMinTealVersionParamEvalCheck(t *testing.T) {
 func TestTxnFieldToTealValue(t *testing.T) {
 
 	txn := transactions.Transaction{}
-	value := uint64(9999)
-	txn.FirstValid = basics.Round(value)
 	groupIndex := 0
 	field := FirstValid
+	values := [6]uint64{0, 1, 2, 2 ^ 32 - 1, 2 ^ 64 - 1}
 
-	tealValue, err := TxnFieldToTealValue(&txn, groupIndex, field)
-	require.Equal(t, basics.TealUintType, tealValue.Type)
-	require.Equal(t, value, tealValue.Uint)
-	require.NoError(t, err)
+	for _, value := range values {
+		txn.FirstValid = basics.Round(value)
+		tealValue, err := TxnFieldToTealValue(&txn, groupIndex, field)
+		require.NoError(t, err)
+		require.Equal(t, basics.TealUintType, tealValue.Type)
+		require.Equal(t, value, tealValue.Uint)
+	}
 }
 
 func TestWrongProtoVersion(t *testing.T) {
