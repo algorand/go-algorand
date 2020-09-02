@@ -135,7 +135,7 @@ func TestTxnFieldToTealValue(t *testing.T) {
 	txn := transactions.Transaction{}
 	groupIndex := 0
 	field := FirstValid
-	values := [6]uint64{0, 1, 2, 2 ^ 32 - 1, 2 ^ 64 - 1}
+	values := [6]uint64{0, 1, 2, 0xffffffff, 0xffffffffffffffff}
 
 	for _, value := range values {
 		txn.FirstValid = basics.Round(value)
