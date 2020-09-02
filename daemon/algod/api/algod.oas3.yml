@@ -1359,6 +1359,32 @@
   },
   "openapi": "3.0.1",
   "paths": {
+    "/genesis.json": {
+      "get": {
+        "description": "Returns the entire genesis file in json.",
+        "operationId": "SwaggerJSON",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The genesis file in json."
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Gets the genesis information.",
+        "tags": [
+          "common"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "HealthCheck",
