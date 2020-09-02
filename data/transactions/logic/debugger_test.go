@@ -125,3 +125,28 @@ func TestDebuggerHook(t *testing.T) {
 	require.Greater(t, testDbg.update, 1)
 	require.Equal(t, 1, len(testDbg.state.Stack))
 }
+
+func TestLineToPC(t *testing.T) {
+	dState := DebugState{
+		Disassembly: "abc\ndef\nghi",
+		PCOffset:    []PCOffset{{PC: 1, Offset: 4}, {PC: 2, Offset: 8}, {PC: 3, Offset: 12}},
+	}
+	pc := dState.LineToPC(0)
+	require.Equal(t, 0, pc)
+
+	pc = dState.LineToPC(1)
+	require.Equal(t, 1, pc)
+
+	pc = dState.LineToPC(2)
+	require.Equal(t, 2, pc)
+
+	pc = dState.LineToPC(3)
+	require.Equal(t, 3, pc)
+
+	pc = dState.LineToPC(4)
+	require.Equal(t, 0, pc)
+
+	dState.PCOffset = []PCOffset{}
+	pc = dState.LineToPC(1)
+	require.Equal(t, 0, pc)
+}
