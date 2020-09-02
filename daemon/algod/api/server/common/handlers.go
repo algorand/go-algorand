@@ -27,6 +27,27 @@ import (
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 )
 
+// GenesisJSON is an httpHandler for route GET /genesis.json
+func GenesisJSON(ctx lib.ReqContext, context echo.Context) {
+	// swagger:operation GET /genesis.json GenesisJSON
+	//---
+	//     Summary: Gets the genesis information
+	//     Description: Returns the entire genesis file in json.
+	//     Produces:
+	//     - application/json
+	//     Schemes:
+	//     - http
+	//     Responses:
+	//       200:
+	//         description: The current genesis information
+	//         schema: {type: string}
+	//       default: { description: Unknown Error }
+	w := context.Response().Writer
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(lib.GenesisJSONText))
+}
+
 // SwaggerJSON is an httpHandler for route GET /swagger.json
 func SwaggerJSON(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /swagger.json SwaggerJSON
