@@ -841,7 +841,7 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 		stats := node.catchpointCatchupService.GetStatistics()
 		// No need to return an error
 		if catchpoint == stats.CatchpointLabel {
-			node.log.Infof("the requested catchpoint is already in progress, no need to return an error", catchpoint)
+			node.log.Infof("the requested catchpoint '%s' is already in progress, suppressing error", catchpoint)
 			return nil
 		}
 		return fmt.Errorf("unable to start catchpoint catchup for '%s' - already catching up '%s'", catchpoint, stats.CatchpointLabel)
