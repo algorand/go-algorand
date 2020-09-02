@@ -326,7 +326,7 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	p.Step = soft
 	p.Napping = false
 	p.FastRecoveryDeadline = 0 // set immediately
-	p.Deadline = FilterTimeout(target, source.Proto)
+	p.Deadline = filterTimeout
 
 	// update tracer state to match player
 	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
@@ -371,15 +371,7 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 	p.Step = soft
 	p.Napping = false
 	p.FastRecoveryDeadline = 0 // set immediately
-
-	switch source := source.(type) {
-	case roundInterruptionEvent:
-		p.Deadline = FilterTimeout(0, source.Proto.Version)
-	case thresholdEvent:
-		p.Deadline = FilterTimeout(0, source.Proto)
-	case filterableMessageEvent:
-		p.Deadline = FilterTimeout(0, source.Proto.Version)
-	}
+	p.Deadline = filterTimeout
 
 	// update tracer state to match player
 	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
