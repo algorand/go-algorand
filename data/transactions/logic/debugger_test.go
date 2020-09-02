@@ -18,8 +18,10 @@ package logic
 
 import (
 	"os"
+	"encoding/base64"
 	"testing"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/stretchr/testify/require"
 )
 
@@ -146,7 +148,30 @@ func TestLineToPC(t *testing.T) {
 	pc = dState.LineToPC(4)
 	require.Equal(t, 0, pc)
 
+	pc = dState.LineToPC(-1)
+	require.Equal(t, 0, pc)
+
+	pc = dState.LineToPC(0x7fffffff)
+	require.Equal(t, 0, pc)
+
 	dState.PCOffset = []PCOffset{}
 	pc = dState.LineToPC(1)
 	require.Equal(t, 0, pc)
+
+	dState.PCOffset = []PCOffset{{PC: 1, Offset: 0}}
+	pc = dState.LineToPC(1)
+	require.Equal(t, 0, pc)	
+}
+
+func TestValueDeltaToValueDelta(t *testing.T) {
+	vDelta := basics.ValueDelta{
+		Action: basics.SetUintAction,
+		Bytes:  "some string",
+		Uint:   uint64(0xffffffff),
+	}
+	ans := valueDeltaToValueDelta(&vDelta)
+	require.Equal(t, vDelta.Action, ans.Action)
+	require.NotEqual(t, vDelta.Bytes, ans.Bytes)
+	require.Equal(t, base64.StdEncoding.EncodeToString([]byte(vDelta.Bytes)), ans.Bytes)
+	require.Equal(t, vDelta.Uint, ans.Uint)
 }
