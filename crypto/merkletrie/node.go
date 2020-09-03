@@ -47,6 +47,8 @@ func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error
 		if depth > stats.depth {
 			stats.depth = depth
 		}
+		// slice takes a ptr + 2 int
+		// the bitset takes 32 bytes
 		stats.size += 3*8 + len(n.hash) + 32
 		return nil
 	}
@@ -64,7 +66,9 @@ func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error
 	return nil
 }
 
-// indexOf returns the index into the children array of the first child whose index field is less than b
+// indexOf returns the index into the children array of the first child whose index field is less or equal to b
+// it's being used in conjuction with the bitset, so we test only the equality path ( i.e. get the index of the
+// child that has index of value x )
 func (n *node) indexOf(b byte) byte {
 	// find the child using binary search:
 	return byte(sort.Search(len(n.children), func(i int) bool { return n.children[i].index >= b }))
@@ -199,8 +203,11 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		if err != nil {
 			return storedNodeIdentifierNull, err
 		}
-		pnode, nodeID = n.duplicate(cache)
-		cache.deleteNode(curNodeID)
+
+		pnode, nodeID = childNode, cache.refurbishNode(curNodeID)
+		pnode.childrenMask = n.childrenMask
+		pnode.children = make([]childEntry, len(n.children), len(n.children))
+		copy(pnode.children, n.children)
 		pnode.children[curNodeIndex].id = updatedChild
 	}
 	pnode.hash = path
@@ -252,9 +259,11 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 		return
 	}
 	if childNode.leaf() {
-		pnode, nodeID = n.duplicate(cache)
+		pnode, nodeID = childNode, cache.refurbishNode(childNodeID)
+		pnode.childrenMask = n.childrenMask
 		// we are guaranteed to have other children, because our tree forbids nodes that have exactly one leaf child and no other children.
-		pnode.children = append(pnode.children[:childIndex], pnode.children[childIndex+1:]...)
+		pnode.children = make([]childEntry, len(n.children)-1, len(n.children)-1)
+		copy(pnode.children, append(n.children[:childIndex], n.children[childIndex+1:]...))
 		pnode.childrenMask.ClearBit(key[0])
 	} else {
 		var updatedChildNodeID storedNodeIdentifier
@@ -262,10 +271,13 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 		if err != nil {
 			return storedNodeIdentifierNull, err
 		}
-		pnode, nodeID = n.duplicate(cache)
+
+		pnode, nodeID = childNode, cache.refurbishNode(childNodeID)
+		pnode.childrenMask = n.childrenMask
+		pnode.children = make([]childEntry, len(n.children), len(n.children))
+		copy(pnode.children, n.children)
 		pnode.children[childIndex].id = updatedChildNodeID
 	}
-	cache.deleteNode(childNodeID)
 
 	// at this point, we might end up with a single leaf child. collapse that.
 	if len(pnode.children) == 1 {
@@ -285,20 +297,6 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 		pnode.hash = path
 	}
 	return nodeID, nil
-}
-
-// duplicate creates a copy of the current node
-func (n *node) duplicate(cache *merkleTrieCache) (pnode *node, nodeID storedNodeIdentifier) {
-	pnode, nodeID = cache.allocateNewNode()
-	pnode.hash = n.hash // the hash is safe for just copy without duplicate, since it's always being reallocated upon change.
-	if !n.leaf() {
-		pnode.children = make([]childEntry, len(n.children), len(n.children))
-		for i, v := range n.children {
-			pnode.children[i] = v
-		}
-		pnode.childrenMask = n.childrenMask
-	}
-	return
 }
 
 // serialize the content of the node into the buffer, and return the number of bytes consumed in the process.
