@@ -142,7 +142,7 @@ function pprof_test {
 }
 
 function test_genesis_endpoint {
-  call_and_verify "There should be a genesis.json endpoint." "/genesis.json" 200 '
+  call_and_verify "There should be a genesis endpoint." "/genesis" 200 '
   "id": "v1",
   "network": "tbd",
   "proto": "future",

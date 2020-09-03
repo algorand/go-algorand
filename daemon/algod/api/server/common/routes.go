@@ -49,9 +49,9 @@ var Routes = lib.Routes{
 	},
 
 	lib.Route{
-		Name:        "genesis.json",
+		Name:        "genesis",
 		Method:      "GET",
-		Path:        "/genesis.json",
+		Path:        "/genesis",
 		HandlerFunc: GenesisJSON,
 	},
 }
