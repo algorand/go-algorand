@@ -17,6 +17,10 @@ RUN apt-get update && apt-get install -y autoconf bsdmainutils git libboost-all-
     curl https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz | tar -xzf - && \
     mv go /usr/local
 
+ENV GOROOT=/usr/local/go \
+    GOPATH=$HOME/go
+ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH
+
 WORKDIR /root
 CMD ["/bin/bash"]
 

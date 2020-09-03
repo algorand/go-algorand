@@ -3,6 +3,10 @@
 
 set -ex
 
+echo
+date "+build_release begin DEPLOY rpm stage %Y%m%d_%H%M%S"
+echo
+
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 
 mule -f package-deploy.yaml package-deploy-setup-gnupg
@@ -24,6 +28,8 @@ else
     echo "no-autostart" >> .gnupg/gpg.conf
 fi
 
+popd
+
 echo "wat" | gpg -u rpm@algorand.com --clearsign
 
 cat << EOF > .rpmmacros
@@ -38,8 +44,9 @@ import sys
 rpm.addSign(sys.argv[1], '')
 EOF
 
+rm -rf rpmrepo
 mkdir rpmrepo
-for rpm in $(ls packages/rpm/stable/*"$VERSION"*.rpm)
+for rpm in $(ls ./packages/rpm/stable/*"$VERSION"*.rpm)
 do
     python2 rpmsign.py "$rpm"
     cp -p "$rpm" rpmrepo
@@ -49,7 +56,9 @@ createrepo --database rpmrepo
 rm -f rpmrepo/repodata/repomd.xml.asc
 gpg -u rpm@algorand.com --detach-sign --armor rpmrepo/repodata/repomd.xml
 
-popd
-
 mule -f package-deploy.yaml package-deploy-rpm-repo
+
+echo
+date "+build_release end DEPLOY rpm stage %Y%m%d_%H%M%S"
+echo
 
