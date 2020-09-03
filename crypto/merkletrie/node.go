@@ -44,10 +44,10 @@ func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error
 		if depth > stats.depth {
 			stats.depth = depth
 		}
-		stats.size += 4 + len(n.hash) + 1
+		stats.size += 3*8 + len(n.hash) + 32
 		return nil
 	}
-	stats.size += 32 + len(n.hash) + len(n.children)*9
+	stats.size += 3*8 + len(n.hash) + 3*8 + len(n.children)*(8+1) + 32
 	for _, child := range n.children {
 		childNode, err := cache.getNode(child.id)
 		if err != nil {
@@ -100,8 +100,8 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		newChildNode.hash = d[idiff+1:]
 
 		pnode, nodeID = cache.allocateNewNode()
-		pnode.childrenMask.SetBit(n.hash[idiff], true)
-		pnode.childrenMask.SetBit(d[idiff], true)
+		pnode.childrenMask.SetBit(n.hash[idiff])
+		pnode.childrenMask.SetBit(d[idiff])
 
 		if n.hash[idiff] < d[idiff] {
 			pnode.children = []childEntry{
@@ -131,7 +131,7 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		for i := idiff - 1; i >= 0; i-- {
 			// create a parent node for pnode.
 			pnode2, nodeID2 := cache.allocateNewNode()
-			pnode2.childrenMask.SetBit(d[i], true)
+			pnode2.childrenMask.SetBit(d[i])
 			pnode2.children = []childEntry{
 				childEntry{
 					id:    nodeID,
@@ -155,7 +155,7 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 
 		pnode, nodeID = cache.allocateNewNode()
 		pnode.childrenMask = n.childrenMask
-		pnode.childrenMask.SetBit(d[0], true)
+		pnode.childrenMask.SetBit(d[0])
 
 		pnode.children = make([]childEntry, len(n.children)+1, len(n.children)+1)
 		if d[0] > n.children[len(n.children)-1].index {
@@ -251,7 +251,7 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 		pnode, nodeID = n.duplicate(cache)
 		// we are guaranteed to have other children, because our tree forbids nodes that have exactly one leaf child and no other children.
 		pnode.children = append(pnode.children[:childIndex], pnode.children[childIndex+1:]...)
-		pnode.childrenMask.SetBit(key[0], false)
+		pnode.childrenMask.ClearBit(key[0])
 	} else {
 		var updatedChildNodeID storedNodeIdentifier
 		updatedChildNodeID, err = childNode.remove(cache, key[1:], append(path, key[0]))
@@ -273,7 +273,7 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 			// convert current node into a leaf.
 			pnode.hash = append([]byte{pnode.children[0].index}, childNode.hash...)
 			cache.deleteNode(pnode.children[0].id)
-			pnode.childrenMask.SetBit(pnode.children[0].index, false)
+			pnode.childrenMask.ClearBit(pnode.children[0].index)
 			pnode.children = nil
 		}
 	}
@@ -354,7 +354,7 @@ func deserializeNode(buf []byte) (n *node, s int) {
 		s += nodeIDLength
 
 		childEntries[i] = childEntry{index: childIndex, id: storedNodeIdentifier(nodeID)}
-		n.childrenMask.SetBit(childIndex, true)
+		n.childrenMask.SetBit(childIndex)
 		prevChildIndex = childIndex
 		i++
 	}
