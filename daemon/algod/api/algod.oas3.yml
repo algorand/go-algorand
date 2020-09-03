@@ -1359,7 +1359,7 @@
   },
   "openapi": "3.0.1",
   "paths": {
-    "/genesis.json": {
+    "/genesis": {
       "get": {
         "description": "Returns the entire genesis file in json.",
         "operationId": "SwaggerJSON",
