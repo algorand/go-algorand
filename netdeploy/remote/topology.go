@@ -23,6 +23,7 @@ import (
 
 type cloudHostType struct {
 	Name     string
+	Group    string
 	Template string
 }
 
