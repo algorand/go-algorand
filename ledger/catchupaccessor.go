@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -219,7 +220,8 @@ type CatchpointCatchupAccessorProgress struct {
 
 	// Having the cachedTrie here would help to accelarate the catchup process since the trie maintain an internal cache of nodes.
 	// While rebuilding the trie, we don't want to force and reload (some) of these nodes into the cache for each catchpoint file chunk.
-	cachedTrie *merkletrie.Trie
+	cachedTrie     *merkletrie.Trie
+	evictFrequency uint64
 }
 
 // ProgressStagingBalances deserialize the given bytes as a temporary staging balances
@@ -300,7 +302,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		}
 
 		if progress.cachedTrie == nil {
-			progress.cachedTrie, err = merkletrie.MakeTrie(mc, trieCachedNodesCount)
+			progress.cachedTrie, err = merkletrie.MakeTrie(mc, trieMemoryConfig)
 			if err != nil {
 				return
 			}
@@ -370,10 +372,27 @@ func (progress *CatchpointCatchupAccessorProgress) EvictAsNeeded(balancesCount u
 	if progress.cachedTrie == nil {
 		return nil
 	}
+	if progress.evictFrequency == 0 {
+		progress.evictFrequency = trieRebuildCommitFrequency
+	}
 	// periodically, perform commit & evict to flush it to the disk and rebalance the cache memory utilization.
-	if (progress.ProcessedAccounts/trieRebuildCommitFrequency) < ((progress.ProcessedAccounts+balancesCount)/trieRebuildCommitFrequency) ||
+	if (progress.ProcessedAccounts/progress.evictFrequency) < ((progress.ProcessedAccounts+balancesCount)/progress.evictFrequency) ||
 		(progress.ProcessedAccounts+balancesCount) == progress.TotalAccounts {
+		evictStart := time.Now()
 		_, err = progress.cachedTrie.Evict(true)
+		if err == nil {
+			evictDelta := time.Now().Sub(evictStart)
+			if evictDelta > 2000*time.Millisecond {
+				if progress.evictFrequency > 1024 {
+					progress.evictFrequency /= 2
+				}
+			} else {
+				progress.evictFrequency *= 2
+				if progress.evictFrequency > trieRebuildCommitFrequency {
+					progress.evictFrequency = trieRebuildCommitFrequency
+				}
+			}
+		}
 	}
 	return
 }
@@ -415,7 +434,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 			return fmt.Errorf("unable to make MerkleCommitter: %v", err0)
 		}
 		var trie *merkletrie.Trie
-		trie, err = merkletrie.MakeTrie(mc, trieCachedNodesCount)
+		trie, err = merkletrie.MakeTrie(mc, trieMemoryConfig)
 		if err != nil {
 			return fmt.Errorf("unable to make trie: %v", err)
 		}

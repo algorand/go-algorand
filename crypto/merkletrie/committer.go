@@ -20,7 +20,6 @@ package merkletrie
 type Committer interface {
 	StorePage(page uint64, content []byte) error
 	LoadPage(page uint64) (content []byte, err error)
-	GetNodesCountPerPage() int64
 }
 
 const (
@@ -53,9 +52,4 @@ func (mc *InMemoryCommitter) LoadPage(page uint64) (content []byte, err error) {
 	}
 	content = mc.memStore[page]
 	return content, nil
-}
-
-// GetNodesCountPerPage returns the page size ( number of nodes per page )
-func (mc *InMemoryCommitter) GetNodesCountPerPage() (pageSize int64) {
-	return inMemoryCommitterPageSize
 }

@@ -838,10 +838,6 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 	return
 }
 
-// merkleCommitterNodesPerPage controls how many nodes will be stored in a single page
-// value was calibrated using BenchmarkCalibrateNodesPerPage
-var merkleCommitterNodesPerPage = int64(116)
-
 type merkleCommitter struct {
 	tx         *sql.Tx
 	deleteStmt *sql.Stmt
@@ -891,11 +887,6 @@ func (mc *merkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 		return nil, err
 	}
 	return content, nil
-}
-
-// GetNodesCountPerPage returns the page size ( number of nodes per page )
-func (mc *merkleCommitter) GetNodesCountPerPage() (pageSize int64) {
-	return merkleCommitterNodesPerPage
 }
 
 // encodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.

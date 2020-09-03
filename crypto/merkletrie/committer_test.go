@@ -35,7 +35,7 @@ func (mc *InMemoryCommitter) Duplicate() (out *InMemoryCommitter) {
 
 func TestInMemoryCommitter(t *testing.T) {
 	var memoryCommitter InMemoryCommitter
-	mt1, _ := MakeTrie(&memoryCommitter, defaultTestEvictSize)
+	mt1, _ := MakeTrie(&memoryCommitter, defaultTestMemoryConfig)
 	// create 50000 hashes.
 	leafsCount := 50000
 	hashes := make([]crypto.Digest, leafsCount)
@@ -60,7 +60,7 @@ func TestInMemoryCommitter(t *testing.T) {
 
 	mt1Hash, _ := mt1.RootHash()
 
-	mt2, _ := MakeTrie(savedMemoryCommitter, defaultTestEvictSize)
+	mt2, _ := MakeTrie(savedMemoryCommitter, defaultTestMemoryConfig)
 
 	for i := len(hashes) / 2; i < len(hashes); i++ {
 		mt2.Add(hashes[i][:])
@@ -95,7 +95,7 @@ func (n *node) getChildren() (list []storedNodeIdentifier) {
 
 func TestNoRedundentPages(t *testing.T) {
 	var memoryCommitter InMemoryCommitter
-	mt1, _ := MakeTrie(&memoryCommitter, defaultTestEvictSize)
+	mt1, _ := MakeTrie(&memoryCommitter, defaultTestMemoryConfig)
 
 	testSize := 20000
 	// create 20000 hashes.
@@ -111,7 +111,7 @@ func TestNoRedundentPages(t *testing.T) {
 	trieNodes := make(map[storedNodeIdentifier]bool)
 	for page, bytes := range memoryCommitter.memStore {
 		if page == 0 {
-			mt2, _ := MakeTrie(nil, defaultTestEvictSize)
+			mt2, _ := MakeTrie(nil, defaultTestMemoryConfig)
 			_, err := mt2.deserialize(bytes)
 			require.NoError(t, err)
 		} else {
@@ -139,7 +139,7 @@ func TestMultipleCommits(t *testing.T) {
 	}
 
 	var memoryCommitter1 InMemoryCommitter
-	mt1, _ := MakeTrie(&memoryCommitter1, defaultTestEvictSize)
+	mt1, _ := MakeTrie(&memoryCommitter1, defaultTestMemoryConfig)
 	for i := 0; i < len(hashes); i++ {
 
 		mt1.Add(hashes[i][:])
@@ -150,7 +150,7 @@ func TestMultipleCommits(t *testing.T) {
 	mt1.Commit()
 
 	var memoryCommitter2 InMemoryCommitter
-	mt2, _ := MakeTrie(&memoryCommitter2, defaultTestEvictSize)
+	mt2, _ := MakeTrie(&memoryCommitter2, defaultTestMemoryConfig)
 	for i := 0; i < len(hashes); i++ {
 		mt2.Add(hashes[i][:])
 	}

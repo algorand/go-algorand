@@ -52,7 +52,7 @@ const (
 	// before added to the trie during trie construction
 	trieRebuildAccountChunkSize = 16384
 	// trieRebuildCommitFrequency defines the number of accounts that would get added before we call evict to commit the changes and adjust the memory cache.
-	trieRebuildCommitFrequency = 65536
+	trieRebuildCommitFrequency = 32768
 	// trieAccumulatedChangesFlush defines the number of pending changes that would be applied to the merkle trie before
 	// we attempt to commit them to disk while writing a batch of rounds balances to disk.
 	trieAccumulatedChangesFlush = 256
@@ -61,6 +61,18 @@ const (
 // trieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory.
 // value was calibrated using BenchmarkCalibrateCacheNodeSize
 var trieCachedNodesCount = 9000
+
+// merkleCommitterNodesPerPage controls how many nodes will be stored in a single page
+// value was calibrated using BenchmarkCalibrateNodesPerPage
+//var merkleCommitterNodesPerPage = int64(116)
+var merkleCommitterNodesPerPage = int64(350)
+
+var trieMemoryConfig = merkletrie.MemoryConfig{
+	NodesCountPerPage:         merkleCommitterNodesPerPage,
+	CachedNodesCount:          trieCachedNodesCount,
+	PageFillFactor:            0.95,
+	MaxChildrenPagesThreshold: 16,
+}
 
 // A modifiedAccount represents an account that has been modified since
 // the persistent state stored in the account DB (i.e., in the range of
@@ -869,7 +881,8 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
 	}
-	trie, err := merkletrie.MakeTrie(committer, trieCachedNodesCount)
+
+	trie, err := merkletrie.MakeTrie(committer, trieMemoryConfig)
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 	}
@@ -1426,7 +1439,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 				return err0
 			}
 			if au.balancesTrie == nil {
-				trie, err := merkletrie.MakeTrie(mc, trieCachedNodesCount)
+				trie, err := merkletrie.MakeTrie(mc, trieMemoryConfig)
 				if err != nil {
 					au.log.Warnf("unable to create merkle trie during committedUpTo: %v", err)
 					return err

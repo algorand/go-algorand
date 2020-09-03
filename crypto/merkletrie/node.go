@@ -359,6 +359,33 @@ func deserializeNode(buf []byte) (n *node, s int) {
 		i++
 	}
 	n.children = make([]childEntry, i, i)
-	copy(n.children[:], childEntries[:i])
+	copy(n.children, childEntries[:i])
 	return
+}
+
+func (n *node) getUniqueChildPageCount(nodesPerPage int64) uint64 {
+	uniquePages := make(map[int64]struct{}, len(n.children))
+	for _, child := range n.children {
+		uniquePages[int64(child.id)/nodesPerPage] = struct{}{}
+	}
+	return uint64(len(uniquePages))
+}
+
+func (n *node) reallocateChildren(cache *merkleTrieCache) {
+	for i := range n.children {
+		n.children[i].id = cache.reallocateNode(n.children[i].id)
+	}
+}
+
+func (n *node) getChildCount() uint64 {
+	return uint64(len(n.children))
+}
+
+func (n *node) remapChildren(reallocationMap map[storedNodeIdentifier]storedNodeIdentifier) {
+	for i := range n.children {
+		if newID, has := reallocationMap[n.children[i].id]; has {
+			delete(reallocationMap, n.children[i].id)
+			n.children[i].id = newID
+		}
+	}
 }
