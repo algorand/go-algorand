@@ -98,7 +98,7 @@
     },
     "/versions": {
       "get": {
-        "description": "Retrieves the current version",
+        "description": "Retrieves the API version, binary build versions, and genesis information.",
         "tags": [
           "common"
         ],
