@@ -34,9 +34,12 @@ type node struct {
 	childrenMask bitset
 }
 
+// leaf returns whether the current node is a leaf node, or a non-leaf node
 func (n *node) leaf() bool {
-	return n.childrenMask.IsZero()
+	return len(n.children) == 0
 }
+
+// stats recursively update the provided Stats structure with the current node information
 func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error) {
 	stats.nodesCount++
 	if n.leaf() {
@@ -61,6 +64,7 @@ func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error
 	return nil
 }
 
+// indexOf returns the index into the children array of the first child whose index field is less than b
 func (n *node) indexOf(b byte) byte {
 	// find the child using binary search:
 	return byte(sort.Search(len(n.children), func(i int) bool { return n.children[i].index >= b }))
@@ -287,12 +291,12 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 func (n *node) duplicate(cache *merkleTrieCache) (pnode *node, nodeID storedNodeIdentifier) {
 	pnode, nodeID = cache.allocateNewNode()
 	pnode.hash = n.hash // the hash is safe for just copy without duplicate, since it's always being reallocated upon change.
-	pnode.childrenMask = n.childrenMask
-	if !pnode.leaf() {
+	if !n.leaf() {
 		pnode.children = make([]childEntry, len(n.children), len(n.children))
 		for i, v := range n.children {
 			pnode.children[i] = v
 		}
+		pnode.childrenMask = n.childrenMask
 	}
 	return
 }

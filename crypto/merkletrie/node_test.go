@@ -53,3 +53,68 @@ func TestNodeSerialization(t *testing.T) {
 		}
 	}
 }
+
+func (n *node) leafUsingChildrenMask() bool {
+	return n.childrenMask.IsZero()
+}
+
+func (n *node) leafUsingChildrenLength() bool {
+	return len(n.children) == 0
+}
+
+func BenchmarkNodeLeafImplementation(b *testing.B) {
+	b.Run("leaf-ChildrenMask", func(b *testing.B) {
+		var memoryCommitter InMemoryCommitter
+		mt1, _ := MakeTrie(&memoryCommitter, defaultTestEvictSize)
+		// create 100000 hashes.
+		leafsCount := 100000
+		hashes := make([]crypto.Digest, leafsCount)
+		for i := 0; i < len(hashes); i++ {
+			hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
+		}
+
+		for i := 0; i < len(hashes); i++ {
+			mt1.Add(hashes[i][:])
+		}
+		b.ResetTimer()
+		k := 0
+		for {
+			for _, pageMap := range mt1.cache.pageToNIDsPtr {
+				for _, pnode := range pageMap {
+					pnode.leafUsingChildrenMask()
+					k++
+					if k > b.N {
+						return
+					}
+				}
+			}
+		}
+	})
+	b.Run("leaf-ChildrenLength", func(b *testing.B) {
+		var memoryCommitter InMemoryCommitter
+		mt1, _ := MakeTrie(&memoryCommitter, defaultTestEvictSize)
+		// create 100000 hashes.
+		leafsCount := 100000
+		hashes := make([]crypto.Digest, leafsCount)
+		for i := 0; i < len(hashes); i++ {
+			hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
+		}
+
+		for i := 0; i < len(hashes); i++ {
+			mt1.Add(hashes[i][:])
+		}
+		b.ResetTimer()
+		k := 0
+		for {
+			for _, pageMap := range mt1.cache.pageToNIDsPtr {
+				for _, pnode := range pageMap {
+					pnode.leafUsingChildrenLength()
+					k++
+					if k > b.N {
+						return
+					}
+				}
+			}
+		}
+	})
+}
