@@ -319,7 +319,7 @@ func abortCatchupTest(t *testing.T, catchpoint string, expectedCode int) {
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	err := handler.StartCatchup(c, catchpoint)
+	err := handler.AbortCatchup(c, catchpoint)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
 }
