@@ -29,7 +29,7 @@ trap "rm -rf $PKG_ROOT" 0
 mkdir -p "${PKG_ROOT}/usr/bin"
 
 # NOTE: keep in sync with installer/rpm/algorand.spec
-bin_files=("algocfg" "algod" "algoh" "algokey" "carpenter" "catchupsrv" "ddconfig.sh" "diagcfg" "goal" "kmd" "msgpacktool" "node_exporter")
+bin_files=("algocfg" "algod" "algoh" "algokey" "carpenter" "catchupsrv" "ddconfig.sh" "diagcfg" "goal" "kmd" "msgpacktool" "node_exporter" "tealdbg")
 
 for binary in "${bin_files[@]}"; do
     cp "${ALGO_BIN}/${binary}" "${PKG_ROOT}"/usr/bin
