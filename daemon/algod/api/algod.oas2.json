@@ -82,7 +82,7 @@
           "http"
         ],
         "summary": "Gets the genesis information.",
-        "operationId": "SwaggerJSON",
+        "operationId": "GetGenesis",
         "responses": {
           "200": {
             "description": "The genesis file in json.",
