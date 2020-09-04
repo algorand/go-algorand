@@ -20,13 +20,14 @@ import (
 	"bytes"
 	"encoding/binary"
 	"sort"
+	"unsafe"
 
 	"github.com/algorand/go-algorand/crypto"
 )
 
 type childEntry struct {
-	id    storedNodeIdentifier
-	index byte
+	id        storedNodeIdentifier
+	hashIndex byte
 }
 type node struct {
 	hash         []byte
@@ -39,6 +40,11 @@ func (n *node) leaf() bool {
 	return len(n.children) == 0
 }
 
+// these sizing constants are being used exclusively in node.stats()
+var sliceSize int = int(unsafe.Sizeof([]byte{}))
+var bitsetSize int = int(unsafe.Sizeof(bitset{}))
+var childEntrySize int = int(unsafe.Sizeof(childEntry{}))
+
 // stats recursively update the provided Stats structure with the current node information
 func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error) {
 	stats.nodesCount++
@@ -47,12 +53,10 @@ func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error
 		if depth > stats.depth {
 			stats.depth = depth
 		}
-		// slice takes a ptr + 2 int
-		// the bitset takes 32 bytes
-		stats.size += 3*8 + len(n.hash) + 32
+		stats.size += sliceSize + len(n.hash) + bitsetSize
 		return nil
 	}
-	stats.size += 3*8 + len(n.hash) + 3*8 + len(n.children)*(8+1) + 32
+	stats.size += sliceSize + len(n.hash) + sliceSize + len(n.children)*childEntrySize + bitsetSize
 	for _, child := range n.children {
 		childNode, err := cache.getNode(child.id)
 		if err != nil {
@@ -66,12 +70,12 @@ func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error
 	return nil
 }
 
-// indexOf returns the index into the children array of the first child whose index field is less or equal to b
+// indexOf returns the index into the children array of the first child whose hashIndex field is less or equal to b
 // it's being used in conjuction with the bitset, so we test only the equality path ( i.e. get the index of the
-// child that has index of value x )
+// child that has hashIndex of value x )
 func (n *node) indexOf(b byte) byte {
 	// find the child using binary search:
-	return byte(sort.Search(len(n.children), func(i int) bool { return n.children[i].index >= b }))
+	return byte(sort.Search(len(n.children), func(i int) bool { return n.children[i].hashIndex >= b }))
 }
 
 // find searches the trie for the element, recursively.
@@ -114,23 +118,23 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		if n.hash[idiff] < d[idiff] {
 			pnode.children = []childEntry{
 				childEntry{
-					id:    curChildNodeID,
-					index: n.hash[idiff],
+					id:        curChildNodeID,
+					hashIndex: n.hash[idiff],
 				},
 				childEntry{
-					id:    newChildNodeID,
-					index: d[idiff],
+					id:        newChildNodeID,
+					hashIndex: d[idiff],
 				},
 			}
 		} else {
 			pnode.children = []childEntry{
 				childEntry{
-					id:    newChildNodeID,
-					index: d[idiff],
+					id:        newChildNodeID,
+					hashIndex: d[idiff],
 				},
 				childEntry{
-					id:    curChildNodeID,
-					index: n.hash[idiff],
+					id:        curChildNodeID,
+					hashIndex: n.hash[idiff],
 				},
 			}
 		}
@@ -142,8 +146,8 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 			pnode2.childrenMask.SetBit(d[i])
 			pnode2.children = []childEntry{
 				childEntry{
-					id:    nodeID,
-					index: d[i],
+					id:        nodeID,
+					hashIndex: d[i],
 				},
 			}
 			pnode2.hash = append(path, d[:i]...)
@@ -166,21 +170,21 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		pnode.childrenMask.SetBit(d[0])
 
 		pnode.children = make([]childEntry, len(n.children)+1, len(n.children)+1)
-		if d[0] > n.children[len(n.children)-1].index {
+		if d[0] > n.children[len(n.children)-1].hashIndex {
 			// the new entry comes after all the existing ones.
 			for i, child := range n.children {
 				pnode.children[i] = child
 			}
 			pnode.children[len(pnode.children)-1] = childEntry{
-				id:    childNodeID,
-				index: d[0],
+				id:        childNodeID,
+				hashIndex: d[0],
 			}
 		} else {
 			for i, child := range n.children {
-				if d[0] < child.index {
+				if d[0] < child.hashIndex {
 					pnode.children[i] = childEntry{
-						index: d[0],
-						id:    childNodeID,
+						hashIndex: d[0],
+						id:        childNodeID,
 					}
 					// copy the rest of the items.
 					for ; i < len(n.children); i++ {
@@ -238,7 +242,7 @@ func (n *node) calculateHash(cache *merkleTrieCache) error {
 			hashAccumulator = append(hashAccumulator, byte(1))
 		}
 		hashAccumulator = append(hashAccumulator, byte(len(childNode.hash))) // we add this string length before the actual string so it could get "decoded"; in practice, it makes a good domain separator.
-		hashAccumulator = append(hashAccumulator, child.index)               // adding the first byte of the child
+		hashAccumulator = append(hashAccumulator, child.hashIndex)           // adding the first byte of the child
 		hashAccumulator = append(hashAccumulator, childNode.hash...)         // adding the reminder of the child
 	}
 	hash := crypto.Hash(hashAccumulator)
@@ -287,9 +291,9 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 		}
 		if childNode.leaf() {
 			// convert current node into a leaf.
-			pnode.hash = append([]byte{pnode.children[0].index}, childNode.hash...)
+			pnode.hash = append([]byte{pnode.children[0].hashIndex}, childNode.hash...)
 			cache.deleteNode(pnode.children[0].id)
-			pnode.childrenMask.ClearBit(pnode.children[0].index)
+			pnode.childrenMask.ClearBit(pnode.children[0].hashIndex)
 			pnode.children = nil
 		}
 	}
@@ -313,12 +317,12 @@ func (n *node) serialize(buf []byte) int {
 	w++
 	// store all the children, and terminate with a null.
 	for _, child := range n.children {
-		buf[w] = child.index
+		buf[w] = child.hashIndex
 		w++
 		x := binary.PutUvarint(buf[w:], uint64(child.id))
 		w += x
 	}
-	buf[w] = n.children[len(n.children)-1].index
+	buf[w] = n.children[len(n.children)-1].hashIndex
 	w++
 	return w
 }
@@ -355,7 +359,7 @@ func deserializeNode(buf []byte) (n *node, s int) {
 		}
 		s += nodeIDLength
 
-		childEntries[i] = childEntry{index: childIndex, id: storedNodeIdentifier(nodeID)}
+		childEntries[i] = childEntry{hashIndex: childIndex, id: storedNodeIdentifier(nodeID)}
 		n.childrenMask.SetBit(childIndex)
 		prevChildIndex = childIndex
 		i++
