@@ -16,40 +16,49 @@
 
 package node
 
+import (
+	"fmt"
+)
+
 // Catchpoint already in progress error
 
 // CatchpointAlreadyInProgressError indicates that the requested catchpoint is already running
 type CatchpointAlreadyInProgressError struct {
-	message string
+	catchpoint string
 }
 
 // MakeCatchpointAlreadyInProgressError creates the error
-func MakeCatchpointAlreadyInProgressError(text string) *CatchpointAlreadyInProgressError {
+func MakeCatchpointAlreadyInProgressError(catchpoint string) *CatchpointAlreadyInProgressError {
 	return &CatchpointAlreadyInProgressError{
-		message: text,
+		catchpoint: catchpoint,
 	}
 }
 
 // Error satisfies builtin interface `error`
 func (e *CatchpointAlreadyInProgressError) Error() string {
-	return e.message
+	return fmt.Sprintf("the requested catchpoint '%s' is already in progress, suppressing error", e.catchpoint)
 }
 
 // Catchpoint unable to start error
 
 // CatchpointUnableToStartError indicates that the requested catchpoint cannot be started
 type CatchpointUnableToStartError struct {
-	message string
+	catchpointRunning   string
+	catchpointRequested string
 }
 
 // MakeCatchpointUnableToStartError creates the error
-func MakeCatchpointUnableToStartError(text string) *CatchpointUnableToStartError {
+func MakeCatchpointUnableToStartError(catchpointRunning, catchpointRequested string) *CatchpointUnableToStartError {
 	return &CatchpointUnableToStartError{
-		message: text,
+		catchpointRunning:   catchpointRunning,
+		catchpointRequested: catchpointRequested,
 	}
 }
 
 // Error satisfies builtin interface `error`
 func (e *CatchpointUnableToStartError) Error() string {
-	return e.message
+	return fmt.Sprintf(
+		"unable to start catchpoint catchup for '%s' - already catching up '%s'",
+		e.catchpointRequested,
+		e.catchpointRunning)
 }
