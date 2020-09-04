@@ -17,6 +17,7 @@
 package merkletrie
 
 import (
+	"math/bits"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -58,4 +59,13 @@ func TestBitSet(t *testing.T) {
 
 	// check that the bitset is zero.
 	require.True(t, a.IsZero())
+}
+
+// TestBitSetOneBit test that only one bit is being set when we call SetBit
+func TestBitSetOneBit(t *testing.T) {
+	for i := 0; i < 256; i++ {
+		var a bitset
+		a.SetBit(byte(i))
+		require.Equal(t, 1, bits.OnesCount64(a.d[0])+bits.OnesCount64(a.d[1])+bits.OnesCount64(a.d[2])+bits.OnesCount64(a.d[3]))
+	}
 }
