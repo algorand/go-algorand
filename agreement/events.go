@@ -636,6 +636,8 @@ type thresholdEvent struct {
 
 	// Bundle holds a quorum of votes which form the threshold.
 	Bundle unauthenticatedBundle
+
+	Proto protocol.ConsensusVersion
 }
 
 func (e thresholdEvent) t() eventType {
