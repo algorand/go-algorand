@@ -185,6 +185,7 @@ func stackValueToTealValue(sv *stackValue) basics.TealValue {
 	}
 }
 
+// valueDeltaToValueDelta converts delta's bytes to base64 in a new struct
 func valueDeltaToValueDelta(vd *basics.ValueDelta) basics.ValueDelta {
 	return basics.ValueDelta{
 		Action: vd.Action,
