@@ -2113,8 +2113,7 @@
                   "type": "object"
                 }
               }
-            },
-            "description": "(empty)"
+            }
           },
           "400": {
             "content": {
@@ -3254,7 +3253,7 @@
     },
     "/versions": {
       "get": {
-        "description": "Retrieves the API version, binary build versions, and genesis information.",
+        "description": "Retrieves the supported API version, binary build versions, and genesis information.",
         "operationId": "GetVersion",
         "responses": {
           "200": {
