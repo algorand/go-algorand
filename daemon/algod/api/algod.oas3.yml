@@ -1362,7 +1362,7 @@
     "/genesis": {
       "get": {
         "description": "Returns the entire genesis file in json.",
-        "operationId": "SwaggerJSON",
+        "operationId": "GetGenesis",
         "responses": {
           "200": {
             "content": {
