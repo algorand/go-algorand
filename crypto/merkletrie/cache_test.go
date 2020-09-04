@@ -436,7 +436,7 @@ func TestCachePagedOutTip(t *testing.T) {
 	for i := 0; i < len(hashes)/2; i++ {
 		mt1.Add(hashes[i][:])
 	}
-	err := mt1.Commit()
+	_, err := mt1.Commit()
 	require.NoError(t, err)
 
 	for i := 0; i < len(hashes)/2; i++ {

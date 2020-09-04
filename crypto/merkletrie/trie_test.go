@@ -131,7 +131,7 @@ func TestRandomAddingAndRemoving(t *testing.T) {
 			nextOperation = 1
 		}
 		if (i % (1 + int(processesHash[0]))) == 42 {
-			err := mt.Commit()
+			_, err := mt.Commit()
 			require.NoError(t, err)
 			verifyCacheNodeCount(t, mt)
 		}

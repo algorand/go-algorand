@@ -120,7 +120,7 @@ func (mt *Trie) RootHash() (crypto.Digest, error) {
 		return crypto.Digest{}, nil
 	}
 	if mt.cache.modified {
-		if err := mt.Commit(); err != nil {
+		if _, err := mt.Commit(); err != nil {
 			return crypto.Digest{}, err
 		}
 	}
@@ -224,21 +224,21 @@ func (mt *Trie) GetStats() (stats Stats, err error) {
 }
 
 // Commit stores the existings trie using the committer.
-func (mt *Trie) Commit() error {
-	err := mt.cache.commit()
+func (mt *Trie) Commit() (stats CommitStats, err error) {
+	stats, err = mt.cache.commit()
 	if err == nil {
 		mt.lastCommittedNodeID = mt.nextNodeID
 		bytes := mt.serialize()
 		err = mt.cache.committer.StorePage(storedNodeIdentifierNull, bytes)
 	}
-	return err
+	return
 }
 
 // Evict removes elements from the cache that are no longer needed.
 func (mt *Trie) Evict(commit bool) (int, error) {
 	if commit {
 		if mt.cache.modified {
-			if err := mt.Commit(); err != nil {
+			if _, err := mt.Commit(); err != nil {
 				return 0, err
 			}
 		}

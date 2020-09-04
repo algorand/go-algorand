@@ -1157,7 +1157,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltasRound []map[basic
 		}
 		if accumulatedChanges >= trieAccumulatedChangesFlush {
 			accumulatedChanges = 0
-			err = au.balancesTrie.Commit()
+			_, err = au.balancesTrie.Commit()
 			if err != nil {
 				return
 			}
@@ -1165,7 +1165,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltasRound []map[basic
 	}
 	// write it all to disk.
 	if accumulatedChanges > 0 {
-		err = au.balancesTrie.Commit()
+		_, err = au.balancesTrie.Commit()
 	}
 	return
 }

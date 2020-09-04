@@ -330,17 +330,27 @@ func SortUint64(a []uint64) {
 	sort.Sort(Uint64Slice(a))
 }
 
+// CommitStats provides statistics about the operation of the commit() function
+type CommitStats struct {
+	NewPageCount                int
+	NewNodeCount                int
+	UpdatedPageCount            int
+	UpdatedNodeCount            int
+	DeletedPageCount            int
+	DeletedNodeCount            int
+	FanoutReallocatedNodeCount  int
+	PackingReallocatedNodeCount int
+}
+
 // commit - used as part of the Trie Commit functionality
-func (mtc *merkleTrieCache) commit() error {
-	/*commitStarted := time.Now()
-	defer func() {
-		fmt.Printf("commit time %v\n", time.Now().Sub(commitStarted))
-	}()*/
+func (mtc *merkleTrieCache) commit() (CommitStats, error) {
+	var stats CommitStats
+
 	// if we have a pending page load, do that now.
 	if mtc.deferedPageLoad != storedNodeIdentifierNull {
 		err := mtc.loadPage(mtc.deferedPageLoad)
 		if err != nil {
-			return err
+			return CommitStats{}, err
 		}
 		mtc.deferedPageLoad = storedNodeIdentifierNull
 	}
@@ -376,9 +386,12 @@ func (mtc *merkleTrieCache) commit() error {
 	for _, page := range sortedCreatedPages {
 		err := mtc.calculatePageHashes(int64(page), page >= newPageThreshold)
 		if err != nil {
-			return err
+			return CommitStats{}, err
 		}
 	}
+
+	stats.FanoutReallocatedNodeCount = mtc.reallocateCounter
+	mtc.reallocateCounter = 0
 
 	// reallocate each of the new page content, if not meeting the desired fill factor.
 	reallocationMap := make(map[storedNodeIdentifier]storedNodeIdentifier)
@@ -394,6 +407,8 @@ func (mtc *merkleTrieCache) commit() error {
 		}
 	}
 
+	stats.PackingReallocatedNodeCount = mtc.reallocateCounter
+
 	for pageID, page := range mtc.reallocatedPages {
 		createdPages[pageID] = page
 	}
@@ -408,22 +423,17 @@ func (mtc *merkleTrieCache) commit() error {
 		delete(reallocationMap, mtc.mt.root)
 		mtc.mt.root = newRootID
 	}
-	//fmt.Printf("uncomsumed reallocated items %d\n", len(reallocationMap))
 
 	mtc.reallocatedPages = nil
-	//fmt.Printf("%d nodes were reallocated\n", mtc.reallocateCounter)
 
-	createdNewPagesCount := 0
-	createdNewNodesCount := 0
-	createdOldPagesCount := 0
-	createdOldNodesCount := 0
 	// store the pages.
-	//start := time.Now()
-	// todo : create staging buffer for encodePage.
+	// allocate a staging area for the page encoder. buffer should be big enough so
+	// we won't need any reallocation to take place.
+	encodeBuffer := make([]byte, maxNodeSerializedSize*256+32)
 	for page, nodeIDs := range createdPages {
 		var pageContent []byte
 		if len(nodeIDs) > 0 {
-			pageContent = mtc.encodePage(nodeIDs)
+			pageContent = mtc.encodePage(nodeIDs, encodeBuffer)
 		} else {
 			if page >= newPageThreshold {
 				continue
@@ -431,33 +441,16 @@ func (mtc *merkleTrieCache) commit() error {
 		}
 		err := mtc.committer.StorePage(uint64(page), pageContent)
 		if err != nil {
-			return err
+			return CommitStats{}, err
 		}
-		if int64(page) > (int64(mtc.mt.lastCommittedNodeID) / mtc.nodesPerPage) {
-			createdNewPagesCount++
-			createdNewNodesCount += len(nodeIDs)
+		if page >= newPageThreshold {
+			stats.NewPageCount++
+			stats.NewNodeCount += len(nodeIDs)
 		} else {
-			createdOldPagesCount++
-			createdOldNodesCount += len(nodeIDs)
+			stats.UpdatedPageCount++
+			stats.UpdatedNodeCount += len(nodeIDs)
 		}
-		//fmt.Printf("page %d (threshold %d) items %d\n", page, newPageThreshold, len(nodeIDs))
 	}
-
-	/*if createdNewPagesCount+createdOldPagesCount > 0 {
-		avgStore := time.Now().Sub(start) / time.Duration(createdNewPagesCount+createdOldPagesCount)
-		oldDensity := 0
-		if createdOldPagesCount > 0 {
-			oldDensity = createdOldNodesCount / createdOldPagesCount
-		}
-		newDensity := 0
-		if createdNewPagesCount > 0 {
-			newDensity = createdNewNodesCount / createdNewPagesCount
-		}
-		fmt.Printf("Creating %d+%d pages in avg of %v, total of %v, avg density %d/%d\n",
-		createdOldPagesCount, createdNewPagesCount, avgStore, time.Now().Sub(start),
-		oldDensity,
-		newDensity)
-	}*/
 
 	// pages that contains elemets that were removed.
 	toRemovePages := mtc.pendingDeletionPages
@@ -475,17 +468,14 @@ func (mtc *merkleTrieCache) commit() error {
 		delete(toRemovePages, pageRemovalCandidate)
 	}
 
-	/*start = time.Now()
-	dummyDeletedPageCount := 0
 	// delete the pages that we don't need anymore.
 	for page := range toRemovePages {
 		if uint64(page) >= newPageThreshold {
-			dummyDeletedPageCount++
 			continue
 		}
 		err := mtc.committer.StorePage(uint64(page), nil)
 		if err != nil {
-			return err
+			return CommitStats{}, err
 		}
 
 		// since the entire page was removed from memory, we can also remove it from the priority list.
@@ -494,57 +484,31 @@ func (mtc *merkleTrieCache) commit() error {
 			mtc.pagesPrioritizationList.Remove(element)
 			delete(mtc.pagesPrioritizationMap, uint64(page))
 		}
+		stats.DeletedPageCount++
+		stats.DeletedNodeCount += len(mtc.pageToNIDsPtr[uint64(page)])
+
 		mtc.cachedNodeCount -= len(mtc.pageToNIDsPtr[uint64(page)])
 		delete(mtc.pageToNIDsPtr, uint64(page))
 	}
-	if len(toRemovePages) > 0 {
-		avgStore := time.Now().Sub(start) / time.Duration(len(toRemovePages))
-		fmt.Printf("Deleting %d pages (%d dummy) in avg of %v, total of %v\n", len(toRemovePages), dummyDeletedPageCount, avgStore, time.Now().Sub(start))
-	}*/
-	//start = time.Now()
-	updatedNewPagesCount := 0
-	updatedNewNodesCount := 0
-	updatedOldPagesCount := 0
-	updatedOldNodesCount := 0
+
 	// updated pages
 	for page, nodeIDs := range toUpdatePages {
 		if createdPages[page] != nil {
 			continue
 		}
-		pageContent := mtc.encodePage(nodeIDs)
+		pageContent := mtc.encodePage(nodeIDs, encodeBuffer)
 		err := mtc.committer.StorePage(uint64(page), pageContent)
 		if err != nil {
-			return err
+			return CommitStats{}, err
 		}
-		if int64(page) > (int64(mtc.mt.lastCommittedNodeID) / mtc.nodesPerPage) {
-			updatedNewPagesCount++
-			updatedNewNodesCount += len(nodeIDs)
-		} else {
-			updatedOldPagesCount++
-			updatedOldNodesCount += len(nodeIDs)
-		}
-
+		stats.UpdatedPageCount++
+		stats.UpdatedNodeCount += len(nodeIDs)
 	}
-	/*if updatedNewPagesCount+updatedOldPagesCount > 0 {
-		avgStore := time.Now().Sub(start) / time.Duration(updatedNewPagesCount+updatedOldPagesCount)
-		oldDensity := 0
-		if updatedOldPagesCount > 0 {
-			oldDensity = updatedOldNodesCount / updatedOldPagesCount
-		}
-		newDensity := 0
-		if updatedNewPagesCount > 0 {
-			newDensity = updatedNewNodesCount / updatedNewPagesCount
-		}
-		fmt.Printf("Storing %d+%d pages in avg of %v, total of %v, avg density %d/%d\n",
-			updatedOldPagesCount, updatedNewPagesCount, avgStore, time.Now().Sub(start),
-			oldDensity,
-			newDensity)
-	}*/
 
 	mtc.pendingCreatedNID = make(map[storedNodeIdentifier]bool)
 	mtc.pendingDeletionPages = make(map[uint64]bool)
 	mtc.modified = false
-	return nil
+	return stats, nil
 }
 
 // calculatePageHashes calculate hashes of a specific page
@@ -658,8 +622,7 @@ func decodePage(bytes []byte) (nodesMap map[storedNodeIdentifier]*node, err erro
 }
 
 // decodePage encodes a page contents into a byte array
-func (mtc *merkleTrieCache) encodePage(nodeIDs map[storedNodeIdentifier]*node) []byte {
-	serializedBuffer := make([]byte, maxNodeSerializedSize*len(nodeIDs)+32)
+func (mtc *merkleTrieCache) encodePage(nodeIDs map[storedNodeIdentifier]*node, serializedBuffer []byte) []byte {
 	version := binary.PutUvarint(serializedBuffer[:], NodePageVersion)
 	length := binary.PutVarint(serializedBuffer[version:], int64(len(nodeIDs)))
 	walk := version + length
