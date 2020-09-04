@@ -945,6 +945,10 @@
             "description": "OK",
             "$ref": "#/responses/CatchpointStartResponse"
           },
+          "201": {
+            "description": "OK",
+            "$ref": "#/responses/CatchpointStartResponse"
+          },
           "400": {
             "description": "Bad Request",
             "schema": {
