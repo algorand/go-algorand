@@ -16,28 +16,29 @@
 
 package merkletrie
 
-import ()
-
 // bitset is used as a 256 bits bitmask storage. The simplistic implementation is designed
 // explicitly to reduce memory utilization to the minimum required.
 type bitset struct {
 	d [4]uint64
 }
 
-func (b *bitset) SetBit(bit byte, bitVal bool) {
-	if bitVal {
-		b.d[bit/64] |= 1 << (bit & 63)
-	} else {
-		// the &^ is the go and-not operator
-		b.d[bit/64] &^= 1 << (bit & 63)
-	}
-
+// SetBit sets the given bit in the bitset.
+func (b *bitset) SetBit(bit byte) {
+	b.d[bit/64] |= 1 << (bit & 63)
 }
 
+// ClearBit clears the given bit in the bitset.
+func (b *bitset) ClearBit(bit byte) {
+	// the &^ is the go and-not operator
+	b.d[bit/64] &^= 1 << (bit & 63)
+}
+
+// Bit tests the given bit in the bitset.
 func (b *bitset) Bit(bit byte) bool {
 	return (b.d[bit/64] & (1 << (bit & 63))) != 0
 }
 
+// IsZero tests to see if all the bits in the bitset are set to zero.
 func (b *bitset) IsZero() bool {
 	return b.d[0] == 0 && b.d[1] == 0 && b.d[2] == 0 && b.d[3] == 0
 }

@@ -34,9 +34,12 @@ type node struct {
 	childrenMask bitset
 }
 
+// leaf returns whether the current node is a leaf node, or a non-leaf node
 func (n *node) leaf() bool {
-	return n.childrenMask.IsZero()
+	return len(n.children) == 0
 }
+
+// stats recursively update the provided Stats structure with the current node information
 func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error) {
 	stats.nodesCount++
 	if n.leaf() {
@@ -44,10 +47,12 @@ func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error
 		if depth > stats.depth {
 			stats.depth = depth
 		}
-		stats.size += 4 + len(n.hash) + 1
+		// slice takes a ptr + 2 int
+		// the bitset takes 32 bytes
+		stats.size += 3*8 + len(n.hash) + 32
 		return nil
 	}
-	stats.size += 32 + len(n.hash) + len(n.children)*9
+	stats.size += 3*8 + len(n.hash) + 3*8 + len(n.children)*(8+1) + 32
 	for _, child := range n.children {
 		childNode, err := cache.getNode(child.id)
 		if err != nil {
@@ -61,6 +66,9 @@ func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error
 	return nil
 }
 
+// indexOf returns the index into the children array of the first child whose index field is less or equal to b
+// it's being used in conjuction with the bitset, so we test only the equality path ( i.e. get the index of the
+// child that has index of value x )
 func (n *node) indexOf(b byte) byte {
 	// find the child using binary search:
 	return byte(sort.Search(len(n.children), func(i int) bool { return n.children[i].index >= b }))
@@ -100,8 +108,8 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		newChildNode.hash = d[idiff+1:]
 
 		pnode, nodeID = cache.allocateNewNode()
-		pnode.childrenMask.SetBit(n.hash[idiff], true)
-		pnode.childrenMask.SetBit(d[idiff], true)
+		pnode.childrenMask.SetBit(n.hash[idiff])
+		pnode.childrenMask.SetBit(d[idiff])
 
 		if n.hash[idiff] < d[idiff] {
 			pnode.children = []childEntry{
@@ -131,7 +139,7 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		for i := idiff - 1; i >= 0; i-- {
 			// create a parent node for pnode.
 			pnode2, nodeID2 := cache.allocateNewNode()
-			pnode2.childrenMask.SetBit(d[i], true)
+			pnode2.childrenMask.SetBit(d[i])
 			pnode2.children = []childEntry{
 				childEntry{
 					id:    nodeID,
@@ -155,7 +163,7 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 
 		pnode, nodeID = cache.allocateNewNode()
 		pnode.childrenMask = n.childrenMask
-		pnode.childrenMask.SetBit(d[0], true)
+		pnode.childrenMask.SetBit(d[0])
 
 		pnode.children = make([]childEntry, len(n.children)+1, len(n.children)+1)
 		if d[0] > n.children[len(n.children)-1].index {
@@ -195,8 +203,11 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		if err != nil {
 			return storedNodeIdentifierNull, err
 		}
-		pnode, nodeID = n.duplicate(cache)
-		cache.deleteNode(curNodeID)
+
+		pnode, nodeID = childNode, cache.refurbishNode(curNodeID)
+		pnode.childrenMask = n.childrenMask
+		pnode.children = make([]childEntry, len(n.children), len(n.children))
+		copy(pnode.children, n.children)
 		pnode.children[curNodeIndex].id = updatedChild
 	}
 	pnode.hash = path
@@ -248,20 +259,25 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 		return
 	}
 	if childNode.leaf() {
-		pnode, nodeID = n.duplicate(cache)
+		pnode, nodeID = childNode, cache.refurbishNode(childNodeID)
+		pnode.childrenMask = n.childrenMask
 		// we are guaranteed to have other children, because our tree forbids nodes that have exactly one leaf child and no other children.
-		pnode.children = append(pnode.children[:childIndex], pnode.children[childIndex+1:]...)
-		pnode.childrenMask.SetBit(key[0], false)
+		pnode.children = make([]childEntry, len(n.children)-1, len(n.children)-1)
+		copy(pnode.children, append(n.children[:childIndex], n.children[childIndex+1:]...))
+		pnode.childrenMask.ClearBit(key[0])
 	} else {
 		var updatedChildNodeID storedNodeIdentifier
 		updatedChildNodeID, err = childNode.remove(cache, key[1:], append(path, key[0]))
 		if err != nil {
 			return storedNodeIdentifierNull, err
 		}
-		pnode, nodeID = n.duplicate(cache)
+
+		pnode, nodeID = childNode, cache.refurbishNode(childNodeID)
+		pnode.childrenMask = n.childrenMask
+		pnode.children = make([]childEntry, len(n.children), len(n.children))
+		copy(pnode.children, n.children)
 		pnode.children[childIndex].id = updatedChildNodeID
 	}
-	cache.deleteNode(childNodeID)
 
 	// at this point, we might end up with a single leaf child. collapse that.
 	if len(pnode.children) == 1 {
@@ -273,7 +289,7 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 			// convert current node into a leaf.
 			pnode.hash = append([]byte{pnode.children[0].index}, childNode.hash...)
 			cache.deleteNode(pnode.children[0].id)
-			pnode.childrenMask.SetBit(pnode.children[0].index, false)
+			pnode.childrenMask.ClearBit(pnode.children[0].index)
 			pnode.children = nil
 		}
 	}
@@ -281,20 +297,6 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 		pnode.hash = path
 	}
 	return nodeID, nil
-}
-
-// duplicate creates a copy of the current node
-func (n *node) duplicate(cache *merkleTrieCache) (pnode *node, nodeID storedNodeIdentifier) {
-	pnode, nodeID = cache.allocateNewNode()
-	pnode.hash = n.hash // the hash is safe for just copy without duplicate, since it's always being reallocated upon change.
-	pnode.childrenMask = n.childrenMask
-	if !pnode.leaf() {
-		pnode.children = make([]childEntry, len(n.children), len(n.children))
-		for i, v := range n.children {
-			pnode.children[i] = v
-		}
-	}
-	return
 }
 
 // serialize the content of the node into the buffer, and return the number of bytes consumed in the process.
@@ -354,7 +356,7 @@ func deserializeNode(buf []byte) (n *node, s int) {
 		s += nodeIDLength
 
 		childEntries[i] = childEntry{index: childIndex, id: storedNodeIdentifier(nodeID)}
-		n.childrenMask.SetBit(childIndex, true)
+		n.childrenMask.SetBit(childIndex)
 		prevChildIndex = childIndex
 		i++
 	}
