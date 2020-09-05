@@ -103,7 +103,7 @@ func (d *DNS) ClearSRVRecord(ctx context.Context, name string, target string, se
 		return err
 	}
 	if len(entries) == 0 {
-		fmt.Printf("No SRV entry for '%s'='%s'.\n", name, target)
+		fmt.Printf("No SRV entry for '[%s.%s.]%s'='%s'.\n", service, protocol, name, target)
 		return nil
 	}
 

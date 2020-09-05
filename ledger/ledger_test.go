@@ -61,7 +61,7 @@ func sign(secrets map[basics.Address]*crypto.SignatureSecrets, t transactions.Tr
 	}
 }
 
-func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genesisInitState InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
+func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (genesisInitState InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
 	params := config.Consensus[proto]
 	poolAddr := testPoolAddr
 	sinkAddr := testSinkAddr
@@ -95,7 +95,7 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genes
 
 	initBlock := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
-			GenesisID: t.Name(),
+			GenesisID: tb.Name(),
 			Round:     0,
 			RewardsState: bookkeeping.RewardsState{
 				RewardsRate: initialRewardsPerRound,
@@ -109,12 +109,12 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genes
 		},
 	}
 	if params.SupportGenesisHash {
-		initBlock.BlockHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
+		initBlock.BlockHeader.GenesisHash = crypto.Hash([]byte(tb.Name()))
 	}
 
 	genesisInitState.Block = initBlock
 	genesisInitState.Accounts = initAccounts
-	genesisInitState.GenesisHash = crypto.Hash([]byte(t.Name()))
+	genesisInitState.GenesisHash = crypto.Hash([]byte(tb.Name()))
 
 	return
 }
