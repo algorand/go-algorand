@@ -926,7 +926,7 @@ func MakeDryrunStateBytes(client Client, txnOrStxn interface{}, other []transact
 	}
 }
 
-// MakeDryrunState function creates DryrunRequest data structure and serializes it into a file
+// MakeDryrunState function creates v2.DryrunRequest data structure
 func MakeDryrunState(client Client, txnOrStxn interface{}, other []transactions.SignedTxn, proto string) (dr v2.DryrunRequest, err error) {
 	gdr, err := MakeDryrunStateGenerated(client, txnOrStxn, other, proto)
 	if err != nil {
@@ -935,78 +935,81 @@ func MakeDryrunState(client Client, txnOrStxn interface{}, other []transactions.
 	return v2.DryrunRequestFromGenerated(&gdr)
 }
 
-// MakeDryrunStateGenerated function creates DryrunRequest data structure and serializes it into a file
+// MakeDryrunStateGenerated function creates generatedV2.DryrunRequest data structure
 func MakeDryrunStateGenerated(client Client, txnOrStxn interface{}, other []transactions.SignedTxn, proto string) (dr generatedV2.DryrunRequest, err error) {
 	var txns []transactions.SignedTxn
-	var tx *transactions.Transaction
-	if txn, ok := txnOrStxn.(transactions.Transaction); ok {
-		tx = &txn
+	if txnOrStxn == nil {
+		// empty input do nothing
+	} else if txn, ok := txnOrStxn.(transactions.Transaction); ok {
 		txns = append(txns, transactions.SignedTxn{Txn: txn})
 	} else if stxn, ok := txnOrStxn.(transactions.SignedTxn); ok {
-		tx = &stxn.Txn
 		txns = append(txns, stxn)
 	} else {
 		err = fmt.Errorf("unsupported txn type")
 		return
 	}
+
 	txns = append(txns, other...)
 	for i := range txns {
 		enc := protocol.EncodeJSON(&txns[i])
 		dr.Txns = append(dr.Txns, enc)
 	}
 
-	if tx.Type == protocol.ApplicationCallTx {
-		apps := []basics.AppIndex{tx.ApplicationID}
-		apps = append(apps, tx.ForeignApps...)
-		for _, appIdx := range apps {
-			var appParams generatedV2.ApplicationParams
-			if appIdx == 0 {
-				// if it is an app create txn then use params from the txn
-				appParams.ApprovalProgram = tx.ApprovalProgram
-				appParams.ClearStateProgram = tx.ClearStateProgram
-				appParams.GlobalStateSchema = &generatedV2.ApplicationStateSchema{
-					NumUint:      tx.GlobalStateSchema.NumUint,
-					NumByteSlice: tx.GlobalStateSchema.NumByteSlice,
+	for _, txn := range txns {
+		tx := txn.Txn
+		if tx.Type == protocol.ApplicationCallTx {
+			apps := []basics.AppIndex{tx.ApplicationID}
+			apps = append(apps, tx.ForeignApps...)
+			for _, appIdx := range apps {
+				var appParams generatedV2.ApplicationParams
+				if appIdx == 0 {
+					// if it is an app create txn then use params from the txn
+					appParams.ApprovalProgram = tx.ApprovalProgram
+					appParams.ClearStateProgram = tx.ClearStateProgram
+					appParams.GlobalStateSchema = &generatedV2.ApplicationStateSchema{
+						NumUint:      tx.GlobalStateSchema.NumUint,
+						NumByteSlice: tx.GlobalStateSchema.NumByteSlice,
+					}
+					appParams.LocalStateSchema = &generatedV2.ApplicationStateSchema{
+						NumUint:      tx.LocalStateSchema.NumUint,
+						NumByteSlice: tx.LocalStateSchema.NumByteSlice,
+					}
+					appParams.Creator = tx.Sender.String()
+					// zero is not acceptable by ledger in dryrun/debugger
+					appIdx = defaultAppIdx
+				} else {
+					// otherwise need to fetch app state
+					var app generatedV2.Application
+					if app, err = client.ApplicationInformation(uint64(tx.ApplicationID)); err != nil {
+						return
+					}
+					appParams = app.Params
 				}
-				appParams.LocalStateSchema = &generatedV2.ApplicationStateSchema{
-					NumUint:      tx.LocalStateSchema.NumUint,
-					NumByteSlice: tx.LocalStateSchema.NumByteSlice,
-				}
-				appParams.Creator = tx.Sender.String()
-				// zero is not acceptable by ledger in dryrun/debugger
-				appIdx = defaultAppIdx
-			} else {
-				// otherwise need to fetch app state
-				var app generatedV2.Application
-				if app, err = client.ApplicationInformation(uint64(tx.ApplicationID)); err != nil {
+				dr.Apps = append(dr.Apps, generatedV2.Application{
+					Id:     uint64(appIdx),
+					Params: appParams,
+				})
+			}
+
+			accounts := append(tx.Accounts, tx.Sender)
+			for _, acc := range accounts {
+				var info generatedV2.Account
+				if info, err = client.AccountInformationV2(acc.String()); err != nil {
 					return
 				}
-				appParams = app.Params
+				dr.Accounts = append(dr.Accounts, info)
 			}
-			dr.Apps = append(dr.Apps, generatedV2.Application{
-				Id:     uint64(appIdx),
-				Params: appParams,
-			})
-		}
 
-		accounts := append(tx.Accounts, tx.Sender)
-		for _, acc := range accounts {
-			var info generatedV2.Account
-			if info, err = client.AccountInformationV2(acc.String()); err != nil {
+			dr.ProtocolVersion = proto
+			if dr.Round, err = client.CurrentRound(); err != nil {
 				return
 			}
-			dr.Accounts = append(dr.Accounts, info)
+			var b v1.Block
+			if b, err = client.Block(dr.Round); err != nil {
+				return
+			}
+			dr.LatestTimestamp = uint64(b.Timestamp)
 		}
-
-		dr.ProtocolVersion = proto
-		if dr.Round, err = client.CurrentRound(); err != nil {
-			return
-		}
-		var b v1.Block
-		if b, err = client.Block(dr.Round); err != nil {
-			return
-		}
-		dr.LatestTimestamp = uint64(b.Timestamp)
 	}
 	return
 }

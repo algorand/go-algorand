@@ -128,6 +128,9 @@ func init() {
 
 	dryrunCmd.Flags().StringVarP(&txFilename, "txfile", "t", "", "transaction or transaction-group to test")
 	dryrunCmd.Flags().StringVarP(&protoVersion, "proto", "P", "", "consensus protocol version id string")
+	dryrunCmd.Flags().BoolVar(&dumpForDryrun, "dryrun-dump", false, "Dump in dryrun format acceptable by dryrun REST api instead of running")
+	dryrunCmd.Flags().Var(&dumpForDryrunFormat, "dryrun-dump-format", "Dryrun dump format: "+dumpForDryrunFormat.AllowedString())
+	dryrunCmd.Flags().StringVarP(&outFilename, "outfile", "o", "", "Filename for writing dryrun state object")
 	dryrunCmd.MarkFlagRequired("txfile")
 
 	dryrunRemoteCmd.Flags().StringVarP(&txFilename, "dryrun-state", "D", "", "dryrun request object to run")
@@ -979,10 +982,22 @@ var dryrunCmd = &cobra.Command{
 		for i, st := range stxns {
 			txgroup[i] = st
 		}
+		proto, params := getProto(protoVersion)
+		if dumpForDryrun {
+			// Write dryrun data to file
+			dataDir := ensureSingleDataDir()
+			client := ensureFullClient(dataDir)
+			data, err := libgoal.MakeDryrunStateBytes(client, nil, txgroup, string(proto), dumpForDryrunFormat.String())
+			if err != nil {
+				reportErrorf(err.Error())
+			}
+			writeFile(outFilename, data, 0600)
+			return
+		}
+
 		if timeStamp <= 0 {
 			timeStamp = time.Now().Unix()
 		}
-		_, params := getProto(protoVersion)
 		for i, txn := range txgroup {
 			if txn.Lsig.Blank() {
 				continue
