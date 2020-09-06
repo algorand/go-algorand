@@ -64,8 +64,7 @@ var trieCachedNodesCount = 9000
 
 // merkleCommitterNodesPerPage controls how many nodes will be stored in a single page
 // value was calibrated using BenchmarkCalibrateNodesPerPage
-//var merkleCommitterNodesPerPage = int64(116)
-var merkleCommitterNodesPerPage = int64(350)
+var merkleCommitterNodesPerPage = int64(116)
 
 var trieMemoryConfig = merkletrie.MemoryConfig{
 	NodesCountPerPage:         merkleCommitterNodesPerPage,

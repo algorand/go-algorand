@@ -210,7 +210,11 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 
 		pnode, nodeID = childNode, cache.refurbishNode(curNodeID)
 		pnode.childrenMask = n.childrenMask
-		pnode.children = make([]childEntry, len(n.children), len(n.children))
+		if len(pnode.children) < len(n.children) {
+			pnode.children = make([]childEntry, len(n.children), len(n.children))
+		} else {
+			pnode.children = pnode.children[:len(n.children)]
+		}
 		copy(pnode.children, n.children)
 		pnode.children[curNodeIndex].id = updatedChild
 	}
@@ -228,7 +232,7 @@ func (n *node) calculateHash(cache *merkleTrieCache) error {
 		return nil
 	}
 	path := n.hash
-	hashAccumulator := make([]byte, 0, 64*256)                 // we can have up to 256 elements, so preallocate sufficient storage; append would expand the storage if it won't be enough.
+	hashAccumulator := cache.hashAccumulationBuffer[:0]        // use a preallocated storage and reuse the storage to avoid reallocation.
 	hashAccumulator = append(hashAccumulator, byte(len(path))) // we add this string length before the actual string so it could get "decoded"; in practice, it makes a good domain separator.
 	hashAccumulator = append(hashAccumulator, path...)
 	for _, child := range n.children {
@@ -278,7 +282,11 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 
 		pnode, nodeID = childNode, cache.refurbishNode(childNodeID)
 		pnode.childrenMask = n.childrenMask
-		pnode.children = make([]childEntry, len(n.children), len(n.children))
+		if len(pnode.children) < len(n.children) {
+			pnode.children = make([]childEntry, len(n.children), len(n.children))
+		} else {
+			pnode.children = pnode.children[:len(n.children)]
+		}
 		copy(pnode.children, n.children)
 		pnode.children[childIndex].id = updatedChildNodeID
 	}
