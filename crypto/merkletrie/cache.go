@@ -392,7 +392,6 @@ func (mtc *merkleTrieCache) commit() (CommitStats, error) {
 
 	stats.FanoutReallocatedNodeCount = mtc.reallocateCounter
 	mtc.reallocateCounter = 0
-
 	// reallocate each of the new page content, if not meeting the desired fill factor.
 	reallocationMap := make(map[storedNodeIdentifier]storedNodeIdentifier)
 	for _, page := range sortedCreatedPages {
@@ -435,6 +434,7 @@ func (mtc *merkleTrieCache) commit() (CommitStats, error) {
 		if len(nodeIDs) > 0 {
 			pageContent = mtc.encodePage(nodeIDs, encodeBuffer)
 		} else {
+			// page is empty; skip it if it's a new page that was never flushed to disk.
 			if page >= newPageThreshold {
 				continue
 			}

@@ -389,9 +389,13 @@ func (n *node) getChildCount() uint64 {
 
 func (n *node) remapChildren(reallocationMap map[storedNodeIdentifier]storedNodeIdentifier) {
 	for i := range n.children {
-		if newID, has := reallocationMap[n.children[i].id]; has {
-			delete(reallocationMap, n.children[i].id)
-			n.children[i].id = newID
+		for {
+			if newID, has := reallocationMap[n.children[i].id]; has {
+				delete(reallocationMap, n.children[i].id)
+				n.children[i].id = newID
+				continue
+			}
+			break
 		}
 	}
 }
