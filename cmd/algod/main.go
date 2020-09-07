@@ -289,7 +289,7 @@ func main() {
 		}
 	}
 
-	err = s.Initialize(cfg, phonebookAddresses)
+	err = s.Initialize(cfg, phonebookAddresses, string(genesisText))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		log.Error(err)

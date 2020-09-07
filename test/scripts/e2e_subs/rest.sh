@@ -141,8 +141,18 @@ function pprof_test {
   fi
 }
 
+function test_genesis_endpoint {
+  call_and_verify "There should be a genesis endpoint." "/genesis" 200 '
+  "id": "v1",
+  "network": "tbd",
+  "proto": "future",
+  "rwd": "7777777777777777777777777777777777777777777777777774MSJUVU"
+}'
+}
+
 
 # Run the tests.
 test_applications_endpoint
 test_assets_endpoint
 pprof_test
+test_genesis_endpoint
