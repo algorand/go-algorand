@@ -3253,7 +3253,7 @@
     },
     "/versions": {
       "get": {
-        "description": "Retrieves the supported API version, binary build versions, and genesis information.",
+        "description": "Retrieves the supported API versions, binary build versions, and genesis information.",
         "operationId": "GetVersion",
         "responses": {
           "200": {
