@@ -20,13 +20,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -545,7 +549,7 @@ func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
 		ctb := creatables[crtbsList[i]]
 		if ctb.created &&
 			// Always delete the first element, to make sure at least one
-			// element is always deleted. 
+			// element is always deleted.
 			(i == delSegmentStart || 1 == (crypto.RandUint64()%2)) {
 			ctb.created = false
 			newSample[crtbsList[i]] = ctb
@@ -784,4 +788,74 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	require.Nil(t, qs.listCreatablesStmt)
 	qs.close()
 	require.Nil(t, qs.listCreatablesStmt)
+}
+
+func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B) {
+	genesisInitState, _ := testGenerateInitState(b, protocol.ConsensusCurrentVersion)
+	const inMem = false
+	log := logging.TestingLog(b)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
+	log.SetLevel(logging.Warn)
+	dbBaseFileName := strings.Replace(b.Name(), "/", "_", -1)
+	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
+	require.NoError(b, err, "could not open ledger")
+	defer func() {
+		l.Close()
+		os.Remove(dbBaseFileName + ".block.sqlite")
+		os.Remove(dbBaseFileName + ".tracker.sqlite")
+	}()
+	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
+	catchpointAccessor.ResetStagingBalances(context.Background(), true)
+	accountsCount := uint64(b.N)
+	b.ResetTimer()
+	accounts := uint64(0)
+	var last64KStart time.Time
+	last64KSize := uint64(0)
+	for accounts < accountsCount {
+		// generate a chunk;
+		chunkSize := accountsCount - accounts
+		if chunkSize > BalancesPerCatchpointFileChunk {
+			chunkSize = BalancesPerCatchpointFileChunk
+		}
+		last64KSize += chunkSize
+		if accounts >= accountsCount-64*1024 && last64KStart.IsZero() {
+			last64KStart = time.Now()
+			last64KSize = chunkSize
+		}
+		var balances catchpointFileBalancesChunk
+		balances.Balances = make([]encodedBalanceRecord, chunkSize)
+		for i := uint64(0); i < chunkSize; i++ {
+			var randomAccount encodedBalanceRecord
+			accountData := basics.AccountData{RewardsBase: accounts + i}
+			accountData.MicroAlgos.Raw = crypto.RandUint63()
+			randomAccount.AccountData = protocol.Encode(&accountData)
+			crypto.RandBytes(randomAccount.Address[:])
+			balances.Balances[i] = randomAccount
+		}
+		err = l.trackerDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			writeCatchpointStagingBalances(ctx, tx, balances.Balances)
+			return nil
+		})
+
+		require.NoError(b, err)
+		accounts += chunkSize
+	}
+	if !last64KStart.IsZero() {
+		last64KDuration := time.Now().Sub(last64KStart)
+		fmt.Printf("%-74s%-7d (last)     %-6d ns/account\n", b.Name(), last64KSize, (last64KDuration / time.Duration(last64KSize)).Nanoseconds())
+	}
+	stats, err := l.trackerDBs.wdb.Vacuum(context.Background())
+	require.NoError(b, err)
+	fmt.Printf("%-74sdb fragmentation   %.1f%%\n", b.Name(), float32(stats.PagesBefore-stats.PagesAfter)*100/float32(stats.PagesBefore))
+}
+
+func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
+	benchSizes := []int{1024 * 100, 1024 * 200, 1024 * 400}
+	for _, size := range benchSizes {
+		b.Run(fmt.Sprintf("Restore-%d", size), func(b *testing.B) {
+			b.N = size
+			benchmarkWriteCatchpointStagingBalancesSub(b)
+		})
+	}
 }
