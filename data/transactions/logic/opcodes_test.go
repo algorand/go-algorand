@@ -32,8 +32,57 @@ func TestOpSpecs(t *testing.T) {
 	}
 }
 
+func (os *OpSpec) equals(oso *OpSpec) bool {
+	if os.Opcode != oso.Opcode {
+		return false
+	}
+	if os.Name != oso.Name {
+		return false
+	}
+	if !reflect.DeepEqual(os.Args, oso.Args) {
+		return false
+	}
+	if !reflect.DeepEqual(os.Returns, oso.Returns) {
+		return false
+	}
+	if os.Version != oso.Version {
+		return false
+	}
+	if os.Modes != oso.Modes {
+		return false
+	}
+
+	return true
+}
+
+func TestOpcodesByVersionReordered(t *testing.T) {
+
+	// Make a copy to restore to the original
+	OpSpecsOrig := make([]OpSpec, len(OpSpecs))
+	for idx, opspec := range OpSpecs {
+		cp := opspec
+		OpSpecsOrig[idx] = cp
+	}
+	defer func() {
+		OpSpecs = OpSpecsOrig
+	}()
+
+	// To test the case where a newer version opcode is before an older version
+	// Change the order of opcode 0x01 so that version 2 comes before version 1
+	tmp := OpSpecs[1]
+	OpSpecs[1] = OpSpecs[4]
+	OpSpecs[4] = tmp
+
+	t.Run("TestOpcodesByVersion", TestOpcodesByVersion)
+}
+
 func TestOpcodesByVersion(t *testing.T) {
-	t.Parallel()
+	// Make a copy of the OpSpecs to check if OpcodesByVersion will change it
+	OpSpecs2 := make([]OpSpec, len(OpSpecs))
+	for idx, opspec := range OpSpecs {
+		cp := opspec
+		OpSpecs2[idx] = cp
+	}
 
 	opSpecs := make([][]OpSpec, 2)
 	for v := uint64(1); v <= LogicVersion; v++ {
@@ -59,6 +108,10 @@ func TestOpcodesByVersion(t *testing.T) {
 		})
 	}
 	require.Greater(t, len(opSpecs[1]), len(opSpecs[0]))
+
+	for idx, opspec := range OpSpecs {
+		require.True(t, opspec.equals(&OpSpecs2[idx]))
+	}
 }
 
 func TestOpcodesVersioningV2(t *testing.T) {
