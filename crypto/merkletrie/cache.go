@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	//"time"
 )
 
 // storedNodeIdentifier is the "equivilent" of a node-ptr, but oriented around persisting the
@@ -68,7 +67,7 @@ type merkleTrieCache struct {
 
 	// pendingCreatedNID contains a list of the node ids that has been created since the last commit and need to be stored.
 	pendingCreatedNID map[storedNodeIdentifier]bool
-	// pendingDeletionPage contains a map of pages to delete once committed.
+	// pendingDeletionPage contains a map of pages that had at least one node removed from. This require these pages to be either deleted or updated.
 	pendingDeletionPages map[uint64]bool
 
 	// a list of the pages priorities. The item in the front has higher priority and would not get evicted as quickly as the item on the back
@@ -78,12 +77,18 @@ type merkleTrieCache struct {
 	// the page to load before the nextNodeID at init time. If zero, then nothing is being reloaded.
 	deferedPageLoad uint64
 
+	// pages reallocation map, used during the commit() execution to identify pages and nodes that would get remapped to ensure the
+	// stored pages are sufficiently "packed"
 	reallocatedPages map[uint64]map[storedNodeIdentifier]*node
 
+	// targetPageFillFactor is the desired threshold for page fill factor. Newly created pages would follow this fill factor.
 	targetPageFillFactor float32
 
+	// maxChildrenPagesThreshold is used during the commit(), evaluating the number of children pages each updated node is referring to. If the number
+	// exceed this number, the node children would be reallocated.
 	maxChildrenPagesThreshold uint64
 
+	// hashAccumulationBuffer is a shared buffer used for the node.calculateHash function. It avoids memory reallocation.
 	hashAccumulationBuffer [64 * 256]byte
 }
 
@@ -339,6 +344,7 @@ type CommitStats struct {
 	DeletedPageCount            int
 	FanoutReallocatedNodeCount  int
 	PackingReallocatedNodeCount int
+	LoadedPages                 int
 }
 
 // commit - used as part of the Trie Commit functionality
@@ -379,6 +385,9 @@ func (mtc *merkleTrieCache) commit() (CommitStats, error) {
 		newPageThreshold++
 	}
 
+	beforeHashCalculationPageCount := len(mtc.pageToNIDsPtr)
+	beforeHashCalculationPendingDeletionPages := len(mtc.pendingDeletionPages)
+
 	// updated the hashes of these pages. this works correctly
 	// since all trie modification are done with ids that are bottom-up
 	for _, page := range sortedCreatedPages {
@@ -389,6 +398,7 @@ func (mtc *merkleTrieCache) commit() (CommitStats, error) {
 		stats.FanoutReallocatedNodeCount += int(relocatedNodes)
 	}
 
+	stats.LoadedPages = len(mtc.pendingDeletionPages) - beforeHashCalculationPendingDeletionPages + len(mtc.pageToNIDsPtr) - beforeHashCalculationPageCount
 	// reallocate each of the new page content, if not meeting the desired fill factor.
 	reallocationMap := make(map[storedNodeIdentifier]storedNodeIdentifier)
 	for _, page := range sortedCreatedPages {
@@ -542,6 +552,7 @@ func (mtc *merkleTrieCache) calculatePageHashes(page int64, newPage bool) (fanou
 	return
 }
 
+// getPageFillFactor calculates the fill factor for a given page, or return 0 if the page is not in memory.
 func (mtc *merkleTrieCache) getPageFillFactor(page uint64) float32 {
 	if pageMap := mtc.pageToNIDsPtr[page]; pageMap != nil {
 		return float32(len(pageMap)) / float32(mtc.nodesPerPage)
@@ -549,6 +560,8 @@ func (mtc *merkleTrieCache) getPageFillFactor(page uint64) float32 {
 	return 0.0
 }
 
+// reallocatePage reallocates an entire page into the latest page(s). It also update the reallocationMap for all the nodes that have been moved,
+// so that we could update the needed node dependencies.
 func (mtc *merkleTrieCache) reallocatePage(page uint64, reallocationMap map[storedNodeIdentifier]storedNodeIdentifier) (reallocatedNodes int) {
 	nextID := mtc.mt.nextNodeID
 	nextPage := uint64(nextID) / uint64(mtc.nodesPerPage)
@@ -578,6 +591,8 @@ func (mtc *merkleTrieCache) reallocatePage(page uint64, reallocationMap map[stor
 	return 0
 }
 
+// reallocateNode reallocates a given node into the latest page. Unlike refurbishNode, it's not expected to be called
+// from within the context of a transaction.
 func (mtc *merkleTrieCache) reallocateNode(nid storedNodeIdentifier) storedNodeIdentifier {
 	nextID := mtc.mt.nextNodeID
 	nextPage := uint64(nextID) / uint64(mtc.nodesPerPage)
