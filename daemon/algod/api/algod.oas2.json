@@ -69,6 +69,33 @@
         }
       }
     },
+    "/genesis": {
+      "get": {
+        "description": "Returns the entire genesis file in json.",
+        "tags": [
+          "common"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Gets the genesis information.",
+        "operationId": "GetGenesis",
+        "responses": {
+          "200": {
+            "description": "The genesis file in json.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/swagger.json": {
       "get": {
         "description": "Returns the entire swagger spec in json.",

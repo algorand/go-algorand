@@ -19,7 +19,6 @@ package test
 import (
 	"bytes"
 	"errors"
-	"github.com/algorand/go-algorand/node"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -36,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -290,10 +290,10 @@ func TestStartCatchup(t *testing.T) {
 	goodCatchPoint := "5894690#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA"
 	startCatchupTest(t, goodCatchPoint, nil, 201)
 
-	inProgressError := node.MakeCatchpointAlreadyInProgressError("error")
+	inProgressError := node.MakeCatchpointAlreadyInProgressError("catchpoint")
 	startCatchupTest(t, goodCatchPoint, inProgressError, 200)
 
-	unableToStartError := node.MakeCatchpointUnableToStartError("error")
+	unableToStartError := node.MakeCatchpointUnableToStartError("running", "requested")
 	startCatchupTest(t, goodCatchPoint, unableToStartError, 400)
 
 	startCatchupTest(t, goodCatchPoint, errors.New("anothing else is internal"), 500)
