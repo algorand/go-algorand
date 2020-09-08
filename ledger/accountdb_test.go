@@ -812,6 +812,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B) {
 	accounts := uint64(0)
 	var last64KStart time.Time
 	last64KSize := uint64(0)
+	accountsWritingStarted := time.Now()
 	for accounts < accountsCount {
 		// generate a chunk;
 		chunkSize := accountsCount - accounts
@@ -843,11 +844,12 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B) {
 	}
 	if !last64KStart.IsZero() {
 		last64KDuration := time.Now().Sub(last64KStart)
-		fmt.Printf("%-74s%-7d (last)     %-6d ns/account\n", b.Name(), last64KSize, (last64KDuration / time.Duration(last64KSize)).Nanoseconds())
+		fmt.Printf("%-74s%-7d (last 64k) %-6d ns/account       %d accounts/sec\n", b.Name(), last64KSize, (last64KDuration / time.Duration(last64KSize)).Nanoseconds(), int(float64(last64KSize)/float64(last64KDuration.Seconds())))
 	}
 	stats, err := l.trackerDBs.wdb.Vacuum(context.Background())
 	require.NoError(b, err)
 	fmt.Printf("%-74sdb fragmentation   %.1f%%\n", b.Name(), float32(stats.PagesBefore-stats.PagesAfter)*100/float32(stats.PagesBefore))
+	b.ReportMetric(float64(b.N)/float64(time.Now().Sub(accountsWritingStarted).Seconds()), "accounts/sec")
 }
 
 func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
