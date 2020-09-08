@@ -812,8 +812,11 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B) {
 	accounts := uint64(0)
 	var last64KStart time.Time
 	last64KSize := uint64(0)
+	last64KSubTime := time.Duration(0)
 	accountsWritingStarted := time.Now()
 	for accounts < accountsCount {
+		b.StopTimer()
+		balancesLoopStart := time.Now()
 		// generate a chunk;
 		chunkSize := accountsCount - accounts
 		if chunkSize > BalancesPerCatchpointFileChunk {
@@ -823,6 +826,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B) {
 		if accounts >= accountsCount-64*1024 && last64KStart.IsZero() {
 			last64KStart = time.Now()
 			last64KSize = chunkSize
+			last64KSubTime = time.Duration(0)
 		}
 		var balances catchpointFileBalancesChunk
 		balances.Balances = make([]encodedBalanceRecord, chunkSize)
@@ -834,6 +838,8 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B) {
 			crypto.RandBytes(randomAccount.Address[:])
 			balances.Balances[i] = randomAccount
 		}
+		last64KSubTime += time.Now().Sub(balancesLoopStart)
+		b.StartTimer()
 		err = l.trackerDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			err = writeCatchpointStagingBalances(ctx, tx, balances.Balances)
 			return
@@ -843,7 +849,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B) {
 		accounts += chunkSize
 	}
 	if !last64KStart.IsZero() {
-		last64KDuration := time.Now().Sub(last64KStart)
+		last64KDuration := time.Now().Sub(last64KStart) - last64KSubTime
 		fmt.Printf("%-74s%-7d (last 64k) %-6d ns/account       %d accounts/sec\n", b.Name(), last64KSize, (last64KDuration / time.Duration(last64KSize)).Nanoseconds(), int(float64(last64KSize)/float64(last64KDuration.Seconds())))
 	}
 	stats, err := l.trackerDBs.wdb.Vacuum(context.Background())
