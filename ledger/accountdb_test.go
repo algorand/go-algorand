@@ -834,8 +834,8 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B) {
 			balances.Balances[i] = randomAccount
 		}
 		err = l.trackerDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			writeCatchpointStagingBalances(ctx, tx, balances.Balances)
-			return nil
+			err = writeCatchpointStagingBalances(ctx, tx, balances.Balances)
+			return
 		})
 
 		require.NoError(b, err)
