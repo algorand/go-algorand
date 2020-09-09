@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"sort"
@@ -837,7 +838,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	require.Nil(t, qs.listCreatablesStmt)
 }
 
-func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B) {
+func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder bool) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	genesisInitState, _ := testGenerateInitState(b, protocol.ConsensusCurrentVersion)
 	const inMem = false
@@ -885,6 +886,9 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B) {
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)
 			crypto.RandBytes(randomAccount.Address[:])
+			if ascendingOrder {
+				binary.LittleEndian.PutUint64(randomAccount.Address[:], accountsLoaded+i)
+			}
 			balances.Balances[i] = randomAccount
 		}
 		balanceLoopDuration := time.Now().Sub(balancesLoopStart)
@@ -901,20 +905,26 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B) {
 	}
 	if !last64KStart.IsZero() {
 		last64KDuration := time.Now().Sub(last64KStart) - last64KAccountCreationTime
-		fmt.Printf("%-74s%-7d (last 64k) %-6d ns/account       %d accounts/sec\n", b.Name(), last64KSize, (last64KDuration / time.Duration(last64KSize)).Nanoseconds(), int(float64(last64KSize)/float64(last64KDuration.Seconds())))
+		fmt.Printf("%-82s%-7d (last 64k) %-6d ns/account       %d accounts/sec\n", b.Name(), last64KSize, (last64KDuration / time.Duration(last64KSize)).Nanoseconds(), int(float64(last64KSize)/float64(last64KDuration.Seconds())))
 	}
 	stats, err := l.trackerDBs.wdb.Vacuum(context.Background())
 	require.NoError(b, err)
-	fmt.Printf("%-74sdb fragmentation   %.1f%%\n", b.Name(), float32(stats.PagesBefore-stats.PagesAfter)*100/float32(stats.PagesBefore))
+	fmt.Printf("%-82sdb fragmentation   %.1f%%\n", b.Name(), float32(stats.PagesBefore-stats.PagesAfter)*100/float32(stats.PagesBefore))
 	b.ReportMetric(float64(b.N)/float64((time.Now().Sub(accountsWritingStarted)-accountsGenerationDuration).Seconds()), "accounts/sec")
 }
 
 func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
 	benchSizes := []int{1024 * 100, 1024 * 200, 1024 * 400}
 	for _, size := range benchSizes {
-		b.Run(fmt.Sprintf("Restore-%d", size), func(b *testing.B) {
+		b.Run(fmt.Sprintf("RandomInsertOrder-%d", size), func(b *testing.B) {
 			b.N = size
-			benchmarkWriteCatchpointStagingBalancesSub(b)
+			benchmarkWriteCatchpointStagingBalancesSub(b, false)
+		})
+	}
+	for _, size := range benchSizes {
+		b.Run(fmt.Sprintf("AscendingInsertOrder-%d", size), func(b *testing.B) {
+			b.N = size
+			benchmarkWriteCatchpointStagingBalancesSub(b, true)
 		})
 	}
 }
