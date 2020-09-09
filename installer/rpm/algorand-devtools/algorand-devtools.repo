@@ -1,5 +1,5 @@
 [algorand]
-name=Algorand-dev
+name=Algorand-devtools
 baseurl=https://releases.algorand.com/rpm/stable/
 enabled=1
 gpgcheck=1

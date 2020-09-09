@@ -32,7 +32,7 @@ mkdir -p %{buildroot}/etc/pki/rpm-gpg
 install -m 644 ${REPO_DIR}/installer/rpm/RPM-GPG-KEY-Algorand %{buildroot}/etc/pki/rpm-gpg/RPM-GPG-KEY-Algorand
 
 mkdir -p %{buildroot}/usr/lib/algorand/yum.repos.d
-install -m 644 ${REPO_DIR}/installer/rpm/algorand-dev/algorand-dev.repo %{buildroot}/usr/lib/algorand/yum.repos.d/algorand-dev.repo
+install -m 644 ${REPO_DIR}/installer/rpm/algorand-devtools/algorand-devtools.repo %{buildroot}/usr/lib/algorand/yum.repos.d/algorand-devtools.repo
 
 %files
 /usr/bin/carpenter
@@ -40,7 +40,7 @@ install -m 644 ${REPO_DIR}/installer/rpm/algorand-dev/algorand-dev.repo %{buildr
 /usr/bin/msgpacktool
 /usr/bin/tealdbg
 /etc/pki/rpm-gpg/RPM-GPG-KEY-Algorand
-/usr/lib/algorand/yum.repos.d/algorand-dev.repo
+/usr/lib/algorand/yum.repos.d/algorand-devtools.repo
 
 %changelog
 

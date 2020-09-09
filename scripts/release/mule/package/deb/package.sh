@@ -30,9 +30,9 @@ trap "rm -rf $PKG_ROOT" 0
 mkdir -p "${PKG_ROOT}/usr/bin"
 
 # NOTE: keep in sync with `./installer/rpm/algorand.spec`.
-if [ "$PKG_NAME" = "algorand-dev" ]; then
+if [ "$PKG_NAME" = "algorand-devtools" ]; then
     BIN_FILES=("carpenter" "catchupsrv" "msgpacktool" "tealdbg")
-    UNATTENDED_UPGRADES_FILE="53algorand-dev-upgrades"
+    UNATTENDED_UPGRADES_FILE="53algorand-devtools-upgrades"
     OUTPUT_DEB="$OUTDIR/algorand_devtools_${OS_TYPE}-${ARCH}_${VER}.deb"
 else
     BIN_FILES=("algocfg" "algod" "algoh" "algokey" "ddconfig.sh" "diagcfg" "goal" "kmd" "node_exporter")
@@ -45,7 +45,7 @@ for binary in "${BIN_FILES[@]}"; do
     chmod 755 "${PKG_ROOT}/usr/bin/${binary}"
 done
 
-if [ "$PKG_NAME" != "algorand-dev" ]; then
+if [ "$PKG_NAME" != "algorand-devtools" ]; then
     mkdir -p "${PKG_ROOT}/usr/lib/algorand"
     lib_files=("updater" "find-nodes.sh")
     for lib in "${lib_files[@]}"; do
