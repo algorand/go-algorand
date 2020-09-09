@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"container/heap"
 	"context"
 	"database/sql"
 	"encoding/hex"
@@ -406,6 +407,109 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 
 		// We're OK to include this result
 		res = append(res, loc)
+	}
+
+	return res, nil
+}
+
+// onlineTop returns the top n online accounts, sorted by their normalized
+// balance and address, whose voting keys are valid in voteRnd.  See the
+// normalization description in AccountData.NormalizedOnlineBalance().
+func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*onlineAccount, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return nil, err
+	}
+
+	proto := au.protos[offset]
+
+	// Determine how many accounts have been modified in-memory,
+	// so that we obtain enough top accounts from disk (accountdb).
+	// If the *onlineAccount is nil, that means the account is offline
+	// as of the most recent change to that account, or its vote key
+	// is not valid in voteRnd.  Otherwise, the *onlineAccount is the
+	// representation of the most recent state of the account, and it
+	// is online and can vote in voteRnd.
+	modifiedAccounts := make(map[basics.Address]*onlineAccount)
+	for o := uint64(0); o < offset; o++ {
+		for addr, d := range au.deltas[o] {
+			if d.new.Status != basics.Online {
+				modifiedAccounts[addr] = nil
+				continue
+			}
+
+			if !(d.new.VoteFirstValid <= voteRnd && voteRnd <= d.new.VoteLastValid) {
+				modifiedAccounts[addr] = nil
+				continue
+			}
+
+			modifiedAccounts[addr] = accountDataToOnline(addr, &d.new, proto)
+		}
+	}
+
+	// Build up a set of candidate accounts.  Start by loading the
+	// top N + len(modifiedAccounts) accounts from disk (accountdb).
+	// This ensures that, even if the worst case if all in-memory
+	// changes are deleting the top accounts in accountdb, we still
+	// will have top N left.
+	//
+	// Keep asking for more accounts until we get the desired number,
+	// or there are no more accounts left.
+	candidates := make(map[basics.Address]*onlineAccount)
+	batchOffset := uint64(0)
+	batchSize := uint64(1024)
+	for uint64(len(candidates)) < n+uint64(len(modifiedAccounts)) {
+		var accts map[basics.Address]*onlineAccount
+		err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			accts, err = accountsOnlineTop(tx, batchOffset, batchSize, proto)
+			return
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		for addr, data := range accts {
+			if !(data.VoteFirstValid <= voteRnd && voteRnd <= data.VoteLastValid) {
+				continue
+			}
+			candidates[addr] = data
+		}
+
+		// If we got fewer than batchSize accounts, there are no
+		// more accounts to look at.
+		if uint64(len(accts)) < batchSize {
+			break
+		}
+
+		batchOffset += batchSize
+	}
+
+	// Now update the candidates based on the in-memory deltas.
+	for addr, oa := range modifiedAccounts {
+		if oa == nil {
+			delete(candidates, addr)
+		} else {
+			candidates[addr] = oa
+		}
+	}
+
+	// Get the top N accounts from the candidate set, by inserting all of
+	// the accounts into a heap and then pulling out N elements from the
+	// heap.
+	topHeap := &onlineTopHeap{
+		accts: nil,
+	}
+
+	for _, data := range candidates {
+		heap.Push(topHeap, data)
+	}
+
+	var res []*onlineAccount
+	for topHeap.Len() > 0 && uint64(len(res)) < n {
+		acct := heap.Pop(topHeap).(*onlineAccount)
+		res = append(res, acct)
 	}
 
 	return res, nil
@@ -849,6 +953,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 2 : %v", err)
 					return 0, err
 				}
+			case 3:
+				dbVersion, err = au.upgradeDatabaseSchema3(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
+					return 0, err
+				}
 			default:
 				return 0, fmt.Errorf("accountsInitialize unable to upgrade database from schema version %d", dbVersion)
 			}
@@ -1084,6 +1194,22 @@ func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx
 		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 2 to 3: %v", err)
 	}
 	return 3, nil
+}
+
+// upgradeDatabaseSchema3 upgrades the database schema from version 3 to version 4,
+// adding the normalizedonlinebalance column to the accountbase table.
+func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+	err = accountsAddNormalizedBalance(tx, au.ledger.GenesisProto())
+	if err != nil {
+		return 0, err
+	}
+
+	// update version
+	_, err = db.SetUserVersion(ctx, tx, 4)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 3 to 4: %v", err)
+	}
+	return 4, nil
 }
 
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
@@ -1430,6 +1556,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	beforeUpdatingBalancesTime := time.Now()
 	var trieBalancesHash crypto.Digest
 
+	genesisProto := au.ledger.GenesisProto()
+
 	err := au.dbs.wdb.AtomicCommitWriteLock(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
@@ -1450,7 +1578,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 		for i := uint64(0); i < offset; i++ {
-			err = accountsNewRound(tx, deltas[i], creatableDeltas[i])
+			err = accountsNewRound(tx, deltas[i], creatableDeltas[i], genesisProto)
 			if err != nil {
 				return err
 			}

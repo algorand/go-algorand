@@ -110,6 +110,13 @@ func (ml *mockLedgerForTracker) GenesisHash() crypto.Digest {
 	return crypto.Digest{}
 }
 
+func (ml *mockLedgerForTracker) GenesisProto() config.ConsensusParams {
+	if len(ml.blocks) > 0 {
+		return config.Consensus[ml.blocks[0].block.CurrentProtocol]
+	}
+	return config.Consensus[protocol.ConsensusCurrentVersion]
+}
+
 // this function used to be in acctupdates.go, but we were never using it for production purposes. This
 // function has a conceptual flaw in that it attempts to load the entire balances into memory. This might
 // not work if we have large number of balances. On these unit testing, however, it's not the case, and it's
@@ -978,6 +985,9 @@ func TestListCreatables(t *testing.T) {
 	err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 
+	err = accountsAddNormalizedBalance(tx, proto)
+	require.NoError(t, err)
+
 	au := &accountUpdates{}
 	au.accountsq, err = accountsDbInit(tx, tx)
 	require.NoError(t, err)
@@ -997,7 +1007,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* No deletes	                                           *******
 	// sync with the database
 	var updates map[basics.Address]accountDelta
-	err = accountsNewRound(tx, updates, ctbsWithDeletes)
+	err = accountsNewRound(tx, updates, ctbsWithDeletes, proto)
 	require.NoError(t, err)
 	// nothing left in cache
 	au.creatables = make(map[basics.CreatableIndex]modifiedCreatable)
@@ -1013,7 +1023,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* Results are obtained from the database and from the cache *******
 	// ******* Deletes are in the database and in the cache              *******
 	// sync with the database. This has deletes synced to the database.
-	err = accountsNewRound(tx, updates, au.creatables)
+	err = accountsNewRound(tx, updates, au.creatables, proto)
 	require.NoError(t, err)
 	// get new creatables in the cache. There will be deletes in the cache from the previous batch.
 	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
