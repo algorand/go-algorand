@@ -89,6 +89,10 @@ func (wl *wrappedLedger) GenesisHash() crypto.Digest {
 	return wl.l.GenesisHash()
 }
 
+func (wl *wrappedLedger) GenesisProto() config.ConsensusParams {
+	return wl.l.GenesisProto()
+}
+
 func getInitState() (genesisInitState InitState) {
 	blk := bookkeeping.Block{}
 	blk.CurrentProtocol = protocol.ConsensusCurrentVersion
