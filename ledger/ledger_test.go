@@ -1103,10 +1103,10 @@ func TestGetLastCatchpointLabel(t *testing.T) {
 // generate at least 3 asset and 3 app creatables, and return the ids
 // of the asset/app with at least 3 elements less or equal.
 func generateCreatables(numElementsPerSegement int) (
-	err error,
 	randomCtbs map[basics.CreatableIndex]modifiedCreatable,
-	assetId3,
-	appId3 basics.CreatableIndex) {
+	assetID3,
+	appID3 basics.CreatableIndex,
+	err error) {
 	_, randomCtbs = randomCreatables(numElementsPerSegement)
 	asCounter3 := 0
 	apCounter3 := 0
@@ -1116,22 +1116,22 @@ func generateCreatables(numElementsPerSegement int) (
 		for cID, crtble := range randomCtbs {
 			switch crtble.ctype {
 			case basics.AssetCreatable:
-				if assetId3 == 0 {
-					assetId3 = cID
+				if assetID3 == 0 {
+					assetID3 = cID
 					continue
 				}
 				asCounter3++
-				if assetId3 < cID {
-					assetId3 = cID
+				if assetID3 < cID {
+					assetID3 = cID
 				}
 			case basics.AppCreatable:
-				if appId3 == 0 {
-					appId3 = cID
+				if appID3 == 0 {
+					appID3 = cID
 					continue
 				}
 				apCounter3++
-				if appId3 < cID {
-					appId3 = cID
+				if appID3 < cID {
+					appID3 = cID
 				}
 			}
 			if asCounter3 >= 3 && apCounter3 >= 3 {
@@ -1147,7 +1147,7 @@ func generateCreatables(numElementsPerSegement int) (
 		}
 	}
 	if asCounter3 < 3 && apCounter3 < 3 {
-		return fmt.Errorf("Could not generate 3 apps and 3 assets."), nil, 0, 0
+		return nil, 0, 0, fmt.Errorf("could not generate 3 apps and 3 assets")
 	}
 	return
 }
@@ -1172,7 +1172,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 	// ******* All results are obtained from the cache. Empty database *******
 	// ******* No deletes                                              *******
 	// get random data. Inital batch, no deletes
-	err, randomCtbs, maxAsset, maxApp := generateCreatables(numElementsPerSegement)
+	randomCtbs, maxAsset, maxApp, err := generateCreatables(numElementsPerSegement)
 	require.NoError(t, err)
 
 	// set the cache
