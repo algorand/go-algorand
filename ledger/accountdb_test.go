@@ -807,38 +807,41 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B) {
 	}()
 	catchpointAccessor := MakeCatchpointCatchupAccessor(l, log)
 	catchpointAccessor.ResetStagingBalances(context.Background(), true)
-	accountsCount := uint64(b.N)
-	b.ResetTimer()
-	accounts := uint64(0)
+	targetAccountsCount := uint64(b.N)
+	accountsLoaded := uint64(0)
 	var last64KStart time.Time
 	last64KSize := uint64(0)
-	last64KSubTime := time.Duration(0)
+	last64KAccountCreationTime := time.Duration(0)
 	accountsWritingStarted := time.Now()
-	for accounts < accountsCount {
+	accountsGenerationDuration := time.Duration(0)
+	b.ResetTimer()
+	for accountsLoaded < targetAccountsCount {
 		b.StopTimer()
 		balancesLoopStart := time.Now()
 		// generate a chunk;
-		chunkSize := accountsCount - accounts
+		chunkSize := targetAccountsCount - accountsLoaded
 		if chunkSize > BalancesPerCatchpointFileChunk {
 			chunkSize = BalancesPerCatchpointFileChunk
 		}
 		last64KSize += chunkSize
-		if accounts >= accountsCount-64*1024 && last64KStart.IsZero() {
+		if accountsLoaded >= targetAccountsCount-64*1024 && last64KStart.IsZero() {
 			last64KStart = time.Now()
 			last64KSize = chunkSize
-			last64KSubTime = time.Duration(0)
+			last64KAccountCreationTime = time.Duration(0)
 		}
 		var balances catchpointFileBalancesChunk
 		balances.Balances = make([]encodedBalanceRecord, chunkSize)
 		for i := uint64(0); i < chunkSize; i++ {
 			var randomAccount encodedBalanceRecord
-			accountData := basics.AccountData{RewardsBase: accounts + i}
+			accountData := basics.AccountData{RewardsBase: accountsLoaded + i}
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)
 			crypto.RandBytes(randomAccount.Address[:])
 			balances.Balances[i] = randomAccount
 		}
-		last64KSubTime += time.Now().Sub(balancesLoopStart)
+		balanceLoopDuration := time.Now().Sub(balancesLoopStart)
+		last64KAccountCreationTime += balanceLoopDuration
+		accountsGenerationDuration += balanceLoopDuration
 		b.StartTimer()
 		err = l.trackerDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			err = writeCatchpointStagingBalances(ctx, tx, balances.Balances)
@@ -846,16 +849,16 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B) {
 		})
 
 		require.NoError(b, err)
-		accounts += chunkSize
+		accountsLoaded += chunkSize
 	}
 	if !last64KStart.IsZero() {
-		last64KDuration := time.Now().Sub(last64KStart) - last64KSubTime
+		last64KDuration := time.Now().Sub(last64KStart) - last64KAccountCreationTime
 		fmt.Printf("%-74s%-7d (last 64k) %-6d ns/account       %d accounts/sec\n", b.Name(), last64KSize, (last64KDuration / time.Duration(last64KSize)).Nanoseconds(), int(float64(last64KSize)/float64(last64KDuration.Seconds())))
 	}
 	stats, err := l.trackerDBs.wdb.Vacuum(context.Background())
 	require.NoError(b, err)
 	fmt.Printf("%-74sdb fragmentation   %.1f%%\n", b.Name(), float32(stats.PagesBefore-stats.PagesAfter)*100/float32(stats.PagesBefore))
-	b.ReportMetric(float64(b.N)/float64(time.Now().Sub(accountsWritingStarted).Seconds()), "accounts/sec")
+	b.ReportMetric(float64(b.N)/float64((time.Now().Sub(accountsWritingStarted)-accountsGenerationDuration).Seconds()), "accounts/sec")
 }
 
 func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
