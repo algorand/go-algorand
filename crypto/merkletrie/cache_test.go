@@ -286,7 +286,7 @@ func (mt *Trie) TestDeleteRollback(d []byte) (bool, error) {
 		return false, err
 	}
 	mt.cache.beginTransaction()
-	if pnode.leaf {
+	if pnode.leaf() {
 		// remove the root.
 		mt.cache.deleteNode(mt.root)
 		mt.root = storedNodeIdentifierNull
@@ -369,4 +369,77 @@ func TestCacheDeleteNodeMidTransaction(t *testing.T) {
 		// memory page should have more than a single node.
 		require.NotZerof(t, len(pageContent), "Memory page %d has zero nodes", page)
 	}
+}
+
+// TestCachePageLoading ensures that during page loading, the number of cachedNodeCount is not
+// increased if the page was already loaded previously into memory.
+func TestCachePageReloading(t *testing.T) {
+	var memoryCommitter InMemoryCommitter
+	mt1, _ := MakeTrie(&memoryCommitter, defaultTestEvictSize)
+	// create 10 hashes.
+	leafsCount := 10
+	hashes := make([]crypto.Digest, leafsCount)
+	for i := 0; i < len(hashes); i++ {
+		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
+	}
+
+	for i := 0; i < len(hashes); i++ {
+		mt1.Add(hashes[i][:])
+	}
+	_, err := mt1.Evict(true)
+	require.NoError(t, err)
+
+	earlyCachedNodeCount := mt1.cache.cachedNodeCount
+	// reloading existing cached page multiple time should not cause increase cached node count.
+	page := uint64(mt1.nextNodeID) / uint64(memoryCommitter.GetNodesCountPerPage())
+	err = mt1.cache.loadPage(page)
+	require.NoError(t, err)
+	lateCachedNodeCount := mt1.cache.cachedNodeCount
+	require.Equal(t, earlyCachedNodeCount, lateCachedNodeCount)
+
+	// manually remove one item off this page
+	for k := range mt1.cache.pageToNIDsPtr[page] {
+		delete(mt1.cache.pageToNIDsPtr[page], k)
+		break
+	}
+	mt1.cache.cachedNodeCount--
+
+	// reload to see if that would "fix" the missing entry.
+	err = mt1.cache.loadPage(page)
+	require.NoError(t, err)
+	lateCachedNodeCount = mt1.cache.cachedNodeCount
+	require.Equal(t, earlyCachedNodeCount, lateCachedNodeCount)
+}
+
+// TestCachePagedOutTip verifies that the evict function would prioritize
+// evicting other pages before evicting the top page.
+func TestCachePagedOutTip(t *testing.T) {
+	var memoryCommitter InMemoryCommitter
+	mt1, _ := MakeTrie(&memoryCommitter, 600)
+	// create 2048 hashes.
+	leafsCount := 2048
+	hashes := make([]crypto.Digest, leafsCount)
+	for i := 0; i < len(hashes); i++ {
+		hashes[i] = crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)})
+	}
+
+	for i := 0; i < len(hashes)/2; i++ {
+		mt1.Add(hashes[i][:])
+	}
+	err := mt1.Commit()
+	require.NoError(t, err)
+
+	for i := 0; i < len(hashes)/2; i++ {
+		mt1.Add(hashes[i+len(hashes)/2][:])
+	}
+
+	// check the tip page before evicting
+	page := uint64(mt1.nextNodeID) / uint64(memoryCommitter.GetNodesCountPerPage())
+	require.NotNil(t, mt1.cache.pageToNIDsPtr[page])
+
+	_, err = mt1.Evict(true)
+	require.NoError(t, err)
+
+	// ensures that the tip page was not flushed out.
+	require.NotNil(t, mt1.cache.pageToNIDsPtr[page])
 }

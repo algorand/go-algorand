@@ -25,7 +25,15 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// TokenPathParam is the name of the path parameter used by URLAuthPrefix
+const TokenPathParam = "token"
+
+// URLAuthPrefix is the echo formatted url/path param which can be used for supplying an API token.
+const URLAuthPrefix = "/urlAuth/:" + TokenPathParam
 const urlAuthFormatter = "/urlAuth/%s"
+
+// InvalidTokenMessage is the message set when an invalid / missing token is found.
+const InvalidTokenMessage = "Invalid API Token"
 
 // AuthMiddleware provides some data to the handler.
 type AuthMiddleware struct {
@@ -71,7 +79,7 @@ func (auth *AuthMiddleware) handler(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		// Handle debug routes with /urlAuth/:token prefix.
-		if ctx.Param("token") != "" {
+		if ctx.Param(TokenPathParam) != "" {
 			// For debug routes, we place the apiToken in the path itself
 			providedToken = []byte(ctx.Param("token"))
 
@@ -93,6 +101,6 @@ func (auth *AuthMiddleware) handler(next echo.HandlerFunc) echo.HandlerFunc {
 			}
 		}
 
-		return echo.NewHTTPError(http.StatusUnauthorized, "Invalid API Token")
+		return echo.NewHTTPError(http.StatusUnauthorized, InvalidTokenMessage)
 	}
 }

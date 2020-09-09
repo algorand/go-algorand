@@ -118,6 +118,34 @@ func (mtc *merkleTrieCache) allocateNewNode() (pnode *node, nid storedNodeIdenti
 	return newNode, nextID
 }
 
+// refurbishNode releases a given node and reallocate a new node while avoiding changing the underlaying buffer.
+func (mtc *merkleTrieCache) refurbishNode(nid storedNodeIdentifier) (nextID storedNodeIdentifier) {
+	page := uint64(nid) / uint64(mtc.nodesPerPage)
+	pNode := mtc.pageToNIDsPtr[page][nid]
+	if mtc.txCreatedNodeIDs[nid] {
+		delete(mtc.txCreatedNodeIDs, nid)
+		delete(mtc.pageToNIDsPtr[page], nid)
+		if len(mtc.pageToNIDsPtr[page]) == 0 {
+			delete(mtc.pageToNIDsPtr, page)
+		}
+		mtc.cachedNodeCount--
+	} else {
+		mtc.txDeletedNodeIDs[nid] = true
+	}
+
+	nextID = mtc.mt.nextNodeID
+	mtc.mt.nextNodeID++
+	page = uint64(nextID) / uint64(mtc.nodesPerPage)
+	if mtc.pageToNIDsPtr[page] == nil {
+		mtc.pageToNIDsPtr[page] = make(map[storedNodeIdentifier]*node, mtc.nodesPerPage)
+	}
+	mtc.pageToNIDsPtr[page][nextID] = pNode
+	mtc.cachedNodeCount++
+	mtc.txCreatedNodeIDs[nextID] = true
+	mtc.modified = true
+	return nextID
+}
+
 // getNode retrieves the given node by its identifier, loading the page if it
 // cannot be found in cache, and returning an error if it's not in cache nor in committer.
 func (mtc *merkleTrieCache) getNode(nid storedNodeIdentifier) (pnode *node, err error) {
@@ -177,12 +205,15 @@ func (mtc *merkleTrieCache) loadPage(page uint64) (err error) {
 		return
 	}
 	if mtc.pageToNIDsPtr[page] == nil {
-		mtc.pageToNIDsPtr[page] = make(map[storedNodeIdentifier]*node, mtc.nodesPerPage)
+		mtc.pageToNIDsPtr[page] = decodedNodes
+		mtc.cachedNodeCount += len(mtc.pageToNIDsPtr[page])
+	} else {
+		mtc.cachedNodeCount -= len(mtc.pageToNIDsPtr[page])
+		for nodeID, pnode := range decodedNodes {
+			mtc.pageToNIDsPtr[page][nodeID] = pnode
+		}
+		mtc.cachedNodeCount += len(mtc.pageToNIDsPtr[page])
 	}
-	for nodeID, pnode := range decodedNodes {
-		mtc.pageToNIDsPtr[page][nodeID] = pnode
-	}
-	mtc.cachedNodeCount += len(mtc.pageToNIDsPtr[page])
 
 	// if we've just loaded a deferred page, no need to reload it during the commit.
 	if mtc.deferedPageLoad != page {
@@ -438,10 +469,18 @@ func (mtc *merkleTrieCache) encodePage(nodeIDs map[storedNodeIdentifier]*node) [
 	return serializedBuffer[:walk]
 }
 
-// evict releases the least used pages from cache until the number of elements in cache are less than cachedNodeCountTarget
+// evict releases the least used pages from cache until the number of elements in cache are less than cachedNodeCountTarget.
+// the root element page is being moved to the front so that it would get flushed last.
 func (mtc *merkleTrieCache) evict() (removedNodes int) {
 	removedNodes = mtc.cachedNodeCount
-
+	// check the root element ( if there is such ), and give it a higher priority, since we want
+	// to release the page with the root element last.
+	if mtc.mt.root != storedNodeIdentifierNull {
+		rootPage := uint64(mtc.mt.root) / uint64(mtc.nodesPerPage)
+		if element, has := mtc.pagesPrioritizationMap[rootPage]; has && element != nil {
+			mtc.pagesPrioritizationList.MoveToFront(element)
+		}
+	}
 	for mtc.cachedNodeCount > mtc.cachedNodeCountTarget {
 		// get the least used page off the pagesPrioritizationList
 		element := mtc.pagesPrioritizationList.Back()

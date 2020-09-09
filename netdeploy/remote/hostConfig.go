@@ -19,5 +19,6 @@ package remote
 // HostConfig represents the configuration of a single deployed Host
 type HostConfig struct {
 	Name  string
+	Group string
 	Nodes []NodeConfig
 }

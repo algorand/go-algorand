@@ -47,4 +47,11 @@ var Routes = lib.Routes{
 		Path:        "/swagger.json",
 		HandlerFunc: SwaggerJSON,
 	},
+
+	lib.Route{
+		Name:        "genesis",
+		Method:      "GET",
+		Path:        "/genesis",
+		HandlerFunc: GenesisJSON,
+	},
 }

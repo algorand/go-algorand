@@ -50,7 +50,7 @@ func TestAddingAndRemoving(t *testing.T) {
 	require.Equal(t, len(hashes), int(stats.leafCount))
 	require.Equal(t, 4, int(stats.depth))
 	require.Equal(t, 10915, int(stats.nodesCount))
-	require.Equal(t, 2490656, int(stats.size))
+	require.Equal(t, 1135745, int(stats.size))
 	require.True(t, int(stats.nodesCount) > len(hashes))
 	require.True(t, int(stats.nodesCount) < 2*len(hashes))
 

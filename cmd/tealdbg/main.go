@@ -184,8 +184,8 @@ func debugLocal(args []string) {
 	// program can be set either directly
 	// or with SignedTxn.Lsig.Logic,
 	// or with BalanceRecord.AppParams.ApprovalProgram
-	if len(args) == 0 && (len(txnFile) == 0 || len(balanceFile) == 0) && len(ddrFile) == 0 {
-		log.Fatalln("No program to debug: must specify program(s), or transaction(s) and a balance record(s), or dryrun-req object")
+	if len(args) == 0 && len(txnFile) == 0 && len(ddrFile) == 0 {
+		log.Fatalln("No program to debug: must specify program(s), or transaction(s), or dryrun-req object")
 	}
 
 	if len(args) == 0 && groupIndex != 0 {

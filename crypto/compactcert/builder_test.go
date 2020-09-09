@@ -126,6 +126,12 @@ func TestBuildVerify(t *testing.T) {
 		t.Error(err)
 	}
 
+	var someReveal Reveal
+	for _, rev := range cert.Reveals {
+		someReveal = rev
+		break
+	}
+
 	certenc := protocol.Encode(cert)
 	fmt.Printf("Cert size:\n")
 	fmt.Printf("  %6d elems sigproofs\n", len(cert.SigProofs))
@@ -133,9 +139,9 @@ func TestBuildVerify(t *testing.T) {
 	fmt.Printf("  %6d bytes partproofs\n", len(protocol.EncodeReflect(cert.PartProofs)))
 	fmt.Printf("  %6d bytes sigproof per reveal\n", len(protocol.EncodeReflect(cert.SigProofs))/len(cert.Reveals))
 	fmt.Printf("  %6d reveals:\n", len(cert.Reveals))
-	fmt.Printf("    %6d bytes reveals[0] participant\n", len(protocol.Encode(&cert.Reveals[0].Part)))
-	fmt.Printf("    %6d bytes reveals[0] sigslot\n", len(protocol.Encode(&cert.Reveals[0].SigSlot)))
-	fmt.Printf("    %6d bytes reveals[0] total\n", len(protocol.Encode(&cert.Reveals[0])))
+	fmt.Printf("    %6d bytes reveals[*] participant\n", len(protocol.Encode(&someReveal.Part)))
+	fmt.Printf("    %6d bytes reveals[*] sigslot\n", len(protocol.Encode(&someReveal.SigSlot)))
+	fmt.Printf("    %6d bytes reveals[*] total\n", len(protocol.Encode(&someReveal)))
 	fmt.Printf("  %6d bytes total\n", len(certenc))
 
 	verif := MkVerifier(param, partcom.Root())
@@ -216,16 +222,17 @@ func BenchmarkBuildVerify(b *testing.B) {
 func TestCoinIndex(t *testing.T) {
 	n := 1000
 	b := &Builder{
-		sigs: make([]sigslot, n),
+		sigs:          make([]sigslot, n),
+		sigsHasValidL: true,
 	}
 
 	for i := 0; i < n; i++ {
 		b.sigs[i].L = uint64(i)
-		b.sigs[i].part.Weight = 1
+		b.sigs[i].Weight = 1
 	}
 
 	for i := 0; i < n; i++ {
-		pos, err := b.coinIndex(uint64(i), 0, uint64(len(b.sigs)))
+		pos, err := b.coinIndex(uint64(i))
 		require.NoError(t, err)
 		require.Equal(t, pos, uint64(i))
 	}

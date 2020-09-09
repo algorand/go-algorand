@@ -839,7 +839,11 @@ func (node *AlgorandFullNode) StartCatchup(catchpoint string) error {
 	}
 	if node.catchpointCatchupService != nil {
 		stats := node.catchpointCatchupService.GetStatistics()
-		return fmt.Errorf("unable to start catchpoint catchup for '%s' - already catching up '%s'", catchpoint, stats.CatchpointLabel)
+		// No need to return an error
+		if catchpoint == stats.CatchpointLabel {
+			return MakeCatchpointAlreadyInProgressError(catchpoint)
+		}
+		return MakeCatchpointUnableToStartError(stats.CatchpointLabel, catchpoint)
 	}
 	var err error
 	node.catchpointCatchupService, err = catchup.MakeNewCatchpointCatchupService(catchpoint, node, node.log, node.net, node.ledger.Ledger, node.config)
@@ -970,7 +974,7 @@ func (vb validatedBlock) Block() bookkeeping.Block {
 func (node *AlgorandFullNode) AssembleBlock(round basics.Round, deadline time.Time) (agreement.ValidatedBlock, error) {
 	lvb, err := node.transactionPool.AssembleBlock(round, deadline)
 	if err != nil {
-		if err == pools.ErrTxPoolStaleBlockAssembly {
+		if err == pools.ErrStaleBlockAssemblyRequest {
 			// convert specific error to one that would have special handling in the agreement code.
 			err = agreement.ErrAssembleBlockRoundStale
 

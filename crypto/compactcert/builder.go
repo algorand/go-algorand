@@ -26,10 +26,11 @@ import (
 
 //msgp:ignore sigslot
 type sigslot struct {
-	// part is the participant signing this message.  The participant
-	// information is tracked here for convenience, but it does not
-	// appear in the commitment to the sigs array.
-	part Participant
+	// Weight is the weight of the participant signing this message.
+	// This information is tracked here for convenience, but it does
+	// not appear in the commitment to the sigs array; it comes from
+	// the Weight field of the corresponding participant.
+	Weight uint64
 
 	// Include the parts of the sigslot that form the commitment to
 	// the sigs array.
@@ -41,10 +42,11 @@ type sigslot struct {
 type Builder struct {
 	Params
 
-	sigs         []sigslot // Indexed by pos in participants
-	signedWeight uint64    // Total weight of signatures so far
-	participants []Participant
-	parttree     *merklearray.Tree
+	sigs          []sigslot // Indexed by pos in participants
+	sigsHasValidL bool      // The L values in sigs are consistent with weights
+	signedWeight  uint64    // Total weight of signatures so far
+	participants  []Participant
+	parttree      *merklearray.Tree
 
 	// Cached cert, if Build() was called and no subsequent
 	// Add() calls were made.
@@ -59,11 +61,12 @@ func MkBuilder(param Params, part []Participant, parttree *merklearray.Tree) (*B
 	npart := len(part)
 
 	b := &Builder{
-		Params:       param,
-		sigs:         make([]sigslot, npart),
-		signedWeight: 0,
-		participants: part,
-		parttree:     parttree,
+		Params:        param,
+		sigs:          make([]sigslot, npart),
+		sigsHasValidL: false,
+		signedWeight:  0,
+		participants:  part,
+		parttree:      parttree,
 	}
 
 	return b, nil
@@ -72,7 +75,7 @@ func MkBuilder(param Params, part []Participant, parttree *merklearray.Tree) (*B
 // Present checks if the builder already contains a signature at a particular
 // offset.
 func (b *Builder) Present(pos uint64) bool {
-	return b.sigs[pos].part.Weight != 0
+	return b.sigs[pos].Weight != 0
 }
 
 // Add a signature to the set of signatures available for building a certificate.
@@ -101,16 +104,17 @@ func (b *Builder) Add(pos uint64, sig crypto.OneTimeSignature, verifySig bool) e
 	}
 
 	// Remember the signature
-	b.sigs[pos].part = p
+	b.sigs[pos].Weight = p.Weight
 	b.sigs[pos].Sig.OneTimeSignature = sig
 	b.signedWeight += p.Weight
 	b.cert = nil
+	b.sigsHasValidL = false
 	return nil
 }
 
 // Ready returns whether the certificate is ready to be built.
 func (b *Builder) Ready() bool {
-	return b.signedWeight >= b.Params.ProvenWeight
+	return b.signedWeight > b.Params.ProvenWeight
 }
 
 // SignedWeight returns the total weight of signatures added so far.
@@ -118,14 +122,14 @@ func (b *Builder) SignedWeight() uint64 {
 	return b.signedWeight
 }
 
-//msgp:ignore sigCommit
-type sigCommit []sigslot
+//msgp:ignore sigsToCommit
+type sigsToCommit []sigslot
 
-func (sc sigCommit) Length() uint64 {
+func (sc sigsToCommit) Length() uint64 {
 	return uint64(len(sc))
 }
 
-func (sc sigCommit) Get(pos uint64) (crypto.Hashable, error) {
+func (sc sigsToCommit) Get(pos uint64) (crypto.Hashable, error) {
 	if pos >= uint64(len(sc)) {
 		return nil, fmt.Errorf("pos %d past end %d", pos, len(sc))
 	}
@@ -138,10 +142,15 @@ func (sc sigCommit) Get(pos uint64) (crypto.Hashable, error) {
 // but the sum of all signature weights up to and including pos exceeds
 // coinWeight.
 //
-// coinIndex works by doing a binary search on the sigs array.  The caller
-// should invoke it with lo=0 and hi=len(b.sigs).  The caller should make
-// sure that sigs[*].L is initialized before using coinIndex().
-func (b *Builder) coinIndex(coinWeight uint64, lo uint64, hi uint64) (uint64, error) {
+// coinIndex works by doing a binary search on the sigs array.
+func (b *Builder) coinIndex(coinWeight uint64) (uint64, error) {
+	if !b.sigsHasValidL {
+		return 0, fmt.Errorf("coinIndex: need valid L values")
+	}
+
+	lo := uint64(0)
+	hi := uint64(len(b.sigs))
+
 again:
 	if lo >= hi {
 		return 0, fmt.Errorf("coinIndex: lo %d >= hi %d", lo, hi)
@@ -153,7 +162,7 @@ again:
 		goto again
 	}
 
-	if coinWeight < b.sigs[mid].L+b.sigs[mid].part.Weight {
+	if coinWeight < b.sigs[mid].L+b.sigs[mid].Weight {
 		return mid, nil
 	}
 
@@ -168,16 +177,17 @@ func (b *Builder) Build() (*Cert, error) {
 		return b.cert, nil
 	}
 
-	if b.signedWeight < b.Params.ProvenWeight {
-		return nil, fmt.Errorf("not enough signed weight: %d < %d", b.signedWeight, b.Params.ProvenWeight)
+	if b.signedWeight <= b.Params.ProvenWeight {
+		return nil, fmt.Errorf("not enough signed weight: %d <= %d", b.signedWeight, b.Params.ProvenWeight)
 	}
 
 	// Commit to the sigs array
 	for i := 1; i < len(b.sigs); i++ {
-		b.sigs[i].L = b.sigs[i-1].L + b.sigs[i-1].part.Weight
+		b.sigs[i].L = b.sigs[i-1].L + b.sigs[i-1].Weight
 	}
+	b.sigsHasValidL = true
 
-	sigtree, err := merklearray.Build(sigCommit(b.sigs))
+	sigtree, err := merklearray.Build(sigsToCommit(b.sigs))
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +196,7 @@ func (b *Builder) Build() (*Cert, error) {
 	c := &Cert{
 		SigCommit:    sigtree.Root(),
 		SignedWeight: b.signedWeight,
-		Reveals:      nil,
+		Reveals:      make(map[uint64]Reveal),
 	}
 
 	nr, err := b.numReveals(b.signedWeight)
@@ -198,7 +208,7 @@ func (b *Builder) Build() (*Cert, error) {
 
 	for j := uint64(0); j < nr; j++ {
 		coin := hashCoin(j, c.SigCommit, c.SignedWeight)
-		pos, err := b.coinIndex(coin, 0, uint64(len(b.sigs)))
+		pos, err := b.coinIndex(coin)
 		if err != nil {
 			return nil, err
 		}
@@ -208,25 +218,17 @@ func (b *Builder) Build() (*Cert, error) {
 		}
 
 		// If we already revealed pos, no need to do it again
-		alreadyRevealed := false
-		for _, r := range c.Reveals {
-			if r.Pos == pos {
-				alreadyRevealed = true
-			}
-		}
-
+		_, alreadyRevealed := c.Reveals[pos]
 		if alreadyRevealed {
 			continue
 		}
 
 		// Generate the reveal for pos
-		r := Reveal{
-			Pos:     pos,
+		c.Reveals[pos] = Reveal{
 			SigSlot: b.sigs[pos].sigslotCommit,
 			Part:    b.participants[pos],
 		}
 
-		c.Reveals = append(c.Reveals, r)
 		proofPositions = append(proofPositions, pos)
 	}
 

@@ -124,7 +124,7 @@ type testLedger struct {
 	nextRound basics.Round
 
 	// constant
-	state map[basics.Address]basics.BalanceRecord
+	state map[basics.Address]basics.AccountData
 
 	notifications map[basics.Round]signal
 
@@ -137,7 +137,7 @@ type testLedger struct {
 	catchingUp            bool
 }
 
-func makeTestLedger(state map[basics.Address]basics.BalanceRecord, sync testLedgerSyncFunc) *testLedger {
+func makeTestLedger(state map[basics.Address]basics.AccountData, sync testLedgerSyncFunc) *testLedger {
 	l := new(testLedger)
 	l.Sync = sync
 	l.entries = make(map[basics.Round]bookkeeping.Block)
@@ -145,7 +145,7 @@ func makeTestLedger(state map[basics.Address]basics.BalanceRecord, sync testLedg
 	l.nextRound = 1
 
 	// deep copy of state
-	l.state = make(map[basics.Address]basics.BalanceRecord)
+	l.state = make(map[basics.Address]basics.AccountData)
 	for k, v := range state {
 		l.state[k] = v
 	}
@@ -226,12 +226,12 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	return l.entries[r].Digest(), nil
 }
 
-func (l *testLedger) BalanceRecord(r basics.Round, a basics.Address) (basics.BalanceRecord, error) {
+func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountData, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	if r >= l.nextRound {
-		err := fmt.Errorf("BalanceRecord called on future round: %d >= %d! (this is probably a bug)", r, l.nextRound)
+		err := fmt.Errorf("Lookup called on future round: %d >= %d! (this is probably a bug)", r, l.nextRound)
 		panic(err)
 	}
 	return l.state[a], nil

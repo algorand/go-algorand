@@ -563,12 +563,21 @@ func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string) error {
 		return badRequest(ctx, err, errFailedToParseCatchpoint, v2.Log)
 	}
 
+	// Select 200/201, or return an error
+	var code int
 	err = v2.Node.StartCatchup(catchpoint)
-	if err != nil {
+	switch err.(type) {
+	case nil:
+		code = http.StatusCreated
+	case *node.CatchpointAlreadyInProgressError:
+		code = http.StatusOK
+	case *node.CatchpointUnableToStartError:
+		return badRequest(ctx, err, err.Error(), v2.Log)
+	default:
 		return internalError(ctx, err, fmt.Sprintf(errFailedToStartCatchup, err), v2.Log)
 	}
 
-	return ctx.JSON(http.StatusOK, private.CatchpointStartResponse{
+	return ctx.JSON(code, private.CatchpointStartResponse{
 		CatchupMessage: catchpoint,
 	})
 }
@@ -625,7 +634,7 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 }
 
 // GetAssetByID returns application information by app idx.
-// (GET /v2/asset/{asset-id})
+// (GET /v2/assets/{asset-id})
 func (v2 *Handlers) GetAssetByID(ctx echo.Context, assetID uint64) error {
 	assetIdx := basics.AssetIndex(assetID)
 	ledger := v2.Node.Ledger()

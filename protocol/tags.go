@@ -21,16 +21,18 @@ package protocol
 type Tag string
 
 // Tags, in lexicographic sort order of tag values to avoid duplicates.
+// These tags must not contain a comma character because lists of tags
+// are encoded using a comma separator (see network/msgOfInterest.go).
 const (
 	UnknownMsgTag      Tag = "??"
 	AgreementVoteTag   Tag = "AV"
+	MsgOfInterestTag   Tag = "MI"
 	MsgDigestSkipTag   Tag = "MS"
 	NetPrioResponseTag Tag = "NP"
 	PingTag            Tag = "pi"
 	PingReplyTag       Tag = "pj"
 	ProposalPayloadTag Tag = "PP"
 	TopicMsgRespTag    Tag = "TS"
-	MsgOfInterestTag   Tag = "MI"
 	TxnTag             Tag = "TX"
 	UniCatchupReqTag   Tag = "UC"
 	UniEnsBlockReqTag  Tag = "UE"
