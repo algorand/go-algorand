@@ -546,6 +546,11 @@ func (l *Ledger) GenesisHash() crypto.Digest {
 	return l.genesisHash
 }
 
+// GenesisProto returns the initial protocol for this ledger.
+func (l *Ledger) GenesisProto() config.ConsensusParams {
+	return l.genesisProto
+}
+
 // GetCatchpointCatchupState returns the current state of the catchpoint catchup.
 func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state CatchpointCatchupState, err error) {
 	return MakeCatchpointCatchupAccessor(l, l.log).GetState(ctx)

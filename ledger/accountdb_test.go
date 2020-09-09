@@ -17,10 +17,12 @@
 package ledger
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -56,7 +58,8 @@ func randomAccountData(rewardsLevel uint64) basics.AccountData {
 	}
 
 	data.RewardsBase = rewardsLevel
-
+	data.VoteFirstValid = 0
+	data.VoteLastValid = 1000
 	return data
 }
 
@@ -339,6 +342,10 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.NoError(t, err)
 	defer aq.close()
 
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	err = accountsAddNormalizedBalance(tx, proto)
+	require.NoError(t, err)
+
 	var totalOnline, totalOffline, totalNotPart uint64
 
 	for addr, data := range accts {
@@ -373,6 +380,46 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	d, err := aq.lookup(randomAddress())
 	require.NoError(t, err)
 	require.Equal(t, d, basics.AccountData{})
+
+	onlineAccounts := make(map[basics.Address]*onlineAccount)
+	for addr, data := range accts {
+		if data.Status == basics.Online {
+			onlineAccounts[addr] = accountDataToOnline(addr, &data, proto)
+		}
+	}
+
+	for i := 0; i < len(onlineAccounts); i++ {
+		dbtop, err := accountsOnlineTop(tx, 0, uint64(i), proto)
+		require.NoError(t, err)
+		require.Equal(t, i, len(dbtop))
+
+		// Compute the top-N accounts ourselves
+		var testtop []onlineAccount
+		for _, data := range onlineAccounts {
+			testtop = append(testtop, *data)
+		}
+
+		sort.Slice(testtop, func(i, j int) bool {
+			ibal := testtop[i].NormalizedOnlineBalance
+			jbal := testtop[j].NormalizedOnlineBalance
+			if ibal > jbal {
+				return true
+			}
+			if ibal < jbal {
+				return false
+			}
+			return bytes.Compare(testtop[i].Address[:], testtop[j].Address[:]) > 0
+		})
+
+		for j := 0; j < i; j++ {
+			_, ok := dbtop[testtop[j].Address]
+			require.True(t, ok)
+		}
+	}
+
+	top, err := accountsOnlineTop(tx, 0, uint64(len(onlineAccounts)+1), proto)
+	require.NoError(t, err)
+	require.Equal(t, len(top), len(onlineAccounts))
 }
 
 func TestAccountDBInit(t *testing.T) {
@@ -479,7 +526,7 @@ func TestAccountDBRound(t *testing.T) {
 		accts = newaccts
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
 			expectedDbImage, numElementsPerSegement)
-		err = accountsNewRound(tx, updates, ctbsWithDeletes)
+		err = accountsNewRound(tx, updates, ctbsWithDeletes, proto)
 		require.NoError(t, err)
 		err = totalsNewRounds(tx, []map[basics.Address]accountDelta{updates}, []AccountTotals{{}}, []config.ConsensusParams{proto})
 		require.NoError(t, err)
@@ -791,6 +838,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 }
 
 func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	genesisInitState, _ := testGenerateInitState(b, protocol.ConsensusCurrentVersion)
 	const inMem = false
 	log := logging.TestingLog(b)
@@ -844,7 +892,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B) {
 		accountsGenerationDuration += balanceLoopDuration
 		b.StartTimer()
 		err = l.trackerDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			err = writeCatchpointStagingBalances(ctx, tx, balances.Balances)
+			err = writeCatchpointStagingBalances(ctx, tx, balances.Balances, proto)
 			return
 		})
 

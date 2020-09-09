@@ -290,6 +290,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		return fmt.Errorf("processStagingBalances received a chunk with no accounts")
 	}
 
+	proto := c.ledger.GenesisProto()
 	wdb := c.ledger.trackerDB().wdb
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		// create the merkle trie for the balances
@@ -308,7 +309,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			progress.cachedTrie.SetCommitter(mc)
 		}
 
-		err = writeCatchpointStagingBalances(ctx, tx, balances.Balances)
+		err = writeCatchpointStagingBalances(ctx, tx, balances.Balances, proto)
 		if err != nil {
 			return
 		}

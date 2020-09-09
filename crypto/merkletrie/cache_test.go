@@ -286,7 +286,7 @@ func (mt *Trie) TestDeleteRollback(d []byte) (bool, error) {
 		return false, err
 	}
 	mt.cache.beginTransaction()
-	if pnode.leaf {
+	if pnode.leaf() {
 		// remove the root.
 		mt.cache.deleteNode(mt.root)
 		mt.root = storedNodeIdentifierNull
