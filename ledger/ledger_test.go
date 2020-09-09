@@ -1078,3 +1078,137 @@ func TestLedgerReload(t *testing.T) {
 		}
 	}
 }
+
+// TestGetLastCatchpointLabel tests ledger.GetLastCatchpointLabel is returning the correct value.
+func TestGetLastCatchpointLabel(t *testing.T) {
+
+	//initLedger
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	const inMem = true
+	log := logging.TestingLog(t)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer ledger.Close()
+
+	// set some value
+	lastCatchpointLabel := "someCatchpointLabel"
+	ledger.accts.lastCatchpointLabel = lastCatchpointLabel
+
+	// verify the value is returned
+	require.Equal(t, lastCatchpointLabel, ledger.GetLastCatchpointLabel())
+}
+
+// generate at least 3 asset and 3 app creatables, and return the ids
+// of the asset/app with at least 3 elements less or equal.
+func generateCreatables(numElementsPerSegement int) (
+	err error,
+	randomCtbs map[basics.CreatableIndex]modifiedCreatable,
+	assetId3,
+	appId3 basics.CreatableIndex) {
+	_, randomCtbs = randomCreatables(numElementsPerSegement)
+	asCounter3 := 0
+	apCounter3 := 0
+
+	for x := 0; x < 10; x++ {
+		// find the assetid greater than at least 2 assetids
+		for cID, crtble := range randomCtbs {
+			switch crtble.ctype {
+			case basics.AssetCreatable:
+				if assetId3 == 0 {
+					assetId3 = cID
+					continue
+				}
+				asCounter3++
+				if assetId3 < cID {
+					assetId3 = cID
+				}
+			case basics.AppCreatable:
+				if appId3 == 0 {
+					appId3 = cID
+					continue
+				}
+				apCounter3++
+				if appId3 < cID {
+					appId3 = cID
+				}
+			}
+			if asCounter3 >= 3 && apCounter3 >= 3 {
+				// found at least 3rd smallest of both
+				break
+			}
+		}
+
+		// there should be at least 3 asset and 3 app creatables generated.
+		// In the rare event this does not happen, repeat... up to 10 times (x)
+		if asCounter3 >= 3 && apCounter3 >= 3 {
+			break
+		}
+	}
+	if asCounter3 < 3 && apCounter3 < 3 {
+		return fmt.Errorf("Could not generate 3 apps and 3 assets."), nil, 0, 0
+	}
+	return
+}
+
+// TestListAssetsAndApplications tests the ledger.ListAssets and ledger.ListApplications
+// interfaces. The detailed test on the correctness of these functions is given in:
+// TestListCreatables (acctupdates_test.go)
+func TestListAssetsAndApplications(t *testing.T) {
+
+	numElementsPerSegement := 10 // This is multiplied by 10. see randomCreatables
+
+	//initLedger
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	const inMem = true
+	log := logging.TestingLog(t)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer ledger.Close()
+
+	// ******* All results are obtained from the cache. Empty database *******
+	// ******* No deletes                                              *******
+	// get random data. Inital batch, no deletes
+	err, randomCtbs, maxAsset, maxApp := generateCreatables(numElementsPerSegement)
+	require.NoError(t, err)
+
+	// set the cache
+	ledger.accts.creatables = randomCtbs
+
+	// Test ListAssets
+	// Check the number of results limit
+	results, err := ledger.ListAssets(basics.AssetIndex(maxAsset), 2)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(results))
+	// Check the max asset id limit
+	results, err = ledger.ListAssets(basics.AssetIndex(maxAsset), 100)
+	assetCount := 0
+	for id, ctb := range randomCtbs {
+		if ctb.ctype == basics.AssetCreatable &&
+			ctb.created &&
+			id <= maxAsset {
+			assetCount++
+		}
+	}
+	require.Equal(t, assetCount, len(results))
+
+	// Test ListApplications
+	// Check the number of results limit
+	ledger.accts.creatables = randomCtbs
+	results, err = ledger.ListApplications(basics.AppIndex(maxApp), 2)
+	require.NoError(t, err)
+	// Check the max application id limit
+	results, err = ledger.ListApplications(basics.AppIndex(maxApp), 100)
+	appCount := 0
+	for id, ctb := range randomCtbs {
+		if ctb.ctype == basics.AppCreatable &&
+			ctb.created &&
+			id <= maxApp {
+			appCount++
+		}
+	}
+	require.Equal(t, appCount, len(results))
+}
