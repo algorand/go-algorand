@@ -118,8 +118,8 @@ mkdir -p "${PKG_ROOT}/DEBIAN"
 debian_files=("control" "preinst" "postinst" "prerm" "postrm" "conffiles")
 for ctl in "${debian_files[@]}"; do
     # Copy first, to preserve permissions, then overwrite to fill in template.
-    cp -a "installer/debian/${ctl}" "${PKG_ROOT}/DEBIAN/${ctl}"
-    < "installer/debian/${ctl}" \
+    cp -a "installer/debian/algorand/${ctl}" "${PKG_ROOT}/DEBIAN/${ctl}"
+    < "installer/debian/algorand/${ctl}" \
       sed -e "s,@ARCH@,${ARCH}," \
           -e "s,@VER@,${VER}," \
           -e "s,@PKG_NAME@,${PKG_NAME}," \

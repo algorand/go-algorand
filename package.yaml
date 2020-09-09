@@ -44,7 +44,7 @@ tasks:
 jobs:
   package:
     tasks:
-      - docker.Make.rpm
+      #      - docker.Make.rpm
       - docker.Make.deb
 
   package-docker:
