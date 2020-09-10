@@ -17,6 +17,7 @@
 package merkletrie
 
 import (
+	"encoding/binary"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -53,7 +54,7 @@ func TestInMemoryCommitter(t *testing.T) {
 	releasedNodes, err := mt1.Evict(true)
 	require.NoError(t, err)
 	savedMemoryCommitter := memoryCommitter.Duplicate()
-	require.Equal(t, 18957, releasedNodes)
+	require.Equal(t, 19282, releasedNodes)
 	for i := len(hashes) / 2; i < len(hashes); i++ {
 		mt1.Add(hashes[i][:])
 	}
@@ -69,13 +70,13 @@ func TestInMemoryCommitter(t *testing.T) {
 	mt2Hash, _ := mt2.RootHash()
 
 	require.Equal(t, mt1Hash, mt2Hash)
-	require.Equal(t, 347, len(memoryCommitter.memStore)) // 347 pages.
+	require.Equal(t, 137, len(memoryCommitter.memStore)) // 137 pages.
 	// find the size of all the storage.
 	storageSize := 0
 	for _, bytes := range memoryCommitter.memStore {
 		storageSize += len(bytes)
 	}
-	require.Equal(t, 2427986, storageSize) // 2,427,986 / 50,000 ~= 48 bytes/leaf.
+	require.Equal(t, 2425675, storageSize) // 2,425,575 / 50,000 ~= 48 bytes/leaf.
 	stats, _ := mt1.GetStats()
 	require.Equal(t, leafsCount, int(stats.leafCount))
 	require.Equal(t, 61926, int(stats.nodesCount))
@@ -128,8 +129,23 @@ func TestNoRedundentPages(t *testing.T) {
 	require.Equal(t, nodesCount, mt1.cache.cachedNodeCount)
 }
 
-func TestMultipleCommits(t *testing.T) {
+// decodePage decodes a byte array into a page content
+func decodePageHeaderSize(bytes []byte) (headerSize int, err error) {
+	version, versionLength := binary.Uvarint(bytes[:])
+	if versionLength <= 0 {
+		return 0, ErrPageDecodingFailuire
+	}
+	if version != NodePageVersion {
+		return 0, ErrPageDecodingFailuire
+	}
+	_, nodesCountLength := binary.Varint(bytes[versionLength:])
+	if nodesCountLength <= 0 {
+		return 0, ErrPageDecodingFailuire
+	}
+	return nodesCountLength + versionLength, nil
+}
 
+func TestMultipleCommits(t *testing.T) {
 	testSize := 5000
 	commitsCount := 5
 
@@ -156,16 +172,18 @@ func TestMultipleCommits(t *testing.T) {
 	}
 	mt2.Commit()
 
-	require.Equal(t, len(memoryCommitter1.memStore), len(memoryCommitter2.memStore))
-
 	storageSize1 := 0
 	for _, bytes := range memoryCommitter1.memStore {
-		storageSize1 += len(bytes)
+		headerSize, err := decodePageHeaderSize(bytes)
+		require.NoError(t, err)
+		storageSize1 += len(bytes) - headerSize
 	}
 
 	storageSize2 := 0
-	for _, bytes := range memoryCommitter1.memStore {
-		storageSize2 += len(bytes)
+	for _, bytes := range memoryCommitter2.memStore {
+		headerSize, err := decodePageHeaderSize(bytes)
+		require.NoError(t, err)
+		storageSize2 += len(bytes) - headerSize
 	}
 	require.Equal(t, storageSize1, storageSize2)
 }

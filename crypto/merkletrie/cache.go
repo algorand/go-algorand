@@ -176,7 +176,8 @@ func (mtc *merkleTrieCache) getNode(nid storedNodeIdentifier) (pnode *node, err 
 			return
 		}
 	}
-	//
+
+	// if we don't have it in memory, try to load it from disk
 	err = mtc.loadPage(nodePage)
 	if err != nil {
 		return
@@ -360,7 +361,72 @@ func (mtc *merkleTrieCache) commit() (CommitStats, error) {
 		mtc.deferedPageLoad = storedNodeIdentifierNull
 	}
 
+	pagesToCreate, pagesToDelete, pagesToUpdate, err := mtc.reallocatePendingPages(&stats)
+	if err != nil {
+		return CommitStats{}, err
+	}
+
+	// allocate a staging area for the page encoder. buffer should be big enough so
+	// we won't need any reallocation to take place.
+	encodeBuffer := make([]byte, maxNodeSerializedSize*256+32)
+
+	// store all the new pages ( which have a sequential ordering )
+	for _, page := range pagesToCreate {
+		nodeIDs := mtc.pageToNIDsPtr[page]
+		pageContent := mtc.encodePage(nodeIDs, encodeBuffer)
+		err := mtc.committer.StorePage(uint64(page), pageContent)
+		if err != nil {
+			return CommitStats{}, err
+		}
+		stats.NewPageCount++
+		stats.NewNodeCount += len(nodeIDs)
+	}
+
+	// delete the pages that we don't need anymore.
+	for page := range pagesToDelete {
+		err := mtc.committer.StorePage(uint64(page), nil)
+		if err != nil {
+			return CommitStats{}, err
+		}
+
+		// since the entire page was removed from memory, we can also remove it from the priority list.
+		element := mtc.pagesPrioritizationMap[uint64(page)]
+		if element != nil {
+			mtc.pagesPrioritizationList.Remove(element)
+			delete(mtc.pagesPrioritizationMap, uint64(page))
+		}
+		stats.DeletedPageCount++
+
+		mtc.cachedNodeCount -= len(mtc.pageToNIDsPtr[uint64(page)])
+		delete(mtc.pageToNIDsPtr, uint64(page))
+	}
+
+	// updated pages
+	for page, nodeIDs := range pagesToUpdate {
+		pageContent := mtc.encodePage(nodeIDs, encodeBuffer)
+		err := mtc.committer.StorePage(uint64(page), pageContent)
+		if err != nil {
+			return CommitStats{}, err
+		}
+		stats.UpdatedPageCount++
+		stats.UpdatedNodeCount += len(nodeIDs)
+	}
+
+	mtc.pendingCreatedNID = make(map[storedNodeIdentifier]bool)
+	mtc.pendingDeletionPages = make(map[uint64]bool)
+	mtc.modified = false
+	return stats, nil
+}
+
+func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToCreate []uint64, pagesToDelete map[uint64]bool, pagesToUpdate map[uint64]map[storedNodeIdentifier]*node, err error) {
+	// newPageThreshold is the threshold at which all the pages are newly created pages that were never commited.
+	newPageThreshold := uint64(mtc.mt.lastCommittedNodeID) / uint64(mtc.nodesPerPage)
+	if int64(mtc.mt.lastCommittedNodeID)%mtc.nodesPerPage > 0 {
+		newPageThreshold++
+	}
+
 	createdPages := make(map[uint64]map[storedNodeIdentifier]*node)
+	toUpdatePages := make(map[uint64]map[storedNodeIdentifier]*node)
 
 	// create a list of all the pages that need to be created/updated
 	for nodeID := range mtc.pendingCreatedNID {
@@ -375,15 +441,13 @@ func (mtc *merkleTrieCache) commit() (CommitStats, error) {
 	for page := range createdPages {
 		sortedCreatedPages = append(sortedCreatedPages, page)
 	}
-	SortUint64(sortedCreatedPages)
+	sort.SliceStable(sortedCreatedPages, func(i, j int) bool { return sortedCreatedPages[i] < sortedCreatedPages[j] })
 
 	mtc.reallocatedPages = make(map[uint64]map[storedNodeIdentifier]*node)
 
-	// newPageThreshold is the threshold after which all the pages are newly created pages.
-	newPageThreshold := uint64(mtc.mt.lastCommittedNodeID) / uint64(mtc.nodesPerPage)
-	if int64(mtc.mt.lastCommittedNodeID)%mtc.nodesPerPage > 0 {
-		newPageThreshold++
-	}
+	// move the next node id to the next page, so that all reallocated nodes would be packed on new pages.
+	mtc.mt.nextNodeID = storedNodeIdentifier(((uint64(mtc.mt.nextNodeID) + uint64(mtc.nodesPerPage-1)) / uint64(mtc.nodesPerPage)) * uint64(mtc.nodesPerPage))
+	reallocatedNodesBasePage := uint64(mtc.mt.nextNodeID) / uint64(mtc.nodesPerPage)
 
 	beforeHashCalculationPageCount := len(mtc.pageToNIDsPtr)
 	beforeHashCalculationPendingDeletionPages := len(mtc.pendingDeletionPages)
@@ -393,7 +457,7 @@ func (mtc *merkleTrieCache) commit() (CommitStats, error) {
 	for _, page := range sortedCreatedPages {
 		relocatedNodes, err := mtc.calculatePageHashes(int64(page), page >= newPageThreshold)
 		if err != nil {
-			return CommitStats{}, err
+			return nil, nil, nil, err
 		}
 		stats.FanoutReallocatedNodeCount += int(relocatedNodes)
 	}
@@ -406,6 +470,9 @@ func (mtc *merkleTrieCache) commit() (CommitStats, error) {
 			continue
 		}
 		if mtc.getPageFillFactor(page) >= mtc.targetPageFillFactor {
+			if len(createdPages[page]) > 0 {
+				pagesToCreate = append(pagesToCreate, page)
+			}
 			continue
 		}
 
@@ -427,39 +494,24 @@ func (mtc *merkleTrieCache) commit() (CommitStats, error) {
 		delete(reallocationMap, mtc.mt.root)
 		mtc.mt.root = newRootID
 	}
-
 	mtc.reallocatedPages = nil
-
-	// store the pages.
-	// allocate a staging area for the page encoder. buffer should be big enough so
-	// we won't need any reallocation to take place.
-	encodeBuffer := make([]byte, maxNodeSerializedSize*256+32)
-	for page, nodeIDs := range createdPages {
-		var pageContent []byte
-		if len(nodeIDs) > 0 {
-			pageContent = mtc.encodePage(nodeIDs, encodeBuffer)
-		} else {
-			// page is empty; skip it if it's a new page that was never flushed to disk.
-			if page >= newPageThreshold {
-				continue
-			}
-		}
-		err := mtc.committer.StorePage(uint64(page), pageContent)
-		if err != nil {
-			return CommitStats{}, err
-		}
-		if page >= newPageThreshold {
-			stats.NewPageCount++
-			stats.NewNodeCount += len(nodeIDs)
-		} else {
-			stats.UpdatedPageCount++
-			stats.UpdatedNodeCount += len(nodeIDs)
-		}
-	}
 
 	// pages that contains elemets that were removed.
 	toRemovePages := mtc.pendingDeletionPages
-	toUpdatePages := make(map[uint64]map[storedNodeIdentifier]*node)
+
+	// The initial page is moved to the "update" step.
+	if len(sortedCreatedPages) > 0 && mtc.pageToNIDsPtr[sortedCreatedPages[0]] != nil {
+		toRemovePages[sortedCreatedPages[0]] = true
+	}
+
+	for page := reallocatedNodesBasePage; len(createdPages[page]) > 0; page++ {
+		nodeIDs := createdPages[page]
+		delete(createdPages, page)
+		if len(nodeIDs) == 0 {
+			continue
+		}
+		pagesToCreate = append(pagesToCreate, page)
+	}
 
 	// iterate over the existing list and ensure we don't delete any page that has active elements
 	for pageRemovalCandidate := range toRemovePages {
@@ -473,46 +525,7 @@ func (mtc *merkleTrieCache) commit() (CommitStats, error) {
 		delete(toRemovePages, pageRemovalCandidate)
 	}
 
-	// delete the pages that we don't need anymore.
-	for page := range toRemovePages {
-		if uint64(page) >= newPageThreshold {
-			continue
-		}
-		err := mtc.committer.StorePage(uint64(page), nil)
-		if err != nil {
-			return CommitStats{}, err
-		}
-
-		// since the entire page was removed from memory, we can also remove it from the priority list.
-		element := mtc.pagesPrioritizationMap[uint64(page)]
-		if element != nil {
-			mtc.pagesPrioritizationList.Remove(element)
-			delete(mtc.pagesPrioritizationMap, uint64(page))
-		}
-		stats.DeletedPageCount++
-
-		mtc.cachedNodeCount -= len(mtc.pageToNIDsPtr[uint64(page)])
-		delete(mtc.pageToNIDsPtr, uint64(page))
-	}
-
-	// updated pages
-	for page, nodeIDs := range toUpdatePages {
-		if createdPages[page] != nil {
-			continue
-		}
-		pageContent := mtc.encodePage(nodeIDs, encodeBuffer)
-		err := mtc.committer.StorePage(uint64(page), pageContent)
-		if err != nil {
-			return CommitStats{}, err
-		}
-		stats.UpdatedPageCount++
-		stats.UpdatedNodeCount += len(nodeIDs)
-	}
-
-	mtc.pendingCreatedNID = make(map[storedNodeIdentifier]bool)
-	mtc.pendingDeletionPages = make(map[uint64]bool)
-	mtc.modified = false
-	return stats, nil
+	return pagesToCreate, toRemovePages, toUpdatePages, nil
 }
 
 // calculatePageHashes calculate hashes of a specific page
@@ -564,7 +577,14 @@ func (mtc *merkleTrieCache) getPageFillFactor(page uint64) float32 {
 // so that we could update the needed node dependencies.
 func (mtc *merkleTrieCache) reallocatePage(page uint64, reallocationMap map[storedNodeIdentifier]storedNodeIdentifier) (reallocatedNodes int) {
 	nextID := mtc.mt.nextNodeID
+	reallocatedNodes = len(mtc.pageToNIDsPtr[page])
 	nextPage := uint64(nextID) / uint64(mtc.nodesPerPage)
+	if reallocatedNodes == 0 {
+		// if we aren't going to reallocate any nodes, no need to allocate (maybe)
+		// new pages for these.
+		goto skipContentDeletion
+	}
+
 	if _, has := mtc.pageToNIDsPtr[nextPage]; !has {
 		pageMap := make(map[storedNodeIdentifier]*node, mtc.nodesPerPage)
 		mtc.reallocatedPages[nextPage] = pageMap
@@ -572,7 +592,7 @@ func (mtc *merkleTrieCache) reallocatePage(page uint64, reallocationMap map[stor
 		mtc.pagesPrioritizationMap[nextPage] = mtc.pagesPrioritizationList.PushFront(nextPage)
 	} else {
 		// see if we will need another allocated page:
-		lastID := mtc.mt.nextNodeID + storedNodeIdentifier(len(mtc.pageToNIDsPtr[page]))
+		lastID := mtc.mt.nextNodeID + storedNodeIdentifier(reallocatedNodes) - 1
 		lastPage := uint64(lastID) / uint64(mtc.nodesPerPage)
 		if _, has := mtc.pageToNIDsPtr[lastPage]; !has {
 			pageMap := make(map[storedNodeIdentifier]*node, mtc.nodesPerPage)
@@ -581,14 +601,21 @@ func (mtc *merkleTrieCache) reallocatePage(page uint64, reallocationMap map[stor
 			mtc.pagesPrioritizationMap[lastPage] = mtc.pagesPrioritizationList.PushFront(lastPage)
 		}
 	}
-	mtc.mt.nextNodeID += storedNodeIdentifier(len(mtc.pageToNIDsPtr[page]))
+	mtc.mt.nextNodeID += storedNodeIdentifier(reallocatedNodes)
 	for nid, node := range mtc.pageToNIDsPtr[page] {
 		reallocationMap[nid] = nextID
 		mtc.pageToNIDsPtr[uint64(nextID)/uint64(mtc.nodesPerPage)][nextID] = node
+		delete(mtc.pageToNIDsPtr[page], nid)
 		nextID++
 	}
-
-	return 0
+skipContentDeletion:
+	delete(mtc.pageToNIDsPtr, page)
+	delete(mtc.reallocatedPages, page)
+	if element, has := mtc.pagesPrioritizationMap[page]; has {
+		mtc.pagesPrioritizationList.Remove(element)
+		delete(mtc.pagesPrioritizationMap, page)
+	}
+	return
 }
 
 // reallocateNode reallocates a given node into the latest page. Unlike refurbishNode, it's not expected to be called

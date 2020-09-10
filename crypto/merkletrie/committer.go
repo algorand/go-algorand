@@ -40,7 +40,9 @@ func (mc *InMemoryCommitter) StorePage(page uint64, content []byte) error {
 	if content == nil {
 		delete(mc.memStore, page)
 	} else {
-		mc.memStore[page] = content
+		storedContent := make([]byte, len(content))
+		copy(storedContent, content)
+		mc.memStore[page] = storedContent
 	}
 	return nil
 }

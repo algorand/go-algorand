@@ -102,7 +102,6 @@ func MakeTrie(committer Committer, memoryConfig MemoryConfig) (*Trie, error) {
 			return nil, err
 		}
 	}
-
 	mt.cache.initialize(mt, committer, memoryConfig)
 	return mt, nil
 }

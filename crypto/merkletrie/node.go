@@ -331,8 +331,7 @@ func (n *node) serialize(buf []byte) int {
 		w += x
 	}
 	buf[w] = n.children[len(n.children)-1].hashIndex
-	w++
-	return w
+	return w + 1
 }
 
 // deserializeNode deserializes the node from a byte array
