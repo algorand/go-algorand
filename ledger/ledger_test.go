@@ -1107,6 +1107,7 @@ func generateCreatables(numElementsPerSegement int) (
 	assetID3,
 	appID3 basics.CreatableIndex,
 	err error) {
+
 	_, randomCtbs = randomCreatables(numElementsPerSegement)
 	asCounter3 := 0
 	apCounter3 := 0
@@ -1200,6 +1201,7 @@ func TestListAssetsAndApplications(t *testing.T) {
 	ledger.accts.creatables = randomCtbs
 	results, err = ledger.ListApplications(basics.AppIndex(maxApp), 2)
 	require.NoError(t, err)
+	require.Equal(t, 2, len(results))
 	// Check the max application id limit
 	results, err = ledger.ListApplications(basics.AppIndex(maxApp), 100)
 	appCount := 0
