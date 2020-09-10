@@ -269,7 +269,9 @@ func TestFullCatchpointWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	// create a ledger.
-	l, err := OpenLedger(ml.log, "TestFullCatchpointWriter", true, InitState{}, conf)
+	var initState InitState
+	initState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
+	l, err := OpenLedger(ml.log, "TestFullCatchpointWriter", true, initState, conf)
 	require.NoError(t, err)
 	defer l.Close()
 	accessor := MakeCatchpointCatchupAccessor(l, l.log)
