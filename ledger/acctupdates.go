@@ -53,7 +53,7 @@ const (
 	// before added to the trie during trie construction
 	trieRebuildAccountChunkSize = 16384
 	// trieRebuildCommitFrequency defines the number of accounts that would get added before we call evict to commit the changes and adjust the memory cache.
-	trieRebuildCommitFrequency = 32768
+	trieRebuildCommitFrequency = 65536
 	// trieAccumulatedChangesFlush defines the number of pending changes that would be applied to the merkle trie before
 	// we attempt to commit them to disk while writing a batch of rounds balances to disk.
 	trieAccumulatedChangesFlush = 256
