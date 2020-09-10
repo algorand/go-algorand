@@ -18,6 +18,7 @@ package ledger
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"strings"
@@ -41,6 +42,9 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 	cfg.Archival = false
 	log.SetLevel(logging.Warn)
 	dbBaseFileName := strings.Replace(b.Name(), "/", "_", -1)
+	// delete database files, in case they were left there by previous iterations of this test.
+	os.Remove(dbBaseFileName + ".block.sqlite")
+	os.Remove(dbBaseFileName + ".tracker.sqlite")
 	l, err := OpenLedger(log, dbBaseFileName, inMem, genesisInitState, cfg)
 	require.NoError(b, err, "could not open ledger")
 	defer func() {
@@ -68,17 +72,18 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 	err = catchpointAccessor.ProgressStagingBalances(context.Background(), "content.msgpack", encodedFileHeader, &progress)
 	require.NoError(b, err)
 
-	b.ResetTimer()
+	// pre-create all encoded chunks.
 	accounts := uint64(0)
-	var last64KStart time.Time
+	encodedAccountChunks := make([][]byte, 0, accountsCount/BalancesPerCatchpointFileChunk+1)
+	last64KIndex := -1
 	for accounts < accountsCount {
 		// generate a chunk;
 		chunkSize := accountsCount - accounts
 		if chunkSize > BalancesPerCatchpointFileChunk {
 			chunkSize = BalancesPerCatchpointFileChunk
 		}
-		if accounts >= accountsCount-64*1024 && last64KStart.IsZero() {
-			last64KStart = time.Now()
+		if accounts >= accountsCount-64*1024 && last64KIndex == -1 {
+			last64KIndex = len(encodedAccountChunks)
 		}
 		var balances catchpointFileBalancesChunk
 		balances.Balances = make([]encodedBalanceRecord, chunkSize)
@@ -88,15 +93,31 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)
 			crypto.RandBytes(randomAccount.Address[:])
+			binary.LittleEndian.PutUint64(randomAccount.Address[:], accounts+i)
 			balances.Balances[i] = randomAccount
 		}
-		err = catchpointAccessor.ProgressStagingBalances(context.Background(), "balances.XX.msgpack", protocol.Encode(&balances), &progress)
-		require.NoError(b, err)
+		encodedAccountChunks = append(encodedAccountChunks, protocol.Encode(&balances))
 		accounts += chunkSize
+	}
+
+	b.ResetTimer()
+	accounts = uint64(0)
+	var last64KStart time.Time
+	for len(encodedAccountChunks) > 0 {
+		encodedAccounts := encodedAccountChunks[0]
+		encodedAccountChunks = encodedAccountChunks[1:]
+
+		if last64KIndex == 0 {
+			last64KStart = time.Now()
+		}
+
+		err = catchpointAccessor.ProgressStagingBalances(context.Background(), "balances.XX.msgpack", encodedAccounts, &progress)
+		require.NoError(b, err)
+		last64KIndex--
 	}
 	if !last64KStart.IsZero() {
 		last64KDuration := time.Now().Sub(last64KStart)
-		b.Logf("Last 64K\t%v\n", last64KDuration)
+		b.ReportMetric(float64(last64KDuration.Nanoseconds())/float64(64*1024), "ns/last_64k_account")
 	}
 }
 
