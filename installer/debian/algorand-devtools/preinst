@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+set -e
+
+PKG_NAME=@PKG_NAME@
+
+if [ "$1" != install ]
+then
+    exit 0
+fi
+
+if dpkg-query --list 'algorand*' &> /dev/null
+then
+    if PKG_INFO=$(grep "install ok installed" <(dpkg-query --show --showformat='${Package} ${Status} ${Version}\n' 'algorand*')); then
+        # Filter out `algorand-indexer` and `algorand-devtools` packages, they are allowed to be
+        # installed alongside other `algorand` packages.
+        INSTALLED=$(grep -v -e algorand-indexer -e "$PKG_NAME" <<< "$PKG_INFO")
+        INSTALLED_PKG=$(awk '{print $1}' <<< "$INSTALLED")
+        ALGORAND_VERSION=$(awk '{print $5}' <<< "$INSTALLED")
+        DEVTOOLS_VERSION=$(awk '/Version/{print $2}' <(apt-cache show $PKG_NAME))
+
+        if [ "$ALGORAND_VERSION" != "$DEVTOOLS_VERSION" ]; then
+            echo -e "\nThe installed version of the $INSTALLED_PKG package ($ALGORAND_VERSION)"
+            echo -e "does not match the version of the algorand-devtools package.\n"
+            echo -e "Please update the algorand package to version $DEVTOOLS_VERSION.\n"
+            exit 1
+        fi
+    fi
+fi
+

@@ -64,14 +64,14 @@ if [ "$PKG_NAME" != "algorand-devtools" ]; then
     # files should not be group writable but directories should be
     chmod -R g-w "${PKG_ROOT}/var/lib/algorand"
     find "${PKG_ROOT}/var/lib/algorand" -type d | xargs chmod g+w
-fi
 
-SYSTEMD_FILES=("algorand.service" "algorand@.service")
-mkdir -p "${PKG_ROOT}/lib/systemd/system"
-for svc in "${SYSTEMD_FILES[@]}"; do
-    cp "installer/${svc}" "${PKG_ROOT}/lib/systemd/system"
-    chmod 644 "${PKG_ROOT}/lib/systemd/system/${svc}"
-done
+    SYSTEMD_FILES=("algorand.service" "algorand@.service")
+    mkdir -p "${PKG_ROOT}/lib/systemd/system"
+    for svc in "${SYSTEMD_FILES[@]}"; do
+        cp "installer/${svc}" "${PKG_ROOT}/lib/systemd/system"
+        chmod 644 "${PKG_ROOT}/lib/systemd/system/${svc}"
+    done
+fi
 
 mkdir -p "${PKG_ROOT}/etc/apt/apt.conf.d"
 cat <<EOF> "${PKG_ROOT}/etc/apt/apt.conf.d/${UNATTENDED_UPGRADES_FILE}"
@@ -114,8 +114,8 @@ License: AGPL-3+
 EOF
 
 sed 's/^$/./g' < COPYING | sed 's/^/ /g' >> "${PKG_ROOT}/DEBIAN/copyright"
-mkdir -p "${PKG_ROOT}/usr/share/doc/algorand"
-cp -p "${PKG_ROOT}/DEBIAN/copyright" "${PKG_ROOT}/usr/share/doc/algorand/copyright"
+mkdir -p "${PKG_ROOT}/usr/share/doc/${PKG_NAME}"
+cp -p "${PKG_ROOT}/DEBIAN/copyright" "${PKG_ROOT}/usr/share/doc/${PKG_NAME}/copyright"
 
 dpkg-deb --build "${PKG_ROOT}" "${OUTPUT_DEB}"
 

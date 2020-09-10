@@ -1,7 +1,7 @@
 Name:          @PKG_NAME@
 Version:       @VER@
 Release:       1
-Summary:       Algorand node software
+Summary:       Algorand tools software
 URL:           https://www.algorand.com
 License:       AGPL-3+
 
