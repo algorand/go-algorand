@@ -29,8 +29,9 @@ trap 'rm -rf $RPMTMP' 0
 TEMPDIR=$(mktemp -d)
 trap 'rm -rf $TEMPDIR' 0
 < "./installer/rpm/$PKG_NAME/$PKG_NAME.spec" \
-    sed -e "s,@PKG_NAME@,$PKG_NAME," \
+    sed -e "s,@PKG_NAME@,${PKG_NAME}-${CHANNEL}," \
         -e "s,@VER@,$FULLVERSION," \
+        -e "s,@ARCH@,$ARCH," \
     > "$TEMPDIR/$PKG_NAME.spec"
 
 rpmbuild --buildroot "$HOME/foo" --define "_rpmdir $RPMTMP" --define "RELEASE_GENESIS_PROCESS x$RELEASE_GENESIS_PROCESS" --define "LICENSE_FILE ./COPYING" -bb "$TEMPDIR/$PKG_NAME.spec"

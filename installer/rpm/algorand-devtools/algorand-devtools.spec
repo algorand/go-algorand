@@ -42,5 +42,3 @@ install -m 644 ${REPO_DIR}/installer/rpm/algorand-devtools/algorand-devtools.rep
 /etc/pki/rpm-gpg/RPM-GPG-KEY-Algorand
 /usr/lib/algorand/yum.repos.d/algorand-devtools.repo
 
-%changelog
-

@@ -33,7 +33,7 @@ mkdir -p "${PKG_ROOT}/usr/bin"
 if [ "$PKG_NAME" = "algorand-devtools" ]; then
     BIN_FILES=("carpenter" "catchupsrv" "msgpacktool" "tealdbg")
     UNATTENDED_UPGRADES_FILE="53algorand-devtools-upgrades"
-    OUTPUT_DEB="$OUTDIR/algorand_devtools_${OS_TYPE}-${ARCH}_${VER}.deb"
+    OUTPUT_DEB="$OUTDIR/algorand_devtools_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
 else
     BIN_FILES=("algocfg" "algod" "algoh" "algokey" "ddconfig.sh" "diagcfg" "goal" "kmd" "node_exporter")
     UNATTENDED_UPGRADES_FILE="51algorand-upgrades"
