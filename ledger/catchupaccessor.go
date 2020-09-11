@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 // CatchpointCatchupAccessor is an interface for the accessor wrapping the database storage for the catchpoint catchup functionality.
@@ -174,6 +175,14 @@ func (c *CatchpointCatchupAccessorImpl) SetLabel(ctx context.Context, label stri
 // ResetStagingBalances resets the current staging balances, preparing for a new set of balances to be added
 func (c *CatchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context, newCatchup bool) (err error) {
 	wdb := c.ledger.trackerDB().wdb
+	if newCatchup {
+		err = wdb.SetSynchrounousMode(ctx, db.SynchronousModeNormal, false)
+	} else {
+		err = wdb.SetSynchrounousMode(ctx, db.SynchronousModeFull, true)
+	}
+	if err != nil {
+		return fmt.Errorf("unable to set database synchrounous mode: %v", err)
+	}
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		err = resetCatchpointStagingBalances(ctx, tx, newCatchup)
 		if err != nil {
