@@ -227,6 +227,16 @@ type AssetParams struct {
 	Url *string `json:"url,omitempty"`
 }
 
+// BuildVersion defines model for BuildVersion.
+type BuildVersion struct {
+	Branch      string `json:"branch"`
+	BuildNumber uint64 `json:"build_number"`
+	Channel     string `json:"channel"`
+	CommitHash  string `json:"commit_hash"`
+	Major       uint64 `json:"major"`
+	Minor       uint64 `json:"minor"`
+}
+
 // DryrunRequest defines model for DryrunRequest.
 type DryrunRequest struct {
 	Accounts []Account     `json:"accounts"`
@@ -340,22 +350,10 @@ type TealValue struct {
 
 // Version defines model for Version.
 type Version struct {
-
-	// the current algod build version information.
-	Build       VersionBuild `json:"build"`
-	GenesisHash []byte       `json:"genesis-hash"`
-	GenesisId   string       `json:"genesis-id"`
-	Versions    []string     `json:"versions"`
-}
-
-// VersionBuild defines model for VersionBuild.
-type VersionBuild struct {
-	Branch      string `json:"branch"`
-	BuildNumber uint64 `json:"build-number"`
-	Channel     string `json:"channel"`
-	CommitHash  []byte `json:"commit-hash"`
-	Major       uint64 `json:"major"`
-	Minor       uint64 `json:"minor"`
+	Build          BuildVersion `json:"build"`
+	GenesisHashB64 []byte       `json:"genesis_hash_b64"`
+	GenesisId      string       `json:"genesis_id"`
+	Versions       []string     `json:"versions"`
 }
 
 // AccountId defines model for account-id.
@@ -615,6 +613,9 @@ type TransactionParametersResponse struct {
 	// txn to validate for the current network protocol.
 	MinFee uint64 `json:"min-fee"`
 }
+
+// VersionsResponse defines model for VersionsResponse.
+type VersionsResponse Version
 
 // RegisterParticipationKeysParams defines parameters for RegisterParticipationKeys.
 type RegisterParticipationKeysParams struct {
