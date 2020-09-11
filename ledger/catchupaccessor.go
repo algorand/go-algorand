@@ -181,7 +181,7 @@ func (c *CatchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context
 		err = wdb.SetSynchrounousMode(ctx, db.SynchronousModeFull, true)
 	}
 	if err != nil {
-		return fmt.Errorf("unable to set database synchrounous mode: %v", err)
+		return fmt.Errorf("unable to set database synchronous mode: %v", err)
 	}
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		err = resetCatchpointStagingBalances(ctx, tx, newCatchup)
@@ -548,6 +548,10 @@ func (c *CatchpointCatchupAccessorImpl) CompleteCatchup(ctx context.Context) (er
 // finishBalances concludes the catchup of the balances(tracker) database.
 func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err error) {
 	wdb := c.ledger.trackerDB().wdb
+	err = wdb.SetSynchrounousMode(ctx, db.SynchronousModeFull, true)
+	if err != nil {
+		return fmt.Errorf("unable to set database synchronous mode: %v", err)
+	}
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		var balancesRound uint64
 		var totals AccountTotals
