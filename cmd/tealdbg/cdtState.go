@@ -66,6 +66,29 @@ type cdtStateUpdate struct {
 	appState
 }
 
+type typeHint int
+
+const (
+	noHint typeHint = iota
+	addressHint
+)
+
+var txnFileTypeHints = map[logic.TxnField]typeHint{
+	logic.Sender:              addressHint,
+	logic.Receiver:            addressHint,
+	logic.CloseRemainderTo:    addressHint,
+	logic.AssetSender:         addressHint,
+	logic.AssetReceiver:       addressHint,
+	logic.AssetCloseTo:        addressHint,
+	logic.Accounts:            addressHint,
+	logic.RekeyTo:             addressHint,
+	logic.ConfigAssetManager:  addressHint,
+	logic.ConfigAssetReserve:  addressHint,
+	logic.ConfigAssetFreeze:   addressHint,
+	logic.ConfigAssetClawback: addressHint,
+	logic.FreezeAssetAccount:  addressHint,
+}
+
 func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int, globals []basics.TealValue) {
 	s.disassembly = disassembly
 	s.proto = proto
@@ -95,6 +118,7 @@ const scratchObjID = "scratchObjID"
 const tealErrorID = "tealErrorID"
 const appGlobalObjID = "appGlobalObjID"
 const appLocalsObjID = "appLocalsObjID"
+const txnArrayFieldObjID = "txnArrayField"
 
 type objectDescFn func(s *cdtState, preview bool) []RuntimePropertyDescriptor
 
@@ -144,6 +168,8 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []Runti
 			return makeAppLocalsKV(s, addr, appID), nil
 		} else if addr, ok := decodeAppLocalsAddr(objID); ok {
 			return makeAppLocalState(s, addr), nil
+		} else if idx, field, ok := decodeTxnArrayField(objID); ok {
+			return makeTxnArrayField(s, idx, field), nil
 		}
 		// might be nested object in array, parse and call
 		err = fmt.Errorf("unk object id: %s", objID)
@@ -340,12 +366,13 @@ func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
 		}
 		var value string
 		var valType string = "string"
-		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, logic.TxnField(field))
+		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, logic.TxnField(field), 0)
 		if err != nil {
 			value = err.Error()
 			valType = "undefined"
 		} else {
-			value = tv.String()
+			hint := txnFileTypeHints[logic.TxnField(field)]
+			value = tealValueToString(&tv, hint)
 			valType = tealTypeMap[tv.Type]
 		}
 		result = append(result, fieldDesc{name, value, valType})
@@ -379,6 +406,15 @@ func tealValueToFieldDesc(name string, tv basics.TealValue) fieldDesc {
 		value = strconv.Itoa(int(tv.Uint))
 	}
 	return fieldDesc{name, value, valType}
+}
+
+func tealValueToString(tv *basics.TealValue, hint typeHint) string {
+	if hint == addressHint {
+		var a basics.Address
+		copy(a[:], []byte(tv.Bytes))
+		return a.String()
+	}
+	return tv.String()
 }
 
 func prepareArray(array []basics.TealValue) []fieldDesc {
@@ -567,6 +603,29 @@ func decodeAppLocalsAppID(objID string) (string, uint64, bool) {
 	return "", 0, false
 }
 
+var txnArrayFieldPrefix = fmt.Sprintf("%s__", txnArrayFieldObjID)
+
+func encodeTxnArrayField(groupIndex int, field int) string {
+	return fmt.Sprintf("%s%d_%d", txnArrayFieldPrefix, groupIndex, field)
+}
+
+func decodeTxnArrayField(objID string) (int, int, bool) {
+	if strings.HasPrefix(objID, txnArrayFieldPrefix) {
+		encoded := objID[len(txnArrayFieldPrefix):]
+		parts := strings.Split(encoded, "_")
+		var groupIndex, fieldIndex int64
+		var err error
+		if groupIndex, err = strconv.ParseInt(parts[0], 10, 32); err != nil {
+			return 0, 0, false
+		}
+		if fieldIndex, err = strconv.ParseInt(parts[1], 10, 32); err != nil {
+			return 0, 0, false
+		}
+		return int(groupIndex), int(fieldIndex), true
+	}
+	return 0, 0, false
+}
+
 func makeGlobalScope(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
 	globals := makeObject("globals", globalsObjID)
 	if preview {
@@ -651,6 +710,68 @@ func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (d
 	fields := prepareTxn(txn, groupIndex)
 	for _, field := range fields {
 		desc = append(desc, makePrimitive(field))
+	}
+
+	for _, fieldIdx := range []logic.TxnField{logic.ApplicationArgs, logic.Accounts} {
+		fieldID := encodeTxnArrayField(groupIndex, int(fieldIdx))
+		var length int
+		switch logic.TxnField(fieldIdx) {
+		case logic.Accounts:
+			length = len(txn.Accounts)
+		case logic.ApplicationArgs:
+			length = len(txn.ApplicationArgs)
+		}
+		field := makeArray(logic.TxnFieldNames[fieldIdx], length, fieldID)
+		if preview {
+			elems := txnFieldToArrayFieldDesc(txn, groupIndex, logic.TxnField(fieldIdx), length)
+			prop := makePreview(elems)
+			p := RuntimeObjectPreview{
+				Type:        "object",
+				Subtype:     "array",
+				Description: fmt.Sprintf("Array(%d)", length),
+				Overflow:    true,
+				Properties:  prop,
+			}
+			field.Value.Preview = &p
+		}
+		desc = append(desc, field)
+	}
+
+	return
+}
+
+func txnFieldToArrayFieldDesc(txn *transactions.Transaction, groupIndex int, field logic.TxnField, length int) (desc []fieldDesc) {
+	for i := 0; i < length; i++ {
+		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, field, uint64(i))
+		if err != nil {
+			return []fieldDesc{}
+		}
+		name := strconv.Itoa(i)
+		hint := txnFileTypeHints[field]
+		value := tealValueToString(&tv, hint)
+		valType := tealTypeMap[tv.Type]
+		desc = append(desc, fieldDesc{name, value, valType})
+	}
+	return
+}
+
+func makeTxnArrayField(s *cdtState, groupIndex int, fieldIdx int) (desc []RuntimePropertyDescriptor) {
+	if len(s.txnGroup) > 0 && s.groupIndex < len(s.txnGroup) && s.groupIndex >= 0 && fieldIdx >= 0 && fieldIdx < len(logic.TxnFieldNames) {
+		txn := s.txnGroup[groupIndex].Txn
+		var length int
+		switch logic.TxnField(fieldIdx) {
+		case logic.Accounts:
+			length = len(txn.Accounts)
+		case logic.ApplicationArgs:
+			length = len(txn.ApplicationArgs)
+		}
+
+		elems := txnFieldToArrayFieldDesc(&txn, groupIndex, logic.TxnField(fieldIdx), length)
+		for _, elem := range elems {
+			desc = append(desc, makePrimitive(elem))
+		}
+
+		desc = append(desc, makePrimitive(fieldDesc{Name: "length", Value: strconv.Itoa(length), Type: "number"}))
 	}
 	return
 }
