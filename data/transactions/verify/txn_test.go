@@ -163,15 +163,36 @@ func TestTxnValidationCompactCert(t *testing.T) {
 	stxn2.Txn.Type = protocol.PaymentTx
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
 	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
-	require.Error(t, err, "payment txn %#v verified from CompactCertSender", stxn)
+	require.Error(t, err, "payment txn %#v verified from CompactCertSender", stxn2)
 
 	secret := keypair()
-	stxn3 := stxn
-	stxn3.Txn.Header.Sender = basics.Address(secret.SignatureVerifier)
-	stxn3.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
-	stxn3 = stxn3.Txn.Sign(secret)
-	err = Txn(&stxn3, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
-	require.Error(t, err, "compact cert txn %#v verified from non-CompactCertSender", stxn)
+	stxn2 = stxn
+	stxn2.Txn.Header.Sender = basics.Address(secret.SignatureVerifier)
+	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
+	stxn2 = stxn2.Txn.Sign(secret)
+	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	require.Error(t, err, "compact cert txn %#v verified from non-CompactCertSender", stxn2)
+
+	// Compact cert txns are not allowed to have non-zero values for many fields
+	stxn2 = stxn
+	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
+	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	require.Error(t, err, "compact cert txn %#v verified", stxn2)
+
+	stxn2 = stxn
+	stxn2.Txn.Header.Note = []byte{'A'}
+	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	require.Error(t, err, "compact cert txn %#v verified", stxn2)
+
+	stxn2 = stxn
+	stxn2.Txn.Lease[0] = 1
+	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	require.Error(t, err, "compact cert txn %#v verified", stxn2)
+
+	stxn2 = stxn
+	stxn2.Txn.RekeyTo = basics.Address(secret.SignatureVerifier)
+	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	require.Error(t, err, "compact cert txn %#v verified", stxn2)
 }
 
 func TestDecodeNil(t *testing.T) {
