@@ -258,13 +258,13 @@ func (l *Ledger) setSynchronousMode(ctx context.Context, synchronousMode db.Sync
 		return
 	}
 
-	err := l.blockDBs.wdb.SetSynchronousMode(ctx, l.synchronousMode, l.synchronousMode >= db.SynchronousModeFull)
+	err := l.blockDBs.wdb.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
 	if err != nil {
 		l.log.Warnf("ledger.setSynchronousMode unable to set syncronous mode on blocks db: %v", err)
 		return
 	}
 
-	l.trackerDBs.wdb.SetSynchronousMode(ctx, l.synchronousMode, l.synchronousMode >= db.SynchronousModeFull)
+	l.trackerDBs.wdb.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
 	if err != nil {
 		l.log.Warnf("ledger.setSynchronousMode unable to set syncronous mode on trackers db: %v", err)
 		return
