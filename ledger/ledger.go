@@ -113,7 +113,7 @@ func OpenLedger(
 		}
 	}()
 
-	l.trackerDBs, l.blockDBs, err = l.openLedgerDB(dbPathPrefix, dbMem)
+	l.trackerDBs, l.blockDBs, err = openLedgerDB(dbPathPrefix, dbMem)
 	if err != nil {
 		err = fmt.Errorf("OpenLedger.openLedgerDB %v", err)
 		return nil, err
@@ -218,7 +218,7 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	return
 }
 
-func (l *Ledger) openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs dbPair, err error) {
+func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs dbPair, err error) {
 	// Backwards compatibility: we used to store both blocks and tracker
 	// state in a single SQLite db file.
 	var trackerDBFilename string
@@ -248,7 +248,6 @@ func (l *Ledger) openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPai
 	if err != nil {
 		return
 	}
-
 	return
 }
 

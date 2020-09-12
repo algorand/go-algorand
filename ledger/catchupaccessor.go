@@ -177,9 +177,6 @@ func (c *CatchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context
 	if !newCatchup {
 		c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 	}
-	if err != nil {
-		return fmt.Errorf("unable to set database synchronous mode: %v", err)
-	}
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		err = resetCatchpointStagingBalances(ctx, tx, newCatchup)
 		if err != nil {
