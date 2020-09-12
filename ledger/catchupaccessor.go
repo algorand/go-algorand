@@ -30,7 +30,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/db"
 )
 
 // CatchpointCatchupAccessor is an interface for the accessor wrapping the database storage for the catchpoint catchup functionality.
@@ -175,10 +174,8 @@ func (c *CatchpointCatchupAccessorImpl) SetLabel(ctx context.Context, label stri
 // ResetStagingBalances resets the current staging balances, preparing for a new set of balances to be added
 func (c *CatchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context, newCatchup bool) (err error) {
 	wdb := c.ledger.trackerDB().wdb
-	if newCatchup {
-		err = wdb.SetSynchrounousMode(ctx, db.SynchronousModeNormal, false)
-	} else {
-		err = wdb.SetSynchrounousMode(ctx, db.SynchronousModeFull, true)
+	if !newCatchup {
+		c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 	}
 	if err != nil {
 		return fmt.Errorf("unable to set database synchronous mode: %v", err)
@@ -279,6 +276,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 		progress.SeenHeader = true
 		progress.TotalAccounts = fileHeader.TotalAccounts
 		progress.TotalChunks = fileHeader.TotalChunks
+		c.ledger.setSynchronousMode(ctx, c.ledger.accountsRebuildSynchronousMode)
 	}
 	return err
 }
@@ -371,6 +369,8 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	// not strictly required, but clean up the pointer in case of either a failuire or when we're done.
 	if err != nil || progress.ProcessedAccounts == progress.TotalAccounts {
 		progress.cachedTrie = nil
+		// restore "normal" syncronous mode
+		c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 	}
 	return err
 }
@@ -548,10 +548,6 @@ func (c *CatchpointCatchupAccessorImpl) CompleteCatchup(ctx context.Context) (er
 // finishBalances concludes the catchup of the balances(tracker) database.
 func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err error) {
 	wdb := c.ledger.trackerDB().wdb
-	err = wdb.SetSynchrounousMode(ctx, db.SynchronousModeFull, true)
-	if err != nil {
-		return fmt.Errorf("unable to set database synchronous mode: %v", err)
-	}
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		var balancesRound uint64
 		var totals AccountTotals

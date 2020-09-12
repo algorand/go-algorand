@@ -386,8 +386,8 @@ func TestResettingTransactionWarnDeadline(t *testing.T) {
 	})
 }
 
-// Test the SetSynchrounousMode function
-func TestSetSynchrounousMode(t *testing.T) {
+// Test the SetSynchronousMode function
+func TestSetSynchronousMode(t *testing.T) {
 	setSynchrounousModeHelper := func(mem bool, ctx context.Context, mode SynchronousMode, fullfsync bool) error {
 		acc, err := MakeAccessor("fn.db", false, mem)
 		require.NoError(t, err)
@@ -397,7 +397,7 @@ func TestSetSynchrounousMode(t *testing.T) {
 			defer os.Remove("fn.db-wal")
 		}
 		defer acc.Close()
-		return acc.SetSynchrounousMode(ctx, mode, fullfsync)
+		return acc.SetSynchronousMode(ctx, mode, fullfsync)
 	}
 	// check with canceled context.
 	ctx, cancelFunc := context.WithCancel(context.Background())

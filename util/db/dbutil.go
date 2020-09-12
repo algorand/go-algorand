@@ -123,7 +123,7 @@ func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []
 			// init failed, db closed and err is set
 			return db, err
 		}
-		err = db.SetSynchrounousMode(context.Background(), SynchronousModeFull, true)
+		err = db.SetSynchronousMode(context.Background(), SynchronousModeFull, true)
 		if err != nil {
 			db.Close()
 		}
@@ -467,8 +467,8 @@ const (
 	SynchronousModeExtra SynchronousMode = 3
 )
 
-// SetSynchrounousMode updates the syncronous mode of the connection
-func (db *Accessor) SetSynchrounousMode(ctx context.Context, mode SynchronousMode, fullfsync bool) (err error) {
+// SetSynchronousMode updates the syncronous mode of the connection
+func (db *Accessor) SetSynchronousMode(ctx context.Context, mode SynchronousMode, fullfsync bool) (err error) {
 	if mode < SynchronousModeOff || mode > SynchronousModeExtra {
 		return fmt.Errorf("invalid value(%d) was provided to mode", mode)
 	}

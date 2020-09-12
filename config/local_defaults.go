@@ -20,7 +20,8 @@
 package config
 
 var defaultLocal = Local{
-	Version:                               11,
+	Version:                               12,
+	AccountsRebuildSynchronousMode:        1,
 	AnnounceParticipationKey:              true,
 	Archival:                              false,
 	BaseLoggerDebugLevel:                  4,
@@ -64,6 +65,7 @@ var defaultLocal = Local{
 	IncomingMessageFilterBucketCount:      5,
 	IncomingMessageFilterBucketSize:       512,
 	IsIndexerActive:                       false,
+	LedgerSynchronousMode:                 2,
 	LogArchiveMaxAge:                      "",
 	LogArchiveName:                        "node.archive.log",
 	LogSizeLimit:                          1073741824,
