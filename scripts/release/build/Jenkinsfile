@@ -40,22 +40,18 @@ pipeline {
             }
         }
 
-        /*
         stage("sign") {
             steps {
                 input "Forward gpg-agent"
                 sh script: "scripts/release/build/stage/sign/run.sh"
             }
         }
-        */
 
-        /*
         stage("verify signatures") {
             steps {
                 sh script: "scripts/release/build/stage/verify/run.sh"
             }
         }
-        */
 
         stage("upload") {
             steps {
@@ -71,7 +67,6 @@ pipeline {
             }
         }
 
-        /*
         stage("trigger test job") {
             steps {
                 build job: 'test-packages',
@@ -80,7 +75,6 @@ pipeline {
                 ]
             }
         }
-        */
     }
 }
 
