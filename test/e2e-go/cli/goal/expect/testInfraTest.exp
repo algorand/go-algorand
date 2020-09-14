@@ -1,0 +1,67 @@
+#!/usr/bin/expect -f
+#exp_internal 1
+set err 0
+log_user 1
+
+source  goalExpectCommon.exp
+
+# This test tests the testing procedure CheckProcessReturnedCode
+# When a process crashes, CheckProcessReturnedCode should return 1
+proc checkProcessReturnedCodeTest {} {
+    spawn  /bin/bash -c "kill -11 $$"
+    expect {
+	eof {
+	}
+    }
+
+    # Test the killed branch
+    lassign [wait] PID SPAWNID OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
+    set response [::AlgorandGoal::CheckProcessReturnedCode $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
+    if {$response == 0} {
+	puts "expected failure code 1 not 0"
+	exit 1
+    }
+    if {$KILLED != "CHILDKILLED" || $KILL_SIGNAL != "SIGSEGV" || $EXP != "segmentation violation"} {
+	puts "expected CHILDKILLED SIGSEGV segmentation violation"
+	puts "got: $KILLED $KILL_SIGNAL $EXP"
+	exit 1
+    }
+
+    # test OS_CODE == -1 branch
+    set response [::AlgorandGoal::CheckProcessReturnedCode -1 5 $KILLED $KILL_SIGNAL $EXP]
+    if {$response == 0} {
+	puts "expected failure code 1 not 0"
+	exit 1
+    }
+
+    # test ERR_CODE != 0 branch
+    set response [::AlgorandGoal::CheckProcessReturnedCode 1 5 $KILLED $KILL_SIGNAL $EXP]
+    if {$response == 0} {
+	puts "expected failure code 1 not 0"
+	exit 1
+    }
+}
+
+# When eof is expected, the spawn_id is no longer open
+# This test confirms this behavior
+proc closeOnEofTest {} {
+    spawn  /bin/bash -c "echo this is some command"
+    expect {
+	eof {
+	    if {[catch {
+		close
+	    } EXCEPTION] } {
+		if {![string match {spawn_id: spawn id * not open} $EXCEPTION]} {
+		    puts "expected: spawn_id: spawn id expID not open"
+		    puts "got: $EXCEPTION"
+		    exit 1
+		}
+	    }
+	}
+    }
+
+}
+
+
+checkProcessReturnedCodeTest
+closeOnEofTest

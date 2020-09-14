@@ -109,6 +109,15 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
 	"*committed in round*" {puts "app call successful"; close}
 	eof {::AlgorandGoal::Abort "app call failed" }
     }
+    lassign [wait] PID SPAWNID OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
+    set response [::AlgorandGoal::CheckProcessReturnedCode $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
+    if {$response != 0} {
+	if {$KILL_SIGNAL != "SIGHUP" || $EXP != "hangup"} {
+	    puts "expected: SIGHUP hangup"
+	    puts "got: $KILL_SIGNAL $EXP"
+	    exit 1
+	}
+    }
 
     puts "Checking the results"
     set EXPECTED_OUTPUT "Account0*$PRIMARY_ACCOUNT_ADDRESS"
@@ -126,6 +135,11 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
 	"*$EXPECTED_OUTPUT*" {puts "Local state read correctly"; close}
 	eof {::AlgorandGoal::Abort "app read failed" }
     }
+    lassign [wait] PID SPAWNID OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
+    set response [::AlgorandGoal::CheckProcessReturnedCode $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
+    if {$response != 0} {
+	exit 1
+    }
 
     # check the local state of account 2
     spawn goal app read --app-id $APP_ID --local --guess-format \
@@ -136,7 +150,12 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
 	"*$EXPECTED_OUTPUT*" {puts "Local state read correctly"; close}
 	eof {::AlgorandGoal::Abort "app read failed" }
     }
-    
+    lassign [wait] PID SPAWNID OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
+    set response [::AlgorandGoal::CheckProcessReturnedCode $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
+    if {$response != 0} {
+	exit 1
+    }
+
     # call the app with a missing app-account. It should fail
     puts "Calling goal app call to get the local state params"
     spawn goal app call --app-id $APP_ID --from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR \
@@ -148,6 +167,13 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
 	"*Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: transaction*invalid Accounts index 4*" \
 	    {puts "Error received successfully "; close}
 	eof {::AlgorandGoal::Abort "failed to get the expected error" }
+    }
+    lassign [wait] PID SPAWNID OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
+    set response [::AlgorandGoal::CheckProcessReturnedCode $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
+    if {$OS_CODE != 0 && $ERR_CODE != 1} {
+	puts "expected: OS_CODE = 0 AND ERR_CODE = 1"
+	puts "got: OS_CODE = $OS_CODE AND ERR_CODE = $ERR_CODE"
+	exit 1
     }
 
     # Shutdown the network
