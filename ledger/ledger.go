@@ -367,6 +367,15 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 	return l.accts.GetCreatorForRound(l.blockQ.latest(), cidx, ctype)
 }
 
+// CompactCertVoters returns the top online accounts at round rnd.
+// The result might be nil, even with err=nil, if there are no voters
+// for that round because compact certs were not enabled.
+func (l *Ledger) CompactCertVoters(rnd basics.Round) (voters *VotersForRound, err error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.voters.getVoters(rnd)
+}
+
 // ListAssets takes a maximum asset index and maximum result length, and
 // returns up to that many CreatableLocators from the database where app idx is
 // less than or equal to the maximum.
