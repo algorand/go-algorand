@@ -99,7 +99,7 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
 
     # call the app
     puts "Calling goal app call to get the local state params"
-    spawn goal app call --app-id $APP_ID --from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR \
+    spawn -ignore HUP goal app call --app-id $APP_ID --from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR \
 	--app-account $ACCOUNT_1_ADDRESS \
 	--app-account $ACCOUNT_2_ADDRESS \
 	--app-account $ACCOUNT_3_ADDRESS \
@@ -112,11 +112,7 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
     lassign [wait] PID SPAWNID OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
     set response [::AlgorandGoal::CheckProcessReturnedCode $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
     if {$response != 0} {
-	if {$KILL_SIGNAL != "SIGHUP" || $EXP != "hangup"} {
-	    puts "expected: SIGHUP hangup"
-	    puts "got: $KILL_SIGNAL $EXP"
-	    exit 1
-	}
+	::AlgorandGoal::Abort "OS_CODE=$OS_CODE ERR_CODE=$ERR_CODE KILLED=$KILLED KILL_SIGNAL=$KILL_SIGNAL EXP=$EXP"
     }
 
     puts "Checking the results"
@@ -133,12 +129,12 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
     expect {
 	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
 	"*$EXPECTED_OUTPUT*" {puts "Local state read correctly"; close}
-	eof {::AlgorandGoal::Abort "app read failed" }
+	eof {::AlgorandGoal::Abort "App read failed. Expected output includes: $EXPECTED_OUTPUT" }
     }
     lassign [wait] PID SPAWNID OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
     set response [::AlgorandGoal::CheckProcessReturnedCode $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
     if {$response != 0} {
-	exit 1
+	::AlgorandGoal::Abort "OS_CODE=$OS_CODE ERR_CODE=$ERR_CODE KILLED=$KILLED KILL_SIGNAL=$KILL_SIGNAL EXP=$EXP"
     }
 
     # check the local state of account 2
@@ -148,12 +144,12 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
 	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
 	"Please enter the password for wallet '$WALLET_1_NAME':" {send "$WALLET_1_PASSWORD\r" ; exp_continue}
 	"*$EXPECTED_OUTPUT*" {puts "Local state read correctly"; close}
-	eof {::AlgorandGoal::Abort "app read failed" }
+	eof {::AlgorandGoal::Abort "App read failed. Expected output includes: $EXPECTED_OUTPUT" }
     }
     lassign [wait] PID SPAWNID OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
     set response [::AlgorandGoal::CheckProcessReturnedCode $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
     if {$response != 0} {
-	exit 1
+	::AlgorandGoal::Abort "OS_CODE=$OS_CODE ERR_CODE=$ERR_CODE KILLED=$KILLED KILL_SIGNAL=$KILL_SIGNAL EXP=$EXP"
     }
 
     # call the app with a missing app-account. It should fail
@@ -171,9 +167,8 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
     lassign [wait] PID SPAWNID OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
     set response [::AlgorandGoal::CheckProcessReturnedCode $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
     if {$OS_CODE != 0 && $ERR_CODE != 1} {
-	puts "expected: OS_CODE = 0 AND ERR_CODE = 1"
-	puts "got: OS_CODE = $OS_CODE AND ERR_CODE = $ERR_CODE"
-	exit 1
+	::AlgorandGoal::Abort "Expected: OS_CODE = 0 AND ERR_CODE = 1 Got: OS_CODE = $OS_CODE AND ERR_CODE = $ERR_CODE"
+
     }
 
     # Shutdown the network
@@ -195,8 +190,6 @@ if { [catch {
     puts "calling goalAppAccountAddressTest"
 
     goalAppAccountAddress  $TEST_ALGO_DIR  $TEST_DATA_DIR
-
-    exit 0
 
 } EXCEPTION ] } {
    ::AlgorandGoal::Abort "ERROR in goalAppAccountAddressTest: $EXCEPTION"
