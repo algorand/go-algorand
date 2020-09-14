@@ -124,7 +124,7 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
     set EXPECTED_OUTPUT "$EXPECTED_OUTPUT*Num Accounts*ui*4"
 
     # check the local state of the caller
-    spawn goal app read --app-id $APP_ID --local --guess-format \
+    spawn -ignore HUP goal app read --app-id $APP_ID --local --guess-format \
 	--from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
     expect {
 	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
@@ -138,7 +138,7 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
     }
 
     # check the local state of account 2
-    spawn goal app read --app-id $APP_ID --local --guess-format \
+    spawn -ignore HUP goal app read --app-id $APP_ID --local --guess-format \
 	--from $ACCOUNT_2_ADDRESS -w $WALLET_1_NAME -d $TEST_PRIMARY_NODE_DIR
     expect {
 	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
@@ -154,7 +154,7 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
 
     # call the app with a missing app-account. It should fail
     puts "Calling goal app call to get the local state params"
-    spawn goal app call --app-id $APP_ID --from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR \
+    spawn -ignore HUP goal app call --app-id $APP_ID --from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR \
 	--app-account $ACCOUNT_1_ADDRESS \
 	--app-account $ACCOUNT_2_ADDRESS \
 	--app-account $ACCOUNT_4_ADDRESS
