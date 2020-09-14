@@ -85,10 +85,6 @@ func BenchmarkNumReveals(b *testing.B) {
 	secKQ := uint64(128)
 	bound := uint64(1000)
 
-<<<<<<< HEAD
-	for i := 0; i < b.N; i++ {
-		_, err := numReveals(signedWeight, provenWeight, secKQ, bound)
-=======
 	nr, err := numReveals(signedWeight, provenWeight, secKQ, bound)
 	if nr < 900 {
 		b.Errorf("numReveals(%d, %d, %d) = %d < 900", signedWeight, provenWeight, secKQ, nr)
@@ -96,7 +92,6 @@ func BenchmarkNumReveals(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		_, err = numReveals(signedWeight, provenWeight, secKQ, bound)
->>>>>>> origin/master
 		if err != nil {
 			b.Error(err)
 		}

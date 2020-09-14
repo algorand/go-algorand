@@ -87,10 +87,6 @@ func (ssc sigslotCommit) ToBeHashed() (protocol.HashID, []byte) {
 type Reveal struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-<<<<<<< HEAD
-	Pos     uint64        `codec:"i"`
-=======
->>>>>>> origin/master
 	SigSlot sigslotCommit `codec:"s"`
 	Part    Participant   `codec:"p"`
 }
@@ -107,10 +103,6 @@ type Cert struct {
 	SignedWeight uint64          `codec:"w"`
 	SigProofs    []crypto.Digest `codec:"S,allocbound=maxProofDigests"`
 	PartProofs   []crypto.Digest `codec:"P,allocbound=maxProofDigests"`
-<<<<<<< HEAD
-	Reveals      []Reveal        `codec:"r,allocbound=maxReveals"`
-}
-=======
 
 	// Reveals is a sparse map from the position being revealed
 	// to the corresponding elements from the sigs and participants
@@ -121,4 +113,3 @@ type Cert struct {
 // SortUint64 implements sorting by uint64 keys for
 // canonical encoding of maps in msgpack format.
 type SortUint64 = basics.SortUint64
->>>>>>> origin/master

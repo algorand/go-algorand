@@ -52,26 +52,6 @@ func hashCoin(j uint64, sigcom crypto.Digest, signedWeight uint64) uint64 {
 //
 // 2^-k >= 2^q * (provenWeight / signedWeight) ^ numReveals
 //
-<<<<<<< HEAD
-// which is equivalent to the following, which avoids any floating-point math:
-//
-// signedWeight ^ numReveals >= 2^(k+q) * provenWeight ^ numReveals
-func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound uint64) (uint64, error) {
-	n := uint64(0)
-
-	sw := &big.Int{}
-	sw.SetUint64(signedWeight)
-
-	pw := &big.Int{}
-	pw.SetUint64(provenWeight)
-
-	lhs := big.NewInt(1)
-	rhs := &big.Int{}
-	rhs.SetBit(rhs, int(secKQ), 1)
-
-	for {
-		if lhs.Cmp(rhs) >= 0 {
-=======
 // which is equivalent to the following:
 //
 // signedWeight ^ numReveals >= 2^(k+q) * provenWeight ^ numReveals
@@ -105,7 +85,6 @@ func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound ui
 
 	for {
 		if lhs.ge(rhs) {
->>>>>>> origin/master
 			return n, nil
 		}
 
@@ -113,13 +92,8 @@ func numReveals(signedWeight uint64, provenWeight uint64, secKQ uint64, bound ui
 			return 0, fmt.Errorf("numReveals(%d, %d, %d) > %d", signedWeight, provenWeight, secKQ, bound)
 		}
 
-<<<<<<< HEAD
-		lhs.Mul(lhs, sw)
-		rhs.Mul(rhs, pw)
-=======
 		lhs.mul(sw)
 		rhs.mul(pw)
->>>>>>> origin/master
 		n++
 	}
 }
