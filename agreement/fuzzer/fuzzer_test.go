@@ -52,7 +52,7 @@ type Fuzzer struct {
 	router           *Router
 	log              logging.Logger
 	accounts         []account.Participation
-	balances         map[basics.Address]basics.BalanceRecord
+	balances         map[basics.Address]basics.AccountData
 	accountAccessors []db.Accessor
 	ledgers          []*testLedger
 	tickGranularity  time.Duration
@@ -83,7 +83,7 @@ func MakeFuzzer(config FuzzerConfig) *Fuzzer {
 		disconnected:     make([][]bool, config.NodesCount),
 		crashAccessors:   make([]db.Accessor, config.NodesCount),
 		accounts:         make([]account.Participation, config.NodesCount),
-		balances:         make(map[basics.Address]basics.BalanceRecord),
+		balances:         make(map[basics.Address]basics.AccountData),
 		accountAccessors: make([]db.Accessor, config.NodesCount*2),
 		ledgers:          make([]*testLedger, config.NodesCount),
 		agreementParams:  make([]agreement.Parameters, config.NodesCount),
@@ -239,10 +239,7 @@ func (n *Fuzzer) initAccountsAndBalances(rootSeed []byte, onlineNodes []bool) er
 				acctData.Status = basics.Offline
 			}
 		}
-		n.balances[rootAddress] = basics.BalanceRecord{
-			Addr:        rootAddress,
-			AccountData: acctData,
-		}
+		n.balances[rootAddress] = acctData
 	}
 	return nil
 }

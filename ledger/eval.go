@@ -794,6 +794,31 @@ func applyTransaction(tx transactions.Transaction, balances *roundCowState, stev
 	return
 }
 
+// compactCertVotersAndTotal returns the expected values of CompactCertVoters
+// and CompactCertVotersTotal for a block.
+func (eval *BlockEvaluator) compactCertVotersAndTotal() (root crypto.Digest, total basics.MicroAlgos, err error) {
+	if eval.proto.CompactCertRounds == 0 {
+		return
+	}
+
+	if eval.block.Round()%basics.Round(eval.proto.CompactCertRounds) != 0 {
+		return
+	}
+
+	lookback := eval.block.Round().SubSaturate(basics.Round(eval.proto.CompactCertVotersLookback))
+	voters, err := eval.l.CompactCertVoters(lookback)
+	if err != nil {
+		return
+	}
+
+	if voters != nil {
+		root = voters.Tree.Root()
+		total = voters.TotalWeight
+	}
+
+	return
+}
+
 // Call "endOfBlock" after all the block's rewards and transactions are processed.
 func (eval *BlockEvaluator) endOfBlock() error {
 	if eval.generate {
@@ -804,16 +829,10 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			eval.block.TxnCounter = 0
 		}
 
-		if eval.proto.CompactCertRounds > 0 && eval.block.Round()%basics.Round(eval.proto.CompactCertRounds) == 0 {
-			lookback := eval.block.Round().SubSaturate(basics.Round(eval.proto.CompactCertVotersLookback))
-			voters, err := eval.l.CompactCertVoters(lookback)
-			if err != nil {
-				return err
-			}
-			if voters != nil {
-				eval.block.CompactCertVoters = voters.Tree.Root()
-				eval.block.CompactCertVotersTotal = voters.TotalWeight
-			}
+		var err error
+		eval.block.CompactCertVoters, eval.block.CompactCertVotersTotal, err = eval.compactCertVotersAndTotal()
+		if err != nil {
+			return err
 		}
 
 		eval.block.CompactCertLastRound = eval.state.compactCertLast()
@@ -839,19 +858,9 @@ func (eval *BlockEvaluator) finalValidation() error {
 			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
 		}
 
-		var expectedVoters crypto.Digest
-		var expectedVotersWeight basics.MicroAlgos
-		if eval.proto.CompactCertRounds > 0 && eval.block.Round()%basics.Round(eval.proto.CompactCertRounds) == 0 {
-			lookback := eval.block.Round().SubSaturate(basics.Round(eval.proto.CompactCertVotersLookback))
-			voters, err := eval.l.CompactCertVoters(lookback)
-			if err != nil {
-				return err
-			}
-
-			if voters != nil {
-				expectedVoters = voters.Tree.Root()
-				expectedVotersWeight = voters.TotalWeight
-			}
+		expectedVoters, expectedVotersWeight, err := eval.compactCertVotersAndTotal()
+		if err != nil {
+			return err
 		}
 		if eval.block.CompactCertVoters != expectedVoters {
 			return fmt.Errorf("CompactCertVoters wrong: %v != %v", eval.block.CompactCertVoters, expectedVoters)

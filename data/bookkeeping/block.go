@@ -125,12 +125,15 @@ type (
 		// CompactCertVoters is the root of a Merkle tree containing the
 		// online accounts that will help sign a compact certificate.  The
 		// Merkle root, and the compact certificate, happen on blocks that
-		// are a multiple of ConsensusParams.CompactCertRounds.
+		// are a multiple of ConsensusParams.CompactCertRounds.  For blocks
+		// that are not a multiple of ConsensusParams.CompactCertRounds,
+		// this value is zero.
 		CompactCertVoters crypto.Digest `codec:"ccv"`
 
 		// CompactCertVotersTotal is the total number of microalgos held by
-		// the accounts in CompactCertVoters.  This is intended for computing
-		// the threshold of votes to expect from CompactCertVoters.
+		// the accounts in CompactCertVoters (or zero, if the merkle root is
+		// zero).  This is intended for computing the threshold of votes to
+		// expect from CompactCertVoters.
 		CompactCertVotersTotal basics.MicroAlgos `codec:"ccvt"`
 
 		// CompactCertLastRound is the last round for which we have committed

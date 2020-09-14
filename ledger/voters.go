@@ -20,14 +20,22 @@ import (
 	"fmt"
 	"sync"
 
+<<<<<<< HEAD
+=======
+	"github.com/algorand/go-deadlock"
+
+>>>>>>> origin/master
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+<<<<<<< HEAD
 
 	"github.com/algorand/go-deadlock"
+=======
+>>>>>>> origin/master
 )
 
 // The votersTracker maintains the Merkle tree for the most recent
@@ -77,8 +85,18 @@ type VotersForRound struct {
 	// tree, and totalWeight) could be nil/zero while a background thread
 	// is computing them.  Once the fields are set, however, they are
 	// immutable, and it is no longer necessary to acquire the lock.
+<<<<<<< HEAD
 	mu   deadlock.Mutex
 	cond *sync.Cond
+=======
+	//
+	// If an error occurs while computing the tree in the background,
+	// loadTreeError might be set to non-nil instead.  That also finalizes
+	// the state of this VotersForRound.
+	mu            deadlock.Mutex
+	cond          *sync.Cond
+	loadTreeError error
+>>>>>>> origin/master
 
 	// Proto is the ConsensusParams for the round whose balances are reflected
 	// in participants.
@@ -184,6 +202,14 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) error {
 		err := tr.loadTree(vt.l, vt.au, hdr)
 		if err != nil {
 			vt.au.log.Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
+<<<<<<< HEAD
+=======
+
+			tr.mu.Lock()
+			tr.loadTreeError = err
+			tr.cond.Broadcast()
+			tr.mu.Unlock()
+>>>>>>> origin/master
 		}
 	}()
 	return nil
@@ -213,7 +239,11 @@ func (tr *VotersForRound) loadTree(l ledgerForTracker, au *accountUpdates, hdr b
 
 	for i, acct := range top {
 		var ot basics.OverflowTracker
+<<<<<<< HEAD
 		rewards := basics.PendingRewards(&ot, acct.MicroAlgos, acct.RewardsBase, tr.Proto, hdr.RewardsLevel)
+=======
+		rewards := basics.PendingRewards(&ot, tr.Proto, acct.MicroAlgos, acct.RewardsBase, hdr.RewardsLevel)
+>>>>>>> origin/master
 		money := ot.AddA(acct.MicroAlgos, rewards)
 		if ot.Overflowed {
 			return fmt.Errorf("votersTracker.loadTree: overflow adding rewards %d + %d", acct.MicroAlgos, rewards)
@@ -311,10 +341,21 @@ func (vt *votersTracker) getVoters(r basics.Round) (*VotersForRound, error) {
 
 	// Wait for the Merkle tree to be constructed.
 	tr.mu.Lock()
+<<<<<<< HEAD
 	for tr.Tree == nil {
 		tr.cond.Wait()
 	}
 	tr.mu.Unlock()
+=======
+	defer tr.mu.Unlock()
+	for tr.Tree == nil {
+		if tr.loadTreeError != nil {
+			return nil, tr.loadTreeError
+		}
+
+		tr.cond.Wait()
+	}
+>>>>>>> origin/master
 
 	return tr, nil
 }

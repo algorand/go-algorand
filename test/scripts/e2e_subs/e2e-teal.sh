@@ -18,9 +18,9 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 ACCOUNTB=$(${gcmd} account new|awk '{ print $6 }')
 
 ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
-TIMEOUT_ROUND=$((${ROUND} + 7))
+TIMEOUT_ROUND=$((${ROUND} + 14))
 
-# timeout after 7 rounds
+# timeout after 14 rounds
 python ${GOPATH}/src/github.com/algorand/go-algorand/data/transactions/logic/tlhc.py --from ${ACCOUNT} --to ${ACCOUNTB} --timeout-round ${TIMEOUT_ROUND} > ${TEMPDIR}/tlhc.teal 2> ${TEMPDIR}/tlhc.teal.secret
 
 cat ${TEMPDIR}/tlhc.teal

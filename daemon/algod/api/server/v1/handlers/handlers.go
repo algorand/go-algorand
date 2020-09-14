@@ -1340,20 +1340,28 @@ func Assets(ctx lib.ReqContext, context echo.Context) {
 
 	const maxAssetsToList = 100
 
+	var err error
+	var max int64 = maxAssetsToList
+	var assetIdx int64 = 0
+
 	// Parse max assets to fetch from db
-	max, err := strconv.ParseInt(r.FormValue("max"), 10, 64)
-	if err != nil || max < 0 || max > maxAssetsToList {
-		err := fmt.Errorf(errFailedParsingMaxAssetsToList, 0, maxAssetsToList)
-		lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
-		return
+	if r.PostFormValue("max") != "" {
+		max, err = strconv.ParseInt(r.FormValue("max"), 10, 64)
+		if err != nil || max < 0 || max > maxAssetsToList {
+			err := fmt.Errorf(errFailedParsingMaxAssetsToList, 0, maxAssetsToList)
+			lib.ErrorResponse(w, http.StatusBadRequest, err, err.Error(), ctx.Log)
+			return
+		}
 	}
 
 	// Parse maximum asset idx
-	assetIdx, err := strconv.ParseInt(r.FormValue("assetIdx"), 10, 64)
-	if err != nil || assetIdx < 0 {
-		errs := errFailedParsingAssetIdx
-		lib.ErrorResponse(w, http.StatusBadRequest, errors.New(errs), errs, ctx.Log)
-		return
+	if r.PostFormValue("assetIdx") != "" {
+		assetIdx, err = strconv.ParseInt(r.FormValue("assetIdx"), 10, 64)
+		if err != nil || assetIdx < 0 {
+			errs := errFailedParsingAssetIdx
+			lib.ErrorResponse(w, http.StatusBadRequest, errors.New(errs), errs, ctx.Log)
+			return
+		}
 	}
 
 	// If assetIdx is 0, we want the most recent assets, so make it intmax

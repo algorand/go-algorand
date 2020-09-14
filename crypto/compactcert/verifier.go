@@ -44,13 +44,19 @@ func MkVerifier(p Params, partcom crypto.Digest) *Verifier {
 // Verify checks if c is a valid compact certificate for the message
 // and participants that were used to construct the Verifier.
 func (v *Verifier) Verify(c *Cert) error {
+<<<<<<< HEAD
 	if c.SignedWeight < v.ProvenWeight {
 		return fmt.Errorf("cert signed weight %d < proven weight %d", c.SignedWeight, v.ProvenWeight)
+=======
+	if c.SignedWeight <= v.ProvenWeight {
+		return fmt.Errorf("cert signed weight %d <= proven weight %d", c.SignedWeight, v.ProvenWeight)
+>>>>>>> origin/master
 	}
 
 	// Verify all of the reveals
 	sigs := make(map[uint64]crypto.Hashable)
 	parts := make(map[uint64]crypto.Hashable)
+<<<<<<< HEAD
 	for i, r := range c.Reveals {
 		_, ok := sigs[r.Pos]
 		if ok {
@@ -63,6 +69,15 @@ func (v *Verifier) Verify(c *Cert) error {
 		ephID := basics.OneTimeIDForRound(v.SigRound, r.Part.KeyDilution)
 		if !r.Part.PK.Verify(ephID, v.Msg, r.SigSlot.Sig.OneTimeSignature) {
 			return fmt.Errorf("signature in reveal %d does not verify", i)
+=======
+	for pos, r := range c.Reveals {
+		sigs[pos] = r.SigSlot
+		parts[pos] = r.Part
+
+		ephID := basics.OneTimeIDForRound(v.SigRound, r.Part.KeyDilution)
+		if !r.Part.PK.Verify(ephID, v.Msg, r.SigSlot.Sig.OneTimeSignature) {
+			return fmt.Errorf("signature in reveal pos %d does not verify", pos)
+>>>>>>> origin/master
 		}
 	}
 

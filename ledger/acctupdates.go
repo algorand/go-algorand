@@ -207,7 +207,7 @@ type accountUpdates struct {
 	commitSyncerClosed chan struct{}
 
 	// voters keeps track of Merkle trees of online accounts, used for compact certificates.
-	voters votersTracker
+	voters *votersTracker
 }
 
 type deferedCommit struct {
@@ -277,6 +277,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest, time.Duration(0))
 	}
 
+	au.voters = &votersTracker{}
 	err = au.voters.loadFromDisk(l, au)
 	if err != nil {
 		return err

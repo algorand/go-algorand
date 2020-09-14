@@ -16,6 +16,9 @@ PUB_TOKEN=$(cat "$ALGORAND_DATA"/algod.token)
 ADMIN_TOKEN=$(cat "$ALGORAND_DATA"/algod.admin.token)
 NET=$(cat "$ALGORAND_DATA"/algod.net)
 
+PRIMARY_NET=$(cat "$ALGORAND_DATA2"/algod.net)
+PRIMARY_ADMIN_TOKEN=$(cat "$ALGORAND_DATA2"/algod.admin.token)
+
 
 function base_call {
   curl -o "$3" -w "%{http_code}" -q -s -H "Authorization: Bearer $1" "$NET$2"
@@ -112,7 +115,44 @@ function test_assets_endpoint {
   call_and_verify "Asset invalid parameter" "/v2/assets/$ASSET_ID?this-should-fail=200" 400 'parameter detected: this-should-fail'
 }
 
+function pprof_test {
+  # URL Auth - valid
+  CODE=$(curl -o "${TEMPDIR}/curl_out.txt" -w "%{http_code}" -q -s "$PRIMARY_NET/urlAuth/$PRIMARY_ADMIN_TOKEN/debug/pprof/block")
+  if [[ "$CODE" != "200" ]]; then
+    fail_and_exit "Call pprof with valid token" "/urlAuth/:token/debug/pprof" "Invalid exit code expected 200 (actual $CODE)"
+  fi
+
+  # URL Auth - invalid
+  CODE=$(curl -o "${TEMPDIR}/curl_out.txt" -w "%{http_code}" -q -s "$PRIMARY_NET/urlAuth/invalid_token/debug/pprof/block")
+  if [[ "$CODE" != "401" ]]; then
+    fail_and_exit "Call pprof with invalid token" "/urlAuth/invalid_token/debug/pprof" "Invalid exit code expected 401 (actual $CODE)"
+  fi
+
+  # Header Auth - valid
+  CODE=$(curl -o "${TEMPDIR}/curl_out.txt" -w "%{http_code}" -q -s "$PRIMARY_NET/debug/pprof/block" -H "Authorization: Bearer $PRIMARY_ADMIN_TOKEN")
+  if [[ "$CODE" != "200" ]]; then
+    fail_and_exit "Call pprof with valid token" "/debug/pprof" "Invalid exit code expected 200 (actual $CODE)"
+  fi
+
+  # Header Auth - invalid
+  CODE=$(curl -o "${TEMPDIR}/curl_out.txt" -w "%{http_code}" -q -s "$PRIMARY_NET/debug/pprof/block" -H "Authorization: Bearer invalid_token")
+  if [[ "$CODE" != "401" ]]; then
+    fail_and_exit "Call pprof with invalid token" "/debug/pprof" "Invalid exit code expected 401 (actual $CODE)"
+  fi
+}
+
+function test_genesis_endpoint {
+  call_and_verify "There should be a genesis endpoint." "/genesis" 200 '
+  "id": "v1",
+  "network": "tbd",
+  "proto": "future",
+  "rwd": "7777777777777777777777777777777777777777777777777774MSJUVU"
+}'
+}
+
 
 # Run the tests.
 test_applications_endpoint
 test_assets_endpoint
+pprof_test
+test_genesis_endpoint
