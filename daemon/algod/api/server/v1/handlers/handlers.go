@@ -1615,7 +1615,9 @@ func Transactions(ctx lib.ReqContext, context echo.Context) {
 	// swagger:operation GET /v1/account/{address}/transactions Transactions
 	// ---
 	//     Summary: Get a list of confirmed transactions.
-	//     Description: Returns the list of confirmed transactions between within a date range. When indexer is disabled this call requires firstRound and lastRound and returns an error if firstRound is not available to the node. Transactions are returned in round, then block order.
+	//     Description: Returns the list of confirmed transactions between within a date range. When indexer is disabled this call requires firstRound and lastRound and returns an error if firstRound is not available to the node. The transaction results start from the oldest round.
+	//     Produces:
+	//     - application/json
 	//     Schemes:
 	//     - http
 	//     Parameters:
