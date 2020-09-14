@@ -814,6 +814,7 @@ func initConsensusProtocols() {
 	vFuture.CompactCertTopVoters = 1024 * 1024
 	vFuture.CompactCertVotersLookback = 16
 	vFuture.CompactCertWeightThreshold = 30
+	vFuture.CompactCertSecKQ = 128
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
