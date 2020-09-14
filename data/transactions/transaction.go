@@ -419,7 +419,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	}
 
 	if tx.Fee.LessThan(basics.MicroAlgos{Raw: proto.MinTxnFee}) {
-		if tx.Type == protocol.CompactCertTx && tx.Sender == CompactCertSender && tx.Fee.IsZero() {
+		if tx.Type == protocol.CompactCertTx {
 			// Zero fee allowed for compact cert txn.
 		} else {
 			return makeMinFeeErrorf("transaction had fee %v, which is less than the minimum %v", tx.Fee, proto.MinTxnFee)

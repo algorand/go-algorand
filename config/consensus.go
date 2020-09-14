@@ -334,6 +334,10 @@ type ConsensusParams struct {
 	// This threshold can be thought of as the maximum percentage of
 	// malicious weight that compact certificates defend against.
 	CompactCertWeightThreshold uint64
+
+	// CompactCertSecKQ is the security parameter (k+q) for the compact
+	// certificate scheme.
+	CompactCertSecKQ uint64
 }
 
 // ConsensusProtocols defines a set of supported protocol versions and their
