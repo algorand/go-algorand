@@ -306,6 +306,24 @@ type ConsensusParams struct {
 	// certificates.
 	CompactCertRounds uint64
 
+	// CompactCertTopVoters is a bound on how many online accounts get to
+	// participate in forming the compact certificate, by including the
+	// top CompactCertTopVoters accounts (by normalized balance) into the
+	// Merkle commitment.
+	CompactCertTopVoters uint64
+
+	// CompactCertVotersLookback is the number of blocks we skip before
+	// publishing a Merkle commitment to the online accounts.  Namely,
+	// if block number N contains a Merkle commitment to the online
+	// accounts (which, incidentally, means N%CompactCertRounds=0),
+	// then the balances reflected in that commitment must come from
+	// block N-CompactCertVotersLookback.  This gives each node some
+	// time (CompactCertVotersLookback blocks worth of time) to
+	// construct this Merkle tree, so as to avoid placing the
+	// construction of this Merkle tree (and obtaining the requisite
+	// accounts and balances) in the critical path.
+	CompactCertVotersLookback uint64
+
 	// CompactCertWeightThreshold is the percentage of top voters weight
 	// that must sign the message (block header) for security.  The compact
 	// certificate ensures this threshold holds; however, forming a valid
