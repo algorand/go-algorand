@@ -115,7 +115,7 @@ func CompactCertParams(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockH
 		Msg:          hdr,
 		ProvenWeight: provenWeight,
 		SigRound:     hdr.Round + 1,
-		SecKQ:        128,
+		SecKQ:        proto.CompactCertSecKQ,
 	}
 	return
 }
