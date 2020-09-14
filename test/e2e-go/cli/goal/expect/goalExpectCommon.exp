@@ -57,6 +57,8 @@ proc ::AlgorandGoal::Abort { ERROR } {
 }
 
 # Utility method to test the process returned value
+# Returns 0 when no error code is detected.
+# Returns 1 in case of a non-zero error code detected, or if the process is killed. 
 proc ::AlgorandGoal::CheckProcessReturnedCode {OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP} {
     if {$OS_CODE == -1} {
 	puts "OS error code: $ERR_CODE"
