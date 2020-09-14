@@ -85,12 +85,22 @@ type (
 	}
 )
 
+type UnauthenticatedVoteVerifyError struct {
+	Err error
+}
+
+func (e *UnauthenticatedVoteVerifyError) Error() string {
+	return fmt.Sprintf("unauthenticatedVote.verify: could not get membership parameters: %v", e.Err.Error())
+}
+
 // verify verifies that a vote that was received from the network is valid.
 func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 	rv := uv.R
 	m, err := membership(l, rv.Sender, rv.Round, rv.Period, rv.Step)
 	if err != nil {
-		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not get membership parameters: %v", err)
+		return vote{}, &UnauthenticatedVoteVerifyError{
+			Err: err,
+		}
 	}
 
 	switch rv.Step {

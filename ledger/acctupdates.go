@@ -32,6 +32,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/merkletrie"
@@ -1430,7 +1431,10 @@ func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Ro
 // roundOffset calculates the offset of the given round compared to the current dbRound. Requires that the lock would be taken.
 func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err error) {
 	if rnd < au.dbRound {
-		err = fmt.Errorf("round %d before dbRound %d", rnd, au.dbRound)
+		err = &agreement.RoundOffsetError{
+			Round: rnd,
+			DbRound:  au.dbRound,
+		}
 		return
 	}
 

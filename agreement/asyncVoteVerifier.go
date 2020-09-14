@@ -18,8 +18,11 @@ package agreement
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -56,6 +59,15 @@ type AsyncVoteVerifier struct {
 	execpoolOut     chan interface{}
 	ctx             context.Context
 	ctxCancel       context.CancelFunc
+}
+
+type RoundOffsetError struct {
+	Round   basics.Round
+	DbRound basics.Round
+}
+
+func (e RoundOffsetError) Error() string {
+	return fmt.Sprintf("round %d before dbRound %d", e.Round, e.DbRound)
 }
 
 // MakeAsyncVoteVerifier creates an AsyncVoteVerifier with workers as the number of CPUs
@@ -104,7 +116,14 @@ func (avv *AsyncVoteVerifier) executeVoteVerification(task interface{}) interfac
 		// request was not cancelled, so we verify it here and return the result on the channel
 		v, err := req.uv.verify(req.l)
 		req.message.Vote = v
-		return &asyncVerifyVoteResponse{v: v, index: req.index, message: req.message, err: err, req: &req}
+		cancelled := false
+
+		var e *RoundOffsetError
+		if errors.As(err, &e) {
+			cancelled = true
+		}
+
+		return &asyncVerifyVoteResponse{v: v, index: req.index, message: req.message, err: err, cancelled: cancelled, req: &req,}
 	}
 }
 
