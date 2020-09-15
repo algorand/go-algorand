@@ -181,7 +181,7 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 			if !cfg.Quiet {
 				fmt.Printf("adjusting balance of account %v by %d\n ", addr, toSend)
 			}
-			_, err := SendPaymentFromUnencryptedWallet(client, cfg.SrcAccount, addr, fee, toSend, nil)
+			_, err := sendPaymentFromUnencryptedWallet(client, cfg.SrcAccount, addr, fee, toSend, nil)
 			if err != nil {
 				return err
 			}
@@ -197,8 +197,7 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 	return nil
 }
 
-// SendPaymentFromUnencryptedWallet send payment
-func SendPaymentFromUnencryptedWallet(client libgoal.Client, from, to string, fee, amount uint64, note []byte) (transactions.Transaction, error) {
+func sendPaymentFromUnencryptedWallet(client libgoal.Client, from, to string, fee, amount uint64, note []byte) (transactions.Transaction, error) {
 	wh, err := client.GetUnencryptedWalletHandle()
 	if err != nil {
 		return transactions.Transaction{}, err
