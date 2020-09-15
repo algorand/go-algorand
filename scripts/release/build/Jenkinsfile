@@ -40,6 +40,7 @@ pipeline {
             }
         }
 
+        /*
         stage("sign") {
             steps {
                 input "Forward gpg-agent"
@@ -52,6 +53,7 @@ pipeline {
                 sh script: "scripts/release/build/stage/verify/run.sh"
             }
         }
+        */
 
         stage("upload") {
             steps {
