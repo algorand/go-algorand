@@ -841,7 +841,8 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 }
 
 func TestVoteAggregatorOldVote(t *testing.T) {
-	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
+	ledger := makeTestLedgerMaxBlocks(readOnlyGenesis100, 320)
+	addresses, vrfSecrets, otSecrets := readOnlyAddrs100, readOnlyVRF100, readOnlyOT100
 	round := ledger.NextRound()
 	period := period(0)
 

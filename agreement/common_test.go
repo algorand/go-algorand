@@ -192,6 +192,8 @@ type testLedger struct {
 	certs     map[basics.Round]Certificate
 	nextRound basics.Round
 
+	maxNumBlocks uint64
+
 	// constant
 	state map[basics.Address]basics.AccountData
 
@@ -233,6 +235,27 @@ func makeTestLedgerWithConsensusVersion(state map[basics.Address]basics.AccountD
 	l.notifications = make(map[basics.Round]signal)
 
 	l.consensusVersion = consensusVersion
+	return l
+}
+
+func makeTestLedgerMaxBlocks(state map[basics.Address]basics.AccountData, maxNumBlocks uint64) Ledger {
+	l := new(testLedger)
+	l.entries = make(map[basics.Round]bookkeeping.Block)
+	l.certs = make(map[basics.Round]Certificate)
+	l.nextRound = 1
+
+	l.maxNumBlocks = maxNumBlocks
+
+	l.state = make(map[basics.Address]basics.AccountData)
+	for k, v := range state {
+		l.state[k] = v
+	}
+
+	l.notifications = make(map[basics.Round]signal)
+
+	l.consensusVersion = func(r basics.Round) (protocol.ConsensusVersion, error) {
+		return protocol.ConsensusCurrentVersion, nil
+	}
 	return l
 }
 
@@ -290,7 +313,7 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 		panic(err)
 	}
 
-	if l.nextRound > 320 && r < l.nextRound-320 { // TODO: (nguo) fix this to use the right params
+	if l.maxNumBlocks != 0 && l.nextRound > round(l.maxNumBlocks) && r < l.nextRound-round(l.maxNumBlocks) {
 		return crypto.Digest{}, &RoundOffsetError{r, l.nextRound - 320}
 	}
 
@@ -306,7 +329,7 @@ func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountDat
 		panic(err)
 	}
 
-	if l.nextRound > 320 && r < l.nextRound-320 { // TODO: (nguo) fix this to use the right params
+	if l.maxNumBlocks != 0 && l.nextRound > round(l.maxNumBlocks) && r < l.nextRound-round(l.maxNumBlocks) {
 		return basics.AccountData{}, &RoundOffsetError{r, l.nextRound - 320}
 	}
 
