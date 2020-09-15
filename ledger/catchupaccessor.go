@@ -174,6 +174,9 @@ func (c *CatchpointCatchupAccessorImpl) SetLabel(ctx context.Context, label stri
 // ResetStagingBalances resets the current staging balances, preparing for a new set of balances to be added
 func (c *CatchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context, newCatchup bool) (err error) {
 	wdb := c.ledger.trackerDB().wdb
+	if !newCatchup {
+		c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
+	}
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		err = resetCatchpointStagingBalances(ctx, tx, newCatchup)
 		if err != nil {
@@ -270,6 +273,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 		progress.SeenHeader = true
 		progress.TotalAccounts = fileHeader.TotalAccounts
 		progress.TotalChunks = fileHeader.TotalChunks
+		c.ledger.setSynchronousMode(ctx, c.ledger.accountsRebuildSynchronousMode)
 	}
 	return err
 }
@@ -290,6 +294,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		return fmt.Errorf("processStagingBalances received a chunk with no accounts")
 	}
 
+	proto := c.ledger.GenesisProto()
 	wdb := c.ledger.trackerDB().wdb
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		// create the merkle trie for the balances
@@ -308,7 +313,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			progress.cachedTrie.SetCommitter(mc)
 		}
 
-		err = writeCatchpointStagingBalances(ctx, tx, balances.Balances)
+		err = writeCatchpointStagingBalances(ctx, tx, balances.Balances, proto)
 		if err != nil {
 			return
 		}
@@ -361,6 +366,8 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	// not strictly required, but clean up the pointer in case of either a failuire or when we're done.
 	if err != nil || progress.ProcessedAccounts == progress.TotalAccounts {
 		progress.cachedTrie = nil
+		// restore "normal" syncronous mode
+		c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 	}
 	return err
 }
