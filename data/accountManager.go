@@ -18,6 +18,7 @@ package data
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -122,6 +123,8 @@ func (manager *AccountManager) AddParticipation(participation account.Participat
 // DeleteOldKeys deletes all accounts' ephemeral keys strictly older than the
 // current round.
 func (manager *AccountManager) DeleteOldKeys(current basics.Round, proto config.ConsensusParams) {
+	start := time.Now()
+	defer fmt.Printf("tsachi: AccountManager.DeleteOldKeys took %v", time.Now().Sub(start))
 	manager.mu.Lock()
 	pendingItems := make(map[string]<-chan error, len(manager.partIntervals))
 	func() {
