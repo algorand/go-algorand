@@ -8,7 +8,7 @@ export HOME=/root
 export GOPATH=${HOME}/go
 export PATH=${GOPATH}/bin:/usr/local/go/bin:${PATH}
 
-cd ${HOME} && tar jxf /root/subhome/gnupg*.tar.bz2
+cd ${HOME} && tar jxf ${HOME}/subhome/gnupg*.tar.bz2
 
 export PATH="${HOME}/gnupg2/bin:${PATH}"
 export LD_LIBRARY_PATH=${HOME}/gnupg2/lib
@@ -24,11 +24,11 @@ else
     echo "no-autostart" >> "${HOME}/.gnupg/gpg.conf"
 fi
 rm -f ${HOME}/.gnupg/S.gpg-agent
-(cd ~/.gnupg && ln -s /root/S.gpg-agent S.gpg-agent)
+(cd ~/.gnupg && ln -s ${HOME}/S.gpg-agent S.gpg-agent)
 
-gpg --import /root/keys/dev.pub
-gpg --import /root/keys/rpm.pub
-rpmkeys --import /root/keys/rpm.pub
+gpg --import ${HOME}/keys/dev.pub
+gpg --import ${HOME}/keys/rpm.pub
+rpmkeys --import ${HOME}/keys/rpm.pub
 echo "wat" | gpg -u rpm@algorand.com --clearsign
 
 cat <<EOF>"${HOME}/.rpmmacros"
@@ -43,6 +43,6 @@ import sys
 rpm.addSign(sys.argv[1], '')
 EOF
 
-NEWEST_RPM=$(ls -t /root/subhome/node_pkg/*rpm | head -1)
+NEWEST_RPM=$(ls -t ${HOME}/subhome/node_pkg/*rpm | head -1)
 python2 "${HOME}/rpmsign.py" "${NEWEST_RPM}"
 
