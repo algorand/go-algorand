@@ -163,6 +163,7 @@ proc ::AlgorandGoal::CreateNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR
 
 # Start the network
 proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR TEST_ROOT_DIR } {
+    set timeout 120
     set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
     set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
     set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
