@@ -42,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 const (
@@ -58,6 +59,19 @@ const (
 	// we attempt to commit them to disk while writing a batch of rounds balances to disk.
 	trieAccumulatedChangesFlush = 256
 )
+
+var ledger_accountsonlinetop_count = metrics.NewCounter("ledger_accountsonlinetop_count", "calls")
+var ledger_accountsonlinetop_ms = metrics.NewCounter("ledger_accountsonlinetop_ms", "ms spent")
+var ledger_getcatchpoint_count = metrics.NewCounter("ledger_getcatchpoint_count", "calls")
+var ledger_getcatchpoint_ms = metrics.NewCounter("ledger_getcatchpoint_ms", "ms spent")
+var ledger_accountsinit_count = metrics.NewCounter("ledger_accountsinit_count", "calls")
+var ledger_accountsinit_ms = metrics.NewCounter("ledger_accountsinit_ms", "ms spent")
+var ledger_commitround_count = metrics.NewCounter("ledger_commitround_count", "calls")
+var ledger_commitround_ms = metrics.NewCounter("ledger_commitround_ms", "ms spent")
+var ledger_generatecatchpoint_count = metrics.NewCounter("ledger_generatecatchpoint_count", "calls")
+var ledger_generatecatchpoint_ms = metrics.NewCounter("ledger_generatecatchpoint_ms", "ms spent")
+var ledger_vacuum_count = metrics.NewCounter("ledger_vacuum_count", "calls")
+var ledger_vacuum_ms = metrics.NewCounter("ledger_vacuum_ms", "ms spent")
 
 // trieCachedNodesCount defines how many balances trie nodes we would like to keep around in memory.
 // value was calibrated using BenchmarkCalibrateCacheNodeSize
@@ -460,11 +474,13 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 	batchSize := uint64(1024)
 	for uint64(len(candidates)) < n+uint64(len(modifiedAccounts)) {
 		var accts map[basics.Address]*onlineAccount
-		// TODO: db metrics
+		start := time.Now()
+		ledger_accountsonlinetop_count.Inc(nil)
 		err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			accts, err = accountsOnlineTop(tx, batchOffset, batchSize, proto)
 			return
 		})
+		counterMs(ledger_accountsonlinetop_ms, start)
 		if err != nil {
 			return nil, err
 		}
@@ -657,11 +673,13 @@ func (au *accountUpdates) Totals(rnd basics.Round) (totals AccountTotals, err er
 // GetCatchpointStream returns an io.Reader to the catchpoint file associated with the provided round
 func (au *accountUpdates) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	dbFileName := ""
-	// TODO: db metrics
+	start := time.Now()
+	ledger_getcatchpoint_count.Inc(nil)
 	err := au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		dbFileName, _, _, err = getCatchpoint(tx, round)
 		return
 	})
+	counterMs(ledger_getcatchpoint_ms, start)
 	if err != nil && err != sql.ErrNoRows {
 		// we had some sql error.
 		return nil, fmt.Errorf("accountUpdates: getCatchpointStream: unable to lookup catchpoint %d: %v", round, err)
@@ -835,7 +853,8 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	}
 
 	lastestBlockRound = l.Latest()
-	// TODO: db metrics
+	start := time.Now()
+	ledger_accountsinit_count.Inc(nil)
 	err = au.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		au.dbRound, err0 = au.accountsInitialize(ctx, tx)
@@ -863,6 +882,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		au.roundTotals = []AccountTotals{totals}
 		return nil
 	})
+	counterMs(ledger_accountsinit_ms, start)
 	if err != nil {
 		return
 	}
@@ -873,7 +893,6 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		return
 	}
 
-	// TODO: db metrics
 	au.accountsq, err = accountsDbInit(au.dbs.rdb.Handle, au.dbs.wdb.Handle)
 
 	au.lastCatchpointLabel, _, err = au.accountsq.readCatchpointStateString(context.Background(), catchpointStateLastCatchpoint)
@@ -1568,7 +1587,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	genesisProto := au.ledger.GenesisProto()
 
-	// TODO: db metrics
+	start := time.Now()
+	ledger_commitround_count.Inc(nil)
 	err := au.dbs.wdb.AtomicCommitWriteLock(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
@@ -1617,7 +1637,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 		return nil
 	}, &au.accountsMu)
-
+	counterMs(ledger_commitround_ms, start)
 	if err != nil {
 		au.balancesTrie = nil
 		au.log.Warnf("unable to advance account snapshot: %v", err)
@@ -1746,7 +1766,8 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	}
 
 	var catchpointWriter *catchpointWriter
-	// TODO: db metrics
+	start := time.Now()
+	ledger_generatecatchpoint_count.Inc(nil)
 	err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		catchpointWriter = makeCatchpointWriter(au.ctx, absCatchpointFileName, tx, committedRound, committedRoundDigest, label)
 		for more {
@@ -1791,6 +1812,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 		}
 		return
 	})
+	counterMs(ledger_generatecatchpoint_ms, start)
 
 	if err != nil {
 		au.log.Warnf("accountUpdates: generateCatchpoint: %v", err)
@@ -1901,8 +1923,10 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 		}
 	}()
 
-	// TODO: db metrics
+	start := time.Now()
+	ledger_vacuum_count.Inc(nil)
 	vacuumStats, err := au.dbs.wdb.Vacuum(ctx)
+	counterMs(ledger_vacuum_ms, start)
 	close(vacuumExitCh)
 	vacuumLoggingAbort.Wait()
 

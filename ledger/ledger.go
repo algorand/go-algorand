@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -33,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // Ledger is a database storing the contents of the ledger.
@@ -125,10 +127,12 @@ func OpenLedger(
 
 	l.setSynchronousMode(context.Background(), l.synchronousMode)
 
-	// TODO: db metrics
+	start := time.Now()
+	ledger_initblocksdb_count.Inc(nil)
 	err = l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
 	})
+	counterMs(ledger_initblocksdb_ms, start)
 	if err != nil {
 		err = fmt.Errorf("OpenLedger.initBlocksDB %v", err)
 		return nil, err
@@ -196,7 +200,8 @@ func (l *Ledger) reloadLedger() error {
 // verifyMatchingGenesisHash tests to see that the latest block header pointing to the same genesis hash provided in genesisHash.
 func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	// Check that the genesis hash, if present, matches.
-	// TODO: db metrics
+	start := time.Now()
+	ledger_verifygenhash_count.Inc(nil)
 	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err := blockLatest(tx)
 		if err != nil {
@@ -217,6 +222,7 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 		}
 		return nil
 	})
+	counterMs(ledger_verifygenhash_ms, start)
 	return
 }
 
@@ -645,3 +651,8 @@ type txlease struct {
 	sender basics.Address
 	lease  [32]byte
 }
+
+var ledger_initblocksdb_count = metrics.NewCounter("ledger_initblocksdb_count", "calls")
+var ledger_initblocksdb_ms = metrics.NewCounter("ledger_initblocksdb_ms", "ms spent")
+var ledger_verifygenhash_count = metrics.NewCounter("ledger_verifygenhash_count", "calls")
+var ledger_verifygenhash_ms = metrics.NewCounter("ledger_verifygenhash_ms", "ms spent")
