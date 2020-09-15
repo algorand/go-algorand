@@ -4,6 +4,7 @@ Release:       1
 Summary:       Algorand tools software
 URL:           https://www.algorand.com
 License:       AGPL-3+
+Requires:      algorand >= @VER@
 
 %define SRCDIR go-algorand-rpmbuild
 %define _buildshell /bin/bash
