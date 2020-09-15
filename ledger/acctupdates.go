@@ -205,6 +205,9 @@ type accountUpdates struct {
 	// commitSyncerClosed is the blocking channel for syncronizing closing the commitSyncer goroutine. Once it's closed, the
 	// commitSyncer can be assumed to have aborted.
 	commitSyncerClosed chan struct{}
+
+	// voters keeps track of Merkle trees of online accounts, used for compact certificates.
+	voters *votersTracker
 }
 
 type deferedCommit struct {
@@ -272,6 +275,12 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 
 	if writingCatchpointRound != 0 && au.catchpointInterval != 0 {
 		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest, time.Duration(0))
+	}
+
+	au.voters = &votersTracker{}
+	err = au.voters.loadFromDisk(l, au)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -595,6 +604,8 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 		return
 	}
 
+	newBase = au.voters.lowestRound(newBase)
+
 	offset = uint64(newBase - au.dbRound)
 
 	// check to see if this is a catchpoint round
@@ -718,6 +729,11 @@ type accountUpdatesLedgerEvaluator struct {
 // GenesisHash returns the genesis hash
 func (aul *accountUpdatesLedgerEvaluator) GenesisHash() crypto.Digest {
 	return aul.au.ledger.GenesisHash()
+}
+
+// CompactCertVoters returns the top online accounts at round rnd.
+func (aul *accountUpdatesLedgerEvaluator) CompactCertVoters(rnd basics.Round) (voters *VotersForRound, err error) {
+	return aul.au.voters.getVoters(rnd)
 }
 
 // BlockHdr returns the header of the given round. When the evaluator is running, it's only referring to the previous header, which is what we
@@ -1340,6 +1356,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	}
 
 	au.roundTotals = append(au.roundTotals, newTotals)
+
+	au.voters.newBlock(blk.BlockHeader)
 }
 
 // lookupImpl returns the accound data for a given address at a given round. The withRewards indicates whether the
