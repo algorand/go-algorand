@@ -82,4 +82,9 @@ func TestValidate(t *testing.T) {
 	template, _ = loadTemplate(filepath.Join(templateDir, "NegativeStake.json"))
 	err = template.Validate()
 	a.Error(err)
+
+	templateDir, _ = filepath.Abs("../test/testdata/nettemplates")
+	template, _ = loadTemplate(filepath.Join(templateDir, "TwoNodesOneRelay1000Accounts.json"))
+	err = template.Validate()
+	a.NoError(err)
 }
