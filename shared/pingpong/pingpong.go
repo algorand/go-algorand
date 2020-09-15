@@ -197,6 +197,7 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 	return nil
 }
 
+// SendPaymentFromUnencryptedWallet send payment
 func SendPaymentFromUnencryptedWallet(client libgoal.Client, from, to string, fee, amount uint64, note []byte) (transactions.Transaction, error) {
 	wh, err := client.GetUnencryptedWalletHandle()
 	if err != nil {
