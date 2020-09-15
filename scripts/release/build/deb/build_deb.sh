@@ -56,6 +56,11 @@ if [ "$PKG_NAME" != "algorand-devtools" ]; then
         cp "./installer/$data" "$PKG_ROOT/var/lib/algorand"
     done
 
+    genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
+    for dir in "${genesis_dirs[@]}"; do
+        mkdir -p "$PKG_ROOT/var/lib/algorand/genesis/$dir"
+        cp "./installer/genesis/$dir/genesis.json" "$PKG_ROOT/var/lib/algorand/genesis/$dir/genesis.json"
+    done
     cp "./installer/genesis/$DEFAULTNETWORK/genesis.json" "$PKG_ROOT/var/lib/algorand/genesis.json"
 
     # files should not be group writable but directories should be
