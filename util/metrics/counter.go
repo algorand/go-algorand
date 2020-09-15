@@ -36,6 +36,18 @@ func MakeCounter(metric MetricName) *Counter {
 	return c
 }
 
+func NewCounter(name, desc string) *Counter {
+	c := &Counter{
+		name:          name,
+		description:   desc,
+		values:        make([]*counterValues, 0),
+		labels:        make(map[string]int),
+		valuesIndices: make(map[int]int),
+	}
+	c.Register(nil)
+	return c
+}
+
 // Register registers the counter with the default/specific registry
 func (counter *Counter) Register(reg *Registry) {
 	if reg == nil {

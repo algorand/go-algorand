@@ -419,6 +419,7 @@ func accountsRound(tx *sql.Tx) (rnd basics.Round, hashrnd basics.Round, err erro
 }
 
 func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) {
+	// TODO: db metrics
 	var err error
 	qs := &accountsDbQueries{}
 

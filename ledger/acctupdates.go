@@ -451,6 +451,7 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 	batchSize := uint64(1024)
 	for uint64(len(candidates)) < n+uint64(len(modifiedAccounts)) {
 		var accts map[basics.Address]*onlineAccount
+		// TODO: db metrics
 		err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			accts, err = accountsOnlineTop(tx, batchOffset, batchSize, proto)
 			return
@@ -645,6 +646,7 @@ func (au *accountUpdates) Totals(rnd basics.Round) (totals AccountTotals, err er
 // GetCatchpointStream returns an io.Reader to the catchpoint file associated with the provided round
 func (au *accountUpdates) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	dbFileName := ""
+	// TODO: db metrics
 	err := au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		dbFileName, _, _, err = getCatchpoint(tx, round)
 		return
@@ -817,6 +819,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	}
 
 	lastestBlockRound = l.Latest()
+	// TODO: db metrics
 	err = au.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		au.dbRound, err0 = au.accountsInitialize(ctx, tx)
@@ -854,6 +857,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		return
 	}
 
+	// TODO: db metrics
 	au.accountsq, err = accountsDbInit(au.dbs.rdb.Handle, au.dbs.wdb.Handle)
 
 	au.lastCatchpointLabel, _, err = au.accountsq.readCatchpointStateString(context.Background(), catchpointStateLastCatchpoint)
@@ -1546,6 +1550,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	genesisProto := au.ledger.GenesisProto()
 
+	// TODO: db metrics
 	err := au.dbs.wdb.AtomicCommitWriteLock(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
@@ -1723,6 +1728,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	}
 
 	var catchpointWriter *catchpointWriter
+	// TODO: db metrics
 	err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		catchpointWriter = makeCatchpointWriter(au.ctx, absCatchpointFileName, tx, committedRound, committedRoundDigest, label)
 		for more {
@@ -1877,6 +1883,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 		}
 	}()
 
+	// TODO: db metrics
 	vacuumStats, err := au.dbs.wdb.Vacuum(ctx)
 	close(vacuumExitCh)
 	vacuumLoggingAbort.Wait()
