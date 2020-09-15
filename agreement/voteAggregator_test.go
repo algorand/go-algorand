@@ -839,3 +839,37 @@ func TestVoteAggregatorFiltersVoteNextRound(t *testing.T) {
 	require.NoError(t, err)
 	require.NoErrorf(t, res, "Votes from next round not correctly filtered")
 }
+
+func TestVoteAggregatorOldVote(t *testing.T) {
+	ledger, addresses, vrfSecrets, otSecrets := readOnlyFixture100()
+	round := ledger.NextRound()
+	period := period(0)
+
+	var proposal proposalValue
+	proposal.BlockDigest = randomBlockHash()
+
+	var uvs []unauthenticatedVote
+	for i := range addresses {
+		address := addresses[i]
+		step := step(1)
+		rv := rawVote{Sender: address, Round: round, Period: period, Step: step, Proposal: proposal}
+		uv, err := makeVote(rv, otSecrets[i], vrfSecrets[i], ledger)
+		assert.NoError(t, err)
+		uvs = append(uvs, uv)
+	}
+
+	for r := 1; r < 1000; r++ {
+		ledger.EnsureBlock(makeRandomBlock(ledger.NextRound()), Certificate{})
+	}
+
+	avv := MakeAsyncVoteVerifier(nil)
+	defer avv.Quit()
+
+	results := make(chan asyncVerifyVoteResponse, len(uvs))
+
+	for i, uv := range uvs {
+		avv.verifyVote(context.Background(), ledger, uv, i, message{}, results)
+		result := <- results
+		require.True(t, result.cancelled)
+	}
+}

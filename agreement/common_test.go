@@ -290,6 +290,10 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 		panic(err)
 	}
 
+	if l.nextRound > 320 && r < l.nextRound - 320 { // TODO: (nguo) fix this to use the right params
+		return crypto.Digest{}, &RoundOffsetError{r, l.nextRound - 320}
+	}
+
 	return l.entries[r].Digest(), nil
 }
 
@@ -301,6 +305,11 @@ func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountDat
 		err := fmt.Errorf("Lookup called on future round: %v >= %v! (this is probably a bug)", r, l.nextRound)
 		panic(err)
 	}
+
+	if l.nextRound > 320 && r < l.nextRound - 320 { // TODO: (nguo) fix this to use the right params
+		return basics.AccountData{}, &RoundOffsetError{r, l.nextRound - 320}
+	}
+
 	return l.state[a], nil
 }
 

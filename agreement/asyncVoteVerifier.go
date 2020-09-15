@@ -66,7 +66,7 @@ type RoundOffsetError struct {
 	DbRound basics.Round
 }
 
-func (e RoundOffsetError) Error() string {
+func (e *RoundOffsetError) Error() string {
 	return fmt.Sprintf("round %d before dbRound %d", e.Round, e.DbRound)
 }
 
@@ -114,12 +114,12 @@ func (avv *AsyncVoteVerifier) executeVoteVerification(task interface{}) interfac
 		return &asyncVerifyVoteResponse{err: req.ctx.Err(), cancelled: true, req: &req}
 	default:
 		// request was not cancelled, so we verify it here and return the result on the channel
-		v, err := req.uv.verify(req.l)
+ 		v, err := req.uv.verify(req.l)
 		req.message.Vote = v
 		cancelled := false
 
 		var e *RoundOffsetError
-		if errors.As(err, &e) {
+		if ok := errors.As(err, &e); ok {
 			cancelled = true
 		}
 
