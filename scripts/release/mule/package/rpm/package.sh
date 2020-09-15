@@ -29,7 +29,7 @@ trap 'rm -rf $RPMTMP' 0
 TEMPDIR=$(mktemp -d)
 trap 'rm -rf $TEMPDIR' 0
 < "./installer/rpm/$PKG_NAME/$PKG_NAME.spec" \
-    sed -e "s,@PKG_NAME@,${PKG_NAME}-${CHANNEL}," \
+    sed -e "s,@PKG_NAME@,${PKG_NAME}," \
         -e "s,@VER@,$FULLVERSION," \
         -e "s,@ARCH@,$ARCH," \
     > "$TEMPDIR/$PKG_NAME.spec"
