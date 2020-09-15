@@ -290,7 +290,7 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 		panic(err)
 	}
 
-	if l.nextRound > 320 && r < l.nextRound - 320 { // TODO: (nguo) fix this to use the right params
+	if l.nextRound > 320 && r < l.nextRound-320 { // TODO: (nguo) fix this to use the right params
 		return crypto.Digest{}, &RoundOffsetError{r, l.nextRound - 320}
 	}
 
@@ -306,7 +306,7 @@ func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountDat
 		panic(err)
 	}
 
-	if l.nextRound > 320 && r < l.nextRound - 320 { // TODO: (nguo) fix this to use the right params
+	if l.nextRound > 320 && r < l.nextRound-320 { // TODO: (nguo) fix this to use the right params
 		return basics.AccountData{}, &RoundOffsetError{r, l.nextRound - 320}
 	}
 

@@ -869,7 +869,7 @@ func TestVoteAggregatorOldVote(t *testing.T) {
 
 	for i, uv := range uvs {
 		avv.verifyVote(context.Background(), ledger, uv, i, message{}, results)
-		result := <- results
+		result := <-results
 		require.True(t, result.cancelled)
 	}
 }

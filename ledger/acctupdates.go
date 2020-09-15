@@ -1432,8 +1432,8 @@ func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Ro
 func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err error) {
 	if rnd < au.dbRound {
 		err = &agreement.RoundOffsetError{
-			Round: rnd,
-			DbRound:  au.dbRound,
+			Round:   rnd,
+			DbRound: au.dbRound,
 		}
 		return
 	}

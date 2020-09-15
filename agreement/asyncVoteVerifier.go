@@ -61,6 +61,7 @@ type AsyncVoteVerifier struct {
 	ctxCancel       context.CancelFunc
 }
 
+// RoundOffsetError is an error for when agreement far behind ledger
 type RoundOffsetError struct {
 	Round   basics.Round
 	DbRound basics.Round
@@ -114,16 +115,16 @@ func (avv *AsyncVoteVerifier) executeVoteVerification(task interface{}) interfac
 		return &asyncVerifyVoteResponse{err: req.ctx.Err(), cancelled: true, req: &req}
 	default:
 		// request was not cancelled, so we verify it here and return the result on the channel
- 		v, err := req.uv.verify(req.l)
+		v, err := req.uv.verify(req.l)
 		req.message.Vote = v
-		cancelled := false
 
+		cancelled := false
 		var e *RoundOffsetError
 		if ok := errors.As(err, &e); ok {
 			cancelled = true
 		}
 
-		return &asyncVerifyVoteResponse{v: v, index: req.index, message: req.message, err: err, cancelled: cancelled, req: &req,}
+		return &asyncVerifyVoteResponse{v: v, index: req.index, message: req.message, err: err, cancelled: cancelled, req: &req}
 	}
 }
 
@@ -137,7 +138,14 @@ func (avv *AsyncVoteVerifier) executeEqVoteVerification(task interface{}) interf
 	default:
 		// request was not cancelled, so we verify it here and return the result on the channel
 		ev, err := req.uev.verify(req.l)
-		return &asyncVerifyVoteResponse{ev: ev, index: req.index, message: req.message, err: err, req: &req}
+
+		cancelled := false
+		var e *RoundOffsetError
+		if ok := errors.As(err, &e); ok {
+			cancelled = true
+		}
+
+		return &asyncVerifyVoteResponse{ev: ev, index: req.index, message: req.message, err: err, cancelled: cancelled, req: &req}
 	}
 }
 
