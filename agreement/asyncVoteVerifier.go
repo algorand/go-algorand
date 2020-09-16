@@ -118,11 +118,8 @@ func (avv *AsyncVoteVerifier) executeVoteVerification(task interface{}) interfac
 		v, err := req.uv.verify(req.l)
 		req.message.Vote = v
 
-		cancelled := false
 		var e *RoundOffsetError
-		if ok := errors.As(err, &e); ok {
-			cancelled = true
-		}
+		cancelled := errors.As(err, &e)
 
 		return &asyncVerifyVoteResponse{v: v, index: req.index, message: req.message, err: err, cancelled: cancelled, req: &req}
 	}
@@ -139,11 +136,8 @@ func (avv *AsyncVoteVerifier) executeEqVoteVerification(task interface{}) interf
 		// request was not cancelled, so we verify it here and return the result on the channel
 		ev, err := req.uev.verify(req.l)
 
-		cancelled := false
 		var e *RoundOffsetError
-		if ok := errors.As(err, &e); ok {
-			cancelled = true
-		}
+		cancelled := errors.As(err, &e)
 
 		return &asyncVerifyVoteResponse{ev: ev, index: req.index, message: req.message, err: err, cancelled: cancelled, req: &req}
 	}
