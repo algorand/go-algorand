@@ -31,9 +31,6 @@ for deb in $(ls /root/subhome/node_pkg/*.deb); do
         add-apt-repository "deb http://${DC_IP}:8111/ stable main"
         apt-get update
         apt-get install -y "$PKG_NAME"
-        algod -v
-        # check that the installed version is now the current version
-        algod -v | grep -q "${FULLVERSION}.${CHANNEL}"
 
         if [ ! -d /root/testnode ]; then
             mkdir -p /root/testnode
