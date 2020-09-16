@@ -17,9 +17,11 @@ export ALGO_BIN
 
 BRANCH=$("$REPO_DIR/scripts/compute_branch.sh")
 CHANNEL=$("$REPO_DIR/scripts/compute_branch_channel.sh" "$BRANCH")
-NAME=$("$REPO_DIR/scripts/compute_package_name.sh" "${CHANNEL:-stable}")
 
-PKG_NAMES=("$NAME" "algorand-devtools")
+ALGORAND_PACKAGE_NAME=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_package_name.sh "${CHANNEL:-stable}")
+DEVTOOLS_PACKAGE_NAME=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_package_name.sh "${CHANNEL:-stable}" algorand-devtools)
+
+PKG_NAMES=("$ALGORAND_PACKAGE_NAME" "$DEVTOOLS_PACKAGE_NAME")
 for pkg_name in "${PKG_NAMES[@]}"; do
     RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
     trap 'rm -rf $RPMTMP' 0

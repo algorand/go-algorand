@@ -16,7 +16,7 @@ export PATH="${GOPATH}":/usr/local/go/bin:"${PATH}"
 pushd "${REPO_ROOT}"
 ./scripts/build_packages.sh "${PLATFORM}"
 
-PKG_NAMES=($(./scripts/compute_package_name.sh "${CHANNEL:-stable}") "algorand-devtools")
+PKG_NAMES=("$ALGORAND_PACKAGE_NAME" "$DEVTOOLS_PACKAGE_NAME")
 for pkg_name in "${PKG_NAMES[@]}"; do
     DEBTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "debtmp")
     trap "rm -rf ${DEBTMP}" 0
