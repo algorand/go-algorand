@@ -56,6 +56,43 @@ proc ::AlgorandGoal::Abort { ERROR } {
     exit 1
 }
 
+# Utility method to test the process returned value
+# Returns 0 when no error code is detected
+# When an error code is detected:
+#    If ABORT = 1 Calls AlgorandGoal::Abort 
+#    if ABORT = 0 Returns 1 OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
+# If SIGHUP is detected, it ignores it.
+proc ::AlgorandGoal::CheckProcessReturnedCode {ABORT} {
+    upvar spawn_id spawn_id
+    lassign [wait -i $spawn_id] PID SPAWNID OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
+
+    if {$KILLED == "CHILDKILLED"} {
+	if {$KILL_SIGNAL == "SIGHUP" && $EXP == "hangup"} {
+	    # this is caused by expect close. Will ignore.
+	    return 0
+	}
+	if {$ABORT} {
+	    ::AlgorandGoal::Abort "process killed: $KILL_SIGNAL $EXP"
+	}
+	return [list 1 $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
+    }
+
+    if {$OS_CODE == -1} {
+	if {$ABORT} {
+	    ::AlgorandGoal::Abort "OS error code: $ERR_CODE"
+	}
+	return [list 1 $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
+    } else {
+	if {$ERR_CODE != 0} {
+	    if {$ABORT} {
+		::AlgorandGoal::Abort "porcess returned non-zero value: $ERR_CODE"
+	    }
+	    return [list 1 $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
+	}
+    }
+    return 0
+}
+
 # Start the node
 proc ::AlgorandGoal::StartNode { TEST_ALGO_DIR {SYSTEMD_MANAGED "False"} {PEER_ADDRESS ""} } {
     set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
