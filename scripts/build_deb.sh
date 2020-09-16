@@ -52,7 +52,7 @@ mkdir -p "${PKG_ROOT}/usr/bin"
 
 if [ "${VARIATION}" = "" ]; then
     # NOTE: keep in sync with installer/rpm/algorand.spec
-    bin_files=("algocfg" "algod" "algoh" "algokey" "carpenter" "catchupsrv" "ddconfig.sh" "diagcfg" "goal" "kmd" "msgpacktool" "node_exporter" "tealdbg")
+    bin_files=("algocfg" "algod" "algoh" "algokey" "carpenter" "catchupsrv" "ddconfig.sh" "diagcfg" "goal" "kmd" "msgpacktool" "node_exporter" "tealcut" "tealdbg")
 fi
 
 for bin in "${bin_files[@]}"; do
