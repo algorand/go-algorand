@@ -14,9 +14,9 @@ CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
 OUTDIR="./tmp/node_pkgs/$OS_TYPE/$ARCH"
 mkdir -p "$OUTDIR/bin"
 ALGO_BIN="./tmp/node_pkgs/$OS_TYPE/$ARCH/$CHANNEL/$OS_TYPE-$ARCH/bin"
-# A make target in Makefile.mule may pass the name as an argument.
-PKG_NAME=${1:-$(./scripts/compute_package_name.sh "${CHANNEL:-stable}")}
 VER=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+# A make target in Makefile.mule may pass the name as an argument.
+ALGORAND_PACKAGE_NAME=${1:-$(./scripts/compute_package_name.sh "$CHANNEL")}
 
 echo "Building debian package for '${OS} - ${ARCH}'"
 
@@ -30,22 +30,23 @@ trap "rm -rf $PKG_ROOT" 0
 mkdir -p "${PKG_ROOT}/usr/bin"
 
 # NOTE: keep in sync with `./installer/rpm/algorand.spec`.
-if [ "$PKG_NAME" = "algorand-devtools" ]; then
+if [ "$ALGORAND_PACKAGE_NAME" = "algorand-devtools" ]; then
     BIN_FILES=("carpenter" "catchupsrv" "msgpacktool" "tealcut" "tealdbg")
     UNATTENDED_UPGRADES_FILE="53algorand-devtools-upgrades"
+    REQUIRED_ALGORAND_PKG=$("./scripts/compute_package_name.sh" "$CHANNEL")
 else
     BIN_FILES=("algocfg" "algod" "algoh" "algokey" "ddconfig.sh" "diagcfg" "goal" "kmd" "node_exporter")
     UNATTENDED_UPGRADES_FILE="51algorand-upgrades"
 fi
 
-OUTPUT_DEB="$OUTDIR/${PKG_NAME}_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
+OUTPUT_DEB="$OUTDIR/${ALGORAND_PACKAGE_NAME}_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
 
 for binary in "${BIN_FILES[@]}"; do
     cp "${ALGO_BIN}/${binary}" "${PKG_ROOT}"/usr/bin
     chmod 755 "${PKG_ROOT}/usr/bin/${binary}"
 done
 
-if [ "$PKG_NAME" != "algorand-devtools" ]; then
+if [ "$ALGORAND_PACKAGE_NAME" != "algorand-devtools" ]; then
     mkdir -p "${PKG_ROOT}/usr/lib/algorand"
     lib_files=("updater" "find-nodes.sh")
     for lib in "${lib_files[@]}"; do
@@ -90,14 +91,14 @@ EOF
 
 mkdir -p "${PKG_ROOT}/DEBIAN"
 # Can contain `control`, `preinst`, `postinst`, `prerm`, `postrm`, `conffiles`.
-CTL_FILES_DIR="installer/debian/${PKG_NAME}"
+CTL_FILES_DIR="installer/debian/${ALGORAND_PACKAGE_NAME}"
 for ctl_file in $(ls "${CTL_FILES_DIR}"); do
     # Copy first, to preserve permissions, then overwrite to fill in template.
     cp -a "${CTL_FILES_DIR}/${ctl_file}" "${PKG_ROOT}/DEBIAN/${ctl_file}"
     < "${CTL_FILES_DIR}/${ctl_file}" \
       sed -e "s,@ARCH@,${ARCH}," \
           -e "s,@VER@,${VER}," \
-          -e "s,@PKG_NAME@,${PKG_NAME}," \
+          -e "s,@REQUIRED_ALGORAND_PKG@,$REQUIRED_ALGORAND_PKG," \
       > "${PKG_ROOT}/DEBIAN/${ctl_file}"
 done
 
@@ -114,8 +115,8 @@ License: AGPL-3+
 EOF
 
 sed 's/^$/./g' < COPYING | sed 's/^/ /g' >> "${PKG_ROOT}/DEBIAN/copyright"
-mkdir -p "${PKG_ROOT}/usr/share/doc/${PKG_NAME}"
-cp -p "${PKG_ROOT}/DEBIAN/copyright" "${PKG_ROOT}/usr/share/doc/${PKG_NAME}/copyright"
+mkdir -p "${PKG_ROOT}/usr/share/doc/${ALGORAND_PACKAGE_NAME}"
+cp -p "${PKG_ROOT}/DEBIAN/copyright" "${PKG_ROOT}/usr/share/doc/${ALGORAND_PACKAGE_NAME}/copyright"
 
 dpkg-deb --build "${PKG_ROOT}" "${OUTPUT_DEB}"
 

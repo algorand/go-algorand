@@ -31,6 +31,7 @@ if [ "$PKG_NAME" = "algorand-devtools" ]; then
     BIN_FILES=("carpenter" "catchupsrv" "msgpacktool" "tealcut" "tealdbg")
     UNATTENDED_UPGRADES_FILE="53algorand-devtools-upgrades"
     OUTPUT_DEB="$OUTDIR/algorand_devtools_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
+    REQUIRED_ALGORAND_PKG=$("./scripts/compute_package_name.sh" "$CHANNEL")
 else
     BIN_FILES=("algocfg" "algod" "algoh" "algokey" "ddconfig.sh" "diagcfg" "goal" "kmd" "node_exporter")
     UNATTENDED_UPGRADES_FILE="51algorand-upgrades"
@@ -100,6 +101,7 @@ for ctl_file in $(ls "$CTL_FILES_DIR"); do
       sed -e "s,@ARCH@,$ARCH," \
           -e "s,@VER@,$VER," \
           -e "s,@PKG_NAME@,$PKG_NAME," \
+          -e "s,@REQUIRED_ALGORAND_PKG@,$REQUIRED_ALGORAND_PKG," \
       > "$PKG_ROOT/DEBIAN/$ctl_file"
 done
 
