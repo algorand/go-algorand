@@ -15,7 +15,7 @@ OS_TYPE=$(./scripts/ostype.sh)
 mkdir -p "$OUTDIR/bin"
 VER=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 
-echo "Building debian package for '${OS} - ${ARCH}'"
+echo "Building debian package $PKG_NAME ($CHANNEL) for '$OS - $ARCH'"
 
 DEFAULTNETWORK=$("./scripts/compute_branch_network.sh")
 DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "$DEFAULTNETWORK")

@@ -30,6 +30,8 @@ for pkg_name in "${PKG_NAMES[@]}"; do
 
     mkdir "$TEMPDIR/$pkg_name"
 
+    echo "Building rpm package $pkg_name ($CHANNEL)"
+
     < "$REPO_DIR/installer/rpm/$pkg_name/$pkg_name.spec" \
         sed -e "s,@PKG_NAME@,$pkg_name," \
             -e "s,@VER@,$FULLVERSION," \
