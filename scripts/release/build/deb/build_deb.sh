@@ -7,79 +7,81 @@ echo
 date "+build_release begin PACKAGE DEB stage %Y%m%d_%H%M%S"
 echo
 
-ARCH=$(./scripts/archtype.sh)
+ARCH="$1"
+OUTDIR="$2"
+CHANNEL="$3"
+PKG_NAME="$4"
 OS_TYPE=$(./scripts/ostype.sh)
-BRANCH=${BRANCH:-$(./scripts/compute_branch.sh "$BRANCH")}
-CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
-OUTDIR="./tmp/node_pkgs/$OS_TYPE/$ARCH"
 mkdir -p "$OUTDIR/bin"
-ALGO_BIN="./tmp/node_pkgs/$OS_TYPE/$ARCH/$CHANNEL/$OS_TYPE-$ARCH/bin"
-# A make target in Makefile.mule may pass the name as an argument.
-PKG_NAME=${1:-$(./scripts/compute_package_name.sh "${CHANNEL:-stable}")}
 VER=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 
-echo "Building debian package for '${OS} - ${ARCH}'"
+echo "Building debian package $PKG_NAME ($CHANNEL) for '$OS - $ARCH'"
 
 DEFAULTNETWORK=$("./scripts/compute_branch_network.sh")
-DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "${DEFAULTNETWORK}")
+DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "$DEFAULTNETWORK")
 export DEFAULT_RELEASE_NETWORK
 
 PKG_ROOT=$(mktemp -d)
 trap "rm -rf $PKG_ROOT" 0
 
-mkdir -p "${PKG_ROOT}/usr/bin"
+mkdir -p "$PKG_ROOT/usr/bin"
 
 # NOTE: keep in sync with `./installer/rpm/algorand.spec`.
 if [ "$PKG_NAME" = "algorand-devtools" ]; then
     BIN_FILES=("carpenter" "catchupsrv" "msgpacktool" "tealcut" "tealdbg")
     UNATTENDED_UPGRADES_FILE="53algorand-devtools-upgrades"
+    OUTPUT_DEB="$OUTDIR/algorand_devtools_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
 else
     BIN_FILES=("algocfg" "algod" "algoh" "algokey" "ddconfig.sh" "diagcfg" "goal" "kmd" "node_exporter")
     UNATTENDED_UPGRADES_FILE="51algorand-upgrades"
+    OUTPUT_DEB="$OUTDIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
 fi
 
-OUTPUT_DEB="$OUTDIR/${PKG_NAME}_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
-
 for binary in "${BIN_FILES[@]}"; do
-    cp "${ALGO_BIN}/${binary}" "${PKG_ROOT}"/usr/bin
-    chmod 755 "${PKG_ROOT}/usr/bin/${binary}"
+    cp "$GOPATH/bin/$binary" "$PKG_ROOT/usr/bin"
+    chmod 755 "$PKG_ROOT/usr/bin/$binary"
 done
 
 if [ "$PKG_NAME" != "algorand-devtools" ]; then
     mkdir -p "${PKG_ROOT}/usr/lib/algorand"
     lib_files=("updater" "find-nodes.sh")
     for lib in "${lib_files[@]}"; do
-        cp "${ALGO_BIN}/${lib}" "${PKG_ROOT}/usr/lib/algorand"
-        chmod g-w "${PKG_ROOT}/usr/lib/algorand/${lib}"
+        cp "$GOPATH/bin/$lib" "$PKG_ROOT/usr/lib/algorand"
+        chmod g-w "$PKG_ROOT/usr/lib/algorand/$lib"
     done
 
     data_files=("config.json.example" "system.json")
-    mkdir -p "${PKG_ROOT}/var/lib/algorand"
+    mkdir -p "$PKG_ROOT/var/lib/algorand"
     for data in "${data_files[@]}"; do
-        cp "installer/${data}" "${PKG_ROOT}/var/lib/algorand"
+        cp "./installer/$data" "$PKG_ROOT/var/lib/algorand"
     done
 
-    cp "./installer/genesis/${DEFAULTNETWORK}/genesis.json" "${PKG_ROOT}/var/lib/algorand/genesis.json"
+    genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
+    for dir in "${genesis_dirs[@]}"; do
+        mkdir -p "$PKG_ROOT/var/lib/algorand/genesis/$dir"
+        cp "./installer/genesis/$dir/genesis.json" "$PKG_ROOT/var/lib/algorand/genesis/$dir/genesis.json"
+    done
+    cp "./installer/genesis/$DEFAULTNETWORK/genesis.json" "$PKG_ROOT/var/lib/algorand/genesis.json"
 
     # files should not be group writable but directories should be
-    chmod -R g-w "${PKG_ROOT}/var/lib/algorand"
-    find "${PKG_ROOT}/var/lib/algorand" -type d | xargs chmod g+w
+    chmod -R g-w "$PKG_ROOT/var/lib/algorand"
+    find "$PKG_ROOT/var/lib/algorand" -type d | xargs chmod g+w
 
     SYSTEMD_FILES=("algorand.service" "algorand@.service")
-    mkdir -p "${PKG_ROOT}/lib/systemd/system"
+    mkdir -p "$PKG_ROOT/lib/systemd/system"
     for svc in "${SYSTEMD_FILES[@]}"; do
-        cp "installer/${svc}" "${PKG_ROOT}/lib/systemd/system"
+        cp "./installer/${svc}" "${PKG_ROOT}/lib/systemd/system"
         chmod 644 "${PKG_ROOT}/lib/systemd/system/${svc}"
     done
 fi
 
-mkdir -p "${PKG_ROOT}/etc/apt/apt.conf.d"
-cat <<EOF> "${PKG_ROOT}/etc/apt/apt.conf.d/${UNATTENDED_UPGRADES_FILE}"
+mkdir -p "$PKG_ROOT/etc/apt/apt.conf.d"
+cat <<EOF> "$PKG_ROOT/etc/apt/apt.conf.d/$UNATTENDED_UPGRADES_FILE"
 ## This file is provided by the Algorand package to configure
 ## unattended upgrades for the Algorand node software.
 
 Unattended-Upgrade::Allowed-Origins {
-  "Algorand:${CHANNEL}";
+  "Algorand:$CHANNEL";
 };
 
 Dpkg::Options {
@@ -88,21 +90,21 @@ Dpkg::Options {
 };
 EOF
 
-mkdir -p "${PKG_ROOT}/DEBIAN"
+mkdir -p "$PKG_ROOT/DEBIAN"
 # Can contain `control`, `preinst`, `postinst`, `prerm`, `postrm`, `conffiles`.
-CTL_FILES_DIR="installer/debian/${PKG_NAME}"
-for ctl_file in $(ls "${CTL_FILES_DIR}"); do
+CTL_FILES_DIR="./installer/debian/$PKG_NAME"
+for ctl_file in $(ls "$CTL_FILES_DIR"); do
     # Copy first, to preserve permissions, then overwrite to fill in template.
-    cp -a "${CTL_FILES_DIR}/${ctl_file}" "${PKG_ROOT}/DEBIAN/${ctl_file}"
-    < "${CTL_FILES_DIR}/${ctl_file}" \
-      sed -e "s,@ARCH@,${ARCH}," \
-          -e "s,@VER@,${VER}," \
-          -e "s,@PKG_NAME@,${PKG_NAME}," \
-      > "${PKG_ROOT}/DEBIAN/${ctl_file}"
+    cp -a "$CTL_FILES_DIR/$ctl_file" "$PKG_ROOT/DEBIAN/$ctl_file"
+    < "$CTL_FILES_DIR/$ctl_file" \
+      sed -e "s,@ARCH@,$ARCH," \
+          -e "s,@VER@,$VER," \
+          -e "s,@PKG_NAME@,$PKG_NAME," \
+      > "$PKG_ROOT/DEBIAN/$ctl_file"
 done
 
 # TODO: make `Files:` segments for vendor/... and crypto/libsodium-fork, but reasonably this should be understood to cover all _our_ files and copied in packages continue to be licenced under their own terms
-cat <<EOF> "${PKG_ROOT}/DEBIAN/copyright"
+cat <<EOF> "$PKG_ROOT/DEBIAN/copyright"
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: Algorand
 Upstream-Contact: Algorand developers <dev@algorand.com>
@@ -113,11 +115,11 @@ Copyright: Algorand developers <dev@algorand.com>
 License: AGPL-3+
 EOF
 
-sed 's/^$/./g' < COPYING | sed 's/^/ /g' >> "${PKG_ROOT}/DEBIAN/copyright"
-mkdir -p "${PKG_ROOT}/usr/share/doc/${PKG_NAME}"
-cp -p "${PKG_ROOT}/DEBIAN/copyright" "${PKG_ROOT}/usr/share/doc/${PKG_NAME}/copyright"
+sed 's/^$/./g' < COPYING | sed 's/^/ /g' >> "$PKG_ROOT/DEBIAN/copyright"
+mkdir -p "$PKG_ROOT/usr/share/doc/$PKG_NAME"
+cp -p "$PKG_ROOT/DEBIAN/copyright" "$PKG_ROOT/usr/share/doc/$PKG_NAME/copyright"
 
-dpkg-deb --build "${PKG_ROOT}" "${OUTPUT_DEB}"
+dpkg-deb --build "$PKG_ROOT" "$OUTPUT_DEB"
 
 echo
 date "+build_release end PACKAGE DEB stage %Y%m%d_%H%M%S"
