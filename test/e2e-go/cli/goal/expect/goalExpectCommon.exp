@@ -57,21 +57,38 @@ proc ::AlgorandGoal::Abort { ERROR } {
 }
 
 # Utility method to test the process returned value
-# Returns 0 when no error code is detected.
-# Returns 1 in case of a non-zero error code detected, or if the process is killed. 
-proc ::AlgorandGoal::CheckProcessReturnedCode {OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP} {
+# Returns 0 when no error code is detected
+# When an error code is detected:
+#    If ABORT = 1 Calls AlgorandGoal::Abort 
+#    if ABORT = 0 Returns 1 OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
+# If SIGHUP is detected, it ignores it.
+proc ::AlgorandGoal::CheckProcessReturnedCode {ABORT} {
+    upvar spawn_id spawn_id
+    lassign [wait -i $spawn_id] PID SPAWNID OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
+
+    if {$KILLED == "CHILDKILLED"} {
+	if {$KILL_SIGNAL == "SIGHUP" && $EXP == "hangup"} {
+	    # this is caused by expect close. Will ignore.
+	    return 0
+	}
+	if {$ABORT} {
+	    ::AlgorandGoal::Abort "process killed: $KILL_SIGNAL $EXP"
+	}
+	return [list 1 $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
+    }
+
     if {$OS_CODE == -1} {
-	puts "OS error code: $ERR_CODE"
-	return 1
+	if {$ABORT} {
+	    ::AlgorandGoal::Abort "OS error code: $ERR_CODE"
+	}
+	return [list 1 $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
     } else {
 	if {$ERR_CODE != 0} {
-	    puts "porcess returned non-zero value: $ERR_CODE"
-	    return 1
+	    if {$ABORT} {
+		::AlgorandGoal::Abort "porcess returned non-zero value: $ERR_CODE"
+	    }
+	    return [list 1 $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
 	}
-    }
-    if {$KILLED == "CHILDKILLED"} {
-	puts "process killed: $KILL_SIGNAL $EXP"
-	return 1
     }
     return 0
 }
