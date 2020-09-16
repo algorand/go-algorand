@@ -56,7 +56,7 @@ then
     exit 1
 fi
 cd "${HOME}"
-if ! curl -O https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz
+if ! curl -O "https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz"
 then
     echo Golang could not be installed!
     exit 1
