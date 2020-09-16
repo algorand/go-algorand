@@ -38,7 +38,7 @@ export BRANCH
 # Check out
 mkdir -p "${HOME}/go/src/github.com/algorand"
 cd "${HOME}/go/src/github.com/algorand"
-if ! git clone --single-branch --branch "${BRANCH}" https://github.com/btoll/go-algorand go-algorand
+if ! git clone --single-branch --branch "${BRANCH}" https://github.com/algorand/go-algorand go-algorand
 then
     echo There has been a problem cloning the "$BRANCH" branch.
     exit 1
@@ -141,7 +141,7 @@ export CHANNEL=${CHANNEL:-$("${GOPATH}"/src/github.com/algorand/go-algorand/scri
 export COMMIT_HASH=${COMMIT_HASH}
 export DEFAULTNETWORK=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_branch_network.sh)
 export DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
-export FULLVERSION=2.1.84416
+export FULLVERSION=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_build_number.sh -f)
 export PKG_ROOT=${HOME}/node_pkg
 export PLATFORM=${PLATFORM}
 export OS=${PLATFORM_SPLIT[0]}

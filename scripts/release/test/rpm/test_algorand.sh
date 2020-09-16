@@ -27,7 +27,7 @@ cd "${HOME}"/.gnupg && ln -s "${HOME}"/S.gpg-agent S.gpg-agent
 gpg --import /root/keys/dev.pub
 gpg --import /root/keys/rpm.pub
 rpmkeys --import /root/keys/rpm.pub
-echo "wat" | gpg -u rpm@algorand.com --clearsign
+echo wat | gpg -u rpm@algorand.com --clearsign
 
 cat <<EOF>"${HOME}/.rpmmacros"
 %_gpg_name Algorand RPM <rpm@algorand.com>
@@ -66,9 +66,6 @@ for rpm in $(ls /root/subhome/node_pkg/*.rpm); do
         yum-config-manager --add-repo "http://${DC_IP}:8111/algodummy.repo"
 
         yum install -y algorand
-        algod -v
-        # check that the installed version is now the current version
-        algod -v | grep -q "${FULLVERSION}.${CHANNEL}"
 
         if [ ! -d /root/testnode ]; then
             mkdir -p /root/testnode
