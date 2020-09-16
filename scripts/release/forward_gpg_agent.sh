@@ -9,7 +9,7 @@ then
     exit 1
 fi
 
-BRANCH=build-packages
+BRANCH=${1:-build-packages}
 EC2_INSTANCE_KEY=ReleaseBuildInstanceKey.pem
 
 # Get the ec2 instance name and the ephemeral private key from the Jenkins server.
@@ -24,12 +24,12 @@ scp -i "$JENKINS_KEY" "$JENKINS":~/"$EC2_INSTANCE_KEY" .
 ssh -i "$JENKINS_KEY" "$JENKINS" 'rm ~/"$EC2_INSTANCE_KEY"'
 
 # Second, get the ec2 instance name.
-INSTANCE=$(ssh -i "$JENKINS_KEY" "$JENKINS" sudo cat /opt/jenkins/workspace/$BRANCH/scripts/release/common/ec2/tmp/instance)
+INSTANCE=$(ssh -i "$JENKINS_KEY" "$JENKINS" sudo cat /opt/jenkins/workspace/"$BRANCH"/scripts/release/common/ec2/tmp/instance)
 
 gpgp=$(find /usr/lib/gnupg{2,,1} -type f -name gpg-preset-passphrase 2> /dev/null)
 
 # Here we need to grab the signing subkey, hence `tail -1`.
-KEYGRIP=$(gpg -K --with-keygrip --textmode dev@algorand.com | egrep -A 1 '^ssb[^#]' | grep Keygrip | awk '{ print $3 }')
+KEYGRIP=$(gpg -K --with-keygrip --textmode dev@algorand.com | grep -AE 1 '^ssb[^#]' | grep Keygrip | awk '{ print $3 }')
 echo "enter dev@ password"
 $gpgp --verbose --preset "$KEYGRIP"
 

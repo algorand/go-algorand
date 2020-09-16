@@ -19,7 +19,7 @@ BUILD_ENV=$(ssh -i ReleaseBuildInstanceKey.pem -A ubuntu@"$INSTANCE" cat build_e
 CHANNEL=$(sed -n 's/.*CHANNEL=\(.*\)/\1/p' <<< "$BUILD_ENV")
 RELEASE=$(sed -n 's/.*FULLVERSION=\(.*\)/\1/p' <<< "$BUILD_ENV")
 
-rm -rf pkg/* && mkdir -p pkg/"$FULLVERSION"
+rm -rf pkg/* && mkdir -p pkg/"$RELEASE"
 
 aws s3 sync "s3://algorand-staging/releases/$CHANNEL/$RELEASE/" pkg/ --exclude "*" --include "*.deb" --include "*.rpm"
 

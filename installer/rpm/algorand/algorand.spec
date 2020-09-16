@@ -42,16 +42,16 @@ install -m 644 ${REPO_DIR}/installer/algorand.service %{buildroot}/lib/systemd/s
 install -m 644 ${REPO_DIR}/installer/algorand@.service %{buildroot}/lib/systemd/system/algorand@.service
 
 mkdir -p %{buildroot}/etc/cron.hourly
-install -m 755 ${REPO_DIR}/installer/rpm/0yum-algorand-hourly.cron %{buildroot}/etc/cron.hourly/0yum-algorand-hourly.cron
+install -m 755 ${REPO_DIR}/installer/rpm/algorand/0yum-algorand-hourly.cron %{buildroot}/etc/cron.hourly/0yum-algorand-hourly.cron
 
 mkdir -p %{buildroot}/etc/yum
-install -m 644 ${REPO_DIR}/installer/rpm/yum-cron-algorand.conf %{buildroot}/etc/yum/yum-cron-algorand.conf
+install -m 644 ${REPO_DIR}/installer/rpm/algorand/yum-cron-algorand.conf %{buildroot}/etc/yum/yum-cron-algorand.conf
 
 mkdir -p %{buildroot}/etc/pki/rpm-gpg
 install -m 644 ${REPO_DIR}/installer/rpm/RPM-GPG-KEY-Algorand %{buildroot}/etc/pki/rpm-gpg/RPM-GPG-KEY-Algorand
 
 mkdir -p %{buildroot}/usr/lib/algorand/yum.repos.d
-install -m 644 ${REPO_DIR}/installer/rpm/algorand.repo %{buildroot}/usr/lib/algorand/yum.repos.d/algorand.repo
+install -m 644 ${REPO_DIR}/installer/rpm/algorand/algorand.repo %{buildroot}/usr/lib/algorand/yum.repos.d/algorand.repo
 
 mkdir -p %{buildroot}/var/lib/algorand/genesis
 if [ "%{RELEASE_GENESIS_PROCESS}" != "x" ]; then
