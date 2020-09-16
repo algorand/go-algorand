@@ -17,6 +17,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -1846,6 +1847,10 @@ func GetTransactionByID(ctx lib.ReqContext, context echo.Context) {
 	}
 
 	rnd, err := indexer.GetRoundByTXID(queryTxID)
+	if err == sql.ErrNoRows {
+		lib.ErrorResponse(w, http.StatusNotFound, err, errTransactionNotFound, ctx.Log)
+		return
+	}
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedGettingInformationFromIndexer, ctx.Log)
 		return
