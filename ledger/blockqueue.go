@@ -50,26 +50,6 @@ type blockQueue struct {
 	closed  chan struct{}
 }
 
-var ledger_init_count = metrics.NewCounter("ledger_init_count", "calls to init block queue")
-var ledger_init_ms = metrics.NewCounter("ledger_init_ms", "ms spent to init block queue")
-var ledger_sync_blockput_count = metrics.NewCounter("ledger_sync_blockput_count", "calls to sync block queue")
-var ledger_sync_blockput_ms = metrics.NewCounter("ledger_sync_blockput_ms", "ms spent to sync block queue")
-var ledger_sync_blockforget_count = metrics.NewCounter("ledger_sync_blockforget_count", "calls")
-var ledger_sync_blockforget_ms = metrics.NewCounter("ledger_sync_blockforget_ms", "ms spent")
-var ledger_getblock_count = metrics.NewCounter("ledger_getblock_count", "calls")
-var ledger_getblock_ms = metrics.NewCounter("ledger_getblock_ms", "ms spent")
-var ledger_getblockhdr_count = metrics.NewCounter("ledger_getblockhdr_count", "calls")
-var ledger_getblockhdr_ms = metrics.NewCounter("ledger_getblockhdr_ms", "ms spent")
-var ledger_geteblockcert_count = metrics.NewCounter("ledger_geteblockcert_count", "calls")
-var ledger_geteblockcert_ms = metrics.NewCounter("ledger_geteblockcert_ms", "ms spent")
-var ledger_getblockcert_count = metrics.NewCounter("ledger_getblockcert_count", "calls")
-var ledger_getblockcert_ms = metrics.NewCounter("ledger_getblockcert_ms", "ms spent")
-
-// TODO: promote this to a utility function in util/metrics ?
-func counterMs(counter *metrics.Counter, start time.Time) {
-	counter.AddUint64(uint64(time.Now().Sub(start).Milliseconds()), nil)
-}
-
 func bqInit(l *Ledger) (*blockQueue, error) {
 	bq := &blockQueue{}
 	bq.cond = sync.NewCond(&bq.mu)
@@ -83,7 +63,7 @@ func bqInit(l *Ledger) (*blockQueue, error) {
 		bq.lastCommitted, err0 = blockLatest(tx)
 		return err0
 	})
-	counterMs(ledger_init_ms, start)
+	counterMicros(ledger_init_micros, start)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +117,7 @@ func (bq *blockQueue) syncer() {
 			}
 			return nil
 		})
-		counterMs(ledger_sync_blockput_ms, start)
+		counterMicros(ledger_sync_blockput_micros, start)
 
 		bq.mu.Lock()
 
@@ -167,7 +147,7 @@ func (bq *blockQueue) syncer() {
 			err = bq.l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 				return blockForgetBefore(tx, minToSave)
 			})
-			counterMs(ledger_sync_blockforget_ms, bfstart)
+			counterMicros(ledger_sync_blockforget_micros, bfstart)
 			if err != nil {
 				bq.l.log.Warnf("blockQueue.syncer: blockForgetBefore(%d): %v", minToSave, err)
 			}
@@ -283,7 +263,7 @@ func (bq *blockQueue) getBlock(r basics.Round) (blk bookkeeping.Block, err error
 		blk, err0 = blockGet(tx, r)
 		return err0
 	})
-	counterMs(ledger_getblock_ms, start)
+	counterMicros(ledger_getblock_micros, start)
 	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }
@@ -305,7 +285,7 @@ func (bq *blockQueue) getBlockHdr(r basics.Round) (hdr bookkeeping.BlockHeader, 
 		hdr, err0 = blockGetHdr(tx, r)
 		return err0
 	})
-	counterMs(ledger_getblockhdr_ms, start)
+	counterMicros(ledger_getblockhdr_micros, start)
 	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }
@@ -331,7 +311,7 @@ func (bq *blockQueue) getEncodedBlockCert(r basics.Round) (blk []byte, cert []by
 		blk, cert, err0 = blockGetEncodedCert(tx, r)
 		return err0
 	})
-	counterMs(ledger_geteblockcert_ms, start)
+	counterMicros(ledger_geteblockcert_micros, start)
 	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }
@@ -353,7 +333,27 @@ func (bq *blockQueue) getBlockCert(r basics.Round) (blk bookkeeping.Block, cert 
 		blk, cert, err0 = blockGetCert(tx, r)
 		return err0
 	})
-	counterMs(ledger_getblockcert_ms, start)
+	counterMicros(ledger_getblockcert_micros, start)
 	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }
+
+// TODO: promote this to a utility function in util/metrics ?
+func counterMicros(counter *metrics.Counter, start time.Time) {
+	counter.AddUint64(uint64(time.Now().Sub(start).Microseconds()), nil)
+}
+
+var ledger_init_count = metrics.NewCounter("ledger_init_count", "calls to init block queue")
+var ledger_init_micros = metrics.NewCounter("ledger_init_micros", "ms spent to init block queue")
+var ledger_sync_blockput_count = metrics.NewCounter("ledger_sync_blockput_count", "calls to sync block queue")
+var ledger_sync_blockput_micros = metrics.NewCounter("ledger_sync_blockput_micros", "ms spent to sync block queue")
+var ledger_sync_blockforget_count = metrics.NewCounter("ledger_sync_blockforget_count", "calls")
+var ledger_sync_blockforget_micros = metrics.NewCounter("ledger_sync_blockforget_micros", "ms spent")
+var ledger_getblock_count = metrics.NewCounter("ledger_getblock_count", "calls")
+var ledger_getblock_micros = metrics.NewCounter("ledger_getblock_micros", "ms spent")
+var ledger_getblockhdr_count = metrics.NewCounter("ledger_getblockhdr_count", "calls")
+var ledger_getblockhdr_micros = metrics.NewCounter("ledger_getblockhdr_micros", "ms spent")
+var ledger_geteblockcert_count = metrics.NewCounter("ledger_geteblockcert_count", "calls")
+var ledger_geteblockcert_micros = metrics.NewCounter("ledger_geteblockcert_micros", "ms spent")
+var ledger_getblockcert_count = metrics.NewCounter("ledger_getblockcert_count", "calls")
+var ledger_getblockcert_micros = metrics.NewCounter("ledger_getblockcert_micros", "ms spent")

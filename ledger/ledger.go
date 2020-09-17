@@ -132,7 +132,7 @@ func OpenLedger(
 	err = l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
 	})
-	counterMs(ledger_initblocksdb_ms, start)
+	counterMicros(ledger_initblocksdb_micros, start)
 	if err != nil {
 		err = fmt.Errorf("OpenLedger.initBlocksDB %v", err)
 		return nil, err
@@ -222,7 +222,7 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 		}
 		return nil
 	})
-	counterMs(ledger_verifygenhash_ms, start)
+	counterMicros(ledger_verifygenhash_micros, start)
 	return
 }
 
@@ -653,6 +653,6 @@ type txlease struct {
 }
 
 var ledger_initblocksdb_count = metrics.NewCounter("ledger_initblocksdb_count", "calls")
-var ledger_initblocksdb_ms = metrics.NewCounter("ledger_initblocksdb_ms", "ms spent")
+var ledger_initblocksdb_micros = metrics.NewCounter("ledger_initblocksdb_micros", "ms spent")
 var ledger_verifygenhash_count = metrics.NewCounter("ledger_verifygenhash_count", "calls")
-var ledger_verifygenhash_ms = metrics.NewCounter("ledger_verifygenhash_ms", "ms spent")
+var ledger_verifygenhash_micros = metrics.NewCounter("ledger_verifygenhash_micros", "ms spent")
