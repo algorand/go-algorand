@@ -213,7 +213,7 @@ func (c *CatchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context
 		}
 		return
 	})
-	counterMicros(ledger_resetstagingbalances_micros, start)
+	ledger_resetstagingbalances_micros.AddMicrosecondsSince(start, nil)
 	return
 }
 
@@ -276,7 +276,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 		err = accountsPutTotals(tx, fileHeader.Totals, true)
 		return
 	})
-	counterMicros(ledger_processstagingcontent_micros, start)
+	ledger_processstagingcontent_micros.AddMicrosecondsSince(start, nil)
 	if err == nil {
 		progress.SeenHeader = true
 		progress.TotalAccounts = fileHeader.TotalAccounts
@@ -369,7 +369,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		err = progress.EvictAsNeeded(uint64(len(balances.Balances)))
 		return
 	})
-	counterMicros(ledger_processstagingbalances_micros, start)
+	ledger_processstagingbalances_micros.AddMicrosecondsSince(start, nil)
 	if err == nil {
 		progress.ProcessedAccounts += uint64(len(balances.Balances))
 		progress.ProcessedBytes += uint64(len(bytes))
@@ -451,7 +451,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 		}
 		return
 	})
-	counterMicros(ledger_verifycatchpoint_micros, start)
+	ledger_verifycatchpoint_micros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return err
 	}
@@ -488,7 +488,7 @@ func (c *CatchpointCatchupAccessorImpl) StoreBalancesRound(ctx context.Context, 
 		}
 		return
 	})
-	counterMicros(ledger_storebalancesround_micros, start)
+	ledger_storebalancesround_micros.AddMicrosecondsSince(start, nil)
 	return
 }
 
@@ -500,7 +500,7 @@ func (c *CatchpointCatchupAccessorImpl) StoreFirstBlock(ctx context.Context, blk
 	err = blockDbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		return blockStartCatchupStaging(tx, *blk)
 	})
-	counterMicros(ledger_storefirstblock_micros, start)
+	ledger_storefirstblock_micros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return err
 	}
@@ -515,7 +515,7 @@ func (c *CatchpointCatchupAccessorImpl) StoreBlock(ctx context.Context, blk *boo
 	err = blockDbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		return blockPutStaging(tx, *blk)
 	})
-	counterMicros(ledger_catchpoint_storeblock_micros, start)
+	ledger_catchpoint_storeblock_micros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return err
 	}
@@ -533,7 +533,7 @@ func (c *CatchpointCatchupAccessorImpl) FinishBlocks(ctx context.Context, applyC
 		}
 		return blockAbortCatchup(tx)
 	})
-	counterMicros(ledger_catchpoint_finishblocks_micros, start)
+	ledger_catchpoint_finishblocks_micros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return err
 	}
@@ -549,7 +549,7 @@ func (c *CatchpointCatchupAccessorImpl) EnsureFirstBlock(ctx context.Context) (b
 		blk, err = blockEnsureSingleBlock(tx)
 		return
 	})
-	counterMicros(ledger_catchpoint_ensureblock1_micros, start)
+	ledger_catchpoint_ensureblock1_micros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return blk, err
 	}
@@ -633,7 +633,7 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 
 		return
 	})
-	counterMicros(ledger_catchpoint_finish_bals_micros, start)
+	ledger_catchpoint_finish_bals_micros.AddMicrosecondsSince(start, nil)
 	return err
 }
 

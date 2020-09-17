@@ -132,7 +132,7 @@ func OpenLedger(
 	err = l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
 	})
-	counterMicros(ledger_initblocksdb_micros, start)
+	ledger_initblocksdb_micros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		err = fmt.Errorf("OpenLedger.initBlocksDB %v", err)
 		return nil, err
@@ -222,7 +222,7 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 		}
 		return nil
 	})
-	counterMicros(ledger_verifygenhash_micros, start)
+	ledger_verifygenhash_micros.AddMicrosecondsSince(start, nil)
 	return
 }
 

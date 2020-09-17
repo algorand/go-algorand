@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 )
 
 // MakeCounter create a new counter with the provided name and description.
@@ -37,15 +38,7 @@ func MakeCounter(metric MetricName) *Counter {
 }
 
 func NewCounter(name, desc string) *Counter {
-	c := &Counter{
-		name:          name,
-		description:   desc,
-		values:        make([]*counterValues, 0),
-		labels:        make(map[string]int),
-		valuesIndices: make(map[int]int),
-	}
-	c.Register(nil)
-	return c
+	return MakeCounter(MetricName{Name: name, Description: desc})
 }
 
 // Register registers the counter with the default/specific registry
@@ -109,6 +102,12 @@ func (counter *Counter) AddUint64(x uint64, labels map[string]string) {
 	} else {
 		counter.Add(float64(x), labels)
 	}
+}
+
+// AddMicrosecondsSince increases counter by microseconds between Time t and now.
+// Fastest if labels is nil
+func (counter *Counter) AddMicrosecondsSince(t time.Time, labels map[string]string) {
+	counter.AddUint64(uint64(time.Now().Sub(t).Microseconds()), labels)
 }
 
 func (counter *Counter) fastAddUint64(x uint64) {

@@ -467,7 +467,7 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 			accts, err = accountsOnlineTop(tx, batchOffset, batchSize, proto)
 			return
 		})
-		counterMicros(ledger_accountsonlinetop_micros, start)
+		ledger_accountsonlinetop_micros.AddMicrosecondsSince(start, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -666,7 +666,7 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (io.ReadCloser
 		dbFileName, _, _, err = getCatchpoint(tx, round)
 		return
 	})
-	counterMicros(ledger_getcatchpoint_micros, start)
+	ledger_getcatchpoint_micros.AddMicrosecondsSince(start, nil)
 	if err != nil && err != sql.ErrNoRows {
 		// we had some sql error.
 		return nil, fmt.Errorf("accountUpdates: getCatchpointStream: unable to lookup catchpoint %d: %v", round, err)
@@ -869,7 +869,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		au.roundTotals = []AccountTotals{totals}
 		return nil
 	})
-	counterMicros(ledger_accountsinit_micros, start)
+	ledger_accountsinit_micros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return
 	}
@@ -1624,7 +1624,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 		return nil
 	}, &au.accountsMu)
-	counterMicros(ledger_commitround_micros, start)
+	ledger_commitround_micros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		au.balancesTrie = nil
 		au.log.Warnf("unable to advance account snapshot: %v", err)
@@ -1799,7 +1799,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 		}
 		return
 	})
-	counterMicros(ledger_generatecatchpoint_micros, start)
+	ledger_generatecatchpoint_micros.AddMicrosecondsSince(start, nil)
 
 	if err != nil {
 		au.log.Warnf("accountUpdates: generateCatchpoint: %v", err)
@@ -1910,10 +1910,8 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 		}
 	}()
 
-	start := time.Now()
 	ledger_vacuum_count.Inc(nil)
 	vacuumStats, err := au.dbs.wdb.Vacuum(ctx)
-	counterMicros(ledger_vacuum_micros, start)
 	close(vacuumExitCh)
 	vacuumLoggingAbort.Wait()
 
@@ -1922,6 +1920,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 		return err
 	}
 	vacuumElapsedTime := time.Now().Sub(startTime)
+	ledger_vacuum_micros.AddUint64(uint64(vacuumElapsedTime.Microseconds()), nil)
 
 	au.log.Infof("Vacuuming accounts database completed within %v, reducing number of pages from %d to %d and size from %d to %d", vacuumElapsedTime, vacuumStats.PagesBefore, vacuumStats.PagesAfter, vacuumStats.SizeBefore, vacuumStats.SizeAfter)
 

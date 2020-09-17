@@ -63,7 +63,7 @@ func bqInit(l *Ledger) (*blockQueue, error) {
 		bq.lastCommitted, err0 = blockLatest(tx)
 		return err0
 	})
-	counterMicros(ledger_init_micros, start)
+	ledger_init_micros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func (bq *blockQueue) syncer() {
 			}
 			return nil
 		})
-		counterMicros(ledger_sync_blockput_micros, start)
+		ledger_sync_blockput_micros.AddMicrosecondsSince(start, nil)
 
 		bq.mu.Lock()
 
@@ -147,7 +147,7 @@ func (bq *blockQueue) syncer() {
 			err = bq.l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 				return blockForgetBefore(tx, minToSave)
 			})
-			counterMicros(ledger_sync_blockforget_micros, bfstart)
+			ledger_sync_blockforget_micros.AddMicrosecondsSince(bfstart, nil)
 			if err != nil {
 				bq.l.log.Warnf("blockQueue.syncer: blockForgetBefore(%d): %v", minToSave, err)
 			}
@@ -263,7 +263,7 @@ func (bq *blockQueue) getBlock(r basics.Round) (blk bookkeeping.Block, err error
 		blk, err0 = blockGet(tx, r)
 		return err0
 	})
-	counterMicros(ledger_getblock_micros, start)
+	ledger_getblock_micros.AddMicrosecondsSince(start, nil)
 	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }
@@ -285,7 +285,7 @@ func (bq *blockQueue) getBlockHdr(r basics.Round) (hdr bookkeeping.BlockHeader, 
 		hdr, err0 = blockGetHdr(tx, r)
 		return err0
 	})
-	counterMicros(ledger_getblockhdr_micros, start)
+	ledger_getblockhdr_micros.AddMicrosecondsSince(start, nil)
 	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }
@@ -311,7 +311,7 @@ func (bq *blockQueue) getEncodedBlockCert(r basics.Round) (blk []byte, cert []by
 		blk, cert, err0 = blockGetEncodedCert(tx, r)
 		return err0
 	})
-	counterMicros(ledger_geteblockcert_micros, start)
+	ledger_geteblockcert_micros.AddMicrosecondsSince(start, nil)
 	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }
@@ -333,14 +333,9 @@ func (bq *blockQueue) getBlockCert(r basics.Round) (blk bookkeeping.Block, cert 
 		blk, cert, err0 = blockGetCert(tx, r)
 		return err0
 	})
-	counterMicros(ledger_getblockcert_micros, start)
+	ledger_getblockcert_micros.AddMicrosecondsSince(start, nil)
 	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
-}
-
-// TODO: promote this to a utility function in util/metrics ?
-func counterMicros(counter *metrics.Counter, start time.Time) {
-	counter.AddUint64(uint64(time.Now().Sub(start).Microseconds()), nil)
 }
 
 var ledger_init_count = metrics.NewCounter("ledger_init_count", "calls to init block queue")
