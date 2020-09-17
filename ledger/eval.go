@@ -61,14 +61,32 @@ type roundCowBase struct {
 
 	// The current protocol consensus params.
 	proto config.ConsensusParams
+
+	// The accounts that we're already accessed during this round evaluation. This is a caching
+	// buffer used to avoid looking up the same account data more than once during a single evaluator
+	// execution. The AccountData is always an historical one, then therefore won't be changing.
+	// The underlying (accountupdates) infrastucture may provide additional cross-round caching which
+	// are beyond the scope of this cache.
+	// The account data store here is always the account data without the rewards.
+	accounts map[basics.Address]basics.AccountData
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return x.l.GetCreatorForRound(x.rnd, cidx, ctype)
 }
 
+// lookup returns the non-rewarded account data for the provided account address. It uses the internal per-round cache
+// first, and if it cannot find it there, it would defer to the underlaying implementation.
+// note that errors in accounts data retrivals are not cached as these typically cause the transaction evaluation to fail.
 func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
-	return x.l.LookupWithoutRewards(x.rnd, addr)
+	if accountData, found := x.accounts[addr]; found {
+		return accountData, nil
+	}
+	accountData, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	if err == nil {
+		x.accounts[addr] = accountData
+	}
+	return accountData, err
 }
 
 func (x *roundCowBase) isDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
@@ -211,8 +229,9 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		// the block at this round below, so underflow will be caught.
 		// If we are not validating, we must have previously checked
 		// an agreement.Certificate attesting that hdr is valid.
-		rnd:   hdr.Round - 1,
-		proto: proto,
+		rnd:      hdr.Round - 1,
+		proto:    proto,
+		accounts: make(map[basics.Address]basics.AccountData),
 	}
 
 	eval := &BlockEvaluator{
