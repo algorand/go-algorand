@@ -90,8 +90,13 @@ Dpkg::Options {
 EOF
 
 mkdir -p "${PKG_ROOT}/DEBIAN"
+if [[ "$PKG_NAME" =~ devtools ]]; then
+    INSTALLER_DIR="algorand-devtools"
+else
+    INSTALLER_DIR=algorand
+fi
 # Can contain `control`, `preinst`, `postinst`, `prerm`, `postrm`, `conffiles`.
-CTL_FILES_DIR="installer/debian/${ALGORAND_PACKAGE_NAME}"
+CTL_FILES_DIR="installer/debian/${INSTALLER_DIR}"
 for ctl_file in $(ls "${CTL_FILES_DIR}"); do
     # Copy first, to preserve permissions, then overwrite to fill in template.
     cp -a "${CTL_FILES_DIR}/${ctl_file}" "${PKG_ROOT}/DEBIAN/${ctl_file}"
