@@ -422,7 +422,7 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 		return nil, err
 	}
 
-	proto := au.protos[offset]
+	proto := au.ledger.GenesisProto()
 
 	// Determine how many accounts have been modified in-memory,
 	// so that we obtain enough top accounts from disk (accountdb).

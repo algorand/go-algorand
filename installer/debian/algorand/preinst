@@ -13,7 +13,9 @@ if dpkg-query --list 'algorand*' &> /dev/null
 then
     if PKG_INFO=$(dpkg-query --show --showformat='${Package} ${Status}\n' 'algorand*' | grep "install ok installed")
     then
-        INSTALLED_PKG=$(grep -v algorand-indexer <<< "$PKG_INFO" | awk '{print $1}')
+        # Filter out `algorand-indexer` and `algorand-devtools` packages, they are allowed to be
+        # installed alongside other `algorand` packages.
+        INSTALLED_PKG=$(grep -v -e algorand-indexer -e algorand-devtools <<< "$PKG_INFO" | awk '{print $1}')
 
         if [ -n "$INSTALLED_PKG" ]
         then

@@ -293,6 +293,7 @@ func main() {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		log.Error(err)
+		os.Exit(1)
 		return
 	}
 
