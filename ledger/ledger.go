@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 // Ledger is a database storing the contents of the ledger.
@@ -51,6 +52,12 @@ type Ledger struct {
 	// archival determines whether the ledger keeps all blocks forever
 	// (archival mode) or trims older blocks to save space (non-archival).
 	archival bool
+
+	// the synchronous mode that would be used for the ledger databases.
+	synchronousMode db.SynchronousMode
+
+	// the synchronous mode that would be used while the accounts database is being rebuilt.
+	accountsRebuildSynchronousMode db.SynchronousMode
 
 	// genesisHash stores the genesis hash for this ledger.
 	genesisHash crypto.Digest
@@ -89,11 +96,13 @@ func OpenLedger(
 ) (*Ledger, error) {
 	var err error
 	l := &Ledger{
-		log:             log,
-		archival:        cfg.Archival,
-		genesisHash:     genesisInitState.GenesisHash,
-		genesisAccounts: genesisInitState.Accounts,
-		genesisProto:    config.Consensus[genesisInitState.Block.CurrentProtocol],
+		log:                            log,
+		archival:                       cfg.Archival,
+		genesisHash:                    genesisInitState.GenesisHash,
+		genesisAccounts:                genesisInitState.Accounts,
+		genesisProto:                   config.Consensus[genesisInitState.Block.CurrentProtocol],
+		synchronousMode:                db.SynchronousMode(cfg.LedgerSynchronousMode),
+		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
 	}
 
 	l.headerCache.maxEntries = 10
@@ -113,6 +122,8 @@ func OpenLedger(
 	l.trackerDBs.wdb.SetLogger(log)
 	l.blockDBs.rdb.SetLogger(log)
 	l.blockDBs.wdb.SetLogger(log)
+
+	l.setSynchronousMode(context.Background(), l.synchronousMode)
 
 	err = l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
@@ -238,6 +249,26 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs 
 		return
 	}
 	return
+}
+
+// setSynchronousMode sets the writing database connections syncronous mode to the specified mode
+func (l *Ledger) setSynchronousMode(ctx context.Context, synchronousMode db.SynchronousMode) {
+	if synchronousMode < db.SynchronousModeOff || synchronousMode > db.SynchronousModeExtra {
+		l.log.Warnf("ledger.setSynchronousMode unable to set syncronous mode : requested value %d is invalid", synchronousMode)
+		return
+	}
+
+	err := l.blockDBs.wdb.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
+	if err != nil {
+		l.log.Warnf("ledger.setSynchronousMode unable to set syncronous mode on blocks db: %v", err)
+		return
+	}
+
+	err = l.trackerDBs.wdb.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
+	if err != nil {
+		l.log.Warnf("ledger.setSynchronousMode unable to set syncronous mode on trackers db: %v", err)
+		return
+	}
 }
 
 // initBlocksDB performs DB initialization:
