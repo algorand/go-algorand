@@ -19,10 +19,8 @@ package agreement
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 
-	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/util/execpool"
 )
 
@@ -61,14 +59,13 @@ type AsyncVoteVerifier struct {
 	ctxCancel       context.CancelFunc
 }
 
-// RoundOffsetError is an error for when agreement far behind ledger
-type RoundOffsetError struct {
-	Round   basics.Round
-	DbRound basics.Round
+// LedgerDroppedRoundError is an error for when agreement far behind ledger
+type LedgerDroppedRoundError struct {
+	Err error
 }
 
-func (e *RoundOffsetError) Error() string {
-	return fmt.Sprintf("round %d before dbRound %d", e.Round, e.DbRound)
+func (e *LedgerDroppedRoundError) Error() string {
+	return e.Err.Error()
 }
 
 // MakeAsyncVoteVerifier creates an AsyncVoteVerifier with workers as the number of CPUs
@@ -118,7 +115,7 @@ func (avv *AsyncVoteVerifier) executeVoteVerification(task interface{}) interfac
 		v, err := req.uv.verify(req.l)
 		req.message.Vote = v
 
-		var e *RoundOffsetError
+		var e *LedgerDroppedRoundError
 		cancelled := errors.As(err, &e)
 
 		return &asyncVerifyVoteResponse{v: v, index: req.index, message: req.message, err: err, cancelled: cancelled, req: &req}
@@ -136,7 +133,7 @@ func (avv *AsyncVoteVerifier) executeEqVoteVerification(task interface{}) interf
 		// request was not cancelled, so we verify it here and return the result on the channel
 		ev, err := req.uev.verify(req.l)
 
-		var e *RoundOffsetError
+		var e *LedgerDroppedRoundError
 		cancelled := errors.As(err, &e)
 
 		return &asyncVerifyVoteResponse{ev: ev, index: req.index, message: req.message, err: err, cancelled: cancelled, req: &req}

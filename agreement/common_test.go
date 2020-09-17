@@ -314,7 +314,7 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	}
 
 	if l.maxNumBlocks != 0 && l.nextRound > round(l.maxNumBlocks) && r < l.nextRound-round(l.maxNumBlocks) {
-		return crypto.Digest{}, &RoundOffsetError{r, l.nextRound - round(l.maxNumBlocks)}
+		return crypto.Digest{}, &LedgerDroppedRoundError{}
 	}
 
 	return l.entries[r].Digest(), nil
@@ -330,7 +330,7 @@ func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountDat
 	}
 
 	if l.maxNumBlocks != 0 && l.nextRound > round(l.maxNumBlocks) && r < l.nextRound-round(l.maxNumBlocks) {
-		return basics.AccountData{}, &RoundOffsetError{r, l.nextRound - round(l.maxNumBlocks)}
+		return basics.AccountData{}, &LedgerDroppedRoundError{}
 	}
 
 	return l.state[a], nil
