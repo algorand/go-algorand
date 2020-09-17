@@ -137,8 +137,8 @@ type ConsensusParams struct {
 	DownCommitteeSize      uint64
 	DownCommitteeThreshold uint64
 
-	FilterTimeoutSmallLambdas             uint64
-	FilterTimeoutPeriod0SmallLambdas      uint64
+	AgreementFilterTimeout        time.Duration
+	AgreementFilterTimeoutPeriod0 time.Duration
 
 	FastRecoveryLambda    time.Duration // time between fast recovery attempts
 	FastPartitionRecovery bool          // set when fast partition recovery is enabled
@@ -524,8 +524,8 @@ func initConsensusProtocols() {
 		DownCommitteeSize:      10000,
 		DownCommitteeThreshold: 7750,
 
-		FilterTimeoutSmallLambdas:        2,
-		FilterTimeoutPeriod0SmallLambdas: 2,
+		AgreementFilterTimeout:        4 * time.Second,
+		AgreementFilterTimeoutPeriod0: 4 * time.Second,
 
 		FastRecoveryLambda: 5 * time.Minute,
 
@@ -792,7 +792,7 @@ func initConsensusProtocols() {
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
 	// FilterTimeout 2s instead of 4s for period 0
-	vFuture.FilterTimeoutPeriod0SmallLambdas = 1
+	vFuture.AgreementFilterTimeoutPeriod0 = 2 * time.Second
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

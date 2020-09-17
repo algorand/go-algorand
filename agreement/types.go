@@ -31,13 +31,10 @@ var recoveryExtraTimeout = config.Protocol.SmallLambda
 
 // FilterTimeout is the duration of the first agreement step.
 func FilterTimeout(p period, v protocol.ConsensusVersion) time.Duration {
-	var smallLambdas uint64
 	if p == 0 {
-		smallLambdas = config.Consensus[v].FilterTimeoutPeriod0SmallLambdas
-	} else {
-		smallLambdas = config.Consensus[v].FilterTimeoutSmallLambdas
+		return config.Consensus[v].AgreementFilterTimeoutPeriod0
 	}
-	return config.Protocol.SmallLambda * time.Duration(smallLambdas)
+	return config.Consensus[v].AgreementFilterTimeout
 }
 
 // DeadlineTimeout is the duration of the second agreement step.
