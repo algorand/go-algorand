@@ -110,7 +110,7 @@ func init() {
 	addTxnFlags(freezeAssetCmd)
 
 	infoAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset to look up")
-	infoAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of the asset to look up")
+	infoAssetCmd.Flags().StringVar(&assetUnitName, "unit", "", "Unit name of the asset to look up")
 	infoAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address of the asset creator")
 }
 
@@ -125,16 +125,16 @@ var assetCmd = &cobra.Command{
 }
 
 func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
-	if cmd.Flags().Changed("assetid") && cmd.Flags().Changed("asset") {
-		reportErrorf("Only one of [--assetid] or [--asset and --creator] can be specified")
+	if cmd.Flags().Changed("assetid") && cmd.Flags().Changed("unit") {
+		reportErrorf("Only one of [--assetid] or [--unit and --creator] can be specified")
 	}
 
 	if cmd.Flags().Changed("assetid") {
 		return
 	}
 
-	if !cmd.Flags().Changed("asset") {
-		reportErrorf("Either [--assetid] or [--asset and --creator] must be specified")
+	if !cmd.Flags().Changed("unit") {
+		reportErrorf("Either [--assetid] or [--unit and --creator] must be specified")
 	}
 
 	if !cmd.Flags().Changed("creator") {
