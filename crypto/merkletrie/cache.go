@@ -118,6 +118,34 @@ func (mtc *merkleTrieCache) allocateNewNode() (pnode *node, nid storedNodeIdenti
 	return newNode, nextID
 }
 
+// refurbishNode releases a given node and reallocate a new node while avoiding changing the underlaying buffer.
+func (mtc *merkleTrieCache) refurbishNode(nid storedNodeIdentifier) (nextID storedNodeIdentifier) {
+	page := uint64(nid) / uint64(mtc.nodesPerPage)
+	pNode := mtc.pageToNIDsPtr[page][nid]
+	if mtc.txCreatedNodeIDs[nid] {
+		delete(mtc.txCreatedNodeIDs, nid)
+		delete(mtc.pageToNIDsPtr[page], nid)
+		if len(mtc.pageToNIDsPtr[page]) == 0 {
+			delete(mtc.pageToNIDsPtr, page)
+		}
+		mtc.cachedNodeCount--
+	} else {
+		mtc.txDeletedNodeIDs[nid] = true
+	}
+
+	nextID = mtc.mt.nextNodeID
+	mtc.mt.nextNodeID++
+	page = uint64(nextID) / uint64(mtc.nodesPerPage)
+	if mtc.pageToNIDsPtr[page] == nil {
+		mtc.pageToNIDsPtr[page] = make(map[storedNodeIdentifier]*node, mtc.nodesPerPage)
+	}
+	mtc.pageToNIDsPtr[page][nextID] = pNode
+	mtc.cachedNodeCount++
+	mtc.txCreatedNodeIDs[nextID] = true
+	mtc.modified = true
+	return nextID
+}
+
 // getNode retrieves the given node by its identifier, loading the page if it
 // cannot be found in cache, and returning an error if it's not in cache nor in committer.
 func (mtc *merkleTrieCache) getNode(nid storedNodeIdentifier) (pnode *node, err error) {
