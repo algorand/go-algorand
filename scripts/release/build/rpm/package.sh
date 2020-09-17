@@ -35,6 +35,7 @@ for pkg_name in "${PKG_NAMES[@]}"; do
     < "$REPO_DIR/installer/rpm/$pkg_name/$pkg_name.spec" \
         sed -e "s,@PKG_NAME@,$pkg_name," \
             -e "s,@VER@,$FULLVERSION," \
+            -e "s,@REQUIRED_ALGORAND_PKG@,$ALGORAND_PACKAGE_NAME," \
         > "$TEMPDIR/$pkg_name/$pkg_name.spec"
 
     rpmbuild --define "_rpmdir $RPMTMP" --define "RELEASE_GENESIS_PROCESS x${RELEASE_GENESIS_PROCESS}" --define "LICENSE_FILE $REPO_DIR/COPYING" -bb "$TEMPDIR/$pkg_name/$pkg_name.spec"

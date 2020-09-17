@@ -72,15 +72,11 @@ fi
 /usr/bin/algod
 /usr/bin/algoh
 /usr/bin/algokey
-/usr/bin/carpenter
-/usr/bin/catchupsrv
 /usr/bin/ddconfig.sh
 /usr/bin/diagcfg
 /usr/bin/goal
 /usr/bin/kmd
-/usr/bin/msgpacktool
 /usr/bin/node_exporter
-/usr/bin/tealdbg
 /var/lib/algorand/config.json.example
 %config(noreplace) /var/lib/algorand/system.json
 %config(noreplace) /var/lib/algorand/genesis.json
