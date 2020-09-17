@@ -27,7 +27,13 @@ for pkg_name in "${PKG_NAMES[@]}"; do
         exit 1
     fi
 
-    cp -p "${DEBTMP}"/*.deb "${PKG_ROOT}/${pkg_name}_${CHANNEL}_${OS}-${ARCH}_${FULLVERSION}.deb"
+    if [[ "$pkg_name" =~ devtools ]]; then
+        BASE_NAME="algorand-devtools"
+    else
+        BASE_NAME=algorand
+    fi
+
+    cp -p "${DEBTMP}"/*.deb "${PKG_ROOT}/${BASE_NAME}_${CHANNEL}_${OS}-${ARCH}_${FULLVERSION}.deb"
 done
 
 popd
