@@ -27,15 +27,15 @@ trap "rm -rf $PKG_ROOT" 0
 mkdir -p "$PKG_ROOT/usr/bin"
 
 # NOTE: keep in sync with `./installer/rpm/algorand.spec`.
-if [ "$PKG_NAME" = "algorand-devtools" ]; then
+if [[ "$PKG_NAME" =~ devtools ]]; then
     BIN_FILES=("carpenter" "catchupsrv" "msgpacktool" "tealcut" "tealdbg")
     UNATTENDED_UPGRADES_FILE="53algorand-devtools-upgrades"
-    OUTPUT_DEB="$OUTDIR/algorand_devtools_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
+    OUTPUT_DEB="$OUTDIR/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
     REQUIRED_ALGORAND_PKG=$("./scripts/compute_package_name.sh" "$CHANNEL")
 else
     BIN_FILES=("algocfg" "algod" "algoh" "algokey" "ddconfig.sh" "diagcfg" "goal" "kmd" "node_exporter")
-    UNATTENDED_UPGRADES_FILE="51algorand-upgrades"
     OUTPUT_DEB="$OUTDIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
+    UNATTENDED_UPGRADES_FILE="51algorand-upgrades"
 fi
 
 for binary in "${BIN_FILES[@]}"; do
@@ -43,7 +43,7 @@ for binary in "${BIN_FILES[@]}"; do
     chmod 755 "$PKG_ROOT/usr/bin/$binary"
 done
 
-if [ "$PKG_NAME" != "algorand-devtools" ]; then
+if [[ ! "$PKG_NAME" =~ devtools ]]; then
     mkdir -p "${PKG_ROOT}/usr/lib/algorand"
     lib_files=("updater" "find-nodes.sh")
     for lib in "${lib_files[@]}"; do
@@ -92,8 +92,15 @@ Dpkg::Options {
 EOF
 
 mkdir -p "$PKG_ROOT/DEBIAN"
+
+if [[ "$PKG_NAME" =~ devtools ]]; then
+    INSTALLER_DIR="algorand-devtools"
+else
+    INSTALLER_DIR=algorand
+fi
+
 # Can contain `control`, `preinst`, `postinst`, `prerm`, `postrm`, `conffiles`.
-CTL_FILES_DIR="./installer/debian/$PKG_NAME"
+CTL_FILES_DIR="./installer/debian/$INSTALLER_DIR"
 for ctl_file in $(ls "$CTL_FILES_DIR"); do
     # Copy first, to preserve permissions, then overwrite to fill in template.
     cp -a "$CTL_FILES_DIR/$ctl_file" "$PKG_ROOT/DEBIAN/$ctl_file"
