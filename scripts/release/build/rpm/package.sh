@@ -30,9 +30,15 @@ for pkg_name in "${PKG_NAMES[@]}"; do
 
     mkdir "$TEMPDIR/$pkg_name"
 
+    if [[ "$pkg_name" =~ devtools ]]; then
+        INSTALLER_DIR="algorand-devtools"
+    else
+        INSTALLER_DIR=algorand
+    fi
+
     echo "Building rpm package $pkg_name ($CHANNEL)"
 
-    < "$REPO_DIR/installer/rpm/$pkg_name/$pkg_name.spec" \
+    < "$REPO_DIR/installer/rpm/$INSTALLER_DIR/$INSTALLER_DIR.spec" \
         sed -e "s,@PKG_NAME@,$pkg_name," \
             -e "s,@VER@,$FULLVERSION," \
             -e "s,@REQUIRED_ALGORAND_PKG@,$ALGORAND_PACKAGE_NAME," \
