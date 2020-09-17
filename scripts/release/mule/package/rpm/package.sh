@@ -14,10 +14,15 @@ ALGO_BIN="$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH/$CHANNEL/$OS_TYPE-$ARCH/bin"
 # TODO: Should there be a default network?
 DEFAULTNETWORK=devnet
 DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "$DEFAULTNETWORK")
-# A make target in Makefile.mule may pass the name as an argument.
-PKG_NAME=${1:-$(./scripts/compute_package_name.sh "${CHANNEL:-stable}")}
 
-# The following need to be exported for use in ./go-algorand/installer/rpm/$PKG_NAME/$PKG_NAME.spec.
+# A make target in Makefile.mule may pass the name as an argument.
+ALGORAND_PACKAGE_NAME=${1:-$(./scripts/compute_package_name.sh "$CHANNEL")}
+
+if [[ "$ALGORAND_PACKAGE_NAME" =~ devtools ]]; then
+    REQUIRED_ALGORAND_PACKAGE=$(./scripts/compute_package_name.sh "$CHANNEL")
+fi
+
+# The following need to be exported for use in ./go-algorand/installer/rpm/$ALGORAND_PACKAGE_NAME/$ALGORAND_PACKAGE_NAME.spec.
 export DEFAULT_NETWORK
 export DEFAULT_RELEASE_NETWORK
 export REPO_DIR
@@ -28,13 +33,14 @@ trap 'rm -rf $RPMTMP' 0
 
 TEMPDIR=$(mktemp -d)
 trap 'rm -rf $TEMPDIR' 0
-< "./installer/rpm/$PKG_NAME/$PKG_NAME.spec" \
-    sed -e "s,@PKG_NAME@,${PKG_NAME}," \
+< "./installer/rpm/$ALGORAND_PACKAGE_NAME/$ALGORAND_PACKAGE_NAME.spec" \
+    sed -e "s,@ALGORAND_PACKAGE_NAME@,$REQUIRED_ALGORAND_PACKAGE," \
         -e "s,@VER@,$FULLVERSION," \
         -e "s,@ARCH@,$ARCH," \
-    > "$TEMPDIR/$PKG_NAME.spec"
+        -e "s,@REQUIRED_ALGORAND_PKG@,$ALGORAND_PACKAGE_NAME," \
+    > "$TEMPDIR/$ALGORAND_PACKAGE_NAME.spec"
 
-rpmbuild --buildroot "$HOME/foo" --define "_rpmdir $RPMTMP" --define "RELEASE_GENESIS_PROCESS x$RELEASE_GENESIS_PROCESS" --define "LICENSE_FILE ./COPYING" -bb "$TEMPDIR/$PKG_NAME.spec"
+rpmbuild --buildroot "$HOME/foo" --define "_rpmdir $RPMTMP" --define "RELEASE_GENESIS_PROCESS x$RELEASE_GENESIS_PROCESS" --define "LICENSE_FILE ./COPYING" -bb "$TEMPDIR/$ALGORAND_PACKAGE_NAME.spec"
 
 cp -p "$RPMTMP"/*/*.rpm "./tmp/node_pkgs/$OS_TYPE/$ARCH"
 
