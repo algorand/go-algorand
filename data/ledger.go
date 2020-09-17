@@ -18,6 +18,7 @@ package data
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -43,6 +44,23 @@ type Ledger struct {
 	*ledger.Ledger
 
 	log logging.Logger
+
+	lastRoundCirculation atomic.Value
+	lastRoundSeed        atomic.Value
+}
+
+type roundCirculation struct {
+	prevRound       basics.Round
+	prevOnlineMoney basics.MicroAlgos
+	curRound        basics.Round
+	curOnlineMoney  basics.MicroAlgos
+}
+
+type roundSeed struct {
+	prevRound basics.Round
+	prevSeed  committee.Seed
+	curRound  basics.Round
+	curSeed   committee.Seed
 }
 
 func makeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest) (bookkeeping.Block, error) {
@@ -188,9 +206,28 @@ func (l *Ledger) NextRound() basics.Round {
 
 // Circulation implements agreement.Ledger.Circulation.
 func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
+	circulation, cached := l.lastRoundCirculation.Load().(roundCirculation)
+	if cached && r != basics.Round(0) {
+		if circulation.prevRound == r {
+			return circulation.prevOnlineMoney, nil
+		}
+		if circulation.curRound == r {
+			return circulation.curOnlineMoney, nil
+		}
+	}
+
 	totals, err := l.Totals(r)
 	if err != nil {
 		return basics.MicroAlgos{}, err
+	}
+
+	if !cached || r > circulation.curRound {
+		l.lastRoundCirculation.Store(
+			roundCirculation{
+				prevRound:       circulation.curRound,
+				prevOnlineMoney: circulation.curOnlineMoney,
+				curRound:        r,
+				curOnlineMoney:  totals.Online.Money})
 	}
 
 	return totals.Online.Money, nil
@@ -201,10 +238,30 @@ func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 // I/O error.
 // Implements agreement.Ledger.Seed
 func (l *Ledger) Seed(r basics.Round) (committee.Seed, error) {
+	seed, cached := l.lastRoundSeed.Load().(roundSeed)
+	if cached && r != basics.Round(0) {
+		if seed.prevRound == r {
+			return seed.prevSeed, nil
+		}
+		if seed.curRound == r {
+			return seed.curSeed, nil
+		}
+	}
+
 	blockhdr, err := l.BlockHdr(r)
 	if err != nil {
 		return committee.Seed{}, err
 	}
+
+	if !cached || r > seed.curRound {
+		l.lastRoundSeed.Store(
+			roundSeed{
+				prevRound: seed.curRound,
+				prevSeed:  seed.curSeed,
+				curRound:  r,
+				curSeed:   blockhdr.Seed})
+	}
+
 	return blockhdr.Seed, nil
 }
 
