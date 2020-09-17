@@ -743,11 +743,6 @@ func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.
 	return bookkeeping.BlockHeader{}, ErrNoEntry{}
 }
 
-// Lookup returns the account balance for a given address at a given round
-func (aul *accountUpdatesLedgerEvaluator) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
-	return aul.au.lookupImpl(rnd, addr, true)
-}
-
 // Totals returns the totals for a given round
 func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (AccountTotals, error) {
 	return aul.au.totalsImpl(rnd)
