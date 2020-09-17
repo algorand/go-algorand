@@ -110,6 +110,7 @@ func init() {
 	addTxnFlags(freezeAssetCmd)
 
 	infoAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset to look up")
+	infoAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "DEPRECATED! Unit name of the asset to look up")
 	infoAssetCmd.Flags().StringVar(&assetUnitName, "unit", "", "Unit name of the asset to look up")
 	infoAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address of the asset creator")
 }
@@ -125,15 +126,25 @@ var assetCmd = &cobra.Command{
 }
 
 func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
-	if cmd.Flags().Changed("assetid") && cmd.Flags().Changed("unit") {
-		reportErrorf("Only one of [--assetid] or [--unit and --creator] can be specified")
+	if cmd.Flags().Changed("asset") {
+		reportWarnln("The [--asset] flag is deprecated and will be removed in a future release, use [--unit] instead.")
+	}
+
+	if cmd.Flags().Changed("asset") && cmd.Flags().Changed("unit"){
+		reportErrorf("The [--asset] flag has been replaced by [--unit], do not provide both flags.")
+	}
+
+	assetOrUnit := cmd.Flags().Changed("asset") || cmd.Flags().Changed("unit")
+
+	if cmd.Flags().Changed("assetid") && assetOrUnit {
+		reportErrorf("Only one of [--assetid] or [--unit and --creator] should be specified")
 	}
 
 	if cmd.Flags().Changed("assetid") {
 		return
 	}
 
-	if !cmd.Flags().Changed("unit") {
+	if !assetOrUnit {
 		reportErrorf("Either [--assetid] or [--unit and --creator] must be specified")
 	}
 
