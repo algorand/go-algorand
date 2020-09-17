@@ -19,7 +19,6 @@ package node
 import (
 	"context"
 	"errors"
-	"github.com/algorand/go-algorand/ledger"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/catchup"
@@ -27,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/util/execpool"
