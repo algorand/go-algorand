@@ -32,8 +32,13 @@ RPMTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "rpmtmp")
 trap 'rm -rf $RPMTMP' 0
 
 TEMPDIR=$(mktemp -d)
+if [[ "$ALGORAND_PACKAGE_NAME" =~ devtools ]]; then
+    INSTALLER_DIR="algorand-devtools"
+else
+    INSTALLER_DIR=algorand
+fi
 trap 'rm -rf $TEMPDIR' 0
-< "./installer/rpm/$ALGORAND_PACKAGE_NAME/$ALGORAND_PACKAGE_NAME.spec" \
+< "./installer/rpm/$INSTALLER_DIR/$INSTALLER_DIR.spec" \
     sed -e "s,@ALGORAND_PACKAGE_NAME@,$REQUIRED_ALGORAND_PACKAGE," \
         -e "s,@VER@,$FULLVERSION," \
         -e "s,@ARCH@,$ARCH," \
