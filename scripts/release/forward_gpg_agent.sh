@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# shellcheck disable=2196
+
 # JENKINS=username@ip
 # JENKINS_KEY=location/to/jenkins/private_key.pem
 
