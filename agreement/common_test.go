@@ -40,17 +40,17 @@ const keyBatchesForward = 10
 const minMoneyAtStart = 10000
 const maxMoneyAtStart = 100000
 
-var readOnlyGenesis10 map[basics.Address]basics.BalanceRecord
+var readOnlyGenesis10 map[basics.Address]basics.AccountData
 var readOnlyAddrs10 []basics.Address
 var readOnlyVRF10 []*crypto.VRFSecrets
 var readOnlyOT10 []crypto.OneTimeSigner
 
-var readOnlyGenesis100 map[basics.Address]basics.BalanceRecord
+var readOnlyGenesis100 map[basics.Address]basics.AccountData
 var readOnlyAddrs100 []basics.Address
 var readOnlyVRF100 []*crypto.VRFSecrets
 var readOnlyOT100 []crypto.OneTimeSigner
 
-var readOnlyGenesis7000 map[basics.Address]basics.BalanceRecord
+var readOnlyGenesis7000 map[basics.Address]basics.AccountData
 var readOnlyAddrs7000 []basics.Address
 var readOnlyVRF7000 []*crypto.VRFSecrets
 var readOnlyOT7000 []crypto.OneTimeSigner
@@ -93,8 +93,8 @@ func generateKeys(latest basics.Round, keyBatchesForward uint) (basics.Address, 
 	return addr, v, o
 }
 
-func generateEnvironment(numAccounts int) (map[basics.Address]basics.BalanceRecord, []basics.Address, []*crypto.VRFSecrets, []crypto.OneTimeSigner) {
-	genesis := make(map[basics.Address]basics.BalanceRecord)
+func generateEnvironment(numAccounts int) (map[basics.Address]basics.AccountData, []basics.Address, []*crypto.VRFSecrets, []crypto.OneTimeSigner) {
+	genesis := make(map[basics.Address]basics.AccountData)
 	gen := rand.New(rand.NewSource(2))
 	addrs := make([]basics.Address, numAccounts)
 	vrfSecrets := make([]*crypto.VRFSecrets, numAccounts)
@@ -107,14 +107,11 @@ func generateEnvironment(numAccounts int) (map[basics.Address]basics.BalanceReco
 		otSecrets[i].OneTimeSignatureSecrets = otSec
 
 		startamt := uint64(minMoneyAtStart + (gen.Int() % (maxMoneyAtStart - minMoneyAtStart)))
-		genesis[addr] = basics.BalanceRecord{
-			Addr: addr,
-			AccountData: basics.AccountData{
-				Status:      basics.Online,
-				MicroAlgos:  basics.MicroAlgos{Raw: startamt},
-				SelectionID: vrfSec.PK,
-				VoteID:      otSec.OneTimeSignatureVerifier,
-			},
+		genesis[addr] = basics.AccountData{
+			Status:      basics.Online,
+			MicroAlgos:  basics.MicroAlgos{Raw: startamt},
+			SelectionID: vrfSec.PK,
+			VoteID:      otSec.OneTimeSignatureVerifier,
 		}
 		total.Raw += startamt
 	}
@@ -196,19 +193,19 @@ type testLedger struct {
 	nextRound basics.Round
 
 	// constant
-	state map[basics.Address]basics.BalanceRecord
+	state map[basics.Address]basics.AccountData
 
 	notifications map[basics.Round]signal
 }
 
-func makeTestLedger(state map[basics.Address]basics.BalanceRecord) Ledger {
+func makeTestLedger(state map[basics.Address]basics.AccountData) Ledger {
 	l := new(testLedger)
 	l.entries = make(map[basics.Round]bookkeeping.Block)
 	l.certs = make(map[basics.Round]Certificate)
 	l.nextRound = 1
 
 	// deep copy of state
-	l.state = make(map[basics.Address]basics.BalanceRecord)
+	l.state = make(map[basics.Address]basics.AccountData)
 	for k, v := range state {
 		l.state[k] = v
 	}
@@ -274,12 +271,12 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	return l.entries[r].Digest(), nil
 }
 
-func (l *testLedger) BalanceRecord(r basics.Round, a basics.Address) (basics.BalanceRecord, error) {
+func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountData, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	if r >= l.nextRound {
-		err := fmt.Errorf("BalanceRecord called on future round: %v >= %v! (this is probably a bug)", r, l.nextRound)
+		err := fmt.Errorf("Lookup called on future round: %v >= %v! (this is probably a bug)", r, l.nextRound)
 		panic(err)
 	}
 	return l.state[a], nil

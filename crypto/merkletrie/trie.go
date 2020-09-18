@@ -117,7 +117,7 @@ func (mt *Trie) RootHash() (crypto.Digest, error) {
 		return crypto.Digest{}, err
 	}
 
-	if pnode.leaf {
+	if pnode.leaf() {
 		return crypto.Hash(append([]byte{0}, pnode.hash...)), nil
 	}
 	return crypto.Hash(append([]byte{1}, pnode.hash...)), nil
@@ -132,7 +132,6 @@ func (mt *Trie) Add(d []byte) (bool, error) {
 		mt.cache.beginTransaction()
 		pnode, mt.root = mt.cache.allocateNewNode()
 		mt.cache.commitTransaction()
-		pnode.leaf = true
 		pnode.hash = d
 		mt.elementLength = len(d)
 		return true, nil
@@ -179,7 +178,7 @@ func (mt *Trie) Delete(d []byte) (bool, error) {
 		return false, err
 	}
 	mt.cache.beginTransaction()
-	if pnode.leaf {
+	if pnode.leaf() {
 		// remove the root.
 		mt.cache.deleteNode(mt.root)
 		mt.root = storedNodeIdentifierNull

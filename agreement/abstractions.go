@@ -128,14 +128,14 @@ type LedgerReader interface {
 	// protocol may lose liveness.
 	Seed(basics.Round) (committee.Seed, error)
 
-	// BalanceRecord returns the BalanceRecord associated with some Address
+	// Lookup returns the AccountData associated with some Address
 	// at the conclusion of a given round.
 	//
 	// This method returns an error if the given Round has not yet been
 	// confirmed. It may also return an error if the given Round is
 	// unavailable by the storage device. In that case, the agreement
 	// protocol may lose liveness.
-	BalanceRecord(basics.Round, basics.Address) (basics.BalanceRecord, error)
+	Lookup(basics.Round, basics.Address) (basics.AccountData, error)
 
 	// Circulation returns the total amount of money in circulation at the
 	// conclusion of a given round.

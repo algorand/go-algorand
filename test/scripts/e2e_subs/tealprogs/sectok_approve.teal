@@ -1,5 +1,4 @@
 #pragma version 2
-
 txn ApplicationID
 int 0
 ==
@@ -150,16 +149,20 @@ int 1
 bnz cond_end11
 cond12:
 // contract/transfer admin
-int 1
-txna ApplicationArgs 0
-txna ApplicationArgs 1
-btoi
-app_local_put
 int 0
 byte base64 Y1g=
 app_local_get
 int 1
 ==
+bnz assert15
+err
+assert15:
+int 1
+txna ApplicationArgs 0
+txna ApplicationArgs 1
+btoi
+app_local_put
+int 1
 cond_end11:
 int 1
 bnz if_end9
@@ -243,13 +246,13 @@ if6:
 txn NumAppArgs
 int 1
 ==
-bnz if15
+bnz if16
 // transfer-rule
 txna ApplicationArgs 2
 btoi
 int 0
 ==
-bnz if17
+bnz if18
 byte 0x0001
 txna ApplicationArgs 0
 concat
@@ -259,15 +262,15 @@ txna ApplicationArgs 2
 btoi
 app_global_put
 int 1
-bnz if_end18
-if17:
+bnz if_end19
+if18:
 byte 0x0001
 txna ApplicationArgs 0
 concat
 txna ApplicationArgs 1
 concat
 app_global_del
-if_end18:
+if_end19:
 txna ApplicationArgs 0
 len
 int 8
@@ -288,8 +291,8 @@ int 1
 ==
 &&
 int 1
-bnz if_end16
-if15:
+bnz if_end17
+if16:
 // pause
 byte base64 cHM=
 txna ApplicationArgs 0
@@ -300,7 +303,7 @@ byte base64 Y1g=
 app_local_get
 int 1
 ==
-if_end16:
+if_end17:
 if_end7:
 int 1
 bnz cond_end0

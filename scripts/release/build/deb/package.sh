@@ -16,19 +16,26 @@ export PATH="${GOPATH}":/usr/local/go/bin:"${PATH}"
 pushd "${REPO_ROOT}"
 ./scripts/build_packages.sh "${PLATFORM}"
 
-DEBTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "debtmp")
-trap "rm -rf ${DEBTMP}" 0
+PKG_NAMES=("$ALGORAND_PACKAGE_NAME" "$DEVTOOLS_PACKAGE_NAME")
+for pkg_name in "${PKG_NAMES[@]}"; do
+    DEBTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "debtmp")
+    trap "rm -rf ${DEBTMP}" 0
 
-if ! ./scripts/build_deb.sh "${ARCH}" "${DEBTMP}" "${CHANNEL}"
-then
-    echo "Error building debian package for ${PLATFORM}.  Aborting..."
-    exit 1
-fi
+    if ! ./scripts/release/build/deb/build_deb.sh "${ARCH}" "${DEBTMP}" "${CHANNEL}" "${pkg_name}"
+    then
+        echo "Error building debian package ${pkg_name} for ${PLATFORM}.  Aborting..."
+        exit 1
+    fi
 
-BRANCH=$("./scripts/compute_branch.sh")
-CHANNEL=$("./scripts/compute_branch_channel.sh" "$BRANCH")
+    if [[ "$pkg_name" =~ devtools ]]; then
+        BASE_NAME="algorand-devtools"
+    else
+        BASE_NAME=algorand
+    fi
 
-cp -p "${DEBTMP}"/*.deb "${PKG_ROOT}/algorand_${CHANNEL}_${OS}-${ARCH}_${FULLVERSION}.deb"
+    cp -p "${DEBTMP}"/*.deb "${PKG_ROOT}/${BASE_NAME}_${CHANNEL}_${OS}-${ARCH}_${FULLVERSION}.deb"
+done
+
 popd
 
 # build docker release package
