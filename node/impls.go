@@ -115,6 +115,7 @@ func (l agreementLedger) EnsureDigest(cert agreement.Certificate, verifier *agre
 	l.UnmatchedPendingCertificates <- catchup.PendingUnmatchedCertificate{Cert: cert, VoteVerifier: verifier}
 }
 
+// Wrapping error with a LedgerDroppedRoundError when an old round is requested but the ledger has already dropped the entry
 func (l agreementLedger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
 	record, err := l.Ledger.Lookup(rnd, addr)
 	var e *ledger.RoundOffsetError

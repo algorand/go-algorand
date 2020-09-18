@@ -59,15 +59,6 @@ type AsyncVoteVerifier struct {
 	ctxCancel       context.CancelFunc
 }
 
-// LedgerDroppedRoundError is an error for when agreement far behind ledger
-type LedgerDroppedRoundError struct {
-	Err error
-}
-
-func (e *LedgerDroppedRoundError) Error() string {
-	return e.Err.Error()
-}
-
 // MakeAsyncVoteVerifier creates an AsyncVoteVerifier with workers as the number of CPUs
 func MakeAsyncVoteVerifier(verificationPool execpool.BacklogPool) *AsyncVoteVerifier {
 	verifier := &AsyncVoteVerifier{
