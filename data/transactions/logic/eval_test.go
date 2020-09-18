@@ -110,6 +110,72 @@ func TestEmptyProgram(t *testing.T) {
 	require.False(t, pass)
 }
 
+// TestMinTealVersionParamEval tests eval/check reading the MinTealVersion from the param
+func TestMinTealVersionParamEvalCheck(t *testing.T) {
+	t.Parallel()
+	params := defaultEvalParams(nil, nil)
+	version2 := uint64(rekeyingEnabledVersion)
+	params.MinTealVersion = &version2
+	program := make([]byte, binary.MaxVarintLen64)
+	// set the teal program version to 1
+	binary.PutUvarint(program, 1)
+
+	_, err := Check(program, params)
+	require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
+
+	// If the param is read correctly, the eval should fail
+	pass, err := Eval(program, params)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), fmt.Sprintf("program version must be >= %d", appsEnabledVersion))
+	require.False(t, pass)
+}
+
+func TestTxnFieldToTealValue(t *testing.T) {
+
+	txn := transactions.Transaction{}
+	groupIndex := 0
+	field := FirstValid
+	values := [6]uint64{0, 1, 2, 0xffffffff, 0xffffffffffffffff}
+
+	for _, value := range values {
+		txn.FirstValid = basics.Round(value)
+		tealValue, err := TxnFieldToTealValue(&txn, groupIndex, field, 0)
+		require.NoError(t, err)
+		require.Equal(t, basics.TealUintType, tealValue.Type)
+		require.Equal(t, value, tealValue.Uint)
+	}
+
+	// check arrayFieldIdx is ignored for non-arrays
+	field = FirstValid
+	value := uint64(1)
+	txn.FirstValid = basics.Round(value)
+	tealValue, err := TxnFieldToTealValue(&txn, groupIndex, field, 10)
+	require.NoError(t, err)
+	require.Equal(t, basics.TealUintType, tealValue.Type)
+	require.Equal(t, value, tealValue.Uint)
+
+	// check arrayFieldIdx is taken into account for arrays
+	field = Accounts
+	sender := basics.Address{}
+	addr, _ := basics.UnmarshalChecksumAddress("DFPKC2SJP3OTFVJFMCD356YB7BOT4SJZTGWLIPPFEWL3ZABUFLTOY6ILYE")
+	txn.Accounts = []basics.Address{addr}
+	tealValue, err = TxnFieldToTealValue(&txn, groupIndex, field, 0)
+	require.NoError(t, err)
+	require.Equal(t, basics.TealBytesType, tealValue.Type)
+	require.Equal(t, string(sender[:]), tealValue.Bytes)
+
+	tealValue, err = TxnFieldToTealValue(&txn, groupIndex, field, 1)
+	require.NoError(t, err)
+	require.Equal(t, basics.TealBytesType, tealValue.Type)
+	require.Equal(t, string(addr[:]), tealValue.Bytes)
+
+	tealValue, err = TxnFieldToTealValue(&txn, groupIndex, field, 100)
+	require.Error(t, err)
+	require.Equal(t, basics.TealUintType, tealValue.Type)
+	require.Equal(t, uint64(0), tealValue.Uint)
+	require.Equal(t, "", tealValue.Bytes)
+}
+
 func TestWrongProtoVersion(t *testing.T) {
 	t.Parallel()
 	for v := uint64(1); v <= AssemblerMaxVersion; v++ {

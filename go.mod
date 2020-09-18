@@ -15,7 +15,8 @@ require (
 	github.com/fatih/color v1.7.0
 	github.com/fortytw2/leaktest v1.3.0 // indirect
 	github.com/gen2brain/beeep v0.0.0-20180718162406-4e430518395f
-	github.com/getkin/kin-openapi v0.14.0
+	github.com/getkin/kin-openapi v0.22.0
+	github.com/go-chi/chi v4.1.2+incompatible // indirect
 	github.com/godbus/dbus v0.0.0-20181101234600-2ff6f7ffd60f // indirect
 	github.com/gofrs/flock v0.7.0
 	github.com/google/go-querystring v1.0.0
@@ -28,8 +29,9 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/karalabe/hid v0.0.0-20181128192157-d815e0c1a2e2
-	github.com/labstack/echo/v4 v4.1.16
+	github.com/labstack/echo/v4 v4.1.17
 	github.com/mailru/easyjson v0.0.0-20180823135443-60711f1a8329 // indirect
+	github.com/matryer/moq v0.1.3 // indirect
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/miekg/dns v1.1.27
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
@@ -43,11 +45,11 @@ require (
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3 // indirect
 	github.com/stretchr/testify v1.6.1
-	golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9
-	golang.org/x/net v0.0.0-20200602114024-627f9648deb9
-	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a // indirect
-	golang.org/x/sys v0.0.0-20200615200032-f1bc736245b1
+	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a
+	golang.org/x/net v0.0.0-20200904194848-62affa334b73
+	golang.org/x/sys v0.0.0-20200905004654-be1d3432aa8f
 	golang.org/x/text v0.3.3 // indirect
+	golang.org/x/tools v0.0.0-20200904185747-39188db58858 // indirect
 	google.golang.org/appengine v1.6.1 // indirect
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect

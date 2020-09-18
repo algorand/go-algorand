@@ -46,10 +46,9 @@ import (
 // go-sqlite3 with the "sqlite_unlock_notify" Go build tag.
 const busy = 1000
 
-// initStatements is a list of statements we execute after opening a database
-// connection.  For now, it's just an optional "PRAGMA fullfsync=true" on
-// MacOSX.
-var initStatements []string
+// enableFullfsyncStatements is a list of statements we execute to enable a fullfsync.
+// Currently, it's only supported by MacOSX.
+var enableFullfsyncStatements []string
 var sqliteInitOnce sync.Once
 
 // An Accessor manages a sqlite database handle and any outstanding batching operations.
@@ -124,23 +123,13 @@ func makeAccessorImpl(dbfilename string, readOnly bool, inMemory bool, params []
 			// init failed, db closed and err is set
 			return db, err
 		}
-		err = db.runInitStatements()
-	}
-
-	return db, err
-}
-
-// runInitStatements executes initialization statements.
-func (db *Accessor) runInitStatements() error {
-	for _, stmt := range initStatements {
-		_, err := db.Handle.Exec(stmt)
+		err = db.SetSynchronousMode(context.Background(), SynchronousModeFull, true)
 		if err != nil {
 			db.Close()
-			return err
 		}
 	}
 
-	return nil
+	return db, err
 }
 
 // SetLogger sets the Logger, mainly for unit test quietness
@@ -453,3 +442,49 @@ type idemFn func(ctx context.Context, tx *sql.Tx) error
 
 const infoTxRetries = 5
 const warnTxRetriesInterval = 1
+
+// SynchronousMode is the syncronious modes supported by sqlite database.
+type SynchronousMode int
+
+const (
+	// SynchronousModeOff (0), SQLite continues without syncing as soon as it has handed data off to the operating system. If the application running SQLite crashes,
+	// the data will be safe, but the database might become corrupted if the operating system crashes or the computer loses power before that data has been written to the
+	// disk surface. On the other hand, commits can be orders of magnitude faster with synchronous OFF.
+	SynchronousModeOff SynchronousMode = 0
+	// SynchronousModeNormal (1), the SQLite database engine will still sync at the most critical moments, but less often than in FULL mode. There is a very small
+	// (though non-zero) chance that a power failure at just the wrong time could corrupt the database in journal_mode=DELETE on an older filesystem.
+	// WAL mode is safe from corruption with synchronous=NORMAL, and probably DELETE mode is safe too on modern filesystems. WAL mode is always consistent with synchronous=NORMAL,
+	// but WAL mode does lose durability. A transaction committed in WAL mode with synchronous=NORMAL might roll back following a power loss or system crash.
+	// Transactions are durable across application crashes regardless of the synchronous setting or journal mode.
+	// The synchronous=NORMAL setting is a good choice for most applications running in WAL mode.
+	SynchronousModeNormal SynchronousMode = 1
+	// SynchronousModeFull (2), the SQLite database engine will use the xSync method of the VFS to ensure that all content is safely written to the disk surface prior to continuing.
+	// This ensures that an operating system crash or power failure will not corrupt the database. FULL synchronous is very safe, but it is also slower.
+	// FULL is the most commonly used synchronous setting when not in WAL mode.
+	SynchronousModeFull SynchronousMode = 2
+	// SynchronousModeExtra synchronous is like FULL with the addition that the directory containing a rollback journal is synced after that journal is unlinked to commit a
+	// transaction in DELETE mode. EXTRA provides additional durability if the commit is followed closely by a power loss.
+	SynchronousModeExtra SynchronousMode = 3
+)
+
+// SetSynchronousMode updates the syncronous mode of the connection
+func (db *Accessor) SetSynchronousMode(ctx context.Context, mode SynchronousMode, fullfsync bool) (err error) {
+	if mode < SynchronousModeOff || mode > SynchronousModeExtra {
+		return fmt.Errorf("invalid value(%d) was provided to mode", mode)
+	}
+	_, err = db.Handle.ExecContext(ctx, fmt.Sprintf("PRAGMA synchronous=%d", mode))
+	if err != nil {
+		return err
+	}
+	if fullfsync {
+		for _, stmt := range enableFullfsyncStatements {
+			_, err = db.Handle.ExecContext(ctx, stmt)
+			if err != nil {
+				break
+			}
+		}
+	} else {
+		_, err = db.Handle.ExecContext(ctx, "PRAGMA fullfsync=false")
+	}
+	return
+}

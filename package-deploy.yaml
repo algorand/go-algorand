@@ -1,4 +1,17 @@
 agents:
+  - name: deb
+    dockerFilePath: docker/build/docker.ubuntu.Dockerfile
+    image: algorand/mule-linux-ubuntu
+    version: scripts/configure_dev-deps.sh
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    env:
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    workDir: $HOME/projects/go-algorand
+
   - name: rpm
     dockerFilePath: docker/build/mule.go.centos.Dockerfile
     image: algorand/mule-linux-centos
@@ -6,11 +19,11 @@ agents:
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     env:
-      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
     volumes:
-      - $HOME/packages:/root/packages,
-      - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
+      - $HOME/packages:/root/packages
+      - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent
       - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
     workDir: $HOME/projects/go-algorand
 

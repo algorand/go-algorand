@@ -69,6 +69,33 @@
         }
       }
     },
+    "/genesis": {
+      "get": {
+        "description": "Returns the entire genesis file in json.",
+        "tags": [
+          "common"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "summary": "Gets the genesis information.",
+        "operationId": "GetGenesis",
+        "responses": {
+          "200": {
+            "description": "The genesis file in json.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "default": {
+            "description": "Unknown Error"
+          }
+        }
+      }
+    },
     "/swagger.json": {
       "get": {
         "description": "Returns the entire swagger spec in json.",
@@ -92,6 +119,26 @@
           },
           "default": {
             "description": "Unknown Error"
+          }
+        }
+      }
+    },
+    "/versions": {
+      "get": {
+        "description": "Retrieves the supported API versions, binary build versions, and genesis information.",
+        "tags": [
+          "common"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "schemes": [
+          "http"
+        ],
+        "operationId": "GetVersion",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/VersionsResponse"
           }
         }
       }
@@ -412,7 +459,6 @@
         ],
         "responses": {
           "200": {
-            "description": "(empty)",
             "schema": {
               "type": "object"
             }
@@ -662,7 +708,7 @@
     },
     "/v2/transactions/pending/{txid}": {
       "get": {
-        "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0) - transaction still in the pool (committed round = 0, pool error = \"\") - transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
+        "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round \u003e 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
         "produces": [
           "application/json",
           "application/msgpack"
@@ -923,6 +969,10 @@
         ],
         "responses": {
           "200": {
+            "description": "OK",
+            "$ref": "#/responses/CatchpointStartResponse"
+          },
+          "201": {
             "description": "OK",
             "$ref": "#/responses/CatchpointStartResponse"
           },
@@ -1605,68 +1655,6 @@
         }
       }
     },
-    "Version": {
-      "description": "Note that we annotate this as a model so that legacy clients\ncan directly import a swagger generated Version model.",
-      "type": "object",
-      "required": [
-        "build",
-        "genesis-hash",
-        "genesis-id",
-        "versions"
-      ],
-      "properties": {
-        "build": {
-          "$ref": "#/definitions/VersionBuild"
-        },
-        "genesis-hash": {
-          "type": "string",
-          "format": "byte"
-        },
-        "genesis-id": {
-          "type": "string"
-        },
-        "versions": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-    },
-    "VersionBuild": {
-      "description": "the current algod build version information.",
-      "type": "object",
-      "required": [
-        "branch",
-        "build-number",
-        "channel",
-        "commit-hash",
-        "major",
-        "minor"
-      ],
-      "properties": {
-        "branch": {
-          "type": "string"
-        },
-        "build-number": {
-          "type": "integer"
-        },
-        "channel": {
-          "type": "string"
-        },
-        "commit-hash": {
-          "type": "string",
-          "format": "byte"
-        },
-        "major": {
-          "type": "integer"
-        },
-        "minor": {
-          "type": "integer"
-        }
-      }
-    },
     "DryrunRequest": {
       "description": "Request data type for dryrun endpoint. Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.",
       "type": "object",
@@ -1746,6 +1734,73 @@
         "app-index": {
           "type": "integer",
           "x-algorand-format": "uint64"
+        }
+      }
+    },
+    "Version": {
+      "description": "algod version information.",
+      "type": "object",
+      "title": "Version contains the current algod version.",
+      "required": [
+        "versions",
+        "genesis_id",
+        "genesis_hash_b64",
+        "build"
+      ],
+      "properties": {
+        "build": {
+          "$ref": "#/definitions/BuildVersion"
+        },
+        "genesis_hash_b64": {
+          "type": "string",
+          "format": "byte"
+        },
+        "genesis_id": {
+          "type": "string"
+        },
+        "versions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "BuildVersion": {
+      "tags": [
+        "common"
+      ],
+      "type": "object",
+      "title": "BuildVersion contains the current algod build version information.",
+      "required": [
+        "major",
+        "minor",
+        "build_number",
+        "commit_hash",
+        "branch",
+        "channel"
+      ],
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "build_number": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "channel": {
+          "type": "string"
+        },
+        "commit_hash": {
+          "type": "string"
+        },
+        "major": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "minor": {
+          "type": "integer",
+          "format": "int64"
         }
       }
     }
@@ -1922,7 +1977,6 @@
   },
   "responses": {
     "AccountResponse": {
-      "description": "(empty)",
       "schema": {
         "$ref": "#/definitions/Account"
       }
@@ -1952,7 +2006,6 @@
       "tags": [
         "private"
       ],
-      "description": "(empty)",
       "schema": {
         "description": "An catchpoint start response.",
         "type": "object",
@@ -1971,7 +2024,6 @@
       "tags": [
         "private"
       ],
-      "description": "(empty)",
       "schema": {
         "description": "An catchpoint abort response.",
         "type": "object",
@@ -1987,7 +2039,6 @@
       }
     },
     "NodeStatusResponse": {
-      "description": "(empty)",
       "schema": {
         "description": "NodeStatus contains the information about a node status",
         "type": "object",
@@ -2287,6 +2338,12 @@
             "type": "string"
           }
         }
+      }
+    },
+    "VersionsResponse": {
+      "description": "VersionsResponse is the response to 'GET /versions'",
+      "schema": {
+        "$ref": "#/definitions/Version"
       }
     }
   },
