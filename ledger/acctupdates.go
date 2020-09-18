@@ -421,7 +421,7 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 		return nil, err
 	}
 
-	proto := au.protos[offset]
+	proto := au.ledger.GenesisProto()
 
 	// Determine how many accounts have been modified in-memory,
 	// so that we obtain enough top accounts from disk (accountdb).
@@ -741,11 +741,6 @@ func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.
 		return aul.prevHeader, nil
 	}
 	return bookkeeping.BlockHeader{}, ErrNoEntry{}
-}
-
-// Lookup returns the account balance for a given address at a given round
-func (aul *accountUpdatesLedgerEvaluator) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
-	return aul.au.lookupImpl(rnd, addr, true)
 }
 
 // Totals returns the totals for a given round

@@ -9,13 +9,25 @@ ARCH_TYPE=$(./scripts/archtype.sh)
 export ARCH_TYPE
 OS_TYPE=$(./scripts/ostype.sh)
 export OS_TYPE
-VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+
+if [ -z "$VERSION" ]; then
+    VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+fi
 export VERSION
-BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
+
+if [ -z "$BRANCH" ]; then
+    BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
+fi
 export BRANCH
-CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
+
+if [ -z "$CHANNEL" ]; then
+    CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
+fi
 export CHANNEL
-SHA=${SHA:-$(git rev-parse HEAD)}
+
+if [ -z "$SHA" ]; then
+    SHA=${SHA:-$(git rev-parse HEAD)}
+fi
 export SHA
 
 if ! $USE_CACHE
