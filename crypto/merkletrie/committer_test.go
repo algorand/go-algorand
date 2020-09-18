@@ -83,17 +83,14 @@ func TestInMemoryCommitter(t *testing.T) {
 }
 
 func (n *node) getChildren() (list []storedNodeIdentifier) {
-	if n.leaf {
+	if n.leaf() {
 		return []storedNodeIdentifier{}
 	}
-	i := n.firstChild
-	for {
-		list = append(list, n.children[i])
-		if i == n.childrenNext[i] {
-			return
-		}
-		i = n.childrenNext[i]
+	for _, child := range n.children {
+		list = append(list, child.id)
+
 	}
+	return
 }
 
 func TestNoRedundentPages(t *testing.T) {

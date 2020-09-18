@@ -27,10 +27,6 @@ agents:
 
 tasks:
   - task: docker.Make
-    name: build
-    target: ci-build
-
-  - task: docker.Make
     name: rpm
     agent: rpm
     target: mule-package-rpm
@@ -48,8 +44,8 @@ tasks:
 jobs:
   package:
     tasks:
-      - docker.Make.rpm
       - docker.Make.deb
+      - docker.Make.rpm
 
   package-docker:
     tasks:

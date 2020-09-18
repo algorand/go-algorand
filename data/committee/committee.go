@@ -36,9 +36,18 @@ type Selector interface {
 	CommitteeSize(config.ConsensusParams) uint64
 }
 
+// BalanceRecord pairs an account's address with its associated data.
+//
+// This struct is used to decouple LedgerReader.AccountData from basics.BalanceRecord.
+//msgp:ignore BalanceRecord
+type BalanceRecord struct {
+	basics.AccountData
+	Addr basics.Address
+}
+
 // Membership encodes the parameters used to verify membership in a committee.
 type Membership struct {
-	Record     basics.BalanceRecord
+	Record     BalanceRecord
 	Selector   Selector
 	TotalMoney basics.MicroAlgos
 }
