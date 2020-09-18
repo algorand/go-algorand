@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 type blockEntry struct {
@@ -54,11 +56,14 @@ func bqInit(l *Ledger) (*blockQueue, error) {
 	bq.l = l
 	bq.running = true
 	bq.closed = make(chan struct{})
+	ledgerBlockqInitCount.Inc(nil)
+	start := time.Now()
 	err := bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		bq.lastCommitted, err0 = blockLatest(tx)
 		return err0
 	})
+	ledgerBlockqInitMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -101,6 +106,8 @@ func (bq *blockQueue) syncer() {
 		workQ := bq.q
 		bq.mu.Unlock()
 
+		start := time.Now()
+		ledgerSyncBlockputCount.Inc(nil)
 		err := bq.l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			for _, e := range workQ {
 				err0 := blockPut(tx, e.block, e.cert)
@@ -110,6 +117,7 @@ func (bq *blockQueue) syncer() {
 			}
 			return nil
 		})
+		ledgerSyncBlockputMicros.AddMicrosecondsSince(start, nil)
 
 		bq.mu.Lock()
 
@@ -134,9 +142,12 @@ func (bq *blockQueue) syncer() {
 			bq.mu.Unlock()
 
 			minToSave := bq.l.notifyCommit(committed)
+			bfstart := time.Now()
+			ledgerSyncBlockforgetCount.Inc(nil)
 			err = bq.l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 				return blockForgetBefore(tx, minToSave)
 			})
+			ledgerSyncBlockforgetMicros.AddMicrosecondsSince(bfstart, nil)
 			if err != nil {
 				bq.l.log.Warnf("blockQueue.syncer: blockForgetBefore(%d): %v", minToSave, err)
 			}
@@ -245,11 +256,14 @@ func (bq *blockQueue) getBlock(r basics.Round) (blk bookkeeping.Block, err error
 		return
 	}
 
+	start := time.Now()
+	ledgerGetblockCount.Inc(nil)
 	err = bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		blk, err0 = blockGet(tx, r)
 		return err0
 	})
+	ledgerGetblockMicros.AddMicrosecondsSince(start, nil)
 	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }
@@ -264,11 +278,14 @@ func (bq *blockQueue) getBlockHdr(r basics.Round) (hdr bookkeeping.BlockHeader, 
 		return
 	}
 
+	start := time.Now()
+	ledgerGetblockhdrCount.Inc(nil)
 	err = bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		hdr, err0 = blockGetHdr(tx, r)
 		return err0
 	})
+	ledgerGetblockhdrMicros.AddMicrosecondsSince(start, nil)
 	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }
@@ -287,11 +304,14 @@ func (bq *blockQueue) getEncodedBlockCert(r basics.Round) (blk []byte, cert []by
 		return
 	}
 
+	start := time.Now()
+	ledgerGeteblockcertCount.Inc(nil)
 	err = bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		blk, cert, err0 = blockGetEncodedCert(tx, r)
 		return err0
 	})
+	ledgerGeteblockcertMicros.AddMicrosecondsSince(start, nil)
 	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }
@@ -306,11 +326,29 @@ func (bq *blockQueue) getBlockCert(r basics.Round) (blk bookkeeping.Block, cert 
 		return
 	}
 
+	start := time.Now()
+	ledgerGetblockcertCount.Inc(nil)
 	err = bq.l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		blk, cert, err0 = blockGetCert(tx, r)
 		return err0
 	})
+	ledgerGetblockcertMicros.AddMicrosecondsSince(start, nil)
 	err = updateErrNoEntry(err, lastCommitted, latest)
 	return
 }
+
+var ledgerBlockqInitCount = metrics.NewCounter("ledger_blockq_init_count", "calls to init block queue")
+var ledgerBlockqInitMicros = metrics.NewCounter("ledger_blockq_init_micros", "µs spent to init block queue")
+var ledgerSyncBlockputCount = metrics.NewCounter("ledger_blockq_sync_put_count", "calls to sync block queue")
+var ledgerSyncBlockputMicros = metrics.NewCounter("ledger_blockq_sync_put_micros", "µs spent to sync block queue")
+var ledgerSyncBlockforgetCount = metrics.NewCounter("ledger_blockq_sync_forget_count", "calls")
+var ledgerSyncBlockforgetMicros = metrics.NewCounter("ledger_blockq_sync_forget_micros", "µs spent")
+var ledgerGetblockCount = metrics.NewCounter("ledger_blockq_getblock_count", "calls")
+var ledgerGetblockMicros = metrics.NewCounter("ledger_blockq_getblock_micros", "µs spent")
+var ledgerGetblockhdrCount = metrics.NewCounter("ledger_blockq_getblockhdr_count", "calls")
+var ledgerGetblockhdrMicros = metrics.NewCounter("ledger_blockq_getblockhdr_micros", "µs spent")
+var ledgerGeteblockcertCount = metrics.NewCounter("ledger_blockq_geteblockcert_count", "calls")
+var ledgerGeteblockcertMicros = metrics.NewCounter("ledger_blockq_geteblockcert_micros", "µs spent")
+var ledgerGetblockcertCount = metrics.NewCounter("ledger_blockq_getblockcert_count", "calls")
+var ledgerGetblockcertMicros = metrics.NewCounter("ledger_blockq_getblockcert_micros", "µs spent")
