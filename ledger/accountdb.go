@@ -422,12 +422,12 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 	var err error
 	qs := &accountsDbQueries{}
 
-	qs.listCreatablesStmt, err = r.Prepare("SELECT rnd, asset, creator FROM assetcreators INNER JOIN acctrounds WHERE acctrounds.id='acctbase' AND assetcreators.asset <= ? AND assetcreators.ctype = ? ORDER BY assetcreators.asset desc LIMIT ?")
+	qs.listCreatablesStmt, err = r.Prepare("SELECT rnd, asset, creator FROM acctrounds LEFT JOIN assetcreators ON assetcreators.asset <= ? AND assetcreators.ctype = ? WHERE acctrounds.id='acctbase' ORDER BY assetcreators.asset desc LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.lookupStmt, err = r.Prepare("SELECT rnd, COALESCE((select data from accountbase where address=? limit 1), '') AS data FROM acctrounds WHERE id='acctbase'")
+	qs.lookupStmt, err = r.Prepare("SELECT rnd, data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
@@ -491,11 +491,17 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 		// For each row, copy into a new CreatableLocator and append to results
 		var buf []byte
 		var cl basics.CreatableLocator
+		var creatableIndex sql.NullInt64
 		for rows.Next() {
-			err := rows.Scan(&dbRound, &cl.Index, &buf)
+			err = rows.Scan(&dbRound, &creatableIndex, &buf)
 			if err != nil {
 				return err
 			}
+			if !creatableIndex.Valid {
+				// we received an entry without any index. This would happen only on the first entry when there are no creatables of the requested type.
+				break
+			}
+			cl.Index = basics.CreatableIndex(creatableIndex.Int64)
 			copy(cl.Creator[:], buf)
 			cl.Type = ctype
 			results = append(results, cl)
