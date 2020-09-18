@@ -34,6 +34,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	apiServer "github.com/algorand/go-algorand/daemon/algod/api/server"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -59,9 +60,11 @@ type Server struct {
 }
 
 // Initialize creates a Node instance with applicable network services
-func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string) error {
+func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genesisText string) error {
 	// set up node
 	s.log = logging.Base()
+
+	lib.GenesisJSONText = genesisText
 
 	liveLog := filepath.Join(s.RootPath, "node.log")
 	archive := filepath.Join(s.RootPath, cfg.LogArchiveName)

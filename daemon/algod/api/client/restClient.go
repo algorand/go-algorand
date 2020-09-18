@@ -87,11 +87,11 @@ func (client *RestClient) SetAPIVersionAffinity(affinity APIVersion) (previousAf
 	return
 }
 
-// extractError checks if the response signifies an error (for now, StatusCode != 200).
+// extractError checks if the response signifies an error (for now, StatusCode != 200 or StatusCode != 201).
 // If so, it returns the error.
 // Otherwise, it returns nil.
 func extractError(resp *http.Response) error {
-	if resp.StatusCode == 200 {
+	if resp.StatusCode == 200 || resp.StatusCode == 201 {
 		return nil
 	}
 

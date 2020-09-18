@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# shellcheck disable=2196
+
 # JENKINS=username@ip
 # JENKINS_KEY=location/to/jenkins/private_key.pem
 
@@ -9,7 +11,7 @@ then
     exit 1
 fi
 
-BRANCH=build-packages
+BRANCH=${1:-build-packages}
 EC2_INSTANCE_KEY=ReleaseBuildInstanceKey.pem
 
 # Get the ec2 instance name and the ephemeral private key from the Jenkins server.
@@ -24,7 +26,7 @@ scp -i "$JENKINS_KEY" "$JENKINS":~/"$EC2_INSTANCE_KEY" .
 ssh -i "$JENKINS_KEY" "$JENKINS" 'rm ~/"$EC2_INSTANCE_KEY"'
 
 # Second, get the ec2 instance name.
-INSTANCE=$(ssh -i "$JENKINS_KEY" "$JENKINS" sudo cat /opt/jenkins/workspace/$BRANCH/scripts/release/common/ec2/tmp/instance)
+INSTANCE=$(ssh -i "$JENKINS_KEY" "$JENKINS" sudo cat /opt/jenkins/workspace/"$BRANCH"/scripts/release/common/ec2/tmp/instance)
 
 gpgp=$(find /usr/lib/gnupg{2,,1} -type f -name gpg-preset-passphrase 2> /dev/null)
 

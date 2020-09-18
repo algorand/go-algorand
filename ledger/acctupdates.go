@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"container/heap"
 	"context"
 	"database/sql"
 	"encoding/hex"
@@ -41,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 const (
@@ -204,6 +206,9 @@ type accountUpdates struct {
 	// commitSyncerClosed is the blocking channel for syncronizing closing the commitSyncer goroutine. Once it's closed, the
 	// commitSyncer can be assumed to have aborted.
 	commitSyncerClosed chan struct{}
+
+	// voters keeps track of Merkle trees of online accounts, used for compact certificates.
+	voters *votersTracker
 }
 
 type deferedCommit struct {
@@ -271,6 +276,12 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 
 	if writingCatchpointRound != 0 && au.catchpointInterval != 0 {
 		au.generateCatchpoint(basics.Round(writingCatchpointRound), au.lastCatchpointLabel, writingCatchpointDigest, time.Duration(0))
+	}
+
+	au.voters = &votersTracker{}
+	err = au.voters.loadFromDisk(l, au)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -400,6 +411,112 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 	return res, nil
 }
 
+// onlineTop returns the top n online accounts, sorted by their normalized
+// balance and address, whose voting keys are valid in voteRnd.  See the
+// normalization description in AccountData.NormalizedOnlineBalance().
+func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*onlineAccount, error) {
+	au.accountsMu.RLock()
+	defer au.accountsMu.RUnlock()
+	offset, err := au.roundOffset(rnd)
+	if err != nil {
+		return nil, err
+	}
+
+	proto := au.ledger.GenesisProto()
+
+	// Determine how many accounts have been modified in-memory,
+	// so that we obtain enough top accounts from disk (accountdb).
+	// If the *onlineAccount is nil, that means the account is offline
+	// as of the most recent change to that account, or its vote key
+	// is not valid in voteRnd.  Otherwise, the *onlineAccount is the
+	// representation of the most recent state of the account, and it
+	// is online and can vote in voteRnd.
+	modifiedAccounts := make(map[basics.Address]*onlineAccount)
+	for o := uint64(0); o < offset; o++ {
+		for addr, d := range au.deltas[o] {
+			if d.new.Status != basics.Online {
+				modifiedAccounts[addr] = nil
+				continue
+			}
+
+			if !(d.new.VoteFirstValid <= voteRnd && voteRnd <= d.new.VoteLastValid) {
+				modifiedAccounts[addr] = nil
+				continue
+			}
+
+			modifiedAccounts[addr] = accountDataToOnline(addr, &d.new, proto)
+		}
+	}
+
+	// Build up a set of candidate accounts.  Start by loading the
+	// top N + len(modifiedAccounts) accounts from disk (accountdb).
+	// This ensures that, even if the worst case if all in-memory
+	// changes are deleting the top accounts in accountdb, we still
+	// will have top N left.
+	//
+	// Keep asking for more accounts until we get the desired number,
+	// or there are no more accounts left.
+	candidates := make(map[basics.Address]*onlineAccount)
+	batchOffset := uint64(0)
+	batchSize := uint64(1024)
+	for uint64(len(candidates)) < n+uint64(len(modifiedAccounts)) {
+		var accts map[basics.Address]*onlineAccount
+		start := time.Now()
+		ledgerAccountsonlinetopCount.Inc(nil)
+		err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			accts, err = accountsOnlineTop(tx, batchOffset, batchSize, proto)
+			return
+		})
+		ledgerAccountsonlinetopMicros.AddMicrosecondsSince(start, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		for addr, data := range accts {
+			if !(data.VoteFirstValid <= voteRnd && voteRnd <= data.VoteLastValid) {
+				continue
+			}
+			candidates[addr] = data
+		}
+
+		// If we got fewer than batchSize accounts, there are no
+		// more accounts to look at.
+		if uint64(len(accts)) < batchSize {
+			break
+		}
+
+		batchOffset += batchSize
+	}
+
+	// Now update the candidates based on the in-memory deltas.
+	for addr, oa := range modifiedAccounts {
+		if oa == nil {
+			delete(candidates, addr)
+		} else {
+			candidates[addr] = oa
+		}
+	}
+
+	// Get the top N accounts from the candidate set, by inserting all of
+	// the accounts into a heap and then pulling out N elements from the
+	// heap.
+	topHeap := &onlineTopHeap{
+		accts: nil,
+	}
+
+	for _, data := range candidates {
+		heap.Push(topHeap, data)
+	}
+
+	var res []*onlineAccount
+	for topHeap.Len() > 0 && uint64(len(res)) < n {
+		acct := heap.Pop(topHeap).(*onlineAccount)
+		res = append(res, acct)
+	}
+
+	return res, nil
+}
+
 // GetLastCatchpointLabel retrieves the last catchpoint label that was stored to the database.
 func (au *accountUpdates) GetLastCatchpointLabel() string {
 	au.accountsMu.RLock()
@@ -490,6 +607,8 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 		return
 	}
 
+	newBase = au.voters.lowestRound(newBase)
+
 	offset = uint64(newBase - au.dbRound)
 
 	// check to see if this is a catchpoint round
@@ -541,10 +660,13 @@ func (au *accountUpdates) Totals(rnd basics.Round) (totals AccountTotals, err er
 // GetCatchpointStream returns an io.Reader to the catchpoint file associated with the provided round
 func (au *accountUpdates) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	dbFileName := ""
+	start := time.Now()
+	ledgerGetcatchpointCount.Inc(nil)
 	err := au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		dbFileName, _, _, err = getCatchpoint(tx, round)
 		return
 	})
+	ledgerGetcatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil && err != sql.ErrNoRows {
 		// we had some sql error.
 		return nil, fmt.Errorf("accountUpdates: getCatchpointStream: unable to lookup catchpoint %d: %v", round, err)
@@ -614,6 +736,11 @@ func (aul *accountUpdatesLedgerEvaluator) GenesisHash() crypto.Digest {
 	return aul.au.ledger.GenesisHash()
 }
 
+// CompactCertVoters returns the top online accounts at round rnd.
+func (aul *accountUpdatesLedgerEvaluator) CompactCertVoters(rnd basics.Round) (voters *VotersForRound, err error) {
+	return aul.au.voters.getVoters(rnd)
+}
+
 // BlockHdr returns the header of the given round. When the evaluator is running, it's only referring to the previous header, which is what we
 // are providing here. Any attempt to access a different header would get denied.
 func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
@@ -621,11 +748,6 @@ func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.
 		return aul.prevHeader, nil
 	}
 	return bookkeeping.BlockHeader{}, ErrNoEntry{}
-}
-
-// Lookup returns the account balance for a given address at a given round
-func (aul *accountUpdatesLedgerEvaluator) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
-	return aul.au.lookupImpl(rnd, addr, true)
 }
 
 // Totals returns the totals for a given round
@@ -713,6 +835,8 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	}
 
 	lastestBlockRound = l.Latest()
+	start := time.Now()
+	ledgerAccountsinitCount.Inc(nil)
 	err = au.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		au.dbRound, err0 = au.accountsInitialize(ctx, tx)
@@ -740,6 +864,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		au.roundTotals = []AccountTotals{totals}
 		return nil
 	})
+	ledgerAccountsinitMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return
 	}
@@ -836,6 +961,12 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 				dbVersion, err = au.upgradeDatabaseSchema2(ctx, tx)
 				if err != nil {
 					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 2 : %v", err)
+					return 0, err
+				}
+			case 3:
+				dbVersion, err = au.upgradeDatabaseSchema3(ctx, tx)
+				if err != nil {
+					au.log.Warnf("accountsInitialize failed to upgrade accounts database (ledger.tracker.sqlite) from schema 3 : %v", err)
 					return 0, err
 				}
 			default:
@@ -1074,6 +1205,22 @@ func (au *accountUpdates) upgradeDatabaseSchema2(ctx context.Context, tx *sql.Tx
 	return 3, nil
 }
 
+// upgradeDatabaseSchema3 upgrades the database schema from version 3 to version 4,
+// adding the normalizedonlinebalance column to the accountbase table.
+func (au *accountUpdates) upgradeDatabaseSchema3(ctx context.Context, tx *sql.Tx) (updatedDBVersion int32, err error) {
+	err = accountsAddNormalizedBalance(tx, au.ledger.GenesisProto())
+	if err != nil {
+		return 0, err
+	}
+
+	// update version
+	_, err = db.SetUserVersion(ctx, tx, 4)
+	if err != nil {
+		return 0, fmt.Errorf("accountsInitialize unable to update database schema version from 3 to 4: %v", err)
+	}
+	return 4, nil
+}
+
 // deleteStoredCatchpoints iterates over the storedcatchpoints table and deletes all the files stored on disk.
 // once all the files have been deleted, it would go ahead and remove the entries from the table.
 func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries *accountsDbQueries) (err error) {
@@ -1210,6 +1357,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	}
 
 	au.roundTotals = append(au.roundTotals, newTotals)
+
+	au.voters.newBlock(blk.BlockHeader)
 }
 
 // lookupImpl returns the accound data for a given address at a given round. The withRewards indicates whether the
@@ -1418,6 +1567,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	beforeUpdatingBalancesTime := time.Now()
 	var trieBalancesHash crypto.Digest
 
+	genesisProto := au.ledger.GenesisProto()
+
+	start := time.Now()
+	ledgerCommitroundCount.Inc(nil)
 	err := au.dbs.wdb.AtomicCommitWriteLock(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
@@ -1438,7 +1591,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 		for i := uint64(0); i < offset; i++ {
-			err = accountsNewRound(tx, deltas[i], creatableDeltas[i])
+			err = accountsNewRound(tx, deltas[i], creatableDeltas[i], genesisProto)
 			if err != nil {
 				return err
 			}
@@ -1466,7 +1619,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 		return nil
 	}, &au.accountsMu)
-
+	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		au.balancesTrie = nil
 		au.log.Warnf("unable to advance account snapshot: %v", err)
@@ -1595,6 +1748,8 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	}
 
 	var catchpointWriter *catchpointWriter
+	start := time.Now()
+	ledgerGeneratecatchpointCount.Inc(nil)
 	err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		catchpointWriter = makeCatchpointWriter(au.ctx, absCatchpointFileName, tx, committedRound, committedRoundDigest, label)
 		for more {
@@ -1639,6 +1794,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 		}
 		return
 	})
+	ledgerGeneratecatchpointMicros.AddMicrosecondsSince(start, nil)
 
 	if err != nil {
 		au.log.Warnf("accountUpdates: generateCatchpoint: %v", err)
@@ -1749,6 +1905,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 		}
 	}()
 
+	ledgerVacuumCount.Inc(nil)
 	vacuumStats, err := au.dbs.wdb.Vacuum(ctx)
 	close(vacuumExitCh)
 	vacuumLoggingAbort.Wait()
@@ -1758,6 +1915,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 		return err
 	}
 	vacuumElapsedTime := time.Now().Sub(startTime)
+	ledgerVacuumMicros.AddUint64(uint64(vacuumElapsedTime.Microseconds()), nil)
 
 	au.log.Infof("Vacuuming accounts database completed within %v, reducing number of pages from %d to %d and size from %d to %d", vacuumElapsedTime, vacuumStats.PagesBefore, vacuumStats.PagesAfter, vacuumStats.SizeBefore, vacuumStats.SizeAfter)
 
@@ -1772,3 +1930,16 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 	au.log.EventWithDetails(telemetryspec.Accounts, telemetryspec.BalancesAccountVacuumEvent, vacuumTelemetryStats)
 	return
 }
+
+var ledgerAccountsonlinetopCount = metrics.NewCounter("ledger_accountsonlinetop_count", "calls")
+var ledgerAccountsonlinetopMicros = metrics.NewCounter("ledger_accountsonlinetop_micros", "µs spent")
+var ledgerGetcatchpointCount = metrics.NewCounter("ledger_getcatchpoint_count", "calls")
+var ledgerGetcatchpointMicros = metrics.NewCounter("ledger_getcatchpoint_micros", "µs spent")
+var ledgerAccountsinitCount = metrics.NewCounter("ledger_accountsinit_count", "calls")
+var ledgerAccountsinitMicros = metrics.NewCounter("ledger_accountsinit_micros", "µs spent")
+var ledgerCommitroundCount = metrics.NewCounter("ledger_commitround_count", "calls")
+var ledgerCommitroundMicros = metrics.NewCounter("ledger_commitround_micros", "µs spent")
+var ledgerGeneratecatchpointCount = metrics.NewCounter("ledger_generatecatchpoint_count", "calls")
+var ledgerGeneratecatchpointMicros = metrics.NewCounter("ledger_generatecatchpoint_micros", "µs spent")
+var ledgerVacuumCount = metrics.NewCounter("ledger_vacuum_count", "calls")
+var ledgerVacuumMicros = metrics.NewCounter("ledger_vacuum_micros", "µs spent")
