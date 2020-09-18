@@ -462,12 +462,12 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 	for uint64(len(candidates)) < n+uint64(len(modifiedAccounts)) {
 		var accts map[basics.Address]*onlineAccount
 		start := time.Now()
-		ledger_accountsonlinetop_count.Inc(nil)
+		ledgerAccountsonlinetopCount.Inc(nil)
 		err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			accts, err = accountsOnlineTop(tx, batchOffset, batchSize, proto)
 			return
 		})
-		ledger_accountsonlinetop_micros.AddMicrosecondsSince(start, nil)
+		ledgerAccountsonlinetopMicros.AddMicrosecondsSince(start, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -661,12 +661,12 @@ func (au *accountUpdates) Totals(rnd basics.Round) (totals AccountTotals, err er
 func (au *accountUpdates) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	dbFileName := ""
 	start := time.Now()
-	ledger_getcatchpoint_count.Inc(nil)
+	ledgerGetcatchpointCount.Inc(nil)
 	err := au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		dbFileName, _, _, err = getCatchpoint(tx, round)
 		return
 	})
-	ledger_getcatchpoint_micros.AddMicrosecondsSince(start, nil)
+	ledgerGetcatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil && err != sql.ErrNoRows {
 		// we had some sql error.
 		return nil, fmt.Errorf("accountUpdates: getCatchpointStream: unable to lookup catchpoint %d: %v", round, err)
@@ -841,7 +841,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 
 	lastestBlockRound = l.Latest()
 	start := time.Now()
-	ledger_accountsinit_count.Inc(nil)
+	ledgerAccountsinitCount.Inc(nil)
 	err = au.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		au.dbRound, err0 = au.accountsInitialize(ctx, tx)
@@ -869,7 +869,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		au.roundTotals = []AccountTotals{totals}
 		return nil
 	})
-	ledger_accountsinit_micros.AddMicrosecondsSince(start, nil)
+	ledgerAccountsinitMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return
 	}
@@ -1575,7 +1575,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	genesisProto := au.ledger.GenesisProto()
 
 	start := time.Now()
-	ledger_commitround_count.Inc(nil)
+	ledgerCommitroundCount.Inc(nil)
 	err := au.dbs.wdb.AtomicCommitWriteLock(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
@@ -1624,7 +1624,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 		return nil
 	}, &au.accountsMu)
-	ledger_commitround_micros.AddMicrosecondsSince(start, nil)
+	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		au.balancesTrie = nil
 		au.log.Warnf("unable to advance account snapshot: %v", err)
@@ -1754,7 +1754,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 
 	var catchpointWriter *catchpointWriter
 	start := time.Now()
-	ledger_generatecatchpoint_count.Inc(nil)
+	ledgerGeneratecatchpointCount.Inc(nil)
 	err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		catchpointWriter = makeCatchpointWriter(au.ctx, absCatchpointFileName, tx, committedRound, committedRoundDigest, label)
 		for more {
@@ -1799,7 +1799,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 		}
 		return
 	})
-	ledger_generatecatchpoint_micros.AddMicrosecondsSince(start, nil)
+	ledgerGeneratecatchpointMicros.AddMicrosecondsSince(start, nil)
 
 	if err != nil {
 		au.log.Warnf("accountUpdates: generateCatchpoint: %v", err)
@@ -1910,7 +1910,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 		}
 	}()
 
-	ledger_vacuum_count.Inc(nil)
+	ledgerVacuumCount.Inc(nil)
 	vacuumStats, err := au.dbs.wdb.Vacuum(ctx)
 	close(vacuumExitCh)
 	vacuumLoggingAbort.Wait()
@@ -1920,7 +1920,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 		return err
 	}
 	vacuumElapsedTime := time.Now().Sub(startTime)
-	ledger_vacuum_micros.AddUint64(uint64(vacuumElapsedTime.Microseconds()), nil)
+	ledgerVacuumMicros.AddUint64(uint64(vacuumElapsedTime.Microseconds()), nil)
 
 	au.log.Infof("Vacuuming accounts database completed within %v, reducing number of pages from %d to %d and size from %d to %d", vacuumElapsedTime, vacuumStats.PagesBefore, vacuumStats.PagesAfter, vacuumStats.SizeBefore, vacuumStats.SizeAfter)
 
@@ -1936,15 +1936,15 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 	return
 }
 
-var ledger_accountsonlinetop_count = metrics.NewCounter("ledger_accountsonlinetop_count", "calls")
-var ledger_accountsonlinetop_micros = metrics.NewCounter("ledger_accountsonlinetop_micros", "ms spent")
-var ledger_getcatchpoint_count = metrics.NewCounter("ledger_getcatchpoint_count", "calls")
-var ledger_getcatchpoint_micros = metrics.NewCounter("ledger_getcatchpoint_micros", "ms spent")
-var ledger_accountsinit_count = metrics.NewCounter("ledger_accountsinit_count", "calls")
-var ledger_accountsinit_micros = metrics.NewCounter("ledger_accountsinit_micros", "ms spent")
-var ledger_commitround_count = metrics.NewCounter("ledger_commitround_count", "calls")
-var ledger_commitround_micros = metrics.NewCounter("ledger_commitround_micros", "ms spent")
-var ledger_generatecatchpoint_count = metrics.NewCounter("ledger_generatecatchpoint_count", "calls")
-var ledger_generatecatchpoint_micros = metrics.NewCounter("ledger_generatecatchpoint_micros", "ms spent")
-var ledger_vacuum_count = metrics.NewCounter("ledger_vacuum_count", "calls")
-var ledger_vacuum_micros = metrics.NewCounter("ledger_vacuum_micros", "ms spent")
+var ledgerAccountsonlinetopCount = metrics.NewCounter("ledger_accountsonlinetop_count", "calls")
+var ledgerAccountsonlinetopMicros = metrics.NewCounter("ledger_accountsonlinetop_micros", "ms spent")
+var ledgerGetcatchpointCount = metrics.NewCounter("ledger_getcatchpoint_count", "calls")
+var ledgerGetcatchpointMicros = metrics.NewCounter("ledger_getcatchpoint_micros", "ms spent")
+var ledgerAccountsinitCount = metrics.NewCounter("ledger_accountsinit_count", "calls")
+var ledgerAccountsinitMicros = metrics.NewCounter("ledger_accountsinit_micros", "ms spent")
+var ledgerCommitroundCount = metrics.NewCounter("ledger_commitround_count", "calls")
+var ledgerCommitroundMicros = metrics.NewCounter("ledger_commitround_micros", "ms spent")
+var ledgerGeneratecatchpointCount = metrics.NewCounter("ledger_generatecatchpoint_count", "calls")
+var ledgerGeneratecatchpointMicros = metrics.NewCounter("ledger_generatecatchpoint_micros", "ms spent")
+var ledgerVacuumCount = metrics.NewCounter("ledger_vacuum_count", "calls")
+var ledgerVacuumMicros = metrics.NewCounter("ledger_vacuum_micros", "ms spent")

@@ -180,7 +180,7 @@ func (c *CatchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context
 		c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 	}
 	start := time.Now()
-	ledger_resetstagingbalances_count.Inc(nil)
+	ledgerResetstagingbalancesCount.Inc(nil)
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		err = resetCatchpointStagingBalances(ctx, tx, newCatchup)
 		if err != nil {
@@ -213,7 +213,7 @@ func (c *CatchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context
 		}
 		return
 	})
-	ledger_resetstagingbalances_micros.AddMicrosecondsSince(start, nil)
+	ledgerResetstagingbalancesMicros.AddMicrosecondsSince(start, nil)
 	return
 }
 
@@ -262,7 +262,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	// TotalAccounts, TotalAccounts, Catchpoint, BlockHeaderDigest, BalancesRound
 	wdb := c.ledger.trackerDB().wdb
 	start := time.Now()
-	ledger_processstagingcontent_count.Inc(nil)
+	ledgerProcessstagingcontentCount.Inc(nil)
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		sq, err := accountsDbInit(tx, tx)
 		if err != nil {
@@ -276,7 +276,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 		err = accountsPutTotals(tx, fileHeader.Totals, true)
 		return
 	})
-	ledger_processstagingcontent_micros.AddMicrosecondsSince(start, nil)
+	ledgerProcessstagingcontentMicros.AddMicrosecondsSince(start, nil)
 	if err == nil {
 		progress.SeenHeader = true
 		progress.TotalAccounts = fileHeader.TotalAccounts
@@ -305,7 +305,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	proto := c.ledger.GenesisProto()
 	wdb := c.ledger.trackerDB().wdb
 	start := time.Now()
-	ledger_processstagingbalances_count.Inc(nil)
+	ledgerProcessstagingbalancesCount.Inc(nil)
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		// create the merkle trie for the balances
 		var mc *merkleCommitter
@@ -369,7 +369,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		err = progress.EvictAsNeeded(uint64(len(balances.Balances)))
 		return
 	})
-	ledger_processstagingbalances_micros.AddMicrosecondsSince(start, nil)
+	ledgerProcessstagingbalancesMicros.AddMicrosecondsSince(start, nil)
 	if err == nil {
 		progress.ProcessedAccounts += uint64(len(balances.Balances))
 		progress.ProcessedBytes += uint64(len(bytes))
@@ -427,7 +427,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 	blockRound = basics.Round(iRound)
 
 	start := time.Now()
-	ledger_verifycatchpoint_count.Inc(nil)
+	ledgerVerifycatchpointCount.Inc(nil)
 	err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		// create the merkle trie for the balances
 		mc, err0 := makeMerkleCommitter(tx, true)
@@ -451,7 +451,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 		}
 		return
 	})
-	ledger_verifycatchpoint_micros.AddMicrosecondsSince(start, nil)
+	ledgerVerifycatchpointMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return err
 	}
@@ -475,7 +475,7 @@ func (c *CatchpointCatchupAccessorImpl) StoreBalancesRound(ctx context.Context, 
 	balancesRound := blk.Round() - basics.Round(config.Consensus[blk.CurrentProtocol].MaxBalLookback)
 	wdb := c.ledger.trackerDB().wdb
 	start := time.Now()
-	ledger_storebalancesround_count.Inc(nil)
+	ledgerStorebalancesroundCount.Inc(nil)
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		sq, err := accountsDbInit(tx, tx)
 		if err != nil {
@@ -488,7 +488,7 @@ func (c *CatchpointCatchupAccessorImpl) StoreBalancesRound(ctx context.Context, 
 		}
 		return
 	})
-	ledger_storebalancesround_micros.AddMicrosecondsSince(start, nil)
+	ledgerStorebalancesroundMicros.AddMicrosecondsSince(start, nil)
 	return
 }
 
@@ -496,11 +496,11 @@ func (c *CatchpointCatchupAccessorImpl) StoreBalancesRound(ctx context.Context, 
 func (c *CatchpointCatchupAccessorImpl) StoreFirstBlock(ctx context.Context, blk *bookkeeping.Block) (err error) {
 	blockDbs := c.ledger.blockDB()
 	start := time.Now()
-	ledger_storefirstblock_count.Inc(nil)
+	ledgerStorefirstblockCount.Inc(nil)
 	err = blockDbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		return blockStartCatchupStaging(tx, *blk)
 	})
-	ledger_storefirstblock_micros.AddMicrosecondsSince(start, nil)
+	ledgerStorefirstblockMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return err
 	}
@@ -511,11 +511,11 @@ func (c *CatchpointCatchupAccessorImpl) StoreFirstBlock(ctx context.Context, blk
 func (c *CatchpointCatchupAccessorImpl) StoreBlock(ctx context.Context, blk *bookkeeping.Block) (err error) {
 	blockDbs := c.ledger.blockDB()
 	start := time.Now()
-	ledger_catchpoint_storeblock_count.Inc(nil)
+	ledgerCatchpointStoreblockCount.Inc(nil)
 	err = blockDbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		return blockPutStaging(tx, *blk)
 	})
-	ledger_catchpoint_storeblock_micros.AddMicrosecondsSince(start, nil)
+	ledgerCatchpointStoreblockMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return err
 	}
@@ -526,14 +526,14 @@ func (c *CatchpointCatchupAccessorImpl) StoreBlock(ctx context.Context, blk *boo
 func (c *CatchpointCatchupAccessorImpl) FinishBlocks(ctx context.Context, applyChanges bool) (err error) {
 	blockDbs := c.ledger.blockDB()
 	start := time.Now()
-	ledger_catchpoint_finishblocks_count.Inc(nil)
+	ledgerCatchpointFinishblocksCount.Inc(nil)
 	err = blockDbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		if applyChanges {
 			return blockCompleteCatchup(tx)
 		}
 		return blockAbortCatchup(tx)
 	})
-	ledger_catchpoint_finishblocks_micros.AddMicrosecondsSince(start, nil)
+	ledgerCatchpointFinishblocksMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return err
 	}
@@ -544,12 +544,12 @@ func (c *CatchpointCatchupAccessorImpl) FinishBlocks(ctx context.Context, applyC
 func (c *CatchpointCatchupAccessorImpl) EnsureFirstBlock(ctx context.Context) (blk bookkeeping.Block, err error) {
 	blockDbs := c.ledger.blockDB()
 	start := time.Now()
-	ledger_catchpoint_ensureblock1_count.Inc(nil)
+	ledgerCatchpointEnsureblock1Count.Inc(nil)
 	err = blockDbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		blk, err = blockEnsureSingleBlock(tx)
 		return
 	})
-	ledger_catchpoint_ensureblock1_micros.AddMicrosecondsSince(start, nil)
+	ledgerCatchpointEnsureblock1Micros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		return blk, err
 	}
@@ -575,7 +575,7 @@ func (c *CatchpointCatchupAccessorImpl) CompleteCatchup(ctx context.Context) (er
 func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err error) {
 	wdb := c.ledger.trackerDB().wdb
 	start := time.Now()
-	ledger_catchpoint_finish_bals_count.Inc(nil)
+	ledgerCatchpointFinishBalsCount.Inc(nil)
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		var balancesRound uint64
 		var totals AccountTotals
@@ -633,27 +633,27 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 
 		return
 	})
-	ledger_catchpoint_finish_bals_micros.AddMicrosecondsSince(start, nil)
+	ledgerCatchpointFinishBalsMicros.AddMicrosecondsSince(start, nil)
 	return err
 }
 
-var ledger_resetstagingbalances_count = metrics.NewCounter("ledger_resetstagingbalances_count", "calls")
-var ledger_resetstagingbalances_micros = metrics.NewCounter("ledger_resetstagingbalances_micros", "ms spent")
-var ledger_processstagingcontent_count = metrics.NewCounter("ledger_processstagingcontent_count", "calls")
-var ledger_processstagingcontent_micros = metrics.NewCounter("ledger_processstagingcontent_micros", "ms spent")
-var ledger_processstagingbalances_count = metrics.NewCounter("ledger_processstagingbalances_count", "calls")
-var ledger_processstagingbalances_micros = metrics.NewCounter("ledger_processstagingbalances_micros", "ms spent")
-var ledger_verifycatchpoint_count = metrics.NewCounter("ledger_verifycatchpoint_count", "calls")
-var ledger_verifycatchpoint_micros = metrics.NewCounter("ledger_verifycatchpoint_micros", "ms spent")
-var ledger_storebalancesround_count = metrics.NewCounter("ledger_storebalancesround_count", "calls")
-var ledger_storebalancesround_micros = metrics.NewCounter("ledger_storebalancesround_micros", "ms spent")
-var ledger_storefirstblock_count = metrics.NewCounter("ledger_storefirstblock_count", "calls")
-var ledger_storefirstblock_micros = metrics.NewCounter("ledger_storefirstblock_micros", "ms spent")
-var ledger_catchpoint_storeblock_count = metrics.NewCounter("ledger_catchpoint_storeblock_count", "calls")
-var ledger_catchpoint_storeblock_micros = metrics.NewCounter("ledger_catchpoint_storeblock_micros", "ms spent")
-var ledger_catchpoint_finishblocks_count = metrics.NewCounter("ledger_catchpoint_finishblocks_count", "calls")
-var ledger_catchpoint_finishblocks_micros = metrics.NewCounter("ledger_catchpoint_finishblocks_micros", "ms spent")
-var ledger_catchpoint_ensureblock1_count = metrics.NewCounter("ledger_catchpoint_ensureblock1_count", "calls")
-var ledger_catchpoint_ensureblock1_micros = metrics.NewCounter("ledger_catchpoint_ensureblock1_micros", "ms spent")
-var ledger_catchpoint_finish_bals_count = metrics.NewCounter("ledger_catchpoint_finish_bals_count", "calls")
-var ledger_catchpoint_finish_bals_micros = metrics.NewCounter("ledger_catchpoint_finish_bals_micros", "ms spent")
+var ledgerResetstagingbalancesCount = metrics.NewCounter("ledger_catchup_resetstagingbalances_count", "calls")
+var ledgerResetstagingbalancesMicros = metrics.NewCounter("ledger_catchup_resetstagingbalances_micros", "ms spent")
+var ledgerProcessstagingcontentCount = metrics.NewCounter("ledger_catchup_processstagingcontent_count", "calls")
+var ledgerProcessstagingcontentMicros = metrics.NewCounter("ledger_catchup_processstagingcontent_micros", "ms spent")
+var ledgerProcessstagingbalancesCount = metrics.NewCounter("ledger_catchup_processstagingbalances_count", "calls")
+var ledgerProcessstagingbalancesMicros = metrics.NewCounter("ledger_catchup_processstagingbalances_micros", "ms spent")
+var ledgerVerifycatchpointCount = metrics.NewCounter("ledger_catchup_verifycatchpoint_count", "calls")
+var ledgerVerifycatchpointMicros = metrics.NewCounter("ledger_catchup_verifycatchpoint_micros", "ms spent")
+var ledgerStorebalancesroundCount = metrics.NewCounter("ledger_catchup_storebalancesround_count", "calls")
+var ledgerStorebalancesroundMicros = metrics.NewCounter("ledger_catchup_storebalancesround_micros", "ms spent")
+var ledgerStorefirstblockCount = metrics.NewCounter("ledger_catchup_storefirstblock_count", "calls")
+var ledgerStorefirstblockMicros = metrics.NewCounter("ledger_catchup_storefirstblock_micros", "ms spent")
+var ledgerCatchpointStoreblockCount = metrics.NewCounter("ledger_catchup_catchpoint_storeblock_count", "calls")
+var ledgerCatchpointStoreblockMicros = metrics.NewCounter("ledger_catchup_catchpoint_storeblock_micros", "ms spent")
+var ledgerCatchpointFinishblocksCount = metrics.NewCounter("ledger_catchup_catchpoint_finishblocks_count", "calls")
+var ledgerCatchpointFinishblocksMicros = metrics.NewCounter("ledger_catchup_catchpoint_finishblocks_micros", "ms spent")
+var ledgerCatchpointEnsureblock1Count = metrics.NewCounter("ledger_catchup_catchpoint_ensureblock1_count", "calls")
+var ledgerCatchpointEnsureblock1Micros = metrics.NewCounter("ledger_catchup_catchpoint_ensureblock1_micros", "ms spent")
+var ledgerCatchpointFinishBalsCount = metrics.NewCounter("ledger_catchup_catchpoint_finish_bals_count", "calls")
+var ledgerCatchpointFinishBalsMicros = metrics.NewCounter("ledger_catchup_catchpoint_finish_bals_micros", "ms spent")

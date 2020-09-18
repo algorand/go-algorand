@@ -128,11 +128,11 @@ func OpenLedger(
 	l.setSynchronousMode(context.Background(), l.synchronousMode)
 
 	start := time.Now()
-	ledger_initblocksdb_count.Inc(nil)
+	ledgerInitblocksdbCount.Inc(nil)
 	err = l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
 	})
-	ledger_initblocksdb_micros.AddMicrosecondsSince(start, nil)
+	ledgerInitblocksdbMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		err = fmt.Errorf("OpenLedger.initBlocksDB %v", err)
 		return nil, err
@@ -201,7 +201,7 @@ func (l *Ledger) reloadLedger() error {
 func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	// Check that the genesis hash, if present, matches.
 	start := time.Now()
-	ledger_verifygenhash_count.Inc(nil)
+	ledgerVerifygenhashCount.Inc(nil)
 	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err := blockLatest(tx)
 		if err != nil {
@@ -222,7 +222,7 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 		}
 		return nil
 	})
-	ledger_verifygenhash_micros.AddMicrosecondsSince(start, nil)
+	ledgerVerifygenhashMicros.AddMicrosecondsSince(start, nil)
 	return
 }
 
@@ -652,7 +652,7 @@ type txlease struct {
 	lease  [32]byte
 }
 
-var ledger_initblocksdb_count = metrics.NewCounter("ledger_initblocksdb_count", "calls")
-var ledger_initblocksdb_micros = metrics.NewCounter("ledger_initblocksdb_micros", "ms spent")
-var ledger_verifygenhash_count = metrics.NewCounter("ledger_verifygenhash_count", "calls")
-var ledger_verifygenhash_micros = metrics.NewCounter("ledger_verifygenhash_micros", "ms spent")
+var ledgerInitblocksdbCount = metrics.NewCounter("ledgerInitblocksdbCount", "calls")
+var ledgerInitblocksdbMicros = metrics.NewCounter("ledgerInitblocksdbMicros", "ms spent")
+var ledgerVerifygenhashCount = metrics.NewCounter("ledgerVerifygenhashCount", "calls")
+var ledgerVerifygenhashMicros = metrics.NewCounter("ledgerVerifygenhashMicros", "ms spent")

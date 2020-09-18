@@ -37,6 +37,7 @@ func MakeCounter(metric MetricName) *Counter {
 	return c
 }
 
+// NewCounter is a shortcut to MakeCounter in one shorter line.
 func NewCounter(name, desc string) *Counter {
 	return MakeCounter(MetricName{Name: name, Description: desc})
 }
