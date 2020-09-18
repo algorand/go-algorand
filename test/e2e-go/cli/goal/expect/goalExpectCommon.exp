@@ -200,6 +200,7 @@ proc ::AlgorandGoal::CreateNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR
 
 # Start the network
 proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR TEST_ROOT_DIR } {
+    set timeout 120
     set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
     set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
     set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
@@ -1144,3 +1145,30 @@ proc ::AlgorandGoal::InspectTransactionFile { TRX_FILE } {
         eof
     }
 }
+
+# Run pingpong test
+proc ::AlgorandGoal::RunPingpong {DURATION PINGPONG_OPTIONS TEST_PRIMARY_NODE_DIR} {
+    set timeout [expr $DURATION + 60]
+    if { [ catch {
+        set pingpong_base "pingpong run --duration $DURATION -d $TEST_PRIMARY_NODE_DIR --quiet "
+        set pingpong_command [concat $pingpong_base $PINGPONG_OPTIONS]
+        puts "starting pingpong test with command:  $pingpong_command"
+        eval spawn $pingpong_command
+        expect {
+            timeout { puts "pingpong test interrupted by timeout, terminating after $timeout seconds" }
+            -re {Sent (\d+) transactions \((\d+) attempted\).} {
+                    set actual $expect_out(1,string) ;
+                    set attempted $expect_out(2,string) ;
+                    puts "actual: $actual, attempted: $attempted";
+                    if { $actual != $attempted } then { ::AlgorandGoal::Abort "Pingpong attempted to send $attempted transactions, but actual was $actual"; break;}
+                    exp_continue
+                }
+            "Terminating after max run time of" {puts "end of ping pong test"}
+            eof {::AlgorandGoal::Abort "pingpong terminated unexpectedly: $expect_out(buffer)"}
+            "Error" {::AlgorandGoal::Abort "error running pingpong: $expect_out(buffer)"}
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in RunPingpong: $EXCEPTION"
+    }
+}
+
