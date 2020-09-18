@@ -652,7 +652,7 @@ type txlease struct {
 	lease  [32]byte
 }
 
-var ledgerInitblocksdbCount = metrics.NewCounter("ledgerInitblocksdbCount", "calls")
-var ledgerInitblocksdbMicros = metrics.NewCounter("ledgerInitblocksdbMicros", "µs spent")
-var ledgerVerifygenhashCount = metrics.NewCounter("ledgerVerifygenhashCount", "calls")
-var ledgerVerifygenhashMicros = metrics.NewCounter("ledgerVerifygenhashMicros", "µs spent")
+var ledgerInitblocksdbCount = metrics.NewCounter("ledger_initblocksdb_count", "calls")
+var ledgerInitblocksdbMicros = metrics.NewCounter("ledger_initblocksdb_micros", "µs spent")
+var ledgerVerifygenhashCount = metrics.NewCounter("ledger_verifygenhash_count", "calls")
+var ledgerVerifygenhashMicros = metrics.NewCounter("ledger_verifygenhash_micros", "µs spent")
