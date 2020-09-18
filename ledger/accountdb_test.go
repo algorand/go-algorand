@@ -350,7 +350,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	var totalOnline, totalOffline, totalNotPart uint64
 
 	for addr, data := range accts {
-		d, err := aq.lookup(addr)
+		d, _, err := aq.lookup(addr)
 		require.NoError(t, err)
 		require.Equal(t, d, data)
 
@@ -378,7 +378,7 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
 	require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
 
-	d, err := aq.lookup(randomAddress())
+	d, _, err := aq.lookup(randomAddress())
 	require.NoError(t, err)
 	require.Equal(t, d, basics.AccountData{})
 

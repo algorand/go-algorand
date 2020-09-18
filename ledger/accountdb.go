@@ -422,17 +422,17 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 	var err error
 	qs := &accountsDbQueries{}
 
-	qs.listCreatablesStmt, err = r.Prepare("SELECT asset, creator FROM assetcreators WHERE asset <= ? AND ctype = ? ORDER BY asset desc LIMIT ?")
+	qs.listCreatablesStmt, err = r.Prepare("SELECT rnd, asset, creator FROM assetcreators INNER JOIN acctrounds WHERE acctrounds.id='acctbase' AND assetcreators.asset <= ? AND assetcreators.ctype = ? ORDER BY assetcreators.asset desc LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.lookupStmt, err = r.Prepare("SELECT data FROM accountbase WHERE address=?")
+	qs.lookupStmt, err = r.Prepare("SELECT rnd, COALESCE((select data from accountbase where address=? limit 1), '') AS data FROM acctrounds WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.lookupCreatorStmt, err = r.Prepare("SELECT creator FROM assetcreators WHERE asset = ? AND ctype = ?")
+	qs.lookupCreatorStmt, err = r.Prepare("SELECT rnd, creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
@@ -479,7 +479,7 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 	return qs, nil
 }
 
-func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, err error) {
+func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {
 		// Query for assets in range
 		rows, err := qs.listCreatablesStmt.Query(maxIdx, ctype, maxResults)
@@ -492,7 +492,7 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 		var buf []byte
 		var cl basics.CreatableLocator
 		for rows.Next() {
-			err := rows.Scan(&cl.Index, &buf)
+			err := rows.Scan(&dbRound, &cl.Index, &buf)
 			if err != nil {
 				return err
 			}
@@ -505,14 +505,14 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 	return
 }
 
-func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, err error) {
+func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
-		err := qs.lookupCreatorStmt.QueryRow(cidx, ctype).Scan(&buf)
+		err := qs.lookupCreatorStmt.QueryRow(cidx, ctype).Scan(&dbRound, &buf)
 
-		// Common error: creatable does not exist
+		// this shouldn't happen unless we can't figure the round number.
 		if err == sql.ErrNoRows {
-			return nil
+			return fmt.Errorf("lookupCreator was unable to retrieve round number")
 		}
 
 		// Some other database error
@@ -520,24 +520,30 @@ func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype bas
 			return err
 		}
 
-		ok = true
-		copy(addr[:], buf)
+		if len(buf) > 0 {
+			ok = true
+			copy(addr[:], buf)
+		}
 		return nil
 	})
 	return
 }
 
-func (qs *accountsDbQueries) lookup(addr basics.Address) (data basics.AccountData, err error) {
+func (qs *accountsDbQueries) lookup(addr basics.Address) (data basics.AccountData, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
-		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&buf)
+		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&dbRound, &buf)
 		if err == nil {
-			return protocol.Decode(buf, &data)
+			if len(buf) > 0 {
+				return protocol.Decode(buf, &data)
+			}
+			// we don't have that account, just return the database round.
+			return nil
 		}
 
 		if err == sql.ErrNoRows {
 			// Return the zero value of data
-			return nil
+			return fmt.Errorf("unable to query account data for address %v : no rows retrieved", addr)
 		}
 
 		return err
