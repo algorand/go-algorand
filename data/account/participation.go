@@ -21,7 +21,6 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/algorand/go-algorand/logging"
-	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -89,14 +88,10 @@ func (part Participation) DeleteOldKeys(current basics.Round, proto config.Conse
 		keyDilution = proto.DefaultKeyDilution
 	}
 
+	part.Voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(current, keyDilution), keyDilution)
+
 	errorCh := make(chan error, 1)
-	deleteOldKeys := func(voting *crypto.OneTimeSignatureSecrets) {
-		startt := time.Now()
-		voting.DeleteBeforeFineGrained(basics.OneTimeIDForRound(current, keyDilution), keyDilution)
-		deleteBeforeFineGrainedTime := time.Now().Sub(startt)
-		startt = time.Now()
-		votingSnapshot := voting.Snapshot()
-		encodedVotingSecrets := protocol.Encode(&votingSnapshot)
+	deleteOldKeys := func(encodedVotingSecrets []byte) {
 		errorCh <- part.Store.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			_, err := tx.Exec("UPDATE ParticipationAccount SET voting=?", encodedVotingSecrets)
 			if err != nil {
@@ -104,11 +99,11 @@ func (part Participation) DeleteOldKeys(current basics.Round, proto config.Conse
 			}
 			return nil
 		})
-		logging.Base().Infof("tsachi : Participation.DeleteOldKeys took %v+%v", deleteBeforeFineGrainedTime, time.Now().Sub(startt))
 		close(errorCh)
 	}
-
-	go deleteOldKeys(part.Voting)
+	voting := part.Voting.Snapshot()
+	encodedVotingSecrets := protocol.Encode(&voting)
+	go deleteOldKeys(encodedVotingSecrets)
 	return errorCh
 }
 
