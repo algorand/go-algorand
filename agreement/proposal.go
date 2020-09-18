@@ -133,7 +133,7 @@ func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, pe
 
 	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
 	if err != nil {
-		err = fmt.Errorf("failed to obtain consensus parameters in round %d: %v", ParamsRound(rnd), err)
+		reterr = fmt.Errorf("failed to obtain consensus parameters in round %d: %v", ParamsRound(rnd), err)
 		return
 	}
 	var alpha crypto.Digest
@@ -184,7 +184,7 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 	}
 
 	balanceRound := balanceRound(rnd, cparams)
-	proposerRecord, err := ledger.BalanceRecord(balanceRound, value.OriginalProposer)
+	proposerRecord, err := ledger.Lookup(balanceRound, value.OriginalProposer)
 	if err != nil {
 		return fmt.Errorf("failed to obtain balance record for address %v in round %d: %v", value.OriginalProposer, balanceRound, err)
 	}
@@ -201,13 +201,15 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 		if !ok {
 			return fmt.Errorf("payload seed proof malformed (%v, %v)", prevSeed, p.SeedProof)
 		}
+		// TODO remove the following Hash() call,
+		// redundant with the Verify() call above.
 		vrfOut, ok = p.SeedProof.Hash()
 		if !ok {
 			// If proof2hash fails on a proof we produced with VRF Prove, this indicates our VRF code has a dangerous bug.
 			// Panicking is the only safe thing to do.
 			logging.Base().Panicf("VrfProof.Hash() failed on a proof we ourselves generated; this indicates a bug in the VRF code: %v", p.SeedProof)
 		}
-		alpha = crypto.HashObj(proposerSeed{Addr: proposerRecord.Addr, VRF: vrfOut})
+		alpha = crypto.HashObj(proposerSeed{Addr: value.OriginalProposer, VRF: vrfOut})
 	} else {
 		alpha = crypto.HashObj(prevSeed)
 	}

@@ -636,12 +636,12 @@ func generatePseudoRandomVRF(keynum int) *crypto.VRFSecrets {
 	}
 }
 
-func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) (accounts []account.Participation, balances map[basics.Address]basics.BalanceRecord) {
+func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) (accounts []account.Participation, balances map[basics.Address]basics.AccountData) {
 	off := int(rand.Uint32() >> 2) // prevent name collision from running tests more than once
 
 	// system state setup: keygen, stake initialization
 	accounts = make([]account.Participation, numNodes)
-	balances = make(map[basics.Address]basics.BalanceRecord, numNodes)
+	balances = make(map[basics.Address]basics.AccountData, numNodes)
 	var seed crypto.Seed
 	copy(seed[:], rootSeed)
 
@@ -703,10 +703,7 @@ func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) 
 			VoteID:      accounts[i].VotingSecrets().OneTimeSignatureVerifier,
 			SelectionID: accounts[i].VRFSecrets().PK,
 		}
-		balances[rootAddress] = basics.BalanceRecord{
-			Addr:        rootAddress,
-			AccountData: acctData,
-		}
+		balances[rootAddress] = acctData
 	}
 	return
 }
@@ -725,12 +722,12 @@ func (testingRand) Uint64() uint64 {
 	return maxuint64 / 2
 }
 
-func setupAgreement(t *testing.T, numNodes int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.BalanceRecord) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock, []Ledger, *activityMonitor) {
+func setupAgreement(t *testing.T, numNodes int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock, []Ledger, *activityMonitor) {
 	var validator testBlockValidator
 	return setupAgreementWithValidator(t, numNodes, traceLevel, validator, ledgerFactory)
 }
 
-func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLevel, validator BlockValidator, ledgerFactory func(map[basics.Address]basics.BalanceRecord) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock, []Ledger, *activityMonitor) {
+func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLevel, validator BlockValidator, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock, []Ledger, *activityMonitor) {
 	bufCap := 1000 // max number of buffered messages
 
 	// system state setup: keygen, stake initialization
@@ -895,7 +892,7 @@ func simulateAgreement(t *testing.T, numNodes int, numRounds int, traceLevel tra
 	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, makeTestLedger)
 }
 
-func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.BalanceRecord) Ledger) {
+func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) {
 	_, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, traceLevel, ledgerFactory)
 	startRound := baseLedger.NextRound()
 	defer cleanupFn()
