@@ -479,6 +479,7 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 	return qs, nil
 }
 
+// listCreatables returns an array of CreatableLocator which have CreatableIndex smaller or equal to maxIdx and are of the provided CreatableType.
 func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {
 		// Query for assets in range
@@ -535,6 +536,9 @@ func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype bas
 	return
 }
 
+// lookup looks up for a the account data given it's address. It returns the current database round and the matching
+// account data, if such was found. If matching account data was found for the given address, the empty account data would
+// be retrieved.
 func (qs *accountsDbQueries) lookup(addr basics.Address) (data basics.AccountData, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
@@ -547,9 +551,10 @@ func (qs *accountsDbQueries) lookup(addr basics.Address) (data basics.AccountDat
 			return nil
 		}
 
+		// this should never happen; it indicates that we don't have a current round in the acctrounds table.
 		if err == sql.ErrNoRows {
 			// Return the zero value of data
-			return fmt.Errorf("unable to query account data for address %v : no rows retrieved", addr)
+			return fmt.Errorf("unable to query account data for address %v : %w", addr, err)
 		}
 
 		return err
