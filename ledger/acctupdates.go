@@ -571,58 +571,7 @@ func (au *accountUpdates) GetLastCatchpointLabel() string {
 
 // GetCreatorForRound returns the creator for a given asset/app index at a given round
 func (au *accountUpdates) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
-	au.accountsMu.RLock()
-	var dbRound basics.Round
-	var offset uint64
-	for {
-		currentDbRound := au.dbRound
-		offset, err = au.roundOffset(rnd)
-		if err != nil {
-			au.accountsMu.RUnlock()
-			return basics.Address{}, false, err
-		}
-
-		// If this is the most recent round, au.creatables has will have the latest
-		// state and we can skip scanning backwards over creatableDeltas
-		if offset == uint64(len(au.deltas)) {
-			// Check if we already have the asset/creator in cache
-			creatableDelta, ok := au.creatables[cidx]
-			if ok {
-				au.accountsMu.RUnlock()
-				if creatableDelta.created && creatableDelta.ctype == ctype {
-					return creatableDelta.creator, true, nil
-				}
-				return basics.Address{}, false, nil
-			}
-		} else {
-			for offset > 0 {
-				offset--
-				creatableDelta, ok := au.creatableDeltas[offset][cidx]
-				if ok {
-					au.accountsMu.RUnlock()
-					if creatableDelta.created && creatableDelta.ctype == ctype {
-						return creatableDelta.creator, true, nil
-					}
-					return basics.Address{}, false, nil
-				}
-			}
-		}
-
-		au.accountsMu.RUnlock()
-		// Check the database
-		creator, ok, dbRound, err = au.accountsq.lookupCreator(cidx, ctype)
-
-		if dbRound == currentDbRound {
-			return
-		}
-		if dbRound < currentDbRound {
-			au.log.Errorf("Lookup: database round %d is behind in-memory round %d", dbRound, currentDbRound)
-		}
-		au.accountsMu.RLock()
-		for currentDbRound >= au.dbRound {
-			au.accountsReadCond.Wait()
-		}
-	}
+	return au.getCreatorForRoundImpl(rnd, cidx, ctype, true /* take the lock */)
 }
 
 // committedUpTo enqueues commiting the balances for round committedRound-lookback.
@@ -862,7 +811,7 @@ func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round,
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
 func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
-	return aul.au.getCreatorForRoundImpl(rnd, cidx, ctype)
+	return aul.au.getCreatorForRoundImpl(rnd, cidx, ctype, false /* don't sync */)
 }
 
 // totalsImpl returns the totals for a given round
@@ -1538,39 +1487,74 @@ func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, with
 }
 
 // getCreatorForRoundImpl returns the asset/app creator for a given asset/app index at a given round
-func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return basics.Address{}, false, err
+func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType, syncronized bool) (creator basics.Address, ok bool, err error) {
+	unlock := false
+	if syncronized {
+		au.accountsMu.RLock()
+		unlock = true
 	}
-
-	// If this is the most recent round, au.creatables has will have the latest
-	// state and we can skip scanning backwards over creatableDeltas
-	if offset == uint64(len(au.deltas)) {
-		// Check if we already have the asset/creator in cache
-		creatableDelta, ok := au.creatables[cidx]
-		if ok {
-			if creatableDelta.created && creatableDelta.ctype == ctype {
-				return creatableDelta.creator, true, nil
-			}
-			return basics.Address{}, false, nil
+	defer func() {
+		if unlock {
+			au.accountsMu.RUnlock()
 		}
-	} else {
-		for offset > 0 {
-			offset--
-			creatableDelta, ok := au.creatableDeltas[offset][cidx]
+	}()
+	var dbRound basics.Round
+	var offset uint64
+	for {
+		currentDbRound := au.dbRound
+		offset, err = au.roundOffset(rnd)
+		if err != nil {
+			return basics.Address{}, false, err
+		}
+
+		// If this is the most recent round, au.creatables has will have the latest
+		// state and we can skip scanning backwards over creatableDeltas
+		if offset == uint64(len(au.deltas)) {
+			// Check if we already have the asset/creator in cache
+			creatableDelta, ok := au.creatables[cidx]
 			if ok {
 				if creatableDelta.created && creatableDelta.ctype == ctype {
 					return creatableDelta.creator, true, nil
 				}
 				return basics.Address{}, false, nil
 			}
+		} else {
+			for offset > 0 {
+				offset--
+				creatableDelta, ok := au.creatableDeltas[offset][cidx]
+				if ok {
+					if creatableDelta.created && creatableDelta.ctype == ctype {
+						return creatableDelta.creator, true, nil
+					}
+					return basics.Address{}, false, nil
+				}
+			}
+		}
+
+		if syncronized {
+			au.accountsMu.RUnlock()
+			unlock = false
+		}
+		// Check the database
+		creator, ok, dbRound, err = au.accountsq.lookupCreator(cidx, ctype)
+
+		if dbRound == currentDbRound {
+			return
+		}
+		if syncronized {
+			if dbRound < currentDbRound {
+				au.log.Errorf("accountUpdates.getCreatorForRoundImpl: database round %d is behind in-memory round %d", dbRound, currentDbRound)
+			}
+			au.accountsMu.RLock()
+			unlock = true
+			for currentDbRound >= au.dbRound {
+				au.accountsReadCond.Wait()
+			}
+		} else {
+			au.log.Errorf("accountUpdates.getCreatorForRoundImpl: database round %d mismatching in-memory round %d", dbRound, currentDbRound)
+			return
 		}
 	}
-
-	// Check the database
-	creator, ok, _, err = au.accountsq.lookupCreator(cidx, ctype)
-	return
 }
 
 // accountsCreateCatchpointLabel creates a catchpoint label and write it.
