@@ -201,7 +201,6 @@ type BlockEvaluator struct {
 type ledgerForEvaluator interface {
 	GenesisHash() crypto.Digest
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
-	Lookup(basics.Round, basics.Address) (basics.AccountData, error)
 	Totals(basics.Round) (AccountTotals, error)
 	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
@@ -252,6 +251,8 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		eval.block.Payset = make([]transactions.SignedTxnInBlock, 0, paysetHint)
 	}
 
+	prevProto := proto
+
 	if hdr.Round > 0 {
 		var err error
 		eval.prevHeader, err = l.BlockHdr(base.rnd)
@@ -260,6 +261,11 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		}
 
 		base.txnCount = eval.prevHeader.TxnCounter
+
+		prevProto, ok = config.Consensus[eval.prevHeader.CurrentProtocol]
+		if !ok {
+			return nil, protocol.Error(eval.prevHeader.CurrentProtocol)
+		}
 	}
 
 	prevTotals, err := l.Totals(eval.prevHeader.Round)
@@ -268,10 +274,14 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 	}
 
 	poolAddr := eval.prevHeader.RewardsPool
-	incentivePoolData, err := l.Lookup(eval.prevHeader.Round, poolAddr)
+	// get the reward pool account data without any rewards
+	incentivePoolData, err := l.LookupWithoutRewards(eval.prevHeader.Round, poolAddr)
 	if err != nil {
 		return nil, err
 	}
+
+	// this is expected to be a no-op, but update the rewards on the rewards pool if it was configured to receive rewards ( unlike mainnet ).
+	incentivePoolData = incentivePoolData.WithUpdatedRewards(prevProto, eval.prevHeader.RewardsLevel)
 
 	if generate {
 		if eval.proto.SupportGenesisHash {
