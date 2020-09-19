@@ -41,7 +41,6 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/condvar"
 	"github.com/algorand/go-algorand/util/db"
 )
 
@@ -200,7 +199,8 @@ type accountUpdates struct {
 	// accountsMu is the syncronization mutex for accessing the various non-static varaibles.
 	accountsMu deadlock.RWMutex
 
-	accountsCond *condvar.RWCond
+	// accountsReadCond used to syncronize read access to the internal data structures.
+	accountsReadCond *sync.Cond
 
 	// accountsWriting provides syncronization around the background writing of account balances.
 	accountsWriting sync.WaitGroup
@@ -250,7 +250,7 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	// initialize the commitSyncerClosed with a closed channel ( since the commitSyncer go-routine is not active )
 	au.commitSyncerClosed = make(chan struct{})
 	close(au.commitSyncerClosed)
-	au.accountsCond = condvar.NewRWCond(&au.accountsMu)
+	au.accountsReadCond = sync.NewCond(au.accountsMu.RLocker())
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
@@ -381,8 +381,8 @@ func (au *accountUpdates) Lookup(rnd basics.Round, addr basics.Address, withRewa
 			au.log.Errorf("Lookup: database round %d is behind in-memory round %d", dbRound, currentDbRound)
 		}
 		au.accountsMu.RLock()
-		for currentDbRound == au.dbRound {
-			au.accountsCond.RWait()
+		for currentDbRound >= au.dbRound {
+			au.accountsReadCond.Wait()
 		}
 	}
 }
@@ -477,8 +477,8 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 			au.log.Errorf("listCreatables: database round %d is behind in-memory round %d", dbRound, currentDbRound)
 		}
 		au.accountsMu.RLock()
-		for currentDbRound == au.dbRound {
-			au.accountsCond.RWait()
+		for currentDbRound >= au.dbRound {
+			au.accountsReadCond.Wait()
 		}
 	}
 }
@@ -571,8 +571,8 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 		if dbRound != currentDbRound && dbRound != basics.Round(0) {
 			// database round doesn't match the last au.dbRound we sampled.
 			au.accountsMu.RLock()
-			for currentDbRound == au.dbRound {
-				au.accountsCond.RWait()
+			for currentDbRound >= au.dbRound {
+				au.accountsReadCond.Wait()
 			}
 			continue
 		}
@@ -664,11 +664,9 @@ func (au *accountUpdates) GetCreatorForRound(rnd basics.Round, cidx basics.Creat
 			au.log.Errorf("Lookup: database round %d is behind in-memory round %d", dbRound, currentDbRound)
 		}
 		au.accountsMu.RLock()
-		for currentDbRound == au.dbRound {
-			au.accountsCond.RWait()
+		for currentDbRound >= au.dbRound {
+			au.accountsReadCond.Wait()
 		}
-
-		return
 	}
 }
 
@@ -1828,7 +1826,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.lastFlushTime = flushTime
 
 	au.accountsMu.Unlock()
-	au.accountsCond.RBroadcast()
+	au.accountsReadCond.Broadcast()
 
 	if isCatchpointRound && au.archivalLedger && catchpointLabel != "" {
 		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.
