@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/crypto"
-	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
@@ -40,37 +40,20 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 		return
 	}
 
+	wallet, walletErr := ac.GetUnencryptedWalletHandle()
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "unable to access wallet %v\n", walletErr)
+		err = walletErr
+		return
+	}
 	if cfg.NumAsset > 0 {
 		// zero out max amount for asset transactions
 		cfg.MaxAmt = 0
 
-		wallet, walletErr := ac.GetUnencryptedWalletHandle()
+		var assetAccounts map[string]uint64
+		assetAccounts, err = prepareNewAccounts(ac, cfg, wallet, accounts)
 		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "unable to access wallet %v\n", walletErr)
-			err = walletErr
-			return
-		}
-		fmt.Printf("Generating %v new accounts for asset transfer test\n", cfg.NumPartAccounts)
-		// remove existing accounts except for src account
-		for k := range accounts {
-			if k != cfg.SrcAccount {
-				delete(accounts, k)
-			}
-		}
-		// create new accounts for asset testing
-		assetAccounts := make(map[string]uint64)
-		assetAccounts, err = generateAccounts(ac, assetAccounts, cfg.NumPartAccounts-1, wallet)
-
-		for addr := range assetAccounts {
-			fmt.Printf("generated account %v\n", addr)
-		}
-
-		for k := range assetAccounts {
-			accounts[k] = assetAccounts[k]
-		}
-		err = fundAccounts(accounts, ac, cfg)
-		if err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
+			_, _ = fmt.Fprintf(os.Stderr, "prepare new accounts failed: %v\n", err)
 			return
 		}
 
@@ -80,21 +63,54 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 			return
 		}
 
-		for k := range assetAccounts {
-			accounts[k] = assetAccounts[k]
+		if !cfg.Quiet {
+			for addr := range accounts {
+				fmt.Printf("final prepareAccounts, account addr: %s, balance: %d\n", addr, accounts[addr])
+			}
 		}
 	} else if cfg.NumApp > 0 {
-		appParams, err = prepareApps(accounts, ac, cfg)
+
+		var appAccounts map[string]uint64
+		appAccounts, err = prepareNewAccounts(ac, cfg, wallet, accounts)
 		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "prepare new accounts failed: %v\n", err)
+			return
+		}
+		appParams, err = prepareApps(appAccounts, ac, cfg)
+		if err != nil {
+			return
+		}
+		if !cfg.Quiet {
+			for addr := range accounts {
+				fmt.Printf("final prepareAccounts, account addr: %s, balance: %d\n", addr, accounts[addr])
+			}
+		}
+	} else {
+		err = fundAccounts(accounts, ac, cfg)
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
 			return
 		}
 	}
 
-	for addr := range accounts {
-		fmt.Printf("**** participant account %v\n", addr)
-	}
+	return
+}
 
-	err = fundAccounts(accounts, ac, cfg)
+func prepareNewAccounts(client libgoal.Client, cfg PpConfig, wallet []byte, accounts map[string]uint64) (newAccounts map[string]uint64, err error) {
+	// remove existing accounts except for src account
+	for k := range accounts {
+		if k != cfg.SrcAccount {
+			delete(accounts, k)
+		}
+	}
+	// create new accounts for testing
+	newAccounts = make(map[string]uint64)
+	newAccounts, err = generateAccounts(client, newAccounts, cfg.NumPartAccounts-1, wallet)
+
+	for k := range newAccounts {
+		accounts[k] = newAccounts[k]
+	}
+	err = fundAccounts(accounts, client, cfg)
 	if err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "fund accounts failed %v\n", err)
 		return
@@ -107,6 +123,11 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 func computeAccountMinBalance(cfg PpConfig) (requiredBalance uint64) {
 	const minActiveAccountBalance uint64 = 100000 // min balance for any active account
 
+	if cfg.NumApp > 0 {
+		requiredBalance = (cfg.MinAccountFunds + (cfg.MaxAmt+cfg.MaxFee)*10) * 2
+		fmt.Printf("required min balance for app accounts: %d\n", requiredBalance)
+		return
+	}
 	var fee uint64 = 1000
 	if cfg.MinFee > fee {
 		fee = cfg.MinFee
@@ -148,24 +169,44 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 
 	fmt.Printf("adjusting account balance to %d\n", minFund)
 	for addr, balance := range accounts {
-		fmt.Printf("adjusting balance of account %v\n", addr)
+		if !cfg.Quiet {
+			fmt.Printf("adjusting balance of account %v\n", addr)
+		}
 		if balance < minFund {
 			toSend := minFund - balance
 			if srcFunds <= toSend {
 				return fmt.Errorf("source account %s has insufficient funds %d - needs %d", cfg.SrcAccount, srcFunds, toSend)
 			}
 			srcFunds -= toSend
-			_, err := client.SendPaymentFromUnencryptedWallet(cfg.SrcAccount, addr, fee, toSend, nil)
+			if !cfg.Quiet {
+				fmt.Printf("adjusting balance of account %v by %d\n ", addr, toSend)
+			}
+			_, err := sendPaymentFromUnencryptedWallet(client, cfg.SrcAccount, addr, fee, toSend, nil)
 			if err != nil {
 				return err
 			}
 			accounts[addr] = minFund
+			if !cfg.Quiet {
+				fmt.Printf("account balance for key %s is %d\n", addr, accounts[addr])
+			}
 
 			totalSent++
 			throttleTransactionRate(startTime, cfg, totalSent)
 		}
 	}
 	return nil
+}
+
+func sendPaymentFromUnencryptedWallet(client libgoal.Client, from, to string, fee, amount uint64, note []byte) (transactions.Transaction, error) {
+	wh, err := client.GetUnencryptedWalletHandle()
+	if err != nil {
+		return transactions.Transaction{}, err
+	}
+	// generate a random lease to avoid duplicate transaction failures
+	var lease [32]byte
+	crypto.RandBytes(lease[:])
+
+	return client.SendPaymentFromWalletWithLease(wh, nil, from, to, fee, amount, note, "", lease, 0, 0)
 }
 
 func refreshAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) error {
@@ -221,6 +262,10 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 	} else {
 		runTime = 10000 * time.Hour // Effectively 'forever'
 	}
+	var endTime time.Time
+	if cfg.MaxRuntime > 0 {
+		endTime = time.Now().Add(cfg.MaxRuntime)
+	}
 	restTime := cfg.RestTime
 	refreshTime := time.Now().Add(cfg.RefreshTime)
 
@@ -234,6 +279,11 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 
 		var totalSent, totalSucceeded uint64
 		for !time.Now().After(stopTime) {
+			if cfg.MaxRuntime > 0 && time.Now().After(endTime) {
+				fmt.Printf("Terminating after max run time of %.f seconds\n", cfg.MaxRuntime.Seconds())
+				return
+			}
+
 			minimumAmount := cfg.MinAccountFunds + (cfg.MaxAmt+cfg.MaxFee)*2
 			fromList := listSufficientAccounts(accounts, minimumAmount, cfg.SrcAccount)
 			// in group tests txns are sent back and forth, so both parties need funds
@@ -358,6 +408,9 @@ func sendFromTo(
 
 			sentCount++
 			_, sendErr = client.BroadcastTransaction(stxn)
+			if sendErr != nil {
+				fmt.Printf("Warning, cannot broadcast txn, %s\n", sendErr)
+			}
 		} else {
 			// Generate txn group
 
