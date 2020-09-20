@@ -65,30 +65,30 @@ proc ::AlgorandGoal::Abort { ERROR } {
 proc ::AlgorandGoal::CheckProcessReturnedCode {ABORT} {
     upvar spawn_id spawn_id
     lassign [wait -i $spawn_id] PID SPAWNID OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
-
+    puts "CheckProcessReturnedCode vars PID = $PID SPAWNID = $SPAWNID OS_CODE = $OS_CODE ERR_CODE = $ERR_CODE KILLED = $KILLED KILL_SIGNAL = $KILL_SIGNAL EXP = $EXP"
     if {$KILLED == "CHILDKILLED"} {
-	if {$KILL_SIGNAL == "SIGHUP" && $EXP == "hangup"} {
-	    # this is caused by expect close. Will ignore.
-	    return 0
-	}
-	if {$ABORT} {
-	    ::AlgorandGoal::Abort "process killed: $KILL_SIGNAL $EXP"
-	}
-	return [list 1 $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
+        if {$KILL_SIGNAL == "SIGHUP" && $EXP == "hangup"} {
+            # this is caused by expect close. Will ignore.
+            return 0
+        }
+        if {$ABORT} {
+            ::AlgorandGoal::Abort "process killed: $KILL_SIGNAL $EXP"
+        }
+        return [list 1 $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
     }
 
     if {$OS_CODE == -1} {
-	if {$ABORT} {
-	    ::AlgorandGoal::Abort "OS error code: $ERR_CODE"
-	}
-	return [list 1 $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
+        if {$ABORT} {
+            ::AlgorandGoal::Abort "OS error code: $ERR_CODE"
+        }
+        return [list 1 $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
     } else {
-	if {$ERR_CODE != 0} {
-	    if {$ABORT} {
-		::AlgorandGoal::Abort "porcess returned non-zero value: $ERR_CODE"
-	    }
-	    return [list 1 $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
-	}
+        if {$ERR_CODE != 0} {
+            if {$ABORT} {
+                ::AlgorandGoal::Abort "porcess returned non-zero value: $ERR_CODE"
+            }
+            return [list 1 $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
+        }
     }
     return 0
 }
