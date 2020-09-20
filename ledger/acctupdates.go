@@ -444,6 +444,7 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 	au.accountsMu.RLock()
 	for {
 		currentDbRound := au.dbRound
+		currentDeltaLen := len(au.deltas)
 		offset, err := au.roundOffset(rnd)
 		if err != nil {
 			au.accountsMu.RUnlock()
@@ -527,7 +528,7 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 		if dbRound != currentDbRound && dbRound != basics.Round(0) {
 			// database round doesn't match the last au.dbRound we sampled.
 			au.accountsMu.RLock()
-			for currentDbRound >= au.dbRound {
+			for currentDbRound >= au.dbRound && currentDeltaLen == len(au.deltas) {
 				au.accountsReadCond.Wait()
 			}
 			continue
