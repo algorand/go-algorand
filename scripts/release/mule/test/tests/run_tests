@@ -45,9 +45,17 @@ fi
 
 if [ "$PKG_TYPE" == "deb" ]
 then
-    dpkg -i "$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*"$FULLVERSION"*.deb
+    for deb in $(ls "$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*"$FULLVERSION"*.deb); do
+        if [[ ! "$deb" =~ devtools ]]; then
+            dpkg -i "$deb"
+        fi
+    done
 else
-    yum install "$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*"$FULLVERSION"*.rpm -y
+    for rpm in $(ls "$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*"$FULLVERSION"*.rpm); do
+        if [[ ! "$rpm" =~ devtools ]]; then
+            yum install "$rpm" -y
+        fi
+    done
 fi
 
 export BRANCH
