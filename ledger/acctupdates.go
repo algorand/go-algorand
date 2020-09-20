@@ -354,6 +354,7 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 	au.accountsMu.RLock()
 	for {
 		currentDbRound := au.dbRound
+		currentDeltaLen := len(au.deltas)
 		// Sort indices for creatables that have been created/deleted. If this
 		// turns out to be too inefficient, we could keep around a heap of
 		// created/deleted asset indices in memory.
@@ -429,7 +430,7 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 			au.log.Errorf("listCreatables: database round %d is behind in-memory round %d", dbRound, currentDbRound)
 		}
 		au.accountsMu.RLock()
-		for currentDbRound >= au.dbRound {
+		for currentDbRound >= au.dbRound && currentDeltaLen == len(au.deltas) {
 			au.accountsReadCond.Wait()
 		}
 	}
@@ -689,8 +690,9 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 // which invokes the internal implementation after taking the lock.
 func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	au.accountsMu.Lock()
-	defer au.accountsMu.Unlock()
 	au.newBlockImpl(blk, delta)
+	au.accountsMu.Unlock()
+	au.accountsReadCond.Broadcast()
 }
 
 // Totals returns the totals for a given round
@@ -1428,6 +1430,7 @@ func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, with
 	}
 	for {
 		currentDbRound := au.dbRound
+		currentDeltaLen := len(au.deltas)
 		offset, err = au.roundOffset(rnd)
 		if err != nil {
 			return
@@ -1475,7 +1478,7 @@ func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, with
 			}
 			au.accountsMu.RLock()
 			needUnlock = true
-			for currentDbRound >= au.dbRound {
+			for currentDbRound >= au.dbRound && currentDeltaLen == len(au.deltas) {
 				au.accountsReadCond.Wait()
 			}
 		} else {
@@ -1502,6 +1505,7 @@ func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.C
 	var offset uint64
 	for {
 		currentDbRound := au.dbRound
+		currentDeltaLen := len(au.deltas)
 		offset, err = au.roundOffset(rnd)
 		if err != nil {
 			return basics.Address{}, false, err
@@ -1547,7 +1551,7 @@ func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.C
 			}
 			au.accountsMu.RLock()
 			unlock = true
-			for currentDbRound >= au.dbRound {
+			for currentDbRound >= au.dbRound && currentDeltaLen == len(au.deltas) {
 				au.accountsReadCond.Wait()
 			}
 		} else {
