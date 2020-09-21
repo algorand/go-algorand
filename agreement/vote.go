@@ -90,7 +90,7 @@ func (uv unauthenticatedVote) verify(l LedgerReader) (vote, error) {
 	rv := uv.R
 	m, err := membership(l, rv.Sender, rv.Round, rv.Period, rv.Step)
 	if err != nil {
-		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not get membership parameters: %v", err)
+		return vote{}, fmt.Errorf("unauthenticatedVote.verify: could not get membership parameters: %w", err)
 	}
 
 	switch rv.Step {
@@ -204,12 +204,12 @@ func (pair unauthenticatedEquivocationVote) verify(l LedgerReader) (equivocation
 
 	v0, err := uv0.verify(l)
 	if err != nil {
-		return equivocationVote{}, fmt.Errorf("unauthenticatedEquivocationVote.verify: failed to verify pair 0: %v", err)
+		return equivocationVote{}, fmt.Errorf("unauthenticatedEquivocationVote.verify: failed to verify pair 0: %w", err)
 	}
 
 	_, err = uv1.verify(l)
 	if err != nil {
-		return equivocationVote{}, fmt.Errorf("unauthenticatedEquivocationVote.verify: failed to verify pair 1: %v", err)
+		return equivocationVote{}, fmt.Errorf("unauthenticatedEquivocationVote.verify: failed to verify pair 1: %w", err)
 	}
 
 	return equivocationVote{
