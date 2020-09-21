@@ -45,22 +45,34 @@ type Ledger struct {
 
 	log logging.Logger
 
+	// a two-item moving window cache for the total number of online circulating coins
 	lastRoundCirculation atomic.Value
-	lastRoundSeed        atomic.Value
+	// a two-item moving window cache for the round seed
+	lastRoundSeed atomic.Value
 }
 
+// roundCirculation is the cache for the circulating coins
 type roundCirculation struct {
-	prevRound       basics.Round
+	// prevRound is the round number for the previously fetched online circulating coins
+	prevRound basics.Round
+	// prevOnlineMoney is the amount of coins in circulation for the round prevRound
 	prevOnlineMoney basics.MicroAlgos
-	curRound        basics.Round
-	curOnlineMoney  basics.MicroAlgos
+	// curRound is the round number for the last fetched online circulating coins
+	curRound basics.Round
+	// curOnlineMoney is the amount of coins in circulation for the round curRound
+	curOnlineMoney basics.MicroAlgos
 }
 
+// roundSeed is the cache for the seed
 type roundSeed struct {
+	// prevRound is the round number for the previously fetched round seed
 	prevRound basics.Round
-	prevSeed  committee.Seed
-	curRound  basics.Round
-	curSeed   committee.Seed
+	// prevSeed is the seed value for the round prevRound
+	prevSeed committee.Seed
+	// curRound is the round number for the last fetched seed
+	curRound basics.Round
+	// curSeed is the seed for the round curRound
+	curSeed committee.Seed
 }
 
 func makeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest) (bookkeeping.Block, error) {
