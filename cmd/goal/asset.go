@@ -111,7 +111,7 @@ func init() {
 
 	infoAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "ID of the asset to look up")
 	infoAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "DEPRECATED! Unit name of the asset to look up")
-	infoAssetCmd.Flags().StringVar(&assetUnitName, "unit", "", "Unit name of the asset to look up")
+	infoAssetCmd.Flags().StringVar(&assetUnitName, "unitname", "", "Unit name of the asset to look up")
 	infoAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address of the asset creator")
 }
 
@@ -127,17 +127,17 @@ var assetCmd = &cobra.Command{
 
 func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 	if cmd.Flags().Changed("asset") {
-		reportWarnln("The [--asset] flag is deprecated and will be removed in a future release, use [--unit] instead.")
+		reportWarnln("The [--asset] flag is deprecated and will be removed in a future release, use [--unitname] instead.")
 	}
 
-	if cmd.Flags().Changed("asset") && cmd.Flags().Changed("unit"){
-		reportErrorf("The [--asset] flag has been replaced by [--unit], do not provide both flags.")
+	if cmd.Flags().Changed("asset") && cmd.Flags().Changed("unitname") {
+		reportErrorf("The [--asset] flag has been replaced by [--unitname], do not provide both flags.")
 	}
 
-	assetOrUnit := cmd.Flags().Changed("asset") || cmd.Flags().Changed("unit")
+	assetOrUnit := cmd.Flags().Changed("asset") || cmd.Flags().Changed("unitname")
 
 	if cmd.Flags().Changed("assetid") && assetOrUnit {
-		reportErrorf("Only one of [--assetid] or [--unit and --creator] should be specified")
+		reportErrorf("Only one of [--assetid] or [--unitname and --creator] should be specified")
 	}
 
 	if cmd.Flags().Changed("assetid") {
@@ -145,7 +145,7 @@ func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 	}
 
 	if !assetOrUnit {
-		reportErrorf("Either [--assetid] or [--unit and --creator] must be specified")
+		reportErrorf("Either [--assetid] or [--unitname and --creator] must be specified")
 	}
 
 	if !cmd.Flags().Changed("creator") {
