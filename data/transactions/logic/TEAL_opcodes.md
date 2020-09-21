@@ -406,6 +406,8 @@ Overflow is an error condition which halts execution and fails the transaction. 
 | 45 | FreezeAsset | uint64 | Asset ID being frozen or un-frozen. LogicSigVersion >= 2. |
 | 46 | FreezeAssetAccount | []byte | 32 byte address of the account whose asset slot is being frozen or un-frozen. LogicSigVersion >= 2. |
 | 47 | FreezeAssetFrozen | uint64 | The new frozen value, 0 or 1. LogicSigVersion >= 2. |
+| 48 | Args | []byte | Arguments passed to the logic signature in a logic signature transaction. LogicSigVersion >= 2. |
+| 49 | NumArgs | uint64 | Number of Args. LogicSigVersion >= 2. |
 
 
 TypeEnum mapping:
