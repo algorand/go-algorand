@@ -137,7 +137,10 @@ type ConsensusParams struct {
 	DownCommitteeSize      uint64
 	DownCommitteeThreshold uint64
 
-	AgreementFilterTimeout        time.Duration
+	// time for nodes to wait for block proposal headers for period > 0, value should be set to 2 * SmallLambda
+	AgreementFilterTimeout time.Duration
+	// time for nodes to wait for block proposal headers for period = 0, value should be configured to suit best case
+	// critical path
 	AgreementFilterTimeoutPeriod0 time.Duration
 
 	FastRecoveryLambda    time.Duration // time between fast recovery attempts
@@ -791,8 +794,8 @@ func initConsensusProtocols() {
 	vFuture := v24
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	// FilterTimeout 2s instead of 4s for period 0
-	vFuture.AgreementFilterTimeoutPeriod0 = 2 * time.Second
+	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
+	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

@@ -34,6 +34,7 @@ func FilterTimeout(p period, v protocol.ConsensusVersion) time.Duration {
 	if p == 0 {
 		return config.Consensus[v].AgreementFilterTimeoutPeriod0
 	}
+	// timeout is expected to be 2 * SmallLambda, value moved to consensusParams
 	return config.Consensus[v].AgreementFilterTimeout
 }
 
