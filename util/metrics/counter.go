@@ -108,7 +108,7 @@ func (counter *Counter) AddUint64(x uint64, labels map[string]string) {
 // AddMicrosecondsSince increases counter by microseconds between Time t and now.
 // Fastest if labels is nil
 func (counter *Counter) AddMicrosecondsSince(t time.Time, labels map[string]string) {
-	counter.AddUint64(uint64(time.Now().Sub(t).Nanoseconds())/1000, labels)
+	counter.AddUint64(uint64(time.Now().Sub(t).Microseconds()), labels)
 }
 
 func (counter *Counter) fastAddUint64(x uint64) {

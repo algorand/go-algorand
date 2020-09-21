@@ -2040,7 +2040,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 		return err
 	}
 	vacuumElapsedTime := time.Now().Sub(startTime)
-	ledgerVacuumMicros.AddUint64(uint64(vacuumElapsedTime.Nanoseconds())/1000, nil)
+	ledgerVacuumMicros.AddUint64(uint64(vacuumElapsedTime.Microseconds()), nil)
 
 	au.log.Infof("Vacuuming accounts database completed within %v, reducing number of pages from %d to %d and size from %d to %d", vacuumElapsedTime, vacuumStats.PagesBefore, vacuumStats.PagesAfter, vacuumStats.SizeBefore, vacuumStats.SizeAfter)
 
