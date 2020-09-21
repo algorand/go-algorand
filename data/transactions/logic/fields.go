@@ -123,6 +123,10 @@ const (
 	FreezeAssetAccount
 	// FreezeAssetFrozen bool
 	FreezeAssetFrozen
+	// Args []basics.TealValue
+	Args
+	// NumArgs len(Args)
+	NumArgs
 
 	invalidTxnField // fence for some setup that loops from Sender..invalidTxnField
 )
@@ -201,21 +205,25 @@ var txnFieldSpecs = []txnFieldSpec{
 	{FreezeAsset, StackUint64, 2},
 	{FreezeAssetAccount, StackBytes, 2},
 	{FreezeAssetFrozen, StackUint64, 2},
+	{Args, StackBytes, 2},
+	{NumArgs, StackUint64, 2},
 }
 
 // TxnaFieldNames are arguments to the 'txna' opcode
 // It is a subset of txn transaction fields so initialized here in-place
-var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String()}
+var TxnaFieldNames = []string{ApplicationArgs.String(), Accounts.String(), Args.String()}
 
 // TxnaFieldTypes is StackBytes or StackUint64 parallel to TxnFieldNames
 var TxnaFieldTypes = []StackType{
 	txnaFieldSpecByField[ApplicationArgs].ftype,
 	txnaFieldSpecByField[Accounts].ftype,
+	txnaFieldSpecByField[Args].ftype,
 }
 
 var txnaFieldSpecByField = map[TxnField]txnFieldSpec{
 	ApplicationArgs: {ApplicationArgs, StackBytes, 2},
 	Accounts:        {Accounts, StackBytes, 2},
+	Args:            {Args, StackBytes, 2},
 }
 
 // TxnTypeNames is the values of Txn.Type in enum order

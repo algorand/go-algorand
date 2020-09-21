@@ -325,6 +325,8 @@ var txnFieldDocList = []stringString{
 	{"FreezeAsset", "Asset ID being frozen or un-frozen"},
 	{"FreezeAssetAccount", "32 byte address of the account whose asset slot is being frozen or un-frozen"},
 	{"FreezeAssetFrozen", "The new frozen value, 0 or 1"},
+	{"Args", "Arguments passed to the logic signature in a logic signature transaction"},
+	{"NumArgs", "Number of Args"},
 }
 
 // TxnFieldDocs are notes on fields available by `txn` and `gtxn`

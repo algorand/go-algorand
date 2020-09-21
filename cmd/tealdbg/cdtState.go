@@ -145,7 +145,7 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.R
 				return
 			}
 			if len(s.txnGroup) > 0 {
-				return makeTxnImpl(&s.txnGroup[idx].Txn, idx, preview), nil
+				return makeTxnImpl(&s.txnGroup[idx], idx, preview), nil
 			}
 		} else if parentObjID, ok := decodeArrayLength(objID); ok {
 			switch parentObjID {
@@ -357,7 +357,7 @@ func prepareGlobals(globals []basics.TealValue) []fieldDesc {
 	return result
 }
 
-func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
+func prepareTxn(stxn *transactions.SignedTxn, groupIndex int) []fieldDesc {
 	result := make([]fieldDesc, 0, len(logic.TxnFieldNames))
 	for field, name := range logic.TxnFieldNames {
 		if field == int(logic.FirstValidTime) ||
@@ -367,7 +367,7 @@ func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
 		}
 		var value string
 		var valType string = "string"
-		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, logic.TxnField(field), 0)
+		tv, err := logic.TxnFieldToTealValue(stxn, groupIndex, logic.TxnField(field), 0)
 		if err != nil {
 			value = err.Error()
 			valType = "undefined"
@@ -455,7 +455,7 @@ func makeIntPreview(n int) (prop []cdt.RuntimePropertyPreview) {
 func makeTxnPreview(txnGroup []transactions.SignedTxn, groupIndex int) cdt.RuntimeObjectPreview {
 	var prop []cdt.RuntimePropertyPreview
 	if len(txnGroup) > 0 {
-		fields := prepareTxn(&txnGroup[groupIndex].Txn, groupIndex)
+		fields := prepareTxn(&txnGroup[groupIndex], groupIndex)
 		prop = makePreview(fields)
 	}
 
@@ -702,13 +702,14 @@ func makeGlobals(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescripto
 
 func makeTxn(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	if len(s.txnGroup) > 0 && s.groupIndex < len(s.txnGroup) && s.groupIndex >= 0 {
-		return makeTxnImpl(&s.txnGroup[s.groupIndex].Txn, s.groupIndex, preview)
+		return makeTxnImpl(&s.txnGroup[s.groupIndex], s.groupIndex, preview)
 	}
 	return
 }
 
-func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
-	fields := prepareTxn(txn, groupIndex)
+func makeTxnImpl(stxn *transactions.SignedTxn, groupIndex int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	txn := stxn.Txn
+	fields := prepareTxn(stxn, groupIndex)
 	for _, field := range fields {
 		desc = append(desc, makePrimitive(field))
 	}
@@ -724,7 +725,7 @@ func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (d
 		}
 		field := makeArray(logic.TxnFieldNames[fieldIdx], length, fieldID)
 		if preview {
-			elems := txnFieldToArrayFieldDesc(txn, groupIndex, logic.TxnField(fieldIdx), length)
+			elems := txnFieldToArrayFieldDesc(stxn, groupIndex, logic.TxnField(fieldIdx), length)
 			prop := makePreview(elems)
 			p := cdt.RuntimeObjectPreview{
 				Type:        "object",
@@ -741,9 +742,9 @@ func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (d
 	return
 }
 
-func txnFieldToArrayFieldDesc(txn *transactions.Transaction, groupIndex int, field logic.TxnField, length int) (desc []fieldDesc) {
+func txnFieldToArrayFieldDesc(stxn *transactions.SignedTxn, groupIndex int, field logic.TxnField, length int) (desc []fieldDesc) {
 	for i := 0; i < length; i++ {
-		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, field, uint64(i))
+		tv, err := logic.TxnFieldToTealValue(stxn, groupIndex, field, uint64(i))
 		if err != nil {
 			return []fieldDesc{}
 		}
@@ -758,7 +759,8 @@ func txnFieldToArrayFieldDesc(txn *transactions.Transaction, groupIndex int, fie
 
 func makeTxnArrayField(s *cdtState, groupIndex int, fieldIdx int) (desc []cdt.RuntimePropertyDescriptor) {
 	if len(s.txnGroup) > 0 && s.groupIndex < len(s.txnGroup) && s.groupIndex >= 0 && fieldIdx >= 0 && fieldIdx < len(logic.TxnFieldNames) {
-		txn := s.txnGroup[groupIndex].Txn
+		stxn := s.txnGroup[groupIndex]
+		txn := stxn.Txn
 		var length int
 		switch logic.TxnField(fieldIdx) {
 		case logic.Accounts:
@@ -767,7 +769,7 @@ func makeTxnArrayField(s *cdtState, groupIndex int, fieldIdx int) (desc []cdt.Ru
 			length = len(txn.ApplicationArgs)
 		}
 
-		elems := txnFieldToArrayFieldDesc(&txn, groupIndex, logic.TxnField(fieldIdx), length)
+		elems := txnFieldToArrayFieldDesc(&stxn, groupIndex, logic.TxnField(fieldIdx), length)
 		for _, elem := range elems {
 			desc = append(desc, makePrimitive(elem))
 		}
