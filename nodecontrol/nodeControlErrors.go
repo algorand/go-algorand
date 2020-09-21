@@ -31,7 +31,7 @@ func (e *errAlgodExitedEarly) Error() string {
 	if e.innerError == nil {
 		return "node exited before we could contact it"
 	}
-	return fmt.Sprintf("node exited with error code, check node.log for more details : %v", e.innerError)
+	return fmt.Sprintf("node exited with an error code, check node.log for more details : %v", e.innerError)
 }
 
 func (e *errAlgodExitedEarly) Unwrap(err error) error {
