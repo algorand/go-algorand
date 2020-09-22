@@ -1048,11 +1048,13 @@ func jsonPrintable(str string) bool {
 }
 
 func heuristicFormatStr(str string) string {
-	// if it's a 32 byte string which has a valid checksum, then make the assumption it's an address
-	if len(str) == 32 {
-		addr, err := basics.UnmarshalChecksumAddress(str)
+	// if it's a base32 address string which has a valid checksum, then make the assumption it's an address
+	if len(str) == 58 {
+		// try to decode the string and perform a checksum validation on it.
+		_, err := basics.UnmarshalChecksumAddress(str)
+		// if err is nil, then the checksum is valid
 		if err == nil {
-			return addr.String()
+			return str
 		}
 	}
 
