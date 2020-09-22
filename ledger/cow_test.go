@@ -54,6 +54,14 @@ func (ml *mockLedger) txnCounter() uint64 {
 	return 0
 }
 
+func (ml *mockLedger) compactCertLast() basics.Round {
+	return 0
+}
+
+func (ml *mockLedger) blockHdr(_ basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{}, nil
+}
+
 func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.AccountData) {
 	for addr, data := range accts {
 		d, err := cow.lookup(addr)

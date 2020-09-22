@@ -41,6 +41,9 @@ const (
 	// ApplicationCallTx allows creating, deleting, and interacting with an application
 	ApplicationCallTx TxType = "appl"
 
+	// CompactCertTx records a compact certificate
+	CompactCertTx TxType = "cert"
+
 	// UnknownTx signals an error
 	UnknownTx TxType = "unknown"
 )
