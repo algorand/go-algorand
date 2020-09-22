@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -139,8 +140,9 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 		return [][]transactions.SignedTxn{}, nil
 	default:
 		hts.log.Warn("txSync response status code : ", response.StatusCode)
+		bodyBytes, _ := ioutil.ReadAll(response.Body)
 		response.Body.Close()
-		return nil, fmt.Errorf("txSync POST error response status code %d", response.StatusCode)
+		return nil, fmt.Errorf("txSync POST error response status code %d for '%s'. Response body : '%s'", response.StatusCode, syncURL, string(bodyBytes))
 	}
 
 	// at this point, we've already receieved the response headers. ensure that the
