@@ -22,6 +22,6 @@ import (
 	"syscall"
 )
 
-func KillProcess(pid int, sig Signal) error {
+func KillProcess(pid int, sig syscall.Signal) error {
 	return syscall.Kill(pid, sig)
 }

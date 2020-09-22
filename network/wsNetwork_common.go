@@ -19,40 +19,9 @@
 package network
 
 import (
-	"container/heap"
-	"context"
-	"encoding/base64"
-	"errors"
-	"fmt"
-	"io/ioutil"
-	"math"
-	"math/rand"
-	"net"
-	"net/http"
-	"net/url"
-	"path"
-	"regexp"
 	"runtime"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 
-	"github.com/algorand/go-deadlock"
-	"github.com/algorand/websocket"
-	"github.com/gorilla/mux"
-	"golang.org/x/net/netutil"
 	"golang.org/x/sys/unix"
-
-	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/logging"
-	"github.com/algorand/go-algorand/logging/telemetryspec"
-	"github.com/algorand/go-algorand/protocol"
-	tools_network "github.com/algorand/go-algorand/tools/network"
-	"github.com/algorand/go-algorand/util/metrics"
 )
 
 func (wn *WebsocketNetwork) rlimitIncomingConnections() error {
