@@ -14,28 +14,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// +build !windows
+// +build windows
 
-package util
+package network
 
-import (
-	"syscall"
-)
-
-/* misc */
-
-// RaiseRlimit increases the number of file descriptors we can have
-func RaiseRlimit(amount uint64) error {
-	var rLimit syscall.Rlimit
-	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-	if err != nil {
-		return err
-	}
-
-	rLimit.Cur = amount
-	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-	if err != nil {
-		return err
-	}
+func (wn *WebsocketNetwork) rlimitIncomingConnections() error {
 	return nil
 }

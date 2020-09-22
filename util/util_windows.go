@@ -1,3 +1,5 @@
+// +build darwin freebsd netbsd openbsd
+
 // Copyright (C) 2019-2020 Algorand, Inc.
 // This file is part of go-algorand
 //
@@ -18,24 +20,9 @@
 
 package util
 
-import (
-	"syscall"
-)
-
 /* misc */
 
 // RaiseRlimit increases the number of file descriptors we can have
-func RaiseRlimit(amount uint64) error {
-	var rLimit syscall.Rlimit
-	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-	if err != nil {
-		return err
-	}
-
-	rLimit.Cur = amount
-	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-	if err != nil {
-		return err
-	}
+func RaiseRlimit(_ uint64) error {
 	return nil
 }

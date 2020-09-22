@@ -14,28 +14,22 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// +build !windows
+// +build gc
 
-package util
+#include "_cgo_export.h"
+#include <string.h>
 
-import (
-	"syscall"
-)
+extern void crosscall2(void (*fn)(void *, int), void *, int);
+extern void _cgo_panic(void *, int);
 
-/* misc */
+void * __memcpy_chk (void *dstpp, const void *srcpp, size_t len, size_t dstlen)
+{
+	if (dstlen < len) {
+		struct { const char *p; } a;
 
-// RaiseRlimit increases the number of file descriptors we can have
-func RaiseRlimit(amount uint64) error {
-	var rLimit syscall.Rlimit
-	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-	if err != nil {
-		return err
+		a.p = "panic from __memcpy_chk";
+		crosscall2(_cgo_panic, &a, sizeof a);
+		*(int*)1 = 1;
 	}
-
-	rLimit.Cur = amount
-	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-	if err != nil {
-		return err
-	}
-	return nil
+	return memcpy (dstpp, srcpp, len);
 }

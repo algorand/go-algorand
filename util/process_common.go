@@ -22,20 +22,6 @@ import (
 	"syscall"
 )
 
-/* misc */
-
-// RaiseRlimit increases the number of file descriptors we can have
-func RaiseRlimit(amount uint64) error {
-	var rLimit syscall.Rlimit
-	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-	if err != nil {
-		return err
-	}
-
-	rLimit.Cur = amount
-	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
-	if err != nil {
-		return err
-	}
-	return nil
+func KillProcess(pid int, sig Signal) error {
+	return syscall.Kill(pid, sig)
 }

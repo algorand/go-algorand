@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-// +build !windows 
-
 package logging
 
 import (
@@ -25,29 +23,18 @@ import (
 	"time"
 )
 
-func timevalSubToMicroseconds(a, b syscall.Timeval) int64 {
-	seconds := a.Sec - b.Sec
-	var dusec int32
-	if b.Usec > a.Usec {
-		seconds--
-		dusec = int32(1000000) + int32(a.Usec-b.Usec)
-	} else {
-		dusec = int32(a.Usec - b.Usec)
-	}
-	return (int64(seconds) * 1000000) + int64(dusec)
-}
-
 // UsageLogThread utility logging method
 func UsageLogThread(ctx context.Context, log Logger, period time.Duration, wg *sync.WaitGroup) {
 	if wg != nil {
 		defer wg.Done()
 	}
-	var usage syscall.Rusage
 	var now time.Time
-	var prevUsage syscall.Rusage
 	var prevTime time.Time
+	var Ktime, Utime syscall.Filetime
+	var prevKtime, prevUtime syscall.Filetime
 	ticker := time.NewTicker(period)
 	hasPrev := false
+	handle, err := syscall.GetCurrentProcess()
 	for true {
 		select {
 		case <-ticker.C:
@@ -55,12 +42,15 @@ func UsageLogThread(ctx context.Context, log Logger, period time.Duration, wg *s
 			return
 		}
 		now = time.Now()
-		err := syscall.Getrusage(syscall.RUSAGE_SELF, &usage)
+		if handle != 0 {
+			err = syscall.GetProcessTimes(handle, nil, nil, &Ktime, &Utime)
+		} else {
+		}
 		if err != nil {
 		}
 		if hasPrev {
-			userNanos := timevalSubToMicroseconds(usage.Utime, prevUsage.Utime) * 1000
-			sysNanos := timevalSubToMicroseconds(usage.Stime, prevUsage.Stime) * 1000
+			userNanos := Utime.Nanoseconds() - prevUtime.Nanoseconds()
+			sysNanos := Ktime.Nanoseconds() - prevKtime.Nanoseconds()
 			wallNanos := now.Sub(prevTime).Nanoseconds()
 			userf := float64(userNanos) / float64(wallNanos)
 			sysf := float64(sysNanos) / float64(wallNanos)
@@ -68,7 +58,8 @@ func UsageLogThread(ctx context.Context, log Logger, period time.Duration, wg *s
 		} else {
 			hasPrev = true
 		}
-		prevUsage = usage
+		prevKtime = Ktime
+		prevUtime = Utime
 		prevTime = now
 	}
 }
