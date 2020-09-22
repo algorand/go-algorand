@@ -112,19 +112,19 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
     ::AlgorandGoal::CheckProcessReturnedCode 1
 
     puts "Checking the results"
-    set EXPECTED_OUTPUT "Account0*$PRIMARY_ACCOUNT_ADDRESS"
-    set EXPECTED_OUTPUT "$EXPECTED_OUTPUT*Account1*$ACCOUNT_1_ADDRESS"
-    set EXPECTED_OUTPUT "$EXPECTED_OUTPUT*Account2*$ACCOUNT_2_ADDRESS"
-    set EXPECTED_OUTPUT "$EXPECTED_OUTPUT*Account3*$ACCOUNT_3_ADDRESS"
-    set EXPECTED_OUTPUT "$EXPECTED_OUTPUT*Account4*$ACCOUNT_4_ADDRESS"
-    set EXPECTED_OUTPUT "$EXPECTED_OUTPUT*Num Accounts*ui*4"
+    set EXPECTED_OUTPUT "Account0.*$PRIMARY_ACCOUNT_ADDRESS"
+    set EXPECTED_OUTPUT "$EXPECTED_OUTPUT.*Account1.*$ACCOUNT_1_ADDRESS"
+    set EXPECTED_OUTPUT "$EXPECTED_OUTPUT.*Account2.*$ACCOUNT_2_ADDRESS"
+    set EXPECTED_OUTPUT "$EXPECTED_OUTPUT.*Account3.*$ACCOUNT_3_ADDRESS"
+    set EXPECTED_OUTPUT "$EXPECTED_OUTPUT.*Account4.*$ACCOUNT_4_ADDRESS"
+    set EXPECTED_OUTPUT "$EXPECTED_OUTPUT.*Num Accounts.*ui.*4"
 
     # check the local state of the caller
     spawn goal app read --app-id $APP_ID --local --guess-format \
 	--from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
     expect {
 	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
-	"*$EXPECTED_OUTPUT*" {puts "Local state read correctly"; close}
+	".*$EXPECTED_OUTPUT.*" {puts "Local state read correctly"; close}
 	eof {::AlgorandGoal::Abort "App read failed. Expected output includes: $EXPECTED_OUTPUT" }
     }
     ::AlgorandGoal::CheckProcessReturnedCode 1
@@ -135,7 +135,7 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
     expect {
 	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
 	"Please enter the password for wallet '$WALLET_1_NAME':" {send "$WALLET_1_PASSWORD\r" ; exp_continue}
-	"*$EXPECTED_OUTPUT*" {puts "Local state read correctly"; close}
+	".*$EXPECTED_OUTPUT.*" {puts "Local state read correctly"; close}
 	eof {::AlgorandGoal::Abort "App read failed. Expected output includes: $EXPECTED_OUTPUT" }
     }
     ::AlgorandGoal::CheckProcessReturnedCode 1
@@ -148,7 +148,7 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
 	--app-account $ACCOUNT_4_ADDRESS
     expect {
 	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
-	"*Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: transaction*invalid Accounts index 4*" \
+	"^Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool\.Remember: transaction.*invalid Accounts index 4.*" \
 	    {puts "Error received successfully "; close}
 	eof {::AlgorandGoal::Abort "failed to get the expected error" }
     }
