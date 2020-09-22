@@ -29,7 +29,6 @@ void * __memcpy_chk (void *dstpp, const void *srcpp, size_t len, size_t dstlen)
 
 		a.p = "panic from __memcpy_chk";
 		crosscall2(_cgo_panic, &a, sizeof a);
-		*(int*)1 = 1;
 	}
 	return memcpy (dstpp, srcpp, len);
 }
