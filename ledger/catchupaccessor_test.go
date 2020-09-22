@@ -122,7 +122,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 }
 
 func BenchmarkRestoringFromCatchpointFile(b *testing.B) {
-	benchSizes := []int{1024 * 100, 1024 * 200, 1024 * 400}
+	benchSizes := []int{1024 * 100, 1024 * 200, 1024 * 400, 1024 * 800}
 	for _, size := range benchSizes {
 		b.Run(fmt.Sprintf("Restore-%d", size), func(b *testing.B) {
 			b.N = size

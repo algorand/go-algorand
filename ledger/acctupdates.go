@@ -72,7 +72,7 @@ var trieMemoryConfig = merkletrie.MemoryConfig{
 	NodesCountPerPage:         merkleCommitterNodesPerPage,
 	CachedNodesCount:          trieCachedNodesCount,
 	PageFillFactor:            0.95,
-	MaxChildrenPagesThreshold: 16,
+	MaxChildrenPagesThreshold: 64,
 }
 
 // A modifiedAccount represents an account that has been modified since
