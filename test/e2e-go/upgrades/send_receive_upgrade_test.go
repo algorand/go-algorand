@@ -18,7 +18,6 @@ package upgrades
 
 import (
 	"math/rand"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -118,7 +117,7 @@ func generateFastUpgradeConsensus() (fastUpgradeProtocols config.ConsensusProtoc
 
 		fastUpgradeProtocols[consensusTestFastUpgrade(proto)] = fastParams
 
-		// support the ALGOSMALLLAMBDAMSEC = 500 env variable
+		// set the small lambda to 500 for the duration of dependent tests.
 		fastParams.AgreementFilterTimeout = time.Second
 		fastParams.AgreementFilterTimeoutPeriod0 = time.Second
 	}
@@ -128,7 +127,6 @@ func generateFastUpgradeConsensus() (fastUpgradeProtocols config.ConsensusProtoc
 func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 	t.Parallel()
 	a := require.New(t)
-	os.Setenv("ALGOSMALLLAMBDAMSEC", "500")
 
 	consensus := generateFastUpgradeConsensus()
 
