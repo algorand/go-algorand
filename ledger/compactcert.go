@@ -124,6 +124,10 @@ func CompactCertParams(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockH
 func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert, votersHdr bookkeeping.BlockHeader, lastCertRnd basics.Round, atRound basics.Round) error {
 	proto := config.Consensus[certHdr.CurrentProtocol]
 
+	if proto.CompactCertRounds == 0 {
+		return fmt.Errorf("compact certs not enabled: rounds = %d", proto.CompactCertRounds)
+	}
+
 	if certHdr.Round%basics.Round(proto.CompactCertRounds) != 0 {
 		return fmt.Errorf("cert at %d for non-multiple of %d", certHdr.Round, proto.CompactCertRounds)
 	}

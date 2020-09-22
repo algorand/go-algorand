@@ -6,7 +6,7 @@ agents:
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     env:
-      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -19,11 +19,11 @@ agents:
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     env:
-      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
     volumes:
-      - $HOME/packages:/root/packages,
-      - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent,
+      - $HOME/packages:/root/packages
+      - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent
       - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
     workDir: $HOME/projects/go-algorand
 

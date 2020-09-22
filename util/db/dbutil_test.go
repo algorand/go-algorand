@@ -385,3 +385,36 @@ func TestResettingTransactionWarnDeadline(t *testing.T) {
 		require.Equal(t, 0, logger.warningsCounter)
 	})
 }
+
+// Test the SetSynchronousMode function
+func TestSetSynchronousMode(t *testing.T) {
+	setSynchrounousModeHelper := func(mem bool, ctx context.Context, mode SynchronousMode, fullfsync bool) error {
+		acc, err := MakeAccessor("fn.db", false, mem)
+		require.NoError(t, err)
+		if !mem {
+			defer os.Remove("fn.db")
+			defer os.Remove("fn.db-shm")
+			defer os.Remove("fn.db-wal")
+		}
+		defer acc.Close()
+		return acc.SetSynchronousMode(ctx, mode, fullfsync)
+	}
+	// check with canceled context.
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	cancelFunc()
+
+	require.Error(t, context.Canceled, setSynchrounousModeHelper(true, ctx, SynchronousModeOff, false))
+	require.Error(t, context.Canceled, setSynchrounousModeHelper(false, ctx, SynchronousModeOff, false))
+
+	require.Contains(t, setSynchrounousModeHelper(false, context.Background(), SynchronousModeOff-1, false).Error(), "invalid value")
+	require.Contains(t, setSynchrounousModeHelper(false, context.Background(), SynchronousModeExtra+1, false).Error(), "invalid value")
+
+	// try all success permutations -
+	for _, mode := range []SynchronousMode{SynchronousModeOff, SynchronousModeNormal, SynchronousModeFull, SynchronousModeExtra} {
+		for _, disk := range []bool{true, false} {
+			for _, fullfsync := range []bool{true, false} {
+				require.NoError(t, setSynchrounousModeHelper(disk, context.Background(), mode, fullfsync))
+			}
+		}
+	}
+}

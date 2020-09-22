@@ -89,9 +89,10 @@ func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]ui
 		fmt.Printf("Located Source Account: %s -> %v\n", cfg.SrcAccount, accounts[cfg.SrcAccount])
 	}
 
-	// Only reuse existing accounts for non asset testing.
+	// Only reuse existing accounts for non asset testing and non app testing.
 	// For asset testing, new participant accounts will be created since accounts are limited to 1000 assets.
-	if cfg.NumAsset == 0 {
+	// For app testing, new participant accounts will be created since accounts are limited to 10 aps.
+	if cfg.NumAsset == 0 && cfg.NumApp == 0 {
 		// If we have more accounts than requested, pick the top N (not including src)
 		if len(accounts) > int(cfg.NumPartAccounts+1) {
 			fmt.Printf("Finding the richest %d accounts to use for transacting\n", cfg.NumPartAccounts)
@@ -158,7 +159,9 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 				return
 			}
 			assetName := fmt.Sprintf("pong%d", i)
-			fmt.Printf("Creating asset %s\n", assetName)
+			if !cfg.Quiet {
+				fmt.Printf("Creating asset %s\n", assetName)
+			}
 			tx, createErr := client.MakeUnsignedAssetCreateTx(totalSupply, false, addr, addr, addr, addr, "ping", assetName, "", meta, 0)
 			if createErr != nil {
 				fmt.Printf("Cannot make asset create txn with meta %v\n", meta)
@@ -196,7 +199,9 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 
 	// 2) For each participant account, opt-in to assets of all other participant accounts
 	for addr := range accounts {
-		fmt.Printf("Opting in assets from account %v\n", addr)
+		if !cfg.Quiet {
+			fmt.Printf("Opting in assets from account %v\n", addr)
+		}
 		addrAccount, addrErr := client.AccountInformation(addr)
 		if addrErr != nil {
 			fmt.Printf("Cannot lookup source account\n")
@@ -205,15 +210,21 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 		}
 
 		assetParams := addrAccount.AssetParams
-		fmt.Printf("Optining in %d assets %+v\n", len(assetParams), assetParams)
+		if !cfg.Quiet {
+			fmt.Printf("Optining in %d assets %+v\n", len(assetParams), assetParams)
+		}
 
 		// Opt-in Accounts for each asset
 		for k := range assetParams {
-			fmt.Printf("optin asset %+v\n", k)
+			if !cfg.Quiet {
+				fmt.Printf("optin asset %+v\n", k)
+			}
 
 			for addr2 := range accounts {
 				if addr != addr2 {
-					fmt.Printf("Opting in assets to account %v \n", addr2)
+					if !cfg.Quiet {
+						fmt.Printf("Opting in assets to account %v \n", addr2)
+					}
 					_, addrErr2 := client.AccountInformation(addr2)
 					if addrErr2 != nil {
 						fmt.Printf("Cannot lookup optin account\n")
@@ -251,7 +262,9 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 
 	// Step 3) Evenly distribute the assets across all participant accounts
 	for addr := range accounts {
-		fmt.Printf("Distributing assets from account %v\n", addr)
+		if !cfg.Quiet {
+			fmt.Printf("Distributing assets from account %v\n", addr)
+		}
 		addrAccount, addrErr := client.AccountInformation(addr)
 		if addrErr != nil {
 			fmt.Printf("Cannot lookup source account\n")
@@ -260,18 +273,22 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 		}
 
 		assetParams := addrAccount.AssetParams
-		fmt.Printf("Distributing  %d assets\n", len(assetParams))
+		if !cfg.Quiet {
+			fmt.Printf("Distributing  %d assets\n", len(assetParams))
+		}
 
 		// Distribute assets to each account
 		for k := range assetParams {
-
-			fmt.Printf("Distributing asset %v \n", k)
+			if !cfg.Quiet {
+				fmt.Printf("Distributing asset %v \n", k)
+			}
 
 			assetAmt := assetParams[k].Total / uint64(len(accounts))
 			for addr2 := range accounts {
 				if addr != addr2 {
-
-					fmt.Printf("Distributing assets from %v to %v \n", addr, addr2)
+					if !cfg.Quiet {
+						fmt.Printf("Distributing assets from %v to %v \n", addr, addr2)
+					}
 
 					tx, sendErr := constructTxn(addr, addr2, cfg.MaxFee, assetAmt, k, client, cfg)
 					if sendErr != nil {
@@ -318,31 +335,15 @@ func signAndBroadcastTransaction(accounts map[string]uint64, sender string, tx t
 	return
 }
 
-func genBigNoOp(numOps uint32) []byte {
-	var progParts []string
-	progParts = append(progParts, `#pragma version 2`)
-	for i := uint32(0); i < numOps/2; i++ {
-		progParts = append(progParts, `int 1`)
-		progParts = append(progParts, `pop`)
-	}
-	progParts = append(progParts, `int 1`)
-	progParts = append(progParts, `return`)
-	progAsm := strings.Join(progParts, "\n")
-	progBytes, err := logic.AssembleString(progAsm)
-	if err != nil {
-		panic(err)
-	}
-	return progBytes
-}
-
-func genBigHashes(numHashes int, numPad int, hash string) []byte {
+func genBigNoOpAndBigHashes(numOps uint32, numHashes uint32, hashSize string) []byte {
 	var progParts []string
 	progParts = append(progParts, `#pragma version 2`)
 	progParts = append(progParts, `byte base64 AA==`)
-	for i := 0; i < numHashes; i++ {
-		progParts = append(progParts, hash)
+
+	for i := uint32(0); i < numHashes; i++ {
+		progParts = append(progParts, hashSize)
 	}
-	for i := 0; i < numPad/2; i++ {
+	for i := uint32(0); i < numOps/2; i++ {
 		progParts = append(progParts, `int 1`)
 		progParts = append(progParts, `pop`)
 	}
@@ -425,12 +426,21 @@ func genMaxClone(numKeys int) []byte {
 }
 
 func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (appParams map[uint64]v1.AppParams, err error) {
-	// get existing apps
-	account, accountErr := client.AccountInformation(cfg.SrcAccount)
-	if accountErr != nil {
-		fmt.Printf("Cannot lookup source account")
-		err = accountErr
-		return
+
+	var appAccount v1.Account
+	for tempAccount := range accounts {
+		if tempAccount != cfg.SrcAccount {
+			appAccount, err = client.AccountInformation(tempAccount)
+			if err != nil {
+				fmt.Printf("Warning, cannot lookup tempAccount account %s", tempAccount)
+				return
+			}
+			break
+		}
+	}
+
+	if !cfg.Quiet {
+		fmt.Printf("Selected temp account: %s\n", appAccount.Address)
 	}
 
 	// Get wallet handle token
@@ -440,27 +450,30 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 		return
 	}
 
-	toCreate := int(cfg.NumApp) - len(account.AppParams)
+	toCreate := int(cfg.NumApp)
 
 	// create apps in srcAccount
 	for i := 0; i < toCreate; i++ {
 		var tx transactions.Transaction
 
 		// generate app program with roughly some number of operations
-		prog := genBigNoOp(cfg.AppProgOps)
+		prog := genBigNoOpAndBigHashes(cfg.AppProgOps, cfg.AppProgHashs, cfg.AppProgHashSize)
+		if !cfg.Quiet {
+			fmt.Printf("generated program: \n%s\n", prog)
+		}
 
 		globSchema := basics.StateSchema{NumByteSlice: 64}
 		locSchema := basics.StateSchema{}
 		tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil)
 		if err != nil {
 			fmt.Printf("Cannot create app txn\n")
-			return
+			panic(err)
 		}
 
-		tx, err = client.FillUnsignedTxTemplate(cfg.SrcAccount, 0, 0, cfg.MaxFee, tx)
+		tx, err = client.FillUnsignedTxTemplate(appAccount.Address, 0, 0, cfg.MaxFee, tx)
 		if err != nil {
 			fmt.Printf("Cannot fill app creation txn\n")
-			return
+			panic(err)
 		}
 
 		// Ensure different txids
@@ -486,15 +499,15 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 			fmt.Printf("Create a new app: txid=%s\n", txid)
 		}
 
-		accounts[cfg.SrcAccount] -= tx.Fee.Raw
+		accounts[appAccount.Address] -= tx.Fee.Raw
 	}
 
+	var account v1.Account
 	// get these apps
 	for {
-		account, accountErr = client.AccountInformation(cfg.SrcAccount)
-		if accountErr != nil {
-			fmt.Printf("Cannot lookup source account")
-			err = accountErr
+		account, err = client.AccountInformation(appAccount.Address)
+		if err != nil {
+			fmt.Printf("Warning, cannot lookup source account")
 			return
 		}
 		if len(account.AppParams) >= int(cfg.NumApp) {
