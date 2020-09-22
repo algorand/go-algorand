@@ -273,7 +273,7 @@ func TestLedgerSeed(t *testing.T) {
 			// ensure the item is not in the cache
 			seed, cached := l.lastRoundSeed.Load().(roundSeed)
 			if cached {
-				require.NotEqual(t, seed.curSeed, expectedHdr.Seed)
+				require.NotEqual(t, seed.elements[1].seed, expectedHdr.Seed)
 			}
 
 			actualSeed, err := l.Seed(rnd)
@@ -283,7 +283,7 @@ func TestLedgerSeed(t *testing.T) {
 
 			seed, cached = l.lastRoundSeed.Load().(roundSeed)
 			require.True(t, cached)
-			require.Equal(t, seed.curSeed, expectedHdr.Seed)
+			require.Equal(t, seed.elements[1].seed, expectedHdr.Seed)
 		} else if rnd < basics.Round(32) {
 			// test against the previous round
 			expectedHdr, err := realLedger.BlockHdr(rnd - 1)
@@ -292,8 +292,8 @@ func TestLedgerSeed(t *testing.T) {
 			// ensure the cache is aligned with the previous round
 			seed, cached := l.lastRoundSeed.Load().(roundSeed)
 			require.True(t, cached)
-			require.Equal(t, seed.curRound, rnd-1)
-			require.Equal(t, seed.curSeed, expectedHdr.Seed)
+			require.Equal(t, seed.elements[1].round, rnd-1)
+			require.Equal(t, seed.elements[1].seed, expectedHdr.Seed)
 
 			actualSeed, err := l.Seed(rnd)
 			require.NoError(t, err)
@@ -306,8 +306,8 @@ func TestLedgerSeed(t *testing.T) {
 			// ensure the cache is aligned with the updated round
 			seed, cached = l.lastRoundSeed.Load().(roundSeed)
 			require.True(t, cached)
-			require.Equal(t, seed.curRound, rnd)
-			require.Equal(t, seed.curSeed, expectedHdr.Seed)
+			require.Equal(t, seed.elements[1].round, rnd)
+			require.Equal(t, seed.elements[1].seed, expectedHdr.Seed)
 		}
 	}
 	return

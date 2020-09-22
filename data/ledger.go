@@ -51,28 +51,28 @@ type Ledger struct {
 	lastRoundSeed atomic.Value
 }
 
+// roundCirculationPair used to hold a pair of matching round number and the amount of online money
+type roundCirculationPair struct {
+	round       basics.Round
+	onlineMoney basics.MicroAlgos
+}
+
 // roundCirculation is the cache for the circulating coins
 type roundCirculation struct {
-	// prevRound is the round number for the previously fetched online circulating coins
-	prevRound basics.Round
-	// prevOnlineMoney is the amount of coins in circulation for the round prevRound
-	prevOnlineMoney basics.MicroAlgos
-	// curRound is the round number for the last fetched online circulating coins
-	curRound basics.Round
-	// curOnlineMoney is the amount of coins in circulation for the round curRound
-	curOnlineMoney basics.MicroAlgos
+	// elements holds several round-onlineMoney pairs
+	elements [2]roundCirculationPair
+}
+
+// roundSeedPair is the cache for a single seed at a given round
+type roundSeedPair struct {
+	round basics.Round
+	seed  committee.Seed
 }
 
 // roundSeed is the cache for the seed
 type roundSeed struct {
-	// prevRound is the round number for the previously fetched round seed
-	prevRound basics.Round
-	// prevSeed is the seed value for the round prevRound
-	prevSeed committee.Seed
-	// curRound is the round number for the last fetched seed
-	curRound basics.Round
-	// curSeed is the seed for the round curRound
-	curSeed committee.Seed
+	// elements holds several round-seed pairs
+	elements [2]roundSeedPair
 }
 
 func makeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalances, genesisID string, genesisHash crypto.Digest) (bookkeeping.Block, error) {
@@ -220,11 +220,10 @@ func (l *Ledger) NextRound() basics.Round {
 func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 	circulation, cached := l.lastRoundCirculation.Load().(roundCirculation)
 	if cached && r != basics.Round(0) {
-		if circulation.prevRound == r {
-			return circulation.prevOnlineMoney, nil
-		}
-		if circulation.curRound == r {
-			return circulation.curOnlineMoney, nil
+		for _, element := range circulation.elements {
+			if element.round == r {
+				return element.onlineMoney, nil
+			}
 		}
 	}
 
@@ -233,13 +232,16 @@ func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 		return basics.MicroAlgos{}, err
 	}
 
-	if !cached || r > circulation.curRound {
+	if !cached || r > circulation.elements[1].round {
 		l.lastRoundCirculation.Store(
 			roundCirculation{
-				prevRound:       circulation.curRound,
-				prevOnlineMoney: circulation.curOnlineMoney,
-				curRound:        r,
-				curOnlineMoney:  totals.Online.Money})
+				elements: [2]roundCirculationPair{
+					circulation.elements[1],
+					roundCirculationPair{
+						round:       r,
+						onlineMoney: totals.Online.Money},
+				},
+			})
 	}
 
 	return totals.Online.Money, nil
@@ -252,11 +254,10 @@ func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 func (l *Ledger) Seed(r basics.Round) (committee.Seed, error) {
 	seed, cached := l.lastRoundSeed.Load().(roundSeed)
 	if cached && r != basics.Round(0) {
-		if seed.prevRound == r {
-			return seed.prevSeed, nil
-		}
-		if seed.curRound == r {
-			return seed.curSeed, nil
+		for _, roundSeed := range seed.elements {
+			if roundSeed.round == r {
+				return roundSeed.seed, nil
+			}
 		}
 	}
 
@@ -265,13 +266,17 @@ func (l *Ledger) Seed(r basics.Round) (committee.Seed, error) {
 		return committee.Seed{}, err
 	}
 
-	if !cached || r > seed.curRound {
+	if !cached || r > seed.elements[1].round {
 		l.lastRoundSeed.Store(
 			roundSeed{
-				prevRound: seed.curRound,
-				prevSeed:  seed.curSeed,
-				curRound:  r,
-				curSeed:   blockhdr.Seed})
+				elements: [2]roundSeedPair{
+					seed.elements[1],
+					roundSeedPair{
+						round: r,
+						seed:  blockhdr.Seed,
+					},
+				},
+			})
 	}
 
 	return blockhdr.Seed, nil
