@@ -47,6 +47,7 @@ const (
 	ProgramData       HashID = "ProgData"
 	ProposerSeed      HashID = "PS"
 	Seed              HashID = "SD"
+	SpecialAddr       HashID = "SpecialAddr"
 	TestHashable      HashID = "TE"
 	TxGroup           HashID = "TG"
 	Transaction       HashID = "TX"
