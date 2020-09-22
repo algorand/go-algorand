@@ -41,6 +41,45 @@ function install_or_upgrade {
     fi
 }
 
+function install_windoows_shellcheck() {
+    filename="shellcheck-v0.7.0.zip"
+    filechecksum="10ee2474845eeb76d8a13992457472b723edf470c7cf182a20b32ecee4ad009ec6b2ca542db8f66127cf19e24baf3a06838a0d101494a5a6c11b3b568f9f5a99"
+    wget https://shellcheck.storage.googleapis.com/$filename -O /tmp/$filename
+    if [ $? -ne 0 ]
+    then
+        rm /tmp/$filename &> /dev/null
+        echo "Error downloading $filename"
+        return 1
+    fi
+
+    if [ "$(cat /tmp/$filename | sha512sum | head -c 128)" != "$filechecksum" ]
+    then
+        rm /tmp/$filename &> /dev/null
+        echo "$filename checksum mismatch"
+        return 1
+    fi
+
+    unzip -o /tmp/shellcheck-v0.7.0.zip shellcheck-v0.7.0.exe -d /tmp
+    if [ $? -ne 0 ]
+    then
+        rm /tmp/$filename &> /dev/null
+        echo "Unable to decompress shellcheck file"
+        return 1
+    fi
+
+    mv -f /tmp/shellcheck-v0.7.0.exe /usr/bin/shellcheck.exe
+    if [ $? -ne 0 ]
+    then
+        rm /tmp/$filename &> /dev/null
+        echo "Unable to move shellcheck to /usr/bin"
+        exit 1
+    fi
+
+    rm /tmp/$filename &> /dev/null
+
+    return 0
+}
+
 if [ "${OS}" = "linux" ]; then
     if ! which sudo > /dev/null
     then
@@ -61,6 +100,21 @@ elif [ "${OS}" = "darwin" ]; then
     install_or_upgrade automake
     install_or_upgrade shellcheck
     install_or_upgrade python3
+elif [ "${OS}" = "windows" ]; then
+    pacman -S --disable-download-timeout --noconfirm git automake autoconf m4 libtool mingw-w64-x86_64-python3 make mingw-w64-x86_64-gcc mingw-w64-x86_64-go mingw-w64-x86_64-boost mingw-w64-x86_64-python unzip procps
+    if [ $? -ne 0 ]
+    then
+        echo "Error installing pacman dependencies"
+        exit 1
+    fi
+
+    export GOPATH=$HOME/go
+
+    install_windoows_shellcheck
+    if [ $? -ne 0 ]
+    then
+        exit 1
+    fi
 fi
 
 if ${SKIP_GO_DEPS} ; then

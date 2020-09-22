@@ -9,13 +9,21 @@ D=$(mktemp -d)
 trap "rm -r $D" 0
 
 GENJSON="$1"
-GOPATH1=$(go env GOPATH | cut -d: -f1)
+UNAME=$(uname)
+if [[ "${UNAME}" == *"MINGW"* ]]; then
+	GOPATH1=$HOME/go
+else
+	GOPATH1=$(go env GOPATH | cut -d: -f1)
+fi
 $GOPATH1/bin/algod -d $D -g "$GENJSON" -x >/dev/null
 LEDGERS=$D/*/ledger.*sqlite
 
 for LEDGER in $LEDGERS; do
   for T in $(echo .tables | sqlite3 $LEDGER); do
-    case "$T" in
+    #remove trailing newlines echoed by Windows' sqlite3 app
+    T=${T//[$'\t\r\n ']}
+
+    case $T in
       blocks)
         SORT=rnd
         ;;

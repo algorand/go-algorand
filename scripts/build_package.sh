@@ -32,7 +32,12 @@ if [ ! -d "${PKG_ROOT}" ]; then
     exit 1
 fi
 
-export GOPATH=$(go env GOPATH)
+UNAME=$(uname)
+if [[ "${UNAME}" == *"MINGW"* ]]; then
+	GOPATH1=$HOME/go
+else
+	export GOPATH=$(go env GOPATH)
+fi
 export GOPATHBIN=${GOPATH%%:*}/bin
 REPO_DIR=$(pwd)
 
