@@ -117,6 +117,10 @@ func generateFastUpgradeConsensus() (fastUpgradeProtocols config.ConsensusProtoc
 		}
 
 		fastUpgradeProtocols[consensusTestFastUpgrade(proto)] = fastParams
+
+		// support the ALGOSMALLLAMBDAMSEC = 500 env variable
+		fastParams.AgreementFilterTimeout = time.Second
+		fastParams.AgreementFilterTimeoutPeriod0 = time.Second
 	}
 	return
 }
