@@ -40,12 +40,7 @@ const (
 	winLockfileSharedLock      = 0x00000000
 )
 
-const ErrorLockViolation syscall.Errno = 0x21 // 33
-
 // makeLocker create a windows file locker.
-// note that the desired way is to use the OFD locker, which locks on the file descriptor level.
-// falling back to the non-OFD lock would allow obtaining two locks by the same process. If this becomes
-// and issue, we might want to use flock, which wouldn't work across NFS.
 func makeLocker() (*windowsLocker, error) {
 	locker := &windowsLocker{}
 	return locker, nil
