@@ -25,6 +25,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// KillProcess kills a running OS process
 func KillProcess(pid int, _ os.Signal) error {
 
 	p, err := os.FindProcess(pid)

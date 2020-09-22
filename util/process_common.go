@@ -22,6 +22,7 @@ import (
 	"syscall"
 )
 
+// KillProcess kills a running OS process
 func KillProcess(pid int, sig syscall.Signal) error {
 	return syscall.Kill(pid, sig)
 }
