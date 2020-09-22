@@ -142,7 +142,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 		hts.log.Warn("txSync response status code : ", response.StatusCode)
 		bodyBytes, _ := ioutil.ReadAll(response.Body)
 		response.Body.Close()
-		return nil, fmt.Errorf("txSync POST error response status code %d for '%s'. Response body : '%s'", response.StatusCode, syncURL, string(bodyBytes))
+		return nil, fmt.Errorf("txSync POST error response status code %d for '%s'. Response body : '%s'. Request bloom filter size = %d", response.StatusCode, syncURL, string(bodyBytes), len(bloomParam))
 	}
 
 	// at this point, we've already receieved the response headers. ensure that the

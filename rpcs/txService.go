@@ -107,7 +107,7 @@ func (txs *TxService) ServeHTTP(response http.ResponseWriter, request *http.Requ
 	request.Body = http.MaxBytesReader(response, request.Body, txs.maxRequestBodyLength)
 	err := request.ParseForm()
 	if err != nil {
-		txs.log.Infof("http.ParseForm fail: %s", err)
+		txs.log.Infof("http.ParseForm fail: %s, max body read size = %d", err, txs.maxRequestBodyLength)
 		response.WriteHeader(http.StatusBadRequest)
 		return
 	}
