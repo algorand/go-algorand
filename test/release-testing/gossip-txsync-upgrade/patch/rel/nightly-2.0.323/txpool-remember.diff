@@ -1,0 +1,14 @@
+diff --git a/data/pools/transactionPool.go b/data/pools/transactionPool.go
+index 330bcfa..5c11929 100644
+--- a/data/pools/transactionPool.go
++++ b/data/pools/transactionPool.go
+@@ -282,6 +282,9 @@ func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
+ 	}
+ 
+ 	pool.rememberCommit(false)
++
++	logging.Base().Infof("Transaction remembered %s", txgroup[0].ID())
++
+ 	return nil
+ }
+ 

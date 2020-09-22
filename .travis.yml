@@ -1,9 +1,6 @@
 dist: bionic
-go:
-  - "1.12"
 go_import_path: github.com/algorand/go-algorand
 language: go
-sudo: required
 
 # Don't build tags
 if: tag IS blank
@@ -166,7 +163,7 @@ addons:
   artifacts:
     s3_region: "us-east-1"
     paths:
-      - $(git ls-files -o | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v ^gen/ | grep -v swagger.json.validated | tr "\n" ":")
+      - $(git ls-files -o | grep -v crypto/libs | grep -v crypto/copies | grep -v crypto/libsodium-fork | grep -v crypto/lib/ | grep -v ^gen/ | grep -v swagger.json.validated | tr "\n" ":")
 
 notifications:
   slack:

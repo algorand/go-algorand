@@ -52,6 +52,12 @@ type PpConfig struct {
 	GroupSize       uint32
 	NumAsset        uint32
 	MinAccountAsset uint64
+	NumApp          uint32
+	AppProgOps      uint32
+	AppProgHashs    uint32
+	AppProgHashSize string
+	Rekey           bool
+	MaxRuntime      time.Duration
 }
 
 // DefaultConfig object for Ping Pong
@@ -73,6 +79,12 @@ var DefaultConfig = PpConfig{
 	GroupSize:       1,
 	NumAsset:        0,
 	MinAccountAsset: 10000000,
+	NumApp:          0,
+	AppProgOps:      0,
+	AppProgHashs:    0,
+	AppProgHashSize: "sha256",
+	Rekey:           false,
+	MaxRuntime:      0,
 }
 
 // LoadConfigFromFile reads and loads Ping Pong configuration

@@ -18,6 +18,8 @@ HOSTEDSPEC=""
 BUCKET=""
 GENESIS_NETWORK_DIR=""
 GENESIS_NETWORK_DIR_SPEC=""
+SKIP_UPDATE=0
+TOOLS_OUTPUT_DIR=""
 
 set -o pipefail
 
@@ -84,6 +86,13 @@ while [ "$1" != "" ]; do
             shift
             BUCKET="-b $1"
             ;;
+        -s)
+            SKIP_UPDATE=1
+            ;;
+        -gettools)
+            shift
+            TOOLS_OUTPUT_DIR=$1
+            ;;
         *)
             echo "Unknown option" "$1"
             UNKNOWNARGS+=("$1")
@@ -138,8 +147,88 @@ function determine_current_version() {
     echo Current Version = ${CURRENTVER}
 }
 
+function get_updater_url() {
+    local UNAME
+    local OS
+    local ARCH
+    UNAME=$(uname)
+    if [[ "${UNAME}" = "Darwin" ]]; then
+        OS="darwin"
+        UNAME=$(uname -m)
+        if [[ "${UNAME}" = "x86_64" ]]; then
+            ARCH="amd64"
+        else
+            echo "This platform ${UNAME} is not supported by updater."
+            exit 1
+        fi
+    elif [[ "${UNAME}" = "Linux" ]]; then
+        OS="linux"
+        UNAME=$(uname -m)
+        if [[ "${UNAME}" = "x86_64" ]]; then
+            ARCH="amd64"
+        elif [[ "${UNAME}" = "armv6l" ]]; then
+            ARCH="arm"
+        elif [[ "${UNAME}" = "armv7l" ]]; then
+            ARCH="arm"
+        elif [[ "${UNAME}" = "aarch64" ]]; then
+            ARCH="arm64"
+        else
+            echo "This platform ${UNAME} is not supported by updater."
+            exit 1
+        fi
+    else
+        echo "This operation system ${UNAME} is not supported by updater."
+        exit 1
+    fi
+    UPDATER_FILENAME="install_master_${OS}-${ARCH}.tar.gz"
+    UPDATER_URL="https://github.com/algorand/go-algorand-doc/raw/master/downloads/installers/${OS}_${ARCH}/${UPDATER_FILENAME}"
+}
+
+# check to see if the binary updater exists. if not, it will automatically the correct updater binary for the current platform
+function check_for_updater() {
+    # check if the updater binary exist.
+    if [ -f "${SCRIPTPATH}/updater" ]; then
+        return 0
+    fi
+    get_updater_url
+
+    # check the curl is available.
+    CURL_VER=$(curl -V 2>/dev/null || true)
+    if [ "${CURL_VER}" = "" ]; then
+        # no curl is installed.
+        echo "updater binary is missing and cannot be downloaded since curl is missing."
+        if [[ "$(uname)" = "Linux" ]]; then
+            echo "To install curl, run the following command:"
+            echo "apt-get update; apt-get install -y curl"
+        fi
+        exit 1
+    fi
+
+    CURL_OUT=$(curl -LJO --silent ${UPDATER_URL})
+    if [ "$?" != "0" ]; then
+        echo "failed to download updater binary from ${UPDATER_URL} using curl."
+        echo "${CURL_OUT}"
+        exit 1
+    fi
+
+    if [ ! -f "${SCRIPTPATH}/${UPDATER_FILENAME}" ]; then
+        echo "downloaded file ${SCRIPTPATH}/${UPDATER_FILENAME} is missing."
+        exit
+    fi
+
+    tar -zxvf "${SCRIPTPATH}/${UPDATER_FILENAME}" updater
+    if [ "$?" != "0" ]; then
+        echo "failed to extract updater binary from ${SCRIPTPATH}/${UPDATER_FILENAME}"
+        exit 1
+    fi
+
+    rm -f "${SCRIPTPATH}/${UPDATER_FILENAME}"
+    echo "updater binary was downloaded"
+}
+
 function check_for_update() {
     determine_current_version
+    check_for_updater
     LATEST="$(${SCRIPTPATH}/updater ver check -c ${CHANNEL} ${BUCKET} | sed -n '2 p')"
     if [ $? -ne 0 ]; then
         echo "No remote updates found"
@@ -161,12 +250,40 @@ function check_for_update() {
     return 0
 }
 
+function download_tools_update() {
+    local TOOLS_SPECIFIC_VERSION=$1
+    echo "downloading tools update ${TOOLS_SPECIFIC_VERSION}"
+    TOOLS_TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
+    export TOOLS_CLEANUP_UPDATE_TEMP_DIR=${TOOLS_TEMPDIR}
+    trap "rm -rf ${TOOLS_CLEANUP_UPDATE_TEMP_DIR}" 0
+
+    TOOLS_TARFILE=${TOOLS_TEMPDIR}/${LATEST}.tar.gz
+
+    if ( ! "${SCRIPTPATH}"/updater gettools -c "${CHANNEL}" -o "${TOOLS_TARFILE}" "${BUCKET}" "${TOOLS_SPECIFIC_VERSION}" ) ; then
+        echo "Error downloading tools tarfile"
+        exit 1
+    fi
+    echo "Tools tarfile downloaded to ${TOOLS_TARFILE}"
+
+    mkdir -p "${TOOLS_OUTPUT_DIR}"
+    if ( ! tar -xf "${TOOLS_TARFILE}" -C "${TOOLS_OUTPUT_DIR}" ) ; then
+        echo "Error extracting the tools update file ${TOOLS_TARFILE}"
+        exit 1
+    fi
+    echo "Tools extracted to ${TOOLS_OUTPUT_DIR}"
+}
+
 TEMPDIR=""
 TARFILE=""
 UPDATESRCDIR=""
 
 function download_update() {
     SPECIFIC_VERSION=$1
+
+    if [ -n "${TOOLS_OUTPUT_DIR}" ]; then
+        download_tools_update "${SPECIFIC_VERSION}"
+    fi
+
     TEMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t "tmp")
     export CLEANUP_UPDATE_TEMP_DIR=${TEMPDIR}
     trap "rm -rf ${CLEANUP_UPDATE_TEMP_DIR}" 0
@@ -510,7 +627,9 @@ fi
 # Shutdown node before backing up so data is consistent and files aren't locked / in-use.
 shutdown_node
 
-backup_current_version
+if [ ${SKIP_UPDATE} -eq 0 ]; then
+    backup_current_version
+fi
 
 # We don't care about return code - doesn't matter if we failed to archive
 

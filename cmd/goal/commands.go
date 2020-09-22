@@ -30,6 +30,9 @@ import (
 	"github.com/spf13/cobra/doc"
 	"golang.org/x/crypto/ssh/terminal"
 
+	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -57,6 +60,7 @@ func init() {
 	rootCmd.Flags().BoolVarP(&versionCheck, "version", "v", false, "Display and write current build version and exit")
 	rootCmd.AddCommand(licenseCmd)
 	rootCmd.AddCommand(reportCmd)
+	rootCmd.AddCommand(protoCmd)
 
 	// account.go
 	rootCmd.AddCommand(accountCmd)
@@ -88,6 +92,9 @@ func init() {
 	// completion.go
 	rootCmd.AddCommand(completionCmd)
 
+	// application.go
+	rootCmd.AddCommand(appCmd)
+
 	// Config
 	defaultDataDirValue := []string{""}
 	rootCmd.PersistentFlags().StringArrayVarP(&dataDirs, "datadir", "d", defaultDataDirValue, "Data directory for the node")
@@ -96,7 +103,7 @@ func init() {
 
 var rootCmd = &cobra.Command{
 	Use:   "goal",
-	Short: "CLI for interacting with Algorand.",
+	Short: "CLI for interacting with Algorand",
 	Long:  `GOAL is the CLI for interacting Algorand software instance. The binary 'goal' is installed alongside the algod binary and is considered an integral part of the complete installation. The binaries should be used in tandem - you should not try to use a version of goal with a different version of algod.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -153,7 +160,7 @@ func main() {
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "The current version of the Algorand daemon (algod).",
+	Short: "The current version of the Algorand daemon (algod)",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		onDataDirs(func(dataDir string) {
@@ -177,7 +184,7 @@ var versionCmd = &cobra.Command{
 
 var licenseCmd = &cobra.Command{
 	Use:   "license",
-	Short: "Display license information.",
+	Short: "Display license information",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(config.GetLicenseInfo())
@@ -214,6 +221,16 @@ var reportCmd = &cobra.Command{
 		}
 		fmt.Println()
 		onDataDirs(getStatus)
+	},
+}
+
+var protoCmd = &cobra.Command{
+	Use:   "protocols",
+	Short: "",
+	Long:  "Dump standard consensus protocols as json to stdout.",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		os.Stdout.Write(protocol.EncodeJSON(config.Consensus))
 	},
 }
 
@@ -364,6 +381,7 @@ func ensureGoalClient(dataDir string, clientType libgoal.ClientType) libgoal.Cli
 	if err != nil {
 		reportErrorf(errorNodeStatus, err)
 	}
+	client.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
 	return client
 }
 
@@ -446,8 +464,6 @@ func getWalletHandleMaybePassword(dataDir string, walletName string, getPassword
 		}
 		return token, nil, nil
 	}
-
-	reportInfof("Failed to get cached wallet handle: %v", err)
 
 	// Assume any errors were "wrong password" errors, until we have actual
 	// API error codes

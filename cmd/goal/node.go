@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -28,9 +29,12 @@ import (
 
 	"github.com/spf13/cobra"
 
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/nodecontrol"
 	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/tokens"
@@ -49,6 +53,8 @@ var newNodeDestination string
 var newNodeArchival bool
 var newNodeIndexer bool
 var newNodeRelay string
+var watchMillisecond uint64
+var abortCatchup bool
 
 func init() {
 	nodeCmd.AddCommand(startCmd)
@@ -61,22 +67,26 @@ func init() {
 	nodeCmd.AddCommand(pendingTxnsCmd)
 	nodeCmd.AddCommand(waitCmd)
 	nodeCmd.AddCommand(createCmd)
+	nodeCmd.AddCommand(catchupCmd)
+	// Once the server-side implementation of the shutdown command is ready, we should enable this one.
+	//nodeCmd.AddCommand(shutdownCmd)
 
 	startCmd.Flags().StringVarP(&peerDial, "peer", "p", "", "Peer address to dial for initial connection")
 	startCmd.Flags().StringVarP(&listenIP, "listen", "l", "", "Endpoint / REST address to listen on")
+	startCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", false, "Run algod hosted by algoh")
+	startCmd.Flags().StringVarP(&telemetryOverride, "telemetry", "t", "", `Enable telemetry if supported (Use "true", "false", "0" or "1")`)
+
 	restartCmd.Flags().StringVarP(&peerDial, "peer", "p", "", "Peer address to dial for initial connection")
 	restartCmd.Flags().StringVarP(&listenIP, "listen", "l", "", "Endpoint / REST address to listen on")
+	restartCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", false, "Run algod hosted by algoh")
+	restartCmd.Flags().StringVarP(&telemetryOverride, "telemetry", "t", "", `Enable telemetry if supported (Use "true", "false", "0" or "1")`)
+
 	cloneCmd.Flags().StringVarP(&targetDir, "targetdir", "t", "", "Target directory for the clone")
 	cloneCmd.Flags().BoolVarP(&noLedger, "noledger", "n", false, "Don't include ledger when copying (No Ledger)")
-	startCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", false, "Run algod hosted by algoh")
-	restartCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", false, "Run algod hosted by algoh")
-	startCmd.Flags().StringVarP(&telemetryOverride, "telemetry", "t", "", `Enable telemetry if supported (Use "true", "false", "0" or "1")`)
-	restartCmd.Flags().StringVarP(&telemetryOverride, "telemetry", "t", "", `Enable telemetry if supported (Use "true", "false", "0" or "1")`)
-	pendingTxnsCmd.Flags().Uint64VarP(&maxPendingTransactions, "maxPendingTxn", "m", 0, "Cap the number of txns to fetch")
-	waitCmd.Flags().Uint32VarP(&waitSec, "waittime", "w", 5, "Time (in seconds) to wait for node to make progress")
+
+	localDefaults := config.GetDefaultLocal()
 	createCmd.Flags().StringVar(&newNodeNetwork, "network", "", "Network the new node should point to")
 	createCmd.Flags().StringVar(&newNodeDestination, "destination", "", "Destination path for the new node")
-	localDefaults := config.GetDefaultLocal()
 	createCmd.Flags().BoolVarP(&newNodeArchival, "archival", "a", localDefaults.Archival, "Make the new node archival, storing all blocks")
 	createCmd.Flags().BoolVarP(&runUnderHost, "hosted", "H", localDefaults.RunHosted, "Configure the new node to run hosted by algoh")
 	createCmd.Flags().BoolVarP(&newNodeIndexer, "indexer", "i", localDefaults.IsIndexerActive, "Configure the new node to enable the indexer feature (implies --archival)")
@@ -84,6 +94,13 @@ func init() {
 	createCmd.Flags().StringVar(&listenIP, "api", "", "REST API Endpoint")
 	createCmd.MarkFlagRequired("destination")
 	createCmd.MarkFlagRequired("network")
+
+	pendingTxnsCmd.Flags().Uint64VarP(&maxPendingTransactions, "maxPendingTxn", "m", 0, "Cap the number of txns to fetch")
+	waitCmd.Flags().Uint32VarP(&waitSec, "waittime", "w", 5, "Time (in seconds) to wait for node to make progress")
+	statusCmd.Flags().Uint64VarP(&watchMillisecond, "watch", "w", 0, "Time (in milliseconds) between two successive status updates")
+
+	catchupCmd.Flags().BoolVarP(&abortCatchup, "abort", "x", false, "Aborts the current catchup process")
+
 }
 
 var nodeCmd = &cobra.Command{
@@ -97,11 +114,51 @@ var nodeCmd = &cobra.Command{
 	},
 }
 
+var catchupCmd = &cobra.Command{
+	Use:     "catchup",
+	Short:   "Catchup the Algorand node to a specific catchpoint",
+	Long:    "Catchup allows making large jumps over round ranges without the need to incrementally validate each individual round.",
+	Example: "goal node catchup 6500000#1234567890ABCDEF01234567890ABCDEF0\tStart catching up to round 6500000 with the provided catchpoint\ngoal node catchup --abort\t\t\t\t\tAbort the current catchup",
+	Args:    catchpointCmdArgument,
+	Run: func(cmd *cobra.Command, args []string) {
+		if abortCatchup == false && len(args) == 0 {
+			fmt.Println(errorCatchpointLabelMissing)
+			os.Exit(1)
+		}
+		onDataDirs(func(datadir string) { catchup(datadir, args) })
+	},
+}
+
+func catchpointCmdArgument(cmd *cobra.Command, args []string) error {
+	catchpointsCount := 0
+	for _, arg := range args {
+		_, _, err := ledger.ParseCatchpointLabel(arg)
+		switch err {
+		case nil:
+			if catchpointsCount > 0 {
+				return errors.New(errorTooManyCatchpointLabels)
+			}
+			catchpointsCount++
+			continue
+		case ledger.ErrCatchpointParsingFailed:
+			// this isn't a valid catchpoint label.
+			// return a nice formatted error
+			return errors.New(errorCatchpointLabelParsingFailed)
+		default:
+			return err
+		}
+	}
+	return nil
+}
+
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Init the specified Algorand node.",
+	Short: "Initialize the specified Algorand node",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
+		if !verifyPeerDialArg() {
+			return
+		}
 		binDir, err := util.ExeDir()
 		if err != nil {
 			panic(err)
@@ -138,6 +195,28 @@ var startCmd = &cobra.Command{
 	},
 }
 
+var shutdownCmd = &cobra.Command{
+	Use:   "shutdown",
+	Short: "Shut down the node",
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, _ []string) {
+		binDir, err := util.ExeDir()
+		if err != nil {
+			panic(err)
+		}
+		onDataDirs(func(dataDir string) {
+			nc := nodecontrol.MakeNodeController(binDir, dataDir)
+			err := nc.Shutdown()
+
+			if err == nil {
+				reportInfoln(infoNodeShuttingDown)
+			} else {
+				reportErrorf(errorNodeFailedToShutdown, err)
+			}
+		})
+	},
+}
+
 func getRunHostedConfigFlag(dataDir string) bool {
 	// See if this instance wants to run Hosted, even if '-H' wasn't specified on our cmdline
 	cfg, err := config.LoadConfigFromDisk(dataDir)
@@ -149,7 +228,7 @@ func getRunHostedConfigFlag(dataDir string) bool {
 
 var stopCmd = &cobra.Command{
 	Use:   "stop",
-	Short: "stop the specified Algorand node.",
+	Short: "Stop the specified Algorand node",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		binDir, err := util.ExeDir()
@@ -177,9 +256,12 @@ var stopCmd = &cobra.Command{
 
 var restartCmd = &cobra.Command{
 	Use:   "restart",
-	Short: "Stop, and then start, the specified Algorand node.",
+	Short: "Stop, and then start, the specified Algorand node",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
+		if !verifyPeerDialArg() {
+			return
+		}
 		binDir, err := util.ExeDir()
 		if err != nil {
 			panic(err)
@@ -237,7 +319,7 @@ var restartCmd = &cobra.Command{
 
 var generateTokenCmd = &cobra.Command{
 	Use:   "generatetoken",
-	Short: "Generate and install a new API token.",
+	Short: "Generate and install a new API token",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		onDataDirs(func(dataDir string) {
@@ -278,38 +360,75 @@ var statusCmd = &cobra.Command{
 }
 
 func getStatus(dataDir string) {
+	const (
+		CUU = string("\033[A") // Cursor Up
+		DL  = string("\033[M") // Delete Line
+	)
 	client := ensureAlgodClient(dataDir)
-	stat, err := client.Status()
-	if err != nil {
-		reportErrorf(errorNodeStatus, err)
+	cleanupFmt := ""
+	for {
+		stat, err := client.Status()
+		if err != nil {
+			reportErrorf(errorNodeStatus, err)
+		}
+		vers, err := client.AlgodVersions()
+		if err != nil {
+			reportErrorf(errorNodeStatus, err)
+		}
+		status := cleanupFmt + makeStatusString(stat) + "\n"
+		if vers.GenesisID != "" {
+			status = fmt.Sprintf("%sGenesis ID: %s\n", status, vers.GenesisID)
+		}
+		status = fmt.Sprintf("%sGenesis hash: %s", status, base64.StdEncoding.EncodeToString(vers.GenesisHash[:]))
+		fmt.Println(status)
+		if watchMillisecond == 0 {
+			break
+		}
+		time.Sleep(time.Duration(watchMillisecond) * time.Millisecond)
+		cleanupFmt = ""
+		for linesCount := len(strings.Split(status, "\n")); linesCount > 0; linesCount-- {
+			cleanupFmt += CUU + DL
+		}
 	}
-	vers, err := client.AlgodVersions()
-	if err != nil {
-		reportErrorf(errorNodeStatus, err)
-	}
-
-	fmt.Println(makeStatusString(stat))
-	if vers.GenesisID != "" {
-		fmt.Printf("Genesis ID: %s\n", vers.GenesisID)
-	}
-	fmt.Printf("Genesis hash: %s\n", base64.StdEncoding.EncodeToString(vers.GenesisHash[:]))
 }
 
-func makeStatusString(stat v1.NodeStatus) string {
+func makeStatusString(stat generatedV2.NodeStatusResponse) string {
 	lastRoundTime := fmt.Sprintf("%.1fs", time.Duration(stat.TimeSinceLastRound).Seconds())
 	catchupTime := fmt.Sprintf("%.1fs", time.Duration(stat.CatchupTime).Seconds())
-	statusString := fmt.Sprintf(
-		infoNodeStatus,
-		stat.LastRound,
-		lastRoundTime,
-		catchupTime,
-		stat.LastVersion,
-		stat.NextVersion,
-		stat.NextVersionRound,
-		stat.NextVersionSupported)
+	var statusString string
+	if stat.Catchpoint == nil || (*stat.Catchpoint) == "" {
+		statusString = fmt.Sprintf(
+			infoNodeStatus,
+			stat.LastRound,
+			lastRoundTime,
+			catchupTime,
+			stat.LastVersion,
+			stat.NextVersion,
+			stat.NextVersionRound,
+			stat.NextVersionSupported)
 
-	if stat.StoppedAtUnsupportedRound {
-		statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
+		if stat.LastCatchpoint != nil {
+			statusString = statusString + "\n" + fmt.Sprintf(nodeLastCatchpoint, *stat.LastCatchpoint)
+		}
+
+		if stat.StoppedAtUnsupportedRound {
+			statusString = statusString + "\n" + fmt.Sprintf(catchupStoppedOnUnsupported, stat.LastRound)
+		}
+	} else {
+		statusString = fmt.Sprintf(
+			infoNodeCatchpointCatchupStatus,
+			stat.LastRound,
+			catchupTime,
+			*stat.Catchpoint)
+
+		if stat.CatchpointTotalAccounts != nil && (*stat.CatchpointTotalAccounts > 0) && stat.CatchpointProcessedAccounts != nil {
+			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupAccounts, *stat.CatchpointTotalAccounts,
+				*stat.CatchpointProcessedAccounts)
+		}
+		if stat.CatchpointAcquiredBlocks != nil && stat.CatchpointTotalBlocks != nil && (*stat.CatchpointAcquiredBlocks+*stat.CatchpointTotalBlocks > 0) {
+			statusString = statusString + "\n" + fmt.Sprintf(infoNodeCatchpointCatchupBlocks, *stat.CatchpointTotalBlocks,
+				*stat.CatchpointAcquiredBlocks)
+		}
 	}
 
 	return statusString
@@ -434,7 +553,7 @@ func isValidIP(userInput string) bool {
 
 var createCmd = &cobra.Command{
 	Use:   "create",
-	Short: "Create a node at the desired data directory for the desired network.",
+	Short: "Create a node at the desired data directory for the desired network",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 
@@ -463,6 +582,8 @@ var createCmd = &cobra.Command{
 		localConfig.Archival = newNodeArchival || newNodeRelay != "" || newNodeIndexer
 		localConfig.IsIndexerActive = newNodeIndexer
 		localConfig.RunHosted = runUnderHost
+		localConfig.EnableLedgerService = localConfig.Archival
+		localConfig.EnableBlockService = localConfig.Archival
 
 		// locate genesis block
 		exePath, err := util.ExeDir()
@@ -506,4 +627,38 @@ var createCmd = &cobra.Command{
 			reportErrorf(errorNodeCreation, err)
 		}
 	},
+}
+
+func catchup(dataDir string, args []string) {
+	client := ensureAlgodClient(ensureSingleDataDir())
+	if abortCatchup {
+		err := client.AbortCatchup()
+		if err != nil {
+			reportErrorf(errorNodeStatus, err)
+		}
+		return
+	}
+	err := client.Catchup(args[0])
+	if err != nil {
+		reportErrorf(errorNodeStatus, err)
+	}
+}
+
+// verifyPeerDialArg verifies that the peers provided in peerDial are valid peers.
+func verifyPeerDialArg() bool {
+	if peerDial == "" {
+		return true
+	}
+
+	// make sure that the format of each entry is valid:
+	for _, peer := range strings.Split(peerDial, ";") {
+		_, err := network.ParseHostOrURL(peer)
+		if err != nil {
+			reportErrorf("Provided peer '%s' is not a valid peer address : %v", peer, err)
+			return false
+		}
+
+	}
+	return true
+
 }

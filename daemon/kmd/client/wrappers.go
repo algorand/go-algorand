@@ -141,13 +141,14 @@ func (kcl KMDClient) DeleteMultisigAddr(walletHandle []byte, pw []byte, addr str
 }
 
 // MultisigSignTransaction wraps kmdapi.APIV1POSTMultisigTransactionSignRequest
-func (kcl KMDClient) MultisigSignTransaction(walletHandle, pw []byte, tx []byte, pk crypto.PublicKey, partial crypto.MultisigSig) (resp kmdapi.APIV1POSTMultisigTransactionSignResponse, err error) {
+func (kcl KMDClient) MultisigSignTransaction(walletHandle, pw []byte, tx []byte, pk crypto.PublicKey, partial crypto.MultisigSig, msigSigner crypto.Digest) (resp kmdapi.APIV1POSTMultisigTransactionSignResponse, err error) {
 	req := kmdapi.APIV1POSTMultisigTransactionSignRequest{
 		WalletHandleToken: string(walletHandle),
 		WalletPassword:    string(pw),
 		Transaction:       tx,
 		PublicKey:         pk,
 		PartialMsig:       partial,
+		AuthAddr:          msigSigner,
 	}
 	err = kcl.DoV1Request(req, &resp)
 	return
@@ -197,11 +198,12 @@ func (kcl KMDClient) ExportMasterDerivationKey(walletHandle []byte, walletPasswo
 }
 
 // SignTransaction wraps kmdapi.APIV1POSTTransactionSignRequest
-func (kcl KMDClient) SignTransaction(walletHandle, pw []byte, tx transactions.Transaction) (resp kmdapi.APIV1POSTTransactionSignResponse, err error) {
+func (kcl KMDClient) SignTransaction(walletHandle, pw []byte, pk crypto.PublicKey, tx transactions.Transaction) (resp kmdapi.APIV1POSTTransactionSignResponse, err error) {
 	txBytes := protocol.Encode(&tx)
 	req := kmdapi.APIV1POSTTransactionSignRequest{
 		WalletHandleToken: string(walletHandle),
 		WalletPassword:    string(pw),
+		PublicKey:         pk,
 		Transaction:       txBytes,
 	}
 	err = kcl.DoV1Request(req, &resp)

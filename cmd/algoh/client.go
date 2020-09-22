@@ -19,12 +19,14 @@ package main
 import (
 	"context"
 
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 )
 
 // Client is a minimal interface for the RestClient
 type Client interface {
-	Status() (v1.NodeStatus, error)
+	Status() (generatedV2.NodeStatusResponse, error)
 	Block(round uint64) (v1.Block, error)
 	GetGoRoutines(ctx context.Context) (string, error)
+	HealthCheck() error
 }

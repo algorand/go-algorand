@@ -44,7 +44,7 @@ const (
 	sqliteWalletDriverVersion   = 1
 	sqliteWalletsDirName        = "sqlite_wallets"
 	sqliteWalletsDirPermissions = 0700
-	sqliteWalletDBOptions       = "_secure_delete=on&_tx_lock=exclusive"
+	sqliteWalletDBOptions       = "_secure_delete=on&_txlock=exclusive"
 	sqliteMaxWalletNameLen      = 64
 	sqliteMaxWalletIDLen        = 64
 	sqliteIntOverflow           = 1 << 63
@@ -87,6 +87,8 @@ type SQLiteWalletDriver struct {
 	globalCfg config.KMDConfig
 	sqliteCfg config.SQLiteWalletDriverConfig
 	mux       *deadlock.Mutex
+
+	claimedWallets [][][]byte
 }
 
 // SQLiteWallet represents a particular SQLiteWallet under the
@@ -360,13 +362,57 @@ func checkDBError(err error) error {
 	return nil
 }
 
-// CreateWallet ensures that a wallet of the given name/id combo doesn't exist,
-// and initializes a database with the appropriate name.
-func (swd *SQLiteWalletDriver) CreateWallet(name []byte, id []byte, pw []byte, mdk crypto.MasterDerivationKey) error {
+func (swd *SQLiteWalletDriver) claimWalletNameID(name []byte, id []byte) (dbPath string, err error) {
 	// Grab our lock to avoid races with duplicate wallet names/ids
 	swd.mux.Lock()
 	defer swd.mux.Unlock()
 
+	for _, nameID := range swd.claimedWallets {
+		if bytes.Equal(nameID[0], name) {
+			return "", errSameName
+		}
+		if bytes.Equal(nameID[1], id) {
+			return "", errSameID
+		}
+	}
+
+	// name, id -> "/data/dir/name-id.db"
+	dbPath = swd.nameIDToPath(name, id)
+
+	// Ensure the wallet with this filename doesn't already exist, and that we
+	// have permissions to access the wallet directory
+	_, err = os.Stat(dbPath)
+	if !os.IsNotExist(err) {
+		return
+	}
+
+	// Ensure a wallet with this name doesn't already exist. swd.mux is
+	// locked above to avoid races here
+	sameNameDBPaths, err := swd.findDBPathsByName(name)
+	if err != nil {
+		return
+	}
+	if len(sameNameDBPaths) != 0 {
+		return "", errSameName
+	}
+
+	// Ensure a wallet with this id doesn't already exist. As above, we use
+	// swd.mux to avoid races
+	sameIDDBPaths, err := swd.findDBPathsByID(id)
+	if err != nil {
+		return
+	}
+	if len(sameIDDBPaths) != 0 {
+		return "", errSameID
+	}
+
+	swd.claimedWallets = append(swd.claimedWallets, [][]byte{name, id})
+	return
+}
+
+// CreateWallet ensures that a wallet of the given name/id combo doesn't exist,
+// and initializes a database with the appropriate name.
+func (swd *SQLiteWalletDriver) CreateWallet(name []byte, id []byte, pw []byte, mdk crypto.MasterDerivationKey) error {
 	if len(name) > sqliteMaxWalletNameLen {
 		return errNameTooLong
 	}
@@ -375,35 +421,11 @@ func (swd *SQLiteWalletDriver) CreateWallet(name []byte, id []byte, pw []byte, m
 		return errIDTooLong
 	}
 
-	// name, id -> "/data/dir/name-id.db"
-	dbPath := swd.nameIDToPath(name, id)
-
-	// Ensure the wallet with this filename doesn't already exist, and that we
-	// have permissions to access the wallet directory
-	_, err := os.Stat(dbPath)
-	if !os.IsNotExist(err) {
-		return err
-	}
-
-	// Ensure a wallet with this name doesn't already exist. swd.mux is
-	// locked above to avoid races here
-	sameNameDBPaths, err := swd.findDBPathsByName(name)
+	dbPath, err := swd.claimWalletNameID(name, id)
 	if err != nil {
 		return err
 	}
-	if len(sameNameDBPaths) != 0 {
-		return errSameName
-	}
-
-	// Ensure a wallet with this id doesn't already exist. As above, we use
-	// swd.mux to avoid races
-	sameIDDBPaths, err := swd.findDBPathsByID(id)
-	if err != nil {
-		return err
-	}
-	if len(sameIDDBPaths) != 0 {
-		return errSameID
-	}
+	// TODO? drop the entry in swd.claimedWallets on exit?
 
 	// Create the database
 	db, err := sqlx.Connect("sqlite3", dbConnectionURL(dbPath))
@@ -831,7 +853,7 @@ func (sw *SQLiteWallet) GenerateKey(displayMnemonic bool) (addr crypto.Digest, e
 		return
 	}
 
-	// Begin an exclusive database transaction (we set _tx_lock=exclusive on the
+	// Begin an exclusive database transaction (we set _txlock=exclusive on the
 	// database connection string)
 	tx, err := db.Beginx()
 	if err != nil {
@@ -1087,9 +1109,9 @@ func (sw *SQLiteWallet) ListMultisigAddrs() (addrs []crypto.Digest, err error) {
 	return
 }
 
-// SignTransaction signs the passed transaction, inferring the required private
-// key from the transaction itself
-func (sw *SQLiteWallet) SignTransaction(tx transactions.Transaction, pw []byte) (stx []byte, err error) {
+// SignTransaction signs the passed transaction with the private key whose public key is provided, or
+// if the provided public key is zero, inferring the required private key from the transaction itself
+func (sw *SQLiteWallet) SignTransaction(tx transactions.Transaction, pk crypto.PublicKey, pw []byte) (stx []byte, err error) {
 	// Check the password
 	err = sw.CheckPassword(pw)
 	if err != nil {
@@ -1097,7 +1119,12 @@ func (sw *SQLiteWallet) SignTransaction(tx transactions.Transaction, pw []byte) 
 	}
 
 	// Fetch the required key
-	sk, err := sw.fetchSecretKey(crypto.Digest(tx.Src()))
+	var sk crypto.PrivateKey
+	if (pk == crypto.PublicKey{}) {
+		sk, err = sw.fetchSecretKey(crypto.Digest(tx.Src()))
+	} else {
+		sk, err = sw.fetchSecretKey(crypto.Digest(pk))
+	}
 	if err != nil {
 		return
 	}
@@ -1146,7 +1173,7 @@ func (sw *SQLiteWallet) SignProgram(data []byte, src crypto.Digest, pw []byte) (
 // MultisigSignTransaction starts a multisig signature or adds a signature to a
 // partially signed multisig transaction signature of the passed transaction
 // using the key
-func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (sig crypto.MultisigSig, err error) {
+func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte, signer crypto.Digest) (sig crypto.MultisigSig, err error) {
 	// Check the password
 	err = sw.CheckPassword(pw)
 	if err != nil {
@@ -1193,7 +1220,9 @@ func (sw *SQLiteWallet) MultisigSignTransaction(tx transactions.Transaction, pk 
 	if err != nil {
 		return
 	}
-	if addr != crypto.Digest(tx.Src()) {
+
+	// Check that the multisig address equals to either sender or signer
+	if addr != crypto.Digest(tx.Src()) && addr != signer {
 		err = errMsigWrongAddr
 		return
 	}

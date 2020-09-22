@@ -17,6 +17,7 @@
 package ledger
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/execpool"
 )
 
 var testPoolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
@@ -46,13 +48,14 @@ func TestBlockEvaluator(t *testing.T) {
 
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	const inMem = true
-	const archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 	require.NoError(t, err)
 
 	genHash := genesisInitState.Block.BlockHeader.GenesisHash
@@ -113,4 +116,205 @@ func TestBlockEvaluator(t *testing.T) {
 	require.Equal(t, bal0new.MicroAlgos.Raw, bal0.MicroAlgos.Raw-minFee.Raw-100)
 	require.Equal(t, bal1new.MicroAlgos.Raw, bal1.MicroAlgos.Raw+100)
 	require.Equal(t, bal2new.MicroAlgos.Raw, bal2.MicroAlgos.Raw-minFee.Raw)
+}
+
+func TestRekeying(t *testing.T) {
+	// Pretend rekeying is supported
+	actual := config.Consensus[protocol.ConsensusCurrentVersion]
+	pretend := actual
+	pretend.SupportRekeying = true
+	config.Consensus[protocol.ConsensusCurrentVersion] = pretend
+	defer func() {
+		config.Consensus[protocol.ConsensusCurrentVersion] = actual
+	}()
+
+	// Bring up a ledger
+	genesisInitState, addrs, keys := genesis(10)
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	// Make a new block
+	nextRound := l.Latest() + basics.Round(1)
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+
+	// Test plan
+	// Syntax: [A -> B][C, D] means transaction from A that rekeys to B with authaddr C and actual sig from D
+	makeTxn := func(sender, rekeyto, authaddr basics.Address, signer *crypto.SignatureSecrets, uniq uint8) transactions.SignedTxn {
+		txn := transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      sender,
+				Fee:         minFee,
+				FirstValid:  nextRound,
+				LastValid:   nextRound,
+				GenesisHash: genHash,
+				RekeyTo:     rekeyto,
+				Note:        []byte{uniq},
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: sender,
+			},
+		}
+		sig := signer.Sign(txn)
+		return transactions.SignedTxn{Txn: txn, Sig: sig, AuthAddr: authaddr}
+	}
+
+	tryBlock := func(stxns []transactions.SignedTxn) error {
+		// We'll make a block using the evaluator.
+		// When generating a block, the evaluator doesn't check transaction sigs -- it assumes the transaction pool already did that.
+		// So the ValidatedBlock that comes out isn't necessarily actually a valid block. We'll call Validate ourselves.
+
+		newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+		eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+		require.NoError(t, err)
+
+		for _, stxn := range stxns {
+			err = eval.Transaction(stxn, transactions.ApplyData{})
+			if err != nil {
+				return err
+			}
+		}
+		validatedBlock, err := eval.GenerateBlock()
+		if err != nil {
+			return err
+		}
+
+		backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+		defer backlogPool.Shutdown()
+		_, err = l.Validate(context.Background(), validatedBlock.Block(), nil, backlogPool)
+		return err
+	}
+
+	// Preamble transactions, which all of the blocks in this test will start with
+	// [A -> 0][0,A] (normal transaction)
+	// [A -> B][0,A] (rekey)
+	txn0 := makeTxn(addrs[0], basics.Address{}, basics.Address{}, keys[0], 0) // Normal transaction
+	txn1 := makeTxn(addrs[0], addrs[1], basics.Address{}, keys[0], 1)         // Rekey transaction
+
+	// Test 1: Do only good things
+	// (preamble)
+	// [A -> 0][B,B] (normal transaction using new key)
+	// [A -> A][B,B] (rekey back to A, transaction still signed by B)
+	// [A -> 0][0,A] (normal transaction again)
+	test1txns := []transactions.SignedTxn{
+		txn0, txn1, // (preamble)
+		makeTxn(addrs[0], basics.Address{}, addrs[1], keys[1], 2),         // [A -> 0][B,B]
+		makeTxn(addrs[0], addrs[0], addrs[1], keys[1], 3),                 // [A -> A][B,B]
+		makeTxn(addrs[0], basics.Address{}, basics.Address{}, keys[0], 4), // [A -> 0][0,A]
+	}
+	err = tryBlock(test1txns)
+	require.NoError(t, err)
+
+	// Test 2: Use old key after rekeying
+	// (preamble)
+	// [A -> A][0,A] (rekey back to A, but signed by A instead of B)
+	test2txns := []transactions.SignedTxn{
+		txn0, txn1, // (preamble)
+		makeTxn(addrs[0], addrs[0], basics.Address{}, keys[0], 2), // [A -> A][0,A]
+	}
+	err = tryBlock(test2txns)
+	require.Error(t, err)
+
+	// TODO: More tests
+}
+
+func TestPrepareAppEvaluators(t *testing.T) {
+	eval := BlockEvaluator{
+		prevHeader: bookkeeping.BlockHeader{
+			TimeStamp: 1234,
+			Round:     2345,
+		},
+		proto: config.ConsensusParams{
+			Application: true,
+		},
+	}
+
+	// Create some sample transactions
+	payment := transactions.SignedTxnWithAD{
+		SignedTxn: transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.PaymentTx,
+				Header: transactions.Header{
+					Sender: basics.Address{1, 2, 3, 4},
+				},
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: basics.Address{4, 3, 2, 1},
+					Amount:   basics.MicroAlgos{Raw: 100},
+				},
+			},
+		},
+	}
+
+	appcall1 := transactions.SignedTxnWithAD{
+		SignedTxn: transactions.SignedTxn{
+			Txn: transactions.Transaction{
+				Type: protocol.ApplicationCallTx,
+				Header: transactions.Header{
+					Sender: basics.Address{1, 2, 3, 4},
+				},
+				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+					ApplicationID: basics.AppIndex(1),
+				},
+			},
+		},
+	}
+
+	appcall2 := appcall1
+	appcall2.SignedTxn.Txn.ApplicationCallTxnFields.ApplicationID = basics.AppIndex(2)
+
+	type evalTestCase struct {
+		group []transactions.SignedTxnWithAD
+
+		// indicates if prepareAppEvaluators should return a non-nil
+		// appTealEvaluator for the txn at index i
+		expected []bool
+	}
+
+	// Create some groups with these transactions
+	cases := []evalTestCase{
+		evalTestCase{[]transactions.SignedTxnWithAD{payment}, []bool{false}},
+		evalTestCase{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}},
+		evalTestCase{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}},
+		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}},
+		evalTestCase{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}},
+		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}},
+		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}},
+		evalTestCase{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}},
+		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}},
+	}
+
+	for i, testCase := range cases {
+		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
+			res := eval.prepareAppEvaluators(testCase.group)
+			require.Equal(t, len(res), len(testCase.group))
+
+			// Compute the expected transaction group without ApplyData for
+			// the test case
+			expGroupNoAD := make([]transactions.SignedTxn, len(testCase.group))
+			for j := range testCase.group {
+				expGroupNoAD[j] = testCase.group[j].SignedTxn
+			}
+
+			// Ensure non app calls have a nil evaluator, and that non-nil
+			// evaluators point to the right transactions and values
+			for j, present := range testCase.expected {
+				if present {
+					require.NotNil(t, res[j])
+					require.Equal(t, res[j].evalParams.GroupIndex, j)
+					require.Equal(t, res[j].evalParams.TxnGroup, expGroupNoAD)
+					require.Equal(t, *res[j].evalParams.Proto, eval.proto)
+					require.Equal(t, *res[j].evalParams.Txn, testCase.group[j].SignedTxn)
+					require.Equal(t, res[j].AppTealGlobals.CurrentRound, eval.prevHeader.Round+1)
+					require.Equal(t, res[j].AppTealGlobals.LatestTimestamp, eval.prevHeader.TimeStamp)
+				} else {
+					require.Nil(t, res[j])
+				}
+			}
+		})
+	}
 }

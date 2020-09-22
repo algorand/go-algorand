@@ -17,8 +17,6 @@
 package routes
 
 import (
-	"fmt"
-
 	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v1/handlers"
 )
@@ -26,8 +24,8 @@ import (
 // KeyLength is the an Algorand's public address length
 const KeyLength = 58
 
-// Routes contains all routes for v1
-var Routes = lib.Routes{
+// V1Routes contains all routes for v1
+var V1Routes = lib.Routes{
 	lib.Route{
 		Name:        "status",
 		Method:      "GET",
@@ -38,7 +36,7 @@ var Routes = lib.Routes{
 	lib.Route{
 		Name:        "wait-for-block",
 		Method:      "GET",
-		Path:        "/status/wait-for-block-after/{round:[0-9]+}",
+		Path:        "/status/wait-for-block-after/:round",
 		HandlerFunc: handlers.WaitForBlock,
 	},
 
@@ -52,14 +50,14 @@ var Routes = lib.Routes{
 	lib.Route{
 		Name:        "account-information",
 		Method:      "GET",
-		Path:        fmt.Sprintf("/account/{addr:[A-Z0-9]{%d}}", KeyLength),
+		Path:        "/account/:addr",
 		HandlerFunc: handlers.AccountInformation,
 	},
 
 	lib.Route{
 		Name:        "transaction-information",
 		Method:      "GET",
-		Path:        fmt.Sprintf("/account/{addr:[A-Z0-9]{%d}}/transaction/{txid:[A-Z0-9]+}", KeyLength),
+		Path:        "/account/:addr/transaction/:txid",
 		HandlerFunc: handlers.TransactionInformation,
 	},
 
@@ -80,14 +78,14 @@ var Routes = lib.Routes{
 	lib.Route{
 		Name:        "transactions",
 		Method:      "GET",
-		Path:        "/account/{addr:[A-Z0-9]+}/transactions",
+		Path:        "/account/:addr/transactions",
 		HandlerFunc: handlers.Transactions,
 	},
 
 	lib.Route{
 		Name:        "block",
 		Method:      "GET",
-		Path:        "/block/{round:[0-9]+}",
+		Path:        "/block/:round",
 		HandlerFunc: handlers.GetBlock,
 	},
 
@@ -108,28 +106,28 @@ var Routes = lib.Routes{
 	lib.Route{
 		Name:        "pending-transaction-information",
 		Method:      "GET",
-		Path:        "/transactions/pending/{txid:[A-Z0-9]+}",
+		Path:        "/transactions/pending/:txid",
 		HandlerFunc: handlers.PendingTransactionInformation,
 	},
 
 	lib.Route{
 		Name:        "pending-transaction-information-by-address",
 		Method:      "GET",
-		Path:        "/account/{addr}/transactions/pending",
+		Path:        "/account/:addr/transactions/pending",
 		HandlerFunc: handlers.GetPendingTransactionsByAddress,
 	},
 
 	lib.Route{
 		Name:        "asset-information-by-id",
 		Method:      "GET",
-		Path:        fmt.Sprintf("/asset/{index:[0-9]+}"),
+		Path:        "/asset/:index",
 		HandlerFunc: handlers.AssetInformation,
 	},
 
 	lib.Route{
 		Name:        "list-assets",
 		Method:      "GET",
-		Path:        fmt.Sprintf("/assets"),
+		Path:        "/assets",
 		HandlerFunc: handlers.Assets,
 	},
 
@@ -138,7 +136,7 @@ var Routes = lib.Routes{
 	lib.Route{
 		Name:        "get-transaction-by-id",
 		Method:      "GET",
-		Path:        "/transaction/{txid:[A-Z0-9]+}",
+		Path:        "/transaction/:txid",
 		HandlerFunc: handlers.GetTransactionByID,
 	},
 }

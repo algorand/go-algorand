@@ -86,8 +86,9 @@ func BenchmarkManyAccounts(b *testing.B) {
 
 	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
 	const inMem = true
-	const archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 	defer l.Close()
 
@@ -111,7 +112,7 @@ func BenchmarkManyAccounts(b *testing.B) {
 			txib, err := blk.EncodeSignedTxn(st, transactions.ApplyData{})
 			require.NoError(b, err)
 
-			txlen := len(protocol.Encode(txib))
+			txlen := len(protocol.Encode(&txib))
 			if txbytes+txlen > proto.MaxTxnBytesPerBlock {
 				break
 			}
@@ -138,8 +139,9 @@ func BenchmarkValidate(b *testing.B) {
 
 	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
 	const inMem = true
-	const archival = true
-	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
 	defer l.Close()
 
@@ -170,7 +172,7 @@ func BenchmarkValidate(b *testing.B) {
 			txib, err := newblk.EncodeSignedTxn(st, transactions.ApplyData{})
 			require.NoError(b, err)
 
-			txlen := len(protocol.Encode(txib))
+			txlen := len(protocol.Encode(&txib))
 			if txbytes+txlen > proto.MaxTxnBytesPerBlock {
 				break
 			}

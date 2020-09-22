@@ -58,7 +58,7 @@ DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "${DEFAULT
 mkdir ${PKG_ROOT}/bin
 
 # If you modify this list, also update this list in ./cmd/updater/update.sh backup_binaries()
-bin_files=("algocfg" "algod" "algoh" "algokey" "carpenter" "catchupsrv" "ddconfig.sh" "diagcfg" "find-nodes.sh" "goal" "kmd" "msgpacktool" "node_exporter" "update.sh" "updater" "COPYING")
+bin_files=("algocfg" "algod" "algoh" "algokey" "carpenter" "catchupsrv" "ddconfig.sh" "diagcfg" "find-nodes.sh" "goal" "kmd" "msgpacktool" "node_exporter" "tealcut" "tealdbg" "update.sh" "updater" "COPYING")
 for bin in "${bin_files[@]}"; do
     cp ${GOPATHBIN}/${bin} ${PKG_ROOT}/bin
     if [ $? -ne 0 ]; then exit 1; fi
@@ -111,10 +111,19 @@ TOOLS_ROOT=${PKG_ROOT}/tools
 
 echo "Staging tools package files"
 
-bin_files=("algons" "auctionconsole" "auctionmaster" "auctionminion" "coroner" "dispenser" "netgoal" "nodecfg" "pingpong" "cc_service" "cc_agent" "cc_client" "COPYING")
+bin_files=("algons" "auctionconsole" "auctionmaster" "auctionminion" "coroner" "dispenser" "netgoal" "nodecfg" "pingpong" "cc_service" "cc_agent" "cc_client" "COPYING" "dsign")
 mkdir -p ${TOOLS_ROOT}
 for bin in "${bin_files[@]}"; do
     cp ${GOPATHBIN}/${bin} ${TOOLS_ROOT}
+    if [ $? -ne 0 ]; then exit 1; fi
+done
+
+echo "Staging test util package files"
+TEST_UTILS_ROOT=${PKG_ROOT}/test-utils
+bin_files=("auctionbank" "algotmpl" "COPYING")
+mkdir -p ${TEST_UTILS_ROOT}
+for bin in "${bin_files[@]}"; do
+    cp ${GOPATHBIN}/${bin} ${TEST_UTILS_ROOT}
     if [ $? -ne 0 ]; then exit 1; fi
 done
 

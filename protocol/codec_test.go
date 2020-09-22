@@ -17,6 +17,8 @@
 package protocol
 
 import (
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -53,7 +55,7 @@ type HelperStruct2 struct {
 
 func TestOmitEmpty(t *testing.T) {
 	var x TestStruct
-	enc := Encode(&x)
+	enc := EncodeReflect(&x)
 	require.Equal(t, 1, len(enc))
 }
 
@@ -72,7 +74,7 @@ func TestEncodeOrder(t *testing.T) {
 	b.A = 1
 	b.B = "foo"
 
-	require.Equal(t, Encode(&a), Encode(&b))
+	require.Equal(t, EncodeReflect(&a), EncodeReflect(&b))
 
 	var c struct {
 		A int    `codec:"x"`
@@ -102,8 +104,8 @@ func TestEncodeOrder(t *testing.T) {
 	e.R = 1
 	e.Q = "foo"
 
-	require.Equal(t, Encode(&c), Encode(&d))
-	require.Equal(t, Encode(&c), Encode(&e))
+	require.Equal(t, EncodeReflect(&c), EncodeReflect(&d))
+	require.Equal(t, EncodeReflect(&c), EncodeReflect(&e))
 }
 
 type InlineChild struct {
@@ -118,5 +120,57 @@ func TestEncodeInline(t *testing.T) {
 	a := InlineChild{X: 5}
 	b := InlineParent{InlineChild: a}
 
-	require.Equal(t, Encode(a), Encode(b))
+	require.Equal(t, EncodeReflect(a), EncodeReflect(b))
+}
+
+type embeddedMsgp struct {
+	TxType
+	A uint64
+}
+
+func TestEncodeEmbedded(t *testing.T) {
+	var x embeddedMsgp
+
+	x.TxType = PaymentTx
+	x.A = 5
+
+	require.Equal(t, Encode(x), Encode(&x))
+	require.Equal(t, Encode(x.TxType), Encode(&x.TxType))
+	require.NotEqual(t, Encode(&x), Encode(&x.TxType))
+
+	var y embeddedMsgp
+
+	require.NoError(t, Decode(Encode(&x), &y))
+	require.Equal(t, x, y)
+}
+
+func TestEncodeJSON(t *testing.T) {
+	type ar []string
+	type mp struct {
+		Map map[int]ar `codec:"ld,allocbound=config.MaxEvalDeltaAccounts"`
+	}
+
+	var v mp
+	v.Map = make(map[int]ar)
+	v.Map[0] = []string{"test0"}
+	v.Map[1] = []string{"test1"}
+
+	nonStrict := EncodeJSON(&v)
+	strings.Contains(string(nonStrict), `0:`)
+	strings.Contains(string(nonStrict), `1:`)
+
+	strict := EncodeJSONStrict(&v)
+	strings.Contains(string(strict), `"0":`)
+	strings.Contains(string(strict), `"1":`)
+
+	var nsv mp
+	err := DecodeJSON(nonStrict, &nsv)
+	require.NoError(t, err)
+
+	var sv mp
+	err = DecodeJSON(nonStrict, &sv)
+	require.NoError(t, err)
+
+	require.True(t, reflect.DeepEqual(v, nsv))
+	require.True(t, reflect.DeepEqual(v, sv))
 }

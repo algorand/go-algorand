@@ -24,13 +24,15 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
 	"unicode"
 
 	"github.com/stretchr/testify/require"
+
+	algodclient "github.com/algorand/go-algorand/daemon/algod/api/client"
+	kmdclient "github.com/algorand/go-algorand/daemon/kmd/client"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -185,6 +187,11 @@ func TestClientCanGetStatus(t *testing.T) {
 	statusResponse, err := testClient.Status()
 	require.NoError(t, err)
 	require.NotEmpty(t, statusResponse)
+	testClient.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
+	statusResponse2, err := testClient.Status()
+	require.NoError(t, err)
+	require.NotEmpty(t, statusResponse2)
+	require.True(t, statusResponse2.LastRound >= statusResponse.LastRound)
 }
 
 func TestClientCanGetStatusAfterBlock(t *testing.T) {
@@ -193,12 +200,13 @@ func TestClientCanGetStatusAfterBlock(t *testing.T) {
 	statusResponse, err := testClient.WaitForRound(1)
 	require.NoError(t, err)
 	require.NotEmpty(t, statusResponse)
+	testClient.SetAPIVersionAffinity(algodclient.APIVersionV2, kmdclient.APIVersionV1)
+	statusResponse, err = testClient.WaitForRound(statusResponse.LastRound + 1)
+	require.NoError(t, err)
+	require.NotEmpty(t, statusResponse)
 }
 
 func TestTransactionsByAddr(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	var localFixture fixtures.RestClientFixture
 	localFixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
 	defer localFixture.Shutdown()

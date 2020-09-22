@@ -1,0 +1,106 @@
+#!/usr/bin/expect -f
+#exp_internal 1
+set err 0
+log_user 1
+
+source  goalExpectCommon.exp
+
+# This test tests the testing procedure CheckProcessReturnedCode
+# When a process crashes, CheckProcessReturnedCode should return 1
+proc checkProcessReturnedCodeTest {} {
+    # Test the process killed branch    
+    spawn  /bin/bash -c "kill -11 $$"
+    lassign [::AlgorandGoal::CheckProcessReturnedCode 0] response OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP 
+    if {$response == 0} {
+	puts "expected failure code 1 not 0"
+	exit 1
+    }
+    if {$KILLED != "CHILDKILLED" || $KILL_SIGNAL != "SIGSEGV" || $EXP != "segmentation violation"} {
+	puts "expected CHILDKILLED SIGSEGV segmentation violation"
+	puts "got: $KILLED $KILL_SIGNAL $EXP"
+	exit 1
+    }
+
+    # Test the sighup branch
+    spawn  /bin/bash -c "kill -1 $$"
+    lassign [::AlgorandGoal::CheckProcessReturnedCode 0] response OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP 
+    if {$response != 0} {
+	puts "expected 0"
+	puts "got: $KILLED $KILL_SIGNAL $EXP"	
+	exit 1
+    }
+    
+    # TODO: test OS_CODE == -1 branch
+
+    # test ERR_CODE != 0 branch
+    spawn  /bin/bash -c "exit  33"
+    lassign [::AlgorandGoal::CheckProcessReturnedCode 0] response OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
+    if {$response == 0} {
+	puts "expected failure code 1 not 0"
+	exit 1
+    }
+    if {$ERR_CODE != 33} {
+	puts "expected ERR_CODE 33 got: $ERR_CODE"
+	exit 1
+    }
+
+    # test ERR_CODE == 0 branch
+    spawn  /bin/bash -c "exit  0"
+    lassign [::AlgorandGoal::CheckProcessReturnedCode 0] response OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
+    if {$response != 0} {
+	puts "expected failure code 0 not $response"
+	exit 1
+    }
+
+    # test close sending sighup
+    spawn /bin/bash -c "echo 44; sleep 2s; kill -11 $$"
+    expect {
+	44 {
+	    close
+	}
+    }
+    lassign [::AlgorandGoal::CheckProcessReturnedCode 0] response OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
+    if {$response != 0} {
+	puts "expected 0"
+	puts "got: $KILLED $KILL_SIGNAL $EXP"	
+	exit 1
+    }
+
+    # same, without close. should get to segv
+    spawn /bin/bash -c "echo 44; sleep 2s; kill -11 $$"
+    expect {
+	44 {
+	    puts "not closing"
+	}
+    }
+    lassign [::AlgorandGoal::CheckProcessReturnedCode 0] response OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
+    if {$KILLED != "CHILDKILLED" || $KILL_SIGNAL != "SIGSEGV" || $EXP != "segmentation violation"} {
+	puts "expected CHILDKILLED SIGSEGV segmentation violation"
+	puts "got: $KILLED $KILL_SIGNAL $EXP"
+	exit 1
+    }
+}
+
+# When eof is expected, the spawn_id is no longer open
+# This test confirms this behavior
+proc closeOnEofTest {} {
+    spawn  /bin/bash -c "echo this is some command"
+    expect {
+	eof {
+	    if {[catch {
+		close
+	    } EXCEPTION] } {
+		if {![string match {spawn_id: spawn id * not open} $EXCEPTION]} {
+		    puts "expected: spawn_id: spawn id expID not open"
+		    puts "got: $EXCEPTION"
+		    exit 1
+		}
+	    }
+	}
+    }
+
+}
+
+
+checkProcessReturnedCodeTest
+closeOnEofTest

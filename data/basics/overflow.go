@@ -18,6 +18,7 @@ package basics
 
 import (
 	"math"
+	"math/big"
 )
 
 // OverflowTracker is used to track when an operation causes an overflow
@@ -64,6 +65,24 @@ func MulSaturate(a uint64, b uint64) uint64 {
 	res, overflowed := OMul(a, b)
 	if overflowed {
 		return math.MaxUint64
+	}
+	return res
+}
+
+// AddSaturate adds 2 values with saturation on overflow
+func AddSaturate(a uint64, b uint64) uint64 {
+	res, overflowed := OAdd(a, b)
+	if overflowed {
+		return math.MaxUint64
+	}
+	return res
+}
+
+// SubSaturate subtracts 2 values with saturation on underflow
+func SubSaturate(a uint64, b uint64) uint64 {
+	res, overflowed := OSub(a, b)
+	if overflowed {
+		return 0
 	}
 	return res
 }
@@ -144,4 +163,22 @@ func (t *OverflowTracker) SubR(a Round, b Round) Round {
 // ScalarMulA multiplies an Algo amount by a scalar
 func (t *OverflowTracker) ScalarMulA(a MicroAlgos, b uint64) MicroAlgos {
 	return MicroAlgos{Raw: t.Mul(a.Raw, b)}
+}
+
+// Muldiv computes a*b/c.  The overflow flag indicates that
+// the result was 2^64 or greater.
+func Muldiv(a uint64, b uint64, c uint64) (res uint64, overflow bool) {
+	var aa big.Int
+	aa.SetUint64(a)
+
+	var bb big.Int
+	bb.SetUint64(b)
+
+	var cc big.Int
+	cc.SetUint64(c)
+
+	aa.Mul(&aa, &bb)
+	aa.Div(&aa, &cc)
+
+	return aa.Uint64(), !aa.IsUint64()
 }

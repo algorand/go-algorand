@@ -55,8 +55,6 @@ if [ "${PKG_ROOT}" = "" ]; then
     PKG_ROOT=${HOME}/node_pkg
 fi
 
-rm -rf ${PKG_ROOT}
-
 BASECHANNEL=${CHANNEL}
 
 echo Building ${#VARIATION_ARRAY[@]} variations
@@ -85,6 +83,7 @@ for var in "${VARIATION_ARRAY[@]}"; do
         PKG_NAME=${OS}-${ARCH}
 
         PLATFORM_ROOT=${PKG_ROOT}/${CHANNEL}/${PKG_NAME}
+        rm -rf ${PLATFORM_ROOT}
         mkdir -p ${PLATFORM_ROOT}
         scripts/build_package.sh ${OS} ${ARCH} ${PLATFORM_ROOT}
 
@@ -107,19 +106,5 @@ for var in "${VARIATION_ARRAY[@]}"; do
         cd ${PLATFORM_ROOT}/tools
         tar -zcf ${PKG_ROOT}/tools_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.tar.gz * >/dev/null 2>&1
         popd
-
-        # If Linux package, build debian (deb) package as well
-        if [ ! -z "${BUILD_DEB}" -a $(scripts/ostype.sh) = "linux" ]; then
-            DEBTMP=$(mktemp -d 2>/dev/null || mktemp -d -t "debtmp")
-            trap "rm -rf ${DEBTMP}" 0
-            scripts/build_deb.sh ${ARCH} ${DEBTMP}
-            if [ $? -ne 0 ]; then
-                echo "Error building debian package for ${PLATFORM}.  Aborting..."
-                exit 1
-            fi
-            pushd ${DEBTMP}
-            cp -p *.deb ${PKG_ROOT}/algorand_${CHANNEL}_${PKG_NAME}_${FULLVERSION}.deb
-            popd
-        fi
     done
 done

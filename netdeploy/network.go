@@ -25,8 +25,9 @@ import (
 	"strings"
 	"time"
 
+	generatedV2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
+
 	"github.com/algorand/go-algorand/config"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/gen"
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/nodecontrol"
@@ -306,9 +307,13 @@ func (n Network) GetPeerAddresses(binDir string) []string {
 	for _, relayDir := range n.cfg.RelayDirs {
 		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(relayDir))
 		relayAddress, err := nc.GetListeningAddress()
-		if err == nil {
-			peerAddresses = append(peerAddresses, relayAddress)
+		if err != nil {
+			continue
 		}
+		if strings.HasPrefix(relayAddress, "http://") {
+			relayAddress = relayAddress[7:]
+		}
+		peerAddresses = append(peerAddresses, relayAddress)
 	}
 	return peerAddresses
 }
@@ -335,7 +340,6 @@ func (n Network) StartNode(binDir, nodeDir string, redirectOutput bool) (err err
 	controller := nodecontrol.MakeNodeController(binDir, nodeDir)
 	peers := n.GetPeerAddresses(binDir)
 	peerAddresses := strings.Join(peers, ";")
-
 	_, err = controller.StartAlgod(nodecontrol.AlgodStartArgs{
 		PeerAddress:    peerAddresses,
 		RedirectOutput: redirectOutput,
@@ -376,7 +380,7 @@ func (n Network) Stop(binDir string) {
 
 // NetworkNodeStatus represents the result from checking the status of a particular node instance
 type NetworkNodeStatus struct {
-	Status v1.NodeStatus
+	Status generatedV2.NodeStatusResponse
 	Error  error
 }
 
@@ -404,7 +408,7 @@ func (n Network) NodesStatus(binDir string) map[string]NetworkNodeStatus {
 	statuses := make(map[string]NetworkNodeStatus)
 
 	for _, relayDir := range n.cfg.RelayDirs {
-		var status v1.NodeStatus
+		var status generatedV2.NodeStatusResponse
 		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(relayDir))
 		algodClient, err := nc.AlgodClient()
 		if err == nil {
@@ -417,7 +421,7 @@ func (n Network) NodesStatus(binDir string) map[string]NetworkNodeStatus {
 	}
 
 	for _, nodeDir := range n.nodeDirs {
-		var status v1.NodeStatus
+		var status generatedV2.NodeStatusResponse
 		nc := nodecontrol.MakeNodeController(binDir, n.getNodeFullPath(nodeDir))
 		algodClient, err := nc.AlgodClient()
 		if err == nil {

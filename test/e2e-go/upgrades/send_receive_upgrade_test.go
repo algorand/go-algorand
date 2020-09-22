@@ -14,13 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package transactions
+package upgrades
 
 import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -45,51 +44,30 @@ func GenerateRandomBytes(n int) []byte {
 // this test checks that two accounts can send money to one another
 // across a protocol upgrade.
 func TestAccountsCanSendMoneyAcrossUpgradeV7toV8(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV7Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV8toV9(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV8Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV9toV10(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV9Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV10toV11(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV10Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV11toV12(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV11Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV12toV13(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV12Upgrade.json"))
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV13toV14(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV13Upgrade.json"))
 }
 
@@ -98,10 +76,19 @@ func TestAccountsCanSendMoneyAcrossUpgradeV14toV15(t *testing.T) {
 }
 
 func TestAccountsCanSendMoneyAcrossUpgradeV15toV16(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
 	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV15Upgrade.json"))
+}
+
+func TestAccountsCanSendMoneyAcrossUpgradeV21toV22(t *testing.T) {
+	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV21Upgrade.json"))
+}
+
+func TestAccountsCanSendMoneyAcrossUpgradeV22toV23(t *testing.T) {
+	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV22Upgrade.json"))
+}
+
+func TestAccountsCanSendMoneyAcrossUpgradeV23toV24(t *testing.T) {
+	testAccountsCanSendMoneyAcrossUpgrade(t, filepath.Join("nettemplates", "TwoNodes50EachV23Upgrade.json"))
 }
 
 // ConsensusTestFastUpgrade is meant for testing of protocol upgrades:
@@ -120,6 +107,8 @@ func generateFastUpgradeConsensus() (fastUpgradeProtocols config.ConsensusProtoc
 		fastParams.UpgradeVoteRounds = 5
 		fastParams.UpgradeThreshold = 3
 		fastParams.DefaultUpgradeWaitRounds = 5
+		fastParams.MinUpgradeWaitRounds = 0
+		fastParams.MaxUpgradeWaitRounds = 0
 		fastParams.MaxVersionStringLen += len(consensusTestFastUpgrade(""))
 		fastParams.ApprovedUpgrades = make(map[protocol.ConsensusVersion]uint64)
 
@@ -196,7 +185,7 @@ func testAccountsCanSendMoneyAcrossUpgrade(t *testing.T, templatePath string) {
 
 		time.Sleep(time.Second)
 
-		if time.Now().After(startTime.Add(2 * time.Minute)) {
+		if time.Now().After(startTime.Add(3 * time.Minute)) {
 			a.Fail("upgrade taking too long")
 		}
 	}

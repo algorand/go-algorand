@@ -16,7 +16,6 @@
 
 package agreement
 
-//go:generate dbgen -i agree.sql -p agreement -n agree -o agreeInstall.go
 import (
 	"context"
 	"database/sql"
@@ -51,14 +50,14 @@ func persistent(as []action) bool {
 // encode serializes the current state into a byte array.
 func encode(t timers.Clock, rr rootRouter, p player, a []action) []byte {
 	var s diskState
-	s.Router = protocol.Encode(rr)
-	s.Player = protocol.Encode(p)
+	s.Router = protocol.EncodeReflect(rr)
+	s.Player = protocol.EncodeReflect(p)
 	s.Clock = t.Encode()
 	for _, act := range a {
 		s.ActionTypes = append(s.ActionTypes, act.t())
-		s.Actions = append(s.Actions, protocol.Encode(act))
+		s.Actions = append(s.Actions, protocol.EncodeReflect(act))
 	}
-	raw := protocol.Encode(s)
+	raw := protocol.EncodeReflect(s)
 	return raw
 }
 
@@ -74,7 +73,7 @@ func persist(log serviceLogger, crash db.Accessor, Round basics.Round, Period pe
 		log.with(logEvent).Info("persisted state to the database")
 	}()
 
-	err = crash.Atomic(func(tx *sql.Tx) error {
+	err = crash.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		_, err := tx.Exec("insert or replace into Service (rowid, data) values (1, ?)", raw)
 		return err
 	})
@@ -92,7 +91,7 @@ func persist(log serviceLogger, crash db.Accessor, Round basics.Round, Period pe
 func reset(log logging.Logger, crash db.Accessor) (err error) {
 	logging.Base().Infof("reset (agreement): resetting crash state")
 
-	err = crash.Atomic(func(tx *sql.Tx) (res error) {
+	err = crash.Atomic(func(ctx context.Context, tx *sql.Tx) (res error) {
 		// we could not retrieve our state, so wipe it
 		_, err := tx.Exec("delete from Service")
 		if err != nil {
@@ -115,11 +114,11 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 		}
 	}()
 
-	crash.Atomic(func(tx *sql.Tx) error {
+	crash.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return agreeInstallDatabase(tx)
 	}) // ignore error
 
-	err = crash.Atomic(func(tx *sql.Tx) (res error) {
+	err = crash.Atomic(func(ctx context.Context, tx *sql.Tx) (res error) {
 		var reset bool
 		defer func() {
 			if !reset {
@@ -173,7 +172,7 @@ func decode(raw []byte, t0 timers.Clock) (t timers.Clock, rr rootRouter, p playe
 	a2 := []action{}
 	var s diskState
 
-	err = protocol.Decode(raw, &s)
+	err = protocol.DecodeReflect(raw, &s)
 	if err != nil {
 		logging.Base().Errorf("decode (agreement): error decoding retrieved state (len = %v): %v", len(raw), err)
 		return
@@ -184,20 +183,20 @@ func decode(raw []byte, t0 timers.Clock) (t timers.Clock, rr rootRouter, p playe
 		return
 	}
 
-	err = protocol.Decode(s.Player, &p2)
+	err = protocol.DecodeReflect(s.Player, &p2)
 	if err != nil {
 		return
 	}
 
 	rr2 = makeRootRouter(p2)
-	err = protocol.Decode(s.Router, &rr2)
+	err = protocol.DecodeReflect(s.Router, &rr2)
 	if err != nil {
 		return
 	}
 
 	for i := range s.Actions {
 		act := zeroAction(s.ActionTypes[i])
-		err = protocol.Decode(s.Actions[i], &act)
+		err = protocol.DecodeReflect(s.Actions[i], &act)
 		if err != nil {
 			return
 		}

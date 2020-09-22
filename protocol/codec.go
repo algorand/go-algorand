@@ -19,6 +19,7 @@ package protocol
 import (
 	"fmt"
 	"io"
+	"os"
 	"sync"
 
 	"github.com/algorand/go-codec/codec"
@@ -32,6 +33,10 @@ var CodecHandle *codec.MsgpackHandle
 // JSONHandle is used to instantiate JSON encoders and decoders
 // with our settings (canonical, paranoid about decoding errors)
 var JSONHandle *codec.JsonHandle
+
+// JSONStrictHandle is the same as JSONHandle but with MapKeyAsString=true
+// for correct maps[int]interface{} encoding
+var JSONStrictHandle *codec.JsonHandle
 
 // Decoder is our interface for a thing that can decode objects.
 type Decoder interface {
@@ -55,6 +60,15 @@ func init() {
 	JSONHandle.RecursiveEmptyCheck = true
 	JSONHandle.Indent = 2
 	JSONHandle.HTMLCharsAsIs = true
+
+	JSONStrictHandle = new(codec.JsonHandle)
+	JSONStrictHandle.ErrorIfNoField = JSONHandle.ErrorIfNoField
+	JSONStrictHandle.ErrorIfNoArrayExpand = JSONHandle.ErrorIfNoArrayExpand
+	JSONStrictHandle.Canonical = JSONHandle.Canonical
+	JSONStrictHandle.RecursiveEmptyCheck = JSONHandle.RecursiveEmptyCheck
+	JSONStrictHandle.Indent = JSONHandle.Indent
+	JSONStrictHandle.HTMLCharsAsIs = JSONHandle.HTMLCharsAsIs
+	JSONStrictHandle.MapKeyAsString = true
 }
 
 type codecBytes struct {
@@ -109,31 +123,15 @@ func EncodeMsgp(obj msgp.Marshaler) []byte {
 }
 
 // Encode returns a msgpack-encoded byte buffer for a given object.
-func Encode(obj interface{}) []byte {
-	msgp, ok := obj.(msgp.Marshaler)
-	if ok && msgp.CanMarshalMsg(msgp) {
-		return EncodeMsgp(msgp)
+func Encode(obj msgp.Marshaler) []byte {
+	if obj.CanMarshalMsg(obj) {
+		return EncodeMsgp(obj)
 	}
+
+	// Use fmt instead of logging to avoid import loops;
+	// the expectation is that this should never happen.
+	fmt.Fprintf(os.Stderr, "Encoding %T using go-codec; stray embedded field?\n", obj)
 	return EncodeReflect(obj)
-}
-
-// CountingWriter is an implementation of io.Writer that tracks the number
-// of bytes written (but discards the actual bytes).
-type CountingWriter struct {
-	N int
-}
-
-func (cw *CountingWriter) Write(b []byte) (int, error) {
-	blen := len(b)
-	cw.N += blen
-	return blen, nil
-}
-
-// EncodeLen returns len(Encode(obj))
-func EncodeLen(obj interface{}) int {
-	var cw CountingWriter
-	EncodeStream(&cw, obj)
-	return cw.N
 }
 
 // EncodeStream is like Encode but writes to an io.Writer instead.
@@ -151,6 +149,15 @@ func EncodeStream(w io.Writer, obj interface{}) {
 func EncodeJSON(obj interface{}) []byte {
 	var b []byte
 	enc := codec.NewEncoderBytes(&b, JSONHandle)
+	enc.MustEncode(obj)
+	return b
+}
+
+// EncodeJSONStrict returns a JSON-encoded byte buffer for a given object
+// It is the same EncodeJSON but encodes map's int keys as strings
+func EncodeJSONStrict(obj interface{}) []byte {
+	var b []byte
+	enc := codec.NewEncoderBytes(&b, JSONStrictHandle)
 	enc.MustEncode(obj)
 	return b
 }
@@ -190,11 +197,15 @@ func DecodeMsgp(b []byte, objptr msgp.Unmarshaler) (err error) {
 
 // Decode attempts to decode a msgpack-encoded byte buffer
 // into an object instance pointed to by objptr.
-func Decode(b []byte, objptr interface{}) error {
-	msgp, ok := objptr.(msgp.Unmarshaler)
-	if ok && msgp.CanUnmarshalMsg(msgp) {
-		return DecodeMsgp(b, msgp)
+func Decode(b []byte, objptr msgp.Unmarshaler) error {
+	if objptr.CanUnmarshalMsg(objptr) {
+		return DecodeMsgp(b, objptr)
 	}
+
+	// Use fmt instead of logging to avoid import loops;
+	// the expectation is that this should never happen.
+	fmt.Fprintf(os.Stderr, "Decoding %T using go-codec; stray embedded field?\n", objptr)
+
 	return DecodeReflect(b, objptr)
 }
 
@@ -214,6 +225,11 @@ func DecodeJSON(b []byte, objptr interface{}) error {
 // NewEncoder returns an encoder object writing bytes into [w].
 func NewEncoder(w io.Writer) *codec.Encoder {
 	return codec.NewEncoder(w, CodecHandle)
+}
+
+// NewJSONEncoder returns an encoder object writing bytes into [w].
+func NewJSONEncoder(w io.Writer) *codec.Encoder {
+	return codec.NewEncoder(w, JSONHandle)
 }
 
 // NewDecoder returns a decoder object reading bytes from [r].

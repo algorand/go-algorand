@@ -220,7 +220,7 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 
 			// at this point, we need to check if this is the very last vote or not.
 			// if we have no regular votes, we won't be generating a bundle so we can abort right here.
-			// note that it migth be a legit thing; if we received two votes from X followed by 100 regular votes,
+			// note that it might be a legit thing; if we received two votes from X followed by 100 regular votes,
 			// we would end up here for the second vote.
 			if len(tracker.Voters) == 0 {
 				return res
@@ -241,11 +241,11 @@ func (tracker *voteTracker) handle(r routerHandle, p player, e0 event) event {
 		step := e.Vote.R.Step
 		switch {
 		case step == soft:
-			res = thresholdEvent{T: softThreshold, Round: round, Period: period, Step: step, Proposal: prop}
+			res = thresholdEvent{T: softThreshold, Round: round, Period: period, Step: step, Proposal: prop, Proto: e.Proto}
 		case step == cert:
-			res = thresholdEvent{T: certThreshold, Round: round, Period: period, Step: step, Proposal: prop}
+			res = thresholdEvent{T: certThreshold, Round: round, Period: period, Step: step, Proposal: prop, Proto: e.Proto}
 		default: // next vote
-			res = thresholdEvent{T: nextThreshold, Round: round, Period: period, Step: step, Proposal: prop}
+			res = thresholdEvent{T: nextThreshold, Round: round, Period: period, Step: step, Proposal: prop, Proto: e.Proto}
 		}
 
 		res.Bundle = tracker.genBundle(proto, proposalVote)

@@ -109,22 +109,23 @@ def _script_thread_inner(runset, scriptname):
         retcode = -1
     dt = time.time() - start
     if retcode != 0:
-        logger.error('%s failed in %f seconds', scriptname, dt)
-        st = os.stat(cmdlogpath)
-        with open(cmdlogpath, 'r') as fin:
-            if st.st_size > LOG_WHOLE_CUTOFF:
-                fin.seek(st.st_size - LOG_WHOLE_CUTOFF)
-                text = fin.read()
-                lines = text.splitlines()
-                if len(lines) > 1:
-                    # drop probably-partial first line
-                    lines = lines[1:]
-                sys.stderr.write('end of log follows:\n')
-                sys.stderr.write('\n'.join(lines))
-                sys.stderr.write('\n\n')
-            else:
-                sys.stderr.write('whole log follows:\n')
-                sys.stderr.write(fin.read())
+        with runset.lock:
+            logger.error('%s failed in %f seconds', scriptname, dt)
+            st = os.stat(cmdlogpath)
+            with open(cmdlogpath, 'r') as fin:
+                if st.st_size > LOG_WHOLE_CUTOFF:
+                    fin.seek(st.st_size - LOG_WHOLE_CUTOFF)
+                    text = fin.read()
+                    lines = text.splitlines()
+                    if len(lines) > 1:
+                        # drop probably-partial first line
+                        lines = lines[1:]
+                    sys.stderr.write('end of log follows ({}):\n'.format(scriptname))
+                    sys.stderr.write('\n'.join(lines))
+                    sys.stderr.write('\n\n')
+                else:
+                    sys.stderr.write('whole log follows ({}):\n'.format(scriptname))
+                    sys.stderr.write(fin.read())
     else:
         logger.info('finished %s OK in %f seconds', scriptname, dt)
     runset.done(scriptname, retcode == 0, dt)
@@ -298,6 +299,17 @@ def goal_network_delete(netdir, normal_cleanup=False):
             raise e
     already_deleted = True
 
+def reportcomms(p, stdout, stderr):
+    cmdr = repr(p.args)
+    if not stdout and p.stdout:
+        stdout = p.stdout.read()
+    if not stderr and p.stderr:
+        stderr = p.stderr.read()
+    if stdout:
+        sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, stdout))
+    if stderr:
+        sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, stderr))
+
 def xrun(cmd, *args, **kwargs):
     timeout = kwargs.pop('timeout', None)
     kwargs['stdout'] = subprocess.PIPE
@@ -309,32 +321,21 @@ def xrun(cmd, *args, **kwargs):
         raise
     try:
         if timeout:
-            p.communicate(timeout=timeout)
+            stdout,stderr = p.communicate(timeout=timeout)
         else:
-            p.communicate()
+            stdout,stderr = p.communicate()
     except subprocess.TimeoutExpired as te:
-        cmdr = repr(cmd)
-        logger.error('subprocess timed out {}'.format(cmdr), exc_info=True)
-        if p.stdout:
-            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout))
-        if p.stderr:
-            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr))
+        logger.error('subprocess timed out {!r}'.format(cmd), exc_info=True)
+        reportcomms(p, stdout, stderr)
         raise
     except Exception as e:
-        cmdr = repr(cmd)
-        logger.error('subprocess exception {}'.format(cmdr), exc_info=True)
-        if p.stdout:
-            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout))
-        if p.stderr:
-            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr))
+        logger.error('subprocess exception {!r}'.format(cmd), exc_info=True)
+        reportcomms(p, stdout, stderr)
         raise
     if p.returncode != 0:
         cmdr = repr(cmd)
         logger.error('cmd failed {}'.format(cmdr))
-        if p.stdout:
-            sys.stderr.write('output from {}:\n{}\n\n'.format(cmdr, p.stdout))
-        if p.stderr:
-            sys.stderr.write('stderr from {}:\n{}\n\n'.format(cmdr, p.stderr))
+        reportcomms(p, stdout, stderr)
         raise Exception('error: cmd failed: {}'.format(cmdr))
 
 _logging_format = '%(asctime)s :%(lineno)d %(message)s'
@@ -378,8 +379,8 @@ def main():
         sys.exit(1)
 
     retcode = 0
-    xrun(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(gopath, 'src/github.com/algorand/go-algorand/test/testdata/nettemplates/TwoNodes50EachFuture.json')], timeout=30)
-    xrun(['goal', 'network', 'start', '-r', netdir], timeout=30)
+    xrun(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(gopath, 'src/github.com/algorand/go-algorand/test/testdata/nettemplates/TwoNodes50EachFuture.json')], timeout=90)
+    xrun(['goal', 'network', 'start', '-r', netdir], timeout=90)
     atexit.register(goal_network_stop, netdir)
 
     env['ALGORAND_DATA'] = os.path.join(netdir, 'Node')

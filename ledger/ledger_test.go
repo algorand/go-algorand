@@ -61,7 +61,7 @@ func sign(secrets map[basics.Address]*crypto.SignatureSecrets, t transactions.Tr
 	}
 }
 
-func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genesisInitState InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
+func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (genesisInitState InitState, initKeys map[basics.Address]*crypto.SignatureSecrets) {
 	params := config.Consensus[proto]
 	poolAddr := testPoolAddr
 	sinkAddr := testSinkAddr
@@ -95,7 +95,7 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genes
 
 	initBlock := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
-			GenesisID: t.Name(),
+			GenesisID: tb.Name(),
 			Round:     0,
 			RewardsState: bookkeeping.RewardsState{
 				RewardsRate: initialRewardsPerRound,
@@ -109,12 +109,12 @@ func testGenerateInitState(t *testing.T, proto protocol.ConsensusVersion) (genes
 		},
 	}
 	if params.SupportGenesisHash {
-		initBlock.BlockHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
+		initBlock.BlockHeader.GenesisHash = crypto.Hash([]byte(tb.Name()))
 	}
 
 	genesisInitState.Block = initBlock
 	genesisInitState.Accounts = initAccounts
-	genesisInitState.GenesisHash = crypto.Hash([]byte(t.Name()))
+	genesisInitState.GenesisHash = crypto.Hash([]byte(tb.Name()))
 
 	return
 }
@@ -201,9 +201,10 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 func TestLedgerBasic(t *testing.T) {
 	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
 	const inMem = true
-	const archival = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
 	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, archival)
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	require.NoError(t, err, "could not open ledger")
 	defer l.Close()
 }
@@ -216,8 +217,9 @@ func TestLedgerBlockHeaders(t *testing.T) {
 
 	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
 	const inMem = true
-	const archival = true
-	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
@@ -353,9 +355,10 @@ func TestLedgerSingleTx(t *testing.T) {
 
 	genesisInitState, initSecrets := testGenerateInitState(t, protocol.ConsensusV7)
 	const inMem = true
-	const archival = true
 	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
@@ -536,6 +539,164 @@ func TestLedgerSingleTx(t *testing.T) {
 	a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctKeyreg, ad), "added duplicate tx")
 }
 
+func TestLedgerSingleTxV24(t *testing.T) {
+	a := require.New(t)
+
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+
+	protoName := protocol.ConsensusV24
+	genesisInitState, initSecrets := testGenerateInitState(t, protoName)
+	const inMem = true
+	log := logging.TestingLog(t)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	a.NoError(err, "could not open ledger")
+	defer l.Close()
+
+	proto := config.Consensus[protoName]
+	poolAddr := testPoolAddr
+	sinkAddr := testSinkAddr
+
+	initAccounts := genesisInitState.Accounts
+	var addrList []basics.Address
+	for addr := range initAccounts {
+		if addr != poolAddr && addr != sinkAddr {
+			addrList = append(addrList, addr)
+		}
+	}
+
+	correctTxHeader := transactions.Header{
+		Sender:      addrList[0],
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
+		GenesisID:   t.Name(),
+		GenesisHash: genesisInitState.GenesisHash,
+	}
+
+	assetParam := basics.AssetParams{
+		Total:    100,
+		UnitName: "unit",
+		Manager:  addrList[0],
+	}
+	correctAssetConfigFields := transactions.AssetConfigTxnFields{
+		AssetParams: assetParam,
+	}
+	correctAssetConfig := transactions.Transaction{
+		Type:                 protocol.AssetConfigTx,
+		Header:               correctTxHeader,
+		AssetConfigTxnFields: correctAssetConfigFields,
+	}
+	correctAssetTransferFields := transactions.AssetTransferTxnFields{
+		AssetAmount:   10,
+		AssetReceiver: addrList[1],
+	}
+	correctAssetTransfer := transactions.Transaction{
+		Type:                   protocol.AssetTransferTx,
+		Header:                 correctTxHeader,
+		AssetTransferTxnFields: correctAssetTransferFields,
+	}
+
+	approvalProgram := []byte("\x02\x20\x01\x01\x22") // int 1
+	clearStateProgram := []byte("\x02")               // empty
+	correctAppCreateFields := transactions.ApplicationCallTxnFields{
+		ApprovalProgram:   approvalProgram,
+		ClearStateProgram: clearStateProgram,
+	}
+	correctAppCreate := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   correctTxHeader,
+		ApplicationCallTxnFields: correctAppCreateFields,
+	}
+
+	correctAppCallFields := transactions.ApplicationCallTxnFields{
+		OnCompletion: 0,
+	}
+	correctAppCall := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   correctTxHeader,
+		ApplicationCallTxnFields: correctAppCallFields,
+	}
+
+	var badTx transactions.Transaction
+	var ad transactions.ApplyData
+
+	var assetIdx basics.AssetIndex
+	var appIdx basics.AppIndex
+
+	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctAssetConfig, ad))
+	assetIdx = 1 // the first txn
+
+	badTx = correctAssetConfig
+	badTx.ConfigAsset = 2
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "asset 2 does not exist or has been deleted")
+
+	badTx = correctAssetConfig
+	badTx.ConfigAsset = assetIdx
+	badTx.AssetFrozen = true
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "type acfg has non-zero fields for type afrz")
+
+	badTx = correctAssetConfig
+	badTx.ConfigAsset = assetIdx
+	badTx.Sender = addrList[1]
+	badTx.AssetParams.Freeze = addrList[0]
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "this transaction should be issued by the manager")
+
+	badTx = correctAssetConfig
+	badTx.AssetParams.UnitName = "very long unit name that exceeds the limit"
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "transaction asset unit name too big: 42 > 8")
+
+	badTx = correctAssetTransfer
+	badTx.XferAsset = assetIdx
+	badTx.AssetAmount = 101
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "underflow on subtracting 101 from sender amount 100")
+
+	badTx = correctAssetTransfer
+	badTx.XferAsset = assetIdx
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), fmt.Sprintf("asset %d missing from", assetIdx))
+
+	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctAppCreate, ad))
+	appIdx = 2 // the first txn
+
+	badTx = correctAppCreate
+	program := make([]byte, len(approvalProgram))
+	copy(program, approvalProgram)
+	program[0] = '\x01'
+	badTx.ApprovalProgram = program
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "program version must be >= 2")
+
+	badTx = correctAppCreate
+	badTx.ApplicationID = appIdx
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "programs may only be specified during application creation or update")
+
+	badTx = correctAppCall
+	badTx.ApplicationID = 0
+	err = l.appendUnvalidatedTx(t, initAccounts, initSecrets, badTx, ad)
+	a.Error(err)
+	a.Contains(err.Error(), "ApprovalProgram: invalid version")
+
+	correctAppCall.ApplicationID = appIdx
+	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctAppCall, ad))
+}
+
 func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion) {
 	a := require.New(t)
 
@@ -544,9 +705,10 @@ func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion
 
 	genesisInitState, initSecrets := testGenerateInitState(t, version)
 	const inMem = true
-	const archival = true
 	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
 	a.NoError(err, "could not open ledger")
 	defer l.Close()
 
@@ -776,4 +938,279 @@ func TestLedgerSingleTxApplyDataV18(t *testing.T) {
 
 func TestLedgerSingleTxApplyDataFuture(t *testing.T) {
 	testLedgerSingleTxApplyData(t, protocol.ConsensusFuture)
+}
+
+func TestLedgerRegressionFaultyLeaseFirstValidCheckOld(t *testing.T) {
+	testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t, protocol.ConsensusV22)
+}
+
+func TestLedgerRegressionFaultyLeaseFirstValidCheckV23(t *testing.T) {
+	testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t, protocol.ConsensusV23)
+}
+
+func TestLedgerRegressionFaultyLeaseFirstValidCheck(t *testing.T) {
+	testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t, protocol.ConsensusCurrentVersion)
+}
+
+func TestLedgerRegressionFaultyLeaseFirstValidCheckFuture(t *testing.T) {
+	testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t, protocol.ConsensusFuture)
+}
+
+func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, version protocol.ConsensusVersion) {
+	a := require.New(t)
+
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+
+	genesisInitState, initSecrets := testGenerateInitState(t, version)
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	a.NoError(err, "could not open ledger")
+	defer l.Close()
+
+	proto := config.Consensus[version]
+	poolAddr := testPoolAddr
+	sinkAddr := testSinkAddr
+
+	initAccounts := genesisInitState.Accounts
+	var addrList []basics.Address
+	for addr := range initAccounts {
+		if addr != poolAddr && addr != sinkAddr {
+			addrList = append(addrList, addr)
+		}
+	}
+
+	correctTxHeader := transactions.Header{
+		Sender:      addrList[0],
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
+		GenesisID:   t.Name(),
+		GenesisHash: crypto.Hash([]byte(t.Name())),
+	}
+
+	correctPayFields := transactions.PaymentTxnFields{
+		Receiver: addrList[1],
+		Amount:   basics.MicroAlgos{Raw: initAccounts[addrList[0]].MicroAlgos.Raw / 10},
+	}
+
+	correctPay := transactions.Transaction{
+		Type:             protocol.PaymentTx,
+		Header:           correctTxHeader,
+		PaymentTxnFields: correctPayFields,
+	}
+
+	var ad transactions.ApplyData
+
+	correctPayLease := correctPay
+	correctPayLease.Sender = addrList[3]
+	correctPayLease.Lease[0] = 1
+
+	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "could not add initial payment transaction")
+
+	correctPayLease.FirstValid = l.Latest() + 1
+	correctPayLease.LastValid = l.Latest() + 10
+
+	if proto.FixTransactionLeases {
+		a.Error(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "added payment transaction with overlapping lease")
+	} else {
+		a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctPayLease, ad), "should allow leasing payment transaction with newer FirstValid")
+	}
+}
+
+func TestLedgerBlockHdrCaching(t *testing.T) {
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	blk := genesisInitState.Block
+
+	for i := 0; i < 128; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		err := l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+
+		hdr, err := l.BlockHdr(blk.BlockHeader.Round)
+		require.NoError(t, err)
+		require.Equal(t, blk.BlockHeader, hdr)
+	}
+}
+
+func TestLedgerReload(t *testing.T) {
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	genesisInitState := getInitState()
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	blk := genesisInitState.Block
+	for i := 0; i < 128; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		err = l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+
+		if i%7 == 0 {
+			err = l.reloadLedger()
+			require.NoError(t, err)
+
+			// if we reloaded it before it got committed, we need to roll back the round counter.
+			if l.LatestCommitted() != blk.BlockHeader.Round {
+				blk.BlockHeader.Round = l.LatestCommitted()
+			}
+		}
+		if i%13 == 0 {
+			l.WaitForCommit(blk.Round())
+		}
+	}
+}
+
+// TestGetLastCatchpointLabel tests ledger.GetLastCatchpointLabel is returning the correct value.
+func TestGetLastCatchpointLabel(t *testing.T) {
+
+	//initLedger
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	const inMem = true
+	log := logging.TestingLog(t)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer ledger.Close()
+
+	// set some value
+	lastCatchpointLabel := "someCatchpointLabel"
+	ledger.accts.lastCatchpointLabel = lastCatchpointLabel
+
+	// verify the value is returned
+	require.Equal(t, lastCatchpointLabel, ledger.GetLastCatchpointLabel())
+}
+
+// generate at least 3 asset and 3 app creatables, and return the ids
+// of the asset/app with at least 3 elements less or equal.
+func generateCreatables(numElementsPerSegement int) (
+	randomCtbs map[basics.CreatableIndex]modifiedCreatable,
+	assetID3,
+	appID3 basics.CreatableIndex,
+	err error) {
+
+	_, randomCtbs = randomCreatables(numElementsPerSegement)
+	asCounter3 := 0
+	apCounter3 := 0
+
+	for x := 0; x < 10; x++ {
+		// find the assetid greater than at least 2 assetids
+		for cID, crtble := range randomCtbs {
+			switch crtble.ctype {
+			case basics.AssetCreatable:
+				if assetID3 == 0 {
+					assetID3 = cID
+					continue
+				}
+				asCounter3++
+				if assetID3 < cID {
+					assetID3 = cID
+				}
+			case basics.AppCreatable:
+				if appID3 == 0 {
+					appID3 = cID
+					continue
+				}
+				apCounter3++
+				if appID3 < cID {
+					appID3 = cID
+				}
+			}
+			if asCounter3 >= 3 && apCounter3 >= 3 {
+				// found at least 3rd smallest of both
+				break
+			}
+		}
+
+		// there should be at least 3 asset and 3 app creatables generated.
+		// In the rare event this does not happen, repeat... up to 10 times (x)
+		if asCounter3 >= 3 && apCounter3 >= 3 {
+			break
+		}
+	}
+	if asCounter3 < 3 && apCounter3 < 3 {
+		return nil, 0, 0, fmt.Errorf("could not generate 3 apps and 3 assets")
+	}
+	return
+}
+
+// TestListAssetsAndApplications tests the ledger.ListAssets and ledger.ListApplications
+// interfaces. The detailed test on the correctness of these functions is given in:
+// TestListCreatables (acctupdates_test.go)
+func TestListAssetsAndApplications(t *testing.T) {
+
+	numElementsPerSegement := 10 // This is multiplied by 10. see randomCreatables
+
+	//initLedger
+	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
+	const inMem = true
+	log := logging.TestingLog(t)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledger, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	require.NoError(t, err, "could not open ledger")
+	defer ledger.Close()
+
+	// ******* All results are obtained from the cache. Empty database *******
+	// ******* No deletes                                              *******
+	// get random data. Inital batch, no deletes
+	randomCtbs, maxAsset, maxApp, err := generateCreatables(numElementsPerSegement)
+	require.NoError(t, err)
+
+	// set the cache
+	ledger.accts.creatables = randomCtbs
+
+	// Test ListAssets
+	// Check the number of results limit
+	results, err := ledger.ListAssets(basics.AssetIndex(maxAsset), 2)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(results))
+	// Check the max asset id limit
+	results, err = ledger.ListAssets(basics.AssetIndex(maxAsset), 100)
+	assetCount := 0
+	for id, ctb := range randomCtbs {
+		if ctb.ctype == basics.AssetCreatable &&
+			ctb.created &&
+			id <= maxAsset {
+			assetCount++
+		}
+	}
+	require.Equal(t, assetCount, len(results))
+
+	// Test ListApplications
+	// Check the number of results limit
+	ledger.accts.creatables = randomCtbs
+	results, err = ledger.ListApplications(basics.AppIndex(maxApp), 2)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(results))
+	// Check the max application id limit
+	results, err = ledger.ListApplications(basics.AppIndex(maxApp), 100)
+	appCount := 0
+	for id, ctb := range randomCtbs {
+		if ctb.ctype == basics.AppCreatable &&
+			ctb.created &&
+			id <= maxApp {
+			appCount++
+		}
+	}
+	require.Equal(t, appCount, len(results))
 }

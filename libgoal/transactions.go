@@ -28,6 +28,8 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+var emptySchema = basics.StateSchema{}
+
 // SignTransactionWithWallet signs the passed transaction with keys from the wallet associated with the passed walletHandle
 func (c *Client) SignTransactionWithWallet(walletHandle, pw []byte, utx transactions.Transaction) (stx transactions.SignedTxn, err error) {
 	kmd, err := c.ensureKmdClient()
@@ -36,7 +38,34 @@ func (c *Client) SignTransactionWithWallet(walletHandle, pw []byte, utx transact
 	}
 
 	// Sign the transaction
-	resp, err := kmd.SignTransaction(walletHandle, pw, utx)
+	resp, err := kmd.SignTransaction(walletHandle, pw, crypto.PublicKey{}, utx)
+	if err != nil {
+		return
+	}
+
+	// Decode the SignedTxn
+	err = protocol.Decode(resp.SignedTransaction, &stx)
+	return
+}
+
+// SignTransactionWithWalletAndSigner signs the passed transaction under a specific signer (which may differ from the sender's address). This is necessary after an account has been rekeyed.
+// If signerAddr is the empty string, just infer spending key from the sender address.
+func (c *Client) SignTransactionWithWalletAndSigner(walletHandle, pw []byte, signerAddr string, utx transactions.Transaction) (stx transactions.SignedTxn, err error) {
+	if signerAddr == "" {
+		return c.SignTransactionWithWallet(walletHandle, pw, utx)
+	}
+
+	kmd, err := c.ensureKmdClient()
+	if err != nil {
+		return
+	}
+
+	authaddr, err := basics.UnmarshalChecksumAddress(signerAddr)
+	if err != nil {
+		return
+	}
+	// Sign the transaction
+	resp, err := kmd.SignTransaction(walletHandle, pw, crypto.PublicKey(authaddr), utx)
 	if err != nil {
 		return
 	}
@@ -66,7 +95,7 @@ func (c *Client) SignProgramWithWallet(walletHandle, pw []byte, addr string, pro
 // MultisigSignTransactionWithWallet creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
 // TODO instead of returning MultisigSigs, accept and return blobs
 func (c *Client) MultisigSignTransactionWithWallet(walletHandle, pw []byte, utx transactions.Transaction, signerAddr string, partial crypto.MultisigSig) (msig crypto.MultisigSig, err error) {
-	txBytes := protocol.Encode(utx)
+	txBytes := protocol.Encode(&utx)
 	addr, err := basics.UnmarshalChecksumAddress(signerAddr)
 	if err != nil {
 		return
@@ -75,7 +104,30 @@ func (c *Client) MultisigSignTransactionWithWallet(walletHandle, pw []byte, utx 
 	if err != nil {
 		return
 	}
-	resp, err := kmd.MultisigSignTransaction(walletHandle, pw, txBytes, crypto.PublicKey(addr), partial)
+	resp, err := kmd.MultisigSignTransaction(walletHandle, pw, txBytes, crypto.PublicKey(addr), partial, crypto.Digest{})
+	if err != nil {
+		return
+	}
+	err = protocol.Decode(resp.Multisig, &msig)
+	return
+}
+
+// MultisigSignTransactionWithWalletAndSigner creates a multisig (or adds to an existing partial multisig, if one is provided), signing with the key corresponding to the given address and using the specified wallet
+func (c *Client) MultisigSignTransactionWithWalletAndSigner(walletHandle, pw []byte, utx transactions.Transaction, signerAddr string, partial crypto.MultisigSig, signerMsig string) (msig crypto.MultisigSig, err error) {
+	txBytes := protocol.Encode(&utx)
+	addr, err := basics.UnmarshalChecksumAddress(signerAddr)
+	if err != nil {
+		return
+	}
+	msigAddr, err := basics.UnmarshalChecksumAddress(signerMsig)
+	if err != nil {
+		return
+	}
+	kmd, err := c.ensureKmdClient()
+	if err != nil {
+		return
+	}
+	resp, err := kmd.MultisigSignTransaction(walletHandle, pw, txBytes, crypto.PublicKey(addr), partial, crypto.Digest(msigAddr))
 	if err != nil {
 		return
 	}
@@ -355,6 +407,96 @@ func (c *Client) FillUnsignedTxTemplate(sender string, firstValid, lastValid, fe
 	}
 
 	return tx, nil
+}
+
+// MakeUnsignedAppCreateTx makes a transaction for creating an application
+func (c *Client) MakeUnsignedAppCreateTx(onComplete transactions.OnCompletion, approvalProg []byte, clearProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(0, appArgs, accounts, foreignApps, foreignAssets, onComplete, approvalProg, clearProg, globalSchema, localSchema)
+}
+
+// MakeUnsignedAppUpdateTx makes a transaction for updating an application's programs
+func (c *Client) MakeUnsignedAppUpdateTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, approvalProg []byte, clearProg []byte) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.UpdateApplicationOC, approvalProg, clearProg, emptySchema, emptySchema)
+}
+
+// MakeUnsignedAppDeleteTx makes a transaction for deleting an application
+func (c *Client) MakeUnsignedAppDeleteTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.DeleteApplicationOC, nil, nil, emptySchema, emptySchema)
+}
+
+// MakeUnsignedAppOptInTx makes a transaction for opting in to (allocating
+// some account-specific state for) an application
+func (c *Client) MakeUnsignedAppOptInTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.OptInOC, nil, nil, emptySchema, emptySchema)
+}
+
+// MakeUnsignedAppCloseOutTx makes a transaction for closing out of
+// (deallocating all account-specific state for) an application
+func (c *Client) MakeUnsignedAppCloseOutTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.CloseOutOC, nil, nil, emptySchema, emptySchema)
+}
+
+// MakeUnsignedAppClearStateTx makes a transaction for clearing out all
+// account-specific state for an application. It may not be rejected by the
+// application's logic.
+func (c *Client) MakeUnsignedAppClearStateTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.ClearStateOC, nil, nil, emptySchema, emptySchema)
+}
+
+// MakeUnsignedAppNoOpTx makes a transaction for interacting with an existing
+// application, potentially updating any account-specific local state and
+// global state associated with it.
+func (c *Client) MakeUnsignedAppNoOpTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64) (tx transactions.Transaction, err error) {
+	return c.MakeUnsignedApplicationCallTx(appIdx, appArgs, accounts, foreignApps, foreignAssets, transactions.NoOpOC, nil, nil, emptySchema, emptySchema)
+}
+
+// MakeUnsignedApplicationCallTx is a helper for the above ApplicationCall
+// transaction constructors. A fully custom ApplicationCall transaction may
+// be constructed using this method.
+func (c *Client) MakeUnsignedApplicationCallTx(appIdx uint64, appArgs [][]byte, accounts []string, foreignApps []uint64, foreignAssets []uint64, onCompletion transactions.OnCompletion, approvalProg []byte, clearProg []byte, globalSchema basics.StateSchema, localSchema basics.StateSchema) (tx transactions.Transaction, err error) {
+	tx.Type = protocol.ApplicationCallTx
+	tx.ApplicationID = basics.AppIndex(appIdx)
+	tx.OnCompletion = onCompletion
+
+	tx.ApplicationArgs = appArgs
+	tx.Accounts, err = parseTxnAccounts(accounts)
+	if err != nil {
+		return tx, err
+	}
+
+	tx.ForeignApps = parseTxnForeignApps(foreignApps)
+	tx.ForeignAssets = parseTxnForeignAssets(foreignAssets)
+	tx.ApprovalProgram = approvalProg
+	tx.ClearStateProgram = clearProg
+	tx.LocalStateSchema = localSchema
+	tx.GlobalStateSchema = globalSchema
+
+	return tx, nil
+}
+
+func parseTxnAccounts(accounts []string) (parsed []basics.Address, err error) {
+	for _, acct := range accounts {
+		addr, err := basics.UnmarshalChecksumAddress(acct)
+		if err != nil {
+			return nil, err
+		}
+		parsed = append(parsed, addr)
+	}
+	return
+}
+
+func parseTxnForeignApps(foreignApps []uint64) (parsed []basics.AppIndex) {
+	for _, aidx := range foreignApps {
+		parsed = append(parsed, basics.AppIndex(aidx))
+	}
+	return
+}
+
+func parseTxnForeignAssets(foreignAssets []uint64) (parsed []basics.AssetIndex) {
+	for _, aidx := range foreignAssets {
+		parsed = append(parsed, basics.AssetIndex(aidx))
+	}
+	return
 }
 
 // MakeUnsignedAssetCreateTx creates a tx template for creating

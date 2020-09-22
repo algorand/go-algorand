@@ -121,6 +121,24 @@ type (
 		// transactions have ever been committed (since TxnCounter
 		// started being supported).
 		TxnCounter uint64 `codec:"tc"`
+
+		// CompactCertVoters is the root of a Merkle tree containing the
+		// online accounts that will help sign a compact certificate.  The
+		// Merkle root, and the compact certificate, happen on blocks that
+		// are a multiple of ConsensusParams.CompactCertRounds.  For blocks
+		// that are not a multiple of ConsensusParams.CompactCertRounds,
+		// this value is zero.
+		CompactCertVoters crypto.Digest `codec:"ccv"`
+
+		// CompactCertVotersTotal is the total number of microalgos held by
+		// the accounts in CompactCertVoters (or zero, if the merkle root is
+		// zero).  This is intended for computing the threshold of votes to
+		// expect from CompactCertVoters.
+		CompactCertVotersTotal basics.MicroAlgos `codec:"ccvt"`
+
+		// CompactCertLastRound is the last round for which we have committed
+		// a CompactCert transaction.
+		CompactCertLastRound basics.Round `codec:"ccl"`
 	}
 
 	// RewardsState represents the global parameters controlling the rate
@@ -316,7 +334,7 @@ func (s UpgradeState) applyUpgradeVote(r basics.Round, vote UpgradeVote) (res Up
 
 		upgradeDelay := uint64(vote.UpgradeDelay)
 		if upgradeDelay > params.MaxUpgradeWaitRounds || upgradeDelay < params.MinUpgradeWaitRounds {
-			err = fmt.Errorf("applyUpgradeVote: proposed upgrade wait rounds %d out of permissible range", upgradeDelay)
+			err = fmt.Errorf("applyUpgradeVote: proposed upgrade wait rounds %d out of permissible range [%d, %d]", upgradeDelay, params.MinUpgradeWaitRounds, params.MaxUpgradeWaitRounds)
 			return
 		}
 
@@ -394,7 +412,7 @@ func ProcessUpgradeParams(prev BlockHeader) (uv UpgradeVote, us UpgradeState, er
 		}
 	}
 
-	// If there is a proposal being voted on, see if we approve it and its delay
+	// If there is a proposal being voted on, see if we approve it
 	round := prev.Round + 1
 	if round < prev.NextProtocolVoteBefore {
 		_, ok := prevParams.ApprovedUpgrades[prev.NextProtocol]

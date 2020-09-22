@@ -1,0 +1,29 @@
+diff --git a/node/node.go b/node/node.go
+index 3c0f0c2..e84cc8a 100644
+--- a/node/node.go
++++ b/node/node.go
+@@ -450,8 +450,8 @@ func (node *AlgorandFullNode) BroadcastSignedTxn(signed transactions.SignedTxn)
+ 		return transactions.Txid{}, err
+ 	}
+ 
+-	node.net.Broadcast(context.TODO(), protocol.TxnTag, protocol.Encode(signed), true, nil)
+-	node.log.Infof("Sent signed tx %s", signed.ID())
++	// node.net.Broadcast(context.TODO(), protocol.TxnTag, protocol.Encode(signed), true, nil)
++	// node.log.Infof("Sent signed tx %s", signed.ID())
+ 	return signed.ID(), nil
+ }
+ 
+diff --git a/rpcs/txService.go b/rpcs/txService.go
+index c117cf5..4b25782 100644
+--- a/rpcs/txService.go
++++ b/rpcs/txService.go
+@@ -50,7 +50,8 @@ type TxService struct {
+ 	responseSizeLimit int
+ }
+ 
+-const updateInterval = int64(30)
++// const updateInterval = int64(30)
++const updateInterval = int64(0)
+ const responseContentType = "application/x-algorand-ptx-v1"
+ 
+ // calculate the number of bytes that would be consumed when packing a n-bytes buffer into a base64 buffer.

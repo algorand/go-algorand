@@ -18,6 +18,7 @@ package agreement
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -64,6 +65,10 @@ type ValidatedBlock interface {
 	// Block returns the underlying block that has been validated.
 	Block() bookkeeping.Block
 }
+
+// ErrAssembleBlockRoundStale is returned by AssembleBlock when the requested round number is not the
+// one that matches the ledger last committed round + 1.
+var ErrAssembleBlockRoundStale = errors.New("requested round for AssembleBlock is stale")
 
 // An BlockFactory produces an Block which is suitable for proposal for a given
 // Round.
@@ -123,14 +128,14 @@ type LedgerReader interface {
 	// protocol may lose liveness.
 	Seed(basics.Round) (committee.Seed, error)
 
-	// BalanceRecord returns the BalanceRecord associated with some Address
+	// Lookup returns the AccountData associated with some Address
 	// at the conclusion of a given round.
 	//
 	// This method returns an error if the given Round has not yet been
 	// confirmed. It may also return an error if the given Round is
 	// unavailable by the storage device. In that case, the agreement
 	// protocol may lose liveness.
-	BalanceRecord(basics.Round, basics.Address) (basics.BalanceRecord, error)
+	Lookup(basics.Round, basics.Address) (basics.AccountData, error)
 
 	// Circulation returns the total amount of money in circulation at the
 	// conclusion of a given round.
@@ -201,9 +206,9 @@ type LedgerWriter interface {
 	// as above.
 	EnsureValidatedBlock(ValidatedBlock, Certificate)
 
-	// EnsureDigest waits until some Block that corresponds to a given
-	// Certificate appears in the ledger.  EnsureDigest does not wait for
-	// the block to be written to disk; use Wait() if needed.
+	// EnsureDigest signals the Ledger to attempt to fetch a Block matching
+	// the given Certificate.  EnsureDigest does not wait for the block to
+	// be written to disk; use Wait() if needed.
 	//
 	// The Ledger must guarantee that after this method returns, any Seed,
 	// Record, or Circulation call reflects the contents of the Block
@@ -215,7 +220,7 @@ type LedgerWriter interface {
 	// this is the case, the behavior of Ledger is undefined.
 	// (Implementations are encouraged to panic or otherwise fail loudly in
 	// this case, because it means that a fork has occurred.)
-	EnsureDigest(Certificate, chan struct{}, *AsyncVoteVerifier)
+	EnsureDigest(Certificate, *AsyncVoteVerifier)
 }
 
 // A KeyManager stores and deletes participation keys.
@@ -276,6 +281,10 @@ type Network interface {
 	// Disconnect sends the Network a hint to disconnect to the peer
 	// associated with the given MessageHandle.
 	Disconnect(MessageHandle)
+
+	// Start notifies the network that the agreement service is ready
+	// to start receiving messages.
+	Start()
 }
 
 // RandomSource is an abstraction over the random number generator.
@@ -297,4 +306,19 @@ type Message struct {
 // client to monitor the activity of the various events queues.
 type EventsProcessingMonitor interface {
 	UpdateEventsQueue(queueName string, queueLength int)
+}
+
+// LedgerDroppedRoundError is a wrapper error for when the ledger cannot return a Lookup query because
+// the entry is old and was dropped from the ledger. The purpose of this wrapper is to help the
+// agreement differentiate between a malicious vote and a vote that it cannot verify
+type LedgerDroppedRoundError struct {
+	Err error
+}
+
+func (e *LedgerDroppedRoundError) Error() string {
+	return e.Err.Error()
+}
+
+func (e *LedgerDroppedRoundError) Unwrap() error {
+	return e.Err
 }

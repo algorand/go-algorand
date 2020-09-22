@@ -27,15 +27,17 @@ import (
 func TestPing(t *testing.T) {
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
+	netA.config.PeerPingPeriodSeconds = 5
 	netA.Start()
 	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
 	netB := makeTestWebsocketNode(t)
 	netB.config.GossipFanout = 1
+	netB.config.PeerPingPeriodSeconds = 5
 	addrA, postListen := netA.Address()
 	require.True(t, postListen)
 	t.Log(addrA)
-	netB.phonebook = MakeMultiPhonebook()
-	netB.phonebook.AddOrUpdatePhonebook("default", &oneEntryPhonebook{addr: addrA})
+	netB.phonebook = MakePhonebook(1, 1*time.Millisecond)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
 	netB.Start()
 	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
 
@@ -58,7 +60,7 @@ func TestPing(t *testing.T) {
 		if lastPingRoundTripTime > 0 {
 			postPing := time.Now()
 			testTime := postPing.Sub(prePing)
-			if (lastPingRoundTripTime < testTime) && (lastPingRoundTripTime > (testTime - (2 * waitStep))) {
+			if (lastPingRoundTripTime < testTime) {
 				// success
 				return
 			}

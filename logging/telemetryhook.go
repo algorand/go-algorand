@@ -48,7 +48,25 @@ func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueD
 	}
 
 	go func() {
-		defer hook.wg.Done()
+		defer func() {
+			// flush the channel
+			moreEntries := true
+			for moreEntries {
+				select {
+				case entry := <-hook.entries:
+					hook.appendEntry(entry)
+				default:
+					moreEntries = false
+				}
+			}
+			for range hook.pending {
+				// The telemetry service is
+				// exiting. Un-wait for the left out
+				// messages.
+				hook.wg.Done()
+			}
+			hook.wg.Done()
+		}()
 
 		exit := false
 		for !exit {
@@ -90,6 +108,7 @@ func (hook *asyncTelemetryHook) appendEntry(entry *logrus.Entry) bool {
 	if len(hook.pending) >= hook.maxQueueDepth {
 		hook.pending = hook.pending[1:]
 		hook.wg.Done()
+		telemetryDrops.Inc(nil)
 	}
 	hook.pending = append(hook.pending, entry)
 
@@ -126,6 +145,9 @@ func (hook *asyncTelemetryHook) waitForEventAndReady() bool {
 func (hook *asyncTelemetryHook) Fire(entry *logrus.Entry) error {
 	hook.wg.Add(1)
 	select {
+	case <-hook.quit:
+		// telemetry quit
+		hook.wg.Done()
 	case hook.entries <- entry:
 	default:
 		hook.wg.Done()

@@ -27,4 +27,4 @@ if [ "${TARGETBINDIR}" = "" ]; then
 fi
 
 # dev_install.sh should explicitly generate 'dev' builds
-scripts/local_install.sh -c dev -p ${TARGETBINDIR} ${DATADIRSPEC}
+scripts/local_install.sh -c dev -p ${TARGETBINDIR} ${DATADIRSPEC} -f -s

@@ -481,9 +481,9 @@ func (t *demuxTester) LookupDigest(basics.Round) (crypto.Digest, error) {
 }
 
 // implement Ledger
-func (t *demuxTester) BalanceRecord(basics.Round, basics.Address) (basics.BalanceRecord, error) {
+func (t *demuxTester) Lookup(basics.Round, basics.Address) (basics.AccountData, error) {
 	// we don't care about this function in this test.
-	return basics.BalanceRecord{}, nil
+	return basics.AccountData{}, nil
 }
 
 // implement Ledger
@@ -515,12 +515,17 @@ func (t *demuxTester) EnsureValidatedBlock(ValidatedBlock, Certificate) {
 }
 
 // implement Ledger
-func (t *demuxTester) EnsureDigest(Certificate, chan struct{}, *AsyncVoteVerifier) {
+func (t *demuxTester) EnsureDigest(Certificate, *AsyncVoteVerifier) {
 	// we don't care about this function in this test.
 }
 
 // implement cryptoVerifier
-func (t *demuxTester) Verify(ctx context.Context, request cryptoRequest) {
+func (t *demuxTester) VerifyProposal(ctx context.Context, request cryptoProposalRequest) {
+	// we don't care about this function in this test.
+}
+
+// implement cryptoVerifier
+func (t *demuxTester) VerifyBundle(ctx context.Context, request cryptoBundleRequest) {
 	// we don't care about this function in this test.
 }
 

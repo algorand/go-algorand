@@ -162,8 +162,9 @@ type APIV1POSTTransactionSignRequest struct {
 	APIV1RequestEnvelope
 	WalletHandleToken string `json:"wallet_handle_token"`
 	// swagger:strfmt byte
-	Transaction    []byte `json:"transaction"`
-	WalletPassword string `json:"wallet_password"`
+	Transaction    []byte           `json:"transaction"`
+	PublicKey      crypto.PublicKey `json:"public_key"`
+	WalletPassword string           `json:"wallet_password"`
 }
 
 // APIV1POSTProgramSignRequest is the request for `POST /v1/program/sign`
@@ -227,6 +228,7 @@ type APIV1POSTMultisigTransactionSignRequest struct {
 	PublicKey      crypto.PublicKey   `json:"public_key"`
 	PartialMsig    crypto.MultisigSig `json:"partial_multisig"`
 	WalletPassword string             `json:"wallet_password"`
+	AuthAddr       crypto.Digest      `json:"signer"`
 }
 
 // APIV1POSTMultisigProgramSignRequest is the request for `POST /v1/multisig/signprogram`

@@ -198,7 +198,11 @@ func (p *player) issueNextVote(r routerHandle) []action {
 		res := r.dispatch(*p, nextThresholdStatusRequestEvent{}, voteMachinePeriod, p.Round, p.Period-1, 0)
 		nextStatus := res.(nextThresholdStatusEvent) // panic if violate postcondition
 		if !nextStatus.Bottom {
-			// note that this is bottom if we fast-forwarded to this period or entered via a soft threshold.
+			// if we fast-forwarded to this period or entered via a soft/cert threshold,
+			// nextStatus.Bottom will be false and we will next vote bottom.
+			// As long as a majority of honest users (in the cert threshold case) do not vote bottom (as assumed), we are safe.
+			// Note that cert threshold fast-forwarding will never change a next value vote to a next bottom vote -
+			// if a player has voted for a value, they have the block, and should have ended the round.
 			a.Proposal = nextStatus.Proposal
 		}
 	}
@@ -231,8 +235,8 @@ func (p *player) issueFastVote(r routerHandle) (actions []action) {
 		res := r.dispatch(*p, nextThresholdStatusRequestEvent{}, voteMachinePeriod, p.Round, p.Period-1, 0)
 		nextStatus := res.(nextThresholdStatusEvent) // panic if violate postcondition
 		if !nextStatus.Bottom {
-			// note that this is bottom if we fast-forwarded to this period or entered via a soft threshold.
 			a.Step = redo
+			// note that this is bottom if we fast-forwarded to this period or entered via a soft/cert threshold.
 			a.Proposal = nextStatus.Proposal
 		}
 	}
@@ -258,39 +262,53 @@ func (p *player) handleCheckpointEvent(r routerHandle, e checkpointEvent) []acti
 func (p *player) handleThresholdEvent(r routerHandle, e thresholdEvent) []action {
 	r.t.timeR().RecThreshold(e)
 
-	// Special case all cert thresholds: we must not ignore them, because they are the freshest bundle
 	var actions []action
-	if e.t() == certThreshold {
-		// this threshold must be for p.Round, and originates from the vote SM tree
-		cert := Certificate(e.Bundle)
-		res := stagedValue(*p, r, e.Round, e.Period)
-		a0 := ensureAction{Payload: res.Payload, PayloadOk: res.Committable, Certificate: cert}
-		actions = append(actions, a0)
-		as := p.enterRound(r, e, p.Round+1)
-		return append(actions, as...)
-	}
-
-	// We might receive a next threshold event for the previous period due to fast-forwarding or a soft threshold.
-	// If we do, this is okay, but the proposalMachine contract-checker will complain.
-	// TODO test this case and update the contract-checker so it does not complain when this is benign
-	if p.Period >= e.Period+1 {
-		return nil
-	}
-
 	switch e.t() {
-	case softThreshold:
-		if p.Period == e.Period {
-			ec := r.dispatch(*p, e, proposalMachine, p.Round, p.Period, 0)
-			if ec.t() == proposalCommittable && p.Step <= cert {
-				actions = append(actions, p.issueCertVote(r, ec.(committableEvent)))
-			}
-			return actions
+	case certThreshold:
+		// for future periods, fast-forwarding below will ensure correct staging
+		// for past periods, having a freshest certThreshold will prevent losing the block
+		r.dispatch(*p, e, proposalMachine, 0, 0, 0)
+		// Now, also check if we have the block.
+		res := stagedValue(*p, r, e.Round, e.Period)
+		if res.Committable {
+			cert := Certificate(e.Bundle)
+			a0 := ensureAction{Payload: res.Payload, Certificate: cert}
+			actions = append(actions, a0)
+			as := p.enterRound(r, e, p.Round+1)
+			return append(actions, as...)
 		}
-		return p.enterPeriod(r, e, e.Period)
+		// we don't have the block! We need to ensure we will be able to receive the block.
+		// In addition, hint to the ledger to fetch by digest.
+		actions = append(actions, stageDigestAction{Certificate: Certificate(e.Bundle)})
+		if p.Period < e.Period {
+			actions = append(actions, p.enterPeriod(r, e, e.Period)...)
+		}
+		return actions
+
+	case softThreshold:
+		// note that it is ok not to stage softThresholds from previous periods; relaying the pinned block
+		// handles any edge case (w.r.t. resynchronization, at least)
+		if p.Period > e.Period {
+			return nil
+		}
+		if p.Period < e.Period {
+			return p.enterPeriod(r, e, e.Period)
+		}
+		ec := r.dispatch(*p, e, proposalMachine, p.Round, p.Period, 0)
+		if ec.t() == proposalCommittable && p.Step <= cert {
+			actions = append(actions, p.issueCertVote(r, ec.(committableEvent)))
+		}
+		return actions
+
 	case nextThreshold:
+		// We might receive a next threshold event for the previous period due to fast-forwarding or a soft threshold.
+		// If we do, this is okay, but the proposalMachine contract-checker will complain.
+		// TODO test this case and update the contract-checker so it does not complain when this is benign
+		if p.Period > e.Period {
+			return nil
+		}
 		return p.enterPeriod(r, e, e.Period+1)
 	default:
-		// certThreshold was handled previously
 		panic("bad event")
 	}
 }
@@ -308,7 +326,7 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 	p.Step = soft
 	p.Napping = false
 	p.FastRecoveryDeadline = 0 // set immediately
-	p.Deadline = filterTimeout
+	p.Deadline = FilterTimeout(target, source.Proto)
 
 	// update tracer state to match player
 	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
@@ -335,11 +353,17 @@ func (p *player) enterPeriod(r routerHandle, source thresholdEvent, target perio
 func (p *player) enterRound(r routerHandle, source event, target round) []action {
 	var actions []action
 
-	// this happens here so that the proposalMachine contract does not complain
-	e := r.dispatch(*p, source, proposalMachine, target, 0, 0)
-	if source.t() != roundInterruption {
+	newRoundEvent := source
+	// passing in a cert threshold to the proposalMachine is now ambiguous,
+	// so replace with an explicit new round event.
+	// In addition, handle a new source: payloadVerified (which can trigger new round if
+	// received after cert threshold)
+	if source.t() == certThreshold || source.t() == payloadVerified { // i.e., source.t() != roundInterruption
 		r.t.logRoundStart(*p, target)
+		newRoundEvent = roundInterruptionEvent{Round: target}
 	}
+	// this happens here so that the proposalMachine contract does not complain
+	e := r.dispatch(*p, newRoundEvent, proposalMachine, target, 0, 0)
 
 	p.LastConcluding = p.Step
 	p.Round = target
@@ -347,7 +371,15 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 	p.Step = soft
 	p.Napping = false
 	p.FastRecoveryDeadline = 0 // set immediately
-	p.Deadline = filterTimeout
+
+	switch source := source.(type) {
+	case roundInterruptionEvent:
+		p.Deadline = FilterTimeout(0, source.Proto.Version)
+	case thresholdEvent:
+		p.Deadline = FilterTimeout(0, source.Proto)
+	case filterableMessageEvent:
+		p.Deadline = FilterTimeout(0, source.Proto.Version)
+	}
 
 	// update tracer state to match player
 	r.t.setMetadata(tracerMetadata{p.Round, p.Period, p.Step})
@@ -365,7 +397,6 @@ func (p *player) enterRound(r routerHandle, source event, target round) []action
 	}
 
 	// we might need to handle a pipelined threshold event
-
 	res := r.dispatch(*p, freshestBundleRequestEvent{}, voteMachineRound, p.Round, 0, 0)
 	freshestRes := res.(freshestBundleEvent) // panic if violate postcondition
 	if freshestRes.Ok {
@@ -540,6 +571,20 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		a := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
 		actions = append(actions, a)
 
+		// If the payload is valid, check it against any received cert threshold.
+		// Of course, this should only trigger for payloadVerified case.
+		// This allows us to handle late payloads (relative to cert-bundles, i.e., certificates) without resorting to catchup.
+		if ef.t() == proposalCommittable || ef.t() == payloadAccepted {
+			freshestRes := r.dispatch(*p, freshestBundleRequestEvent{}, voteMachineRound, p.Round, 0, 0).(freshestBundleEvent)
+			if freshestRes.Ok && freshestRes.Event.t() == certThreshold && freshestRes.Event.Proposal == e.Input.Proposal.value() {
+				cert := Certificate(freshestRes.Event.Bundle)
+				a0 := ensureAction{Payload: e.Input.Proposal, Certificate: cert}
+				actions = append(actions, a0)
+				as := p.enterRound(r, delegatedE, cert.Round+1)
+				return append(actions, as...)
+			}
+		}
+
 		if ef.t() == proposalCommittable && p.Step <= cert {
 			actions = append(actions, p.issueCertVote(r, ef.(committableEvent)))
 		}
@@ -578,7 +623,7 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 		}
 		if e.t() == bundlePresent {
 			ub := e.Input.UnauthenticatedBundle
-			return append(actions, verifyBundleAction(e, ub.Round, ub.Period))
+			return append(actions, verifyBundleAction(e, ub.Round, ub.Period, ub.Step))
 		}
 		a0 := relayAction(e, protocol.VoteBundleTag, ef.(thresholdEvent).Bundle)
 		a1 := p.handle(r, ef)

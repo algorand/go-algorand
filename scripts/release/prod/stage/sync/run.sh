@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# shellcheck disable=2029
 
-# Path(s) are relative to the root of the Jenkins workspace.
-STAGING="$1"
-PROD="$2"
-RSTAMP=$(scripts/release/prod/reverse_hex_timestamp)
+set -ex
 
-BUILD_ENV=$(ssh -i ReleaseBuildInstanceKey.pem -o -A ubuntu@"$INSTANCE" cat build_env)
-CHANNEL=$(sed -n 's/.*CHANNEL=\(.*\)/\1/p' <<< "$BUILD_ENV")
-RELEASE=$(sed -n 's/.*FULLVERSION=\(.*\)/\1/p' <<< "$BUILD_ENV")
+CHANNEL="$1"
+VERSION="$2"
 
-if ! aws s3 sync s3://"$STAGING"/"$CHANNEL"/"$RELEASE" s3://"$PROD"/"$CHANNEL"/"$RSTAMP"_"$RELEASE"
-then
+if [ -z "$CHANNEL" ] || [ -z "$VERSION" ]; then
+    echo "CHANNEL=$CHANNEL and VERSION=$VERSION variables must be defined."
+    exit 1
+fi
+
+RSTAMP=$(./scripts/release/prod/reverse_hex_timestamp)
+
+if ! aws s3 sync --exclude="*" --include="*$VERSION*" "s3://algorand-staging/releases/$CHANNEL/$VERSION/" "s3://algorand-dev-deb-repo/releases/$CHANNEL/${RSTAMP}_${VERSION}"; then
     echo There was a problem syncing the staging and production buckets!
     exit 1
 fi

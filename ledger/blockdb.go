@@ -17,14 +17,17 @@
 package ledger
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/mattn/go-sqlite3"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -133,12 +136,73 @@ func blockGetCert(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, cert agr
 		return
 	}
 
-	err = protocol.Decode(certbuf, &cert)
-	if err != nil {
-		return
+	if certbuf != nil {
+		err = protocol.Decode(certbuf, &cert)
+		if err != nil {
+			return
+		}
 	}
 
 	return
+}
+
+func blockReplaceIfExists(tx *sql.Tx, log logging.Logger, blk bookkeeping.Block, cert agreement.Certificate) (updated bool, err error) {
+	// Fetch encoded block + cert for the requested round so we can compare
+	var oldProto protocol.ConsensusVersion
+	var oldHdr, oldBlk, oldCert []byte
+	const query = "SELECT proto, hdrdata, blkdata, certdata FROM blocks WHERE rnd=?"
+	err = tx.QueryRow(query, blk.Round()).Scan(&oldProto, &oldHdr, &oldBlk, &oldCert)
+	if err != nil {
+		// Didn't have a block to replace, no problem
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, err
+	}
+
+	// Encode new block + cert in order to check against old values and replace
+	newProto := blk.CurrentProtocol
+	newHdr := protocol.Encode(&blk.BlockHeader)
+	newBlk := protocol.Encode(&blk)
+	newCert := protocol.Encode(&cert)
+
+	// if the header hasn't been modified, just return.
+	if bytes.Equal(oldHdr[:], newHdr[:]) {
+		return false, nil
+	}
+
+	// Log if protocol version or certificate changed for the block we're replacing
+	if newProto != oldProto {
+		log.Warnf("blockReplaceIfExists(%v): old proto %v != new proto %v", blk.Round(), oldProto, newProto)
+	}
+	if !bytes.Equal(oldCert, newCert) {
+		log.Warnf("blockReplaceIfExists(%v): old cert %v != new cert %v", blk.Round(), oldCert, newCert)
+	}
+
+	// Replace the block
+	res, err := tx.Exec("UPDATE blocks SET proto=?, hdrdata=?, blkdata=?, certdata=? WHERE rnd=?",
+		newProto,
+		newHdr,
+		newBlk,
+		newCert,
+		blk.Round(),
+	)
+	if err != nil {
+		return false, err
+	}
+
+	// Ensure we actually updated a row
+	cnt, err := res.RowsAffected()
+	if err != nil {
+		return true, err
+	}
+	if cnt > 0 {
+		return true, nil
+	}
+
+	// Shouldn't get here since we found the block
+	log.Warnf("blockReplaceIfExists(%v): found block but didn't update any rows?", blk.Round())
+	return false, nil
 }
 
 func blockPut(tx *sql.Tx, blk bookkeeping.Block, cert agreement.Certificate) error {
@@ -224,4 +288,113 @@ func blockForgetBefore(tx *sql.Tx, rnd basics.Round) error {
 
 	_, err = tx.Exec("DELETE FROM blocks WHERE rnd<?", rnd)
 	return err
+}
+
+func blockStartCatchupStaging(tx *sql.Tx, blk bookkeeping.Block) error {
+	// delete the old catchpointblocks table, if there is such.
+	for _, stmt := range blockResetExprs {
+		stmt = strings.Replace(stmt, "blocks", "catchpointblocks", 1)
+		_, err := tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+
+	// create the catchpointblocks table
+	for _, stmt := range blockSchema {
+		stmt = strings.Replace(stmt, "blocks", "catchpointblocks", 1)
+		_, err := tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+
+	// insert the top entry to the blocks table.
+	_, err := tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata) VALUES (?, ?, ?, ?)",
+		blk.Round(),
+		blk.CurrentProtocol,
+		protocol.Encode(&blk.BlockHeader),
+		protocol.Encode(&blk),
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func blockCompleteCatchup(tx *sql.Tx) (err error) {
+	_, err = tx.Exec("ALTER TABLE blocks RENAME TO blocks_old")
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec("ALTER TABLE catchpointblocks RENAME TO blocks")
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec("DROP TABLE IF EXISTS blocks_old")
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func blockAbortCatchup(tx *sql.Tx) error {
+	// delete the old catchpointblocks table, if there is such.
+	for _, stmt := range blockResetExprs {
+		stmt = strings.Replace(stmt, "blocks", "catchpointblocks", 1)
+		_, err := tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func blockPutStaging(tx *sql.Tx, blk bookkeeping.Block) (err error) {
+	// insert the new entry
+	_, err = tx.Exec("INSERT INTO catchpointblocks (rnd, proto, hdrdata, blkdata) VALUES (?, ?, ?, ?)",
+		blk.Round(),
+		blk.CurrentProtocol,
+		protocol.Encode(&blk.BlockHeader),
+		protocol.Encode(&blk),
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func blockEnsureSingleBlock(tx *sql.Tx) (blk bookkeeping.Block, err error) {
+	// delete all the blocks that aren't the latest one.
+	var max sql.NullInt64
+	err = tx.QueryRow("SELECT MAX(rnd) FROM catchpointblocks").Scan(&max)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			err = ErrNoEntry{}
+		}
+		return bookkeeping.Block{}, err
+	}
+	if !max.Valid {
+		return bookkeeping.Block{}, ErrNoEntry{}
+	}
+	round := basics.Round(max.Int64)
+
+	_, err = tx.Exec("DELETE FROM catchpointblocks WHERE rnd<?", round)
+
+	if err != nil {
+		return bookkeeping.Block{}, err
+	}
+
+	var buf []byte
+	err = tx.QueryRow("SELECT blkdata FROM catchpointblocks WHERE rnd=?", round).Scan(&buf)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			err = ErrNoEntry{Round: round}
+		}
+		return
+	}
+
+	err = protocol.Decode(buf, &blk)
+
+	return blk, err
 }

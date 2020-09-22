@@ -1,15 +1,7 @@
 pipeline {
     parameters {
-        string defaultValue: 'master', description: 'Release to deploy to production', name: 'branch', trim: true
-        string defaultValue: 'stable', description: 'Staged channel which should be deployed to production.', name: 'channel', trim: true
-        string defaultValue: '', description: 'Release to deploy to production', name: 'release', trim: true
-        string defaultValue: 'ben-test-2.0.3', description: 'Staging location', name: 'bucket_location_staging', trim: true
-        string defaultValue: 'algorand-dev-deb-repo/releases', description: 'Production location', name: 'bucket_location_prod', trim: true
-
-        // AWS
-        string defaultValue: 'us-west-1', description: 'AWS Region', name: 'region', trim: true
-        string defaultValue: 'ami-0dd655843c87b6930', description: 'Amazon Machine Image (default: Ubuntu Server 18.04 LTS, 8 vCPUs, 32 GB RAM', name: 'ami', trim: true
-        string defaultValue: 't2.2xlarge', description: 'Instance Type', name: 'type', trim: true
+        string defaultValue: '', description: 'Channel', name: 'channel', trim: true
+        string defaultValue: '', description: 'Version', name: 'version', trim: true
     }
 
     environment {
@@ -17,42 +9,17 @@ pipeline {
         AWS_SECRET_ACCESS_KEY = credentials("prod-s3-aws-secret-access-key")
     }
 
-    agent any
+    agent {
+        dockerfile {
+            filename 'scripts/release/common/docker/setup.Dockerfile'
+            args '-u root'
+        }
+    }
 
     stages {
         stage("sync staging and production buckets") {
             steps {
-                sh script: "scripts/release/prod/stage/sync/run.sh ${params.bucket_location_staging} ${params.bucket_location_prod} ${params.channel} ${params.release}"
-            }
-        }
-
-        stage("create ec2 instance") {
-            steps {
-                sh script: "scripts/release/common/create.sh ${params.region} ${params.ami} ${params.type}"
-            }
-        }
-
-        stage("setup") {
-            steps {
-                script {
-                    if (params.channel == null || params.channel == "") {
-                        error("Missing required parameter [channel].")
-                    }
-                }
-
-                sh script: "scripts/release/prod/stage/setup/run.sh ${params.bucket_location_staging} ${params.branch} ${params.channel} ${params.release}"
-            }
-        }
-
-        stage("snapshot") {
-            steps {
-                input "Forward GPG agent"
-            }
-        }
-
-        stage("delete ec2 instance") {
-            steps {
-                sh script: "scripts/release/common/delete.sh ${params.region}"
+                sh script: "scripts/release/prod/stage/sync/run.sh ${params.channel} ${params.version}"
             }
         }
     }

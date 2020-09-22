@@ -182,7 +182,12 @@ var checkCmd = &cobra.Command{
 		results := make([]checkResult, 0)
 		anyCheckError := false
 
+		relaysDNSAlias := make(map[string]bool)
+		enabledRelaysDNSAlias := make(map[string]bool)
+		relayHostNames := make(map[string]bool)
+
 		for _, relay := range relays {
+			relaysDNSAlias[relay.DNSAlias] = true
 			if checkOne && relay.ID != recordIDArg {
 				continue
 			}
@@ -190,6 +195,8 @@ var checkCmd = &cobra.Command{
 			if !relay.CheckSuccess {
 				continue
 			}
+			enabledRelaysDNSAlias[relay.DNSAlias] = true
+			relayHostNames[strings.Split(relay.Address, ":")[0]] = true
 
 			const checkOnly = true
 			name, port, err := ensureRelayStatus(checkOnly, relay, nameDomainArg, srvDomainArg, defaultPortArg, context)
@@ -212,6 +219,49 @@ var checkCmd = &cobra.Command{
 			if checkOne {
 				break
 			}
+		}
+
+		// look for orphan _algobootstrap records that aren't represented by this relay file.
+		if context.bootstrap.entries != nil {
+			for bootstrap := range context.bootstrap.entries {
+				alias := strings.Split(bootstrap, ".")[0]
+				if enabledRelaysDNSAlias[alias] {
+					continue
+				}
+
+				if relaysDNSAlias[alias] {
+					fmt.Printf("WARN : disabled relay %s has a _algobootstrap entry\n", bootstrap)
+				} else {
+					fmt.Printf("INFO : orphan relay %s has a _algobootstrap entry\n", bootstrap)
+				}
+			}
+		}
+
+		// look for orphan _metrics records that aren't represented by this relay file.
+		if context.metrics.entries != nil {
+			for metrics := range context.metrics.entries {
+				alias := strings.Split(metrics, ".")[0]
+				if enabledRelaysDNSAlias[alias] {
+					continue
+				}
+				if relaysDNSAlias[alias] {
+					fmt.Printf("WARN : disabled relay %s has a _metrics entry\n", metrics)
+				} else {
+					fmt.Printf("INFO : orphan relay %s has a _metrics entry\n", metrics)
+				}
+			}
+		}
+		for name, entry := range context.nameEntries {
+			if relayHostNames[name] {
+				continue
+			}
+			alias := strings.Split(entry, ".")[0]
+			if enabledRelaysDNSAlias[alias] {
+				// if we have an entry for that, than it just mean that it wasn't updated yet.
+				continue
+			}
+			fmt.Printf("INFO : orphan DNS entry %s -> %s\n", entry, name)
+
 		}
 
 		if outputFileArg != "" {
@@ -242,11 +292,6 @@ var updateCmd = &cobra.Command{
 				continue
 			}
 
-			if !relay.CheckSuccess {
-				fmt.Printf("[%d] OK: Skipping NotSuccessful %s\n", relay.ID, relay.Address)
-				// Don't output results if skipped
-				continue
-			}
 			const checkOnly = false
 			name, port, err := ensureRelayStatus(checkOnly, relay, nameDomainArg, srvDomainArg, defaultPortArg, context)
 			if err != nil {
@@ -258,7 +303,11 @@ var updateCmd = &cobra.Command{
 				})
 				anyUpdateError = true
 			} else {
-				fmt.Printf("[%d] OK: %s -> %s:%d\n", relay.ID, relay.Address, name, port)
+				if relay.CheckSuccess {
+					fmt.Printf("[%d] OK: %s -> %s:%d\n", relay.ID, relay.Address, name, port)
+				} else {
+					fmt.Printf("[%d] OK: %s removed ( if it was there )\n", relay.ID, relay.Address)
+				}
 				results = append(results, checkResult{
 					ID:      relay.ID,
 					Success: true,
@@ -331,6 +380,7 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 	}
 
 	targetDomainAlias := relay.DNSAlias + "." + nameDomain
+
 	if topmost != targetDomainAlias {
 		if checkOnly {
 			err = fmt.Errorf("topmost DNS name is not the assigned DNS Alias (wanted: %s, found %s)",
@@ -338,19 +388,35 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 			return
 		}
 
-		// Add A/CNAME for the DNSAlias assigned
-		err = addDNSRecord(targetDomainAlias, topmost, ctx.nameZoneID)
+		if relay.CheckSuccess {
+			// Add A/CNAME for the DNSAlias assigned
+			err = addDNSRecord(targetDomainAlias, topmost, ctx.nameZoneID)
+			if err != nil {
+				return
+			}
+			fmt.Printf("[%d] Added DNS Record: %s -> %s\n", relay.ID, targetDomainAlias, topmost)
+
+			// Update our state
+			names = append(names, targetDomainAlias)
+			topmost = targetDomainAlias
+		} else {
+			// remove entry.
+			err = deleteDNSRecord(targetDomainAlias, topmost, ctx.nameZoneID)
+			if err != nil {
+				return
+			}
+			fmt.Printf("[%d] Removed DNS Record: %s -> %s\n", relay.ID, targetDomainAlias, topmost)
+		}
+	} else if !relay.CheckSuccess {
+		// remove entry.
+		err = deleteDNSRecord(targetDomainAlias, names[0], ctx.nameZoneID)
 		if err != nil {
 			return
 		}
-		fmt.Printf("[%d] Added DNS Record: %s -> %s\n", relay.ID, targetDomainAlias, topmost)
-
-		// Update our state
-		names = append(names, targetDomainAlias)
-		topmost = targetDomainAlias
+		fmt.Printf("[%d] Removed DNS Record: %s -> %s\n", relay.ID, targetDomainAlias, names[0])
 	}
 
-	var ensureEntry = func(use string, entries map[string]uint16, port uint16) error {
+	var ensureEntry = func(use string, entries map[string]uint16, port uint16) (matchingEntries int, err error) {
 		type srvMatch struct {
 			name string
 			port uint16
@@ -366,50 +432,85 @@ func ensureRelayStatus(checkOnly bool, relay eb.Relay, nameDomain string, srvDom
 		}
 
 		if len(matches) == 0 {
-			return fmt.Errorf("no %s SRV entries found mapping to %s in '%s'", use, target, srvDomain)
+			return 0, fmt.Errorf("no %s SRV entries found mapping to %s in '%s'", use, target, srvDomain)
 		}
 
 		if len(matches) > 1 {
-			return fmt.Errorf("multiple %s SRV entries found in the chain mapping to %s", use, target)
+			return len(matches), fmt.Errorf("multiple %s SRV entries found in the chain mapping to %s", use, target)
 		}
 
 		if matches[0].name != topmost || matches[0].port != port {
-			return fmt.Errorf("existing %s SRV record mapped to intermediate DNS name or wrong port (wanted %s:%d, found %s:%d)",
+			return len(matches), fmt.Errorf("existing %s SRV record mapped to intermediate DNS name or wrong port (wanted %s:%d, found %s:%d)",
 				use, topmost, port, matches[0].name, matches[0].port)
 		}
-		return nil
+		return len(matches), nil
 	}
 
-	err = ensureEntry("bootstrap", ctx.bootstrap.entries, port)
-	if err != nil {
-		if checkOnly {
-			return
-		}
-
-		// Add SRV entry to map to our DNSAlias
-		err = addSRVRecord(ctx.bootstrap.networkName, topmost, port, ctx.bootstrap.shortName, ctx.srvZoneID)
-		if err != nil {
-			return
-		}
-		fmt.Printf("[%d] Added boostrap SRV Record: %s:%d\n", relay.ID, targetDomainAlias, port)
-	}
-
-	err = ensureEntry("metrics", ctx.metrics.entries, metricsPort)
-	if relay.MetricsEnabled {
+	var matchCount int
+	matchCount, err = ensureEntry("algobootstrap", ctx.bootstrap.entries, port)
+	if relay.CheckSuccess {
 		if err != nil {
 			if checkOnly {
 				return
 			}
 
-			// Add SRV entry for metrics
-			err = addSRVRecord(ctx.metrics.networkName, topmost, metricsPort, ctx.metrics.shortName, ctx.srvZoneID)
+			// Add SRV entry to map to our DNSAlias
+			err = addSRVRecord(ctx.bootstrap.networkName, topmost, port, ctx.bootstrap.shortName, ctx.srvZoneID)
 			if err != nil {
 				return
 			}
-			fmt.Printf("[%d] Added metrics SRV Record: %s:%d\n", relay.ID, targetDomainAlias, metricsPort)
+			fmt.Printf("[%d] Added boostrap SRV Record: %s:%d\n", relay.ID, targetDomainAlias, port)
+		}
+	} else {
+		if matchCount > 0 {
+			err = clearSRVRecord(ctx.bootstrap.networkName, topmost, ctx.bootstrap.shortName, ctx.srvZoneID)
+			if err != nil {
+				return
+			}
+			fmt.Printf("[%d] Removed boostrap SRV Record: %s\n", relay.ID, targetDomainAlias)
+		}
+	}
+
+	matchCount, err = ensureEntry("metrics", ctx.metrics.entries, metricsPort)
+	if relay.MetricsEnabled {
+		if relay.CheckSuccess {
+			if err != nil {
+				if checkOnly {
+					return
+				}
+
+				// Add SRV entry for metrics
+				err = addSRVRecord(ctx.metrics.networkName, topmost, metricsPort, ctx.metrics.shortName, ctx.srvZoneID)
+				if err != nil {
+					return
+				}
+				fmt.Printf("[%d] Added metrics SRV Record: %s:%d\n", relay.ID, targetDomainAlias, metricsPort)
+			}
+		} else {
+			if matchCount > 0 {
+				// metrics are enabled, but we should delete the entry since it failed the success test.
+				err = clearSRVRecord(ctx.metrics.networkName, topmost, ctx.metrics.shortName, ctx.srvZoneID)
+				if err != nil {
+					return
+				}
+				fmt.Printf("[%d] Removed metrics SRV Record: %s\n", relay.ID, targetDomainAlias)
+			} else {
+				err = nil
+			}
 		}
 	} else if err == nil {
-		err = fmt.Errorf("metrics should not be registered for %s but it is", target)
+		if checkOnly {
+			err = fmt.Errorf("metrics should not be registered for %s but it is", target)
+			return
+		}
+		if matchCount > 0 {
+			// delete the metric entry.
+			err = clearSRVRecord(ctx.metrics.networkName, topmost, ctx.metrics.shortName, ctx.srvZoneID)
+			if err != nil {
+				return
+			}
+			fmt.Printf("[%d] Removed metrics SRV Record: %s\n", relay.ID, targetDomainAlias)
+		}
 	} else {
 		// If metrics are not enabled, then we SHOULD get an error.
 		// Since this isn't actually an error, reset to nil
@@ -525,4 +626,41 @@ func addSRVRecord(srvNetwork string, target string, port uint16, serviceShortNam
 	const weight = 1
 
 	return cloudflareDNS.SetSRVRecord(context.Background(), srvNetwork, target, cloudflare.AutomaticTTL, priority, uint(port), serviceShortName, "_tcp", weight)
+}
+
+func clearSRVRecord(srvNetwork string, target string, serviceShortName string, cfZoneID string) error {
+	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfEmail, cfAuthKey)
+	return cloudflareDNS.ClearSRVRecord(context.Background(), srvNetwork, target, serviceShortName, "_tcp")
+}
+
+func deleteDNSRecord(from string, to string, cfZoneID string) (err error) {
+	isIP := net.ParseIP(to) != nil
+	var recordType string
+	if isIP {
+		recordType = "A"
+	} else {
+		recordType = "CNAME"
+	}
+
+	cloudflareDNS := cloudflare.NewDNS(cfZoneID, cfEmail, cfAuthKey)
+
+	var records []cloudflare.DNSRecordResponseEntry
+	records, err = cloudflareDNS.ListDNSRecord(context.Background(), recordType, "", "", "", "", "")
+	if err != nil {
+		return
+	}
+
+	for _, record := range records {
+		// Error if duplicates found
+		recordFrom := strings.ToLower(record.Name)
+		recordTarget := strings.ToLower(record.Content)
+		if from == recordFrom && recordTarget == to {
+			// delete the entry
+			err = cloudflareDNS.DeleteDNSRecord(context.Background(), record.ID)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

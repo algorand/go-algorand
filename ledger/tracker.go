@@ -17,6 +17,11 @@
 package ledger
 
 import (
+	"fmt"
+	"reflect"
+
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
@@ -80,12 +85,15 @@ type ledgerTracker interface {
 // access.  This is particularly useful for testing trackers in isolation.
 type ledgerForTracker interface {
 	trackerDB() dbPair
+	blockDB() dbPair
 	trackerLog() logging.Logger
-	trackerEvalVerified(bookkeeping.Block) (StateDelta, error)
+	trackerEvalVerified(bookkeeping.Block, ledgerForEvaluator) (StateDelta, error)
 
 	Latest() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	GenesisHash() crypto.Digest
+	GenesisProto() config.ConsensusParams
 }
 
 type trackerRegistry struct {
@@ -100,7 +108,9 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 	for _, lt := range tr.trackers {
 		err := lt.loadFromDisk(l)
 		if err != nil {
-			return err
+			// find the tracker name.
+			trackerName := reflect.TypeOf(lt).String()
+			return fmt.Errorf("tracker %s failed to loadFromDisk : %v", trackerName, err)
 		}
 	}
 
@@ -110,6 +120,9 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 func (tr *trackerRegistry) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	for _, lt := range tr.trackers {
 		lt.newBlock(blk, delta)
+	}
+	if len(tr.trackers) == 0 {
+		fmt.Printf("trackerRegistry::newBlock - no trackers (%d)\n", blk.Round())
 	}
 }
 
@@ -130,4 +143,5 @@ func (tr *trackerRegistry) close() {
 	for _, lt := range tr.trackers {
 		lt.close()
 	}
+	tr.trackers = nil
 }

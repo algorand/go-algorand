@@ -18,16 +18,19 @@ package driver
 
 import (
 	"bytes"
+	"crypto/sha512"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/kmd/config"
 	"github.com/algorand/go-algorand/daemon/kmd/wallet"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -36,6 +39,7 @@ import (
 const (
 	ledgerWalletDriverName    = "ledger"
 	ledgerWalletDriverVersion = 1
+	ledgerIDLen               = 16
 
 	ledgerClass            = uint8(0x80)
 	ledgerInsGetPublicKey  = uint8(0x03)
@@ -116,14 +120,15 @@ func (lwd *LedgerWalletDriver) scanWalletsLocked() error {
 	// Try to open each new device, skipping ones that are already open.
 	var newDevs []LedgerUSB
 	for _, info := range infos {
-		if curPaths[info.Path] {
-			delete(curPaths, info.Path)
+		walletID := pathToID(info.Path)
+		if curPaths[walletID] {
+			delete(curPaths, walletID)
 			continue
 		}
 
 		dev, err := info.Open()
 		if err != nil {
-			lwd.log.Warnf("enumerated but failed to open ledger %x: %v", info.ProductID, err)
+			lwd.log.Warnf("enumerated but failed to open ledger %s %x: %v", info.Path, info.ProductID, err)
 			continue
 		}
 
@@ -141,13 +146,22 @@ func (lwd *LedgerWalletDriver) scanWalletsLocked() error {
 		delete(lwd.wallets, deadPath)
 	}
 
-	// Add in new devices
+	// Add in new ledger wallets if they appear valid
 	for _, dev := range newDevs {
-		id := dev.USBInfo().Path
-		lwd.wallets[id] = &LedgerWallet{
+		newWallet := &LedgerWallet{
 			dev: dev,
 		}
+
+		// Check that device responds to Algorand app requests
+		_, err := newWallet.ListKeys()
+		if err != nil {
+			continue
+		}
+
+		id := pathToID(dev.USBInfo().Path)
+		lwd.wallets[id] = newWallet
 	}
+
 	return nil
 }
 
@@ -211,15 +225,27 @@ func (lw *LedgerWallet) ExportMasterDerivationKey(pw []byte) (crypto.MasterDeriv
 	return crypto.MasterDerivationKey{}, errNotSupported
 }
 
+func pathToID(path string) string {
+	// The Path USB info field is platform-dependent and sometimes
+	// very long. We hash it to make the wallet name/ID less unwieldy
+	pathHashFull := sha512.Sum512_256([]byte(path))
+	return fmt.Sprintf("%x", pathHashFull[:ledgerIDLen])
+}
+
 // Metadata implements the Wallet interface.
 func (lw *LedgerWallet) Metadata() (wallet.Metadata, error) {
 	lw.mu.Lock()
 	defer lw.mu.Unlock()
 
 	info := lw.dev.USBInfo()
+
+	walletID := pathToID(info.Path)
+	walletName := fmt.Sprintf("%s-%s-%s-%s", info.Manufacturer, info.Product, info.Serial, walletID)
+	walletName = strings.Replace(walletName, " ", "-", -1)
+
 	return wallet.Metadata{
-		ID:                    []byte(info.Path),
-		Name:                  []byte(fmt.Sprintf("%s %s (serial %s, path %s)", info.Manufacturer, info.Product, info.Serial, info.Path)),
+		ID:                    []byte(walletID),
+		Name:                  []byte(walletName),
 		DriverName:            ledgerWalletDriverName,
 		DriverVersion:         ledgerWalletDriverVersion,
 		SupportedTransactions: ledgerWalletSupportedTxs,
@@ -282,16 +308,40 @@ func (lw *LedgerWallet) DeleteMultisigAddr(addr crypto.Digest, pw []byte) error 
 }
 
 // SignTransaction implements the Wallet interface.
-func (lw *LedgerWallet) SignTransaction(tx transactions.Transaction, pw []byte) ([]byte, error) {
+func (lw *LedgerWallet) SignTransaction(tx transactions.Transaction, pk crypto.PublicKey, pw []byte) ([]byte, error) {
+	pks, err := lw.ListKeys()
+	if err != nil {
+		return nil, err
+	}
+	// Right now the device only supports one key
+	if len(pks) > 1 {
+		return nil, errors.New("LedgerWallet device only supports one key but ListKeys returned more than one")
+	}
+	if len(pks) < 1 {
+		return nil, errKeyNotFound
+	}
+	if (pk != crypto.PublicKey{}) && pk != crypto.PublicKey(pks[0]) {
+		// A specific key was requested; return an error if it's not the one on the device.
+		return nil, errKeyNotFound
+	}
+	pk = crypto.PublicKey(pks[0])
+
 	sig, err := lw.signTransactionHelper(tx)
 	if err != nil {
 		return nil, err
 	}
 
-	return protocol.Encode(&transactions.SignedTxn{
+	stxn := transactions.SignedTxn{
 		Txn: tx,
 		Sig: sig,
-	}), nil
+	}
+
+	// Set the AuthAddr if the key we signed with doesn't match the txn sender
+	if basics.Address(pk) != tx.Sender {
+		stxn.AuthAddr = basics.Address(pk)
+	}
+
+	return protocol.Encode(&stxn), nil
 }
 
 // SignProgram implements the Wallet interface.
@@ -305,7 +355,7 @@ func (lw *LedgerWallet) SignProgram(data []byte, src crypto.Digest, pw []byte) (
 }
 
 // MultisigSignTransaction implements the Wallet interface.
-func (lw *LedgerWallet) MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte) (crypto.MultisigSig, error) {
+func (lw *LedgerWallet) MultisigSignTransaction(tx transactions.Transaction, pk crypto.PublicKey, partial crypto.MultisigSig, pw []byte, signer crypto.Digest) (crypto.MultisigSig, error) {
 	isValidKey := false
 	for i := 0; i < len(partial.Subsigs); i++ {
 		subsig := &partial.Subsigs[i]

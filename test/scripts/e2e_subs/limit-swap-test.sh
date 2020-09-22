@@ -33,7 +33,7 @@ ACCOUNT_ALGO_TRADER=$(${gcmd} clerk compile ${TEMPDIR}/limit-order-a.teal -o ${T
 # setup trader with Algos
 ${gcmd} clerk send --amount 100000000 --from ${ACCOUNT} --to ${ACCOUNT_ALGO_TRADER}
 
-goal node wait
+goal node wait --waittime 30
 
 ${gcmd} clerk send -a 0 -t ${ZERO_ADDRESS} -c ${ACCOUNT} --from-program ${TEMPDIR}/limit-order-a.teal
 
@@ -42,8 +42,8 @@ echo "closeout part b, asset trader"
 # quick expiration, test closeout
 
 ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
-TIMEOUT_ROUND=$((${ROUND} + 6))
-SETUP_ROUND=$((${ROUND} + 5))
+SETUP_ROUND=$((${ROUND} + 10))
+TIMEOUT_ROUND=$((${SETUP_ROUND} + 1))
 
 sed s/TMPL_ASSET/${ASSET_ID}/g < ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/limit-order-b.teal.tmpl | sed s/TMPL_SWAPN/137/g | sed s/TMPL_SWAPD/31337/g | sed s/TMPL_TIMEOUT/${TIMEOUT_ROUND}/g | sed s/TMPL_OWN/${ACCOUNT}/g | sed s/TMPL_FEE/100000/g | sed s/TMPL_MINTRD/10000/g > ${TEMPDIR}/limit-order-b.teal
 
@@ -68,7 +68,7 @@ ${gcmd} asset send --assetid ${ASSET_ID} -f ${ACCOUNT} -t ${ACCOUNT_ASSET_TRADER
 
 ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 while [ $ROUND -lt $TIMEOUT_ROUND ]; do
-    goal node wait
+    goal node wait --waittime 30
     ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
 done
 
@@ -90,8 +90,9 @@ ${gcmd} clerk rawsend -f ${TEMPDIR}/bcloseA.stx
 echo "test actual swap"
 
 ROUND=$(goal node status | grep 'Last committed block:'|awk '{ print $4 }')
-TIMEOUT_ROUND=$((${ROUND} + 200))
+
 SETUP_ROUND=$((${ROUND} + 199))
+TIMEOUT_ROUND=$((${SETUP_ROUND} + 1))
 
 sed s/TMPL_ASSET/${ASSET_ID}/g < ${GOPATH}/src/github.com/algorand/go-algorand/tools/teal/templates/limit-order-b.teal.tmpl | sed s/TMPL_SWAPN/137/g | sed s/TMPL_SWAPD/31337/g | sed s/TMPL_TIMEOUT/${TIMEOUT_ROUND}/g | sed s/TMPL_OWN/${ACCOUNT}/g | sed s/TMPL_FEE/100000/g | sed s/TMPL_MINTRD/10000/g > ${TEMPDIR}/limit-order-b.teal
 

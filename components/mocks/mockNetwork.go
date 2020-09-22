@@ -18,6 +18,7 @@ package mocks
 
 import (
 	"context"
+	"net"
 	"net/http"
 
 	"github.com/algorand/go-algorand/network"
@@ -95,4 +96,12 @@ func (network *MockNetwork) ClearHandlers() {
 
 // RegisterHTTPHandler - empty implementation
 func (network *MockNetwork) RegisterHTTPHandler(path string, handler http.Handler) {
+}
+
+// OnNetworkAdvance - empty implementation
+func (network *MockNetwork) OnNetworkAdvance() {}
+
+// GetHTTPRequestConnection - empty implementation
+func (network *MockNetwork) GetHTTPRequestConnection(request *http.Request) (conn net.Conn) {
+	return nil
 }

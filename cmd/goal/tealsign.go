@@ -76,6 +76,10 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 			reportErrorf(tealsignMutKeyArgs)
 		}
 
+		if keyFilename == "" && signerAcct == "" {
+			reportErrorf(tealsignMutKeyArgs)
+		}
+
 		var kdata []byte
 		var err error
 		if keyFilename != "" {
@@ -215,7 +219,7 @@ The base64 encoding of the signature will always be printed to stdout. Optionall
 			stxn.Lsig.Args[setLsigArg] = signature[:]
 
 			// Write out the modified stxn
-			err = writeFile(lsigTxnFilename, protocol.Encode(stxn), 0600)
+			err = writeFile(lsigTxnFilename, protocol.Encode(&stxn), 0600)
 			if err != nil {
 				reportErrorf(fileWriteError, lsigTxnFilename, err)
 			}

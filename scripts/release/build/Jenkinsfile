@@ -8,7 +8,12 @@ pipeline {
         AWS_SECRET_ACCESS_KEY = credentials("prod-s3-aws-secret-access-key")
     }
 
-    agent any
+    agent {
+        dockerfile {
+            filename 'scripts/release/common/docker/setup.Dockerfile'
+            args '-u root'
+        }
+    }
 
     stages {
         stage("create ec2 instance") {
@@ -42,6 +47,12 @@ pipeline {
             }
         }
 
+        stage("verify signatures") {
+            steps {
+                sh script: "scripts/release/build/stage/verify/run.sh"
+            }
+        }
+
         stage("upload") {
             steps {
                 script {
@@ -58,7 +69,7 @@ pipeline {
 
         stage("trigger test job") {
             steps {
-                build job: 'test',
+                build job: 'test-packages',
                 parameters: [
                     string(name: 'branch', value: env.GIT_BRANCH)
                 ]

@@ -17,23 +17,29 @@
 package ledger
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"fmt"
 	"io/ioutil"
+	mathrand "math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/agreement"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -59,8 +65,8 @@ func (wl *wrappedLedger) BlockHdr(rnd basics.Round) (bookkeeping.BlockHeader, er
 	return wl.l.BlockHdr(rnd)
 }
 
-func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block) (StateDelta, error) {
-	return wl.l.trackerEvalVerified(blk)
+func (wl *wrappedLedger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
+	return wl.l.trackerEvalVerified(blk, accUpdatesLedger)
 }
 
 func (wl *wrappedLedger) Latest() basics.Round {
@@ -71,8 +77,20 @@ func (wl *wrappedLedger) trackerDB() dbPair {
 	return wl.l.trackerDB()
 }
 
+func (wl *wrappedLedger) blockDB() dbPair {
+	return wl.l.blockDB()
+}
+
 func (wl *wrappedLedger) trackerLog() logging.Logger {
 	return wl.l.trackerLog()
+}
+
+func (wl *wrappedLedger) GenesisHash() crypto.Digest {
+	return wl.l.GenesisHash()
+}
+
+func (wl *wrappedLedger) GenesisProto() config.ConsensusParams {
+	return wl.l.GenesisProto()
 }
 
 func getInitState() (genesisInitState InitState) {
@@ -100,12 +118,20 @@ func TestArchival(t *testing.T) {
 	// We generate mostly empty blocks, with the exception of timestamps,
 	// which affect participationTracker.committedUpTo()'s return value.
 
+	// This test was causing random crashes on travis when executed with the race detector
+	// due to memory exhustion. For the time being, I'm taking it offline from the ubuntu
+	// configuration where it used to cause failuires.
+	if runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
+		t.Skip("Skipping the TestArchival as it tend to randomally fail on travis linux-amd64")
+	}
+
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
 	genesisInitState := getInitState()
 	const inMem = true
-	const archival = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
 	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, dbName, inMem, genesisInitState, archival)
+	l, err := OpenLedger(log, dbName, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 	wl := &wrappedLedger{
@@ -126,7 +152,6 @@ func TestArchival(t *testing.T) {
 		}
 
 		wl.l.WaitForCommit(blk.Round())
-
 		minMinSave, err := checkTrackers(t, wl, blk.Round())
 		require.NoError(t, err)
 		if err != nil {
@@ -150,6 +175,13 @@ func TestArchival(t *testing.T) {
 func TestArchivalRestart(t *testing.T) {
 	// Start in archival mode, add 2K blocks, restart, ensure all blocks are there
 
+	// disable deadlock checking code
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() {
+		deadlock.Opts.Disable = deadlockDisable
+	}()
+
 	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
 	require.NoError(t, err)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
@@ -158,9 +190,10 @@ func TestArchivalRestart(t *testing.T) {
 
 	genesisInitState := getInitState()
 	const inMem = false // use persistent storage
-	const archival = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
 
-	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
@@ -173,7 +206,7 @@ func TestArchivalRestart(t *testing.T) {
 	l.WaitForCommit(blk.Round())
 
 	var latest, earliest basics.Round
-	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err = blockLatest(tx)
 		require.NoError(t, err)
 
@@ -184,15 +217,13 @@ func TestArchivalRestart(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, basics.Round(maxBlocks), latest)
 	require.Equal(t, basics.Round(0), earliest)
-
 	// close and reopen the same DB, ensure latest/earliest are not changed
 	l.Close()
-
-	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
-	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err = blockLatest(tx)
 		require.NoError(t, err)
 
@@ -239,19 +270,65 @@ func makeUnsignedAssetCreateTx(firstValid, lastValid basics.Round, total uint64,
 	return tx, nil
 }
 
-func makeUnsignedAssetDestroyTx(client libgoal.Client, firstValid, lastValid basics.Round, assetIndex uint64) (transactions.Transaction, error) {
-	txn, err := client.MakeUnsignedAssetDestroyTx(assetIndex)
-	if err != nil {
-		return transactions.Transaction{}, err
-	}
+func makeUnsignedAssetDestroyTx(firstValid, lastValid basics.Round, assetIndex uint64) (transactions.Transaction, error) {
+	var txn transactions.Transaction
+	txn.Type = protocol.AssetConfigTx
+	txn.ConfigAsset = basics.AssetIndex(assetIndex)
 	txn.FirstValid = firstValid
 	txn.LastValid = lastValid
 	return txn, nil
 }
 
-func TestArchivalAssets(t *testing.T) {
-	// Start in archival mode, add 2K blocks with asset txns, restart, ensure all
-	// assets are there in index unless they were deleted
+func makeUnsignedApplicationCallTx(appIdx uint64, onCompletion transactions.OnCompletion) (tx transactions.Transaction, err error) {
+	tx.Type = protocol.ApplicationCallTx
+	tx.ApplicationID = basics.AppIndex(appIdx)
+	tx.OnCompletion = onCompletion
+
+	// If creating, set programs
+	if appIdx == 0 {
+		testprog := `#pragma version 2
+			// Write global["foo"] = "bar"
+			byte base64 Zm9v
+			byte base64 YmFy
+			app_global_put
+
+			// Write sender.local["foo"] = "bar"
+			// txn.Sender
+			int 0
+			byte base64 Zm9v
+			byte base64 YmFy
+			app_local_put
+
+			int 1
+		`
+		prog, err := logic.AssembleString(testprog)
+		if err != nil {
+			return tx, err
+		}
+		tx.ApprovalProgram = prog
+		tx.ClearStateProgram = prog
+		tx.GlobalStateSchema = basics.StateSchema{
+			NumByteSlice: 1,
+		}
+		tx.LocalStateSchema = basics.StateSchema{
+			NumByteSlice: 1,
+		}
+	}
+
+	return tx, nil
+}
+
+func TestArchivalCreatables(t *testing.T) {
+	// Start in archival mode, add 2K blocks with asset + app txns
+	// restart, ensure all assets are there in index unless they were
+	// deleted
+
+	// disable deadlock checking code
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() {
+		deadlock.Opts.Disable = deadlockDisable
+	}()
 
 	dbTempDir, err := ioutil.TempDir("", "testdir"+t.Name())
 	require.NoError(t, err)
@@ -267,9 +344,14 @@ func TestArchivalAssets(t *testing.T) {
 	genesisInitState.GenesisHash = crypto.Digest{1}
 	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
 
-	// true = created, false = deleted
-	assetIdxs := make(map[basics.AssetIndex]bool)
-	assetCreators := make(map[basics.AssetIndex]basics.Address)
+	type ActionEnum uint64
+	const AssetCreated ActionEnum = 0
+	const AppCreated ActionEnum = 1
+	const AssetDeleted ActionEnum = 2
+	const AppDeleted ActionEnum = 3
+
+	creatableIdxs := make(map[basics.CreatableIndex]ActionEnum)
+	allCreators := make(map[basics.CreatableIndex]basics.Address)
 
 	// keep track of existing/deleted assets for sanity check at end
 	var expectedExisting int
@@ -288,28 +370,39 @@ func TestArchivalAssets(t *testing.T) {
 
 	// open ledger
 	const inMem = false // use persistent storage
-	const archival = true
-	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
-	// create assets
-	client := libgoal.Client{}
+	// keep track of max created idx
+	var maxCreated uint64
+
+	// create apps and assets
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
 
-		// make a transaction that will create an asset
+		// make a transaction that will create an asset or application
 		creatorEncoded := creators[i].String()
-		tx, err := makeUnsignedAssetCreateTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, 100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
+		createdIdx := basics.CreatableIndex(blk.BlockHeader.TxnCounter + 1)
+		var tx transactions.Transaction
+		if mathrand.Float32() < 0.5 {
+			creatableIdxs[createdIdx] = AssetCreated
+			tx, err = makeUnsignedAssetCreateTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, 100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
+		} else {
+			creatableIdxs[createdIdx] = AppCreated
+			tx, err = makeUnsignedApplicationCallTx(0, transactions.OptInOC)
+		}
 		require.NoError(t, err)
+
+		maxCreated = uint64(createdIdx)
+
 		tx.Sender = creators[i]
-		createdAssetIdx := basics.AssetIndex(blk.BlockHeader.TxnCounter + 1)
 		expectedExisting++
 
-		// mark asset as created for checking later
-		assetIdxs[createdAssetIdx] = true
-		assetCreators[createdAssetIdx] = tx.Sender
+		allCreators[createdIdx] = tx.Sender
 		blk.BlockHeader.TxnCounter++
 
 		// make a payset
@@ -318,13 +411,21 @@ func TestArchivalAssets(t *testing.T) {
 		payset = append(payset, stxnib)
 		blk.Payset = payset
 
-		// for one of the assets, delete it in the same block
-		if i == maxBlocks/2 {
-			tx0, err := makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, blk.BlockHeader.TxnCounter)
+		// for some of the assets/apps, delete it in the same block
+		if i >= maxBlocks/2 && i < (3*(maxBlocks/4)) {
+			switch creatableIdxs[createdIdx] {
+			case AssetCreated:
+				tx, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(createdIdx))
+				creatableIdxs[createdIdx] = AssetDeleted
+			case AppCreated:
+				tx, err = makeUnsignedApplicationCallTx(uint64(createdIdx), transactions.DeleteApplicationOC)
+				creatableIdxs[createdIdx] = AppDeleted
+			default:
+				panic("unknown action")
+			}
 			require.NoError(t, err)
-			tx0.Sender = assetCreators[createdAssetIdx]
-			blk.Payset = append(blk.Payset, makeSignedTxnInBlock(tx0))
-			assetIdxs[createdAssetIdx] = false
+			tx.Sender = allCreators[createdIdx]
+			blk.Payset = append(blk.Payset, makeSignedTxnInBlock(tx))
 			blk.BlockHeader.TxnCounter++
 			expectedExisting--
 			expectedDeleted++
@@ -336,66 +437,120 @@ func TestArchivalAssets(t *testing.T) {
 	}
 	l.WaitForCommit(blk.Round())
 
-	// check that we can fetch creator for all created assets and can't for
-	// deleted assets
+	// check that we can fetch creator for all created assets/apps and
+	// can't for deleted assets/apps
 	var existing, deleted int
-	for aidx, status := range assetIdxs {
-		c, err := l.GetAssetCreator(aidx)
-		if status {
+	for aidx, status := range creatableIdxs {
+		switch status {
+		case AssetCreated:
+			c, ok, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
-			require.Equal(t, assetCreators[aidx], c)
+			require.True(t, ok)
+			require.Equal(t, allCreators[aidx], c)
 			existing++
-		} else {
-			require.Error(t, err)
+		case AppCreated:
+			c, ok, err := l.GetCreator(aidx, basics.AppCreatable)
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.Equal(t, allCreators[aidx], c)
+			existing++
+		case AssetDeleted:
+			c, ok, err := l.GetCreator(aidx, basics.AssetCreatable)
+			require.NoError(t, err)
+			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
+		case AppDeleted:
+			c, ok, err := l.GetCreator(aidx, basics.AppCreatable)
+			require.NoError(t, err)
+			require.False(t, ok)
+			require.Equal(t, basics.Address{}, c)
+			deleted++
+		default:
+			panic("unknown action")
 		}
 	}
+
 	require.Equal(t, expectedExisting, existing)
 	require.Equal(t, expectedDeleted, deleted)
-	require.Equal(t, len(assetIdxs), existing+deleted)
+	require.Equal(t, len(creatableIdxs), existing+deleted)
 
 	// close and reopen the same DB
 	l.Close()
-	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
-	defer l.Close()
 
 	// check that we can fetch creator for all created assets and can't for
 	// deleted assets
 	existing = 0
 	deleted = 0
-	for aidx, status := range assetIdxs {
-		c, err := l.GetAssetCreator(aidx)
-		if status {
+	for aidx, status := range creatableIdxs {
+		switch status {
+		case AssetCreated:
+			c, ok, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
-			require.Equal(t, assetCreators[aidx], c)
+			require.True(t, ok)
+			require.Equal(t, allCreators[aidx], c)
 			existing++
-		} else {
-			require.Error(t, err)
+		case AppCreated:
+			c, ok, err := l.GetCreator(aidx, basics.AppCreatable)
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.Equal(t, allCreators[aidx], c)
+			existing++
+		case AssetDeleted:
+			c, ok, err := l.GetCreator(aidx, basics.AssetCreatable)
+			require.NoError(t, err)
+			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
+		case AppDeleted:
+			c, ok, err := l.GetCreator(aidx, basics.AppCreatable)
+			require.NoError(t, err)
+			require.False(t, ok)
+			require.Equal(t, basics.Address{}, c)
+			deleted++
+		default:
+			panic("unknown action")
 		}
 	}
 	require.Equal(t, expectedExisting, existing)
 	require.Equal(t, expectedDeleted, deleted)
-	require.Equal(t, len(assetIdxs), existing+deleted)
+	require.Equal(t, len(creatableIdxs), existing+deleted)
 
-	// delete an old asset and a new asset
-	assetToDelete := basics.AssetIndex(1)
-	tx0, err := makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(assetToDelete))
+	// delete an old creatable and a new creatable
+	creatableToDelete := basics.CreatableIndex(1)
+	var tx0 transactions.Transaction
+	switch creatableIdxs[creatableToDelete] {
+	case AssetCreated:
+		tx0, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(creatableToDelete))
+		creatableIdxs[creatableToDelete] = AssetDeleted
+	case AppCreated:
+		tx0, err = makeUnsignedApplicationCallTx(uint64(creatableToDelete), transactions.DeleteApplicationOC)
+		creatableIdxs[creatableToDelete] = AppDeleted
+	default:
+		panic("unknown action")
+	}
 	require.NoError(t, err)
-	tx0.Sender = assetCreators[assetToDelete]
-	assetIdxs[assetToDelete] = false
+	tx0.Sender = allCreators[creatableToDelete]
 	blk.BlockHeader.TxnCounter++
 	expectedExisting--
 	expectedDeleted++
 
-	assetToDelete = basics.AssetIndex(maxBlocks)
-	tx1, err := makeUnsignedAssetDestroyTx(client, blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(assetToDelete))
+	creatableToDelete = basics.CreatableIndex(maxCreated)
+	var tx1 transactions.Transaction
+	switch creatableIdxs[creatableToDelete] {
+	case AssetCreated:
+		tx1, err = makeUnsignedAssetDestroyTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, uint64(creatableToDelete))
+		creatableIdxs[creatableToDelete] = AssetDeleted
+	case AppCreated:
+		tx1, err = makeUnsignedApplicationCallTx(uint64(creatableToDelete), transactions.DeleteApplicationOC)
+		creatableIdxs[creatableToDelete] = AppDeleted
+	default:
+		panic("unknown action")
+	}
 	require.NoError(t, err)
-	tx1.Sender = assetCreators[assetToDelete]
-	assetIdxs[assetToDelete] = false
+	tx1.Sender = allCreators[creatableToDelete]
 	blk.BlockHeader.TxnCounter++
 	expectedExisting--
 	expectedDeleted++
@@ -419,21 +574,39 @@ func TestArchivalAssets(t *testing.T) {
 	// deleted assets
 	existing = 0
 	deleted = 0
-	for aidx, status := range assetIdxs {
-		c, err := l.GetAssetCreator(aidx)
-		if status {
+	for aidx, status := range creatableIdxs {
+		switch status {
+		case AssetCreated:
+			c, ok, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
-			require.Equal(t, assetCreators[aidx], c)
+			require.True(t, ok)
+			require.Equal(t, allCreators[aidx], c)
 			existing++
-		} else {
-			require.Error(t, err)
+		case AppCreated:
+			c, ok, err := l.GetCreator(aidx, basics.AppCreatable)
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.Equal(t, allCreators[aidx], c)
+			existing++
+		case AssetDeleted:
+			c, ok, err := l.GetCreator(aidx, basics.AssetCreatable)
+			require.NoError(t, err)
+			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
+		case AppDeleted:
+			c, ok, err := l.GetCreator(aidx, basics.AppCreatable)
+			require.NoError(t, err)
+			require.False(t, ok)
+			require.Equal(t, basics.Address{}, c)
+			deleted++
+		default:
+			panic("unknown action")
 		}
 	}
 	require.Equal(t, expectedExisting, existing)
 	require.Equal(t, expectedDeleted, deleted)
-	require.Equal(t, len(assetIdxs), existing+deleted)
+	require.Equal(t, len(creatableIdxs), existing+deleted)
 
 	// Mine another maxBlocks blocks
 	for i := 0; i < maxBlocks; i++ {
@@ -447,7 +620,7 @@ func TestArchivalAssets(t *testing.T) {
 
 	// close and reopen the same DB
 	l.Close()
-	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, archival)
+	l, err = OpenLedger(logging.Base(), dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
@@ -455,21 +628,39 @@ func TestArchivalAssets(t *testing.T) {
 	// deleted assets
 	existing = 0
 	deleted = 0
-	for aidx, status := range assetIdxs {
-		c, err := l.GetAssetCreator(aidx)
-		if status {
+	for aidx, status := range creatableIdxs {
+		switch status {
+		case AssetCreated:
+			c, ok, err := l.GetCreator(aidx, basics.AssetCreatable)
 			require.NoError(t, err)
-			require.Equal(t, assetCreators[aidx], c)
+			require.True(t, ok)
+			require.Equal(t, allCreators[aidx], c)
 			existing++
-		} else {
-			require.Error(t, err)
+		case AppCreated:
+			c, ok, err := l.GetCreator(aidx, basics.AppCreatable)
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.Equal(t, allCreators[aidx], c)
+			existing++
+		case AssetDeleted:
+			c, ok, err := l.GetCreator(aidx, basics.AssetCreatable)
+			require.NoError(t, err)
+			require.False(t, ok)
 			require.Equal(t, basics.Address{}, c)
 			deleted++
+		case AppDeleted:
+			c, ok, err := l.GetCreator(aidx, basics.AppCreatable)
+			require.NoError(t, err)
+			require.False(t, ok)
+			require.Equal(t, basics.Address{}, c)
+			deleted++
+		default:
+			panic("unknown action")
 		}
 	}
 	require.Equal(t, expectedExisting, existing)
 	require.Equal(t, expectedDeleted, deleted)
-	require.Equal(t, len(assetIdxs), existing+deleted)
+	require.Equal(t, len(creatableIdxs), existing+deleted)
 }
 
 func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInBlock {
@@ -485,7 +676,11 @@ func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInB
 
 func TestArchivalFromNonArchival(t *testing.T) {
 	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
-
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() {
+		deadlock.Opts.Disable = deadlockDisable
+	}()
 	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
 	require.NoError(t, err)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
@@ -493,11 +688,29 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	defer os.RemoveAll(dbTempDir)
 
 	genesisInitState := getInitState()
+
+	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{}
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
+	genesisInitState.GenesisHash = crypto.Digest{1}
+	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
+
+	balanceRecords := []basics.BalanceRecord{}
+
+	for i := 0; i < 50; i++ {
+		addr := basics.Address{}
+		_, err = rand.Read(addr[:])
+		require.NoError(t, err)
+		br := basics.BalanceRecord{AccountData: basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890}), Addr: addr}
+		genesisInitState.Accounts[addr] = br.AccountData
+		balanceRecords = append(balanceRecords, br)
+	}
+
 	const inMem = false // use persistent storage
-	archival := false
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
 
 	log := logging.TestingLog(t)
-	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, archival)
+	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	blk := genesisInitState.Block
 
@@ -505,12 +718,26 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	for i := 0; i < maxBlocks; i++ {
 		blk.BlockHeader.Round++
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
-		l.AddBlock(blk, agreement.Certificate{})
+		blk.Payset = transactions.Payset{}
+
+		for j := 0; j < 5; j++ {
+			x := (j + i) % len(balanceRecords)
+			creatorEncoded := balanceRecords[x].Addr.String()
+			tx, err := makeUnsignedAssetCreateTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, 100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
+			require.NoError(t, err)
+			tx.Sender = balanceRecords[x].Addr
+			stxnib := makeSignedTxnInBlock(tx)
+			blk.Payset = append(blk.Payset, stxnib)
+			blk.BlockHeader.TxnCounter++
+		}
+
+		err := l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
 	}
 	l.WaitForCommit(blk.Round())
 
 	var latest, earliest basics.Round
-	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err = blockLatest(tx)
 		require.NoError(t, err)
 
@@ -525,12 +752,12 @@ func TestArchivalFromNonArchival(t *testing.T) {
 	// close and reopen the same DB, ensure the DB truncated
 	l.Close()
 
-	archival = true
-	l, err = OpenLedger(log, dbPrefix, inMem, genesisInitState, archival)
+	cfg.Archival = true
+	l, err = OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
 	require.NoError(t, err)
 	defer l.Close()
 
-	err = l.blockDBs.rdb.Atomic(func(tx *sql.Tx) error {
+	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err = blockLatest(tx)
 		require.NoError(t, err)
 
@@ -545,30 +772,49 @@ func TestArchivalFromNonArchival(t *testing.T) {
 
 func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Round, error) {
 	minMinSave := rnd
-
+	var minSave basics.Round
+	var cleanTracker ledgerTracker
+	var trackerType reflect.Type
+	wl.l.trackerMu.RLock()
+	defer wl.l.trackerMu.RUnlock()
 	for _, trk := range wl.l.trackers.trackers {
-		wl.l.trackerMu.RLock()
-		minSave := trk.committedUpTo(rnd)
-		wl.l.trackerMu.RUnlock()
-		if minSave < minMinSave {
-			minMinSave = minSave
+		if au, ok := trk.(*accountUpdates); ok {
+			au.waitAccountsWriting()
+			minSave = trk.committedUpTo(rnd)
+			au.waitAccountsWriting()
+			if minSave < minMinSave {
+				minMinSave = minSave
+			}
+			wl.minQueriedBlock = rnd
+
+			trackerType = reflect.TypeOf(trk).Elem()
+			cleanTracker = reflect.New(trackerType).Interface().(ledgerTracker)
+
+			au = cleanTracker.(*accountUpdates)
+			cfg := config.GetDefaultLocal()
+			cfg.Archival = true
+			au.initialize(cfg, "", au.initProto, wl.l.accts.initAccounts)
+		} else {
+			minSave = trk.committedUpTo(rnd)
+			if minSave < minMinSave {
+				minMinSave = minSave
+			}
+			wl.minQueriedBlock = rnd
+
+			trackerType = reflect.TypeOf(trk).Elem()
+			cleanTracker = reflect.New(trackerType).Interface().(ledgerTracker)
 		}
 
-		trackerType := reflect.TypeOf(trk).Elem()
-		cleanTracker := reflect.New(trackerType).Interface().(ledgerTracker)
-		if trackerType.String() == "ledger.accountUpdates" {
-			cleanTracker.(*accountUpdates).initAccounts = wl.l.accts.initAccounts
-		}
-
-		wl.minQueriedBlock = rnd
-
+		cleanTracker.close()
 		err := cleanTracker.loadFromDisk(wl)
 		require.NoError(t, err)
 
+		cleanTracker.close()
+
 		// Special case: initAccounts reflects state after block 0,
 		// so it's OK to return minSave=0 but query block 1.
-		if minSave != wl.minQueriedBlock && minSave != 0 && wl.minQueriedBlock != 1 {
-			return minMinSave, fmt.Errorf("tracker %v: committed %d, minSave %d != minQuery %d", trackerType, rnd, minSave, wl.minQueriedBlock)
+		if minSave > wl.minQueriedBlock && minSave != 0 && wl.minQueriedBlock != 1 {
+			return minMinSave, fmt.Errorf("tracker %v: committed %d, minSave %d > minQuery %d", trackerType, rnd, minSave, wl.minQueriedBlock)
 		}
 	}
 

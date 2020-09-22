@@ -1,0 +1,44 @@
+*.log
+*.log.archive
+*.out
+*.prof
+coverage.html
+
+# cadaver
+*.cdv
+*.cdv.archive
+
+# swagger
+swagger.json
+swagger.json.validated
+kmdSwaggerWrappers.go
+bundledSpecInject.go
+
+# Exclude GoLand files
+.idea/
+
+# Exclude VSCode files
+.vscode/
+
+# Exclude go binaries built in-place
+cmd/algod/algod
+cmd/goal/goal
+cmd/updater/updater
+
+# Exclude our local temp directory
+tmp/dev_pkg
+tmp/out
+tmp/node_pkgs
+
+# Ignore vim backup and swap files
+*~
+*.swp
+*.swo
+
+# Mac
+.DS_Store
+
+# doc intermediates
+data/transactions/logic/*.md
+
+*.pem

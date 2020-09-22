@@ -11,13 +11,26 @@ export HOME=/root
 
 . "${HOME}"/subhome/build_env
 
-GIT_REPO_PATH=https://github.com/algorand/go-algorand
 mkdir -p "${HOME}/go/src/github.com/algorand"
-cd "${HOME}/go/src/github.com/algorand" && git clone --single-branch --branch "${BRANCH}" "${GIT_REPO_PATH}" go-algorand
-
-# Get golang 1.12 and build its own copy of go-algorand.
+cd "${HOME}/go/src/github.com/algorand"
+if ! git clone --single-branch --branch "${BRANCH}" https://github.com/algorand/go-algorand go-algorand
+then
+    echo There has been a problem cloning the "$BRANCH" branch.
+    exit 1
+fi
+cd go-algorand
+# Install go version specified by get_golang_version.sh and build its own copy of go-algorand.
+if ! GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+then
+    echo "${GOLANG_VERSION}"
+    exit 1
+fi
 cd "${HOME}"
-python3 "${HOME}/go/src/github.com/algorand/go-algorand/scripts/get_latest_go.py" --version-prefix=1.12
+if ! curl -O "https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz"
+then
+    echo Golang could not be installed!
+    exit 1
+fi
 bash -c "cd /usr/local && tar zxf ${HOME}/go*.tar.gz"
 
 GOPATH=$(/usr/local/go/bin/go env GOPATH)
@@ -29,7 +42,6 @@ REPO_DIR=/root/go/src/github.com/algorand/go-algorand
 # Build!
 "${REPO_DIR}"/scripts/configure_dev-deps.sh
 cd "${REPO_DIR}"
-make crypto/lib/libsodium.a
 make build
 
 # Copy binaries to the host for use in the packaging stage.

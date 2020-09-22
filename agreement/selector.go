@@ -38,7 +38,7 @@ type selector struct {
 
 // ToBeHashed implements the crypto.Hashable interface.
 func (sel selector) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.AgreementSelector, protocol.Encode(sel)
+	return protocol.AgreementSelector, protocol.Encode(&sel)
 }
 
 // CommitteeSize returns the size of the committee, which is determined by
@@ -64,9 +64,9 @@ func membership(l LedgerReader, addr basics.Address, r basics.Round, p period, s
 	balanceRound := balanceRound(r, cparams)
 	seedRound := seedRound(r, cparams)
 
-	record, err := l.BalanceRecord(balanceRound, addr)
+	record, err := l.Lookup(balanceRound, addr)
 	if err != nil {
-		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain balance record for address %v in round %d: %v", r, addr, balanceRound, err)
+		err = fmt.Errorf("Service.initializeVote (r=%d): Failed to obtain balance record for address %v in round %d: %w", r, addr, balanceRound, err)
 		return
 	}
 
@@ -82,7 +82,7 @@ func membership(l LedgerReader, addr basics.Address, r basics.Round, p period, s
 		return
 	}
 
-	m.Record = record
+	m.Record = committee.BalanceRecord{AccountData: record, Addr: addr}
 	m.Selector = selector{Seed: seed, Round: r, Period: p, Step: s}
 	m.TotalMoney = total
 	return m, nil

@@ -46,30 +46,6 @@ type SpecialAddresses struct {
 	RewardsPool basics.Address
 }
 
-// Balances allow to move MicroAlgos from one address to another and to update balance records, or to access and modify individual balance records
-// After a call to Put (or Move), future calls to Get or Move will reflect the updated balance record(s)
-type Balances interface {
-	// Get looks up the balance record for an address
-	// If the account is known to be empty, then err should be nil and the returned balance record should have the given address and empty AccountData
-	// withPendingRewards specifies whether pending rewards should be applied.
-	// A non-nil error means the lookup is impossible (e.g., if the database doesn't have necessary state anymore)
-	Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error)
-
-	// GetAssetCreator gets the address of the account whose balance record
-	// contains the asset params
-	GetAssetCreator(aidx basics.AssetIndex) (basics.Address, error)
-
-	Put(basics.BalanceRecord) error
-
-	// Move MicroAlgos from one account to another, doing all necessary overflow checking (convenience method)
-	// TODO: Does this need to be part of the balances interface, or can it just be implemented here as a function that calls Put and Get?
-	Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards *basics.MicroAlgos, dstRewards *basics.MicroAlgos) error
-
-	// Balances correspond to a Round, which mean that they also correspond
-	// to a ConsensusParams.  This returns those parameters.
-	ConsensusParams() config.ConsensusParams
-}
-
 // Header captures the fields common to every transaction type.
 type Header struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
@@ -78,7 +54,7 @@ type Header struct {
 	Fee         basics.MicroAlgos `codec:"fee"`
 	FirstValid  basics.Round      `codec:"fv"`
 	LastValid   basics.Round      `codec:"lv"`
-	Note        []byte            `codec:"note"` // Uniqueness or app-level data about txn
+	Note        []byte            `codec:"note,allocbound=config.MaxTxnNoteBytes"` // Uniqueness or app-level data about txn
 	GenesisID   string            `codec:"gen"`
 	GenesisHash crypto.Digest     `codec:"gh"`
 
@@ -93,6 +69,12 @@ type Header struct {
 	// the LastValid round passes.  While this transaction possesses the
 	// lease, no other transaction specifying this lease can be confirmed.
 	Lease [32]byte `codec:"lx"`
+
+	// RekeyTo, if nonzero, sets the sender's AuthAddr to the given address
+	// If the RekeyTo address is the sender's actual address, the AuthAddr is set to zero
+	// This allows "re-keying" a long-lived account -- rotating the signing key, changing
+	// membership of a multisig account, etc.
+	RekeyTo basics.Address `codec:"rekey"`
 }
 
 // Transaction describes a transaction that can appear in a block.
@@ -111,6 +93,7 @@ type Transaction struct {
 	AssetConfigTxnFields
 	AssetTransferTxnFields
 	AssetFreezeTxnFields
+	ApplicationCallTxnFields
 }
 
 // ApplyData contains information about the transaction's execution.
@@ -124,6 +107,28 @@ type ApplyData struct {
 	SenderRewards   basics.MicroAlgos `codec:"rs"`
 	ReceiverRewards basics.MicroAlgos `codec:"rr"`
 	CloseRewards    basics.MicroAlgos `codec:"rc"`
+	EvalDelta       basics.EvalDelta  `codec:"dt"`
+}
+
+// Equal returns true if two ApplyDatas are equal, ignoring nilness equality on
+// EvalDelta's internal deltas (see EvalDelta.Equal for more information)
+func (ad ApplyData) Equal(o ApplyData) bool {
+	if ad.ClosingAmount != o.ClosingAmount {
+		return false
+	}
+	if ad.SenderRewards != o.SenderRewards {
+		return false
+	}
+	if ad.ReceiverRewards != o.ReceiverRewards {
+		return false
+	}
+	if ad.CloseRewards != o.CloseRewards {
+		return false
+	}
+	if !ad.EvalDelta.Equal(o.EvalDelta) {
+		return false
+	}
+	return true
 }
 
 // TxGroup describes a group of transactions that must appear
@@ -135,7 +140,7 @@ type TxGroup struct {
 	// together, sequentially, in a block in order for the group to be
 	// valid.  Each hash in the list is a hash of a transaction with
 	// the `Group` field omitted.
-	TxGroupHashes []crypto.Digest `codec:"txlist,allocbound=-"`
+	TxGroupHashes []crypto.Digest `codec:"txlist,allocbound=config.MaxTxGroupSize"`
 }
 
 // ToBeHashed implements the crypto.Hashable interface.
@@ -160,6 +165,10 @@ func (tx Transaction) Sign(secrets *crypto.SignatureSecrets) SignedTxn {
 	s := SignedTxn{
 		Txn: tx,
 		Sig: sig,
+	}
+	// Set the AuthAddr if the signing key doesn't match the transaction sender
+	if basics.Address(secrets.SignatureVerifier) != tx.Sender {
+		s.AuthAddr = basics.Address(secrets.SignatureVerifier)
 	}
 	return s
 }
@@ -215,8 +224,8 @@ func (tx Header) Alive(tc TxnContext) error {
 }
 
 // MatchAddress checks if the transaction touches a given address.
-func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses, proto config.ConsensusParams) bool {
-	for _, candidate := range tx.RelevantAddrs(spec, proto) {
+func (tx Transaction) MatchAddress(addr basics.Address, spec SpecialAddresses) bool {
+	for _, candidate := range tx.RelevantAddrs(spec) {
 		if addr == candidate {
 			return true
 		}
@@ -263,7 +272,83 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		if !proto.Asset {
 			return fmt.Errorf("asset transaction not supported")
 		}
+	case protocol.ApplicationCallTx:
+		if !proto.Application {
+			return fmt.Errorf("application transaction not supported")
+		}
 
+		// Ensure requested action is valid
+		switch tx.OnCompletion {
+		case NoOpOC:
+		case OptInOC:
+		case CloseOutOC:
+		case ClearStateOC:
+		case UpdateApplicationOC:
+		case DeleteApplicationOC:
+		default:
+			return fmt.Errorf("invalid application OnCompletion")
+		}
+
+		// Programs may only be set for creation or update
+		if tx.ApplicationID != 0 && tx.OnCompletion != UpdateApplicationOC {
+			if len(tx.ApprovalProgram) != 0 || len(tx.ClearStateProgram) != 0 {
+				return fmt.Errorf("programs may only be specified during application creation or update")
+			}
+		}
+
+		// Schemas may only be set during application creation
+		if tx.ApplicationID != 0 {
+			if tx.LocalStateSchema != (basics.StateSchema{}) ||
+				tx.GlobalStateSchema != (basics.StateSchema{}) {
+				return fmt.Errorf("local and global state schemas are immutable")
+			}
+		}
+
+		// Limit total number of arguments
+		if len(tx.ApplicationArgs) > proto.MaxAppArgs {
+			return fmt.Errorf("too many application args, max %d", proto.MaxAppArgs)
+		}
+
+		// Sum up argument lengths
+		var argSum uint64
+		for _, arg := range tx.ApplicationArgs {
+			argSum = basics.AddSaturate(argSum, uint64(len(arg)))
+		}
+
+		// Limit total length of all arguments
+		if argSum > uint64(proto.MaxAppTotalArgLen) {
+			return fmt.Errorf("application args total length too long, max len %d bytes", proto.MaxAppTotalArgLen)
+		}
+
+		// Limit number of accounts referred to in a single ApplicationCall
+		if len(tx.Accounts) > proto.MaxAppTxnAccounts {
+			return fmt.Errorf("tx.Accounts too long, max number of accounts is %d", proto.MaxAppTxnAccounts)
+		}
+
+		// Limit number of other app global states referred to
+		if len(tx.ForeignApps) > proto.MaxAppTxnForeignApps {
+			return fmt.Errorf("tx.ForeignApps too long, max number of foreign apps is %d", proto.MaxAppTxnForeignApps)
+		}
+
+		if len(tx.ForeignAssets) > proto.MaxAppTxnForeignAssets {
+			return fmt.Errorf("tx.ForeignAssets too long, max number of foreign assets is %d", proto.MaxAppTxnForeignAssets)
+		}
+
+		if len(tx.ApprovalProgram) > proto.MaxAppProgramLen {
+			return fmt.Errorf("approval program too long. max len %d bytes", proto.MaxAppProgramLen)
+		}
+
+		if len(tx.ClearStateProgram) > proto.MaxAppProgramLen {
+			return fmt.Errorf("clear state program too long. max len %d bytes", proto.MaxAppProgramLen)
+		}
+
+		if tx.LocalStateSchema.NumEntries() > proto.MaxLocalSchemaEntries {
+			return fmt.Errorf("tx.LocalStateSchema too large, max number of keys is %d", proto.MaxLocalSchemaEntries)
+		}
+
+		if tx.GlobalStateSchema.NumEntries() > proto.MaxGlobalSchemaEntries {
+			return fmt.Errorf("tx.GlobalStateSchema too large, max number of keys is %d", proto.MaxGlobalSchemaEntries)
+		}
 	default:
 		return fmt.Errorf("unknown tx type %v", tx.Type)
 	}
@@ -287,6 +372,10 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 
 	if tx.AssetFreezeTxnFields != (AssetFreezeTxnFields{}) {
 		nonZeroFields[protocol.AssetFreezeTx] = true
+	}
+
+	if !tx.ApplicationCallTxnFields.Empty() {
+		nonZeroFields[protocol.ApplicationCallTx] = true
 	}
 
 	for t, nonZero := range nonZeroFields {
@@ -323,7 +412,7 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 		// this check is just to be safe, but reaching here seems impossible, since it requires computing a preimage of rwpool
 		return fmt.Errorf("transaction from incentive pool is invalid")
 	}
-	if tx.Sender == (basics.Address{}) {
+	if tx.Sender.IsZero() {
 		return fmt.Errorf("transaction cannot have zero sender")
 	}
 	if !proto.SupportTransactionLeases && (tx.Lease != [32]byte{}) {
@@ -331,6 +420,9 @@ func (tx Transaction) WellFormed(spec SpecialAddresses, proto config.ConsensusPa
 	}
 	if !proto.SupportTxGroups && (tx.Group != crypto.Digest{}) {
 		return fmt.Errorf("transaction has group but groups not yet enabled")
+	}
+	if !proto.SupportRekeying && (tx.RekeyTo != basics.Address{}) {
+		return fmt.Errorf("transaction has RekeyTo set but rekeying not yet enabled")
 	}
 	return nil
 }
@@ -352,19 +444,22 @@ func (tx Header) Last() basics.Round {
 
 // RelevantAddrs returns the addresses whose balance records this transaction will need to access.
 // The header's default is to return just the sender and the fee sink.
-func (tx Transaction) RelevantAddrs(spec SpecialAddresses, proto config.ConsensusParams) []basics.Address {
+func (tx Transaction) RelevantAddrs(spec SpecialAddresses) []basics.Address {
 	addrs := []basics.Address{tx.Sender, spec.FeeSink}
 
 	switch tx.Type {
 	case protocol.PaymentTx:
 		addrs = append(addrs, tx.PaymentTxnFields.Receiver)
-		if tx.PaymentTxnFields.CloseRemainderTo != (basics.Address{}) {
+		if !tx.PaymentTxnFields.CloseRemainderTo.IsZero() {
 			addrs = append(addrs, tx.PaymentTxnFields.CloseRemainderTo)
 		}
 	case protocol.AssetTransferTx:
 		addrs = append(addrs, tx.AssetTransferTxnFields.AssetReceiver)
-		if tx.AssetTransferTxnFields.AssetCloseTo != (basics.Address{}) {
+		if !tx.AssetTransferTxnFields.AssetCloseTo.IsZero() {
 			addrs = append(addrs, tx.AssetTransferTxnFields.AssetCloseTo)
+		}
+		if !tx.AssetTransferTxnFields.AssetSender.IsZero() {
+			addrs = append(addrs, tx.AssetTransferTxnFields.AssetSender)
 		}
 	}
 
@@ -396,53 +491,15 @@ func (tx Transaction) GetReceiverAddress() basics.Address {
 
 // EstimateEncodedSize returns the estimated encoded size of the transaction including the signature.
 // This function is to be used for calculating the fee
+// Note that it may be an underestimate if the transaction is signed in an unusual way
+// (e.g., with an authaddr or via multisig or logicsig)
 func (tx Transaction) EstimateEncodedSize() int {
-	var seed crypto.Seed
-	crypto.RandBytes(seed[:])
-	keys := crypto.GenerateSignatureSecrets(seed)
-	stx := tx.Sign(keys)
+	// Make a signedtxn with a nonzero signature and encode it
+	stx := SignedTxn{
+		Txn: tx,
+		Sig: crypto.Signature{1},
+	}
 	return stx.GetEncodedLength()
-}
-
-// Apply changes the balances according to this transaction.
-func (tx Transaction) Apply(balances Balances, spec SpecialAddresses, ctr uint64) (ad ApplyData, err error) {
-	params := balances.ConsensusParams()
-
-	// move fee to pool
-	err = balances.Move(tx.Sender, spec.FeeSink, tx.Fee, &ad.SenderRewards, nil)
-	if err != nil {
-		return
-	}
-
-	switch tx.Type {
-	case protocol.PaymentTx:
-		err = tx.PaymentTxnFields.apply(tx.Header, balances, spec, &ad)
-
-	case protocol.KeyRegistrationTx:
-		err = tx.KeyregTxnFields.apply(tx.Header, balances, spec, &ad)
-
-	case protocol.AssetConfigTx:
-		err = tx.AssetConfigTxnFields.apply(tx.Header, balances, spec, &ad, ctr)
-
-	case protocol.AssetTransferTx:
-		err = tx.AssetTransferTxnFields.apply(tx.Header, balances, spec, &ad)
-
-	case protocol.AssetFreezeTx:
-		err = tx.AssetFreezeTxnFields.apply(tx.Header, balances, spec, &ad)
-
-	default:
-		err = fmt.Errorf("Unknown transaction type %v", tx.Type)
-	}
-
-	// If the protocol does not support rewards in ApplyData,
-	// clear them out.
-	if !params.RewardsInApplyData {
-		ad.SenderRewards = basics.MicroAlgos{}
-		ad.ReceiverRewards = basics.MicroAlgos{}
-		ad.CloseRewards = basics.MicroAlgos{}
-	}
-
-	return
 }
 
 // TxnContext describes the context in which a transaction can appear

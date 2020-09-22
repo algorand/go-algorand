@@ -1,0 +1,1013 @@
+{
+	"NetworkName": "",
+	"VersionModifier": "",
+	"ConsensusProtocol": "",
+	"FirstPartKeyRound": 0,
+	"LastPartKeyRound": 3000000,
+	"PartKeyDilution": 0,
+	"Wallets": [
+		{
+			"Name": "Wallet1",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet2",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet3",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet4",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet5",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet6",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet7",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet8",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet9",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet10",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet11",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet12",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet13",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet14",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet15",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet16",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet17",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet18",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet19",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet20",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet21",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet22",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet23",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet24",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet25",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet26",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet27",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet28",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet29",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet30",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet31",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet32",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet33",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet34",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet35",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet36",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet37",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet38",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet39",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet40",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet41",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet42",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet43",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet44",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet45",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet46",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet47",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet48",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet49",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet50",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet51",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet52",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet53",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet54",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet55",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet56",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet57",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet58",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet59",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet60",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet61",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet62",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet63",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet64",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet65",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet66",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet67",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet68",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet69",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet70",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet71",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet72",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet73",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet74",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet75",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet76",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet77",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet78",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet79",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet80",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet81",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet82",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet83",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet84",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet85",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet86",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet87",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet88",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet89",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet90",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet91",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet92",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet93",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet94",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet95",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet96",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet97",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet98",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet99",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet100",
+			"Stake": 0.5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet101",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet102",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet103",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet104",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet105",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet106",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet107",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet108",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet109",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet110",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet111",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet112",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet113",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet114",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet115",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet116",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet117",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet118",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet119",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet120",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet121",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet122",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet123",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet124",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet125",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet126",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet127",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet128",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet129",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet130",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet131",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet132",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet133",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet134",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet135",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet136",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet137",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet138",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet139",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet140",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet141",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet142",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet143",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet144",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet145",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet146",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet147",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet148",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet149",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet150",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet151",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet152",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet153",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet154",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet155",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet156",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet157",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet158",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet159",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet160",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet161",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet162",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet163",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet164",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet165",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet166",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet167",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet168",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet169",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet170",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet171",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet172",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet173",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet174",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet175",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet176",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet177",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet178",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet179",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet180",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet181",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet182",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet183",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet184",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet185",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet186",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet187",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet188",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet189",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet190",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet191",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet192",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet193",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet194",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet195",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet196",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet197",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet198",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet199",
+			"Stake": 0.5,
+			"Online": false
+		},
+		{
+			"Name": "Wallet200",
+			"Stake": 0.5,
+			"Online": false
+		}
+	],
+	"FeeSink": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+	"RewardsPool": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+	"Comment": ""
+}

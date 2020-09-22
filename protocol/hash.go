@@ -28,11 +28,15 @@ const (
 	AuctionParams     HashID = "aP"
 	AuctionSettlement HashID = "aS"
 
+	CompactCertPart HashID = "ccp"
+	CompactCertSig  HashID = "ccs"
+
 	AgreementSelector HashID = "AS"
 	BlockHeader       HashID = "BH"
 	BalanceRecord     HashID = "BR"
 	Credential        HashID = "CR"
 	Genesis           HashID = "GE"
+	MerkleArrayNode   HashID = "MA"
 	Message           HashID = "MX"
 	NetPrioResponse   HashID = "NPR"
 	OneTimeSigKey1    HashID = "OT1"

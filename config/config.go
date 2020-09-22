@@ -20,11 +20,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/user"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +32,9 @@ import (
 
 // Devnet identifies the 'development network' use for development and not generally accessible publicly
 const Devnet protocol.NetworkID = "devnet"
+
+// Betanet identifies the 'beta network' use for early releases of feature to the public prior to releasing these to mainnet/testnet
+const Betanet protocol.NetworkID = "betanet"
 
 // Devtestnet identifies the 'development network for tests' use for running tests against development and not generally accessible publicly
 const Devtestnet protocol.NetworkID = "devtestnet"
@@ -47,603 +48,56 @@ const Mainnet protocol.NetworkID = "mainnet"
 // GenesisJSONFile is the name of the genesis.json file
 const GenesisJSONFile = "genesis.json"
 
-// Global defines global Algorand protocol parameters which should not be overriden.
-type Global struct {
-	SmallLambda time.Duration // min amount of time to wait for leader's credential (i.e., time to propagate one credential)
-	BigLambda   time.Duration // max amount of time to wait for leader's proposal (i.e., time to propagate one block)
-}
-
-// Protocol holds the global configuration settings for the agreement protocol,
-// initialized with our current defaults. This is used across all nodes we create.
-var Protocol = Global{
-	SmallLambda: 2000 * time.Millisecond,
-	BigLambda:   15000 * time.Millisecond,
-}
-
-// ConsensusParams specifies settings that might vary based on the
-// particular version of the consensus protocol.
-type ConsensusParams struct {
-	// Consensus protocol upgrades.  Votes for upgrades are collected for
-	// UpgradeVoteRounds.  If the number of positive votes is over
-	// UpgradeThreshold, the proposal is accepted.
-	//
-	// UpgradeVoteRounds needs to be long enough to collect an
-	// accurate sample of participants, and UpgradeThreshold needs
-	// to be high enough to ensure that there are sufficient participants
-	// after the upgrade.
-	//
-	// A consensus protocol upgrade may specify the delay between its
-	// acceptance and its execution.  This gives clients time to notify
-	// users.  This delay is specified by the upgrade proposer and must
-	// be between MinUpgradeWaitRounds and MaxUpgradeWaitRounds (inclusive)
-	// in the old protocol's parameters.  Note that these parameters refer
-	// to the representation of the delay in a block rather than the actual
-	// delay: if the specified delay is zero, it is equivalent to
-	// DefaultUpgradeWaitRounds.
-	//
-	// The maximum length of a consensus version string is
-	// MaxVersionStringLen.
-	UpgradeVoteRounds        uint64
-	UpgradeThreshold         uint64
-	DefaultUpgradeWaitRounds uint64
-	MinUpgradeWaitRounds     uint64
-	MaxUpgradeWaitRounds     uint64
-	MaxVersionStringLen      int
-
-	// MaxTxnBytesPerBlock determines the maximum number of bytes
-	// that transactions can take up in a block.  Specifically,
-	// the sum of the lengths of encodings of each transaction
-	// in a block must not exceed MaxTxnBytesPerBlock.
-	MaxTxnBytesPerBlock int
-
-	// MaxTxnBytesPerBlock is the maximum size of a transaction's Note field.
-	MaxTxnNoteBytes int
-
-	// MaxTxnLife is how long a transaction can be live for:
-	// the maximum difference between LastValid and FirstValid.
-	//
-	// Note that in a protocol upgrade, the ledger must first be upgraded
-	// to hold more past blocks for this value to be raised.
-	MaxTxnLife uint64
-
-	// ApprovedUpgrades describes the upgrade proposals that this protocol
-	// implementation will vote for, along with their delay value
-	// (in rounds).  A delay value of zero is the same as a delay of
-	// DefaultUpgradeWaitRounds.
-	ApprovedUpgrades map[protocol.ConsensusVersion]uint64
-
-	// SupportGenesisHash indicates support for the GenesisHash
-	// fields in transactions (and requires them in blocks).
-	SupportGenesisHash bool
-
-	// RequireGenesisHash indicates that GenesisHash must be present
-	// in every transaction.
-	RequireGenesisHash bool
-
-	// DefaultKeyDilution specifies the granularity of top-level ephemeral
-	// keys. KeyDilution is the number of second-level keys in each batch,
-	// signed by a top-level "batch" key.  The default value can be
-	// overriden in the account state.
-	DefaultKeyDilution uint64
-
-	// MinBalance specifies the minimum balance that can appear in
-	// an account.  To spend money below MinBalance requires issuing
-	// an account-closing transaction, which transfers all of the
-	// money from the account, and deletes the account state.
-	MinBalance uint64
-
-	// MinTxnFee specifies the minimum fee allowed on a transaction.
-	// A minimum fee is necessary to prevent DoS. In some sense this is
-	// a way of making the spender subsidize the cost of storing this transaction.
-	MinTxnFee uint64
-
-	// RewardUnit specifies the number of MicroAlgos corresponding to one reward
-	// unit.
-	//
-	// Rewards are received by whole reward units.  Fractions of
-	// RewardUnits do not receive rewards.
-	RewardUnit uint64
-
-	// RewardsRateRefreshInterval is the number of rounds after which the
-	// rewards level is recomputed for the next RewardsRateRefreshInterval rounds.
-	RewardsRateRefreshInterval uint64
-
-	// seed-related parameters
-	SeedLookback        uint64 // how many blocks back we use seeds from in sortition. delta_s in the spec
-	SeedRefreshInterval uint64 // how often an old block hash is mixed into the seed. delta_r in the spec
-
-	// ledger retention policy
-	MaxBalLookback uint64 // (current round - MaxBalLookback) is the oldest round the ledger must answer balance queries for
-
-	// sortition threshold factors
-	NumProposers           uint64
-	SoftCommitteeSize      uint64
-	SoftCommitteeThreshold uint64
-	CertCommitteeSize      uint64
-	CertCommitteeThreshold uint64
-	NextCommitteeSize      uint64 // for any non-FPR votes >= deadline step, committee sizes and thresholds are constant
-	NextCommitteeThreshold uint64
-	LateCommitteeSize      uint64
-	LateCommitteeThreshold uint64
-	RedoCommitteeSize      uint64
-	RedoCommitteeThreshold uint64
-	DownCommitteeSize      uint64
-	DownCommitteeThreshold uint64
-
-	FastRecoveryLambda    time.Duration // time between fast recovery attempts
-	FastPartitionRecovery bool          // set when fast partition recovery is enabled
-
-	// commit to payset using a hash of entire payset,
-	// instead of txid merkle tree
-	PaysetCommitFlat bool
-
-	MaxTimestampIncrement int64 // maximum time between timestamps on successive blocks
-
-	// support for the efficient encoding in SignedTxnInBlock
-	SupportSignedTxnInBlock bool
-
-	// force the FeeSink address to be non-participating in the genesis balances.
-	ForceNonParticipatingFeeSink bool
-
-	// support for ApplyData in SignedTxnInBlock
-	ApplyData bool
-
-	// track reward distributions in ApplyData
-	RewardsInApplyData bool
-
-	// domain-separated credentials
-	CredentialDomainSeparationEnabled bool
-
-	// support for transactions that mark an account non-participating
-	SupportBecomeNonParticipatingTransactions bool
-
-	// fix the rewards calculation by avoiding subtracting too much from the rewards pool
-	PendingResidueRewards bool
-
-	// asset support
-	Asset bool
-
-	// max number of assets per account
-	MaxAssetsPerAccount int
-
-	// max length of asset name
-	MaxAssetNameBytes int
-
-	// max length of asset unit name
-	MaxAssetUnitNameBytes int
-
-	// max length of asset url
-	MaxAssetURLBytes int
-
-	// support sequential transaction counter TxnCounter
-	TxnCounter bool
-
-	// transaction groups
-	SupportTxGroups bool
-
-	// max group size
-	MaxTxGroupSize int
-
-	// support for transaction leases
-	SupportTransactionLeases bool
-
-	// 0 for no support, otherwise highest version supported
-	LogicSigVersion uint64
-
-	// len(LogicSig.Logic) + len(LogicSig.Args[*]) must be less than this
-	LogicSigMaxSize uint64
-
-	// sum of estimated op cost must be less than this
-	LogicSigMaxCost uint64
-
-	// max decimal precision for assets
-	MaxAssetDecimals uint32
-
-	// whether to use the old buggy Credential.lowestOutput function
-	// TODO(upgrade): Please remove as soon as the upgrade goes through
-	UseBuggyProposalLowestOutput bool
-}
-
-// ConsensusProtocols defines a set of supported protocol versions and their
-// corresponding parameters.
-type ConsensusProtocols map[protocol.ConsensusVersion]ConsensusParams
-
-// Consensus tracks the protocol-level settings for different versions of the
-// consensus protocol.
-var Consensus ConsensusProtocols
-
-// MaxVoteThreshold is the largest threshold for a bundle over all supported
-// consensus protocols, used for decoding purposes.
-var MaxVoteThreshold int
-
-func maybeMaxVoteThreshold(t uint64) {
-	if int(t) > MaxVoteThreshold {
-		MaxVoteThreshold = int(t)
-	}
-}
-
-func init() {
-	Consensus = make(ConsensusProtocols)
-
-	initConsensusProtocols()
-
-	// Allow tuning SmallLambda for faster consensus in single-machine e2e
-	// tests.  Useful for development.  This might make sense to fold into
-	// a protocol-version-specific setting, once we move SmallLambda into
-	// ConsensusParams.
-	algoSmallLambda, err := strconv.ParseInt(os.Getenv("ALGOSMALLLAMBDAMSEC"), 10, 64)
-	if err == nil {
-		Protocol.SmallLambda = time.Duration(algoSmallLambda) * time.Millisecond
-	}
-
-	for _, p := range Consensus {
-		maybeMaxVoteThreshold(p.SoftCommitteeThreshold)
-		maybeMaxVoteThreshold(p.CertCommitteeThreshold)
-		maybeMaxVoteThreshold(p.NextCommitteeThreshold)
-		maybeMaxVoteThreshold(p.LateCommitteeThreshold)
-		maybeMaxVoteThreshold(p.RedoCommitteeThreshold)
-		maybeMaxVoteThreshold(p.DownCommitteeThreshold)
-	}
-}
-
-// SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.
-func SaveConfigurableConsensus(dataDirectory string, params ConsensusProtocols) error {
-	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
-
-	encodedConsensusParams, err := json.Marshal(params)
-	if err != nil {
-		return err
-	}
-	err = ioutil.WriteFile(consensusProtocolPath, encodedConsensusParams, 0644)
-	return err
-}
-
-// DeepCopy creates a deep copy of a consensus protocols map.
-func (cp ConsensusProtocols) DeepCopy() ConsensusProtocols {
-	staticConsensus := make(ConsensusProtocols)
-	for consensusVersion, consensusParams := range cp {
-		// recreate the ApprovedUpgrades map since we don't want to modify the original one.
-		if consensusParams.ApprovedUpgrades != nil {
-			newApprovedUpgrades := make(map[protocol.ConsensusVersion]uint64)
-			for ver, when := range consensusParams.ApprovedUpgrades {
-				newApprovedUpgrades[ver] = when
-			}
-			consensusParams.ApprovedUpgrades = newApprovedUpgrades
-		}
-		staticConsensus[consensusVersion] = consensusParams
-	}
-	return staticConsensus
-}
-
-// Merge merges a configurable consensus ontop of the existing consensus protocol and return
-// a new consensus protocol without modify any of the incoming structures.
-func (cp ConsensusProtocols) Merge(configurableConsensus ConsensusProtocols) ConsensusProtocols {
-	staticConsensus := cp.DeepCopy()
-
-	for consensusVersion, consensusParams := range configurableConsensus {
-		if consensusParams.ApprovedUpgrades == nil {
-			// if we were provided with an empty ConsensusParams, delete the existing reference to this consensus version
-			for cVer, cParam := range staticConsensus {
-				if cVer == consensusVersion {
-					delete(staticConsensus, cVer)
-				} else if _, has := cParam.ApprovedUpgrades[consensusVersion]; has {
-					// delete upgrade to deleted version
-					delete(cParam.ApprovedUpgrades, consensusVersion)
-				}
-			}
-		} else {
-			// need to add/update entry
-			staticConsensus[consensusVersion] = consensusParams
-		}
-	}
-
-	return staticConsensus
-}
-
-// LoadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
-func LoadConfigurableConsensusProtocols(dataDirectory string) error {
-	newConsensus, err := PreloadConfigurableConsensusProtocols(dataDirectory)
-	if err != nil {
-		return err
-	}
-	if newConsensus != nil {
-		Consensus = newConsensus
-	}
-	return nil
-}
-
-// PreloadConfigurableConsensusProtocols loads the configurable protocols from the data directroy
-// and merge it with a copy of the Consensus map. Then, it returns it to the caller.
-func PreloadConfigurableConsensusProtocols(dataDirectory string) (ConsensusProtocols, error) {
-	consensusProtocolPath := filepath.Join(dataDirectory, ConfigurableConsensusProtocolsFilename)
-	file, err := os.Open(consensusProtocolPath)
-
-	if err != nil {
-		if os.IsNotExist(err) {
-			// this file is not required, only optional. if it's missing, no harm is done.
-			return Consensus, nil
-		}
-		return nil, err
-	}
-	defer file.Close()
-
-	configurableConsensus := make(ConsensusProtocols)
-
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(&configurableConsensus)
-	if err != nil {
-		return nil, err
-	}
-	return Consensus.Merge(configurableConsensus), nil
-}
-
-func initConsensusProtocols() {
-	// WARNING: copying a ConsensusParams by value into a new variable
-	// does not copy the ApprovedUpgrades map.  Make sure that each new
-	// ConsensusParams structure gets a fresh ApprovedUpgrades map.
-
-	// Base consensus protocol version, v7.
-	v7 := ConsensusParams{
-		UpgradeVoteRounds:        10000,
-		UpgradeThreshold:         9000,
-		DefaultUpgradeWaitRounds: 10000,
-		MaxVersionStringLen:      64,
-
-		MinBalance:          10000,
-		MinTxnFee:           1000,
-		MaxTxnLife:          1000,
-		MaxTxnNoteBytes:     1024,
-		MaxTxnBytesPerBlock: 1000000,
-		DefaultKeyDilution:  10000,
-
-		MaxTimestampIncrement: 25,
-
-		RewardUnit:                 1e6,
-		RewardsRateRefreshInterval: 5e5,
-
-		ApprovedUpgrades: map[protocol.ConsensusVersion]uint64{},
-
-		NumProposers:           30,
-		SoftCommitteeSize:      2500,
-		SoftCommitteeThreshold: 1870,
-		CertCommitteeSize:      1000,
-		CertCommitteeThreshold: 720,
-		NextCommitteeSize:      10000,
-		NextCommitteeThreshold: 7750,
-		LateCommitteeSize:      10000,
-		LateCommitteeThreshold: 7750,
-		RedoCommitteeSize:      10000,
-		RedoCommitteeThreshold: 7750,
-		DownCommitteeSize:      10000,
-		DownCommitteeThreshold: 7750,
-
-		FastRecoveryLambda: 5 * time.Minute,
-
-		SeedLookback:        2,
-		SeedRefreshInterval: 100,
-
-		MaxBalLookback: 320,
-
-		MaxTxGroupSize:               1,
-		UseBuggyProposalLowestOutput: true, // TODO(upgrade): Please remove as soon as the upgrade goes through
-	}
-
-	v7.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV7] = v7
-
-	// v8 uses parameters and a seed derivation policy (the "twin seeds") from Georgios' new analysis
-	v8 := v7
-
-	v8.SeedRefreshInterval = 80
-	v8.NumProposers = 9
-	v8.SoftCommitteeSize = 2990
-	v8.SoftCommitteeThreshold = 2267
-	v8.CertCommitteeSize = 1500
-	v8.CertCommitteeThreshold = 1112
-	v8.NextCommitteeSize = 5000
-	v8.NextCommitteeThreshold = 3838
-	v8.LateCommitteeSize = 5000
-	v8.LateCommitteeThreshold = 3838
-	v8.RedoCommitteeSize = 5000
-	v8.RedoCommitteeThreshold = 3838
-	v8.DownCommitteeSize = 5000
-	v8.DownCommitteeThreshold = 3838
-
-	v8.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV8] = v8
-
-	// v7 can be upgraded to v8.
-	v7.ApprovedUpgrades[protocol.ConsensusV8] = 0
-
-	// v9 increases the minimum balance to 100,000 microAlgos.
-	v9 := v8
-	v9.MinBalance = 100000
-	v9.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV9] = v9
-
-	// v8 can be upgraded to v9.
-	v8.ApprovedUpgrades[protocol.ConsensusV9] = 0
-
-	// v10 introduces fast partition recovery (and also raises NumProposers).
-	v10 := v9
-	v10.FastPartitionRecovery = true
-	v10.NumProposers = 20
-	v10.LateCommitteeSize = 500
-	v10.LateCommitteeThreshold = 320
-	v10.RedoCommitteeSize = 2400
-	v10.RedoCommitteeThreshold = 1768
-	v10.DownCommitteeSize = 6000
-	v10.DownCommitteeThreshold = 4560
-	v10.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV10] = v10
-
-	// v9 can be upgraded to v10.
-	v9.ApprovedUpgrades[protocol.ConsensusV10] = 0
-
-	// v11 introduces SignedTxnInBlock.
-	v11 := v10
-	v11.SupportSignedTxnInBlock = true
-	v11.PaysetCommitFlat = true
-	v11.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV11] = v11
-
-	// v10 can be upgraded to v11.
-	v10.ApprovedUpgrades[protocol.ConsensusV11] = 0
-
-	// v12 increases the maximum length of a version string.
-	v12 := v11
-	v12.MaxVersionStringLen = 128
-	v12.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV12] = v12
-
-	// v11 can be upgraded to v12.
-	v11.ApprovedUpgrades[protocol.ConsensusV12] = 0
-
-	// v13 makes the consensus version a meaningful string.
-	v13 := v12
-	v13.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV13] = v13
-
-	// v12 can be upgraded to v13.
-	v12.ApprovedUpgrades[protocol.ConsensusV13] = 0
-
-	// v14 introduces tracking of closing amounts in ApplyData, and enables
-	// GenesisHash in transactions.
-	v14 := v13
-	v14.ApplyData = true
-	v14.SupportGenesisHash = true
-	v14.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV14] = v14
-
-	// v13 can be upgraded to v14.
-	v13.ApprovedUpgrades[protocol.ConsensusV14] = 0
-
-	// v15 introduces tracking of reward distributions in ApplyData.
-	v15 := v14
-	v15.RewardsInApplyData = true
-	v15.ForceNonParticipatingFeeSink = true
-	v15.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV15] = v15
-
-	// v14 can be upgraded to v15.
-	v14.ApprovedUpgrades[protocol.ConsensusV15] = 0
-
-	// v16 fixes domain separation in credentials.
-	v16 := v15
-	v16.CredentialDomainSeparationEnabled = true
-	v16.RequireGenesisHash = true
-	v16.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV16] = v16
-
-	// v15 can be upgraded to v16.
-	v15.ApprovedUpgrades[protocol.ConsensusV16] = 0
-
-	// ConsensusV17 points to 'final' spec commit
-	v17 := v16
-	v17.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	Consensus[protocol.ConsensusV17] = v17
-
-	// v16 can be upgraded to v17.
-	v16.ApprovedUpgrades[protocol.ConsensusV17] = 0
-
-	// ConsensusV18 points to reward calculation spec commit
-	v18 := v17
-	v18.PendingResidueRewards = true
-	v18.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	v18.TxnCounter = true
-	v18.Asset = true
-	v18.LogicSigVersion = 1
-	v18.LogicSigMaxSize = 1000
-	v18.LogicSigMaxCost = 20000
-	v18.MaxAssetsPerAccount = 1000
-	v18.SupportTxGroups = true
-	v18.MaxTxGroupSize = 16
-	v18.SupportTransactionLeases = true
-	v18.SupportBecomeNonParticipatingTransactions = true
-	v18.MaxAssetNameBytes = 32
-	v18.MaxAssetUnitNameBytes = 8
-	v18.MaxAssetURLBytes = 32
-	Consensus[protocol.ConsensusV18] = v18
-
-	// ConsensusV19 is the official spec commit ( teal, assets, group tx )
-	v19 := v18
-	v19.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-
-	Consensus[protocol.ConsensusV19] = v19
-
-	// v18 can be upgraded to v19.
-	v18.ApprovedUpgrades[protocol.ConsensusV19] = 0
-	// v17 can be upgraded to v19.
-	v17.ApprovedUpgrades[protocol.ConsensusV19] = 0
-
-	// v20 points to adding the precision to the assets.
-	v20 := v19
-	v20.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	v20.MaxAssetDecimals = 19
-	// we want to adjust the upgrade time to be roughly one week.
-	// one week, in term of rounds would be:
-	// 140651 = (7 * 24 * 60 * 60 / 4.3)
-	// for the sake of future manual calculations, we'll round that down
-	// a bit :
-	v20.DefaultUpgradeWaitRounds = 140000
-	Consensus[protocol.ConsensusV20] = v20
-
-	// v19 can be upgraded to v20.
-	v19.ApprovedUpgrades[protocol.ConsensusV20] = 0
-
-	// v21 fixes a bug in Credential.lowestOutput that would cause larger accounts to be selected to propose disproportionately more often than small accounts
-	v21 := v20
-	v21.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	v21.UseBuggyProposalLowestOutput = false // TODO(upgrade): Please remove this line as soon as the protocol upgrade goes through
-	Consensus[protocol.ConsensusV21] = v21
-	// v20 can be upgraded to v21.
-	v20.ApprovedUpgrades[protocol.ConsensusV21] = 0
-
-	// ConsensusFuture is used to test features that are implemented
-	// but not yet released in a production protocol version.
-	vFuture := v21
-	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
-	vFuture.MinUpgradeWaitRounds = 10000
-	vFuture.MaxUpgradeWaitRounds = 150000
-	Consensus[protocol.ConsensusFuture] = vFuture
-}
-
 // Local holds the per-node-instance configuration settings for the protocol.
+// !!! WARNING !!!
+//
+// These versioned struct tags need to be maintained CAREFULLY and treated
+// like UNIVERSAL CONSTANTS - they should not be modified once committed.
+//
+// New fields may be added to the Local struct, along with a version tag
+// denoting a new version. When doing so, also update the
+// test/testdata/configs/config-v{n}.json and call "make generate" to regenerate the constants.
+//
+// !!! WARNING !!!
 type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
-	// for an existing parameter.
-	Version uint32
+	// for an existing parameter. This field tag must be updated any time we add a new version.
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12"`
 
 	// environmental (may be overridden)
-	// if true, does not garbage collect; also, replies to catchup requests
-	Archival bool
+	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
+	// are being kept around. ( the precise number of recent blocks depends on the consensus parameters )
+	Archival bool `version[0]:"false"`
 
 	// gossipNode.go
 	// how many peers to propagate to?
-	GossipFanout  int
-	NetAddress    string
-	ReconnectTime time.Duration
-	// what we should tell people to connect to
-	PublicAddress string
+	GossipFanout int    `version[0]:"4"`
+	NetAddress   string `version[0]:""`
 
-	MaxConnectionsPerIP int
+	// 1 * time.Minute = 60000000000 ns
+	ReconnectTime time.Duration `version[0]:"60" version[1]:"60000000000"`
+
+	// what we should tell people to connect to
+	PublicAddress string `version[0]:""`
+
+	MaxConnectionsPerIP int `version[3]:"30"`
 
 	// 0 == disable
-	PeerPingPeriodSeconds int
+	PeerPingPeriodSeconds int `version[0]:"0"`
 
 	// for https serving
-	TLSCertFile string
-	TLSKeyFile  string
+	TLSCertFile string `version[0]:""`
+	TLSKeyFile  string `version[0]:""`
 
 	// Logging
-	BaseLoggerDebugLevel uint32
+	BaseLoggerDebugLevel uint32 `version[0]:"1" version[1]:"4"`
 	// if this is 0, do not produce agreement.cadaver
-	CadaverSizeTarget uint64
+	CadaverSizeTarget uint64 `version[0]:"1073741824"`
 
 	// IncomingConnectionsLimit specifies the max number of long-lived incoming
 	// connections.  0 means no connections allowed.  -1 is unbounded.
-	IncomingConnectionsLimit int
+	IncomingConnectionsLimit int `version[0]:"-1" version[1]:"10000"`
 
 	// BroadcastConnectionsLimit specifies the number of connections that
 	// will receive broadcast (gossip) messages from this node.  If the
@@ -652,38 +106,38 @@ type Local struct {
 	// by money held by peers based on their participation key).  0 means
 	// no outgoing messages (not even transaction broadcasting to outgoing
 	// peers).  -1 means unbounded (default).
-	BroadcastConnectionsLimit int
+	BroadcastConnectionsLimit int `version[4]:"-1"`
 
 	// AnnounceParticipationKey specifies that this node should announce its
 	// participation key (with the largest stake) to its gossip peers.  This
 	// allows peers to prioritize our connection, if necessary, in case of a
 	// DoS attack.  Disabling this means that the peers will not have any
 	// additional information to allow them to prioritize our connection.
-	AnnounceParticipationKey bool
+	AnnounceParticipationKey bool `version[4]:"true"`
 
 	// PriorityPeers specifies peer IP addresses that should always get
 	// outgoing broadcast messages from this node.
-	PriorityPeers map[string]bool
+	PriorityPeers map[string]bool `version[4]:""`
 
 	// To make sure the algod process does not run out of FDs, algod ensures
 	// that RLIMIT_NOFILE exceeds the max number of incoming connections (i.e.,
 	// IncomingConnectionsLimit) by at least ReservedFDs.  ReservedFDs are meant
 	// to leave room for short-lived FDs like DNS queries, SQLite files, etc.
-	ReservedFDs uint64
+	ReservedFDs uint64 `version[2]:"256"`
 
 	// local server
 	// API endpoint address
-	EndpointAddress string
+	EndpointAddress string `version[0]:"127.0.0.1:0"`
 
 	// timeouts passed to the rest http.Server implementation
-	RestReadTimeoutSeconds  int
-	RestWriteTimeoutSeconds int
+	RestReadTimeoutSeconds  int `version[4]:"15"`
+	RestWriteTimeoutSeconds int `version[4]:"120"`
 
 	// SRV-based phonebook
-	DNSBootstrapID string
+	DNSBootstrapID string `version[0]:"<network>.algorand.network"`
 
 	// Log file size limit in bytes
-	LogSizeLimit uint64
+	LogSizeLimit uint64 `version[0]:"1073741824"`
 
 	// text/template for creating log archive filename.
 	// Available template vars:
@@ -693,129 +147,208 @@ type Local struct {
 	// If the filename ends with .gz or .bz2 it will be compressed.
 	//
 	// default: "node.archive.log" (no rotation, clobbers previous archive)
-	LogArchiveName string
+	LogArchiveName string `version[4]:"node.archive.log"`
 
 	// LogArchiveMaxAge will be parsed by time.ParseDuration().
 	// Valid units are 's' seconds, 'm' minutes, 'h' hours
-	LogArchiveMaxAge string
+	LogArchiveMaxAge string `version[4]:""`
 
 	// number of consecutive attempts to catchup after which we replace the peers we're connected to
-	CatchupFailurePeerRefreshRate int
+	CatchupFailurePeerRefreshRate int `version[0]:"10"`
 
 	// where should the node exporter listen for metrics
-	NodeExporterListenAddress string
+	NodeExporterListenAddress string `version[0]:":9100"`
 
 	// enable metric reporting flag
-	EnableMetricReporting bool
+	EnableMetricReporting bool `version[0]:"false"`
 
 	// enable top accounts reporting flag
-	EnableTopAccountsReporting bool
+	EnableTopAccountsReporting bool `version[0]:"false"`
 
 	// enable agreement reporting flag. Currently only prints additional period events.
-	EnableAgreementReporting bool
+	EnableAgreementReporting bool `version[3]:"false"`
 
 	// enable agreement timing metrics flag
-	EnableAgreementTimeMetrics bool
+	EnableAgreementTimeMetrics bool `version[3]:"false"`
 
 	// The path to the node exporter.
-	NodeExporterPath string
+	NodeExporterPath string `version[0]:"./node_exporter"`
 
 	// The fallback DNS resolver address that would be used if the system resolver would fail to retrieve SRV records
-	FallbackDNSResolverAddress string
+	FallbackDNSResolverAddress string `version[0]:""`
 
 	// exponential increase factor of transaction pool's fee threshold, should always be 2 in production
-	TxPoolExponentialIncreaseFactor uint64
+	TxPoolExponentialIncreaseFactor uint64 `version[0]:"2"`
 
-	SuggestedFeeBlockHistory int
+	SuggestedFeeBlockHistory int `version[0]:"3"`
 
 	// TxPoolSize is the number of transactions that fit in the transaction pool
-	TxPoolSize int
+	TxPoolSize int `version[0]:"50000" version[5]:"15000"`
 
 	// number of seconds allowed for syncing transactions
-	TxSyncTimeoutSeconds int64
+	TxSyncTimeoutSeconds int64 `version[0]:"30"`
 
 	// number of seconds between transaction synchronizations
-	TxSyncIntervalSeconds int64
+	TxSyncIntervalSeconds int64 `version[0]:"60"`
 
 	// the number of incoming message hashes buckets.
-	IncomingMessageFilterBucketCount int
+	IncomingMessageFilterBucketCount int `version[0]:"5"`
 
 	// the size of each incoming message hash bucket.
-	IncomingMessageFilterBucketSize int
+	IncomingMessageFilterBucketSize int `version[0]:"512"`
 
 	// the number of outgoing message hashes buckets.
-	OutgoingMessageFilterBucketCount int
+	OutgoingMessageFilterBucketCount int `version[0]:"3"`
 
 	// the size of each outgoing message hash bucket.
-	OutgoingMessageFilterBucketSize int
+	OutgoingMessageFilterBucketSize int `version[0]:"128"`
 
 	// enable the filtering of outgoing messages
-	EnableOutgoingNetworkMessageFiltering bool
+	EnableOutgoingNetworkMessageFiltering bool `version[0]:"true"`
 
 	// enable the filtering of incoming messages
-	EnableIncomingMessageFilter bool
+	EnableIncomingMessageFilter bool `version[0]:"false"`
 
 	// control enabling / disabling deadlock detection.
 	// negative (-1) to disable, positive (1) to enable, 0 for default.
-	DeadlockDetection int
+	DeadlockDetection int `version[1]:"0"`
 
 	// Prefer to run algod Hosted (under algoh)
 	// Observed by `goal` for now.
-	RunHosted bool
+	RunHosted bool `version[3]:"false"`
 
 	// The maximal number of blocks that catchup will fetch in parallel.
 	// If less than Protocol.SeedLookback, then Protocol.SeedLookback will be used as to limit the catchup.
-	CatchupParallelBlocks uint64
+	CatchupParallelBlocks uint64 `version[3]:"50" version[5]:"16"`
 
 	// Generate AssembleBlockMetrics telemetry event
-	EnableAssembleStats bool
+	EnableAssembleStats bool `version[0]:""`
 
 	// Generate ProcessBlockMetrics telemetry event
-	EnableProcessBlockStats bool
+	EnableProcessBlockStats bool `version[0]:""`
 
 	// SuggestedFeeSlidingWindowSize is number of past blocks that will be considered in computing the suggested fee
-	SuggestedFeeSlidingWindowSize uint32
+	SuggestedFeeSlidingWindowSize uint32 `version[3]:"50"`
 
 	// the max size the sync server would return
-	TxSyncServeResponseSize int
+	TxSyncServeResponseSize int `version[3]:"1000000"`
 
 	// IsIndexerActive indicates whether to activate the indexer for fast retrieval of transactions
 	// Note -- Indexer cannot operate on non Archival nodes
-	IsIndexerActive bool
+	IsIndexerActive bool `version[3]:"false"`
 
 	// UseXForwardedForAddress indicates whether or not the node should use the X-Forwarded-For HTTP Header when
 	// determining the source of a connection.  If used, it should be set to the string "X-Forwarded-For", unless the
 	// proxy vendor provides another header field.  In the case of CloudFlare proxy, the "CF-Connecting-IP" header
 	// field can be used.
-	UseXForwardedForAddressField string
+	UseXForwardedForAddressField string `version[0]:""`
 
 	// ForceRelayMessages indicates whether the network library relay messages even in the case that no NetAddress was specified.
-	ForceRelayMessages bool
+	ForceRelayMessages bool `version[0]:"false"`
 
 	// ConnectionsRateLimitingWindowSeconds is being used in conjunction with ConnectionsRateLimitingCount;
 	// see ConnectionsRateLimitingCount description for further information. Providing a zero value
 	// in this variable disables the connection rate limiting.
-	ConnectionsRateLimitingWindowSeconds uint
+	ConnectionsRateLimitingWindowSeconds uint `version[4]:"1"`
 
 	// ConnectionsRateLimitingCount is being used along with ConnectionsRateLimitingWindowSeconds to determine if
 	// a connection request should be accepted or not. The gossip network examine all the incoming requests in the past
 	// ConnectionsRateLimitingWindowSeconds seconds that share the same origin. If the total count exceed the ConnectionsRateLimitingCount
 	// value, the connection is refused.
-	ConnectionsRateLimitingCount uint
+	ConnectionsRateLimitingCount uint `version[4]:"60"`
 
 	// EnableRequestLogger enabled the logging of the incoming requests to the telemetry server.
-	EnableRequestLogger bool
+	EnableRequestLogger bool `version[4]:"false"`
 
 	// PeerConnectionsUpdateInterval defines the interval at which the peer connections information is being sent to the
 	// telemetry ( when enabled ). Defined in seconds.
-	PeerConnectionsUpdateInterval int
+	PeerConnectionsUpdateInterval int `version[5]:"3600"`
 
 	// EnableProfiler enables the go pprof endpoints, should be false if
 	// the algod api will be exposed to untrusted individuals
-	EnableProfiler bool
+	EnableProfiler bool `version[0]:"false"`
 
 	// TelemetryToLog records messages to node.log that are normally sent to remote event monitoring
-	TelemetryToLog bool
+	TelemetryToLog bool `version[5]:"true"`
+
+	// DNSSecurityFlags instructs algod validating DNS responses.
+	// Possible fla values
+	// 0x00 - disabled
+	// 0x01 (dnssecSRV) - validate SRV response
+	// 0x02 (dnssecRelayAddr) - validate relays' names to addresses resolution
+	// 0x04 (dnssecTelemetryAddr) - validate telemetry and metrics names to addresses resolution
+	// ...
+	DNSSecurityFlags uint32 `version[6]:"1"`
+
+	// EnablePingHandler controls whether the gossip node would respond to ping messages with a pong message.
+	EnablePingHandler bool `version[6]:"true"`
+
+	// DisableOutgoingConnectionThrottling disables the connection throttling of the network library, which
+	// allow the network library to continuesly disconnect relays based on their relative ( and absolute ) performance.
+	DisableOutgoingConnectionThrottling bool `version[5]:"false"`
+
+	// NetworkProtocolVersion overrides network protocol version ( if present )
+	NetworkProtocolVersion string `version[6]:""`
+
+	// CatchpointInterval sets the interval at which catchpoint are being generated. Setting this to 0 disables the catchpoint from being generated.
+	// See CatchpointTracking for more details.
+	CatchpointInterval uint64 `version[7]:"10000"`
+
+	// CatchpointFileHistoryLength defines how many catchpoint files we want to store back.
+	// 0 means don't store any, -1 mean unlimited and positive number suggest the number of most recent catchpoint files.
+	CatchpointFileHistoryLength int `version[7]:"365"`
+
+	// EnableLedgerService enables the ledger serving service. The functionality of this depends on NetAddress, which must also be provided.
+	// This functionality is required for the catchpoint catchup.
+	EnableLedgerService bool `version[7]:"false"`
+
+	// EnableBlockService enables the block serving service. The functionality of this depends on NetAddress, which must also be provided.
+	// This functionality is required for the catchup.
+	EnableBlockService bool `version[7]:"false"`
+
+	// EnableGossipBlockService enables the block serving service over the gossip network. The functionality of this depends on NetAddress, which must also be provided.
+	// This functionality is required for the relays to perform catchup from nodes.
+	EnableGossipBlockService bool `version[8]:"true"`
+
+	// CatchupHTTPBlockFetchTimeoutSec controls how long the http query for fetching a block from a relay would take before giving up and trying another relay.
+	CatchupHTTPBlockFetchTimeoutSec int `version[9]:"4"`
+
+	// CatchupGossipBlockFetchTimeoutSec controls how long the gossip query for fetching a block from a relay would take before giving up and trying another relay.
+	CatchupGossipBlockFetchTimeoutSec int `version[9]:"4"`
+
+	// CatchupLedgerDownloadRetryAttempts controls the number of attempt the ledger fetching would be attempted before giving up catching up to the provided catchpoint.
+	CatchupLedgerDownloadRetryAttempts int `version[9]:"50"`
+
+	// CatchupLedgerDownloadRetryAttempts controls the number of attempt the block fetching would be attempted before giving up catching up to the provided catchpoint.
+	CatchupBlockDownloadRetryAttempts int `version[9]:"1000"`
+
+	// EnableDeveloperAPI enables teal/compile, teal/dryrun API endpoints.
+	// This functionlity is disabled by default.
+	EnableDeveloperAPI bool `version[9]:"false"`
+
+	// OptimizeAccountsDatabaseOnStartup controls whether the accounts database would be optimized
+	// on algod startup.
+	OptimizeAccountsDatabaseOnStartup bool `version[10]:"false"`
+
+	// CatchpointTracking determines if catchpoints are going to be tracked. The value is interpreted as follows:
+	// A value of -1 means "don't track catchpoints".
+	// A value of 1 means "track catchpoints as long as CatchpointInterval is also set to a positive non-zero value". If CatchpointInterval <= 0, no catchpoint tracking would be performed.
+	// A value of 0 means automatic, which is the default value. In this mode, a non archival node would not track the catchpoints, and an archival node would track the catchpoints as long as CatchpointInterval > 0.
+	// Other values of CatchpointTracking would give a warning in the log file, and would behave as if the default value was provided.
+	CatchpointTracking int64 `version[11]:"0"`
+
+	// LedgerSynchronousMode defines the synchronous mode used by the ledger database. The supported options are:
+	// 0 - SQLite continues without syncing as soon as it has handed data off to the operating system.
+	// 1 - SQLite database engine will still sync at the most critical moments, but less often than in FULL mode.
+	// 2 - SQLite database engine will use the xSync method of the VFS to ensure that all content is safely written to the disk surface prior to continuing. On Mac OS, the data is additionally syncronized via fullfsync.
+	// 3 - In addition to what being done in 2, it provides additional durability if the commit is followed closely by a power loss.
+	// for further information see the description of SynchronousMode in dbutil.go
+	LedgerSynchronousMode int `version[12]:"2"`
+
+	// AccountsRebuildSynchronousMode defines the synchronous mode used by the ledger database while the account database is being rebuilt. This is not a typical operational usecase,
+	// and is expected to happen only on either startup ( after enabling the catchpoint interval, or on certain database upgrades ) or during fast catchup. The values specified here
+	// and their meanings are identical to the ones in LedgerSynchronousMode.
+	AccountsRebuildSynchronousMode int `version[12]:"1"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
@@ -883,6 +416,8 @@ func mergeConfigFromFile(configpath string, source Local) (Local, error) {
 	// We can change this logic in the future, but it's currently the sanest default.
 	if source.NetAddress != "" {
 		source.Archival = true
+		source.EnableLedgerService = true
+		source.EnableBlockService = true
 	}
 
 	return source, err
@@ -905,8 +440,12 @@ func (cfg Local) DNSBootstrap(network protocol.NetworkID) string {
 	// if user hasn't modified the default DNSBootstrapID in the configuration
 	// file and we're targeting a devnet ( via genesis file ), we the
 	// explicit devnet network bootstrap.
-	if defaultLocal.DNSBootstrapID == cfg.DNSBootstrapID && network == Devnet {
-		return "devnet.algodev.network"
+	if defaultLocal.DNSBootstrapID == cfg.DNSBootstrapID {
+		if network == Devnet {
+			return "devnet.algodev.network"
+		} else if network == Betanet {
+			return "betanet.algodev.network"
+		}
 	}
 	return strings.Replace(cfg.DNSBootstrapID, "<network>", string(network), -1)
 }
@@ -1023,4 +562,25 @@ func GetDefaultConfigFilePath() (string, error) {
 		return "", errors.New("GetDefaultConfigFilePath fail - current user has no home directory")
 	}
 	return filepath.Join(currentUser.HomeDir, ".algorand"), nil
+}
+
+const (
+	dnssecSRV = 1 << iota
+	dnssecRelayAddr
+	dnssecTelemetryAddr
+)
+
+// DNSSecuritySRVEnforced returns true if SRV response verification enforced
+func (cfg Local) DNSSecuritySRVEnforced() bool {
+	return cfg.DNSSecurityFlags&dnssecSRV != 0
+}
+
+// DNSSecurityRelayAddrEnforced returns true if relay name to ip addr resolution enforced
+func (cfg Local) DNSSecurityRelayAddrEnforced() bool {
+	return cfg.DNSSecurityFlags&dnssecRelayAddr != 0
+}
+
+// DNSSecurityTelemeryAddrEnforced returns true if relay name to ip addr resolution enforced
+func (cfg Local) DNSSecurityTelemeryAddrEnforced() bool {
+	return cfg.DNSSecurityFlags&dnssecTelemetryAddr != 0
 }

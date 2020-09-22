@@ -25,7 +25,15 @@ while [ $SECONDS -lt $end ]; do
     aws s3 ls "${BUILD_LOG_PATH}"-"${LOG_SEQ}" ${NO_SIGN_REQUEST} 2> /dev/null > /dev/null
     if [ "$?" = "0" ]; then
         while true ; do
-            LOG_CHUNK=$(aws s3 cp "${BUILD_LOG_PATH}"-"${LOG_SEQ}" - ${NO_SIGN_REQUEST} 2> /dev/null)
+            if [ "${NO_SIGN_REQUEST}" == "--no-sign-request" ]; then
+                URL="${BUILD_LOG_PATH}-${LOG_SEQ}"
+                URL="${URL#s3://}"
+                URL="${URL/\//.s3.amazonaws.com/}"
+                URL="https://${URL}"
+                LOG_CHUNK=$(curl  --fail "${URL}" 2> /dev/null)
+            else
+                LOG_CHUNK=$(aws s3 cp "${BUILD_LOG_PATH}"-"${LOG_SEQ}" - ${NO_SIGN_REQUEST} 2> /dev/null)
+            fi
             if [ "$?" = "0" ]; then
                 echo "${LOG_CHUNK}"
                 ((LOG_SEQ++))
@@ -51,7 +59,7 @@ while [ $SECONDS -lt $end ]; do
     if [ "${TRAVIS}" = "true" ]; then
         # under travis, if we have passed the 1h:45m mark, the build is going to likely fail due to timeout.
         # instead of failing, we want to exit the build with success, indicating where the log could be retrieved later on.
-        # ( note that there migth be an issue with that build, but we don't want to cap it via travis timeouts. )
+        # ( note that there might be an issue with that build, but we don't want to cap it via travis timeouts. )
         if [ $((SECONDS-LOG_WAITING_START)) -gt $((60*105)) ]; then
             echo "Build is taking too long. Travis is going to timeout this build, so we'll tell travis that we're done for now."
             echo "Once this build is complete, you could get a complete log by typing:"

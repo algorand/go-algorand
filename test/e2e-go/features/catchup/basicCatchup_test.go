@@ -14,12 +14,11 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package rewards
+package catchup
 
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -73,14 +72,27 @@ func TestBasicCatchup(t *testing.T) {
 	a.NoError(err)
 }
 
+// TestCatchupOverGossip tests catchup across network versions
+// The current versions are the original v1 and the upgraded to v2.1
 func TestCatchupOverGossip(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip()
-	}
+	t.Parallel()
+	// ledger node upgraded version, fetcher node upgraded version
+	runCatchupOverGossip(t, false, false)
+	// ledger node older version, fetcher node upgraded version
+	runCatchupOverGossip(t, true, false)
+	// ledger node upgraded older version, fetcher node older version
+	runCatchupOverGossip(t, false, true)
+	// ledger node older version, fetcher node older version
+	runCatchupOverGossip(t, true, true)
+}
+
+func runCatchupOverGossip(t *testing.T,
+	ledgerNodeDowngrade,
+	fetcherNodeDowngrade bool) {
+
 	if testing.Short() {
 		t.Skip()
 	}
-	t.Parallel()
 	a := require.New(t)
 	// Overview of this test:
 	// Start a two-node network (Primary with 0% stake, Secondary with 100% stake)
@@ -91,41 +103,57 @@ func TestCatchupOverGossip(t *testing.T) {
 	// Give the second node (which starts up last) all the stake so that its proposal always has better credentials,
 	// and so that its proposal isn't dropped. Otherwise the test burns 17s to recover. We don't care about stake
 	// distribution for catchup so this is fine.
-	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes100Second.json"))
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes100Second.json"))
+
+	if ledgerNodeDowngrade {
+		// Force the node to only support v1
+		dir, err := fixture.GetNodeDir("Node")
+		a.NoError(err)
+		cfg, err := config.LoadConfigFromDisk(dir)
+		a.NoError(err)
+		cfg.NetworkProtocolVersion = "1"
+		cfg.SaveToDisk(dir)
+	}
+
+	if fetcherNodeDowngrade {
+		// Force the node to only support v1
+		dir := fixture.PrimaryDataDir()
+		cfg, err := config.LoadConfigFromDisk(dir)
+		a.NoError(err)
+		cfg.NetworkProtocolVersion = "1"
+		cfg.SaveToDisk(dir)
+	}
+
 	defer fixture.Shutdown()
 	ncPrim, err := fixture.GetNodeController("Primary")
 	a.NoError(err)
-
-	// Kill the primary
-	ncPrim.FullStop()
 
 	// Get 2nd node, which makes all the progress
 	nc, err := fixture.GetNodeController("Node")
 	a.NoError(err)
 
-	// Let the network make some progress
+	// Start the secondary
+	_, err = fixture.StartNode(nc.GetDataDir())
+	a.NoError(err)
 
+	// Let the secondary make progress up to round 3, while the primary was never startred ( hence, it's on round = 0)
 	waitForRound := uint64(3)
 	err = fixture.ClientWaitForRoundWithTimeout(fixture.GetAlgodClientForController(nc), waitForRound)
 	a.NoError(err)
 
-	// Now, revive the primary
-	lg, err := fixture.StartNode(ncPrim.GetDataDir())
-	a.NoError(err)
-
-	status, err := lg.Status()
-	a.NoError(err)
-	a.True(status.LastRound < waitForRound)
-
-	// Now, kill the secondary and restart it to reinitiate inbound connection
+	// stop the secondary, which is on round 3 or more.
 	nc.FullStop()
-	_, err = fixture.StartNode(nc.GetDataDir())
+
+	// Now, start both primary and secondary, and let the primary catchup up.
+	fixture.Start()
+	lg, err := fixture.StartNode(ncPrim.GetDataDir())
 	a.NoError(err)
 
 	// Now, catch up
 	err = fixture.LibGoalFixture.ClientWaitForRoundWithTimeout(lg, waitForRound)
 	a.NoError(err)
 
+	waitStart := time.Now()
 	// wait until the round number on the secondary node matches the round number on the primary node.
 	for {
 		nodeLibGoalClient := fixture.LibGoalFixture.GetLibGoalClientFromDataDir(nc.GetDataDir())
@@ -134,18 +162,23 @@ func TestCatchupOverGossip(t *testing.T) {
 
 		primaryStatus, err := lg.Status()
 		a.NoError(err)
-		a.True(nodeStatus.LastRound >= primaryStatus.LastRound)
-		if nodeStatus.LastRound == primaryStatus.LastRound && waitForRound < nodeStatus.LastRound {
+		if nodeStatus.LastRound <= primaryStatus.LastRound && waitForRound < nodeStatus.LastRound {
 			//t.Logf("Both nodes reached round %d\n", primaryStatus.LastRound)
 			break
 		}
+
+		if time.Now().Sub(waitStart) > time.Minute {
+			// it's taking too long.
+			require.FailNow(t, "Waiting too long for catchup to complete")
+		}
+
 		time.Sleep(50 * time.Millisecond)
 	}
 }
 
 // consensusTestUnupgradedProtocol is a version of ConsensusCurrentVersion
 // that allows the control of the upgrade from consensusTestUnupgradedProtocol to
-// consensusTestUnupgradedProtocol
+// consensusTestUnupgradedToProtocol
 const consensusTestUnupgradedProtocol = protocol.ConsensusVersion("test-unupgraded-protocol")
 
 // consensusTestUnupgradedToProtocol is a version of ConsensusCurrentVersion
@@ -180,6 +213,7 @@ func TestStoppedCatchupOnUnsupported(t *testing.T) {
 	testUnupgradedProtocol.UpgradeVoteRounds = 3
 	testUnupgradedProtocol.UpgradeThreshold = 2
 	testUnupgradedProtocol.DefaultUpgradeWaitRounds = 3
+	testUnupgradedProtocol.MinUpgradeWaitRounds = 0
 
 	testUnupgradedProtocol.ApprovedUpgrades[consensusTestUnupgradedToProtocol] = 0
 	consensus[consensusTestUnupgradedProtocol] = testUnupgradedProtocol

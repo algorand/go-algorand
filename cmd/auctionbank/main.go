@@ -402,7 +402,7 @@ func depositAuction(w http.ResponseWriter, r *http.Request) {
 
 		var status depositStatus
 		status.Success = true
-		status.SignedDepositNote = protocol.Encode(auction.NoteField{
+		status.SignedDepositNote = protocol.Encode(&auction.NoteField{
 			Type:          auction.NoteDeposit,
 			SignedDeposit: sigDep,
 		})

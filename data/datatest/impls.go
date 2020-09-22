@@ -101,9 +101,9 @@ func (i ledgerImpl) LookupDigest(r basics.Round) (crypto.Digest, error) {
 	return crypto.Digest(blockhdr.Hash()), nil
 }
 
-// BalanceRecord implements Ledger.BalanceRecord.
-func (i ledgerImpl) BalanceRecord(r basics.Round, addr basics.Address) (basics.BalanceRecord, error) {
-	return i.l.BalanceRecord(r, addr)
+// Lookup implements Ledger.Lookup.
+func (i ledgerImpl) Lookup(r basics.Round, addr basics.Address) (basics.AccountData, error) {
+	return i.l.Lookup(r, addr)
 }
 
 // Circulation implements Ledger.Circulation.
@@ -137,7 +137,7 @@ func (i ledgerImpl) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion,
 }
 
 // EnsureDigest implements Ledger.EnsureDigest.
-func (i ledgerImpl) EnsureDigest(cert agreement.Certificate, quit chan struct{}, verifier *agreement.AsyncVoteVerifier) {
+func (i ledgerImpl) EnsureDigest(cert agreement.Certificate, verifier *agreement.AsyncVoteVerifier) {
 	r := cert.Round
 	consistencyCheck := func() bool {
 		if r < i.NextRound() {
@@ -157,15 +157,5 @@ func (i ledgerImpl) EnsureDigest(cert agreement.Certificate, quit chan struct{},
 
 	if consistencyCheck() {
 		return
-	}
-
-	select {
-	case <-quit:
-		return
-	case <-i.Wait(r):
-		if !consistencyCheck() {
-			err := fmt.Errorf("Wait channel fired without matching block in round %v", r)
-			panic(err)
-		}
 	}
 }

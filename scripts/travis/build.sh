@@ -26,6 +26,7 @@ done
 
 # turn off exit on error
 set +e
+set -x
 
 CONFIGURE_SUCCESS=false
 
@@ -33,6 +34,16 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 OS=$("${SCRIPTPATH}/../ostype.sh")
 ARCH=$("${SCRIPTPATH}/../archtype.sh")
+# Use go version specified by get_golang_version.sh
+if ! GOLANG_VERSION=$("${SCRIPTPATH}/../get_golang_version.sh")
+then
+    echo "${GOLANG_VERSION}"
+    exit 1
+fi
+
+curl -sL -o ~/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gimme
+chmod +x ~/gimme
+eval $(~/gimme "${GOLANG_VERSION}")
 
 # travis sometimes fail to download a dependency. trying multiple times might help.
 for (( attempt=1; attempt<=5; attempt++ ))
@@ -58,17 +69,19 @@ scripts/travis/before_build.sh
 # Force re-evaluation of genesis files to see if source files changed w/o running make
 touch gen/generate.go
 
-# Force re-generation of msgpack encoders/decoders with msgp.  If this re-generated code
-# does not match the checked-in code, some structs may have been added or updated without
-# refreshing the generated codecs.  The enlistment check below will error out, if so.
-make msgp
-
 if [ "${OS}-${ARCH}" = "linux-arm" ]; then
     # for arm, build just the basic distro
     MAKE_DEBUG_OPTION=""
 fi
 
 if [ "${MAKE_DEBUG_OPTION}" != "" ]; then
+    # Force re-generation of msgpack encoders/decoders with msgp.  If this re-generated code
+    # does not match the checked-in code, some structs may have been added or updated without
+    # refreshing the generated codecs.  The enlistment check below will error out, if so.
+    # we want to have that only on system where we have some debugging abilities. Platforms that do not support
+    # debugging ( i.e. arm ) are also usually under powered and making this extra step
+    # would be very costly there.
+    make msgp
     make build build-race
 else
     make build

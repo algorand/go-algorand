@@ -114,7 +114,7 @@ func compareEventChannels(t *testing.T, ch1, ch2 <-chan externalEvent) bool {
 				if !compareUnauthenticatedProposal(t, uo, up2) {
 					return false
 				}
-				if !assert.Equal(t, protocol.Encode(uo), protocol.Encode(up2)) {
+				if !assert.Equal(t, protocol.Encode(&uo), protocol.Encode(&up2)) {
 					return false
 				}
 				if !assert.Equal(t, uo.Digest(), up2.Digest()) {
@@ -141,7 +141,15 @@ func TestPseudonode(t *testing.T) {
 	sLogger := serviceLogger{logging.Base()}
 
 	keyManager := simpleKeyManager(accounts)
-	pb := makePseudonode(testBlockFactory{Owner: 0}, testBlockValidator{}, keyManager, ledger, MakeAsyncVoteVerifier(nil), sLogger)
+	pb := makePseudonode(pseudonodeParams{
+		factory:      testBlockFactory{Owner: 0},
+		validator:    testBlockValidator{},
+		keys:         keyManager,
+		ledger:       ledger,
+		voteVerifier: MakeAsyncVoteVerifier(nil),
+		log:          sLogger,
+		monitor:      nil,
+	})
 	defer pb.Quit()
 	spn := makeSerializedPseudonode(testBlockFactory{Owner: 0}, testBlockValidator{}, keyManager, ledger)
 	defer spn.Quit()
@@ -298,7 +306,7 @@ func (n serializedPseudonode) MakeProposals(ctx context.Context, r round, p peri
 	}
 
 	for i, proposal := range proposals {
-		verifier.Verify(ctx, cryptoRequest{message: message{Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: proposal.u()}, Round: r})
+		verifier.VerifyProposal(ctx, cryptoProposalRequest{message: message{Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: proposal.u()}, Round: r})
 		select {
 		case cryptoResult, ok := <-verifier.Verified(protocol.ProposalPayloadTag):
 			if !ok {

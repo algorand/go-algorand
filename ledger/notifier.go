@@ -41,9 +41,12 @@ type blockNotifier struct {
 	listeners     []BlockListener
 	pendingBlocks []blockDeltaPair
 	running       bool
+	// closing is the waitgroup used to syncronize closing the worker goroutine. It's being increased during loadFromDisk, and the worker is responsible to call Done on it once it's aborting it's goroutine. The close function waits on this to complete.
+	closing sync.WaitGroup
 }
 
 func (bn *blockNotifier) worker() {
+	defer bn.closing.Done()
 	bn.mu.Lock()
 
 	for {
@@ -73,17 +76,19 @@ func (bn *blockNotifier) worker() {
 
 func (bn *blockNotifier) close() {
 	bn.mu.Lock()
-	defer bn.mu.Unlock()
 	if bn.running {
 		bn.running = false
 		bn.cond.Broadcast()
 	}
+	bn.mu.Unlock()
+	bn.closing.Wait()
 }
 
 func (bn *blockNotifier) loadFromDisk(l ledgerForTracker) error {
 	bn.cond = sync.NewCond(&bn.mu)
 	bn.running = true
-
+	bn.pendingBlocks = nil
+	bn.closing.Add(1)
 	go bn.worker()
 	return nil
 }
@@ -98,7 +103,6 @@ func (bn *blockNotifier) register(listeners []BlockListener) {
 func (bn *blockNotifier) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	bn.mu.Lock()
 	defer bn.mu.Unlock()
-
 	bn.pendingBlocks = append(bn.pendingBlocks, blockDeltaPair{block: blk, delta: delta})
 	bn.cond.Broadcast()
 }

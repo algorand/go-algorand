@@ -152,6 +152,7 @@ type testingNetwork struct {
 	compoundPocket    chan<- multicastParams
 	partitionedNodes  map[nodeID]bool
 	crownedNodes      map[nodeID]bool
+	relayNodes        map[nodeID]bool
 	interceptFn       multicastInterceptFn
 }
 
@@ -219,7 +220,7 @@ func (n *testingNetwork) multicast(tag protocol.Tag, data []byte, source nodeID,
 		tag, data, source, exclude = out.tag, out.data, out.source, out.exclude
 	}
 
-	if n.dropSoftVotes || n.dropSlowNextVotes || n.dropVotes || n.certVotePocket != nil || n.softVotePocket != nil || n.compoundPocket != nil || n.crownedNodes != nil {
+	if n.dropSoftVotes || n.dropSlowNextVotes || n.dropVotes || n.certVotePocket != nil || n.softVotePocket != nil || n.compoundPocket != nil {
 		if tag == protocol.ProposalPayloadTag {
 			r := bytes.NewBuffer(data)
 
@@ -300,13 +301,18 @@ func (n *testingNetwork) multicast(tag protocol.Tag, data []byte, source nodeID,
 			continue
 		}
 		if n.partitionedNodes != nil {
-			if n.partitionedNodes[source] != n.partitionedNodes[nodeID(i)] {
+			if n.partitionedNodes[source] != n.partitionedNodes[peerid] {
 				continue
 			}
 		}
 		if n.crownedNodes != nil {
-			if !n.crownedNodes[nodeID(i)] {
-				return
+			if !n.crownedNodes[peerid] {
+				continue
+			}
+		}
+		if n.relayNodes != nil {
+			if !n.relayNodes[source] && !n.relayNodes[peerid] {
+				continue
 			}
 		}
 
@@ -377,6 +383,7 @@ func (n *testingNetwork) repairAll() {
 	n.compoundPocket = nil
 	n.partitionedNodes = nil
 	n.crownedNodes = nil
+	n.relayNodes = nil
 	n.interceptFn = nil
 }
 
@@ -406,7 +413,17 @@ func (n *testingNetwork) crown(prophets ...nodeID) {
 	defer n.mu.Unlock()
 	n.crownedNodes = make(map[nodeID]bool)
 	for i := 0; i < len(prophets); i++ {
-		n.crownedNodes[nodeID(i)] = true
+		n.crownedNodes[prophets[i]] = true
+	}
+}
+
+// Star topology with the given nodes at the center; to revert, call repairAll
+func (n *testingNetwork) makeRelays(relays ...nodeID) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.relayNodes = make(map[nodeID]bool)
+	for i := 0; i < len(relays); i++ {
+		n.relayNodes[relays[i]] = true
 	}
 }
 
@@ -443,16 +460,16 @@ func (n *testingNetwork) testingNetworkEndpoint(id nodeID) *testingNetworkEndpoi
 func (n *testingNetwork) prepareAllMulticast() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	for i := 0; i < len(n.monitors); i++ {
-		n.monitors[nodeID(i)].inc(networkCoserviceType)
+	for _, monitor := range n.monitors {
+		monitor.inc(networkCoserviceType)
 	}
 }
 
 func (n *testingNetwork) finishAllMulticast() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	for i := 0; i < len(n.monitors); i++ {
-		n.monitors[nodeID(i)].dec(networkCoserviceType)
+	for _, monitor := range n.monitors {
+		monitor.dec(networkCoserviceType)
 	}
 }
 
@@ -492,6 +509,8 @@ func (e *testingNetworkEndpoint) Disconnect(h MessageHandle) {
 	sourceID := e.parent.sourceOf(h)
 	e.parent.disconnect(e.id, sourceID)
 }
+
+func (e *testingNetworkEndpoint) Start() {}
 
 type activityMonitor struct {
 	deadlock.Mutex
@@ -549,7 +568,7 @@ func (m *activityMonitor) waitForActivity() {
 func (m *activityMonitor) waitForQuiet() {
 	select {
 	case <-m.quiet:
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		m.dump()
 
 		var buf [1000000]byte
@@ -617,12 +636,12 @@ func generatePseudoRandomVRF(keynum int) *crypto.VRFSecrets {
 	}
 }
 
-func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) (accounts []account.Participation, balances map[basics.Address]basics.BalanceRecord) {
+func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) (accounts []account.Participation, balances map[basics.Address]basics.AccountData) {
 	off := int(rand.Uint32() >> 2) // prevent name collision from running tests more than once
 
 	// system state setup: keygen, stake initialization
 	accounts = make([]account.Participation, numNodes)
-	balances = make(map[basics.Address]basics.BalanceRecord, numNodes)
+	balances = make(map[basics.Address]basics.AccountData, numNodes)
 	var seed crypto.Seed
 	copy(seed[:], rootSeed)
 
@@ -684,10 +703,7 @@ func createTestAccountsAndBalances(t *testing.T, numNodes int, rootSeed []byte) 
 			VoteID:      accounts[i].VotingSecrets().OneTimeSignatureVerifier,
 			SelectionID: accounts[i].VRFSecrets().PK,
 		}
-		balances[rootAddress] = basics.BalanceRecord{
-			Addr:        rootAddress,
-			AccountData: acctData,
-		}
+		balances[rootAddress] = acctData
 	}
 	return
 }
@@ -706,17 +722,17 @@ func (testingRand) Uint64() uint64 {
 	return maxuint64 / 2
 }
 
-func setupAgreement(t *testing.T, numNodes int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.BalanceRecord) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock, []Ledger, *activityMonitor) {
+func setupAgreement(t *testing.T, numNodes int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock, []Ledger, *activityMonitor) {
 	var validator testBlockValidator
 	return setupAgreementWithValidator(t, numNodes, traceLevel, validator, ledgerFactory)
 }
 
-func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLevel, validator BlockValidator, ledgerFactory func(map[basics.Address]basics.BalanceRecord) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock, []Ledger, *activityMonitor) {
+func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLevel, validator BlockValidator, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) (*testingNetwork, Ledger, func(), []*Service, []timers.Clock, []Ledger, *activityMonitor) {
 	bufCap := 1000 // max number of buffered messages
 
 	// system state setup: keygen, stake initialization
 	accounts, balances := createTestAccountsAndBalances(t, numNodes, (&[32]byte{})[:])
-	baseLedger := makeTestLedger(balances)
+	baseLedger := ledgerFactory(balances)
 
 	// logging
 	log := logging.Base()
@@ -771,16 +787,12 @@ func setupAgreementWithValidator(t *testing.T, numNodes int, traceLevel traceLev
 		services[i].tracer.tag = strconv.Itoa(i)
 
 		services[i].monitor = m
-		services[i].demux.monitor = m
-		pn := services[i].loopback.(asyncPseudonode)
-		pn.monitor = m
-		services[i].loopback = pn
 		m.inc(demuxCoserviceType)
 	}
 
 	cleanupFn := func() {
-		for _, accessor := range dbAccessors {
-			defer accessor.Close()
+		for idx := 0; idx < len(dbAccessors); idx++ {
+			dbAccessors[idx].Close()
 		}
 
 		if r := recover(); r != nil {
@@ -854,7 +866,7 @@ func triggerGlobalTimeout(d time.Duration, clocks []timers.Clock, activityMonito
 	activityMonitor.waitForQuiet()
 }
 
-func runRound(clocks []timers.Clock, activityMonitor *activityMonitor, zeroes uint) (newzeroes uint) {
+func runRound(clocks []timers.Clock, activityMonitor *activityMonitor, zeroes uint, filterTimeout time.Duration) (newzeroes uint) {
 	triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
 	return expectNewPeriod(clocks, zeroes)
 }
@@ -880,7 +892,14 @@ func simulateAgreement(t *testing.T, numNodes int, numRounds int, traceLevel tra
 	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, makeTestLedger)
 }
 
-func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.BalanceRecord) Ledger) {
+func simulateAgreementWithConsensusVersion(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, consensusVersion func(basics.Round) (protocol.ConsensusVersion, error)) {
+	ledgerFactory := func(data map[basics.Address]basics.AccountData) Ledger {
+		return makeTestLedgerWithConsensusVersion(data, consensusVersion)
+	}
+	simulateAgreementWithLedgerFactory(t, numNodes, numRounds, traceLevel, ledgerFactory)
+}
+
+func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds int, traceLevel traceLevel, ledgerFactory func(map[basics.Address]basics.AccountData) Ledger) {
 	_, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, traceLevel, ledgerFactory)
 	startRound := baseLedger.NextRound()
 	defer cleanupFn()
@@ -892,8 +911,11 @@ func simulateAgreementWithLedgerFactory(t *testing.T, numNodes int, numRounds in
 	activityMonitor.waitForQuiet()
 	zeroes := expectNewPeriod(clocks, 0)
 
-	for j := 0; j < numRounds; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+	// run round with current consensus version first
+	zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, protocol.ConsensusCurrentVersion))
+	for j := 1; j < numRounds; j++ {
+		version, _ := baseLedger.ConsensusVersion(ParamsRound(baseLedger.NextRound() + basics.Round(j-1)))
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	for i := 0; i < numNodes; i++ {
@@ -959,10 +981,47 @@ func TestAgreementSynchronous5_50(t *testing.T) {
 	simulateAgreement(t, 5, 50, disabled)
 }
 
+func TestAgreementSynchronousFuture1(t *testing.T) {
+	//if testing.Short() {
+	//	t.Skip("Skipping agreement integration test")
+	//}
+
+	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
+		return protocol.ConsensusFuture, nil
+	}
+	simulateAgreementWithConsensusVersion(t, 1, 5, disabled, consensusVersion)
+}
+
+func TestAgreementSynchronousFuture5(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping agreement integration test")
+	}
+
+	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
+		return protocol.ConsensusFuture, nil
+	}
+	simulateAgreementWithConsensusVersion(t, 5, 5, disabled, consensusVersion)
+}
+
+func TestAgreementSynchronousFutureUpgrade(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping agreement integration test")
+	}
+
+	consensusVersion := func(r basics.Round) (protocol.ConsensusVersion, error) {
+		if r >= 5 {
+			return protocol.ConsensusFuture, nil
+		}
+		return protocol.ConsensusCurrentVersion, nil
+	}
+	simulateAgreementWithConsensusVersion(t, 5, 10, disabled, consensusVersion)
+}
+
 func TestAgreementFastRecoveryDownEarly(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
+	version, _ := baseLedger.ConsensusVersion(startRound)
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -974,14 +1033,15 @@ func TestAgreementFastRecoveryDownEarly(t *testing.T) {
 
 	// run two rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	// force fast partition recovery into bottom
 	{
 		baseNetwork.dropAllSoftVotes()
 		baseNetwork.dropAllSlowNextVotes()
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+
+		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
 		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
@@ -997,13 +1057,13 @@ func TestAgreementFastRecoveryDownEarly(t *testing.T) {
 	// terminate on period 1
 	{
 		baseNetwork.repairAll()
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// run two more rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	for i := 0; i < numNodes; i++ {
@@ -1017,6 +1077,7 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1028,14 +1089,14 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 
 	// run two rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	// force fast partition recovery into bottom
 	{
 		// fail all steps
 		baseNetwork.dropAllVotes()
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
 		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
@@ -1075,13 +1136,13 @@ func TestAgreementFastRecoveryDownMiss(t *testing.T) {
 	// terminate on period 1
 	{
 		baseNetwork.repairAll()
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// run two more rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	for i := 0; i < numNodes; i++ {
@@ -1095,6 +1156,7 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1106,7 +1168,7 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 
 	// run two rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	// force fast partition recovery into value
@@ -1115,7 +1177,7 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 		pocket := make(chan multicastParams, 100)
 		closeFn := baseNetwork.pocketAllCertVotes(pocket)
 		baseNetwork.dropAllSlowNextVotes()
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 
@@ -1174,7 +1236,7 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 	// terminate on period 1
 	{
 		baseNetwork.repairAll()
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -1191,7 +1253,7 @@ func TestAgreementFastRecoveryLate(t *testing.T) {
 
 	// run two more rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	for i := 0; i < numNodes; i++ {
@@ -1205,6 +1267,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1216,7 +1279,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 
 	// run two rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	// force fast partition recovery into value
@@ -1225,7 +1288,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 		pocket := make(chan multicastParams, 100)
 		closeFn := baseNetwork.pocketAllCertVotes(pocket)
 		baseNetwork.dropAllSlowNextVotes()
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 
@@ -1284,7 +1347,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 	// fail period 1 with value again
 	{
 		baseNetwork.dropAllVotes()
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
 		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
@@ -1325,7 +1388,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 	// terminate on period 2
 	{
 		baseNetwork.repairAll()
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(2, version), clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
@@ -1342,7 +1405,7 @@ func TestAgreementFastRecoveryRedo(t *testing.T) {
 
 	// run two more rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	for i := 0; i < numNodes; i++ {
@@ -1356,6 +1419,7 @@ func TestAgreementBlockReplayBug_b29ea57(t *testing.T) {
 	numNodes := 2
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1367,13 +1431,13 @@ func TestAgreementBlockReplayBug_b29ea57(t *testing.T) {
 
 	// run two rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	// fail period 0
 	{
 		baseNetwork.dropAllSoftVotes()
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
 		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
@@ -1382,7 +1446,7 @@ func TestAgreementBlockReplayBug_b29ea57(t *testing.T) {
 
 	// fail period 1 on bottom with block
 	{
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
 		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
@@ -1392,13 +1456,13 @@ func TestAgreementBlockReplayBug_b29ea57(t *testing.T) {
 	// terminate on period 2
 	{
 		baseNetwork.repairAll()
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(2, version), clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// run two more rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	for i := 0; i < numNodes; i++ {
@@ -1412,6 +1476,7 @@ func TestAgreementLateCertBug(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1423,14 +1488,14 @@ func TestAgreementLateCertBug(t *testing.T) {
 
 	// run two rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	// delay minority cert votes to force period 1
 	pocket := make(chan multicastParams, 100)
 	{
 		closeFn := baseNetwork.pocketAllCertVotes(pocket)
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 		baseNetwork.repairAll()
@@ -1453,7 +1518,7 @@ func TestAgreementLateCertBug(t *testing.T) {
 
 	// run two more rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	for i := 0; i < numNodes; i++ {
@@ -1467,6 +1532,7 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1478,7 +1544,7 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 
 	// run two rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	// force partition recovery into value
@@ -1487,7 +1553,7 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 		pocket := make(chan multicastParams, 100)
 		closeFn := baseNetwork.pocketAllCertVotes(pocket)
 
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 
@@ -1518,7 +1584,7 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 		pocket := make(chan multicastParams, 100)
 		closeFn := baseNetwork.pocketAllCertVotes(pocket)
 
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 
@@ -1544,14 +1610,14 @@ func TestAgreementRecoverGlobalStartingValue(t *testing.T) {
 	// todo: make more transparent, I want to kow what v we agreed on
 	{
 		baseNetwork.repairAll()
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(2, version), clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 		require.Equal(t, 6, int(zeroes))
 	}
 
 	// run two more rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 	for i := 0; i < numNodes; i++ {
 		services[i].Shutdown()
@@ -1564,6 +1630,7 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1575,7 +1642,7 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 
 	// run two rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	// force partition recovery into value.
@@ -1583,7 +1650,7 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 	{
 		pocket := make(chan multicastParams, 100)
 		closeFn := baseNetwork.pocketAllCertVotes(pocket)
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 
@@ -1620,7 +1687,7 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 		baseNetwork.repairAll()
 		pocket := make(chan multicastParams, 100)
 		closeFn := baseNetwork.pocketAllCertVotes(pocket)
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 
@@ -1644,14 +1711,14 @@ func TestAgreementRecoverGlobalStartingValueBadProposal(t *testing.T) {
 	// Finish in period 2
 	{
 		baseNetwork.repairAll()
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(2, version), clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 		require.Equal(t, 6, int(zeroes))
 	}
 
 	// run two more rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 	for i := 0; i < numNodes; i++ {
 		services[i].Shutdown()
@@ -1664,6 +1731,7 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1675,7 +1743,7 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 
 	// run two rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	// force partition recovery into both bottom and value. one node enters bottom, the rest enter value
@@ -1683,7 +1751,7 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 	{
 		pocket := make(chan multicastParams, 100)
 		closeFn := baseNetwork.pocketAllSoftVotes(pocket)
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 		pocketedSoft := make([]multicastParams, len(pocket))
@@ -1742,7 +1810,7 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 		baseNetwork.repairAll()
 		pocket := make(chan multicastParams, 100)
 		closeFn := baseNetwork.pocketAllCertVotes(pocket)
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(1, version), clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		closeFn()
 
@@ -1766,14 +1834,14 @@ func TestAgreementRecoverBothVAndBotQuorums(t *testing.T) {
 	// Finish in period 2
 	{
 		baseNetwork.repairAll()
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(2, version), clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 		require.Equal(t, 6, int(zeroes))
 	}
 
 	// run two more rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 	for i := 0; i < numNodes; i++ {
 		services[i].Shutdown()
@@ -1786,6 +1854,7 @@ func TestAgreementSlowPayloadsPreDeadline(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1797,20 +1866,20 @@ func TestAgreementSlowPayloadsPreDeadline(t *testing.T) {
 
 	// run two rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	// run round and then start pocketing payloads
 	pocket := make(chan multicastParams, 100)
 	closeFn := baseNetwork.pocketAllCompound(pocket) // (takes effect next round)
 	{
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// run round with late payload
 	{
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
 		// release payloads; expect new round
@@ -1828,7 +1897,7 @@ func TestAgreementSlowPayloadsPreDeadline(t *testing.T) {
 
 	// run two more rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 	for i := 0; i < numNodes; i++ {
 		services[i].Shutdown()
@@ -1841,6 +1910,7 @@ func TestAgreementSlowPayloadsPostDeadline(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 
 	for i := 0; i < numNodes; i++ {
@@ -1852,20 +1922,20 @@ func TestAgreementSlowPayloadsPostDeadline(t *testing.T) {
 
 	// run two rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	// run round and then start pocketing payloads
 	pocket := make(chan multicastParams, 100)
 	closeFn := baseNetwork.pocketAllCompound(pocket) // (takes effect next round)
 	{
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// force network into period 1 by delaying proposals
 	{
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 		triggerGlobalTimeout(deadlineTimeout, clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
@@ -1884,13 +1954,13 @@ func TestAgreementSlowPayloadsPostDeadline(t *testing.T) {
 		activityMonitor.waitForQuiet()
 		zeroes = expectNoNewPeriod(clocks, zeroes)
 
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// run two more rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 	for i := 0; i < numNodes; i++ {
 		services[i].Shutdown()
@@ -1903,6 +1973,7 @@ func TestAgreementLargePeriods(t *testing.T) {
 	numNodes := 5
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
 	startRound := baseLedger.NextRound()
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
 	for i := 0; i < numNodes; i++ {
 		services[i].Start()
@@ -1914,14 +1985,14 @@ func TestAgreementLargePeriods(t *testing.T) {
 
 	// run two rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	// partition the network, run until period 60
 	for p := 0; p < 60; p++ {
 		{
 			baseNetwork.partition(0, 1, 2)
-			triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+			triggerGlobalTimeout(FilterTimeout(period(p), version), clocks, activityMonitor)
 			zeroes = expectNoNewPeriod(clocks, zeroes)
 
 			baseNetwork.repairAll()
@@ -1933,13 +2004,13 @@ func TestAgreementLargePeriods(t *testing.T) {
 
 	// terminate
 	{
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(60, version), clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// run two more rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 	for i := 0; i < numNodes; i++ {
 		services[i].Shutdown()
@@ -1998,18 +2069,19 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 	validator := makeTestSuspendableBlockValidator()
 	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreementWithValidator(t, numNodes, disabled, validator, makeTestLedger)
 	startRound := baseLedger.NextRound()
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
 	defer cleanupFn()
+
 	for i := 0; i < numNodes; i++ {
 		services[i].Start()
 	}
-
 	activityMonitor.waitForActivity()
 	activityMonitor.waitForQuiet()
 	zeroes := expectNewPeriod(clocks, 0)
 
 	// run two rounds
 	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
+		zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
 	}
 
 	// run round and then start pocketing payloads, suspending validation
@@ -2017,13 +2089,13 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 	ch := validator.suspend()
 	closeFn := baseNetwork.pocketAllCompound(pocket0) // (takes effect next round)
 	{
-		triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+		triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
 		zeroes = expectNewPeriod(clocks, zeroes)
 	}
 
 	// force network into period 1 by failing period 0, entering with bottom and no soft threshold (to prevent proposal value pinning)
 	baseNetwork.dropAllSoftVotes()
-	triggerGlobalTimeout(filterTimeout, clocks, activityMonitor)
+	triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
 	zeroes = expectNoNewPeriod(clocks, zeroes)
 
 	// resume delivery of payloads in following period
@@ -2101,7 +2173,7 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 	}
 
 	// resume block verification, replay potentially cancelled blocks to ensure good caching
-	//  then wait for network to converge (round should terminate at this point)
+	// then wait for network to converge (round should terminate at this point)
 	activityMonitor.setCallback(nil)
 	close(ch)
 
@@ -2115,9 +2187,12 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 	activityMonitor.waitForQuiet()
 
 	// run two more rounds
-	for j := 0; j < 2; j++ {
-		zeroes = runRound(clocks, activityMonitor, zeroes)
-	}
+	//for j := 0; j < 2; j++ {
+	//	zeroes = runRound(clocks, activityMonitor, zeroes, period(1-j))
+	//}
+	zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(1, version))
+	zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
+
 	for i := 0; i < numNodes; i++ {
 		services[i].Shutdown()
 	}
@@ -2133,6 +2208,122 @@ func TestAgreementRegression_WrongPeriodPayloadVerificationCancellation_8ba23942
 		ledger := ledgers[0].(*testLedger)
 		reference := ledger.entries[startRound+round(j)].Digest()
 		for i := 0; i < numNodes; i++ {
+			ledger := ledgers[i].(*testLedger)
+			if ledger.entries[startRound+round(j)].Digest() != reference {
+				panic("wrong block confirmed")
+			}
+		}
+	}
+}
+
+// Receiving a certificate should not cause a node to stop relaying important messages
+// (such as blocks and pipelined messages for the next round)
+// Note that the stall will be resolved by catchup even if the relay blocks.
+func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
+	numNodes := 5 // single relay, four leaf nodes
+	relayID := nodeID(0)
+	baseNetwork, baseLedger, cleanupFn, services, clocks, ledgers, activityMonitor := setupAgreement(t, numNodes, disabled, makeTestLedger)
+
+	startRound := baseLedger.NextRound()
+	version, _ := baseLedger.ConsensusVersion(baseLedger.NextRound())
+	defer cleanupFn()
+	for i := 0; i < numNodes; i++ {
+		services[i].Start()
+	}
+	activityMonitor.waitForActivity()
+	activityMonitor.waitForQuiet()
+	zeroes := expectNewPeriod(clocks, 0)
+	// run two rounds
+	zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
+	// make sure relay does not see block proposal for round 3
+	baseNetwork.intercept(func(params multicastParams) multicastParams {
+		if params.tag == protocol.ProposalPayloadTag {
+			var tp transmittedPayload
+			err := protocol.DecodeStream(bytes.NewBuffer(params.data), &tp)
+			if err != nil {
+				panic(err)
+			}
+			if tp.Round() == basics.Round(startRound+2) {
+				params.exclude = relayID
+			}
+		}
+		if params.source == relayID {
+			// must also drop relay's proposal so it cannot win leadership
+			r := bytes.NewBuffer(params.data)
+			if params.tag == protocol.AgreementVoteTag {
+				var uv unauthenticatedVote
+				err := protocol.DecodeStream(r, &uv)
+				if err != nil {
+					panic(err)
+				}
+				if uv.R.Step != propose {
+					return params
+				}
+			}
+			params.tag = protocol.UnknownMsgTag
+		}
+
+		return params
+	})
+	zeroes = runRound(clocks, activityMonitor, zeroes, FilterTimeout(0, version))
+
+	// Round 3:
+	// First partition the relay to prevent it from seeing certificate or block
+	baseNetwork.repairAll()
+	baseNetwork.partition(relayID)
+	// Get a copy of the certificate
+	pocketCert := make(chan multicastParams, 100)
+	baseNetwork.intercept(func(params multicastParams) multicastParams {
+		if params.tag == protocol.AgreementVoteTag {
+			r := bytes.NewBuffer(params.data)
+			var uv unauthenticatedVote
+			err := protocol.DecodeStream(r, &uv)
+			if err != nil {
+				panic(err)
+			}
+			if uv.R.Step == cert {
+				pocketCert <- params
+			}
+		}
+		return params
+	})
+	// And with some hypothetical second relay the network achieves consensus on a certificate and block.
+	triggerGlobalTimeout(FilterTimeout(0, version), clocks, activityMonitor)
+	zeroes = expectNewPeriod(clocks[1:], zeroes)
+	require.Equal(t, uint(3), clocks[0].(*testingClock).zeroes)
+	close(pocketCert)
+
+	// Round 4:
+	// Return to the relay topology
+	baseNetwork.repairAll()
+	baseNetwork.makeRelays(relayID)
+	// Trigger ensureDigest on the relay
+	baseNetwork.prepareAllMulticast()
+	for p := range pocketCert {
+		baseNetwork.multicast(p.tag, p.data, p.source, p.exclude)
+	}
+	baseNetwork.finishAllMulticast()
+	activityMonitor.waitForActivity()
+	activityMonitor.waitForQuiet()
+	// this relay must still relay initial messages. Note that payloads were already relayed with
+	// the previous global timeout.
+	triggerGlobalTimeout(FilterTimeout(0, version), clocks[1:], activityMonitor)
+	zeroes = expectNewPeriod(clocks[1:], zeroes)
+	require.Equal(t, uint(3), clocks[0].(*testingClock).zeroes)
+
+	for i := 0; i < numNodes; i++ {
+		services[i].Shutdown()
+	}
+	const expectNumRounds = 4
+	for i := 1; i < numNodes; i++ {
+		if ledgers[i].NextRound() != startRound+round(expectNumRounds) {
+			panic("did not progress 4 rounds")
+		}
+	}
+	for j := 0; j < expectNumRounds; j++ {
+		ledger := ledgers[1].(*testLedger)
+		reference := ledger.entries[startRound+round(j)].Digest()
+		for i := 1; i < numNodes; i++ {
 			ledger := ledgers[i].(*testLedger)
 			if ledger.entries[startRound+round(j)].Digest() != reference {
 				panic("wrong block confirmed")
