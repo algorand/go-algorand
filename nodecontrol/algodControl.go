@@ -185,9 +185,8 @@ func (nc *NodeController) StartAlgod(args AlgodStartArgs) (alreadyRunning bool, 
 		errLogger.SetLinePrefix(linePrefix)
 		outLogger.SetLinePrefix(linePrefix)
 	}
-
 	// Wait on the algod process and check if exits
-	algodExitChan := make(chan struct{})
+	algodExitChan := make(chan error, 1)
 	startAlgodCompletedChan := make(chan struct{})
 	defer close(startAlgodCompletedChan)
 	go func() {
@@ -202,14 +201,14 @@ func (nc *NodeController) StartAlgod(args AlgodStartArgs) (alreadyRunning bool, 
 			}
 		default:
 		}
-		algodExitChan <- struct{}{}
+		algodExitChan <- err
 	}()
-
 	success := false
 	for !success {
 		select {
-		case <-algodExitChan:
-			return false, errAlgodExitedEarly
+		case err := <-algodExitChan:
+			err = &errAlgodExitedEarly{err}
+			return false, err
 		case <-time.After(time.Millisecond * 100):
 			// If we can't talk to the API yet, spin
 			algodClient, err := nc.AlgodClient()
