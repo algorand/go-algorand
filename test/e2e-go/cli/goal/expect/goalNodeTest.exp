@@ -46,7 +46,8 @@ if { [catch {
     spawn goal node start -d $TEST_PRIMARY_NODE_DIR
     expect {
         timeout { close; ::AlgorandGoal::Abort "starting node exceeded timeout" }
-        "^Algorand node failed to start: node exited with an error code, check node\.log for more details : exit status 1" {puts "Expected failuire : node failed to start"; close}
+        -re {^Algorand node failed to start: node exited with an error code, check node\.log for more details : exit status 1} {puts "Expected failuire : node failed to start"; close}
+        eof { ::AlgorandGoal::Abort "eof received before the expected output " }
     }
     lassign [::AlgorandGoal::CheckProcessReturnedCode 0] ERROR_CODE
     if {$ERROR_CODE != 1} {
