@@ -31,7 +31,7 @@ func KillProcess(pid int, _ os.Signal) error {
 	p, err := os.FindProcess(pid)
 	if err == nil {
 
-		for _, v := range getChildrenProcesses(pid){
+		for _, v := range getChildrenProcesses(pid) {
 			_ = v.Kill()
 		}
 
@@ -40,7 +40,7 @@ func KillProcess(pid int, _ os.Signal) error {
 	return err
 }
 
-func getChildrenProcesses(parentPid int) ([]*os.Process) {
+func getChildrenProcesses(parentPid int) []*os.Process {
 	out := []*os.Process{}
 	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, uint32(0))
 	if err == nil {

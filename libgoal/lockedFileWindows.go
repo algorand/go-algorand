@@ -47,14 +47,14 @@ func makeLocker() (*windowsLocker, error) {
 }
 
 func (f *windowsLocker) tryRLock(fd *os.File) error {
-	if errNo := lockFileEx(syscall.Handle(fd.Fd()), winLockfileSharedLock | winLockfileFailImmediately, 0, 1, 0, &syscall.Overlapped{}); errNo > 0 {
+	if errNo := lockFileEx(syscall.Handle(fd.Fd()), winLockfileSharedLock|winLockfileFailImmediately, 0, 1, 0, &syscall.Overlapped{}); errNo > 0 {
 		return errors.New("cannot lock file")
 	}
 	return nil
 }
 
 func (f *windowsLocker) tryLock(fd *os.File) error {
-	if errNo := lockFileEx(syscall.Handle(fd.Fd()), winLockfileExclusiveLock | winLockfileFailImmediately, 0, 1, 0, &syscall.Overlapped{}); errNo > 0 {
+	if errNo := lockFileEx(syscall.Handle(fd.Fd()), winLockfileExclusiveLock|winLockfileFailImmediately, 0, 1, 0, &syscall.Overlapped{}); errNo > 0 {
 		return errors.New("cannot lock file")
 	}
 	return nil
@@ -67,7 +67,7 @@ func (f *windowsLocker) unlock(fd *os.File) error {
 	return nil
 }
 
-func lockFileEx(handle syscall.Handle, flags uint32, reserved uint32, numberOfBytesToLockLow uint32, numberOfBytesToLockHigh uint32, offset *syscall.Overlapped) (syscall.Errno) {
+func lockFileEx(handle syscall.Handle, flags uint32, reserved uint32, numberOfBytesToLockLow uint32, numberOfBytesToLockHigh uint32, offset *syscall.Overlapped) syscall.Errno {
 	r1, _, errNo := syscall.Syscall6(uintptr(procLockFileEx), 6, uintptr(handle), uintptr(flags), uintptr(reserved), uintptr(numberOfBytesToLockLow), uintptr(numberOfBytesToLockHigh), uintptr(unsafe.Pointer(offset)))
 	if r1 != 1 {
 		if errNo == 0 {
@@ -78,7 +78,7 @@ func lockFileEx(handle syscall.Handle, flags uint32, reserved uint32, numberOfBy
 	return 0
 }
 
-func unlockFileEx(handle syscall.Handle, reserved uint32, numberOfBytesToLockLow uint32, numberOfBytesToLockHigh uint32, offset *syscall.Overlapped) (syscall.Errno) {
+func unlockFileEx(handle syscall.Handle, reserved uint32, numberOfBytesToLockLow uint32, numberOfBytesToLockHigh uint32, offset *syscall.Overlapped) syscall.Errno {
 	r1, _, errNo := syscall.Syscall6(uintptr(procUnlockFileEx), 5, uintptr(handle), uintptr(reserved), uintptr(numberOfBytesToLockLow), uintptr(numberOfBytesToLockHigh), uintptr(unsafe.Pointer(offset)), 0)
 	if r1 != 1 {
 		if errNo == 0 {
