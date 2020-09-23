@@ -1069,16 +1069,16 @@ func TestWebsocketNetworkManyIdle(t *testing.T) {
 		waitReady(t, clients[i], readyTimeout.C)
 	}
 
-	var r0_utime, r1_utime int64
-	var r0_stime, r1_stime int64
+	var r0utime, r1utime int64
+	var r0stime, r1stime int64
 
-	r0_utime, r0_stime = util.GetSystemTimes()
+	r0utime, r0stime = util.GetSystemTimes()
 	time.Sleep(10 * time.Second)
-	r1_utime, r1_stime = util.GetSystemTimes()
+	r1utime, r1stime = util.GetSystemTimes()
 
 	t.Logf("Background CPU use: user %v, system %v\n",
-		time.Duration(r1_utime-r0_utime),
-		time.Duration(r1_stime-r0_stime))
+		time.Duration(r1utime-r0utime),
+		time.Duration(r1stime-r0stime))
 }
 
 // TODO: test both sides of http-header setting and checking?
