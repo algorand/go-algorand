@@ -20,5 +20,10 @@ import (
 	"github.com/algorand/go-algorand/logging"
 )
 
-func tryMlockall(_ logging.Logger) {
+// Windows does not have an mlockall functionality but might be emulated by
+// calling SetProcessWorkingSetSize and VirtualLock like described here
+// https://github.com/elastic/elasticsearch/pull/10887 but it can degrade
+// OS performance.
+func tryMlockall(log logging.Logger) {
+	log.Infof("running on windows -- mlockall not available")
 }
