@@ -890,6 +890,7 @@ txn ConfigAssetClawback
 txn FreezeAsset
 txn FreezeAssetAccount
 txn FreezeAssetFrozen
+txn NumArgs
 gtxn 12 Fee
 `
 	for _, globalField := range GlobalFieldNames {
