@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/spf13/cobra"
 
@@ -919,7 +920,7 @@ var deleteAppCmd = &cobra.Command{
 	},
 }
 
-func printable(str string) bool {
+func unicodePrintable(str string) bool {
 	for _, r := range str {
 		if !unicode.IsPrint(r) {
 			return false
@@ -928,17 +929,138 @@ func printable(str string) bool {
 	return true
 }
 
+func jsonPrintable(str string) bool {
+	// htmlSafeSet holds the value true if the ASCII character with the given
+	// array position can be safely represented inside a JSON string, embedded
+	// inside of HTML <script> tags, without any additional escaping.
+	//
+	// All values are true except for the ASCII control characters (0-31), the
+	// double quote ("), the backslash character ("\"), HTML opening and closing
+	// tags ("<" and ">"), and the ampersand ("&").
+	var htmlSafeSet = [utf8.RuneSelf]bool{
+		' ':      true,
+		'!':      true,
+		'"':      false,
+		'#':      true,
+		'$':      true,
+		'%':      true,
+		'&':      false,
+		'\'':     true,
+		'(':      true,
+		')':      true,
+		'*':      true,
+		'+':      true,
+		',':      true,
+		'-':      true,
+		'.':      true,
+		'/':      true,
+		'0':      true,
+		'1':      true,
+		'2':      true,
+		'3':      true,
+		'4':      true,
+		'5':      true,
+		'6':      true,
+		'7':      true,
+		'8':      true,
+		'9':      true,
+		':':      true,
+		';':      true,
+		'<':      false,
+		'=':      true,
+		'>':      false,
+		'?':      true,
+		'@':      true,
+		'A':      true,
+		'B':      true,
+		'C':      true,
+		'D':      true,
+		'E':      true,
+		'F':      true,
+		'G':      true,
+		'H':      true,
+		'I':      true,
+		'J':      true,
+		'K':      true,
+		'L':      true,
+		'M':      true,
+		'N':      true,
+		'O':      true,
+		'P':      true,
+		'Q':      true,
+		'R':      true,
+		'S':      true,
+		'T':      true,
+		'U':      true,
+		'V':      true,
+		'W':      true,
+		'X':      true,
+		'Y':      true,
+		'Z':      true,
+		'[':      true,
+		'\\':     false,
+		']':      true,
+		'^':      true,
+		'_':      true,
+		'`':      true,
+		'a':      true,
+		'b':      true,
+		'c':      true,
+		'd':      true,
+		'e':      true,
+		'f':      true,
+		'g':      true,
+		'h':      true,
+		'i':      true,
+		'j':      true,
+		'k':      true,
+		'l':      true,
+		'm':      true,
+		'n':      true,
+		'o':      true,
+		'p':      true,
+		'q':      true,
+		'r':      true,
+		's':      true,
+		't':      true,
+		'u':      true,
+		'v':      true,
+		'w':      true,
+		'x':      true,
+		'y':      true,
+		'z':      true,
+		'{':      true,
+		'|':      true,
+		'}':      true,
+		'~':      true,
+		'\u007f': true,
+	}
+
+	for _, r := range str {
+		if r >= utf8.RuneSelf {
+			return false
+		}
+		if htmlSafeSet[r] == false {
+			return false
+		}
+	}
+	return true
+}
+
 func heuristicFormatStr(str string) string {
-	if printable(str) {
+	// See if we can print it as a json output
+	if jsonPrintable(str) {
 		return str
 	}
 
+	// otherwise, see if it's a 32 byte string that could be printed as an address
 	if len(str) == 32 {
 		var addr basics.Address
 		copy(addr[:], []byte(str))
 		return addr.String()
 	}
 
+	// otherwise, use the default json formatter to output the byte array.
 	return str
 }
 

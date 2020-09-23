@@ -51,7 +51,7 @@ func queuePayments(b *testing.B, wg *sync.WaitGroup, c libgoal.Client, q <-chan 
 			}
 
 			fmt.Printf("Error broadcasting transaction: %v\n", err)
-			time.Sleep(2 * config.Protocol.SmallLambda)
+			time.Sleep(config.Consensus[protocol.ConsensusCurrentVersion].AgreementFilterTimeout)
 		}
 	}
 

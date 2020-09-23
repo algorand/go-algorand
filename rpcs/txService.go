@@ -60,8 +60,8 @@ func base64PaddedSize(n int64) int64 {
 
 func makeTxService(pool PendingTxAggregate, genesisID string, txPoolSize int, responseSizeLimit int) *TxService {
 	// figure out how many bytes do we expect the bloom filter to be in the worst case scenario.
-	bloomRequestSizeBits, _ := bloom.Optimal(txPoolSize, bloomFilterFalsePositiveRate)
-	filterBytes := int64((bloomRequestSizeBits + 7) / 8) // convert bits -> bytes.
+	filterBytes := bloom.BinaryMarshalLength(txPoolSize, bloomFilterFalsePositiveRate)
+	// since the bloom filter is going to be base64 encoded, account for that as well.
 	filterPackedBytes := base64PaddedSize(filterBytes)
 	// The http transport add some additional content to the form ( form keys, separators, etc.)
 	// we need to account for these if we're trying to match the size in the worst case scenario.

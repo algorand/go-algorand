@@ -121,6 +121,80 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 	}
 }
 
+func TestTxnValidationEmptySig(t *testing.T) {
+	_, signed, _, _ := generateTestObjects(100, 50)
+
+	for _, txn := range signed {
+		if Txn(&txn, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: protocol.ConsensusCurrentVersion}}) != nil {
+			t.Errorf("signed transaction %#v did not verify", txn)
+		}
+
+		txn.Sig = crypto.Signature{}
+		txn.Msig = crypto.MultisigSig{}
+		txn.Lsig = transactions.LogicSig{}
+		if Txn(&txn, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: protocol.ConsensusCurrentVersion}}) == nil {
+			t.Errorf("transaction %#v verified without sig", txn)
+		}
+	}
+}
+
+const ccProto = protocol.ConsensusVersion("test-compact-cert-enabled")
+
+func TestTxnValidationCompactCert(t *testing.T) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	proto.CompactCertRounds = 128
+	config.Consensus[ccProto] = proto
+
+	stxn := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type: protocol.CompactCertTx,
+			Header: transactions.Header{
+				Sender:     transactions.CompactCertSender,
+				FirstValid: 0,
+				LastValid:  10,
+			},
+		},
+	}
+
+	err := Txn(&stxn, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	require.NoError(t, err, "compact cert txn %#v did not verify", stxn)
+
+	stxn2 := stxn
+	stxn2.Txn.Type = protocol.PaymentTx
+	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
+	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	require.Error(t, err, "payment txn %#v verified from CompactCertSender", stxn2)
+
+	secret := keypair()
+	stxn2 = stxn
+	stxn2.Txn.Header.Sender = basics.Address(secret.SignatureVerifier)
+	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
+	stxn2 = stxn2.Txn.Sign(secret)
+	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	require.Error(t, err, "compact cert txn %#v verified from non-CompactCertSender", stxn2)
+
+	// Compact cert txns are not allowed to have non-zero values for many fields
+	stxn2 = stxn
+	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
+	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	require.Error(t, err, "compact cert txn %#v verified", stxn2)
+
+	stxn2 = stxn
+	stxn2.Txn.Header.Note = []byte{'A'}
+	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	require.Error(t, err, "compact cert txn %#v verified", stxn2)
+
+	stxn2 = stxn
+	stxn2.Txn.Lease[0] = 1
+	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	require.Error(t, err, "compact cert txn %#v verified", stxn2)
+
+	stxn2 = stxn
+	stxn2.Txn.RekeyTo = basics.Address(secret.SignatureVerifier)
+	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	require.Error(t, err, "compact cert txn %#v verified", stxn2)
+}
+
 func TestDecodeNil(t *testing.T) {
 	// This is a regression test for improper decoding of a nil SignedTxn.
 	// This is a subtle case because decoding a msgpack nil does not run
