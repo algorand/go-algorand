@@ -1072,9 +1072,9 @@ func TestWebsocketNetworkManyIdle(t *testing.T) {
 	var r0utime, r1utime int64
 	var r0stime, r1stime int64
 
-	r0utime, r0stime = util.GetSystemTimes()
+	r0utime, r0stime, _ = util.GetCurrentProcessTimes()
 	time.Sleep(10 * time.Second)
-	r1utime, r1stime = util.GetSystemTimes()
+	r1utime, r1stime, _ = util.GetCurrentProcessTimes()
 
 	t.Logf("Background CPU use: user %v, system %v\n",
 		time.Duration(r1utime-r0utime),

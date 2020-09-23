@@ -20,15 +20,6 @@ import (
 	"errors"
 	"syscall"
 	"time"
-	"unsafe"
-
-	"golang.org/x/sys/windows"
-)
-
-var (
-	modkernel32 = windows.NewLazySystemDLL("kernel32.dll")
-
-	procGetSystemTimes = modkernel32.NewProc("GetSystemTimes")
 )
 
 /* misc */
@@ -49,14 +40,18 @@ func Getrusage(who int, rusage *syscall.Rusage) (err error) {
 	return
 }
 
-// GetSystemTimes gets current OS kernel and usermode times
-func GetSystemTimes() (utime int64, stime int64) {
-	var idleTime, kernelTime, userTime syscall.Filetime
+// GetCurrentProcessTimes gets current process kernel and usermode times
+func GetCurrentProcessTimes() (utime int64, stime int64, err error) {
+	var Ktime, Utime syscall.Filetime
+	var handle syscall.Handle
 
-	err := getSystemTimes(&idleTime, &kernelTime, &userTime)
+	handle, err = syscall.GetCurrentProcess()
 	if err == nil {
-		utime = filetimeToDuration(&userTime).Nanoseconds()
-		stime = filetimeToDuration(&kernelTime).Nanoseconds()
+		err = syscall.GetProcessTimes(handle, nil, nil, &Ktime, &Utime)
+	}
+	if err == nil {
+		utime = filetimeToDuration(&Utime).Nanoseconds()
+		stime = filetimeToDuration(&Ktime).Nanoseconds()
 	} else {
 		utime = 0
 		stime = 0
@@ -67,16 +62,4 @@ func GetSystemTimes() (utime int64, stime int64) {
 func filetimeToDuration(ft *syscall.Filetime) time.Duration {
 	n := int64(ft.HighDateTime)<<32 + int64(ft.LowDateTime) // in 100-nanosecond intervals
 	return time.Duration(n * 100)
-}
-
-func getSystemTimes(idleTime *syscall.Filetime, kernelTime *syscall.Filetime, userTime *syscall.Filetime) (err error) {
-	r1, _, e1 := syscall.Syscall(procGetSystemTimes.Addr(), 3, uintptr(unsafe.Pointer(idleTime)), uintptr(unsafe.Pointer(kernelTime)), uintptr(unsafe.Pointer(userTime)))
-	if r1 == 0 {
-		if e1 != 0 {
-			err = error(e1)
-		} else {
-			err = syscall.EINVAL
-		}
-	}
-	return
 }

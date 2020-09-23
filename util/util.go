@@ -46,13 +46,17 @@ func Getrusage(who int, rusage *syscall.Rusage) (err error) {
 	return
 }
 
-// GetSystemTimes gets current OS kernel and usermode times
-func GetSystemTimes() (utime int64, stime int64) {
-	var r syscall.Rusage
+// GetCurrentProcessTimes gets current process kernel and usermode times
+func GetCurrentProcessTimes() (utime int64, stime int64, err error) {
+	var usage syscall.Rusage
 
-	syscall.Getrusage(syscall.RUSAGE_SELF, &r)
-
-	utime = r.Utime.Nano()
-	stime = r.Stime.Nano()
+	err = syscall.Getrusage(syscall.RUSAGE_SELF, &usage)
+	if err == nil {
+		utime = usage.Utime.Nano()
+		stime = usage.Stime.Nano()
+	} else {
+		utime = 0
+		stime = 0
+	}
 	return
 }
