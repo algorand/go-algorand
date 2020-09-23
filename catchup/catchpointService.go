@@ -466,6 +466,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 				}
 				if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 					// try again.
+					cs.log.Infof("Failed to download block %d. %v", topBlock.Round()-basics.Round(blocksFetched), err)
 					continue
 				}
 				return cs.abort(fmt.Errorf("processStageBlocksDownload failed after multiple blocks download attempts"))
