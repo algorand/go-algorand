@@ -133,7 +133,7 @@ func TestMinTealVersionParamEvalCheck(t *testing.T) {
 func TestTxnFieldToTealValue(t *testing.T) {
 
 	stxn := transactions.SignedTxn{}
-	txn := stxn.Txn
+	txn := &stxn.Txn
 	groupIndex := 0
 	field := FirstValid
 	values := [6]uint64{0, 1, 2, 0xffffffff, 0xffffffffffffffff}
@@ -1652,6 +1652,10 @@ txna ApplicationArgs 7
 &&
 txn FreezeAssetFrozen
 int 1
+==
+&&
+txn NumArgs
+int 11
 ==
 &&
 `
