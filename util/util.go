@@ -39,3 +39,19 @@ func RaiseRlimit(amount uint64) error {
 	}
 	return nil
 }
+
+// Getrusage gets file descriptors usage statistics
+func Getrusage(who int, rusage *syscall.Rusage) (err error) {
+	err = syscall.Getrusage(who, rusage)
+}
+
+// GetSystemTimes gets current OS kernel and usermode times
+func GetSystemTimes() (utime int64, stime int64) {
+	var r syscall.Rusage
+
+	syscall.Getrusage(syscall.RUSAGE_SELF, &r)
+
+	utime = r.Utime.Nano()
+	stime = r.Stime.Nano()
+	return
+}
