@@ -1547,6 +1547,7 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 // Plan:
 // Network A will be sending messages to network B.
 // Network B will respond with another message for the first 4 messages. When it receive the 5th message, it would close the connection.
+// We want to get an event with disconnectRequestReceived
 func TestWebsocketDisconnection(t *testing.T) {
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
@@ -1625,8 +1626,6 @@ func TestWebsocketDisconnection(t *testing.T) {
 		case telemetryspec.DisconnectPeerEventDetails:
 			require.Equal(t, disconnectPeerEventDetails.Reason, string(disconnectRequestReceived))
 		default:
-			// if we received a disconnection event because *we* disconnected this end, it's an error. We shouldn't have receive this event.
-
 			require.FailNow(t, "Unexpected event was send : %v", eventDetails)
 		}
 
