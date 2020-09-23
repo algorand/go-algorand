@@ -1551,7 +1551,7 @@ func TestWebsocketDisconnection(t *testing.T) {
 	netA := makeTestWebsocketNode(t)
 	netA.config.GossipFanout = 1
 	netA.config.EnablePingHandler = false
-	dl := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan struct{}, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
+	dl := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
 	netA.log = dl
 
 	netA.Start()
@@ -1620,9 +1620,17 @@ func TestWebsocketDisconnection(t *testing.T) {
 	}
 
 	select {
-	case <-dl.eventReceived:
-		// if we received a disconnection event because *we* disconnected this end, it's an error. We shouldn't have receive this event.
-		require.FailNow(t, "The DisconnectPeerEvent was send on the peer which was gracefully closed by the other end.")
+	case eventDetails := <-dl.eventReceived:
+		switch disconnectPeerEventDetails := eventDetails.(type) {
+		case telemetryspec.DisconnectPeerEventDetails:
+			require.Equal(t, disconnectPeerEventDetails.Reason, string(disconnectRequestReceived))
+		default:
+			// if we received a disconnection event because *we* disconnected this end, it's an error. We shouldn't have receive this event.
+
+			require.FailNow(t, "Unexpected event was send : %v", eventDetails)
+		}
+
 	default:
+		require.FailNow(t, "The DisconnectPeerEvent was missing")
 	}
 }

@@ -1950,23 +1950,15 @@ func (wn *WebsocketNetwork) peerRemoteClose(peer *wsPeer, reason disconnectReaso
 }
 
 func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
-	var eventDetails telemetryspec.PeerEventDetails
-	var peerAddr string
-	var logEntry logging.Logger
-	var localAddr string
-	if reason == disconnectRequestReceived {
-		goto skipErrorLogging
-	}
-
 	// first logging, then take the lock and do the actual accounting.
 	// definitely don't change this to do the logging while holding the lock.
-	localAddr, _ = wn.Address()
-	logEntry = wn.log.With("event", "Disconnected").With("remote", peer.rootURL).With("local", localAddr)
+	localAddr, _ := wn.Address()
+	logEntry := wn.log.With("event", "Disconnected").With("remote", peer.rootURL).With("local", localAddr)
 	if peer.outgoing && peer.peerMessageDelay > 0 {
 		logEntry = logEntry.With("messageDelay", peer.peerMessageDelay)
 	}
 	logEntry.Infof("Peer %s disconnected: %s", peer.rootURL, reason)
-	peerAddr = peer.OriginAddress()
+	peerAddr := peer.OriginAddress()
 	// we might be able to get addr out of conn, or it might be closed
 	if peerAddr == "" && peer.conn != nil {
 		paddr := peer.conn.RemoteAddr()
@@ -1984,7 +1976,7 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 			peerAddr = justHost(peer.rootURL)
 		}
 	}
-	eventDetails = telemetryspec.PeerEventDetails{
+	eventDetails := telemetryspec.PeerEventDetails{
 		Address:      peerAddr,
 		HostName:     peer.TelemetryGUID,
 		Incoming:     !peer.outgoing,
@@ -2000,7 +1992,6 @@ func (wn *WebsocketNetwork) removePeer(peer *wsPeer, reason disconnectReason) {
 			Reason:           string(reason),
 		})
 
-skipErrorLogging:
 	peers.Set(float64(wn.NumPeers()), nil)
 	incomingPeers.Set(float64(wn.numIncomingPeers()), nil)
 	outgoingPeers.Set(float64(wn.numOutgoingPeers()), nil)

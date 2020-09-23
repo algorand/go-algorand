@@ -30,12 +30,12 @@ import (
 type eventsDetailsLogger struct {
 	logging.Logger
 	eventIdentifier telemetryspec.Event
-	eventReceived   chan struct{}
+	eventReceived   chan interface{}
 }
 
 func (dl eventsDetailsLogger) EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details interface{}) {
 	if category == telemetryspec.Network && identifier == dl.eventIdentifier {
-		dl.eventReceived <- struct{}{}
+		dl.eventReceived <- details
 
 	}
 }
@@ -43,7 +43,7 @@ func (dl eventsDetailsLogger) EventWithDetails(category telemetryspec.Category, 
 // for two node network, check that B can ping A and get a reply
 func TestRequestLogger(t *testing.T) {
 	log := logging.TestingLog(t)
-	dl := eventsDetailsLogger{Logger: log, eventReceived: make(chan struct{}, 1), eventIdentifier: telemetryspec.HTTPRequestEvent}
+	dl := eventsDetailsLogger{Logger: log, eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.HTTPRequestEvent}
 	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
 	netA := &WebsocketNetwork{
 		log:       dl,
