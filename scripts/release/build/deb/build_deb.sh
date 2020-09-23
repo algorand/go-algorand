@@ -17,7 +17,9 @@ VER=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 
 echo "Building debian package $PKG_NAME ($CHANNEL) for '$OS - $ARCH'"
 
-DEFAULTNETWORK=$("./scripts/compute_branch_network.sh")
+if [ -z "$DEFAULTNETWORK" ]; then
+    DEFAULTNETWORK=$("./scripts/compute_branch_network.sh")
+fi
 DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "$DEFAULTNETWORK")
 export DEFAULT_RELEASE_NETWORK
 
