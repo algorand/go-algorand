@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 adduser --system --group --home /var/lib/algorand --no-create-home algorand >/dev/null
 # prior versions didn't create this group and adduser above won't create it if the algorand user exists
@@ -35,3 +35,11 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
 		deb-systemd-invoke $_dh_action algorand.service >/dev/null || true
 	fi
 fi
+
+if [ "$1" = "configure" ]; then
+    if [ -f /var/lib/algorand/genesis.json-2.1.5-patch ]; then
+        # 2.1.5 bug fix - restore user-modified genesis.json
+        mv /var/lib/algorand/genesis.json{-2.1.5-patch,}
+    fi
+fi
+
