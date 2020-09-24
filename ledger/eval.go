@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
@@ -73,6 +74,9 @@ type roundCowBase struct {
 	// are beyond the scope of this cache.
 	// The account data store here is always the account data without the rewards.
 	accounts map[basics.Address]basics.AccountData
+
+	// accountsMu is the accounts read-write mutex, used to syncronize the access ot the accounts map.
+	accountsMu deadlock.RWMutex
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -83,12 +87,18 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 // first, and if it cannot find it there, it would defer to the underlaying implementation.
 // note that errors in accounts data retrivals are not cached as these typically cause the transaction evaluation to fail.
 func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
+	x.accountsMu.RLock()
 	if accountData, found := x.accounts[addr]; found {
+		x.accountsMu.RUnlock()
 		return accountData, nil
 	}
+	x.accountsMu.RUnlock()
+
 	accountData, err := x.l.LookupWithoutRewards(x.rnd, addr)
 	if err == nil {
+		x.accountsMu.Lock()
 		x.accounts[addr] = accountData
+		x.accountsMu.Unlock()
 	}
 	return accountData, err
 }
@@ -310,8 +320,8 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 	}
 
 	poolAddr := eval.prevHeader.RewardsPool
-	// get the reward pool account data without any rewards
-	incentivePoolData, err := l.LookupWithoutRewards(eval.prevHeader.Round, poolAddr)
+	// get the reward pool account data without any rewards; we use the roundCowBase so the account data would get cached.
+	incentivePoolData, err := base.lookup(poolAddr)
 	if err != nil {
 		return nil, err
 	}
