@@ -60,7 +60,12 @@ if [[ ! "$ALGORAND_PACKAGE_NAME" =~ devtools ]]; then
         cp "installer/${data}" "${PKG_ROOT}/var/lib/algorand"
     done
 
-    cp "./installer/genesis/${DEFAULTNETWORK}/genesis.json" "${PKG_ROOT}/var/lib/algorand/genesis.json"
+    genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
+    for dir in "${genesis_dirs[@]}"; do
+        mkdir -p "${PKG_ROOT}/var/lib/algorand/genesis/${dir}"
+        cp "./installer/genesis/${dir}/genesis.json" "${PKG_ROOT}/var/lib/algorand/genesis/${dir}/genesis.json"
+    done
+    cp "./installer/genesis/${DEFAULT_RELEASE_NETWORK}/genesis.json" "${PKG_ROOT}/var/lib/algorand/genesis.json"
 
     # files should not be group writable but directories should be
     chmod -R g-w "${PKG_ROOT}/var/lib/algorand"
@@ -90,7 +95,7 @@ Dpkg::Options {
 EOF
 
 mkdir -p "${PKG_ROOT}/DEBIAN"
-if [[ "$PKG_NAME" =~ devtools ]]; then
+if [[ "$ALGORAND_PACKAGE_NAME" =~ devtools ]]; then
     INSTALLER_DIR="algorand-devtools"
 else
     INSTALLER_DIR=algorand
@@ -103,6 +108,7 @@ for ctl_file in $(ls "${CTL_FILES_DIR}"); do
     < "${CTL_FILES_DIR}/${ctl_file}" \
       sed -e "s,@ARCH@,${ARCH}," \
           -e "s,@VER@,${VER}," \
+          -e "s,@PKG_NAME@,$ALGORAND_PACKAGE_NAME," \
           -e "s,@REQUIRED_ALGORAND_PKG@,$REQUIRED_ALGORAND_PKG," \
       > "${PKG_ROOT}/DEBIAN/${ctl_file}"
 done
