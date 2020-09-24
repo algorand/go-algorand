@@ -71,8 +71,6 @@ if { [catch {
     set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
     set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
 
-    set ::env(ALGOSMALLLAMBDAMSEC) 500
-
     # Start the Primary Node
     ::AlgorandGoal::StartNode $TEST_ROOT_DIR/Primary
 
