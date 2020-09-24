@@ -16,7 +16,7 @@ ZERO_ADDRESS=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ
 
 ${gcmd} asset create --creator ${ACCOUNT} --name bogocoin --unitname bogo --total 1000000000000
 
-ASSET_ID=$(${gcmd} asset info --creator $ACCOUNT --asset bogo|grep 'Asset ID'|awk '{ print $3 }')
+ASSET_ID=$(${gcmd} asset info --creator $ACCOUNT --unitname bogo|grep 'Asset ID'|awk '{ print $3 }')
 
 # Asset ID:         5
 
