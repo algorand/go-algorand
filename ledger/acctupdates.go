@@ -1439,7 +1439,9 @@ func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, with
 		// we want to make this defer only after setting the above rewardsProto/rewardsLevel.
 		if withRewards {
 			defer func() {
-				data = data.WithUpdatedRewards(rewardsProto, rewardsLevel)
+				if err == nil {
+					data = data.WithUpdatedRewards(rewardsProto, rewardsLevel)
+				}
 			}()
 			withRewards = false
 		}
@@ -1489,6 +1491,7 @@ func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, with
 		} else {
 			// in non-sync mode, we don't wait since we already assume that we're syncronized.
 			au.log.Errorf("accountUpdates.lookupImpl: database round %d mismatching in-memory round %d", dbRound, currentDbRound)
+			err = fmt.Errorf("database round %d mismatching in-memory round %d", dbRound, currentDbRound)
 			return
 		}
 	}
