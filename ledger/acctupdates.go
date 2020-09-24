@@ -1424,11 +1424,6 @@ func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, with
 	var offset uint64
 	var rewardsProto config.ConsensusParams
 	var rewardsLevel uint64
-	if withRewards {
-		defer func() {
-			data = data.WithUpdatedRewards(rewardsProto, rewardsLevel)
-		}()
-	}
 	for {
 		currentDbRound := au.dbRound
 		currentDeltaLen := len(au.deltas)
@@ -1439,6 +1434,15 @@ func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, with
 
 		rewardsProto = au.protos[offset]
 		rewardsLevel = au.roundTotals[offset].RewardsLevel
+
+		// we're testing the withRewards here and setting the defer function only once, and only if withRewards is true.
+		// we want to make this defer only after setting the above rewardsProto/rewardsLevel.
+		if withRewards {
+			defer func() {
+				data = data.WithUpdatedRewards(rewardsProto, rewardsLevel)
+			}()
+			withRewards = false
+		}
 
 		// Check if this is the most recent round, in which case, we can
 		// use a cache of the most recent account state.
