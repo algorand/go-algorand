@@ -10,6 +10,7 @@ BRANCH=
 CHANNEL=
 COMMIT_HASH=
 FULLVERSION=
+NETWORK=
 
 while [ "$1" != "" ]; do
     case "$1" in
@@ -25,6 +26,10 @@ while [ "$1" != "" ]; do
             shift
             COMMIT_HASH="$1"
             ;;
+        -n)
+            shift
+            NETWORK="$1"
+            ;;
         -r)
             shift
             FULLVERSION="$1"
@@ -37,9 +42,9 @@ while [ "$1" != "" ]; do
     shift
 done
 
-if [ -z "$BRANCH" ] || [ -z "$CHANNEL" ] || [ -z "$COMMIT_HASH" ] || [ -z "$FULLVERSION" ]
+if [ -z "$BRANCH" ] || [ -z "$CHANNEL" ] || [ -z "$COMMIT_HASH" ] || [ -z "$FULLVERSION" ] || [ -z "$NETWORK" ]
 then
-    echo "[ERROR] $0 -b $BRANCH -c $CHANNEL -h $COMMIT_HASH -r $FULLVERSION"
+    echo "[ERROR] $0 -b $BRANCH -c $CHANNEL -h $COMMIT_HASH -n $NETWORK -r $FULLVERSION"
     exit 1
 fi
 
@@ -62,6 +67,7 @@ export BRANCH
 export COMMIT_HASH
 export CHANNEL
 export FULLVERSION
+export NETWORK
 
 for test in $(ls ./scripts/release/mule/test/tests/*.sh)
 do

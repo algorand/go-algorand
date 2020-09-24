@@ -16,17 +16,22 @@ fi
 export VERSION
 
 if [ -z "$BRANCH" ]; then
-    BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
+    BRANCH=$(git rev-parse --abbrev-ref HEAD)
 fi
 export BRANCH
 
+if [ -z "$NETWORK" ]; then
+    NETWORK=$(./scripts/compute_branch_network.sh "$BRANCH")
+fi
+export NETWORK
+
 if [ -z "$CHANNEL" ]; then
-    CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
+    CHANNEL=$(./scripts/compute_branch_channel.sh "$BRANCH")
 fi
 export CHANNEL
 
 if [ -z "$SHA" ]; then
-    SHA=${SHA:-$(git rev-parse HEAD)}
+    SHA=$(git rev-parse HEAD)
 fi
 export SHA
 
@@ -37,7 +42,7 @@ fi
 
 if [[ "$ARCH_TYPE" =~ "arm" ]]
 then
-    ./scripts/release/mule/test/tests/run_tests -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -r "$VERSION"
+    ./scripts/release/mule/test/tests/run_tests -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -n "$NETWORK" -r "$VERSION"
 else
     ./scripts/release/mule/test/util/test_package.sh
 fi
