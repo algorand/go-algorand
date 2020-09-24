@@ -25,11 +25,24 @@ import (
 func TestHashCoin(t *testing.T) {
 	var slots [32]uint64
 	var sigcom [32]byte
+	var partcom [32]byte
+	var msgHash crypto.Digest
 
 	crypto.RandBytes(sigcom[:])
+	crypto.RandBytes(partcom[:])
+	crypto.RandBytes(msgHash[:])
 
 	for j := uint64(0); j < 1000; j++ {
-		coin := hashCoin(j, sigcom, uint64(len(slots)))
+		choice := coinChoice{
+			J:            j,
+			SignedWeight: uint64(len(slots)),
+			ProvenWeight: uint64(len(slots)),
+			Sigcom:       sigcom,
+			Partcom:      partcom,
+			MsgHash:      msgHash,
+		}
+
+		coin := hashCoin(choice)
 		if coin >= uint64(len(slots)) {
 			t.Errorf("hashCoin out of bounds")
 		}
@@ -49,10 +62,24 @@ func TestHashCoin(t *testing.T) {
 
 func BenchmarkHashCoin(b *testing.B) {
 	var sigcom [32]byte
+	var partcom [32]byte
+	var msgHash crypto.Digest
+
 	crypto.RandBytes(sigcom[:])
+	crypto.RandBytes(partcom[:])
+	crypto.RandBytes(msgHash[:])
 
 	for i := 0; i < b.N; i++ {
-		hashCoin(uint64(i), sigcom, 1024)
+		choice := coinChoice{
+			J:            uint64(i),
+			SignedWeight: 1024,
+			ProvenWeight: 1024,
+			Sigcom:       sigcom,
+			Partcom:      partcom,
+			MsgHash:      msgHash,
+		}
+
+		hashCoin(choice)
 	}
 }
 
