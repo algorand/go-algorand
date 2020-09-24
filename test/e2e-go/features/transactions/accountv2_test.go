@@ -17,7 +17,6 @@
 package transactions
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -39,13 +38,9 @@ func TestAccountInformationV2(t *testing.T) {
 	var fixture fixtures.RestClientFixture
 	proto, ok := config.Consensus[protocol.ConsensusFuture]
 	a.True(ok)
-	os.Setenv("ALGOSMALLLAMBDAMSEC", "200")
 	proto.AgreementFilterTimeoutPeriod0 = 400 * time.Millisecond
 	proto.AgreementFilterTimeout = 400 * time.Millisecond
 	fixture.SetConsensus(config.ConsensusProtocols{protocol.ConsensusFuture: proto})
-	defer func() {
-		os.Unsetenv("ALGOSMALLLAMBDAMSEC")
-	}()
 
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
 	defer fixture.Shutdown()
