@@ -17,27 +17,41 @@
 package compactcert
 
 import (
-	"encoding/binary"
 	"fmt"
 	"math/big"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/protocol"
 )
 
-// hashCoin returns a number in [0, signedWeight) with a nearly uniform
-// distribution, "randomized" by all of the supplied arguments.
-func hashCoin(j uint64, sigcom crypto.Digest, signedWeight uint64) uint64 {
-	hashinput := make([]byte, 16+crypto.DigestSize)
-	binary.LittleEndian.PutUint64(hashinput[0:], j)
-	binary.LittleEndian.PutUint64(hashinput[8:], signedWeight)
-	copy(hashinput[16:], sigcom[:])
-	h := crypto.Hash(hashinput)
+// The coinChoice type defines the fields that go into the hash for choosing
+// the index of the coin to reveal as part of the compact certificate.
+type coinChoice struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	J            uint64        `codec:"j"`
+	SignedWeight uint64        `codec:"sigweight"`
+	ProvenWeight uint64        `codec:"provenweight"`
+	Sigcom       crypto.Digest `codec:"sigcom"`
+	Partcom      crypto.Digest `codec:"partcom"`
+	MsgHash      crypto.Digest `codec:"msghash"`
+}
+
+// ToBeHashed implements the crypto.Hashable interface.
+func (cc coinChoice) ToBeHashed() (protocol.HashID, []byte) {
+	return protocol.CompactCertCoin, protocol.Encode(&cc)
+}
+
+// hashCoin returns a number in [0, choice.SignedWeight) with a nearly uniform
+// distribution, "randomized" by all of the fields in choice.
+func hashCoin(choice coinChoice) uint64 {
+	h := crypto.HashObj(choice)
 
 	i := &big.Int{}
 	i.SetBytes(h[:])
 
 	w := &big.Int{}
-	w.SetUint64(signedWeight)
+	w.SetUint64(choice.SignedWeight)
 
 	res := &big.Int{}
 	res.Mod(i, w)

@@ -77,8 +77,19 @@ func (v *Verifier) Verify(c *Cert) error {
 		return err
 	}
 
+	msgHash := crypto.HashObj(v.Msg)
+
 	for j := uint64(0); j < nr; j++ {
-		coin := hashCoin(j, c.SigCommit, c.SignedWeight)
+		choice := coinChoice{
+			J:            j,
+			SignedWeight: c.SignedWeight,
+			ProvenWeight: v.ProvenWeight,
+			Sigcom:       c.SigCommit,
+			Partcom:      v.partcom,
+			MsgHash:      msgHash,
+		}
+
+		coin := hashCoin(choice)
 		matchingReveal := false
 		for _, r := range c.Reveals {
 			if r.SigSlot.L <= coin && coin < r.SigSlot.L+r.Part.Weight {

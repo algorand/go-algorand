@@ -21,7 +21,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/algorand/go-algorand/protocol"
@@ -137,8 +136,11 @@ type ConsensusParams struct {
 	DownCommitteeSize      uint64
 	DownCommitteeThreshold uint64
 
-	FilterTimeoutSmallLambdas             uint64
-	FilterTimeoutPeriod0SmallLambdas      uint64
+	// time for nodes to wait for block proposal headers for period > 0, value should be set to 2 * SmallLambda
+	AgreementFilterTimeout time.Duration
+	// time for nodes to wait for block proposal headers for period = 0, value should be configured to suit best case
+	// critical path
+	AgreementFilterTimeoutPeriod0 time.Duration
 
 	FastRecoveryLambda    time.Duration // time between fast recovery attempts
 	FastPartitionRecovery bool          // set when fast partition recovery is enabled
@@ -539,8 +541,8 @@ func initConsensusProtocols() {
 		DownCommitteeSize:      10000,
 		DownCommitteeThreshold: 7750,
 
-		FilterTimeoutSmallLambdas:        2,
-		FilterTimeoutPeriod0SmallLambdas: 2,
+		AgreementFilterTimeout:        4 * time.Second,
+		AgreementFilterTimeoutPeriod0: 4 * time.Second,
 
 		FastRecoveryLambda: 5 * time.Minute,
 
@@ -806,8 +808,8 @@ func initConsensusProtocols() {
 	vFuture := v24
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	// FilterTimeout 2s instead of 4s for period 0
-	vFuture.FilterTimeoutPeriod0SmallLambdas = 1
+	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
+	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
 
 	// Enable compact certificates.
 	vFuture.CompactCertRounds = 128
@@ -836,15 +838,6 @@ func init() {
 	Consensus = make(ConsensusProtocols)
 
 	initConsensusProtocols()
-
-	// Allow tuning SmallLambda for faster consensus in single-machine e2e
-	// tests.  Useful for development.  This might make sense to fold into
-	// a protocol-version-specific setting, once we move SmallLambda into
-	// ConsensusParams.
-	algoSmallLambda, err := strconv.ParseInt(os.Getenv("ALGOSMALLLAMBDAMSEC"), 10, 64)
-	if err == nil {
-		Protocol.SmallLambda = time.Duration(algoSmallLambda) * time.Millisecond
-	}
 
 	// Set allocation limits
 	for _, p := range Consensus {
