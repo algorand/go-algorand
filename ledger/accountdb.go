@@ -537,7 +537,7 @@ func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype bas
 }
 
 // lookup looks up for a the account data given it's address. It returns the current database round and the matching
-// account data, if such was found. If matching account data was found for the given address, the empty account data would
+// account data, if such was found. If no matching account data could be found for the given address, an empty account data would
 // be retrieved.
 func (qs *accountsDbQueries) lookup(addr basics.Address) (data basics.AccountData, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {

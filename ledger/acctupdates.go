@@ -230,6 +230,29 @@ func (e *RoundOffsetError) Error() string {
 	return fmt.Sprintf("round %d before dbRound %d", e.round, e.dbRound)
 }
 
+// StaleDatabaseRoundError is generated when we detect that the database round is behind the accountUpdates in-memory dbRound. This
+// should never happen, since we update the database first, and only upon a successfull update we update the in-memory dbRound.
+type StaleDatabaseRoundError struct {
+	memoryRound   basics.Round
+	databaseRound basics.Round
+}
+
+func (e *StaleDatabaseRoundError) Error() string {
+	return fmt.Sprintf("database round %d is behind in-memory round %d", e.databaseRound, e.memoryRound)
+}
+
+// MismatchingDatabaseRoundError is generated when we detect that the database round is different than the accountUpdates in-memory dbRound. This
+// could happen normally when the database and the in-memory dbRound aren't syncronized. However, when we work in non-sync mode, we expect the database to be
+// always syncronized with the in-memory data. When that condition is violated, this error is generated.
+type MismatchingDatabaseRoundError struct {
+	memoryRound   basics.Round
+	databaseRound basics.Round
+}
+
+func (e *MismatchingDatabaseRoundError) Error() string {
+	return fmt.Sprintf("database round %d mismatching in-memory round %d", e.databaseRound, e.memoryRound)
+}
+
 // initialize initializes the accountUpdates structure
 func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, genesisProto config.ConsensusParams, genesisAccounts map[basics.Address]basics.AccountData) {
 	au.initProto = genesisProto
@@ -428,6 +451,7 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 		}
 		if dbRound < currentDbRound {
 			au.log.Errorf("listCreatables: database round %d is behind in-memory round %d", dbRound, currentDbRound)
+			return []basics.CreatableLocator{}, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 		}
 		au.accountsMu.RLock()
 		for currentDbRound >= au.dbRound && currentDeltaLen == len(au.deltas) {
@@ -1482,6 +1506,7 @@ func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, with
 		if syncronized {
 			if dbRound < currentDbRound {
 				au.log.Errorf("accountUpdates.lookupImpl: database round %d is behind in-memory round %d", dbRound, currentDbRound)
+				return basics.AccountData{}, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 			}
 			au.accountsMu.RLock()
 			needUnlock = true
@@ -1491,8 +1516,7 @@ func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, with
 		} else {
 			// in non-sync mode, we don't wait since we already assume that we're syncronized.
 			au.log.Errorf("accountUpdates.lookupImpl: database round %d mismatching in-memory round %d", dbRound, currentDbRound)
-			err = fmt.Errorf("database round %d mismatching in-memory round %d", dbRound, currentDbRound)
-			return
+			return basics.AccountData{}, &MismatchingDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 		}
 	}
 }
@@ -1519,7 +1543,7 @@ func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.C
 			return basics.Address{}, false, err
 		}
 
-		// If this is the most recent round, au.creatables has will have the latest
+		// If this is the most recent round, au.creatables has the latest
 		// state and we can skip scanning backwards over creatableDeltas
 		if offset == uint64(len(au.deltas)) {
 			// Check if we already have the asset/creator in cache
@@ -1556,6 +1580,7 @@ func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.C
 		if syncronized {
 			if dbRound < currentDbRound {
 				au.log.Errorf("accountUpdates.getCreatorForRoundImpl: database round %d is behind in-memory round %d", dbRound, currentDbRound)
+				return basics.Address{}, false, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 			}
 			au.accountsMu.RLock()
 			unlock = true
@@ -1564,7 +1589,7 @@ func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.C
 			}
 		} else {
 			au.log.Errorf("accountUpdates.getCreatorForRoundImpl: database round %d mismatching in-memory round %d", dbRound, currentDbRound)
-			return
+			return basics.Address{}, false, &MismatchingDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 		}
 	}
 }
