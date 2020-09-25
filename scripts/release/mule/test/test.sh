@@ -10,30 +10,30 @@ export ARCH_TYPE
 OS_TYPE=$(./scripts/ostype.sh)
 export OS_TYPE
 
-if [ -z "$VERSION" ]; then
-    VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
-fi
-export VERSION
-
 if [ -z "$BRANCH" ]; then
     BRANCH=$(git rev-parse --abbrev-ref HEAD)
 fi
 export BRANCH
-
-if [ -z "$NETWORK" ]; then
-    NETWORK=$(./scripts/compute_branch_network.sh "$BRANCH")
-fi
-export NETWORK
 
 if [ -z "$CHANNEL" ]; then
     CHANNEL=$(./scripts/compute_branch_channel.sh "$BRANCH")
 fi
 export CHANNEL
 
+if [ -z "$NETWORK" ]; then
+    NETWORK=$(./scripts/compute_branch_network.sh "$BRANCH")
+fi
+export NETWORK
+
 if [ -z "$SHA" ]; then
     SHA=$(git rev-parse HEAD)
 fi
 export SHA
+
+if [ -z "$VERSION" ]; then
+    VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+fi
+export VERSION
 
 if ! $USE_CACHE
 then

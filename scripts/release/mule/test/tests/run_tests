@@ -6,12 +6,6 @@ set -ex
 # This is currently used by `test_package.sh`.
 # It is copied into a docker image at build time and then invoked at run time.
 
-BRANCH=
-CHANNEL=
-COMMIT_HASH=
-FULLVERSION=
-NETWORK=
-
 while [ "$1" != "" ]; do
     case "$1" in
         -b)
@@ -55,12 +49,12 @@ then
             dpkg -i "$deb"
         fi
     done
-else
-    for rpm in $(ls "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*"$FULLVERSION"*.rpm); do
-        if [[ ! "$rpm" =~ devtools ]]; then
-            yum install "$rpm" -y
-        fi
-    done
+#else
+#    for rpm in $(ls "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*"$FULLVERSION"*.rpm); do
+#        if [[ ! "$rpm" =~ devtools ]]; then
+#            yum install "$rpm" -y
+#        fi
+#    done
 fi
 
 export BRANCH
