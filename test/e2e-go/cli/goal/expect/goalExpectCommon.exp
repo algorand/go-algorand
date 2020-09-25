@@ -452,8 +452,8 @@ proc ::AlgorandGoal::WaitForAccountBalance { WALLET_NAME ACCOUNT_ADDRESS EXPECTE
             if { $ACCOUNT_BALANCE == $EXPECTED_BALANCE } {
                 puts "Account balance OK: $ACCOUNT_BALANCE"; break
             } else {
-               puts "Account balance: '$ACCOUNT_BALANCE' does not match expected balance: '$EXPECTED_BALANCE'"
-               if { $i >= 10 } then { ::AlgorandGoal::Abort "Account balance $ACCOUNT_BALANCE does not match expected amount: $EXPECTED_BALANCE"; break;}
+               puts "Account balance: '$ACCOUNT_BALANCE' does not match expected balance: '$EXPECTED_BALANCE', still waiting..."
+               if { $i >= 20 } then { ::AlgorandGoal::Abort "Account balance '$ACCOUNT_BALANCE' does not match expected amount: '$EXPECTED_BALANCE', waited too long, FAIL"; break;}
             }
         }
     } EXCEPTION ] } {
