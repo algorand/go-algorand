@@ -50,13 +50,13 @@ fi
 
 if [ "$PKG_TYPE" == "deb" ]
 then
-    for deb in $(ls "$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*"$FULLVERSION"*.deb); do
+    for deb in $(ls "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*"$FULLVERSION"*.deb); do
         if [[ ! "$deb" =~ devtools ]]; then
             dpkg -i "$deb"
         fi
     done
 else
-    for rpm in $(ls "$WORKDIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*"$FULLVERSION"*.rpm); do
+    for rpm in $(ls "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*"$FULLVERSION"*.rpm); do
         if [[ ! "$rpm" =~ devtools ]]; then
             yum install "$rpm" -y
         fi

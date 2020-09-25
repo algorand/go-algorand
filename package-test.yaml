@@ -8,6 +8,7 @@ agents:
     env:
       - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      - VERSION=2.1.85318
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     workDir: $HOME/projects/go-algorand

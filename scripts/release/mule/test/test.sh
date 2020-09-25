@@ -40,10 +40,11 @@ then
     mule -f package-test.yaml "package-test-setup-$PKG_TYPE"
 fi
 
-if [[ "$ARCH_TYPE" =~ "arm" ]]
-then
-    ./scripts/release/mule/test/tests/run_tests -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -n "$NETWORK" -r "$VERSION"
-else
-    ./scripts/release/mule/test/util/test_package.sh
-fi
+./scripts/release/mule/test/tests/run_tests -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -n "$NETWORK" -r "$VERSION"
+#if [[ "$ARCH_TYPE" =~ "arm" ]]
+#then
+#    ./scripts/release/mule/test/tests/run_tests -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -n "$NETWORK" -r "$VERSION"
+#else
+#    ./scripts/release/mule/test/util/test_package.sh
+#fi
 

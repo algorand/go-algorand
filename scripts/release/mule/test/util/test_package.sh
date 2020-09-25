@@ -40,6 +40,8 @@ CMD [\"/bin/bash\"]")
 
     for item in ${OS_LIST[*]}
     do
+        echo "$    env:
+        "
         # Use pattern substitution here (like sed).
         # ${parameter/pattern/substitution}
         echo -e "${TOKENIZED/\{\{OS\}\}/$item}" > Dockerfile
