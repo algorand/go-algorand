@@ -96,6 +96,14 @@ func (f *Filter) MarshalBinary() ([]byte, error) {
 	return data, nil
 }
 
+// BinaryMarshalLength returns the length of a binary marshaled filter ( in bytes ) using the
+// optimal configuration for the given number of elements with the desired false positive rate.
+func BinaryMarshalLength(numElements int, falsePositiveRate float64) int64 {
+	sizeBits, _ := Optimal(numElements, falsePositiveRate)
+	filterBytes := int64((sizeBits + 7) / 8) // convert bits -> bytes.
+	return filterBytes + 8                   // adding 8 to match 4 prefix array, plus 4 bytes for the numHashes uint32
+}
+
 // UnmarshalBinary restores the state of the filter from raw data
 func UnmarshalBinary(data []byte) (*Filter, error) {
 	f := &Filter{}

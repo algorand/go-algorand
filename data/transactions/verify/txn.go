@@ -173,6 +173,15 @@ func stxnVerifyCore(s *transactions.SignedTxn, ctx *Context) error {
 		hasLogicSig = true
 	}
 	if numSigs == 0 {
+		// Special case: special sender address can issue special transaction
+		// types (compact cert txn) without any signature.  The well-formed
+		// check ensures that this transaction cannot pay any fee, and
+		// cannot have any other interesting fields, except for the compact
+		// cert payload.
+		if s.Txn.Sender == transactions.CompactCertSender && s.Txn.Type == protocol.CompactCertTx {
+			return nil
+		}
+
 		return errors.New("signedtxn has no sig")
 	}
 	if numSigs > 1 {
