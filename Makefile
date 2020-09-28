@@ -1,13 +1,12 @@
 UNAME := $(shell uname)
 ifneq (, $(findstring MINGW,$(UNAME)))
-	#Gopath is not saved across sessions, probably existing Windows env vars, override them
-	export GOPATH := ${HOME}/go
-	GOPATH1 := $(GOPATH)
-
-	export PATH := $(PATH):$(GOPATH)/bin
+#Gopath is not saved across sessions, probably existing Windows env vars, override them
+export GOPATH := ${HOME}/go
+GOPATH1 := $(GOPATH)
+export PATH := $(PATH):$(GOPATH)/bin
 else
-	export GOPATH := $(shell go env GOPATH)
-	GOPATH1 := $(firstword $(subst :, ,$(GOPATH)))
+export GOPATH := $(shell go env GOPATH)
+GOPATH1 := $(firstword $(subst :, ,$(GOPATH)))
 endif
 export GO111MODULE	:= on
 export GOPROXY := direct
