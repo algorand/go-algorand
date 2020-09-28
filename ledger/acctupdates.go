@@ -617,7 +617,9 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 		return
 	}
 
-	newBase = au.voters.lowestRound(newBase)
+	if au.voters != nil {
+		newBase = au.voters.lowestRound(newBase)
+	}
 
 	offset = uint64(newBase - au.dbRound)
 
@@ -1368,7 +1370,9 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 
 	au.roundTotals = append(au.roundTotals, newTotals)
 
-	au.voters.newBlock(blk.BlockHeader)
+	if au.voters != nil {
+		au.voters.newBlock(blk.BlockHeader)
+	}
 }
 
 // lookupImpl returns the accound data for a given address at a given round. The withRewards indicates whether the
