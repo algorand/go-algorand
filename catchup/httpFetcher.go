@@ -100,8 +100,13 @@ func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data 
 		return nil, errNoBlockForRound
 	default:
 		hf.log.Warn("http block fetcher response status code : ", response.StatusCode)
-		response.Body.Close()
-		return nil, fmt.Errorf("GetBlockBytes error response status code %d", response.StatusCode)
+		bodyBytes, err := rpcs.ResponseBytes(response, hf.log, fetcherMaxBlockBytes)
+		if err == nil {
+			err = fmt.Errorf("GetBlockBytes error response status code %d when requesting '%s'. Response body '%s'", response.StatusCode, blockURL, string(bodyBytes))
+		} else {
+			err = fmt.Errorf("GetBlockBytes error response status code %d when requesting '%s'. %w", response.StatusCode, blockURL, err)
+		}
+		return nil, err
 	}
 
 	// at this point, we've already receieved the response headers. ensure that the

@@ -293,6 +293,16 @@ func (pool *TransactionPool) computeFeePerByte() uint64 {
 // checkSufficientFee take a set of signed transactions and verifies that each transaction has
 // sufficient fee to get into the transaction pool
 func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
+	// Special case: the compact cert transaction, if issued from the
+	// special compact-cert-sender address, in a singleton group, pays
+	// no fee.
+	if len(txgroup) == 1 {
+		t := txgroup[0].Txn
+		if t.Type == protocol.CompactCertTx && t.Sender == transactions.CompactCertSender && t.Fee.IsZero() {
+			return nil
+		}
+	}
+
 	// get the current fee per byte
 	feePerByte := pool.computeFeePerByte()
 

@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
@@ -59,6 +60,9 @@ type roundCowBase struct {
 	// TxnCounter from previous block header.
 	txnCount uint64
 
+	// CompactCertLastRound from previous block header.
+	compactCertSeen basics.Round
+
 	// The current protocol consensus params.
 	proto config.ConsensusParams
 }
@@ -77,6 +81,14 @@ func (x *roundCowBase) isDup(firstValid, lastValid basics.Round, txid transactio
 
 func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
+}
+
+func (x *roundCowBase) compactCertLast() basics.Round {
+	return x.compactCertSeen
+}
+
+func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+	return x.l.BlockHdr(r)
 }
 
 // wrappers for roundCowState to satisfy the (current) apply.Balances interface
@@ -161,6 +173,30 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 	return cs.proto
 }
 
+func (cs *roundCowState) compactCert(certRnd basics.Round, cert compactcert.Cert, atRound basics.Round) error {
+	lastCertRnd := cs.compactCertLast()
+
+	certHdr, err := cs.blockHdr(certRnd)
+	if err != nil {
+		return err
+	}
+
+	proto := config.Consensus[certHdr.CurrentProtocol]
+	votersRnd := certRnd.SubSaturate(basics.Round(proto.CompactCertRounds))
+	votersHdr, err := cs.blockHdr(votersRnd)
+	if err != nil {
+		return err
+	}
+
+	err = validateCompactCert(certHdr, cert, votersHdr, lastCertRnd, atRound)
+	if err != nil {
+		return err
+	}
+
+	cs.sawCompactCert(certRnd)
+	return nil
+}
+
 // BlockEvaluator represents an in-progress evaluation of a block
 // against the ledger.
 type BlockEvaluator struct {
@@ -242,7 +278,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		}
 
 		base.txnCount = eval.prevHeader.TxnCounter
-
+		base.compactCertSeen = eval.prevHeader.CompactCertLastRound
 		prevProto, ok = config.Consensus[eval.prevHeader.CurrentProtocol]
 		if !ok {
 			return nil, protocol.Error(eval.prevHeader.CurrentProtocol)
@@ -658,11 +694,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *app
 	// completely zero, which means the account will be deleted.)
 	rewardlvl := cow.rewardsLevel()
 	for _, addr := range cow.modifiedAccounts() {
-		// Skip FeeSink and RewardsPool MinBalance checks here.
-		// There's only two accounts, so space isn't an issue, and we don't
+		// Skip FeeSink, RewardsPool, and CompactCertSender MinBalance checks here.
+		// There's only a few accounts, so space isn't an issue, and we don't
 		// expect them to have low balances, but if they do, it may cause
-		// surprises for every transaction.
-		if addr == spec.FeeSink || addr == spec.RewardsPool {
+		// surprises.
+		if addr == spec.FeeSink || addr == spec.RewardsPool || addr == transactions.CompactCertSender {
 			continue
 		}
 
@@ -700,7 +736,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *app
 }
 
 // applyTransaction changes the balances according to this transaction.
-func applyTransaction(tx transactions.Transaction, balances apply.Balances, steva apply.StateEvaluator, spec transactions.SpecialAddresses, ctr uint64) (ad transactions.ApplyData, err error) {
+func applyTransaction(tx transactions.Transaction, balances *roundCowState, steva apply.StateEvaluator, spec transactions.SpecialAddresses, ctr uint64) (ad transactions.ApplyData, err error) {
 	params := balances.ConsensusParams()
 
 	// move fee to pool
@@ -748,6 +784,9 @@ func applyTransaction(tx transactions.Transaction, balances apply.Balances, stev
 
 	case protocol.ApplicationCallTx:
 		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, ctr, steva)
+
+	case protocol.CompactCertTx:
+		err = balances.compactCert(tx.CertRound, tx.Cert, tx.Header.FirstValid)
 
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)
@@ -804,6 +843,8 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		if err != nil {
 			return err
 		}
+
+		eval.block.CompactCertLastRound = eval.state.compactCertLast()
 	}
 
 	return nil
@@ -836,8 +877,8 @@ func (eval *BlockEvaluator) finalValidation() error {
 		if eval.block.CompactCertVotersTotal != expectedVotersWeight {
 			return fmt.Errorf("CompactCertVotersTotal wrong: %v != %v", eval.block.CompactCertVotersTotal, expectedVotersWeight)
 		}
-		if eval.block.CompactCertLastRound != 0 {
-			return fmt.Errorf("CompactCertLastRound wrong: %v != %v", eval.block.CompactCertLastRound, 0)
+		if eval.block.CompactCertLastRound != eval.state.compactCertLast() {
+			return fmt.Errorf("CompactCertLastRound wrong: %v != %v", eval.block.CompactCertLastRound, eval.state.compactCertLast())
 		}
 	}
 
