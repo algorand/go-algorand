@@ -20,6 +20,6 @@
 
 6. Switch to source code directory with `cd go-algorand`.
 
-7. Run `./scripts/windows/install_deps.sh` to install required dependencies.
+7. Run `./scripts/configure_dev.sh` to install required dependencies.
 
 8. Run `make`.
