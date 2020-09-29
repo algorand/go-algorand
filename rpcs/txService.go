@@ -20,10 +20,12 @@ import (
 	"encoding/base64"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/gorilla/mux"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -107,7 +109,11 @@ func (txs *TxService) ServeHTTP(response http.ResponseWriter, request *http.Requ
 	request.Body = http.MaxBytesReader(response, request.Body, txs.maxRequestBodyLength)
 	err := request.ParseForm()
 	if err != nil {
-		txs.log.Infof("http.ParseForm fail: %s, max body read size = %d", err, txs.maxRequestBodyLength)
+		if strings.Contains(err.Error(), "http: request body too large") {
+			txs.log.Infof("http.ParseForm fail due to body length exceed max limit size of %d", txs.maxRequestBodyLength)
+		} else {
+			txs.log.Infof("http.ParseForm fail: %s", err)
+		}
 		response.WriteHeader(http.StatusBadRequest)
 		return
 	}
