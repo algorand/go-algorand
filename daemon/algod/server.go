@@ -19,6 +19,7 @@ package algod
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -79,13 +80,12 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 		}
 	}
 
-	logWriter := func() {
-		if cfg.LogToConsole {
-			os.Stdout
-		} else {
-			logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit, maxLogAge)
-		}
-	}()
+	var logWriter io.Writer
+	if cfg.LogToConsole == true {
+		logWriter = os.Stdout
+	} else {
+		logWriter = logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit, maxLogAge)
+	}
 
 	s.log.SetOutput(logWriter)
 	s.log.SetJSONFormatter()
