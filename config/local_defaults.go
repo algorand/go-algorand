@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                               12,
+	Version:                               13,
 	AccountsRebuildSynchronousMode:        1,
 	AnnounceParticipationKey:              true,
 	Archival:                              false,
@@ -69,6 +69,7 @@ var defaultLocal = Local{
 	LogArchiveMaxAge:                      "",
 	LogArchiveName:                        "node.archive.log",
 	LogSizeLimit:                          1073741824,
+	LogToConsole:                          false,
 	MaxConnectionsPerIP:                   30,
 	NetAddress:                            "",
 	NetworkProtocolVersion:                "",

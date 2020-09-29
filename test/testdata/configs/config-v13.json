@@ -1,5 +1,5 @@
 {
-    "Version": 13,
+    "Version": 12,
     "AccountsRebuildSynchronousMode": 1,
     "AnnounceParticipationKey": true,
     "Archival": false,
@@ -48,7 +48,7 @@
     "LogArchiveMaxAge": "",
     "LogArchiveName": "node.archive.log",
     "LogSizeLimit": 1073741824,
-    "LogToConsole": false,
+    "LogToConsole": true,
     "MaxConnectionsPerIP": 30,
     "NetAddress": "",
     "NetworkProtocolVersion": "",
