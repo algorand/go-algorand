@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=2045
+# shellcheck disable=2035,2045
 
 set -ex
 
@@ -7,14 +7,24 @@ echo
 date "+build_release begin DEPLOY rpm stage %Y%m%d_%H%M%S"
 echo
 
+NO_DEPLOY=${NO_DEPLOY:-false}
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 
-mule -f package-deploy.yaml package-deploy-setup-gnupg
+# PACKAGES_DIR is set in the mule yaml and can point to local RPM packages.
+if [ -z "$PACKAGES_DIR" ]
+then
+    aws s3 cp "s3://algorand-staging/releases/stable/$VERSION/algorand-$VERSION-1.x86_64.rpm" /root
+    aws s3 cp "s3://algorand-staging/releases/stable/$VERSION/algorand-devtools-$VERSION-1.x86_64.rpm" /root
+else
+    cp "$PACKAGES_DIR"/*"$VERSION"*.rpm /root
+fi
 
 pushd /root
+
+aws s3 cp s3://algorand-devops-misc/tools/gnupg2.2.9_centos7_amd64.tar.bz2 .
 tar jxf gnupg*.tar.bz2
 
-export PATH=/root/gnupg2/bin:"${PATH}"
+export PATH="/root/gnupg2/bin:$PATH"
 export LD_LIBRARY_PATH=/root/gnupg2/lib
 
 mkdir -p .gnupg
@@ -27,8 +37,6 @@ then
 else
     echo "no-autostart" >> .gnupg/gpg.conf
 fi
-
-popd
 
 echo "wat" | gpg -u rpm@algorand.com --clearsign
 
@@ -44,9 +52,8 @@ import sys
 rpm.addSign(sys.argv[1], '')
 EOF
 
-rm -rf rpmrepo
 mkdir rpmrepo
-for rpm in $(ls ./packages/rpm/stable/*"$VERSION"*.rpm)
+for rpm in $(ls *"$VERSION"*.rpm)
 do
     python2 rpmsign.py "$rpm"
     cp -p "$rpm" rpmrepo
@@ -56,7 +63,13 @@ createrepo --database rpmrepo
 rm -f rpmrepo/repodata/repomd.xml.asc
 gpg -u rpm@algorand.com --detach-sign --armor rpmrepo/repodata/repomd.xml
 
-mule -f package-deploy.yaml package-deploy-rpm-repo
+if $NO_DEPLOY
+then
+    popd
+    cp -r /root/rpmrepo .
+else
+    aws s3 sync rpmrepo s3://algorand-releases/rpm/stable/
+fi
 
 echo
 date "+build_release end DEPLOY rpm stage %Y%m%d_%H%M%S"
