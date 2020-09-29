@@ -44,7 +44,7 @@ func TestCompactCerts(t *testing.T) {
 	consensusParams.CompactCertRounds = 8
 	consensusParams.CompactCertTopVoters = 1024
 	consensusParams.CompactCertVotersLookback = 2
-	consensusParams.CompactCertWeightThreshold = 30
+	consensusParams.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	consensusParams.CompactCertSecKQ = 128
 	configurableConsensus[consensusVersion] = consensusParams
 
@@ -110,9 +110,12 @@ func TestCompactCerts(t *testing.T) {
 			var votersRoot crypto.Digest
 			copy(votersRoot[:], lastCertBlock.CompactCertVoters)
 
+			provenWeight, overflowed := basics.Muldiv(lastCertBlock.CompactCertVotersTotal, uint64(consensusParams.CompactCertWeightThreshold), 1<<32)
+			r.False(overflowed)
+
 			ccparams := compactcert.Params{
 				Msg:          nextCertBlockDecoded.Block.BlockHeader,
-				ProvenWeight: lastCertBlock.CompactCertVotersTotal * consensusParams.CompactCertWeightThreshold / 100,
+				ProvenWeight: provenWeight,
 				SigRound:     basics.Round(nextCertBlock.Round + 1),
 				SecKQ:        128,
 			}
