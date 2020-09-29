@@ -12,6 +12,7 @@ In no particular order:
 - jsign
 - RomitKumar
 - jeapostrophe
+- mxmauro ( Mauro Leggieri )
 
 ### Bug Reports
 - Nanyan
