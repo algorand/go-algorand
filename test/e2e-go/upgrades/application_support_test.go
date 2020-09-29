@@ -17,8 +17,6 @@
 package upgrades
 
 import (
-	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -67,18 +65,7 @@ func makeApplicationUpgradeConsensus(t *testing.T) (appConsensus config.Consensu
 // to a version that supports applications. It verify that prior to supporting applications, the node would not accept
 // any application transaction and after the upgrade is complete, it would support that.
 func TestApplicationsUpgradeOverREST(t *testing.T) {
-	// set the small lambda to 500 for the duration of this test.
-	roundTimeMs := 500
-	lambda := os.Getenv("ALGOSMALLLAMBDAMSEC")
-	os.Setenv("ALGOSMALLLAMBDAMSEC", fmt.Sprintf("%d", roundTimeMs))
-	defer func() {
-		if lambda == "" {
-			os.Unsetenv("ALGOSMALLLAMBDAMSEC")
-		} else {
-			os.Setenv("ALGOSMALLLAMBDAMSEC", lambda)
-		}
-	}()
-
+	smallLambdaMs := 500
 	consensus := makeApplicationUpgradeConsensus(t)
 
 	var fixture fixtures.RestClientFixture
@@ -177,7 +164,7 @@ int 1
 		require.NoError(t, err)
 
 		require.Less(t, int64(time.Now().Sub(startLoopTime)), int64(3*time.Minute))
-		time.Sleep(time.Duration(roundTimeMs) * time.Millisecond)
+		time.Sleep(time.Duration(smallLambdaMs) * time.Millisecond)
 		round = curStatus.LastRound
 	}
 
@@ -291,18 +278,7 @@ int 1
 // to a version that supports applications. It verify that prior to supporting applications, the node would not accept
 // any application transaction and after the upgrade is complete, it would support that.
 func TestApplicationsUpgradeOverGossip(t *testing.T) {
-	// set the small lambda to 500 for the duration of this test.
-	roundTimeMs := 500
-	lambda := os.Getenv("ALGOSMALLLAMBDAMSEC")
-	os.Setenv("ALGOSMALLLAMBDAMSEC", fmt.Sprintf("%d", roundTimeMs))
-	defer func() {
-		if lambda == "" {
-			os.Unsetenv("ALGOSMALLLAMBDAMSEC")
-		} else {
-			os.Setenv("ALGOSMALLLAMBDAMSEC", lambda)
-		}
-	}()
-
+	smallLambdaMs := 500
 	consensus := makeApplicationUpgradeConsensus(t)
 
 	var fixture fixtures.RestClientFixture
@@ -436,7 +412,7 @@ int 1
 		require.NoError(t, err)
 
 		require.Less(t, int64(time.Now().Sub(startLoopTime)), int64(3*time.Minute))
-		time.Sleep(time.Duration(roundTimeMs) * time.Millisecond)
+		time.Sleep(time.Duration(smallLambdaMs) * time.Millisecond)
 		round = curStatus.LastRound
 	}
 

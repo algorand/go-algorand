@@ -354,7 +354,7 @@ func (l *Ledger) Close() {
 	// then, we shut down the trackers and their corresponding goroutines.
 	l.trackers.close()
 
-	// last, we close the underlaying database connections.
+	// last, we close the underlying database connections.
 	l.blockDBs.close()
 	l.trackerDBs.close()
 }
@@ -477,7 +477,7 @@ func (l *Ledger) isDup(currentProto config.ConsensusParams, current basics.Round
 }
 
 // GetRoundTxIds returns a map of the transactions ids that we have for the given round
-// this function is currently not being used, but remains here as it migth be useful in the future.
+// this function is currently not being used, but remains here as it might be useful in the future.
 func (l *Ledger) GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
@@ -607,8 +607,8 @@ func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state Catchpoin
 // GetCatchpointStream returns an io.ReadCloser file stream from which the catchpoint file
 // for the provided round could be retrieved. If no such stream can be generated, a non-nil
 // error is returned. The io.ReadCloser and the error are mutually exclusive -
-// if error is returned, the file stream is gurenteed to be nil, and vice versa,
-// if the file stream is not nil, the error is gurenteed to be nil.
+// if error is returned, the file stream is guaranteed to be nil, and vice versa,
+// if the file stream is not nil, the error is guaranteed to be nil.
 func (l *Ledger) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
@@ -630,7 +630,7 @@ func (l *Ledger) trackerLog() logging.Logger {
 }
 
 // trackerEvalVerified is used by the accountUpdates to reconstruct the StateDelta from a given block during it's loadFromDisk execution.
-// when this function is called, the trackers mutex is expected alredy to be taken. The provided accUpdatesLedger would allow the
+// when this function is called, the trackers mutex is expected already to be taken. The provided accUpdatesLedger would allow the
 // evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
 func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.

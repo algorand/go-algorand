@@ -418,3 +418,47 @@ func TestSetSynchronousMode(t *testing.T) {
 		}
 	}
 }
+
+// TestReadingWhileWriting tests the SQLite behaviour when we're using two transactions, writing with one and reading from the other.
+// it demonstates that at any time before we're calling Commit, the database content can be read, and it's containing it's pre-transaction
+// value.
+func TestReadingWhileWriting(t *testing.T) {
+	writeAcc, err := MakeAccessor("fn.db", false, false)
+	require.NoError(t, err)
+	defer os.Remove("fn.db")
+	defer os.Remove("fn.db-shm")
+	defer os.Remove("fn.db-wal")
+	defer writeAcc.Close()
+	readAcc, err := MakeAccessor("fn.db", true, false)
+	require.NoError(t, err)
+	defer readAcc.Close()
+	_, err = writeAcc.Handle.Exec("CREATE TABLE foo (a INTEGER, b INTEGER)")
+	require.NoError(t, err)
+
+	_, err = writeAcc.Handle.Exec("INSERT INTO foo(a,b) VALUES (1,1)")
+	require.NoError(t, err)
+
+	var count int
+	err = readAcc.Handle.QueryRow("SELECT count(*) FROM foo").Scan(&count)
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
+
+	err = writeAcc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err = tx.Exec("INSERT INTO foo(a,b) VALUES (2,2)")
+		if err != nil {
+			return err
+		}
+		err = readAcc.Handle.QueryRow("SELECT count(*) FROM foo").Scan(&count)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	// this should be 1, since it was queried before the commit.
+	require.Equal(t, 1, count)
+	err = readAcc.Handle.QueryRow("SELECT count(*) FROM foo").Scan(&count)
+	require.NoError(t, err)
+	require.Equal(t, 2, count)
+
+}

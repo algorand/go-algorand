@@ -84,7 +84,7 @@ type TransactionPool struct {
 	// rememberedTxids.  Calling rememberCommit() adds them to the
 	// pendingTxGroups and pendingTxids.  This allows us to batch the
 	// changes in OnNewBlock() without preventing a concurrent call
-	// to Pending() or Verified().
+	// to PendingTxGroups() or Verified().
 	rememberedTxGroups     [][]transactions.SignedTxn
 	rememberedVerifyParams [][]verify.Params
 	rememberedTxids        map[transactions.Txid]txPoolVerifyCacheVal
@@ -180,15 +180,24 @@ func (pool *TransactionPool) PendingTxIDs() []transactions.Txid {
 	return ids
 }
 
-// Pending returns a list of transaction groups that should be proposed
+// PendingTxGroups returns a list of transaction groups that should be proposed
 // in the next block, in order.
-func (pool *TransactionPool) Pending() [][]transactions.SignedTxn {
+func (pool *TransactionPool) PendingTxGroups() [][]transactions.SignedTxn {
 	pool.pendingMu.RLock()
 	defer pool.pendingMu.RUnlock()
 	// note that this operation is safe for the sole reason that arrays in go are immutable.
 	// if the underlaying array need to be expanded, the actual underlaying array would need
 	// to be reallocated.
 	return pool.pendingTxGroups
+}
+
+// pendingTxIDsCount returns the number of pending transaction ids that are still waiting
+// in the transaction pool. This is identical to the number of transaction ids that would
+// be retrieved by a call to PendingTxIDs()
+func (pool *TransactionPool) pendingTxIDsCount() int {
+	pool.pendingMu.RLock()
+	defer pool.pendingMu.RUnlock()
+	return len(pool.pendingTxids)
 }
 
 // rememberCommit() saves the changes added by remember to
@@ -238,9 +247,9 @@ func (pool *TransactionPool) pendingCountNoLock() int {
 // group transaction list. As long as we haven't surpassed the size limit, we
 // should be good to go.
 func (pool *TransactionPool) checkPendingQueueSize() error {
-	pendingSize := len(pool.Pending())
+	pendingSize := pool.pendingTxIDsCount()
 	if pendingSize >= pool.txPoolMaxSize {
-		return fmt.Errorf("TransactionPool.Test: transaction pool have reached capacity")
+		return fmt.Errorf("TransactionPool.checkPendingQueueSize: transaction pool have reached capacity")
 	}
 	return nil
 }
@@ -293,6 +302,16 @@ func (pool *TransactionPool) computeFeePerByte() uint64 {
 // checkSufficientFee take a set of signed transactions and verifies that each transaction has
 // sufficient fee to get into the transaction pool
 func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn) error {
+	// Special case: the compact cert transaction, if issued from the
+	// special compact-cert-sender address, in a singleton group, pays
+	// no fee.
+	if len(txgroup) == 1 {
+		t := txgroup[0].Txn
+		if t.Type == protocol.CompactCertTx && t.Sender == transactions.CompactCertSender && t.Fee.IsZero() {
+			return nil
+		}
+	}
+
 	// get the current fee per byte
 	feePerByte := pool.computeFeePerByte()
 

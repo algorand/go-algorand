@@ -128,7 +128,7 @@ func appSpecStringInvalid(s string) error {
 }
 
 func appSpecHelpStringInvalid(s string) error {
-	if !printable(s) {
+	if !unicodePrintable(s) {
 		return fmt.Errorf("%s is not Unicode printable", strconv.Quote(s))
 	}
 	return nil
