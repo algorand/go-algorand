@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.com/algorand/go-algorand.svg?token=25XP72ADqbCQJ3TJVC9S&branch=master)](https://travis-ci.com/algorand/go-algorand)
+[![Build Status](https://travis-ci.com/algorand/go-algorand.svg?branch=master)](https://travis-ci.com/algorand/go-algorand)
 
 buildhost
 ====================
