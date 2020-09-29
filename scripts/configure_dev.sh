@@ -41,7 +41,7 @@ function install_or_upgrade {
     fi
 }
 
-function install_windoows_shellcheck() {
+function install_windows_shellcheck() {
     version="v0.7.1"
     wget https://github.com/koalaman/shellcheck/releases/download/$version/shellcheck-$version.zip -O /tmp/shellcheck-$version.zip
     if [ $? -ne 0 ]; then
@@ -100,7 +100,7 @@ elif [ "${OS}" = "windows" ]; then
     # Golang probably is not installed under MSYS2 so add the environment variable temporarily
     export GOPATH=$HOME/go
 
-    install_windoows_shellcheck
+    install_windows_shellcheck
     if [ $? -ne 0 ]
     then
         exit 1
