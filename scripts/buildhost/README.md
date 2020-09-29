@@ -1,5 +1,3 @@
-[![Build Status](https://travis-ci.com/algorand/go-algorand.svg?branch=master)](https://travis-ci.com/algorand/go-algorand)
-
 buildhost
 ====================
 
@@ -32,6 +30,7 @@ sudo cp 50-cloud-init.yaml 50-cloud-init.yaml.bak
 ```
 
  Merge the following into 50-cloud-init.yaml, while retaining the original mac address:
+ ```
 # This file is generated from information provided by
 # the datasource.  Changes to it will not persist across an instance.
 # To disable cloud-init's network configuration capabilities, write a file
@@ -50,6 +49,7 @@ network:
       interfaces: [ens3]
       macaddress: "02:2c:f9:9d:ec:04"
       dhcp4: true
+```
 
 run the following script:
 ```bash
