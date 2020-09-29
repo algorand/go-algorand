@@ -131,7 +131,7 @@ func killPID(pid int) error {
 		}
 		select {
 		case <-waitLong:
-			return util.KillProcess(pid, syscall.SIGTERM)
+			return util.KillProcess(pid, syscall.SIGKILL)
 		case <-time.After(time.Millisecond * 100):
 		}
 	}
