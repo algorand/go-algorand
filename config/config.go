@@ -63,7 +63,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
@@ -152,6 +152,10 @@ type Local struct {
 	// LogArchiveMaxAge will be parsed by time.ParseDuration().
 	// Valid units are 's' seconds, 'm' minutes, 'h' hours
 	LogArchiveMaxAge string `version[4]:""`
+
+	// Log to console out only.
+	// Used when running node within docker container
+	LogToConsole bool `version[13]:"false"`
 
 	// number of consecutive attempts to catchup after which we replace the peers we're connected to
 	CatchupFailurePeerRefreshRate int `version[0]:"10"`

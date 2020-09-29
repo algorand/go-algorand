@@ -78,7 +78,15 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 			maxLogAge = 0
 		}
 	}
-	logWriter := logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit, maxLogAge)
+
+	logWriter := func() {
+		if cfg.LogToConsole {
+			os.Stdout
+		} else {
+			logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit, maxLogAge)
+		}
+	}()
+
 	s.log.SetOutput(logWriter)
 	s.log.SetJSONFormatter()
 	s.log.SetLevel(logging.Level(cfg.BaseLoggerDebugLevel))
