@@ -27,6 +27,7 @@ import (
 	"io"
 	"math"
 	"math/big"
+	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -414,6 +415,11 @@ func eval(program []byte, cx *evalContext) (pass bool, err error) {
 	cx.pc = vlen
 	cx.stack = make([]stackValue, 0, 10)
 	cx.program = program
+
+	debugURL := os.Getenv("TEAL_DEBUGGER_URL")
+	if debugURL != "" {
+		cx.Debugger = &WebDebuggerHook{URL: debugURL}
+	}
 
 	if cx.Debugger != nil {
 		cx.debugState = makeDebugState(cx)
