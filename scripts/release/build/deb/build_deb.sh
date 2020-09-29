@@ -62,7 +62,7 @@ if [[ ! "$PKG_NAME" =~ devtools ]]; then
         mkdir -p "$PKG_ROOT/var/lib/algorand/genesis/$dir"
         cp "./installer/genesis/$dir/genesis.json" "$PKG_ROOT/var/lib/algorand/genesis/$dir/genesis.json"
     done
-    cp "./installer/genesis/$DEFAULTNETWORK/genesis.json" "$PKG_ROOT/var/lib/algorand/genesis.json"
+    cp "./installer/genesis/$DEFAULT_RELEASE_NETWORK/genesis.json" "$PKG_ROOT/var/lib/algorand/genesis.json"
 
     # files should not be group writable but directories should be
     chmod -R g-w "$PKG_ROOT/var/lib/algorand"

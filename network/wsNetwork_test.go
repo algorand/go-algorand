@@ -42,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -1539,5 +1540,96 @@ func TestWebsocketNetworkMessageOfInterest(t *testing.T) {
 		} else {
 			require.Equal(t, 0, count)
 		}
+	}
+}
+
+// Set up two nodes, have one of them disconnect from the other, and monitor disconnection error on the side that did not issue the disconnection.
+// Plan:
+// Network A will be sending messages to network B.
+// Network B will respond with another message for the first 4 messages. When it receive the 5th message, it would close the connection.
+// We want to get an event with disconnectRequestReceived
+func TestWebsocketDisconnection(t *testing.T) {
+	netA := makeTestWebsocketNode(t)
+	netA.config.GossipFanout = 1
+	netA.config.EnablePingHandler = false
+	dl := eventsDetailsLogger{Logger: logging.TestingLog(t), eventReceived: make(chan interface{}, 1), eventIdentifier: telemetryspec.DisconnectPeerEvent}
+	netA.log = dl
+
+	netA.Start()
+	defer func() { t.Log("stopping A"); netA.Stop(); t.Log("A done") }()
+	netB := makeTestWebsocketNode(t)
+	netB.config.GossipFanout = 1
+	netB.config.EnablePingHandler = false
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
+	netB.Start()
+	defer func() { t.Log("stopping B"); netB.Stop(); t.Log("B done") }()
+
+	msgHandlerA := func(msg IncomingMessage) (out OutgoingMessage) {
+		// if we received a message, send a message back.
+		if msg.Data[0]%10 == 2 {
+			netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{msg.Data[0] + 8}, true, nil)
+		}
+		return
+	}
+
+	var msgCounterNetB uint32
+	msgHandlerB := func(msg IncomingMessage) (out OutgoingMessage) {
+		if atomic.AddUint32(&msgCounterNetB, 1) == 5 {
+			// disconnect
+			netB.DisconnectPeers()
+		} else {
+			// if we received a message, send a message back.
+			netB.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{msg.Data[0] + 1}, true, nil)
+			netB.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{msg.Data[0] + 2}, true, nil)
+		}
+		return
+	}
+
+	// register all the handlers.
+	taggedHandlersA := []TaggedMessageHandler{
+		TaggedMessageHandler{
+			Tag:            protocol.ProposalPayloadTag,
+			MessageHandler: HandlerFunc(msgHandlerA),
+		},
+	}
+	netA.ClearHandlers()
+	netA.RegisterHandlers(taggedHandlersA)
+
+	taggedHandlersB := []TaggedMessageHandler{
+		TaggedMessageHandler{
+			Tag:            protocol.ProposalPayloadTag,
+			MessageHandler: HandlerFunc(msgHandlerB),
+		},
+	}
+	netB.ClearHandlers()
+	netB.RegisterHandlers(taggedHandlersB)
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	waitReady(t, netB, readyTimeout.C)
+	netA.Broadcast(context.Background(), protocol.ProposalPayloadTag, []byte{0}, true, nil)
+	// wait until the peers disconnect.
+	for {
+		peers := netA.GetPeers(PeersConnectedIn)
+		if len(peers) == 0 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	select {
+	case eventDetails := <-dl.eventReceived:
+		switch disconnectPeerEventDetails := eventDetails.(type) {
+		case telemetryspec.DisconnectPeerEventDetails:
+			require.Equal(t, disconnectPeerEventDetails.Reason, string(disconnectRequestReceived))
+		default:
+			require.FailNow(t, "Unexpected event was send : %v", eventDetails)
+		}
+
+	default:
+		require.FailNow(t, "The DisconnectPeerEvent was missing")
 	}
 }

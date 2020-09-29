@@ -217,6 +217,16 @@ type deferedCommit struct {
 	lookback basics.Round
 }
 
+// RoundOffsetError is an error for when requested round is behind earliest stored db entry
+type RoundOffsetError struct {
+	round   basics.Round
+	dbRound basics.Round
+}
+
+func (e *RoundOffsetError) Error() string {
+	return fmt.Sprintf("round %d before dbRound %d", e.round, e.dbRound)
+}
+
 // initialize initializes the accountUpdates structure
 func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, genesisProto config.ConsensusParams, genesisAccounts map[basics.Address]basics.AccountData) {
 	au.initProto = genesisProto
@@ -1453,7 +1463,10 @@ func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Ro
 // roundOffset calculates the offset of the given round compared to the current dbRound. Requires that the lock would be taken.
 func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err error) {
 	if rnd < au.dbRound {
-		err = fmt.Errorf("round %d before dbRound %d", rnd, au.dbRound)
+		err = &RoundOffsetError{
+			round:   rnd,
+			dbRound: au.dbRound,
+		}
 		return
 	}
 
