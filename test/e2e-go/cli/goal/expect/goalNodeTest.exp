@@ -48,10 +48,10 @@ if { [catch {
         timeout { close; ::AlgorandGoal::Abort "starting node exceeded timeout" }
         -re {^Algorand node failed to start: node exited with an error code, check node\.log for more details : exit status 1} {
             puts "\nExpected failuire : node failed to start"
-            // wait until the eof signal is received
+            # wait until the eof signal is received
             expect {
                 timeout { close; ::AlgorandGoal::Abort "failed to see node terminating after outputing error message" }
-                eof { ::AlgorandGoal::Abort "eof received as expected after error message output" }
+                eof { puts "eof received as expected after error message output" }
             }
         }
         eof { ::AlgorandGoal::Abort "eof received before the expected output " }
