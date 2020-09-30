@@ -28,19 +28,12 @@ tasks:
     agent: deb
     target: mule-test-rpm
 
-  - task: s3.DownloadFile
-    name: deb
-    bucketName: algorand-staging
-    objectName: releases/$CHANNEL/$VERSION/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb
-    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
-
-  - task: s3.DownloadFile
-    name: rpm
-    bucketName: algorand-staging
-    objectName: releases/$CHANNEL/$VERSION/algorand-${VERSION}-1.${ARCH_BIT}.rpm
-    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
-
 jobs:
+  package-test:
+    tasks:
+      - docker.Make.package-test-deb
+      - docker.Make.package-test-rpm
+
   package-test-deb:
     tasks:
       - docker.Make.package-test-deb
@@ -48,17 +41,4 @@ jobs:
   package-test-rpm:
     tasks:
       - docker.Make.package-test-rpm
-
-  package-test:
-    tasks:
-      - docker.Make.package-test-deb
-      - docker.Make.package-test-rpm
-
-  package-test-setup-deb:
-    tasks:
-      - s3.DownloadFile.deb
-
-  package-test-setup-rpm:
-    tasks:
-      - s3.DownloadFile.rpm
 

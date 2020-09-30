@@ -10,37 +10,27 @@ export ARCH_TYPE
 OS_TYPE=$(./scripts/ostype.sh)
 export OS_TYPE
 
-if [ -z "$BRANCH" ]; then
-    BRANCH=$(git rev-parse --abbrev-ref HEAD)
-fi
-export BRANCH
+export BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
+export CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
+export NETWORK=${NETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
+export SHA=${SHA:-$(git rev-parse HEAD)}
+export VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 
-if [ -z "$CHANNEL" ]; then
-    CHANNEL=$(./scripts/compute_branch_channel.sh "$BRANCH")
-fi
-export CHANNEL
+#if ! $USE_CACHE
+#then
+#    mule -f package-test.yaml "package-test-setup-$PKG_TYPE"
+#    agent: deb
+#    bucketName: algorand-staging
+#    objectName: releases/$CHANNEL/$VERSION/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb
+#    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
+#
+#    name: rpm
+#    bucketName: algorand-staging
+#    objectName: releases/$CHANNEL/$VERSION/algorand-${VERSION}-1.${ARCH_BIT}.rpm
+#    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
+#fi
 
-if [ -z "$NETWORK" ]; then
-    NETWORK=$(./scripts/compute_branch_network.sh "$BRANCH")
-fi
-export NETWORK
-
-if [ -z "$SHA" ]; then
-    SHA=$(git rev-parse HEAD)
-fi
-export SHA
-
-if [ -z "$VERSION" ]; then
-    VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
-fi
-export VERSION
-
-if ! $USE_CACHE
-then
-    mule -f package-test.yaml "package-test-setup-$PKG_TYPE"
-fi
-
-./scripts/release/mule/test/tests/run_tests -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -n "$NETWORK" -r "$VERSION"
+./scripts/release/mule/test/tests/run_tests
 #if [[ "$ARCH_TYPE" =~ "arm" ]]
 #then
 #    ./scripts/release/mule/test/tests/run_tests -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -n "$NETWORK" -r "$VERSION"

@@ -3,65 +3,26 @@
 
 set -ex
 
-# This is currently used by `test_package.sh`.
-# It is copied into a docker image at build time and then invoked at run time.
-
-while [ "$1" != "" ]; do
-    case "$1" in
-        -b)
-            shift
-            BRANCH="$1"
-            ;;
-        -c)
-            shift
-            CHANNEL="$1"
-            ;;
-        -h)
-            shift
-            COMMIT_HASH="$1"
-            ;;
-        -n)
-            shift
-            NETWORK="$1"
-            ;;
-        -r)
-            shift
-            FULLVERSION="$1"
-            ;;
-        *)
-            echo "Unknown option" "$1"
-            exit 1
-            ;;
-    esac
-    shift
-done
-
-if [ -z "$BRANCH" ] || [ -z "$CHANNEL" ] || [ -z "$COMMIT_HASH" ] || [ -z "$FULLVERSION" ] || [ -z "$NETWORK" ]
+if [ -z "$BRANCH" ] || [ -z "$CHANNEL" ] || [ -z "$SHA" ] || [ -z "$VERSION" ] || [ -z "$NETWORK" ]
 then
-    echo "[ERROR] $0 -b $BRANCH -c $CHANNEL -h $COMMIT_HASH -n $NETWORK -r $FULLVERSION"
+    echo "[ERROR] $0 -b $BRANCH -c $CHANNEL -h $SHA -n $NETWORK -r $VERSION"
     exit 1
 fi
 
 if [ "$PKG_TYPE" == "deb" ]
 then
-    for deb in $(ls "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*"$FULLVERSION"*.deb); do
+    for deb in $(ls "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*"$VERSION"*.deb); do
         if [[ ! "$deb" =~ devtools ]]; then
             dpkg -i "$deb"
         fi
     done
 #else
-#    for rpm in $(ls "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*"$FULLVERSION"*.rpm); do
+#    for rpm in $(ls "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"/*"$VERSION"*.rpm); do
 #        if [[ ! "$rpm" =~ devtools ]]; then
 #            yum install "$rpm" -y
 #        fi
 #    done
 fi
-
-export BRANCH
-export COMMIT_HASH
-export CHANNEL
-export FULLVERSION
-export NETWORK
 
 for test in $(ls ./scripts/release/mule/test/tests/*.sh)
 do
