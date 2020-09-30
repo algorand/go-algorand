@@ -172,7 +172,7 @@ func (kc *KMDController) StartKMD(args KMDStartArgs) (alreadyRunning bool, err e
 		// Got a PID. Is there actually a process running there?
 		// "If sig is 0, then no signal is sent, but existence and permission
 		// checks are still performed"
-		err = syscall.Kill(int(pid), syscall.Signal(0))
+		err = util.KillProcess(int(pid), syscall.Signal(0))
 		if err == nil {
 			// Yup, return alreadyRunning = true
 			return true, nil

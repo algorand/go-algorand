@@ -30,7 +30,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 
@@ -44,6 +43,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -1070,14 +1070,16 @@ func TestWebsocketNetworkManyIdle(t *testing.T) {
 		waitReady(t, clients[i], readyTimeout.C)
 	}
 
-	var r0, r1 syscall.Rusage
-	syscall.Getrusage(syscall.RUSAGE_SELF, &r0)
+	var r0utime, r1utime int64
+	var r0stime, r1stime int64
+
+	r0utime, r0stime, _ = util.GetCurrentProcessTimes()
 	time.Sleep(10 * time.Second)
-	syscall.Getrusage(syscall.RUSAGE_SELF, &r1)
+	r1utime, r1stime, _ = util.GetCurrentProcessTimes()
 
 	t.Logf("Background CPU use: user %v, system %v\n",
-		time.Duration(r1.Utime.Nano()-r0.Utime.Nano()),
-		time.Duration(r1.Stime.Nano()-r0.Stime.Nano()))
+		time.Duration(r1utime-r0utime),
+		time.Duration(r1stime-r0stime))
 }
 
 // TODO: test both sides of http-header setting and checking?
