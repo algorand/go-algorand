@@ -67,7 +67,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	lib.GenesisJSONText = genesisText
 
-	liveLog := filepath.Join(s.RootPath, "node.log")
+	liveLog := filepath.Join(s.RootPath, cfg.LogFileName)
 	archive := filepath.Join(s.RootPath, cfg.LogArchiveName)
 	fmt.Println("Logging to: ", liveLog)
 	var maxLogAge time.Duration
@@ -81,7 +81,7 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	}
 
 	var logWriter io.Writer
-	if cfg.LogToConsole == true {
+	if cfg.LogFileName == "-" {
 		logWriter = os.Stdout
 	} else {
 		logWriter = logging.MakeCyclicFileWriter(liveLog, archive, cfg.LogSizeLimit, maxLogAge)

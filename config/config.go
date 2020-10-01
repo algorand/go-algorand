@@ -153,9 +153,10 @@ type Local struct {
 	// Valid units are 's' seconds, 'm' minutes, 'h' hours
 	LogArchiveMaxAge string `version[4]:""`
 
-	// Log to console out only.
+	// Log file name defaults to node.log.
+	// Set to "-" to log to stdout
 	// Used when running node within docker container
-	LogToConsole bool `version[13]:"false"`
+	LogFileName string `version[13]:"node.log"`
 
 	// number of consecutive attempts to catchup after which we replace the peers we're connected to
 	CatchupFailurePeerRefreshRate int `version[0]:"10"`
