@@ -47,6 +47,7 @@ import (
 	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util"
 )
 
 const (
@@ -221,7 +222,7 @@ func (f *AuctionFixture) Stop(pidFile string) error {
 		return err
 	}
 
-	err = syscall.Kill(int(pid), syscall.SIGTERM)
+	err = util.KillProcess(int(pid), syscall.SIGTERM)
 	if err != nil {
 		f.t.Errorf("Unable to kill PID: %d", pid)
 		return err
@@ -235,7 +236,7 @@ func (f *AuctionFixture) Stop(pidFile string) error {
 		}
 		select {
 		case <-waitLong:
-			return syscall.Kill(int(pid), syscall.SIGKILL)
+			return util.KillProcess(int(pid), syscall.SIGKILL)
 		case <-time.After(time.Millisecond * 100):
 		}
 	}

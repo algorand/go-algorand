@@ -46,10 +46,17 @@ if { [catch {
     spawn goal node start -d $TEST_PRIMARY_NODE_DIR
     expect {
         timeout { close; ::AlgorandGoal::Abort "starting node exceeded timeout" }
-        -re {^Algorand node failed to start: node exited with an error code, check node\.log for more details : exit status 1} {puts "Expected failuire : node failed to start"; close}
+        -re {^Algorand node failed to start: node exited with an error code, check node\.log for more details : exit status 1} {
+            puts "\nExpected failuire : node failed to start"
+            # wait until the eof signal is received
+            expect {
+                timeout { close; ::AlgorandGoal::Abort "failed to see node terminating after outputing error message" }
+                eof { puts "eof received as expected after error message output" }
+            }
+        }
         eof { ::AlgorandGoal::Abort "eof received before the expected output " }
     }
-    lassign [::AlgorandGoal::CheckProcessReturnedCode 0] ERROR_CODE
+    lassign [::AlgorandGoal::CheckProcessReturnedCode 0] response OS_CODE ERROR_CODE KILLED KILL_SIGNAL EXP
     if {$ERROR_CODE != 1} {
         puts "Node was expected to fail with 1 due to invalid ledger file, but returned error code $ERROR_CODE instead"
         exit 1

@@ -12,6 +12,8 @@ import (
 	"log"
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestBitset(t *testing.T) {
@@ -226,5 +228,22 @@ func TestEmptyFilter(t *testing.T) {
 			continue
 		}
 		f.Test([]byte{1, 2, 3, 4, 5})
+	}
+}
+
+// TestBinaryMarshalLength tests various sizes of bloom filters and ensures that the encoded binary
+// size is equal to the one reported by BinaryMarshalLength.
+func TestBinaryMarshalLength(t *testing.T) {
+	for _, elementCount := range []int{2, 16, 1024, 32768, 5101, 100237, 144539} {
+		for _, falsePositiveRate := range []float64{0.2, 0.1, 0.01, 0.001, 0.00001, 0.0000001} {
+			sizeBits, numHashes := Optimal(elementCount, falsePositiveRate)
+			filter := New(sizeBits, numHashes, 1234)
+			require.NotNil(t, filter)
+			bytes, err := filter.MarshalBinary()
+			require.NoError(t, err)
+			require.NotZero(t, len(bytes))
+			calculatedBytesLength := BinaryMarshalLength(elementCount, falsePositiveRate)
+			require.Equal(t, calculatedBytesLength, int64(len(bytes)))
+		}
 	}
 }
