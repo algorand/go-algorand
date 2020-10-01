@@ -43,6 +43,22 @@ func TestAlgodLogsToFile(t *testing.T) {
 	testNodeCreatesLogFiles(t, nc2, false)
 }
 
+func TestAlgodLogsToStdOut(t *testing.T) {
+	t.Parallel()
+
+	var fixture fixtures.LibGoalFixture
+	fixture.SetupNoStart(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
+	defer fixture.Shutdown()
+	binDir := fixture.GetBinDir()
+
+	// Start one node with Redirect enabled and one without.
+	// The one with redirect should not generate the algod-*.log files
+	nc1 := nodecontrol.MakeNodeController(binDir, fixture.PrimaryDataDir())
+	nc2 := nodecontrol.MakeNodeController(binDir, fixture.NodeDataDirs()[0])
+	testNodeCreatesLogFiles(t, nc1, true)
+	testNodeCreatesLogFiles(t, nc2, false)
+}
+
 func testNodeCreatesLogFiles(t *testing.T, nc nodecontrol.NodeController, redirect bool) {
 	a := require.New(t)
 
