@@ -5,13 +5,15 @@ set -ex
 
 echo "[$0] Verifying installed binaries."
 
+RPMTMP=$(mktemp -d)
+
 if [ "$PKG_TYPE" = deb ]
 then
-    dpkg -L algorand > /tmp/algorand.install
-    dpkg -L algorand-devtools > /tmp/algorand-devtools.install
+    dpkg -L algorand > "$RPMTMP/algorand.install"
+    dpkg -L algorand-devtools > "$RPMTMP/algorand-devtools.install"
 else
-    rpm -ql algorand > /tmp/algorand.install
-    rpm -ql algorand-devtools > /tmp/algorand-devtools.install
+    rpm -ql algorand > "$RPMTMP/algorand.install"
+    rpm -ql algorand-devtools > "$RPMTMP/algorand-devtools.install"
 fi
 
 ALGORAND_BINS=(
@@ -26,7 +28,7 @@ ALGORAND_BINS=(
     /usr/bin/node_exporter
 )
 for bin in "${ALGORAND_BINS[@]}"; do
-    if ! grep "$bin" /tmp/algorand.install
+    if ! grep "$bin" "$RPMTMP/algorand.install"
     then
         echo "[$0] The binary $bin is not contained in the algorand package."
         exit 1
@@ -41,7 +43,7 @@ DEVTOOLS_BINS=(
     /usr/bin/tealdbg
 )
 for bin in "${DEVTOOLS_BINS[@]}"; do
-    if ! grep "$bin" /tmp/algorand-devtools.install
+    if ! grep "$bin" "$RPMTMP/algorand-devtools.install"
     then
         echo "[$0] The binary $bin is not contained in the algorand-devtools package."
         exit 1

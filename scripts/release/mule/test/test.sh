@@ -37,8 +37,8 @@ then
     dpkg -i algorand_*"$VERSION"*.deb
     dpkg -i algorand-devtools*"$VERSION"*.deb
 else
-    yum install yum-cron -y
-    rpm -i algorand*"$VERSION"*.rpm
+    yum install yumdownloader yum-cron -y
+    rpm -i algorand*"$VERSION"*"$ARCH_BIT".rpm
 fi
 popd
 
