@@ -205,9 +205,19 @@ func (b *Builder) Build() (*Cert, error) {
 	}
 
 	var proofPositions []uint64
+	msgHash := crypto.HashObj(b.Msg)
 
 	for j := uint64(0); j < nr; j++ {
-		coin := hashCoin(j, c.SigCommit, c.SignedWeight)
+		choice := coinChoice{
+			J:            j,
+			SignedWeight: c.SignedWeight,
+			ProvenWeight: b.ProvenWeight,
+			Sigcom:       c.SigCommit,
+			Partcom:      b.parttree.Root(),
+			MsgHash:      msgHash,
+		}
+
+		coin := hashCoin(choice)
 		pos, err := b.coinIndex(coin)
 		if err != nil {
 			return nil, err

@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/algorand/go-algorand/util"
 )
 
 // NodeController provides an object for controlling a specific algod node instance
@@ -116,7 +118,7 @@ func killPID(pid int) error {
 		return err
 	}
 
-	err = syscall.Kill(pid, syscall.SIGTERM)
+	err = util.KillProcess(pid, syscall.SIGTERM)
 	if err != nil {
 		return err
 	}
@@ -129,7 +131,7 @@ func killPID(pid int) error {
 		}
 		select {
 		case <-waitLong:
-			return syscall.Kill(pid, syscall.SIGKILL)
+			return util.KillProcess(pid, syscall.SIGKILL)
 		case <-time.After(time.Millisecond * 100):
 		}
 	}

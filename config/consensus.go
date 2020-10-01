@@ -21,7 +21,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/algorand/go-algorand/protocol"
@@ -832,15 +831,6 @@ func init() {
 	Consensus = make(ConsensusProtocols)
 
 	initConsensusProtocols()
-
-	// Allow tuning SmallLambda for faster consensus in single-machine e2e
-	// tests.  Useful for development.  This might make sense to fold into
-	// a protocol-version-specific setting, once we move SmallLambda into
-	// ConsensusParams.
-	algoSmallLambda, err := strconv.ParseInt(os.Getenv("ALGOSMALLLAMBDAMSEC"), 10, 64)
-	if err == nil {
-		Protocol.SmallLambda = time.Duration(algoSmallLambda) * time.Millisecond
-	}
 
 	// Set allocation limits
 	for _, p := range Consensus {

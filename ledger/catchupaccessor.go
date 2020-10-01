@@ -60,7 +60,7 @@ type CatchpointCatchupAccessor interface {
 	// VerifyCatchpoint verifies that the catchpoint is valid by reconstructing the label.
 	VerifyCatchpoint(ctx context.Context, blk *bookkeeping.Block) (err error)
 
-	// StoreBalancesRound calculates the balances round based on the first block and the associated consensus parametets, and
+	// StoreBalancesRound calculates the balances round based on the first block and the associated consensus parameters, and
 	// store that to the database
 	StoreBalancesRound(ctx context.Context, blk *bookkeeping.Block) (err error)
 
@@ -225,7 +225,7 @@ type CatchpointCatchupAccessorProgress struct {
 	TotalChunks       uint64
 	SeenHeader        bool
 
-	// Having the cachedTrie here would help to accelarate the catchup process since the trie maintain an internal cache of nodes.
+	// Having the cachedTrie here would help to accelerate the catchup process since the trie maintain an internal cache of nodes.
 	// While rebuilding the trie, we don't want to force and reload (some) of these nodes into the cache for each catchpoint file chunk.
 	cachedTrie     *merkletrie.Trie
 	evictFrequency uint64
@@ -375,16 +375,16 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		progress.ProcessedAccounts += uint64(len(balances.Balances))
 		progress.ProcessedBytes += uint64(len(bytes))
 	}
-	// not strictly required, but clean up the pointer in case of either a failuire or when we're done.
+	// not strictly required, but clean up the pointer in case of either a failure or when we're done.
 	if err != nil || progress.ProcessedAccounts == progress.TotalAccounts {
 		progress.cachedTrie = nil
-		// restore "normal" syncronous mode
+		// restore "normal" synchronous mode
 		c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 	}
 	return err
 }
 
-// EvictAsNeeded calls Evict on the cachedTrie priodically, or once we're done updating the trie.
+// EvictAsNeeded calls Evict on the cachedTrie periodically, or once we're done updating the trie.
 func (progress *CatchpointCatchupAccessorProgress) EvictAsNeeded(balancesCount uint64) (err error) {
 	if progress.cachedTrie == nil {
 		return nil
@@ -485,7 +485,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 	return nil
 }
 
-// StoreBalancesRound calculates the balances round based on the first block and the associated consensus parametets, and
+// StoreBalancesRound calculates the balances round based on the first block and the associated consensus parameters, and
 // store that to the database
 func (c *CatchpointCatchupAccessorImpl) StoreBalancesRound(ctx context.Context, blk *bookkeeping.Block) (err error) {
 	// calculate the balances round and store it. It *should* be identical to the one in the catchpoint file header, but we don't want to

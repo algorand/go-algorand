@@ -183,11 +183,11 @@ type accountUpdates struct {
 	// written to the database.
 	balancesTrie *merkletrie.Trie
 
-	// The last catchpoint label that was writted to the database. Should always align with what's in the database.
+	// The last catchpoint label that was written to the database. Should always align with what's in the database.
 	// note that this is the last catchpoint *label* and not the catchpoint file.
 	lastCatchpointLabel string
 
-	// catchpointWriting help to syncronize the catchpoint file writing. When this channel is closed, no writting is going on.
+	// catchpointWriting help to syncronize the catchpoint file writing. When this channel is closed, no writing is going on.
 	// the channel is non-closed while writing the current accounts state to disk.
 	catchpointWriting chan struct{}
 
@@ -199,7 +199,7 @@ type accountUpdates struct {
 	// ctx is the context for the committing go-routine. It's also used as the "parent" of the catchpoint generation operation.
 	ctx context.Context
 
-	// ctxCancel is the canceling function for canceling the commiting go-routine ( i.e. signaling the commiting go-routine that it's time to abort )
+	// ctxCancel is the canceling function for canceling the committing go-routine ( i.e. signaling the committing go-routine that it's time to abort )
 	ctxCancel context.CancelFunc
 
 	// deltasAccum stores the accumulated deltas for every round starting dbRound-1.
@@ -208,13 +208,13 @@ type accountUpdates struct {
 	// committedOffset is the offset at which we'd like to persist all the previous account information to disk.
 	committedOffset chan deferedCommit
 
-	// accountsMu is the syncronization mutex for accessing the various non-static varaibles.
+	// accountsMu is the synchronization mutex for accessing the various non-static variables.
 	accountsMu deadlock.RWMutex
 
-	// accountsWriting provides syncronization around the background writing of account balances.
+	// accountsWriting provides synchronization around the background writing of account balances.
 	accountsWriting sync.WaitGroup
 
-	// commitSyncerClosed is the blocking channel for syncronizing closing the commitSyncer goroutine. Once it's closed, the
+	// commitSyncerClosed is the blocking channel for synchronizing closing the commitSyncer goroutine. Once it's closed, the
 	// commitSyncer can be assumed to have aborted.
 	commitSyncerClosed chan struct{}
 
@@ -339,7 +339,7 @@ func (au *accountUpdates) IsWritingCatchpointFile() bool {
 	}
 }
 
-// Lookup returns the accound data for a given address at a given round. The withRewards indicates whether the
+// Lookup returns the account data for a given address at a given round. The withRewards indicates whether the
 // rewards should be added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it could return the AccoutData which represent the "rewarded" account data.
 func (au *accountUpdates) Lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
@@ -552,11 +552,11 @@ func (au *accountUpdates) GetCreatorForRound(rnd basics.Round, cidx basics.Creat
 	return au.getCreatorForRoundImpl(rnd, cidx, ctype)
 }
 
-// committedUpTo enqueues commiting the balances for round committedRound-lookback.
-// The defered committing is done so that we could calculate the historical balances lookback rounds back.
-// Since we don't want to hold off the tracker's mutex for too long, we'll defer the database persistance of this
-// operation to a syncer goroutine. The one caviat is that when storing a catchpoint round, we would want to
-// wait until the catchpoint creation is done, so that the persistance of the catchpoint file would have an
+// committedUpTo enqueues committing the balances for round committedRound-lookback.
+// The deferred committing is done so that we could calculate the historical balances lookback rounds back.
+// Since we don't want to hold off the tracker's mutex for too long, we'll defer the database persistence of this
+// operation to a syncer goroutine. The one caveat is that when storing a catchpoint round, we would want to
+// wait until the catchpoint creation is done, so that the persistence of the catchpoint file would have an
 // uninterrupted view of the balances at a given point of time.
 func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound basics.Round) {
 	var isCatchpointRound, hasMultipleIntermediateCatchpoint bool
@@ -640,7 +640,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 
 	// If we recently flushed, wait to aggregate some more blocks.
 	// ( unless we're creating a catchpoint, in which case we want to flush it right away
-	//   so that all the instances of the catchpoint would contain the exacy same data )
+	//   so that all the instances of the catchpoint would contain exactly the same data )
 	flushTime := time.Now()
 	if !flushTime.After(au.lastFlushTime.Add(balancesFlushInterval)) && !isCatchpointRound && pendingDeltas < pendingDeltasFlushThreshold {
 		return au.dbRound
@@ -776,10 +776,10 @@ func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (AccountTotal
 	return aul.au.totalsImpl(rnd)
 }
 
-// isDup return whether a transaction is a duplicate one. It's not needed by the accountUpdatesLedgerEvaluator and implemeted as a stub.
+// isDup return whether a transaction is a duplicate one. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
 func (aul *accountUpdatesLedgerEvaluator) isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error) {
 	// this is a non-issue since this call will never be made on non-validating evaluation
-	return false, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initilization ")
+	return false, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
 }
 
 // LookupWithoutRewards returns the account balance for a given address at a given round, without the reward
@@ -844,7 +844,7 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 }
 
 // initializeFromDisk performs the atomic operation of loading the accounts data information from disk
-// and preparing the accountUpdates for operation, including initlizating the commitSyncer goroutine.
+// and preparing the accountUpdates for operation, including initializing the commitSyncer goroutine.
 func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRound, lastestBlockRound basics.Round, err error) {
 	au.dbs = l.trackerDB()
 	au.log = l.trackerLog()
@@ -943,7 +943,7 @@ func accountHashBuilder(addr basics.Address, accountData basics.AccountData, enc
 	return hash[:]
 }
 
-// accountsInitialize initializes the accounts DB if needed and return currrent account round.
+// accountsInitialize initializes the accounts DB if needed and return current account round.
 // as part of the initialization, it tests the current database schema version, and perform upgrade
 // procedures to bring it up to the database schema supported by the binary.
 func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (basics.Round, error) {
@@ -954,7 +954,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 	}
 
 	// if database version is greater than supported by current binary, write a warning. This would keep the existing
-	// fallback behaviour where we could use an older binary iff the schema happen to be backward compatible.
+	// fallback behavior where we could use an older binary iff the schema happen to be backward compatible.
 	if dbVersion > accountDBVersion {
 		au.log.Warnf("accountsInitialize database schema version is %d, but algod supports only %d", dbVersion, accountDBVersion)
 	}
@@ -1028,7 +1028,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 	}
 
 	// we might have a database that was previously initialized, and now we're adding the balances trie. In that case, we need to add all the existing balances to this trie.
-	// we can figure this out by examinine the hash of the root:
+	// we can figure this out by examining the hash of the root:
 	rootHash, err := trie.RootHash()
 	if err != nil {
 		return rnd, fmt.Errorf("accountsInitialize was unable to retrieve trie root hash: %v", err)
@@ -1096,7 +1096,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 			return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
 		}
 
-		// we've just updated the markle trie, update the hashRound to reflect that.
+		// we've just updated the merkle trie, update the hashRound to reflect that.
 		err = updateAccountsRound(tx, rnd, rnd)
 		if err != nil {
 			return 0, fmt.Errorf("accountsInitialize was unable to update the account round to %d: %v", rnd, err)
@@ -1143,15 +1143,15 @@ func (au *accountUpdates) upgradeDatabaseSchema0(ctx context.Context, tx *sql.Tx
 
 // upgradeDatabaseSchema1 upgrades the database schema from version 1 to version 2
 //
-// The schema updated to verison 2 intended to ensure that the encoding of all the accounts data is
+// The schema updated to version 2 intended to ensure that the encoding of all the accounts data is
 // both canonical and identical across the entire network. On release 2.0.5 we released an upgrade to the messagepack.
 // the upgraded messagepack was decoding the account data correctly, but would have different
 // encoding compared to it's predecessor. As a result, some of the account data that was previously stored
 // would have different encoded representation than the one on disk.
-// To address this, this startup proceduce would attempt to scan all the accounts data. for each account data, we would
+// To address this, this startup procedure would attempt to scan all the accounts data. for each account data, we would
 // see if it's encoding aligns with the current messagepack encoder. If it doesn't we would update it's encoding.
 // then, depending if we found any such account data, we would reset the merkle trie and stored catchpoints.
-// once the upgrade is complete, the accountsInitialize would (if needed) rebuild the merke trie using the new
+// once the upgrade is complete, the accountsInitialize would (if needed) rebuild the merkle trie using the new
 // encoded accounts.
 //
 // This upgrade doesn't change any of the actual database schema ( i.e. tables, indexes ) but rather just performing
@@ -1383,7 +1383,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	au.voters.newBlock(blk.BlockHeader)
 }
 
-// lookupImpl returns the accound data for a given address at a given round. The withRewards indicates whether the
+// lookupImpl returns the account data for a given address at a given round. The withRewards indicates whether the
 // rewards should be added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it could return the AccoutData which represent the "rewarded" account data.
 func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
@@ -1491,7 +1491,7 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 	return off, nil
 }
 
-// commitSyncer is the syncer go-routine function which perform the database updates. Internally, it dequeue deferedCommits and
+// commitSyncer is the syncer go-routine function which perform the database updates. Internally, it dequeues deferedCommits and
 // send the tasks to commitRound for completing the operation.
 func (au *accountUpdates) commitSyncer(deferedCommits chan deferedCommit) {
 	defer close(au.commitSyncerClosed)
@@ -1538,7 +1538,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		return
 	}
 
-	// adjust the offset according to what happend meanwhile..
+	// adjust the offset according to what happened meanwhile..
 	offset -= uint64(au.dbRound - dbRound)
 	dbRound = au.dbRound
 
@@ -1571,7 +1571,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.accountsMu.RUnlock()
 
 	// in committedUpTo, we expect that this function we close the catchpointWriting when
-	// it's on a catchpoint round and it's an archival ledger. Doing this in a defered function
+	// it's on a catchpoint round and it's an archival ledger. Doing this in a deferred function
 	// here would prevent us from "forgetting" to close that channel later on.
 	defer func() {
 		if isCatchpointRound && au.archivalLedger {
@@ -1862,7 +1862,7 @@ func catchpointRoundToPath(rnd basics.Round) string {
 }
 
 // saveCatchpointFile stores the provided fileName as the stored catchpoint for the given round.
-// after a successfull insert operation to the database, it would delete up to 2 old entries, as needed.
+// after a successful insert operation to the database, it would delete up to 2 old entries, as needed.
 // deleting 2 entries while inserting single entry allow us to adjust the size of the backing storage and have the
 // database and storage realign.
 func (au *accountUpdates) saveCatchpointFile(round basics.Round, fileName string, fileSize int64, catchpoint string) (err error) {

@@ -14,26 +14,16 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package nodecontrol
+package main
 
 import (
-	"fmt"
+	"github.com/algorand/go-algorand/logging"
 )
 
-var errKMDDataDirNotAbs = fmt.Errorf("kmd data dir must be absolute path")
-var errKMDExitedEarly = fmt.Errorf("kmd exited before we could contact it")
-
-type errAlgodExitedEarly struct {
-	innerError error
-}
-
-func (e *errAlgodExitedEarly) Error() string {
-	if e.innerError == nil {
-		return "node exited before we could contact it"
-	}
-	return fmt.Sprintf("node exited with an error code, check node.log for more details : %v", e.innerError)
-}
-
-func (e *errAlgodExitedEarly) Unwrap(err error) error {
-	return e.innerError
+// Windows does not have an mlockall functionality but might be emulated by
+// calling SetProcessWorkingSetSize and VirtualLock like described here
+// https://github.com/elastic/elasticsearch/pull/10887 but it can degrade
+// OS performance.
+func tryMlockall(log logging.Logger) {
+	log.Infof("running on windows -- mlockall not available")
 }
