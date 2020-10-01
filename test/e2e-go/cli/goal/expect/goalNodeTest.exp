@@ -36,6 +36,32 @@ if { [catch {
     # Stop node
     ::AlgorandGoal::StopNode $TEST_PRIMARY_NODE_DIR
 
+    # "break" the node by replacing it's ledger data files with "broken" ones.
+    lassign [exec find $TEST_PRIMARY_NODE_DIR -name "ledger.tracker.sqlite"] PRIMARY_TRACKER_DATABASE_FILE
+    exec find $TEST_PRIMARY_NODE_DIR -name "ledger.tracker.sqlite*" -delete
+    exec -- echo "1234" > $PRIMARY_TRACKER_DATABASE_FILE
+
+    # try to start the primary node, and observe the expected failuire
+    set timeout 15
+    spawn goal node start -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "starting node exceeded timeout" }
+        -re {^Algorand node failed to start: node exited with an error code, check node\.log for more details : exit status 1} {
+            puts "\nExpected failuire : node failed to start"
+            # wait until the eof signal is received
+            expect {
+                timeout { close; ::AlgorandGoal::Abort "failed to see node terminating after outputing error message" }
+                eof { puts "eof received as expected after error message output" }
+            }
+        }
+        eof { ::AlgorandGoal::Abort "eof received before the expected output " }
+    }
+    lassign [::AlgorandGoal::CheckProcessReturnedCode 0] response OS_CODE ERROR_CODE KILLED KILL_SIGNAL EXP
+    if {$ERROR_CODE != 1} {
+        puts "Node was expected to fail with 1 due to invalid ledger file, but returned error code $ERROR_CODE instead"
+        exit 1
+    }
+
     # Shutdown the network
     ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
 

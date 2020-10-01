@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-set -e
+set -eo pipefail
+export BASHOPTS
 
 PKG_NAME=@PKG_NAME@
 

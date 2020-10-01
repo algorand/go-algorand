@@ -39,7 +39,7 @@ fi
 if [ "$1" = "configure" ]; then
     if [ -f /var/lib/algorand/genesis.json-2.1.5-patch ]; then
         # 2.1.5 bug fix - restore user-modified genesis.json
-        mv /var/lib/algorand/genesis.json-2.1.5-patch /var/lib/algorand/genesis.json
+        mv -f /var/lib/algorand/genesis.json-2.1.5-patch /var/lib/algorand/genesis.json
     fi
 fi
 

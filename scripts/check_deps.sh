@@ -19,7 +19,12 @@ TEAL_FG=$(tput setaf 6 2>/dev/null)
 YELLOW_FG=$(tput setaf 3 2>/dev/null)
 END_FG_COLOR=$(tput sgr0 2>/dev/null)
 
-GOPATH=$(go env GOPATH)
+UNAME=$(uname)
+if [[ "${UNAME}" == *"MINGW"* ]]; then
+	GOPATH=$HOME/go
+else
+	GOPATH=$(go env GOPATH)
+fi
 export GOPATH
 GO_BIN="$(echo "$GOPATH" | cut -d: -f1)/bin"
 MISSING=0

@@ -14,26 +14,21 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package nodecontrol
+// +build gc
 
-import (
-	"fmt"
-)
+#include "_cgo_export.h"
+#include <string.h>
 
-var errKMDDataDirNotAbs = fmt.Errorf("kmd data dir must be absolute path")
-var errKMDExitedEarly = fmt.Errorf("kmd exited before we could contact it")
+extern void crosscall2(void (*fn)(void *, int), void *, int);
+extern void _cgo_panic(void *, int);
 
-type errAlgodExitedEarly struct {
-	innerError error
-}
+void * __memcpy_chk (void *dstpp, const void *srcpp, size_t len, size_t dstlen)
+{
+	if (dstlen < len) {
+		struct { const char *p; } a;
 
-func (e *errAlgodExitedEarly) Error() string {
-	if e.innerError == nil {
-		return "node exited before we could contact it"
+		a.p = "panic from __memcpy_chk";
+		crosscall2(_cgo_panic, &a, sizeof a);
 	}
-	return fmt.Sprintf("node exited with an error code, check node.log for more details : %v", e.innerError)
-}
-
-func (e *errAlgodExitedEarly) Unwrap(err error) error {
-	return e.innerError
+	return memcpy (dstpp, srcpp, len);
 }

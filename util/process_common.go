@@ -14,26 +14,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package nodecontrol
+// +build !windows
+
+package util
 
 import (
-	"fmt"
+	"syscall"
 )
 
-var errKMDDataDirNotAbs = fmt.Errorf("kmd data dir must be absolute path")
-var errKMDExitedEarly = fmt.Errorf("kmd exited before we could contact it")
-
-type errAlgodExitedEarly struct {
-	innerError error
-}
-
-func (e *errAlgodExitedEarly) Error() string {
-	if e.innerError == nil {
-		return "node exited before we could contact it"
-	}
-	return fmt.Sprintf("node exited with an error code, check node.log for more details : %v", e.innerError)
-}
-
-func (e *errAlgodExitedEarly) Unwrap(err error) error {
-	return e.innerError
+// KillProcess kills a running OS process
+func KillProcess(pid int, sig syscall.Signal) error {
+	return syscall.Kill(pid, sig)
 }
