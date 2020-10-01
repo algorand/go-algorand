@@ -243,9 +243,10 @@ func (pool *TransactionPool) pendingCountNoLock() int {
 	return count
 }
 
-// checkPendingQueueSize test to see if there is more room in the pending
-// group transaction list for additional txCount entries. As long as we haven't
-// surpassed the size limit, we should be good to go.
+// checkPendingQueueSize tests to see if we can grow the pending group transaction list
+// by adding txCount more transactions. The limits comes from the total number of transactions
+// and not from the total number of transaction groups.
+// As long as we haven't surpassed the size limit, we should be good to go.
 func (pool *TransactionPool) checkPendingQueueSize(txCount int) error {
 	pendingSize := pool.pendingTxIDsCount()
 	if pendingSize+txCount > pool.txPoolMaxSize {
