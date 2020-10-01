@@ -3,8 +3,7 @@ FROM python:3.7
 ARG GOLANG_VERSION
 
 COPY --from=docker /usr/local/bin/docker /usr/local/bin/docker
-#COPY *.yaml /root/
-COPY * /root/
+COPY *.yaml /root/
 
 RUN apt-get update && apt-get install -y autoconf bsdmainutils build-essential curl git libboost-all-dev && \
     curl https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz | tar -xzf - && \
