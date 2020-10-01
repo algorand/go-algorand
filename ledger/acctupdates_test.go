@@ -325,7 +325,6 @@ func TestAcctUpdates(t *testing.T) {
 		au.waitAccountsWriting()
 		checkAcctUpdates(t, au, i, basics.Round(proto.MaxBalLookback+14), accts, rewardsLevels, proto)
 	}
-
 }
 
 func TestAcctUpdatesFastUpdates(t *testing.T) {
@@ -841,13 +840,6 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fmt.Sprintf("./dummy_catchpoint_file-%d", i), "", 0)
 		require.NoError(t, err)
 	}
-
-	reader, err := au.GetCatchpointStream(2)
-
-	fmt.Println(reader)
-	fmt.Println(err)
-
-	
 	err = au.deleteStoredCatchpoints(context.Background(), au.accountsq)
 	require.NoError(t, err)
 
@@ -859,7 +851,6 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	fileNames, err := au.accountsq.getOldestCatchpointFiles(context.Background(), dummyCatchpointFilesToCreate, 0)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fileNames))
-
 }
 
 // listAndCompareComb lists the assets/applications and then compares against the expected
@@ -1081,7 +1072,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	for i := 0; i < filesToCreate; i++ {
 		f, err := os.Create(fmt.Sprintf("catchpoints/%d.catchpoint", i))
 		require.NoError(t, err)
-		data := []byte{byte(i), byte(i+1), byte(i+2)}
+		data := []byte{byte(i), byte(i + 1), byte(i + 2)}
 		var n int
 		n, err = f.Write(data)
 		require.NoError(t, err)
@@ -1098,7 +1089,7 @@ func TestGetCatchpointStream(t *testing.T) {
 
 	dataRead := make([]byte, 3)
 	var n int
-	
+
 	// File on disk, and database has the record
 	reader, err := au.GetCatchpointStream(1)
 	n, err = reader.Read(dataRead)
@@ -1107,13 +1098,11 @@ func TestGetCatchpointStream(t *testing.T) {
 	outData := []byte{1, 2, 3}
 	require.Equal(t, outData, dataRead)
 
-
 	// File deleted, but record in the database
 	err = os.Remove("catchpoints/2.catchpoint")
 	reader, err = au.GetCatchpointStream(2)
 	require.Equal(t, ErrNoEntry{}, err)
 	require.Nil(t, reader)
-
 
 	// File on disk, but database lost the record
 	err = au.accountsq.storeCatchpoint(context.Background(), 3, "", "", 0)
