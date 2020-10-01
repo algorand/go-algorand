@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# shellcheck disable=2035
 
-set -ex
+set -e
 
 echo "[$0] Testing control files"
 

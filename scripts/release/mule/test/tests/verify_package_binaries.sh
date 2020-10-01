@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# shellcheck disable=2035
+# shellcheck disable=2116
 
-set -ex
+set -e
 
-echo "[$0] Verifying installed binaries."
+echo "[$0] Verifying installed binaries..."
 
+RET=0
 RPMTMP=$(mktemp -d)
 
 if [ "$PKG_TYPE" = deb ]
@@ -27,11 +28,11 @@ ALGORAND_BINS=(
     /usr/bin/kmd
     /usr/bin/node_exporter
 )
+
 for bin in "${ALGORAND_BINS[@]}"; do
-    if ! grep "$bin" "$RPMTMP/algorand.install"
+    if ! grep "$bin" "$RPMTMP/algorand.install" > /dev/null
     then
-        echo "[$0] The binary $bin is not contained in the algorand package."
-        exit 1
+        MISSING_ALGORAND_BINS+=("$bin")
     fi
 done
 
@@ -42,11 +43,35 @@ DEVTOOLS_BINS=(
     /usr/bin/tealcut
     /usr/bin/tealdbg
 )
+
 for bin in "${DEVTOOLS_BINS[@]}"; do
-    if ! grep "$bin" "$RPMTMP/algorand-devtools.install"
+    if ! grep "$bin" "$RPMTMP/algorand-devtools.install" > /dev/null
     then
-        echo "[$0] The binary $bin is not contained in the algorand-devtools package."
-        exit 1
+        MISSING_DEVTOOLS_BINS+=("$bin")
     fi
 done
+
+LEN=$(echo ${#MISSING_ALGORAND_BINS[*]})
+if [ "$LEN" -gt 0 ]
+then
+    echo "The following binaries are not contained in the \`algorand\` package:"
+    for (( i=0; i<LEN; i++ ));
+    do
+        echo -e "\t${MISSING_ALGORAND_BINS[$i]}"
+    done
+    RET=1
+fi
+
+LEN=$(echo ${#MISSING_DEVTOOLS_BINS[*]})
+if [ "$LEN" -gt 0 ]
+then
+    echo "The following binaries are not contained in the \`algorand-devtools\` package:"
+    for (( i=0; i<LEN; i++ ));
+    do
+        echo -e "\t${MISSING_DEVTOOLS_BINS[$i]}"
+    done
+    RET=1
+fi
+
+exit $RET
 
