@@ -248,7 +248,7 @@ func (pool *TransactionPool) pendingCountNoLock() int {
 // surpassed the size limit, we should be good to go.
 func (pool *TransactionPool) checkPendingQueueSize(txCount int) error {
 	pendingSize := pool.pendingTxIDsCount()
-	if pendingSize+txCount >= pool.txPoolMaxSize {
+	if pendingSize+txCount > pool.txPoolMaxSize {
 		return fmt.Errorf("TransactionPool.checkPendingQueueSize: transaction pool have reached capacity")
 	}
 	return nil
