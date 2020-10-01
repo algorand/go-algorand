@@ -325,6 +325,7 @@ func TestAcctUpdates(t *testing.T) {
 		au.waitAccountsWriting()
 		checkAcctUpdates(t, au, i, basics.Round(proto.MaxBalLookback+14), accts, rewardsLevels, proto)
 	}
+
 }
 
 func TestAcctUpdatesFastUpdates(t *testing.T) {
@@ -840,6 +841,13 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fmt.Sprintf("./dummy_catchpoint_file-%d", i), "", 0)
 		require.NoError(t, err)
 	}
+
+	reader, err := au.GetCatchpointStream(2)
+
+	fmt.Println(reader)
+	fmt.Println(err)
+
+	
 	err = au.deleteStoredCatchpoints(context.Background(), au.accountsq)
 	require.NoError(t, err)
 
@@ -851,6 +859,7 @@ func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	fileNames, err := au.accountsq.getOldestCatchpointFiles(context.Background(), dummyCatchpointFilesToCreate, 0)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(fileNames))
+
 }
 
 // listAndCompareComb lists the assets/applications and then compares against the expected
@@ -1029,4 +1038,95 @@ func TestListCreatables(t *testing.T) {
 	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
 		expectedDbImage, numElementsPerSegement)
 	listAndCompareComb(t, au, expectedDbImage)
+}
+
+func TestIsWritingCatchpointFile(t *testing.T) {
+
+	au := &accountUpdates{}
+
+	au.catchpointWriting = make(chan struct{}, 1)
+	ans := au.IsWritingCatchpointFile()
+	require.True(t, ans)
+
+	close(au.catchpointWriting)
+	ans = au.IsWritingCatchpointFile()
+	require.False(t, ans)
+}
+
+func TestGetCatchpointStream(t *testing.T) {
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	ml := makeMockLedgerForTracker(t, true)
+	defer ml.close()
+	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
+
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
+	au := &accountUpdates{}
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	au.initialize(conf, ".", proto, accts[0])
+	defer au.close()
+
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+
+	filesToCreate := 4
+
+	// Prepare the directory as GetCatchpointStream expects
+	err = os.Mkdir("catchpoints", 0777)
+	require.NoError(t, err)
+
+	// Create the catchpoint files with dummy data
+	for i := 0; i < filesToCreate; i++ {
+		f, err := os.Create(fmt.Sprintf("catchpoints/%d.catchpoint", i))
+		require.NoError(t, err)
+		data := []byte{byte(i), byte(i+1), byte(i+2)}
+		var n int
+		n, err = f.Write(data)
+		require.NoError(t, err)
+		require.Equal(t, 3, n)
+		err = f.Close()
+		require.NoError(t, err)
+	}
+
+	// Store the catchpoint into the database
+	for i := 0; i < filesToCreate; i++ {
+		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fmt.Sprintf("catchpoints/%d.catchpoint", i), "", 0)
+		require.NoError(t, err)
+	}
+
+	dataRead := make([]byte, 3)
+	var n int
+	
+	// File on disk, and database has the record
+	reader, err := au.GetCatchpointStream(1)
+	n, err = reader.Read(dataRead)
+	require.NoError(t, err)
+	require.Equal(t, 3, n)
+	outData := []byte{1, 2, 3}
+	require.Equal(t, outData, dataRead)
+
+
+	// File deleted, but record in the database
+	err = os.Remove("catchpoints/2.catchpoint")
+	reader, err = au.GetCatchpointStream(2)
+	require.Equal(t, ErrNoEntry{}, err)
+	require.Nil(t, reader)
+
+
+	// File on disk, but database lost the record
+	err = au.accountsq.storeCatchpoint(context.Background(), 3, "", "", 0)
+	reader, err = au.GetCatchpointStream(3)
+	n, err = reader.Read(dataRead)
+	require.NoError(t, err)
+	require.Equal(t, 3, n)
+	outData = []byte{3, 4, 5}
+	require.Equal(t, outData, dataRead)
+
+	err = au.deleteStoredCatchpoints(context.Background(), au.accountsq)
+	require.NoError(t, err)
+
+	err = os.Remove("catchpoints")
+	require.NoError(t, err)
 }
