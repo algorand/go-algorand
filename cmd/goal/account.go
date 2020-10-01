@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/passphrase"
+	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	algodAcct "github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -61,6 +62,7 @@ var (
 	importDefault      bool
 	mnemonic           string
 	dumpOutFile        string
+	listAccountInfo    bool
 )
 
 func init() {
@@ -68,6 +70,7 @@ func init() {
 	accountCmd.AddCommand(deleteCmd)
 	accountCmd.AddCommand(listCmd)
 	accountCmd.AddCommand(renameCmd)
+	accountCmd.AddCommand(infoCmd)
 	accountCmd.AddCommand(balanceCmd)
 	accountCmd.AddCommand(rewardsCmd)
 	accountCmd.AddCommand(changeOnlineCmd)
@@ -115,6 +118,13 @@ func init() {
 	// Lookup info for multisig account flag
 	infoMultisigCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Address of multisig account to look up")
 	infoMultisigCmd.MarkFlagRequired("address")
+
+	// Account list flags
+	listCmd.Flags().BoolVar(&listAccountInfo, "info", false, "Include additional information about each account's assets and applications")
+
+	// Info flags
+	infoCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to look up (required)")
+	infoCmd.MarkFlagRequired("address")
 
 	// Balance flags
 	balanceCmd.Flags().StringVarP(&accountAddress, "address", "a", "", "Account address to retrieve balance (required)")
@@ -440,7 +450,7 @@ var infoMultisigCmd = &cobra.Command{
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "Show the list of Algorand accounts on this machine",
-	Long:  `Show the list of Algorand accounts on this machine. Indicates whether the account is [offline] or [online], and if the account is the default account for goal. Also displays balances and asset information.`,
+	Long:  `Show the list of Algorand accounts on this machine. Indicates whether the account is [offline] or [online], and if the account is the default account for goal. Also displays account information with --info.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
@@ -480,50 +490,158 @@ var listCmd = &cobra.Command{
 				accountList.outputAccount(addr.Addr, response, nil)
 			}
 
-			for aid, bal := range response.Assets {
-				frozen := ""
-				if bal.Frozen {
-					frozen = ", frozen"
-				}
-
-				unitName := "base units"
-				assetName := ""
-				assetURL := ""
-				assetMetadata := ""
-				creatorInfo, err := client.AccountInformation(bal.Creator)
-				assetDecimals := uint32(0)
-				decimalInfo := " (no decimal info) "
-				if err == nil {
-					params, ok := creatorInfo.AssetParams[aid]
-					if ok {
-						unitName = "units"
-						if params.UnitName != "" {
-							unitName = params.UnitName
-						}
-						if params.AssetName != "" {
-							assetName = fmt.Sprintf(", name %s", params.AssetName)
-						}
-						if params.URL != "" {
-							assetURL = fmt.Sprintf(", url %s", params.URL)
-						}
-						if params.MetadataHash != nil {
-							assetMetadata = fmt.Sprintf(", metadata %x", params.MetadataHash)
-						}
-						assetDecimals = params.Decimals
-						decimalInfo = ""
-					}
-				}
-
-				fmt.Printf("\t%20s %-8s%s (creator %s, ID %d%s%s%s%s)\n", assetDecimalsFmt(bal.Amount, assetDecimals), unitName, decimalInfo, bal.Creator, aid, assetName, assetURL, assetMetadata, frozen)
+			if listAccountInfo {
+				printAccountInfo(client, addr.Addr, response)
 			}
 		}
 	},
 }
 
+var infoCmd = &cobra.Command{
+	Use:   "info",
+	Short: "Retrieve information about the assets and applications belonging to the specified account",
+	Long:  `Retrieve information about the assets and applications the specified account has created or opted into.`,
+	Args:  validateNoPosArgsFn,
+	Run: func(cmd *cobra.Command, args []string) {
+		dataDir := ensureSingleDataDir()
+		client := ensureAlgodClient(dataDir)
+		response, err := client.AccountInformation(accountAddress)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+		}
+
+		printAccountInfo(client, accountAddress, response)
+	},
+}
+
+func sortUint64Slice(slice []uint64) {
+	sort.Slice(slice, func(i, j int) bool {
+		return slice[i] < slice[j]
+	})
+}
+
+func printAccountInfo(client libgoal.Client, address string, account v1.Account) {
+	createdAssets := []uint64{}
+	for id := range account.AssetParams {
+		createdAssets = append(createdAssets, id)
+	}
+	sortUint64Slice(createdAssets)
+
+	heldAssets := []uint64{}
+	for id := range account.Assets {
+		heldAssets = append(heldAssets, id)
+	}
+	sortUint64Slice(heldAssets)
+
+	createdApps := []uint64{}
+	for id := range account.AppParams {
+		createdApps = append(createdApps, id)
+	}
+	sortUint64Slice(createdApps)
+
+	optedInApps := []uint64{}
+	for id := range account.AppLocalStates {
+		optedInApps = append(optedInApps, id)
+	}
+	sortUint64Slice(optedInApps)
+
+	fmt.Println("Created Assets:")
+	if len(createdAssets) == 0 {
+		fmt.Println("\t<none>")
+	}
+	for _, id := range createdAssets {
+		assetParams := account.AssetParams[id]
+
+		name := assetParams.AssetName
+		if len(name) == 0 {
+			name = "<unnamed>"
+		}
+		units := assetParams.UnitName
+		if len(units) == 0 {
+			units = "units"
+		}
+		total := assetDecimalsFmt(assetParams.Total, assetParams.Decimals)
+		url := ""
+		if len(assetParams.URL) != 0 {
+			url = fmt.Sprintf(", %s", assetParams.URL)
+		}
+
+		fmt.Printf("\tID %d, %s, supply %s %s%s\n", id, name, total, units, url)
+	}
+
+	fmt.Println("Held Assets:")
+	if len(heldAssets) == 0 {
+		fmt.Println("\t<none>")
+	}
+	for _, id := range heldAssets {
+		assetHolding := account.Assets[id]
+		assetParams, err := client.AssetInformation(id)
+		if err != nil {
+			reportErrorf(errorRequestFail, err)
+			fmt.Printf("\tID %d, error retrieving asset information: %s\n", id, err)
+		}
+
+		amount := assetDecimalsFmt(assetHolding.Amount, assetParams.Decimals)
+
+		assetName := assetParams.AssetName
+		if len(assetName) == 0 {
+			assetName = "<unnamed>"
+		}
+
+		unitName := assetParams.UnitName
+		if len(unitName) == 0 {
+			unitName = "units"
+		}
+
+		frozen := ""
+		if assetHolding.Frozen {
+			frozen = " (frozen)"
+		}
+
+		fmt.Printf("\tID %d, %s, balance %s %s%s\n", id, assetName, amount, unitName, frozen)
+	}
+
+	fmt.Println("Created Apps:")
+	if len(createdApps) == 0 {
+		fmt.Println("\t<none>")
+	}
+	for _, id := range createdApps {
+		appParams := account.AppParams[id]
+		usedInts := 0
+		usedBytes := 0
+		for _, value := range appParams.GlobalState {
+			if value.Type == "u" {
+				usedInts++
+			} else {
+				usedBytes++
+			}
+		}
+		fmt.Printf("\tID %d, global state used %d/%d uints, %d/%d byte slices\n", id, usedInts, appParams.GlobalStateSchema.NumUint, usedBytes, appParams.GlobalStateSchema.NumByteSlice)
+	}
+
+	fmt.Println("Opted In Apps:")
+	if len(optedInApps) == 0 {
+		fmt.Println("\t<none>")
+	}
+	for _, id := range optedInApps {
+		localState := account.AppLocalStates[id]
+		usedInts := 0
+		usedBytes := 0
+		for _, value := range localState.KeyValue {
+			if value.Type == "u" {
+				usedInts++
+			} else {
+				usedBytes++
+			}
+		}
+		fmt.Printf("\tID %d, local state used %d/%d uints, %d/%d byte slices\n", id, usedInts, localState.Schema.NumUint, usedBytes, localState.Schema.NumByteSlice)
+	}
+}
+
 var balanceCmd = &cobra.Command{
 	Use:   "balance",
 	Short: "Retrieve the balances for the specified account",
-	Long:  `Retrieve the balance record for the specified account, displaying both algos and assets. Algo balance is displayed in microAlgos.`,
+	Long:  `Retrieve the balance record for the specified account. Algo balance is displayed in microAlgos.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		dataDir := ensureSingleDataDir()
