@@ -920,13 +920,23 @@ var deleteAppCmd = &cobra.Command{
 	},
 }
 
-func unicodePrintable(str string) bool {
+// unicodePrintable scan the input string str, and find if it contains any
+// non-printable unicode characters. If so, it returns false, along with the
+// printable characters that do appear in the input string. Otherwise, it
+// returns true, along with a copy of the original string. The returned string
+// printableString is gurenteed to be printable in all cases.
+func unicodePrintable(str string) (isPrintable bool, printableString string) {
+	isPrintable = true
+	encRuneBuf := make([]byte, 8)
 	for _, r := range str {
 		if !unicode.IsPrint(r) {
-			return false
+			isPrintable = false
+		} else {
+			n := utf8.EncodeRune(encRuneBuf, r)
+			printableString += string(encRuneBuf[:n+1])
 		}
 	}
-	return true
+	return
 }
 
 func jsonPrintable(str string) bool {
