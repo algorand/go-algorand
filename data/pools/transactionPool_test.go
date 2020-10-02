@@ -1178,7 +1178,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 
 	receiver := addresses[1]
 
-	uniqueTxId := 0
+	uniqueTxID := 0
 	// almost fill the transaction pool, leaving room for one additional transaction group of the biggest size.
 	for i := 0; i <= cfg.TxPoolSize-config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize; i++ {
 		tx := transactions.Transaction{
@@ -1188,7 +1188,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
 				FirstValid:  0,
 				LastValid:   10,
-				Note:        []byte{byte(uniqueTxId), byte(uniqueTxId >> 8), byte(uniqueTxId >> 16)},
+				Note:        []byte{byte(uniqueTxID), byte(uniqueTxID >> 8), byte(uniqueTxID >> 16)},
 				GenesisHash: ledger.GenesisHash(),
 			},
 			PaymentTxnFields: transactions.PaymentTxnFields{
@@ -1200,7 +1200,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 
 		// consume the transaction of allowed limit
 		require.NoError(t, transactionPool.RememberOne(signedTx, verify.Params{}))
-		uniqueTxId++
+		uniqueTxID++
 	}
 
 	for groupSize := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize; groupSize > 0; groupSize-- {
@@ -1215,7 +1215,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 					Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
 					FirstValid:  0,
 					LastValid:   10,
-					Note:        []byte{byte(uniqueTxId), byte(uniqueTxId >> 8), byte(uniqueTxId >> 16)},
+					Note:        []byte{byte(uniqueTxID), byte(uniqueTxID >> 8), byte(uniqueTxID >> 16)},
 					GenesisHash: ledger.GenesisHash(),
 				},
 				PaymentTxnFields: transactions.PaymentTxnFields{
@@ -1226,7 +1226,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 			signedTx := tx.Sign(secrets[0])
 			txgroup = append(txgroup, signedTx)
 			verifyParams = append(verifyParams, verify.Params{})
-			uniqueTxId++
+			uniqueTxID++
 		}
 
 		// ensure that we would fail adding this.
