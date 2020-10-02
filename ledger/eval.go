@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/algorand/go-deadlock"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/crypto/compactcert"
@@ -65,6 +67,11 @@ type roundCowBase struct {
 
 	// The current protocol consensus params.
 	proto config.ConsensusParams
+
+	accounts map[basics.Address]basics.AccountData
+
+	// accountMu is the accounts read-write mutex, used to syncronize the access to the accounts map
+	accountMu deadlock.RWMutex
 }
 
 func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
@@ -72,7 +79,22 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 }
 
 func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
-	return x.l.LookupWithoutRewards(x.rnd, addr)
+	// return x.l.LookupWithoutRewards(x.rnd, addr)
+	x.accountMu.RLock()
+
+	if accountData, found := x.accounts[addr]; found {
+		x.accountMu.RUnlock()
+		return accountData, nil
+	}
+
+	x.accountMu.RUnlock()
+	accountData, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	if err == nil {
+		x.accountMu.Lock()
+		x.accounts[addr] = accountData
+		x.accountMu.Unlock()
+	}
+	return accountData, err
 }
 
 func (x *roundCowBase) isDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
@@ -246,8 +268,9 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		// the block at this round below, so underflow will be caught.
 		// If we are not validating, we must have previously checked
 		// an agreement.Certificate attesting that hdr is valid.
-		rnd:   hdr.Round - 1,
-		proto: proto,
+		rnd:      hdr.Round - 1,
+		proto:    proto,
+		accounts: make(map[basics.Address]basics.AccountData),
 	}
 
 	eval := &BlockEvaluator{
@@ -292,7 +315,10 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 
 	poolAddr := eval.prevHeader.RewardsPool
 	// get the reward pool account data without any rewards
-	incentivePoolData, err := l.LookupWithoutRewards(eval.prevHeader.Round, poolAddr)
+	// incentivePoolData, err := l.LookupWithoutRewards(eval.prevHeader.Round, poolAddr)
+
+	// get the reward pool account data without any rewards; we use the roundCowBase so the account data would be cached
+	incentivePoolData, err := base.lookup(poolAddr)
 	if err != nil {
 		return nil, err
 	}
