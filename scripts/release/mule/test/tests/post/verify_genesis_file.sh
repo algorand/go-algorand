@@ -17,7 +17,7 @@ then
     exit 1
 fi
 
-if ! grep -F "\"network\": \"$NETWORK\"" /var/lib/algorand/genesis.json
+if [ "$NETWORK" != "$(jq -r '.network' /var/lib/algorand/genesis.json)" ]
 then
     echo "[$0] The network \`$NETWORK\` set in \`genesis.json\` is incorrect."
     exit 1
