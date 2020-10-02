@@ -1153,3 +1153,89 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 		fmt.Printf("BenchmarkTransactionPoolSteadyState: committed block %d\n", blk.Block().Round())
 	}
 }
+
+func TestTxPoolSizeLimits(t *testing.T) {
+	numOfAccounts := 2
+	// Generate accounts
+	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
+	addresses := make([]basics.Address, numOfAccounts)
+
+	for i := 0; i < numOfAccounts; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+	}
+
+	firstAddress := addresses[0]
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableProcessBlockStats = false
+
+	ledger := makeMockLedger(t, initAcc(map[basics.Address]uint64{firstAddress: proto.MinBalance + 2*proto.MinTxnFee*uint64(cfg.TxPoolSize)}))
+
+	transactionPool := MakeTransactionPool(ledger, cfg)
+
+	receiver := addresses[1]
+
+	uniqueTxId := 0
+	// almost fill the transaction pool, leaving room for one additional transaction group of the biggest size.
+	for i := 0; i <= cfg.TxPoolSize-config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize; i++ {
+		tx := transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      firstAddress,
+				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
+				FirstValid:  0,
+				LastValid:   10,
+				Note:        []byte{byte(uniqueTxId), byte(uniqueTxId >> 8), byte(uniqueTxId >> 16)},
+				GenesisHash: ledger.GenesisHash(),
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: receiver,
+				Amount:   basics.MicroAlgos{Raw: 0},
+			},
+		}
+		signedTx := tx.Sign(secrets[0])
+
+		// consume the transaction of allowed limit
+		require.NoError(t, transactionPool.RememberOne(signedTx, verify.Params{}))
+		uniqueTxId++
+	}
+
+	for groupSize := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize; groupSize > 0; groupSize-- {
+		var txgroup []transactions.SignedTxn
+		var verifyParams []verify.Params
+		// fill the transaction group with groupSize transactions.
+		for i := 0; i < groupSize; i++ {
+			tx := transactions.Transaction{
+				Type: protocol.PaymentTx,
+				Header: transactions.Header{
+					Sender:      firstAddress,
+					Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
+					FirstValid:  0,
+					LastValid:   10,
+					Note:        []byte{byte(uniqueTxId), byte(uniqueTxId >> 8), byte(uniqueTxId >> 16)},
+					GenesisHash: ledger.GenesisHash(),
+				},
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: receiver,
+					Amount:   basics.MicroAlgos{Raw: 0},
+				},
+			}
+			signedTx := tx.Sign(secrets[0])
+			txgroup = append(txgroup, signedTx)
+			verifyParams = append(verifyParams, verify.Params{})
+			uniqueTxId++
+		}
+
+		// ensure that we would fail adding this.
+		require.Error(t, transactionPool.Remember(txgroup, verifyParams))
+
+		if groupSize > 1 {
+			// add a single transaction and ensure we succeed
+			// consume the transaction of allowed limit
+			require.NoError(t, transactionPool.RememberOne(txgroup[0], verifyParams[0]))
+		}
+	}
+}
