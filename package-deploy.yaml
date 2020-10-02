@@ -29,11 +29,6 @@ agents:
 
 tasks:
   - task: docker.Make
-    name: deb
-    agent: deb
-    target: mule-deploy-deb
-
-  - task: docker.Make
     name: rpm
     agent: rpm
     target: mule-deploy-rpm
@@ -41,7 +36,6 @@ tasks:
 jobs:
   package-deploy:
     tasks:
-      - docker.Make.deb
       - docker.Make.rpm
 
   package-deploy-deb:
@@ -51,4 +45,3 @@ jobs:
   package-deploy-rpm:
     tasks:
       - docker.Make.rpm
-
