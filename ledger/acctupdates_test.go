@@ -21,7 +21,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"testing"
@@ -1064,26 +1066,26 @@ func TestGetCatchpointStream(t *testing.T) {
 
 	filesToCreate := 4
 
-	// Prepare the directory as GetCatchpointStream expects
-	err = os.Mkdir("catchpoints", 0777)
+	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), "catchpoints")
 	require.NoError(t, err)
+	defer func() {
+		os.RemoveAll(temporaryDirectroy)
+	}()
+	catchpointsDirectory := filepath.Join(temporaryDirectroy, "catchpoints")
+	err = os.Mkdir(catchpointsDirectory, 0777)
+	require.NoError(t, err)
+
+	au.dbDirectory = temporaryDirectroy
 
 	// Create the catchpoint files with dummy data
 	for i := 0; i < filesToCreate; i++ {
-		f, err := os.Create(fmt.Sprintf("catchpoints/%d.catchpoint", i))
-		require.NoError(t, err)
+		fileName := filepath.Join("catchpoints", fmt.Sprintf("%d.catchpoint", i))
 		data := []byte{byte(i), byte(i + 1), byte(i + 2)}
-		var n int
-		n, err = f.Write(data)
+		err = ioutil.WriteFile(filepath.Join(temporaryDirectroy, fileName), data, 0666)
 		require.NoError(t, err)
-		require.Equal(t, 3, n)
-		err = f.Close()
-		require.NoError(t, err)
-	}
 
-	// Store the catchpoint into the database
-	for i := 0; i < filesToCreate; i++ {
-		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fmt.Sprintf("catchpoints/%d.catchpoint", i), "", 0)
+		// Store the catchpoint into the database
+		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fileName, "", 0)
 		require.NoError(t, err)
 	}
 
@@ -1091,7 +1093,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	var n int
 
 	// File on disk, and database has the record
-	reader, err := au.GetCatchpointStream(1)
+	reader, err := au.GetCatchpointStream(basics.Round(1))
 	n, err = reader.Read(dataRead)
 	require.NoError(t, err)
 	require.Equal(t, 3, n)
@@ -1099,14 +1101,14 @@ func TestGetCatchpointStream(t *testing.T) {
 	require.Equal(t, outData, dataRead)
 
 	// File deleted, but record in the database
-	err = os.Remove("catchpoints/2.catchpoint")
-	reader, err = au.GetCatchpointStream(2)
+	err = os.Remove(filepath.Join(temporaryDirectroy, "catchpoints", "2.catchpoint"))
+	reader, err = au.GetCatchpointStream(basics.Round(2))
 	require.Equal(t, ErrNoEntry{}, err)
 	require.Nil(t, reader)
 
 	// File on disk, but database lost the record
-	err = au.accountsq.storeCatchpoint(context.Background(), 3, "", "", 0)
-	reader, err = au.GetCatchpointStream(3)
+	err = au.accountsq.storeCatchpoint(context.Background(), basics.Round(3), "", "", 0)
+	reader, err = au.GetCatchpointStream(basics.Round(3))
 	n, err = reader.Read(dataRead)
 	require.NoError(t, err)
 	require.Equal(t, 3, n)
@@ -1114,8 +1116,5 @@ func TestGetCatchpointStream(t *testing.T) {
 	require.Equal(t, outData, dataRead)
 
 	err = au.deleteStoredCatchpoints(context.Background(), au.accountsq)
-	require.NoError(t, err)
-
-	err = os.Remove("catchpoints")
 	require.NoError(t, err)
 }
