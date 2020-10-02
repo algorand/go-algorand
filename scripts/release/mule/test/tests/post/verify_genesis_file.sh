@@ -8,6 +8,9 @@ echo "[$0] Testing network string in genesis.json"
 #
 #       "network": "mainnet",
 #
+
+cd "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
+
 if ! grep -F "\"network\": \"$NETWORK\"" /var/lib/algorand/genesis.json
 then
     echo "[$0] The network \`$NETWORK\` set in \`genesis.json\` is incorrect."

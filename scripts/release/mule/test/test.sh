@@ -17,32 +17,45 @@ export NETWORK=${NETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
 export SHA=${SHA:-$(git rev-parse HEAD)}
 export VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 
+PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
+
+pushd "$PKG_DIR"
+
 if ! $USE_CACHE
 then
     SRC_DIR="s3://algorand-staging/releases/$CHANNEL/$VERSION"
-    DEST_DIR="/projects/go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 
     # deb
-    aws s3 cp "$SRC_DIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" "$DEST_DIR"
-    aws s3 cp "$SRC_DIR/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" "$DEST_DIR"
+    aws s3 cp "$SRC_DIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
+    aws s3 cp "$SRC_DIR/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
 
     # rpm
-    aws s3 cp "$SRC_DIR/algorand-$VERSION-1.$ARCH_BIT.rpm" "$DEST_DIR"
-    aws s3 cp "$SRC_DIR/algorand-devtools-$VERSION-1.$ARCH_BIT.rpm" "$DEST_DIR"
+    aws s3 cp "$SRC_DIR/algorand-$VERSION-1.$ARCH_BIT.rpm" .
+    aws s3 cp "$SRC_DIR/algorand-devtools-$VERSION-1.$ARCH_BIT.rpm" .
 fi
 
-pushd "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
-if [ "$PKG_TYPE" == "deb" ]
+popd
+
+for test in $(ls ./scripts/release/mule/test/tests/pre/*.sh)
+do
+    bash "$test"
+done
+
+pushd "$PKG_DIR"
+
+if [ "$PKG_TYPE" = deb ]
 then
     dpkg -i algorand_*"$VERSION"*.deb
     dpkg -i algorand-devtools*"$VERSION"*.deb
 else
-    yum install yumdownloader yum-cron -y
-    rpm -i algorand*"$VERSION"*"$ARCH_BIT".rpm
+    yum install yum-cron -y
+    rpm -i algorand-"$VERSION"-1."$ARCH_BIT".rpm
+    rpm -i algorand-devtools-"$VERSION"-1."$ARCH_BIT".rpm
 fi
+
 popd
 
-for test in $(ls ./scripts/release/mule/test/tests/*.sh)
+for test in $(ls ./scripts/release/mule/test/tests/post/*.sh)
 do
     bash "$test"
 done

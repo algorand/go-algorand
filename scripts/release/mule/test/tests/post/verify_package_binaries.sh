@@ -8,6 +8,8 @@ echo "[$0] Verifying installed binaries..."
 RET=0
 RPMTMP=$(mktemp -d)
 
+cd "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
+
 if [ "$PKG_TYPE" = deb ]
 then
     dpkg -L algorand > "$RPMTMP/algorand.install"
