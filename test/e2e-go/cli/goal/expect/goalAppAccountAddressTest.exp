@@ -147,14 +147,20 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
 	--app-account $ACCOUNT_2_ADDRESS \
 	--app-account $ACCOUNT_4_ADDRESS
     expect {
-	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
-	"*Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: transaction*invalid Accounts index 4*" \
-	    {puts "Error received successfully "; close}
-	eof {::AlgorandGoal::Abort "failed to get the expected error" }
+        timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+        "*Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: transaction*invalid Accounts index 4*" {
+            puts "\nError received successfully "
+            # wait until the eof signal is received
+            expect {
+                timeout { close; ::AlgorandGoal::Abort "failed to see goal terminating after outputing error message" }
+                eof { puts "eof received as expected after error message output" }
+            }
+        }
+        eof {::AlgorandGoal::Abort "failed to get the expected error" }
     }
     lassign [::AlgorandGoal::CheckProcessReturnedCode 0] response OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
     if {$response != 1 || $OS_CODE != 0 || $ERR_CODE != 1} {
-	::AlgorandGoal::Abort "failed to get the expected error. Expected ERR_CODE = 1 got ERR_CODE = $ERR_CODE"
+	    ::AlgorandGoal::Abort "failed to get the expected error. Expected ERR_CODE = 1 got ERR_CODE = $ERR_CODE"
     }
 
     # Shutdown the network
