@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=2076
+# shellcheck disable=2035,2076
 
 set -e
 
