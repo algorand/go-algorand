@@ -933,7 +933,7 @@ func unicodePrintable(str string) (isPrintable bool, printableString string) {
 			isPrintable = false
 		} else {
 			n := utf8.EncodeRune(encRuneBuf, r)
-			printableString += string(encRuneBuf[:n+1])
+			printableString += string(encRuneBuf[:n])
 		}
 	}
 	return
