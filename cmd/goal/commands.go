@@ -492,11 +492,13 @@ func ensurePassword() []byte {
 }
 
 func reportInfoln(args ...interface{}) {
-	printable, outStr := unicodePrintable(fmt.Sprint(args...))
-	if !printable {
-		fmt.Println(infoNonPrintableCharacters)
+	for _, line := range strings.Split(fmt.Sprint(args...), "\n") {
+		printable, line := unicodePrintable(line)
+		if !printable {
+			fmt.Println(infoNonPrintableCharacters)
+		}
+		fmt.Println(line)
 	}
-	fmt.Println(outStr)
 }
 
 func reportInfof(format string, args ...interface{}) {
@@ -506,12 +508,14 @@ func reportInfof(format string, args ...interface{}) {
 func reportWarnln(args ...interface{}) {
 	fmt.Print("Warning: ")
 
-	printable, outStr := unicodePrintable(fmt.Sprint(args...))
-	if !printable {
-		fmt.Println(infoNonPrintableCharacters)
-	}
+	for _, line := range strings.Split(fmt.Sprint(args...), "\n") {
+		printable, line := unicodePrintable(line)
+		if !printable {
+			fmt.Println(infoNonPrintableCharacters)
+		}
 
-	fmt.Println(outStr)
+		fmt.Println(line)
+	}
 }
 
 func reportWarnf(format string, args ...interface{}) {
@@ -520,11 +524,13 @@ func reportWarnf(format string, args ...interface{}) {
 
 func reportErrorln(args ...interface{}) {
 	outStr := fmt.Sprint(args...)
-	printable, outStr := unicodePrintable(outStr)
-	if !printable {
-		fmt.Fprintln(os.Stderr, errorNonPrintableCharacters)
+	for _, line := range strings.Split(outStr, "\n") {
+		printable, line := unicodePrintable(line)
+		if !printable {
+			fmt.Fprintln(os.Stderr, errorNonPrintableCharacters)
+		}
+		fmt.Fprintln(os.Stderr, line)
 	}
-	fmt.Fprintln(os.Stderr, outStr)
 	os.Exit(1)
 }
 
