@@ -1635,3 +1635,21 @@ func TestWebsocketDisconnection(t *testing.T) {
 		require.FailNow(t, "The DisconnectPeerEvent was missing")
 	}
 }
+
+// TestASCIIFiltering tests the behaviour of filterASCII by feeding it with few known inputs and verifying the expected outputs.
+func TestASCIIFiltering(t *testing.T) {
+	testUnicodePrintableStrings := []struct {
+		testString     string
+		expectedString string
+	}{
+		{"abc", "abc"},
+		{"", ""},
+		{"אבג", ""},
+		{"\u001b[31mABC\u001b[0m", "[31mABC[0m"},
+		{"ab\nc", "abc"},
+	}
+	for _, testElement := range testUnicodePrintableStrings {
+		outString := filterASCII(testElement.testString)
+		require.Equalf(t, testElement.expectedString, outString, "test string:%s", testElement.testString)
+	}
+}
