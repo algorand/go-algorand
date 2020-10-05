@@ -1754,8 +1754,11 @@ func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
 	return &wn.transport
 }
 
-// filterAscii filter out the non-ascii characters out of the given input string. It's used as a
-// security qualifier before logging a network-provided data.
+// filterASCII filter out the non-ascii printable characters out of the given input string.
+// It's used as a security qualifier before logging a network-provided data.
+// The function allows only characters in the range of [32..126], which excludes all the
+// control character, new lines, deletion, etc. All the alpha numeric and punctuation characters
+// are included in this range.
 func filterASCII(unfilteredString string) (filteredString string) {
 	for i, r := range unfilteredString {
 		if int(r) >= 0x20 && int(r) <= 0x7e {
