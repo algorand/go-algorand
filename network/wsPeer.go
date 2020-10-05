@@ -434,7 +434,7 @@ func (wp *wsPeer) readLoop() {
 			}
 			requestHash, found := topics.GetValue(requestHashKey)
 			if !found {
-				wp.net.log.Warnf("wsPeer readLoop: message from %s is missing the %s", wp.conn.RemoteAddr().String(), requestHashKey)
+				wp.net.log.Warnf("wsPeer readLoop: message from %s is missing the %s", wp.conn.RemoteAddr().String(), filterASCII(requestHashKey))
 				continue
 			}
 			hashKey, _ := binary.Uvarint(requestHash)
@@ -543,7 +543,7 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 
 func (wp *wsPeer) writeLoopSend(msg sendMessage) (exit bool) {
 	if len(msg.data) > maxMessageLength {
-		wp.net.log.Errorf("trying to send a message longer than we would recieve: %d > %d tag=%#v", len(msg.data), maxMessageLength, string(msg.data[0:2]))
+		wp.net.log.Errorf("trying to send a message longer than we would recieve: %d > %d tag=%s", len(msg.data), maxMessageLength, string(msg.data[0:2]))
 		// just drop it, don't break the connection
 		return false
 	}
