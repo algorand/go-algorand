@@ -119,7 +119,7 @@ type accountDelta struct {
 	new basics.AccountData
 }
 
-// catchpointState is used to store catchpoint related varaibles into the catchpointstate table.
+// catchpointState is used to store catchpoint related variables into the catchpointstate table.
 type catchpointState string
 
 const (
@@ -306,7 +306,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		}
 	} else {
 		serr, ok := err.(sqlite3.Error)
-		// serr.Code is sqlite.ErrConstraint if the database has already been initalized;
+		// serr.Code is sqlite.ErrConstraint if the database has already been initialized;
 		// in that case, ignore the error and return nil.
 		if !ok || serr.Code != sqlite3.ErrConstraint {
 			return err
@@ -965,7 +965,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 		// note that we should be quite liberal on timing here, since it might perform much slower
 		// on low-power devices.
 		if scannedAccounts%1000 == 0 {
-			// The return value from ResetTransactionWarnDeadline can be safely ignored here since it would only default to writing the warnning
+			// The return value from ResetTransactionWarnDeadline can be safely ignored here since it would only default to writing the warning
 			// message, which would let us know that it failed anyway.
 			db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(time.Second))
 		}

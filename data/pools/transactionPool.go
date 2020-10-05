@@ -84,7 +84,7 @@ type TransactionPool struct {
 	// rememberedTxids.  Calling rememberCommit() adds them to the
 	// pendingTxGroups and pendingTxids.  This allows us to batch the
 	// changes in OnNewBlock() without preventing a concurrent call
-	// to Pending() or Verified().
+	// to PendingTxGroups() or Verified().
 	rememberedTxGroups     [][]transactions.SignedTxn
 	rememberedVerifyParams [][]verify.Params
 	rememberedTxids        map[transactions.Txid]txPoolVerifyCacheVal
@@ -180,15 +180,24 @@ func (pool *TransactionPool) PendingTxIDs() []transactions.Txid {
 	return ids
 }
 
-// Pending returns a list of transaction groups that should be proposed
+// PendingTxGroups returns a list of transaction groups that should be proposed
 // in the next block, in order.
-func (pool *TransactionPool) Pending() [][]transactions.SignedTxn {
+func (pool *TransactionPool) PendingTxGroups() [][]transactions.SignedTxn {
 	pool.pendingMu.RLock()
 	defer pool.pendingMu.RUnlock()
 	// note that this operation is safe for the sole reason that arrays in go are immutable.
 	// if the underlaying array need to be expanded, the actual underlaying array would need
 	// to be reallocated.
 	return pool.pendingTxGroups
+}
+
+// pendingTxIDsCount returns the number of pending transaction ids that are still waiting
+// in the transaction pool. This is identical to the number of transaction ids that would
+// be retrieved by a call to PendingTxIDs()
+func (pool *TransactionPool) pendingTxIDsCount() int {
+	pool.pendingMu.RLock()
+	defer pool.pendingMu.RUnlock()
+	return len(pool.pendingTxids)
 }
 
 // rememberCommit() saves the changes added by remember to
@@ -234,13 +243,14 @@ func (pool *TransactionPool) pendingCountNoLock() int {
 	return count
 }
 
-// checkPendingQueueSize test to see if there is more room in the pending
-// group transaction list. As long as we haven't surpassed the size limit, we
-// should be good to go.
-func (pool *TransactionPool) checkPendingQueueSize() error {
-	pendingSize := len(pool.Pending())
-	if pendingSize >= pool.txPoolMaxSize {
-		return fmt.Errorf("TransactionPool.Test: transaction pool have reached capacity")
+// checkPendingQueueSize tests to see if we can grow the pending group transaction list
+// by adding txCount more transactions. The limits comes from the total number of transactions
+// and not from the total number of transaction groups.
+// As long as we haven't surpassed the size limit, we should be good to go.
+func (pool *TransactionPool) checkPendingQueueSize(txCount int) error {
+	pendingSize := pool.pendingTxIDsCount()
+	if pendingSize+txCount > pool.txPoolMaxSize {
+		return fmt.Errorf("TransactionPool.checkPendingQueueSize: transaction pool have reached capacity")
 	}
 	return nil
 }
@@ -320,7 +330,7 @@ func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn
 // Test performs basic duplicate detection and well-formedness checks
 // on a transaction group without storing the group.
 func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
-	if err := pool.checkPendingQueueSize(); err != nil {
+	if err := pool.checkPendingQueueSize(len(txgroup)); err != nil {
 		return err
 	}
 
@@ -409,7 +419,7 @@ func (pool *TransactionPool) RememberOne(t transactions.SignedTxn, verifyParams 
 // Remember stores the provided transaction group.
 // Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
 func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn, verifyParams []verify.Params) error {
-	if err := pool.checkPendingQueueSize(); err != nil {
+	if err := pool.checkPendingQueueSize(len(txgroup)); err != nil {
 		return err
 	}
 

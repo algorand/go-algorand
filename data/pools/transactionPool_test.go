@@ -538,7 +538,7 @@ func TestRememberForget(t *testing.T) {
 		}
 	}
 
-	pending := transactionPool.Pending()
+	pending := transactionPool.PendingTxGroups()
 	numberOfTxns := numOfAccounts*numOfAccounts - numOfAccounts
 	require.Len(t, pending, numberOfTxns)
 
@@ -549,7 +549,7 @@ func TestRememberForget(t *testing.T) {
 	require.NoError(t, err)
 	transactionPool.OnNewBlock(blk.Block(), ledger.StateDelta{})
 
-	pending = transactionPool.Pending()
+	pending = transactionPool.PendingTxGroups()
 	require.Len(t, pending, 0)
 }
 
@@ -612,7 +612,7 @@ func TestCleanUp(t *testing.T) {
 		transactionPool.OnNewBlock(blk.Block(), ledger.StateDelta{})
 	}
 
-	pending := transactionPool.Pending()
+	pending := transactionPool.PendingTxGroups()
 	require.Zero(t, len(pending))
 	require.Zero(t, transactionPool.NumExpired(4))
 	require.Equal(t, issuedTransactions, transactionPool.NumExpired(5))
@@ -684,7 +684,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 			}
 		}
 	}
-	pending := transactionPool.Pending()
+	pending := transactionPool.PendingTxGroups()
 	require.Len(t, pending, savedTransactions)
 
 	secret := keypair()
@@ -720,7 +720,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 
 	transactionPool.OnNewBlock(block.Block(), ledger.StateDelta{})
 
-	pending = transactionPool.Pending()
+	pending = transactionPool.PendingTxGroups()
 	// only one transaction is missing
 	require.Len(t, pending, savedTransactions-1)
 }
@@ -824,7 +824,7 @@ func TestRemove(t *testing.T) {
 	}
 	signedTx := tx.Sign(secrets[0])
 	require.NoError(t, transactionPool.RememberOne(signedTx, verify.Params{}))
-	require.Equal(t, transactionPool.Pending(), [][]transactions.SignedTxn{[]transactions.SignedTxn{signedTx}})
+	require.Equal(t, transactionPool.PendingTxGroups(), [][]transactions.SignedTxn{[]transactions.SignedTxn{signedTx}})
 }
 
 func TestLogicSigOK(t *testing.T) {
@@ -1047,12 +1047,12 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 
 		b.StartTimer()
 		for i := 0; i < b.N; i++ {
-			transactionPool.Pending()
+			transactionPool.PendingTxGroups()
 		}
 	}
 	subs := []int{1000, 5000, 10000, 25000, 50000}
 	for _, bps := range subs {
-		b.Run(fmt.Sprintf("Pending-%d", bps), func(b *testing.B) {
+		b.Run(fmt.Sprintf("PendingTxGroups-%d", bps), func(b *testing.B) {
 			sub(b, bps)
 		})
 	}
@@ -1151,5 +1151,91 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 		transactionPool.OnNewBlock(blk.Block(), ledger.StateDelta{})
 
 		fmt.Printf("BenchmarkTransactionPoolSteadyState: committed block %d\n", blk.Block().Round())
+	}
+}
+
+func TestTxPoolSizeLimits(t *testing.T) {
+	numOfAccounts := 2
+	// Generate accounts
+	secrets := make([]*crypto.SignatureSecrets, numOfAccounts)
+	addresses := make([]basics.Address, numOfAccounts)
+
+	for i := 0; i < numOfAccounts; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+	}
+
+	firstAddress := addresses[0]
+	cfg := config.GetDefaultLocal()
+	cfg.TxPoolSize = testPoolSize
+	cfg.EnableProcessBlockStats = false
+
+	ledger := makeMockLedger(t, initAcc(map[basics.Address]uint64{firstAddress: proto.MinBalance + 2*proto.MinTxnFee*uint64(cfg.TxPoolSize)}))
+
+	transactionPool := MakeTransactionPool(ledger, cfg)
+
+	receiver := addresses[1]
+
+	uniqueTxID := 0
+	// almost fill the transaction pool, leaving room for one additional transaction group of the biggest size.
+	for i := 0; i <= cfg.TxPoolSize-config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize; i++ {
+		tx := transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      firstAddress,
+				Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
+				FirstValid:  0,
+				LastValid:   10,
+				Note:        []byte{byte(uniqueTxID), byte(uniqueTxID >> 8), byte(uniqueTxID >> 16)},
+				GenesisHash: ledger.GenesisHash(),
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: receiver,
+				Amount:   basics.MicroAlgos{Raw: 0},
+			},
+		}
+		signedTx := tx.Sign(secrets[0])
+
+		// consume the transaction of allowed limit
+		require.NoError(t, transactionPool.RememberOne(signedTx, verify.Params{}))
+		uniqueTxID++
+	}
+
+	for groupSize := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize; groupSize > 0; groupSize-- {
+		var txgroup []transactions.SignedTxn
+		var verifyParams []verify.Params
+		// fill the transaction group with groupSize transactions.
+		for i := 0; i < groupSize; i++ {
+			tx := transactions.Transaction{
+				Type: protocol.PaymentTx,
+				Header: transactions.Header{
+					Sender:      firstAddress,
+					Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee + 1},
+					FirstValid:  0,
+					LastValid:   10,
+					Note:        []byte{byte(uniqueTxID), byte(uniqueTxID >> 8), byte(uniqueTxID >> 16)},
+					GenesisHash: ledger.GenesisHash(),
+				},
+				PaymentTxnFields: transactions.PaymentTxnFields{
+					Receiver: receiver,
+					Amount:   basics.MicroAlgos{Raw: 0},
+				},
+			}
+			signedTx := tx.Sign(secrets[0])
+			txgroup = append(txgroup, signedTx)
+			verifyParams = append(verifyParams, verify.Params{})
+			uniqueTxID++
+		}
+
+		// ensure that we would fail adding this.
+		require.Error(t, transactionPool.Remember(txgroup, verifyParams))
+
+		if groupSize > 1 {
+			// add a single transaction and ensure we succeed
+			// consume the transaction of allowed limit
+			require.NoError(t, transactionPool.RememberOne(txgroup[0], verifyParams[0]))
+		}
 	}
 }

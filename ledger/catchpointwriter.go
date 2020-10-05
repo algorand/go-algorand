@@ -76,7 +76,7 @@ type encodedBalanceRecord struct {
 }
 
 // CatchpointFileHeader is the content we would have in the "content.msgpack" file in the catchpoint tar archive.
-// we need it to be public, as it's being decoded externaly by the catchpointdump utility.
+// we need it to be public, as it's being decoded externally by the catchpointdump utility.
 type CatchpointFileHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
