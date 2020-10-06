@@ -31,26 +31,26 @@ func TestEnsureDataDirReturnsWhenDataDirIsProvided(t *testing.T) {
 	require.Equal(t, expectedDir, actualDir)
 }
 
-func TestEnsurePasswordWhenEnvironmentVariableIsProvided(t *testing.T) {
+func TestEnsurePasswordForWalletWhenEnvironmentVariableIsProvided(t *testing.T) {
 	expectedPassword := []byte("password")
 	os.Setenv("ALGORAND_KMD_PASSWORD", string(expectedPassword))
-	actualPassword := ensurePassword()
+	actualPassword := ensurePasswordForWallet("testwallet")
 	require.Equal(t, expectedPassword, actualPassword)
 }
 
-func TestEnsurePasswordWhenEnvironmentVariableIsProvidedButIncorrect(t *testing.T) {
+func TestEnsurePasswordForWalletWhenEnvironmentVariableIsProvidedButIncorrect(t *testing.T) {
 	incorrectPassword := []byte("incorrectpassword")
 	os.Setenv("ALGORAND_KMD_PASSWORD", "password")
-	actualPassword := ensurePassword()
+	actualPassword := ensurePasswordForWallet("testwallet")
 	require.NotEqual(t, incorrectPassword, actualPassword)
 }
 
-func TestEnsurePasswordWhenEnvironmentVariableIsNotProvided(t *testing.T) {
+func TestEnsurePasswordForWalletWhenEnvironmentVariableIsNotProvided(t *testing.T) {
 	if err := os.Unsetenv("ALGORAND_KMD_PASSWORD"); err != nil {
 		require.Error(t, err)
 	}
 	if os.Getenv("REAL_TEST") == "" {
-		cmd := exec.Command(os.Args[0], "-test.run=TestEnsurePasswordWhenEnvironmentVariableIsNotProvided")
+		cmd := exec.Command(os.Args[0], "-test.run=TestEnsurePasswordForWalletWhenEnvironmentVariableIsNotProvided")
 		cmd.Env = append(os.Environ(), "REAL_TEST=1")
 		err := cmd.Run()
 		e, ok := err.(*exec.ExitError)
@@ -59,5 +59,5 @@ func TestEnsurePasswordWhenEnvironmentVariableIsNotProvided(t *testing.T) {
 		require.Equal(t, "exit status 1", e.Error())
 		return
 	}
-	ensurePassword()
+	ensurePasswordForWallet("testwallet")
 }
