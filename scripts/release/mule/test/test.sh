@@ -48,6 +48,9 @@ then
     dpkg -i algorand_*"$VERSION"*.deb
     dpkg -i algorand-devtools*"$VERSION"*.deb
 else
+    # We need to install this since it's not being installed by a package manager.
+    # Normally, this is installed for us b/c it's a dependency.
+    # See `./installer/rpm/algorand/algorand.spec`.
     yum install yum-cron -y
     rpm -i algorand-"$VERSION"-1."$ARCH_BIT".rpm
     rpm -i algorand-devtools-"$VERSION"-1."$ARCH_BIT".rpm
