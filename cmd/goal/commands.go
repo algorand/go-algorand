@@ -492,36 +492,50 @@ func ensurePassword() []byte {
 }
 
 func reportInfoln(args ...interface{}) {
-	fmt.Println(args...)
-	// log.Infoln(args...)
+	for _, line := range strings.Split(fmt.Sprint(args...), "\n") {
+		printable, line := unicodePrintable(line)
+		if !printable {
+			fmt.Println(infoNonPrintableCharacters)
+		}
+		fmt.Println(line)
+	}
 }
 
 func reportInfof(format string, args ...interface{}) {
-	fmt.Printf(format+"\n", args...)
-	// log.Infof(format, args...)
+	reportInfoln(fmt.Sprintf(format, args...))
 }
 
 func reportWarnln(args ...interface{}) {
 	fmt.Print("Warning: ")
-	fmt.Println(args...)
-	// log.Warnln(args...)
+
+	for _, line := range strings.Split(fmt.Sprint(args...), "\n") {
+		printable, line := unicodePrintable(line)
+		if !printable {
+			fmt.Println(infoNonPrintableCharacters)
+		}
+
+		fmt.Println(line)
+	}
 }
 
 func reportWarnf(format string, args ...interface{}) {
-	fmt.Printf("Warning: "+format+"\n", args...)
-	// log.Warnf(format, args...)
+	reportWarnln(fmt.Sprintf(format, args...))
 }
 
 func reportErrorln(args ...interface{}) {
-	fmt.Fprintln(os.Stderr, args...)
-	// log.Warnln(args...)
+	outStr := fmt.Sprint(args...)
+	for _, line := range strings.Split(outStr, "\n") {
+		printable, line := unicodePrintable(line)
+		if !printable {
+			fmt.Fprintln(os.Stderr, errorNonPrintableCharacters)
+		}
+		fmt.Fprintln(os.Stderr, line)
+	}
 	os.Exit(1)
 }
 
 func reportErrorf(format string, args ...interface{}) {
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
-	// log.Warnf(format, args...)
-	os.Exit(1)
+	reportErrorln(fmt.Sprintf(format, args...))
 }
 
 // writeFile is a wrapper of ioutil.WriteFile which considers the special
