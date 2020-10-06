@@ -1,5 +1,7 @@
 const fs = require('fs');
 
+const RELAY_BANDWIDTH = 100
+
 const countries = JSON.parse(fs.readFileSync('./data/countries.json'))
 const countryBandwidths = JSON.parse(fs.readFileSync('./data/bandwidth.json'))
 const latencies = JSON.parse(fs.readFileSync('./data/latency.json'))
@@ -48,7 +50,7 @@ const average = (data) => {
     return sum / data.length
 }
 
-var writer = fs.createWriteStream('./network/network_performance_rules', {
+var writer = fs.createWriteStream('./network_performance_rules', {
     flags: 'w'
 })
 
@@ -58,7 +60,10 @@ Object.keys(continentToGroup).forEach((source) => {
         targetGroup = continentToGroup[target]
         const bandwidth = average(continentBandwidths[source]['bandwidths'])
         const latency = latencyMap[source][target]
-        writer.write(`${sourceGroup} ${targetGroup} ${Math.round(bandwidth)} ${Math.round(latency)}\n`)
+        writer.write(`${sourceGroup}-n ${targetGroup}-n ${Math.round(bandwidth)} ${Math.round(latency)}\n`)
+        writer.write(`${sourceGroup}-n ${targetGroup}-r ${Math.round(bandwidth)} ${Math.round(latency)}\n`)
+        writer.write(`${sourceGroup}-r ${targetGroup}-n ${RELAY_BANDWIDTH} ${Math.round(latency)}\n`)
+        writer.write(`${sourceGroup}-r ${targetGroup}-r ${RELAY_BANDWIDTH} ${Math.round(latency)}\n`)
     })
 })
 

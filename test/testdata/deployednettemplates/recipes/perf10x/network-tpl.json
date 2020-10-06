@@ -21,29 +21,94 @@
     }
   },
   "groups": [
-    { 
-      "name": "us",
-      "percent": 20,
+    {
+      "name": "us-r",
+      "percent": {
+        "relays": 20,
+        "participatingNodes": 0,
+        "nonParticipatingNodes": 0
+      },
       "region": "us-west-1"
     },
     {
-      "name": "eu",
-      "percent": 20,
+      "name": "us-n",
+      "percent": {
+        "relays": 0,
+        "participatingNodes": 20,
+        "nonParticipatingNodes": 20
+      },
       "region": "us-west-1"
     },
     {
-      "name": "ap",
-      "percent": 20,
+      "name": "eu-r",
+      "percent": {
+        "relays": 20,
+        "participatingNodes": 0,
+        "nonParticipatingNodes": 0
+      },
       "region": "us-west-1"
     },
     {
-      "name": "af",
-      "percent": 20,
+      "name": "eu-n",
+      "percent": {
+        "relays": 0,
+        "participatingNodes": 20,
+        "nonParticipatingNodes": 20
+      },
       "region": "us-west-1"
     },
     {
-      "name": "au",
-      "percent": 20,
+      "name": "ap-r",
+      "percent": {
+        "relays": 20,
+        "participatingNodes": 0,
+        "nonParticipatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "ap-n",
+      "percent": {
+        "relays": 0,
+        "participatingNodes": 20,
+        "nonParticipatingNodes": 20
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "af-r",
+      "percent": {
+        "relays": 20,
+        "participatingNodes": 0,
+        "nonParticipatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "af-n",
+      "percent": {
+        "relays": 0,
+        "participatingNodes": 20,
+        "nonParticipatingNodes": 20
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "au-r",
+      "percent": {
+        "relays": 20,
+        "participatingNodes": 0,
+        "nonParticipatingNodes": 0
+      },
+      "region": "us-west-1"
+    },
+    {
+      "name": "au-n",
+      "percent": {
+        "relays": 0,
+        "participatingNodes": 20,
+        "nonParticipatingNodes": 20
+      },
       "region": "us-west-1"
     }
   ]

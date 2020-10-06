@@ -23,9 +23,9 @@ def build_netgoal_params(template_dict):
     non_participating_node_count = 0
 
     for group in template_dict['groups']:
-        relay_count += getInstanceCount(instances['relays'], group)
-        participating_node_count += getInstanceCount(instances['participatingNodes'], group)
-        non_participating_node_count += getInstanceCount(instances['nonParticipatingNodes'], group)
+        relay_count += getInstanceCount(instances['relays'], group['percent']['relays'])
+        participating_node_count += getInstanceCount(instances['participatingNodes'], group['percent']['participatingNodes'])
+        non_participating_node_count += getInstanceCount(instances['nonParticipatingNodes'], group['percent']['nonParticipatingNodes'])
     
 
     relay_config = instances['relays']['config']
@@ -90,19 +90,19 @@ def build_hosts(instances, groups):
     non_participating_node_cfg = instances['nonParticipatingNodes']
 
     for group in groups:
-        for i in range(getInstanceCount(relay_cfg, group)):
+        for i in range(getInstanceCount(relay_cfg, group['percent']['relays'])):
             relays.append({
                 "Name": f"R{len(relays) + 1}",
                 "Group": group['name'],
                 "Template": f"AWS-{group['region'].upper()}-{relay_cfg['type']}"
             })
-        for i in range(getInstanceCount(participating_node_cfg, group)):
+        for i in range(getInstanceCount(participating_node_cfg, group['percent']['participatingNodes'])):
             participating_nodes.append({
                 "Name": f"N{len(participating_nodes) + 1}",
                 "Group": group['name'],
                 "Template": f"AWS-{group['region'].upper()}-{participating_node_cfg['type']}"
             })
-        for i in range(getInstanceCount(non_participating_node_cfg, group)):
+        for i in range(getInstanceCount(non_participating_node_cfg, group['percent']['nonParticipatingNodes'])):
             non_participating_nodes.append({
                 "Name": f"NPN{len(non_participating_nodes) + 1}",
                 "Group": group['name'],
@@ -115,9 +115,11 @@ def build_hosts(instances, groups):
     hosts.extend(non_participating_nodes)
     return hosts
 
-def getInstanceCount(instance, group):
+def getInstanceCount(instance, percent):
+    if (percent == 0):
+        return 0
     total_instance_count = instance['count']
-    instance_count = math.floor(total_instance_count * group['percent'] / 100)
+    instance_count = math.floor(total_instance_count * percent / 100)
     return max(instance_count, 1)
 
 
