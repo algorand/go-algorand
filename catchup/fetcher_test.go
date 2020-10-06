@@ -567,7 +567,7 @@ func (p *testHTTPPeer) GetHTTPPeer() network.HTTPPeer {
 
 func buildTestHTTPPeerSource(rootURLs ...string) *httpTestPeerSource {
 	peers := []network.Peer{}
-	for url := range rootURLs {
+	for _, url := range rootURLs {
 		peer := testHTTPPeer(url)
 		peers = append(peers, &peer)
 	}
