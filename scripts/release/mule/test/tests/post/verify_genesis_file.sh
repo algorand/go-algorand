@@ -9,19 +9,22 @@ echo "[$0] Testing network string in genesis.json"
 #       "network": "mainnet",
 #
 
+GEN_FILE=/var/lib/algorand/genesis.json
 cd "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 
-if [ ! -f /var/lib/algorand/genesis.json ]
+if [ ! -f "$GEN_FILE" ]
 then
     echo "[$0] The genesis file is not present."
     exit 1
 fi
 
-if [ "$NETWORK" != "$(jq -r '.network' /var/lib/algorand/genesis.json)" ]
+EXPECTED_NETWORK=$(jq -r '.network' $GEN_FILE)
+
+if [ "$NETWORK" != "$EXPECTED_NETWORK" ]
 then
-    echo "[$0] The network \`$NETWORK\` set in \`genesis.json\` is incorrect."
+    echo "[$0] The network value \`$NETWORK\` in \`$GEN_FILE\` is incorrect, it does not match $EXPECTED_NETWORK."
     exit 1
 fi
 
-echo "[$0] The network \`$NETWORK\` set in \`genesis.json\` is correct."
+echo "[$0] The network value \`$NETWORK\` in \`$GEN_FILE\` is correct."
 
