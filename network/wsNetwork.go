@@ -803,7 +803,7 @@ func (wn *WebsocketNetwork) setHeaders(header http.Header) {
 func (wn *WebsocketNetwork) checkServerResponseVariables(otherHeader http.Header, addr string) (bool, string) {
 	matchingVersion, otherVersion := wn.checkProtocolVersionMatch(otherHeader)
 	if matchingVersion == "" {
-		wn.log.Infof("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", addr, SupportedProtocolVersions, otherVersion, otherHeader)
+		wn.log.Info(filterASCII(fmt.Sprintf("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", addr, SupportedProtocolVersions, otherVersion, otherHeader)))
 		return false, ""
 	}
 	otherRandom := otherHeader.Get(NodeRandomHeader)
@@ -811,7 +811,7 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(otherHeader http.Header
 		// This is pretty harmless and some configurations of phonebooks or DNS records make this likely. Quietly filter it out.
 		if otherRandom == "" {
 			// missing header.
-			wn.log.Warnf("new peer %s did not include random ID header in request. mine=%s headers %#v", addr, wn.RandomID, otherHeader)
+			wn.log.Warn(filterASCII(fmt.Sprintf("new peer %s did not include random ID header in request. mine=%s headers %#v", addr, wn.RandomID, otherHeader)))
 		} else {
 			wn.log.Debugf("new peer %s has same node random id, am I talking to myself? %s", addr, wn.RandomID)
 		}
@@ -820,7 +820,7 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(otherHeader http.Header
 	otherGenesisID := otherHeader.Get(GenesisHeader)
 	if wn.GenesisID != otherGenesisID {
 		if otherGenesisID != "" {
-			wn.log.Warnf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", addr, wn.GenesisID, otherGenesisID, otherHeader)
+			wn.log.Warn(filterASCII(fmt.Sprintf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", addr, wn.GenesisID, otherGenesisID, otherHeader)))
 		} else {
 			wn.log.Warnf("new peer %#v did not include genesis header in response. mine=%#v headers %#v", addr, wn.GenesisID, otherHeader)
 		}
