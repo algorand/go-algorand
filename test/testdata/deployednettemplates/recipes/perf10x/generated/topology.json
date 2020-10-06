@@ -1,0 +1,79 @@
+{
+    "Hosts": [
+        {
+            "Name": "R1",
+            "Group": "us",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "R2",
+            "Group": "eu",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "R3",
+            "Group": "ap",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "R4",
+            "Group": "af",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "R5",
+            "Group": "au",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "N1",
+            "Group": "us",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "N2",
+            "Group": "eu",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "N3",
+            "Group": "ap",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "N4",
+            "Group": "af",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "N5",
+            "Group": "au",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "NPN1",
+            "Group": "us",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "NPN2",
+            "Group": "eu",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "NPN3",
+            "Group": "ap",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "NPN4",
+            "Group": "af",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "NPN5",
+            "Group": "au",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        }
+    ]
+}

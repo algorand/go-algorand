@@ -1,0 +1,50 @@
+{
+  "network": {
+    "wallets": 40,
+    "nodes": 15
+  },
+  "instances": {
+    "relays": {
+      "config": "./configs/relay.json",
+      "type": "m5d.large",
+      "count": 5
+    },
+    "participatingNodes": {
+      "config": "./configs/node.json",
+      "type": "m5d.large",
+      "count": 5
+    },
+    "nonParticipatingNodes": {
+      "config": "./configs/nonPartNode.json",
+      "type": "m5d.large",
+      "count": 5
+    }
+  },
+  "groups": [
+    { 
+      "name": "us",
+      "percent": 20,
+      "region": "us-west-1"
+    },
+    {
+      "name": "eu",
+      "percent": 20,
+      "region": "us-west-1"
+    },
+    {
+      "name": "ap",
+      "percent": 20,
+      "region": "us-west-1"
+    },
+    {
+      "name": "af",
+      "percent": 20,
+      "region": "us-west-1"
+    },
+    {
+      "name": "au",
+      "percent": 20,
+      "region": "us-west-1"
+    }
+  ]
+}

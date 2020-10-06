@@ -1,0 +1,413 @@
+{
+	"NetworkName": "",
+	"VersionModifier": "",
+	"ConsensusProtocol": "",
+	"FirstPartKeyRound": 0,
+	"LastPartKeyRound": 3000000,
+	"PartKeyDilution": 0,
+	"Wallets": [
+		{
+			"Name": "Wallet1",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet2",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet3",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet4",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet5",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet6",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet7",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet8",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet9",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet10",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet11",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet12",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet13",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet14",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet15",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet16",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet17",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet18",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet19",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet20",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet21",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet22",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet23",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet24",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet25",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet26",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet27",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet28",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet29",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet30",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet31",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet32",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet33",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet34",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet35",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet36",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet37",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet38",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet39",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet40",
+			"Stake": 1.25,
+			"Online": true
+		},
+		{
+			"Name": "Wallet41",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet42",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet43",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet44",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet45",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet46",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet47",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet48",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet49",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet50",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet51",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet52",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet53",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet54",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet55",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet56",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet57",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet58",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet59",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet60",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet61",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet62",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet63",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet64",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet65",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet66",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet67",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet68",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet69",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet70",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet71",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet72",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet73",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet74",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet75",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet76",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet77",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet78",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet79",
+			"Stake": 1.25,
+			"Online": false
+		},
+		{
+			"Name": "Wallet80",
+			"Stake": 1.25,
+			"Online": false
+		}
+	],
+	"FeeSink": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+	"RewardsPool": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+	"Comment": ""
+}
