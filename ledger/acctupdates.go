@@ -393,8 +393,8 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 		sort.Slice(keys, func(i, j int) bool { return keys[i] > keys[j] })
 
 		// Check for creatables that haven't been synced to disk yet.
-		var unsyncedCreatables []basics.CreatableLocator
-		deletedCreatables := make(map[basics.CreatableIndex]bool)
+		unsyncedCreatables := make([]basics.CreatableLocator, 0, len(keys))
+		deletedCreatables := make(map[basics.CreatableIndex]bool, len(keys))
 		for _, cidx := range keys {
 			delta := au.creatables[cidx]
 			if delta.created {
@@ -410,18 +410,14 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 			}
 		}
 
+		au.accountsMu.RUnlock()
+
 		// Check in-memory created creatables, which will always be newer than anything
 		// in the database
-		var res []basics.CreatableLocator
-		for _, loc := range unsyncedCreatables {
-			if uint64(len(res)) == maxResults {
-				au.accountsMu.RUnlock()
-				return res, nil
-			}
-			res = append(res, loc)
+		if uint64(len(unsyncedCreatables)) >= maxResults {
+			return unsyncedCreatables[:maxResults], nil
 		}
-
-		au.accountsMu.RUnlock()
+		res := unsyncedCreatables
 
 		// Fetch up to maxResults - len(res) + len(deletedCreatables) from the database,
 		// so we have enough extras in case creatables were deleted
