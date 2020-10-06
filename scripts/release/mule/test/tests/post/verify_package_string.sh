@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-set -ex
+set -e
 
 echo "[$0] Testing: algod -v"
 
 STR=$(algod -v)
-SHORT_HASH=${COMMIT_HASH:0:8}
+SHORT_HASH=${SHA:0:8}
 
 # We're looking for a line that looks like the following:
 #
@@ -13,8 +13,8 @@ SHORT_HASH=${COMMIT_HASH:0:8}
 #
 # Since we're passing in the full hash, we won't using the closing paren.
 # Use a regex over the multi-line string.
-if [[ "$STR" =~ .*"$FULLVERSION.$CHANNEL [$BRANCH] (commit #$SHORT_HASH".* ]] ||
-    [[ "$STR" =~ .*"$FULLVERSION. [$BRANCH] (commit #$SHORT_HASH".* ]]
+if [[ "$STR" =~ .*"$VERSION.$CHANNEL [$BRANCH] (commit #$SHORT_HASH".* ]] ||
+    [[ "$STR" =~ .*"$VERSION. [$BRANCH] (commit #$SHORT_HASH".* ]]
 then
     echo -e "[$0] The result of \`algod -v\` is a correct match.\n$STR"
     exit 0
