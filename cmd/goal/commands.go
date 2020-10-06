@@ -478,6 +478,10 @@ func getWalletHandleMaybePassword(dataDir string, walletName string, getPassword
 }
 
 func ensurePasswordForWallet(walletName string) []byte {
+	password, ok := os.LookupEnv("ALGORAND_KMD_PASSWORD")
+	if ok {
+		return []byte(password)
+	}
 	fmt.Printf(infoPasswordPrompt, walletName)
 	return ensurePassword()
 }
