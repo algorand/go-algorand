@@ -434,7 +434,7 @@ func (wp *wsPeer) readLoop() {
 			}
 			requestHash, found := topics.GetValue(requestHashKey)
 			if !found {
-				wp.net.log.Warnf("wsPeer readLoop: message from %s is missing the %s", wp.conn.RemoteAddr().String(), filterASCII(requestHashKey))
+				wp.net.log.Warnf("wsPeer readLoop: message from %s is missing the %s", wp.conn.RemoteAddr().String(), requestHashKey)
 				continue
 			}
 			hashKey, _ := binary.Uvarint(requestHash)
