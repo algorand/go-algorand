@@ -172,6 +172,12 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
 
 	initializeConfig(cfg)
+
+	f, _ := os.OpenFile("/tmp/mylog.txt", 	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f.WriteString(fmt.Sprintf("%s: dataDir: %v TelemetryConfigFilename: %v configPath: %v \n", time.Now().String(), *dataDir, TelemetryConfigFilename, configPath))
+	f.Close()
+
+
 	return cfg, created, err
 }
 

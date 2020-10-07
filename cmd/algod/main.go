@@ -181,6 +181,10 @@ func main() {
 		}
 		fmt.Fprintf(os.Stdout, "Telemetry configured from '%s'\n", telemetryConfig.FilePath)
 
+		f, _ := os.OpenFile("/tmp/mylog.txt", 	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		f.WriteString(fmt.Sprintf("%s: telemetryConfig.SendToLog: %v telemetryConfig.Enable %v  cfg.TelemetryToLog %v\n", time.Now().String(), telemetryConfig.SendToLog,  telemetryConfig.Enable, cfg.TelemetryToLog))
+		f.Close()
+		
 		telemetryConfig.SendToLog = telemetryConfig.SendToLog || cfg.TelemetryToLog
 
 		// Apply telemetry override.

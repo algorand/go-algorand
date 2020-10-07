@@ -269,7 +269,7 @@ type Local struct {
 	EnableProfiler bool `version[0]:"false"`
 
 	// TelemetryToLog records messages to node.log that are normally sent to remote event monitoring
-	TelemetryToLog bool `version[5]:"true"`
+	TelemetryToLog bool `"true"`
 
 	// DNSSecurityFlags instructs algod validating DNS responses.
 	// Possible fla values
@@ -308,7 +308,7 @@ type Local struct {
 
 	// EnableGossipBlockService enables the block serving service over the gossip network. The functionality of this depends on NetAddress, which must also be provided.
 	// This functionality is required for the relays to perform catchup from nodes.
-	EnableGossipBlockService bool `version[8]:"true"`
+	EnableGossipBlockService bool `version[0]:"true"`
 
 	// CatchupHTTPBlockFetchTimeoutSec controls how long the http query for fetching a block from a relay would take before giving up and trying another relay.
 	CatchupHTTPBlockFetchTimeoutSec int `version[9]:"4"`

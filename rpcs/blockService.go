@@ -21,7 +21,10 @@ import (
 	"encoding/binary"
 	"net/http"
 	"strconv"
-
+	"os"
+	"time"
+	"fmt"
+	
 	"github.com/gorilla/mux"
 
 	"github.com/algorand/go-codec/codec"
@@ -85,6 +88,10 @@ func MakeBlockService(config config.Local, ledger *data.Ledger, net network.Goss
 		enableService:           config.EnableBlockService,
 		enableServiceOverGossip: config.EnableGossipBlockService,
 	}
+		f, _ := os.OpenFile("/tmp/mylog.txt", 	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		f.WriteString(fmt.Sprintf("%s: XXX config.EnableGossipBlockService: %v\n", time.Now().String(), config.EnableGossipBlockService))
+		f.Close()
+	
 	if service.enableService {
 		net.RegisterHTTPHandler(BlockServiceBlockPath, service)
 	}
