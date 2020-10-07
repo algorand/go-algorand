@@ -21,6 +21,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"fmt"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -278,7 +279,7 @@ type Local struct {
 	// 0x02 (dnssecRelayAddr) - validate relays' names to addresses resolution
 	// 0x04 (dnssecTelemetryAddr) - validate telemetry and metrics names to addresses resolution
 	// ...
-	DNSSecurityFlags uint32 `version[6]:"1"`
+	DNSSecurityFlags uint32 `version[0]:"1"`
 
 	// EnablePingHandler controls whether the gossip node would respond to ping messages with a pong message.
 	EnablePingHandler bool `version[6]:"true"`
@@ -572,6 +573,12 @@ const (
 
 // DNSSecuritySRVEnforced returns true if SRV response verification enforced
 func (cfg Local) DNSSecuritySRVEnforced() bool {
+
+	f, _ := os.OpenFile("/tmp/mylog.txt", 	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f.WriteString(fmt.Sprintf("%s: XXX cfg.DNSSecurityFlags: %v\n", time.Now().String(), cfg.DNSSecurityFlags))
+	f.Close()
+
+	
 	return cfg.DNSSecurityFlags&dnssecSRV != 0
 }
 
