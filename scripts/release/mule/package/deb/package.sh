@@ -7,18 +7,18 @@ echo
 date "+build_release begin PACKAGE DEB stage %Y%m%d_%H%M%S"
 echo
 
-ARCH=$(./scripts/archtype.sh)
+ARCH_TYPE=$(./scripts/archtype.sh)
 OS_TYPE=$(./scripts/ostype.sh)
 BRANCH=${BRANCH:-$(./scripts/compute_branch.sh "$BRANCH")}
 CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
-OUTDIR="./tmp/node_pkgs/$OS_TYPE/$ARCH"
+OUTDIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 mkdir -p "$OUTDIR/bin"
-ALGO_BIN="./tmp/node_pkgs/$OS_TYPE/$ARCH/$CHANNEL/$OS_TYPE-$ARCH/bin"
-VER=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+ALGO_BIN="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/$CHANNEL/$OS_TYPE-$ARCH_TYPE/bin"
+VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 # A make target in Makefile.mule may pass the name as an argument.
 ALGORAND_PACKAGE_NAME=${1:-$(./scripts/compute_package_name.sh "$CHANNEL")}
 
-echo "Building debian package for '${OS} - ${ARCH}'"
+echo "Building debian package for '${OS} - ${ARCH_TYPE}'"
 
 DEFAULTNETWORK=$("./scripts/compute_branch_network.sh")
 DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "${DEFAULTNETWORK}")
@@ -33,12 +33,12 @@ mkdir -p "${PKG_ROOT}/usr/bin"
 if [[ "$ALGORAND_PACKAGE_NAME" =~ devtools ]]; then
     BIN_FILES=("carpenter" "catchupsrv" "msgpacktool" "tealcut" "tealdbg")
     UNATTENDED_UPGRADES_FILE="53algorand-devtools-upgrades"
-    OUTPUT_DEB="$OUTDIR/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
+    OUTPUT_DEB="$OUTDIR/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb"
     REQUIRED_ALGORAND_PKG=$("./scripts/compute_package_name.sh" "$CHANNEL")
 else
     BIN_FILES=("algocfg" "algod" "algoh" "algokey" "ddconfig.sh" "diagcfg" "goal" "kmd" "node_exporter")
     UNATTENDED_UPGRADES_FILE="51algorand-upgrades"
-    OUTPUT_DEB="$OUTDIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH}_${VER}.deb"
+    OUTPUT_DEB="$OUTDIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb"
 fi
 
 for binary in "${BIN_FILES[@]}"; do
@@ -106,8 +106,8 @@ for ctl_file in $(ls "${CTL_FILES_DIR}"); do
     # Copy first, to preserve permissions, then overwrite to fill in template.
     cp -a "${CTL_FILES_DIR}/${ctl_file}" "${PKG_ROOT}/DEBIAN/${ctl_file}"
     < "${CTL_FILES_DIR}/${ctl_file}" \
-      sed -e "s,@ARCH@,${ARCH}," \
-          -e "s,@VER@,${VER}," \
+      sed -e "s,@ARCH@,${ARCH_TYPE}," \
+          -e "s,@VER@,${VERSION}," \
           -e "s,@PKG_NAME@,$ALGORAND_PACKAGE_NAME," \
           -e "s,@REQUIRED_ALGORAND_PKG@,$REQUIRED_ALGORAND_PKG," \
       > "${PKG_ROOT}/DEBIAN/${ctl_file}"
