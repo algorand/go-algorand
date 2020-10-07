@@ -42,7 +42,7 @@ tasks:
     target: mule-package-docker
 
 jobs:
-  package:
+  package-linux-amd64:
     tasks:
       - docker.Make.deb
       - docker.Make.rpm
