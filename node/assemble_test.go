@@ -18,13 +18,13 @@ package node
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/agreement"
 	"math/rand"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
@@ -179,7 +179,6 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 			Status:     basics.Online,
 			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
 		}
-		//b.Log(addr)
 	}
 
 	genesis[poolAddr] = basics.AccountData{
@@ -189,7 +188,6 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 
 	require.Equal(t, len(genesis), numUsers+1)
 	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
-	//ledgerName := fmt.Sprintf("%s-mem-%d", b.Name(), b.N)
 	const inMem = true
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
@@ -214,10 +212,4 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	block, err = tp.AssembleBlock(next, deadline)
 	require.NoError(t, err)
 	require.NoError(t, ledger.AddBlock(block.Block(), agreement.Certificate{Round: next}))
-
-	//next = l.NextRound()
-	//fmt.Println(next)
-	//deadline = time.Now().Add(time.Second)
-	//block, err = tp.AssembleBlock(next, deadline)
-	//require.Error(t, err)
 }
