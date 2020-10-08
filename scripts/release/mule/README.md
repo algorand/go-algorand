@@ -55,10 +55,12 @@ These env vars generally don't change between stages. Here is a list of variable
 
 - see `./go-algorand/package-test.yaml`
 
-- `ARCH_BIT`, i.e., the value from `uname -m`
-- `NETWORK`
-- `SHA`, i.e., the value from `git rev-parse HEAD` if not passed on CLI
-- `USE_CACHE`
+- customizable environment variables:
+
+    + `ARCH_BIT`, i.e., the value from `uname -m`
+    + `NETWORK`
+    + `SHA`, i.e., the value from `git rev-parse HEAD` if not passed on CLI
+    + `USE_CACHE`
 
 #### `mule` jobs
 
@@ -75,8 +77,10 @@ These env vars generally don't change between stages. Here is a list of variable
 
 - see `./go-algorand/package-sign.yaml`
 
-- `ARCH_BIT`, i.e., the value from `uname -m`
-- `USE_CACHE`
+- customizable environment variables:
+
+    + `ARCH_BIT`, i.e., the value from `uname -m`
+    + `USE_CACHE`
 
 ### `mule` jobs
 
@@ -87,9 +91,11 @@ These env vars generally don't change between stages. Here is a list of variable
 
 - see `./go-algorand/package-deploy.yaml`
 
-- `NETWORK`
-- `NO_DEPLOY`
-- `PACKAGES_DIR`
+- customizable environment variables:
+
+    + `NETWORK`
+    + `NO_DEPLOY`
+    + `PACKAGES_DIR`
 
 #### `mule` jobs
 
@@ -106,11 +112,7 @@ These env vars generally don't change between stages. Here is a list of variable
 
 It is sometimes necessary to create packages after doing a local build.
 
-For instance, it is common that a custom build is performed on a feature branch other than `rel/stable` or `rel/beta`.  Also, the version will need to be specified.  In these instances, it is important to be able to pass values to the build process to customize a build.
-
-The most common way to do this is to modify the environment that the subprocess inherits by specifying the values on the command *before* the command.  This won't need to be done for the package stage, but often needs to be done with subsequent stages.
-
-For example, the packaging build process would be starting as usual:
+For example, the packaging build process will look like this:
 
 ```
 mule -f package.yaml package
@@ -123,9 +125,33 @@ algorand_dev_linux-amd64_2.1.86615.deb
 algorand-devtools_dev_linux-amd64_2.1.86615.deb
 ```
 
+Note that this is in the format `{ALGORAND_PACKAGE_NAME}_{CHANNEL}_{OS_TYPE}-{ARCH_TYPE}_{VERSION}.deb. `rpm` packages will follow their own format which is easy to intuit.
+
+It is common that a custom build is performed on a feature branch other than `rel/stable` or `rel/beta` and that the build environment will need to be modified. In these instances, it is important to be able to pass values to the build process to customize a build.
+
+The most common way to do this is to modify the environment that the subprocess inherits by specifying the values on the command *before* the command.  This won't need to be done for the package stage, but often needs to be done with subsequent stages.
+
 In order to be able to correctly run some of the stages, such as testing and signing, several values needed by the subsequent stages must to be explicitly passed to those stages.
 
-Now, let's look at some examples.
+> Verifying which env vars can be overridden is as simple as opening the `mule` yaml file for the respective stage and examining the list of env vars in the `agents`' `env` list.
+>
+>   For example:
+>
+>       agents:
+>         - name: deb
+>           dockerFilePath: docker/build/cicd.ubuntu.Dockerfile
+>           image: algorand/mule-linux-debian
+>           version: scripts/configure_dev-deps.sh
+>           buildArgs:
+>             - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+>           env:
+>             - BRANCH=$BRANCH
+>             - CHANNEL=$CHANNEL
+>             - NETWORK=$NETWORK
+>             - SHA=$SHA
+>             - VERSION=$VERSION
+
+Let's look at some examples.
 
 # Examples
 
@@ -167,9 +193,7 @@ Now, let's look at some examples.
 
 1. Packages will be automatically downloaded from `s3:algorand-staging`. Each package will then be pushed to `s3:algorand-releases:`.
 
-    ```
-    VERSION=2.1.6 mule -f package-deploy.yaml package-deploy
-    ```
+        VERSION=2.1.6 mule -f package-deploy.yaml package-deploy
 
 1. Packages are not downloaded from `s3:algorand-staging` but rather are copied from the location on the local filesystem specified by `PACKAGES_DIR` in the `mule` yaml file. Each package will then be pushed to `s3:algorand-releases:`.
 
