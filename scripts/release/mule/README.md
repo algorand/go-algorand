@@ -73,7 +73,7 @@ These env vars generally don't change between stages. Here is a list of variable
 
 ## sign
 
-- see `./$go-algorand/package-sign.yaml`
+- see `./go-algorand/package-sign.yaml`
 
 - `ARCH_BIT`, i.e., the value from `uname -m`
 - `USE_CACHE`
@@ -129,65 +129,55 @@ Now, let's look at some examples.
 
 # Examples
 
+### Packaging
+
+    mule -f package.yaml package
+
 ### Testing
 
 1. As part of the test suite, the `verify_package_string.sh` test needs the `BRANCH` as well as the `SHA`:
 
-```
-BRANCH=update_signing CHANNEL=dev SHA=aecd5318 VERSION=2.1.86615 mule -f package-test.yaml package-test
-```
+        BRANCH=update_signing CHANNEL=dev SHA=aecd5318 VERSION=2.1.86615 mule -f package-test.yaml package-test
 
-2. Test local packages on the filesystem because `USE_CACHE` is set to `true`. Note that the tests still expect the packages to be in the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
+1. Test local packages on the filesystem because `USE_CACHE` is set to `true`. Note that the tests still expect the packages to be in the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
 
-As this is the default behavior, `USE_CACHE` can be omitted.
+    As this is the default behavior, `USE_CACHE` can be omitted.
 
-```
-BRANCH=update_signing CHANNEL=dev USE_CACHE=true VERSION=2.1.86615 mule -f package-test.yaml package-test
-```
+        BRANCH=update_signing CHANNEL=dev USE_CACHE=true VERSION=2.1.86615 mule -f package-test.yaml package-test
 
-3. Download packages from `s3:algorand-staging:` and test.  `USE_CACHE` is set to `false`. This will download the packages to the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
+1. Download packages from `s3:algorand-staging:` and test.  `USE_CACHE` is set to `false`. This will download the packages to the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
 
-Note that this is used to test a pending official release.
+    Note that this is used to test a pending official release.
 
-```
-CHANNEL=beta USE_CACHE=false VERSION=2.1.6 mule -f package-test.yaml package-test
-```
+        CHANNEL=beta USE_CACHE=false VERSION=2.1.6 mule -f package-test.yaml package-test
 
 ### Signing
 
 1. Sign local packages on the filesystem because `USE_CACHE` is set to `true`. Note that the packages should be in the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
 
-As this is the default behavior, `USE_CACHE` can be omitted.
+    As this is the default behavior, `USE_CACHE` can be omitted.
 
-```
-CHANNEL=dev USE_CACHE=true VERSION=2.1.86615 mule -f package-sign.yaml package-sign
-```
+        CHANNEL=dev USE_CACHE=true VERSION=2.1.86615 mule -f package-sign.yaml package-sign
 
-2. Download packages from `s3:algorand-staging:` and sign.  `USE_CACHE` is set to `false`. This will download the packages to the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
+1. Download packages from `s3:algorand-staging:` and sign.  `USE_CACHE` is set to `false`. This will download the packages to the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
 
-```
-CHANNEL=beta USE_CACHE=false VERSION=2.1.6 mule -f package-sign.yaml package-sign
-```
+        CHANNEL=beta USE_CACHE=false VERSION=2.1.6 mule -f package-sign.yaml package-sign
 
 ### Deploying
 
 1. Packages will be automatically downloaded from `s3:algorand-staging`. Each package will then be pushed to `s3:algorand-releases:`.
 
-```
-VERSION=2.1.6 mule -f package-deploy.yaml package-deploy
-```
+    ```
+    VERSION=2.1.6 mule -f package-deploy.yaml package-deploy
+    ```
 
-2. Packages are not downloaded from `s3:algorand-staging` but rather are copied from the location on the local filesystem specified by `PACKAGES_DIR` in the `mule` yaml file. Each package will then be pushed to `s3:algorand-releases:`.
+1. Packages are not downloaded from `s3:algorand-staging` but rather are copied from the location on the local filesystem specified by `PACKAGES_DIR` in the `mule` yaml file. Each package will then be pushed to `s3:algorand-releases:`.
 
-```
-PACKAGES_DIR=/packages_location/foo VERSION=2.1.86615 mule -f package-deploy.yaml package-deploy
-```
+        PACKAGES_DIR=/packages_location/foo VERSION=2.1.86615 mule -f package-deploy.yaml package-deploy
 
-3. `NO_DEPLOY` is set to `true`. Instead of automatically pushing to `s3:algorand-releases:`, this will copy the `rpmrepo` directory that was created in the container to the `WORKDIR` in the host environment (the `WORKDIR` is set in the `mule` yaml file).
+1. `NO_DEPLOY` is set to `true`. Instead of automatically pushing to `s3:algorand-releases:`, this will copy the `rpmrepo` directory that was created in the container to the `WORKDIR` in the host environment (the `WORKDIR` is set in the `mule` yaml file).
 
-This is handy when testing a deployment and not yet ready to deploy.
+    This is handy when testing a deployment and not yet ready to deploy.
 
-```
-NO_DEPLOY=true VERSION=2.1.6 mule -f package-deploy.yaml package-deploy
-```
+        NO_DEPLOY=true VERSION=2.1.6 mule -f package-deploy.yaml package-deploy
 
