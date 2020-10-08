@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=2038,2045,2064
+# shellcheck disable=2038,2045,2064,2129
 
 set -ex
 
@@ -17,11 +17,12 @@ ALGO_BIN="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/$CHANNEL/$OS_TYPE-$ARCH_TYPE/bin"
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 # A make target in Makefile.mule may pass the name as an argument.
 ALGORAND_PACKAGE_NAME=${1:-$(./scripts/compute_package_name.sh "$CHANNEL")}
+PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 
-echo "Building debian package for '${OS} - ${ARCH_TYPE}'"
+echo "Building debian package for '$OS - $ARCH_TYPE'"
 
 DEFAULTNETWORK=$("./scripts/compute_branch_network.sh")
-DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "${DEFAULTNETWORK}")
+DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "$DEFAULTNETWORK")
 export DEFAULT_RELEASE_NETWORK
 
 PKG_ROOT=$(mktemp -d)
@@ -42,50 +43,50 @@ else
 fi
 
 for binary in "${BIN_FILES[@]}"; do
-    cp "${ALGO_BIN}/${binary}" "${PKG_ROOT}"/usr/bin
-    chmod 755 "${PKG_ROOT}/usr/bin/${binary}"
+    cp "${ALGO_BIN}/$binary" "$PKG_ROOT/usr/bin"
+    chmod 755 "$PKG_ROOT/usr/bin/$binary"
 done
 
 if [[ ! "$ALGORAND_PACKAGE_NAME" =~ devtools ]]; then
-    mkdir -p "${PKG_ROOT}/usr/lib/algorand"
+    mkdir -p "$PKG_ROOT/usr/lib/algorand"
     lib_files=("updater" "find-nodes.sh")
     for lib in "${lib_files[@]}"; do
-        cp "${ALGO_BIN}/${lib}" "${PKG_ROOT}/usr/lib/algorand"
-        chmod g-w "${PKG_ROOT}/usr/lib/algorand/${lib}"
+        cp "$ALGO_BIN/$lib" "$PKG_ROOT/usr/lib/algorand"
+        chmod g-w "$PKG_ROOT/usr/lib/algorand/$lib"
     done
 
     data_files=("config.json.example" "system.json")
-    mkdir -p "${PKG_ROOT}/var/lib/algorand"
+    mkdir -p "$PKG_ROOT/var/lib/algorand"
     for data in "${data_files[@]}"; do
-        cp "installer/${data}" "${PKG_ROOT}/var/lib/algorand"
+        cp "installer/$data" "$PKG_ROOT/var/lib/algorand"
     done
 
     genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
     for dir in "${genesis_dirs[@]}"; do
-        mkdir -p "${PKG_ROOT}/var/lib/algorand/genesis/${dir}"
-        cp "./installer/genesis/${dir}/genesis.json" "${PKG_ROOT}/var/lib/algorand/genesis/${dir}/genesis.json"
+        mkdir -p "$PKG_ROOT/var/lib/algorand/genesis/$dir"
+        cp "./installer/genesis/$dir/genesis.json" "$PKG_ROOT/var/lib/algorand/genesis/$dir/genesis.json"
     done
-    cp "./installer/genesis/${DEFAULT_RELEASE_NETWORK}/genesis.json" "${PKG_ROOT}/var/lib/algorand/genesis.json"
+    cp "./installer/genesis/$DEFAULT_RELEASE_NETWORK/genesis.json" "$PKG_ROOT/var/lib/algorand/genesis.json"
 
     # files should not be group writable but directories should be
-    chmod -R g-w "${PKG_ROOT}/var/lib/algorand"
-    find "${PKG_ROOT}/var/lib/algorand" -type d | xargs chmod g+w
+    chmod -R g-w "$PKG_ROOT/var/lib/algorand"
+    find "$PKG_ROOT/var/lib/algorand" -type d | xargs chmod g+w
 
     SYSTEMD_FILES=("algorand.service" "algorand@.service")
-    mkdir -p "${PKG_ROOT}/lib/systemd/system"
+    mkdir -p "$PKG_ROOT/lib/systemd/system"
     for svc in "${SYSTEMD_FILES[@]}"; do
-        cp "installer/${svc}" "${PKG_ROOT}/lib/systemd/system"
-        chmod 644 "${PKG_ROOT}/lib/systemd/system/${svc}"
+        cp "installer/$svc" "$PKG_ROOT/lib/systemd/system"
+        chmod 644 "$PKG_ROOT/lib/systemd/system/$svc"
     done
 fi
 
-mkdir -p "${PKG_ROOT}/etc/apt/apt.conf.d"
-cat <<EOF> "${PKG_ROOT}/etc/apt/apt.conf.d/${UNATTENDED_UPGRADES_FILE}"
+mkdir -p "$PKG_ROOT/etc/apt/apt.conf.d"
+cat << EOF > "$PKG_ROOT/etc/apt/apt.conf.d/$UNATTENDED_UPGRADES_FILE"
 ## This file is provided by the Algorand package to configure
 ## unattended upgrades for the Algorand node software.
 
 Unattended-Upgrade::Allowed-Origins {
-  "Algorand:${CHANNEL}";
+  "Algorand:$CHANNEL";
 };
 
 Dpkg::Options {
@@ -94,27 +95,27 @@ Dpkg::Options {
 };
 EOF
 
-mkdir -p "${PKG_ROOT}/DEBIAN"
+mkdir -p "$PKG_ROOT/DEBIAN"
 if [[ "$ALGORAND_PACKAGE_NAME" =~ devtools ]]; then
     INSTALLER_DIR="algorand-devtools"
 else
     INSTALLER_DIR=algorand
 fi
 # Can contain `control`, `preinst`, `postinst`, `prerm`, `postrm`, `conffiles`.
-CTL_FILES_DIR="installer/debian/${INSTALLER_DIR}"
+CTL_FILES_DIR="installer/debian/$INSTALLER_DIR"
 for ctl_file in $(ls "${CTL_FILES_DIR}"); do
     # Copy first, to preserve permissions, then overwrite to fill in template.
-    cp -a "${CTL_FILES_DIR}/${ctl_file}" "${PKG_ROOT}/DEBIAN/${ctl_file}"
-    < "${CTL_FILES_DIR}/${ctl_file}" \
-      sed -e "s,@ARCH@,${ARCH_TYPE}," \
-          -e "s,@VER@,${VERSION}," \
+    cp -a "$CTL_FILES_DIR/$ctl_file" "$PKG_ROOT/DEBIAN/$ctl_file"
+    < "$CTL_FILES_DIR/$ctl_file" \
+      sed -e "s,@ARCH@,$ARCH_TYPE," \
+          -e "s,@VER@,$VERSION," \
           -e "s,@PKG_NAME@,$ALGORAND_PACKAGE_NAME," \
           -e "s,@REQUIRED_ALGORAND_PKG@,$REQUIRED_ALGORAND_PKG," \
-      > "${PKG_ROOT}/DEBIAN/${ctl_file}"
+      > "$PKG_ROOT/DEBIAN/$ctl_file"
 done
 
 # TODO: make `Files:` segments for vendor/... and crypto/libsodium-fork, but reasonably this should be understood to cover all _our_ files and copied in packages continue to be licenced under their own terms
-cat <<EOF> "${PKG_ROOT}/DEBIAN/copyright"
+cat << EOF > "$PKG_ROOT/DEBIAN/copyright"
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: Algorand
 Upstream-Contact: Algorand developers <dev@algorand.com>
@@ -125,11 +126,46 @@ Copyright: Algorand developers <dev@algorand.com>
 License: AGPL-3+
 EOF
 
-sed 's/^$/./g' < COPYING | sed 's/^/ /g' >> "${PKG_ROOT}/DEBIAN/copyright"
-mkdir -p "${PKG_ROOT}/usr/share/doc/${ALGORAND_PACKAGE_NAME}"
-cp -p "${PKG_ROOT}/DEBIAN/copyright" "${PKG_ROOT}/usr/share/doc/${ALGORAND_PACKAGE_NAME}/copyright"
+sed 's/^$/./g' < COPYING | sed 's/^/ /g' >> "$PKG_ROOT/DEBIAN/copyright"
+mkdir -p "$PKG_ROOT/usr/share/doc/$ALGORAND_PACKAGE_NAME"
+cp -p "$PKG_ROOT/DEBIAN/copyright" "$PKG_ROOT/usr/share/doc/$ALGORAND_PACKAGE_NAME/copyright"
 
-dpkg-deb --build "${PKG_ROOT}" "${OUTPUT_DEB}"
+dpkg-deb --build "$PKG_ROOT" "$OUTPUT_DEB"
+
+############################################################
+
+pushd "$PKG_DIR"
+
+STATUSFILE=build_status_${CHANNEL}_${VERSION}
+
+cat << EOF >> "$STATUSFILE"
+
+go version:
+EOF
+
+/usr/local/go/bin/go version >> "$STATUSFILE"
+
+############################################################
+
+cat << EOF >> "$STATUSFILE"
+
+go env:
+EOF
+
+/usr/local/go/bin/go env >> "$STATUSFILE"
+
+############################################################
+
+cat << EOF >> "$STATUSFILE"
+
+dpkg-l:
+EOF
+
+dpkg -l >> "$STATUSFILE"
+
+popd
+
+############################################################
 
 echo
 date "+build_release end PACKAGE DEB stage %Y%m%d_%H%M%S"
