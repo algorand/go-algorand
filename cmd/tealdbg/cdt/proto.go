@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package cdt
 
 // definitions copied from packages below with json fields and struct names fixed
 // "github.com/wirepair/gcd/gcdapi"
@@ -33,7 +33,8 @@ type ChromeRequest struct {
 	Params interface{} `json:"params,omitempty"`
 }
 
-type cdtTabDescription struct {
+// TabDescription represents information shown by CDT at chrome://inspect/ tab
+type TabDescription struct {
 	Description               string `json:"description"`
 	DevtoolsFrontendURL       string `json:"devtoolsFrontendUrl"`
 	ID                        string `json:"id"`
