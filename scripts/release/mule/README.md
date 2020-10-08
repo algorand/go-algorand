@@ -108,6 +108,8 @@ It is sometimes necessary to create packages after doing a local build.
 
 For instance, it is common that a custom build is performed on a feature branch other than `rel/stable` or `rel/beta`.  Also, the version will need to be specified.  In these instances, it is important to be able to pass values to the build process to customize a build.
 
+The most common way to do this is to modify the environment that the subprocess inherits by specifying the values on the command *before* the command.  This won't need to be done for the package stage, but often needs to be done with subsequent stages.
+
 For example, the packaging build process would be starting as usual:
 
 ```
@@ -151,15 +153,21 @@ Note that this is used to test a pending official release.
 CHANNEL=beta USE_CACHE=false VERSION=2.1.6 mule -f package-test.yaml package-test
 ```
 
-### Testing
+### Signing
 
-#1. Sign local packages on the filesystem because `USE_CACHE` is set to `true`. Note that the packages should be in the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
-#
-#As this is the default behavior, `USE_CACHE` can be omitted.
-#
-#```
-#BRANCH=update_signing CHANNEL=dev USE_CACHE=true VERSION=2.1.86615 mule -f package-test.yaml package-test
-#```
+1. Sign local packages on the filesystem because `USE_CACHE` is set to `true`. Note that the packages should be in the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
+
+As this is the default behavior, `USE_CACHE` can be omitted.
+
+```
+CHANNEL=dev USE_CACHE=true VERSION=2.1.86615 mule -f package-sign.yaml package-sign
+```
+
+2. Download packages from `s3:algorand-staging:` and sign.  `USE_CACHE` is set to `false`. This will download the packages to the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
+
+```
+CHANNEL=beta USE_CACHE=false VERSION=2.1.6 mule -f package-sign.yaml package-sign
+```
 
 ### Deploying
 
