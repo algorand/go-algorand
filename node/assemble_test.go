@@ -18,6 +18,7 @@ package node
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/agreement"
 	"math/rand"
 	"testing"
 	"time"
@@ -160,4 +161,63 @@ func BenchmarkAssembleBlock(b *testing.B) {
 		_, _, found := tp.Lookup(worstTxID)
 		require.True(b, found)
 	}
+}
+
+func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
+	const numUsers = 100
+	log := logging.TestingLog(t)
+	secrets := make([]*crypto.SignatureSecrets, numUsers)
+	addresses := make([]basics.Address, numUsers)
+
+	genesis := make(map[basics.Address]basics.AccountData)
+	for i := 0; i < numUsers; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+		genesis[addr] = basics.AccountData{
+			Status:     basics.Online,
+			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
+		}
+		//b.Log(addr)
+	}
+
+	genesis[poolAddr] = basics.AccountData{
+		Status:     basics.NotParticipating,
+		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
+	}
+
+	require.Equal(t, len(genesis), numUsers+1)
+	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	//ledgerName := fmt.Sprintf("%s-mem-%d", b.Name(), b.N)
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledger, err := data.LoadLedger(log, "ledgerName", inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	require.NoError(t, err)
+
+	l := ledger
+	const txPoolSize = 6000
+	cfg = config.GetDefaultLocal()
+	cfg.TxPoolSize = txPoolSize
+	cfg.EnableAssembleStats = false
+	tp := pools.MakeTransactionPool(l.Ledger, cfg)
+
+	next := l.NextRound()
+	deadline := time.Now().Add(time.Second)
+	block, err := tp.AssembleBlock(next, deadline)
+	require.NoError(t, err)
+	require.NoError(t, ledger.AddBlock(block.Block(), agreement.Certificate{Round: next}))
+
+	next = l.NextRound()
+	deadline = time.Now().Add(time.Second)
+	block, err = tp.AssembleBlock(next, deadline)
+	require.NoError(t, err)
+	require.NoError(t, ledger.AddBlock(block.Block(), agreement.Certificate{Round: next}))
+
+	//next = l.NextRound()
+	//fmt.Println(next)
+	//deadline = time.Now().Add(time.Second)
+	//block, err = tp.AssembleBlock(next, deadline)
+	//require.Error(t, err)
 }

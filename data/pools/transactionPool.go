@@ -788,6 +788,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		// the agreement know about it.
 		// since the network is already ahead of us, there is no issue here in not generating a block ( since the block would get discarded anyway )
 		logging.Base().Infof("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
+		fmt.Println(pool.assemblyResults.roundStartedEvaluating)
 		return nil, ErrStaleBlockAssemblyRequest
 	}
 
@@ -840,8 +841,11 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		// The "normal" usecase is evaluated on the top of the function.
 		logging.Base().Warnf("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
 		return nil, ErrStaleBlockAssemblyRequest
-	} else if pool.assemblyResults.roundStartedEvaluating != round {
-		return nil, fmt.Errorf("AssembleBlock: assembled block round does not match: %d != %d",
+	} else if pool.assemblyResults.roundStartedEvaluating == round.SubSaturate(1) {
+		logging.Base().Warnf("AssembleBlock: assembled block round did not catch up to requested round: %d != %d", pool.assemblyResults.roundStartedEvaluating, round)
+		return pool.assembleEmptyBlock(round)
+	} else if pool.assemblyResults.roundStartedEvaluating < round {
+		return nil, fmt.Errorf("AssembleBlock: assembled block round much behind requested round: %d != %d",
 			pool.assemblyResults.roundStartedEvaluating, round)
 	}
 
