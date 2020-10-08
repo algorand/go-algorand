@@ -1,13 +1,17 @@
 agents:
   - name: deb
-    dockerFilePath: docker/build/mule.go.debian.Dockerfile
-    image: algorand/go-algorand-ci-mule-debian
+    dockerFilePath: docker/build/cicd.ubuntu.Dockerfile
+    image: algorand/cicd-ubuntu
     version: scripts/configure_dev-deps.sh
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     env:
       - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      - BRANCH=$BRANCH
+      - CHANNEL=$CHANNEL
+      - USE_CACHE=$USE_CACHE
+      - VERSION=$VERSION
     volumes:
       - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent
       - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
@@ -15,61 +19,12 @@ agents:
 
 tasks:
   - task: docker.Make
-    name: package-sign-deb
+    name: package-sign
     agent: deb
-    target: mule-sign-deb
-
-  - task: docker.Make
-    name: package-sign-rpm
-    agent: deb
-    target: mule-sign-rpm
-
-  - task: docker.Make
-    name: package-sign-tarball
-    agent: deb
-    target: mule-sign-tar.gz
-
-  - task: docker.Make
-    name: package-sign-source
-    agent: deb
-    target: mule-sign-source
-
-  - task: s3.DownloadFile
-    name: deb
-    bucketName: algorand-staging
-    objectName: releases/$CHANNEL/$VERSION/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb
-    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
-
-  - task: s3.DownloadFile
-    name: rpm
-    bucketName: algorand-staging
-    objectName: releases/$CHANNEL/$VERSION/algorand-${VERSION}-1.${ARCH_BIT}.rpm
-    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
-
-  - task: s3.DownloadFiles
-    name: tarball
-    bucketName: algorand-staging
-    prefix: releases/$CHANNEL/$VERSION
-    suffix: tar.gz
-    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
+    target: mule-sign
 
 jobs:
   package-sign:
     tasks:
-      - docker.Make.package-sign-deb
-      - docker.Make.package-sign-rpm
-      - docker.Make.package-sign-tarball
-      - docker.Make.package-sign-source
-
-  package-sign-setup-deb:
-    tasks:
-      - s3.DownloadFile.deb
-
-  package-sign-setup-rpm:
-    tasks:
-      - s3.DownloadFile.rpm
-
-  package-sign-setup-tarball:
-    tasks:
-      - s3.DownloadFiles.tarball
+      - docker.Make.package-sign
 
