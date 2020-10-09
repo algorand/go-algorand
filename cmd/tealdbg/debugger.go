@@ -155,9 +155,7 @@ func makeSession(disassembly string, line int) (s *session) {
 func (s *session) resume() {
 	select {
 	case s.acknowledged <- true:
-		fmt.Println("Queued")
 	default:
-		fmt.Println("Not Queued")
 	}
 }
 
