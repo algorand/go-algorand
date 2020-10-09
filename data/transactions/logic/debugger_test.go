@@ -17,8 +17,8 @@
 package logic
 
 import (
-	"os"
 	"encoding/base64"
+	"os"
 	"testing"
 
 	"github.com/algorand/go-algorand/data/basics"
@@ -160,7 +160,7 @@ func TestLineToPC(t *testing.T) {
 
 	dState.PCOffset = []PCOffset{{PC: 1, Offset: 0}}
 	pc = dState.LineToPC(1)
-	require.Equal(t, 0, pc)	
+	require.Equal(t, 0, pc)
 }
 
 func TestValueDeltaToValueDelta(t *testing.T) {

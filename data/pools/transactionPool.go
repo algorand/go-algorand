@@ -243,12 +243,13 @@ func (pool *TransactionPool) pendingCountNoLock() int {
 	return count
 }
 
-// checkPendingQueueSize test to see if there is more room in the pending
-// group transaction list. As long as we haven't surpassed the size limit, we
-// should be good to go.
-func (pool *TransactionPool) checkPendingQueueSize() error {
+// checkPendingQueueSize tests to see if we can grow the pending group transaction list
+// by adding txCount more transactions. The limits comes from the total number of transactions
+// and not from the total number of transaction groups.
+// As long as we haven't surpassed the size limit, we should be good to go.
+func (pool *TransactionPool) checkPendingQueueSize(txCount int) error {
 	pendingSize := pool.pendingTxIDsCount()
-	if pendingSize >= pool.txPoolMaxSize {
+	if pendingSize+txCount > pool.txPoolMaxSize {
 		return fmt.Errorf("TransactionPool.checkPendingQueueSize: transaction pool have reached capacity")
 	}
 	return nil
@@ -329,7 +330,7 @@ func (pool *TransactionPool) checkSufficientFee(txgroup []transactions.SignedTxn
 // Test performs basic duplicate detection and well-formedness checks
 // on a transaction group without storing the group.
 func (pool *TransactionPool) Test(txgroup []transactions.SignedTxn) error {
-	if err := pool.checkPendingQueueSize(); err != nil {
+	if err := pool.checkPendingQueueSize(len(txgroup)); err != nil {
 		return err
 	}
 
@@ -418,7 +419,7 @@ func (pool *TransactionPool) RememberOne(t transactions.SignedTxn, verifyParams 
 // Remember stores the provided transaction group.
 // Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
 func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn, verifyParams []verify.Params) error {
-	if err := pool.checkPendingQueueSize(); err != nil {
+	if err := pool.checkPendingQueueSize(len(txgroup)); err != nil {
 		return err
 	}
 

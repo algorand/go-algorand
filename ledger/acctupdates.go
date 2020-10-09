@@ -200,6 +200,9 @@ type accountUpdates struct {
 	// accountsMu is the synchronization mutex for accessing the various non-static variables.
 	accountsMu deadlock.RWMutex
 
+	// accountsReadCond used to synchronize read access to the internal data structures.
+	accountsReadCond *sync.Cond
+
 	// accountsWriting provides synchronization around the background writing of account balances.
 	accountsWriting sync.WaitGroup
 
@@ -225,6 +228,29 @@ type RoundOffsetError struct {
 
 func (e *RoundOffsetError) Error() string {
 	return fmt.Sprintf("round %d before dbRound %d", e.round, e.dbRound)
+}
+
+// StaleDatabaseRoundError is generated when we detect that the database round is behind the accountUpdates in-memory dbRound. This
+// should never happen, since we update the database first, and only upon a successfull update we update the in-memory dbRound.
+type StaleDatabaseRoundError struct {
+	memoryRound   basics.Round
+	databaseRound basics.Round
+}
+
+func (e *StaleDatabaseRoundError) Error() string {
+	return fmt.Sprintf("database round %d is behind in-memory round %d", e.databaseRound, e.memoryRound)
+}
+
+// MismatchingDatabaseRoundError is generated when we detect that the database round is different than the accountUpdates in-memory dbRound. This
+// could happen normally when the database and the in-memory dbRound aren't syncronized. However, when we work in non-sync mode, we expect the database to be
+// always syncronized with the in-memory data. When that condition is violated, this error is generated.
+type MismatchingDatabaseRoundError struct {
+	memoryRound   basics.Round
+	databaseRound basics.Round
+}
+
+func (e *MismatchingDatabaseRoundError) Error() string {
+	return fmt.Sprintf("database round %d mismatching in-memory round %d", e.databaseRound, e.memoryRound)
 }
 
 // initialize initializes the accountUpdates structure
@@ -258,6 +284,7 @@ func (au *accountUpdates) initialize(cfg config.Local, dbPathPrefix string, gene
 	// initialize the commitSyncerClosed with a closed channel ( since the commitSyncer go-routine is not active )
 	au.commitSyncerClosed = make(chan struct{})
 	close(au.commitSyncerClosed)
+	au.accountsReadCond = sync.NewCond(au.accountsMu.RLocker())
 }
 
 // loadFromDisk is the 2nd level initialization, and is required before the accountUpdates becomes functional
@@ -332,9 +359,7 @@ func (au *accountUpdates) IsWritingCatchpointFile() bool {
 // rewards should be added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it could return the AccoutData which represent the "rewarded" account data.
 func (au *accountUpdates) Lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-	return au.lookupImpl(rnd, addr, withRewards)
+	return au.lookupImpl(rnd, addr, withRewards, true /* take lock*/)
 }
 
 // ListAssets lists the assets by their asset index, limiting to the first maxResults
@@ -350,181 +375,213 @@ func (au *accountUpdates) ListApplications(maxAppIdx basics.AppIndex, maxResults
 // listCreatables lists the application/asset by their app/asset index, limiting to the first maxResults
 func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) ([]basics.CreatableLocator, error) {
 	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-
-	// Sort indices for creatables that have been created/deleted. If this
-	// turns out to be too inefficient, we could keep around a heap of
-	// created/deleted asset indices in memory.
-	keys := make([]basics.CreatableIndex, 0, len(au.creatables))
-	for cidx, delta := range au.creatables {
-		if delta.ctype != ctype {
-			continue
+	for {
+		currentDbRound := au.dbRound
+		currentDeltaLen := len(au.deltas)
+		// Sort indices for creatables that have been created/deleted. If this
+		// turns out to be too inefficient, we could keep around a heap of
+		// created/deleted asset indices in memory.
+		keys := make([]basics.CreatableIndex, 0, len(au.creatables))
+		for cidx, delta := range au.creatables {
+			if delta.ctype != ctype {
+				continue
+			}
+			if cidx <= maxCreatableIdx {
+				keys = append(keys, cidx)
+			}
 		}
-		if cidx <= maxCreatableIdx {
-			keys = append(keys, cidx)
-		}
-	}
-	sort.Slice(keys, func(i, j int) bool { return keys[i] > keys[j] })
+		sort.Slice(keys, func(i, j int) bool { return keys[i] > keys[j] })
 
-	// Check for creatables that haven't been synced to disk yet.
-	var unsyncedCreatables []basics.CreatableLocator
-	deletedCreatables := make(map[basics.CreatableIndex]bool)
-	for _, cidx := range keys {
-		delta := au.creatables[cidx]
-		if delta.created {
-			// Created but only exists in memory
-			unsyncedCreatables = append(unsyncedCreatables, basics.CreatableLocator{
-				Type:    delta.ctype,
-				Index:   cidx,
-				Creator: delta.creator,
-			})
-		} else {
-			// Mark deleted creatables for exclusion from the results set
-			deletedCreatables[cidx] = true
+		// Check for creatables that haven't been synced to disk yet.
+		unsyncedCreatables := make([]basics.CreatableLocator, 0, len(keys))
+		deletedCreatables := make(map[basics.CreatableIndex]bool, len(keys))
+		for _, cidx := range keys {
+			delta := au.creatables[cidx]
+			if delta.created {
+				// Created but only exists in memory
+				unsyncedCreatables = append(unsyncedCreatables, basics.CreatableLocator{
+					Type:    delta.ctype,
+					Index:   cidx,
+					Creator: delta.creator,
+				})
+			} else {
+				// Mark deleted creatables for exclusion from the results set
+				deletedCreatables[cidx] = true
+			}
 		}
-	}
 
-	// Check in-memory created creatables, which will always be newer than anything
-	// in the database
-	var res []basics.CreatableLocator
-	for _, loc := range unsyncedCreatables {
-		if uint64(len(res)) == maxResults {
+		au.accountsMu.RUnlock()
+
+		// Check in-memory created creatables, which will always be newer than anything
+		// in the database
+		if uint64(len(unsyncedCreatables)) >= maxResults {
+			return unsyncedCreatables[:maxResults], nil
+		}
+		res := unsyncedCreatables
+
+		// Fetch up to maxResults - len(res) + len(deletedCreatables) from the database,
+		// so we have enough extras in case creatables were deleted
+		numToFetch := maxResults - uint64(len(res)) + uint64(len(deletedCreatables))
+		dbResults, dbRound, err := au.accountsq.listCreatables(maxCreatableIdx, numToFetch, ctype)
+		if err != nil {
+			return nil, err
+		}
+
+		if dbRound == currentDbRound {
+			// Now we merge the database results with the in-memory results
+			for _, loc := range dbResults {
+				// Check if we have enough results
+				if uint64(len(res)) == maxResults {
+					return res, nil
+				}
+
+				// Creatable was deleted
+				if _, ok := deletedCreatables[loc.Index]; ok {
+					continue
+				}
+
+				// We're OK to include this result
+				res = append(res, loc)
+			}
 			return res, nil
 		}
-		res = append(res, loc)
-	}
-
-	// Fetch up to maxResults - len(res) + len(deletedCreatables) from the database,
-	// so we have enough extras in case creatables were deleted
-	numToFetch := maxResults - uint64(len(res)) + uint64(len(deletedCreatables))
-	dbResults, err := au.accountsq.listCreatables(maxCreatableIdx, numToFetch, ctype)
-	if err != nil {
-		return nil, err
-	}
-
-	// Now we merge the database results with the in-memory results
-	for _, loc := range dbResults {
-		// Check if we have enough results
-		if uint64(len(res)) == maxResults {
-			return res, nil
+		if dbRound < currentDbRound {
+			au.log.Errorf("listCreatables: database round %d is behind in-memory round %d", dbRound, currentDbRound)
+			return []basics.CreatableLocator{}, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 		}
-
-		// Creatable was deleted
-		if _, ok := deletedCreatables[loc.Index]; ok {
-			continue
+		au.accountsMu.RLock()
+		for currentDbRound >= au.dbRound && currentDeltaLen == len(au.deltas) {
+			au.accountsReadCond.Wait()
 		}
-
-		// We're OK to include this result
-		res = append(res, loc)
 	}
-
-	return res, nil
 }
 
 // onlineTop returns the top n online accounts, sorted by their normalized
 // balance and address, whose voting keys are valid in voteRnd.  See the
 // normalization description in AccountData.NormalizedOnlineBalance().
 func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n uint64) ([]*onlineAccount, error) {
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return nil, err
-	}
-
 	proto := au.ledger.GenesisProto()
-
-	// Determine how many accounts have been modified in-memory,
-	// so that we obtain enough top accounts from disk (accountdb).
-	// If the *onlineAccount is nil, that means the account is offline
-	// as of the most recent change to that account, or its vote key
-	// is not valid in voteRnd.  Otherwise, the *onlineAccount is the
-	// representation of the most recent state of the account, and it
-	// is online and can vote in voteRnd.
-	modifiedAccounts := make(map[basics.Address]*onlineAccount)
-	for o := uint64(0); o < offset; o++ {
-		for addr, d := range au.deltas[o] {
-			if d.new.Status != basics.Online {
-				modifiedAccounts[addr] = nil
-				continue
-			}
-
-			if !(d.new.VoteFirstValid <= voteRnd && voteRnd <= d.new.VoteLastValid) {
-				modifiedAccounts[addr] = nil
-				continue
-			}
-
-			modifiedAccounts[addr] = accountDataToOnline(addr, &d.new, proto)
-		}
-	}
-
-	// Build up a set of candidate accounts.  Start by loading the
-	// top N + len(modifiedAccounts) accounts from disk (accountdb).
-	// This ensures that, even if the worst case if all in-memory
-	// changes are deleting the top accounts in accountdb, we still
-	// will have top N left.
-	//
-	// Keep asking for more accounts until we get the desired number,
-	// or there are no more accounts left.
-	candidates := make(map[basics.Address]*onlineAccount)
-	batchOffset := uint64(0)
-	batchSize := uint64(1024)
-	for uint64(len(candidates)) < n+uint64(len(modifiedAccounts)) {
-		var accts map[basics.Address]*onlineAccount
-		start := time.Now()
-		ledgerAccountsonlinetopCount.Inc(nil)
-		err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			accts, err = accountsOnlineTop(tx, batchOffset, batchSize, proto)
-			return
-		})
-		ledgerAccountsonlinetopMicros.AddMicrosecondsSince(start, nil)
+	au.accountsMu.RLock()
+	for {
+		currentDbRound := au.dbRound
+		currentDeltaLen := len(au.deltas)
+		offset, err := au.roundOffset(rnd)
 		if err != nil {
+			au.accountsMu.RUnlock()
 			return nil, err
 		}
 
-		for addr, data := range accts {
-			if !(data.VoteFirstValid <= voteRnd && voteRnd <= data.VoteLastValid) {
-				continue
+		// Determine how many accounts have been modified in-memory,
+		// so that we obtain enough top accounts from disk (accountdb).
+		// If the *onlineAccount is nil, that means the account is offline
+		// as of the most recent change to that account, or its vote key
+		// is not valid in voteRnd.  Otherwise, the *onlineAccount is the
+		// representation of the most recent state of the account, and it
+		// is online and can vote in voteRnd.
+		modifiedAccounts := make(map[basics.Address]*onlineAccount)
+		for o := uint64(0); o < offset; o++ {
+			for addr, d := range au.deltas[o] {
+				if d.new.Status != basics.Online {
+					modifiedAccounts[addr] = nil
+					continue
+				}
+
+				if !(d.new.VoteFirstValid <= voteRnd && voteRnd <= d.new.VoteLastValid) {
+					modifiedAccounts[addr] = nil
+					continue
+				}
+
+				modifiedAccounts[addr] = accountDataToOnline(addr, &d.new, proto)
 			}
-			candidates[addr] = data
 		}
 
-		// If we got fewer than batchSize accounts, there are no
-		// more accounts to look at.
-		if uint64(len(accts)) < batchSize {
-			break
+		au.accountsMu.RUnlock()
+
+		// Build up a set of candidate accounts.  Start by loading the
+		// top N + len(modifiedAccounts) accounts from disk (accountdb).
+		// This ensures that, even if the worst case if all in-memory
+		// changes are deleting the top accounts in accountdb, we still
+		// will have top N left.
+		//
+		// Keep asking for more accounts until we get the desired number,
+		// or there are no more accounts left.
+		candidates := make(map[basics.Address]*onlineAccount)
+		batchOffset := uint64(0)
+		batchSize := uint64(1024)
+		var dbRound basics.Round
+		for uint64(len(candidates)) < n+uint64(len(modifiedAccounts)) {
+			var accts map[basics.Address]*onlineAccount
+			start := time.Now()
+			ledgerAccountsonlinetopCount.Inc(nil)
+			err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+				accts, err = accountsOnlineTop(tx, batchOffset, batchSize, proto)
+				if err != nil {
+					return
+				}
+				dbRound, _, err = accountsRound(tx)
+				return
+			})
+			ledgerAccountsonlinetopMicros.AddMicrosecondsSince(start, nil)
+			if err != nil {
+				return nil, err
+			}
+
+			if dbRound != currentDbRound {
+				break
+			}
+
+			for addr, data := range accts {
+				if !(data.VoteFirstValid <= voteRnd && voteRnd <= data.VoteLastValid) {
+					continue
+				}
+				candidates[addr] = data
+			}
+
+			// If we got fewer than batchSize accounts, there are no
+			// more accounts to look at.
+			if uint64(len(accts)) < batchSize {
+				break
+			}
+
+			batchOffset += batchSize
+		}
+		if dbRound != currentDbRound && dbRound != basics.Round(0) {
+			// database round doesn't match the last au.dbRound we sampled.
+			au.accountsMu.RLock()
+			for currentDbRound >= au.dbRound && currentDeltaLen == len(au.deltas) {
+				au.accountsReadCond.Wait()
+			}
+			continue
 		}
 
-		batchOffset += batchSize
-	}
-
-	// Now update the candidates based on the in-memory deltas.
-	for addr, oa := range modifiedAccounts {
-		if oa == nil {
-			delete(candidates, addr)
-		} else {
-			candidates[addr] = oa
+		// Now update the candidates based on the in-memory deltas.
+		for addr, oa := range modifiedAccounts {
+			if oa == nil {
+				delete(candidates, addr)
+			} else {
+				candidates[addr] = oa
+			}
 		}
-	}
 
-	// Get the top N accounts from the candidate set, by inserting all of
-	// the accounts into a heap and then pulling out N elements from the
-	// heap.
-	topHeap := &onlineTopHeap{
-		accts: nil,
-	}
+		// Get the top N accounts from the candidate set, by inserting all of
+		// the accounts into a heap and then pulling out N elements from the
+		// heap.
+		topHeap := &onlineTopHeap{
+			accts: nil,
+		}
 
-	for _, data := range candidates {
-		heap.Push(topHeap, data)
-	}
+		for _, data := range candidates {
+			heap.Push(topHeap, data)
+		}
 
-	var res []*onlineAccount
-	for topHeap.Len() > 0 && uint64(len(res)) < n {
-		acct := heap.Pop(topHeap).(*onlineAccount)
-		res = append(res, acct)
-	}
+		var res []*onlineAccount
+		for topHeap.Len() > 0 && uint64(len(res)) < n {
+			acct := heap.Pop(topHeap).(*onlineAccount)
+			res = append(res, acct)
+		}
 
-	return res, nil
+		return res, nil
+	}
 }
 
 // GetLastCatchpointLabel retrieves the last catchpoint label that was stored to the database.
@@ -536,9 +593,7 @@ func (au *accountUpdates) GetLastCatchpointLabel() string {
 
 // GetCreatorForRound returns the creator for a given asset/app index at a given round
 func (au *accountUpdates) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-	return au.getCreatorForRoundImpl(rnd, cidx, ctype)
+	return au.getCreatorForRoundImpl(rnd, cidx, ctype, true /* take the lock */)
 }
 
 // committedUpTo enqueues committing the balances for round committedRound-lookback.
@@ -658,8 +713,9 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 // which invokes the internal implementation after taking the lock.
 func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
 	au.accountsMu.Lock()
-	defer au.accountsMu.Unlock()
 	au.newBlockImpl(blk, delta)
+	au.accountsMu.Unlock()
+	au.accountsReadCond.Broadcast()
 }
 
 // Totals returns the totals for a given round
@@ -775,12 +831,12 @@ func (aul *accountUpdatesLedgerEvaluator) isDup(config.ConsensusParams, basics.R
 
 // LookupWithoutRewards returns the account balance for a given address at a given round, without the reward
 func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
-	return aul.au.lookupImpl(rnd, addr, false)
+	return aul.au.lookupImpl(rnd, addr, false /*no rewards*/, false /*don't sync*/)
 }
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
 func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
-	return aul.au.getCreatorForRoundImpl(rnd, cidx, ctype)
+	return aul.au.getCreatorForRoundImpl(rnd, cidx, ctype, false /* don't sync */)
 }
 
 // totalsImpl returns the totals for a given round
@@ -1378,82 +1434,164 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 // lookupImpl returns the account data for a given address at a given round. The withRewards indicates whether the
 // rewards should be added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it could return the AccoutData which represent the "rewarded" account data.
-func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return
+func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, withRewards, syncronized bool) (data basics.AccountData, err error) {
+	needUnlock := false
+	if syncronized {
+		au.accountsMu.RLock()
+		needUnlock = true
 	}
-
-	offsetForRewards := offset
-
 	defer func() {
-		if withRewards {
-			totals := au.roundTotals[offsetForRewards]
-			proto := au.protos[offsetForRewards]
-			data = data.WithUpdatedRewards(proto, totals.RewardsLevel)
+		if needUnlock {
+			au.accountsMu.RUnlock()
 		}
 	}()
-
-	// Check if this is the most recent round, in which case, we can
-	// use a cache of the most recent account state.
-	if offset == uint64(len(au.deltas)) {
-		macct, ok := au.accounts[addr]
-		if ok {
-			return macct.data, nil
+	var offset uint64
+	var rewardsProto config.ConsensusParams
+	var rewardsLevel uint64
+	for {
+		currentDbRound := au.dbRound
+		currentDeltaLen := len(au.deltas)
+		offset, err = au.roundOffset(rnd)
+		if err != nil {
+			return
 		}
-	} else {
-		// Check if the account has been updated recently.  Traverse the deltas
-		// backwards to ensure that later updates take priority if present.
-		for offset > 0 {
-			offset--
-			d, ok := au.deltas[offset][addr]
+
+		rewardsProto = au.protos[offset]
+		rewardsLevel = au.roundTotals[offset].RewardsLevel
+
+		// we're testing the withRewards here and setting the defer function only once, and only if withRewards is true.
+		// we want to make this defer only after setting the above rewardsProto/rewardsLevel.
+		if withRewards {
+			defer func() {
+				if err == nil {
+					data = data.WithUpdatedRewards(rewardsProto, rewardsLevel)
+				}
+			}()
+			withRewards = false
+		}
+
+		// Check if this is the most recent round, in which case, we can
+		// use a cache of the most recent account state.
+		if offset == uint64(len(au.deltas)) {
+			macct, ok := au.accounts[addr]
 			if ok {
-				return d.new, nil
+				return macct.data, nil
+			}
+		} else {
+			// Check if the account has been updated recently.  Traverse the deltas
+			// backwards to ensure that later updates take priority if present.
+			for offset > 0 {
+				offset--
+				d, ok := au.deltas[offset][addr]
+				if ok {
+					return d.new, nil
+				}
 			}
 		}
-	}
 
-	// No updates of this account in the in-memory deltas; use on-disk DB.
-	// The check in roundOffset() made sure the round is exactly the one
-	// present in the on-disk DB.  As an optimization, we avoid creating
-	// a separate transaction here, and directly use a prepared SQL query
-	// against the database.
-	return au.accountsq.lookup(addr)
+		if syncronized {
+			au.accountsMu.RUnlock()
+			needUnlock = false
+		}
+		var dbRound basics.Round
+		// No updates of this account in the in-memory deltas; use on-disk DB.
+		// The check in roundOffset() made sure the round is exactly the one
+		// present in the on-disk DB.  As an optimization, we avoid creating
+		// a separate transaction here, and directly use a prepared SQL query
+		// against the database.
+		data, dbRound, err = au.accountsq.lookup(addr)
+		if dbRound == currentDbRound {
+			return data, err
+		}
+		if syncronized {
+			if dbRound < currentDbRound {
+				au.log.Errorf("accountUpdates.lookupImpl: database round %d is behind in-memory round %d", dbRound, currentDbRound)
+				return basics.AccountData{}, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
+			}
+			au.accountsMu.RLock()
+			needUnlock = true
+			for currentDbRound >= au.dbRound && currentDeltaLen == len(au.deltas) {
+				au.accountsReadCond.Wait()
+			}
+		} else {
+			// in non-sync mode, we don't wait since we already assume that we're syncronized.
+			au.log.Errorf("accountUpdates.lookupImpl: database round %d mismatching in-memory round %d", dbRound, currentDbRound)
+			return basics.AccountData{}, &MismatchingDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
+		}
+	}
 }
 
 // getCreatorForRoundImpl returns the asset/app creator for a given asset/app index at a given round
-func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
-	offset, err := au.roundOffset(rnd)
-	if err != nil {
-		return basics.Address{}, false, err
+func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType, syncronized bool) (creator basics.Address, ok bool, err error) {
+	unlock := false
+	if syncronized {
+		au.accountsMu.RLock()
+		unlock = true
 	}
-
-	// If this is the most recent round, au.creatables has will have the latest
-	// state and we can skip scanning backwards over creatableDeltas
-	if offset == uint64(len(au.deltas)) {
-		// Check if we already have the asset/creator in cache
-		creatableDelta, ok := au.creatables[cidx]
-		if ok {
-			if creatableDelta.created && creatableDelta.ctype == ctype {
-				return creatableDelta.creator, true, nil
-			}
-			return basics.Address{}, false, nil
+	defer func() {
+		if unlock {
+			au.accountsMu.RUnlock()
 		}
-	} else {
-		for offset > 0 {
-			offset--
-			creatableDelta, ok := au.creatableDeltas[offset][cidx]
+	}()
+	var dbRound basics.Round
+	var offset uint64
+	for {
+		currentDbRound := au.dbRound
+		currentDeltaLen := len(au.deltas)
+		offset, err = au.roundOffset(rnd)
+		if err != nil {
+			return basics.Address{}, false, err
+		}
+
+		// If this is the most recent round, au.creatables has the latest
+		// state and we can skip scanning backwards over creatableDeltas
+		if offset == uint64(len(au.deltas)) {
+			// Check if we already have the asset/creator in cache
+			creatableDelta, ok := au.creatables[cidx]
 			if ok {
 				if creatableDelta.created && creatableDelta.ctype == ctype {
 					return creatableDelta.creator, true, nil
 				}
 				return basics.Address{}, false, nil
 			}
+		} else {
+			for offset > 0 {
+				offset--
+				creatableDelta, ok := au.creatableDeltas[offset][cidx]
+				if ok {
+					if creatableDelta.created && creatableDelta.ctype == ctype {
+						return creatableDelta.creator, true, nil
+					}
+					return basics.Address{}, false, nil
+				}
+			}
+		}
+
+		if syncronized {
+			au.accountsMu.RUnlock()
+			unlock = false
+		}
+		// Check the database
+		creator, ok, dbRound, err = au.accountsq.lookupCreator(cidx, ctype)
+
+		if dbRound == currentDbRound {
+			return
+		}
+		if syncronized {
+			if dbRound < currentDbRound {
+				au.log.Errorf("accountUpdates.getCreatorForRoundImpl: database round %d is behind in-memory round %d", dbRound, currentDbRound)
+				return basics.Address{}, false, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
+			}
+			au.accountsMu.RLock()
+			unlock = true
+			for currentDbRound >= au.dbRound && currentDeltaLen == len(au.deltas) {
+				au.accountsReadCond.Wait()
+			}
+		} else {
+			au.log.Errorf("accountUpdates.getCreatorForRoundImpl: database round %d mismatching in-memory round %d", dbRound, currentDbRound)
+			return basics.Address{}, false, &MismatchingDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 		}
 	}
-
-	// Check the database
-	return au.accountsq.lookupCreator(cidx, ctype)
 }
 
 // accountsCreateCatchpointLabel creates a catchpoint label and write it.
@@ -1588,7 +1726,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	err := au.dbs.wdb.AtomicCommitWriteLock(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := au.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
 			mc, err0 := makeMerkleCommitter(tx, false)
@@ -1635,7 +1773,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			}
 		}
 		return nil
-	}, &au.accountsMu)
+	})
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		au.balancesTrie = nil
@@ -1661,6 +1799,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	}
 	updatingBalancesDuration := time.Now().Sub(beforeUpdatingBalancesTime)
 
+	au.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
 	for addr, cnt := range flushcount {
@@ -1709,6 +1848,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.lastFlushTime = flushTime
 
 	au.accountsMu.Unlock()
+	au.accountsReadCond.Broadcast()
 
 	if isCatchpointRound && au.archivalLedger && catchpointLabel != "" {
 		// generate the catchpoint file. This need to be done inline so that it will block any new accounts that from being written.

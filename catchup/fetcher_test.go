@@ -565,14 +565,6 @@ func (p *testHTTPPeer) GetHTTPPeer() network.HTTPPeer {
 	return p
 }
 
-func buildTestHTTPPeerSource(rootURLs ...string) *httpTestPeerSource {
-	peers := []network.Peer{}
-	for url := range rootURLs {
-		peer := testHTTPPeer(url)
-		peers = append(peers, &peer)
-	}
-	return &httpTestPeerSource{peers: peers}
-}
 func (s *httpTestPeerSource) addPeer(rootURL string) {
 	peer := testHTTPPeer(rootURL)
 	s.peers = append(s.peers, &peer)
@@ -588,7 +580,7 @@ func TestGetBlockHTTP(t *testing.T) {
 		t.Fatal(err)
 		return
 	}
-	net := buildTestHTTPPeerSource()
+	net := &httpTestPeerSource{}
 	ls := rpcs.MakeBlockService(config.GetDefaultLocal(), ledger, net, "test genesisID")
 
 	nodeA := basicRPCNode{}
@@ -876,7 +868,7 @@ func TestGetBlockWS(t *testing.T) {
 	versions := []string{"1", "2.1"}
 	for _, version := range versions { // range network.SupportedProtocolVersions {
 
-		net := buildTestHTTPPeerSource()
+		net := &httpTestPeerSource{}
 		blockServiceConfig := config.GetDefaultLocal()
 		blockServiceConfig.CatchupParallelBlocks = 5
 		blockServiceConfig.EnableBlockService = true
