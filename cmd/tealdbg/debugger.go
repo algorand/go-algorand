@@ -17,8 +17,6 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -82,9 +80,19 @@ type programMeta struct {
 	states       appState
 }
 
+// breakpointLine is a source line number with a couple special values:
+// -1 do not break
+//  0 break at next instruction
+//  N break at line N
+type breakpointLine int
+
+const (
+	noBreak   breakpointLine = -1
+	stepBreak breakpointLine = 0
+)
+
 type debugConfig struct {
-	// If -1, don't break
-	BreakAtLine int `json:"breakatline"`
+	BreakAtLine breakpointLine `json:"breakatline"`
 }
 
 type session struct {
@@ -130,7 +138,7 @@ func makeSession(disassembly string, line int) (s *session) {
 
 	// Allocate a default debugConfig (don't break)
 	s.debugConfig = debugConfig{
-		BreakAtLine: -1,
+		BreakAtLine: noBreak,
 	}
 
 	// Allocate an acknowledgement and notifications channels
@@ -147,7 +155,9 @@ func makeSession(disassembly string, line int) (s *session) {
 func (s *session) resume() {
 	select {
 	case s.acknowledged <- true:
+		fmt.Println("Queued")
 	default:
+		fmt.Println("Not Queued")
 	}
 }
 
@@ -155,7 +165,7 @@ func (s *session) Step() {
 	func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		s.debugConfig = debugConfig{BreakAtLine: 0}
+		s.debugConfig = debugConfig{BreakAtLine: stepBreak}
 	}()
 
 	s.resume()
@@ -167,7 +177,7 @@ func (s *session) Resume() {
 	func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		s.debugConfig = debugConfig{BreakAtLine: -1} // reset possible break after Step
+		s.debugConfig = debugConfig{BreakAtLine: noBreak} // reset possible break after Step
 		// find any active breakpoints and set next break
 		if currentLine < len(s.breakpoints) {
 			for line, state := range s.breakpoints[currentLine+1:] {
@@ -188,7 +198,7 @@ func (s *session) setBreakpoint(line int) error {
 		return fmt.Errorf("invalid bp line %d", line)
 	}
 	s.breakpoints[line] = breakpoint{set: true, active: true}
-	s.debugConfig = debugConfig{BreakAtLine: line}
+	s.debugConfig = debugConfig{BreakAtLine: breakpointLine(line)}
 	return nil
 }
 
@@ -206,7 +216,7 @@ func (s *session) RemoveBreakpoint(line int) error {
 		return fmt.Errorf("invalid bp line %d", line)
 	}
 	if s.breakpoints[line].NonEmpty() {
-		s.debugConfig = debugConfig{BreakAtLine: -1}
+		s.debugConfig = debugConfig{BreakAtLine: noBreak}
 		s.breakpoints[line] = breakpoint{}
 	}
 	return nil
@@ -222,7 +232,7 @@ func (s *session) SetBreakpointsActive(active bool) {
 		}
 	}
 	if !active {
-		s.debugConfig = debugConfig{BreakAtLine: -1}
+		s.debugConfig = debugConfig{BreakAtLine: noBreak}
 	}
 }
 
@@ -377,18 +387,12 @@ func (d *Debugger) AddAdapter(da DebugAdapter) {
 	d.das = append(d.das, da)
 }
 
-// hashProgram returns binary program hash
-func (d *Debugger) hashProgram(program []byte) string {
-	hash := sha256.Sum256([]byte(program))
-	return hex.EncodeToString(hash[:])
-}
-
 // SaveProgram stores program, source and offsetToLine for later use
 func (d *Debugger) SaveProgram(
 	name string, program []byte, source string, offsetToLine map[int]int,
 	states appState,
 ) {
-	hash := d.hashProgram(program)
+	hash := logic.GetProgramID(program)
 	d.mus.Lock()
 	defer d.mus.Unlock()
 	d.programs[hash] = &programMeta{
@@ -445,8 +449,8 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 	go func() {
 		// Check if we are triggered and acknowledge asynchronously
 		cfg := s.debugConfig
-		if cfg.BreakAtLine != -1 {
-			if cfg.BreakAtLine == 0 || state.Line == cfg.BreakAtLine {
+		if cfg.BreakAtLine != noBreak {
+			if cfg.BreakAtLine == stepBreak || breakpointLine(state.Line) == cfg.BreakAtLine {
 				// Breakpoint hit! Inform the user
 				s.notifications <- Notification{"updated", *state}
 			} else {
