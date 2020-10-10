@@ -21,7 +21,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"fmt"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -270,7 +269,7 @@ type Local struct {
 	EnableProfiler bool `version[0]:"false"`
 
 	// TelemetryToLog records messages to node.log that are normally sent to remote event monitoring
-	TelemetryToLog bool `"true"`
+	TelemetryToLog bool `version[5]:"true"`
 
 	// DNSSecurityFlags instructs algod validating DNS responses.
 	// Possible fla values
@@ -279,7 +278,7 @@ type Local struct {
 	// 0x02 (dnssecRelayAddr) - validate relays' names to addresses resolution
 	// 0x04 (dnssecTelemetryAddr) - validate telemetry and metrics names to addresses resolution
 	// ...
-	DNSSecurityFlags uint32 `version[0]:"1"`
+	DNSSecurityFlags uint32 `version[6]:"1"`
 
 	// EnablePingHandler controls whether the gossip node would respond to ping messages with a pong message.
 	EnablePingHandler bool `version[6]:"true"`
@@ -309,7 +308,7 @@ type Local struct {
 
 	// EnableGossipBlockService enables the block serving service over the gossip network. The functionality of this depends on NetAddress, which must also be provided.
 	// This functionality is required for the relays to perform catchup from nodes.
-	EnableGossipBlockService bool `version[0]:"true"`
+	EnableGossipBlockService bool `version[8]:"true"`
 
 	// CatchupHTTPBlockFetchTimeoutSec controls how long the http query for fetching a block from a relay would take before giving up and trying another relay.
 	CatchupHTTPBlockFetchTimeoutSec int `version[9]:"4"`
@@ -573,12 +572,6 @@ const (
 
 // DNSSecuritySRVEnforced returns true if SRV response verification enforced
 func (cfg Local) DNSSecuritySRVEnforced() bool {
-
-	f, _ := os.OpenFile("/tmp/mylog.txt", 	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	f.WriteString(fmt.Sprintf("%s: XXX cfg.DNSSecurityFlags: %v\n", time.Now().String(), cfg.DNSSecurityFlags))
-	f.Close()
-
-	
 	return cfg.DNSSecurityFlags&dnssecSRV != 0
 }
 

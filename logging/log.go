@@ -156,6 +156,7 @@ type Logger interface {
 	EnableTelemetry(cfg TelemetryConfig) error
 	UpdateTelemetryURI(uri string) error
 	GetTelemetryEnabled() bool
+	GetTelemetryRemoteEnabled() bool
 	Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{})
 	Event(category telemetryspec.Category, identifier telemetryspec.Event)
 	EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details interface{})
@@ -380,6 +381,9 @@ func (l logger) UpdateTelemetryURI(uri string) (err error) {
 	return
 }
 
+// GetTelemetryEnabled returns true if
+// logging.config Enable, or SendToLog or config.json
+// TelemetryToLog is true.
 func (l logger) GetTelemetryEnabled() bool {
 	return l.loggerState.telemetry != nil
 }
@@ -398,6 +402,12 @@ func (l logger) GetInstanceName() string {
 
 func (l logger) GetTelemetryURI() string {
 	return telemetryConfig.URI
+}
+
+// GetTelemetryRemoteEnabled returns true if remote logging is enabled
+// This is decided by Enable parameter in logging.config
+func (l logger) GetTelemetryRemoteEnabled() bool {
+	return telemetryConfig.Enable
 }
 
 func (l logger) Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{}) {

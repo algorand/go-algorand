@@ -18,6 +18,8 @@ package logging
 
 import (
 	"fmt"
+	"os"
+	"time"
 
 	"github.com/olivere/elastic"
 	"github.com/sirupsen/logrus"
@@ -200,6 +202,13 @@ func (hook *dummyHook) waitForEventAndReady() bool {
 }
 
 func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
+
+
+	f, _ := os.OpenFile("/tmp/mylog.txt", 	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f.WriteString(fmt.Sprintf("%s: XXX Hook Created! cfg: %+v\n", time.Now().String(), cfg))
+	f.Close()
+
+	
 	// Returning an error here causes issues... need the hooks to be created even if the elastic hook fails so that
 	// things can recover later.
 	if cfg.URI == "" {

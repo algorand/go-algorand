@@ -65,6 +65,10 @@ func TelemetryOverride(env string) bool {
 func createTelemetryConfig() TelemetryConfig {
 	enable := false
 
+	//	f, _ := os.OpenFile("/tmp/mylog.txt", 	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	//	f.WriteString(fmt.Sprintf("%s: worng password!\n", time.Now().String()))
+	//	f.Close()
+
 	return TelemetryConfig{
 		Enable:             enable,
 		GUID:               uuid.NewV4().String(),
