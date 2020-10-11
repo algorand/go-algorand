@@ -22,7 +22,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"runtime/debug"
 	"time"
 
 	"github.com/satori/go.uuid"
@@ -76,17 +75,7 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 	telemetry.history = createLogBuffer(logBufferDepth)
 	if cfg.Enable {
 		if cfg.SessionGUID == "" {
-
 			cfg.SessionGUID = uuid.NewV4().String()
-
-			f, _ := os.OpenFile("/tmp/mylog.txt", 	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			f.WriteString(fmt.Sprintf("%s: cfg.SessionGUID %s \n", time.Now().String(), cfg.SessionGUID))
-			debug.PrintStack()
-			f.Close()
-	
-
-			
-
 		}
 		hook, err := createTelemetryHook(cfg, telemetry.history, hookFactory)
 		if err != nil {
@@ -183,12 +172,6 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
 
 	initializeConfig(cfg)
-
-	f, _ := os.OpenFile("/tmp/mylog.txt", 	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	f.WriteString(fmt.Sprintf("%s: dataDir: %v TelemetryConfigFilename: %v configPath: %v \n", time.Now().String(), *dataDir, TelemetryConfigFilename, configPath))
-	f.Close()
-
-
 	return cfg, created, err
 }
 
@@ -245,12 +228,6 @@ func (t *telemetryState) logTelemetry(l logger, message string, details interfac
 		entry.Info(message)
 	}
 	t.hook.Fire(entry)
-
-	f, _ := os.OpenFile("/tmp/mylog.txt", 	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	f.WriteString(fmt.Sprintf("%s: t.sendToLog: %v message: %s entry: %+v\n", time.Now().String(), t.sendToLog,  message, entry))
-	f.Close()
-	
-	
 }
 
 func (t *telemetryState) Close() {

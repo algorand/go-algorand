@@ -38,13 +38,6 @@ const hostnameLength = 255
 // TelemetryOverride Determines whether an override value is set and what it's value is.
 // The first return value is whether an override variable is found, if it is, the second is the override value.
 func TelemetryOverride(env string) bool {
-
-	f, _ := os.OpenFile("/tmp/mylog.txt", 	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	f.WriteString(fmt.Sprintf("TelemetryOverride env %s\n", env))
-	f.Close()
-
-
-	
 	env = strings.ToLower(env)
 
 	if env == "1" || env == "true" {
@@ -64,10 +57,6 @@ func TelemetryOverride(env string) bool {
 //       a "dev" branch check.
 func createTelemetryConfig() TelemetryConfig {
 	enable := false
-
-	//	f, _ := os.OpenFile("/tmp/mylog.txt", 	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	//	f.WriteString(fmt.Sprintf("%s: worng password!\n", time.Now().String()))
-	//	f.Close()
 
 	return TelemetryConfig{
 		Enable:             enable,

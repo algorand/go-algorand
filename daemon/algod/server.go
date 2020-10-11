@@ -29,7 +29,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"runtime/debug"
 
 	"github.com/algorand/go-deadlock"
 
@@ -102,11 +101,6 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 
 	// if we have the telemetry enabled, we want to use it's sessionid as part of the
 	// collected metrics decorations.
-			f, _ := os.OpenFile("/tmp/mylog.txt", 	os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			f.WriteString(fmt.Sprintf("%s: time of this \n", time.Now().String()))
-			f.Close()
-	debug.PrintStack()
-
 	fmt.Fprintln(logWriter, "++++++++++++++++++++++++++++++++++++++++")
 	fmt.Fprintln(logWriter, "Logging Starting")
 	if s.log.GetTelemetryRemoteEnabled() {
