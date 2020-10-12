@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data"
@@ -98,7 +99,7 @@ func BenchmarkAssembleBlock(b *testing.B) {
 		cfg := config.GetDefaultLocal()
 		cfg.TxPoolSize = txPoolSize
 		cfg.EnableAssembleStats = false
-		tp := pools.MakeTransactionPool(l.Ledger, cfg)
+		tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 		errcount := 0
 		okcount := 0
 		var worstTxID transactions.Txid
@@ -160,4 +161,78 @@ func BenchmarkAssembleBlock(b *testing.B) {
 		_, _, found := tp.Lookup(worstTxID)
 		require.True(b, found)
 	}
+}
+
+type callbackLogger struct {
+	logging.Logger
+	WarnfCallback func(string, ...interface{})
+}
+
+func (cl callbackLogger) Warnf(s string, args ...interface{}) {
+	cl.WarnfCallback(s, args...)
+}
+
+func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
+	const numUsers = 100
+	expectingLog := false
+	baseLog := logging.TestingLog(t)
+	baseLog.SetLevel(logging.Info)
+	log := &callbackLogger{
+		Logger: baseLog,
+		WarnfCallback: func(s string, args ...interface{}) {
+			require.True(t, expectingLog)
+			require.Equal(t, s, "AssembleBlock: assembled block round did not catch up to requested round: %d != %d")
+			expectingLog = false
+		},
+	}
+	secrets := make([]*crypto.SignatureSecrets, numUsers)
+	addresses := make([]basics.Address, numUsers)
+
+	genesis := make(map[basics.Address]basics.AccountData)
+	for i := 0; i < numUsers; i++ {
+		secret := keypair()
+		addr := basics.Address(secret.SignatureVerifier)
+		secrets[i] = secret
+		addresses[i] = addr
+		genesis[addr] = basics.AccountData{
+			Status:     basics.Online,
+			MicroAlgos: basics.MicroAlgos{Raw: 10000000000000},
+		}
+	}
+
+	genesis[poolAddr] = basics.AccountData{
+		Status:     basics.NotParticipating,
+		MicroAlgos: basics.MicroAlgos{Raw: config.Consensus[protocol.ConsensusCurrentVersion].MinBalance},
+	}
+
+	require.Equal(t, len(genesis), numUsers+1)
+	genBal := data.MakeGenesisBalances(genesis, sinkAddr, poolAddr)
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	ledger, err := data.LoadLedger(log, "ledgerName", inMem, protocol.ConsensusCurrentVersion, genBal, genesisID, genesisHash, nil, cfg)
+	require.NoError(t, err)
+
+	l := ledger
+	const txPoolSize = 6000
+	cfg = config.GetDefaultLocal()
+	cfg.TxPoolSize = txPoolSize
+	cfg.EnableAssembleStats = false
+	tp := pools.MakeTransactionPool(l.Ledger, cfg, log)
+
+	next := l.NextRound()
+	deadline := time.Now().Add(time.Second)
+	block, err := tp.AssembleBlock(next, deadline)
+	require.NoError(t, err)
+	require.NoError(t, ledger.AddBlock(block.Block(), agreement.Certificate{Round: next}))
+
+	expectingLog = true
+
+	next = l.NextRound()
+	deadline = time.Now().Add(time.Second)
+	block, err = tp.AssembleBlock(next, deadline)
+	require.NoError(t, err)
+	require.NoError(t, ledger.AddBlock(block.Block(), agreement.Certificate{Round: next}))
+
+	require.False(t, expectingLog)
 }
