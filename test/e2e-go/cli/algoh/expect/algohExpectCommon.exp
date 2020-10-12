@@ -61,7 +61,14 @@ proc ::Algoh::StartNode { TEST_ALGO_DIR } {
     if { [catch {
         spawn goal node start -d $TEST_ALGO_DIR
         expect {
-            timeout { close; ::Algoh::Abort "Timed out starting relay node"  }
+            timeout {
+                close
+                if {[file exists $TEST_ALGO_DIR/node.log]} {
+                    puts "relay node failed to start within time limits, node.log file content follows:"
+                    exec cat $TEST_ALGO_DIR/node.log
+                }
+                ::Algoh::Abort "Timed out starting relay node"
+            }
             "^Algorand node successfully started!*" { puts "Primary relay node started"; close  }
             eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to start node"; Algoh::Abort } }
         }
