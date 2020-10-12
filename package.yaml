@@ -23,14 +23,6 @@ agents:
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm64v8
-  #- name: cicd.centos.arm64
-  #  dockerFilePath: docker/build/cicd.centos.Dockerfile
-  #  image: algorand/go-algorand-ci-linux-centos
-  #  version: scripts/configure_dev-deps.sh
-  #  arch: arm64v8
-  #  buildArgs:
-  #    - GOLANG_VERSION=`./scripts/get_golang_version.sh`
-  #    - ARCH=arm64v8
   - name: cicd.alpine.arm
     dockerFilePath: docker/build/cicd.alpine.Dockerfile
     image: algorand/go-algorand-ci-linux
@@ -70,15 +62,6 @@ tasks:
     name: deb.amd64
     agent: cicd.ubuntu.amd64
     target: mule-package-deb
-
-  #- task: docker.Make
-  #  name: rpm.arm64
-  #  agent: cicd.centos.arm64
-  #  target: mule-package-rpm
-  #- task: docker.Make
-  #  name: deb.arm64
-  #  agent: cicd.ubuntu.arm64
-  #  target: mule-package-deb
 
   # Stash tasks
   - task: stash.Stash
@@ -140,7 +123,6 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
 
-
   - task: docker.Make
     name: docker-image
     agent: docker-ubuntu
@@ -155,26 +137,19 @@ jobs:
     tasks:
       - docker.Make.build.arm64
       - stash.Stash.linux-arm64
-  #build-linux-arm:
-  #  tasks:
-  #    - docker.Make.build.arm
-  #    - stash.Stash.linux-arm
+  build-linux-arm:
+    tasks:
+      - docker.Make.build.arm
+      - stash.Stash.linux-arm
 
   package-linux-amd64:
     tasks:
       - stash.Unstash.linux-amd64
       - stash.Unstash.linux-arm64
-      #- stash.Unstash.linux-arm
+      - stash.Unstash.linux-arm
       - docker.Make.deb.amd64
       - docker.Make.rpm.amd64
-
-  #package-linux-arm64:
-  #  tasks:
-  #    - stash.Unstash.linux-amd64
-  #    - docker.Make.deb.arm64
-  #    - docker.Make.rpm.arm64
 
   package-docker:
     tasks:
       - docker.Make.docker-image
-
