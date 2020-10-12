@@ -12,7 +12,7 @@ CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
 DEFAULTNETWORK=devnet
 DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "$DEFAULTNETWORK")
 
-find tmp/node_pkgs -name "*${CHANNEL}*${FULLVERSION}*.tar.gz" | cut -d '/' -f3-4 | sort --unique | while read OS_ARCH; do
+find tmp/node_pkgs -name "*${CHANNEL}*linux*${FULLVERSION}*.tar.gz" | cut -d '/' -f3-4 | sort --unique | while read OS_ARCH; do
     OS_TYPE=$(echo "${OS_ARCH}" | cut -d '/' -f1)
     ARCH=$(echo "${OS_ARCH}" | cut -d '/' -f2)
     ALGO_BIN="$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH/$CHANNEL/$OS_TYPE-$ARCH/bin"

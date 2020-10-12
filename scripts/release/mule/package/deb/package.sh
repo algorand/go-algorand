@@ -19,7 +19,7 @@ DEFAULTNETWORK=$("./scripts/compute_branch_network.sh")
 DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "${DEFAULTNETWORK}")
 export DEFAULT_RELEASE_NETWORK
 
-find tmp/node_pkgs -name "*${CHANNEL}*${VER}*.tar.gz" | cut -d '/' -f3-4 | sort --unique | while read OS_ARCH; do
+find tmp/node_pkgs -name "*${CHANNEL}*linux*${VER}*.tar.gz" | cut -d '/' -f3-4 | sort --unique | while read OS_ARCH; do
     PKG_ROOT=$(mktemp -d)
     trap "rm -rf $PKG_ROOT" 0
 
