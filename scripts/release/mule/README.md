@@ -32,7 +32,7 @@ These env vars generally don't change between stages. Here is a list of variable
 #### `mule` jobs
 
     - package
-        + packages both `deb` and `rpm`
+        + packages `deb`, `rpm` and `docker`
 
     - package-deb
         + packages only `deb`
