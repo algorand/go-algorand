@@ -46,6 +46,7 @@ endif
 
 ifneq (, $(findstring MINGW,$(UNAME)))
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
+export GOBUILDMODE := -buildmode=exe
 endif
 
 GOTAGS      := --tags "$(GOTAGSLIST)"
