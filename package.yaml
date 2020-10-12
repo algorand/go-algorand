@@ -49,15 +49,15 @@ agents:
       - /var/run/docker.sock:/var/run/docker.sock
 
 tasks:
-  - task: shell.Make
+  - task: docker.Make
     name: build.amd64
     agent: cicd.ubuntu.amd64
     target: ci-build
-  - task: shell.Make
+  - task: docker.Make
     name: build.arm64
     agent: cicd.ubuntu.arm64
     target: ci-build
-  - task: shell.Make
+  - task: docker.Make
     name: build.arm
     agent: cicd.alpine.arm
     target: ci-build
@@ -112,9 +112,9 @@ tasks:
       - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
   - task: stash.Stash
-    name: linux-arm32
+    name: linux-arm
     bucketName: go-algorand-ci-cache
-    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm32
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
     globSpecs:
       - tmp/node_pkgs/**
       - crypto/libs/**
@@ -136,9 +136,9 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
   - task: stash.Unstash
-    name: linux-arm32
+    name: linux-arm
     bucketName: go-algorand-ci-cache
-    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm32
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
 
 
   - task: docker.Make
@@ -155,16 +155,16 @@ jobs:
     tasks:
       - docker.Make.build.arm64
       - stash.Stash.linux-arm64
-  build-linux-arm:
-    tasks:
-      - docker.Make.build.arm
-      - stash.Stash.linux-arm
+  #build-linux-arm:
+  #  tasks:
+  #    - docker.Make.build.arm
+  #    - stash.Stash.linux-arm
 
   package-linux-amd64:
     tasks:
       - stash.Unstash.linux-amd64
       - stash.Unstash.linux-arm64
-      - stash.Unstash.linux-arm
+      #- stash.Unstash.linux-arm
       - docker.Make.deb.amd64
       - docker.Make.rpm.amd64
 
