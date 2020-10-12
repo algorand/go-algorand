@@ -47,6 +47,11 @@ These env vars generally don't change between stages. Here is a list of variable
 
 - see `./go-algorand/package-test.yaml`
 
+- customizable environment variables:
+
+    + `CHANNEL`
+    + `VERSION`
+
 #### `mule` jobs
 
     - package-upload
@@ -158,6 +163,10 @@ Let's look at some examples.
 ### Packaging
 
     mule -f package.yaml package
+
+### Uploading
+
+    VERSION=latest mule -f package-upload.yaml package-upload
 
 ### Testing
 
