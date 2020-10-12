@@ -70,6 +70,7 @@
     "TLSCertFile": "",
     "TLSKeyFile": "",
     "TelemetryToLog": true,
+    "TraceServer": "",
     "TxPoolExponentialIncreaseFactor": 2,
     "TxPoolSize": 15000,
     "TxSyncIntervalSeconds": 60,

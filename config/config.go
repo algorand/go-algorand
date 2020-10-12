@@ -349,6 +349,9 @@ type Local struct {
 	// and is expected to happen only on either startup ( after enabling the catchpoint interval, or on certain database upgrades ) or during fast catchup. The values specified here
 	// and their meanings are identical to the ones in LedgerSynchronousMode.
 	AccountsRebuildSynchronousMode int `version[12]:"1"`
+
+	// TraceServer is a host:port to report graph propagation trace info to.
+	TraceServer string `version[12]:""`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

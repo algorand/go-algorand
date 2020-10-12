@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/graphtrace/graphtrace"
+
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/agreement/gossip"
 	"github.com/algorand/go-algorand/catchup"
@@ -125,6 +127,8 @@ type AlgorandFullNode struct {
 
 	oldKeyDeletionNotify        chan struct{}
 	monitoringRoutinesWaitGroup sync.WaitGroup
+
+	tracer graphtrace.Client
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -266,6 +270,17 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 			log.Errorf("unable to create catchpoint catchup service: %v", err)
 			return nil, err
 		}
+	}
+
+	if cfg.TraceServer == "" {
+		node.tracer = &graphtrace.NopClientSingleton
+	} else {
+		node.tracer, err = graphtrace.NewTcpClient(cfg.TraceServer)
+		if err != nil {
+			log.Errorf("unable to create trace client: %v", err)
+			return nil, err
+		}
+		gossip.Trace = node.tracer
 	}
 
 	return node, err
