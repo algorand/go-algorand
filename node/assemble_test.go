@@ -182,6 +182,7 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 		WarnfCallback: func(s string, args ...interface{}) {
 			require.True(t, expectingLog)
 			require.Equal(t, s, "AssembleBlock: assembled block round did not catch up to requested round: %d != %d")
+			expectingLog = false
 		},
 	}
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
@@ -232,4 +233,6 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	block, err = tp.AssembleBlock(next, deadline)
 	require.NoError(t, err)
 	require.NoError(t, ledger.AddBlock(block.Block(), agreement.Certificate{Round: next}))
+
+	require.False(t, expectingLog)
 }
