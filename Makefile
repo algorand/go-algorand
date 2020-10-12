@@ -25,6 +25,9 @@ DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILD
 
 GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 
+# e.g. make GOTAGSCUSTOM=msgtrace
+GOTAGSLIST += ${GOTAGSCUSTOM}
+
 ifeq ($(UNAME), Linux)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
 ifeq ($(ARCH), amd64)
@@ -305,4 +308,3 @@ archive:
 	CHANNEL=$(CHANNEL) \
 	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/bin:$${PATH} \
 	scripts/upload_version.sh $(CHANNEL) $(SRCPATH)/tmp/node_pkgs $(S3_RELEASE_BUCKET)
-

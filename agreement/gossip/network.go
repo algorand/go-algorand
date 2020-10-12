@@ -23,11 +23,10 @@ import (
 	"hash/fnv"
 	"time"
 
-	"github.com/algorand/graphtrace/graphtrace"
-
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/messagetracer"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -41,7 +40,7 @@ var (
 var messagesHandled = metrics.MakeCounter(metrics.AgreementMessagesHandled)
 var messagesDropped = metrics.MakeCounter(metrics.AgreementMessagesDropped)
 
-var Trace graphtrace.Client
+var Trace messagetracer.MessageTracer
 
 type messageMetadata struct {
 	raw network.IncomingMessage

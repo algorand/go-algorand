@@ -351,7 +351,7 @@ type Local struct {
 	AccountsRebuildSynchronousMode int `version[12]:"1"`
 
 	// TraceServer is a host:port to report graph propagation trace info to.
-	TraceServer string `version[12]:""`
+	NetworkMessageTraceServer string `version[12]:""`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

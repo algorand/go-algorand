@@ -26,8 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/algorand/graphtrace/graphtrace"
-
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/agreement/gossip"
 	"github.com/algorand/go-algorand/catchup"
@@ -44,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/messagetracer"
 	"github.com/algorand/go-algorand/node/indexer"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
@@ -128,7 +127,7 @@ type AlgorandFullNode struct {
 	oldKeyDeletionNotify        chan struct{}
 	monitoringRoutinesWaitGroup sync.WaitGroup
 
-	tracer graphtrace.Client
+	tracer messagetracer.MessageTracer
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -272,16 +271,8 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		}
 	}
 
-	if cfg.TraceServer == "" {
-		node.tracer = &graphtrace.NopClientSingleton
-	} else {
-		node.tracer, err = graphtrace.NewTcpClient(cfg.TraceServer)
-		if err != nil {
-			log.Errorf("unable to create trace client: %v", err)
-			return nil, err
-		}
-		gossip.Trace = node.tracer
-	}
+	node.tracer = messagetracer.NewTracer().Init(cfg)
+	gossip.Trace = node.tracer
 
 	return node, err
 }
