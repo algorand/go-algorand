@@ -174,9 +174,13 @@ func (cl callbackLogger) Warnf(s string, args ...interface{}) {
 
 func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	const numUsers = 100
+	expectingLog := false
+	baseLog := logging.TestingLog(t)
+	baseLog.SetLevel(logging.Info)
 	log := &callbackLogger{
-		Logger: logging.TestingLog(t),
+		Logger: baseLog,
 		WarnfCallback: func(s string, args ...interface{}) {
+			require.True(t, expectingLog)
 			require.Equal(t, s, "AssembleBlock: assembled block round did not catch up to requested round: %d != %d")
 		},
 	}
@@ -220,6 +224,8 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	block, err := tp.AssembleBlock(next, deadline)
 	require.NoError(t, err)
 	require.NoError(t, ledger.AddBlock(block.Block(), agreement.Certificate{Round: next}))
+
+	expectingLog = true
 
 	next = l.NextRound()
 	deadline = time.Now().Add(time.Second)
