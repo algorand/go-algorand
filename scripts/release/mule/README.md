@@ -131,7 +131,7 @@ It is common that a custom build is performed on a feature branch other than `re
 
 The most common way to do this is to modify the environment that the subprocess inherits by specifying the values on the command *before* the command.  This won't need to be done for the package stage, but often needs to be done with subsequent stages.
 
-In order to be able to correctly run some of the stages, such as testing and signing, several values needed by the subsequent stages must to be explicitly passed to those stages.
+In order to be able to correctly run some of the stages, such as testing and signing, several values needed by the subsequent stages must be explicitly passed to those stages.
 
 > Verifying which env vars can be overridden is as simple as opening the `mule` yaml file for the respective stage and examining the list of env vars in the `agents`' `env` list.
 >
