@@ -82,15 +82,15 @@ tasks:
 
   # Stash tasks
   - task: stash.Stash
-  name: linux-amd64
-  bucketName: go-algorand-ci-cache
-  stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
-  globSpecs:
-    - tmp/node_pkgs/**
-    - crypto/libs/**
-    - gen/devnet/genesis.json
-    - gen/testnet/genesis.json
-    - gen/mainnet/genesis.json
+    name: linux-amd64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
+    globSpecs:
+      - tmp/node_pkgs/**
+      - crypto/libs/**
+      - gen/devnet/genesis.json
+      - gen/testnet/genesis.json
+      - gen/mainnet/genesis.json
   - task: stash.Stash
     name: darwin-amd64
     bucketName: go-algorand-ci-cache
