@@ -171,7 +171,7 @@ func (mtc *merkleTrieCache) getNode(nid storedNodeIdentifier) (pnode *node, err 
 		pnode = pageNodes[nid]
 		if pnode != nil {
 			if mtc.reallocatedPages == nil {
-				mtc.prioritizeNode(nid, true)
+				mtc.prioritizeNodeFront(nid)
 			}
 			return
 		}
@@ -187,37 +187,54 @@ func (mtc *merkleTrieCache) getNode(nid storedNodeIdentifier) (pnode *node, err 
 	if pnode, have = pageNodes[nid]; !have {
 		err = ErrLoadedPageMissingNode
 	} else {
-		mtc.prioritizeNode(nid, mtc.reallocatedPages == nil)
+		// if we're current reallocating pages, the mtc.reallocatedPages would be non-nil, and
+		// the newly prioritized pages should be placed on the back. Otherwise, we're on the
+		// "normal" path, adding/deleting elements from the trie, in which case new pages should
+		// always be placed on the front.
+		if mtc.reallocatedPages == nil {
+			mtc.prioritizeNodeFront(nid)
+		} else {
+			mtc.prioritizeNodeBack(nid)
+		}
+
 	}
 	return
 }
 
-// prioritizeNode make sure to adjust the priority of the given node id.
+// prioritizeNodeFront make sure to adjust the priority of the given node id.
 // nodes are prioritized based on the page the belong to.
 // a new page would be placed on front, and an existing page would get moved
 // to the front.
-func (mtc *merkleTrieCache) prioritizeNode(nid storedNodeIdentifier, frontSide bool) {
+func (mtc *merkleTrieCache) prioritizeNodeFront(nid storedNodeIdentifier) {
 	page := uint64(nid) / uint64(mtc.nodesPerPage)
 
 	element := mtc.pagesPrioritizationMap[page]
 
-	if frontSide {
-		if element != nil {
-			// if we already have this page as an element, move it to the front.
-			mtc.pagesPrioritizationList.MoveToFront(element)
-			return
-		}
-		// add it at the front.
-		mtc.pagesPrioritizationMap[page] = mtc.pagesPrioritizationList.PushFront(page)
-	} else {
-		if element != nil {
-			// if we already have this page as an element, move it to the back.
-			mtc.pagesPrioritizationList.MoveToBack(element)
-			return
-		}
-		// add it at the back.
-		mtc.pagesPrioritizationMap[page] = mtc.pagesPrioritizationList.PushBack(page)
+	if element != nil {
+		// if we already have this page as an element, move it to the front.
+		mtc.pagesPrioritizationList.MoveToFront(element)
+		return
 	}
+	// add it at the front.
+	mtc.pagesPrioritizationMap[page] = mtc.pagesPrioritizationList.PushFront(page)
+}
+
+// prioritizeNodeBack make sure to adjust the priority of the given node id.
+// nodes are prioritized based on the page the belong to.
+// a new page would be placed on front, and an existing page would get moved
+// to the front.
+func (mtc *merkleTrieCache) prioritizeNodeBack(nid storedNodeIdentifier) {
+	page := uint64(nid) / uint64(mtc.nodesPerPage)
+
+	element := mtc.pagesPrioritizationMap[page]
+
+	if element != nil {
+		// if we already have this page as an element, move it to the back.
+		mtc.pagesPrioritizationList.MoveToBack(element)
+		return
+	}
+	// add it at the back.
+	mtc.pagesPrioritizationMap[page] = mtc.pagesPrioritizationList.PushBack(page)
 }
 
 // loadPage loads a give page id into memory.
@@ -280,7 +297,7 @@ func (mtc *merkleTrieCache) commitTransaction() {
 	// the created nodes are already on the list.
 	for nodeID := range mtc.txCreatedNodeIDs {
 		mtc.pendingCreatedNID[nodeID] = true
-		mtc.prioritizeNode(nodeID, true)
+		mtc.prioritizeNodeFront(nodeID)
 	}
 	mtc.txCreatedNodeIDs = nil
 
@@ -576,22 +593,24 @@ func (mtc *merkleTrieCache) reallocatePage(page uint64, reallocationMap map[stor
 		goto skipContentDeletion
 	}
 
-	if _, has := mtc.pageToNIDsPtr[nextPage]; !has {
-		pageMap := make(map[storedNodeIdentifier]*node, mtc.nodesPerPage)
-		mtc.reallocatedPages[nextPage] = pageMap
-		mtc.pageToNIDsPtr[nextPage] = pageMap
-		mtc.pagesPrioritizationMap[nextPage] = mtc.pagesPrioritizationList.PushFront(nextPage)
-	} else {
+	if _, has := mtc.pageToNIDsPtr[nextPage]; has {
 		// see if we will need another allocated page:
 		lastID := mtc.mt.nextNodeID + storedNodeIdentifier(reallocatedNodes) - 1
 		lastPage := uint64(lastID) / uint64(mtc.nodesPerPage)
 		if _, has := mtc.pageToNIDsPtr[lastPage]; !has {
-			pageMap := make(map[storedNodeIdentifier]*node, mtc.nodesPerPage)
-			mtc.reallocatedPages[lastPage] = pageMap
-			mtc.pageToNIDsPtr[lastPage] = pageMap
-			mtc.pagesPrioritizationMap[lastPage] = mtc.pagesPrioritizationList.PushFront(lastPage)
+			nextPage = lastPage
+		} else {
+			nextPage = storedNodeIdentifierNull
 		}
 	}
+
+	if nextPage > storedNodeIdentifierNull {
+		pageMap := make(map[storedNodeIdentifier]*node, mtc.nodesPerPage)
+		mtc.reallocatedPages[nextPage] = pageMap
+		mtc.pageToNIDsPtr[nextPage] = pageMap
+		mtc.pagesPrioritizationMap[nextPage] = mtc.pagesPrioritizationList.PushFront(nextPage)
+	}
+
 	mtc.mt.nextNodeID += storedNodeIdentifier(reallocatedNodes)
 	for nid, node := range mtc.pageToNIDsPtr[page] {
 		reallocationMap[nid] = nextID

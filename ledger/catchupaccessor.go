@@ -109,6 +109,13 @@ const (
 
 	// catchpointCatchupStateLast is the last entry in the CatchpointCatchupState enumeration.
 	catchpointCatchupStateLast = CatchpointCatchupStateSwitch
+
+	// minMerkleTrieEvictFrequency control the minimal number of accounts changes that we will attempt to update between
+	// two consecutive evict calls.
+	minMerkleTrieEvictFrequency = uint64(1024)
+	// maxMerkleTrieEvictionDuration is the upper bound for the time we'll let the evict call take before lowing the number
+	// of accounts per update.
+	maxMerkleTrieEvictionDuration = 2000 * time.Millisecond
 )
 
 // MakeCatchpointCatchupAccessor creates a CatchpointCatchupAccessor given a ledger
@@ -399,8 +406,8 @@ func (progress *CatchpointCatchupAccessorProgress) EvictAsNeeded(balancesCount u
 		_, err = progress.cachedTrie.Evict(true)
 		if err == nil {
 			evictDelta := time.Now().Sub(evictStart)
-			if evictDelta > 2000*time.Millisecond {
-				if progress.evictFrequency > 1024 {
+			if evictDelta > maxMerkleTrieEvictionDuration {
+				if progress.evictFrequency > minMerkleTrieEvictFrequency {
 					progress.evictFrequency /= 2
 				}
 			} else {
