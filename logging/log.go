@@ -156,7 +156,7 @@ type Logger interface {
 	EnableTelemetry(cfg TelemetryConfig) error
 	UpdateTelemetryURI(uri string) error
 	GetTelemetryEnabled() bool
-	GetTelemetryRemoteEnabled() bool
+	GetTelemetryUploadingEnabled() bool
 	Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{})
 	Event(category telemetryspec.Category, identifier telemetryspec.Event)
 	EventWithDetails(category telemetryspec.Category, identifier telemetryspec.Event, details interface{})
@@ -404,9 +404,10 @@ func (l logger) GetTelemetryURI() string {
 	return telemetryConfig.URI
 }
 
-// GetTelemetryRemoteEnabled returns true if remote logging is enabled
+// GetTelemetryUploadingEnabled returns true if telemetry logging is
+// enabled for uploading messages.
 // This is decided by Enable parameter in logging.config
-func (l logger) GetTelemetryRemoteEnabled() bool {
+func (l logger) GetTelemetryUploadingEnabled() bool {
 	return telemetryConfig.Enable
 }
 
