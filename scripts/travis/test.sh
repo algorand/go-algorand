@@ -18,10 +18,11 @@ curl -sL -o ~/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gim
 chmod +x ~/gimme
 eval $(~/gimme "${GOLANG_VERSION}")
 
-if [ "${OS}-${ARCH}" = "linux-arm" ]; then
-    # for arm, no tests need to be invoked.
-    exit 0
-fi
+if [ "${OS}-${ARCH}" = "linux-arm" ] || [ "${OS}-${ARCH}" = "windows-amd64" ]; then
+     # for arm, no tests need to be invoked.
+     # for now, disable tests on windows.
+     exit 0
+ fi
 
 GOPATHBIN=$(go env GOPATH)/bin
 export PATH=$PATH:$GOPATHBIN
