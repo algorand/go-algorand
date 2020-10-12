@@ -23,14 +23,22 @@ agents:
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm64v8
-  - name: cicd.centos.arm64
-    dockerFilePath: docker/build/cicd.centos.Dockerfile
-    image: algorand/go-algorand-ci-linux-centos
+  #- name: cicd.centos.arm64
+  #  dockerFilePath: docker/build/cicd.centos.Dockerfile
+  #  image: algorand/go-algorand-ci-linux-centos
+  #  version: scripts/configure_dev-deps.sh
+  #  arch: arm64v8
+  #  buildArgs:
+  #    - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+  #    - ARCH=arm64v8
+  - name: cicd.alpine.arm
+    dockerFilePath: docker/build/cicd.alpine.Dockerfile
+    image: algorand/go-algorand-ci-linux
     version: scripts/configure_dev-deps.sh
-    arch: arm64v8
+    arch: arm32v6
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
-      - ARCH=arm64v8
+      - ARCH=arm32v6
   - name: docker-ubuntu
     dockerFilePath: docker/build/docker.ubuntu.Dockerfile
     image: algorand/go-algorand-docker-linux-ubuntu
@@ -41,25 +49,97 @@ agents:
       - /var/run/docker.sock:/var/run/docker.sock
 
 tasks:
+  - task: shell.Make
+    name: build.amd64
+    agent: cicd.ubuntu.amd64
+    target: ci-build
+  - task: shell.Make
+    name: build.arm64
+    agent: cicd.ubuntu.arm64
+    target: ci-build
+  - task: shell.Make
+    name: build.arm
+    agent: cicd.alpine.arm
+    target: ci-build
+
   - task: docker.Make
     name: rpm.amd64
     agent: cicd.centos.amd64
     target: mule-package-rpm
-
   - task: docker.Make
     name: deb.amd64
     agent: cicd.ubuntu.amd64
     target: mule-package-deb
-  
-  - task: docker.Make
-    name: rpm.arm64
-    agent: cicd.centos.arm64
-    target: mule-package-rpm
 
-  - task: docker.Make
-    name: deb.arm64
-    agent: cicd.ubuntu.arm64
-    target: mule-package-deb
+  #- task: docker.Make
+  #  name: rpm.arm64
+  #  agent: cicd.centos.arm64
+  #  target: mule-package-rpm
+  #- task: docker.Make
+  #  name: deb.arm64
+  #  agent: cicd.ubuntu.arm64
+  #  target: mule-package-deb
+
+  # Stash tasks
+  - task: stash.Stash
+  name: linux-amd64
+  bucketName: go-algorand-ci-cache
+  stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
+  globSpecs:
+    - tmp/node_pkgs/**
+    - crypto/libs/**
+    - gen/devnet/genesis.json
+    - gen/testnet/genesis.json
+    - gen/mainnet/genesis.json
+  - task: stash.Stash
+    name: darwin-amd64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
+    globSpecs:
+      - tmp/node_pkgs/**
+      - crypto/libs/**
+      - gen/devnet/genesis.json
+      - gen/testnet/genesis.json
+      - gen/mainnet/genesis.json
+  - task: stash.Stash
+    name: linux-arm64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm64
+    globSpecs:
+      - tmp/node_pkgs/**
+      - crypto/libs/**
+      - gen/devnet/genesis.json
+      - gen/testnet/genesis.json
+      - gen/mainnet/genesis.json
+  - task: stash.Stash
+    name: linux-arm32
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm32
+    globSpecs:
+      - tmp/node_pkgs/**
+      - crypto/libs/**
+      - gen/devnet/genesis.json
+      - gen/testnet/genesis.json
+      - gen/mainnet/genesis.json
+
+    # Unstash tasks
+  - task: stash.Unstash
+    name: linux-arm64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm64
+  - task: stash.Unstash
+    name: linux-amd64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
+  - task: stash.Unstash
+    name: darwin-amd64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
+  - task: stash.Unstash
+    name: linux-arm32
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm32
+
 
   - task: docker.Make
     name: docker-image
@@ -67,14 +147,32 @@ tasks:
     target: mule-package-docker
 
 jobs:
+  build-linux-amd64:
+    tasks:
+      - docker.Make.build.amd64
+      - stash.Stash.linux-amd64
+  build-linux-arm64:
+    tasks:
+      - docker.Make.build.arm64
+      - stash.Stash.linux-arm64
+  build-linux-arm:
+    tasks:
+      - docker.Make.build.arm
+      - stash.Stash.linux-arm
+
   package-linux-amd64:
     tasks:
+      - stash.Unstash.linux-amd64
+      - stash.Unstash.linux-arm64
+      - stash.Unstash.linux-arm
       - docker.Make.deb.amd64
       - docker.Make.rpm.amd64
-  package-linux-arm64:
-    tasks:
-      - docker.Make.deb.arm64
-      - docker.Make.rpm.arm64
+
+  #package-linux-arm64:
+  #  tasks:
+  #    - stash.Unstash.linux-amd64
+  #    - docker.Make.deb.arm64
+  #    - docker.Make.rpm.arm64
 
   package-docker:
     tasks:
