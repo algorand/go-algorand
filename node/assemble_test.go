@@ -99,7 +99,7 @@ func BenchmarkAssembleBlock(b *testing.B) {
 		cfg := config.GetDefaultLocal()
 		cfg.TxPoolSize = txPoolSize
 		cfg.EnableAssembleStats = false
-		tp := pools.MakeTransactionPool(l.Ledger, cfg)
+		tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 		errcount := 0
 		okcount := 0
 		var worstTxID transactions.Txid
@@ -163,9 +163,23 @@ func BenchmarkAssembleBlock(b *testing.B) {
 	}
 }
 
+type callbackLogger struct {
+	logging.Logger
+	WarnfCallback func(string, ...interface{})
+}
+
+func (cl callbackLogger) Warnf(s string, args ...interface{}) {
+	cl.WarnfCallback(s, args...)
+}
+
 func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	const numUsers = 100
-	log := logging.TestingLog(t)
+	log := &callbackLogger{
+		Logger: logging.TestingLog(t),
+		WarnfCallback: func(s string, args ...interface{}) {
+			require.Equal(t, s, "AssembleBlock: assembled block round did not catch up to requested round: %d != %d")
+		},
+	}
 	secrets := make([]*crypto.SignatureSecrets, numUsers)
 	addresses := make([]basics.Address, numUsers)
 
@@ -199,7 +213,7 @@ func TestAssembleBlockTransactionPoolBehind(t *testing.T) {
 	cfg = config.GetDefaultLocal()
 	cfg.TxPoolSize = txPoolSize
 	cfg.EnableAssembleStats = false
-	tp := pools.MakeTransactionPool(l.Ledger, cfg)
+	tp := pools.MakeTransactionPool(l.Ledger, cfg, log)
 
 	next := l.NextRound()
 	deadline := time.Now().Add(time.Second)

@@ -88,10 +88,12 @@ type TransactionPool struct {
 	rememberedTxGroups     [][]transactions.SignedTxn
 	rememberedVerifyParams [][]verify.Params
 	rememberedTxids        map[transactions.Txid]txPoolVerifyCacheVal
+
+	log logging.Logger
 }
 
 // MakeTransactionPool makes a transaction pool.
-func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPool {
+func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Logger) *TransactionPool {
 	if cfg.TxPoolExponentialIncreaseFactor < 1 {
 		cfg.TxPoolExponentialIncreaseFactor = 1
 	}
@@ -105,6 +107,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local) *TransactionPo
 		logAssembleStats:     cfg.EnableAssembleStats,
 		expFeeFactor:         cfg.TxPoolExponentialIncreaseFactor,
 		txPoolMaxSize:        cfg.TxPoolSize,
+		log:                  log,
 	}
 	pool.cond.L = &pool.mu
 	pool.assemblyCond.L = &pool.assemblyMu
@@ -547,7 +550,7 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledger.St
 			Round uint64
 		}
 		details.Round = uint64(block.Round())
-		logging.Base().Metrics(telemetryspec.Transaction, stats, details)
+		pool.log.Metrics(telemetryspec.Transaction, stats, details)
 	}
 }
 
@@ -614,7 +617,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	latest := pool.ledger.Latest()
 	prev, err := pool.ledger.BlockHdr(latest)
 	if err != nil {
-		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: cannot get prev header for %d: %v",
+		pool.log.Warnf("TransactionPool.recomputeBlockEvaluator: cannot get prev header for %d: %v",
 			latest, err)
 		return
 	}
@@ -622,7 +625,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	// Process upgrade to see if we support the next protocol version
 	_, upgradeState, err := bookkeeping.ProcessUpgradeParams(prev)
 	if err != nil {
-		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: error processing upgrade params for next round: %v", err)
+		pool.log.Warnf("TransactionPool.recomputeBlockEvaluator: error processing upgrade params for next round: %v", err)
 		return
 	}
 
@@ -630,7 +633,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	// if we don't, and we would rather stall locally than panic)
 	_, ok := config.Consensus[upgradeState.CurrentProtocol]
 	if !ok {
-		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: next protocol version %v is not supported", upgradeState.CurrentProtocol)
+		pool.log.Warnf("TransactionPool.recomputeBlockEvaluator: next protocol version %v is not supported", upgradeState.CurrentProtocol)
 		return
 	}
 
@@ -651,7 +654,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	pool.numPendingWholeBlocks = 0
 	pool.pendingBlockEvaluator, err = pool.ledger.StartEvaluator(next.BlockHeader, pendingCount)
 	if err != nil {
-		logging.Base().Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
+		pool.log.Warnf("TransactionPool.recomputeBlockEvaluator: cannot start evaluator: %v", err)
 		return
 	}
 
@@ -685,11 +688,11 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			case transactions.MinFeeError:
 				asmStats.InvalidCount++
 				stats.RemovedInvalidCount++
-				logging.Base().Infof("Cannot re-add pending transaction to pool: %v", err)
+				pool.log.Infof("Cannot re-add pending transaction to pool: %v", err)
 			default:
 				asmStats.InvalidCount++
 				stats.RemovedInvalidCount++
-				logging.Base().Warnf("Cannot re-add pending transaction to pool: %v", err)
+				pool.log.Warnf("Cannot re-add pending transaction to pool: %v", err)
 			}
 		}
 	}
@@ -766,7 +769,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 				Round uint64
 			}
 			details.Round = uint64(round)
-			logging.Base().Metrics(telemetryspec.Transaction, stats, details)
+			pool.log.Metrics(telemetryspec.Transaction, stats, details)
 		}()
 	}
 
@@ -774,7 +777,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 
 	// if the transaction pool is more than two rounds behind, we don't want to wait.
 	if pool.assemblyResults.roundStartedEvaluating <= round.SubSaturate(2) {
-		logging.Base().Infof("AssembleBlock: requested round is more than a single round ahead of the transaction pool %d <= %d-2", pool.assemblyResults.roundStartedEvaluating, round)
+		pool.log.Infof("AssembleBlock: requested round is more than a single round ahead of the transaction pool %d <= %d-2", pool.assemblyResults.roundStartedEvaluating, round)
 		stats.StopReason = telemetryspec.AssembleBlockEmpty
 		pool.assemblyMu.Unlock()
 		return pool.assembleEmptyBlock(round)
@@ -787,7 +790,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		// that the agreement is far behind us, so we're going to return here with error code to let
 		// the agreement know about it.
 		// since the network is already ahead of us, there is no issue here in not generating a block ( since the block would get discarded anyway )
-		logging.Base().Infof("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
+		pool.log.Infof("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
 		return nil, ErrStaleBlockAssemblyRequest
 	}
 
@@ -809,7 +812,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 			// this case is expected to happen only if the transaction pool was able to construct *two* rounds during the time we were trying to assemble the empty block.
 			// while this is extreamly unlikely, we need to handle this. the handling it quite straight-forward :
 			// since the network is already ahead of us, there is no issue here in not generating a block ( since the block would get discarded anyway )
-			logging.Base().Infof("AssembleBlock: requested round is behind transaction pool round after timing out %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
+			pool.log.Infof("AssembleBlock: requested round is behind transaction pool round after timing out %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
 			return nil, ErrStaleBlockAssemblyRequest
 		}
 
@@ -821,7 +824,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		// check to see if the extra time helped us to get a block.
 		if !pool.assemblyResults.ok {
 			// it didn't. Lucky us - we already prepared an empty block, so we can return this right now.
-			logging.Base().Warnf("AssembleBlock: ran out of time for round %d", round)
+			pool.log.Warnf("AssembleBlock: ran out of time for round %d", round)
 			stats.StopReason = telemetryspec.AssembleBlockTimeout
 			if emptyBlockErr != nil {
 				emptyBlockErr = fmt.Errorf("AssembleBlock: failed to construct empty block : %v", emptyBlockErr)
@@ -838,10 +841,11 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 		// this scenario should not happen unless the txpool is receiving the new blocks via OnNewBlocks
 		// with "jumps" between consecutive blocks ( which is why it's a warning )
 		// The "normal" usecase is evaluated on the top of the function.
-		logging.Base().Warnf("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
+		pool.log.Warnf("AssembleBlock: requested round is behind transaction pool round %d < %d", round, pool.assemblyResults.roundStartedEvaluating)
 		return nil, ErrStaleBlockAssemblyRequest
 	} else if pool.assemblyResults.roundStartedEvaluating == round.SubSaturate(1) {
-		logging.Base().Warnf("AssembleBlock: assembled block round did not catch up to requested round: %d != %d", pool.assemblyResults.roundStartedEvaluating, round)
+		pool.log.Warnf("AssembleBlock: assembled block round did not catch up to requested round: %d != %d", pool.assemblyResults.roundStartedEvaluating, round)
+		stats.StopReason = telemetryspec.AssembleBlockTimeout
 		return pool.assembleEmptyBlock(round)
 	} else if pool.assemblyResults.roundStartedEvaluating < round {
 		return nil, fmt.Errorf("AssembleBlock: assembled block round much behind requested round: %d != %d",
