@@ -55,10 +55,10 @@ func TelemetryOverride(env string) bool {
 // Note: This should only be used/persisted when initially creating 'TelemetryConfigFilename'. Because the methods are called
 //       from various tools and goal commands and affect the future default settings for telemetry, we need to inject
 //       a "dev" branch check.
-func createTelemetryConfig() TelemetryConfig {
+func createTelemetryConfig() *TelemetryConfig {
 	enable := false
 
-	return TelemetryConfig{
+	return &TelemetryConfig{
 		Enable:             enable,
 		GUID:               uuid.NewV4().String(),
 		URI:                "",
@@ -71,7 +71,7 @@ func createTelemetryConfig() TelemetryConfig {
 }
 
 // LoadTelemetryConfig loads the TelemetryConfig from the config file
-func LoadTelemetryConfig(configPath string) (TelemetryConfig, error) {
+func LoadTelemetryConfig(configPath string) (*TelemetryConfig, error) {
 	return loadTelemetryConfig(configPath)
 }
 
@@ -124,7 +124,7 @@ func SanitizeTelemetryString(input string, maxParts int) string {
 	return input
 }
 
-func loadTelemetryConfig(path string) (TelemetryConfig, error) {
+func loadTelemetryConfig(path string) (*TelemetryConfig, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return createTelemetryConfig(), err
@@ -132,7 +132,7 @@ func loadTelemetryConfig(path string) (TelemetryConfig, error) {
 	defer f.Close()
 	cfg := createTelemetryConfig()
 	dec := json.NewDecoder(f)
-	err = dec.Decode(&cfg)
+	err = dec.Decode(cfg)
 	cfg.FilePath = path
 
 	// Sanitize user-defined name.

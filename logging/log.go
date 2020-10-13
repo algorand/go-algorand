@@ -52,7 +52,7 @@ type Level uint32
 // Create a general Base logger
 var (
 	baseLogger      Logger
-	telemetryConfig TelemetryConfig
+	telemetryConfig *TelemetryConfig
 )
 
 const (
@@ -91,7 +91,7 @@ func init() {
 	Init()
 }
 
-func initializeConfig(cfg TelemetryConfig) {
+func initializeConfig(cfg *TelemetryConfig) {
 	telemetryConfig = cfg
 }
 
@@ -153,7 +153,7 @@ type Logger interface {
 	// Adds a hook to the logger
 	AddHook(hook logrus.Hook)
 
-	EnableTelemetry(cfg TelemetryConfig) error
+	EnableTelemetry(cfg *TelemetryConfig) error
 	UpdateTelemetryURI(uri string) error
 	GetTelemetryEnabled() bool
 	GetTelemetryUploadingEnabled() bool
@@ -366,7 +366,7 @@ func NewLogger() Logger {
 	return out
 }
 
-func (l logger) EnableTelemetry(cfg TelemetryConfig) (err error) {
+func (l logger) EnableTelemetry(cfg *TelemetryConfig) (err error) {
 	if l.loggerState.telemetry != nil || (!cfg.Enable && !cfg.SendToLog) {
 		return nil
 	}

@@ -53,7 +53,7 @@ func maybeUpdateDataDirFromEnv() {
 	}
 }
 
-func readTelemetryConfigOrExit() logging.TelemetryConfig {
+func readTelemetryConfigOrExit() *logging.TelemetryConfig {
 	maybeUpdateDataDirFromEnv()
 	cfg, err := logging.ReadTelemetryConfigOrDefault(&dataDir, "")
 	if err != nil {
@@ -63,7 +63,7 @@ func readTelemetryConfigOrExit() logging.TelemetryConfig {
 	return cfg
 }
 
-func saveTelemetryConfig(cfg logging.TelemetryConfig) {
+func saveTelemetryConfig(cfg *logging.TelemetryConfig) {
 	globalPath, err := config.GetConfigFilePath(logging.TelemetryConfigFilename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)

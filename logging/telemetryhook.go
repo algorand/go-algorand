@@ -199,7 +199,7 @@ func (hook *dummyHook) waitForEventAndReady() bool {
 	return true
 }
 
-func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
+func createElasticHook(cfg *TelemetryConfig) (hook logrus.Hook, err error) {
 	// Returning an error here causes issues... need the hooks to be created even if the elastic hook fails so that
 	// things can recover later.
 	if cfg.URI == "" {
@@ -220,7 +220,7 @@ func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 }
 
 // createTelemetryHook creates the Telemetry log hook, or returns nil if remote logging is not enabled
-func createTelemetryHook(cfg TelemetryConfig, history *logBuffer, hookFactory hookFactory) (hook logrus.Hook, err error) {
+func createTelemetryHook(cfg *TelemetryConfig, history *logBuffer, hookFactory hookFactory) (hook logrus.Hook, err error) {
 	if !cfg.Enable {
 		return nil, fmt.Errorf("createTelemetryHook called when telemetry not enabled")
 	}
@@ -252,7 +252,7 @@ func (hook *asyncTelemetryHook) UpdateHookURI(uri string) (err error) {
 		copy := tfh.telemetryConfig
 		copy.URI = uri
 		var newHook logrus.Hook
-		newHook, err = tfh.factory(copy)
+		newHook, err = tfh.factory(&copy)
 
 		if err == nil && newHook != nil {
 			tfh.wrappedHook = newHook

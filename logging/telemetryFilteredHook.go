@@ -35,9 +35,9 @@ type telemetryFilteredHook struct {
 
 // newFilteredTelemetryHook creates a hook filter for ensuring telemetry events are
 // always included by the wrapped log hook.
-func newTelemetryFilteredHook(cfg TelemetryConfig, hook logrus.Hook, reportLogLevel logrus.Level, history *logBuffer, sessionGUID string, factory hookFactory, levels []logrus.Level) (logrus.Hook, error) {
+func newTelemetryFilteredHook(cfg *TelemetryConfig, hook logrus.Hook, reportLogLevel logrus.Level, history *logBuffer, sessionGUID string, factory hookFactory, levels []logrus.Level) (logrus.Hook, error) {
 	filteredHook := &telemetryFilteredHook{
-		cfg,
+		*cfg,
 		hook,
 		reportLogLevel,
 		history,
