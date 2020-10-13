@@ -9,27 +9,30 @@ import (
 	"github.com/algorand/go-algorand/logging"
 )
 
-var log logging.Logger
-
 type graphtraceMessageTracer struct {
 	tracer graphtrace.Client
+	log    logging.Logger
 }
 
 func (gmt *graphtraceMessageTracer) Init(cfg config.Local) MessageTracer {
+	if cfg.NetworkMessageTraceServer == "" {
+		return nil
+	}
 	var err error
 	gmt.tracer, err = graphtrace.NewTcpClient(cfg.NetworkMessageTraceServer)
 	if err != nil {
-		log.Errorf("unable to create trace client: %v", err)
+		gmt.log.Errorf("unable to create trace client: %v", err)
 		return nil
 	}
+	gmt.log.Infof("tracing network messages to %s", cfg.NetworkMessageTraceServer)
 	return gmt
 }
 func (gmt *graphtraceMessageTracer) Trace(m []byte) {
 	gmt.tracer.Trace(m)
 }
 
-func NewGraphtraceMessageTracer() MessageTracer {
-	return &graphtraceMessageTracer{}
+func NewGraphtraceMessageTracer(log logging.Logger) MessageTracer {
+	return &graphtraceMessageTracer{log: log}
 }
 
 func init() {

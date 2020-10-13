@@ -10,7 +10,7 @@ type MessageTracer interface {
 	Trace(m []byte)
 }
 
-var implFactory func() MessageTracer
+var implFactory func(logging.Logger) MessageTracer
 
 type nopMessageTracer struct {
 }
@@ -23,11 +23,9 @@ func (gmt *nopMessageTracer) Trace(m []byte) {
 
 var singletonNopMessageTracer nopMessageTracer
 
-func NewTracer() MessageTracer {
+func NewTracer(log logging.Logger) MessageTracer {
 	if implFactory != nil {
-		logging.Base().Info("messagetracer using implFactory")
-		return implFactory()
+		return implFactory(log)
 	}
-	logging.Base().Info("messagetracer disabled")
 	return &singletonNopMessageTracer
 }

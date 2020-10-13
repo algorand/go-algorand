@@ -271,7 +271,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		}
 	}
 
-	node.tracer = messagetracer.NewTracer().Init(cfg)
+	node.tracer = messagetracer.NewTracer(log).Init(cfg)
 	gossip.Trace = node.tracer
 
 	return node, err
