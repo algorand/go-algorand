@@ -137,7 +137,7 @@ jobs:
     tasks:
       - docker.Make.build.arm64
       - stash.Stash.linux-arm64
-  build-linux-arm:
+  build-linux-arm32:
     tasks:
       - docker.Make.build.arm
       - stash.Stash.linux-arm
