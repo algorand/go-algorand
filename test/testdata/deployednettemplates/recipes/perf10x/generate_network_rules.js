@@ -60,7 +60,6 @@ Object.keys(continentToGroup).forEach((source) => {
         targetGroup = continentToGroup[target]
         const bandwidth = average(continentBandwidths[source]['bandwidths'])
         const latency = latencyMap[source][target]
-        writer.write(`${sourceGroup}-n ${targetGroup}-n ${Math.round(bandwidth)} ${Math.round(latency)}\n`)
         writer.write(`${sourceGroup}-n ${targetGroup}-r ${Math.round(bandwidth)} ${Math.round(latency)}\n`)
         writer.write(`${sourceGroup}-r ${targetGroup}-n ${RELAY_BANDWIDTH} ${Math.round(latency)}\n`)
         writer.write(`${sourceGroup}-r ${targetGroup}-r ${RELAY_BANDWIDTH} ${Math.round(latency)}\n`)
