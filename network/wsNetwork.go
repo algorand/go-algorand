@@ -104,6 +104,10 @@ const maxMessageQueueDuration = 25 * time.Second
 // verify that their current outgoing message is not being blocked for too long.
 const slowWritingPeerMonitorInterval = 5 * time.Second
 
+// unprintableCharacterGlyph is used to replace any non-ascii character when logging incoming network string directly
+// to the log file. Note that the log file itself would also json-encode these before placing them in the log file.
+const unprintableCharacterGlyph = "▯"
+
 var networkIncomingConnections = metrics.MakeGauge(metrics.NetworkIncomingConnections)
 var networkOutgoingConnections = metrics.MakeGauge(metrics.NetworkOutgoingConnections)
 
@@ -1754,7 +1758,8 @@ func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
 	return &wn.transport
 }
 
-// filterASCII filter out the non-ascii printable characters out of the given input string.
+// filterASCII filter out the non-ascii printable characters out of the given input string and
+// and replace these with unprintableCharacterGlyph.
 // It's used as a security qualifier before logging a network-provided data.
 // The function allows only characters in the range of [32..126], which excludes all the
 // control character, new lines, deletion, etc. All the alpha numeric and punctuation characters
@@ -1763,6 +1768,8 @@ func filterASCII(unfilteredString string) (filteredString string) {
 	for i, r := range unfilteredString {
 		if int(r) >= 0x20 && int(r) <= 0x7e {
 			filteredString += string(unfilteredString[i])
+		} else {
+			filteredString += unprintableCharacterGlyph
 		}
 	}
 	return

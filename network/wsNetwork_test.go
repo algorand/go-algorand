@@ -1383,7 +1383,7 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 	header4.Add(ProtocolVersionHeader, "5\n")
 	matchingVersion, otherVersion = wn.checkProtocolVersionMatch(header4)
 	require.Equal(t, "", matchingVersion)
-	require.Equal(t, "5", otherVersion)
+	require.Equal(t, "5"+unprintableCharacterGlyph, otherVersion)
 }
 
 func handleTopicRequest(msg IncomingMessage) (out OutgoingMessage) {
@@ -1650,9 +1650,9 @@ func TestASCIIFiltering(t *testing.T) {
 	}{
 		{"abc", "abc"},
 		{"", ""},
-		{"אבג", ""},
-		{"\u001b[31mABC\u001b[0m", "[31mABC[0m"},
-		{"ab\nc", "abc"},
+		{"אבג", unprintableCharacterGlyph + unprintableCharacterGlyph + unprintableCharacterGlyph},
+		{"\u001b[31mABC\u001b[0m", unprintableCharacterGlyph + "[31mABC" + unprintableCharacterGlyph + "[0m"},
+		{"ab\nc", "ab" + unprintableCharacterGlyph + "c"},
 	}
 	for _, testElement := range testUnicodePrintableStrings {
 		outString := filterASCII(testElement.testString)
