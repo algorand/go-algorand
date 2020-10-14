@@ -342,6 +342,9 @@ func (au *accountUpdates) waitAccountsWriting() {
 
 // close closes the accountUpdates, waiting for all the child go-routine to complete
 func (au *accountUpdates) close() {
+	if au.voters != nil {
+		au.voters.close()
+	}
 	if au.ctxCancel != nil {
 		au.ctxCancel()
 	}

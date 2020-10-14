@@ -66,6 +66,10 @@ type votersTracker struct {
 
 	l  ledgerForTracker
 	au *accountUpdates
+
+	// loadWaitGroup syncronizing the completion of the loadTree call so that we can
+	// shutdown the tracker without leaving any running go-routines.
+	loadWaitGroup sync.WaitGroup
 }
 
 // VotersForRound tracks the top online voting accounts as of a particular
@@ -185,7 +189,9 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) error {
 	tr.cond = sync.NewCond(&tr.mu)
 	vt.round[r] = tr
 
+	vt.loadWaitGroup.Add(1)
 	go func() {
+		defer vt.loadWaitGroup.Done()
 		err := tr.loadTree(vt.l, vt.au, hdr)
 		if err != nil {
 			vt.au.log.Warnf("votersTracker.loadTree(%d): %v", hdr.Round, err)
@@ -197,6 +203,12 @@ func (vt *votersTracker) loadTree(hdr bookkeeping.BlockHeader) error {
 		}
 	}()
 	return nil
+}
+
+// close waits until all the internal spawned go-rouines are done before returning, allowing clean
+// shutdown.
+func (vt *votersTracker) close() {
+	vt.loadWaitGroup.Wait()
 }
 
 func (tr *VotersForRound) loadTree(l ledgerForTracker, au *accountUpdates, hdr bookkeeping.BlockHeader) error {
