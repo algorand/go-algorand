@@ -17,6 +17,7 @@ S3_RELEASE_BUCKET = $$S3_RELEASE_BUCKET
 
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
+FULLBUILDNUMBER  ?= $(shell ./scripts/compute_build_number.sh -f)
 COMMITHASH       := $(shell ./scripts/compute_build_commit.sh)
 BUILDBRANCH      := $(shell ./scripts/compute_branch.sh)
 CHANNEL          ?= $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
@@ -299,10 +300,8 @@ install: build
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule
 
-SUPPORTED_ARCHIVE_OS_ARCH = linux/amd64 linux/arm64 linux/arm darwin/amd64
-
 archive:
 	CHANNEL=$(CHANNEL) \
-	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/bin:$${PATH} \
-	scripts/upload_version.sh $(CHANNEL) $(SRCPATH)/tmp/node_pkgs $(S3_RELEASE_BUCKET)
+	FULLBUILDNUMBER=$(FULLBUILDNUMBER) \
+	aws s3 cp tmp/node_pkgs s3://algorand-internal/channel/${CHANNEL}/${FULLBUILDNUMBER} --recursive --exclude "*" --include "*${CHANNEL}*${FULLBUILDNUMBER}*"
 
