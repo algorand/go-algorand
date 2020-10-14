@@ -1378,6 +1378,12 @@ func TestCheckProtocolVersionMatch(t *testing.T) {
 	matchingVersion, otherVersion = wn.checkProtocolVersionMatch(header3)
 	require.Equal(t, "", matchingVersion)
 	require.Equal(t, "3", otherVersion)
+
+	header4 := make(http.Header)
+	header4.Add(ProtocolVersionHeader, "5\n")
+	matchingVersion, otherVersion = wn.checkProtocolVersionMatch(header4)
+	require.Equal(t, "", matchingVersion)
+	require.Equal(t, "5"+unprintableCharacterGlyph, otherVersion)
 }
 
 func handleTopicRequest(msg IncomingMessage) (out OutgoingMessage) {
@@ -1634,4 +1640,94 @@ func TestWebsocketDisconnection(t *testing.T) {
 	default:
 		require.FailNow(t, "The DisconnectPeerEvent was missing")
 	}
+}
+
+// TestASCIIFiltering tests the behaviour of filterASCII by feeding it with few known inputs and verifying the expected outputs.
+func TestASCIIFiltering(t *testing.T) {
+	testUnicodePrintableStrings := []struct {
+		testString     string
+		expectedString string
+	}{
+		{"abc", "abc"},
+		{"", ""},
+		{"אבג", unprintableCharacterGlyph + unprintableCharacterGlyph + unprintableCharacterGlyph},
+		{"\u001b[31mABC\u001b[0m", unprintableCharacterGlyph + "[31mABC" + unprintableCharacterGlyph + "[0m"},
+		{"ab\nc", "ab" + unprintableCharacterGlyph + "c"},
+	}
+	for _, testElement := range testUnicodePrintableStrings {
+		outString := filterASCII(testElement.testString)
+		require.Equalf(t, testElement.expectedString, outString, "test string:%s", testElement.testString)
+	}
+}
+
+type callbackLogger struct {
+	logging.Logger
+	InfoCallback  func(...interface{})
+	InfofCallback func(string, ...interface{})
+	WarnCallback  func(...interface{})
+	WarnfCallback func(string, ...interface{})
+}
+
+func (cl callbackLogger) Info(args ...interface{}) {
+	cl.InfoCallback(args...)
+}
+func (cl callbackLogger) Infof(s string, args ...interface{}) {
+	cl.InfofCallback(s, args...)
+}
+
+func (cl callbackLogger) Warn(args ...interface{}) {
+	cl.WarnCallback(args...)
+}
+func (cl callbackLogger) Warnf(s string, args ...interface{}) {
+	cl.WarnfCallback(s, args...)
+}
+
+// TestMaliciousCheckServerResponseVariables test the checkServerResponseVariables to ensure it doesn't print the a malicious input without being filtered to the log file.
+func TestMaliciousCheckServerResponseVariables(t *testing.T) {
+	wn := makeTestWebsocketNode(t)
+	wn.GenesisID = "genesis-id1"
+	wn.RandomID = "random-id1"
+	wn.log = callbackLogger{
+		Logger: wn.log,
+		InfoCallback: func(args ...interface{}) {
+			s := fmt.Sprint(args...)
+			require.NotContains(t, s, "א")
+		},
+		InfofCallback: func(s string, args ...interface{}) {
+			s = fmt.Sprintf(s, args...)
+			require.NotContains(t, s, "א")
+		},
+		WarnCallback: func(args ...interface{}) {
+			s := fmt.Sprint(args...)
+			require.NotContains(t, s, "א")
+		},
+		WarnfCallback: func(s string, args ...interface{}) {
+			s = fmt.Sprintf(s, args...)
+			require.NotContains(t, s, "א")
+		},
+	}
+
+	header1 := http.Header{}
+	header1.Set(ProtocolVersionHeader, ProtocolVersion+"א")
+	header1.Set(NodeRandomHeader, wn.RandomID+"tag")
+	header1.Set(GenesisHeader, wn.GenesisID)
+	responseVariableOk, matchingVersion := wn.checkServerResponseVariables(header1, "addressX")
+	require.Equal(t, false, responseVariableOk)
+	require.Equal(t, "", matchingVersion)
+
+	header2 := http.Header{}
+	header2.Set(ProtocolVersionHeader, ProtocolVersion)
+	header2.Set("א", "א")
+	header2.Set(GenesisHeader, wn.GenesisID)
+	responseVariableOk, matchingVersion = wn.checkServerResponseVariables(header2, "addressX")
+	require.Equal(t, false, responseVariableOk)
+	require.Equal(t, "", matchingVersion)
+
+	header3 := http.Header{}
+	header3.Set(ProtocolVersionHeader, ProtocolVersion)
+	header3.Set(NodeRandomHeader, wn.RandomID+"tag")
+	header3.Set(GenesisHeader, wn.GenesisID+"א")
+	responseVariableOk, matchingVersion = wn.checkServerResponseVariables(header3, "addressX")
+	require.Equal(t, false, responseVariableOk)
+	require.Equal(t, "", matchingVersion)
 }
