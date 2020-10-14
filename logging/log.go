@@ -384,18 +384,30 @@ func (l logger) GetTelemetryEnabled() bool {
 }
 
 func (l logger) GetTelemetrySession() string {
+	if !l.GetTelemetryEnabled() {
+		return ""
+	}
 	return l.loggerState.telemetry.telemetryConfig.SessionGUID
 }
 
 func (l logger) GetTelemetryHostName() string {
+	if !l.GetTelemetryEnabled() {
+		return ""
+	}
 	return l.loggerState.telemetry.telemetryConfig.getHostName()
 }
 
 func (l logger) GetInstanceName() string {
+	if !l.GetTelemetryEnabled() {
+		return ""
+	}
 	return l.loggerState.telemetry.telemetryConfig.getInstanceName()
 }
 
 func (l logger) GetTelemetryURI() string {
+	if !l.GetTelemetryEnabled() {
+		return ""
+	}
 	return l.loggerState.telemetry.telemetryConfig.URI
 }
 
@@ -403,7 +415,8 @@ func (l logger) GetTelemetryURI() string {
 // enabled for uploading messages.
 // This is decided by Enable parameter in logging.config
 func (l logger) GetTelemetryUploadingEnabled() bool {
-	return l.loggerState.telemetry.telemetryConfig.Enable
+	return l.GetTelemetryEnabled() &&
+		l.loggerState.telemetry.telemetryConfig.Enable
 }
 
 func (l logger) Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{}) {
