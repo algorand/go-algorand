@@ -115,6 +115,9 @@ type AlgorandFullNode struct {
 
 	log logging.Logger
 
+	// use syncMu for locking lastRoundTimestamp and hasSyncedSinceStartup
+	// syncMu added so OnNewBlock wouldn't be blocked by oldKeyDeletionThread during catchup
+	syncMu                deadlock.Mutex
 	lastRoundTimestamp    time.Time
 	hasSyncedSinceStartup bool
 
@@ -578,7 +581,9 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 // Status returns a StatusReport structure reporting our status as Active and with our ledger's LastRound
 func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 	node.mu.Lock()
+	node.syncMu.Lock()
 	defer node.mu.Unlock()
+	defer node.syncMu.Unlock()
 
 	s.LastRoundTimestamp = node.lastRoundTimestamp
 	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
@@ -755,10 +760,13 @@ func (node *AlgorandFullNode) IsArchival() bool {
 
 // OnNewBlock implements the BlockListener interface so we're notified after each block is written to the ledger
 func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta) {
-	node.mu.Lock()
+	if node.ledger.Latest() > block.Round() {
+		return
+	}
+	node.syncMu.Lock()
 	node.lastRoundTimestamp = time.Now()
 	node.hasSyncedSinceStartup = true
-	node.mu.Unlock()
+	node.syncMu.Unlock()
 
 	// Wake up oldKeyDeletionThread(), non-blocking.
 	select {
