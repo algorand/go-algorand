@@ -85,7 +85,7 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 	} else {
 		telemetry.hook = new(dummyHook)
 	}
-	telemetry.sendToLog = cfg.SendToLog
+	telemetry.telemetryConfig = cfg
 	return telemetry, nil
 }
 
@@ -148,7 +148,6 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 		configPath, err = config.GetConfigFilePath(TelemetryConfigFilename)
 		if err != nil {
 			cfg := createTelemetryConfig()
-			initializeConfig(cfg)
 			return cfg, true, err
 		}
 		cfg, err = LoadTelemetryConfig(configPath)
@@ -171,7 +170,6 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryC
 	}
 	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
 
-	initializeConfig(cfg)
 	return cfg, created, err
 }
 
@@ -224,7 +222,7 @@ func (t *telemetryState) logTelemetry(l logger, message string, details interfac
 	entry.Level = logrus.InfoLevel
 	entry.Message = message
 
-	if t.sendToLog {
+	if t.telemetryConfig.SendToLog {
 		entry.Info(message)
 	}
 	t.hook.Fire(entry)
