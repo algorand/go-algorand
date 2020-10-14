@@ -5,13 +5,12 @@ set -ex
 echo "Building RPM package"
 
 REPO_DIR=$(pwd)
-ARCH=$(./scripts/archtype.sh)
+ARCH_TYPE=$(./scripts/archtype.sh)
 OS_TYPE=$(./scripts/ostype.sh)
-FULLVERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
 CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
-ALGO_BIN="$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH/$CHANNEL/$OS_TYPE-$ARCH/bin"
-# TODO: Should there be a default network?
+ALGO_BIN="$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/$CHANNEL/$OS_TYPE-$ARCH_TYPE/bin"
 DEFAULTNETWORK=devnet
 DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "$DEFAULTNETWORK")
 
@@ -40,12 +39,12 @@ fi
 trap 'rm -rf $TEMPDIR' 0
 < "./installer/rpm/$INSTALLER_DIR/$INSTALLER_DIR.spec" \
     sed -e "s,@PKG_NAME@,$ALGORAND_PACKAGE_NAME," \
-        -e "s,@VER@,$FULLVERSION," \
-        -e "s,@ARCH@,$ARCH," \
+        -e "s,@VER@,$VERSION," \
+        -e "s,@ARCH@,$ARCH_TYPE," \
         -e "s,@REQUIRED_ALGORAND_PKG@,$REQUIRED_ALGORAND_PACKAGE," \
     > "$TEMPDIR/$ALGORAND_PACKAGE_NAME.spec"
 
 rpmbuild --buildroot "$HOME/foo" --define "_rpmdir $RPMTMP" --define "RELEASE_GENESIS_PROCESS x$RELEASE_GENESIS_PROCESS" --define "LICENSE_FILE ./COPYING" -bb "$TEMPDIR/$ALGORAND_PACKAGE_NAME.spec"
 
-cp -p "$RPMTMP"/*/*.rpm "./tmp/node_pkgs/$OS_TYPE/$ARCH"
+cp -p "$RPMTMP"/*/*.rpm "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 
