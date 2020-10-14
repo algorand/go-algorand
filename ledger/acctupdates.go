@@ -64,6 +64,17 @@ const (
 // value was calibrated using BenchmarkCalibrateCacheNodeSize
 var trieCachedNodesCount = 9000
 
+// merkleCommitterNodesPerPage controls how many nodes will be stored in a single page
+// value was calibrated using BenchmarkCalibrateNodesPerPage
+var merkleCommitterNodesPerPage = int64(116)
+
+var trieMemoryConfig = merkletrie.MemoryConfig{
+	NodesCountPerPage:         merkleCommitterNodesPerPage,
+	CachedNodesCount:          trieCachedNodesCount,
+	PageFillFactor:            0.95,
+	MaxChildrenPagesThreshold: 64,
+}
+
 // A modifiedAccount represents an account that has been modified since
 // the persistent state stored in the account DB (i.e., in the range of
 // rounds covered by the accountUpdates tracker).
@@ -1066,7 +1077,8 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
 	}
-	trie, err := merkletrie.MakeTrie(committer, trieCachedNodesCount)
+
+	trie, err := merkletrie.MakeTrie(committer, trieMemoryConfig)
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to MakeTrie: %v", err)
 	}
@@ -1357,7 +1369,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltasRound []map[basic
 		}
 		if accumulatedChanges >= trieAccumulatedChangesFlush {
 			accumulatedChanges = 0
-			err = au.balancesTrie.Commit()
+			_, err = au.balancesTrie.Commit()
 			if err != nil {
 				return
 			}
@@ -1365,7 +1377,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltasRound []map[basic
 	}
 	// write it all to disk.
 	if accumulatedChanges > 0 {
-		err = au.balancesTrie.Commit()
+		_, err = au.balancesTrie.Commit()
 	}
 	return
 }
@@ -1730,7 +1742,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 				return err0
 			}
 			if au.balancesTrie == nil {
-				trie, err := merkletrie.MakeTrie(mc, trieCachedNodesCount)
+				trie, err := merkletrie.MakeTrie(mc, trieMemoryConfig)
 				if err != nil {
 					au.log.Warnf("unable to create merkle trie during committedUpTo: %v", err)
 					return err
