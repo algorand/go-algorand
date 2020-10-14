@@ -1197,7 +1197,7 @@ func TestDelayedMessageDrop(t *testing.T) {
 
 func TestSlowPeerDisconnection(t *testing.T) {
 	log := logging.TestingLog(t)
-	log.SetLevel(logging.Level(defaultConfig.BaseLoggerDebugLevel))
+	log.SetLevel(logging.Info)
 	wn := &WebsocketNetwork{
 		log:                            log,
 		config:                         defaultConfig,
@@ -1208,6 +1208,7 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	}
 	wn.setup()
 	wn.eventualReadyDelay = time.Second
+	wn.messagesOfInterest = nil // clear this before starting the network so that we won't be sending a MOI upon connection.
 
 	netA := wn
 	netA.config.GossipFanout = 1
@@ -1234,12 +1235,17 @@ func TestSlowPeerDisconnection(t *testing.T) {
 	require.Equalf(t, len(peers), 1, "Expected number of peers should be 1")
 	peer := peers[0]
 	// modify the peer on netA and
-	atomic.StoreInt64(&peer.intermittentOutgoingMessageEnqueueTime, time.Now().Add(-maxMessageQueueDuration).Add(-time.Second).UnixNano())
-	// wait up to 2*slowWritingPeerMonitorInterval for the monitor to figure out it needs to disconnect.
-	expire := time.Now().Add(maxMessageQueueDuration * time.Duration(2))
+	beforeLoopTime := time.Now()
+	atomic.StoreInt64(&peer.intermittentOutgoingMessageEnqueueTime, beforeLoopTime.Add(-maxMessageQueueDuration).Add(time.Second).UnixNano())
+	// wait up to 10 seconds for the monitor to figure out it needs to disconnect.
+	expire := beforeLoopTime.Add(2 * slowWritingPeerMonitorInterval)
 	for {
 		peers = netA.peerSnapshot(peers)
 		if len(peers) == 0 || peers[0] != peer {
+			// make sure it took more than 1 second, and less than 5 seconds.
+			waitTime := time.Now().Sub(beforeLoopTime)
+			require.LessOrEqual(t, int64(time.Second), int64(waitTime))
+			require.GreaterOrEqual(t, int64(5*time.Second), int64(waitTime))
 			break
 		}
 		if time.Now().After(expire) {
