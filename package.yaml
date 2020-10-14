@@ -106,10 +106,9 @@ tasks:
       - tmp/node_pkgs/**
       - crypto/libs/**
       - gen/devnet/genesis.json
-      - gen/testnet/genesis.jsonS   name: 
+      - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
   - task: stash.Stash
-  stashId: SENKINS_JOB_CACHE_ID}/
     name: packages
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/packages
@@ -131,10 +130,9 @@ tasks:
     stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
   - task: stash.Unstash
     name: linux-arm
-    bucketName: go-algorand-ci-cacheS name: 
+    bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
   - task: stash.Unstash
-  stashId: SENKINS_JOB_CACHE_ID}/
     name: packages
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/packages
