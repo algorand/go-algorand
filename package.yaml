@@ -53,10 +53,6 @@ tasks:
     name: build.arm
     agent: cicd.alpine.arm
     target: ci-build
-  
-  - task: s3.UploadFiles
-    bucketName: algorand-internal
-    prefix: channel/`
 
   - task: docker.Make
     name: archive.amd64
