@@ -115,9 +115,9 @@ type AlgorandFullNode struct {
 
 	log logging.Logger
 
-	// use syncMu for locking lastRoundTimestamp and hasSyncedSinceStartup
-	// syncMu added so OnNewBlock wouldn't be blocked by oldKeyDeletionThread during catchup
-	syncMu                deadlock.Mutex
+	// syncStatusMu used for locking lastRoundTimestamp and hasSyncedSinceStartup
+	// syncStatusMu added so OnNewBlock wouldn't be blocked by oldKeyDeletionThread during catchup
+	syncStatusMu                deadlock.Mutex
 	lastRoundTimestamp    time.Time
 	hasSyncedSinceStartup bool
 
@@ -580,14 +580,13 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 
 // Status returns a StatusReport structure reporting our status as Active and with our ledger's LastRound
 func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
-	node.mu.Lock()
-	node.syncMu.Lock()
-	defer node.mu.Unlock()
-	defer node.syncMu.Unlock()
-
+	node.syncStatusMu.Lock()
 	s.LastRoundTimestamp = node.lastRoundTimestamp
 	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
+	node.syncStatusMu.Unlock()
 
+	node.mu.Lock()
+	defer node.mu.Unlock()
 	if node.catchpointCatchupService != nil {
 		// we're in catchpoint catchup mode.
 		lastBlockHeader := node.catchpointCatchupService.GetLatestBlockHeader()
@@ -763,10 +762,10 @@ func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledger.S
 	if node.ledger.Latest() > block.Round() {
 		return
 	}
-	node.syncMu.Lock()
+	node.syncStatusMu.Lock()
 	node.lastRoundTimestamp = time.Now()
 	node.hasSyncedSinceStartup = true
-	node.syncMu.Unlock()
+	node.syncStatusMu.Unlock()
 
 	// Wake up oldKeyDeletionThread(), non-blocking.
 	select {
