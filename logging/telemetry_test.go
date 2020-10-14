@@ -58,7 +58,6 @@ func makeMockTelemetryHook(level logrus.Level) mockTelemetryHook {
 }
 
 type telemetryTestFixture struct {
-	cfg   *TelemetryConfig
 	hook  mockTelemetryHook
 	telem *telemetryState
 	l     logger
@@ -70,20 +69,22 @@ func makeTelemetryTestFixture(minLevel logrus.Level) *telemetryTestFixture {
 
 func makeTelemetryTestFixtureWithConfig(minLevel logrus.Level, cfg *TelemetryConfig) *telemetryTestFixture {
 	f := &telemetryTestFixture{}
+	var lcfg TelemetryConfig
 	if cfg == nil {
-		f.cfg = createTelemetryConfig()
+		lcfg = createTelemetryConfig()
 	} else {
-		f.cfg = cfg
+		lcfg = *cfg
 	}
-	f.cfg.Enable = true
-	f.cfg.MinLogLevel = minLevel
+	lcfg.Enable = true
+	lcfg.MinLogLevel = minLevel
 	f.hook = makeMockTelemetryHook(minLevel)
 	f.l = Base().(logger)
 	f.l.SetLevel(Debug) // Ensure logging doesn't filter anything out
 
-	f.telem, _ = makeTelemetryState(f.cfg, func(cfg *TelemetryConfig) (hook logrus.Hook, err error) {
+	f.telem, _ = makeTelemetryState(lcfg, func(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 		return &f.hook, nil
 	})
+	f.l.loggerState.telemetry = f.telem
 	return f
 }
 
@@ -133,7 +134,7 @@ func TestCreateHookError(t *testing.T) {
 
 	cfg := createTelemetryConfig()
 	cfg.Enable = true
-	telem, err := makeTelemetryState(cfg, func(cfg *TelemetryConfig) (hook logrus.Hook, err error) {
+	telem, err := makeTelemetryState(cfg, func(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 		return nil, fmt.Errorf("failed")
 	})
 
@@ -146,7 +147,7 @@ func TestTelemetryHook(t *testing.T) {
 	a := require.New(t)
 	f := makeTelemetryTestFixture(logrus.InfoLevel)
 
-	a.NotNil(f.telem)
+	a.NotNil(f.l.loggerState.telemetry)
 	a.Zero(len(f.hookEntries()))
 
 	f.telem.logMetrics(f.l, testString1, testMetrics{}, nil)
@@ -282,7 +283,7 @@ func TestLogHistoryLevels(t *testing.T) {
 	cfg.MinLogLevel = logrus.DebugLevel
 	cfg.ReportHistoryLevel = logrus.ErrorLevel
 
-	f := makeTelemetryTestFixtureWithConfig(logrus.DebugLevel, cfg)
+	f := makeTelemetryTestFixtureWithConfig(logrus.DebugLevel, &cfg)
 	enableTelemetryState(f.telem, &f.l)
 
 	f.l.Debug("debug")

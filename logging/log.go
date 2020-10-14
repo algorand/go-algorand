@@ -51,8 +51,7 @@ type Level uint32
 
 // Create a general Base logger
 var (
-	baseLogger      Logger
-	telemetryConfig *TelemetryConfig
+	baseLogger Logger
 )
 
 const (
@@ -89,10 +88,6 @@ func Init() {
 
 func init() {
 	Init()
-}
-
-func initializeConfig(cfg *TelemetryConfig) {
-	telemetryConfig = cfg
 }
 
 // Fields maps logrus fields
@@ -153,7 +148,7 @@ type Logger interface {
 	// Adds a hook to the logger
 	AddHook(hook logrus.Hook)
 
-	EnableTelemetry(cfg *TelemetryConfig) error
+	EnableTelemetry(cfg TelemetryConfig) error
 	UpdateTelemetryURI(uri string) error
 	GetTelemetryEnabled() bool
 	GetTelemetryUploadingEnabled() bool
@@ -366,7 +361,7 @@ func NewLogger() Logger {
 	return out
 }
 
-func (l logger) EnableTelemetry(cfg *TelemetryConfig) (err error) {
+func (l logger) EnableTelemetry(cfg TelemetryConfig) (err error) {
 	if l.loggerState.telemetry != nil || (!cfg.Enable && !cfg.SendToLog) {
 		return nil
 	}
@@ -376,7 +371,7 @@ func (l logger) EnableTelemetry(cfg *TelemetryConfig) (err error) {
 func (l logger) UpdateTelemetryURI(uri string) (err error) {
 	err = l.loggerState.telemetry.hook.UpdateHookURI(uri)
 	if err == nil {
-		telemetryConfig.URI = uri
+		l.loggerState.telemetry.telemetryConfig.URI = uri
 	}
 	return
 }
@@ -389,26 +384,26 @@ func (l logger) GetTelemetryEnabled() bool {
 }
 
 func (l logger) GetTelemetrySession() string {
-	return telemetryConfig.SessionGUID
+	return l.loggerState.telemetry.telemetryConfig.SessionGUID
 }
 
 func (l logger) GetTelemetryHostName() string {
-	return telemetryConfig.getHostName()
+	return l.loggerState.telemetry.telemetryConfig.getHostName()
 }
 
 func (l logger) GetInstanceName() string {
-	return telemetryConfig.getInstanceName()
+	return l.loggerState.telemetry.telemetryConfig.getInstanceName()
 }
 
 func (l logger) GetTelemetryURI() string {
-	return telemetryConfig.URI
+	return l.loggerState.telemetry.telemetryConfig.URI
 }
 
 // GetTelemetryUploadingEnabled returns true if telemetry logging is
 // enabled for uploading messages.
 // This is decided by Enable parameter in logging.config
 func (l logger) GetTelemetryUploadingEnabled() bool {
-	return telemetryConfig.Enable
+	return l.loggerState.telemetry.telemetryConfig.Enable
 }
 
 func (l logger) Metrics(category telemetryspec.Category, metrics telemetryspec.MetricDetails, details interface{}) {

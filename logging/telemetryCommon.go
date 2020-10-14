@@ -47,9 +47,9 @@ type telemetryHook interface {
 }
 
 type telemetryState struct {
-	history   *logBuffer
-	hook      telemetryHook
-	sendToLog bool
+	history         *logBuffer
+	hook            telemetryHook
+	telemetryConfig TelemetryConfig
 }
 
 // TelemetryConfig represents the configuration of Telemetry logging
@@ -84,4 +84,4 @@ type asyncTelemetryHook struct {
 // A dummy noop type to get rid of checks like telemetry.hook != nil
 type dummyHook struct{}
 
-type hookFactory func(cfg *TelemetryConfig) (logrus.Hook, error)
+type hookFactory func(cfg TelemetryConfig) (logrus.Hook, error)

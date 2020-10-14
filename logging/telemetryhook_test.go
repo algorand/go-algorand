@@ -61,7 +61,7 @@ func isDefault(cfg TelemetryConfig) bool {
 	cfg.GUID = ""
 	cfg.ChainID = ""
 	defaultCfg.GUID = ""
-	return cfg == *defaultCfg
+	return cfg == defaultCfg
 }
 
 func TestLoggingConfigDataDirFirst(t *testing.T) {
@@ -133,7 +133,7 @@ func TestLoggingConfigGlobalSecond(t *testing.T) {
 	a.Equal(cfg.FilePath, globalLoggingPath)
 	a.NotEqual(cfg.GUID, defaultCfg.GUID)
 
-	a.True(isDefault(*cfg))
+	a.True(isDefault(cfg))
 
 	err = cfg.Save(cfg.FilePath)
 	a.Nil(err)

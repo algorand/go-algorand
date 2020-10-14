@@ -36,7 +36,7 @@ const telemetrySeparator = "/"
 const logBufferDepth = 2
 
 // EnableTelemetry configures and enables telemetry based on the config provided
-func EnableTelemetry(cfg *TelemetryConfig, l *logger) (err error) {
+func EnableTelemetry(cfg TelemetryConfig, l *logger) (err error) {
 	telemetry, err := makeTelemetryState(cfg, createElasticHook)
 	if err != nil {
 		return
@@ -70,7 +70,7 @@ func makeLevels(min logrus.Level) []logrus.Level {
 	return levels
 }
 
-func makeTelemetryState(cfg *TelemetryConfig, hookFactory hookFactory) (*telemetryState, error) {
+func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetryState, error) {
 	telemetry := &telemetryState{}
 	telemetry.history = createLogBuffer(logBufferDepth)
 	if cfg.Enable {
@@ -85,12 +85,12 @@ func makeTelemetryState(cfg *TelemetryConfig, hookFactory hookFactory) (*telemet
 	} else {
 		telemetry.hook = new(dummyHook)
 	}
-	telemetry.sendToLog = cfg.SendToLog
+	telemetry.telemetryConfig = cfg
 	return telemetry, nil
 }
 
 // ReadTelemetryConfigOrDefault reads telemetry config from file or defaults if no config file found.
-func ReadTelemetryConfigOrDefault(dataDir *string, genesisID string) (cfg *TelemetryConfig, err error) {
+func ReadTelemetryConfigOrDefault(dataDir *string, genesisID string) (cfg TelemetryConfig, err error) {
 	err = nil
 	if dataDir != nil && *dataDir != "" {
 		configPath := filepath.Join(*dataDir, TelemetryConfigFilename)
@@ -125,16 +125,16 @@ func ReadTelemetryConfigOrDefault(dataDir *string, genesisID string) (cfg *Telem
 // EnsureTelemetryConfig creates a new TelemetryConfig structure with a generated GUID and the appropriate Telemetry endpoint
 // Err will be non-nil if the file doesn't exist, or if error loading.
 // Cfg will always be valid.
-func EnsureTelemetryConfig(dataDir *string, genesisID string) (*TelemetryConfig, error) {
+func EnsureTelemetryConfig(dataDir *string, genesisID string) (TelemetryConfig, error) {
 	cfg, _, err := EnsureTelemetryConfigCreated(dataDir, genesisID)
 	return cfg, err
 }
 
 // EnsureTelemetryConfigCreated is the same as EnsureTelemetryConfig but it also returns a bool indicating
 // whether EnsureTelemetryConfig had to create the config.
-func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (*TelemetryConfig, bool, error) {
+func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (TelemetryConfig, bool, error) {
 	configPath := ""
-	var cfg *TelemetryConfig
+	var cfg TelemetryConfig
 	var err error
 	if dataDir != nil && *dataDir != "" {
 		configPath = filepath.Join(*dataDir, TelemetryConfigFilename)
@@ -148,7 +148,6 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (*Telemetry
 		configPath, err = config.GetConfigFilePath(TelemetryConfigFilename)
 		if err != nil {
 			cfg := createTelemetryConfig()
-			initializeConfig(cfg)
 			return cfg, true, err
 		}
 		cfg, err = LoadTelemetryConfig(configPath)
@@ -171,7 +170,6 @@ func EnsureTelemetryConfigCreated(dataDir *string, genesisID string) (*Telemetry
 	}
 	cfg.ChainID = fmt.Sprintf("%s-%s", ch, genesisID)
 
-	initializeConfig(cfg)
 	return cfg, created, err
 }
 
@@ -224,7 +222,7 @@ func (t *telemetryState) logTelemetry(l logger, message string, details interfac
 	entry.Level = logrus.InfoLevel
 	entry.Message = message
 
-	if t.sendToLog {
+	if t.telemetryConfig.SendToLog {
 		entry.Info(message)
 	}
 	t.hook.Fire(entry)
