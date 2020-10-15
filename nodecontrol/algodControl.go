@@ -143,7 +143,6 @@ func (nc *NodeController) StopAlgod() (alreadyStopped bool, err error) {
 			return
 		}
 	} else {
-		err = nil
 		alreadyStopped = true
 	}
 	return
