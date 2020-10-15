@@ -13,12 +13,7 @@ ENV GOROOT=/usr/local/go \
 RUN mkdir -p $GOPATH/src/github.com/algorand
 COPY . $GOPATH/src/github.com/algorand/go-algorand
 ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \
-    BRANCH=${BRANCH} \
-    CHANNEL=${CHANNEL} \
-    DEFAULTNETWORK=${DEFAULTNETWORK} \
-    FULLVERSION=${FULLVERSION} \
-    GOPROXY=https://gocenter.io \
-    PKG_ROOT=${PKG_ROOT}
+    GOPROXY=https://gocenter.io
 WORKDIR $GOPATH/src/github.com/algorand/go-algorand
 RUN make ci-deps && make clean
 RUN rm -rf $GOPATH/src/github.com/algorand/go-algorand && \
