@@ -1,0 +1,50 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+if { [catch {
+
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set timeout 30
+
+    set TEST_DIR $TEST_ALGO_DIR
+    exec mkdir -p $TEST_DIR
+
+    set TEAL_PROG_FILE "$TEST_DIR/trivial.teal"
+    exec printf "#pragma version 2\nint 1\ndup\n+\n" > $TEAL_PROG_FILE
+
+    set URL ""
+    set PASSED 0
+    spawn tealdbg debug -v $TEAL_PROG_FILE
+    expect_background {
+        timeout { puts "tealdbg debug timed out"; exit 1 }
+        -re {CDT debugger listening on: (ws://[.a-z0-9:/]+)} { set URL $expect_out(1,string); }
+    }
+
+    # wait until URL is set or timeout
+    set it 0
+    while { $it < 10 && $URL == "" } {
+        set it [expr {$it + 1}]
+        sleep 1
+    }
+    if { $URL == "" } {
+        puts "ERROR: URL is not set after timeout"
+        exit 1
+    }
+
+    spawn cdtmock $URL
+    expect {
+        timeout { puts "cdt-mock debug timed out"; exit 1 }
+        -re {Debugger.paused} { set PASSED 1; }
+        eof { catch wait result; if { [lindex $result 3] == 0 } { puts "Expected non-zero exit code"; exit [lindex $result 3] } }
+    }
+
+    if { $PASSED == 0 } {
+        puts "ERROR: have not found 'Debugger.paused' in cdtmock output"
+        exit 1
+    }
+
+} EXCEPTION ] } {
+    puts "ERROR in teadbgTest: $EXCEPTION"
+    exit 1
+}

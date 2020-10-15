@@ -4,6 +4,9 @@ agents:
     image: algorand/go-algorand-ci-linux-ubuntu
     version: scripts/configure_dev-deps.sh
     arch: amd64
+    env:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
@@ -12,6 +15,9 @@ agents:
     image: algorand/go-algorand-ci-linux-centos
     version: scripts/configure_dev-deps.sh
     arch: amd64
+    env:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
@@ -20,6 +26,9 @@ agents:
     image: algorand/go-algorand-ci-linux-ubuntu
     version: scripts/configure_dev-deps.sh
     arch: arm64v8
+    env:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm64v8
@@ -28,6 +37,9 @@ agents:
     image: algorand/go-algorand-ci-linux
     version: scripts/configure_dev-deps.sh
     arch: arm32v6
+    env:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm32v6

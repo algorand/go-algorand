@@ -103,10 +103,12 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genes
 	// collected metrics decorations.
 	fmt.Fprintln(logWriter, "++++++++++++++++++++++++++++++++++++++++")
 	fmt.Fprintln(logWriter, "Logging Starting")
-	if s.log.GetTelemetryEnabled() {
+	if s.log.GetTelemetryUploadingEnabled() {
+		// May or may not be logging to node.log
 		fmt.Fprintf(logWriter, "Telemetry Enabled: %s\n", s.log.GetTelemetryHostName())
 		fmt.Fprintf(logWriter, "Session: %s\n", s.log.GetTelemetrySession())
 	} else {
+		// May or may not be logging to node.log
 		fmt.Fprintln(logWriter, "Telemetry Disabled")
 	}
 	fmt.Fprintln(logWriter, "++++++++++++++++++++++++++++++++++++++++")

@@ -184,7 +184,7 @@ func main() {
 		telemetryConfig.SendToLog = telemetryConfig.SendToLog || cfg.TelemetryToLog
 
 		// Apply telemetry override.
-		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride)
+		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride, &telemetryConfig)
 		remoteTelemetryEnabled = telemetryConfig.Enable
 
 		if telemetryConfig.Enable || telemetryConfig.SendToLog {

@@ -109,6 +109,13 @@ const (
 
 	// catchpointCatchupStateLast is the last entry in the CatchpointCatchupState enumeration.
 	catchpointCatchupStateLast = CatchpointCatchupStateSwitch
+
+	// minMerkleTrieEvictFrequency control the minimal number of accounts changes that we will attempt to update between
+	// two consecutive evict calls.
+	minMerkleTrieEvictFrequency = uint64(1024)
+	// maxMerkleTrieEvictionDuration is the upper bound for the time we'll let the evict call take before lowing the number
+	// of accounts per update.
+	maxMerkleTrieEvictionDuration = 2000 * time.Millisecond
 )
 
 // MakeCatchpointCatchupAccessor creates a CatchpointCatchupAccessor given a ledger
@@ -227,7 +234,8 @@ type CatchpointCatchupAccessorProgress struct {
 
 	// Having the cachedTrie here would help to accelerate the catchup process since the trie maintain an internal cache of nodes.
 	// While rebuilding the trie, we don't want to force and reload (some) of these nodes into the cache for each catchpoint file chunk.
-	cachedTrie *merkletrie.Trie
+	cachedTrie     *merkletrie.Trie
+	evictFrequency uint64
 }
 
 // ProgressStagingBalances deserialize the given bytes as a temporary staging balances
@@ -315,7 +323,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		}
 
 		if progress.cachedTrie == nil {
-			progress.cachedTrie, err = merkletrie.MakeTrie(mc, trieCachedNodesCount)
+			progress.cachedTrie, err = merkletrie.MakeTrie(mc, trieMemoryConfig)
 			if err != nil {
 				return
 			}
@@ -388,10 +396,27 @@ func (progress *CatchpointCatchupAccessorProgress) EvictAsNeeded(balancesCount u
 	if progress.cachedTrie == nil {
 		return nil
 	}
+	if progress.evictFrequency == 0 {
+		progress.evictFrequency = trieRebuildCommitFrequency
+	}
 	// periodically, perform commit & evict to flush it to the disk and rebalance the cache memory utilization.
-	if (progress.ProcessedAccounts/trieRebuildCommitFrequency) < ((progress.ProcessedAccounts+balancesCount)/trieRebuildCommitFrequency) ||
+	if (progress.ProcessedAccounts/progress.evictFrequency) < ((progress.ProcessedAccounts+balancesCount)/progress.evictFrequency) ||
 		(progress.ProcessedAccounts+balancesCount) == progress.TotalAccounts {
+		evictStart := time.Now()
 		_, err = progress.cachedTrie.Evict(true)
+		if err == nil {
+			evictDelta := time.Now().Sub(evictStart)
+			if evictDelta > maxMerkleTrieEvictionDuration {
+				if progress.evictFrequency > minMerkleTrieEvictFrequency {
+					progress.evictFrequency /= 2
+				}
+			} else {
+				progress.evictFrequency *= 2
+				if progress.evictFrequency > trieRebuildCommitFrequency {
+					progress.evictFrequency = trieRebuildCommitFrequency
+				}
+			}
+		}
 	}
 	return
 }
@@ -435,7 +460,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 			return fmt.Errorf("unable to make MerkleCommitter: %v", err0)
 		}
 		var trie *merkletrie.Trie
-		trie, err = merkletrie.MakeTrie(mc, trieCachedNodesCount)
+		trie, err = merkletrie.MakeTrie(mc, trieMemoryConfig)
 		if err != nil {
 			return fmt.Errorf("unable to make trie: %v", err)
 		}

@@ -52,9 +52,8 @@ mule-package-%:
 	echo Building algorand-devtools package...
 	scripts/release/mule/package/$(PKG_TYPE)/package.sh algorand-devtools
 
-mule-sign-%: PKG_TYPE=$*
-mule-sign-%:
-	scripts/release/mule/sign/sign.sh $(PKG_TYPE)
+mule-sign:
+	scripts/release/mule/sign/sign.sh
 
 mule-test-%: PKG_TYPE=$*
 mule-test-%:

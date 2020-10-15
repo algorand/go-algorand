@@ -74,7 +74,7 @@ func BenchmarkTxHandlerProcessDecoded(b *testing.B) {
 
 	cfg.TxPoolSize = 20000
 	cfg.EnableProcessBlockStats = false
-	tp := pools.MakeTransactionPool(l.Ledger, cfg)
+	tp := pools.MakeTransactionPool(l.Ledger, cfg, logging.Base())
 	signedTransactions := make([]transactions.SignedTxn, 0, b.N)
 	for i := 0; i < b.N/numUsers; i++ {
 		for u := 0; u < numUsers; u++ {
