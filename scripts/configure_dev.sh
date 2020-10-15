@@ -69,6 +69,13 @@ function install_windows_shellcheck() {
     return 0
 }
 
+function install_python_packages() {
+    pip3 install \
+        argparse \
+        simplejson \
+        awscli
+}
+
 if [ "${OS}" = "linux" ]; then
     if ! which sudo > /dev/null
     then
@@ -109,6 +116,8 @@ elif [ "${OS}" = "windows" ]; then
     # This is required because http://github.com/karalabe/hid library compiles with non-static libraries
     cp /mingw64/bin/libwinpthread-1.dll $GOPATH/bin/ 
 fi
+
+install_python_packages
 
 if ${SKIP_GO_DEPS} ; then
     exit 0

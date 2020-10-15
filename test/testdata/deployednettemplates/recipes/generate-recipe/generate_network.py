@@ -1,19 +1,32 @@
+#!/usr/bin/env python3
+
+import argparse
 import simplejson
+
 import math
 import subprocess
+import os
 
 def build_network(template):
     with open(template) as f:
         template_dict = simplejson.load(f)
 
+    template_path = os.path.abspath(os.path.dirname(args.template))
+    script_path = os.path.dirname(__file__)
     topology = build_topology(template_dict)
 
-    with open('generated/topology.json', 'w') as topology_file:
+    gen_dir = f"{template_path}/generated"
+    if not os.path.isdir(gen_dir):
+        os.mkdir(gen_dir)
+
+    subprocess.run(['cp', f"{script_path}/recipe.json", f"{template_path}/recipe.json"])
+
+    with open(f"{template_path}/generated/topology.json", 'w') as topology_file:
         simplejson.dump(topology, topology_file, indent=4)
 
     netgoal_params = build_netgoal_params(template_dict)
-    build_net(netgoal_params)
-    build_genesis(netgoal_params)
+    build_net(template_path, netgoal_params)
+    build_genesis(template_path, netgoal_params)
 
 def build_netgoal_params(template_dict):
     instances = template_dict['instances']
@@ -46,29 +59,29 @@ def build_netgoal_params(template_dict):
         '--non-participating-node-template', non_participating_node_config
     ]
 
-def build_net(netgoal_params):
+def build_net(template_path, netgoal_params):
     args = [
         '-t', 'net',
-        '-o', 'generated/net.json'
+        '-o', f"{template_path}/generated/net.json"
     ]
     args.extend(netgoal_params)
-    netgoal(args)
+    netgoal(args, template_path)
 
-def build_genesis(netgoal_params):
+def build_genesis(template_path, netgoal_params):
     args = [
         '-t', 'genesis',
-        '-o', 'generated/genesis.json'
+        '-o', f"{template_path}/generated/genesis.json"
     ]
     args.extend(netgoal_params)
-    netgoal(args)
+    netgoal(args, template_path)
 
-def netgoal(args):
+def netgoal(args, template_path='.'):
     cmd = [
         'netgoal', 'generate',
         '-r', '/dev/null'
     ]
     cmd.extend(args)
-    subprocess.run(cmd)
+    subprocess.run(cmd, cwd=template_path)
 
 def build_topology(template_dict):
 
@@ -131,5 +144,21 @@ def validate_template(template_dict):
     if total_percent != 100:
         raise Exception(f"Total percentages of groups expected 100, got {total_percent}")
 
+parser = argparse.ArgumentParser(
+    description="",
+)
 
-build_network('./network-tpl.json')
+parser.add_argument(
+    '-f',
+    '--template',
+    help = 'Path to network template',
+    required=True
+)
+
+args = parser.parse_args()
+
+if os.path.isfile(args.template):
+    build_network(args.template)
+else:
+    print(f"Expected --template option to be set with a path to a network template, was {args.template}")
+    exit(2)
