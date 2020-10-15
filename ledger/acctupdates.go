@@ -1547,24 +1547,30 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 			return
 		}
 
-		// Check if this is the most recent round, in which case, we can
-		// use a cache of the most recent account state.
-		if offset == uint64(len(au.deltas)) {
-			macct, ok := au.accounts[addr]
-			if ok {
+		macct, indeltas := au.accounts[addr]
+		if indeltas {
+			if offset == uint64(len(au.deltas)) {
 				return macct.data, rnd, nil
 			}
-		} else {
-			// Check if the account has been updated recently.  Traverse the deltas
-			// backwards to ensure that later updates take priority if present.
+			// the account appears in the deltas, but we don't know if it appears in the
+			// delta range of [0..offset], so we'll need to check :
+			// Traverse the deltas backwards to ensure that later updates take
+			// priority if present.
 			for offset > 0 {
 				offset--
 				d, ok := au.deltas[offset][addr]
 				if ok {
-					// todo - at this point, we need to scan forward to determine the validity range.
+					// the returned validThrough here is not optimal, but it still correct. We could get a more accurate value by scanning
+					// the deltas forward, but this would be time consuming loop, which might not pay off.
 					return d.new, rnd, nil
 				}
 			}
+		} else {
+			// we know that the account in not in the deltas - so there is no point in scanning it.
+			// we've going to fall back to search in the database, but before doing so, we should
+			// update the rnd so that it would point to the end of the known delta range.
+			// ( that would give us the best validity range )
+			rnd = currentDbRound + basics.Round(currentDeltaLen-1)
 		}
 
 		if syncronized {
@@ -1579,7 +1585,6 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 		// against the database.
 		data, dbRound, err = au.accountsq.lookup(addr)
 		if dbRound == currentDbRound {
-			// todo - at this point, we need to scan forward to determine the validity range.
 			return data, rnd, err
 		}
 		if syncronized {
