@@ -171,8 +171,10 @@ func init() {
 
 func debugRemote() {
 	ds := makeDebugServer(port, &frontend, nil)
-
-	ds.startRemote()
+	err := ds.startRemote()
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
 }
 
 func debugLocal(args []string) {
