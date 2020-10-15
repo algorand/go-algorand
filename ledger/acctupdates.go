@@ -366,11 +366,16 @@ func (au *accountUpdates) IsWritingCatchpointFile() bool {
 	}
 }
 
-// Lookup returns the account data for a given address at a given round. The withRewards indicates whether the
-// rewards should be added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
-// even while it could return the AccoutData which represent the "rewarded" account data.
-func (au *accountUpdates) Lookup(rnd basics.Round, addr basics.Address, withRewards bool) (data basics.AccountData, err error) {
-	return au.lookupImpl(rnd, addr, withRewards, true /* take lock*/)
+// LookupWithRewards returns the account data for a given address at a given round.
+// Note that the function doesn't update the account with the rewards,
+// even while it does return the AccoutData which represent the "rewarded" account data.
+func (au *accountUpdates) LookupWithRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, err error) {
+	return au.lookupWithRewardsImpl(rnd, addr)
+}
+
+// LookupWithoutRewards returns the account data for a given address at a given round.
+func (au *accountUpdates) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, validThrough basics.Round, err error) {
+	return au.lookupWithoutRewardsImpl(rnd, addr, true /* take lock*/)
 }
 
 // ListAssets lists the assets by their asset index, limiting to the first maxResults
@@ -839,8 +844,8 @@ func (aul *accountUpdatesLedgerEvaluator) isDup(config.ConsensusParams, basics.R
 }
 
 // LookupWithoutRewards returns the account balance for a given address at a given round, without the reward
-func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
-	return aul.au.lookupImpl(rnd, addr, false /*no rewards*/, false /*don't sync*/)
+func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
+	return aul.au.lookupWithoutRewardsImpl(rnd, addr, false /*don't sync*/)
 }
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
@@ -1439,15 +1444,12 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	au.voters.newBlock(blk.BlockHeader)
 }
 
-// lookupImpl returns the account data for a given address at a given round. The withRewards indicates whether the
-// rewards should be added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
-// even while it could return the AccoutData which represent the "rewarded" account data.
-func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, withRewards, syncronized bool) (data basics.AccountData, err error) {
-	needUnlock := false
-	if syncronized {
-		au.accountsMu.RLock()
-		needUnlock = true
-	}
+// lookupWithRewardsImpl returns the account data for a given address at a given round.
+// The rewards are added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
+// even while it does return the AccoutData which represent the "rewarded" account data.
+func (au *accountUpdates) lookupWithRewardsImpl(rnd basics.Round, addr basics.Address) (data basics.AccountData, err error) {
+	au.accountsMu.RLock()
+	needUnlock := true
 	defer func() {
 		if needUnlock {
 			au.accountsMu.RUnlock()
@@ -1456,6 +1458,7 @@ func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, with
 	var offset uint64
 	var rewardsProto config.ConsensusParams
 	var rewardsLevel uint64
+	withRewards := true
 	for {
 		currentDbRound := au.dbRound
 		currentDeltaLen := len(au.deltas)
@@ -1497,6 +1500,73 @@ func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, with
 			}
 		}
 
+		au.accountsMu.RUnlock()
+		needUnlock = false
+
+		var dbRound basics.Round
+		// No updates of this account in the in-memory deltas; use on-disk DB.
+		// The check in roundOffset() made sure the round is exactly the one
+		// present in the on-disk DB.  As an optimization, we avoid creating
+		// a separate transaction here, and directly use a prepared SQL query
+		// against the database.
+		data, dbRound, err = au.accountsq.lookup(addr)
+		if dbRound == currentDbRound {
+			return data, err
+		}
+
+		if dbRound < currentDbRound {
+			au.log.Errorf("accountUpdates.lookupWithRewardsImpl: database round %d is behind in-memory round %d", dbRound, currentDbRound)
+			return basics.AccountData{}, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
+		}
+		au.accountsMu.RLock()
+		needUnlock = true
+		for currentDbRound >= au.dbRound && currentDeltaLen == len(au.deltas) {
+			au.accountsReadCond.Wait()
+		}
+	}
+}
+
+// lookupWithoutRewardsImpl returns the account data for a given address at a given round.
+func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics.Address, syncronized bool) (data basics.AccountData, validThrough basics.Round, err error) {
+	needUnlock := false
+	if syncronized {
+		au.accountsMu.RLock()
+		needUnlock = true
+	}
+	defer func() {
+		if needUnlock {
+			au.accountsMu.RUnlock()
+		}
+	}()
+	var offset uint64
+	for {
+		currentDbRound := au.dbRound
+		currentDeltaLen := len(au.deltas)
+		offset, err = au.roundOffset(rnd)
+		if err != nil {
+			return
+		}
+
+		// Check if this is the most recent round, in which case, we can
+		// use a cache of the most recent account state.
+		if offset == uint64(len(au.deltas)) {
+			macct, ok := au.accounts[addr]
+			if ok {
+				return macct.data, rnd, nil
+			}
+		} else {
+			// Check if the account has been updated recently.  Traverse the deltas
+			// backwards to ensure that later updates take priority if present.
+			for offset > 0 {
+				offset--
+				d, ok := au.deltas[offset][addr]
+				if ok {
+					// todo - at this point, we need to scan forward to determine the validity range.
+					return d.new, rnd, nil
+				}
+			}
+		}
+
 		if syncronized {
 			au.accountsMu.RUnlock()
 			needUnlock = false
@@ -1509,12 +1579,13 @@ func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, with
 		// against the database.
 		data, dbRound, err = au.accountsq.lookup(addr)
 		if dbRound == currentDbRound {
-			return data, err
+			// todo - at this point, we need to scan forward to determine the validity range.
+			return data, rnd, err
 		}
 		if syncronized {
 			if dbRound < currentDbRound {
-				au.log.Errorf("accountUpdates.lookupImpl: database round %d is behind in-memory round %d", dbRound, currentDbRound)
-				return basics.AccountData{}, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
+				au.log.Errorf("accountUpdates.lookupWithoutRewardsImpl: database round %d is behind in-memory round %d", dbRound, currentDbRound)
+				return basics.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 			}
 			au.accountsMu.RLock()
 			needUnlock = true
@@ -1523,8 +1594,8 @@ func (au *accountUpdates) lookupImpl(rnd basics.Round, addr basics.Address, with
 			}
 		} else {
 			// in non-sync mode, we don't wait since we already assume that we're syncronized.
-			au.log.Errorf("accountUpdates.lookupImpl: database round %d mismatching in-memory round %d", dbRound, currentDbRound)
-			return basics.AccountData{}, &MismatchingDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
+			au.log.Errorf("accountUpdates.lookupWithoutRewardsImpl: database round %d mismatching in-memory round %d", dbRound, currentDbRound)
+			return basics.AccountData{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 		}
 	}
 }
