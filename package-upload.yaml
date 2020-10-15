@@ -1,0 +1,11 @@
+tasks:
+  - task: s3.BucketCopy
+    name: upload
+    src: $HOME/projects/go-algorand/tmp/node_pkgs/linux/amd64
+    dest: s3://algorand-staging/releases/$CHANNEL/$VERSION
+
+jobs:
+  package-upload:
+    tasks:
+      - s3.BucketCopy.upload
+
