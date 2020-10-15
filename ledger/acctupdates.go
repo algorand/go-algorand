@@ -1570,7 +1570,7 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 			// we've going to fall back to search in the database, but before doing so, we should
 			// update the rnd so that it would point to the end of the known delta range.
 			// ( that would give us the best validity range )
-			rnd = currentDbRound + basics.Round(currentDeltaLen-1)
+			rnd = currentDbRound + basics.Round(currentDeltaLen)
 		}
 
 		if syncronized {
