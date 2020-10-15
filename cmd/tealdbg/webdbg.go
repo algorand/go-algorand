@@ -65,12 +65,7 @@ type WebPageAdapterParams struct {
 }
 
 // MakeWebPageAdapter creates new WebPageAdapter
-func MakeWebPageAdapter(ctx interface{}) (a *WebPageAdapter) {
-	params, ok := ctx.(*WebPageAdapterParams)
-	if !ok {
-		panic("MakeWebPageAdapter expected CDTAdapterParams")
-	}
-
+func MakeWebPageAdapter(params *WebPageAdapterParams) (a *WebPageAdapter) {
 	a = new(WebPageAdapter)
 	a.sessions = make(map[string]wpaSession)
 	a.apiAddress = params.apiAddress

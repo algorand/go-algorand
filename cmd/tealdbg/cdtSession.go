@@ -46,7 +46,7 @@ type cdtSession struct {
 	scriptHash   string
 	scriptURL    string
 	sourceMapURL string
-	states       appState
+	states       AppState
 
 	verbose bool
 }

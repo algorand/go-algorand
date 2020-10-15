@@ -51,7 +51,7 @@ type Control interface {
 
 	GetSourceMap() ([]byte, error)
 	GetSource() (string, []byte)
-	GetStates(changes *logic.AppStateChange) appState
+	GetStates(changes *logic.AppStateChange) AppState
 }
 
 // Debugger is TEAL event-driven debugger
@@ -77,7 +77,7 @@ type programMeta struct {
 	program      []byte
 	source       string
 	offsetToLine map[int]int
-	states       appState
+	states       AppState
 }
 
 // breakpointLine is a source line number with a couple special values:
@@ -121,7 +121,7 @@ type session struct {
 	breakpoints []breakpoint
 	line        atomicInt
 
-	states appState
+	states AppState
 }
 
 type breakpoint struct {
@@ -293,7 +293,7 @@ func (s *session) GetSource() (string, []byte) {
 	return s.programName, []byte(s.source)
 }
 
-func (s *session) GetStates(changes *logic.AppStateChange) appState {
+func (s *session) GetStates(changes *logic.AppStateChange) AppState {
 	if changes == nil {
 		return s.states
 	}
@@ -388,7 +388,7 @@ func (d *Debugger) AddAdapter(da DebugAdapter) {
 // SaveProgram stores program, source and offsetToLine for later use
 func (d *Debugger) SaveProgram(
 	name string, program []byte, source string, offsetToLine map[int]int,
-	states appState,
+	states AppState,
 ) {
 	hash := logic.GetProgramID(program)
 	d.mus.Lock()

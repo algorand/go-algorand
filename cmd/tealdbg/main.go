@@ -114,7 +114,7 @@ func (f *frontendValue) Make(router *mux.Router, appAddress string) (da DebugAda
 	case "cdt":
 		fallthrough
 	default:
-		cdt := MakeCDTAdapter(&CDTAdapterParams{router, appAddress, verbose})
+		cdt := MakeCdtFrontend(&CdtFrontendParams{router, appAddress, verbose})
 		return cdt
 	}
 }
