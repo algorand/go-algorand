@@ -1489,8 +1489,10 @@ func (au *accountUpdates) lookupWithRewardsImpl(rnd basics.Round, addr basics.Ad
 			if offset == uint64(len(au.deltas)) {
 				return macct.data, nil
 			}
-			// Check if the account has been updated recently.  Traverse the deltas
-			// backwards to ensure that later updates take priority if present.
+			// the account appears in the deltas, but we don't know if it appears in the
+			// delta range of [0..offset], so we'll need to check :
+			// Traverse the deltas backwards to ensure that later updates take
+			// priority if present.
 			for offset > 0 {
 				offset--
 				d, ok := au.deltas[offset][addr]
@@ -1547,8 +1549,11 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 			return
 		}
 
+		// check if we've had this address modified in the past rounds. ( i.e. if it's in the deltas )
 		macct, indeltas := au.accounts[addr]
 		if indeltas {
+			// Check if this is the most recent round, in which case, we can
+			// use a cache of the most recent account state.
 			if offset == uint64(len(au.deltas)) {
 				return macct.data, rnd, nil
 			}
