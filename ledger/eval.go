@@ -71,8 +71,9 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 	return x.l.GetCreatorForRound(x.rnd, cidx, ctype)
 }
 
-func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
-	return x.l.LookupWithoutRewards(x.rnd, addr)
+func (x *roundCowBase) lookup(addr basics.Address) (acctData basics.AccountData, err error) {
+	acctData, _, err = x.l.LookupWithoutRewards(x.rnd, addr)
+	return acctData, err
 }
 
 func (x *roundCowBase) isDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
@@ -221,7 +222,7 @@ type ledgerForEvaluator interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	Totals(basics.Round) (AccountTotals, error)
 	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
-	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
+	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 	CompactCertVoters(basics.Round) (*VotersForRound, error)
 }
@@ -292,7 +293,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 
 	poolAddr := eval.prevHeader.RewardsPool
 	// get the reward pool account data without any rewards
-	incentivePoolData, err := l.LookupWithoutRewards(eval.prevHeader.Round, poolAddr)
+	incentivePoolData, _, err := l.LookupWithoutRewards(eval.prevHeader.Round, poolAddr)
 	if err != nil {
 		return nil, err
 	}
