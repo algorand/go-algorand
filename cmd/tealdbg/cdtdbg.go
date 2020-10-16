@@ -63,7 +63,7 @@ func MakeCdtFrontend(params *CdtFrontendParams) (a *CdtFrontend) {
 
 // SessionStarted registers new session
 func (a *CdtFrontend) SessionStarted(sid string, debugger Control, ch chan Notification) {
-	s := makeCDTSession(sid, debugger, ch)
+	s := makeCdtSession(sid, debugger, ch)
 
 	a.mu.Lock()
 	defer a.mu.Unlock()

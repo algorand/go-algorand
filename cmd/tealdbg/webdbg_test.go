@@ -71,7 +71,7 @@ func TestWebPageFrontendHandlers(t *testing.T) {
 	// check handlers on existing session
 	dbg := MockDebugControl{}
 	ch := make(chan Notification)
-	a.SessionStarted(sid, dbg, ch)
+	a.SessionStarted(sid, &dbg, ch)
 
 	body = bytes.NewReader(data)
 	req, err = http.NewRequest("POST", "/exec/config", body)

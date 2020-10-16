@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -96,35 +97,47 @@ func TestCdtHandlers(t *testing.T) {
 }
 
 type MockDebugControl struct {
+	errOnCall bool
+	bpActive  bool
 }
 
-func (c MockDebugControl) Step() {
+func (c *MockDebugControl) Step() {
 }
 
-func (c MockDebugControl) Resume() {
+func (c *MockDebugControl) Resume() {
 }
 
-func (c MockDebugControl) SetBreakpoint(line int) error {
+func (c *MockDebugControl) SetBreakpoint(line int) error {
+	if c.errOnCall {
+		return errors.New("mock err")
+	}
 	return nil
 }
 
-func (c MockDebugControl) RemoveBreakpoint(line int) error {
+func (c *MockDebugControl) RemoveBreakpoint(line int) error {
+	if c.errOnCall {
+		return errors.New("mock err")
+	}
 	return nil
 }
 
-func (c MockDebugControl) SetBreakpointsActive(active bool) {
-	return
+func (c *MockDebugControl) SetBreakpointsActive(active bool) {
+	c.bpActive = active
 }
 
-func (c MockDebugControl) GetSourceMap() ([]byte, error) {
+func (c *MockDebugControl) GetSourceMap() ([]byte, error) {
+	if c.errOnCall {
+		return nil, errors.New("mock err")
+	}
+
 	return []byte("mock"), nil
 }
 
-func (c MockDebugControl) GetSource() (string, []byte) {
+func (c *MockDebugControl) GetSource() (string, []byte) {
 	return "name", []byte("int 1")
 }
 
-func (c MockDebugControl) GetStates(changes *logic.AppStateChange) AppState {
+func (c *MockDebugControl) GetStates(changes *logic.AppStateChange) AppState {
 	return AppState{}
 }
 
@@ -151,6 +164,17 @@ func TestCdtFrontendSessionStarted(t *testing.T) {
 	a.router.ServeHTTP(rr, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 	require.Equal(t, "mock", rr.Body.String())
+
+	sid = "test2"
+	dbg = MockDebugControl{errOnCall: true}
+	ch = make(chan Notification)
+	a.SessionStarted(sid, &dbg, ch)
+
+	req, _ = http.NewRequest("GET", "/"+sid+"/sourcemap", nil)
+	rr = httptest.NewRecorder()
+	a.router.ServeHTTP(rr, req)
+	require.Equal(t, http.StatusInternalServerError, rr.Code)
+	require.Contains(t, rr.Body.String(), "mock err")
 }
 
 func TestCdtAdapterSessionEnded(t *testing.T) {
