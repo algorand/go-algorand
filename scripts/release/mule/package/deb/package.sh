@@ -9,15 +9,16 @@ echo
 
 BRANCH=${BRANCH:-$(./scripts/compute_branch.sh "$BRANCH")}
 CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
-VER=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 # A make target in Makefile.mule may pass the name as an argument.
 ALGORAND_PACKAGE_NAME=${1:-$(./scripts/compute_package_name.sh "$CHANNEL")}
+PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 
 DEFAULTNETWORK=$("./scripts/compute_branch_network.sh")
 DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "$DEFAULTNETWORK")
 export DEFAULT_RELEASE_NETWORK
 
-find tmp/node_pkgs -name "*${CHANNEL}*linux*${VER}*.tar.gz" | cut -d '/' -f3-4 | sort --unique | while read OS_ARCH; do
+find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3-4 | sort --unique | while read OS_ARCH; do
     PKG_ROOT=$(mktemp -d)
     trap "rm -rf $PKG_ROOT" 0
 
@@ -76,6 +77,7 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${VER}*.tar.gz" | cut -d '/' -f3-4 |
             cp "installer/$svc" "$PKG_ROOT/lib/systemd/system"
             chmod 644 "$PKG_ROOT/lib/systemd/system/$svc"
         done
+    fi
 
     mkdir -p "$PKG_ROOT/etc/apt/apt.conf.d"
     cat > "$PKG_ROOT/etc/apt/apt.conf.d/$UNATTENDED_UPGRADES_FILE" << EOF
@@ -112,7 +114,7 @@ EOF
     done
 
     # TODO: make `Files:` segments for vendor/... and crypto/libsodium-fork, but reasonably this should be understood to cover all _our_ files and copied in packages continue to be licenced under their own terms
-    cat << EOF > "$PKG_ROOT/DEBIAN/copyright"
+    cat > "$PKG_ROOT/DEBIAN/copyright" << EOF
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: Algorand
 Upstream-Contact: Algorand developers <dev@algorand.com>
@@ -135,7 +137,7 @@ EOF
 
     STATUSFILE=build_status_${CHANNEL}_${VERSION}
 
-    cat << EOF >> "$STATUSFILE"
+    cat >> "$STATUSFILE" << EOF
 go version:
 EOF
 
@@ -143,7 +145,7 @@ EOF
 
     ############################################################
 
-    cat << EOF >> "$STATUSFILE"
+    cat >> "$STATUSFILE" << EOF
 go env:
 EOF
 
@@ -151,7 +153,7 @@ EOF
 
     ############################################################
 
-    cat << EOF >> "$STATUSFILE"
+    cat >> "$STATUSFILE" << EOF
 dpkg-l:
 EOF
 
@@ -161,9 +163,7 @@ EOF
 
     ############################################################
 
-        echo
-        date "+build_release end PACKAGE DEB stage %Y%m%d_%H%M%S"
-        echo
-
-    done
+    echo
+    date "+build_release end PACKAGE DEB stage %Y%m%d_%H%M%S"
+    echo
 done

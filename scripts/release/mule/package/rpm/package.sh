@@ -4,6 +4,7 @@ set -ex
 
 echo "Building RPM package"
 
+REPO_DIR=$(pwd)
 FULLVERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
 CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
@@ -40,7 +41,7 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${FULLVERSION}*.tar.gz" | cut -d '/'
     trap 'rm -rf $TEMPDIR' 0
     < "./installer/rpm/$INSTALLER_DIR/$INSTALLER_DIR.spec" \
         sed -e "s,@PKG_NAME@,$ALGORAND_PACKAGE_NAME," \
-            -e "s,@VER@,$VERSION," \
+            -e "s,@VER@,$FULLVERSION," \
             -e "s,@ARCH@,$ARCH_TYPE," \
             -e "s,@REQUIRED_ALGORAND_PKG@,$REQUIRED_ALGORAND_PACKAGE," \
         > "$TEMPDIR/$ALGORAND_PACKAGE_NAME.spec"
