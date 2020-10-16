@@ -25,6 +25,8 @@ import (
 
 	"github.com/algorand/go-deadlock"
 	"github.com/gorilla/mux"
+
+	"github.com/algorand/go-algorand/cmd/tealdbg/cdt"
 )
 
 // CDTAdapter is Chrome DevTools frontend
@@ -71,14 +73,17 @@ func (a *CDTAdapter) SessionStarted(sid string, debugger Control, ch chan Notifi
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	s.endpoint = a.enableWebsocketEndpoint(sid, a.apiAddress, s.websocketHandler)
-
+	// first add new routes
 	if name, source := debugger.GetSource(); len(source) != 0 {
 		s.scriptURL = name
 		s.sourceMapURL = fmt.Sprintf("http://%s/%s/sourcemap", a.apiAddress, sid)
 		a.router.HandleFunc(fmt.Sprintf("/%s/sourcemap", sid), s.sourceMapHandler).Methods("GET")
 		a.router.HandleFunc(fmt.Sprintf("/%s/source", sid), s.sourceHandler).Methods("GET")
 	}
+
+	// then add a websocket route and publish (output to console) it
+	// after that mux.Router.routes may not be modifed due to possible data race
+	s.endpoint = a.enableWebsocketEndpoint(sid, a.apiAddress, s.websocketHandler)
 
 	s.verbose = a.verbose
 	s.states = debugger.GetStates(nil)
@@ -119,9 +124,9 @@ func (a *CDTAdapter) WaitForCompletion() {
 func (a *CDTAdapter) enableWebsocketEndpoint(
 	uuid string, apiAddress string,
 	handler func(http.ResponseWriter, *http.Request),
-) cdtTabDescription {
+) cdt.TabDescription {
 	address := apiAddress + "/" + uuid
-	desc := cdtTabDescription{
+	desc := cdt.TabDescription{
 		Description:               "",
 		ID:                        uuid,
 		Title:                     "Algorand TEAL program",
@@ -161,7 +166,7 @@ func (a *CDTAdapter) versionHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *CDTAdapter) jsonHandler(w http.ResponseWriter, r *http.Request) {
-	tabs := make([]cdtTabDescription, 0, len(a.sessions))
+	tabs := make([]cdt.TabDescription, 0, len(a.sessions))
 
 	func() {
 		a.mu.Lock()
