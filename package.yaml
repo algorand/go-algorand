@@ -56,14 +56,6 @@ jobs:
     tasks:
       - docker.Make.rpm
 
-  package-deb:
-    tasks:
-      - docker.Make.docker
-
-  package-rpm:
-    tasks:
-      - docker.Make.rpm
-
   package-docker:
     tasks:
       - docker.Make.docker
