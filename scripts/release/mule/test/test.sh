@@ -15,23 +15,24 @@ export BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
 export CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
 export NETWORK=${NETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
 export SHA=${SHA:-$(git rev-parse HEAD)}
+S3_SOURCE=${S3_SOURCE:-"algorand-internal/channel"}
 export VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 
 PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 
 pushd "$PKG_DIR"
 
-if ! $USE_CACHE
+if [ -z "$USE_CACHE" ]
 then
-    SRC_DIR="s3://algorand-staging/releases/$CHANNEL/$VERSION"
+    PREFIX="$S3_SOURCE/$CHANNEL/$VERSION"
 
     # deb
-    aws s3 cp "$SRC_DIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
-    aws s3 cp "$SRC_DIR/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
+    aws s3 cp "s3://$PREFIX/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
+    aws s3 cp "s3://$PREFIX/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
 
     # rpm
-    aws s3 cp "$SRC_DIR/algorand-$VERSION-1.$ARCH_BIT.rpm" .
-    aws s3 cp "$SRC_DIR/algorand-devtools-$VERSION-1.$ARCH_BIT.rpm" .
+    aws s3 cp "s3://$PREFIX/algorand-$VERSION-1.$ARCH_BIT.rpm" .
+    aws s3 cp "s3://$PREFIX/algorand-devtools-$VERSION-1.$ARCH_BIT.rpm" .
 fi
 
 popd

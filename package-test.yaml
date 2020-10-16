@@ -11,7 +11,9 @@ agents:
       - BRANCH=$BRANCH
       - CHANNEL=$CHANNEL
       - NETWORK=$NETWORK
+      - S3_SOURCE=$S3_SOURCE
       - SHA=$SHA
+      - USE_CACHE=$USE_CACHE
       - VERSION=$VERSION
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -29,7 +31,9 @@ agents:
       - BRANCH=$BRANCH
       - CHANNEL=$CHANNEL
       - NETWORK=$NETWORK
+      - S3_SOURCE=$S3_SOURCE
       - SHA=$SHA
+      - USE_CACHE=$USE_CACHE
       - VERSION=$VERSION
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

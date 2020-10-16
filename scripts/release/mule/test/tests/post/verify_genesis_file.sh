@@ -22,7 +22,7 @@ EXPECTED_NETWORK=$(jq -r '.network' $GEN_FILE)
 
 if [ "$NETWORK" != "$EXPECTED_NETWORK" ]
 then
-    echo "[$0] The network value \`$NETWORK\` in \`$GEN_FILE\` is incorrect, it does not match $EXPECTED_NETWORK."
+    echo "[$0] The network value \`$NETWORK\` in \`$GEN_FILE\` is incorrect, it does not match \`$EXPECTED_NETWORK\`."
     exit 1
 fi
 

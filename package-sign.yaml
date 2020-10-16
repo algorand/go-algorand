@@ -10,6 +10,7 @@ agents:
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
       - BRANCH=$BRANCH
       - CHANNEL=$CHANNEL
+      - S3_SOURCE=$S3_SOURCE
       - USE_CACHE=$USE_CACHE
       - VERSION=$VERSION
     volumes:
