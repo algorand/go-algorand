@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+
+CHANNEL=${CHANNEL:-stable}
+REPO=${REPO:-algorand}
+
+usage() {
+    echo "Usage: -e CHANNEL=\$CHANNEL -e VERSION=\$VERSION -e REPO=\$REPO -e SNAPSHOT=\$SNAPSHOT $0 "
+    exit "$1"
+}
+
+if [ "$HELP" = true ]
+then
+    echo ------------------------------
+    echo "default values:"
+    echo + CHANNEL=stable
+    echo + REPO=algorand
+    echo + SNAPSHOT="\$CHANNEL-\$VERSION"
+    echo
+    echo "aptly repos (values for REPO):"
+    echo "+ algorand"
+    echo "+ algorand-beta"
+    echo "+ algorand-indexer"
+    echo "+ algorand-indexer-beta"
+    echo ------------------------------
+    exit 0
+fi
+
+if [ -z "$VERSION" ]
+then
+    echo "Version is a required parameter."
+    usage 1
+fi
+
+PKG_DIR="/root/packages/deb/$CHANNEL/"
+
+if [ -z "$SNAPSHOT" ]
+then
+    SNAPSHOT="$CHANNEL-$VERSION"
+fi
+
+echo -e "REPO $REPO\nSNAPSHOT $SNAPSHOT\nPKG_DIR $PKG_DIR"
+
+# It's necessary to copy packages from staging to packages/.
+SOURCE_PREFIX="algorand-staging/releases/$CHANNEL/$VERSION"
+DEST="s3://algorand-internal/packages/deb/$CHANNEL/"
+aws s3 cp "s3://$SOURCE_PREFIX/algorand_${CHANNEL}_linux-amd64_${VERSION}.deb" "$DEST"
+aws s3 cp "s3://$SOURCE_PREFIX/algorand-devtools_${CHANNEL}_linux-amd64_${VERSION}.deb" "$DEST"
+
+aws s3 sync s3://algorand-internal/packages packages
+
+aptly repo add "$REPO" "$PKG_DIR"/*.deb
+aptly snapshot create "$SNAPSHOT" from repo "$REPO"
+aptly publish switch "$CHANNEL" s3:algorand-releases: "$SNAPSHOT"
+
+# Sync with `algorand-dev-deb-repo` so the releases page can be generated.
+aws s3 sync "s3://algorand-staging/releases/$CHANNEL/$VERSION" "s3://algorand-dev-deb-repo/releases/$CHANNEL/$("/root/reverse_hex_timestamp")_$VERSION"
+

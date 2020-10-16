@@ -7,14 +7,15 @@ echo
 date "+build_release begin DEPLOY rpm stage %Y%m%d_%H%M%S"
 echo
 
+CHANNEL=${CHANNEL:-stable}
 NO_DEPLOY=${NO_DEPLOY:-false}
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 
 # PACKAGES_DIR is set in the mule yaml and can point to local RPM packages.
 if [ -z "$PACKAGES_DIR" ]
 then
-    aws s3 cp "s3://algorand-staging/releases/stable/$VERSION/algorand-$VERSION-1.x86_64.rpm" /root
-    aws s3 cp "s3://algorand-staging/releases/stable/$VERSION/algorand-devtools-$VERSION-1.x86_64.rpm" /root
+    aws s3 cp "s3://algorand-staging/releases/$CHANNEL/$VERSION/algorand-$VERSION-1.x86_64.rpm" /root
+    aws s3 cp "s3://algorand-staging/releases/$CHANNEL/$VERSION/algorand-devtools-$VERSION-1.x86_64.rpm" /root
 else
     cp "$PACKAGES_DIR"/*"$VERSION"*.rpm /root
 fi
@@ -68,7 +69,8 @@ then
     popd
     cp -r /root/rpmrepo .
 else
-    aws s3 sync rpmrepo s3://algorand-releases/rpm/stable/
+    aws s3 sync rpmrepo "s3://algorand-releases/rpm/$CHANNEL/"
+    aws s3 cp *"$VERSION"*.rpm "s3://algorand-internal/packages/rpm/$CHANNEL/"
 fi
 
 echo

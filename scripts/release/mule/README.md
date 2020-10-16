@@ -4,6 +4,7 @@
 - [Build Stages](#build-stages)
 - [Custom Builds](#custom-builds)
 - [Examples](#examples)
+- [Manual Deploy](#manual-deploy)
 
 # Environment Variables
 
@@ -98,6 +99,7 @@ These env vars generally don't change between stages. Here is a list of variable
 
 - customizable environment variables:
 
+    + `CHANNEL`
     + `NETWORK`
     + `NO_DEPLOY`
     + `PACKAGES_DIR`
@@ -213,4 +215,38 @@ Let's look at some examples.
     This is handy when testing a deployment and not yet ready to deploy.
 
         NO_DEPLOY=true VERSION=2.1.6 mule -f package-deploy.yaml package-deploy
+
+# Manual Deploy
+
+> Before any processes are run, make sure that the signing keys have been added to the `gpg-agent`. The `gpg_preset_passphrase.sh` helper script is provided just for this purpose.
+
+Currently, it is still necessary to run two stages manually: sign and deploy. This is for several reasons, though principally because GPG signing of the build assets occurs in both stages.
+
+The processes that make up both stages have been `mule-ified` as much as possible, and all but one can be run as a `mule` task.
+
+### Signing
+
+Usually, the packages are pulled down from S3 where the eks pipeline or the `mule` `package-upload` task had placed them. Issue the following command to download and sign them:
+
+```
+CHANNEL=stable VERSION=2.1.6 mule -f package-sign.yaml package-sign
+```
+
+> These are downloaded to the usual location at `tmp/node_pkgs/OS_TYPE/ARCH/` on the local filesystem. The source location on S3 is the `algorand-internal/releases` bucket, but this can be changed using the `S3_SOURCE` environment variable.
+
+### Signing
+
+### Misc
+
+The following is an example of several commands issued for all the stages when building locally:
+
+```
+mule -f package.yaml package
+CHANNEL=dev VERSION=2.1.87522 SHA=730b3fd0 mule -f package-test.yaml package-test
+CHANNEL=dev VERSION=2.1.87522 mule -f package-sign.yaml package-sign
+CHANNEL=dev VERSION=2.1.87522 mule -f package-upload.yaml package-upload
+CHANNEL=dev VERSION=2.1.87522 NO_DEPLOY=true mule -f package-deploy.yaml package-deploy
+mule -f package-deploy.yaml releases-page
+docker run --name aptly-algorand --rm -i -v "$XDG_RUNTIME_DIR/gnupg/S.gpg-agent":/root/.gnupg/S.gpg-agent -v "$HOME/.gnupg/pubring.kbx":/root/.gnupg/pubring.kbx -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" -e CHANNEL=dev -e REPO=algorand -e VERSION=2.1.87522 aptly-algorand bash create_and_push
+```
 
