@@ -40,6 +40,22 @@ const StdErrFilename = "algod-err.log"
 // StdOutFilename is the name of the file in <datadir> where stdout will be captured if not redirected to host
 const StdOutFilename = "algod-out.log"
 
+type NodeAlreadyStoppedError struct {
+	algodDataDir string
+}
+
+func (e *NodeAlreadyStoppedError) Error() string {
+	return fmt.Sprintf("Node in directory %s has already stopped", e.algodDataDir)
+}
+
+type InvalidDataDirError struct {
+	algodDataDir string
+}
+
+func (e *InvalidDataDirError) Error() string {
+	return fmt.Sprintf("%s is not a valid directory", e.algodDataDir)
+}
+
 // AlgodClient attempts to build a client.RestClient for communication with
 // the algod REST API, but fails if we can't find the net file
 func (nc NodeController) AlgodClient() (algodClient client.RestClient, err error) {
@@ -133,7 +149,11 @@ func (nc NodeController) algodRunning() (isRunning bool) {
 }
 
 // StopAlgod reads the net file and kills the algod process
-func (nc *NodeController) StopAlgod() (alreadyStopped bool, err error) {
+func (nc *NodeController) StopAlgod() (err error) {
+	// Check for valid data director
+	if !util.IsDir(nc.algodDataDir) {
+		return &InvalidDataDirError{algodDataDir: nc.algodDataDir}
+	}
 	// Find algod PID
 	algodPID, err := nc.GetAlgodPID()
 	if err == nil {
@@ -143,7 +163,7 @@ func (nc *NodeController) StopAlgod() (alreadyStopped bool, err error) {
 			return
 		}
 	} else {
-		alreadyStopped = true
+		return &NodeAlreadyStoppedError{algodDataDir: nc.algodDataDir}
 	}
 	return
 }
