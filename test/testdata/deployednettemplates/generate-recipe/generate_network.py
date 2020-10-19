@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-
+import json
 import argparse
-import simplejson
-
 import math
 import subprocess
+import shutil
 import os
 
 def build_network(template):
     with open(template) as f:
-        template_dict = simplejson.load(f)
+        template_dict = json.load(f)
 
     template_path = os.path.abspath(os.path.dirname(args.template))
     script_path = os.path.dirname(__file__)
@@ -19,10 +18,10 @@ def build_network(template):
     if not os.path.isdir(gen_dir):
         os.mkdir(gen_dir)
 
-    subprocess.run(['cp', f"{script_path}/recipe.json", f"{template_path}/recipe.json"])
+    shutil.copy(f"{script_path}/recipe.json", f"{template_path}/recipe.json")
 
     with open(f"{template_path}/generated/topology.json", 'w') as topology_file:
-        simplejson.dump(topology, topology_file, indent=4)
+        json.dump(topology, topology_file, indent=4)
 
     netgoal_params = build_netgoal_params(template_dict)
     build_net(template_path, netgoal_params)
