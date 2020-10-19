@@ -20,8 +20,14 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/algorand/go-algorand/cmd/tealdbg/cdt"
 	"github.com/stretchr/testify/require"
+
+	"github.com/algorand/go-algorand/cmd/tealdbg/cdt"
+	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 func TestCdtSessionProto11Common(t *testing.T) {
@@ -285,6 +291,127 @@ func TestCdtSessionProto11Evaluate(t *testing.T) {
 	require.Empty(t, resp.Result)
 }
 
+func TestCdtSessionProto11CallOnFunc(t *testing.T) {
+	sid := "test"
+	dbg := MockDebugControl{}
+	ch := make(chan Notification)
+	s := makeCdtSession(sid, &dbg, ch)
+
+	var rid int64 = 6
+	req := cdt.ChromeRequest{ID: rid}
+	state := cdtState{}
+
+	req.Method = "Runtime.callFunctionOn"
+	req.Params = map[string]interface{}{}
+	resp, events, err := s.handleCdtRequest(&req, &state)
+	require.Error(t, err)
+
+	req.Params = map[string]interface{}{"objectId": ""}
+	resp, events, err = s.handleCdtRequest(&req, &state)
+	require.Error(t, err)
+
+	req.Params = map[string]interface{}{"objectId": "", "functionDeclaration": ""}
+	resp, events, err = s.handleCdtRequest(&req, &state)
+	require.Error(t, err)
+
+	req.Params = map[string]interface{}{"objectId": "", "functionDeclaration": "", "arguments": []interface{}{}}
+	resp, events, err = s.handleCdtRequest(&req, &state)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(events))
+	require.Equal(t, rid, resp.ID)
+	require.Empty(t, resp.Result)
+
+	req.Params = map[string]interface{}{
+		"objectId":            "",
+		"functionDeclaration": "function packRanges",
+		"arguments": []interface{}{
+			map[string]interface{}{"value": 1.},
+			map[string]interface{}{"value": 2.},
+			map[string]interface{}{"value": 3.},
+			map[string]interface{}{"value": 4.},
+			map[string]interface{}{"value": 5.},
+		}}
+	resp, events, err = s.handleCdtRequest(&req, &state)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(events))
+	require.Equal(t, rid, resp.ID)
+	require.NotEmpty(t, resp.Result)
+	result, ok := resp.Result.(cmdResult)
+	require.True(t, ok)
+	require.NotEmpty(t, result)
+	_, ok = result.Result.(cdt.RuntimeCallPackRangesObject)
+	require.True(t, ok)
+
+	req.Params = map[string]interface{}{
+		"objectId":            stackObjID,
+		"functionDeclaration": "function buildObjectFragment",
+		"arguments": []interface{}{
+			map[string]interface{}{"value": 1.},
+		}}
+	resp, events, err = s.handleCdtRequest(&req, &state)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(events))
+	require.Equal(t, rid, resp.ID)
+	require.NotEmpty(t, resp.Result)
+	result, ok = resp.Result.(cmdResult)
+	require.True(t, ok)
+	require.NotEmpty(t, result)
+	_, ok = result.Result.(cdt.RuntimeRemoteObject)
+	require.True(t, ok)
+
+	req.Params = map[string]interface{}{
+		"objectId":            stackObjID,
+		"functionDeclaration": "function buildArrayFragment",
+		"arguments": []interface{}{
+			map[string]interface{}{"value": 1.},
+			map[string]interface{}{"value": 2.},
+			map[string]interface{}{"value": 3.},
+		}}
+	resp, events, err = s.handleCdtRequest(&req, &state)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(events))
+	require.Equal(t, rid, resp.ID)
+	require.NotEmpty(t, resp.Result)
+	result, ok = resp.Result.(cmdResult)
+	require.True(t, ok)
+	require.NotEmpty(t, result)
+	_, ok = result.Result.(cdt.RuntimeRemoteObject)
+	require.True(t, ok)
+}
+
+func TestCdtSessionProto11GetProps(t *testing.T) {
+	sid := "test"
+	dbg := MockDebugControl{}
+	ch := make(chan Notification)
+	s := makeCdtSession(sid, &dbg, ch)
+
+	var rid int64 = 7
+	req := cdt.ChromeRequest{ID: rid}
+	state := cdtState{}
+
+	req.Method = "Runtime.getProperties"
+	req.Params = map[string]interface{}{}
+	resp, events, err := s.handleCdtRequest(&req, &state)
+	require.Error(t, err)
+
+	req.Params = map[string]interface{}{"objectId": "", "generatePreview": true}
+	resp, events, err = s.handleCdtRequest(&req, &state)
+	require.Error(t, err)
+
+	req.Params = map[string]interface{}{"objectId": globalScopeObjID, "generatePreview": true}
+	s.verbose = true
+	resp, events, err = s.handleCdtRequest(&req, &state)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(events))
+	require.Equal(t, rid, resp.ID)
+	require.NotEmpty(t, resp.Result)
+	result, ok := resp.Result.(cmdResult)
+	require.True(t, ok)
+	require.NotEmpty(t, result)
+	_ = result.Result.([]cdt.RuntimePropertyDescriptor)
+	require.True(t, ok)
+}
+
 func TestCdtSessionStateToEvent(t *testing.T) {
 	sid := "test"
 	dbg := MockDebugControl{}
@@ -321,4 +448,115 @@ func TestCdtSessionStateToEvent(t *testing.T) {
 	e = s.computeEvent(&state)
 	_, ok = (e).(cdt.RuntimeExecutionContextDestroyedEvent)
 	require.True(t, ok)
+}
+
+func TestCdtSessionGetObjects(t *testing.T) {
+	sid := "test"
+	dbg := MockDebugControl{}
+	ch := make(chan Notification)
+	s := makeCdtSession(sid, &dbg, ch)
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	var globals []basics.TealValue
+	for range logic.GlobalFieldNames {
+		globals = append(globals, basics.TealValue{Type: basics.TealUintType, Uint: 1})
+	}
+	e := atomicString{}
+	e.Store("mock err")
+
+	var rid int64 = 1
+	req := cdt.ChromeRequest{ID: rid}
+	state := cdtState{
+		disassembly: "version 2\nint 1",
+		proto:       &proto,
+		txnGroup: []transactions.SignedTxn{
+			{
+				Txn: transactions.Transaction{
+					Type: protocol.PaymentTx,
+					Header: transactions.Header{
+						Sender: basics.Address{}, Fee: basics.MicroAlgos{Raw: 1000}, FirstValid: 10,
+					},
+				},
+			},
+			{
+				Txn: transactions.Transaction{
+					Type: protocol.ApplicationCallTx,
+					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+						ApplicationArgs: [][]byte{{0, 1, 2, 3}},
+					},
+				},
+			},
+		},
+		groupIndex: 0,
+		globals:    globals,
+		stack:      []basics.TealValue{{Type: basics.TealBytesType, Bytes: "test"}},
+		scratch: []basics.TealValue{
+			{Type: basics.TealUintType, Uint: 1},
+			{Type: basics.TealBytesType, Bytes: "\x01\x02"},
+		},
+		pc:   atomicInt{1},
+		line: atomicInt{1},
+		err:  e,
+		AppState: AppState{
+			appIdx: basics.AppIndex(1),
+			schemas: basics.StateSchemas{
+				GlobalStateSchema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+				LocalStateSchema:  basics.StateSchema{NumUint: 1, NumByteSlice: 1},
+			},
+			global: map[basics.AppIndex]basics.TealKeyValue{
+				basics.AppIndex(1): {
+					"a": basics.TealValue{Type: basics.TealUintType, Uint: 1},
+					"b": basics.TealValue{Type: basics.TealBytesType, Bytes: "\x01\x02"},
+				},
+			},
+			locals: map[basics.Address]map[basics.AppIndex]basics.TealKeyValue{
+				{}: {
+					basics.AppIndex(1): {
+						"c": basics.TealValue{Type: basics.TealUintType, Uint: 1},
+						"b": basics.TealValue{Type: basics.TealBytesType, Bytes: "\x01\x02"},
+					},
+				},
+			},
+		},
+	}
+
+	req.Method = "Runtime.getProperties"
+	req.Params = map[string]interface{}{}
+	resp, events, err := s.handleCdtRequest(&req, &state)
+	require.Error(t, err)
+
+	for k := range objectDescMap {
+		req.Params = map[string]interface{}{"objectId": k, "generatePreview": true}
+		resp, events, err = s.handleCdtRequest(&req, &state)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(events))
+		require.Equal(t, rid, resp.ID)
+		require.NotEmpty(t, resp.Result)
+		result, ok := resp.Result.(cmdResult)
+		require.True(t, ok)
+		require.NotEmpty(t, result)
+		_ = result.Result.([]cdt.RuntimePropertyDescriptor)
+		require.True(t, ok)
+	}
+
+	objIds := []string{
+		encodeTxnArrayField(0, 1), encodeGroupTxnID(0), encodeGroupTxnID(1),
+		encodeArrayLength(stackObjID), encodeArraySlice(scratchObjID, 0, 1),
+		encodeAppLocalsAddr(basics.Address{}.String()),
+		encodeAppGlobalAppID("0"), encodeAppGlobalAppID("1"),
+		encodeAppLocalsAppID(basics.Address{}.String(), "1"),
+	}
+	for _, k := range objIds {
+		req.Params = map[string]interface{}{"objectId": k, "generatePreview": true}
+		resp, events, err = s.handleCdtRequest(&req, &state)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(events))
+		require.Equal(t, rid, resp.ID)
+		require.NotEmpty(t, resp.Result)
+		result, ok := resp.Result.(cmdResult)
+		require.True(t, ok)
+		require.NotEmpty(t, result)
+		_ = result.Result.([]cdt.RuntimePropertyDescriptor)
+		require.True(t, ok)
+	}
 }
