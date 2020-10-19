@@ -15,7 +15,7 @@ agents:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     workDir: $HOME/projects/go-algorand
 
-  - name: docker-ubuntu
+  - name: docker
     dockerFilePath: docker/build/docker.ubuntu.Dockerfile
     image: algorand/go-algorand-docker-linux-ubuntu
     version: scripts/configure_dev-deps.sh
@@ -37,8 +37,8 @@ tasks:
     target: mule-package-deb
 
   - task: docker.Make
-    name: docker-image
-    agent: docker-ubuntu
+    name: docker
+    agent: docker
     target: mule-package-docker
 
 jobs:
@@ -46,8 +46,17 @@ jobs:
     tasks:
       - docker.Make.deb
       - docker.Make.rpm
+      - docker.Make.docker
+
+  package-deb:
+    tasks:
+      - docker.Make.deb
+
+  package-rpm:
+    tasks:
+      - docker.Make.rpm
 
   package-docker:
     tasks:
-      - docker.Make.docker-image
+      - docker.Make.docker
 

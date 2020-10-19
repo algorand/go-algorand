@@ -104,6 +104,10 @@ const maxMessageQueueDuration = 25 * time.Second
 // verify that their current outgoing message is not being blocked for too long.
 const slowWritingPeerMonitorInterval = 5 * time.Second
 
+// unprintableCharacterGlyph is used to replace any non-ascii character when logging incoming network string directly
+// to the log file. Note that the log file itself would also json-encode these before placing them in the log file.
+const unprintableCharacterGlyph = "▯"
+
 var networkIncomingConnections = metrics.MakeGauge(metrics.NetworkIncomingConnections)
 var networkOutgoingConnections = metrics.MakeGauge(metrics.NetworkOutgoingConnections)
 
@@ -807,7 +811,7 @@ func (wn *WebsocketNetwork) setHeaders(header http.Header) {
 func (wn *WebsocketNetwork) checkServerResponseVariables(otherHeader http.Header, addr string) (bool, string) {
 	matchingVersion, otherVersion := wn.checkProtocolVersionMatch(otherHeader)
 	if matchingVersion == "" {
-		wn.log.Infof("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", addr, SupportedProtocolVersions, otherVersion, otherHeader)
+		wn.log.Info(filterASCII(fmt.Sprintf("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", addr, SupportedProtocolVersions, otherVersion, otherHeader)))
 		return false, ""
 	}
 	otherRandom := otherHeader.Get(NodeRandomHeader)
@@ -815,7 +819,7 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(otherHeader http.Header
 		// This is pretty harmless and some configurations of phonebooks or DNS records make this likely. Quietly filter it out.
 		if otherRandom == "" {
 			// missing header.
-			wn.log.Warnf("new peer %s did not include random ID header in request. mine=%s headers %#v", addr, wn.RandomID, otherHeader)
+			wn.log.Warn(filterASCII(fmt.Sprintf("new peer %s did not include random ID header in request. mine=%s headers %#v", addr, wn.RandomID, otherHeader)))
 		} else {
 			wn.log.Debugf("new peer %s has same node random id, am I talking to myself? %s", addr, wn.RandomID)
 		}
@@ -824,7 +828,7 @@ func (wn *WebsocketNetwork) checkServerResponseVariables(otherHeader http.Header
 	otherGenesisID := otherHeader.Get(GenesisHeader)
 	if wn.GenesisID != otherGenesisID {
 		if otherGenesisID != "" {
-			wn.log.Warnf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", addr, wn.GenesisID, otherGenesisID, otherHeader)
+			wn.log.Warn(filterASCII(fmt.Sprintf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", addr, wn.GenesisID, otherGenesisID, otherHeader)))
 		} else {
 			wn.log.Warnf("new peer %#v did not include genesis header in response. mine=%#v headers %#v", addr, wn.GenesisID, otherHeader)
 		}
@@ -894,7 +898,8 @@ func (wn *WebsocketNetwork) checkProtocolVersionMatch(otherHeaders http.Header) 
 			return supportedProtocolVersion, otherVersion
 		}
 	}
-	return "", otherVersion
+
+	return "", filterASCII(otherVersion)
 }
 
 // checkIncomingConnectionVariables checks the variables that were provided on the request, and compares them to the
@@ -911,7 +916,7 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 	}
 
 	if wn.GenesisID != otherGenesisID {
-		wn.log.Warnf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", request.RemoteAddr, wn.GenesisID, otherGenesisID, request.Header)
+		wn.log.Warn(filterASCII(fmt.Sprintf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", request.RemoteAddr, wn.GenesisID, otherGenesisID, request.Header)))
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "mismatching genesis-id"})
 		response.WriteHeader(http.StatusPreconditionFailed)
 		response.Write([]byte("mismatching genesis ID"))
@@ -923,7 +928,7 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 		// This is pretty harmless and some configurations of phonebooks or DNS records make this likely. Quietly filter it out.
 		var message string
 		// missing header.
-		wn.log.Warnf("new peer %s did not include random ID header in request. mine=%s headers %#v", request.RemoteAddr, wn.RandomID, request.Header)
+		wn.log.Warn(filterASCII(fmt.Sprintf("new peer %s did not include random ID header in request. mine=%s headers %#v", request.RemoteAddr, wn.RandomID, request.Header)))
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "missing random ID header"})
 		message = fmt.Sprintf("Request was missing a %s header", NodeRandomHeader)
 		response.WriteHeader(http.StatusPreconditionFailed)
@@ -970,10 +975,10 @@ func (wn *WebsocketNetwork) ServeHTTP(response http.ResponseWriter, request *htt
 
 	matchingVersion, otherVersion := wn.checkProtocolVersionMatch(request.Header)
 	if matchingVersion == "" {
-		wn.log.Infof("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", request.RemoteAddr, SupportedProtocolVersions, otherVersion, request.Header)
+		wn.log.Info(filterASCII(fmt.Sprintf("new peer %s version mismatch, mine=%v theirs=%s, headers %#v", request.RemoteAddr, SupportedProtocolVersions, otherVersion, request.Header)))
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "mismatching protocol version"})
 		response.WriteHeader(http.StatusPreconditionFailed)
-		message := fmt.Sprintf("Requested version %s not in %v mismatches server version", otherVersion, SupportedProtocolVersions)
+		message := fmt.Sprintf("Requested version %s not in %v mismatches server version", filterASCII(otherVersion), SupportedProtocolVersions)
 		n, err := response.Write([]byte(message))
 		if err != nil {
 			wn.log.Warnf("ws failed to write response '%s' : n = %d err = %v", message, n, err)
@@ -1757,6 +1762,23 @@ func (wn *WebsocketNetwork) GetRoundTripper() http.RoundTripper {
 	return &wn.transport
 }
 
+// filterASCII filter out the non-ascii printable characters out of the given input string and
+// and replace these with unprintableCharacterGlyph.
+// It's used as a security qualifier before logging a network-provided data.
+// The function allows only characters in the range of [32..126], which excludes all the
+// control character, new lines, deletion, etc. All the alpha numeric and punctuation characters
+// are included in this range.
+func filterASCII(unfilteredString string) (filteredString string) {
+	for i, r := range unfilteredString {
+		if int(r) >= 0x20 && int(r) <= 0x7e {
+			filteredString += string(unfilteredString[i])
+		} else {
+			filteredString += unprintableCharacterGlyph
+		}
+	}
+	return
+}
+
 // tryConnect opens websocket connection and checks initial connection parameters.
 // addr should be 'host:port' or a URL, gossipAddr is the websocket endpoint URL
 func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
@@ -1795,6 +1817,7 @@ func (wn *WebsocketNetwork) tryConnect(addr, gossipAddr string) {
 			if len(errString) > 128 {
 				errString = errString[:128]
 			}
+			errString = filterASCII(errString)
 
 			// we're guaranteed to have a valid response object.
 			switch response.StatusCode {

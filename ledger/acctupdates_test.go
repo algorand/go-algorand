@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -156,15 +157,18 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 	_, err := au.Totals(latest + 1)
 	require.Error(t, err)
 
-	_, err = au.Lookup(latest+1, randomAddress(), false)
+	var validThrough basics.Round
+	_, validThrough, err = au.LookupWithoutRewards(latest+1, randomAddress())
 	require.Error(t, err)
+	require.Equal(t, basics.Round(0), validThrough)
 
 	if base > 0 {
 		_, err := au.Totals(base - 1)
 		require.Error(t, err)
 
-		_, err = au.Lookup(base-1, randomAddress(), false)
+		_, validThrough, err = au.LookupWithoutRewards(base-1, randomAddress())
 		require.Error(t, err)
+		require.Equal(t, basics.Round(0), validThrough)
 	}
 
 	roundsRanges := []struct {
@@ -189,9 +193,10 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			var totalOnline, totalOffline, totalNotPart uint64
 
 			for addr, data := range accts[rnd] {
-				d, err := au.Lookup(rnd, addr, false)
+				d, validThrough, err := au.LookupWithoutRewards(rnd, addr)
 				require.NoError(t, err)
 				require.Equal(t, d, data)
+				require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
 
 				rewardsDelta := rewards[rnd] - d.RewardsBase
 				switch d.Status {
@@ -220,8 +225,9 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
 			require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
 
-			d, err := au.Lookup(rnd, randomAddress(), false)
+			d, validThrough, err := au.LookupWithoutRewards(rnd, randomAddress())
 			require.NoError(t, err)
+			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
 			require.Equal(t, d, basics.AccountData{})
 		}
 	}
@@ -711,15 +717,17 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			updates := make(map[basics.Address]accountDelta)
 			moneyAccountsExpectedAmounts = append(moneyAccountsExpectedAmounts, make([]uint64, len(moneyAccounts)))
 			toAccount := moneyAccounts[0]
-			toAccountDataOld, err := au.Lookup(i-1, toAccount, false)
+			toAccountDataOld, validThrough, err := au.LookupWithoutRewards(i-1, toAccount)
 			require.NoError(t, err)
+			require.Equal(t, i-1, validThrough)
 			toAccountDataNew := toAccountDataOld
 
 			for j := 1; j < len(moneyAccounts); j++ {
 				fromAccount := moneyAccounts[j]
 
-				fromAccountDataOld, err := au.Lookup(i-1, fromAccount, false)
+				fromAccountDataOld, validThrough, err := au.LookupWithoutRewards(i-1, fromAccount)
 				require.NoError(t, err)
+				require.Equal(t, i-1, validThrough)
 				require.Equalf(t, moneyAccountsExpectedAmounts[i-1][j], fromAccountDataOld.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, i)
 
 				fromAccountDataNew := fromAccountDataOld
@@ -747,20 +755,20 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 					if checkRound < uint64(testback) {
 						continue
 					}
-					acct, err := au.Lookup(basics.Round(checkRound-uint64(testback)), moneyAccounts[j], false)
+					acct, validThrough, err := au.LookupWithoutRewards(basics.Round(checkRound-uint64(testback)), moneyAccounts[j])
 					// we might get an error like "round 2 before dbRound 5", which is the success case, so we'll ignore it.
-					if err != nil {
+					roundOffsetError := &RoundOffsetError{}
+					if errors.As(err, &roundOffsetError) {
+						require.Equal(t, basics.Round(0), validThrough)
 						// verify it's the expected error and not anything else.
-						var r1, r2 int
-						n, err2 := fmt.Sscanf(err.Error(), "round %d before dbRound %d", &r1, &r2)
-						require.NoErrorf(t, err2, "unable to parse : %v", err)
-						require.Equal(t, 2, n)
-						require.Less(t, r1, r2)
+						require.Less(t, int64(roundOffsetError.round), int64(roundOffsetError.dbRound))
 						if testback > 1 {
 							testback--
 						}
 						continue
 					}
+					require.NoError(t, err)
+					require.GreaterOrEqual(t, int64(validThrough), int64(basics.Round(checkRound-uint64(testback))))
 					// if we received no error, we want to make sure the reported amount is correct.
 					require.Equalf(t, moneyAccountsExpectedAmounts[checkRound-uint64(testback)][j], acct.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, checkRound)
 					testback++
@@ -791,8 +799,9 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		au.waitAccountsWriting()
 
 		for idx, addr := range moneyAccounts {
-			balance, err := au.Lookup(lastRound, addr, false)
+			balance, validThrough, err := au.LookupWithoutRewards(lastRound, addr)
 			require.NoErrorf(t, err, "unable to retrieve balance for account idx %d %v", idx, addr)
+			require.Equal(t, lastRound, validThrough)
 			if idx != 0 {
 				require.Equalf(t, 100*1000000-roundCount*(roundCount-1)/2, int(balance.MicroAlgos.Raw), "account idx %d %v has the wrong balance", idx, addr)
 			} else {
