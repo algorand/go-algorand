@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -161,9 +162,18 @@ func makeSession(disassembly string, line int) (s *session) {
 }
 
 func (s *session) resume() {
-	select {
-	case s.acknowledged <- true:
-	default:
+	// There is a chance for race in automated environments like tests and scripted executions:
+	// acknowledged channel is not listening but attempted to write here.
+	// See a comment in Registered function.
+	// This loop adds delays to mitigate possible race:
+	// if the channel is not ready then yield and give another go-routine a chance.
+	for i := 0; i < 50; i++ {
+		select {
+		case s.acknowledged <- true:
+			return
+		default:
+			time.Sleep(1 * time.Millisecond)
+		}
 	}
 }
 
@@ -451,14 +461,15 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 		return err
 	}
 	s.line.Store(state.Line)
+	cfg := s.debugConfig
 
-	go func() {
+	// copy state to prevent a data race in this the go-routine and upcoming updates to the state
+	go func(localState logic.DebugState) {
 		// Check if we are triggered and acknowledge asynchronously
-		cfg := s.debugConfig
 		if cfg.BreakAtLine != noBreak {
-			if cfg.BreakAtLine == stepBreak || breakpointLine(state.Line) == cfg.BreakAtLine {
+			if cfg.BreakAtLine == stepBreak || breakpointLine(localState.Line) == cfg.BreakAtLine {
 				// Breakpoint hit! Inform the user
-				s.notifications <- Notification{"updated", *state}
+				s.notifications <- Notification{"updated", localState}
 			} else {
 				// Continue if we haven't hit the next breakpoint
 				s.acknowledged <- true
@@ -467,7 +478,7 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 			// User won't send acknowledgment, so we will
 			s.acknowledged <- true
 		}
-	}()
+	}(*state)
 
 	// Let TEAL continue when acknowledged
 	<-s.acknowledged
