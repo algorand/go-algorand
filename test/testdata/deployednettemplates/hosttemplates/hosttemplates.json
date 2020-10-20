@@ -13,6 +13,12 @@
       "BaseConfiguration": "c5.4xlarge"
     },
     {
+      "Name": "AWS-US-WEST-1-m5d.large",
+      "Provider": "AWS",
+      "Region": "us-west-1",
+      "BaseConfiguration": "m5d.large"
+    },
+    {
       "Name": "AWS-US-WEST-1-m5d.2xl",
       "Provider": "AWS",
       "Region": "us-west-1",
