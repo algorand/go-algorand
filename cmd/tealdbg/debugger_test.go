@@ -17,6 +17,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -117,4 +118,71 @@ int 1
 	require.True(t, da.started)
 	require.True(t, da.ended)
 	require.Equal(t, 3, da.eventCount) // register, update, complete
+}
+
+func TestSession(t *testing.T) {
+	source := fmt.Sprintf("#pragma version %d\nint 1\ndup\n+\n", logic.LogicVersion)
+	program, offsets, err := logic.AssembleStringWithVersionEx(source, logic.LogicVersion)
+	require.NoError(t, err)
+	disassembly, err := logic.Disassemble(program)
+	require.NoError(t, err)
+
+	// create a sample disassembly line to pc mapping
+	// this simple source is similar to disassembly except intcblock at the begining
+	pcOffset := make(map[int]int, len(offsets))
+	for pc, line := range offsets {
+		pcOffset[line+1] = pc
+	}
+
+	s := makeSession(disassembly, 0)
+	s.source = source
+	s.programName = "test"
+	s.offsetToLine = offsets
+	s.pcOffset = pcOffset
+	err = s.SetBreakpoint(2)
+	require.NoError(t, err)
+
+	sig := make(chan struct{})
+	ackCount := 0
+	ackFunc := func() {
+		sig <- struct{}{}
+		<-s.acknowledged
+		ackCount++
+		<-sig
+	}
+	go ackFunc()
+
+	<-sig
+	s.Resume()
+	sig <- struct{}{}
+
+	require.Equal(t, breakpointLine(2), s.debugConfig.BreakAtLine)
+	require.Equal(t, breakpoint{true, true}, s.breakpoints[2])
+	require.Equal(t, 1, ackCount)
+
+	s.SetBreakpointsActive(false)
+	require.Equal(t, breakpoint{true, false}, s.breakpoints[2])
+
+	s.SetBreakpointsActive(true)
+	require.Equal(t, breakpoint{true, true}, s.breakpoints[2])
+
+	s.RemoveBreakpoint(2)
+	require.Equal(t, breakpoint{false, false}, s.breakpoints[2])
+
+	go ackFunc()
+
+	<-sig
+	s.Step()
+	sig <- struct{}{}
+
+	require.Equal(t, stepBreak, s.debugConfig.BreakAtLine)
+	require.Equal(t, 2, ackCount)
+
+	data, err := s.GetSourceMap()
+	require.NoError(t, err)
+	require.Greater(t, len(data), 0)
+
+	name, data := s.GetSource()
+	require.NotEmpty(t, name)
+	require.Greater(t, len(data), 0)
 }

@@ -48,7 +48,7 @@ type cdtState struct {
 	pc      atomicInt
 	line    atomicInt
 	err     atomicString
-	appState
+	AppState
 
 	// debugger states
 	lastAction      atomicString
@@ -64,7 +64,7 @@ type cdtStateUpdate struct {
 	line    int
 	err     string
 
-	appState
+	AppState
 }
 
 type typeHint int
@@ -106,7 +106,7 @@ func (s *cdtState) Update(state cdtStateUpdate) {
 	s.err.Store(state.err)
 	s.stack = state.stack
 	s.scratch = state.scratch
-	s.appState = state.appState
+	s.AppState = state.AppState
 }
 
 const localScopeObjID = "localScopeObjId"
@@ -677,13 +677,13 @@ func makeLocalScope(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescri
 		scratch,
 	}
 
-	if !s.appState.empty() {
+	if !s.AppState.empty() {
 		var global, local cdt.RuntimePropertyDescriptor
-		if len(s.appState.global) > 0 {
+		if len(s.AppState.global) > 0 {
 			global = makeObject("appGlobal", appGlobalObjID)
 			desc = append(desc, global)
 		}
-		if len(s.appState.locals) > 0 {
+		if len(s.AppState.locals) > 0 {
 			local = makeObject("appLocals", appLocalsObjID)
 			desc = append(desc, local)
 		}
@@ -792,7 +792,7 @@ func makeTxnGroup(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescript
 }
 
 func makeAppGlobalState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
-	for key := range s.appState.global {
+	for key := range s.AppState.global {
 		s := strconv.Itoa(int(key))
 		item := makeObject(s, encodeAppGlobalAppID(s))
 		desc = append(desc, item)
@@ -801,7 +801,7 @@ func makeAppGlobalState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDe
 }
 
 func makeAppLocalsState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
-	for addr := range s.appState.locals {
+	for addr := range s.AppState.locals {
 		a := addr.String()
 		item := makeObject(a, encodeAppLocalsAddr(a))
 		desc = append(desc, item)
@@ -815,7 +815,7 @@ func makeAppLocalState(s *cdtState, addr string) (desc []cdt.RuntimePropertyDesc
 		return
 	}
 
-	if state, ok := s.appState.locals[a]; ok {
+	if state, ok := s.AppState.locals[a]; ok {
 		for key := range state {
 			s := strconv.Itoa(int(key))
 			item := makeObject(s, encodeAppLocalsAppID(addr, s))
@@ -826,7 +826,7 @@ func makeAppLocalState(s *cdtState, addr string) (desc []cdt.RuntimePropertyDesc
 }
 
 func makeAppGlobalKV(s *cdtState, appID uint64) (desc []cdt.RuntimePropertyDescriptor) {
-	if tkv, ok := s.appState.global[basics.AppIndex(appID)]; ok {
+	if tkv, ok := s.AppState.global[basics.AppIndex(appID)]; ok {
 		return tkvToRpd(tkv)
 	}
 	return
@@ -838,7 +838,7 @@ func makeAppLocalsKV(s *cdtState, addr string, appID uint64) (desc []cdt.Runtime
 		return
 	}
 
-	state, ok := s.appState.locals[a]
+	state, ok := s.AppState.locals[a]
 	if !ok {
 		return
 	}

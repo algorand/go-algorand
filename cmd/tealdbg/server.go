@@ -107,16 +107,17 @@ func makeDebugServer(port int, ff FrontendFactory, dp *DebugParams) DebugServer 
 	}
 }
 
-func (ds *DebugServer) startRemote() {
+func (ds *DebugServer) startRemote() error {
 	remote := MakeRemoteHook(ds.debugger)
 	remote.Setup(ds.router)
 	ds.remote = remote
 
 	log.Printf("starting server on %s", ds.server.Addr)
 	err := ds.server.ListenAndServe()
-	if err != nil {
-		log.Panicf("failed to listen: %v", err)
+	if err != nil && err != http.ErrServerClosed {
+		return err
 	}
+	return nil
 }
 
 func (ds *DebugServer) startDebug() (err error) {
@@ -126,8 +127,8 @@ func (ds *DebugServer) startDebug() (err error) {
 	}
 
 	go func() {
-		err = ds.server.ListenAndServe()
-		if err != nil {
+		err := ds.server.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
 			log.Panicf("failed to listen: %v", err)
 		}
 	}()
