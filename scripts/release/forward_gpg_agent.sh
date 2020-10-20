@@ -31,7 +31,7 @@ INSTANCE=$(ssh -i "$JENKINS_KEY" "$JENKINS" sudo cat /opt/jenkins/workspace/"$BR
 gpgp=$(find /usr/lib/gnupg{2,,1} -type f -name gpg-preset-passphrase 2> /dev/null)
 
 # Here we need to grab the signing subkey, hence `tail -1`.
-KEYGRIP=$(gpg -K --with-keygrip --textmode dev@algorand.com | egrep -A 1 '^ssb[^#]' | grep Keygrip | awk '{ print $3 }')
+KEYGRIP=$(gpg -K --with-keygrip --textmode dev@algorand.com | grep -AE 1 '^ssb[^#]' | grep Keygrip | awk '{ print $3 }')
 echo "enter dev@ password"
 $gpgp --verbose --preset "$KEYGRIP"
 
