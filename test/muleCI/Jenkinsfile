@@ -1,3 +1,3 @@
-@Library('go-algorand-ci') _
+@Library('go-algorand-ci@brice/commentOutDarwin') _
 
-muleCI('test/muleCI/mule.yaml', '0.0.9')
+muleCI('test/muleCI/mule.yaml', '0.0.12')

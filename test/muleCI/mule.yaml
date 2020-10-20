@@ -1,4 +1,73 @@
+agents:
+  - name: cicd.ubuntu.amd64
+    dockerFilePath: docker/build/cicd.ubuntu.Dockerfile
+    image: algorand/go-algorand-ci-linux-ubuntu
+    version: scripts/configure_dev-deps.sh
+    arch: amd64
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+      - ARCH=amd64
+  - name: cicd.centos.amd64
+    dockerFilePath: docker/build/cicd.centos.Dockerfile
+    image: algorand/go-algorand-ci-linux-centos
+    version: scripts/configure_dev-deps.sh
+    arch: amd64
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+      - ARCH=amd64
+  - name: cicd.ubuntu.arm64
+    dockerFilePath: docker/build/cicd.ubuntu.Dockerfile
+    image: algorand/go-algorand-ci-linux-ubuntu
+    version: scripts/configure_dev-deps.sh
+    arch: arm64v8
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+      - ARCH=arm64v8
+  - name: cicd.alpine.arm
+    dockerFilePath: docker/build/cicd.alpine.Dockerfile
+    image: algorand/go-algorand-ci-linux
+    version: scripts/configure_dev-deps.sh
+    arch: arm32v6
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+      - ARCH=arm32v6
+  - name: docker-ubuntu
+    dockerFilePath: docker/build/docker.ubuntu.Dockerfile
+    image: algorand/go-algorand-docker-linux-ubuntu
+    version: scripts/configure_dev-deps.sh
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
 tasks:
+  - task: docker.Make
+    name: build.amd64
+    agent: cicd.ubuntu.amd64
+    target: ci-build
+  - task: docker.Make
+    name: build.arm64
+    agent: cicd.ubuntu.arm64
+    target: ci-build
+  - task: docker.Make
+    name: build.arm
+    agent: cicd.alpine.arm
+    target: ci-build
+
+  - task: docker.Make
+    name: archive.amd64
+    agent: cicd.centos.amd64
+    target: archive
+
+  - task: docker.Make
+    name: rpm.amd64
+    agent: cicd.centos.amd64
+    target: mule-package-rpm
+  - task: docker.Make
+    name: deb.amd64
+    agent: cicd.ubuntu.amd64
+    target: mule-package-deb
+
   # Stash tasks
   - task: stash.Stash
     name: linux-amd64
@@ -31,17 +100,23 @@ tasks:
       - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
   - task: stash.Stash
-    name: linux-arm32
+    name: linux-arm
     bucketName: go-algorand-ci-cache
-    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm32
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
     globSpecs:
       - tmp/node_pkgs/**
       - crypto/libs/**
       - gen/devnet/genesis.json
       - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
+  - task: stash.Stash
+    name: packages
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/packages
+    globSpecs:
+      - tmp/node_pkgs/**
 
-  # Unstash tasks
+    # Unstash tasks
   - task: stash.Unstash
     name: linux-arm64
     bucketName: go-algorand-ci-cache
@@ -55,145 +130,46 @@ tasks:
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
   - task: stash.Unstash
-    name: linux-arm32
+    name: linux-arm
     bucketName: go-algorand-ci-cache
-    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm32
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
+  - task: stash.Unstash
+    name: packages
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/packages
 
-  # Docker tasks
-  - task: docker.Version
-    configFilePath: scripts/configure_dev-deps.sh
-  - task: shell.docker.Ensure
-    name: centos
-    image: algorand/go-algorand-ci-linux
-    version: '{{ docker.Version.outputs.version }}'
-    dockerFilePath: docker/build/cicd.centos.Dockerfile
-    dependencies: docker.Version
-  - task: shell.docker.Ensure
-    name: alpine
-    image: algorand/go-algorand-ci-linux
-    version: '{{ docker.Version.outputs.version }}'
-    dockerFilePath: docker/build/cicd.alpine.Dockerfile
-    dependencies: docker.Version
   - task: docker.Make
-    name: build
-    docker:
-      image: algorand/go-algorand-ci-linux
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /go/src/github.com/algorand/go-algorand
-    target: ci-build
-  - task: docker.Make
-    name: fulltest
-    docker:
-      image: algorand/go-algorand-ci-linux
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /go/src/github.com/algorand/go-algorand
-    target: fulltest -j4
-  - task: docker.Make
-    name: integration-test
-    docker:
-      env:
-        - SHORTTEST=-short
-      image: algorand/go-algorand-ci-linux
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /go/src/github.com/algorand/go-algorand
-    target: ci-integration -j4
-  - task: docker.Make
-    name: archive
-    docker:
-      image: algorand/go-algorand-ci-linux
-      version: '{{ docker.Version.outputs.version }}'
-      workDir: /go/src/github.com/algorand/go-algorand
-    target: ci-archive
-
-  # Local Tasks
-  - task: shell.Make
-    name: ci-deps build
-    target: ci-build
-  - task: shell.Make
-    name: fulltest
-    target: fulltest -j4
-  - task: shell.Make
-    name: integration-test
-    target: ci-integration -j4
-  - task: shell.Make
-    name: archive
-    target: archive
+    name: docker-image
+    agent: docker-ubuntu
+    target: mule-package-docker
 
 jobs:
-  # Linux amd64 jobs
   build-linux-amd64:
-    configs:
-      arch: amd64
     tasks:
-      - shell.docker.Ensure.centos
-      - docker.Make.build
+      - docker.Make.build.amd64
       - stash.Stash.linux-amd64
-  test-linux-amd64-integration:
-    configs:
-      arch: amd64
-    tasks:
-      - shell.docker.Ensure.centos
-      - stash.Unstash.linux-amd64
-      - docker.Make.integration-test
-  test-linux-amd64-fulltest:
-    configs:
-      arch: amd64
-    tasks:
-      - shell.docker.Ensure.centos
-      - docker.Make.fulltest
-
-  # Darwin amd64 jobs
-# build-darwin-amd64:
-#   configs:
-#     arch: amd64
-#   tasks:
-#     - shell.Make.build
-#     - stash.Stash.darwin-amd64
-# test-darwin-amd64-integration:
-#   configs:
-#     arch: amd64
-#   tasks:
-#     - stash.Unstash.darwin-amd64
-#     - shell.Make.integration-test
-# test-darwin-amd64-fulltest:
-#   configs:
-#     arch: amd64
-#   tasks:
-#     - shell.Make.fulltest
-
-  # Linux arm64 jobs
   build-linux-arm64:
-    configs:
-      arch: arm64v8
     tasks:
-      - shell.docker.Ensure.centos
-      - docker.Make.build
+      - docker.Make.build.arm64
       - stash.Stash.linux-arm64
-  test-linux-arm64-integration:
-    configs:
-      arch: arm64v8
-    tasks:
-      - shell.docker.Ensure.centos
-      - stash.Unstash.linux-arm64
-      - docker.Make.integration-test
-
-  # Linux arm32 jobs
   build-linux-arm32:
-    configs:
-      arch: arm32v6
     tasks:
-      - shell.docker.Ensure.alpine
-      - docker.Make.build
-      - stash.Stash.linux-arm32
-  
-  # Archive jobs
-  archive-linux-amd64:
-    configs:
-      arch: amd64
+      - docker.Make.build.arm
+      - stash.Stash.linux-arm
+
+  package-linux-amd64:
     tasks:
-      - shell.docker.Ensure.centos
       - stash.Unstash.linux-amd64
-    # - stash.Unstash.darwin-amd64
       - stash.Unstash.linux-arm64
-      - stash.Unstash.linux-arm32
-      - docker.Make.archive
+      - stash.Unstash.linux-arm
+      - docker.Make.deb.amd64
+      - docker.Make.rpm.amd64
+      - stash.Stash.packages
+  archive-linux-amd64:
+    tasks:
+      - stash.Unstash.packages
+      - docker.Make.archive.amd64
+
+  package-docker:
+    tasks:
+      - docker.Make.docker-image
