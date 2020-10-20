@@ -36,9 +36,17 @@ type Notification struct {
 
 // DebugAdapter represents debugger frontend (i.e. CDT, webpage, VSCode, etc)
 type DebugAdapter interface {
+	// SessionStarted is called by the debugging core on the beginning of execution.
+	// Control interface must be used to manage execution (step, break, resume, etc).
+	// Notification channel must be used for receiving events from the debugger.
 	SessionStarted(sid string, debugger Control, ch chan Notification)
+	// SessionStarted is called by the debugging core on the competion of execution.
 	SessionEnded(sid string)
+	// WaitForCompletion must returns only when all session were completed and block otherwise.
 	WaitForCompletion()
+	// URL returns the most frontend URL for the most recent session
+	// or an empty string if there are no sessions yet.
+	URL() string
 }
 
 // Control interface for execution control

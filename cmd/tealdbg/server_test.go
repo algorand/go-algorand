@@ -46,6 +46,10 @@ func (t testServerDebugFrontend) SessionEnded(sid string) {
 func (t testServerDebugFrontend) WaitForCompletion() {
 }
 
+func (t testServerDebugFrontend) URL() string {
+	return ""
+}
+
 func (t testServerDebugFrontend) eventLoop() {
 	for {
 		select {

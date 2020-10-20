@@ -66,6 +66,10 @@ func (d *testDbgAdapter) SessionEnded(sid string) {
 	d.ended = true
 }
 
+func (d *testDbgAdapter) URL() string {
+	return ""
+}
+
 func (d *testDbgAdapter) eventLoop() {
 	for {
 		select {
