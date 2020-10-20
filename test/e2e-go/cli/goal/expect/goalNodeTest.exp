@@ -40,7 +40,7 @@ if { [catch {
     spawn goal node stop -d $TEST_PRIMARY_NODE_DIR
     expect {
         timeout { close; ::AlgorandGoal::Abort "Goal Node Stop did not fail as expected" }
-        "^Cannot kill node: Node in directory * has already stopped" {puts "Node failed successfully"; close}
+        "^Cannot kill node: no running node in directory '*'" {puts "Node failed successfully"; close}
         eof { close; ::AlgorandGoal::Abort "Goal Node Stop did not fail as expected" }
     }
 
@@ -48,7 +48,7 @@ if { [catch {
     spawn goal node stop -d ''
     expect {
         timeout { close; ::AlgorandGoal::Abort "Goal Node Fail did not fail as expected" }
-        "^Cannot kill node: '' is not a valid directory" {puts "Node failed successfully"; close}
+        "^Cannot kill node: the provided directory '*' does not exist" {puts "Node failed successfully"; close}
         eof { close; ::AlgorandGoal::Abort "Goal Node Stop did not fail as expected" }
     }
 

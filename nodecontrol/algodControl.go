@@ -40,20 +40,22 @@ const StdErrFilename = "algod-err.log"
 // StdOutFilename is the name of the file in <datadir> where stdout will be captured if not redirected to host
 const StdOutFilename = "algod-out.log"
 
-type NodeAlreadyStoppedError struct {
+// NodeNotRunningError thrown when StopAlgod is called but there is no running algod in requested directory
+type NodeNotRunningError struct {
 	algodDataDir string
 }
 
-func (e *NodeAlreadyStoppedError) Error() string {
-	return fmt.Sprintf("Node in directory %s has already stopped", e.algodDataDir)
+func (e *NodeNotRunningError) Error() string {
+	return fmt.Sprintf("no running node in directory '%s'", e.algodDataDir)
 }
 
-type InvalidDataDirError struct {
+// MissingDataDirError thrown when StopAlgod is called but requested directory does not exist
+type MissingDataDirError struct {
 	algodDataDir string
 }
 
-func (e *InvalidDataDirError) Error() string {
-	return fmt.Sprintf("%s is not a valid directory", e.algodDataDir)
+func (e *MissingDataDirError) Error() string {
+	return fmt.Sprintf("the provided directory '%s' does not exist", e.algodDataDir)
 }
 
 // AlgodClient attempts to build a client.RestClient for communication with
@@ -150,9 +152,9 @@ func (nc NodeController) algodRunning() (isRunning bool) {
 
 // StopAlgod reads the net file and kills the algod process
 func (nc *NodeController) StopAlgod() (err error) {
-	// Check for valid data director
+	// Check for valid data directory
 	if !util.IsDir(nc.algodDataDir) {
-		return &InvalidDataDirError{algodDataDir: nc.algodDataDir}
+		return &MissingDataDirError{algodDataDir: nc.algodDataDir}
 	}
 	// Find algod PID
 	algodPID, err := nc.GetAlgodPID()
@@ -163,7 +165,7 @@ func (nc *NodeController) StopAlgod() (err error) {
 			return
 		}
 	} else {
-		return &NodeAlreadyStoppedError{algodDataDir: nc.algodDataDir}
+		return &NodeNotRunningError{algodDataDir: nc.algodDataDir}
 	}
 	return
 }
