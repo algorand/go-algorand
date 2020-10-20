@@ -545,9 +545,12 @@ func printAccountInfo(client libgoal.Client, address string, account v1.Account)
 	}
 	sortUint64Slice(optedInApps)
 
-	fmt.Println("Created Assets:")
+	report := &strings.Builder{}
+	errorReport := &strings.Builder{}
+
+	fmt.Fprintln(report, "Created Assets:")
 	if len(createdAssets) == 0 {
-		fmt.Println("\t<none>")
+		fmt.Fprintln(report, "\t<none>")
 	}
 	for _, id := range createdAssets {
 		assetParams := account.AssetParams[id]
@@ -566,19 +569,19 @@ func printAccountInfo(client libgoal.Client, address string, account v1.Account)
 			url = fmt.Sprintf(", %s", assetParams.URL)
 		}
 
-		fmt.Printf("\tID %d, %s, supply %s %s%s\n", id, name, total, units, url)
+		fmt.Fprintf(report, "\tID %d, %s, supply %s %s%s\n", id, name, total, units, url)
 	}
 
-	fmt.Println("Held Assets:")
+	fmt.Fprintln(report, "Held Assets:")
 	if len(heldAssets) == 0 {
-		fmt.Println("\t<none>")
+		fmt.Fprintln(report, "\t<none>")
 	}
 	for _, id := range heldAssets {
 		assetHolding := account.Assets[id]
 		assetParams, err := client.AssetInformation(id)
 		if err != nil {
-			reportErrorf(errorRequestFail, err)
-			fmt.Printf("\tID %d, error retrieving asset information: %s\n", id, err)
+			fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", id, address, err)
+			fmt.Fprintf(report, "\tID %d, error\n", id)
 		}
 
 		amount := assetDecimalsFmt(assetHolding.Amount, assetParams.Decimals)
@@ -598,12 +601,12 @@ func printAccountInfo(client libgoal.Client, address string, account v1.Account)
 			frozen = " (frozen)"
 		}
 
-		fmt.Printf("\tID %d, %s, balance %s %s%s\n", id, assetName, amount, unitName, frozen)
+		fmt.Fprintf(report, "\tID %d, %s, balance %s %s%s\n", id, assetName, amount, unitName, frozen)
 	}
 
-	fmt.Println("Created Apps:")
+	fmt.Fprintln(report, "Created Apps:")
 	if len(createdApps) == 0 {
-		fmt.Println("\t<none>")
+		fmt.Fprintln(report, "\t<none>")
 	}
 	for _, id := range createdApps {
 		appParams := account.AppParams[id]
@@ -616,12 +619,12 @@ func printAccountInfo(client libgoal.Client, address string, account v1.Account)
 				usedBytes++
 			}
 		}
-		fmt.Printf("\tID %d, global state used %d/%d uints, %d/%d byte slices\n", id, usedInts, appParams.GlobalStateSchema.NumUint, usedBytes, appParams.GlobalStateSchema.NumByteSlice)
+		fmt.Fprintf(report, "\tID %d, global state used %d/%d uints, %d/%d byte slices\n", id, usedInts, appParams.GlobalStateSchema.NumUint, usedBytes, appParams.GlobalStateSchema.NumByteSlice)
 	}
 
-	fmt.Println("Opted In Apps:")
+	fmt.Fprintln(report, "Opted In Apps:")
 	if len(optedInApps) == 0 {
-		fmt.Println("\t<none>")
+		fmt.Fprintln(report, "\t<none>")
 	}
 	for _, id := range optedInApps {
 		localState := account.AppLocalStates[id]
@@ -634,8 +637,10 @@ func printAccountInfo(client libgoal.Client, address string, account v1.Account)
 				usedBytes++
 			}
 		}
-		fmt.Printf("\tID %d, local state used %d/%d uints, %d/%d byte slices\n", id, usedInts, localState.Schema.NumUint, usedBytes, localState.Schema.NumByteSlice)
+		fmt.Fprintf(report, "\tID %d, local state used %d/%d uints, %d/%d byte slices\n", id, usedInts, localState.Schema.NumUint, usedBytes, localState.Schema.NumByteSlice)
 	}
+
+	fmt.Print(errorReport.String(), report.String())
 }
 
 var balanceCmd = &cobra.Command{
