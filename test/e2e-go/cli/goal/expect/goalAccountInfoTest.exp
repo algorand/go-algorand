@@ -1,0 +1,159 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+if { [catch {
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set timeout 60
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50Each.json"
+    set TEAL_PROGS_DIR "$TEST_DATA_DIR/../scripts/e2e_subs/tealprogs"
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    set EMPTY_EXPECTED "Created Assets:
+\t<none>
+Held Assets:
+\t<none>
+Created Apps:
+\t<none>
+Opted In Apps:
+\t<none>"
+
+    # Check info with no assets
+    puts "goal account info -w $PRIMARY_WALLET_NAME -a $PRIMARY_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR"
+    set EMPTY_ACTUAL [exec goal account info -w $PRIMARY_WALLET_NAME -a $PRIMARY_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR]
+    puts $EMPTY_ACTUAL
+
+    if { $EMPTY_ACTUAL ne $EMPTY_EXPECTED } {
+        ::AlgorandGoal::Abort "Invalid response for account info. Expected:\n$EMPTY_EXPECTED"
+    }
+
+    # Create A-Coin
+    set ACOIN_UNIT_NAME "AC"
+    ::AlgorandGoal::AssetCreate $PRIMARY_ACCOUNT_ADDRESS $PRIMARY_WALLET_NAME "" 1000 0 "A-Coin" $ACOIN_UNIT_NAME $TEST_PRIMARY_NODE_DIR
+
+    # Create B-Coin
+    set BCOIN_UNIT_NAME "BC"
+    ::AlgorandGoal::AssetCreate $PRIMARY_ACCOUNT_ADDRESS $PRIMARY_WALLET_NAME "" 1000 0 "" $BCOIN_UNIT_NAME $TEST_PRIMARY_NODE_DIR
+
+    # Create C-Coin
+    set CCOIN_UNIT_NAME ""
+    ::AlgorandGoal::AssetCreate $PRIMARY_ACCOUNT_ADDRESS $PRIMARY_WALLET_NAME "" 1000 0 "C-Coin" $CCOIN_UNIT_NAME $TEST_PRIMARY_NODE_DIR
+
+    # Create D-Coin
+    set DCOIN_UNIT_NAME "DC"
+    ::AlgorandGoal::AssetCreate $PRIMARY_ACCOUNT_ADDRESS $PRIMARY_WALLET_NAME "" 1000 2 "D-Coin" $DCOIN_UNIT_NAME $TEST_PRIMARY_NODE_DIR
+
+    # wait about 2 rounds
+    set ASSET_WAIT 10
+    puts "Wait $ASSET_WAIT for asset creation"
+    exec sleep $ASSET_WAIT
+
+    set ACOIN_ASSET_ID [::AlgorandGoal::AssetLookup $PRIMARY_ACCOUNT_ADDRESS $ACOIN_UNIT_NAME $TEST_PRIMARY_NODE_DIR]
+    set BCOIN_ASSET_ID [::AlgorandGoal::AssetLookup $PRIMARY_ACCOUNT_ADDRESS $BCOIN_UNIT_NAME $TEST_PRIMARY_NODE_DIR]
+    set CCOIN_ASSET_ID [::AlgorandGoal::AssetLookup $PRIMARY_ACCOUNT_ADDRESS $CCOIN_UNIT_NAME $TEST_PRIMARY_NODE_DIR]
+    set DCOIN_ASSET_ID [::AlgorandGoal::AssetLookup $PRIMARY_ACCOUNT_ADDRESS $DCOIN_UNIT_NAME $TEST_PRIMARY_NODE_DIR]
+
+    # Freeze D-Coin
+    ::AlgorandGoal::AssetFreeze $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $PRIMARY_ACCOUNT_ADDRESS $DCOIN_ASSET_ID true $TEST_PRIMARY_NODE_DIR
+
+    # wait about 2 rounds
+    puts "Wait $ASSET_WAIT for asset freeze"
+    exec sleep $ASSET_WAIT
+
+    set ASSET_EXPECTED "Created Assets:
+\tID $ACOIN_ASSET_ID, A-Coin, supply 1000 $ACOIN_UNIT_NAME
+\tID $BCOIN_ASSET_ID, <unnamed>, supply 1000 $BCOIN_UNIT_NAME
+\tID $CCOIN_ASSET_ID, C-Coin, supply 1000 units
+\tID $DCOIN_ASSET_ID, D-Coin, supply 10.00 $DCOIN_UNIT_NAME
+Held Assets:
+\tID $ACOIN_ASSET_ID, A-Coin, balance 1000 $ACOIN_UNIT_NAME
+\tID $BCOIN_ASSET_ID, <unnamed>, balance 1000 $BCOIN_UNIT_NAME
+\tID $CCOIN_ASSET_ID, C-Coin, balance 1000 units
+\tID $DCOIN_ASSET_ID, D-Coin, balance 10.00 $DCOIN_UNIT_NAME (frozen)
+Created Apps:
+\t<none>
+Opted In Apps:
+\t<none>"
+
+    # Check info with assets
+    puts "goal account info -w $PRIMARY_WALLET_NAME -a $PRIMARY_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR"
+    set ASSET_ACTUAL [exec goal account info -w $PRIMARY_WALLET_NAME -a $PRIMARY_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR]
+    puts $ASSET_ACTUAL
+
+    if { $ASSET_ACTUAL ne $ASSET_EXPECTED } {
+        ::AlgorandGoal::Abort "Invalid response for account info. Expected:\n$ASSET_EXPECTED"
+    }
+
+    puts "Creating global state app"
+    set GSTATE_GLOBAL_BYTE_SLICES 10
+    set GSTATE_LOCAL_BYTE_SLICES 0
+    set GSTATE_APP_ID [::AlgorandGoal::AppCreate $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS ${TEAL_PROGS_DIR}/globwrite.teal "str:value_to_write" $GSTATE_GLOBAL_BYTE_SLICES $GSTATE_LOCAL_BYTE_SLICES ${TEAL_PROGS_DIR}/clear_program_state.teal $TEST_PRIMARY_NODE_DIR]
+
+    puts "Creating local state app"
+    set LSTATE_GLOBAL_BYTE_SLICES 0
+    set LSTATE_LOCAL_BYTE_SLICES 1
+    set LSTATE_APP_ID [::AlgorandGoal::AppCreateOnCompletion $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS ${TEAL_PROGS_DIR}/loccheck.teal "str:write" $LSTATE_GLOBAL_BYTE_SLICES $LSTATE_LOCAL_BYTE_SLICES ${TEAL_PROGS_DIR}/clear_program_state.teal $TEST_PRIMARY_NODE_DIR "optin"]
+
+    # wait about 2 rounds
+    puts "Wait $ASSET_WAIT for app creation"
+    exec sleep $ASSET_WAIT
+
+    set APP_AND_ASSET_EXPECTED "Created Assets:
+\tID $ACOIN_ASSET_ID, A-Coin, supply 1000 $ACOIN_UNIT_NAME
+\tID $BCOIN_ASSET_ID, <unnamed>, supply 1000 $BCOIN_UNIT_NAME
+\tID $CCOIN_ASSET_ID, C-Coin, supply 1000 units
+\tID $DCOIN_ASSET_ID, D-Coin, supply 10.00 $DCOIN_UNIT_NAME
+Held Assets:
+\tID $ACOIN_ASSET_ID, A-Coin, balance 1000 $ACOIN_UNIT_NAME
+\tID $BCOIN_ASSET_ID, <unnamed>, balance 1000 $BCOIN_UNIT_NAME
+\tID $CCOIN_ASSET_ID, C-Coin, balance 1000 units
+\tID $DCOIN_ASSET_ID, D-Coin, balance 10.00 $DCOIN_UNIT_NAME (frozen)
+Created Apps:
+\tID $GSTATE_APP_ID, global state used 0/0 uints, 1/$GSTATE_GLOBAL_BYTE_SLICES byte slices
+\tID $LSTATE_APP_ID, global state used 0/0 uints, 0/$LSTATE_GLOBAL_BYTE_SLICES byte slices
+Opted In Apps:
+\tID $LSTATE_APP_ID, local state used 0/1 uints, 1/$LSTATE_LOCAL_BYTE_SLICES byte slices"
+
+    # Check info with assets and apps
+    puts "goal account info -w $PRIMARY_WALLET_NAME -a $PRIMARY_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR"
+    set APP_AND_ASSET_ACTUAL [exec goal account info -w $PRIMARY_WALLET_NAME -a $PRIMARY_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR]
+    puts $APP_AND_ASSET_ACTUAL
+
+    if { $APP_AND_ASSET_ACTUAL ne $APP_AND_ASSET_EXPECTED } {
+        ::AlgorandGoal::Abort "Invalid response for account info. Expected:\n$APP_AND_ASSET_EXPECTED"
+    }
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    puts "Goal Account Info Test Successful"
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in goalAccountInfoTest: $EXCEPTION"
+}
