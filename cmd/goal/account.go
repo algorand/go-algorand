@@ -472,6 +472,8 @@ var listCmd = &cobra.Command{
 			os.Exit(0)
 		}
 
+		accountInfoError := false
+
 		// For each address, request information about it from algod
 		for _, addr := range addrs {
 			response, _ := client.AccountInformation(addr.Addr)
@@ -491,8 +493,13 @@ var listCmd = &cobra.Command{
 			}
 
 			if listAccountInfo {
-				printAccountInfo(client, addr.Addr, response)
+				hasError := printAccountInfo(client, addr.Addr, response)
+				accountInfoError = accountInfoError || hasError
 			}
+		}
+
+		if accountInfoError {
+			os.Exit(1)
 		}
 	},
 }
@@ -510,7 +517,10 @@ var infoCmd = &cobra.Command{
 			reportErrorf(errorRequestFail, err)
 		}
 
-		printAccountInfo(client, accountAddress, response)
+		hasError := printAccountInfo(client, accountAddress, response)
+		if hasError {
+			os.Exit(1)
+		}
 	},
 }
 
@@ -520,7 +530,7 @@ func sortUint64Slice(slice []uint64) {
 	})
 }
 
-func printAccountInfo(client libgoal.Client, address string, account v1.Account) {
+func printAccountInfo(client libgoal.Client, address string, account v1.Account) bool {
 	createdAssets := []uint64{}
 	for id := range account.AssetParams {
 		createdAssets = append(createdAssets, id)
@@ -547,6 +557,7 @@ func printAccountInfo(client libgoal.Client, address string, account v1.Account)
 
 	report := &strings.Builder{}
 	errorReport := &strings.Builder{}
+	hasError := false
 
 	fmt.Fprintln(report, "Created Assets:")
 	if len(createdAssets) == 0 {
@@ -580,6 +591,7 @@ func printAccountInfo(client libgoal.Client, address string, account v1.Account)
 		assetHolding := account.Assets[id]
 		assetParams, err := client.AssetInformation(id)
 		if err != nil {
+			hasError = true
 			fmt.Fprintf(errorReport, "Error: Unable to retrieve asset information for asset %d referred to by account %s: %v\n", id, address, err)
 			fmt.Fprintf(report, "\tID %d, error\n", id)
 		}
@@ -640,7 +652,11 @@ func printAccountInfo(client libgoal.Client, address string, account v1.Account)
 		fmt.Fprintf(report, "\tID %d, local state used %d/%d uints, %d/%d byte slices\n", id, usedInts, localState.Schema.NumUint, usedBytes, localState.Schema.NumByteSlice)
 	}
 
-	fmt.Print(errorReport.String(), report.String())
+	if hasError {
+		fmt.Fprint(os.Stderr, errorReport.String())
+	}
+	fmt.Print(report.String())
+	return hasError
 }
 
 var balanceCmd = &cobra.Command{
