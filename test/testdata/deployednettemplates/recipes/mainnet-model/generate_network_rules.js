@@ -1,6 +1,6 @@
 const fs = require('fs');
 
-const RELAY_BANDWIDTH = 100
+const RELAY_BANDWIDTH = 1000
 
 const countries = JSON.parse(fs.readFileSync('./data/countries.json'))
 const countryBandwidths = JSON.parse(fs.readFileSync('./data/bandwidth.json'))
