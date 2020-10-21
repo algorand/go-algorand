@@ -1,7 +1,7 @@
 {
   "network": {
     "wallets": 100,
-    "nodes": 100
+    "nodes": 25
   },
   "instances": {
     "relays": {
@@ -17,7 +17,7 @@
     "nonParticipatingNodes": {
       "config": "./configs/nonPartNode.json",
       "type": "m5d.large",
-      "count": 25
+      "count": 7
     }
   },
   "groups": [
