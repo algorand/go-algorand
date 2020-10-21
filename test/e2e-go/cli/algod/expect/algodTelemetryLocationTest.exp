@@ -19,6 +19,7 @@ if { [catch {
     #allows script to be run outside of go context
     exec mkdir -p $TEST_PRIMARY_NODE_DIR
 
+    exec goal node start -d $TEST_PRIMARY_NODE_DIR
     exec goal node stop -d $TEST_PRIMARY_NODE_DIR
     
     exec rm -f $TEST_PRIMARY_NODE_DIR/logging.config
