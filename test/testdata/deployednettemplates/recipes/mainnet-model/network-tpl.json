@@ -17,7 +17,7 @@
     "nonParticipatingNodes": {
       "config": "./configs/nonPartNode.json",
       "type": "m5d.large",
-      "count": 7
+      "count": 10
     }
   },
   "groups": [

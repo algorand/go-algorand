@@ -257,21 +257,46 @@
         },
         {
             "Name": "NPN2",
-            "Group": "eu-n",
+            "Group": "us-n",
             "Template": "AWS-US-WEST-1-m5d.large"
         },
         {
             "Name": "NPN3",
-            "Group": "ap-n",
+            "Group": "eu-n",
             "Template": "AWS-US-WEST-1-m5d.large"
         },
         {
             "Name": "NPN4",
-            "Group": "af-n",
+            "Group": "eu-n",
             "Template": "AWS-US-WEST-1-m5d.large"
         },
         {
             "Name": "NPN5",
+            "Group": "ap-n",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "NPN6",
+            "Group": "ap-n",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "NPN7",
+            "Group": "af-n",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "NPN8",
+            "Group": "af-n",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "NPN9",
+            "Group": "au-n",
+            "Template": "AWS-US-WEST-1-m5d.large"
+        },
+        {
+            "Name": "NPN10",
             "Group": "au-n",
             "Template": "AWS-US-WEST-1-m5d.large"
         }
