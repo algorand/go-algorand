@@ -105,8 +105,16 @@ func replaceTokens(original string, buildConfig BuildConfig) (expanded string, e
 	expanded = strings.NewReplacer(tokenPairs...).Replace(original)
 
 	// To validate that there wasn't a typo in an intended token, look for obvious clues like "{{" or "}}"
-	if strings.Index(expanded, "{{") >= 0 || strings.Index(expanded, "}}") >= 0 {
-		return "", fmt.Errorf("config file contains unrecognized token: %s", expanded)
+	openIndex := strings.Index(expanded, "{{")
+	closeIndex := strings.Index(expanded, "}}")
+	if openIndex >= 0 || closeIndex >= 0 {
+		if openIndex < 0 {
+			openIndex = 0
+		}
+		if closeIndex < 0 {
+			closeIndex = len(expanded) - 2
+		}
+		return "", fmt.Errorf("config file contains unrecognized token: %s", expanded[openIndex:closeIndex+2])
 	}
 
 	return
