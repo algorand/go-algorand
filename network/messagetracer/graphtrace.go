@@ -16,6 +16,7 @@ type graphtraceMessageTracer struct {
 
 func (gmt *graphtraceMessageTracer) Init(cfg config.Local) MessageTracer {
 	if cfg.NetworkMessageTraceServer == "" {
+		gmt.log.Info("NetworkMessageTraceServer empty graphtrace disabled")
 		return nil
 	}
 	var err error
@@ -36,7 +37,6 @@ func NewGraphtraceMessageTracer(log logging.Logger) MessageTracer {
 }
 
 func init() {
-	log = logging.Base()
 	if implFactory != nil {
 		panic("at most one MessageTracer impl should be compiled in, dup found at graphtrace.go init()")
 	}

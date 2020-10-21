@@ -25,7 +25,9 @@ var singletonNopMessageTracer nopMessageTracer
 
 func NewTracer(log logging.Logger) MessageTracer {
 	if implFactory != nil {
+		log.Info("graphtrace factory enabled")
 		return implFactory(log)
 	}
+	log.Info("graphtrace factory DISabled")
 	return &singletonNopMessageTracer
 }
