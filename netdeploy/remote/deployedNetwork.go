@@ -45,6 +45,16 @@ var ErrDeployedNetworkInsufficientHosts = fmt.Errorf("target network requires mo
 // ErrDeployedNetworkNameCantIncludeWildcard is returned by Validate if network name contains '*'
 var ErrDeployedNetworkNameCantIncludeWildcard = fmt.Errorf("network name cannont include wild-cards")
 
+// ErrDeployedNetworkTemplate A template file contained {{Field}} sections that were not handled by a corresponding Field value in configuration.
+type ErrDeployedNetworkTemplate struct {
+	UnhandledTemplate string
+}
+
+// Error satisfies error interface
+func (ednt ErrDeployedNetworkTemplate) Error() string {
+	return fmt.Sprintf("config file contains unrecognized token: %s", ednt.UnhandledTemplate)
+}
+
 // DeployedNetworkConfig represents the complete configuration specification for a deployed network
 type DeployedNetworkConfig struct {
 	Hosts []HostConfig
@@ -114,7 +124,7 @@ func replaceTokens(original string, buildConfig BuildConfig) (expanded string, e
 		if closeIndex < 0 {
 			closeIndex = len(expanded) - 2
 		}
-		return "", fmt.Errorf("config file contains unrecognized token: %s", expanded[openIndex:closeIndex+2])
+		return "", ErrDeployedNetworkTemplate{expanded[openIndex : closeIndex+2]}
 	}
 
 	return
