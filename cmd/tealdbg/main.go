@@ -29,7 +29,7 @@ import (
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		os.Exit(1)
 	}
 }
@@ -109,12 +109,12 @@ type frontendValue struct {
 func (f *frontendValue) Make(router *mux.Router, appAddress string) (da DebugAdapter) {
 	switch f.value {
 	case "web":
-		wa := MakeWebPageAdapter(&WebPageAdapterParams{router, appAddress})
+		wa := MakeWebPageFrontend(&WebPageFrontendParams{router, appAddress})
 		return wa
 	case "cdt":
 		fallthrough
 	default:
-		cdt := MakeCDTAdapter(&CDTAdapterParams{router, appAddress, verbose})
+		cdt := MakeCdtFrontend(&CdtFrontendParams{router, appAddress, verbose})
 		return cdt
 	}
 }
@@ -171,8 +171,10 @@ func init() {
 
 func debugRemote() {
 	ds := makeDebugServer(port, &frontend, nil)
-
-	ds.startRemote()
+	err := ds.startRemote()
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
 }
 
 func debugLocal(args []string) {
