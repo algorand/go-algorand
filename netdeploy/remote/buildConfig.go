@@ -40,6 +40,7 @@ type BuildConfig struct {
 	CrontabSchedule   string
 	EnableAlgoh       bool
 	DashboardEndpoint string
+	MiscStringString  []string
 }
 
 // LoadBuildConfig loads a BuildConfig structure from a json file

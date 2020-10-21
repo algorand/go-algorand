@@ -42,10 +42,6 @@ var ErrDeployedNetworkRootDirExists = fmt.Errorf("unable to generate deployed ne
 // ErrDeployedNetworkInsufficientHosts is returned by Validate if our target network requires more hosts than the topology provides
 var ErrDeployedNetworkInsufficientHosts = fmt.Errorf("target network requires more hosts than the topology provides")
 
-// ErrDeployedNetworkTokenError is returned by InitDeployedNetworkConfig
-// if the config file contains {{ or }} after token replacement
-var ErrDeployedNetworkTokenError = fmt.Errorf("config file contains unrecognized token")
-
 // ErrDeployedNetworkNameCantIncludeWildcard is returned by Validate if network name contains '*'
 var ErrDeployedNetworkNameCantIncludeWildcard = fmt.Errorf("network name cannont include wild-cards")
 
@@ -104,12 +100,13 @@ func replaceTokens(original string, buildConfig BuildConfig) (expanded string, e
 	tokenPairs = append(tokenPairs, "{{CrontabSchedule}}", buildConfig.CrontabSchedule)
 	tokenPairs = append(tokenPairs, "{{EnableAlgoh}}", strconv.FormatBool(buildConfig.EnableAlgoh))
 	tokenPairs = append(tokenPairs, "{{DashboardEndpoint}}", buildConfig.DashboardEndpoint)
+	tokenPairs = append(tokenPairs, buildConfig.MiscStringString...)
 
 	expanded = strings.NewReplacer(tokenPairs...).Replace(original)
 
 	// To validate that there wasn't a typo in an intended token, look for obvious clues like "{{" or "}}"
 	if strings.Index(expanded, "{{") >= 0 || strings.Index(expanded, "}}") >= 0 {
-		return "", ErrDeployedNetworkTokenError
+		return "", fmt.Errorf("config file contains unrecognized token: %s", expanded)
 	}
 
 	return
