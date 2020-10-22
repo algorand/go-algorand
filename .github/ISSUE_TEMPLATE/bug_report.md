@@ -1,9 +1,12 @@
 ---
-name: '🐜 Bug report'
-about: 'Report a reproducible bug.'
+name: "\U0001F41C Bug report"
+about: Report a reproducible bug.
 title: ''
-labels: 'new-bug'
+labels: new-bug
+assignees: ''
+
 ---
+
 <!--
 NOTE: If this issue relates to security, please use the vulnerability disclosure form here:
 https://www.algorand.com/resources/blog/security
