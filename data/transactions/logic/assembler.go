@@ -1322,6 +1322,7 @@ func disDefault(dis *disassembleState, spec *OpSpec) {
 	_, dis.err = fmt.Fprintf(dis.out, "%s\n", spec.Name)
 }
 
+var errShortIntcblock  = errors.New("intcblock ran past end of program")
 var errTooManyIntc = errors.New("intcblock with too many items")
 
 func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err error) {
@@ -1339,7 +1340,7 @@ func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err erro
 	intc = make([]uint64, numInts)
 	for i := uint64(0); i < numInts; i++ {
 		if pos >= len(program) {
-			err = fmt.Errorf("bytecblock ran past end of program")
+			err = errShortIntcblock
 			return
 		}
 		intc[i], bytesUsed = binary.Uvarint(program[pos:])
@@ -1368,7 +1369,7 @@ func checkIntConstBlock(cx *evalContext) int {
 	//intc = make([]uint64, numInts)
 	for i := uint64(0); i < numInts; i++ {
 		if pos >= len(cx.program) {
-			cx.err = fmt.Errorf("bytecblock ran past end of program")
+			cx.err = errShortIntcblock
 			return 0
 		}
 		_, bytesUsed = binary.Uvarint(cx.program[pos:])
