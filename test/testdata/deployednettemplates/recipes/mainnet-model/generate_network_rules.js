@@ -1,6 +1,7 @@
 const fs = require('fs');
 
 const RELAY_BANDWIDTH = 1000
+const SAME_REGION_RELAY_TO_RELAY_LATENCY = 10
 
 const countries = JSON.parse(fs.readFileSync('./data/countries.json'))
 const countryBandwidths = JSON.parse(fs.readFileSync('./data/bandwidth.json'))
@@ -60,9 +61,15 @@ Object.keys(continentToGroup).forEach((source) => {
         targetGroup = continentToGroup[target]
         const bandwidth = average(continentBandwidths[source]['bandwidths'])
         const latency = latencyMap[source][target]
+        var relay_to_relay_latency
+        if (sourceGroup==targetGroup) {
+            relay_to_relay_latency = SAME_REGION_RELAY_TO_RELAY_LATENCY
+        } else {
+            relay_to_relay_latency = latency
+        }
         writer.write(`${sourceGroup}-n ${targetGroup}-r ${Math.round(bandwidth)} ${Math.round(latency)}\n`)
         writer.write(`${sourceGroup}-r ${targetGroup}-n ${RELAY_BANDWIDTH} ${Math.round(latency)}\n`)
-        writer.write(`${sourceGroup}-r ${targetGroup}-r ${RELAY_BANDWIDTH} ${Math.round(latency)}\n`)
+        writer.write(`${sourceGroup}-r ${targetGroup}-r ${RELAY_BANDWIDTH} ${Math.round(relay_to_relay_latency)}\n`)
     })
 })
 
