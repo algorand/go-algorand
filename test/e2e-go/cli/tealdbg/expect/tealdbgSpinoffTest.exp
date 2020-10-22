@@ -1,0 +1,61 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+if { [catch {
+
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set timeout 30
+
+    set TEST_DIR $TEST_ALGO_DIR
+    exec mkdir -p $TEST_DIR
+
+    # this is simple escrow logic sig txn in form of dryrun request
+    # it is hardcoded to do not start a network so that speedup the test a bit
+    set DR_ENCODED_FILE "$TEST_DIR/drreq.base64"
+    set DR_FILE "$TEST_DIR/drreq.msgp"
+    exec echo "h6hhY2NvdW50c8CkYXBwc8CwbGF0ZXN0LXRpbWVzdGFtcACwcHJvdG9jb2wtdmVyc2lvbqClcm91bmQAp3NvdXJjZXPApHR4bnORgqRsc2lngaFsxAUCIAEAIqN0eG6Ko2FtdM0D6KNmZWXNA+iiZnbOAIouvaNnZW6sdGVzdG5ldC12MS4womdoxCBIY7UYpLPITsgQ8i1PEIHLD3HwWaesIN7GL39w5Qk6IqJsds4AijKlpG5vdGXECNUWZX6OlD7Yo3JjdsQgpyYUTlC0jaNxDE4C5LyEF3fcPjIrI6STeWXGbGv02ISjc25kxCCnJhROULSNo3EMTgLkvIQXd9w+MisjpJN5ZcZsa/TYhKR0eXBlo3BheQ==" > $DR_ENCODED_FILE
+    exec cat $DR_ENCODED_FILE | base64 --decode > $DR_FILE
+
+    set URL_SPINOFF ""
+    set URL_WS ""
+    set PASSED 0
+    spawn tealdbg debug -q
+    expect_background {
+        timeout { puts "tealdbg debug timed out"; exit 1 }
+        -re {listening for upcoming dryrun requests at (http://[.a-z0-9:/]+)} { set URL_SPINOFF $expect_out(1,string); }
+    }
+
+    # wait until URL is set or timeout
+    set it 0
+    while { $it < 10 && $URL_SPINOFF == "" } {
+        set it [expr {$it + 1}]
+        sleep 1
+    }
+    if { $URL_SPINOFF == "" } {
+        puts "ERROR: SPINOFF URL is not set after timeout"
+        exit 1
+    }
+
+    spawn curl -X POST $URL_SPINOFF -H'Content-Type: octet/stream' --data-binary @$DR_FILE
+    expect {
+        timeout { puts "curl timed out"; exit 1 }
+        -re {(ws://[.a-z0-9:/]+)} { set URL_WS $expect_out(1,string); }
+    }
+
+    spawn cdtmock $URL_WS
+    expect {
+        timeout { puts "cdt-mock debug timed out"; exit 1 }
+        -re {Debugger.paused} { set PASSED 1; }
+        eof { catch wait result; if { [lindex $result 3] == 0 } { puts "Expected non-zero exit code"; exit [lindex $result 3] } }
+    }
+
+    if { $PASSED == 0 } {
+        puts "ERROR: have not found 'Debugger.paused' in cdtmock output"
+        exit 1
+    }
+
+} EXCEPTION ] } {
+    puts "ERROR in teadbgTest: $EXCEPTION"
+    exit 1
+}
