@@ -64,6 +64,7 @@ var oneInt = StackTypes{StackUint64}
 var twoInts = StackTypes{StackUint64, StackUint64}
 var oneAny = StackTypes{StackAny}
 var twoAny = StackTypes{StackAny, StackAny}
+var intAnyAny = StackTypes{StackUint64, StackAny, StackAny}
 
 // OpSpecs is the table of operations that can be assembled and evaluated.
 //
@@ -164,6 +165,12 @@ var OpSpecs = []OpSpec{
 
 	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, twoInts, oneInt.plus(oneAny), 2, runModeApplication, opSize{1, 2, nil}},
 	{0x71, "asset_params_get", opAssetParamsGet, assembleAssetParams, disAssetParams, oneInt, oneInt.plus(oneAny), 2, runModeApplication, opSize{1, 2, nil}},
+
+	{0x80, "<<", opBitLsh, asmDefault, disDefault, twoInts, oneInt, 2, modeAny, opSizeDefault},
+	{0x81, ">>", opBitRsh, asmDefault, disDefault, twoInts, oneInt, 2, modeAny, opSizeDefault},
+	{0x82, "assert", opAssert, asmDefault, disDefault, oneInt, nil, 2, modeAny, opSizeDefault},
+	{0x83, "swap", opSwap, asmDefault, disDefault, twoAny, twoAny, 2, modeAny, opSizeDefault},
+	{0x84, "ite", opIte, asmDefault, disDefault, intAnyAny, oneAny, 2, modeAny, opSizeDefault},
 }
 
 type sortByOpcode []OpSpec

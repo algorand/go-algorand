@@ -976,6 +976,19 @@ func opNot(cx *evalContext) {
 	}
 }
 
+func opIte(cx *evalContext) {
+	last := len(cx.stack) - 1 // false
+	prev := last - 1          // true
+	pprev := prev - 1         // cond
+	cond := cx.stack[pprev].Uint == 0
+	if cond {
+		cx.stack[pprev] = cx.stack[last]
+	} else {
+		cx.stack[pprev] = cx.stack[prev]
+	}
+	cx.stack = cx.stack[:pprev]
+}
+
 func opLen(cx *evalContext) {
 	last := len(cx.stack) - 1
 	cx.stack[last].Uint = uint64(len(cx.stack[last].Bytes))
@@ -1031,6 +1044,20 @@ func opBitXor(cx *evalContext) {
 func opBitNot(cx *evalContext) {
 	last := len(cx.stack) - 1
 	cx.stack[last].Uint = cx.stack[last].Uint ^ 0xffffffffffffffff
+}
+
+func opBitLsh(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	cx.stack[prev].Uint = cx.stack[prev].Uint << cx.stack[last].Uint
+	cx.stack = cx.stack[:last]
+}
+
+func opBitRsh(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	cx.stack[prev].Uint = cx.stack[prev].Uint >> cx.stack[last].Uint
+	cx.stack = cx.stack[:last]
 }
 
 func opIntConstBlock(cx *evalContext) {
@@ -1172,6 +1199,17 @@ func opBz(cx *evalContext) {
 	}
 }
 
+func opAssert(cx *evalContext) {
+	last := len(cx.stack) - 1
+	isZero := cx.stack[last].Uint == 0
+	cx.stack = cx.stack[:last]
+	if isZero {
+		cx.stack[0] = cx.stack[last]
+		cx.stack = cx.stack[:1]
+		cx.nextpc = len(cx.program)
+	}
+}
+
 func opB(cx *evalContext) {
 	offset := (uint(cx.program[cx.pc+1]) << 8) | uint(cx.program[cx.pc+2])
 	if offset > 0x7fff {
@@ -1196,6 +1234,14 @@ func opDup2(cx *evalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cx.stack = append(cx.stack, cx.stack[prev:]...)
+}
+
+func opSwap(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	tmp := cx.stack[last]
+	cx.stack[last] = cx.stack[prev]
+	cx.stack[prev] = tmp
 }
 
 func (cx *evalContext) assetHoldingEnumToValue(holding *basics.AssetHolding, field uint64) (sv stackValue, err error) {
