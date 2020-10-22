@@ -46,9 +46,9 @@ with Web or Chrome DevTools frontends`,
 }
 
 var debugCmd = &cobra.Command{
-	Use:   "debug program.tok [program.teal ...]",
-	Short: "Debug a local TEAL program(s)",
-	Long:  `Debug a local TEAL program(s) in controlled environment`,
+	Use:   "debug [program.tok [program.teal ...]]",
+	Short: "Debug TEAL program(s) off-chain",
+	Long:  `Debug TEAL program(s) in controlled environment using a local TEAL evaluator`,
 	Run: func(cmd *cobra.Command, args []string) {
 		debugLocal(args)
 		// //If no arguments passed, we should fallback to help
@@ -58,8 +58,8 @@ var debugCmd = &cobra.Command{
 
 var remoteCmd = &cobra.Command{
 	Use:   "remote",
-	Short: "Debug remote TEAL program",
-	Long:  `Start the server and wait upcoming debug connections from remote TEAL evaluator`,
+	Short: "Debug TEAL program on-chain",
+	Long:  `Start the server and wait for upcoming debug connections from remote TEAL evaluator`,
 	Run: func(cmd *cobra.Command, args []string) {
 		debugRemote()
 	},
@@ -141,6 +141,7 @@ var noSourceMap bool
 var verbose bool
 var painless bool
 var appID uint64
+var listenForDrReq bool
 
 func init() {
 	rootCmd.PersistentFlags().VarP(&frontend, "frontend", "f", "Frontend to use: "+frontend.AllowedString())
@@ -158,12 +159,13 @@ func init() {
 	debugCmd.Flags().StringVarP(&balanceFile, "balance", "b", "", "Balance records to evaluate stateful TEAL on in form of json or msgpack file")
 	debugCmd.Flags().StringVarP(&ddrFile, "dryrun-req", "d", "", "Program(s) and state(s) in dryrun REST request format")
 	debugCmd.Flags().Uint64VarP(&appID, "app-id", "a", 1380011588, "Application ID for stateful TEAL if not set in transaction(s)")
-	debugCmd.Flags().StringVarP(&indexerURL, "indexer-url", "i", "", "URL for indexer to fetch Balance records from to evaluate stateful TEAL")
-	debugCmd.Flags().StringVarP(&indexerToken, "indexer-token", "", "", "API token for indexer to fetch Balance records from to evaluate stateful TEAL")
 	debugCmd.Flags().Uint64VarP(&roundNumber, "round", "r", 0, "Ledger round number to evaluate stateful TEAL on")
 	debugCmd.Flags().Int64VarP(&timestamp, "latest-timestamp", "l", 0, "Latest confirmed timestamp to evaluate stateful TEAL on")
 	debugCmd.Flags().VarP(&runMode, "mode", "m", "TEAL evaluation mode: "+runMode.AllowedString())
 	debugCmd.Flags().BoolVar(&painless, "painless", false, "Automatically create balance record for all accounts and applications")
+	debugCmd.Flags().StringVarP(&indexerURL, "indexer-url", "i", "", "URL for indexer to fetch Balance records from to evaluate stateful TEAL")
+	debugCmd.Flags().StringVarP(&indexerToken, "indexer-token", "", "", "API token for indexer to fetch Balance records from to evaluate stateful TEAL")
+	debugCmd.Flags().BoolVarP(&listenForDrReq, "listen-dr-req", "q", false, "Listen for upcoming debugging dryrun request objects instead of taking program(s) from command line")
 
 	rootCmd.AddCommand(debugCmd)
 	rootCmd.AddCommand(remoteCmd)
@@ -183,27 +185,37 @@ func debugLocal(args []string) {
 		log.Fatalln("Invalid round")
 	}
 
-	// program can be set either directly
-	// or with SignedTxn.Lsig.Logic,
-	// or with BalanceRecord.AppParams.ApprovalProgram
-	if len(args) == 0 && len(txnFile) == 0 && len(ddrFile) == 0 {
-		log.Fatalln("No program to debug: must specify program(s), or transaction(s), or dryrun-req object")
+	// local debugging works in two modes:
+	// - listening for upcoming Dryrun Requests
+	// - or taking program, transaction or Dryrun Request from command line
+	// they can not be combined
+	if listenForDrReq && (len(args) != 0 || len(txnFile) != 0 && len(ddrFile) != 0) {
+		log.Fatalln("Can not combine listening for Dryrun Requests and program(s), or transaction(s), or dryrun-req object")
 	}
 
-	if len(args) == 0 && groupIndex != 0 {
-		log.Fatalln("Error: group-index may be only set only along with program(s)")
-	}
+	if !listenForDrReq {
+		// program can be set either directly
+		// or with SignedTxn.Lsig.Logic,
+		// or with BalanceRecord.AppParams.ApprovalProgram
+		if len(args) == 0 && len(txnFile) == 0 && len(ddrFile) == 0 {
+			log.Fatalln("No program to debug: must specify program(s), or transaction(s), or dryrun-req object")
+		}
 
-	if len(args) == 0 && runMode.IsSet() {
-		log.Fatalln("Error: mode may be only set only along with program(s)")
-	}
+		if len(args) == 0 && groupIndex != 0 {
+			log.Fatalln("Error: group-index may be only set only along with program(s)")
+		}
 
-	if len(txnFile) != 0 && len(ddrFile) != 0 {
-		log.Fatalln("Error: cannot specify both transaction(s) and dryrun-req")
-	}
+		if len(args) == 0 && runMode.IsSet() {
+			log.Fatalln("Error: mode may be only set only along with program(s)")
+		}
 
-	if len(balanceFile) != 0 && len(ddrFile) != 0 {
-		log.Fatalln("Error: cannot specify both balance records(s) and dryrun-req")
+		if len(txnFile) != 0 && len(ddrFile) != 0 {
+			log.Fatalln("Error: cannot specify both transaction(s) and dryrun-req")
+		}
+
+		if len(balanceFile) != 0 && len(ddrFile) != 0 {
+			log.Fatalln("Error: cannot specify both balance records(s) and dryrun-req")
+		}
 	}
 
 	var programNames []string
@@ -262,6 +274,7 @@ func debugLocal(args []string) {
 		DisableSourceMap: noSourceMap,
 		AppID:            appID,
 		Painless:         painless,
+		ListenForDrReq:   listenForDrReq,
 	}
 
 	ds := makeDebugServer(port, &frontend, &dp)
