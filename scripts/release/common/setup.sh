@@ -56,7 +56,7 @@ then
     exit 1
 fi
 cd "${HOME}"
-if ! curl -O https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz
+if ! curl -O "https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz"
 then
     echo Golang could not be installed!
     exit 1
@@ -134,10 +134,12 @@ REPO_ROOT="${GOPATH}"/src/github.com/algorand/go-algorand
 PLATFORM=$("${REPO_ROOT}"/scripts/osarchtype.sh)
 PLATFORM_SPLIT=(${PLATFORM//\// })
 
+CHANNEL=${CHANNEL:-$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "$BRANCH")}
+
 # a bash user might `source build_env` to manually continue a broken build
 cat << EOF > "${HOME}"/build_env
 export BRANCH=${BRANCH}
-export CHANNEL=${CHANNEL:-$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_branch_channel.sh "$BRANCH")}
+export CHANNEL=${CHANNEL}
 export COMMIT_HASH=${COMMIT_HASH}
 export DEFAULTNETWORK=$(PATH=${PATH} "${REPO_ROOT}"/scripts/compute_branch_network.sh)
 export DC_IP=$(curl --silent http://169.254.169.254/latest/meta-data/local-ipv4)
@@ -149,6 +151,8 @@ export ARCH=${PLATFORM_SPLIT[1]}
 export REPO_ROOT=${REPO_ROOT}
 export RELEASE_GENESIS_PROCESS=true
 export VARIATIONS=base
+export ALGORAND_PACKAGE_NAME=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_package_name.sh "${CHANNEL:-stable}")
+export DEVTOOLS_PACKAGE_NAME=$("${GOPATH}"/src/github.com/algorand/go-algorand/scripts/compute_package_name.sh "${CHANNEL:-stable}" algorand-devtools)
 EOF
 
 # strip leading 'export ' for docker --env-file

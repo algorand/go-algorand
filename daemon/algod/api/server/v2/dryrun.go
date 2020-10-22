@@ -414,12 +414,11 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 			GroupIndex: ti,
 			//Logger: nil, // TODO: capture logs, send them back
 		}
-		var result *generated.DryrunTxnResult
+		var result generated.DryrunTxnResult
 		if len(stxn.Lsig.Logic) > 0 {
 			var debug dryrunDebugReceiver
 			ep.Debugger = &debug
 			pass, err := logic.Eval(stxn.Lsig.Logic, ep)
-			result = new(generated.DryrunTxnResult)
 			var messages []string
 			result.Disassembly = debug.lines
 			result.LogicSigTrace = &debug.history
@@ -463,9 +462,6 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 				}
 			}
 			var messages []string
-			if result == nil {
-				result = new(generated.DryrunTxnResult)
-			}
 			if !ok {
 				messages = make([]string, 1)
 				messages[0] = fmt.Sprintf("uploaded state did not include app id %d referenced in txn[%d]", appIdx, ti)
@@ -512,7 +508,7 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 			}
 			result.AppCallMessages = &messages
 		}
-		response.Txns[ti] = *result
+		response.Txns[ti] = result
 	}
 }
 

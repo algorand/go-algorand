@@ -1226,9 +1226,9 @@ func (cx *evalContext) assetParamsEnumToValue(params *basics.AssetParams, field 
 }
 
 // TxnFieldToTealValue is a thin wrapper for txnFieldToStack for external use
-func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field TxnField) (basics.TealValue, error) {
+func TxnFieldToTealValue(txn *transactions.Transaction, groupIndex int, field TxnField, arrayFieldIdx uint64) (basics.TealValue, error) {
 	cx := evalContext{EvalParams: EvalParams{GroupIndex: groupIndex}}
-	sv, err := cx.txnFieldToStack(txn, field, 0, groupIndex)
+	sv, err := cx.txnFieldToStack(txn, field, arrayFieldIdx, groupIndex)
 	return sv.toTealValue(), err
 }
 

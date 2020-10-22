@@ -89,7 +89,7 @@ if { [catch {
     # create duckcoin
     set TOTAL_SUPPLY 1000000000
     set UNIT_NAME "duckcoin"
-    ::AlgorandGoal::AssetCreate $ACCOUNT_1_ADDRESS $WALLET_1_NAME $WALLET_1_PASSWORD $TOTAL_SUPPLY $UNIT_NAME $TEST_PRIMARY_NODE_DIR
+    ::AlgorandGoal::AssetCreate $ACCOUNT_1_ADDRESS $WALLET_1_NAME $WALLET_1_PASSWORD $TOTAL_SUPPLY 0 "" $UNIT_NAME $TEST_PRIMARY_NODE_DIR
 
     # wait about 4 rounds
     set ASSET_CREATE_WAIT 20

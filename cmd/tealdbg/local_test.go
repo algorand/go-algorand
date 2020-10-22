@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"

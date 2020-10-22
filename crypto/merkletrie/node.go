@@ -19,32 +19,46 @@ package merkletrie
 import (
 	"bytes"
 	"encoding/binary"
+	"sort"
+	"unsafe"
 
 	"github.com/algorand/go-algorand/crypto"
 )
 
+type childEntry struct {
+	id        storedNodeIdentifier
+	hashIndex byte
+}
 type node struct {
 	hash         []byte
-	children     []storedNodeIdentifier
-	childrenNext []byte
-	firstChild   byte
-	leaf         bool
+	children     []childEntry
+	childrenMask bitset
 }
 
+// leaf returns whether the current node is a leaf node, or a non-leaf node
+func (n *node) leaf() bool {
+	return len(n.children) == 0
+}
+
+// these sizing constants are being used exclusively in node.stats()
+var sliceSize int = int(unsafe.Sizeof([]byte{}))
+var bitsetSize int = int(unsafe.Sizeof(bitset{}))
+var childEntrySize int = int(unsafe.Sizeof(childEntry{}))
+
+// stats recursively update the provided Stats structure with the current node information
 func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error) {
 	stats.nodesCount++
-	if n.leaf {
+	if n.leaf() {
 		stats.leafCount++
 		if depth > stats.depth {
 			stats.depth = depth
 		}
-		stats.size += 4 + len(n.hash) + 1
+		stats.size += sliceSize + len(n.hash) + bitsetSize
 		return nil
 	}
-	i := n.firstChild
-	stats.size += 4 + len(n.hash) + cap(n.children)*8 + cap(n.childrenNext) + 1
-	for {
-		childNode, err := cache.getNode(n.children[i])
+	stats.size += sliceSize + len(n.hash) + sliceSize + len(n.children)*childEntrySize + bitsetSize
+	for _, child := range n.children {
+		childNode, err := cache.getNode(child.id)
 		if err != nil {
 			return err
 		}
@@ -52,23 +66,27 @@ func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error
 		if err != nil {
 			return err
 		}
-		if i == n.childrenNext[i] {
-			break
-		}
-		i = n.childrenNext[i]
 	}
 	return nil
 }
 
+// indexOf returns the index into the children array of the first child whose hashIndex field is less or equal to b
+// it's being used in conjuction with the bitset, so we test only the equality path ( i.e. get the index of the
+// child that has hashIndex of value x )
+func (n *node) indexOf(b byte) byte {
+	// find the child using binary search:
+	return byte(sort.Search(len(n.children), func(i int) bool { return n.children[i].hashIndex >= b }))
+}
+
 // find searches the trie for the element, recursively.
 func (n *node) find(cache *merkleTrieCache, d []byte) (bool, error) {
-	if n.leaf {
+	if n.leaf() {
 		return 0 == bytes.Compare(d, n.hash), nil
 	}
-	childNodeID := n.children[d[0]]
-	if childNodeID == storedNodeIdentifierNull {
+	if n.childrenMask.Bit(d[0]) == false {
 		return false, nil
 	}
+	childNodeID := n.children[n.indexOf(d[0])].id
 	childNode, err := cache.getNode(childNodeID)
 	if err != nil {
 		return false, err
@@ -81,7 +99,7 @@ func (n *node) find(cache *merkleTrieCache, d []byte) (bool, error) {
 func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID storedNodeIdentifier, err error) {
 	// allocate a new node to replace the current one.
 	var pnode *node
-	if n.leaf {
+	if n.leaf() {
 		// find the diff index:
 		idiff := 0
 		for ; n.hash[idiff] == d[idiff]; idiff++ {
@@ -90,38 +108,48 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		curChildNode, curChildNodeID := cache.allocateNewNode()
 		newChildNode, newChildNodeID := cache.allocateNewNode()
 
-		curChildNode.leaf = true
 		curChildNode.hash = n.hash[idiff+1:]
-		newChildNode.leaf = true
 		newChildNode.hash = d[idiff+1:]
 
 		pnode, nodeID = cache.allocateNewNode()
-		pnode.leaf = false
-		pnode.children = make([]storedNodeIdentifier, 256)
-		pnode.childrenNext = make([]byte, 256)
+		pnode.childrenMask.SetBit(n.hash[idiff])
+		pnode.childrenMask.SetBit(d[idiff])
 
-		pnode.children[n.hash[idiff]] = curChildNodeID
-		pnode.children[d[idiff]] = newChildNodeID
 		if n.hash[idiff] < d[idiff] {
-			pnode.firstChild = n.hash[idiff]
-			pnode.childrenNext[pnode.firstChild] = d[idiff]
-			pnode.childrenNext[d[idiff]] = d[idiff]
+			pnode.children = []childEntry{
+				childEntry{
+					id:        curChildNodeID,
+					hashIndex: n.hash[idiff],
+				},
+				childEntry{
+					id:        newChildNodeID,
+					hashIndex: d[idiff],
+				},
+			}
 		} else {
-			pnode.firstChild = d[idiff]
-			pnode.childrenNext[pnode.firstChild] = n.hash[idiff]
-			pnode.childrenNext[n.hash[idiff]] = n.hash[idiff]
+			pnode.children = []childEntry{
+				childEntry{
+					id:        newChildNodeID,
+					hashIndex: d[idiff],
+				},
+				childEntry{
+					id:        curChildNodeID,
+					hashIndex: n.hash[idiff],
+				},
+			}
 		}
 		pnode.hash = append(path, d[:idiff]...)
 
 		for i := idiff - 1; i >= 0; i-- {
 			// create a parent node for pnode.
 			pnode2, nodeID2 := cache.allocateNewNode()
-			pnode2.leaf = false
-			pnode2.children = make([]storedNodeIdentifier, 256)
-			pnode2.childrenNext = make([]byte, 256)
-			pnode2.children[d[i]] = nodeID
-			pnode2.firstChild = d[i]
-			pnode2.childrenNext[d[i]] = d[i]
+			pnode2.childrenMask.SetBit(d[i])
+			pnode2.children = []childEntry{
+				childEntry{
+					id:        nodeID,
+					hashIndex: d[i],
+				},
+			}
 			pnode2.hash = append(path, d[:i]...)
 
 			pnode = pnode2
@@ -130,41 +158,48 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		return nodeID, nil
 	}
 
-	if n.children[d[0]] == storedNodeIdentifierNull {
+	if n.childrenMask.Bit(d[0]) == false {
 		// no such child.
 		var childNode *node
 		var childNodeID storedNodeIdentifier
 		childNode, childNodeID = cache.allocateNewNode()
-		childNode.leaf = true
 		childNode.hash = d[1:]
 
-		pnode, nodeID = n.duplicate(cache)
-		pnode.children[d[0]] = childNodeID
+		pnode, nodeID = cache.allocateNewNode()
+		pnode.childrenMask = n.childrenMask
+		pnode.childrenMask.SetBit(d[0])
 
-		if pnode.firstChild > d[0] {
-			pnode.childrenNext[d[0]] = pnode.firstChild
-			pnode.firstChild = d[0]
+		pnode.children = make([]childEntry, len(n.children)+1, len(n.children)+1)
+		if d[0] > n.children[len(n.children)-1].hashIndex {
+			// the new entry comes after all the existing ones.
+			for i, child := range n.children {
+				pnode.children[i] = child
+			}
+			pnode.children[len(pnode.children)-1] = childEntry{
+				id:        childNodeID,
+				hashIndex: d[0],
+			}
 		} else {
-			// iterate on all the entries.
-			i := pnode.firstChild
-			for {
-				if pnode.childrenNext[i] < d[0] {
-					if pnode.childrenNext[i] == i {
-						pnode.childrenNext[i] = d[0]
-						pnode.childrenNext[d[0]] = d[0]
-						break
+			for i, child := range n.children {
+				if d[0] < child.hashIndex {
+					pnode.children[i] = childEntry{
+						hashIndex: d[0],
+						id:        childNodeID,
 					}
-				} else {
-					pnode.childrenNext[d[0]] = pnode.childrenNext[i]
-					pnode.childrenNext[i] = d[0]
+					// copy the rest of the items.
+					for ; i < len(n.children); i++ {
+						pnode.children[i+1] = n.children[i]
+					}
 					break
 				}
-				i = pnode.childrenNext[i]
+				pnode.children[i] = child
 			}
 		}
 	} else {
 		// there is already a child there.
-		childNode, err := cache.getNode(n.children[d[0]])
+		curNodeIndex := n.indexOf(d[0])
+		curNodeID := n.children[curNodeIndex].id
+		childNode, err := cache.getNode(curNodeID)
 		if err != nil {
 			return storedNodeIdentifierNull, err
 		}
@@ -172,9 +207,16 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 		if err != nil {
 			return storedNodeIdentifierNull, err
 		}
-		pnode, nodeID = n.duplicate(cache)
-		cache.deleteNode(n.children[d[0]])
-		pnode.children[d[0]] = updatedChild
+
+		pnode, nodeID = childNode, cache.refurbishNode(curNodeID)
+		pnode.childrenMask = n.childrenMask
+		if len(pnode.children) < len(n.children) {
+			pnode.children = make([]childEntry, len(n.children), len(n.children))
+		} else {
+			pnode.children = pnode.children[:len(n.children)]
+		}
+		copy(pnode.children, n.children)
+		pnode.children[curNodeIndex].id = updatedChild
 	}
 	pnode.hash = path
 	return nodeID, nil
@@ -186,31 +228,26 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 // 1. all node id allocations are done in incremental monolitic order, from the bottom up.
 // 2. hash calculations are being doing in node id incremental ordering
 func (n *node) calculateHash(cache *merkleTrieCache) error {
-	if n.leaf {
+	if n.leaf() {
 		return nil
 	}
 	path := n.hash
-	hashAccumulator := make([]byte, 0, 64*256)                 // we can have up to 256 elements, so preallocate sufficient storage; append would expand the storage if it won't be enough.
+	hashAccumulator := cache.hashAccumulationBuffer[:0]        // use a preallocated storage and reuse the storage to avoid reallocation.
 	hashAccumulator = append(hashAccumulator, byte(len(path))) // we add this string length before the actual string so it could get "decoded"; in practice, it makes a good domain separator.
 	hashAccumulator = append(hashAccumulator, path...)
-	i := n.firstChild
-	for {
-		childNode, err := cache.getNode(n.children[i])
+	for _, child := range n.children {
+		childNode, err := cache.getNode(child.id)
 		if err != nil {
 			return err
 		}
-		if childNode.leaf {
+		if childNode.leaf() {
 			hashAccumulator = append(hashAccumulator, byte(0))
 		} else {
 			hashAccumulator = append(hashAccumulator, byte(1))
 		}
 		hashAccumulator = append(hashAccumulator, byte(len(childNode.hash))) // we add this string length before the actual string so it could get "decoded"; in practice, it makes a good domain separator.
-		hashAccumulator = append(hashAccumulator, i)                         // adding the first byte of the child
+		hashAccumulator = append(hashAccumulator, child.hashIndex)           // adding the first byte of the child
 		hashAccumulator = append(hashAccumulator, childNode.hash...)         // adding the reminder of the child
-		if n.childrenNext[i] == i {
-			break
-		}
-		i = n.childrenNext[i]
 	}
 	hash := crypto.Hash(hashAccumulator)
 	n.hash = hash[:]
@@ -223,91 +260,55 @@ func (n *node) calculateHash(cache *merkleTrieCache) error {
 func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID storedNodeIdentifier, err error) {
 	// allocate a new node to replace the current one.
 	var pnode, childNode *node
-	childNodeID := n.children[key[0]]
+	childIndex := n.indexOf(key[0])
+	childNodeID := n.children[childIndex].id
 	childNode, err = cache.getNode(childNodeID)
 	if err != nil {
 		return
 	}
-	if childNode.leaf {
-		pnode, nodeID = n.duplicate(cache)
+	if childNode.leaf() {
+		pnode, nodeID = childNode, cache.refurbishNode(childNodeID)
+		pnode.childrenMask = n.childrenMask
 		// we are guaranteed to have other children, because our tree forbids nodes that have exactly one leaf child and no other children.
-		// we have one or more children, see if it's the first child:
-		if pnode.firstChild == key[0] {
-			// we're removing the first child.
-			next := pnode.childrenNext[pnode.firstChild]
-			pnode.children[pnode.firstChild] = storedNodeIdentifierNull
-			pnode.childrenNext[pnode.firstChild] = 0
-			pnode.firstChild = next
-		} else {
-			// wer're removing a child off the list ( known to be there, and not to be the first )
-			i := pnode.firstChild
-			for {
-				if pnode.childrenNext[i] == key[0] {
-					// is this the last item ?
-					if pnode.childrenNext[key[0]] == key[0] {
-						// yes, it's the last item.
-						pnode.childrenNext[i] = i
-						// clear out pointers.
-						pnode.childrenNext[key[0]] = 0
-						pnode.children[key[0]] = storedNodeIdentifierNull
-						break
-					}
-					pnode.childrenNext[i] = pnode.childrenNext[key[0]]
-					// clear out pointers
-					pnode.childrenNext[key[0]] = 0
-					pnode.children[key[0]] = storedNodeIdentifierNull
-					break
-				}
-				i = pnode.childrenNext[i]
-			}
-		}
+		pnode.children = make([]childEntry, len(n.children)-1, len(n.children)-1)
+		copy(pnode.children, append(n.children[:childIndex], n.children[childIndex+1:]...))
+		pnode.childrenMask.ClearBit(key[0])
 	} else {
 		var updatedChildNodeID storedNodeIdentifier
 		updatedChildNodeID, err = childNode.remove(cache, key[1:], append(path, key[0]))
 		if err != nil {
 			return storedNodeIdentifierNull, err
 		}
-		pnode, nodeID = n.duplicate(cache)
-		pnode.children[key[0]] = updatedChildNodeID
+
+		pnode, nodeID = childNode, cache.refurbishNode(childNodeID)
+		pnode.childrenMask = n.childrenMask
+		if len(pnode.children) < len(n.children) {
+			pnode.children = make([]childEntry, len(n.children), len(n.children))
+		} else {
+			pnode.children = pnode.children[:len(n.children)]
+		}
+		copy(pnode.children, n.children)
+		pnode.children[childIndex].id = updatedChildNodeID
 	}
-	cache.deleteNode(childNodeID)
 
 	// at this point, we might end up with a single leaf child. collapse that.
-	if pnode.childrenNext[pnode.firstChild] == pnode.firstChild {
-		childNode, err = cache.getNode(pnode.children[pnode.firstChild])
+	if len(pnode.children) == 1 {
+		childNode, err = cache.getNode(pnode.children[0].id)
 		if err != nil {
 			return
 		}
-		if childNode.leaf {
+		if childNode.leaf() {
 			// convert current node into a leaf.
-			pnode.leaf = true
-			pnode.hash = append([]byte{pnode.firstChild}, childNode.hash...)
-			cache.deleteNode(pnode.children[pnode.firstChild])
+			pnode.hash = append([]byte{pnode.children[0].hashIndex}, childNode.hash...)
+			cache.deleteNode(pnode.children[0].id)
+			pnode.childrenMask.ClearBit(pnode.children[0].hashIndex)
 			pnode.children = nil
-			pnode.childrenNext = nil
-			pnode.firstChild = 0
 		}
 	}
-	if !pnode.leaf {
+	if !pnode.leaf() {
 		pnode.hash = path
 	}
 	return nodeID, nil
-}
-
-// duplicate creates a copy of the current node
-func (n *node) duplicate(cache *merkleTrieCache) (pnode *node, nodeID storedNodeIdentifier) {
-	pnode, nodeID = cache.allocateNewNode()
-	pnode.firstChild = n.firstChild
-	pnode.hash = n.hash // the hash is safe for just copy without duplicate, since it's always being reallocated upon change.
-	pnode.leaf = n.leaf
-	if !pnode.leaf {
-		pnode.children = make([]storedNodeIdentifier, 256)
-		pnode.childrenNext = make([]byte, 256)
-		// copy the elements starting the first known entry.
-		copy(pnode.children[n.firstChild:], n.children[n.firstChild:])
-		copy(pnode.childrenNext[n.firstChild:], n.childrenNext[n.firstChild:])
-	}
-	return
 }
 
 // serialize the content of the node into the buffer, and return the number of bytes consumed in the process.
@@ -315,7 +316,7 @@ func (n *node) serialize(buf []byte) int {
 	w := binary.PutUvarint(buf[:], uint64(len(n.hash)))
 	copy(buf[w:], n.hash)
 	w += len(n.hash)
-	if n.leaf {
+	if n.leaf() {
 		buf[w] = 0 // leaf
 		return w + 1
 	}
@@ -323,20 +324,14 @@ func (n *node) serialize(buf []byte) int {
 	buf[w] = 1 // non-leaf
 	w++
 	// store all the children, and terminate with a null.
-	i := n.firstChild
-	for {
-		buf[w] = i
+	for _, child := range n.children {
+		buf[w] = child.hashIndex
 		w++
-		x := binary.PutUvarint(buf[w:], uint64(n.children[i]))
+		x := binary.PutUvarint(buf[w:], uint64(child.id))
 		w += x
-		if i == n.childrenNext[i] {
-			break
-		}
-		i = n.childrenNext[i]
 	}
-	buf[w] = i
-	w++
-	return w
+	buf[w] = n.children[len(n.children)-1].hashIndex
+	return w + 1
 }
 
 // deserializeNode deserializes the node from a byte array
@@ -349,36 +344,65 @@ func deserializeNode(buf []byte) (n *node, s int) {
 	n.hash = make([]byte, hashLength)
 	copy(n.hash, buf[hashLength2:hashLength2+int(hashLength)])
 	s = hashLength2 + int(hashLength)
-	n.leaf = (buf[s] == 0)
+	isLeaf := (buf[s] == 0)
 	s++
-	if n.leaf {
+	if isLeaf {
 		return
 	}
-	n.children = make([]storedNodeIdentifier, 256)
-	n.childrenNext = make([]byte, 256)
+	var childEntries [256]childEntry
 	first := true
 	prevChildIndex := byte(0)
-
+	i := 0
 	for {
 		childIndex := buf[s]
 		s++
 		if childIndex <= prevChildIndex && !first {
 			break
 		}
-		if first {
-			first = false
-			n.firstChild = childIndex
-		} else {
-			n.childrenNext[prevChildIndex] = childIndex
-		}
+		first = false
 		nodeID, nodeIDLength := binary.Uvarint(buf[s:])
 		if nodeIDLength <= 0 {
 			return nil, nodeIDLength
 		}
 		s += nodeIDLength
-		n.children[childIndex] = storedNodeIdentifier(nodeID)
+
+		childEntries[i] = childEntry{hashIndex: childIndex, id: storedNodeIdentifier(nodeID)}
+		n.childrenMask.SetBit(childIndex)
 		prevChildIndex = childIndex
+		i++
 	}
-	n.childrenNext[prevChildIndex] = prevChildIndex
+	n.children = make([]childEntry, i, i)
+	copy(n.children, childEntries[:i])
 	return
+}
+
+func (n *node) getUniqueChildPageCount(nodesPerPage int64) uint64 {
+	uniquePages := make(map[int64]struct{}, len(n.children))
+	for _, child := range n.children {
+		uniquePages[int64(child.id)/nodesPerPage] = struct{}{}
+	}
+	return uint64(len(uniquePages))
+}
+
+func (n *node) reallocateChildren(cache *merkleTrieCache) {
+	for i := range n.children {
+		n.children[i].id = cache.reallocateNode(n.children[i].id)
+	}
+}
+
+func (n *node) getChildCount() uint64 {
+	return uint64(len(n.children))
+}
+
+func (n *node) remapChildren(reallocationMap map[storedNodeIdentifier]storedNodeIdentifier) {
+	for i := range n.children {
+		for {
+			if newID, has := reallocationMap[n.children[i].id]; has {
+				delete(reallocationMap, n.children[i].id)
+				n.children[i].id = newID
+				continue
+			}
+			break
+		}
+	}
 }

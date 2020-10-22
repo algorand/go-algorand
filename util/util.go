@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
+// +build !windows
+
 package util
 
 import (
@@ -36,4 +38,25 @@ func RaiseRlimit(amount uint64) error {
 		return err
 	}
 	return nil
+}
+
+// Getrusage gets file descriptors usage statistics
+func Getrusage(who int, rusage *syscall.Rusage) (err error) {
+	err = syscall.Getrusage(who, rusage)
+	return
+}
+
+// GetCurrentProcessTimes gets current process kernel and usermode times
+func GetCurrentProcessTimes() (utime int64, stime int64, err error) {
+	var usage syscall.Rusage
+
+	err = syscall.Getrusage(syscall.RUSAGE_SELF, &usage)
+	if err == nil {
+		utime = usage.Utime.Nano()
+		stime = usage.Stime.Nano()
+	} else {
+		utime = 0
+		stime = 0
+	}
+	return
 }

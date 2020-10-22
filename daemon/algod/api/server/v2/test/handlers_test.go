@@ -18,6 +18,7 @@ package test
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -34,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -42,7 +44,7 @@ func setupTestForMethodGet(t *testing.T) (v2.Handlers, echo.Context, *httptest.R
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, rootkeys, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
-	mockNode := makeMockNode(mockLedger, t.Name())
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	dummyShutdownChan := make(chan struct{})
 	handler := v2.Handlers{
 		Node:     mockNode,
@@ -232,7 +234,7 @@ func postTransactionTest(t *testing.T, txnToUse, expectedCode int) {
 	mockLedger, _, _, stxns, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name())
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -260,14 +262,14 @@ func TestPostTransaction(t *testing.T) {
 	postTransactionTest(t, 0, 200)
 }
 
-func startCatchupTest(t *testing.T, catchpoint string, expectedCode int) {
+func startCatchupTest(t *testing.T, catchpoint string, nodeError error, expectedCode int) {
 	numAccounts := 1
 	numTransactions := 1
 	offlineAccounts := true
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name())
+	mockNode := makeMockNode(mockLedger, t.Name(), nodeError)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -286,9 +288,18 @@ func TestStartCatchup(t *testing.T) {
 	t.Parallel()
 
 	goodCatchPoint := "5894690#DVFRZUYHEFKRLK5N6DNJRR4IABEVN2D6H76F3ZSEPIE6MKXMQWQA"
-	startCatchupTest(t, goodCatchPoint, 200)
+	startCatchupTest(t, goodCatchPoint, nil, 201)
+
+	inProgressError := node.MakeCatchpointAlreadyInProgressError("catchpoint")
+	startCatchupTest(t, goodCatchPoint, inProgressError, 200)
+
+	unableToStartError := node.MakeCatchpointUnableToStartError("running", "requested")
+	startCatchupTest(t, goodCatchPoint, unableToStartError, 400)
+
+	startCatchupTest(t, goodCatchPoint, errors.New("anothing else is internal"), 500)
+
 	badCatchPoint := "bad catchpoint"
-	startCatchupTest(t, badCatchPoint, 400)
+	startCatchupTest(t, badCatchPoint, nil, 400)
 }
 
 func abortCatchupTest(t *testing.T, catchpoint string, expectedCode int) {
@@ -298,7 +309,7 @@ func abortCatchupTest(t *testing.T, catchpoint string, expectedCode int) {
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name())
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	handler := v2.Handlers{
 		Node:     mockNode,
 		Log:      logging.Base(),
@@ -308,7 +319,7 @@ func abortCatchupTest(t *testing.T, catchpoint string, expectedCode int) {
 	req := httptest.NewRequest(http.MethodDelete, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	err := handler.StartCatchup(c, catchpoint)
+	err := handler.AbortCatchup(c, catchpoint)
 	require.NoError(t, err)
 	require.Equal(t, expectedCode, rec.Code)
 }
@@ -329,7 +340,7 @@ func tealCompileTest(t *testing.T, bytesToUse []byte, expectedCode int, enableDe
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name())
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
 		Node:     &mockNode,
@@ -368,7 +379,7 @@ func tealDryrunTest(
 	mockLedger, _, _, _, releasefunc := testingenv(t, numAccounts, numTransactions, offlineAccounts)
 	defer releasefunc()
 	dummyShutdownChan := make(chan struct{})
-	mockNode := makeMockNode(mockLedger, t.Name())
+	mockNode := makeMockNode(mockLedger, t.Name(), nil)
 	mockNode.config.EnableDeveloperAPI = enableDeveloperAPI
 	handler := v2.Handlers{
 		Node:     &mockNode,

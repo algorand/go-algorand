@@ -37,6 +37,8 @@ type roundCowParent interface {
 	isDup(basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
+	compactCertLast() basics.Round
+	blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error)
 	getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
 	// note: getStorageLimits is redundant with the other methods
 	// and is provided to optimize state schema lookups
@@ -85,6 +87,10 @@ type StateDelta struct {
 
 	// new block header; read-only
 	hdr *bookkeeping.BlockHeader
+
+	// last round for which we have seen a compact cert.
+	// zero if no compact cert seen.
+	compactCertSeen basics.Round
 
 	// previous block timestamp
 	prevTimestamp int64
@@ -154,6 +160,17 @@ func (cb *roundCowState) txnCounter() uint64 {
 	return cb.lookupParent.txnCounter() + uint64(len(cb.mods.Txids))
 }
 
+func (cb *roundCowState) compactCertLast() basics.Round {
+	if cb.mods.compactCertSeen != 0 {
+		return cb.mods.compactCertSeen
+	}
+	return cb.lookupParent.compactCertLast()
+}
+
+func (cb *roundCowState) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+	return cb.lookupParent.blockHdr(r)
+}
+
 func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) {
 	prev, present := cb.mods.accts[addr]
 	if present {
@@ -182,6 +199,10 @@ func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new ba
 func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {
 	cb.mods.Txids[txid] = txn.LastValid
 	cb.mods.txleases[txlease{sender: txn.Sender, lease: txn.Lease}] = txn.LastValid
+}
+
+func (cb *roundCowState) sawCompactCert(rnd basics.Round) {
+	cb.mods.compactCertSeen = rnd
 }
 
 func (cb *roundCowState) child() *roundCowState {
@@ -237,6 +258,7 @@ func (cb *roundCowState) commitToParent() {
 			}
 		}
 	}
+	cb.commitParent.mods.compactCertSeen = cb.mods.compactCertSeen
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {

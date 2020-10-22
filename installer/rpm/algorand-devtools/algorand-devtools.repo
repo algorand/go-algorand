@@ -1,0 +1,6 @@
+[algorand]
+name=Algorand-devtools
+baseurl=https://releases.algorand.com/rpm/stable/
+enabled=1
+gpgcheck=1
+gpgkey=https://releases.algorand.com/rpm/rpm_algorand.pub

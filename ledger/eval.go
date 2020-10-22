@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/committee"
@@ -59,6 +60,9 @@ type roundCowBase struct {
 	// TxnCounter from previous block header.
 	txnCount uint64
 
+	// CompactCertLastRound from previous block header.
+	compactCertSeen basics.Round
+
 	// The current protocol consensus params.
 	proto config.ConsensusParams
 }
@@ -67,8 +71,9 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 	return x.l.GetCreatorForRound(x.rnd, cidx, ctype)
 }
 
-func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
-	return x.l.lookupWithoutRewards(x.rnd, addr)
+func (x *roundCowBase) lookup(addr basics.Address) (acctData basics.AccountData, err error) {
+	acctData, _, err = x.l.LookupWithoutRewards(x.rnd, addr)
+	return acctData, err
 }
 
 func (x *roundCowBase) isDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
@@ -77,6 +82,14 @@ func (x *roundCowBase) isDup(firstValid, lastValid basics.Round, txid transactio
 
 func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
+}
+
+func (x *roundCowBase) compactCertLast() basics.Round {
+	return x.compactCertSeen
+}
+
+func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+	return x.l.BlockHdr(r)
 }
 
 func (x *roundCowBase) Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
@@ -217,6 +230,30 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 	return cs.proto
 }
 
+func (cs *roundCowState) compactCert(certRnd basics.Round, cert compactcert.Cert, atRound basics.Round) error {
+	lastCertRnd := cs.compactCertLast()
+
+	certHdr, err := cs.blockHdr(certRnd)
+	if err != nil {
+		return err
+	}
+
+	proto := config.Consensus[certHdr.CurrentProtocol]
+	votersRnd := certRnd.SubSaturate(basics.Round(proto.CompactCertRounds))
+	votersHdr, err := cs.blockHdr(votersRnd)
+	if err != nil {
+		return err
+	}
+
+	err = validateCompactCert(certHdr, cert, votersHdr, lastCertRnd, atRound)
+	if err != nil {
+		return err
+	}
+
+	cs.sawCompactCert(certRnd)
+	return nil
+}
+
 // BlockEvaluator represents an in-progress evaluation of a block
 // against the ledger.
 type BlockEvaluator struct {
@@ -242,8 +279,9 @@ type ledgerForEvaluator interface {
 	lookup(basics.Round, basics.Address) (basics.AccountData, error)
 	Totals(basics.Round) (AccountTotals, error)
 	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
-	lookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
+	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
+	CompactCertVoters(basics.Round) (*VotersForRound, error)
 	GetKeyForRound(basics.Round, basics.Address, basics.AppIndex, bool, string) (basics.TealValue, bool, error)
 	CountStorageForRound(basics.Round, basics.Address, basics.AppIndex, bool) (basics.StateSchema, error)
 }
@@ -290,6 +328,8 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		eval.block.Payset = make([]transactions.SignedTxnInBlock, 0, paysetHint)
 	}
 
+	prevProto := proto
+
 	if hdr.Round > 0 {
 		var err error
 		eval.prevHeader, err = l.BlockHdr(base.rnd)
@@ -298,6 +338,11 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		}
 
 		base.txnCount = eval.prevHeader.TxnCounter
+		base.compactCertSeen = eval.prevHeader.CompactCertLastRound
+		prevProto, ok = config.Consensus[eval.prevHeader.CurrentProtocol]
+		if !ok {
+			return nil, protocol.Error(eval.prevHeader.CurrentProtocol)
+		}
 	}
 
 	prevTotals, err := l.Totals(eval.prevHeader.Round)
@@ -306,10 +351,14 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 	}
 
 	poolAddr := eval.prevHeader.RewardsPool
-	incentivePoolData, err := l.lookup(eval.prevHeader.Round, poolAddr)
+	// get the reward pool account data without any rewards
+	incentivePoolData, _, err := l.LookupWithoutRewards(eval.prevHeader.Round, poolAddr)
 	if err != nil {
 		return nil, err
 	}
+
+	// this is expected to be a no-op, but update the rewards on the rewards pool if it was configured to receive rewards ( unlike mainnet ).
+	incentivePoolData = incentivePoolData.WithUpdatedRewards(prevProto, eval.prevHeader.RewardsLevel)
 
 	if generate {
 		if eval.proto.SupportGenesisHash {
@@ -695,11 +744,11 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	// completely zero, which means the account will be deleted.)
 	rewardlvl := cow.rewardsLevel()
 	for _, addr := range cow.modifiedAccounts() {
-		// Skip FeeSink and RewardsPool MinBalance checks here.
-		// There's only two accounts, so space isn't an issue, and we don't
+		// Skip FeeSink, RewardsPool, and CompactCertSender MinBalance checks here.
+		// There's only a few accounts, so space isn't an issue, and we don't
 		// expect them to have low balances, but if they do, it may cause
-		// surprises for every transaction.
-		if addr == spec.FeeSink || addr == spec.RewardsPool {
+		// surprises.
+		if addr == spec.FeeSink || addr == spec.RewardsPool || addr == transactions.CompactCertSender {
 			continue
 		}
 
@@ -737,7 +786,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 }
 
 // applyTransaction changes the balances according to this transaction.
-func applyTransaction(tx transactions.Transaction, balances apply.Balances, evalParams *logic.EvalParams, spec transactions.SpecialAddresses, ctr uint64) (ad transactions.ApplyData, err error) {
+func applyTransaction(tx transactions.Transaction, balances *roundCowState, evalParams *logic.EvalParams, spec transactions.SpecialAddresses, ctr uint64) (ad transactions.ApplyData, err error) {
 	params := balances.ConsensusParams()
 
 	// move fee to pool
@@ -748,20 +797,20 @@ func applyTransaction(tx transactions.Transaction, balances apply.Balances, eval
 
 	// rekeying: update balrecord.AuthAddr to tx.RekeyTo if provided
 	if (tx.RekeyTo != basics.Address{}) {
-		var acct basics.AccountData
-		acct, err = balances.Get(tx.Sender, false)
+		var record basics.BalanceRecord
+		record, err = balances.Get(tx.Sender, false)
 		if err != nil {
 			return
 		}
 		// Special case: rekeying to the account's actual address just sets acct.AuthAddr to 0
 		// This saves 32 bytes in your balance record if you want to go back to using your original key
 		if tx.RekeyTo == tx.Sender {
-			acct.AuthAddr = basics.Address{}
+			record.AuthAddr = basics.Address{}
 		} else {
-			acct.AuthAddr = tx.RekeyTo
+			record.AuthAddr = tx.RekeyTo
 		}
 
-		err = balances.Put(tx.Sender, acct)
+		err = balances.Put(record)
 		if err != nil {
 			return
 		}
@@ -786,6 +835,9 @@ func applyTransaction(tx transactions.Transaction, balances apply.Balances, eval
 	case protocol.ApplicationCallTx:
 		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, evalParams, ctr)
 
+	case protocol.CompactCertTx:
+		err = balances.compactCert(tx.CertRound, tx.Cert, tx.Header.FirstValid)
+
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)
 	}
@@ -801,6 +853,31 @@ func applyTransaction(tx transactions.Transaction, balances apply.Balances, eval
 	return
 }
 
+// compactCertVotersAndTotal returns the expected values of CompactCertVoters
+// and CompactCertVotersTotal for a block.
+func (eval *BlockEvaluator) compactCertVotersAndTotal() (root crypto.Digest, total basics.MicroAlgos, err error) {
+	if eval.proto.CompactCertRounds == 0 {
+		return
+	}
+
+	if eval.block.Round()%basics.Round(eval.proto.CompactCertRounds) != 0 {
+		return
+	}
+
+	lookback := eval.block.Round().SubSaturate(basics.Round(eval.proto.CompactCertVotersLookback))
+	voters, err := eval.l.CompactCertVoters(lookback)
+	if err != nil {
+		return
+	}
+
+	if voters != nil {
+		root = voters.Tree.Root()
+		total = voters.TotalWeight
+	}
+
+	return
+}
+
 // Call "endOfBlock" after all the block's rewards and transactions are processed.
 func (eval *BlockEvaluator) endOfBlock() error {
 	if eval.generate {
@@ -810,6 +887,14 @@ func (eval *BlockEvaluator) endOfBlock() error {
 		} else {
 			eval.block.TxnCounter = 0
 		}
+
+		var err error
+		eval.block.CompactCertVoters, eval.block.CompactCertVotersTotal, err = eval.compactCertVotersAndTotal()
+		if err != nil {
+			return err
+		}
+
+		eval.block.CompactCertLastRound = eval.state.compactCertLast()
 	}
 
 	return nil
@@ -830,6 +915,20 @@ func (eval *BlockEvaluator) finalValidation() error {
 		}
 		if eval.block.TxnCounter != expectedTxnCount {
 			return fmt.Errorf("txn count wrong: %d != %d", eval.block.TxnCounter, expectedTxnCount)
+		}
+
+		expectedVoters, expectedVotersWeight, err := eval.compactCertVotersAndTotal()
+		if err != nil {
+			return err
+		}
+		if eval.block.CompactCertVoters != expectedVoters {
+			return fmt.Errorf("CompactCertVoters wrong: %v != %v", eval.block.CompactCertVoters, expectedVoters)
+		}
+		if eval.block.CompactCertVotersTotal != expectedVotersWeight {
+			return fmt.Errorf("CompactCertVotersTotal wrong: %v != %v", eval.block.CompactCertVotersTotal, expectedVotersWeight)
+		}
+		if eval.block.CompactCertLastRound != eval.state.compactCertLast() {
+			return fmt.Errorf("CompactCertLastRound wrong: %v != %v", eval.block.CompactCertLastRound, eval.state.compactCertLast())
 		}
 	}
 

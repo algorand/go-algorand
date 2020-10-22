@@ -192,10 +192,14 @@ type testLedger struct {
 	certs     map[basics.Round]Certificate
 	nextRound basics.Round
 
+	maxNumBlocks uint64
+
 	// constant
 	state map[basics.Address]basics.AccountData
 
 	notifications map[basics.Round]signal
+
+	consensusVersion func(basics.Round) (protocol.ConsensusVersion, error)
 }
 
 func makeTestLedger(state map[basics.Address]basics.AccountData) Ledger {
@@ -204,13 +208,54 @@ func makeTestLedger(state map[basics.Address]basics.AccountData) Ledger {
 	l.certs = make(map[basics.Round]Certificate)
 	l.nextRound = 1
 
-	// deep copy of state
 	l.state = make(map[basics.Address]basics.AccountData)
 	for k, v := range state {
 		l.state[k] = v
 	}
 
 	l.notifications = make(map[basics.Round]signal)
+
+	l.consensusVersion = func(r basics.Round) (protocol.ConsensusVersion, error) {
+		return protocol.ConsensusCurrentVersion, nil
+	}
+	return l
+}
+
+func makeTestLedgerWithConsensusVersion(state map[basics.Address]basics.AccountData, consensusVersion func(basics.Round) (protocol.ConsensusVersion, error)) Ledger {
+	l := new(testLedger)
+	l.entries = make(map[basics.Round]bookkeeping.Block)
+	l.certs = make(map[basics.Round]Certificate)
+	l.nextRound = 1
+
+	l.state = make(map[basics.Address]basics.AccountData)
+	for k, v := range state {
+		l.state[k] = v
+	}
+
+	l.notifications = make(map[basics.Round]signal)
+
+	l.consensusVersion = consensusVersion
+	return l
+}
+
+func makeTestLedgerMaxBlocks(state map[basics.Address]basics.AccountData, maxNumBlocks uint64) Ledger {
+	l := new(testLedger)
+	l.entries = make(map[basics.Round]bookkeeping.Block)
+	l.certs = make(map[basics.Round]Certificate)
+	l.nextRound = 1
+
+	l.maxNumBlocks = maxNumBlocks
+
+	l.state = make(map[basics.Address]basics.AccountData)
+	for k, v := range state {
+		l.state[k] = v
+	}
+
+	l.notifications = make(map[basics.Round]signal)
+
+	l.consensusVersion = func(r basics.Round) (protocol.ConsensusVersion, error) {
+		return protocol.ConsensusCurrentVersion, nil
+	}
 	return l
 }
 
@@ -268,6 +313,10 @@ func (l *testLedger) LookupDigest(r basics.Round) (crypto.Digest, error) {
 		panic(err)
 	}
 
+	if l.maxNumBlocks != 0 && r+round(l.maxNumBlocks) < l.nextRound {
+		return crypto.Digest{}, &LedgerDroppedRoundError{}
+	}
+
 	return l.entries[r].Digest(), nil
 }
 
@@ -279,6 +328,11 @@ func (l *testLedger) Lookup(r basics.Round, a basics.Address) (basics.AccountDat
 		err := fmt.Errorf("Lookup called on future round: %v >= %v! (this is probably a bug)", r, l.nextRound)
 		panic(err)
 	}
+
+	if l.maxNumBlocks != 0 && r+round(l.maxNumBlocks) < l.nextRound {
+		return basics.AccountData{}, &LedgerDroppedRoundError{}
+	}
+
 	return l.state[a], nil
 }
 
@@ -348,11 +402,15 @@ func (l *testLedger) EnsureDigest(c Certificate, verifier *AsyncVoteVerifier) {
 }
 
 func (l *testLedger) ConsensusParams(r basics.Round) (config.ConsensusParams, error) {
-	return config.Consensus[protocol.ConsensusCurrentVersion], nil
+	version, err := l.ConsensusVersion(r)
+	if err != nil {
+		return config.ConsensusParams{}, err
+	}
+	return config.Consensus[version], nil
 }
 
 func (l *testLedger) ConsensusVersion(r basics.Round) (protocol.ConsensusVersion, error) {
-	return protocol.ConsensusCurrentVersion, nil
+	return l.consensusVersion(r)
 }
 
 // simulation helpers

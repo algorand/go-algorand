@@ -1,0 +1,10 @@
+Package: @PKG_NAME@
+Homepage: https://www.algorand.com/
+Maintainer: Algorand developers <dev@algorand.com>
+Version: @VER@
+Architecture: @ARCH@
+Pre-Depends: @REQUIRED_ALGORAND_PKG@ (>= @VER@)
+Recommends: unattended-upgrades
+Description: Algorand tools software
+ This package provides development tools for the Algorand blockchain.
+

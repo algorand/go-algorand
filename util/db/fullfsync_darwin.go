@@ -18,5 +18,5 @@ package db
 
 func init() {
 	// See https://www.sqlite.org/pragma.html#pragma_fullfsync
-	initStatements = append(initStatements, "PRAGMA fullfsync=true")
+	enableFullfsyncStatements = append(enableFullfsyncStatements, "PRAGMA fullfsync=true")
 }

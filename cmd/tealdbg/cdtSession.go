@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-deadlock"
 	"github.com/algorand/websocket"
 
+	"github.com/algorand/go-algorand/cmd/tealdbg/cdt"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
@@ -37,7 +38,7 @@ type cdtSession struct {
 	uuid          string
 	debugger      Control
 	notifications chan Notification
-	endpoint      cdtTabDescription
+	endpoint      cdt.TabDescription
 	done          chan struct{}
 
 	contextID    int
@@ -45,7 +46,7 @@ type cdtSession struct {
 	scriptHash   string
 	scriptURL    string
 	sourceMapURL string
-	states       appState
+	states       AppState
 
 	verbose bool
 }
@@ -53,7 +54,7 @@ type cdtSession struct {
 var contextCounter int32 = 0
 var scriptCounter int32 = 0
 
-func makeCDTSession(uuid string, debugger Control, ch chan Notification) *cdtSession {
+func makeCdtSession(uuid string, debugger Control, ch chan Notification) *cdtSession {
 	s := new(cdtSession)
 	s.uuid = uuid
 	s.debugger = debugger
@@ -106,7 +107,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 
 	notifications := s.notifications
 
-	cdtRespCh := make(chan ChromeResponse, 128)
+	cdtRespCh := make(chan cdt.ChromeResponse, 128)
 	cdtEventCh := make(chan interface{}, 128)
 	cdtUpdatedCh := make(chan interface{}, 1)
 
@@ -179,7 +180,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	// Chrome Devtools reader
 	go func() {
 		for {
-			var cdtReq ChromeRequest
+			var cdtReq cdt.ChromeRequest
 			mtype, reader, err := ws.NextReader()
 			if err != nil {
 				closed <- struct{}{}
@@ -204,7 +205,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			dbgStateMu.Lock()
-			cdtResp, events, err := s.handleCDTRequest(&cdtReq, &state)
+			cdtResp, events, err := s.handleCdtRequest(&cdtReq, &state)
 			dbgStateMu.Unlock()
 			if err != nil {
 				log.Println(err.Error())
@@ -276,11 +277,12 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (response ChromeResponse, events []interface{}, err error) {
+type cmdResult struct {
+	Result interface{} `json:"result"`
+}
+
+func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (response cdt.ChromeResponse, events []interface{}, err error) {
 	empty := make(map[string]interface{})
-	type cmdResult struct {
-		Result interface{} `json:"result"`
-	}
 	switch req.Method {
 	case "Debugger.enable":
 		evCtxCreated := s.makeContextCreatedEvent()
@@ -289,15 +291,15 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 
 		debuggerID := make(map[string]string)
 		debuggerID["debuggerId"] = s.uuid
-		response = ChromeResponse{ID: req.ID, Result: debuggerID}
+		response = cdt.ChromeResponse{ID: req.ID, Result: debuggerID}
 	case "Runtime.runIfWaitingForDebugger":
 		evPaused := s.makeDebuggerPausedEvent(state)
 		events = append(events, &evPaused)
-		response = ChromeResponse{ID: req.ID, Result: empty}
+		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
 	case "Runtime.getIsolateId":
 		isolateID := make(map[string]string)
 		isolateID["id"] = s.uuid
-		response = ChromeResponse{ID: req.ID, Result: isolateID}
+		response = cdt.ChromeResponse{ID: req.ID, Result: isolateID}
 	case "Debugger.getScriptSource":
 		p := req.Params.(map[string]interface{})
 		_, ok := p["scriptId"]
@@ -307,7 +309,7 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 			return
 		}
 		source["scriptSource"] = state.disassembly
-		response = ChromeResponse{ID: req.ID, Result: source}
+		response = cdt.ChromeResponse{ID: req.ID, Result: source}
 	case "Debugger.setPauseOnExceptions":
 		p := req.Params.(map[string]interface{})
 		stateRaw, ok := p["state"]
@@ -318,7 +320,7 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 			}
 		}
 		state.pauseOnError.SetTo(enable)
-		response = ChromeResponse{ID: req.ID, Result: empty}
+		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
 	case "Runtime.evaluate":
 		p := req.Params.(map[string]interface{})
 		exprRaw, ok := p["expression"]
@@ -330,9 +332,9 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 		expr := exprRaw.(string)
 		if expr == "navigator.userAgent" {
 			obj := makeStringResult("Algorand TEAL Debugger")
-			response = ChromeResponse{ID: req.ID, Result: cmdResult{obj}}
+			response = cdt.ChromeResponse{ID: req.ID, Result: cmdResult{obj}}
 		} else {
-			response = ChromeResponse{ID: req.ID, Result: cmdResult{}}
+			response = cdt.ChromeResponse{ID: req.ID, Result: cmdResult{}}
 		}
 	case "Runtime.callFunctionOn":
 		p := req.Params.(map[string]interface{})
@@ -356,12 +358,12 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 		args := argsRaw.([]interface{})
 		if strings.HasPrefix(funcDecl, "function packRanges") {
 			ranges := state.packRanges(objID, args)
-			response = ChromeResponse{ID: req.ID, Result: cmdResult{ranges}}
+			response = cdt.ChromeResponse{ID: req.ID, Result: cmdResult{ranges}}
 		} else if strings.HasPrefix(funcDecl, "function buildArrayFragment") || strings.HasPrefix(funcDecl, "function buildObjectFragment") {
 			obj := state.buildFragment(objID, args)
-			response = ChromeResponse{ID: req.ID, Result: cmdResult{obj}}
+			response = cdt.ChromeResponse{ID: req.ID, Result: cmdResult{obj}}
 		} else {
-			response = ChromeResponse{ID: req.ID, Result: cmdResult{}}
+			response = cdt.ChromeResponse{ID: req.ID, Result: cmdResult{}}
 		}
 	case "Runtime.getProperties":
 		p := req.Params.(map[string]interface{})
@@ -378,7 +380,7 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 			preview = previewRaw.(bool)
 		}
 
-		var desc []RuntimePropertyDescriptor
+		var desc []cdt.RuntimePropertyDescriptor
 		desc, err = state.getObjectDescriptor(objID, preview)
 		if err != nil {
 			err = fmt.Errorf("getObjectDescriptor error: " + err.Error())
@@ -395,7 +397,7 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 			log.Printf("Desc object: %s", string(data))
 		}
 
-		response = ChromeResponse{ID: req.ID, Result: cmdResult{desc}}
+		response = cdt.ChromeResponse{ID: req.ID, Result: cmdResult{desc}}
 	case "Debugger.setBreakpointsActive":
 		p := req.Params.(map[string]interface{})
 		activeRaw, ok := p["active"]
@@ -407,14 +409,14 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 		}
 		s.debugger.SetBreakpointsActive(active)
 
-		response = ChromeResponse{ID: req.ID, Result: empty}
+		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
 	case "Debugger.getPossibleBreakpoints":
 		p := req.Params.(map[string]interface{})
 		var start, end map[string]interface{}
 		var startLine, endLine int
 		var scriptID string
 		if _, ok := p["start"]; !ok {
-			response = ChromeResponse{ID: req.ID, Result: empty}
+			response = cdt.ChromeResponse{ID: req.ID, Result: empty}
 			return
 		}
 
@@ -429,12 +431,12 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 		}
 
 		result := make(map[string]interface{})
-		locs := make([]DebuggerLocation, 0, endLine-startLine+1)
-		for ln := startLine; ln < endLine; ln++ {
-			locs = append(locs, DebuggerLocation{ScriptID: scriptID, LineNumber: ln})
+		locs := make([]cdt.DebuggerLocation, 0, endLine-startLine+1)
+		for ln := startLine; ln <= endLine; ln++ {
+			locs = append(locs, cdt.DebuggerLocation{ScriptID: scriptID, LineNumber: ln})
 		}
 		result["locations"] = locs
-		response = ChromeResponse{ID: req.ID, Result: result}
+		response = cdt.ChromeResponse{ID: req.ID, Result: result}
 	case "Debugger.removeBreakpoint":
 		p := req.Params.(map[string]interface{})
 		var bpLine int
@@ -446,7 +448,7 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 		if err != nil {
 			return
 		}
-		response = ChromeResponse{ID: req.ID, Result: empty}
+		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
 	case "Debugger.setBreakpointByUrl":
 		p := req.Params.(map[string]interface{})
 		bpLine := int(p["lineNumber"].(float64))
@@ -457,10 +459,10 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 
 		result := make(map[string]interface{})
 		result["breakpointId"] = strconv.Itoa(bpLine)
-		result["locations"] = []DebuggerLocation{
+		result["locations"] = []cdt.DebuggerLocation{
 			{ScriptID: s.scriptID, LineNumber: bpLine},
 		}
-		response = ChromeResponse{ID: req.ID, Result: result}
+		response = cdt.ChromeResponse{ID: req.ID, Result: result}
 	case "Debugger.resume":
 		state.lastAction.Store("resume")
 		s.debugger.Resume()
@@ -468,7 +470,7 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 			evDestroyed := s.makeContextDestroyedEvent()
 			events = append(events, &evDestroyed)
 		}
-		response = ChromeResponse{ID: req.ID, Result: empty}
+		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
 	case "Debugger.stepOut":
 		state.lastAction.Store("step")
 		state.pauseOnCompeted.SetTo(true)
@@ -477,7 +479,7 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 			evDestroyed := s.makeContextDestroyedEvent()
 			events = append(events, &evDestroyed)
 		}
-		response = ChromeResponse{ID: req.ID, Result: empty}
+		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
 	case "Debugger.stepOver", "Debugger.stepInto":
 		state.lastAction.Store("step")
 		s.debugger.Step()
@@ -485,9 +487,9 @@ func (s *cdtSession) handleCDTRequest(req *ChromeRequest, state *cdtState) (resp
 			evDestroyed := s.makeContextDestroyedEvent()
 			events = append(events, &evDestroyed)
 		}
-		response = ChromeResponse{ID: req.ID, Result: empty}
+		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
 	default:
-		response = ChromeResponse{ID: req.ID, Result: empty}
+		response = cdt.ChromeResponse{ID: req.ID, Result: empty}
 	}
 
 	return
@@ -513,14 +515,14 @@ func (s *cdtSession) computeEvent(state *cdtState) (event interface{}) {
 	return
 }
 
-func (s *cdtSession) makeScriptParsedEvent(state *cdtState) DebuggerScriptParsedEvent {
+func (s *cdtSession) makeScriptParsedEvent(state *cdtState) cdt.DebuggerScriptParsedEvent {
 	// {"method":"Debugger.scriptParsed","params":{"scriptId":"69","url":"internal/dtrace.js","startLine":0,"startColumn":0,"endLine":21,"endColumn":0,"executionContextId":1,"hash":"2e8fbf2f9f6aaa183be557d25f5fbc5b09fae00a","executionContextAuxData":{"isDefault":true},"isLiveEdit":false,"sourceMapURL":"","hasSourceURL":false,"isModule":false,"length":568,"stackTrace":{"callFrames":[{"functionName":"NativeModule.compile","scriptId":"7","url":"internal/bootstrap/loaders.js","lineNumber":298,"columnNumber":15}]}}}
 	progLines := strings.Count(state.disassembly, "\n")
 	length := len(state.disassembly)
 
-	evParsed := DebuggerScriptParsedEvent{
+	evParsed := cdt.DebuggerScriptParsedEvent{
 		Method: "Debugger.scriptParsed",
-		Params: DebuggerScriptParsedParams{
+		Params: cdt.DebuggerScriptParsedParams{
 			ScriptID:           s.scriptID,
 			URL:                s.scriptURL,
 			SourceMapURL:       s.sourceMapURL,
@@ -537,42 +539,42 @@ func (s *cdtSession) makeScriptParsedEvent(state *cdtState) DebuggerScriptParsed
 	return evParsed
 }
 
-func (s *cdtSession) makeDebuggerPausedEvent(state *cdtState) DebuggerPausedEvent {
+func (s *cdtSession) makeDebuggerPausedEvent(state *cdtState) cdt.DebuggerPausedEvent {
 	progLines := strings.Count(state.disassembly, "\n")
 
-	scopeLocal := DebuggerScope{
+	scopeLocal := cdt.DebuggerScope{
 		Type: "local",
-		Object: RuntimeRemoteObject{
+		Object: cdt.RuntimeRemoteObject{
 			Type:        "object",
 			ClassName:   "Object",
 			Description: "Object",
 			ObjectID:    localScopeObjID,
 		},
-		StartLocation: &DebuggerLocation{
+		StartLocation: &cdt.DebuggerLocation{
 			ScriptID:     s.scriptID,
 			LineNumber:   0,
 			ColumnNumber: 0,
 		},
-		EndLocation: &DebuggerLocation{
+		EndLocation: &cdt.DebuggerLocation{
 			ScriptID:     s.scriptID,
 			LineNumber:   progLines,
 			ColumnNumber: 0,
 		},
 	}
-	scopeGlobal := DebuggerScope{
+	scopeGlobal := cdt.DebuggerScope{
 		Type: "global",
-		Object: RuntimeRemoteObject{
+		Object: cdt.RuntimeRemoteObject{
 			Type:        "object",
 			ClassName:   "Object",
 			Description: "Object",
 			ObjectID:    globalScopeObjID,
 		},
 	}
-	sc := []DebuggerScope{scopeLocal, scopeGlobal}
-	cf := DebuggerCallFrame{
+	sc := []cdt.DebuggerScope{scopeLocal, scopeGlobal}
+	cf := cdt.DebuggerCallFrame{
 		CallFrameID:  "mainframe",
 		FunctionName: "",
-		Location: &DebuggerLocation{
+		Location: &cdt.DebuggerLocation{
 			ScriptID:     s.scriptID,
 			LineNumber:   state.line.Load(),
 			ColumnNumber: 0,
@@ -581,10 +583,10 @@ func (s *cdtSession) makeDebuggerPausedEvent(state *cdtState) DebuggerPausedEven
 		ScopeChain: sc,
 	}
 
-	evPaused := DebuggerPausedEvent{
+	evPaused := cdt.DebuggerPausedEvent{
 		Method: "Debugger.paused",
-		Params: DebuggerPausedParams{
-			CallFrames:     []DebuggerCallFrame{cf},
+		Params: cdt.DebuggerPausedParams{
+			CallFrames:     []cdt.DebuggerCallFrame{cf},
 			Reason:         "other",
 			HitBreakpoints: make([]string, 0),
 		},
@@ -603,15 +605,15 @@ func (s *cdtSession) makeDebuggerPausedEvent(state *cdtState) DebuggerPausedEven
 	return evPaused
 }
 
-func (s *cdtSession) makeContextCreatedEvent() RuntimeExecutionContextCreatedEvent {
+func (s *cdtSession) makeContextCreatedEvent() cdt.RuntimeExecutionContextCreatedEvent {
 	// {"method":"Runtime.executionContextCreated","params":{"context":{"id":1,"origin":"","name":"node[47576]","auxData":{"isDefault":true}}}}
 
 	aux := make(map[string]interface{})
 	aux["isDefault"] = true
-	evCtxCreated := RuntimeExecutionContextCreatedEvent{
+	evCtxCreated := cdt.RuntimeExecutionContextCreatedEvent{
 		Method: "Runtime.executionContextCreated",
-		Params: RuntimeExecutionContextCreatedParams{
-			Context: RuntimeExecutionContextDescription{
+		Params: cdt.RuntimeExecutionContextCreatedParams{
+			Context: cdt.RuntimeExecutionContextDescription{
 				ID:      s.contextID,
 				Origin:  "",
 				Name:    "TEAL program",
@@ -622,9 +624,9 @@ func (s *cdtSession) makeContextCreatedEvent() RuntimeExecutionContextCreatedEve
 	return evCtxCreated
 }
 
-func (s *cdtSession) makeContextDestroyedEvent() RuntimeExecutionContextDestroyedEvent {
-	return RuntimeExecutionContextDestroyedEvent{
+func (s *cdtSession) makeContextDestroyedEvent() cdt.RuntimeExecutionContextDestroyedEvent {
+	return cdt.RuntimeExecutionContextDestroyedEvent{
 		Method: "Runtime.executionContextDestroyed",
-		Params: RuntimeExecutionContextDestroyedParams{s.contextID},
+		Params: cdt.RuntimeExecutionContextDestroyedParams{ExecutionContextID: s.contextID},
 	}
 }

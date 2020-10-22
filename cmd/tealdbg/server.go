@@ -41,6 +41,9 @@ var upgrader = websocket.Upgrader{
 		if strings.HasPrefix(r.Header.Get("Origin"), "http://localhost") {
 			return true
 		}
+		if strings.HasPrefix(r.Header.Get("Origin"), "http://127.0.0.1") {
+			return true
+		}
 		return false
 	},
 }
@@ -83,7 +86,7 @@ func makeDebugServer(port int, ff FrontendFactory, dp *DebugParams) DebugServer 
 	debugger := MakeDebugger()
 
 	router := mux.NewRouter()
-	appAddress := fmt.Sprintf("localhost:%d", port)
+	appAddress := fmt.Sprintf("127.0.0.1:%d", port)
 
 	da := ff.Make(router, appAddress)
 	debugger.AddAdapter(da)
@@ -104,13 +107,17 @@ func makeDebugServer(port int, ff FrontendFactory, dp *DebugParams) DebugServer 
 	}
 }
 
-func (ds *DebugServer) startRemote() {
+func (ds *DebugServer) startRemote() error {
 	remote := MakeRemoteHook(ds.debugger)
 	remote.Setup(ds.router)
 	ds.remote = remote
 
 	log.Printf("starting server on %s", ds.server.Addr)
-	ds.server.ListenAndServe()
+	err := ds.server.ListenAndServe()
+	if err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
 }
 
 func (ds *DebugServer) startDebug() (err error) {
@@ -119,7 +126,12 @@ func (ds *DebugServer) startDebug() (err error) {
 		return
 	}
 
-	go ds.server.ListenAndServe()
+	go func() {
+		err := ds.server.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			log.Panicf("failed to listen: %v", err)
+		}
+	}()
 	defer ds.server.Shutdown(context.Background())
 
 	err = local.RunAll()

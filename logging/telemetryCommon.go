@@ -47,9 +47,9 @@ type telemetryHook interface {
 }
 
 type telemetryState struct {
-	history   *logBuffer
-	hook      telemetryHook
-	sendToLog bool
+	history         *logBuffer
+	hook            telemetryHook
+	telemetryConfig TelemetryConfig
 }
 
 // TelemetryConfig represents the configuration of Telemetry logging

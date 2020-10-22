@@ -174,8 +174,6 @@ func (a sortByOpcode) Less(i, j int) bool { return a[i].Opcode < a[j].Opcode }
 
 // OpcodesByVersion returns list of opcodes available in a specific version of TEAL
 // by copying v1 opcodes to v2 to create a full list.
-// This function must be used for documentation only because it modifies opcode versions
-// to the first introduced for the opcodes updated in later versions.
 func OpcodesByVersion(version uint64) []OpSpec {
 	// for updated opcodes use the lowest version opcode was introduced in
 	maxOpcode := 0

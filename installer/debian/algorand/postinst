@@ -1,0 +1,45 @@
+#!/bin/sh
+
+adduser --system --group --home /var/lib/algorand --no-create-home algorand >/dev/null
+# prior versions didn't create this group and adduser above won't create it if the algorand user exists
+getent group algorand >/dev/null || groupadd --system algorand
+chown -R algorand:algorand /var/lib/algorand
+
+## cat /usr/share/debhelper/autoscripts/postinst-systemd-enable | sed -e s,#UNITFILE#,algorand.service,
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	# This will only remove masks created by d-s-h on package removal.
+	deb-systemd-helper unmask algorand.service >/dev/null || true
+
+	# was-enabled defaults to true, so new installations run enable.
+	if deb-systemd-helper --quiet was-enabled algorand.service; then
+		# Enables the unit on first installation, creates new
+		# symlinks on upgrades if the unit file has changed.
+		deb-systemd-helper enable algorand.service >/dev/null || true
+	else
+		# Update the statefile to add new symlinks (if any), which need to be
+		# cleaned up on purge. Also remove old symlinks.
+		deb-systemd-helper update-state algorand.service >/dev/null || true
+	fi
+fi
+
+## cat /usr/share/debhelper/autoscripts/postinst-systemd-restart | sed -e s,#UNITFILES#,algorand.service,
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
+	if [ -d /run/systemd/system ]; then
+		systemctl --system daemon-reload >/dev/null || true
+		if [ -n "$2" ]; then
+			_dh_action=restart
+			deb-systemd-invoke restart algorand@\* >/dev/null || true
+		else
+			_dh_action=start
+		fi
+		deb-systemd-invoke $_dh_action algorand.service >/dev/null || true
+	fi
+fi
+
+if [ "$1" = "configure" ]; then
+    if [ -f /var/lib/algorand/genesis.json-2.1.5-patch ]; then
+        # 2.1.5 bug fix - restore user-modified genesis.json
+        mv -f /var/lib/algorand/genesis.json-2.1.5-patch /var/lib/algorand/genesis.json
+    fi
+fi
+

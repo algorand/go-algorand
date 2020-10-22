@@ -63,7 +63,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
@@ -336,6 +336,19 @@ type Local struct {
 	// A value of 0 means automatic, which is the default value. In this mode, a non archival node would not track the catchpoints, and an archival node would track the catchpoints as long as CatchpointInterval > 0.
 	// Other values of CatchpointTracking would give a warning in the log file, and would behave as if the default value was provided.
 	CatchpointTracking int64 `version[11]:"0"`
+
+	// LedgerSynchronousMode defines the synchronous mode used by the ledger database. The supported options are:
+	// 0 - SQLite continues without syncing as soon as it has handed data off to the operating system.
+	// 1 - SQLite database engine will still sync at the most critical moments, but less often than in FULL mode.
+	// 2 - SQLite database engine will use the xSync method of the VFS to ensure that all content is safely written to the disk surface prior to continuing. On Mac OS, the data is additionally syncronized via fullfsync.
+	// 3 - In addition to what being done in 2, it provides additional durability if the commit is followed closely by a power loss.
+	// for further information see the description of SynchronousMode in dbutil.go
+	LedgerSynchronousMode int `version[12]:"2"`
+
+	// AccountsRebuildSynchronousMode defines the synchronous mode used by the ledger database while the account database is being rebuilt. This is not a typical operational usecase,
+	// and is expected to happen only on either startup ( after enabling the catchpoint interval, or on certain database upgrades ) or during fast catchup. The values specified here
+	// and their meanings are identical to the ones in LedgerSynchronousMode.
+	AccountsRebuildSynchronousMode int `version[12]:"1"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

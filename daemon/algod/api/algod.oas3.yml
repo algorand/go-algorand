@@ -230,8 +230,7 @@
               "$ref": "#/components/schemas/Account"
             }
           }
-        },
-        "description": "(empty)"
+        }
       },
       "ApplicationResponse": {
         "content": {
@@ -297,8 +296,7 @@
               "type": "object"
             }
           }
-        },
-        "description": "(empty)"
+        }
       },
       "CatchpointStartResponse": {
         "content": {
@@ -317,8 +315,7 @@
               "type": "object"
             }
           }
-        },
-        "description": "(empty)"
+        }
       },
       "CompileResponse": {
         "content": {
@@ -450,8 +447,7 @@
               "type": "object"
             }
           }
-        },
-        "description": "(empty)"
+        }
       },
       "PendingTransactionResponse": {
         "content": {
@@ -644,6 +640,16 @@
           }
         },
         "description": "TransactionParams contains the parameters that help a client construct a new transaction."
+      },
+      "VersionsResponse": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Version"
+            }
+          }
+        },
+        "description": "VersionsResponse is the response to 'GET /versions'"
       }
     },
     "schemas": {
@@ -1000,6 +1006,41 @@
         ],
         "type": "object"
       },
+      "BuildVersion": {
+        "properties": {
+          "branch": {
+            "type": "string"
+          },
+          "build_number": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "commit_hash": {
+            "type": "string"
+          },
+          "major": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "minor": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "branch",
+          "build_number",
+          "channel",
+          "commit_hash",
+          "major",
+          "minor"
+        ],
+        "title": "BuildVersion contains the current algod build version information.",
+        "type": "object"
+      },
       "DryrunRequest": {
         "description": "Request data type for dryrun endpoint. Given the Transactions and simulated ledger state upload, run TEAL scripts and return debugging information.",
         "properties": {
@@ -1274,17 +1315,17 @@
         "type": "object"
       },
       "Version": {
-        "description": "Note that we annotate this as a model so that legacy clients\ncan directly import a swagger generated Version model.",
+        "description": "algod version information.",
         "properties": {
           "build": {
-            "$ref": "#/components/schemas/VersionBuild"
+            "$ref": "#/components/schemas/BuildVersion"
           },
-          "genesis-hash": {
+          "genesis_hash_b64": {
             "format": "byte",
             "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
             "type": "string"
           },
-          "genesis-id": {
+          "genesis_id": {
             "type": "string"
           },
           "versions": {
@@ -1296,45 +1337,11 @@
         },
         "required": [
           "build",
-          "genesis-hash",
-          "genesis-id",
+          "genesis_hash_b64",
+          "genesis_id",
           "versions"
         ],
-        "type": "object",
-        "x-go-package": "github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-      },
-      "VersionBuild": {
-        "description": "the current algod build version information.",
-        "properties": {
-          "branch": {
-            "type": "string"
-          },
-          "build-number": {
-            "type": "integer"
-          },
-          "channel": {
-            "type": "string"
-          },
-          "commit-hash": {
-            "format": "byte",
-            "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$",
-            "type": "string"
-          },
-          "major": {
-            "type": "integer"
-          },
-          "minor": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "branch",
-          "build-number",
-          "channel",
-          "commit-hash",
-          "major",
-          "minor"
-        ],
+        "title": "Version contains the current algod version.",
         "type": "object"
       }
     },
@@ -1359,6 +1366,32 @@
   },
   "openapi": "3.0.1",
   "paths": {
+    "/genesis": {
+      "get": {
+        "description": "Returns the entire genesis file in json.",
+        "operationId": "GetGenesis",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The genesis file in json."
+          },
+          "default": {
+            "content": {},
+            "description": "Unknown Error"
+          }
+        },
+        "summary": "Gets the genesis information.",
+        "tags": [
+          "common"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "operationId": "HealthCheck",
@@ -1464,8 +1497,7 @@
                   "$ref": "#/components/schemas/Account"
                 }
               }
-            },
-            "description": "(empty)"
+            }
           },
           "400": {
             "content": {
@@ -2010,8 +2042,7 @@
                   "type": "object"
                 }
               }
-            },
-            "description": "(empty)"
+            }
           },
           "400": {
             "content": {
@@ -2089,8 +2120,26 @@
                   "type": "object"
                 }
               }
-            },
-            "description": "(empty)"
+            }
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "An catchpoint start response.",
+                  "properties": {
+                    "catchup-message": {
+                      "description": "Catchup start response string",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "catchup-message"
+                  ],
+                  "type": "object"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -2281,8 +2330,7 @@
                   "type": "object"
                 }
               }
-            },
-            "description": "(empty)"
+            }
           }
         },
         "tags": [
@@ -2370,8 +2418,7 @@
                   "type": "object"
                 }
               }
-            },
-            "description": "(empty)"
+            }
           },
           "401": {
             "content": {
@@ -2494,8 +2541,7 @@
                   "type": "object"
                 }
               }
-            },
-            "description": "(empty)"
+            }
           },
           "400": {
             "content": {
@@ -3026,7 +3072,7 @@
     },
     "/v2/transactions/pending/{txid}": {
       "get": {
-        "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0) - transaction still in the pool (committed round = 0, pool error = \"\") - transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
+        "description": "Given a transaction id of a recently submitted transaction, it returns information about it.  There are several cases when this might succeed:\n- transaction committed (committed round > 0)\n- transaction still in the pool (committed round = 0, pool error = \"\")\n- transaction removed from pool due to error (committed round = 0, pool error != \"\")\nOr the transaction may have happened sufficiently long ago that the node no longer remembers it, and this will return an error.\n",
         "operationId": "PendingTransactionInformation",
         "parameters": [
           {
@@ -3229,6 +3275,27 @@
           }
         },
         "summary": "Get a specific pending transaction."
+      }
+    },
+    "/versions": {
+      "get": {
+        "description": "Retrieves the supported API versions, binary build versions, and genesis information.",
+        "operationId": "GetVersion",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              }
+            },
+            "description": "VersionsResponse is the response to 'GET /versions'"
+          }
+        },
+        "tags": [
+          "common"
+        ]
       }
     }
   },

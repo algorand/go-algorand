@@ -37,7 +37,7 @@ const hostnameLength = 255
 
 // TelemetryOverride Determines whether an override value is set and what it's value is.
 // The first return value is whether an override variable is found, if it is, the second is the override value.
-func TelemetryOverride(env string) bool {
+func TelemetryOverride(env string, telemetryConfig *TelemetryConfig) bool {
 	env = strings.ToLower(env)
 
 	if env == "1" || env == "true" {
@@ -139,8 +139,6 @@ func loadTelemetryConfig(path string) (TelemetryConfig, error) {
 	if len(cfg.Name) > 0 {
 		cfg.Name = SanitizeTelemetryString(cfg.Name, 1)
 	}
-
-	initializeConfig(cfg)
 
 	return cfg, err
 }

@@ -385,3 +385,80 @@ func TestResettingTransactionWarnDeadline(t *testing.T) {
 		require.Equal(t, 0, logger.warningsCounter)
 	})
 }
+
+// Test the SetSynchronousMode function
+func TestSetSynchronousMode(t *testing.T) {
+	setSynchrounousModeHelper := func(mem bool, ctx context.Context, mode SynchronousMode, fullfsync bool) error {
+		acc, err := MakeAccessor("fn.db", false, mem)
+		require.NoError(t, err)
+		if !mem {
+			defer os.Remove("fn.db")
+			defer os.Remove("fn.db-shm")
+			defer os.Remove("fn.db-wal")
+		}
+		defer acc.Close()
+		return acc.SetSynchronousMode(ctx, mode, fullfsync)
+	}
+	// check with canceled context.
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	cancelFunc()
+
+	require.Error(t, context.Canceled, setSynchrounousModeHelper(true, ctx, SynchronousModeOff, false))
+	require.Error(t, context.Canceled, setSynchrounousModeHelper(false, ctx, SynchronousModeOff, false))
+
+	require.Contains(t, setSynchrounousModeHelper(false, context.Background(), SynchronousModeOff-1, false).Error(), "invalid value")
+	require.Contains(t, setSynchrounousModeHelper(false, context.Background(), SynchronousModeExtra+1, false).Error(), "invalid value")
+
+	// try all success permutations -
+	for _, mode := range []SynchronousMode{SynchronousModeOff, SynchronousModeNormal, SynchronousModeFull, SynchronousModeExtra} {
+		for _, disk := range []bool{true, false} {
+			for _, fullfsync := range []bool{true, false} {
+				require.NoError(t, setSynchrounousModeHelper(disk, context.Background(), mode, fullfsync))
+			}
+		}
+	}
+}
+
+// TestReadingWhileWriting tests the SQLite behaviour when we're using two transactions, writing with one and reading from the other.
+// it demonstates that at any time before we're calling Commit, the database content can be read, and it's containing it's pre-transaction
+// value.
+func TestReadingWhileWriting(t *testing.T) {
+	writeAcc, err := MakeAccessor("fn.db", false, false)
+	require.NoError(t, err)
+	defer os.Remove("fn.db")
+	defer os.Remove("fn.db-shm")
+	defer os.Remove("fn.db-wal")
+	defer writeAcc.Close()
+	readAcc, err := MakeAccessor("fn.db", true, false)
+	require.NoError(t, err)
+	defer readAcc.Close()
+	_, err = writeAcc.Handle.Exec("CREATE TABLE foo (a INTEGER, b INTEGER)")
+	require.NoError(t, err)
+
+	_, err = writeAcc.Handle.Exec("INSERT INTO foo(a,b) VALUES (1,1)")
+	require.NoError(t, err)
+
+	var count int
+	err = readAcc.Handle.QueryRow("SELECT count(*) FROM foo").Scan(&count)
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
+
+	err = writeAcc.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		_, err = tx.Exec("INSERT INTO foo(a,b) VALUES (2,2)")
+		if err != nil {
+			return err
+		}
+		err = readAcc.Handle.QueryRow("SELECT count(*) FROM foo").Scan(&count)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	// this should be 1, since it was queried before the commit.
+	require.Equal(t, 1, count)
+	err = readAcc.Handle.QueryRow("SELECT count(*) FROM foo").Scan(&count)
+	require.NoError(t, err)
+	require.Equal(t, 2, count)
+
+}

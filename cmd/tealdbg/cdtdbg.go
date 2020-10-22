@@ -25,10 +25,12 @@ import (
 
 	"github.com/algorand/go-deadlock"
 	"github.com/gorilla/mux"
+
+	"github.com/algorand/go-algorand/cmd/tealdbg/cdt"
 )
 
-// CDTAdapter is Chrome DevTools frontend
-type CDTAdapter struct {
+// CdtFrontend is Chrome DevTools frontend
+type CdtFrontend struct {
 	mu         deadlock.Mutex
 	sessions   map[string]cdtSession
 	router     *mux.Router
@@ -36,21 +38,16 @@ type CDTAdapter struct {
 	verbose    bool
 }
 
-// CDTAdapterParams for Setup
-type CDTAdapterParams struct {
+// CdtFrontendParams for Setup
+type CdtFrontendParams struct {
 	router     *mux.Router
 	apiAddress string
 	verbose    bool
 }
 
-// MakeCDTAdapter creates new CDTAdapter
-func MakeCDTAdapter(ctx interface{}) (a *CDTAdapter) {
-	params, ok := ctx.(*CDTAdapterParams)
-	if !ok {
-		panic("MakeCDTAdapter expected CDTAdapterParams")
-	}
-
-	a = new(CDTAdapter)
+// MakeCdtFrontend creates new CdtFrontend
+func MakeCdtFrontend(params *CdtFrontendParams) (a *CdtFrontend) {
+	a = new(CdtFrontend)
 
 	a.sessions = make(map[string]cdtSession)
 	a.router = params.router
@@ -65,20 +62,23 @@ func MakeCDTAdapter(ctx interface{}) (a *CDTAdapter) {
 }
 
 // SessionStarted registers new session
-func (a *CDTAdapter) SessionStarted(sid string, debugger Control, ch chan Notification) {
-	s := makeCDTSession(sid, debugger, ch)
+func (a *CdtFrontend) SessionStarted(sid string, debugger Control, ch chan Notification) {
+	s := makeCdtSession(sid, debugger, ch)
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	s.endpoint = a.enableWebsocketEndpoint(sid, a.apiAddress, s.websocketHandler)
-
+	// first add new routes
 	if name, source := debugger.GetSource(); len(source) != 0 {
 		s.scriptURL = name
 		s.sourceMapURL = fmt.Sprintf("http://%s/%s/sourcemap", a.apiAddress, sid)
 		a.router.HandleFunc(fmt.Sprintf("/%s/sourcemap", sid), s.sourceMapHandler).Methods("GET")
 		a.router.HandleFunc(fmt.Sprintf("/%s/source", sid), s.sourceHandler).Methods("GET")
 	}
+
+	// then add a websocket route and publish (output to console) it
+	// after that mux.Router.routes may not be modifed due to possible data race
+	s.endpoint = a.enableWebsocketEndpoint(sid, a.apiAddress, s.websocketHandler)
 
 	s.verbose = a.verbose
 	s.states = debugger.GetStates(nil)
@@ -87,7 +87,7 @@ func (a *CDTAdapter) SessionStarted(sid string, debugger Control, ch chan Notifi
 }
 
 // SessionEnded removes the session
-func (a *CDTAdapter) SessionEnded(sid string) {
+func (a *CdtFrontend) SessionEnded(sid string) {
 	go func() {
 		a.mu.Lock()
 		s := a.sessions[sid]
@@ -103,7 +103,7 @@ func (a *CDTAdapter) SessionEnded(sid string) {
 }
 
 // WaitForCompletion returns when no active connections left
-func (a *CDTAdapter) WaitForCompletion() {
+func (a *CdtFrontend) WaitForCompletion() {
 	for {
 		a.mu.Lock()
 		active := len(a.sessions)
@@ -116,12 +116,12 @@ func (a *CDTAdapter) WaitForCompletion() {
 }
 
 // must be called with rctx.mux locked
-func (a *CDTAdapter) enableWebsocketEndpoint(
+func (a *CdtFrontend) enableWebsocketEndpoint(
 	uuid string, apiAddress string,
 	handler func(http.ResponseWriter, *http.Request),
-) cdtTabDescription {
+) cdt.TabDescription {
 	address := apiAddress + "/" + uuid
-	desc := cdtTabDescription{
+	desc := cdt.TabDescription{
 		Description:               "",
 		ID:                        uuid,
 		Title:                     "Algorand TEAL program",
@@ -144,7 +144,7 @@ func (a *CDTAdapter) enableWebsocketEndpoint(
 	return desc
 }
 
-func (a *CDTAdapter) versionHandler(w http.ResponseWriter, r *http.Request) {
+func (a *CdtFrontend) versionHandler(w http.ResponseWriter, r *http.Request) {
 	type devtoolsVersion struct {
 		Browser         string `json:"Browser"`
 		ProtocolVersion string `json:"Protocol-Version"`
@@ -160,8 +160,8 @@ func (a *CDTAdapter) versionHandler(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-func (a *CDTAdapter) jsonHandler(w http.ResponseWriter, r *http.Request) {
-	tabs := make([]cdtTabDescription, 0, len(a.sessions))
+func (a *CdtFrontend) jsonHandler(w http.ResponseWriter, r *http.Request) {
+	tabs := make([]cdt.TabDescription, 0, len(a.sessions))
 
 	func() {
 		a.mu.Lock()

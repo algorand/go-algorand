@@ -25,7 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/server/v2"
+	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -69,10 +69,10 @@ func makeAppLedger(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
 	groupIndex int, proto config.ConsensusParams, round uint64, latestTimestamp int64,
 	appIdx basics.AppIndex, painless bool, indexerURL string, indexerToken string,
-) (logic.LedgerForLogic, appState, error) {
+) (logic.LedgerForLogic, AppState, error) {
 
 	if groupIndex >= len(txnGroup) {
-		return nil, appState{}, fmt.Errorf("invalid groupIndex %d exceed txn group length %d", groupIndex, len(txnGroup))
+		return nil, AppState{}, fmt.Errorf("invalid groupIndex %d exceed txn group length %d", groupIndex, len(txnGroup))
 	}
 	txn := txnGroup[groupIndex]
 
@@ -90,18 +90,18 @@ func makeAppLedger(
 				var err error
 				balances[acc], err = getBalanceFromIndexer(indexerURL, indexerToken, acc, round)
 				if err != nil {
-					return nil, appState{}, err
+					return nil, AppState{}, err
 				}
 			}
 		}
 		for _, app := range apps {
 			creator, err := getAppCreatorFromIndexer(indexerURL, indexerToken, app)
 			if err != nil {
-				return nil, appState{}, err
+				return nil, AppState{}, err
 			}
 			balances[creator], err = getBalanceFromIndexer(indexerURL, indexerToken, creator, round)
 			if err != nil {
-				return nil, appState{}, err
+				return nil, AppState{}, err
 			}
 		}
 	}
@@ -145,7 +145,7 @@ func makeAppLedger(
 				// create balance record and AppParams for this app
 				addr, err := getRandomAddress()
 				if err != nil {
-					return nil, appState{}, err
+					return nil, AppState{}, err
 				}
 				ad := basics.AccountData{
 					AppParams: map[basics.AppIndex]basics.AppParams{

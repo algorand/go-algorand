@@ -269,7 +269,9 @@ func TestFullCatchpointWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	// create a ledger.
-	l, err := OpenLedger(ml.log, "TestFullCatchpointWriter", true, InitState{}, conf)
+	var initState InitState
+	initState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
+	l, err := OpenLedger(ml.log, "TestFullCatchpointWriter", true, initState, conf)
 	require.NoError(t, err)
 	defer l.Close()
 	accessor := MakeCatchpointCatchupAccessor(l, l.log)
@@ -322,8 +324,10 @@ func TestFullCatchpointWriter(t *testing.T) {
 
 	// verify that the account data aligns with what we originally stored :
 	for addr, acct := range accts {
-		acctData, err := l.LookupWithoutRewards(0, addr)
+		acctData, validThrough, err := l.LookupWithoutRewards(0, addr)
 		require.NoError(t, err)
 		require.Equal(t, acct, acctData)
+		require.Equal(t, basics.Round(0), validThrough)
+
 	}
 }

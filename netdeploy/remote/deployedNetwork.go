@@ -360,6 +360,7 @@ type cloudHostConfiguration struct {
 
 type cloudHostSpec struct {
 	Name           string
+	Group          string
 	Provider       string
 	Region         string
 	InstanceType   string
@@ -404,6 +405,9 @@ func (cfg DeployedNetwork) GenerateCloudTemplate(templates HostTemplates, target
 		if err != nil {
 			return
 		}
+
+		hostSpec.Group = strings.TrimSpace(cloudHost.Group)
+
 		topology.Hosts = append(topology.Hosts, hostSpec)
 	}
 
@@ -488,6 +492,7 @@ func createHostSpec(host HostConfig, template cloudHost) (hostSpec cloudHostSpec
 	}
 
 	hostSpec.Name = host.Name
+	hostSpec.Group = host.Group
 	hostSpec.Provider = template.Provider
 	hostSpec.Region = template.Region
 	hostSpec.InstanceType = template.BaseConfiguration

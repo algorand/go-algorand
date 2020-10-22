@@ -72,6 +72,9 @@ func Payment(payment transactions.PaymentTxnFields, header transactions.Header, 
 
 		// Confirm that we have no balance left
 		rec, err = balances.Get(header.Sender, true)
+		if err != nil {
+			return err
+		}
 		if !rec.MicroAlgos.IsZero() {
 			return fmt.Errorf("balance %d still not zero after CloseRemainderTo", rec.MicroAlgos.Raw)
 		}

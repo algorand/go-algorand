@@ -106,6 +106,21 @@ var storageMigration = []string{
 		data blob)`,
 }
 
+func createNormalizedOnlineBalanceIndex(idxname string, tablename string) string {
+	return fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %s
+		ON %s ( normalizedonlinebalance, address, data )
+		WHERE normalizedonlinebalance>0`, idxname, tablename)
+}
+
+var createOnlineAccountIndex = []string{
+	`ALTER TABLE accountbase
+		ADD COLUMN normalizedonlinebalance INTEGER`,
+	createNormalizedOnlineBalanceIndex("onlineaccountbals", "accountbase"),
+}
+
+		data blob)`,
+}
+
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -119,7 +134,7 @@ var accountsResetExprs = []string{
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
-var accountDBVersion = int32(3)
+var accountDBVersion = int32(4)
 
 type accountDelta struct {
 	old basics.AccountData
@@ -295,17 +310,26 @@ func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, addr basic
 	return nil
 }
 
-func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []encodedBalanceRecord) error {
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, data) VALUES(?, ?)")
+func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []encodedBalanceRecord, proto config.ConsensusParams) error {
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
 	}
 
 	for _, balance := range bals {
-		result, err := insertStmt.ExecContext(ctx, balance.Address[:], balance.AccountData)
+		var data basics.AccountData
+		err = protocol.Decode(balance.AccountData, &data)
 		if err != nil {
 			return err
 		}
+
+		normBalance := data.NormalizedOnlineBalance(proto)
+
+		result, err := insertStmt.ExecContext(ctx, balance.Address[:], normBalance, balance.AccountData)
+		if err != nil {
+			return err
+		}
+
 		aff, err := result.RowsAffected()
 		if err != nil {
 			return err
@@ -313,42 +337,68 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []enco
 		if aff != 1 {
 			return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
 		}
-
 	}
 	return nil
 }
 
 func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup bool) (err error) {
-	s := "DROP TABLE IF EXISTS catchpointbalances;"
-	s += "DROP TABLE IF EXISTS catchpointassetcreators;"
-	s += "DROP TABLE IF EXISTS catchpointaccounthashes;"
-	s += "DELETE FROM accounttotals where id='catchpointStaging';"
-	if newCatchup {
-		s += "CREATE TABLE IF NOT EXISTS catchpointassetcreators(asset integer primary key, creator blob, ctype integer);"
-		s += "CREATE TABLE IF NOT EXISTS catchpointbalances(address blob primary key, data blob);"
-		s += "CREATE TABLE IF NOT EXISTS catchpointaccounthashes(id integer primary key, data blob);"
+	s := []string{
+		"DROP TABLE IF EXISTS catchpointbalances",
+		"DROP TABLE IF EXISTS catchpointassetcreators",
+		"DROP TABLE IF EXISTS catchpointaccounthashes",
+		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
-	_, err = tx.Exec(s)
-	return err
+
+	if newCatchup {
+		// SQLite has no way to rename an existing index.  So, we need
+		// to cook up a fresh name for the index, which will be kept
+		// around after we rename the table from "catchpointbalances"
+		// to "accountbase".  To construct a unique index name, we
+		// use the current time.
+		idxname := fmt.Sprintf("onlineaccountbals%d", time.Now().UnixNano())
+
+		s = append(s,
+			"CREATE TABLE IF NOT EXISTS catchpointassetcreators (asset integer primary key, creator blob, ctype integer)",
+			"CREATE TABLE IF NOT EXISTS catchpointbalances (address blob primary key, data blob, normalizedonlinebalance integer)",
+			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
+			createNormalizedOnlineBalanceIndex(idxname, "catchpointbalances"),
+		)
+	}
+
+	for _, stmt := range s {
+		_, err = tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // applyCatchpointStagingBalances switches the staged catchpoint catchup tables onto the actual
 // tables and update the correct balance round. This is the final step in switching onto the new catchpoint round.
 func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRound basics.Round) (err error) {
-	s := "ALTER TABLE accountbase RENAME TO accountbase_old;"
-	s += "ALTER TABLE assetcreators RENAME TO assetcreators_old;"
-	s += "ALTER TABLE accounthashes RENAME TO accounthashes_old;"
-	s += "ALTER TABLE catchpointbalances RENAME TO accountbase;"
-	s += "ALTER TABLE catchpointassetcreators RENAME TO assetcreators;"
-	s += "ALTER TABLE catchpointaccounthashes RENAME TO accounthashes;"
-	s += "DROP TABLE IF EXISTS accountbase_old;"
-	s += "DROP TABLE IF EXISTS assetcreators_old;"
-	s += "DROP TABLE IF EXISTS accounthashes_old;"
+	stmts := []string{
+		"ALTER TABLE accountbase RENAME TO accountbase_old",
+		"ALTER TABLE assetcreators RENAME TO assetcreators_old",
+		"ALTER TABLE accounthashes RENAME TO accounthashes_old",
 
-	_, err = tx.Exec(s)
-	if err != nil {
-		return err
+		"ALTER TABLE catchpointbalances RENAME TO accountbase",
+		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
+		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
+
+		"DROP TABLE IF EXISTS accountbase_old",
+		"DROP TABLE IF EXISTS assetcreators_old",
+		"DROP TABLE IF EXISTS accounthashes_old",
 	}
+
+	for _, stmt := range stmts {
+		_, err = tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+
 	_, err = tx.Exec("INSERT OR REPLACE INTO acctrounds(id, rnd) VALUES('acctbase', ?)", balancesRound)
 	if err != nil {
 		return err
@@ -459,7 +509,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		}
 	} else {
 		serr, ok := err.(sqlite3.Error)
-		// serr.Code is sqlite.ErrConstraint if the database has already been initalized;
+		// serr.Code is sqlite.ErrConstraint if the database has already been initialized;
 		// in that case, ignore the error and return nil.
 		if !ok || serr.Code != sqlite3.ErrConstraint {
 			return err
@@ -467,6 +517,76 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 	}
 
 	return nil
+}
+
+// accountsAddNormalizedBalance adds the normalizedonlinebalance column
+// to the accountbase table.
+func accountsAddNormalizedBalance(tx *sql.Tx, proto config.ConsensusParams) error {
+	var exists bool
+	err := tx.QueryRow("SELECT 1 FROM pragma_table_info('accountbase') WHERE name='normalizedonlinebalance'").Scan(&exists)
+	if err == nil {
+		// Already exists.
+		return nil
+	}
+	if err != sql.ErrNoRows {
+		return err
+	}
+
+	for _, stmt := range createOnlineAccountIndex {
+		_, err := tx.Exec(stmt)
+		if err != nil {
+			return err
+		}
+	}
+
+	rows, err := tx.Query("SELECT address, data FROM accountbase")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		err = rows.Scan(&addrbuf, &buf)
+		if err != nil {
+			return err
+		}
+
+		var data basics.AccountData
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return err
+		}
+
+		normBalance := data.NormalizedOnlineBalance(proto)
+		if normBalance > 0 {
+			_, err = tx.Exec("UPDATE accountbase SET normalizedonlinebalance=? WHERE address=?", normBalance, addrbuf)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return rows.Err()
+}
+
+// accountDataToOnline returns the part of the AccountData that matters
+// for online accounts (to answer top-N queries).  We store a subset of
+// the full AccountData because we need to store a large number of these
+// in memory (say, 1M), and storing that many AccountData could easily
+// cause us to run out of memory.
+func accountDataToOnline(address basics.Address, ad *basics.AccountData, proto config.ConsensusParams) *onlineAccount {
+	return &onlineAccount{
+		Address:                 address,
+		MicroAlgos:              ad.MicroAlgos,
+		RewardsBase:             ad.RewardsBase,
+		NormalizedOnlineBalance: ad.NormalizedOnlineBalance(proto),
+		VoteID:                  ad.VoteID,
+		VoteFirstValid:          ad.VoteFirstValid,
+		VoteLastValid:           ad.VoteLastValid,
+		VoteKeyDilution:         ad.VoteKeyDilution,
+	}
 }
 
 func resetAccountHashes(tx *sql.Tx) (err error) {
@@ -505,12 +625,17 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 	var err error
 	qs := &accountsDbQueries{}
 
-	qs.listCreatablesStmt, err = r.Prepare("SELECT asset, creator FROM assetcreators WHERE asset <= ? AND ctype = ? ORDER BY asset desc LIMIT ?")
+	qs.listCreatablesStmt, err = r.Prepare("SELECT rnd, asset, creator FROM acctrounds LEFT JOIN assetcreators ON assetcreators.asset <= ? AND assetcreators.ctype = ? WHERE acctrounds.id='acctbase' ORDER BY assetcreators.asset desc LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
 
-	qs.lookupStmt, err = r.Prepare("SELECT data FROM accountbase WHERE address=?")
+	qs.lookupStmt, err = r.Prepare("SELECT rnd, data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
+	if err != nil {
+		return nil, err
+	}
+
+	qs.lookupCreatorStmt, err = r.Prepare("SELECT rnd, creator FROM acctrounds LEFT JOIN assetcreators ON asset = ? AND ctype = ? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
@@ -526,11 +651,6 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 	}
 
 	qs.countStorageStmt, err = r.Prepare("SELECT COUNT(*) FROM storage WHERE owner = ? AND aidx = ? AND global = ? AND vtype = ?")
-	if err != nil {
-		return nil, err
-	}
-
-	qs.lookupCreatorStmt, err = r.Prepare("SELECT creator FROM assetcreators WHERE asset = ? AND ctype = ?")
 	if err != nil {
 		return nil, err
 	}
@@ -577,7 +697,8 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 	return qs, nil
 }
 
-func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, err error) {
+// listCreatables returns an array of CreatableLocator which have CreatableIndex smaller or equal to maxIdx and are of the provided CreatableType.
+func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxResults uint64, ctype basics.CreatableType) (results []basics.CreatableLocator, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {
 		// Query for assets in range
 		rows, err := qs.listCreatablesStmt.Query(maxIdx, ctype, maxResults)
@@ -589,11 +710,17 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 		// For each row, copy into a new CreatableLocator and append to results
 		var buf []byte
 		var cl basics.CreatableLocator
+		var creatableIndex sql.NullInt64
 		for rows.Next() {
-			err := rows.Scan(&cl.Index, &buf)
+			err = rows.Scan(&dbRound, &creatableIndex, &buf)
 			if err != nil {
 				return err
 			}
+			if !creatableIndex.Valid {
+				// we received an entry without any index. This would happen only on the first entry when there are no creatables of the requested type.
+				break
+			}
+			cl.Index = basics.CreatableIndex(creatableIndex.Int64)
 			copy(cl.Creator[:], buf)
 			cl.Type = ctype
 			results = append(results, cl)
@@ -689,14 +816,14 @@ func (qs *accountsDbQueries) countStorage(addr basics.Address, aapp storagePtr) 
 	return
 }
 
-func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, err error) {
+func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (addr basics.Address, ok bool, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
-		err := qs.lookupCreatorStmt.QueryRow(cidx, ctype).Scan(&buf)
+		err := qs.lookupCreatorStmt.QueryRow(cidx, ctype).Scan(&dbRound, &buf)
 
-		// Common error: creatable does not exist
+		// this shouldn't happen unless we can't figure the round number.
 		if err == sql.ErrNoRows {
-			return nil
+			return fmt.Errorf("lookupCreator was unable to retrieve round number")
 		}
 
 		// Some other database error
@@ -704,24 +831,34 @@ func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype bas
 			return err
 		}
 
-		ok = true
-		copy(addr[:], buf)
+		if len(buf) > 0 {
+			ok = true
+			copy(addr[:], buf)
+		}
 		return nil
 	})
 	return
 }
 
-func (qs *accountsDbQueries) lookup(addr basics.Address) (data basics.AccountData, err error) {
+// lookup looks up for a the account data given it's address. It returns the current database round and the matching
+// account data, if such was found. If no matching account data could be found for the given address, an empty account data would
+// be retrieved.
+func (qs *accountsDbQueries) lookup(addr basics.Address) (data basics.AccountData, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
-		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&buf)
+		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&dbRound, &buf)
 		if err == nil {
-			return protocol.Decode(buf, &data)
+			if len(buf) > 0 {
+				return protocol.Decode(buf, &data)
+			}
+			// we don't have that account, just return the database round.
+			return nil
 		}
 
+		// this should never happen; it indicates that we don't have a current round in the acctrounds table.
 		if err == sql.ErrNoRows {
 			// Return the zero value of data
-			return nil
+			return fmt.Errorf("unable to query account data for address %v : %w", addr, err)
 		}
 
 		return err
@@ -855,6 +992,50 @@ func (qs *accountsDbQueries) close() {
 	}
 }
 
+// accountsOnlineTop returns the top n online accounts starting at position offset
+// (that is, the top offset'th account through the top offset+n-1'th account).
+//
+// The accounts are sorted by their normalized balance and address.  The normalized
+// balance has to do with the reward parts of online account balances.  See the
+// normalization procedure in AccountData.NormalizedOnlineBalance().
+//
+// Note that this does not check if the accounts have a vote key valid for any
+// particular round (past, present, or future).
+func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParams) (map[basics.Address]*onlineAccount, error) {
+	rows, err := tx.Query("SELECT address, data FROM accountbase WHERE normalizedonlinebalance>0 ORDER BY normalizedonlinebalance DESC, address DESC LIMIT ? OFFSET ?", n, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make(map[basics.Address]*onlineAccount, n)
+	for rows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		err = rows.Scan(&addrbuf, &buf)
+		if err != nil {
+			return nil, err
+		}
+
+		var data basics.AccountData
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return nil, err
+		}
+
+		var addr basics.Address
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return nil, err
+		}
+
+		copy(addr[:], addrbuf)
+		res[addr] = accountDataToOnline(addr, &data, proto)
+	}
+
+	return res, rows.Err()
+}
+
 func accountsTotals(tx *sql.Tx, catchpointStaging bool) (totals AccountTotals, err error) {
 	id := ""
 	if catchpointStaging {
@@ -894,7 +1075,7 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]miniAccountDelta, c
 	}
 	defer deleteStmt.Close()
 
-	replaceStmt, err = tx.Prepare("REPLACE INTO accountbase (address, data) VALUES (?, ?)")
+	replaceStmt, err = tx.Prepare("REPLACE INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
 	if err != nil {
 		return
 	}
@@ -905,12 +1086,12 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]miniAccountDelta, c
 			// prune empty accounts
 			_, err = deleteStmt.Exec(addr[:])
 		} else {
-			_, err = replaceStmt.Exec(addr[:], protocol.Encode(&data.new))
+			normBalance := data.new.NormalizedOnlineBalance(proto)
+			_, err = replaceStmt.Exec(addr[:], normBalance, protocol.Encode(&data.new))
 		}
 		if err != nil {
 			return
 		}
-
 	}
 
 	if len(creatables) > 0 {
@@ -1179,7 +1360,7 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 		// note that we should be quite liberal on timing here, since it might perform much slower
 		// on low-power devices.
 		if scannedAccounts%1000 == 0 {
-			// The return value from ResetTransactionWarnDeadline can be safely ignored here since it would only default to writing the warnning
+			// The return value from ResetTransactionWarnDeadline can be safely ignored here since it would only default to writing the warning
 			// message, which would let us know that it failed anyway.
 			db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(time.Second))
 		}
@@ -1230,10 +1411,6 @@ func reencodeAccounts(ctx context.Context, tx *sql.Tx) (modifiedAccounts uint, e
 	return
 }
 
-// merkleCommitterNodesPerPage controls how many nodes will be stored in a single page
-// value was calibrated using BenchmarkCalibrateNodesPerPage
-var merkleCommitterNodesPerPage = int64(116)
-
 type merkleCommitter struct {
 	tx         *sql.Tx
 	deleteStmt *sql.Stmt
@@ -1283,11 +1460,6 @@ func (mc *merkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 		return nil, err
 	}
 	return content, nil
-}
-
-// GetNodesCountPerPage returns the page size ( number of nodes per page )
-func (mc *merkleCommitter) GetNodesCountPerPage() (pageSize int64) {
-	return merkleCommitterNodesPerPage
 }
 
 // encodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.

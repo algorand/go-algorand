@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=2045
 
 set -ex
 
@@ -9,24 +10,56 @@ ARCH_TYPE=$(./scripts/archtype.sh)
 export ARCH_TYPE
 OS_TYPE=$(./scripts/ostype.sh)
 export OS_TYPE
-VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
-export VERSION
-BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
-export BRANCH
-CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
-export CHANNEL
-SHA=${SHA:-$(git rev-parse HEAD)}
-export SHA
+
+export BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
+export CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
+export NETWORK=${NETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
+export SHA=${SHA:-$(git rev-parse HEAD)}
+export VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+
+PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
+
+pushd "$PKG_DIR"
 
 if ! $USE_CACHE
 then
-    mule -f package-test.yaml "package-test-setup-$PKG_TYPE"
+    SRC_DIR="s3://algorand-staging/releases/$CHANNEL/$VERSION"
+
+    # deb
+    aws s3 cp "$SRC_DIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
+    aws s3 cp "$SRC_DIR/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
+
+    # rpm
+    aws s3 cp "$SRC_DIR/algorand-$VERSION-1.$ARCH_BIT.rpm" .
+    aws s3 cp "$SRC_DIR/algorand-devtools-$VERSION-1.$ARCH_BIT.rpm" .
 fi
 
-if [[ "$ARCH_TYPE" =~ "arm" ]]
+popd
+
+for test in $(ls ./scripts/release/mule/test/tests/pre/*.sh)
+do
+    bash "$test"
+done
+
+pushd "$PKG_DIR"
+
+if [ "$PKG_TYPE" = deb ]
 then
-    ./scripts/release/mule/test/tests/run_tests -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -r "$VERSION"
+    dpkg -i algorand_*"$VERSION"*.deb
+    dpkg -i algorand-devtools*"$VERSION"*.deb
 else
-    ./scripts/release/mule/test/util/test_package.sh
+    # We need to install this since it's not being installed by a package manager.
+    # Normally, this is installed for us b/c it's a dependency.
+    # See `./installer/rpm/algorand/algorand.spec`.
+    yum install yum-cron -y
+    rpm -i algorand-"$VERSION"-1."$ARCH_BIT".rpm
+    rpm -i algorand-devtools-"$VERSION"-1."$ARCH_BIT".rpm
 fi
+
+popd
+
+for test in $(ls ./scripts/release/mule/test/tests/post/*.sh)
+do
+    bash "$test"
+done
 

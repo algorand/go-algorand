@@ -25,6 +25,13 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 )
 
+var defaultTestMemoryConfig = MemoryConfig{
+	NodesCountPerPage:         inMemoryCommitterPageSize,
+	CachedNodesCount:          defaultTestEvictSize,
+	PageFillFactor:            0.90,
+	MaxChildrenPagesThreshold: 32,
+}
+
 func verifyCacheNodeCount(t *testing.T, trie *Trie) {
 	count := 0
 	for _, pageNodes := range trie.cache.pageToNIDsPtr {
@@ -44,7 +51,7 @@ func verifyCacheNodeCount(t *testing.T, trie *Trie) {
 
 func TestCacheEviction1(t *testing.T) {
 	var memoryCommitter InMemoryCommitter
-	mt1, _ := MakeTrie(&memoryCommitter, defaultTestEvictSize)
+	mt1, _ := MakeTrie(&memoryCommitter, defaultTestMemoryConfig)
 	// create 13000 hashes.
 	leafsCount := 13000
 	hashes := make([]crypto.Digest, leafsCount)
@@ -66,7 +73,7 @@ func TestCacheEviction1(t *testing.T) {
 
 func TestCacheEviction2(t *testing.T) {
 	var memoryCommitter InMemoryCommitter
-	mt1, _ := MakeTrie(&memoryCommitter, defaultTestEvictSize)
+	mt1, _ := MakeTrie(&memoryCommitter, defaultTestMemoryConfig)
 	// create 20000 hashes.
 	leafsCount := 20000
 	hashes := make([]crypto.Digest, leafsCount)
@@ -93,7 +100,7 @@ func TestCacheEviction2(t *testing.T) {
 
 func TestCacheEviction3(t *testing.T) {
 	var memoryCommitter InMemoryCommitter
-	mt1, _ := MakeTrie(&memoryCommitter, defaultTestEvictSize)
+	mt1, _ := MakeTrie(&memoryCommitter, defaultTestMemoryConfig)
 	// create 200000 hashes.
 	leafsCount := 200000
 	hashes := make([]crypto.Digest, leafsCount)
@@ -120,14 +127,8 @@ func TestCacheEviction3(t *testing.T) {
 // smallPageMemoryCommitter is an InMemoryCommitter, which has a custom page size, and knows how to "fail" per request.
 type smallPageMemoryCommitter struct {
 	InMemoryCommitter
-	pageSize  int64
 	failStore int
 	failLoad  int
-}
-
-// GetNodesCountPerPage returns the page size ( number of nodes per page )
-func (spmc *smallPageMemoryCommitter) GetNodesCountPerPage() (pageSize int64) {
-	return spmc.pageSize
 }
 
 // StorePage stores a single page in an in-memory persistence.
@@ -150,8 +151,10 @@ func (spmc *smallPageMemoryCommitter) LoadPage(page uint64) (content []byte, err
 
 func cacheEvictionFuzzer(t *testing.T, hashes []crypto.Digest, pageSize int64, evictSize int) {
 	var memoryCommitter smallPageMemoryCommitter
-	memoryCommitter.pageSize = pageSize
-	mt1, _ := MakeTrie(&memoryCommitter, evictSize)
+	memoryConfig := defaultTestMemoryConfig
+	memoryConfig.CachedNodesCount = evictSize
+	memoryConfig.NodesCountPerPage = pageSize
+	mt1, _ := MakeTrie(&memoryCommitter, memoryConfig)
 
 	// add the first 10 hashes.
 	for i := 0; i < 10; i++ {
@@ -221,8 +224,9 @@ func TestCacheEvictionFuzzer2(t *testing.T) {
 // it's being deleted correctly.
 func TestCacheMidTransactionPageDeletion(t *testing.T) {
 	var memoryCommitter smallPageMemoryCommitter
-	memoryCommitter.pageSize = 2
-	mt1, _ := MakeTrie(&memoryCommitter, defaultTestEvictSize)
+	memoryConfig := defaultTestMemoryConfig
+	memoryConfig.NodesCountPerPage = 2
+	mt1, _ := MakeTrie(&memoryCommitter, memoryConfig)
 
 	// create 10000 hashes.
 	leafsCount := 10000
@@ -241,10 +245,11 @@ func TestCacheMidTransactionPageDeletion(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, deleted)
 	}
-	mt1.Commit()
+
+	stats, err := mt1.Commit()
+	require.NoError(t, err)
 
 	// compare committed pages to the in-memory pages.
-
 	for page, pageContent := range memoryCommitter.memStore {
 		if page == storedNodeIdentifierNull {
 			continue
@@ -254,16 +259,15 @@ func TestCacheMidTransactionPageDeletion(t *testing.T) {
 		require.NoError(t, err)
 
 		// stored page should have more than a single node.
-		require.Greater(t, len(decodedPage), 0)
+		require.Greaterf(t, len(decodedPage), 0, "page %d has no nodes", page)
 	}
 
 	for page, pageContent := range mt1.cache.pageToNIDsPtr {
-
 		// memory page should have more than a single node.
 		require.NotZerof(t, len(pageContent), "Memory page %d has zero nodes", page)
 
 		// memory page should also be available on disk:
-		require.NotNil(t, memoryCommitter.memStore[page])
+		require.NotNilf(t, memoryCommitter.memStore[page], "committed page %d is empty while memory node has %d items\nStats : %#v", page, len(pageContent), stats)
 	}
 }
 
@@ -286,7 +290,7 @@ func (mt *Trie) TestDeleteRollback(d []byte) (bool, error) {
 		return false, err
 	}
 	mt.cache.beginTransaction()
-	if pnode.leaf {
+	if pnode.leaf() {
 		// remove the root.
 		mt.cache.deleteNode(mt.root)
 		mt.root = storedNodeIdentifierNull
@@ -305,8 +309,10 @@ func (mt *Trie) TestDeleteRollback(d []byte) (bool, error) {
 // it's being deleted correctly.
 func TestCacheTransactionRollbackPageDeletion(t *testing.T) {
 	var memoryCommitter smallPageMemoryCommitter
-	memoryCommitter.pageSize = 2
-	mt1, _ := MakeTrie(&memoryCommitter, 5)
+	memConfig := defaultTestMemoryConfig
+	memConfig.CachedNodesCount = 5
+	memConfig.NodesCountPerPage = 2
+	mt1, _ := MakeTrie(&memoryCommitter, memConfig)
 
 	// create 1000 hashes.
 	leafsCount := 1000
@@ -344,8 +350,10 @@ func TestCacheTransactionRollbackPageDeletion(t *testing.T) {
 // it's being deleted correctly.
 func TestCacheDeleteNodeMidTransaction(t *testing.T) {
 	var memoryCommitter smallPageMemoryCommitter
-	memoryCommitter.pageSize = 1
-	mt1, _ := MakeTrie(&memoryCommitter, 5)
+	memConfig := defaultTestMemoryConfig
+	memConfig.CachedNodesCount = 5
+	memConfig.NodesCountPerPage = 1
+	mt1, _ := MakeTrie(&memoryCommitter, memConfig)
 
 	// create 1000 hashes.
 	leafsCount := 10000
@@ -375,7 +383,7 @@ func TestCacheDeleteNodeMidTransaction(t *testing.T) {
 // increased if the page was already loaded previously into memory.
 func TestCachePageReloading(t *testing.T) {
 	var memoryCommitter InMemoryCommitter
-	mt1, _ := MakeTrie(&memoryCommitter, defaultTestEvictSize)
+	mt1, _ := MakeTrie(&memoryCommitter, defaultTestMemoryConfig)
 	// create 10 hashes.
 	leafsCount := 10
 	hashes := make([]crypto.Digest, leafsCount)
@@ -391,7 +399,7 @@ func TestCachePageReloading(t *testing.T) {
 
 	earlyCachedNodeCount := mt1.cache.cachedNodeCount
 	// reloading existing cached page multiple time should not cause increase cached node count.
-	page := uint64(mt1.nextNodeID) / uint64(memoryCommitter.GetNodesCountPerPage())
+	page := uint64(mt1.nextNodeID-1) / uint64(defaultTestMemoryConfig.NodesCountPerPage)
 	err = mt1.cache.loadPage(page)
 	require.NoError(t, err)
 	lateCachedNodeCount := mt1.cache.cachedNodeCount
@@ -415,7 +423,9 @@ func TestCachePageReloading(t *testing.T) {
 // evicting other pages before evicting the top page.
 func TestCachePagedOutTip(t *testing.T) {
 	var memoryCommitter InMemoryCommitter
-	mt1, _ := MakeTrie(&memoryCommitter, 600)
+	memConfig := defaultTestMemoryConfig
+	memConfig.CachedNodesCount = 600
+	mt1, _ := MakeTrie(&memoryCommitter, memConfig)
 	// create 2048 hashes.
 	leafsCount := 2048
 	hashes := make([]crypto.Digest, leafsCount)
@@ -426,7 +436,7 @@ func TestCachePagedOutTip(t *testing.T) {
 	for i := 0; i < len(hashes)/2; i++ {
 		mt1.Add(hashes[i][:])
 	}
-	err := mt1.Commit()
+	_, err := mt1.Commit()
 	require.NoError(t, err)
 
 	for i := 0; i < len(hashes)/2; i++ {
@@ -434,12 +444,13 @@ func TestCachePagedOutTip(t *testing.T) {
 	}
 
 	// check the tip page before evicting
-	page := uint64(mt1.nextNodeID) / uint64(memoryCommitter.GetNodesCountPerPage())
+	page := uint64(mt1.root) / uint64(memConfig.NodesCountPerPage)
 	require.NotNil(t, mt1.cache.pageToNIDsPtr[page])
 
 	_, err = mt1.Evict(true)
 	require.NoError(t, err)
 
-	// ensures that the tip page was not flushed out.
+	// ensures that the tip page was not flushed out. ( the root might have been reallocated, so recheck is needed )
+	page = uint64(mt1.root) / uint64(memConfig.NodesCountPerPage)
 	require.NotNil(t, mt1.cache.pageToNIDsPtr[page])
 }

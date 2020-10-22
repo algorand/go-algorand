@@ -133,7 +133,7 @@ func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, pe
 
 	cparams, err := ledger.ConsensusParams(ParamsRound(rnd))
 	if err != nil {
-		err = fmt.Errorf("failed to obtain consensus parameters in round %d: %v", ParamsRound(rnd), err)
+		reterr = fmt.Errorf("failed to obtain consensus parameters in round %d: %v", ParamsRound(rnd), err)
 		return
 	}
 	var alpha crypto.Digest
@@ -201,6 +201,8 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 		if !ok {
 			return fmt.Errorf("payload seed proof malformed (%v, %v)", prevSeed, p.SeedProof)
 		}
+		// TODO remove the following Hash() call,
+		// redundant with the Verify() call above.
 		vrfOut, ok = p.SeedProof.Hash()
 		if !ok {
 			// If proof2hash fails on a proof we produced with VRF Prove, this indicates our VRF code has a dangerous bug.

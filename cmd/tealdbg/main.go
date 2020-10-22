@@ -29,7 +29,7 @@ import (
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		os.Exit(1)
 	}
 }
@@ -109,12 +109,12 @@ type frontendValue struct {
 func (f *frontendValue) Make(router *mux.Router, appAddress string) (da DebugAdapter) {
 	switch f.value {
 	case "web":
-		wa := MakeWebPageAdapter(&WebPageAdapterParams{router, appAddress})
+		wa := MakeWebPageFrontend(&WebPageFrontendParams{router, appAddress})
 		return wa
 	case "cdt":
 		fallthrough
 	default:
-		cdt := MakeCDTAdapter(&CDTAdapterParams{router, appAddress, verbose})
+		cdt := MakeCdtFrontend(&CdtFrontendParams{router, appAddress, verbose})
 		return cdt
 	}
 }
@@ -171,8 +171,10 @@ func init() {
 
 func debugRemote() {
 	ds := makeDebugServer(port, &frontend, nil)
-
-	ds.startRemote()
+	err := ds.startRemote()
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
 }
 
 func debugLocal(args []string) {
@@ -184,8 +186,8 @@ func debugLocal(args []string) {
 	// program can be set either directly
 	// or with SignedTxn.Lsig.Logic,
 	// or with BalanceRecord.AppParams.ApprovalProgram
-	if len(args) == 0 && (len(txnFile) == 0 || len(balanceFile) == 0) && len(ddrFile) == 0 {
-		log.Fatalln("No program to debug: must specify program(s), or transaction(s) and a balance record(s), or dryrun-req object")
+	if len(args) == 0 && len(txnFile) == 0 && len(ddrFile) == 0 {
+		log.Fatalln("No program to debug: must specify program(s), or transaction(s), or dryrun-req object")
 	}
 
 	if len(args) == 0 && groupIndex != 0 {
