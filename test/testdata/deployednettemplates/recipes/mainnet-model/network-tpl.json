@@ -6,17 +6,17 @@
   "instances": {
     "relays": {
       "config": "./configs/relay.json",
-      "type": "m5d.xlarge",
+      "type": "c5.xlarge",
       "count": 25
     },
     "participatingNodes": {
       "config": "./configs/node.json",
-      "type": "m5d.xlarge",
+      "type": "c5.xlarge",
       "count": 25
     },
     "nonParticipatingNodes": {
       "config": "./configs/nonPartNode.json",
-      "type": "m5d.xlarge",
+      "type": "c5.xlarge",
       "count": 10
     }
   },
