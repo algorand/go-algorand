@@ -486,14 +486,6 @@ func (s *Service) sync() {
 		s.log.Infof("resuming previous sync from %d (now=%d)", atomic.LoadInt64(&s.syncStartNS), timeInNS)
 	}
 
-	defer func() {
-		// if the catchupWriting flag is set, it means that we aborted the sync due to the ledger writing the catchup file.
-		// in that case, don't change the timer so that the "timer" would keep running.
-		if !s.catchpointWriting {
-			atomic.StoreInt64(&s.syncStartNS, 0)
-		}
-	}()
-
 	pr := s.ledger.LastRound()
 
 	s.log.EventWithDetails(telemetryspec.ApplicationState, telemetryspec.CatchupStartEvent, telemetryspec.CatchupStartEventDetails{
@@ -511,10 +503,16 @@ func (s *Service) sync() {
 
 	initSync := false
 
-	// close the initial sync channel if not already close
-	if atomic.CompareAndSwapUint32(&s.initialSyncNotified, 0, 1) {
-		close(s.InitialSyncDone)
-		initSync = true
+	// if the catchupWriting flag is set, it means that we aborted the sync due to the ledger writing the catchup file.
+	if !s.catchpointWriting {
+		// in that case, don't change the timer so that the "timer" would keep running.
+		atomic.StoreInt64(&s.syncStartNS, 0)
+
+		// close the initial sync channel if not already close
+		if atomic.CompareAndSwapUint32(&s.initialSyncNotified, 0, 1) {
+			close(s.InitialSyncDone)
+			initSync = true
+		}
 	}
 
 	elapsedTime := time.Now().Sub(start)
