@@ -614,6 +614,39 @@ func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
 	return nil
 }
 
+func assembleByteGet(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return errors.New("byteget operation needs one argument")
+	}
+	val, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return err
+	}
+	if val > 255 {
+		return errors.New("byteget limited to 0..255")
+	}
+	ops.Out.WriteByte(spec.Opcode)
+	ops.Out.WriteByte(byte(val))
+	ops.tpush(StackUint64)
+	return nil
+}
+
+func assembleByteSet(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		return errors.New("byteset operation needs one argument")
+	}
+	val, err := strconv.ParseUint(args[0], 0, 64)
+	if err != nil {
+		return err
+	}
+	if val > 255 {
+		return errors.New("byteset limited to 0..255")
+	}
+	ops.Out.WriteByte(spec.Opcode)
+	ops.Out.WriteByte(byte(val))
+	return nil
+}
+
 func assembleLoad(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
 		return errors.New("load operation needs one argument")
@@ -1638,6 +1671,30 @@ func disBranch(dis *disassembleState, spec *OpSpec) {
 		dis.putLabel(label, target)
 	}
 	_, dis.err = fmt.Fprintf(dis.out, "%s %s\n", spec.Name, label)
+}
+
+func disByteGet(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
+	n := uint(dis.program[dis.pc+1])
+	dis.nextpc = dis.pc + 2
+	_, dis.err = fmt.Fprintf(dis.out, "byteget %d\n", n)
+}
+
+func disByteSet(dis *disassembleState, spec *OpSpec) {
+	lastIdx := dis.pc + 1
+	if len(dis.program) <= lastIdx {
+		missing := lastIdx - len(dis.program) + 1
+		dis.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return
+	}
+	n := uint(dis.program[dis.pc+1])
+	dis.nextpc = dis.pc + 2
+	_, dis.err = fmt.Fprintf(dis.out, "byteset %d\n", n)
 }
 
 func disLoad(dis *disassembleState, spec *OpSpec) {

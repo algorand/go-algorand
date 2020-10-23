@@ -1060,6 +1060,33 @@ func opBitRsh(cx *evalContext) {
 	cx.stack = cx.stack[:last]
 }
 
+func opByteGet(cx *evalContext) {
+	last := len(cx.stack) - 1
+	cx.stack[last].Uint = uint64(cx.stack[last].Bytes[cx.program[cx.pc+1]])
+}
+
+func opByteGet2(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	cx.stack[prev].Uint = uint64(cx.stack[prev].Bytes[byte(cx.stack[last].Uint)])
+	cx.stack = cx.stack[:last]
+}
+
+func opByteSet(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	cx.stack[prev].Bytes[cx.program[cx.pc+1]] = byte(cx.stack[last].Uint)
+	cx.stack = cx.stack[:last]
+}
+
+func opByteSet2(cx *evalContext) {
+	last := len(cx.stack) - 1
+	prev := last - 1
+	pprev := prev - 1
+	cx.stack[pprev].Bytes[cx.stack[prev].Uint] = byte(cx.stack[last].Uint)
+	cx.stack = cx.stack[:prev]
+}
+
 func opIntConstBlock(cx *evalContext) {
 	cx.intc, cx.nextpc, cx.err = parseIntcblock(cx.program, cx.pc)
 }

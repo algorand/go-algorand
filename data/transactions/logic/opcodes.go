@@ -60,11 +60,15 @@ var oneBytes = StackTypes{StackBytes}
 var twoBytes = StackTypes{StackBytes, StackBytes}
 var threeBytes = StackTypes{StackBytes, StackBytes, StackBytes}
 var byteIntInt = StackTypes{StackBytes, StackUint64, StackUint64}
+var byteInt = StackTypes{StackBytes, StackUint64}
 var oneInt = StackTypes{StackUint64}
 var twoInts = StackTypes{StackUint64, StackUint64}
+var threeInts = StackTypes{StackUint64, StackUint64, StackUint64}
 var oneAny = StackTypes{StackAny}
 var twoAny = StackTypes{StackAny, StackAny}
 var intAnyAny = StackTypes{StackUint64, StackAny, StackAny}
+var anyInt = StackTypes{StackAny, StackUint64}
+var anyIntInt = StackTypes{StackAny, StackUint64, StackUint64}
 
 // OpSpecs is the table of operations that can be assembled and evaluated.
 //
@@ -171,6 +175,10 @@ var OpSpecs = []OpSpec{
 	{0x82, "assert", opAssert, asmDefault, disDefault, oneInt, nil, 2, modeAny, opSizeDefault},
 	{0x83, "swap", opSwap, asmDefault, disDefault, twoAny, twoAny, 2, modeAny, opSizeDefault},
 	{0x84, "ite", opIte, asmDefault, disDefault, intAnyAny, oneAny, 2, modeAny, opSizeDefault},
+	{0x85, "byteget", opByteGet, assembleByteGet, disByteGet, oneBytes, oneInt, 2, modeAny, opSize{1, 2, nil}},
+	{0x86, "byteget2", opByteGet2, asmDefault, disDefault, byteInt, oneInt, 2, modeAny, opSizeDefault},
+	{0x87, "byteset", opByteSet, assembleByteSet, disByteSet, byteInt, oneBytes, 2, modeAny, opSize{1, 2, nil}},
+	{0x88, "byteset2", opByteSet2, asmDefault, disDefault, byteIntInt, oneBytes, 2, modeAny, opSizeDefault},
 }
 
 type sortByOpcode []OpSpec
