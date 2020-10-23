@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/execpool"
 	"github.com/algorand/go-algorand/util/timers"
@@ -201,7 +202,7 @@ func (s *Service) mainLoop(input <-chan externalEvent, output chan<- []action, r
 	if err != nil || status.Round < s.Ledger.NextRound() {
 		// in this case, we don't have fresh and valid state
 		// pretend a new round has just started, and propose a block
-		status = player{Round: s.Ledger.NextRound(), Step: soft, Deadline: filterTimeout}
+		status = player{Round: s.Ledger.NextRound(), Step: soft, Deadline: FilterTimeout(0, protocol.ConsensusCurrentVersion)}
 		router = makeRootRouter(status)
 
 		a1 := pseudonodeAction{T: assemble, Round: s.Ledger.NextRound()}
