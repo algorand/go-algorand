@@ -20,7 +20,6 @@ package gossip
 
 import (
 	"context"
-	"hash/fnv"
 	"time"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -92,11 +91,7 @@ func (i *networkImpl) processVoteMessage(raw network.IncomingMessage) network.Ou
 
 func (i *networkImpl) processProposalMessage(raw network.IncomingMessage) network.OutgoingMessage {
 	if Trace != nil {
-		hasher := fnv.New64a()
-		hasher.Write(raw.Data)
-		var msgBytes []byte = []byte("prop        ")
-		hash := hasher.Sum(msgBytes[0:4])
-		Trace.Trace(hash)
+		Trace.HashTrace("prop", raw.Data)
 	}
 	return i.processMessage(raw, i.proposalCh)
 }

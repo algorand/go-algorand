@@ -3,6 +3,8 @@
 package messagetracer
 
 import (
+	"hash/fnv"
+
 	"github.com/algorand/graphtrace/graphtrace"
 
 	"github.com/algorand/go-algorand/config"
@@ -28,8 +30,14 @@ func (gmt *graphtraceMessageTracer) Init(cfg config.Local) MessageTracer {
 	gmt.log.Infof("tracing network messages to %s", cfg.NetworkMessageTraceServer)
 	return gmt
 }
-func (gmt *graphtraceMessageTracer) Trace(m []byte) {
-	gmt.tracer.Trace(m)
+func (gmt *graphtraceMessageTracer) HashTrace(prefix string, data []byte) {
+	hasher := fnv.New64a()
+	hasher.Write(data)
+	pb := []byte(prefix)
+	msg := make([]byte, len(pb)+8)
+	copy(msg, pb)
+	hash := hasher.Sum(msg[0:len(pb)])
+	gmt.tracer.Trace(hash)
 }
 
 func NewGraphtraceMessageTracer(log logging.Logger) MessageTracer {

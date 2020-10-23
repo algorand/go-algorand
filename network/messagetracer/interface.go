@@ -7,7 +7,7 @@ import (
 
 type MessageTracer interface {
 	Init(cfg config.Local) MessageTracer
-	Trace(m []byte)
+	HashTrace(prefix string, data []byte)
 }
 
 var implFactory func(logging.Logger) MessageTracer
@@ -18,7 +18,7 @@ type nopMessageTracer struct {
 func (gmt *nopMessageTracer) Init(cfg config.Local) MessageTracer {
 	return nil
 }
-func (gmt *nopMessageTracer) Trace(m []byte) {
+func (gmt *nopMessageTracer) HashTrace(prefix string, data []byte) {
 }
 
 var singletonNopMessageTracer nopMessageTracer
