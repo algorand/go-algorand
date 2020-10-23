@@ -33,6 +33,7 @@ import (
 type CdtFrontend struct {
 	mu         deadlock.Mutex
 	sessions   map[string]cdtSession
+	latestSids []string
 	router     *mux.Router
 	apiAddress string
 	verbose    bool
@@ -84,6 +85,7 @@ func (a *CdtFrontend) SessionStarted(sid string, debugger Control, ch chan Notif
 	s.states = debugger.GetStates(nil)
 
 	a.sessions[sid] = *s
+	a.latestSids = append(a.latestSids, sid)
 }
 
 // SessionEnded removes the session
@@ -91,6 +93,14 @@ func (a *CdtFrontend) SessionEnded(sid string) {
 	go func() {
 		a.mu.Lock()
 		s := a.sessions[sid]
+		// remove this session id from ordred a.latestSids array
+		var i int
+		for i = 0; i < len(a.latestSids); i++ {
+			if a.latestSids[i] == sid {
+				a.latestSids = append(a.latestSids[:i], a.latestSids[i+1:]...)
+				break
+			}
+		}
 		a.mu.Unlock()
 
 		<-s.done
@@ -100,6 +110,17 @@ func (a *CdtFrontend) SessionEnded(sid string) {
 		a.mu.Unlock()
 		log.Printf("CDT session %s closed\n", sid)
 	}()
+}
+
+// URL returns an URL to access the latest debugging session
+func (a *CdtFrontend) URL() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.latestSids) == 0 {
+		return ""
+	}
+
+	return a.sessions[a.latestSids[len(a.latestSids)-1]].endpoint.WebSocketDebuggerURL
 }
 
 // WaitForCompletion returns when no active connections left
@@ -115,7 +136,7 @@ func (a *CdtFrontend) WaitForCompletion() {
 	}
 }
 
-// must be called with rctx.mux locked
+// must be called with ctx.mux locked
 func (a *CdtFrontend) enableWebsocketEndpoint(
 	uuid string, apiAddress string,
 	handler func(http.ResponseWriter, *http.Request),
