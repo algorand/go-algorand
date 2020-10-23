@@ -21,7 +21,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"github.com/algorand/go-algorand/protocol"
@@ -137,8 +136,11 @@ type ConsensusParams struct {
 	DownCommitteeSize      uint64
 	DownCommitteeThreshold uint64
 
-	FilterTimeoutSmallLambdas             uint64
-	FilterTimeoutPeriod0SmallLambdas      uint64
+	// time for nodes to wait for block proposal headers for period > 0, value should be set to 2 * SmallLambda
+	AgreementFilterTimeout time.Duration
+	// time for nodes to wait for block proposal headers for period = 0, value should be configured to suit best case
+	// critical path
+	AgreementFilterTimeoutPeriod0 time.Duration
 
 	FastRecoveryLambda    time.Duration // time between fast recovery attempts
 	FastPartitionRecovery bool          // set when fast partition recovery is enabled
@@ -295,6 +297,49 @@ type ConsensusParams struct {
 	// maximum total minimum balance requirement for an account, used
 	// to limit the maximum size of a single balance record
 	MaximumMinimumBalance uint64
+
+	// CompactCertRounds defines the frequency with with compact
+	// certificates are generated.  Every round that is a multiple
+	// of CompactCertRounds, the block header will include a Merkle
+	// commitment to the set of online accounts (that can vote after
+	// another CompactCertRounds rounds), and that block will be signed
+	// (forming a compact certificate) by the voters from the previous
+	// such Merkle tree commitment.  A value of zero means no compact
+	// certificates.
+	CompactCertRounds uint64
+
+	// CompactCertTopVoters is a bound on how many online accounts get to
+	// participate in forming the compact certificate, by including the
+	// top CompactCertTopVoters accounts (by normalized balance) into the
+	// Merkle commitment.
+	CompactCertTopVoters uint64
+
+	// CompactCertVotersLookback is the number of blocks we skip before
+	// publishing a Merkle commitment to the online accounts.  Namely,
+	// if block number N contains a Merkle commitment to the online
+	// accounts (which, incidentally, means N%CompactCertRounds=0),
+	// then the balances reflected in that commitment must come from
+	// block N-CompactCertVotersLookback.  This gives each node some
+	// time (CompactCertVotersLookback blocks worth of time) to
+	// construct this Merkle tree, so as to avoid placing the
+	// construction of this Merkle tree (and obtaining the requisite
+	// accounts and balances) in the critical path.
+	CompactCertVotersLookback uint64
+
+	// CompactCertWeightThreshold is the percentage of top voters weight
+	// that must sign the message (block header) for security.  The compact
+	// certificate ensures this threshold holds; however, forming a valid
+	// compact certificate requires a somewhat higher number of signatures,
+	// and the more signatures are collected, the smaller the compact cert
+	// can be.
+	//
+	// This threshold can be thought of as the maximum percentage of
+	// malicious weight that compact certificates defend against.
+	CompactCertWeightThreshold uint64
+
+	// CompactCertSecKQ is the security parameter (k+q) for the compact
+	// certificate scheme.
+	CompactCertSecKQ uint64
 }
 
 // ConsensusProtocols defines a set of supported protocol versions and their
@@ -496,8 +541,8 @@ func initConsensusProtocols() {
 		DownCommitteeSize:      10000,
 		DownCommitteeThreshold: 7750,
 
-		FilterTimeoutSmallLambdas:        2,
-		FilterTimeoutPeriod0SmallLambdas: 2,
+		AgreementFilterTimeout:        4 * time.Second,
+		AgreementFilterTimeoutPeriod0: 4 * time.Second,
 
 		FastRecoveryLambda: 5 * time.Minute,
 
@@ -763,8 +808,8 @@ func initConsensusProtocols() {
 	vFuture := v24
 	vFuture.ApprovedUpgrades = map[protocol.ConsensusVersion]uint64{}
 
-	// FilterTimeout 2s instead of 4s for period 0
-	vFuture.FilterTimeoutPeriod0SmallLambdas = 1
+	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
+	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }
@@ -786,15 +831,6 @@ func init() {
 	Consensus = make(ConsensusProtocols)
 
 	initConsensusProtocols()
-
-	// Allow tuning SmallLambda for faster consensus in single-machine e2e
-	// tests.  Useful for development.  This might make sense to fold into
-	// a protocol-version-specific setting, once we move SmallLambda into
-	// ConsensusParams.
-	algoSmallLambda, err := strconv.ParseInt(os.Getenv("ALGOSMALLLAMBDAMSEC"), 10, 64)
-	if err == nil {
-		Protocol.SmallLambda = time.Duration(algoSmallLambda) * time.Millisecond
-	}
 
 	// Set allocation limits
 	for _, p := range Consensus {

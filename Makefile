@@ -1,9 +1,15 @@
-export GOPATH		:= $(shell go env GOPATH)
-GOPATH1		:= $(firstword $(subst :, ,$(GOPATH)))
+UNAME := $(shell uname)
+ifneq (, $(findstring MINGW,$(UNAME)))
+#Gopath is not saved across sessions, probably existing Windows env vars, override them
+export GOPATH := ${HOME}/go
+GOPATH1 := $(GOPATH)
+export PATH := $(PATH):$(GOPATH)/bin
+else
+export GOPATH := $(shell go env GOPATH)
+GOPATH1 := $(firstword $(subst :, ,$(GOPATH)))
+endif
 export GO111MODULE	:= on
 export GOPROXY := direct
-
-UNAME		:= $(shell uname)
 SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
@@ -38,6 +44,11 @@ endif
 endif
 endif
 
+ifneq (, $(findstring MINGW,$(UNAME)))
+EXTLDFLAGS := -static-libstdc++ -static-libgcc
+export GOBUILDMODE := -buildmode=exe
+endif
+
 GOTAGS      := --tags "$(GOTAGSLIST)"
 GOTRIMPATH	:= $(shell go help build | grep -q .-trimpath && echo -trimpath)
 
@@ -53,7 +64,7 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 UNIT_TEST_SOURCES := $(sort $(shell GO111MODULE=off go list ./... | grep -v /go-algorand/test/ ))
 ALGOD_API_PACKAGES := $(sort $(shell GO111MODULE=off cd daemon/algod/api; go list ./... ))
 
-MSGP_GENERATE	:= ./protocol ./crypto ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./auction ./agreement ./rpcs ./node ./ledger
+MSGP_GENERATE	:= ./protocol ./crypto ./crypto/compactcert ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./auction ./agreement ./rpcs ./node ./ledger
 
 default: build
 

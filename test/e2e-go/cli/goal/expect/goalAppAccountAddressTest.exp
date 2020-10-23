@@ -107,8 +107,9 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
     expect {
 	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
 	"*committed in round*" {puts "app call successful"; close}
-	eof {close; ::AlgorandGoal::Abort "app call failed" }
+	eof {::AlgorandGoal::Abort "app call failed" }
     }
+    ::AlgorandGoal::CheckProcessReturnedCode 1
 
     puts "Checking the results"
     set EXPECTED_OUTPUT "Account0*$PRIMARY_ACCOUNT_ADDRESS"
@@ -124,20 +125,21 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
     expect {
 	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
 	"*$EXPECTED_OUTPUT*" {puts "Local state read correctly"; close}
-	eof {close; ::AlgorandGoal::Abort "app read failed" }
+	eof {::AlgorandGoal::Abort "App read failed. Expected output includes: $EXPECTED_OUTPUT" }
     }
+    ::AlgorandGoal::CheckProcessReturnedCode 1
 
     # check the local state of account 2
     spawn goal app read --app-id $APP_ID --local --guess-format \
 	--from $ACCOUNT_2_ADDRESS -w $WALLET_1_NAME -d $TEST_PRIMARY_NODE_DIR
-
     expect {
 	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
 	"Please enter the password for wallet '$WALLET_1_NAME':" {send "$WALLET_1_PASSWORD\r" ; exp_continue}
 	"*$EXPECTED_OUTPUT*" {puts "Local state read correctly"; close}
-	eof {close; ::AlgorandGoal::Abort "app read failed" }
+	eof {::AlgorandGoal::Abort "App read failed. Expected output includes: $EXPECTED_OUTPUT" }
     }
-    
+    ::AlgorandGoal::CheckProcessReturnedCode 1
+
     # call the app with a missing app-account. It should fail
     puts "Calling goal app call to get the local state params"
     spawn goal app call --app-id $APP_ID --from $PRIMARY_ACCOUNT_ADDRESS -w $PRIMARY_WALLET_NAME -d $TEST_PRIMARY_NODE_DIR \
@@ -145,10 +147,20 @@ proc goalAppAccountAddress { TEST_ALGO_DIR TEST_DATA_DIR} {
 	--app-account $ACCOUNT_2_ADDRESS \
 	--app-account $ACCOUNT_4_ADDRESS
     expect {
-	timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
-	"*Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: transaction*invalid Accounts index 4*" \
-	    {puts "Error received successfully "; close}
-	eof {close; ::AlgorandGoal::Abort "failed to get the expected error" }
+        timeout { puts timeout; ::AlgorandGoal::Abort  "\n Failed to see expected output" }
+        "*Couldn't broadcast tx with algod: HTTP 400 Bad Request: TransactionPool.Remember: transaction*invalid Accounts index 4*" {
+            puts "\nError received successfully "
+            # wait until the eof signal is received
+            expect {
+                timeout { close; ::AlgorandGoal::Abort "failed to see goal terminating after outputing error message" }
+                eof { puts "eof received as expected after error message output" }
+            }
+        }
+        eof {::AlgorandGoal::Abort "failed to get the expected error" }
+    }
+    lassign [::AlgorandGoal::CheckProcessReturnedCode 0] response OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
+    if {$response != 1 || $OS_CODE != 0 || $ERR_CODE != 1} {
+	    ::AlgorandGoal::Abort "failed to get the expected error. Expected ERR_CODE = 1 got ERR_CODE = $ERR_CODE"
     }
 
     # Shutdown the network
@@ -170,8 +182,6 @@ if { [catch {
     puts "calling goalAppAccountAddressTest"
 
     goalAppAccountAddress  $TEST_ALGO_DIR  $TEST_DATA_DIR
-
-    exit 0
 
 } EXCEPTION ] } {
    ::AlgorandGoal::Abort "ERROR in goalAppAccountAddressTest: $EXCEPTION"

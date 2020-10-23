@@ -34,6 +34,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	apiServer "github.com/algorand/go-algorand/daemon/algod/api/server"
+	"github.com/algorand/go-algorand/daemon/algod/api/server/lib"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
@@ -59,9 +60,11 @@ type Server struct {
 }
 
 // Initialize creates a Node instance with applicable network services
-func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string) error {
+func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string, genesisText string) error {
 	// set up node
 	s.log = logging.Base()
+
+	lib.GenesisJSONText = genesisText
 
 	liveLog := filepath.Join(s.RootPath, "node.log")
 	archive := filepath.Join(s.RootPath, cfg.LogArchiveName)
@@ -100,10 +103,12 @@ func (s *Server) Initialize(cfg config.Local, phonebookAddresses []string) error
 	// collected metrics decorations.
 	fmt.Fprintln(logWriter, "++++++++++++++++++++++++++++++++++++++++")
 	fmt.Fprintln(logWriter, "Logging Starting")
-	if s.log.GetTelemetryEnabled() {
+	if s.log.GetTelemetryUploadingEnabled() {
+		// May or may not be logging to node.log
 		fmt.Fprintf(logWriter, "Telemetry Enabled: %s\n", s.log.GetTelemetryHostName())
 		fmt.Fprintf(logWriter, "Session: %s\n", s.log.GetTelemetrySession())
 	} else {
+		// May or may not be logging to node.log
 		fmt.Fprintln(logWriter, "Telemetry Disabled")
 	}
 	fmt.Fprintln(logWriter, "++++++++++++++++++++++++++++++++++++++++")

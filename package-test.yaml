@@ -1,13 +1,36 @@
 agents:
   - name: deb
-    dockerFilePath: docker/build/mule.go.debian.Dockerfile
+    dockerFilePath: docker/build/cicd.ubuntu.Dockerfile
     image: algorand/mule-linux-debian
     version: scripts/configure_dev-deps.sh
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     env:
-      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID,
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      - BRANCH=$BRANCH
+      - CHANNEL=$CHANNEL
+      - NETWORK=$NETWORK
+      - SHA=$SHA
+      - VERSION=$VERSION
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    workDir: $HOME/projects/go-algorand
+
+  - name: rpm
+    dockerFilePath: docker/build/cicd.centos.Dockerfile
+    image: algorand/mule-linux-centos
+    version: scripts/configure_dev-deps.sh
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    env:
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      - BRANCH=$BRANCH
+      - CHANNEL=$CHANNEL
+      - NETWORK=$NETWORK
+      - SHA=$SHA
+      - VERSION=$VERSION
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     workDir: $HOME/projects/go-algorand
@@ -20,22 +43,15 @@ tasks:
 
   - task: docker.Make
     name: package-test-rpm
-    agent: deb
+    agent: rpm
     target: mule-test-rpm
 
-  - task: s3.DownloadFile
-    name: deb
-    bucketName: algorand-staging
-    objectName: releases/$CHANNEL/$VERSION/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb
-    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
-
-  - task: s3.DownloadFile
-    name: rpm
-    bucketName: algorand-staging
-    objectName: releases/$CHANNEL/$VERSION/algorand-${VERSION}-1.${ARCH_BIT}.rpm
-    outputDir: /projects/go-algorand/tmp/node_pkgs/${OS_TYPE}/${ARCH_TYPE}
-
 jobs:
+  package-test:
+    tasks:
+      - docker.Make.package-test-deb
+      - docker.Make.package-test-rpm
+
   package-test-deb:
     tasks:
       - docker.Make.package-test-deb
@@ -43,17 +59,4 @@ jobs:
   package-test-rpm:
     tasks:
       - docker.Make.package-test-rpm
-
-  package-test:
-    tasks:
-      - docker.Make.package-test-deb
-      - docker.Make.package-test-rpm
-
-  package-test-setup-deb:
-    tasks:
-      - s3.DownloadFile.deb
-
-  package-test-setup-rpm:
-    tasks:
-      - s3.DownloadFile.rpm
 

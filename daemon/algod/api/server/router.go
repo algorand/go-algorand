@@ -56,10 +56,11 @@
 // loader.Config.Import(), and that breaks the vendor directory if the source is symlinked from elsewhere)
 //go:generate swagger generate spec -o="../swagger.json"
 //go:generate swagger validate ../swagger.json --stop-on-error
-//go:generate ./lib/bundle_swagger_json.sh
+//go:generate sh ./lib/bundle_swagger_json.sh
 package server
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 
@@ -130,7 +131,7 @@ func NewRouter(logger logging.Logger, node *node.AlgorandFullNode, shutdown <-ch
 	// The auth middleware removes /urlAuth/:token so that it can be routed correctly.
 	if node.Config().EnableProfiler {
 		e.GET("/debug/pprof/*", echo.WrapHandler(http.DefaultServeMux), adminAuthenticator)
-		e.GET("/urlAuth/:token/debug/pprof/*", echo.WrapHandler(http.DefaultServeMux), adminAuthenticator)
+		e.GET(fmt.Sprintf("%s/debug/pprof/*", middlewares.URLAuthPrefix), echo.WrapHandler(http.DefaultServeMux), adminAuthenticator)
 	}
 	// Registering common routes (no auth)
 	registerHandlers(e, "", common.Routes, ctx)

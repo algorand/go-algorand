@@ -307,3 +307,18 @@ type Message struct {
 type EventsProcessingMonitor interface {
 	UpdateEventsQueue(queueName string, queueLength int)
 }
+
+// LedgerDroppedRoundError is a wrapper error for when the ledger cannot return a Lookup query because
+// the entry is old and was dropped from the ledger. The purpose of this wrapper is to help the
+// agreement differentiate between a malicious vote and a vote that it cannot verify
+type LedgerDroppedRoundError struct {
+	Err error
+}
+
+func (e *LedgerDroppedRoundError) Error() string {
+	return e.Err.Error()
+}
+
+func (e *LedgerDroppedRoundError) Unwrap() error {
+	return e.Err
+}

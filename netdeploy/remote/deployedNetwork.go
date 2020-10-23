@@ -42,12 +42,18 @@ var ErrDeployedNetworkRootDirExists = fmt.Errorf("unable to generate deployed ne
 // ErrDeployedNetworkInsufficientHosts is returned by Validate if our target network requires more hosts than the topology provides
 var ErrDeployedNetworkInsufficientHosts = fmt.Errorf("target network requires more hosts than the topology provides")
 
-// ErrDeployedNetworkTokenError is returned by InitDeployedNetworkConfig
-// if the config file contains {{ or }} after token replacement
-var ErrDeployedNetworkTokenError = fmt.Errorf("config file contains unrecognized token")
-
 // ErrDeployedNetworkNameCantIncludeWildcard is returned by Validate if network name contains '*'
 var ErrDeployedNetworkNameCantIncludeWildcard = fmt.Errorf("network name cannont include wild-cards")
+
+// ErrDeployedNetworkTemplate A template file contained {{Field}} sections that were not handled by a corresponding Field value in configuration.
+type ErrDeployedNetworkTemplate struct {
+	UnhandledTemplate string
+}
+
+// Error satisfies error interface
+func (ednt ErrDeployedNetworkTemplate) Error() string {
+	return fmt.Sprintf("config file contains unrecognized token: %s", ednt.UnhandledTemplate)
+}
 
 // DeployedNetworkConfig represents the complete configuration specification for a deployed network
 type DeployedNetworkConfig struct {
@@ -104,12 +110,21 @@ func replaceTokens(original string, buildConfig BuildConfig) (expanded string, e
 	tokenPairs = append(tokenPairs, "{{CrontabSchedule}}", buildConfig.CrontabSchedule)
 	tokenPairs = append(tokenPairs, "{{EnableAlgoh}}", strconv.FormatBool(buildConfig.EnableAlgoh))
 	tokenPairs = append(tokenPairs, "{{DashboardEndpoint}}", buildConfig.DashboardEndpoint)
+	tokenPairs = append(tokenPairs, buildConfig.MiscStringString...)
 
 	expanded = strings.NewReplacer(tokenPairs...).Replace(original)
 
 	// To validate that there wasn't a typo in an intended token, look for obvious clues like "{{" or "}}"
-	if strings.Index(expanded, "{{") >= 0 || strings.Index(expanded, "}}") >= 0 {
-		return "", ErrDeployedNetworkTokenError
+	openIndex := strings.Index(expanded, "{{")
+	closeIndex := strings.Index(expanded, "}}")
+	if openIndex >= 0 || closeIndex >= 0 {
+		if openIndex < 0 {
+			openIndex = 0
+		}
+		if closeIndex < 0 {
+			closeIndex = len(expanded) - 2
+		}
+		return "", ErrDeployedNetworkTemplate{expanded[openIndex : closeIndex+2]}
 	}
 
 	return
@@ -360,6 +375,7 @@ type cloudHostConfiguration struct {
 
 type cloudHostSpec struct {
 	Name           string
+	Group          string
 	Provider       string
 	Region         string
 	InstanceType   string
@@ -404,6 +420,9 @@ func (cfg DeployedNetwork) GenerateCloudTemplate(templates HostTemplates, target
 		if err != nil {
 			return
 		}
+
+		hostSpec.Group = strings.TrimSpace(cloudHost.Group)
+
 		topology.Hosts = append(topology.Hosts, hostSpec)
 	}
 
@@ -488,6 +507,7 @@ func createHostSpec(host HostConfig, template cloudHost) (hostSpec cloudHostSpec
 	}
 
 	hostSpec.Name = host.Name
+	hostSpec.Group = host.Group
 	hostSpec.Provider = template.Provider
 	hostSpec.Region = template.Region
 	hostSpec.InstanceType = template.BaseConfiguration

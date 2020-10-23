@@ -59,6 +59,9 @@ var groupSize uint32
 var numAsset uint32
 var numApp uint32
 var appProgOps uint32
+var appProgHashs uint32
+var appProgHashSize string
+var duration uint32
 var rekey bool
 
 func init() {
@@ -91,8 +94,12 @@ func init() {
 	runCmd.Flags().Uint32Var(&numAsset, "numasset", 0, "The number of assets each account holds")
 	runCmd.Flags().Uint32Var(&numApp, "numapp", 0, "The number of apps each account opts in to")
 	runCmd.Flags().Uint32Var(&appProgOps, "appprogops", 0, "The approximate number of TEAL operations to perform in each ApplicationCall transaction")
+	runCmd.Flags().Uint32Var(&appProgHashs, "appproghashes", 0, "The number of hashes to include in the Application")
+	runCmd.Flags().StringVar(&appProgHashSize, "appproghashsize", "sha256", "The size of hashes to include in the Application")
 	runCmd.Flags().BoolVar(&randomLease, "randomlease", false, "set the lease to contain a random value")
 	runCmd.Flags().BoolVar(&rekey, "rekey", false, "Create RekeyTo transactions. Requires groupsize=2 and any of random flags exc random dst")
+	runCmd.Flags().Uint32Var(&duration, "duration", 0, "The number of seconds to run the pingpong test, forever if 0")
+
 }
 
 var runCmd = &cobra.Command{
@@ -200,6 +207,9 @@ var runCmd = &cobra.Command{
 			}
 			cfg.RefreshTime = time.Duration(uint32(val)) * time.Second
 		}
+		if duration > 0 {
+			cfg.MaxRuntime = time.Duration(uint32(duration)) * time.Second
+		}
 		if randomNote {
 			cfg.RandomNote = true
 		}
@@ -248,6 +258,8 @@ var runCmd = &cobra.Command{
 		}
 
 		cfg.AppProgOps = appProgOps
+		cfg.AppProgHashs = appProgHashs
+		cfg.AppProgHashSize = appProgHashSize
 
 		if numApp <= 1000 {
 			cfg.NumApp = numApp
