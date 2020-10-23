@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=2116
 
-set -e
+set -ex
 
 echo "[$0] Verifying installed binaries..."
 

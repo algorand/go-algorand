@@ -116,6 +116,9 @@ type AlgorandFullNode struct {
 
 	log logging.Logger
 
+	// syncStatusMu used for locking lastRoundTimestamp and hasSyncedSinceStartup
+	// syncStatusMu added so OnNewBlock wouldn't be blocked by oldKeyDeletionThread during catchup
+	syncStatusMu                deadlock.Mutex
 	lastRoundTimestamp    time.Time
 	hasSyncedSinceStartup bool
 
@@ -194,7 +197,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg)
+	node.transactionPool = pools.MakeTransactionPool(node.ledger.Ledger, cfg, node.log)
 
 	blockListeners := []ledger.BlockListener{
 		node.transactionPool,
@@ -583,12 +586,13 @@ func (node *AlgorandFullNode) GetPendingTransaction(txID transactions.Txid) (res
 
 // Status returns a StatusReport structure reporting our status as Active and with our ledger's LastRound
 func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
-	node.mu.Lock()
-	defer node.mu.Unlock()
-
+	node.syncStatusMu.Lock()
 	s.LastRoundTimestamp = node.lastRoundTimestamp
 	s.HasSyncedSinceStartup = node.hasSyncedSinceStartup
+	node.syncStatusMu.Unlock()
 
+	node.mu.Lock()
+	defer node.mu.Unlock()
 	if node.catchpointCatchupService != nil {
 		// we're in catchpoint catchup mode.
 		lastBlockHeader := node.catchpointCatchupService.GetLatestBlockHeader()
@@ -761,10 +765,13 @@ func (node *AlgorandFullNode) IsArchival() bool {
 
 // OnNewBlock implements the BlockListener interface so we're notified after each block is written to the ledger
 func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta) {
-	node.mu.Lock()
+	if node.ledger.Latest() > block.Round() {
+		return
+	}
+	node.syncStatusMu.Lock()
 	node.lastRoundTimestamp = time.Now()
 	node.hasSyncedSinceStartup = true
-	node.mu.Unlock()
+	node.syncStatusMu.Unlock()
 
 	// Wake up oldKeyDeletionThread(), non-blocking.
 	select {

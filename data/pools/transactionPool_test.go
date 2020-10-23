@@ -150,7 +150,7 @@ func TestMinBalanceOK(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(ledger, cfg)
+	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base())
 
 	// sender goes below min
 	tx := transactions.Transaction{
@@ -191,7 +191,7 @@ func TestSenderGoesBelowMinBalance(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(ledger, cfg)
+	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base())
 
 	// sender goes below min
 	tx := transactions.Transaction{
@@ -233,7 +233,7 @@ func TestSenderGoesBelowMinBalanceDueToAssets(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(ledger, cfg)
+	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base())
 
 	assetTx := transactions.Transaction{
 		Type: protocol.AssetConfigTx,
@@ -302,7 +302,7 @@ func TestCloseAccount(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(ledger, cfg)
+	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base())
 
 	// sender goes below min
 	closeTx := transactions.Transaction{
@@ -363,7 +363,7 @@ func TestCloseAccountWhileTxIsPending(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(ledger, cfg)
+	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base())
 
 	// sender goes below min
 	tx := transactions.Transaction{
@@ -425,7 +425,7 @@ func TestClosingAccountBelowMinBalance(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(ledger, cfg)
+	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base())
 
 	// sender goes below min
 	closeTx := transactions.Transaction{
@@ -467,7 +467,7 @@ func TestRecipientGoesBelowMinBalance(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(ledger, cfg)
+	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base())
 
 	// sender goes below min
 	tx := transactions.Transaction{
@@ -506,7 +506,7 @@ func TestRememberForget(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(mockLedger, cfg)
+	transactionPool := MakeTransactionPool(mockLedger, cfg, logging.Base())
 
 	eval := newBlockEvaluator(t, mockLedger)
 
@@ -571,7 +571,7 @@ func TestCleanUp(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(mockLedger, cfg)
+	transactionPool := MakeTransactionPool(mockLedger, cfg, logging.Base())
 
 	issuedTransactions := 0
 	for i, sender := range addresses {
@@ -648,7 +648,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(mockLedger, cfg)
+	transactionPool := MakeTransactionPool(mockLedger, cfg, logging.Base())
 
 	overSpender := addresses[0]
 	var overSpenderAmount uint64
@@ -743,7 +743,7 @@ func TestOverspender(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(ledger, cfg)
+	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base())
 
 	receiver := addresses[1]
 	tx := transactions.Transaction{
@@ -803,7 +803,7 @@ func TestRemove(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(ledger, cfg)
+	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base())
 
 	sender := addresses[0]
 	receiver := addresses[1]
@@ -858,7 +858,7 @@ func TestLogicSigOK(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(ledger, cfg)
+	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base())
 
 	// sender goes below min
 	tx := transactions.Transaction{
@@ -902,7 +902,7 @@ func TestTransactionPool_CurrentFeePerByte(t *testing.T) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = testPoolSize * 15
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(l, cfg)
+	transactionPool := MakeTransactionPool(l, cfg, logging.Base())
 
 	for i, sender := range addresses {
 		for j := 0; j < testPoolSize*15/len(addresses); j++ {
@@ -953,7 +953,7 @@ func BenchmarkTransactionPoolRememberOne(b *testing.B) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = b.N
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(ledger, cfg)
+	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base())
 	signedTransactions := make([]transactions.SignedTxn, 0, b.N)
 	for i, sender := range addresses {
 		for j := 0; j < b.N/len(addresses); j++ {
@@ -985,7 +985,7 @@ func BenchmarkTransactionPoolRememberOne(b *testing.B) {
 	b.StopTimer()
 	b.ResetTimer()
 	ledger = makeMockLedger(b, initAccFixed(addresses, 1<<32))
-	transactionPool = MakeTransactionPool(ledger, cfg)
+	transactionPool = MakeTransactionPool(ledger, cfg, logging.Base())
 
 	b.StartTimer()
 	for _, signedTx := range signedTransactions {
@@ -1014,7 +1014,7 @@ func BenchmarkTransactionPoolPending(b *testing.B) {
 		cfg := config.GetDefaultLocal()
 		cfg.TxPoolSize = benchPoolSize
 		cfg.EnableProcessBlockStats = false
-		transactionPool := MakeTransactionPool(ledger, cfg)
+		transactionPool := MakeTransactionPool(ledger, cfg, logging.Base())
 		var block bookkeeping.Block
 		block.Payset = make(transactions.Payset, 0)
 
@@ -1079,7 +1079,7 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 	cfg := config.GetDefaultLocal()
 	cfg.TxPoolSize = poolSize
 	cfg.EnableProcessBlockStats = false
-	transactionPool := MakeTransactionPool(l, cfg)
+	transactionPool := MakeTransactionPool(l, cfg, logging.Base())
 
 	var signedTransactions []transactions.SignedTxn
 	for i := 0; i < b.N; i++ {
@@ -1174,7 +1174,7 @@ func TestTxPoolSizeLimits(t *testing.T) {
 
 	ledger := makeMockLedger(t, initAcc(map[basics.Address]uint64{firstAddress: proto.MinBalance + 2*proto.MinTxnFee*uint64(cfg.TxPoolSize)}))
 
-	transactionPool := MakeTransactionPool(ledger, cfg)
+	transactionPool := MakeTransactionPool(ledger, cfg, logging.Base())
 
 	receiver := addresses[1]
 
