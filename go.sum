@@ -4,6 +4,8 @@ github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d h1:W9MgGUo
 github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d/go.mod h1:qm6LyXvDa1+uZJxaVg8X+OEjBqt/zDinDa2EohtTDxU=
 github.com/algorand/go-deadlock v0.2.1 h1:TQPQwWAB133bS5uwHpmrgH5hCMyZK5hnUW26aqWMvq4=
 github.com/algorand/go-deadlock v0.2.1/go.mod h1:HgdF2cwtBIBCL7qmUaozuG/UIZFR6PLpSMR58pvWiXE=
+github.com/algorand/graphtrace v0.0.0-20201023193244-96dde3c58a7a h1:0vQcZhPB7rCI7w0CXMiAmxg1R92JROMxTG6RjvVz1oQ=
+github.com/algorand/graphtrace v0.0.0-20201023193244-96dde3c58a7a/go.mod h1:qFtQmC+kmsfnLfS9j3xgKtzsWyozemL5ek1R4dWZa5c=
 github.com/algorand/msgp v1.1.45 h1:uLEPvg0BfTrb2JjBcXexON8il4vv0EsD7HYFaA7e5jg=
 github.com/algorand/msgp v1.1.45/go.mod h1:LtOntbYiCHj/Sl/Sqxtf8CZOrDt2a8Dv3tLaS6mcnUE=
 github.com/algorand/oapi-codegen v1.3.5-algorand5 h1:y576Ca2/guQddQrQA7dtL5KcOx5xQgPeIupiuFMGyCI=

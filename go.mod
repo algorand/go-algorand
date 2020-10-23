@@ -5,6 +5,7 @@ go 1.14
 require (
 	github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d
 	github.com/algorand/go-deadlock v0.2.1
+	github.com/algorand/graphtrace v0.0.0-20201023193244-96dde3c58a7a // indirect
 	github.com/algorand/msgp v1.1.45
 	github.com/algorand/oapi-codegen v1.3.5-algorand5
 	github.com/algorand/websocket v1.4.1
@@ -57,7 +58,4 @@ require (
 	gopkg.in/sohlich/elogrus.v3 v3.0.0-20180410122755-1fa29e2f2009
 	gopkg.in/toast.v1 v1.0.0-20180812000517-0a84660828b2 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
-	github.com/algorand/graphtrace v0.0.0
 )
-
-replace github.com/algorand/graphtrace => /Users/bolson/src/graphtrace
