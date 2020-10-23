@@ -21,6 +21,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -88,7 +89,7 @@ func (a *WebPageFrontend) SessionStarted(sid string, debugger Control, ch chan N
 
 	a.sessions[sid] = wpaSession{debugger, ch}
 
-	log.Printf("Open %s in a web browser", a.apiAddress)
+	log.Printf("Open http://%s in a web browser", a.apiAddress)
 }
 
 // SessionEnded removes the session
@@ -102,6 +103,17 @@ func (a *WebPageFrontend) SessionEnded(sid string) {
 // WaitForCompletion waits session to complete
 func (a *WebPageFrontend) WaitForCompletion() {
 	<-a.done
+}
+
+// URL returns an URL to access the latest debugging session
+func (a *WebPageFrontend) URL() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.sessions) == 0 {
+		return ""
+	}
+
+	return fmt.Sprintf("http://%s/", a.apiAddress)
 }
 
 func (a *WebPageFrontend) homeHandler(w http.ResponseWriter, r *http.Request) {

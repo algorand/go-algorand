@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -66,6 +65,10 @@ func (d *testDbgAdapter) SessionEnded(sid string) {
 	d.ended = true
 }
 
+func (d *testDbgAdapter) URL() string {
+	return ""
+}
+
 func (d *testDbgAdapter) eventLoop() {
 	for {
 		select {
@@ -82,8 +85,6 @@ func (d *testDbgAdapter) eventLoop() {
 				require.NotEmpty(d.t, n.DebugState.ExecID)
 				d.debugger.SetBreakpoint(n.DebugState.Line + 1)
 			}
-			// simulate user delay to workaround race cond
-			time.Sleep(10 * time.Millisecond)
 			d.debugger.Resume()
 		}
 	}
@@ -142,19 +143,17 @@ func TestSession(t *testing.T) {
 	err = s.SetBreakpoint(2)
 	require.NoError(t, err)
 
-	sig := make(chan struct{})
 	ackCount := 0
+	done := make(chan struct{})
 	ackFunc := func() {
-		sig <- struct{}{}
 		<-s.acknowledged
 		ackCount++
-		<-sig
+		done <- struct{}{}
 	}
 	go ackFunc()
 
-	<-sig
 	s.Resume()
-	sig <- struct{}{}
+	<-done
 
 	require.Equal(t, breakpointLine(2), s.debugConfig.BreakAtLine)
 	require.Equal(t, breakpoint{true, true}, s.breakpoints[2])
@@ -171,9 +170,8 @@ func TestSession(t *testing.T) {
 
 	go ackFunc()
 
-	<-sig
 	s.Step()
-	sig <- struct{}{}
+	<-done
 
 	require.Equal(t, stepBreak, s.debugConfig.BreakAtLine)
 	require.Equal(t, 2, ackCount)
