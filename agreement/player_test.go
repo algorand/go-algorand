@@ -492,7 +492,7 @@ func TestPlayerLateBlockProposalPeriod0(t *testing.T) {
 
 func setupP(t *testing.T, r round, p period, s step) (plyr *player, pMachine ioAutomata, helper *voteMakerHelper) {
 	// Set up a composed test machine starting at specified rps
-	rRouter := makeRootRouter(player{Round: r, Period: p, Step: s, Deadline: filterTimeout})
+	rRouter := makeRootRouter(player{Round: r, Period: p, Step: s, Deadline: FilterTimeout(p, protocol.ConsensusCurrentVersion)})
 	concreteMachine := ioAutomataConcretePlayer{rootRouter: &rRouter}
 	plyr = concreteMachine.underlying()
 	pMachine = &concreteMachine
