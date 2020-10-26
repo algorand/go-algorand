@@ -11,7 +11,6 @@ agents:
       - BRANCH=$BRANCH
       - CHANNEL=$CHANNEL
       - S3_SOURCE=$S3_SOURCE
-      - USE_CACHE=$USE_CACHE
       - VERSION=$VERSION
     volumes:
       - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent

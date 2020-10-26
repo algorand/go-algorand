@@ -15,14 +15,13 @@ export BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
 export CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
 export NETWORK=${NETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
 export SHA=${SHA:-$(git rev-parse HEAD)}
-S3_SOURCE=${S3_SOURCE:-"algorand-internal/channel"}
 export VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 
 PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 
 pushd "$PKG_DIR"
 
-if [ -z "$USE_CACHE" ]
+if [ -n "$S3_SOURCE" ]
 then
     PREFIX="$S3_SOURCE/$CHANNEL/$VERSION"
 

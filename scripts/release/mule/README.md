@@ -64,9 +64,8 @@ These env vars generally don't change between stages. Here is a list of variable
 
     + `ARCH_BIT`, i.e., the value from `uname -m`
     + `NETWORK`
-    + `S3_SOURCE`, i.e., the S3 bucket from which to download (defaults to `algorand-internal/channel`)
+    + `S3_SOURCE`, i.e., the S3 bucket from which to download
     + `SHA`, i.e., the value from `git rev-parse HEAD` if not passed on CLI
-    + `USE_CACHE`
 
 #### `mule` jobs
 
@@ -86,8 +85,7 @@ These env vars generally don't change between stages. Here is a list of variable
 - customizable environment variables:
 
     + `ARCH_BIT`, i.e., the value from `uname -m`
-    + `S3_SOURCE`, i.e., the S3 bucket from which to download (defaults to `algorand-internal/channel`)
-    + `USE_CACHE`
+    + `S3_SOURCE`, i.e., the S3 bucket from which to download
 
 ### `mule` jobs
 
