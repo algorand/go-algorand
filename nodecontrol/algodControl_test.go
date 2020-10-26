@@ -14,21 +14,25 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package nodecontrol
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestVLQ(t *testing.T) {
-	a := require.New(t)
+func TestStopAlgodErrorNotRunning(t *testing.T) {
+	nodeController := MakeNodeController("", ".")
+	err := nodeController.StopAlgod()
+	var e *NodeNotRunningError
+	require.True(t, errors.As(err, &e))
+}
 
-	a.Equal("AAAA", MakeSourceMapLine(0, 0, 0, 0))
-	a.Equal("AACA", MakeSourceMapLine(0, 0, 1, 0))
-	a.Equal("AAEA", MakeSourceMapLine(0, 0, 2, 0))
-	a.Equal("AAgBA", MakeSourceMapLine(0, 0, 16, 0))
-	a.Equal("AAggBA", MakeSourceMapLine(0, 0, 512, 0))
-	a.Equal("ADggBD", MakeSourceMapLine(0, -1, 512, -1))
+func TestStopAlgodErrorInvalidDirectory(t *testing.T) {
+	nodeController := MakeNodeController("", "[][]")
+	err := nodeController.StopAlgod()
+	var e *MissingDataDirError
+	require.True(t, errors.As(err, &e))
 }

@@ -21,7 +21,7 @@ import (
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
 
-// TestAlgohWithExpect Process all expect script files with suffix Test.exp within the test/e2e-go/cli/tealdbg/expect directory
+// TestTealdbgWithExpect processes all expect script files with suffix Test.exp within the test/e2e-go/cli/tealdbg/expect directory
 func TestTealdbgWithExpect(t *testing.T) {
 	et := fixtures.MakeExpectTest(t)
 	et.Run()

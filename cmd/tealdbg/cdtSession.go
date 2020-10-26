@@ -46,7 +46,7 @@ type cdtSession struct {
 	scriptHash   string
 	scriptURL    string
 	sourceMapURL string
-	states       appState
+	states       AppState
 
 	verbose bool
 }
@@ -54,7 +54,7 @@ type cdtSession struct {
 var contextCounter int32 = 0
 var scriptCounter int32 = 0
 
-func makeCDTSession(uuid string, debugger Control, ch chan Notification) *cdtSession {
+func makeCdtSession(uuid string, debugger Control, ch chan Notification) *cdtSession {
 	s := new(cdtSession)
 	s.uuid = uuid
 	s.debugger = debugger
@@ -205,7 +205,7 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			dbgStateMu.Lock()
-			cdtResp, events, err := s.handleCDTRequest(&cdtReq, &state)
+			cdtResp, events, err := s.handleCdtRequest(&cdtReq, &state)
 			dbgStateMu.Unlock()
 			if err != nil {
 				log.Println(err.Error())
@@ -277,11 +277,12 @@ func (s *cdtSession) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *cdtSession) handleCDTRequest(req *cdt.ChromeRequest, state *cdtState) (response cdt.ChromeResponse, events []interface{}, err error) {
+type cmdResult struct {
+	Result interface{} `json:"result"`
+}
+
+func (s *cdtSession) handleCdtRequest(req *cdt.ChromeRequest, state *cdtState) (response cdt.ChromeResponse, events []interface{}, err error) {
 	empty := make(map[string]interface{})
-	type cmdResult struct {
-		Result interface{} `json:"result"`
-	}
 	switch req.Method {
 	case "Debugger.enable":
 		evCtxCreated := s.makeContextCreatedEvent()
@@ -431,7 +432,7 @@ func (s *cdtSession) handleCDTRequest(req *cdt.ChromeRequest, state *cdtState) (
 
 		result := make(map[string]interface{})
 		locs := make([]cdt.DebuggerLocation, 0, endLine-startLine+1)
-		for ln := startLine; ln < endLine; ln++ {
+		for ln := startLine; ln <= endLine; ln++ {
 			locs = append(locs, cdt.DebuggerLocation{ScriptID: scriptID, LineNumber: ln})
 		}
 		result["locations"] = locs

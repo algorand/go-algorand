@@ -2,8 +2,6 @@
 set err 0
 log_user 1
 
-
-
 if { [catch {
     source algodExpectCommon.exp
 
@@ -18,13 +16,10 @@ if { [catch {
 
     #allows script to be run outside of go context
     exec mkdir -p $TEST_PRIMARY_NODE_DIR
-
-    exec goal node stop -d $TEST_PRIMARY_NODE_DIR
     
     exec rm -f $TEST_PRIMARY_NODE_DIR/logging.config
 
     ::Algod::ReadTelemetry $TEST_PRIMARY_NODE_DIR
-
 
     exec rm -d -r -f $TEST_ALGO_DIR
     puts "Basic Algod Test Successful"
