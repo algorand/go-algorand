@@ -45,11 +45,12 @@ These env vars generally don't change between stages. Here is a list of variable
 
 ## upload
 
-- see `./go-algorand/package-test.yaml`
+- see `./go-algorand/package-upload.yaml`
 
 - customizable environment variables:
 
     + `CHANNEL`
+    + `STAGING`
     + `VERSION`
 
 #### `mule` jobs
@@ -178,15 +179,15 @@ Let's look at some examples.
 
         BRANCH=update_signing CHANNEL=dev VERSION=2.1.86615 mule -f package-test.yaml package-test
 
-1. Download packages from `s3:algorand-staging/releases:` and test.  This will download the packages to the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
+1. Download packages from staging and test.  This will download the packages to the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
 
     Note that this is used to test a pending official release.
 
-        CHANNEL=beta S3_SOURCE=algorand-staging/releases VERSION=2.1.6 mule -f package-test.yaml package-test
+        CHANNEL=beta S3_SOURCE=the-staging-area VERSION=2.1.6 mule -f package-test.yaml package-test
 
 1. When testing locally, very often it is necessary to specify the `BRANCH`, `NETWORK` and `SHA` of the last commit to be able to having passing tests.  This is because the local environment will most likely not match the environment in which the packages were packaged.
 
-        BRANCH=rel/stable CHANNEL=stable NETWORK=mainnet S3_SOURCE=algorand-staging/releases SHA=df65da2b VERSION=2.1.6 mule -f package-test.yaml package-test
+        BRANCH=rel/stable CHANNEL=stable NETWORK=mainnet S3_SOURCE=the-staging-area SHA=df65da2b VERSION=2.1.6 mule -f package-test.yaml package-test
 
 ### Signing
 
@@ -194,17 +195,17 @@ Let's look at some examples.
 
         CHANNEL=dev VERSION=2.1.86615 mule -f package-sign.yaml package-sign
 
-1. Download packages from `s3:algorand-staging/releases:` and sign.  This will download the packages to the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
+1. Download packages from staging and sign.  This will download the packages to the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
 
-        CHANNEL=beta S3_SOURCE=algorand-staging/releases VERSION=2.1.6 mule -f package-sign.yaml package-sign
+        CHANNEL=beta S3_SOURCE=the-staging-area VERSION=2.1.6 mule -f package-sign.yaml package-sign
 
 ### Deploying
 
-1. Packages will be automatically downloaded from `s3:algorand-staging`. Each package will then be pushed to `s3:algorand-releases:`.
+1. Packages will be automatically downloaded from staging. Each package will then be pushed to `s3:algorand-releases:`.
 
         VERSION=2.1.6 mule -f package-deploy.yaml package-deploy
 
-1. Packages are not downloaded from `s3:algorand-staging` but rather are copied from the location on the local filesystem specified by `PACKAGES_DIR` in the `mule` yaml file. Each package will then be pushed to `s3:algorand-releases:`.
+1. Packages are not downloaded from staging but rather are copied from the location on the local filesystem specified by `PACKAGES_DIR` in the `mule` yaml file. Each package will then be pushed to `s3:algorand-releases:`.
 
         PACKAGES_DIR=/packages_location/foo VERSION=2.1.86615 mule -f package-deploy.yaml package-deploy
 
