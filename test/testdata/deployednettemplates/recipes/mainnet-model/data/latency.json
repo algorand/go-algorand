@@ -1,0 +1,127 @@
+[
+    {
+        "source": "Europe",
+        "target": "Europe",
+        "latency": 16
+    },
+    {
+        "source": "Europe",
+        "target": "North America",
+        "latency": 39.7
+    },
+    {
+        "source": "Europe",
+        "target": "Australia",
+        "latency": 135
+    },
+    {
+        "source": "Europe",
+        "target": "Africa",
+        "latency": 84.5
+    },
+    {
+        "source": "Europe",
+        "target": "Asia Pacific",
+        "latency": 75.3
+    },
+    {
+        "source": "North America",
+        "target": "Europe",
+        "latency": 39.7
+    },
+    {
+        "source": "North America",
+        "target": "North America",
+        "latency": 22
+    },
+    {
+        "source": "North America",
+        "target": "Australia",
+        "latency": 101.5
+    },
+    {
+        "source": "North America",
+        "target": "Africa",
+        "latency": 124
+    },
+    {
+        "source": "North America",
+        "target": "Asia Pacific",
+        "latency": 120
+    },
+    {
+        "source": "Australia",
+        "target": "Europe",
+        "latency": 135.5
+    },
+    {
+        "source": "Australia",
+        "target": "North America",
+        "latency": 101.5
+    },
+    {
+        "source": "Australia",
+        "target": "Australia",
+        "latency": 23
+    },
+    {
+        "source": "Australia",
+        "target": "Africa",
+        "latency": 216.5
+    },
+    {
+        "source": "Australia",
+        "target": "Asia Pacific",
+        "latency": 47
+    },
+    {
+        "source": "Africa",
+        "target": "Europe",
+        "latency": 84.5
+    },
+    {
+        "source": "Africa",
+        "target": "North America",
+        "latency": 118
+    },
+    {
+        "source": "Africa",
+        "target": "Australia",
+        "latency": 216
+    },
+    {
+        "source": "Africa",
+        "target": "Africa",
+        "latency": 70
+    },
+    {
+        "source": "Africa",
+        "target": "Asia Pacific",
+        "latency": 202
+    },
+    {
+        "source": "Asia Pacific",
+        "target": "Europe",
+        "latency": 75
+    },
+    {
+        "source": "Asia Pacific",
+        "target": "North America",
+        "latency": 120
+    },
+    {
+        "source": "Asia Pacific",
+        "target": "Australia",
+        "latency": 47
+    },
+    {
+        "source": "Asia Pacific",
+        "target": "Africa",
+        "latency": 202
+    },
+    {
+        "source": "Asia Pacific",
+        "target": "Asia Pacific",
+        "latency": 32
+    }
+]

@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -50,12 +51,18 @@ var upgrader = websocket.Upgrader{
 
 // DebugServer is Debugger + HTTP/WS handlers for frontends
 type DebugServer struct {
-	debugger *Debugger
-	frontend DebugAdapter
-	router   *mux.Router
-	server   *http.Server
-	remote   *RemoteHookAdapter
-	params   *DebugParams
+	debugger  *Debugger
+	frontend  DebugAdapter
+	router    *mux.Router
+	server    *http.Server
+	remote    *RemoteHookAdapter
+	params    *DebugParams
+	spinoffCh chan spinoffMsg
+}
+
+type spinoffMsg struct {
+	err  error
+	data []byte
 }
 
 // DebugParams is a container for debug parameters
@@ -75,6 +82,7 @@ type DebugParams struct {
 	DisableSourceMap bool
 	AppID            uint64
 	Painless         bool
+	ListenForDrReq   bool
 }
 
 // FrontendFactory interface for attaching debug frontends
@@ -99,45 +107,126 @@ func makeDebugServer(port int, ff FrontendFactory, dp *DebugParams) DebugServer 
 	}
 
 	return DebugServer{
-		debugger: debugger,
-		frontend: da,
-		router:   router,
-		server:   server,
-		params:   dp,
+		debugger:  debugger,
+		frontend:  da,
+		router:    router,
+		server:    server,
+		params:    dp,
+		spinoffCh: make(chan spinoffMsg),
 	}
 }
 
-func (ds *DebugServer) startRemote() {
+func (ds *DebugServer) startRemote() error {
 	remote := MakeRemoteHook(ds.debugger)
 	remote.Setup(ds.router)
 	ds.remote = remote
 
 	log.Printf("starting server on %s", ds.server.Addr)
 	err := ds.server.ListenAndServe()
-	if err != nil {
-		log.Panicf("failed to listen: %v", err)
+	if err != nil && err != http.ErrServerClosed {
+		return err
 	}
+	return nil
 }
 
+// DebugServer in local evaluator mode either accepts Dryrun Request obj if ListenForDrReq is set
+// or works with existing args set via command line.
+// So that for ListenForDrReq case a new endpoint is created and incoming data is await first.
+// Then execution is set up and program(s) run with stage-by-stage sync with ListenForDrReq's handler.
 func (ds *DebugServer) startDebug() (err error) {
 	local := MakeLocalRunner(ds.debugger)
-	if err = local.Setup(ds.params); err != nil {
-		return
+
+	if ds.params.ListenForDrReq {
+		path := "/spinoff"
+		ds.router.HandleFunc(path, ds.dryrunReqHander).Methods("POST")
+		log.Printf("listening for upcoming dryrun requests at http://%s%s", ds.server.Addr, path)
 	}
 
 	go func() {
-		err = ds.server.ListenAndServe()
-		if err != nil {
+		err := ds.server.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
 			log.Panicf("failed to listen: %v", err)
 		}
 	}()
 	defer ds.server.Shutdown(context.Background())
 
-	err = local.RunAll()
-	if err != nil {
+	urlFetcherCh := make(chan struct{})
+	if ds.params.ListenForDrReq {
+		msg := <-ds.spinoffCh
+		ds.params.DdrBlob = msg.data
+		go func() {
+			for {
+				url := ds.frontend.URL()
+				if len(url) > 0 {
+					ds.spinoffCh <- spinoffMsg{nil, []byte(url)}
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+			urlFetcherCh <- struct{}{}
+		}()
+	}
+
+	if err = local.Setup(ds.params); err != nil {
+		if ds.params.ListenForDrReq {
+			ds.spinoffCh <- spinoffMsg{err, []byte(err.Error())}
+			<-ds.spinoffCh // wait handler to complete
+		}
+		return
+	}
+
+	if err = local.RunAll(); err != nil {
+		if ds.params.ListenForDrReq {
+			ds.spinoffCh <- spinoffMsg{err, []byte(err.Error())}
+			<-ds.spinoffCh // wait handler to complete
+		}
 		return
 	}
 
 	ds.frontend.WaitForCompletion()
+
+	if ds.params.ListenForDrReq {
+		// It is possible URL fetcher routine does not return anything and stuck in the loop.
+		// By this point all executions are done and a message urlFetcherCh must be available.
+		// If not then URL fetcher stuck and special handling is needed: send an error message
+		// to the network handler in order to unblock it.
+		select {
+		case <-urlFetcherCh:
+		default:
+			err = fmt.Errorf("no URL from frontend")
+			ds.spinoffCh <- spinoffMsg{err, []byte(err.Error())}
+		}
+		<-ds.spinoffCh // wait handler to complete
+	}
+	return
+}
+
+func (ds *DebugServer) dryrunReqHander(w http.ResponseWriter, r *http.Request) {
+	blob := make([]byte, 0, 4096)
+	buf := make([]byte, 1024)
+	n, err := r.Body.Read(buf)
+	for n > 0 {
+		blob = append(blob, buf...)
+		n, err = r.Body.Read(buf)
+	}
+	if err != nil && err != io.EOF {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	// send data
+	ds.spinoffCh <- spinoffMsg{nil, blob}
+	// wait for confirmation message
+	msg := <-ds.spinoffCh
+
+	w.Header().Set("Content-Type", "text/plain")
+	if msg.err == nil {
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusBadRequest)
+	}
+	w.Write(msg.data)
+
+	// let the main thread to exit
+	close(ds.spinoffCh)
 	return
 }

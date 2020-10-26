@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -32,6 +33,7 @@ var networkRootDir string
 var networkRecipeFile string
 var networkName string
 var networkGenesisVersionModifier string
+var miscStringStringTokens []string
 
 var networkUseGenesisFiles bool
 var networkIgnoreExistingDir bool
@@ -49,6 +51,7 @@ func init() {
 
 	networkBuildCmd.Flags().BoolVarP(&networkUseGenesisFiles, "use-existing-files", "e", false, "Use existing genesis files.")
 	networkBuildCmd.Flags().BoolVarP(&networkIgnoreExistingDir, "force", "f", false, "Force generation into existing directory.")
+	networkBuildCmd.Flags().StringSliceVarP(&miscStringStringTokens, "val", "v", nil, "name=value, may be reapeated")
 
 	rootCmd.PersistentFlags().StringVarP(&networkGenesisVersionModifier, "modifier", "m", "", "Override Genesis Version Modifier (eg 'v1')")
 }
@@ -103,6 +106,10 @@ func runBuildNetwork() (err error) {
 	buildConfig, err := remote.LoadBuildConfig(configFile)
 	if err != nil {
 		return fmt.Errorf("error loading Build Config file: %v", err)
+	}
+	for _, kev := range miscStringStringTokens {
+		ab := strings.SplitN(kev, "=", 2)
+		buildConfig.MiscStringString = append(buildConfig.MiscStringString, "{{" + ab[0] + "}}", ab[1])
 	}
 
 	networkTemplateFile := resolveFile(r.NetworkFile, templateBaseDir)

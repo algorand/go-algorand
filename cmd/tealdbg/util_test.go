@@ -30,4 +30,5 @@ func TestVLQ(t *testing.T) {
 	a.Equal("AAEA", MakeSourceMapLine(0, 0, 2, 0))
 	a.Equal("AAgBA", MakeSourceMapLine(0, 0, 16, 0))
 	a.Equal("AAggBA", MakeSourceMapLine(0, 0, 512, 0))
+	a.Equal("ADggBD", MakeSourceMapLine(0, -1, 512, -1))
 }
