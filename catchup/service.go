@@ -73,10 +73,11 @@ type Service struct {
 	auth            BlockAuthenticator
 	parallelBlocks  uint64
 	deadlineTimeout time.Duration
-	// catchpointWriting defines whether we've ran into a state where the ledger is currently busy writing the
-	// catchpoint file. If so, we want to pospone all the catchup process until the catchpoint file writing is complete,
+
+	// suspendForCatchpointWriting defines whether we've ran into a state where the ledger is currently busy writing the
+	// catchpoint file. If so, we want to suspend the catchup process until the catchpoint file writing is complete,
 	// and resume from there without stopping the catchup timer.
-	catchpointWriting bool
+	suspendForCatchpointWriting bool
 
 	// The channel gets closed when the initial sync is complete. This allows for other services to avoid
 	// the overhead of starting prematurely (before this node is caught-up and can validate messages for example).
@@ -394,7 +395,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 			// could resume with the catchup.
 			if s.ledger.IsWritingCatchpointFile() {
 				s.log.Info("Catchup is stopping due to catchpoint file being written")
-				s.catchpointWriting = true
+				s.suspendForCatchpointWriting = true
 				return
 			}
 			completedRounds[round] = true
@@ -453,7 +454,7 @@ func (s *Service) periodicSync() {
 				// keep the existing sleep duration and try again later.
 				continue
 			}
-			s.catchpointWriting = false
+			s.suspendForCatchpointWriting = false
 			s.log.Info("It's been too long since our ledger advanced; resyncing")
 			s.sync()
 		case cert := <-s.unmatchedPendingCertificates:
@@ -504,7 +505,7 @@ func (s *Service) sync() {
 	initSync := false
 
 	// if the catchupWriting flag is set, it means that we aborted the sync due to the ledger writing the catchup file.
-	if !s.catchpointWriting {
+	if !s.suspendForCatchpointWriting {
 		// in that case, don't change the timer so that the "timer" would keep running.
 		atomic.StoreInt64(&s.syncStartNS, 0)
 
