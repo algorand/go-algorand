@@ -24,7 +24,7 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${FULLVERSION}*.tar.gz" | cut -d '/'
     fi
 
     # The following need to be exported for use in ./go-algorand/installer/rpm/$ALGORAND_PACKAGE_NAME/$ALGORAND_PACKAGE_NAME.spec.
-    export DEFAULT_NETWORK
+    export DEFAULTNETWORK
     export DEFAULT_RELEASE_NETWORK
     export REPO_DIR
     export ALGO_BIN
