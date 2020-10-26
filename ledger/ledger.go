@@ -464,18 +464,6 @@ func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 	return mini, nil
 }
 
-// LookupWithoutRewards is like Lookup but does not apply pending rewards up
-// to the requested round rnd.
-//
-// Note: LookupWithoutRewards will omit application key-value pairs.
-func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
-	mini, err := l.lookupWithoutRewards(rnd, addr)
-	if err != nil {
-		return basics.AccountData{}, err
-	}
-	return mini, nil
-}
-
 // lookup uses the accounts tracker to return the account state for a
 // given account in a particular round.  The account values reflect
 // the changes of all blocks up to and including rnd.
@@ -492,8 +480,9 @@ func (l *Ledger) lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 	return data, nil
 }
 
-// lookupWithoutRewards is like lookup but does not apply pending rewards up
+// LookupWithoutRewards is like lookup but does not apply pending rewards up
 // to the requested round rnd.
+// Note: LookupWithoutRewards will omit application key-value pairs.
 func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()

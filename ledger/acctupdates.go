@@ -421,7 +421,7 @@ func (au *accountUpdates) fullLookup(rnd basics.Round, addr basics.Address, with
 		}
 	}()
 
-	res, err := au.accountsq.lookup(addr)
+	res, _, err := au.accountsq.lookup(addr)
 	if err != nil {
 		return basics.AccountData{}, fmt.Errorf("fullLookup: could not look up %v: %v", addr, err)
 	}
@@ -973,6 +973,11 @@ func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (AccountTotal
 func (aul *accountUpdatesLedgerEvaluator) isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error) {
 	// this is a non-issue since this call will never be made on non-validating evaluation
 	return false, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
+}
+
+// lookupWithoutRewards returns the account balance for a given address at a given round, without the reward
+func (aul *accountUpdatesLedgerEvaluator) lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+	return aul.au.lookupWithRewardsImpl(rnd, addr)
 }
 
 // lookupWithoutRewards returns the account balance for a given address at a given round, without the reward

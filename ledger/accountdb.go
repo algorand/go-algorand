@@ -118,9 +118,6 @@ var createOnlineAccountIndex = []string{
 	createNormalizedOnlineBalanceIndex("onlineaccountbals", "accountbase"),
 }
 
-		data blob)`,
-}
-
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -1065,7 +1062,7 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool)
 }
 
 // accountsNewRound updates the accountbase and assetcreators by applying the provided deltas to the accounts / creatables.
-func accountsNewRound(tx *sql.Tx, updates map[basics.Address]miniAccountDelta, creatables map[basics.CreatableIndex]modifiedCreatable) (err error) {
+func accountsNewRound(tx *sql.Tx, updates map[basics.Address]miniAccountDelta, creatables map[basics.CreatableIndex]modifiedCreatable, proto config.ConsensusParams) (err error) {
 
 	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteStmt, replaceStmt *sql.Stmt
 

@@ -72,6 +72,14 @@ func (ml *emptyLedger) txnCounter() uint64 {
 	return 0
 }
 
+func (ml *emptyLedger) blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{}, nil
+}
+
+func (ml *emptyLedger) compactCertLast() basics.Round {
+	return basics.Round(0)
+}
+
 // stateTracker tracks the expected state of an account's storage after a
 // series of allocs, dallocs, reads, writes, and deletes
 type stateTracker struct {

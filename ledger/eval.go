@@ -93,7 +93,7 @@ func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 func (x *roundCowBase) Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
-	acct, err := x.l.lookupWithoutRewards(x.rnd, addr)
+	acct, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
 	if err != nil {
 		return false, err
 	}
@@ -797,20 +797,20 @@ func applyTransaction(tx transactions.Transaction, balances *roundCowState, eval
 
 	// rekeying: update balrecord.AuthAddr to tx.RekeyTo if provided
 	if (tx.RekeyTo != basics.Address{}) {
-		var record basics.BalanceRecord
-		record, err = balances.Get(tx.Sender, false)
+		var acct basics.AccountData
+		acct, err = balances.Get(tx.Sender, false)
 		if err != nil {
 			return
 		}
 		// Special case: rekeying to the account's actual address just sets acct.AuthAddr to 0
 		// This saves 32 bytes in your balance record if you want to go back to using your original key
 		if tx.RekeyTo == tx.Sender {
-			record.AuthAddr = basics.Address{}
+			acct.AuthAddr = basics.Address{}
 		} else {
-			record.AuthAddr = tx.RekeyTo
+			acct.AuthAddr = tx.RekeyTo
 		}
 
-		err = balances.Put(record)
+		err = balances.Put(tx.Sender, acct)
 		if err != nil {
 			return
 		}

@@ -409,8 +409,8 @@ func tealDryrunTest(
 		require.NoError(t, err, string(data))
 
 		require.GreaterOrEqual(t, len(response.Txns), 1)
-		messages := *response.Txns[0].AppCallMessages
 		require.NotNil(t, response.Txns[0].AppCallMessages)
+		messages := *response.Txns[0].AppCallMessages
 		require.GreaterOrEqual(t, len(messages), 1)
 		require.Equal(t, expResult, messages[len(messages)-1])
 	}

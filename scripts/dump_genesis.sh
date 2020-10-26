@@ -54,6 +54,9 @@ for LEDGER in $LEDGERS; do
       storage)
         SORT=owner
         ;;
+      miniaccountbase)
+        SORT=address
+        ;;
       *)
         echo "Unknown table $T" >&2
         exit 1
