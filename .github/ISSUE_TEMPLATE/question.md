@@ -1,8 +1,10 @@
 ---
-name: '❓ Question'
-about: 'General questions related to the algorand platform.'
+name: "❓ Question"
+about: General questions related to the algorand platform.
 title: ''
-labels: 'question'
+labels: question
+assignees: ''
+
 ---
 
 🚨 The issue tracker is not for questions. 🚨

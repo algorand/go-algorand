@@ -1,9 +1,12 @@
 ---
-name: '🔔 Feature Request'
-about: 'Suggestions for how we can improve the algorand platform.'
+name: "\U0001F514 Feature Request"
+about: Suggestions for how we can improve the algorand platform.
 title: ''
-labels: 'new-feature-request'
+labels: new-feature-request
+assignees: ''
+
 ---
+
 <!--
 NOTE: If this issue relates to security, please use the vulnerability disclosure form here:
 https://www.algorand.com/resources/blog/security

@@ -463,10 +463,10 @@ proc ::AlgorandGoal::WaitForAccountBalance { WALLET_NAME ACCOUNT_ADDRESS EXPECTE
 }
 
 # Create an asset
-proc ::AlgorandGoal::AssetCreate { CREATOR WALLET_NAME WALLET_PASSWORD TOTAL_SUPPLY UNIT_NAME TEST_PRIMARY_NODE_DIR } {
+proc ::AlgorandGoal::AssetCreate { CREATOR WALLET_NAME WALLET_PASSWORD TOTAL_SUPPLY DECIMALS ASSET_NAME UNIT_NAME TEST_PRIMARY_NODE_DIR } {
     set timeout 40
     if { [ catch {
-        spawn goal asset create -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME --creator $CREATOR --total $TOTAL_SUPPLY --unitname $UNIT_NAME
+        spawn goal asset create -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME --creator $CREATOR --total $TOTAL_SUPPLY --unitname $UNIT_NAME --name $ASSET_NAME --decimals $DECIMALS
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out create asset"  }
 	        "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r"; exp_continue }
@@ -501,6 +501,20 @@ proc ::AlgorandGoal::CreateAssetTransfer { FROM_ADDR TO_ADDR ASSET_ID ASSET_AMOU
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in CreateAssetTransfer: $EXCEPTION"
+    }
+}
+
+# Freeze asset
+proc ::AlgorandGoal::AssetFreeze { WALLET_NAME WALLET_PASSWORD FREEZE_ADDR ACCOUNT_ADDR ASSET_ID FREEZE_VALUE TEST_PRIMARY_NODE_DIR} {
+    if { [ catch {
+        spawn goal asset freeze -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME --freezer $FREEZE_ADDR --account $ACCOUNT_ADDR --assetid $ASSET_ID --freeze=$FREEZE_VALUE
+        expect {
+            timeout { ::AlgorandGoal::Abort "Timed out asset transfer"  }
+	        "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r"; exp_continue }
+	        eof
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in AssetTransfer: $EXCEPTION"
     }
 }
 
