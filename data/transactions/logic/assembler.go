@@ -1322,7 +1322,7 @@ func disDefault(dis *disassembleState, spec *OpSpec) {
 	_, dis.err = fmt.Fprintf(dis.out, "%s\n", spec.Name)
 }
 
-var errShortIntcblock  = errors.New("intcblock ran past end of program")
+var errShortIntcblock = errors.New("intcblock ran past end of program")
 var errTooManyIntc = errors.New("intcblock with too many items")
 
 func parseIntcblock(program []byte, pc int) (intc []uint64, nextpc int, err error) {
