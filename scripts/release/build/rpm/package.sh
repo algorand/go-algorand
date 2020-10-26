@@ -11,7 +11,7 @@ export REPO_DIR
 DEFAULT_RELEASE_NETWORK=$("$REPO_DIR/scripts/compute_branch_release_network.sh" "$DEFAULTNETWORK")
 export DEFAULT_RELEASE_NETWORK
 DEFAULTNETWORK=devnet
-export DEFAULT_NETWORK
+export DEFAULTNETWORK
 ALGO_BIN="$HOME/subhome/go/bin"
 export ALGO_BIN
 
