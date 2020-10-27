@@ -26,6 +26,7 @@ import (
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/cmd/tealdbg/cdt"
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -47,7 +48,7 @@ type cdtState struct {
 	pc      atomicInt
 	line    atomicInt
 	err     atomicString
-	appState
+	AppState
 
 	// debugger states
 	lastAction      atomicString
@@ -63,7 +64,30 @@ type cdtStateUpdate struct {
 	line    int
 	err     string
 
-	appState
+	AppState
+}
+
+type typeHint int
+
+const (
+	noHint typeHint = iota
+	addressHint
+)
+
+var txnFileTypeHints = map[logic.TxnField]typeHint{
+	logic.Sender:              addressHint,
+	logic.Receiver:            addressHint,
+	logic.CloseRemainderTo:    addressHint,
+	logic.AssetSender:         addressHint,
+	logic.AssetReceiver:       addressHint,
+	logic.AssetCloseTo:        addressHint,
+	logic.Accounts:            addressHint,
+	logic.RekeyTo:             addressHint,
+	logic.ConfigAssetManager:  addressHint,
+	logic.ConfigAssetReserve:  addressHint,
+	logic.ConfigAssetFreeze:   addressHint,
+	logic.ConfigAssetClawback: addressHint,
+	logic.FreezeAssetAccount:  addressHint,
 }
 
 func (s *cdtState) Init(disassembly string, proto *config.ConsensusParams, txnGroup []transactions.SignedTxn, groupIndex int, globals []basics.TealValue) {
@@ -82,7 +106,7 @@ func (s *cdtState) Update(state cdtStateUpdate) {
 	s.err.Store(state.err)
 	s.stack = state.stack
 	s.scratch = state.scratch
-	s.appState = state.appState
+	s.AppState = state.AppState
 }
 
 const localScopeObjID = "localScopeObjId"
@@ -95,8 +119,9 @@ const scratchObjID = "scratchObjID"
 const tealErrorID = "tealErrorID"
 const appGlobalObjID = "appGlobalObjID"
 const appLocalsObjID = "appLocalsObjID"
+const txnArrayFieldObjID = "txnArrayField"
 
-type objectDescFn func(s *cdtState, preview bool) []RuntimePropertyDescriptor
+type objectDescFn func(s *cdtState, preview bool) []cdt.RuntimePropertyDescriptor
 
 var objectDescMap = map[string]objectDescFn{
 	globalScopeObjID: makeGlobalScope,
@@ -111,7 +136,7 @@ var objectDescMap = map[string]objectDescFn{
 	appLocalsObjID:   makeAppLocalsState,
 }
 
-func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []RuntimePropertyDescriptor, err error) {
+func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []cdt.RuntimePropertyDescriptor, err error) {
 	maker, ok := objectDescMap[objID]
 	if !ok {
 		if idx, ok := decodeGroupTxnID(objID); ok {
@@ -144,6 +169,8 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []Runti
 			return makeAppLocalsKV(s, addr, appID), nil
 		} else if addr, ok := decodeAppLocalsAddr(objID); ok {
 			return makeAppLocalState(s, addr), nil
+		} else if idx, field, ok := decodeTxnArrayField(objID); ok {
+			return makeTxnArrayField(s, idx, field), nil
 		}
 		// might be nested object in array, parse and call
 		err = fmt.Errorf("unk object id: %s", objID)
@@ -152,16 +179,16 @@ func (s *cdtState) getObjectDescriptor(objID string, preview bool) (desc []Runti
 	return maker(s, preview), nil
 }
 
-func convertCallArgs(argsRaw []interface{}) (args []RuntimeCallArgument) {
+func convertCallArgs(argsRaw []interface{}) (args []cdt.RuntimeCallArgument) {
 	for _, item := range argsRaw {
 		argRaw := item.(map[string]interface{})
 		value := argRaw["value"]
-		args = append(args, RuntimeCallArgument{Value: value})
+		args = append(args, cdt.RuntimeCallArgument{Value: value})
 	}
 	return
 }
 
-func (s *cdtState) packRanges(objID string, argsRaw []interface{}) (result RuntimeCallPackRangesObject) {
+func (s *cdtState) packRanges(objID string, argsRaw []interface{}) (result cdt.RuntimeCallPackRangesObject) {
 	if len(argsRaw) < 5 {
 		return
 	}
@@ -202,14 +229,14 @@ func (s *cdtState) packRanges(objID string, argsRaw []interface{}) (result Runti
 	}
 
 	result.Type = "object"
-	result.Value = RuntimeCallPackRangesRange{
+	result.Value = cdt.RuntimeCallPackRangesRange{
 		Ranges: ranges,
 	}
 
 	return
 }
 
-func (s *cdtState) buildFragment(objID string, argsRaw []interface{}) RuntimeRemoteObject {
+func (s *cdtState) buildFragment(objID string, argsRaw []interface{}) cdt.RuntimeRemoteObject {
 	var source []basics.TealValue
 	switch objID {
 	case stackObjID:
@@ -217,12 +244,12 @@ func (s *cdtState) buildFragment(objID string, argsRaw []interface{}) RuntimeRem
 	case scratchObjID:
 		source = s.scratch
 	default:
-		return RuntimeRemoteObject{}
+		return cdt.RuntimeRemoteObject{}
 	}
 
 	// buildObjectFragment
 	if len(argsRaw) < 3 {
-		return RuntimeRemoteObject{
+		return cdt.RuntimeRemoteObject{
 			Type:        "object",
 			Subtype:     "array",
 			ClassName:   "Array",
@@ -238,7 +265,7 @@ func (s *cdtState) buildFragment(objID string, argsRaw []interface{}) RuntimeRem
 	toIndex := int(args[1].Value.(float64))
 	// sparseIterationThreshold := args[2].Value.(float64)
 
-	return RuntimeRemoteObject{
+	return cdt.RuntimeRemoteObject{
 		Type:        "object",
 		ClassName:   "Object",
 		Description: "Object",
@@ -246,14 +273,14 @@ func (s *cdtState) buildFragment(objID string, argsRaw []interface{}) RuntimeRem
 	}
 }
 
-func makeObject(name, id string) RuntimePropertyDescriptor {
-	return RuntimePropertyDescriptor{
+func makeObject(name, id string) cdt.RuntimePropertyDescriptor {
+	return cdt.RuntimePropertyDescriptor{
 		Name:         name,
 		Configurable: false,
 		Writable:     false,
 		Enumerable:   true,
 		IsOwn:        true,
-		Value: &RuntimeRemoteObject{
+		Value: &cdt.RuntimeRemoteObject{
 			Type:        "object",
 			ClassName:   "Object",
 			Description: "Object",
@@ -262,14 +289,14 @@ func makeObject(name, id string) RuntimePropertyDescriptor {
 	}
 }
 
-func makeArray(name string, length int, id string) RuntimePropertyDescriptor {
-	return RuntimePropertyDescriptor{
+func makeArray(name string, length int, id string) cdt.RuntimePropertyDescriptor {
+	return cdt.RuntimePropertyDescriptor{
 		Name:         name,
 		Configurable: false,
 		Writable:     false,
 		Enumerable:   true,
 		IsOwn:        true,
-		Value: &RuntimeRemoteObject{
+		Value: &cdt.RuntimeRemoteObject{
 			Type:        "object",
 			Subtype:     "array",
 			ClassName:   "Array",
@@ -279,22 +306,22 @@ func makeArray(name string, length int, id string) RuntimePropertyDescriptor {
 	}
 }
 
-func makePrimitive(field fieldDesc) RuntimePropertyDescriptor {
-	return RuntimePropertyDescriptor{
+func makePrimitive(field fieldDesc) cdt.RuntimePropertyDescriptor {
+	return cdt.RuntimePropertyDescriptor{
 		Name:         field.Name,
 		Configurable: false,
 		Writable:     false,
 		Enumerable:   true,
 		IsOwn:        true,
-		Value: &RuntimeRemoteObject{
+		Value: &cdt.RuntimeRemoteObject{
 			Type:  field.Type,
 			Value: field.Value,
 		},
 	}
 }
 
-func makeStringResult(value string) RuntimeRemoteObject {
-	return RuntimeRemoteObject{
+func makeStringResult(value string) cdt.RuntimeRemoteObject {
+	return cdt.RuntimeRemoteObject{
 		Type:  "string",
 		Value: value,
 	}
@@ -340,12 +367,13 @@ func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
 		}
 		var value string
 		var valType string = "string"
-		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, logic.TxnField(field))
+		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, logic.TxnField(field), 0)
 		if err != nil {
 			value = err.Error()
 			valType = "undefined"
 		} else {
-			value = tv.String()
+			hint := txnFileTypeHints[logic.TxnField(field)]
+			value = tealValueToString(&tv, hint)
 			valType = tealTypeMap[tv.Type]
 		}
 		result = append(result, fieldDesc{name, value, valType})
@@ -381,6 +409,15 @@ func tealValueToFieldDesc(name string, tv basics.TealValue) fieldDesc {
 	return fieldDesc{name, value, valType}
 }
 
+func tealValueToString(tv *basics.TealValue, hint typeHint) string {
+	if hint == addressHint {
+		var a basics.Address
+		copy(a[:], []byte(tv.Bytes))
+		return a.String()
+	}
+	return tv.String()
+}
+
 func prepareArray(array []basics.TealValue) []fieldDesc {
 	result := make([]fieldDesc, 0, len(logic.TxnFieldNames))
 	for i := 0; i < len(array); i++ {
@@ -391,9 +428,9 @@ func prepareArray(array []basics.TealValue) []fieldDesc {
 	return result
 }
 
-func makePreview(fields []fieldDesc) (prop []RuntimePropertyPreview) {
+func makePreview(fields []fieldDesc) (prop []cdt.RuntimePropertyPreview) {
 	for _, field := range fields {
-		v := RuntimePropertyPreview{
+		v := cdt.RuntimePropertyPreview{
 			Name:  field.Name,
 			Value: field.Value,
 			Type:  field.Type,
@@ -403,9 +440,9 @@ func makePreview(fields []fieldDesc) (prop []RuntimePropertyPreview) {
 	return
 }
 
-func makeIntPreview(n int) (prop []RuntimePropertyPreview) {
+func makeIntPreview(n int) (prop []cdt.RuntimePropertyPreview) {
 	for i := 0; i < n; i++ {
-		v := RuntimePropertyPreview{
+		v := cdt.RuntimePropertyPreview{
 			Name:  strconv.Itoa(i),
 			Value: "Object",
 			Type:  "object",
@@ -415,20 +452,20 @@ func makeIntPreview(n int) (prop []RuntimePropertyPreview) {
 	return
 }
 
-func makeTxnPreview(txnGroup []transactions.SignedTxn, groupIndex int) RuntimeObjectPreview {
-	var prop []RuntimePropertyPreview
+func makeTxnPreview(txnGroup []transactions.SignedTxn, groupIndex int) cdt.RuntimeObjectPreview {
+	var prop []cdt.RuntimePropertyPreview
 	if len(txnGroup) > 0 {
 		fields := prepareTxn(&txnGroup[groupIndex].Txn, groupIndex)
 		prop = makePreview(fields)
 	}
 
-	p := RuntimeObjectPreview{Type: "object", Overflow: true, Properties: prop}
+	p := cdt.RuntimeObjectPreview{Type: "object", Overflow: true, Properties: prop}
 	return p
 }
 
-func makeGtxnPreview(txnGroup []transactions.SignedTxn) RuntimeObjectPreview {
+func makeGtxnPreview(txnGroup []transactions.SignedTxn) cdt.RuntimeObjectPreview {
 	prop := makeIntPreview(len(txnGroup))
-	p := RuntimeObjectPreview{
+	p := cdt.RuntimeObjectPreview{
 		Type:        "object",
 		Subtype:     "array",
 		Description: fmt.Sprintf("Array(%d)", len(txnGroup)),
@@ -439,7 +476,7 @@ func makeGtxnPreview(txnGroup []transactions.SignedTxn) RuntimeObjectPreview {
 
 const maxArrayPreviewLength = 20
 
-func makeArrayPreview(array []basics.TealValue) RuntimeObjectPreview {
+func makeArrayPreview(array []basics.TealValue) cdt.RuntimeObjectPreview {
 	fields := prepareArray(array)
 
 	length := len(fields)
@@ -448,7 +485,7 @@ func makeArrayPreview(array []basics.TealValue) RuntimeObjectPreview {
 	}
 	prop := makePreview(fields[:length])
 
-	p := RuntimeObjectPreview{
+	p := cdt.RuntimeObjectPreview{
 		Type:        "object",
 		Subtype:     "array",
 		Description: fmt.Sprintf("Array(%d)", len(array)),
@@ -457,11 +494,11 @@ func makeArrayPreview(array []basics.TealValue) RuntimeObjectPreview {
 	return p
 }
 
-func makeGlobalsPreview(globals []basics.TealValue) RuntimeObjectPreview {
+func makeGlobalsPreview(globals []basics.TealValue) cdt.RuntimeObjectPreview {
 	fields := prepareGlobals(globals)
 	prop := makePreview(fields)
 
-	p := RuntimeObjectPreview{
+	p := cdt.RuntimeObjectPreview{
 		Type:        "object",
 		Description: "Object",
 		Overflow:    true,
@@ -567,20 +604,43 @@ func decodeAppLocalsAppID(objID string) (string, uint64, bool) {
 	return "", 0, false
 }
 
-func makeGlobalScope(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
+var txnArrayFieldPrefix = fmt.Sprintf("%s__", txnArrayFieldObjID)
+
+func encodeTxnArrayField(groupIndex int, field int) string {
+	return fmt.Sprintf("%s%d_%d", txnArrayFieldPrefix, groupIndex, field)
+}
+
+func decodeTxnArrayField(objID string) (int, int, bool) {
+	if strings.HasPrefix(objID, txnArrayFieldPrefix) {
+		encoded := objID[len(txnArrayFieldPrefix):]
+		parts := strings.Split(encoded, "_")
+		var groupIndex, fieldIndex int64
+		var err error
+		if groupIndex, err = strconv.ParseInt(parts[0], 10, 32); err != nil {
+			return 0, 0, false
+		}
+		if fieldIndex, err = strconv.ParseInt(parts[1], 10, 32); err != nil {
+			return 0, 0, false
+		}
+		return int(groupIndex), int(fieldIndex), true
+	}
+	return 0, 0, false
+}
+
+func makeGlobalScope(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	globals := makeObject("globals", globalsObjID)
 	if preview {
 		globalsPreview := makeGlobalsPreview(s.globals)
 		globals.Value.Preview = &globalsPreview
 	}
 
-	desc = []RuntimePropertyDescriptor{
+	desc = []cdt.RuntimePropertyDescriptor{
 		globals,
 	}
 	return desc
 }
 
-func makeLocalScope(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
+func makeLocalScope(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	txn := makeObject("txn", txnObjID)
 	gtxn := makeArray("gtxn", len(s.txnGroup), gtxnObjID)
 	stack := makeArray("stack", len(s.stack), stackObjID)
@@ -609,7 +669,7 @@ func makeLocalScope(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor
 		Value: strconv.Itoa(s.pc.Load()),
 		Type:  "number",
 	})
-	desc = []RuntimePropertyDescriptor{
+	desc = []cdt.RuntimePropertyDescriptor{
 		pc,
 		txn,
 		gtxn,
@@ -617,13 +677,13 @@ func makeLocalScope(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor
 		scratch,
 	}
 
-	if !s.appState.empty() {
-		var global, local RuntimePropertyDescriptor
-		if len(s.appState.global) > 0 {
+	if !s.AppState.empty() {
+		var global, local cdt.RuntimePropertyDescriptor
+		if len(s.AppState.global) > 0 {
 			global = makeObject("appGlobal", appGlobalObjID)
 			desc = append(desc, global)
 		}
-		if len(s.appState.locals) > 0 {
+		if len(s.AppState.locals) > 0 {
 			local = makeObject("appLocals", appLocalsObjID)
 			desc = append(desc, local)
 		}
@@ -632,7 +692,7 @@ func makeLocalScope(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor
 	return desc
 }
 
-func makeGlobals(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
+func makeGlobals(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	fields := prepareGlobals(s.globals)
 	for _, field := range fields {
 		desc = append(desc, makePrimitive(field))
@@ -640,22 +700,84 @@ func makeGlobals(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
 	return
 }
 
-func makeTxn(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
+func makeTxn(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	if len(s.txnGroup) > 0 && s.groupIndex < len(s.txnGroup) && s.groupIndex >= 0 {
 		return makeTxnImpl(&s.txnGroup[s.groupIndex].Txn, s.groupIndex, preview)
 	}
 	return
 }
 
-func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (desc []RuntimePropertyDescriptor) {
+func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	fields := prepareTxn(txn, groupIndex)
 	for _, field := range fields {
 		desc = append(desc, makePrimitive(field))
 	}
+
+	for _, fieldIdx := range []logic.TxnField{logic.ApplicationArgs, logic.Accounts} {
+		fieldID := encodeTxnArrayField(groupIndex, int(fieldIdx))
+		var length int
+		switch logic.TxnField(fieldIdx) {
+		case logic.Accounts:
+			length = len(txn.Accounts)
+		case logic.ApplicationArgs:
+			length = len(txn.ApplicationArgs)
+		}
+		field := makeArray(logic.TxnFieldNames[fieldIdx], length, fieldID)
+		if preview {
+			elems := txnFieldToArrayFieldDesc(txn, groupIndex, logic.TxnField(fieldIdx), length)
+			prop := makePreview(elems)
+			p := cdt.RuntimeObjectPreview{
+				Type:        "object",
+				Subtype:     "array",
+				Description: fmt.Sprintf("Array(%d)", length),
+				Overflow:    true,
+				Properties:  prop,
+			}
+			field.Value.Preview = &p
+		}
+		desc = append(desc, field)
+	}
+
 	return
 }
 
-func makeTxnGroup(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
+func txnFieldToArrayFieldDesc(txn *transactions.Transaction, groupIndex int, field logic.TxnField, length int) (desc []fieldDesc) {
+	for i := 0; i < length; i++ {
+		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, field, uint64(i))
+		if err != nil {
+			return []fieldDesc{}
+		}
+		name := strconv.Itoa(i)
+		hint := txnFileTypeHints[field]
+		value := tealValueToString(&tv, hint)
+		valType := tealTypeMap[tv.Type]
+		desc = append(desc, fieldDesc{name, value, valType})
+	}
+	return
+}
+
+func makeTxnArrayField(s *cdtState, groupIndex int, fieldIdx int) (desc []cdt.RuntimePropertyDescriptor) {
+	if len(s.txnGroup) > 0 && s.groupIndex < len(s.txnGroup) && s.groupIndex >= 0 && fieldIdx >= 0 && fieldIdx < len(logic.TxnFieldNames) {
+		txn := s.txnGroup[groupIndex].Txn
+		var length int
+		switch logic.TxnField(fieldIdx) {
+		case logic.Accounts:
+			length = len(txn.Accounts)
+		case logic.ApplicationArgs:
+			length = len(txn.ApplicationArgs)
+		}
+
+		elems := txnFieldToArrayFieldDesc(&txn, groupIndex, logic.TxnField(fieldIdx), length)
+		for _, elem := range elems {
+			desc = append(desc, makePrimitive(elem))
+		}
+
+		desc = append(desc, makePrimitive(fieldDesc{Name: "length", Value: strconv.Itoa(length), Type: "number"}))
+	}
+	return
+}
+
+func makeTxnGroup(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	if len(s.txnGroup) > 0 {
 		for i := 0; i < len(s.txnGroup); i++ {
 			item := makeObject(strconv.Itoa(i), encodeGroupTxnID(i))
@@ -669,8 +791,8 @@ func makeTxnGroup(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) 
 	return
 }
 
-func makeAppGlobalState(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
-	for key := range s.appState.global {
+func makeAppGlobalState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	for key := range s.AppState.global {
 		s := strconv.Itoa(int(key))
 		item := makeObject(s, encodeAppGlobalAppID(s))
 		desc = append(desc, item)
@@ -678,8 +800,8 @@ func makeAppGlobalState(s *cdtState, preview bool) (desc []RuntimePropertyDescri
 	return
 }
 
-func makeAppLocalsState(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
-	for addr := range s.appState.locals {
+func makeAppLocalsState(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
+	for addr := range s.AppState.locals {
 		a := addr.String()
 		item := makeObject(a, encodeAppLocalsAddr(a))
 		desc = append(desc, item)
@@ -687,13 +809,13 @@ func makeAppLocalsState(s *cdtState, preview bool) (desc []RuntimePropertyDescri
 	return
 }
 
-func makeAppLocalState(s *cdtState, addr string) (desc []RuntimePropertyDescriptor) {
+func makeAppLocalState(s *cdtState, addr string) (desc []cdt.RuntimePropertyDescriptor) {
 	a, err := basics.UnmarshalChecksumAddress(addr)
 	if err != nil {
 		return
 	}
 
-	if state, ok := s.appState.locals[a]; ok {
+	if state, ok := s.AppState.locals[a]; ok {
 		for key := range state {
 			s := strconv.Itoa(int(key))
 			item := makeObject(s, encodeAppLocalsAppID(addr, s))
@@ -703,20 +825,20 @@ func makeAppLocalState(s *cdtState, addr string) (desc []RuntimePropertyDescript
 	return
 }
 
-func makeAppGlobalKV(s *cdtState, appID uint64) (desc []RuntimePropertyDescriptor) {
-	if tkv, ok := s.appState.global[basics.AppIndex(appID)]; ok {
+func makeAppGlobalKV(s *cdtState, appID uint64) (desc []cdt.RuntimePropertyDescriptor) {
+	if tkv, ok := s.AppState.global[basics.AppIndex(appID)]; ok {
 		return tkvToRpd(tkv)
 	}
 	return
 }
 
-func makeAppLocalsKV(s *cdtState, addr string, appID uint64) (desc []RuntimePropertyDescriptor) {
+func makeAppLocalsKV(s *cdtState, addr string, appID uint64) (desc []cdt.RuntimePropertyDescriptor) {
 	a, err := basics.UnmarshalChecksumAddress(addr)
 	if err != nil {
 		return
 	}
 
-	state, ok := s.appState.locals[a]
+	state, ok := s.AppState.locals[a]
 	if !ok {
 		return
 	}
@@ -727,7 +849,7 @@ func makeAppLocalsKV(s *cdtState, addr string, appID uint64) (desc []RuntimeProp
 	return
 }
 
-func tkvToRpd(tkv basics.TealKeyValue) (desc []RuntimePropertyDescriptor) {
+func tkvToRpd(tkv basics.TealKeyValue) (desc []cdt.RuntimePropertyDescriptor) {
 	for key, value := range tkv {
 		field := tealValueToFieldDesc(key, basics.TealValue{Type: value.Type, Uint: value.Uint, Bytes: value.Bytes})
 		desc = append(desc, makePrimitive(field))
@@ -735,13 +857,13 @@ func tkvToRpd(tkv basics.TealKeyValue) (desc []RuntimePropertyDescriptor) {
 	return
 }
 
-func makeArrayLength(array []basics.TealValue) (desc []RuntimePropertyDescriptor) {
+func makeArrayLength(array []basics.TealValue) (desc []cdt.RuntimePropertyDescriptor) {
 	field := fieldDesc{Name: "length", Value: strconv.Itoa(len(array)), Type: "number"}
 	desc = append(desc, makePrimitive(field))
 	return
 }
 
-func makeStackSlice(s *cdtState, from int, to int, preview bool) (desc []RuntimePropertyDescriptor) {
+func makeStackSlice(s *cdtState, from int, to int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	// temporary disable stack reversion to see if people prefer appending to the list
 	// stack := make([]v2.TealValue, len(s.stack))
 	// for i := 0; i < len(stack); i++ {
@@ -758,11 +880,11 @@ func makeStackSlice(s *cdtState, from int, to int, preview bool) (desc []Runtime
 	return
 }
 
-func makeStack(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
+func makeStack(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	return makeStackSlice(s, 0, len(s.stack)-1, preview)
 }
 
-func makeScratchSlice(s *cdtState, from int, to int, preview bool) (desc []RuntimePropertyDescriptor) {
+func makeScratchSlice(s *cdtState, from int, to int, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	scratch := s.scratch[from : to+1]
 	fields := prepareArray(scratch)
 	for _, field := range fields {
@@ -773,11 +895,11 @@ func makeScratchSlice(s *cdtState, from int, to int, preview bool) (desc []Runti
 	return
 }
 
-func makeScratch(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
+func makeScratch(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	return makeScratchSlice(s, 0, len(s.scratch)-1, preview)
 }
 
-func makeTealError(s *cdtState, preview bool) (desc []RuntimePropertyDescriptor) {
+func makeTealError(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	if lastError := s.err.Load(); len(lastError) != 0 {
 		field := fieldDesc{Name: "message", Value: lastError, Type: "string"}
 		desc = append(desc, makePrimitive(field))

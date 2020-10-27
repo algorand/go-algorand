@@ -185,9 +185,16 @@ func (t NetworkTemplate) Validate() error {
 		}
 		accounts[upperAcct] = true
 	}
+
 	totalPctInt, _ := totalPct.Int64()
+	const epsilon = 0.0000001
 	if totalPctInt != 100 {
-		return fmt.Errorf("invalid template: Genesis account allocations must total 100 (actual %v)", totalPct)
+		totalPctFloat, _ := totalPct.Float64()
+		if totalPctInt < 100 && totalPctFloat > (100.0-epsilon) {
+			// ignore. This is a rounding error.
+		} else {
+			return fmt.Errorf("invalid template: Genesis account allocations must total 100 (actual %v)", totalPct)
+		}
 	}
 
 	// No wallet can be assigned to more than one node

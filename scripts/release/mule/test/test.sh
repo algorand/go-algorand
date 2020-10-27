@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=2045
 
 set -ex
 
@@ -10,35 +11,55 @@ export ARCH_TYPE
 OS_TYPE=$(./scripts/ostype.sh)
 export OS_TYPE
 
-if [ -z "$VERSION" ]; then
-    VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
-fi
-export VERSION
+export BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
+export CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
+export NETWORK=${NETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
+export SHA=${SHA:-$(git rev-parse HEAD)}
+export VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 
-if [ -z "$BRANCH" ]; then
-    BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
-fi
-export BRANCH
+PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 
-if [ -z "$CHANNEL" ]; then
-    CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
-fi
-export CHANNEL
+pushd "$PKG_DIR"
 
-if [ -z "$SHA" ]; then
-    SHA=${SHA:-$(git rev-parse HEAD)}
-fi
-export SHA
-
-if ! $USE_CACHE
+if [ -n "$S3_SOURCE" ]
 then
-    mule -f package-test.yaml "package-test-setup-$PKG_TYPE"
+    PREFIX="$S3_SOURCE/$CHANNEL/$VERSION"
+
+    # deb
+    aws s3 cp "s3://$PREFIX/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
+    aws s3 cp "s3://$PREFIX/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
+
+    # rpm
+    aws s3 cp "s3://$PREFIX/algorand-$VERSION-1.$ARCH_BIT.rpm" .
+    aws s3 cp "s3://$PREFIX/algorand-devtools-$VERSION-1.$ARCH_BIT.rpm" .
 fi
 
-if [[ "$ARCH_TYPE" =~ "arm" ]]
+popd
+
+for test in $(ls ./scripts/release/mule/test/tests/pre/*.sh)
+do
+    bash "$test"
+done
+
+pushd "$PKG_DIR"
+
+if [ "$PKG_TYPE" = deb ]
 then
-    ./scripts/release/mule/test/tests/run_tests -b "$BRANCH" -c "$CHANNEL" -h "$SHA" -r "$VERSION"
+    dpkg -i algorand_*"$VERSION"*.deb
+    dpkg -i algorand-devtools*"$VERSION"*.deb
 else
-    ./scripts/release/mule/test/util/test_package.sh
+    # We need to install this since it's not being installed by a package manager.
+    # Normally, this is installed for us b/c it's a dependency.
+    # See `./installer/rpm/algorand/algorand.spec`.
+    yum install yum-cron -y
+    rpm -i algorand-"$VERSION"-1."$ARCH_BIT".rpm
+    rpm -i algorand-devtools-"$VERSION"-1."$ARCH_BIT".rpm
 fi
+
+popd
+
+for test in $(ls ./scripts/release/mule/test/tests/post/*.sh)
+do
+    bash "$test"
+done
 

@@ -184,7 +184,7 @@ func main() {
 		telemetryConfig.SendToLog = telemetryConfig.SendToLog || cfg.TelemetryToLog
 
 		// Apply telemetry override.
-		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride)
+		telemetryConfig.Enable = logging.TelemetryOverride(*telemetryOverride, &telemetryConfig)
 		remoteTelemetryEnabled = telemetryConfig.Enable
 
 		if telemetryConfig.Enable || telemetryConfig.SendToLog {
@@ -289,10 +289,11 @@ func main() {
 		}
 	}
 
-	err = s.Initialize(cfg, phonebookAddresses)
+	err = s.Initialize(cfg, phonebookAddresses, string(genesisText))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		log.Error(err)
+		os.Exit(1)
 		return
 	}
 

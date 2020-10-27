@@ -24,7 +24,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/spf13/cobra"
 
@@ -917,49 +916,6 @@ var deleteAppCmd = &cobra.Command{
 			}
 		}
 	},
-}
-
-func printable(str string) bool {
-	for _, r := range str {
-		if !unicode.IsPrint(r) {
-			return false
-		}
-	}
-	return true
-}
-
-func heuristicFormatStr(str string) string {
-	if printable(str) {
-		return str
-	}
-
-	if len(str) == 32 {
-		var addr basics.Address
-		copy(addr[:], []byte(str))
-		return addr.String()
-	}
-
-	return str
-}
-
-func heuristicFormatKey(key string) string {
-	return heuristicFormatStr(key)
-}
-
-func heuristicFormatVal(val basics.TealValue) basics.TealValue {
-	if val.Type == basics.TealUintType {
-		return val
-	}
-	val.Bytes = heuristicFormatStr(val.Bytes)
-	return val
-}
-
-func heuristicFormat(state map[string]basics.TealValue) map[string]basics.TealValue {
-	result := make(map[string]basics.TealValue)
-	for k, v := range state {
-		result[heuristicFormatKey(k)] = heuristicFormatVal(v)
-	}
-	return result
 }
 
 var readStateAppCmd = &cobra.Command{

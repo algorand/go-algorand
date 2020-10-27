@@ -69,8 +69,9 @@ scripts/travis/before_build.sh
 # Force re-evaluation of genesis files to see if source files changed w/o running make
 touch gen/generate.go
 
-if [ "${OS}-${ARCH}" = "linux-arm" ]; then
+if [ "${OS}-${ARCH}" = "linux-arm" ] || [ "${OS}-${ARCH}" = "windows-amd64" ]; then
     # for arm, build just the basic distro
+    # for windows, we still have some issues with the enlistment checking, so we'll make it simple for now.
     MAKE_DEBUG_OPTION=""
 fi
 

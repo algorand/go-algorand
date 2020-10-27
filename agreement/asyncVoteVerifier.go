@@ -18,6 +18,7 @@ package agreement
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/algorand/go-algorand/util/execpool"
@@ -104,7 +105,11 @@ func (avv *AsyncVoteVerifier) executeVoteVerification(task interface{}) interfac
 		// request was not cancelled, so we verify it here and return the result on the channel
 		v, err := req.uv.verify(req.l)
 		req.message.Vote = v
-		return &asyncVerifyVoteResponse{v: v, index: req.index, message: req.message, err: err, req: &req}
+
+		var e *LedgerDroppedRoundError
+		cancelled := errors.As(err, &e)
+
+		return &asyncVerifyVoteResponse{v: v, index: req.index, message: req.message, err: err, cancelled: cancelled, req: &req}
 	}
 }
 
@@ -118,7 +123,11 @@ func (avv *AsyncVoteVerifier) executeEqVoteVerification(task interface{}) interf
 	default:
 		// request was not cancelled, so we verify it here and return the result on the channel
 		ev, err := req.uev.verify(req.l)
-		return &asyncVerifyVoteResponse{ev: ev, index: req.index, message: req.message, err: err, req: &req}
+
+		var e *LedgerDroppedRoundError
+		cancelled := errors.As(err, &e)
+
+		return &asyncVerifyVoteResponse{ev: ev, index: req.index, message: req.message, err: err, cancelled: cancelled, req: &req}
 	}
 }
 
