@@ -188,7 +188,7 @@ func TestServiceFetchBlocksSameRange(t *testing.T) {
 	syncer.fetcherFactory = makeMockFactory(&MockedFetcher{ledger: remote, timeout: false, tries: make(map[basics.Round]int)})
 
 	syncer.testStart()
-	syncer.sync(nil)
+	syncer.sync()
 
 	require.Equal(t, remote.LastRound(), local.LastRound())
 }
@@ -248,7 +248,7 @@ func TestServiceFetchBlocksOneBlock(t *testing.T) {
 	s.testStart()
 
 	// Fetch blocks
-	s.sync(nil)
+	s.sync()
 
 	// Asserts that the last block is the one we expect
 	require.Equal(t, lastRoundAtStart+basics.Round(numBlocks), local.LastRound())
@@ -301,7 +301,7 @@ func TestAbruptWrites(t *testing.T) {
 	// Start the service ( dummy )
 	s.testStart()
 
-	s.sync(nil)
+	s.sync()
 	require.Equal(t, remote.LastRound(), local.LastRound())
 }
 
@@ -322,7 +322,7 @@ func TestServiceFetchBlocksMultiBlocks(t *testing.T) {
 	syncer.testStart()
 
 	// Fetch blocks
-	syncer.sync(nil)
+	syncer.sync()
 
 	// Asserts that the last block is the one we expect
 	require.Equal(t, lastRoundAtStart+numberOfBlocks, local.LastRound())
@@ -353,7 +353,7 @@ func TestServiceFetchBlocksMalformed(t *testing.T) {
 	// Start the service ( dummy )
 	s.testStart()
 
-	s.sync(nil)
+	s.sync()
 	require.Equal(t, lastRoundAtStart, local.LastRound())
 	require.True(t, s.fetcherFactory.(*MockedFetcherFactory).fetcher.client.closed)
 }
@@ -664,7 +664,7 @@ func TestCatchupUnmatchedCertificate(t *testing.T) {
 		}
 		block, _ := remote.Block(basics.Round(roundNumber))
 		pc.Cert.Proposal.BlockDigest = block.Digest()
-		s.sync(pc)
+		s.syncCert(pc)
 		require.True(t, s.latestRoundFetcherFactory.(*MockedFetcherFactory).fetcher.client.closed)
 	}
 }
