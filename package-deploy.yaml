@@ -35,6 +35,7 @@ agents:
       - CHANNEL=$CHANNEL
       - PACKAGES_DIR=$PACKAGES_DIR
       - NO_DEPLOY=$NO_DEPLOY
+      - S3_SOURCE=$S3_SOURCE
       - VERSION=$VERSION
     volumes:
       - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent

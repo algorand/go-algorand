@@ -104,6 +104,7 @@ These env vars generally don't change between stages. Here is a list of variable
     + `NETWORK`
     + `NO_DEPLOY`
     + `PACKAGES_DIR`
+    + `S3_SOURCE`
 
 #### `mule` jobs
 
