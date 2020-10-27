@@ -980,13 +980,13 @@ func opIte(cx *evalContext) {
 	last := len(cx.stack) - 1 // false
 	prev := last - 1          // true
 	pprev := prev - 1         // cond
-	cond := cx.stack[pprev].Uint == 0
-	if cond {
+	isZero := cx.stack[pprev].Uint == 0
+	if isZero {
 		cx.stack[pprev] = cx.stack[last]
 	} else {
 		cx.stack[pprev] = cx.stack[prev]
 	}
-	cx.stack = cx.stack[:pprev]
+	cx.stack = cx.stack[:prev]
 }
 
 func opLen(cx *evalContext) {
