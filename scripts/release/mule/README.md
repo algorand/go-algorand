@@ -249,6 +249,11 @@ CHANNEL=dev VERSION=2.1.87522 mule -f package-sign.yaml package-sign
 CHANNEL=dev VERSION=2.1.87522 mule -f package-upload.yaml package-upload
 CHANNEL=dev VERSION=2.1.87522 NO_DEPLOY=true mule -f package-deploy.yaml package-deploy
 mule -f package-deploy.yaml releases-page
-docker run --name aptly-algorand --rm -i -v "$XDG_RUNTIME_DIR/gnupg/S.gpg-agent":/root/.gnupg/S.gpg-agent -v "$HOME/.gnupg/pubring.kbx":/root/.gnupg/pubring.kbx -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" -e CHANNEL=dev -e REPO=algorand -e VERSION=2.1.87522 aptly-algorand bash create_and_push
+
+docker build --build-arg AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" --build-arg AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" -t aptly-test .
+
+docker run --name aptly-algorand --rm -i -v "$XDG_RUNTIME_DIR/gnupg/S.gpg-agent":/root/.gnupg/S.gpg-agent -v "$HOME/.gnupg/pubring.kbx":/root/.gnupg/pubring.kbx -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" -e CHANNEL=dev -e REPO=algorand -e VERSION=2.1.87522 aptly-test bash create_and_push
+
+docker run --name aptly-algorand --rm -it aptly-test
 ```
 

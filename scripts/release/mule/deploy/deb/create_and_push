@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
 
+# This script is doing the following:
+# 1. Copying the new packages from staging to the packages cache.
+# 2. Syncing from the packages cache to the local container.
+# 3. Aptly operations:
+#       i. Add all the packages to the correct $REPO. This includes the newly-synced packages.
+#      ii. Create the new snapshot that contains the new packages and the previous ones for
+#          the channel.
+#     iii. Switch out the old snapshot for the new one. Note that in the "publish" command that
+#          the $CHANNEL is the distro.
+# 4. Copy the new packages from staging to `algorand-dev-deb-repo` so that the releases page can
+#    be generated.
+
 CHANNEL=${CHANNEL:-stable}
 REPO=${REPO:-algorand}
 
@@ -52,6 +64,5 @@ aptly repo add "$REPO" "$PKG_DIR"/*.deb
 aptly snapshot create "$SNAPSHOT" from repo "$REPO"
 aptly publish switch "$CHANNEL" s3:algorand-releases: "$SNAPSHOT"
 
-# Sync with `algorand-dev-deb-repo` so the releases page can be generated.
 aws s3 sync "s3://algorand-staging/releases/$CHANNEL/$VERSION" "s3://algorand-dev-deb-repo/releases/$CHANNEL/$("/root/reverse_hex_timestamp")_$VERSION"
 
