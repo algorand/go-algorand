@@ -1229,12 +1229,13 @@ func opBz(cx *evalContext) {
 func opAssert(cx *evalContext) {
 	last := len(cx.stack) - 1
 	isZero := cx.stack[last].Uint == 0
-	cx.stack = cx.stack[:last]
 	if isZero {
 		cx.stack[0] = cx.stack[last]
 		cx.stack = cx.stack[:1]
 		cx.nextpc = len(cx.program)
-	}
+	} else {
+		cx.stack = cx.stack[:last]
+	} 
 }
 
 func opB(cx *evalContext) {
