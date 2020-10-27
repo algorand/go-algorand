@@ -5,7 +5,7 @@ agents:
     version: scripts/configure_dev-deps.sh
     arch: amd64
     env:
-      TRAVIS_BRANCH: ${GIT_BRANCH}
+      - TRAVIS_BRANCH="${GIT_BRANCH}"
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
@@ -15,7 +15,7 @@ agents:
     version: scripts/configure_dev-deps.sh
     arch: amd64
     env:
-      TRAVIS_BRANCH: ${GIT_BRANCH}
+      - TRAVIS_BRANCH="${GIT_BRANCH}"
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
@@ -25,7 +25,7 @@ agents:
     version: scripts/configure_dev-deps.sh
     arch: arm64v8
     env:
-      TRAVIS_BRANCH: ${GIT_BRANCH}
+      - TRAVIS_BRANCH="${GIT_BRANCH}"
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm64v8
@@ -35,7 +35,7 @@ agents:
     version: scripts/configure_dev-deps.sh
     arch: arm32v6
     env:
-      TRAVIS_BRANCH: ${GIT_BRANCH}
+      - TRAVIS_BRANCH="${GIT_BRANCH}"
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm32v6
@@ -44,7 +44,7 @@ agents:
     image: algorand/go-algorand-docker-linux-ubuntu
     version: scripts/configure_dev-deps.sh
     env:
-      TRAVIS_BRANCH: ${GIT_BRANCH}
+      - TRAVIS_BRANCH="${GIT_BRANCH}"
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     volumes:
