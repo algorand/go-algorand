@@ -724,7 +724,9 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 		dbRound:  au.dbRound,
 		lookback: lookback,
 	}
-	au.accountsWriting.Add(1)
+	if offset != 0 {
+		au.accountsWriting.Add(1)
+	}
 	return
 }
 
