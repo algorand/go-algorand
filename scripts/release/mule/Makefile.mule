@@ -45,7 +45,6 @@ mule = $(shell ls -d scripts/release/mule/*/ | awk 'BEGIN { FS="/" ; OFS="-" } {
 mule-deploy-rpm:
 	scripts/release/mule/deploy/rpm/deploy.sh
 
-mule-package-deb: ci-build
 mule-package-%: PKG_TYPE=$*
 mule-package-%:
 	echo Building algorand package...

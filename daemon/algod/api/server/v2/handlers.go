@@ -110,7 +110,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 		return ctx.Blob(http.StatusOK, contentType, data)
 	}
 
-	recordWithoutPendingRewards, err := myLedger.LookupWithoutRewards(lastRound, addr)
+	recordWithoutPendingRewards, _, err := myLedger.LookupWithoutRewards(lastRound, addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}

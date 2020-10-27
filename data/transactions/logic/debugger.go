@@ -85,6 +85,13 @@ type AppStateChange struct {
 	LocalStateChanges  map[basics.Address]basics.StateDelta `codec:"lsch"`
 }
 
+// GetProgramID returns program or execution ID that is string representation of sha256 checksum.
+// It is used later to link program on the user-facing side of the debugger with TEAL evaluator.
+func GetProgramID(program []byte) string {
+	hash := sha256.Sum256([]byte(program))
+	return hex.EncodeToString(hash[:])
+}
+
 func makeDebugState(cx *evalContext) DebugState {
 	disasm, dsInfo, err := disassembleInstrumented(cx.program)
 	if err != nil {
@@ -92,10 +99,9 @@ func makeDebugState(cx *evalContext) DebugState {
 		disasm = err.Error()
 	}
 
-	hash := sha256.Sum256(cx.program)
 	// initialize DebuggerState with immutable fields
 	ds := DebugState{
-		ExecID:      hex.EncodeToString(hash[:]),
+		ExecID:      GetProgramID(cx.program),
 		Disassembly: disasm,
 		PCOffset:    dsInfo.pcOffset,
 		GroupIndex:  cx.GroupIndex,

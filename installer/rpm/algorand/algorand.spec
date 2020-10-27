@@ -63,7 +63,7 @@ if [ "%{RELEASE_GENESIS_PROCESS}" != "x" ]; then
   done
   cp %{buildroot}/var/lib/algorand/genesis/${DEFAULT_RELEASE_NETWORK}/genesis.json %{buildroot}/var/lib/algorand/genesis.json
 else
-  cp ${REPO_DIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json %{buildroot}/var/lib/algorand/genesis.json
+  cp ${REPO_DIR}/installer/genesis/${DEFAULT_RELEASE_NETWORK}/genesis.json %{buildroot}/var/lib/algorand/genesis.json
   #${GOPATH}/bin/buildtools genesis ensure -n ${DEFAULT_RELEASE_NETWORK} --source ${REPO_DIR}/gen/${DEFAULT_RELEASE_NETWORK}/genesis.json --target %{buildroot}/var/lib/algorand/genesis.json --releasedir ${REPO_DIR}/installer/genesis
 fi
 

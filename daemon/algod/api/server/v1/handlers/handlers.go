@@ -738,7 +738,7 @@ func AccountInformation(ctx lib.ReqContext, context echo.Context) {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
 	}
-	recordWithoutPendingRewards, err := ledger.LookupWithoutRewards(lastRound, basics.Address(addr))
+	recordWithoutPendingRewards, _, err := ledger.LookupWithoutRewards(lastRound, basics.Address(addr))
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return

@@ -94,7 +94,7 @@ func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
 	}
 	x.accountsMu.RUnlock()
 
-	accountData, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
 	if err == nil {
 		x.accountsMu.Lock()
 		x.accounts[addr] = accountData
@@ -249,7 +249,7 @@ type ledgerForEvaluator interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	Totals(basics.Round) (AccountTotals, error)
 	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
-	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, error)
+	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 	CompactCertVoters(basics.Round) (*VotersForRound, error)
 }
@@ -320,8 +320,8 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 	}
 
 	poolAddr := eval.prevHeader.RewardsPool
-	// get the reward pool account data without any rewards; we use the roundCowBase so the account data would get cached.
-	incentivePoolData, err := base.lookup(poolAddr)
+	// get the reward pool account data without any rewards
+	incentivePoolData, _, err := l.LookupWithoutRewards(eval.prevHeader.Round, poolAddr)
 	if err != nil {
 		return nil, err
 	}
