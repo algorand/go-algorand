@@ -64,7 +64,7 @@ func (ml *emptyLedger) allocated(addr basics.Address, aidx basics.AppIndex, glob
 	return false, nil
 }
 
-func (ml *emptyLedger) GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+func (ml *emptyLedger) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
 	return basics.TealValue{}, false, nil
 }
 
