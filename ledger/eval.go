@@ -52,7 +52,7 @@ type VerifiedTxnCache interface {
 }
 
 type roundCowBase struct {
-	l ledgerForEvaluator
+	l LedgerForCow
 
 	// The round number of the previous block, for looking up prior state.
 	rnd basics.Round
@@ -77,7 +77,7 @@ func (x *roundCowBase) lookup(addr basics.Address) (acctData basics.AccountData,
 }
 
 func (x *roundCowBase) isDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
-	return x.l.IsDup(x.proto, x.rnd+1, firstValid, lastValid, txid, txl)
+	return x.l.IsDup(x.proto, x.rnd+1, firstValid, lastValid, txid, TxLease{txl})
 }
 
 func (x *roundCowBase) txnCounter() uint64 {
@@ -274,13 +274,18 @@ type BlockEvaluator struct {
 }
 
 type ledgerForEvaluator interface {
+	LedgerForCow
 	GenesisHash() crypto.Digest
-	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	Totals(basics.Round) (AccountTotals, error)
-	IsDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
+	CompactCertVoters(basics.Round) (*VotersForRound, error)
+}
+
+// LedgerForCow represents subset of Ledger functionality needed for cow business
+type LedgerForCow interface {
+	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
+	IsDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) (bool, error)
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
-	CompactCertVoters(basics.Round) (*VotersForRound, error)
 	GetKeyForRound(basics.Round, basics.Address, basics.AppIndex, bool, string) (basics.TealValue, bool, error)
 	CountStorageForRound(basics.Round, basics.Address, basics.AppIndex, bool) (basics.StateSchema, error)
 }

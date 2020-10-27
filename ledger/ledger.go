@@ -510,10 +510,10 @@ func (l *Ledger) Totals(rnd basics.Round) (AccountTotals, error) {
 }
 
 // IsDup return whether a transaction is a duplicate one.
-func (l *Ledger) IsDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
+func (l *Ledger) IsDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl TxLease) (bool, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.txTail.isDup(currentProto, current, firstValid, lastValid, txid, txl)
+	return l.txTail.isDup(currentProto, current, firstValid, lastValid, txid, txl.txlease)
 }
 
 // GetRoundTxIds returns a map of the transactions ids that we have for the given round
@@ -690,6 +690,16 @@ func (l *Ledger) IsWritingCatchpointFile() bool {
 type txlease struct {
 	sender basics.Address
 	lease  [32]byte
+}
+
+// TxLease is an exported version of txlease
+type TxLease struct {
+	txlease
+}
+
+// FromTx populates TxLease object from SignedTxn
+func (l *TxLease) FromTx(txn transactions.SignedTxn) {
+	l.txlease = txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease}
 }
 
 var ledgerInitblocksdbCount = metrics.NewCounter("ledger_initblocksdb_count", "calls")

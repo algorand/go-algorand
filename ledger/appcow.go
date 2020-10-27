@@ -19,9 +19,13 @@ package ledger
 import (
 	"fmt"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger/apply"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 type storageAction uint64
@@ -409,6 +413,22 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 	}
 
 	return nil // note: deletion cannot cause us to violate maxCount
+}
+
+// MakeDebugBalances creates a ledger suitable for dryrun and debugger
+func MakeDebugBalances(l LedgerForCow, round basics.Round, proto protocol.ConsensusVersion) apply.Balances {
+	base := &roundCowBase{
+		l:     l,
+		rnd:   round - 1,
+		proto: config.Consensus[proto],
+	}
+
+	hdr := bookkeeping.BlockHeader{
+		Round:        round,
+		UpgradeState: bookkeeping.UpgradeState{CurrentProtocol: proto},
+	}
+	cb := makeRoundCowState(base, hdr, 0)
+	return cb
 }
 
 func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta basics.EvalDelta, err error) {
