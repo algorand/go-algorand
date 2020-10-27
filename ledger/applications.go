@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 )
 
 type logicLedger struct {
@@ -117,7 +118,7 @@ func (al *logicLedger) ApplicationID() basics.AppIndex {
 }
 
 func (al *logicLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
-	return al.cow.Allocated(addr, appIdx, false)
+	return al.cow.allocated(addr, appIdx, false)
 }
 
 func (al *logicLedger) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string) (basics.TealValue, bool, error) {
@@ -137,7 +138,8 @@ func (al *logicLedger) DelLocal(addr basics.Address, key string) error {
 
 func (al *logicLedger) fetchAppCreator(appIdx basics.AppIndex) (basics.Address, error) {
 	// Fetch the application creator
-	addr, ok, err := al.cow.getCreator(basics.CreatableIndex(appIdx), basics.AppCreatable)
+	addr, ok, err := al.cow.GetCreator(basics.CreatableIndex(appIdx), basics.AppCreatable)
+
 	if err != nil {
 		return basics.Address{}, err
 	}
@@ -164,4 +166,8 @@ func (al *logicLedger) SetGlobal(key string, value basics.TealValue) error {
 
 func (al *logicLedger) DelGlobal(key string) error {
 	return al.cow.DelKey(al.creator, al.aidx, true, key)
+}
+
+func (al *logicLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
+	return al.cow.BuildDelta(al.aidx, txn)
 }

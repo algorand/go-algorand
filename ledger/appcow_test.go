@@ -60,7 +60,7 @@ func (ml *emptyLedger) getStorageLimits(addr basics.Address, aidx basics.AppInde
 	return basics.StateSchema{}, nil
 }
 
-func (ml *emptyLedger) Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
+func (ml *emptyLedger) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
 	return false, nil
 }
 
@@ -283,7 +283,7 @@ func TestCowStorage(t *testing.T) {
 			aapp = addrApp{addr: addr, aidx: sptr.aidx, global: sptr.global}
 			// Allocations should match
 			actuallyAllocated := st.allocated(aapp)
-			cowAllocated, err := cow.Allocated(addr, sptr.aidx, sptr.global)
+			cowAllocated, err := cow.allocated(addr, sptr.aidx, sptr.global)
 			require.NoError(t, err)
 			require.Equal(t, actuallyAllocated, cowAllocated)
 

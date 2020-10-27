@@ -58,11 +58,11 @@ func (ml *mockLedger) getStorageLimits(addr basics.Address, aidx basics.AppIndex
 	return basics.StateSchema{}, nil
 }
 
-func (ml *mockLedger) Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
+func (ml *mockLedger) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
 	return true, nil
 }
 
-func (ml *mockLedger) GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+func (ml *mockLedger) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
 	return basics.TealValue{}, false, nil
 }
 

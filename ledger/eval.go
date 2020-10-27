@@ -92,7 +92,7 @@ func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error)
 	return x.l.BlockHdr(r)
 }
 
-func (x *roundCowBase) Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
+func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
 	acct, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
 	if err != nil {
 		return false, err
@@ -109,7 +109,7 @@ func (x *roundCowBase) Allocated(addr basics.Address, aidx basics.AppIndex, glob
 	return ok, nil
 }
 
-func (x *roundCowBase) GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
 	return x.l.GetKeyForRound(x.rnd, addr, aidx, global, key)
 }
 

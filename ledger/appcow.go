@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 )
 
@@ -152,7 +153,7 @@ func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.App
 
 func (cb *roundCowState) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
 	// If we haven't allocated storage, then our used storage count is zero
-	allocated, err := cb.Allocated(addr, aidx, global)
+	allocated, err := cb.allocated(addr, aidx, global)
 	if err != nil {
 		return basics.StateSchema{}, err
 	}
@@ -173,7 +174,7 @@ func (cb *roundCowState) getStorageCounts(addr basics.Address, aidx basics.AppIn
 
 func (cb *roundCowState) getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
 	// If we haven't allocated storage, then our storage limit is zero
-	allocated, err := cb.Allocated(addr, aidx, global)
+	allocated, err := cb.allocated(addr, aidx, global)
 	if err != nil {
 		return basics.StateSchema{}, err
 	}
@@ -192,7 +193,7 @@ func (cb *roundCowState) getStorageLimits(addr basics.Address, aidx basics.AppIn
 	return cb.lookupParent.getStorageLimits(addr, aidx, global)
 }
 
-func (cb *roundCowState) Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
+func (cb *roundCowState) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
 	// Check if we've allocated or deallocate within this very cow
 	aapp := storagePtr{aidx, global}
 	lsd, ok := cb.mods.sdeltas[addr][aapp]
@@ -205,7 +206,7 @@ func (cb *roundCowState) Allocated(addr basics.Address, aidx basics.AppIndex, gl
 	}
 
 	// Otherwise, check our parent
-	return cb.lookupParent.Allocated(addr, aidx, global)
+	return cb.lookupParent.allocated(addr, aidx, global)
 }
 
 func errNoStorage(addr basics.Address, aidx basics.AppIndex, global bool) error {
@@ -224,7 +225,7 @@ func errAlreadyStorage(addr basics.Address, aidx basics.AppIndex, global bool) e
 
 func (cb *roundCowState) Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
 	// Check that account is not already opted in
-	allocated, err := cb.Allocated(addr, aidx, global)
+	allocated, err := cb.allocated(addr, aidx, global)
 	if err != nil {
 		return err
 	}
@@ -246,7 +247,7 @@ func (cb *roundCowState) Allocate(addr basics.Address, aidx basics.AppIndex, glo
 
 func (cb *roundCowState) Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error {
 	// Check that account has allocated storage
-	allocated, err := cb.Allocated(addr, aidx, global)
+	allocated, err := cb.allocated(addr, aidx, global)
 	if err != nil {
 		return err
 	}
@@ -268,8 +269,12 @@ func (cb *roundCowState) Deallocate(addr basics.Address, aidx basics.AppIndex, g
 }
 
 func (cb *roundCowState) GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+	return cb.getKey(addr, aidx, global, key)
+}
+
+func (cb *roundCowState) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
 	// Check that account has allocated storage
-	allocated, err := cb.Allocated(addr, aidx, global)
+	allocated, err := cb.allocated(addr, aidx, global)
 	if err != nil {
 		return basics.TealValue{}, false, err
 	}
@@ -292,7 +297,7 @@ func (cb *roundCowState) GetKey(addr basics.Address, aidx basics.AppIndex, globa
 		// parent. Otherwise, the key does not exist.
 		if lsd.action == remainAllocAction {
 			// Check our parent
-			return cb.lookupParent.GetKey(addr, aidx, global, key)
+			return cb.lookupParent.getKey(addr, aidx, global, key)
 		}
 
 		return basics.TealValue{}, false, nil
@@ -300,7 +305,7 @@ func (cb *roundCowState) GetKey(addr basics.Address, aidx basics.AppIndex, globa
 
 	// At this point, we know we're allocated, and we don't have a delta,
 	// so we should check our parent.
-	return cb.lookupParent.GetKey(addr, aidx, global, key)
+	return cb.lookupParent.getKey(addr, aidx, global, key)
 }
 
 func (cb *roundCowState) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue) error {
@@ -315,7 +320,7 @@ func (cb *roundCowState) SetKey(addr basics.Address, aidx basics.AppIndex, globa
 	}
 
 	// Check that account has allocated storage
-	allocated, err := cb.Allocated(addr, aidx, global)
+	allocated, err := cb.allocated(addr, aidx, global)
 	if err != nil {
 		return err
 	}
@@ -362,7 +367,7 @@ func (cb *roundCowState) SetKey(addr basics.Address, aidx basics.AppIndex, globa
 
 func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) error {
 	// Check that account has allocated storage
-	allocated, err := cb.Allocated(addr, aidx, global)
+	allocated, err := cb.allocated(addr, aidx, global)
 	if err != nil {
 		return err
 	}
@@ -422,45 +427,52 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 
 	// If program passed, build our eval delta and commit to state changes
 	if pass {
-		foundGlobal := false
-		for addr, smod := range calf.mods.sdeltas {
-			for aapp, sdelta := range smod {
-				// Check that all of these deltas are for the correct app
-				if aapp.aidx != aidx {
-					err = fmt.Errorf("found storage delta for different app during StatefulEval: %d != %d", aapp.aidx, aidx)
-					return false, basics.EvalDelta{}, err
-				}
-				if aapp.global {
-					// Check that there is at most one global delta
-					if foundGlobal {
-						err = fmt.Errorf("found more than one global delta during StatefulEval: %d", aapp.aidx)
-						return false, basics.EvalDelta{}, err
-					}
-					evalDelta.GlobalDelta = sdelta.kvCow.serialize()
-					foundGlobal = true
-				} else {
-					if evalDelta.LocalDeltas == nil {
-						evalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
-					}
-					// It is impossible for there to be more than one local delta for
-					// a particular (address, app ID) in sdeltas, because the appAddr
-					// type consists only of (address, appID, global=false). So if
-					// IndexByAddress is deterministic (and it is), there is no need
-					// to check for duplicates here.
-					var addrOffset uint64
-					sender := params.Txn.Txn.Sender
-					addrOffset, err = params.Txn.Txn.IndexByAddress(addr, sender)
-					if err != nil {
-						return false, basics.EvalDelta{}, err
-					}
-					evalDelta.LocalDeltas[addrOffset] = sdelta.kvCow.serialize()
-				}
-			}
+		evalDelta, err = calf.BuildDelta(aidx, &params.Txn.Txn)
+		if err != nil {
+			return false, basics.EvalDelta{}, err
 		}
 		calf.commitToParent()
 	}
 
 	return pass, evalDelta, nil
+}
+
+func (cb *roundCowState) BuildDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
+	foundGlobal := false
+	for addr, smod := range cb.mods.sdeltas {
+		for aapp, sdelta := range smod {
+			// Check that all of these deltas are for the correct app
+			if aapp.aidx != aidx {
+				err = fmt.Errorf("found storage delta for different app during StatefulEval/BuildDelta: %d != %d", aapp.aidx, aidx)
+				return basics.EvalDelta{}, err
+			}
+			if aapp.global {
+				// Check that there is at most one global delta
+				if foundGlobal {
+					err = fmt.Errorf("found more than one global delta during StatefulEval/BuildDelta: %d", aapp.aidx)
+					return basics.EvalDelta{}, err
+				}
+				evalDelta.GlobalDelta = sdelta.kvCow.serialize()
+				foundGlobal = true
+			} else {
+				if evalDelta.LocalDeltas == nil {
+					evalDelta.LocalDeltas = make(map[uint64]basics.StateDelta)
+				}
+				// It is impossible for there to be more than one local delta for
+				// a particular (address, app ID) in sdeltas, because the appAddr
+				// type consists only of (address, appID, global=false). So if
+				// IndexByAddress is deterministic (and it is), there is no need
+				// to check for duplicates here.
+				var addrOffset uint64
+				addrOffset, err = txn.IndexByAddress(addr, txn.Sender)
+				if err != nil {
+					return basics.EvalDelta{}, err
+				}
+				evalDelta.LocalDeltas[addrOffset] = sdelta.kvCow.serialize()
+			}
+		}
+	}
+	return
 }
 
 func updateCounts(lsd *storageDelta, bv basics.TealValue, bok bool, av basics.TealValue, aok bool) error {

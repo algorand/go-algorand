@@ -43,8 +43,8 @@ type roundCowParent interface {
 	// note: getStorageLimits is redundant with the other methods
 	// and is provided to optimize state schema lookups
 	getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
-	Allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
-	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error)
+	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
+	getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error)
 }
 
 type roundCowState struct {
