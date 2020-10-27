@@ -11,6 +11,7 @@ agents:
       - BRANCH=$BRANCH
       - CHANNEL=$CHANNEL
       - NETWORK=$NETWORK
+      - S3_SOURCE=$S3_SOURCE
       - SHA=$SHA
       - VERSION=$VERSION
     volumes:
@@ -29,6 +30,7 @@ agents:
       - BRANCH=$BRANCH
       - CHANNEL=$CHANNEL
       - NETWORK=$NETWORK
+      - S3_SOURCE=$S3_SOURCE
       - SHA=$SHA
       - VERSION=$VERSION
     volumes:
