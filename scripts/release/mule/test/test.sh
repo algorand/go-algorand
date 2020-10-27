@@ -21,17 +21,17 @@ PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 
 pushd "$PKG_DIR"
 
-if ! $USE_CACHE
+if [ -n "$S3_SOURCE" ]
 then
-    SRC_DIR="s3://algorand-staging/releases/$CHANNEL/$VERSION"
+    PREFIX="$S3_SOURCE/$CHANNEL/$VERSION"
 
     # deb
-    aws s3 cp "$SRC_DIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
-    aws s3 cp "$SRC_DIR/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
+    aws s3 cp "s3://$PREFIX/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
+    aws s3 cp "s3://$PREFIX/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
 
     # rpm
-    aws s3 cp "$SRC_DIR/algorand-$VERSION-1.$ARCH_BIT.rpm" .
-    aws s3 cp "$SRC_DIR/algorand-devtools-$VERSION-1.$ARCH_BIT.rpm" .
+    aws s3 cp "s3://$PREFIX/algorand-$VERSION-1.$ARCH_BIT.rpm" .
+    aws s3 cp "s3://$PREFIX/algorand-devtools-$VERSION-1.$ARCH_BIT.rpm" .
 fi
 
 popd
