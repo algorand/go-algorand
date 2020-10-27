@@ -1,0 +1,55 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+if { [catch {
+
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    # generate invalid transaction file. ( we want to see that goal is ommitting the control characters when printing out the error message )
+    exec echo {{ "\u001b[0G\u001b[0K\u001b[33munexpected_key\u001b[0m": 2 }} > $TEST_ALGO_DIR/tx.json
+    exec cat $TEST_ALGO_DIR/tx.json | msgpacktool -e -b32 > $TEST_ALGO_DIR/tx
+    exec rm $TEST_ALGO_DIR/tx.json
+
+    set NON_PRINTABLE_CHARS_WARNING 0
+    set CANNOT_DECODE_MESSAGE 0
+    spawn goal clerk inspect $TEST_ALGO_DIR/tx
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "failed to inspect transaction file within timeout" }
+        {One or more non-printable characters were ommited from the following error message:} {
+            set NON_PRINTABLE_CHARS_WARNING 1
+            exp_continue
+        }
+        {Cannot decode transactions from *: msgpack decode error \[pos 33\]: no matching struct field found when decoding stream map with key \[0G\[0K\[33munexpected_key\[0m} {
+            set CANNOT_DECODE_MESSAGE 1
+            exp_continue
+        }
+        eof {
+            if {$CANNOT_DECODE_MESSAGE == 0 || $NON_PRINTABLE_CHARS_WARNING == 0} {
+                puts "eof received before the expected output " 
+                exit 1
+            }      
+        }
+    }
+
+    lassign [::AlgorandGoal::CheckProcessReturnedCode 0] response OS_CODE ERROR_CODE KILLED KILL_SIGNAL EXP
+    if {$ERROR_CODE != 1} {
+        puts "goal was expected to fail with 1 due to invalid transaction file, but returned error code $ERROR_CODE instead"
+        exit 1
+    }
+
+    exec rm $TEST_ALGO_DIR/tx
+
+    puts "Goal Formatting Test Successful"
+
+    exit 0
+} EXCEPTION] } {
+    puts "ERROR in goalFormattingTest: $EXCEPTION"
+    exit 1
+}

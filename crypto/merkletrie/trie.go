@@ -44,13 +44,27 @@ var ErrMismatchingPageSize = errors.New("mismatching page size")
 // ErrUnableToEvictPendingCommits is returned if the tree was modified and Evict was called with commit=false
 var ErrUnableToEvictPendingCommits = errors.New("unable to evict as pending commits available")
 
+// MemoryConfig used to define the Trie object memory configuration.
+type MemoryConfig struct {
+	// NodesCountPerPage defines how many nodes each page would contain
+	NodesCountPerPage int64
+	// CachedNodesCount defines the number of nodes we want to retain in memory between consecutive Evict calls.
+	CachedNodesCount int
+	// PageFillFactor defines the desired fill ratio of a created page.
+	PageFillFactor float32
+	// MaxChildrenPagesThreshold define the maximum number of different pages that would be used for a single node's children.
+	// it's being evaluated during Commit, for all the updated nodes.
+	MaxChildrenPagesThreshold uint64
+}
+
 // Trie is a merkle trie intended to efficiently calculate the merkle root of
 // unordered elements
 type Trie struct {
-	root          storedNodeIdentifier
-	nextNodeID    storedNodeIdentifier
-	cache         *merkleTrieCache
-	elementLength int
+	root                storedNodeIdentifier
+	nextNodeID          storedNodeIdentifier
+	lastCommittedNodeID storedNodeIdentifier
+	cache               *merkleTrieCache
+	elementLength       int
 }
 
 // Stats structure is a helper for finding underlaying statistics about the trie
@@ -62,11 +76,12 @@ type Stats struct {
 }
 
 // MakeTrie creates a merkle trie
-func MakeTrie(committer Committer, cachedNodesCount int) (*Trie, error) {
+func MakeTrie(committer Committer, memoryConfig MemoryConfig) (*Trie, error) {
 	mt := &Trie{
-		root:       storedNodeIdentifierNull,
-		cache:      &merkleTrieCache{},
-		nextNodeID: storedNodeIdentifierBase,
+		root:                storedNodeIdentifierNull,
+		cache:               &merkleTrieCache{},
+		nextNodeID:          storedNodeIdentifierBase,
+		lastCommittedNodeID: storedNodeIdentifierBase,
 	}
 	if committer == nil {
 		committer = &InMemoryCommitter{}
@@ -79,7 +94,7 @@ func MakeTrie(committer Committer, cachedNodesCount int) (*Trie, error) {
 				if err != nil {
 					return nil, err
 				}
-				if pageSize != committer.GetNodesCountPerPage() {
+				if pageSize != memoryConfig.NodesCountPerPage {
 					return nil, ErrMismatchingPageSize
 				}
 			}
@@ -87,16 +102,12 @@ func MakeTrie(committer Committer, cachedNodesCount int) (*Trie, error) {
 			return nil, err
 		}
 	}
-
-	mt.cache.initialize(mt, committer, cachedNodesCount)
+	mt.cache.initialize(mt, committer, memoryConfig)
 	return mt, nil
 }
 
 // SetCommitter set the provided committter as the current committer, and return the old one.
 func (mt *Trie) SetCommitter(committer Committer) (prevCommitter Committer) {
-	if committer.GetNodesCountPerPage() != mt.cache.committer.GetNodesCountPerPage() {
-		panic("committer has to retain the name page size")
-	}
 	prevCommitter = mt.cache.committer
 	mt.cache.committer = committer
 	return
@@ -108,7 +119,7 @@ func (mt *Trie) RootHash() (crypto.Digest, error) {
 		return crypto.Digest{}, nil
 	}
 	if mt.cache.modified {
-		if err := mt.Commit(); err != nil {
+		if _, err := mt.Commit(); err != nil {
 			return crypto.Digest{}, err
 		}
 	}
@@ -212,17 +223,21 @@ func (mt *Trie) GetStats() (stats Stats, err error) {
 }
 
 // Commit stores the existings trie using the committer.
-func (mt *Trie) Commit() error {
-	bytes := mt.serialize()
-	mt.cache.committer.StorePage(storedNodeIdentifierNull, bytes)
-	return mt.cache.commit()
+func (mt *Trie) Commit() (stats CommitStats, err error) {
+	stats, err = mt.cache.commit()
+	if err == nil {
+		mt.lastCommittedNodeID = mt.nextNodeID
+		bytes := mt.serialize()
+		err = mt.cache.committer.StorePage(storedNodeIdentifierNull, bytes)
+	}
+	return
 }
 
 // Evict removes elements from the cache that are no longer needed.
 func (mt *Trie) Evict(commit bool) (int, error) {
 	if commit {
 		if mt.cache.modified {
-			if err := mt.Commit(); err != nil {
+			if _, err := mt.Commit(); err != nil {
 				return 0, err
 			}
 		}
@@ -241,7 +256,7 @@ func (mt *Trie) serialize() []byte {
 	root := binary.PutUvarint(serializedBuffer[version:], uint64(mt.root))
 	next := binary.PutUvarint(serializedBuffer[version+root:], uint64(mt.nextNodeID))
 	elementLength := binary.PutUvarint(serializedBuffer[version+root+next:], uint64(mt.elementLength))
-	pageSizeLength := binary.PutUvarint(serializedBuffer[version+root+next+elementLength:], uint64(mt.cache.committer.GetNodesCountPerPage()))
+	pageSizeLength := binary.PutUvarint(serializedBuffer[version+root+next+elementLength:], uint64(mt.cache.nodesPerPage))
 	return serializedBuffer[:version+root+next+elementLength+pageSizeLength]
 }
 
@@ -272,14 +287,7 @@ func (mt *Trie) deserialize(bytes []byte) (int64, error) {
 	}
 	mt.root = storedNodeIdentifier(root)
 	mt.nextNodeID = storedNodeIdentifier(nextNodeID)
+	mt.lastCommittedNodeID = storedNodeIdentifier(nextNodeID)
 	mt.elementLength = int(elemLength)
 	return int64(pageSize), nil
-}
-
-// reset is used to reset the trie to a given root & nextID. It's used exclusively as part of the
-// transaction rollback recovery in case no persistence could be established.
-func (mt *Trie) reset(root, nextID storedNodeIdentifier) {
-	mt.root = root
-	mt.nextNodeID = nextID
-	mt.cache.initialize(mt, mt.cache.committer, mt.cache.cachedNodeCount)
 }

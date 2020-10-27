@@ -22,16 +22,20 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/protocol"
 )
 
-var filterTimeout = 2 * config.Protocol.SmallLambda
 var deadlineTimeout = config.Protocol.BigLambda + config.Protocol.SmallLambda
 var partitionStep = next + 3
 var recoveryExtraTimeout = config.Protocol.SmallLambda
 
 // FilterTimeout is the duration of the first agreement step.
-func FilterTimeout() time.Duration {
-	return filterTimeout
+func FilterTimeout(p period, v protocol.ConsensusVersion) time.Duration {
+	if p == 0 {
+		return config.Consensus[v].AgreementFilterTimeoutPeriod0
+	}
+	// timeout is expected to be 2 * SmallLambda, value moved to consensusParams
+	return config.Consensus[v].AgreementFilterTimeout
 }
 
 // DeadlineTimeout is the duration of the second agreement step.

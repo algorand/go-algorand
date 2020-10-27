@@ -128,7 +128,7 @@ func appSpecStringInvalid(s string) error {
 }
 
 func appSpecHelpStringInvalid(s string) error {
-	if !printable(s) {
+	if printable, _ := unicodePrintable(s); !printable {
 		return fmt.Errorf("%s is not Unicode printable", strconv.Quote(s))
 	}
 	return nil
@@ -715,7 +715,7 @@ var appQueryCmd = &cobra.Command{
 		case "int", "integer":
 			if tealval.Type == 0 {
 				if meta.Explicit {
-					reportErrorf("%s not set for %s.%s", param, appIdx, storeName)
+					reportErrorf("%s not set for %d.%s", param, appIdx, storeName)
 				}
 			} else if tealval.Type != basics.TealUintType {
 				reportErrorf("Expected kind %s but got teal type %s", meta.Kind, tealval.Type)
@@ -724,7 +724,7 @@ var appQueryCmd = &cobra.Command{
 		default:
 			if tealval.Type == 0 {
 				if meta.Explicit {
-					reportErrorf("%s not set for %s.%s", param, appIdx, storeName)
+					reportErrorf("%s not set for %d.%s", param, appIdx, storeName)
 				}
 			} else if tealval.Type != basics.TealBytesType {
 				reportErrorf("Expected kind %s but got teal type %s", meta.Kind, tealval.Type)

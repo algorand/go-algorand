@@ -56,6 +56,43 @@ proc ::AlgorandGoal::Abort { ERROR } {
     exit 1
 }
 
+# Utility method to test the process returned value
+# Returns 0 when no error code is detected
+# When an error code is detected:
+#    If ABORT = 1 Calls AlgorandGoal::Abort 
+#    if ABORT = 0 Returns 1 OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
+# If SIGHUP is detected, it ignores it.
+proc ::AlgorandGoal::CheckProcessReturnedCode {ABORT} {
+    upvar spawn_id spawn_id
+    lassign [wait -i $spawn_id] PID SPAWNID OS_CODE ERR_CODE KILLED KILL_SIGNAL EXP
+
+    if {$KILLED == "CHILDKILLED"} {
+	if {$KILL_SIGNAL == "SIGHUP" && $EXP == "hangup"} {
+	    # this is caused by expect close. Will ignore.
+	    return 0
+	}
+	if {$ABORT} {
+	    ::AlgorandGoal::Abort "process killed: $KILL_SIGNAL $EXP"
+	}
+	return [list 1 $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
+    }
+
+    if {$OS_CODE == -1} {
+	if {$ABORT} {
+	    ::AlgorandGoal::Abort "OS error code: $ERR_CODE"
+	}
+	return [list 1 $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
+    } else {
+	if {$ERR_CODE != 0} {
+	    if {$ABORT} {
+		::AlgorandGoal::Abort "porcess returned non-zero value: $ERR_CODE"
+	    }
+	    return [list 1 $OS_CODE $ERR_CODE $KILLED $KILL_SIGNAL $EXP]
+	}
+    }
+    return 0
+}
+
 # Start the node
 proc ::AlgorandGoal::StartNode { TEST_ALGO_DIR {SYSTEMD_MANAGED "False"} {PEER_ADDRESS ""} } {
     set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
@@ -163,6 +200,7 @@ proc ::AlgorandGoal::CreateNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR
 
 # Start the network
 proc ::AlgorandGoal::StartNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ALGO_DIR TEST_ROOT_DIR } {
+    set timeout 120
     set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
     set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
     set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
@@ -414,8 +452,8 @@ proc ::AlgorandGoal::WaitForAccountBalance { WALLET_NAME ACCOUNT_ADDRESS EXPECTE
             if { $ACCOUNT_BALANCE == $EXPECTED_BALANCE } {
                 puts "Account balance OK: $ACCOUNT_BALANCE"; break
             } else {
-               puts "Account balance: '$ACCOUNT_BALANCE' does not match expected balance: '$EXPECTED_BALANCE'"
-               if { $i >= 10 } then { ::AlgorandGoal::Abort "Account balance $ACCOUNT_BALANCE does not match expected amount: $EXPECTED_BALANCE"; break;}
+               puts "Account balance: '$ACCOUNT_BALANCE' does not match expected balance: '$EXPECTED_BALANCE', still waiting..."
+               if { $i >= 20 } then { ::AlgorandGoal::Abort "Account balance '$ACCOUNT_BALANCE' does not match expected amount: '$EXPECTED_BALANCE', waited too long, FAIL"; break;}
             }
         }
     } EXCEPTION ] } {
@@ -425,10 +463,10 @@ proc ::AlgorandGoal::WaitForAccountBalance { WALLET_NAME ACCOUNT_ADDRESS EXPECTE
 }
 
 # Create an asset
-proc ::AlgorandGoal::AssetCreate { CREATOR WALLET_NAME WALLET_PASSWORD TOTAL_SUPPLY UNIT_NAME TEST_PRIMARY_NODE_DIR } {
+proc ::AlgorandGoal::AssetCreate { CREATOR WALLET_NAME WALLET_PASSWORD TOTAL_SUPPLY DECIMALS ASSET_NAME UNIT_NAME TEST_PRIMARY_NODE_DIR } {
     set timeout 40
     if { [ catch {
-        spawn goal asset create -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME --creator $CREATOR --total $TOTAL_SUPPLY --unitname $UNIT_NAME
+        spawn goal asset create -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME --creator $CREATOR --total $TOTAL_SUPPLY --unitname $UNIT_NAME --name $ASSET_NAME --decimals $DECIMALS
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out create asset"  }
 	        "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r"; exp_continue }
@@ -466,12 +504,26 @@ proc ::AlgorandGoal::CreateAssetTransfer { FROM_ADDR TO_ADDR ASSET_ID ASSET_AMOU
     }
 }
 
+# Freeze asset
+proc ::AlgorandGoal::AssetFreeze { WALLET_NAME WALLET_PASSWORD FREEZE_ADDR ACCOUNT_ADDR ASSET_ID FREEZE_VALUE TEST_PRIMARY_NODE_DIR} {
+    if { [ catch {
+        spawn goal asset freeze -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME --freezer $FREEZE_ADDR --account $ACCOUNT_ADDR --assetid $ASSET_ID --freeze=$FREEZE_VALUE
+        expect {
+            timeout { ::AlgorandGoal::Abort "Timed out asset transfer"  }
+	        "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r"; exp_continue }
+	        eof
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in AssetTransfer: $EXCEPTION"
+    }
+}
+
 # Get asset id
 proc ::AlgorandGoal::AssetLookup { CREATOR UNIT_NAME TEST_PRIMARY_NODE_DIR } {
     set timeout 10
     if { [ catch {
 	set ASSET_ID "NOT SET"
-        spawn goal asset info -d $TEST_PRIMARY_NODE_DIR --creator $CREATOR  --asset $UNIT_NAME
+        spawn goal asset info -d $TEST_PRIMARY_NODE_DIR --creator $CREATOR  --unitname $UNIT_NAME
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out asset lookup"  }
             -re {Asset ID:\s+([0-9]+)} {set ASSET_ID $expect_out(1,string); close }
@@ -1107,3 +1159,30 @@ proc ::AlgorandGoal::InspectTransactionFile { TRX_FILE } {
         eof
     }
 }
+
+# Run pingpong test
+proc ::AlgorandGoal::RunPingpong {DURATION PINGPONG_OPTIONS TEST_PRIMARY_NODE_DIR} {
+    set timeout [expr $DURATION + 60]
+    if { [ catch {
+        set pingpong_base "pingpong run --duration $DURATION -d $TEST_PRIMARY_NODE_DIR --quiet "
+        set pingpong_command [concat $pingpong_base $PINGPONG_OPTIONS]
+        puts "starting pingpong test with command:  $pingpong_command"
+        eval spawn $pingpong_command
+        expect {
+            timeout { puts "pingpong test interrupted by timeout, terminating after $timeout seconds" }
+            -re {Sent (\d+) transactions \((\d+) attempted\).} {
+                    set actual $expect_out(1,string) ;
+                    set attempted $expect_out(2,string) ;
+                    puts "actual: $actual, attempted: $attempted";
+                    if { $actual != $attempted } then { ::AlgorandGoal::Abort "Pingpong attempted to send $attempted transactions, but actual was $actual"; break;}
+                    exp_continue
+                }
+            "Terminating after max run time of" {puts "end of ping pong test"}
+            eof {::AlgorandGoal::Abort "pingpong terminated unexpectedly: $expect_out(buffer)"}
+            "Error" {::AlgorandGoal::Abort "error running pingpong: $expect_out(buffer)"}
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in RunPingpong: $EXCEPTION"
+    }
+}
+
