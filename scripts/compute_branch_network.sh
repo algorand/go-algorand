@@ -18,6 +18,10 @@ fi
 #credit to https://stackoverflow.com/questions/3161204/find-the-parent-branch-of-a-git-branch
 BRANCHPARENT="$(git show-branch | grep '\*' | grep -v '${BRANCH}' | head -n1 | sed 's/.*\[\(.*\)\].*/\1/' | sed 's/[\^~].*//')"
 
+if [ $? != 0 ]; then
+    BRANCHPARENT="${BRANCH}"
+fi
+
 if [ "${BRANCHPARENT}" = "rel/stable" ]; then
     echo "testnet"
 elif [ "${BRANCHPARENT}" = "rel/beta" ]; then
