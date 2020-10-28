@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=2038,2045,2064,2129
+# shellcheck disable=2038,2045,2064,2129,2162
 
 set -ex
 
@@ -7,7 +7,7 @@ echo
 date "+build_release begin PACKAGE DEB stage %Y%m%d_%H%M%S"
 echo
 
-BRANCH=${BRANCH:-$(./scripts/compute_branch.sh "$BRANCH")}
+BRANCH=${BRANCH:-$(./scripts/compute_branch.sh)}
 CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 # A make target in Makefile.mule may pass the name as an argument.
