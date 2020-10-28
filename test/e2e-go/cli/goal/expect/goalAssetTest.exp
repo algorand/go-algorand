@@ -1,0 +1,47 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+if { [catch {
+
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+
+    exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    set PRIMARY_NODE_ADDRESS [ ::AlgorandGoal::GetAlgodNetworkAddress $TEST_PRIMARY_NODE_DIR ]
+    puts "Primary Node Address: $PRIMARY_NODE_ADDRESS"
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
+
+    exec goal asset create --creator $PRIMARY_ACCOUNT_ADDRESS --total 90000 --name 'testassetname\b\b\b' --unitname 'u' --datadir $TEST_PRIMARY_NODE_DIR
+
+    spawn goal asset info --creator $PRIMARY_ACCOUNT_ADDRESS --unitname 'u' --datadir $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "Asset Info Failed" }
+        "Asset name:       'testassetname'" { puts "Successfully displayed asset"; close;}
+        eof { close; ::AlgorandGoal::Abort "Asset Info Unexpected Result" }
+    }
+} EXCEPTION] } {
+    puts "ERROR in goalFormattingTest: $EXCEPTION"
+    exit 1
+}
