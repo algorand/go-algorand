@@ -1078,7 +1078,9 @@ func opByteGet2(cx *evalContext) {
 func opByteSet(cx *evalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
-	cx.stack[prev].Bytes[cx.program[cx.pc+1]] = byte(cx.stack[last].Uint)
+	newstr := append([]byte(nil), cx.stack[prev].Bytes...)
+	newstr[cx.program[cx.pc+1]] = byte(cx.stack[last].Uint)
+	cx.stack[prev].Bytes = newstr
 	cx.stack = cx.stack[:last]
 	cx.nextpc = cx.pc + 2
 }
@@ -1087,7 +1089,9 @@ func opByteSet2(cx *evalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	pprev := prev - 1
-	cx.stack[pprev].Bytes[cx.stack[prev].Uint] = byte(cx.stack[last].Uint)
+	newstr := append([]byte(nil), cx.stack[pprev].Bytes...)
+	newstr[cx.stack[prev].Uint] = byte(cx.stack[last].Uint)
+	cx.stack[pprev].Bytes = newstr
 	cx.stack = cx.stack[:prev]
 }
 
