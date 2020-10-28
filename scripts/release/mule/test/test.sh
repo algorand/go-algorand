@@ -11,7 +11,7 @@ export ARCH_TYPE
 OS_TYPE=$(./scripts/ostype.sh)
 export OS_TYPE
 
-export BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
+export BRANCH=${BRANCH:-$(./scripts/compute_branch.sh)}
 export CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
 export NETWORK=${NETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
 export SHA=${SHA:-$(git rev-parse HEAD)}
