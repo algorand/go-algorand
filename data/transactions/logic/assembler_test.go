@@ -1587,3 +1587,16 @@ func TestAssembleConstants(t *testing.T) {
 		})
 	}
 }
+
+func TestErrShortBytecblock(t *testing.T) {
+	text := `intcblock 0x1234567812345678 0x1234567812345671 0x1234567812345672 0x1234567812345673 4 5 6 7 8`
+	program, err := AssembleStringWithVersion(text, 1)
+	require.NoError(t, err)
+	_, _, err = parseIntcblock(program, 0)
+	require.Equal(t, err, errShortIntcblock)
+
+	var cx evalContext
+	cx.program = program
+	checkIntConstBlock(&cx)
+	require.Equal(t, cx.err, errShortIntcblock)
+}
