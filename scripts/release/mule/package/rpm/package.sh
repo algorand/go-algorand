@@ -6,7 +6,7 @@ echo "Building RPM package"
 
 REPO_DIR=$(pwd)
 FULLVERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
-BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
+BRANCH=${BRANCH:-$(./scripts/compute_branch.sh "$BRANCH")}
 CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
 # TODO: Should there be a default network?
 DEFAULTNETWORK=devnet
