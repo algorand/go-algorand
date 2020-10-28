@@ -41,7 +41,9 @@ type LeaseInLedgerError struct {
 
 // Error implements the error interface for the LeaseInLedgerError stuct
 func (lile LeaseInLedgerError) Error() string {
-	return fmt.Sprintf("transaction %v using a currently used lease %v", lile.txid, lile.lease)
+	// format the lease as address.
+	addr := basics.Address(lile.lease.lease)
+	return fmt.Sprintf("transaction %v using an overlapping lease %s", lile.txid, addr.String())
 }
 
 // BlockInLedgerError is returned when a block cannot be added because it has already been done
