@@ -1063,12 +1063,15 @@ func opBitRsh(cx *evalContext) {
 func opByteGet(cx *evalContext) {
 	last := len(cx.stack) - 1
 	cx.stack[last].Uint = uint64(cx.stack[last].Bytes[cx.program[cx.pc+1]])
+	cx.stack[last].Bytes = nil
+	cx.nextpc = cx.pc + 2
 }
 
 func opByteGet2(cx *evalContext) {
 	last := len(cx.stack) - 1
 	prev := last - 1
 	cx.stack[prev].Uint = uint64(cx.stack[prev].Bytes[byte(cx.stack[last].Uint)])
+	cx.stack[prev].Bytes = nil
 	cx.stack = cx.stack[:last]
 }
 
@@ -1077,6 +1080,7 @@ func opByteSet(cx *evalContext) {
 	prev := last - 1
 	cx.stack[prev].Bytes[cx.program[cx.pc+1]] = byte(cx.stack[last].Uint)
 	cx.stack = cx.stack[:last]
+	cx.nextpc = cx.pc + 2
 }
 
 func opByteSet2(cx *evalContext) {
