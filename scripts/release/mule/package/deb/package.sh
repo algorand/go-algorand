@@ -14,7 +14,7 @@ VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 ALGORAND_PACKAGE_NAME=${1:-$(./scripts/compute_package_name.sh "$CHANNEL")}
 PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 
-DEFAULTNETWORK=$("./scripts/compute_branch_network.sh")
+DEFAULTNETWORK=${DEFAULTNETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
 DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "$DEFAULTNETWORK")
 export DEFAULT_RELEASE_NETWORK
 
