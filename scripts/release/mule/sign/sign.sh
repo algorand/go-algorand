@@ -16,6 +16,14 @@ PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 SIGNING_KEY_ADDR=dev@algorand.com
 STATUSFILE="build_status_${CHANNEL}_${VERSION}"
 
+# It seems that copying/mounting the gpg dir from another machine can result in insecure
+# access privileges, so set the correct permissions to avoid the following warning:
+#
+#   gpg: WARNING: unsafe permissions on homedir '/root/.gnupg'
+#
+find /root/.gnupg -type d -exec chmod 700 {} \;
+find /root/.gnupg -type f -exec chmod 600 {} \;
+
 mkdir -p "$PKG_DIR"
 cd "$PKG_DIR"
 
@@ -39,7 +47,7 @@ do
     gpg -u rpm@algorand.com --detach-sign "$file"
 done
 
-HASHFILE=hashes_${CHANNEL}_${OS_TYPE}_${ARCH_TYPE}_${VERSION}
+HASHFILE="hashes_${CHANNEL}_${OS_TYPE}_${ARCH_TYPE}_${VERSION}"
 
 md5sum *.tar.gz *.deb *.rpm >> "$HASHFILE"
 shasum -a 256 *.tar.gz *.deb *.rpm >> "$HASHFILE"
