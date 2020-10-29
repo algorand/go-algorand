@@ -12,6 +12,9 @@ fi
 if [ "${BRANCH}" = "rel/stable" ]; then
     echo "testnet"
     exit 0
+elif [ "${BRANCH}" = "rel/beta" ]; then
+    echo "betanet"
+    exit 0
 fi
 
 #get parent of current branch
