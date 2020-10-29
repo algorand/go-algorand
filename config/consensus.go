@@ -298,7 +298,7 @@ type ConsensusParams struct {
 	// to limit the maximum size of a single balance record
 	MaximumMinimumBalance uint64
 
-	// CompactCertRounds defines the frequency with with compact
+	// CompactCertRounds defines the frequency with which compact
 	// certificates are generated.  Every round that is a multiple
 	// of CompactCertRounds, the block header will include a Merkle
 	// commitment to the set of online accounts (that can vote after
