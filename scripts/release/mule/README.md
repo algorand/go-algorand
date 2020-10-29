@@ -70,7 +70,6 @@ In addition, make sure that the following AWS credentials are set in environment
 
 - customizable environment variables:
 
-    + `ARCH_BIT`, i.e., the value from `uname -m`
     + `BRANCH`
     + `CHANNEL`
     + `NETWORK`
@@ -95,7 +94,6 @@ In addition, make sure that the following AWS credentials are set in environment
 
 - customizable environment variables:
 
-    + `ARCH_BIT`, i.e., the value from `uname -m`
     + `BRANCH`
     + `CHANNEL`
     + `S3_SOURCE`, i.e., the S3 bucket from which to download

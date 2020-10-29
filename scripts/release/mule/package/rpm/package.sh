@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=2086,2162
 
 set -ex
 
@@ -6,10 +7,9 @@ echo "Building RPM package"
 
 REPO_DIR=$(pwd)
 FULLVERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
-BRANCH=${BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
+BRANCH=${BRANCH:-$(./scripts/compute_branch.sh)}
 CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
-# TODO: Should there be a default network?
-DEFAULTNETWORK=devnet
+DEFAULTNETWORK=${DEFAULTNETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
 DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "$DEFAULTNETWORK")
 
 find tmp/node_pkgs -name "*${CHANNEL}*linux*${FULLVERSION}*.tar.gz" | cut -d '/' -f3-4 | sort --unique | while read OS_ARCH; do
