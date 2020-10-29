@@ -4,8 +4,6 @@
 set -ex
 
 export PKG_TYPE="$1"
-ARCH_BIT=$(uname -m)
-export ARCH_BIT
 ARCH_TYPE=$(./scripts/archtype.sh)
 export ARCH_TYPE
 OS_TYPE=$(./scripts/ostype.sh)
@@ -30,8 +28,8 @@ then
     aws s3 cp "s3://$PREFIX/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
 
     # rpm
-    aws s3 cp "s3://$PREFIX/algorand-$VERSION-1.$ARCH_BIT.rpm" .
-    aws s3 cp "s3://$PREFIX/algorand-devtools-$VERSION-1.$ARCH_BIT.rpm" .
+    aws s3 cp "s3://$PREFIX/algorand-$CHANNEL-$VERSION-1.$ARCH_TYPE.rpm" .
+    aws s3 cp "s3://$PREFIX/algorand-devtools-$CHANNEL-$VERSION-1.$ARCH_TYPE.rpm" .
 fi
 
 popd
@@ -52,8 +50,8 @@ else
     # Normally, this is installed for us b/c it's a dependency.
     # See `./installer/rpm/algorand/algorand.spec`.
     yum install yum-cron -y
-    rpm -i algorand-"$VERSION"-1."$ARCH_BIT".rpm
-    rpm -i algorand-devtools-"$VERSION"-1."$ARCH_BIT".rpm
+    rpm -i algorand-"$VERSION"-1."$ARCH_TYPE".rpm
+    rpm -i algorand-devtools-"$VERSION"-1."$ARCH_TYPE".rpm
 fi
 
 popd
