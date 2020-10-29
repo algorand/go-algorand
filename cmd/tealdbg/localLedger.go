@@ -28,8 +28,11 @@ import (
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/apply"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // AccountIndexerResponse represents the Account Response object from querying indexer
@@ -54,21 +57,20 @@ type ApplicationIndexerResponse struct {
 	CurrentRound uint64 `json:"current-round"`
 }
 
-type balancesAdapter struct {
+type localLedger struct {
 	balances        map[basics.Address]basics.AccountData
 	txnGroup        []transactions.SignedTxn
 	groupIndex      int
-	proto           config.ConsensusParams
 	round           uint64
-	appIdx          basics.AppIndex
+	aidx            basics.AppIndex
 	latestTimestamp int64
 }
 
-func makeAppLedger(
+func makeBalancesAdapter(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
-	groupIndex int, proto config.ConsensusParams, round uint64, latestTimestamp int64,
+	groupIndex int, proto string, round uint64, latestTimestamp int64,
 	appIdx basics.AppIndex, painless bool, indexerURL string, indexerToken string,
-) (logic.LedgerForLogic, AppState, error) {
+) (apply.Balances, AppState, error) {
 
 	if groupIndex >= len(txnGroup) {
 		return nil, AppState{}, fmt.Errorf("invalid groupIndex %d exceed txn group length %d", groupIndex, len(txnGroup))
@@ -105,11 +107,10 @@ func makeAppLedger(
 		}
 	}
 
-	ba := &balancesAdapter{
+	ll := &localLedger{
 		balances:   balances,
 		txnGroup:   txnGroup,
 		groupIndex: groupIndex,
-		proto:      proto,
 		round:      round,
 	}
 
@@ -177,8 +178,8 @@ func makeAppLedger(
 		}
 	}
 
-	ba.appIdx = appIdx
-	ba.latestTimestamp = latestTimestamp
+	ba := ledger.MakeDebugBalances(ll, basics.Round(round), protocol.ConsensusVersion(proto), latestTimestamp)
+	ll.aidx = appIdx
 	return ba, states, nil
 }
 
@@ -269,23 +270,23 @@ func getRandomAddress() (basics.Address, error) {
 	return basics.Address(address), nil
 }
 
-func (ba *balancesAdapter) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
-	br, ok := ba.balances[addr]
-	if !ok {
-		return basics.BalanceRecord{}, nil
-	}
-	return basics.BalanceRecord{Addr: addr, AccountData: br}, nil
+func (l *localLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{}, nil
 }
 
-func (ba *balancesAdapter) Round() basics.Round {
-	return basics.Round(ba.round)
+func (l *localLedger) IsDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledger.TxLease) (bool, error) {
+	return false, nil
 }
 
-func (ba *balancesAdapter) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+func (l *localLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
+	return l.balances[addr], rnd, nil
+}
+
+func (l *localLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	switch ctype {
 	case basics.AssetCreatable:
 		assetIdx := basics.AssetIndex(cidx)
-		for addr, br := range ba.balances {
+		for addr, br := range l.balances {
 			if _, ok := br.AssetParams[assetIdx]; ok {
 				return addr, true, nil
 			}
@@ -293,7 +294,7 @@ func (ba *balancesAdapter) GetCreator(cidx basics.CreatableIndex, ctype basics.C
 		return basics.Address{}, false, nil
 	case basics.AppCreatable:
 		appIdx := basics.AppIndex(cidx)
-		for addr, br := range ba.balances {
+		for addr, br := range l.balances {
 			if _, ok := br.AppParams[appIdx]; ok {
 				return addr, true, nil
 			}
@@ -303,116 +304,68 @@ func (ba *balancesAdapter) GetCreator(cidx basics.CreatableIndex, ctype basics.C
 	return basics.Address{}, false, fmt.Errorf("unknown creatable type %d", ctype)
 }
 
-func (ba *balancesAdapter) ConsensusParams() config.ConsensusParams {
-	return ba.proto
-}
+func (l *localLedger) GetKeyForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool, key string) (value basics.TealValue, exists bool, err error) {
+	if aidx == 0 {
+		aidx = l.aidx
+	}
 
-func (ba *balancesAdapter) PutWithCreatable(basics.BalanceRecord, *basics.CreatableLocator, *basics.CreatableLocator) error {
-	return nil
-}
-
-func (ba *balancesAdapter) Put(basics.BalanceRecord) error {
-	return nil
-}
-
-func (ba *balancesAdapter) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards, dstRewards *basics.MicroAlgos) error {
-	return nil
-}
-
-func (ba *balancesAdapter) ApplicationID() basics.AppIndex {
-	return ba.appIdx
-}
-
-func (ba *balancesAdapter) LatestTimestamp() int64 {
-	return ba.latestTimestamp
-}
-
-func (ba *balancesAdapter) AssetHolding(addr basics.Address, assetIdx basics.AssetIndex) (holding basics.AssetHolding, err error) {
-	br, ok := ba.balances[addr]
+	br, ok := l.balances[addr]
 	if !ok {
-		err = fmt.Errorf("account %s has not opted in to asset %d", addr.String(), assetIdx)
+		err = fmt.Errorf("no balance record for %s", addr.String())
 		return
 	}
 
-	holding, ok = br.Assets[assetIdx]
-	if !ok {
-		err = fmt.Errorf("account %s has not opted in to asset %d", addr.String(), assetIdx)
-	}
-
-	return
-}
-
-func (ba *balancesAdapter) AssetParams(assetIdx basics.AssetIndex) (basics.AssetParams, error) {
-	for _, br := range ba.balances {
-		params, ok := br.AssetParams[assetIdx]
-		if ok {
-			return params, nil
-		}
-	}
-
-	return basics.AssetParams{}, nil
-}
-
-func (ba *balancesAdapter) Balance(addr basics.Address) (basics.MicroAlgos, error) {
-	br := ba.balances[addr]
-	return br.MicroAlgos, nil
-}
-
-func (ba *balancesAdapter) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
-	if appIdx == 0 {
-		appIdx = ba.appIdx
-	}
-
-	br, ok := ba.balances[addr]
-	if !ok {
-		return false, nil
-	}
-
-	_, ok = br.AppLocalStates[appIdx]
-	return ok, nil
-}
-
-func (ba *balancesAdapter) GetGlobal(appIdx basics.AppIndex, key string) (value basics.TealValue, exists bool, err error) {
-	if appIdx == 0 {
-		appIdx = ba.appIdx
-	}
-
-	for _, br := range ba.balances {
-		params, ok := br.AppParams[appIdx]
-		if ok {
-			value, exists = params.GlobalState[key]
+	if global {
+		params, ok := br.AppParams[aidx]
+		if !ok {
+			err = fmt.Errorf("app %d does not exist", aidx)
 			return
 		}
-	}
-	err = fmt.Errorf("app %d does not exist", appIdx)
-	return
-}
-
-func (ba *balancesAdapter) GetLocal(addr basics.Address, appIdx basics.AppIndex, key string) (value basics.TealValue, exists bool, err error) {
-	if appIdx == 0 {
-		appIdx = ba.appIdx
-	}
-
-	br, ok := ba.balances[addr]
-	if !ok {
-		err = fmt.Errorf("addr %s not opted in to app %d, cannot fetch state", addr.String(), appIdx)
+		value, exists = params.GlobalState[key]
 		return
 	}
 
-	local, ok := br.AppLocalStates[appIdx]
+	kv, ok := br.AppLocalStates[aidx]
 	if !ok {
-		err = fmt.Errorf("addr %s not opted in to app %d, cannot fetch state", addr.String(), appIdx)
+		err = fmt.Errorf("addr %s not opted in to app %d, cannot fetch state", addr.String(), aidx)
 		return
 	}
 
-	value, exists = local.KeyValue[key]
+	value, exists = kv.KeyValue[key]
 	return
 }
 
-func (ba *balancesAdapter) SetLocal(addr basics.Address, key string, value basics.TealValue) error {
-	return nil
-}
-func (ba *balancesAdapter) DelLocal(addr basics.Address, key string) error { return nil }
+func (l *localLedger) CountStorageForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool) (storage basics.StateSchema, err error) {
+	if aidx == 0 {
+		aidx = l.aidx
+	}
 
-func (ba *balancesAdapter) SetGlobal(key string, value basics.TealValue) error { return nil }
-func (ba *balancesAdapter) DelGlobal(key string) error                         { return nil }
+	br, ok := l.balances[addr]
+	if !ok {
+		err = fmt.Errorf("no balance record for %s", addr.String())
+		return
+	}
+
+	count := func(kv basics.TealKeyValue) (s basics.StateSchema) {
+		for _, v := range kv {
+			if v.Type == basics.TealBytesType {
+				s.NumByteSlice++
+			} else {
+				s.NumUint++
+			}
+		}
+		return s
+	}
+
+	if global {
+		params, ok := br.AppParams[aidx]
+		if !ok {
+			err = fmt.Errorf("app %d does not exist", aidx)
+			return
+		}
+		return count(params.GlobalState), nil
+	}
+
+	kv, ok := br.AppLocalStates[aidx]
+	return count(kv.KeyValue), nil
+}

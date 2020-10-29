@@ -51,7 +51,7 @@ type Control interface {
 
 	GetSourceMap() ([]byte, error)
 	GetSource() (string, []byte)
-	GetStates(changes *logic.AppStateChange) AppState
+	GetStates(s *logic.DebugState) AppState
 }
 
 // Debugger is TEAL event-driven debugger
@@ -293,8 +293,8 @@ func (s *session) GetSource() (string, []byte) {
 	return s.programName, []byte(s.source)
 }
 
-func (s *session) GetStates(changes *logic.AppStateChange) AppState {
-	if changes == nil {
+func (s *session) GetStates(st *logic.DebugState) AppState {
+	if st == nil {
 		return s.states
 	}
 
@@ -316,16 +316,20 @@ func (s *session) GetStates(changes *logic.AppStateChange) AppState {
 		}
 	}
 
-	if len(changes.GlobalStateChanges) > 0 {
+	changes := st.EvalDelta
+	if len(changes.GlobalDelta) > 0 {
 		tkv := newStates.global[appIdx]
 		if tkv == nil {
 			tkv = make(basics.TealKeyValue)
 		}
-		applyDelta(changes.GlobalStateChanges, tkv)
+		applyDelta(changes.GlobalDelta, tkv)
 		newStates.global[appIdx] = tkv
 	}
 
-	for addr, delta := range changes.LocalStateChanges {
+	txn := st.TxnGroup[st.GroupIndex].Txn
+	accounts := append([]basics.Address{txn.Sender}, txn.Accounts...)
+	for idx, delta := range changes.LocalDeltas {
+		addr := accounts[idx]
 		local := newStates.locals[addr]
 		if local == nil {
 			local = make(map[basics.AppIndex]basics.TealKeyValue)

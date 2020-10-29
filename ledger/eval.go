@@ -52,7 +52,7 @@ type VerifiedTxnCache interface {
 }
 
 type roundCowBase struct {
-	l LedgerForCow
+	l LedgerForCowBase
 
 	// The round number of the previous block, for looking up prior state.
 	rnd basics.Round
@@ -274,14 +274,14 @@ type BlockEvaluator struct {
 }
 
 type ledgerForEvaluator interface {
-	LedgerForCow
+	LedgerForCowBase
 	GenesisHash() crypto.Digest
 	Totals(basics.Round) (AccountTotals, error)
 	CompactCertVoters(basics.Round) (*VotersForRound, error)
 }
 
-// LedgerForCow represents subset of Ledger functionality needed for cow business
-type LedgerForCow interface {
+// LedgerForCowBase represents subset of Ledger functionality needed for cow business
+type LedgerForCowBase interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	IsDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) (bool, error)
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)

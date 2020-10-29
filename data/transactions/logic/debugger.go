@@ -76,13 +76,7 @@ type DebugState struct {
 	Error   string             `codec:"error"`
 
 	// global/local state changes are updated every step. Stateful TEAL only.
-	AppStateChange
-}
-
-// AppStateChange encapsulates global and local app state changes
-type AppStateChange struct {
-	GlobalStateChanges basics.StateDelta                    `codec:"gsch"`
-	LocalStateChanges  map[basics.Address]basics.StateDelta `codec:"lsch"`
+	basics.EvalDelta
 }
 
 // GetProgramID returns program or execution ID that is string representation of sha256 checksum.
@@ -121,13 +115,13 @@ func makeDebugState(cx *evalContext) DebugState {
 
 	// pre-allocate state maps
 	if (cx.runModeFlags & runModeApplication) != 0 {
-		ds.GlobalStateChanges = make(basics.StateDelta)
-
-		// allocate maximum possible slots in the hashmap even if Txn.Accounts might have duplicate entries
-		locals := 1 + len(cx.Txn.Txn.Accounts) // sender + referenced accounts
-		ds.LocalStateChanges = make(map[basics.Address]basics.StateDelta, locals)
-
-		// do not pre-allocate ds.LocalStateChanges[addr] since it initialized during update
+		ds.EvalDelta, err = cx.Ledger.GetDelta(&cx.Txn.Txn)
+		if err != nil {
+			sv := stackValue{Bytes: []byte(err.Error())}
+			tv := stackValueToTealValue(&sv)
+			vd := tv.ToValueDelta()
+			ds.EvalDelta.GlobalDelta = basics.StateDelta{"error": vd}
+		}
 	}
 
 	return ds
@@ -223,23 +217,16 @@ func (cx *evalContext) refreshDebugState() *DebugState {
 	ds.Stack = stack
 	ds.Scratch = scratch
 
-// TODO(app refactor, fix)
-/*
 	if (cx.runModeFlags & runModeApplication) != 0 {
-		if cx.globalStateCow != nil {
-			for k, v := range cx.globalStateCow.delta {
-				ds.GlobalStateChanges[k] = valueDeltaToValueDelta(&v)
-			}
-		}
-		for addr, cow := range cx.localStateCows {
-			delta := make(basics.StateDelta, len(cow.cow.delta))
-			for k, v := range cow.cow.delta {
-				delta[k] = valueDeltaToValueDelta(&v)
-			}
-			ds.LocalStateChanges[addr] = delta
+		var err error
+		ds.EvalDelta, err = cx.Ledger.GetDelta(&cx.Txn.Txn)
+		if err != nil {
+			sv := stackValue{Bytes: []byte(err.Error())}
+			tv := stackValueToTealValue(&sv)
+			vd := tv.ToValueDelta()
+			ds.EvalDelta.GlobalDelta = basics.StateDelta{"error": vd}
 		}
 	}
-*/
 
 	return ds
 }

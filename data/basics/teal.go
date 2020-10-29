@@ -311,23 +311,3 @@ func (tk TealKeyValue) ToStateSchema() (schema StateSchema, err error) {
 	}
 	return schema, nil
 }
-
-// SatisfiesSchema returns an error indicating whether or not a particular
-// TealKeyValue store meets the requirements set by a StateSchema on how
-// many values of each type are allowed
-func (tk TealKeyValue) SatisfiesSchema(schema StateSchema) error {
-	calc, err := tk.ToStateSchema()
-	if err != nil {
-		return err
-	}
-
-	// Check against the schema
-	if calc.NumUint > schema.NumUint {
-		return fmt.Errorf("store integer count %d exceeds schema integer count %d", calc.NumUint, schema.NumUint)
-	}
-	if calc.NumByteSlice > schema.NumByteSlice {
-		return fmt.Errorf("store bytes count %d exceeds schema bytes count %d", calc.NumByteSlice, schema.NumByteSlice)
-	}
-
-	return nil
-}

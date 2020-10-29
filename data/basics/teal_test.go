@@ -79,39 +79,6 @@ func TestStateDeltaValid(t *testing.T) {
 	a.NoError(err)
 }
 
-func TestSatisfiesSchema(t *testing.T) {
-	a := require.New(t)
-
-	tkv := TealKeyValue{}
-	schema := StateSchema{}
-	err := tkv.SatisfiesSchema(schema)
-	a.NoError(err)
-
-	tkv["key"] = TealValue{Type: TealType(10), Uint: 1}
-	err = tkv.SatisfiesSchema(schema)
-	a.Error(err)
-	a.Contains(err.Error(), "unknown type")
-
-	tkv["key"] = TealValue{Type: TealUintType, Uint: 1}
-	err = tkv.SatisfiesSchema(schema)
-	a.Error(err)
-	a.Contains(err.Error(), "exceeds schema integer count")
-
-	tkv["key"] = TealValue{Type: TealBytesType, Uint: 1, Bytes: "value"}
-	err = tkv.SatisfiesSchema(schema)
-	a.Error(err)
-	a.Contains(err.Error(), "exceeds schema bytes count")
-
-	schema.NumUint = 1
-	err = tkv.SatisfiesSchema(schema)
-	a.Error(err)
-	a.Contains(err.Error(), "exceeds schema bytes count")
-
-	schema.NumByteSlice = 1
-	err = tkv.SatisfiesSchema(schema)
-	a.NoError(err)
-}
-
 func TestStateDeltaEqual(t *testing.T) {
 	a := require.New(t)
 

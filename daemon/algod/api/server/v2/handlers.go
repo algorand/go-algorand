@@ -358,19 +358,18 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 
 	var response generated.DryrunResponse
 
-	var proto config.ConsensusParams
 	var protocolVersion protocol.ConsensusVersion
 	if dr.ProtocolVersion != "" {
 		var ok bool
-		proto, ok = config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
+		_, ok = config.Consensus[protocol.ConsensusVersion(dr.ProtocolVersion)]
 		if !ok {
 			return badRequest(ctx, nil, "unsupported protocol version", v2.Log)
 		}
 		protocolVersion = protocol.ConsensusVersion(dr.ProtocolVersion)
 	} else {
-		proto = config.Consensus[hdr.CurrentProtocol]
 		protocolVersion = hdr.CurrentProtocol
 	}
+	dr.ProtocolVersion = string(protocolVersion)
 
 	if dr.Round == 0 {
 		dr.Round = uint64(hdr.Round + 1)
@@ -380,7 +379,7 @@ func (v2 *Handlers) TealDryrun(ctx echo.Context) error {
 		dr.LatestTimestamp = hdr.TimeStamp
 	}
 
-	doDryrunRequest(&dr, &proto, &response)
+	doDryrunRequest(&dr, &response)
 	response.ProtocolVersion = string(protocolVersion)
 	return ctx.JSON(http.StatusOK, response)
 }

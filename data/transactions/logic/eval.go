@@ -139,6 +139,8 @@ type LedgerForLogic interface {
 	GetGlobal(appIdx basics.AppIndex, key string) (value basics.TealValue, exists bool, err error)
 	SetGlobal(key string, value basics.TealValue) error
 	DelGlobal(key string) error
+
+	GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error)
 }
 
 // EvalParams contains data that comes into condition evaluation.
@@ -211,16 +213,6 @@ func (ep EvalParams) log() logging.Logger {
 	return logging.Base()
 }
 
-type ckey struct {
-	app  uint64
-	addr basics.Address
-}
-
-type indexedCow struct {
-	accountIdx uint64
-	cow        *keyValueCow
-}
-
 type evalContext struct {
 	EvalParams
 
@@ -243,7 +235,6 @@ type evalContext struct {
 
 	programHashCached crypto.Digest
 	txidCache         map[int]transactions.Txid
-	appEvalDelta      basics.EvalDelta
 
 	// Stores state & disassembly for the optional debugger
 	debugState DebugState
