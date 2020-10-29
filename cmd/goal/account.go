@@ -570,10 +570,12 @@ func printAccountInfo(client libgoal.Client, address string, account v1.Account)
 		if len(name) == 0 {
 			name = "<unnamed>"
 		}
+		_, name = unicodePrintable(name)
 		units := assetParams.UnitName
 		if len(units) == 0 {
 			units = "units"
 		}
+		_, units = unicodePrintable(units)
 		total := assetDecimalsFmt(assetParams.Total, assetParams.Decimals)
 		url := ""
 		if len(assetParams.URL) != 0 {
@@ -602,11 +604,13 @@ func printAccountInfo(client libgoal.Client, address string, account v1.Account)
 		if len(assetName) == 0 {
 			assetName = "<unnamed>"
 		}
+		_, assetName = unicodePrintable(assetName)
 
 		unitName := assetParams.UnitName
 		if len(unitName) == 0 {
 			unitName = "units"
 		}
+		_, unitName = unicodePrintable(unitName)
 
 		frozen := ""
 		if assetHolding.Frozen {
