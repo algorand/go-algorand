@@ -112,11 +112,16 @@
         },
         {
             "Name": "R23",
-            "Group": "af-r",
+            "Group": "ap-r",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "R24",
+            "Group": "af-r",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "R25",
             "Group": "au-r",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
@@ -342,7 +347,7 @@
         },
         {
             "Name": "N45",
-            "Group": "au-n",
+            "Group": "af-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
@@ -362,6 +367,11 @@
         },
         {
             "Name": "N49",
+            "Group": "au-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N50",
             "Group": "au-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },

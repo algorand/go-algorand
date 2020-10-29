@@ -24,7 +24,7 @@
     {
       "name": "us-r",
       "percent": {
-        "relays": 37,
+        "relays": 36,
         "participatingNodes": 0,
         "nonParticipatingNodes": 0
       },
@@ -42,7 +42,7 @@
     {
       "name": "eu-r",
       "percent": {
-        "relays": 30,
+        "relays": 28,
         "participatingNodes": 0,
         "nonParticipatingNodes": 0
       },
@@ -52,7 +52,7 @@
       "name": "eu-n",
       "percent": {
         "relays": 0,
-        "participatingNodes": 19,
+        "participatingNodes": 18,
         "nonParticipatingNodes": 25
       },
       "region": "us-west-1"
@@ -60,7 +60,7 @@
     {
       "name": "ap-r",
       "percent": {
-        "relays": 27,
+        "relays": 28,
         "participatingNodes": 0,
         "nonParticipatingNodes": 0
       },
@@ -78,7 +78,7 @@
     {
       "name": "af-r",
       "percent": {
-        "relays": 3,
+        "relays": 4,
         "participatingNodes": 0,
         "nonParticipatingNodes": 0
       },
@@ -88,7 +88,7 @@
       "name": "af-n",
       "percent": {
         "relays": 0,
-        "participatingNodes": 13,
+        "participatingNodes": 14,
         "nonParticipatingNodes": 5
       },
       "region": "us-west-1"
@@ -96,7 +96,7 @@
     {
       "name": "au-r",
       "percent": {
-        "relays": 3,
+        "relays": 4,
         "participatingNodes": 0,
         "nonParticipatingNodes": 0
       },
