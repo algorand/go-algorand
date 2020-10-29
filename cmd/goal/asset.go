@@ -604,7 +604,7 @@ var infoAssetCmd = &cobra.Command{
 		fmt.Printf("Asset ID:         %d\n", assetID)
 		fmt.Printf("Creator:          %s\n", params.Creator)
 		reportInfof("Asset name:       %s\n", params.AssetName)
-		fmt.Printf("Unit name:        %s\n", params.UnitName)
+		reportInfof("Unit name:        %s\n", params.UnitName)
 		fmt.Printf("Maximum issue:    %s %s\n", assetDecimalsFmt(params.Total, params.Decimals), params.UnitName)
 		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(res.Amount, params.Decimals), params.UnitName)
 		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(params.Total-res.Amount, params.Decimals), params.UnitName)

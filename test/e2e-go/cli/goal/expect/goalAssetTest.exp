@@ -41,6 +41,13 @@ if { [catch {
         "Asset name:       'testassetname'" { puts "Successfully displayed asset"; close;}
         eof { close; ::AlgorandGoal::Abort "Asset Info Unexpected Result" }
     }
+
+    spawn goal account info --address $PRIMARY_ACCOUNT_ADDRESS --datadir $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "Account Info Failed" }
+        "'testassetname', supply" { puts "Successfully displayed account asset"; close;}
+        eof { close; ::AlgorandGoal::Abort "Account Info Unexpected Result" }
+    }
 } EXCEPTION] } {
     puts "ERROR in goalFormattingTest: $EXCEPTION"
     exit 1
