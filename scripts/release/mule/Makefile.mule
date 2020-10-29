@@ -48,7 +48,6 @@ mule-deploy-rpm:
 mule-docker:
 	scripts/release/mule/deploy/docker/docker.sh
 
-mule-package-deb: ci-build
 mule-package-%: PKG_TYPE=$*
 mule-package-%:
 	echo Building algorand package...

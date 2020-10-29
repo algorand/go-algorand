@@ -59,7 +59,7 @@ tasks:
     target: mule-deploy-rpm
 
 jobs:
-  package-deploy:
+  package-deploy-rpm:
     tasks:
       - docker.Make.rpm
 

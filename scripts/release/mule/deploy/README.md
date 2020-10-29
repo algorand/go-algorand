@@ -1,4 +1,4 @@
-## Manual deploy steps
+## Manual deploy steps for deb packages
 
 It's **very** important that the docker container is run **before** the `release-page` **and** the `docker-hub` `mule` tasks in `package-deploy`.
 
