@@ -152,101 +152,226 @@
         },
         {
             "Name": "N6",
-            "Group": "eu-n",
+            "Group": "us-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N7",
-            "Group": "eu-n",
+            "Group": "us-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N8",
-            "Group": "eu-n",
+            "Group": "us-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N9",
-            "Group": "eu-n",
+            "Group": "us-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N10",
-            "Group": "eu-n",
+            "Group": "us-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N11",
-            "Group": "ap-n",
+            "Group": "eu-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N12",
-            "Group": "ap-n",
+            "Group": "eu-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N13",
-            "Group": "ap-n",
+            "Group": "eu-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N14",
-            "Group": "ap-n",
+            "Group": "eu-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N15",
-            "Group": "ap-n",
+            "Group": "eu-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N16",
-            "Group": "af-n",
+            "Group": "eu-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N17",
-            "Group": "af-n",
+            "Group": "eu-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N18",
-            "Group": "af-n",
+            "Group": "eu-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N19",
-            "Group": "af-n",
+            "Group": "eu-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N20",
-            "Group": "af-n",
+            "Group": "eu-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N21",
-            "Group": "au-n",
+            "Group": "ap-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N22",
-            "Group": "au-n",
+            "Group": "ap-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N23",
-            "Group": "au-n",
+            "Group": "ap-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N24",
-            "Group": "au-n",
+            "Group": "ap-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
         {
             "Name": "N25",
+            "Group": "ap-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N26",
+            "Group": "ap-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N27",
+            "Group": "ap-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N28",
+            "Group": "ap-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N29",
+            "Group": "ap-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N30",
+            "Group": "ap-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N31",
+            "Group": "af-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N32",
+            "Group": "af-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N33",
+            "Group": "af-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N34",
+            "Group": "af-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N35",
+            "Group": "af-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N36",
+            "Group": "af-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N37",
+            "Group": "af-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N38",
+            "Group": "af-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N39",
+            "Group": "af-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N40",
+            "Group": "af-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N41",
+            "Group": "au-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N42",
+            "Group": "au-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N43",
+            "Group": "au-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N44",
+            "Group": "au-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N45",
+            "Group": "au-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N46",
+            "Group": "au-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N47",
+            "Group": "au-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N48",
+            "Group": "au-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N49",
+            "Group": "au-n",
+            "Template": "AWS-US-WEST-1-c5.xlarge"
+        },
+        {
+            "Name": "N50",
             "Group": "au-n",
             "Template": "AWS-US-WEST-1-c5.xlarge"
         },
