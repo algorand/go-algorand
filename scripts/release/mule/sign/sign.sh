@@ -64,12 +64,8 @@ shasum -a 512 *.tar.gz *.deb *.rpm >> "$HASHFILE"
 gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$HASHFILE"
 gpg -u "$SIGNING_KEY_ADDR" --clearsign "$HASHFILE"
 
-# The status file *should* be present, but let's check to be safe.
-if [ -f "$STATUSFILE" ]
-then
-    gpg -u "$SIGNING_KEY_ADDR" --clearsign "$STATUSFILE"
-    gzip -c "$STATUSFILE.asc" > "$STATUSFILE.asc.gz"
-fi
+gpg -u "$SIGNING_KEY_ADDR" --clearsign "$STATUSFILE"
+gzip -c "$STATUSFILE.asc" > "$STATUSFILE.asc.gz"
 
 echo
 date "+build_release end SIGN stage %Y%m%d_%H%M%S"
