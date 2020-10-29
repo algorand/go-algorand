@@ -312,7 +312,7 @@ func (ccw *Worker) tryBuilding() {
 
 		cert, err := b.Build()
 		if err != nil {
-			ccw.log.Warnf("building compact cert for %d: %v", rnd, err)
+			ccw.log.Warnf("ccw.tryBuilding: building compact cert for %d: %v", rnd, err)
 			continue
 		}
 
@@ -326,7 +326,7 @@ func (ccw *Worker) tryBuilding() {
 		stxn.Txn.Cert = *cert
 		err = ccw.txnSender.BroadcastSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
-			ccw.log.Warnf("broadcasting compact cert txn for %d: %v", rnd, err)
+			ccw.log.Warnf("ccw.tryBuilding: broadcasting compact cert txn for %d: %v", rnd, err)
 		}
 	}
 }
