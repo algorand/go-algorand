@@ -12,9 +12,8 @@ CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 # A make target in Makefile.mule may pass the name as an argument.
 ALGORAND_PACKAGE_NAME=${1:-$(./scripts/compute_package_name.sh "$CHANNEL")}
-PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 
-DEFAULTNETWORK=$("./scripts/compute_branch_network.sh")
+DEFAULTNETWORK=${DEFAULTNETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
 DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "$DEFAULTNETWORK")
 export DEFAULT_RELEASE_NETWORK
 
@@ -25,20 +24,20 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3
     mkdir -p "${PKG_ROOT}/usr/bin"
     OS_TYPE=$(echo "${OS_ARCH}" | cut -d '/' -f1)
     ARCH=$(echo "${OS_ARCH}" | cut -d '/' -f2)
-    OUTDIR="./tmp/node_pkgs/$OS_TYPE/$ARCH"
-    mkdir -p "$OUTDIR/bin"
-    ALGO_BIN="./tmp/node_pkgs/$OS_TYPE/$ARCH/$CHANNEL/$OS_TYPE-$ARCH/bin"
+    PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH"
+    mkdir -p "$PKG_DIR/bin"
+    ALGO_BIN="${PKG_DIR}/$CHANNEL/$OS_TYPE-$ARCH/bin"
 
     # NOTE: keep in sync with `./installer/rpm/algorand.spec`.
     if [[ "$ALGORAND_PACKAGE_NAME" =~ devtools ]]; then
         BIN_FILES=("carpenter" "catchupsrv" "msgpacktool" "tealcut" "tealdbg")
         UNATTENDED_UPGRADES_FILE="53algorand-devtools-upgrades"
-        OUTPUT_DEB="$OUTDIR/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH}_${VERSION}.deb"
+        OUTPUT_DEB="$PKG_DIR/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH}_${VERSION}.deb"
         REQUIRED_ALGORAND_PKG=$("./scripts/compute_package_name.sh" "$CHANNEL")
     else
         BIN_FILES=("algocfg" "algod" "algoh" "algokey" "ddconfig.sh" "diagcfg" "goal" "kmd" "node_exporter")
         UNATTENDED_UPGRADES_FILE="51algorand-upgrades"
-        OUTPUT_DEB="$OUTDIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH}_${VERSION}.deb"
+        OUTPUT_DEB="$PKG_DIR/algorand_${CHANNEL}_${OS_TYPE}-${ARCH}_${VERSION}.deb"
     fi
 
     for binary in "${BIN_FILES[@]}"; do
