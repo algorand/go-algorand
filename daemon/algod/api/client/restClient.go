@@ -123,14 +123,14 @@ func extractError(resp *http.Response) error {
 	}
 
 	errorBuf, _ := ioutil.ReadAll(resp.Body) // ignore returned error
+	errorString := filterASCII(string(errorBuf))
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		errorString := filterASCII(string(errorBuf))
 		apiToken := resp.Request.Header.Get(authHeader)
 		return unauthorizedRequestError{errorString, apiToken, resp.Request.URL.String()}
 	}
 
-	return fmt.Errorf("HTTP %v: %s", resp.Status, errorBuf)
+	return fmt.Errorf("HTTP %s: %s", resp.Status, errorString)
 }
 
 // stripTransaction gets a transaction of the form "tx-XXXXXXXX" and truncates the "tx-" part, if it starts with "tx-"
