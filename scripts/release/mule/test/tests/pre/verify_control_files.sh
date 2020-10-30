@@ -32,7 +32,7 @@ else
     # attempt to generate the .spec file, but it doesn't give us the info we need.
     #
     # Instead, we'll just install using `dpkg` and grep the error stream.
-    if ! rpm -i "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/algorand-devtools-$VERSION"*"$ARCH_TYPE".rpm 2> "$RPMTMP/rpm.install"
+    if ! rpm -i "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/algorand-devtools-$VERSION"*"$ARCH_BIT".rpm 2> "$RPMTMP/rpm.install"
     then
         #
         # We're looking for lines that looks like the following:
