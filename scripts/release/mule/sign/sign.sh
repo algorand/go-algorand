@@ -9,7 +9,6 @@ echo
 date "+build_release begin SIGN stage %Y%m%d_%H%M%S"
 echo
 
-OS_TYPE=$(./scripts/ostype.sh)
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 BRANCH=${BRANCH:-$(./scripts/compute_branch.sh)}
 CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
@@ -46,7 +45,7 @@ for os in "${OS_TYPES[@]}"; do
         ARCHS=(amd64 arm arm64)
         for arch in "${ARCHS[@]}"; do
             (
-                cd "$OS_TYPE/$arch"
+                cd "$os/$arch"
 
                 # Clean package directory of any previous operations.
                 rm -rf hashes* *.sig *.asc *.asc.gz
@@ -61,7 +60,7 @@ for os in "${OS_TYPES[@]}"; do
                     gpg -u rpm@algorand.com --detach-sign "$file"
                 done
 
-                HASHFILE="hashes_${CHANNEL}_${OS_TYPE}_${ARCH_TYPE}_${VERSION}"
+                HASHFILE="hashes_${CHANNEL}_${os}_${arch}_${VERSION}"
 
                 md5sum *.tar.gz *.deb *.rpm >> "$HASHFILE"
                 shasum -a 256 *.tar.gz *.deb *.rpm >> "$HASHFILE"
