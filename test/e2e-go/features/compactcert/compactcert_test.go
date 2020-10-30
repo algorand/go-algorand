@@ -63,7 +63,7 @@ func TestCompactCerts(t *testing.T) {
 		blk, err := libgoal.Block(rnd)
 		r.NoError(err)
 
-		// fmt.Printf("Round %d, block %v\n", rnd, blk)
+		t.Logf("Round %d, block %v\n", rnd, blk)
 
 		if (rnd % consensusParams.CompactCertRounds) == 0 {
 			// Must have a merkle commitment for participants
