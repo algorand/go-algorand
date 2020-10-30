@@ -21,7 +21,6 @@ DEVTOOLS_PACKAGE_NAME=$([ "$CHANNEL" = beta ] && echo algorand-devtools-beta || 
 export ALGORAND_PACKAGE_NAME
 export DEVTOOLS_PACKAGE_NAME
 
-# Note that currently we are only supporting amd64 packages (20201030).
 PKG_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 
 mkdir -p "$PKG_DIR"
