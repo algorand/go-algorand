@@ -57,25 +57,6 @@ const (
 	APIVersionV2 APIVersion = "v2"
 )
 
-// unauthorizedRequestError is generated when we receive 401 error from the server. This error includes the inner error
-// as well as the likely parameters that caused the issue.
-type unauthorizedRequestError struct {
-	innerError error
-	apiToken   string
-	url        string
-}
-
-// Error format an error string for the unauthorizedRequestError error.
-func (e unauthorizedRequestError) Error() string {
-	return fmt.Sprintf("Unauthorized request to `%s` when using token `%s` : %v", e.url, e.apiToken, e.innerError)
-}
-
-// Unwrap unfold and reveal the internal error that triggered the creation of this error. Note that
-// the internal error would lack the operational parameters which might have triggered the error
-func (e unauthorizedRequestError) Unwrap() error {
-	return e.innerError
-}
-
 // rawRequestPaths is a set of paths where the body should not be urlencoded
 var rawRequestPaths = map[string]bool{
 	"/v1/transactions": true,
@@ -170,9 +151,6 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 	httpClient := &http.Client{}
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		if resp.StatusCode == http.StatusUnauthorized {
-			return unauthorizedRequestError{err, client.apiToken, queryURL.String()}
-		}
 		return err
 	}
 
