@@ -64,6 +64,19 @@ var rawRequestPaths = map[string]bool{
 	"/v2/teal/compile": true,
 }
 
+// unauthorizedRequestError is generated when we receive 401 error from the server. This error includes the inner error
+// as well as the likely parameters that caused the issue.
+type unauthorizedRequestError struct {
+	errorString string
+	apiToken    string
+	url         string
+}
+
+// Error format an error string for the unauthorizedRequestError error.
+func (e unauthorizedRequestError) Error() string {
+	return fmt.Sprintf("Unauthorized request to `%s` when using token `%s` : %s", e.url, e.apiToken, e.errorString)
+}
+
 // RestClient manages the REST interface for a calling user.
 type RestClient struct {
 	serverURL       url.URL
@@ -87,15 +100,36 @@ func (client *RestClient) SetAPIVersionAffinity(affinity APIVersion) (previousAf
 	return
 }
 
+// filterASCII filter out the non-ascii printable characters out of the given input string.
+// It's used as a security qualifier before adding network provided data into an error message.
+// The function allows only characters in the range of [32..126], which excludes all the
+// control character, new lines, deletion, etc. All the alpha numeric and punctuation characters
+// are included in this range.
+func filterASCII(unfilteredString string) (filteredString string) {
+	for i, r := range unfilteredString {
+		if int(r) >= 0x20 && int(r) <= 0x7e {
+			filteredString += string(unfilteredString[i])
+		}
+	}
+	return
+}
+
 // extractError checks if the response signifies an error (for now, StatusCode != 200 or StatusCode != 201).
 // If so, it returns the error.
 // Otherwise, it returns nil.
-func extractError(resp *http.Response) error {
+func (client RestClient) extractError(resp *http.Response) error {
 	if resp.StatusCode == 200 || resp.StatusCode == 201 {
 		return nil
 	}
 
 	errorBuf, _ := ioutil.ReadAll(resp.Body) // ignore returned error
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		errorString := filterASCII(string(errorBuf))
+
+		return unauthorizedRequestError{errorString, client.apiToken, resp.Request.URL.String()}
+	}
+
 	return fmt.Errorf("HTTP %v: %s", resp.Status, errorBuf)
 }
 
@@ -158,7 +192,7 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 	resp.Body = http.MaxBytesReader(nil, resp.Body, maxRawResponseBytes)
 	defer resp.Body.Close()
 
-	err = extractError(resp)
+	err = client.extractError(resp)
 	if err != nil {
 		return err
 	}
@@ -501,7 +535,7 @@ func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryA
 	}
 	defer resp.Body.Close()
 
-	err = extractError(resp)
+	err = client.extractError(resp)
 	if err != nil {
 		return
 	}
