@@ -117,7 +117,7 @@ func filterASCII(unfilteredString string) (filteredString string) {
 // extractError checks if the response signifies an error (for now, StatusCode != 200 or StatusCode != 201).
 // If so, it returns the error.
 // Otherwise, it returns nil.
-func (client RestClient) extractError(resp *http.Response) error {
+func extractError(resp *http.Response) error {
 	if resp.StatusCode == 200 || resp.StatusCode == 201 {
 		return nil
 	}
@@ -126,8 +126,8 @@ func (client RestClient) extractError(resp *http.Response) error {
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		errorString := filterASCII(string(errorBuf))
-
-		return unauthorizedRequestError{errorString, client.apiToken, resp.Request.URL.String()}
+		apiToken := resp.Request.Header.Get(authHeader)
+		return unauthorizedRequestError{errorString, apiToken, resp.Request.URL.String()}
 	}
 
 	return fmt.Errorf("HTTP %v: %s", resp.Status, errorBuf)
@@ -192,7 +192,7 @@ func (client RestClient) submitForm(response interface{}, path string, request i
 	resp.Body = http.MaxBytesReader(nil, resp.Body, maxRawResponseBytes)
 	defer resp.Body.Close()
 
-	err = client.extractError(resp)
+	err = extractError(resp)
 	if err != nil {
 		return err
 	}
@@ -535,7 +535,7 @@ func (client RestClient) doGetWithQuery(ctx context.Context, path string, queryA
 	}
 	defer resp.Body.Close()
 
-	err = client.extractError(resp)
+	err = extractError(resp)
 	if err != nil {
 		return
 	}
