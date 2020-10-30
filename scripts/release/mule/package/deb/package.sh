@@ -7,6 +7,7 @@ echo
 date "+build_release begin PACKAGE DEB stage %Y%m%d_%H%M%S"
 echo
 
+ARCH_TYPE=$(./scripts/archtype.sh)
 BRANCH=${BRANCH:-$(./scripts/compute_branch.sh)}
 CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
@@ -134,7 +135,7 @@ EOF
 
     pushd "$PKG_DIR"
 
-    STATUSFILE=build_status_${CHANNEL}_${VERSION}
+    STATUSFILE=build_status_${CHANNEL}-${ARCH_TYPE}_${VERSION}
 
     cat >> "$STATUSFILE" << EOF
 go version:
