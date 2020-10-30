@@ -14,7 +14,6 @@ BRANCH=${BRANCH:-$(./scripts/compute_branch.sh)}
 CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
 PKG_DIR="./tmp/node_pkgs"
 SIGNING_KEY_ADDR=dev@algorand.com
-STATUSFILE="build_status_${CHANNEL}_${VERSION}"
 
 # It seems that copying/mounting the gpg dir from another machine can result in insecure
 # access privileges, so set the correct permissions to avoid the following warning:
@@ -62,7 +61,6 @@ for os in "${OS_TYPES[@]}"; do
                 done
 
                 HASHFILE="hashes_${CHANNEL}_${os}_${arch}_${VERSION}"
-
                 md5sum *.tar.gz *.deb *.rpm >> "$HASHFILE"
                 shasum -a 256 *.tar.gz *.deb *.rpm >> "$HASHFILE"
                 shasum -a 512 *.tar.gz *.deb *.rpm >> "$HASHFILE"
@@ -70,6 +68,7 @@ for os in "${OS_TYPES[@]}"; do
                 gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$HASHFILE"
                 gpg -u "$SIGNING_KEY_ADDR" --clearsign "$HASHFILE"
 
+                STATUSFILE="build_status_${CHANNEL}_${os}-${arch}_${VERSION}"
                 gpg -u "$SIGNING_KEY_ADDR" --clearsign "$STATUSFILE"
                 gzip -c "$STATUSFILE.asc" > "$STATUSFILE.asc.gz"
             )
