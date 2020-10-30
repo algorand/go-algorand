@@ -11,7 +11,7 @@ BRANCH=${BRANCH:-$(./scripts/compute_branch.sh)}
 CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 # A make target in Makefile.mule may pass the name as an argument.
-ALGORAND_PACKAGE_NAME=${1:-$(./scripts/compute_package_name.sh "$CHANNEL")}
+PACKAGE_NAME="$1"
 
 DEFAULTNETWORK=${DEFAULTNETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
 DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "$DEFAULTNETWORK")
@@ -21,6 +21,7 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3
     PKG_ROOT=$(mktemp -d)
     trap "rm -rf $PKG_ROOT" 0
 
+    ALGORAND_PACKAGE_NAME=$(./scripts/compute_package_name.sh "$CHANNEL" "$PACKAGE_NAME")
     mkdir -p "${PKG_ROOT}/usr/bin"
     OS_TYPE=$(echo "${OS_ARCH}" | cut -d '/' -f1)
     ARCH=$(echo "${OS_ARCH}" | cut -d '/' -f2)
