@@ -1,7 +1,7 @@
 {
   "network": {
     "wallets": 100,
-    "nodes": 25
+    "nodes": 50
   },
   "instances": {
     "relays": {
@@ -12,7 +12,7 @@
     "participatingNodes": {
       "config": "./configs/node.json",
       "type": "c5.xlarge",
-      "count": 25
+      "count": 50
     },
     "nonParticipatingNodes": {
       "config": "./configs/nonPartNode.json",
@@ -24,7 +24,7 @@
     {
       "name": "us-r",
       "percent": {
-        "relays": 20,
+        "relays": 36,
         "participatingNodes": 0,
         "nonParticipatingNodes": 0
       },
@@ -34,15 +34,15 @@
       "name": "us-n",
       "percent": {
         "relays": 0,
-        "participatingNodes": 20,
-        "nonParticipatingNodes": 20
+        "participatingNodes": 14,
+        "nonParticipatingNodes": 35
       },
       "region": "us-west-1"
     },
     {
       "name": "eu-r",
       "percent": {
-        "relays": 20,
+        "relays": 28,
         "participatingNodes": 0,
         "nonParticipatingNodes": 0
       },
@@ -52,15 +52,15 @@
       "name": "eu-n",
       "percent": {
         "relays": 0,
-        "participatingNodes": 20,
-        "nonParticipatingNodes": 20
+        "participatingNodes": 18,
+        "nonParticipatingNodes": 25
       },
       "region": "us-west-1"
     },
     {
       "name": "ap-r",
       "percent": {
-        "relays": 20,
+        "relays": 28,
         "participatingNodes": 0,
         "nonParticipatingNodes": 0
       },
@@ -70,15 +70,15 @@
       "name": "ap-n",
       "percent": {
         "relays": 0,
-        "participatingNodes": 20,
-        "nonParticipatingNodes": 20
+        "participatingNodes": 44,
+        "nonParticipatingNodes": 30
       },
       "region": "us-west-1"
     },
     {
       "name": "af-r",
       "percent": {
-        "relays": 20,
+        "relays": 4,
         "participatingNodes": 0,
         "nonParticipatingNodes": 0
       },
@@ -88,15 +88,15 @@
       "name": "af-n",
       "percent": {
         "relays": 0,
-        "participatingNodes": 20,
-        "nonParticipatingNodes": 20
+        "participatingNodes": 14,
+        "nonParticipatingNodes": 5
       },
       "region": "us-west-1"
     },
     {
       "name": "au-r",
       "percent": {
-        "relays": 20,
+        "relays": 4,
         "participatingNodes": 0,
         "nonParticipatingNodes": 0
       },
@@ -106,8 +106,8 @@
       "name": "au-n",
       "percent": {
         "relays": 0,
-        "participatingNodes": 20,
-        "nonParticipatingNodes": 20
+        "participatingNodes": 10,
+        "nonParticipatingNodes": 5
       },
       "region": "us-west-1"
     }
