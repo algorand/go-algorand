@@ -7,10 +7,8 @@ echo
 date "+build_release begin PACKAGE DEB stage %Y%m%d_%H%M%S"
 echo
 
-ARCH_TYPE=$(./scripts/archtype.sh)
 BRANCH=${BRANCH:-$(./scripts/compute_branch.sh)}
 CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
-OS_TYPE=$(./scripts/ostype.sh)
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 # A make target in Makefile.mule may pass the name as an argument.
 ALGORAND_PACKAGE_NAME=${1:-$(./scripts/compute_package_name.sh "$CHANNEL")}
@@ -136,7 +134,7 @@ EOF
 
     pushd "$PKG_DIR"
 
-    STATUSFILE=build_status_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}
+    STATUSFILE=build_status_${CHANNEL}_${OS_TYPE}-${ARCH}_${VERSION}
 
     cat >> "$STATUSFILE" << EOF
 go version:
