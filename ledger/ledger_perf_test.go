@@ -95,8 +95,8 @@ func makeUnsignedASATx(appIdx uint64, creator basics.Address, round int) transac
 			creator[:],
 			creator[:],
 			creator[:],
-			[]byte{0, 0, 0, 1, 0, 0, 0, 0},
-			[]byte{0, 0, 0, 0, 0, 0, 0, 0},
+			{0, 0, 0, 1, 0, 0, 0, 0},
+			{0, 0, 0, 0, 0, 0, 0, 0},
 		}
 		tx.OnCompletion = transactions.NoOpOC
 		tx.ApprovalProgram = asaAppovalProgram
@@ -232,11 +232,11 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 				if createdAppIdx != 0 {
 					// Creator spends to an opted in acct
 					tx.ApplicationArgs = [][]byte{
-						[]byte{0, 0, 0, 0, 0, 0, 0, 1},
+						{0, 0, 0, 0, 0, 0, 0, 1},
 					}
 					tx.Accounts = []basics.Address{
 						accts[j%len(accts)],
-						basics.Address{},
+						{},
 					}
 				}
 			default:

@@ -52,7 +52,7 @@ type VerifiedTxnCache interface {
 }
 
 type roundCowBase struct {
-	l LedgerForCowBase
+	l CowBaseForEvaluator
 
 	// The round number of the previous block, for looking up prior state.
 	rnd basics.Round
@@ -143,9 +143,8 @@ func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppInde
 
 	if global {
 		return params.GlobalStateSchema, nil
-	} else {
-		return params.LocalStateSchema, nil
 	}
+	return params.LocalStateSchema, nil
 }
 
 // wrappers for roundCowState to satisfy the (current) apply.Balances interface
@@ -274,14 +273,14 @@ type BlockEvaluator struct {
 }
 
 type ledgerForEvaluator interface {
-	LedgerForCowBase
+	CowBaseForEvaluator
 	GenesisHash() crypto.Digest
 	Totals(basics.Round) (AccountTotals, error)
 	CompactCertVoters(basics.Round) (*VotersForRound, error)
 }
 
-// LedgerForCowBase represents subset of Ledger functionality needed for cow business
-type LedgerForCowBase interface {
+// CowBaseForEvaluator represents subset of Ledger functionality needed for cow business
+type CowBaseForEvaluator interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	IsDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) (bool, error)
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
@@ -555,12 +554,10 @@ func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, cow *rou
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
 func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error {
-	return eval.transactionGroup([]transactions.SignedTxnWithAD{
-		transactions.SignedTxnWithAD{
-			SignedTxn: txn,
-			ApplyData: ad,
-		},
-	})
+	return eval.transactionGroup([]transactions.SignedTxnWithAD{{
+		SignedTxn: txn,
+		ApplyData: ad,
+	}})
 }
 
 // TransactionGroup tentatively adds a new transaction group as part of this block evaluation.

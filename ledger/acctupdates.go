@@ -1490,7 +1490,7 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 	}
 	count := 0
 	for rows.Next() {
-		count += 1
+		count++
 		if count%10000 == 0 {
 			au.log.Infof("upgradeDatabaseSchema4: count=%d", count)
 		}

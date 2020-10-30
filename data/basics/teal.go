@@ -72,17 +72,6 @@ func (vd *ValueDelta) ToTealValue() (value TealValue, ok bool) {
 //msgp:allocbound StateDelta config.MaxStateDeltaKeys
 type StateDelta map[string]ValueDelta
 
-func (sd StateDelta) Clone() StateDelta {
-	if sd == nil {
-		return nil
-	}
-	out := make(StateDelta, len(sd))
-	for key, vdelta := range sd {
-		out[key] = vdelta
-	}
-	return out
-}
-
 // Equal checks whether two StateDeltas are equal. We don't check for nilness
 // equality because an empty map will encode/decode as nil. So if our generated
 // map is empty but not nil, we want to equal a decoded nil off the wire.

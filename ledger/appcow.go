@@ -416,7 +416,7 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 }
 
 // MakeDebugBalances creates a ledger suitable for dryrun and debugger
-func MakeDebugBalances(l LedgerForCowBase, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
+func MakeDebugBalances(l CowBaseForEvaluator, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
 	base := &roundCowBase{
 		l:     l,
 		rnd:   round - 1,

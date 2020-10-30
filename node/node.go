@@ -117,7 +117,7 @@ type AlgorandFullNode struct {
 
 	// syncStatusMu used for locking lastRoundTimestamp and hasSyncedSinceStartup
 	// syncStatusMu added so OnNewBlock wouldn't be blocked by oldKeyDeletionThread during catchup
-	syncStatusMu                deadlock.Mutex
+	syncStatusMu          deadlock.Mutex
 	lastRoundTimestamp    time.Time
 	hasSyncedSinceStartup bool
 

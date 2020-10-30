@@ -252,7 +252,7 @@ func (dl *dryrunLedger) init() error {
 	return nil
 }
 
-// ledger.LedgerForCowBase interface
+// ledger.CowBaseForEvaluator interface
 func (dl *dryrunLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
 	return bookkeeping.BlockHeader{}, nil
 }
