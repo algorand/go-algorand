@@ -134,7 +134,7 @@ EOF
 
     pushd "$PKG_DIR"
 
-    STATUSFILE=build_status_${CHANNEL}_${VERSION}
+    STATUSFILE=build_status_${CHANNEL}_${OS_TYPE}-${ARCH}_${VERSION}
 
     cat >> "$STATUSFILE" << EOF
 go version:
