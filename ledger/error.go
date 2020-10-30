@@ -40,7 +40,7 @@ type LeaseInLedgerError struct {
 }
 
 // Error implements the error interface for the LeaseInLedgerError stuct
-func (lile LeaseInLedgerError) Error() string {
+func (lile *LeaseInLedgerError) Error() string {
 	// format the lease as address.
 	addr := basics.Address(lile.lease.lease)
 	return fmt.Sprintf("transaction %v using an overlapping lease %s", lile.txid, addr.String())
