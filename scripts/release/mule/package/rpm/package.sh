@@ -11,13 +11,15 @@ BRANCH=${BRANCH:-$(./scripts/compute_branch.sh)}
 CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
 DEFAULTNETWORK=${DEFAULTNETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
 DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "$DEFAULTNETWORK")
+PACKAGE_NAME="$1"
 
 find tmp/node_pkgs -name "*${CHANNEL}*linux*${FULLVERSION}*.tar.gz" | cut -d '/' -f3-4 | sort --unique | while read OS_ARCH; do
     OS_TYPE=$(echo "${OS_ARCH}" | cut -d '/' -f1)
     ARCH_TYPE=$(echo "${OS_ARCH}" | cut -d '/' -f2)
+    ARCH_UNAME=$(./scripts/release/common/cpu_name.sh ${ARCH_TYPE})
     ALGO_BIN="$REPO_DIR/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/$CHANNEL/$OS_TYPE-$ARCH_TYPE/bin"
     # A make target in Makefile.mule may pass the name as an argument.
-    ALGORAND_PACKAGE_NAME=${1:-$(./scripts/compute_package_name.sh "$CHANNEL")}
+    ALGORAND_PACKAGE_NAME=$(./scripts/compute_package_name.sh "$CHANNEL" "$PACKAGE_NAME")
 
     if [[ "$ALGORAND_PACKAGE_NAME" =~ devtools ]]; then
         REQUIRED_ALGORAND_PACKAGE=$(./scripts/compute_package_name.sh "$CHANNEL")
@@ -42,11 +44,11 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${FULLVERSION}*.tar.gz" | cut -d '/'
     < "./installer/rpm/$INSTALLER_DIR/$INSTALLER_DIR.spec" \
         sed -e "s,@PKG_NAME@,$ALGORAND_PACKAGE_NAME," \
             -e "s,@VER@,$FULLVERSION," \
-            -e "s,@ARCH@,$ARCH_TYPE," \
+            -e "s,@ARCH@,$ARCH_UNAME," \
             -e "s,@REQUIRED_ALGORAND_PKG@,$REQUIRED_ALGORAND_PACKAGE," \
         > "$TEMPDIR/$ALGORAND_PACKAGE_NAME.spec"
 
-    rpmbuild --buildroot "$HOME/foo" --define "_rpmdir $RPMTMP" --define "RELEASE_GENESIS_PROCESS x$RELEASE_GENESIS_PROCESS" --define "LICENSE_FILE ./COPYING" -bb "$TEMPDIR/$ALGORAND_PACKAGE_NAME.spec" --target $ARCH_TYPE
+    rpmbuild --buildroot "$HOME/foo" --define "_rpmdir $RPMTMP" --define "RELEASE_GENESIS_PROCESS x$RELEASE_GENESIS_PROCESS" --define "LICENSE_FILE ./COPYING" -bb "$TEMPDIR/$ALGORAND_PACKAGE_NAME.spec" --target $ARCH_UNAME
 
     cp -p "$RPMTMP"/*/*.rpm "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
     echo "${RPMTMP}"
