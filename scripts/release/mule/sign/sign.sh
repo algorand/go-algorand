@@ -45,6 +45,7 @@ for os in "${OS_TYPES[@]}"; do
         ARCHS=(amd64 arm arm64)
         for arch in "${ARCHS[@]}"; do
             (
+                mkdir -p "$os/$arch"
                 cd "$os/$arch"
 
                 # Clean package directory of any previous operations.

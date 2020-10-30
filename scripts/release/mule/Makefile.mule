@@ -51,7 +51,7 @@ mule-docker:
 mule-package-%: PKG_TYPE=$*
 mule-package-%:
 	echo Building algorand package...
-	scripts/release/mule/package/$(PKG_TYPE)/package.sh
+	scripts/release/mule/package/$(PKG_TYPE)/package.sh algorand
 	echo Building algorand-devtools package...
 	scripts/release/mule/package/$(PKG_TYPE)/package.sh algorand-devtools
 
