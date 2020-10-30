@@ -72,6 +72,7 @@ In addition, make sure that the following AWS credentials are set in environment
 
     + `BRANCH`
     + `CHANNEL`
+    + `ARCH_BIT`, i.e., the value from `uname -m`
     + `NETWORK`
     + `S3_SOURCE`, i.e., the S3 bucket from which to download
     + `SHA`, i.e., the value from `git rev-parse HEAD` if not passed on CLI
@@ -96,6 +97,7 @@ In addition, make sure that the following AWS credentials are set in environment
 
     + `BRANCH`
     + `CHANNEL`
+    + `ARCH_BIT`, i.e., the value from `uname -m`
     + `S3_SOURCE`, i.e., the S3 bucket from which to download
     + `VERSION`
 
