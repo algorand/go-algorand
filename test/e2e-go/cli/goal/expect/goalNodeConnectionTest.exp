@@ -1,0 +1,58 @@
+#!/usr/bin/expect -f
+#exp_internal 1
+set err 0
+log_user 1
+
+if { [catch {
+
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50Each.json"
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start node
+    ::AlgorandGoal::StartNode $TEST_PRIMARY_NODE_DIR
+
+    exec cp $TEST_PRIMARY_NODE_DIR/algod.admin.token $TEST_PRIMARY_NODE_DIR/algod.admin.token.backup
+    exec echo "XXX" >> $TEST_PRIMARY_NODE_DIR/algod.admin.token
+
+    set UNABLE_TO_CONNECT_MESSAGE 0
+    spawn goal node status -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "failed to test node status" }
+        "Cannot contact Algorand node: Unauthorized request to * when using token *Invalid API Token*" {
+            set UNABLE_TO_CONNECT_MESSAGE 1
+            exp_continue
+        }
+        eof {
+            if {$UNABLE_TO_CONNECT_MESSAGE == 0} {
+                puts "eof received before the expected output " 
+                exit 1
+            }
+        }
+    }
+
+    exec cp $TEST_PRIMARY_NODE_DIR/algod.admin.token.backup $TEST_PRIMARY_NODE_DIR/algod.admin.token
+
+    # Stop node
+    ::AlgorandGoal::StopNode $TEST_PRIMARY_NODE_DIR
+
+    puts "Goal Node Connection Test Successful"
+
+    exit 0
+} EXCEPTION] } {
+    puts "ERROR in goalNodeConnectionTest: $EXCEPTION"
+    exit 1
+}
