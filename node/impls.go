@@ -18,12 +18,15 @@ package node
 
 import (
 	"context"
+	"errors"
 
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/catchup"
 	"github.com/algorand/go-algorand/data"
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
+	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -110,4 +113,16 @@ func (l agreementLedger) EnsureDigest(cert agreement.Certificate, verifier *agre
 	// 3. the EnsureDigest method is being called with the agreeement service guarantee
 	// 4. no other senders to this channel exists
 	l.UnmatchedPendingCertificates <- catchup.PendingUnmatchedCertificate{Cert: cert, VoteVerifier: verifier}
+}
+
+// Wrapping error with a LedgerDroppedRoundError when an old round is requested but the ledger has already dropped the entry
+func (l agreementLedger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+	record, err := l.Ledger.Lookup(rnd, addr)
+	var e *ledger.RoundOffsetError
+	if errors.As(err, &e) {
+		err = &agreement.LedgerDroppedRoundError{
+			Err: err,
+		}
+	}
+	return record, err
 }

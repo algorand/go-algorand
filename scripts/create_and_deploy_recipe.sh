@@ -114,6 +114,12 @@ ${GOPATH}/bin/netgoal build -r "${ROOTDIR}" -n "${NETWORK}" --recipe "${RECIPEFI
 export S3_RELEASE_BUCKET="${S3_RELEASE_BUCKET}"
 ${SRCPATH}/scripts/upload_config.sh "${ROOTDIR}" "${CHANNEL}"
 
+NETWORK_PERF_RULES_PATH="$(dirname $RECIPEFILE)/network_performance_rules"
+
+if [ -f "${NETWORK_PERF_RULES_PATH}" ]; then
+    cp "${NETWORK_PERF_RULES_PATH}" "${ROOTDIR}/network_performance_rules"
+fi
+
 # Deploy binaries
 if [ "${NO_DEPLOY}" = "" ]; then
     # Now generate a private build using our custom genesis.json and deploy it to S3 also

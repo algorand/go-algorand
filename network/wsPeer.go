@@ -115,6 +115,7 @@ const disconnectIdleConn disconnectReason = "IdleConnection"
 const disconnectSlowConn disconnectReason = "SlowConnection"
 const disconnectLeastPerformingPeer disconnectReason = "LeastPerformingPeer"
 const disconnectCliqueResolve disconnectReason = "CliqueResolving"
+const disconnectRequestReceived disconnectReason = "DisconnectRequest"
 
 // Response is the structure holding the response from the server
 type Response struct {
@@ -361,7 +362,11 @@ func dedupSafeTag(t protocol.Tag) bool {
 }
 
 func (wp *wsPeer) readLoop() {
-	defer wp.readLoopCleanup()
+	// the cleanupCloseError sets the default error to disconnectReadError; depending on the exit reason, the error might get changed.
+	cleanupCloseError := disconnectReadError
+	defer func() {
+		wp.readLoopCleanup(cleanupCloseError)
+	}()
 	wp.conn.SetReadLimit(maxMessageLength)
 	slurper := LimitedReaderSlurper{Limit: maxMessageLength}
 	for {
@@ -372,6 +377,7 @@ func (wp *wsPeer) readLoop() {
 				switch ce.Code {
 				case websocket.CloseNormalClosure, websocket.CloseGoingAway:
 					// deliberate close, no error
+					cleanupCloseError = disconnectRequestReceived
 					return
 				default:
 					// fall through to reportReadErr
@@ -515,8 +521,8 @@ func (wp *wsPeer) handleMessageOfInterest(msg IncomingMessage) (shutdown bool) {
 	return
 }
 
-func (wp *wsPeer) readLoopCleanup() {
-	wp.internalClose(disconnectReadError)
+func (wp *wsPeer) readLoopCleanup(reason disconnectReason) {
+	wp.internalClose(reason)
 	wp.wg.Done()
 }
 
@@ -537,7 +543,7 @@ func (wp *wsPeer) handleFilterMessage(msg IncomingMessage) {
 
 func (wp *wsPeer) writeLoopSend(msg sendMessage) (exit bool) {
 	if len(msg.data) > maxMessageLength {
-		wp.net.log.Errorf("trying to send a message longer than we would recieve: %d > %d tag=%#v", len(msg.data), maxMessageLength, string(msg.data[0:2]))
+		wp.net.log.Errorf("trying to send a message longer than we would recieve: %d > %d tag=%s", len(msg.data), maxMessageLength, string(msg.data[0:2]))
 		// just drop it, don't break the connection
 		return false
 	}

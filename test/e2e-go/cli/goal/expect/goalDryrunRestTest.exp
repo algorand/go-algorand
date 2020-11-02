@@ -101,6 +101,27 @@ if { [catch {
         timeout { ::AlgorandGoal::Abort "goal app create timeout" }
     }
 
+    # atomic transfer
+    set DRREQ_FILE_4 "$TEST_ROOT_DIR/atomic-tran-drreq.msgp"
+    set AT_TX1_FILE "$TEST_ROOT_DIR/atomic-tran-tx1.mspg"
+    set AT_TX2_FILE "$TEST_ROOT_DIR/atomic-tran-tx2.mspg"
+    set AT_COMBINED_FILE "$TEST_ROOT_DIR/atomic-tran-comb.mspg"
+    set AT_GROUPPED_FILE "$TEST_ROOT_DIR/atomic-tran-group.mspg"
+    spawn goal clerk send --from $PRIMARY_ACCOUNT_ADDRESS --to $PRIMARY_ACCOUNT_ADDRESS -a 1 --fee 1000 -d $TEST_PRIMARY_NODE_DIR -o $AT_TX1_FILE
+    expect {
+        timeout { ::AlgorandGoal::Abort "goal clerk send timeout" }
+    }
+    spawn goal app create --creator $PRIMARY_ACCOUNT_ADDRESS --approval-prog $TEAL_PROG_FILE --clear-prog $TEAL_PROG_FILE --global-byteslices 0 --global-ints 0 --local-byteslices 0 --local-ints 0 -d $TEST_PRIMARY_NODE_DIR -o $AT_TX2_FILE
+    expect {
+        timeout { ::AlgorandGoal::Abort "goal app create timeout" }
+    }
+    exec cat $AT_TX1_FILE $AT_TX2_FILE > $AT_COMBINED_FILE
+    exec goal clerk group -i $AT_COMBINED_FILE -o $AT_GROUPPED_FILE
+    spawn goal clerk dryrun -t $AT_GROUPPED_FILE -d $TEST_PRIMARY_NODE_DIR -o $DRREQ_FILE_4 --dryrun-dump --dryrun-dump-format=msgp
+    expect {
+        timeout { ::AlgorandGoal::Abort "goal clerk dryrun timeout" }
+    }
+
     # invalid app
     set INVALID_FILE_1 "$TEST_ROOT_DIR/invalid-app.json"
     set INVALID_FILE_1_ID [open $INVALID_FILE_1 "w"]
@@ -111,6 +132,8 @@ if { [catch {
     TestGoalDryrun $DRREQ_FILE_1 $TEST_PRIMARY_NODE_DIR
     TestGoalDryrun $DRREQ_FILE_2 $TEST_PRIMARY_NODE_DIR
     TestGoalDryrun $DRREQ_FILE_3 $TEST_PRIMARY_NODE_DIR
+    TestGoalDryrun $DRREQ_FILE_4 $TEST_PRIMARY_NODE_DIR
+
     TestGoalDryrunExitCode $DRREQ_FILE_3 $TEST_PRIMARY_NODE_DIR 0 "PASS"
     TestGoalDryrunExitCode "" $TEST_PRIMARY_NODE_DIR 1 "Cannot read file : open : no such file or directory"
     TestGoalDryrunExitCode $INVALID_FILE_1 $TEST_PRIMARY_NODE_DIR 1 "dryrun-remote: HTTP 400 Bad Request:"

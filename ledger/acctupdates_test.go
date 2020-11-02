@@ -20,8 +20,11 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"testing"
@@ -110,6 +113,13 @@ func (ml *mockLedgerForTracker) GenesisHash() crypto.Digest {
 	return crypto.Digest{}
 }
 
+func (ml *mockLedgerForTracker) GenesisProto() config.ConsensusParams {
+	if len(ml.blocks) > 0 {
+		return config.Consensus[ml.blocks[0].block.CurrentProtocol]
+	}
+	return config.Consensus[protocol.ConsensusCurrentVersion]
+}
+
 // this function used to be in acctupdates.go, but we were never using it for production purposes. This
 // function has a conceptual flaw in that it attempts to load the entire balances into memory. This might
 // not work if we have large number of balances. On these unit testing, however, it's not the case, and it's
@@ -147,15 +157,18 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 	_, err := au.Totals(latest + 1)
 	require.Error(t, err)
 
-	_, err = au.Lookup(latest+1, randomAddress(), false)
+	var validThrough basics.Round
+	_, validThrough, err = au.LookupWithoutRewards(latest+1, randomAddress())
 	require.Error(t, err)
+	require.Equal(t, basics.Round(0), validThrough)
 
 	if base > 0 {
 		_, err := au.Totals(base - 1)
 		require.Error(t, err)
 
-		_, err = au.Lookup(base-1, randomAddress(), false)
+		_, validThrough, err = au.LookupWithoutRewards(base-1, randomAddress())
 		require.Error(t, err)
+		require.Equal(t, basics.Round(0), validThrough)
 	}
 
 	roundsRanges := []struct {
@@ -180,9 +193,10 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			var totalOnline, totalOffline, totalNotPart uint64
 
 			for addr, data := range accts[rnd] {
-				d, err := au.Lookup(rnd, addr, false)
+				d, validThrough, err := au.LookupWithoutRewards(rnd, addr)
 				require.NoError(t, err)
 				require.Equal(t, d, data)
+				require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
 
 				rewardsDelta := rewards[rnd] - d.RewardsBase
 				switch d.Status {
@@ -211,8 +225,9 @@ func checkAcctUpdates(t *testing.T, au *accountUpdates, base basics.Round, lates
 			require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
 			require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
 
-			d, err := au.Lookup(rnd, randomAddress(), false)
+			d, validThrough, err := au.LookupWithoutRewards(rnd, randomAddress())
 			require.NoError(t, err)
+			require.GreaterOrEqualf(t, uint64(validThrough), uint64(rnd), fmt.Sprintf("validThrough :%v\nrnd :%v\n", validThrough, rnd))
 			require.Equal(t, d, basics.AccountData{})
 		}
 	}
@@ -702,15 +717,17 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 			updates := make(map[basics.Address]accountDelta)
 			moneyAccountsExpectedAmounts = append(moneyAccountsExpectedAmounts, make([]uint64, len(moneyAccounts)))
 			toAccount := moneyAccounts[0]
-			toAccountDataOld, err := au.Lookup(i-1, toAccount, false)
+			toAccountDataOld, validThrough, err := au.LookupWithoutRewards(i-1, toAccount)
 			require.NoError(t, err)
+			require.Equal(t, i-1, validThrough)
 			toAccountDataNew := toAccountDataOld
 
 			for j := 1; j < len(moneyAccounts); j++ {
 				fromAccount := moneyAccounts[j]
 
-				fromAccountDataOld, err := au.Lookup(i-1, fromAccount, false)
+				fromAccountDataOld, validThrough, err := au.LookupWithoutRewards(i-1, fromAccount)
 				require.NoError(t, err)
+				require.Equal(t, i-1, validThrough)
 				require.Equalf(t, moneyAccountsExpectedAmounts[i-1][j], fromAccountDataOld.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, i)
 
 				fromAccountDataNew := fromAccountDataOld
@@ -738,20 +755,20 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 					if checkRound < uint64(testback) {
 						continue
 					}
-					acct, err := au.Lookup(basics.Round(checkRound-uint64(testback)), moneyAccounts[j], false)
+					acct, validThrough, err := au.LookupWithoutRewards(basics.Round(checkRound-uint64(testback)), moneyAccounts[j])
 					// we might get an error like "round 2 before dbRound 5", which is the success case, so we'll ignore it.
-					if err != nil {
+					roundOffsetError := &RoundOffsetError{}
+					if errors.As(err, &roundOffsetError) {
+						require.Equal(t, basics.Round(0), validThrough)
 						// verify it's the expected error and not anything else.
-						var r1, r2 int
-						n, err2 := fmt.Sscanf(err.Error(), "round %d before dbRound %d", &r1, &r2)
-						require.NoErrorf(t, err2, "unable to parse : %v", err)
-						require.Equal(t, 2, n)
-						require.Less(t, r1, r2)
+						require.Less(t, int64(roundOffsetError.round), int64(roundOffsetError.dbRound))
 						if testback > 1 {
 							testback--
 						}
 						continue
 					}
+					require.NoError(t, err)
+					require.GreaterOrEqual(t, int64(validThrough), int64(basics.Round(checkRound-uint64(testback))))
 					// if we received no error, we want to make sure the reported amount is correct.
 					require.Equalf(t, moneyAccountsExpectedAmounts[checkRound-uint64(testback)][j], acct.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, checkRound)
 					testback++
@@ -782,8 +799,9 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		au.waitAccountsWriting()
 
 		for idx, addr := range moneyAccounts {
-			balance, err := au.Lookup(lastRound, addr, false)
+			balance, validThrough, err := au.LookupWithoutRewards(lastRound, addr)
 			require.NoErrorf(t, err, "unable to retrieve balance for account idx %d %v", idx, addr)
+			require.Equal(t, lastRound, validThrough)
 			if idx != 0 {
 				require.Equalf(t, 100*1000000-roundCount*(roundCount-1)/2, int(balance.MicroAlgos.Raw), "account idx %d %v has the wrong balance", idx, addr)
 			} else {
@@ -978,6 +996,9 @@ func TestListCreatables(t *testing.T) {
 	err = accountsInit(tx, accts, proto)
 	require.NoError(t, err)
 
+	err = accountsAddNormalizedBalance(tx, proto)
+	require.NoError(t, err)
+
 	au := &accountUpdates{}
 	au.accountsq, err = accountsDbInit(tx, tx)
 	require.NoError(t, err)
@@ -997,7 +1018,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* No deletes	                                           *******
 	// sync with the database
 	var updates map[basics.Address]accountDelta
-	err = accountsNewRound(tx, updates, ctbsWithDeletes)
+	err = accountsNewRound(tx, updates, ctbsWithDeletes, proto)
 	require.NoError(t, err)
 	// nothing left in cache
 	au.creatables = make(map[basics.CreatableIndex]modifiedCreatable)
@@ -1013,10 +1034,96 @@ func TestListCreatables(t *testing.T) {
 	// ******* Results are obtained from the database and from the cache *******
 	// ******* Deletes are in the database and in the cache              *******
 	// sync with the database. This has deletes synced to the database.
-	err = accountsNewRound(tx, updates, au.creatables)
+	err = accountsNewRound(tx, updates, au.creatables, proto)
 	require.NoError(t, err)
 	// get new creatables in the cache. There will be deletes in the cache from the previous batch.
 	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
 		expectedDbImage, numElementsPerSegement)
 	listAndCompareComb(t, au, expectedDbImage)
+}
+
+func TestIsWritingCatchpointFile(t *testing.T) {
+
+	au := &accountUpdates{}
+
+	au.catchpointWriting = make(chan struct{}, 1)
+	ans := au.IsWritingCatchpointFile()
+	require.True(t, ans)
+
+	close(au.catchpointWriting)
+	ans = au.IsWritingCatchpointFile()
+	require.False(t, ans)
+}
+
+func TestGetCatchpointStream(t *testing.T) {
+
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	ml := makeMockLedgerForTracker(t, true)
+	defer ml.close()
+	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
+
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
+	au := &accountUpdates{}
+	conf := config.GetDefaultLocal()
+	conf.CatchpointInterval = 1
+	au.initialize(conf, ".", proto, accts[0])
+	defer au.close()
+
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+
+	filesToCreate := 4
+
+	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), "catchpoints")
+	require.NoError(t, err)
+	defer func() {
+		os.RemoveAll(temporaryDirectroy)
+	}()
+	catchpointsDirectory := filepath.Join(temporaryDirectroy, "catchpoints")
+	err = os.Mkdir(catchpointsDirectory, 0777)
+	require.NoError(t, err)
+
+	au.dbDirectory = temporaryDirectroy
+
+	// Create the catchpoint files with dummy data
+	for i := 0; i < filesToCreate; i++ {
+		fileName := filepath.Join("catchpoints", fmt.Sprintf("%d.catchpoint", i))
+		data := []byte{byte(i), byte(i + 1), byte(i + 2)}
+		err = ioutil.WriteFile(filepath.Join(temporaryDirectroy, fileName), data, 0666)
+		require.NoError(t, err)
+
+		// Store the catchpoint into the database
+		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fileName, "", 0)
+		require.NoError(t, err)
+	}
+
+	dataRead := make([]byte, 3)
+	var n int
+
+	// File on disk, and database has the record
+	reader, err := au.GetCatchpointStream(basics.Round(1))
+	n, err = reader.Read(dataRead)
+	require.NoError(t, err)
+	require.Equal(t, 3, n)
+	outData := []byte{1, 2, 3}
+	require.Equal(t, outData, dataRead)
+
+	// File deleted, but record in the database
+	err = os.Remove(filepath.Join(temporaryDirectroy, "catchpoints", "2.catchpoint"))
+	reader, err = au.GetCatchpointStream(basics.Round(2))
+	require.Equal(t, ErrNoEntry{}, err)
+	require.Nil(t, reader)
+
+	// File on disk, but database lost the record
+	err = au.accountsq.storeCatchpoint(context.Background(), basics.Round(3), "", "", 0)
+	reader, err = au.GetCatchpointStream(basics.Round(3))
+	n, err = reader.Read(dataRead)
+	require.NoError(t, err)
+	require.Equal(t, 3, n)
+	outData = []byte{3, 4, 5}
+	require.Equal(t, outData, dataRead)
+
+	err = au.deleteStoredCatchpoints(context.Background(), au.accountsq)
+	require.NoError(t, err)
 }

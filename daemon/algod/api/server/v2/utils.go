@@ -105,8 +105,6 @@ func computeCreatableIndexInPayset(tx node.TxnWithStatus, txnCounter uint64, pay
 	return &idx
 }
 
-
-
 // computeAssetIndexFromTxn returns the created asset index given a confirmed
 // transaction whose confirmation block is available in the ledger. Note that
 // 0 is an invalid asset index (they start at 1).
@@ -177,7 +175,6 @@ func computeAppIndexFromTxn(tx node.TxnWithStatus, l *data.Ledger) (aidx *uint64
 	return computeCreatableIndexInPayset(tx, blk.BlockHeader.TxnCounter, payset)
 }
 
-
 // getCodecHandle converts a format string into the encoder + content type
 func getCodecHandle(formatPtr *string) (codec.Handle, string, error) {
 	format := "json"
@@ -224,9 +221,9 @@ func stateDeltaToStateDelta(d basics.StateDelta) *generated.StateDelta {
 		return nil
 	}
 	var delta generated.StateDelta
-	for k, v:= range d {
+	for k, v := range d {
 		delta = append(delta, generated.EvalDeltaKeyValue{
-			Key:   base64.StdEncoding.EncodeToString([]byte(k)),
+			Key: base64.StdEncoding.EncodeToString([]byte(k)),
 			Value: generated.EvalDelta{
 				Action: uint64(v.Action),
 				Bytes:  strOrNil(base64.StdEncoding.EncodeToString([]byte(v.Bytes))),
@@ -249,10 +246,10 @@ func convertToDeltas(txn node.TxnWithStatus) (*[]generated.AccountStateDelta, *g
 			if k == 0 {
 				addr = txn.Txn.Txn.Sender.String()
 			} else {
-				if int(k - 1) < len(accounts) {
+				if int(k-1) < len(accounts) {
 					addr = txn.Txn.Txn.Accounts[k-1].String()
 				} else {
-					addr = fmt.Sprintf("Invalid Address Index: %d", k - 1)
+					addr = fmt.Sprintf("Invalid Address Index: %d", k-1)
 				}
 			}
 			d = append(d, generated.AccountStateDelta{

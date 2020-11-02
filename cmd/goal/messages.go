@@ -18,12 +18,14 @@ package main
 
 const (
 	// General
-	errorNoDataDirectory     = "Data directory not specified.  Please use -d or set $ALGORAND_DATA in your environment. Exiting."
-	errorOneDataDirSupported = "Only one data directory can be specified for this command."
-	errorRequestFail         = "Error processing command: %s"
-	errorGenesisIDFail       = "Error determining kmd folder (%s). Ensure the node is running in %s."
-	errorDirectoryNotExist   = "Specified directory '%s' does not exist."
-	errorParseAddr           = "Failed to parse addr: %v"
+	errorNoDataDirectory        = "Data directory not specified.  Please use -d or set $ALGORAND_DATA in your environment. Exiting."
+	errorOneDataDirSupported    = "Only one data directory can be specified for this command."
+	errorRequestFail            = "Error processing command: %s"
+	errorGenesisIDFail          = "Error determining kmd folder (%s). Ensure the node is running in %s."
+	errorDirectoryNotExist      = "Specified directory '%s' does not exist."
+	errorParseAddr              = "Failed to parse addr: %v"
+	errorNonPrintableCharacters = "One or more non-printable characters were ommited from the following error message:"
+	infoNonPrintableCharacters  = "One or more non-printable characters were ommited from the subsequent line:"
 
 	// Account
 	infoNoAccounts                 = "Did not find any account. Please import or create a new one."

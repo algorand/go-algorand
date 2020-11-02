@@ -17,11 +17,10 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -38,9 +37,17 @@ type Notification struct {
 
 // DebugAdapter represents debugger frontend (i.e. CDT, webpage, VSCode, etc)
 type DebugAdapter interface {
+	// SessionStarted is called by the debugging core on the beginning of execution.
+	// Control interface must be used to manage execution (step, break, resume, etc).
+	// Notification channel must be used for receiving events from the debugger.
 	SessionStarted(sid string, debugger Control, ch chan Notification)
+	// SessionStarted is called by the debugging core on the competion of execution.
 	SessionEnded(sid string)
+	// WaitForCompletion must returns only when all session were completed and block otherwise.
 	WaitForCompletion()
+	// URL returns the most frontend URL for the most recent session
+	// or an empty string if there are no sessions yet.
+	URL() string
 }
 
 // Control interface for execution control
@@ -53,7 +60,7 @@ type Control interface {
 
 	GetSourceMap() ([]byte, error)
 	GetSource() (string, []byte)
-	GetStates(changes *logic.AppStateChange) appState
+	GetStates(changes *logic.AppStateChange) AppState
 }
 
 // Debugger is TEAL event-driven debugger
@@ -79,12 +86,22 @@ type programMeta struct {
 	program      []byte
 	source       string
 	offsetToLine map[int]int
-	states       appState
+	states       AppState
 }
 
+// breakpointLine is a source line number with a couple special values:
+// -1 do not break
+//  0 break at next instruction
+//  N break at line N
+type breakpointLine int
+
+const (
+	noBreak   breakpointLine = -1
+	stepBreak breakpointLine = 0
+)
+
 type debugConfig struct {
-	// If -1, don't break
-	BreakAtLine int `json:"breakatline"`
+	BreakAtLine breakpointLine `json:"breakatline"`
 }
 
 type session struct {
@@ -113,7 +130,7 @@ type session struct {
 	breakpoints []breakpoint
 	line        atomicInt
 
-	states appState
+	states AppState
 }
 
 type breakpoint struct {
@@ -130,7 +147,7 @@ func makeSession(disassembly string, line int) (s *session) {
 
 	// Allocate a default debugConfig (don't break)
 	s.debugConfig = debugConfig{
-		BreakAtLine: -1,
+		BreakAtLine: noBreak,
 	}
 
 	// Allocate an acknowledgement and notifications channels
@@ -145,9 +162,18 @@ func makeSession(disassembly string, line int) (s *session) {
 }
 
 func (s *session) resume() {
-	select {
-	case s.acknowledged <- true:
-	default:
+	// There is a chance for race in automated environments like tests and scripted executions:
+	// acknowledged channel is not listening but attempted to write here.
+	// See a comment in Registered function.
+	// This loop adds delays to mitigate possible race:
+	// if the channel is not ready then yield and give another go-routine a chance.
+	for i := 0; i < 50; i++ {
+		select {
+		case s.acknowledged <- true:
+			return
+		default:
+			time.Sleep(1 * time.Millisecond)
+		}
 	}
 }
 
@@ -155,7 +181,7 @@ func (s *session) Step() {
 	func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		s.debugConfig = debugConfig{BreakAtLine: 0}
+		s.debugConfig = debugConfig{BreakAtLine: stepBreak}
 	}()
 
 	s.resume()
@@ -167,7 +193,7 @@ func (s *session) Resume() {
 	func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		s.debugConfig = debugConfig{BreakAtLine: -1} // reset possible break after Step
+		s.debugConfig = debugConfig{BreakAtLine: noBreak} // reset possible break after Step
 		// find any active breakpoints and set next break
 		if currentLine < len(s.breakpoints) {
 			for line, state := range s.breakpoints[currentLine+1:] {
@@ -188,7 +214,7 @@ func (s *session) setBreakpoint(line int) error {
 		return fmt.Errorf("invalid bp line %d", line)
 	}
 	s.breakpoints[line] = breakpoint{set: true, active: true}
-	s.debugConfig = debugConfig{BreakAtLine: line}
+	s.debugConfig = debugConfig{BreakAtLine: breakpointLine(line)}
 	return nil
 }
 
@@ -206,7 +232,7 @@ func (s *session) RemoveBreakpoint(line int) error {
 		return fmt.Errorf("invalid bp line %d", line)
 	}
 	if s.breakpoints[line].NonEmpty() {
-		s.debugConfig = debugConfig{BreakAtLine: -1}
+		s.debugConfig = debugConfig{BreakAtLine: noBreak}
 		s.breakpoints[line] = breakpoint{}
 	}
 	return nil
@@ -222,7 +248,7 @@ func (s *session) SetBreakpointsActive(active bool) {
 		}
 	}
 	if !active {
-		s.debugConfig = debugConfig{BreakAtLine: -1}
+		s.debugConfig = debugConfig{BreakAtLine: noBreak}
 	}
 }
 
@@ -285,7 +311,7 @@ func (s *session) GetSource() (string, []byte) {
 	return s.programName, []byte(s.source)
 }
 
-func (s *session) GetStates(changes *logic.AppStateChange) appState {
+func (s *session) GetStates(changes *logic.AppStateChange) AppState {
 	if changes == nil {
 		return s.states
 	}
@@ -377,18 +403,12 @@ func (d *Debugger) AddAdapter(da DebugAdapter) {
 	d.das = append(d.das, da)
 }
 
-// hashProgram returns binary program hash
-func (d *Debugger) hashProgram(program []byte) string {
-	hash := sha256.Sum256([]byte(program))
-	return hex.EncodeToString(hash[:])
-}
-
 // SaveProgram stores program, source and offsetToLine for later use
 func (d *Debugger) SaveProgram(
 	name string, program []byte, source string, offsetToLine map[int]int,
-	states appState,
+	states AppState,
 ) {
-	hash := d.hashProgram(program)
+	hash := logic.GetProgramID(program)
 	d.mus.Lock()
 	defer d.mus.Unlock()
 	d.programs[hash] = &programMeta{
@@ -441,14 +461,15 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 		return err
 	}
 	s.line.Store(state.Line)
+	cfg := s.debugConfig
 
-	go func() {
+	// copy state to prevent a data race in this the go-routine and upcoming updates to the state
+	go func(localState logic.DebugState) {
 		// Check if we are triggered and acknowledge asynchronously
-		cfg := s.debugConfig
-		if cfg.BreakAtLine != -1 {
-			if cfg.BreakAtLine == 0 || state.Line == cfg.BreakAtLine {
+		if cfg.BreakAtLine != noBreak {
+			if cfg.BreakAtLine == stepBreak || breakpointLine(localState.Line) == cfg.BreakAtLine {
 				// Breakpoint hit! Inform the user
-				s.notifications <- Notification{"updated", *state}
+				s.notifications <- Notification{"updated", localState}
 			} else {
 				// Continue if we haven't hit the next breakpoint
 				s.acknowledged <- true
@@ -457,7 +478,7 @@ func (d *Debugger) Update(state *logic.DebugState) error {
 			// User won't send acknowledgment, so we will
 			s.acknowledged <- true
 		}
-	}()
+	}(*state)
 
 	// Let TEAL continue when acknowledged
 	<-s.acknowledged

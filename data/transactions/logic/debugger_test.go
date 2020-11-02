@@ -17,9 +17,11 @@
 package logic
 
 import (
+	"encoding/base64"
 	"os"
 	"testing"
 
+	"github.com/algorand/go-algorand/data/basics"
 	"github.com/stretchr/testify/require"
 )
 
@@ -124,4 +126,52 @@ func TestDebuggerHook(t *testing.T) {
 	require.Equal(t, 1, testDbg.complete)
 	require.Greater(t, testDbg.update, 1)
 	require.Equal(t, 1, len(testDbg.state.Stack))
+}
+
+func TestLineToPC(t *testing.T) {
+	dState := DebugState{
+		Disassembly: "abc\ndef\nghi",
+		PCOffset:    []PCOffset{{PC: 1, Offset: 4}, {PC: 2, Offset: 8}, {PC: 3, Offset: 12}},
+	}
+	pc := dState.LineToPC(0)
+	require.Equal(t, 0, pc)
+
+	pc = dState.LineToPC(1)
+	require.Equal(t, 1, pc)
+
+	pc = dState.LineToPC(2)
+	require.Equal(t, 2, pc)
+
+	pc = dState.LineToPC(3)
+	require.Equal(t, 3, pc)
+
+	pc = dState.LineToPC(4)
+	require.Equal(t, 0, pc)
+
+	pc = dState.LineToPC(-1)
+	require.Equal(t, 0, pc)
+
+	pc = dState.LineToPC(0x7fffffff)
+	require.Equal(t, 0, pc)
+
+	dState.PCOffset = []PCOffset{}
+	pc = dState.LineToPC(1)
+	require.Equal(t, 0, pc)
+
+	dState.PCOffset = []PCOffset{{PC: 1, Offset: 0}}
+	pc = dState.LineToPC(1)
+	require.Equal(t, 0, pc)
+}
+
+func TestValueDeltaToValueDelta(t *testing.T) {
+	vDelta := basics.ValueDelta{
+		Action: basics.SetUintAction,
+		Bytes:  "some string",
+		Uint:   uint64(0xffffffff),
+	}
+	ans := valueDeltaToValueDelta(&vDelta)
+	require.Equal(t, vDelta.Action, ans.Action)
+	require.NotEqual(t, vDelta.Bytes, ans.Bytes)
+	require.Equal(t, base64.StdEncoding.EncodeToString([]byte(vDelta.Bytes)), ans.Bytes)
+	require.Equal(t, vDelta.Uint, ans.Uint)
 }
