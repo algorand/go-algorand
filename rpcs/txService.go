@@ -20,10 +20,12 @@ import (
 	"encoding/base64"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/gorilla/mux"
+
+	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
@@ -60,8 +62,8 @@ func base64PaddedSize(n int64) int64 {
 
 func makeTxService(pool PendingTxAggregate, genesisID string, txPoolSize int, responseSizeLimit int) *TxService {
 	// figure out how many bytes do we expect the bloom filter to be in the worst case scenario.
-	bloomRequestSizeBits, _ := bloom.Optimal(txPoolSize, bloomFilterFalsePositiveRate)
-	filterBytes := int64((bloomRequestSizeBits + 7) / 8) // convert bits -> bytes.
+	filterBytes := bloom.BinaryMarshalLength(txPoolSize, bloomFilterFalsePositiveRate)
+	// since the bloom filter is going to be base64 encoded, account for that as well.
 	filterPackedBytes := base64PaddedSize(filterBytes)
 	// The http transport add some additional content to the form ( form keys, separators, etc.)
 	// we need to account for these if we're trying to match the size in the worst case scenario.
@@ -107,7 +109,11 @@ func (txs *TxService) ServeHTTP(response http.ResponseWriter, request *http.Requ
 	request.Body = http.MaxBytesReader(response, request.Body, txs.maxRequestBodyLength)
 	err := request.ParseForm()
 	if err != nil {
-		txs.log.Infof("http.ParseForm fail: %s", err)
+		if strings.Contains(err.Error(), "http: request body too large") {
+			txs.log.Infof("http.ParseForm fail due to body length exceed max limit size of %d", txs.maxRequestBodyLength)
+		} else {
+			txs.log.Infof("http.ParseForm fail: %s", err)
+		}
 		response.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -185,10 +191,10 @@ func (txs *TxService) updateTxCache() (pendingTxGroups [][]transactions.SignedTx
 
 	// we need to check again, since we released and took the lock.
 	if txs.lastUpdate == 0 || txs.lastUpdate+updateInterval < currentUnixTime {
-		// The txs.pool.Pending() function allocates a new array on every call. That means that the old
+		// The txs.pool.PendingTxGroups() function allocates a new array on every call. That means that the old
 		// array ( if being used ) is still valid. There is no risk of data race here since
 		// the txs.pendingTxGroups is a slice (hence a pointer to the array) and not the array itself.
-		txs.pendingTxGroups = txs.pool.Pending()
+		txs.pendingTxGroups = txs.pool.PendingTxGroups()
 		txs.lastUpdate = currentUnixTime
 	}
 	return txs.pendingTxGroups

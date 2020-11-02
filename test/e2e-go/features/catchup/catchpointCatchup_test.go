@@ -19,7 +19,6 @@ package catchup
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -86,11 +85,6 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	a := require.New(t)
 	log := logging.TestingLog(t)
 
-	if runtime.GOARCH == "amd64" {
-		// amd64 platforms are generally quite capable, so exceletate the round times to make the test run faster.
-		os.Setenv("ALGOSMALLLAMBDAMSEC", "500")
-	}
-
 	// Overview of this test:
 	// Start a two-node network (primary has 100%, secondary has 0%)
 	// Nodes are having a consensus allowing balances history of 32 rounds and transaction history of 33 rounds.
@@ -109,6 +103,12 @@ func TestBasicCatchpointCatchup(t *testing.T) {
 	catchpointCatchupProtocol.SeedRefreshInterval = 8
 	catchpointCatchupProtocol.MaxBalLookback = 2 * catchpointCatchupProtocol.SeedLookback * catchpointCatchupProtocol.SeedRefreshInterval // 32
 	catchpointCatchupProtocol.MaxTxnLife = 33
+
+	if runtime.GOARCH == "amd64" {
+		// amd64 platforms are generally quite capable, so accelerate the round times to make the test run faster.
+		catchpointCatchupProtocol.AgreementFilterTimeoutPeriod0 = 1 * time.Second
+		catchpointCatchupProtocol.AgreementFilterTimeout = 1 * time.Second
+	}
 
 	consensus[consensusCatchpointCatchupTestProtocol] = catchpointCatchupProtocol
 

@@ -17,9 +17,9 @@
 package transactions
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -38,11 +38,9 @@ func TestAccountInformationV2(t *testing.T) {
 	var fixture fixtures.RestClientFixture
 	proto, ok := config.Consensus[protocol.ConsensusFuture]
 	a.True(ok)
-	os.Setenv("ALGOSMALLLAMBDAMSEC", "200")
+	proto.AgreementFilterTimeoutPeriod0 = 400 * time.Millisecond
+	proto.AgreementFilterTimeout = 400 * time.Millisecond
 	fixture.SetConsensus(config.ConsensusProtocols{protocol.ConsensusFuture: proto})
-	defer func() {
-		os.Unsetenv("ALGOSMALLLAMBDAMSEC")
-	}()
 
 	fixture.Setup(t, filepath.Join("nettemplates", "TwoNodes50EachFuture.json"))
 	defer fixture.Shutdown()
@@ -66,7 +64,7 @@ func TestAccountInformationV2(t *testing.T) {
 	// Fund the manager, so it can issue transactions later on
 	_, err = client.SendPaymentFromUnencryptedWallet(creator, user, fee, 10000000000, nil)
 	a.NoError(err)
-	client.WaitForRound(round + 2)
+	client.WaitForRound(round + 4)
 
 	// There should be no apps to start with
 	ad, err := client.AccountData(creator)

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -33,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-algorand/util/metrics"
 )
 
 // Ledger is a database storing the contents of the ledger.
@@ -125,9 +127,12 @@ func OpenLedger(
 
 	l.setSynchronousMode(context.Background(), l.synchronousMode)
 
+	start := time.Now()
+	ledgerInitblocksdbCount.Inc(nil)
 	err = l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
 	})
+	ledgerInitblocksdbMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		err = fmt.Errorf("OpenLedger.initBlocksDB %v", err)
 		return nil, err
@@ -195,6 +200,8 @@ func (l *Ledger) reloadLedger() error {
 // verifyMatchingGenesisHash tests to see that the latest block header pointing to the same genesis hash provided in genesisHash.
 func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	// Check that the genesis hash, if present, matches.
+	start := time.Now()
+	ledgerVerifygenhashCount.Inc(nil)
 	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err := blockLatest(tx)
 		if err != nil {
@@ -215,6 +222,7 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 		}
 		return nil
 	})
+	ledgerVerifygenhashMicros.AddMicrosecondsSince(start, nil)
 	return
 }
 
@@ -346,7 +354,7 @@ func (l *Ledger) Close() {
 	// then, we shut down the trackers and their corresponding goroutines.
 	l.trackers.close()
 
-	// last, we close the underlaying database connections.
+	// last, we close the underlying database connections.
 	l.blockDBs.close()
 	l.trackerDBs.close()
 }
@@ -398,6 +406,15 @@ func (l *Ledger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableTy
 	return l.accts.GetCreatorForRound(l.blockQ.latest(), cidx, ctype)
 }
 
+// CompactCertVoters returns the top online accounts at round rnd.
+// The result might be nil, even with err=nil, if there are no voters
+// for that round because compact certs were not enabled.
+func (l *Ledger) CompactCertVoters(rnd basics.Round) (voters *VotersForRound, err error) {
+	l.trackerMu.RLock()
+	defer l.trackerMu.RUnlock()
+	return l.accts.voters.getVoters(rnd)
+}
+
 // ListAssets takes a maximum asset index and maximum result length, and
 // returns up to that many CreatableLocators from the database where app idx is
 // less than or equal to the maximum.
@@ -424,7 +441,7 @@ func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	data, err := l.accts.Lookup(rnd, addr, true)
+	data, err := l.accts.LookupWithRewards(rnd, addr)
 	if err != nil {
 		return basics.AccountData{}, err
 	}
@@ -434,16 +451,16 @@ func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 
 // LookupWithoutRewards is like Lookup but does not apply pending rewards up
 // to the requested round rnd.
-func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
+func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	data, err := l.accts.Lookup(rnd, addr, false)
+	data, validThrough, err := l.accts.LookupWithoutRewards(rnd, addr)
 	if err != nil {
-		return basics.AccountData{}, err
+		return basics.AccountData{}, basics.Round(0), err
 	}
 
-	return data, nil
+	return data, validThrough, nil
 }
 
 // Totals returns the totals of all accounts at the end of round rnd.
@@ -460,7 +477,7 @@ func (l *Ledger) isDup(currentProto config.ConsensusParams, current basics.Round
 }
 
 // GetRoundTxIds returns a map of the transactions ids that we have for the given round
-// this function is currently not being used, but remains here as it migth be useful in the future.
+// this function is currently not being used, but remains here as it might be useful in the future.
 func (l *Ledger) GetRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
@@ -577,6 +594,11 @@ func (l *Ledger) GenesisHash() crypto.Digest {
 	return l.genesisHash
 }
 
+// GenesisProto returns the initial protocol for this ledger.
+func (l *Ledger) GenesisProto() config.ConsensusParams {
+	return l.genesisProto
+}
+
 // GetCatchpointCatchupState returns the current state of the catchpoint catchup.
 func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state CatchpointCatchupState, err error) {
 	return MakeCatchpointCatchupAccessor(l, l.log).GetState(ctx)
@@ -585,8 +607,8 @@ func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state Catchpoin
 // GetCatchpointStream returns an io.ReadCloser file stream from which the catchpoint file
 // for the provided round could be retrieved. If no such stream can be generated, a non-nil
 // error is returned. The io.ReadCloser and the error are mutually exclusive -
-// if error is returned, the file stream is gurenteed to be nil, and vice versa,
-// if the file stream is not nil, the error is gurenteed to be nil.
+// if error is returned, the file stream is guaranteed to be nil, and vice versa,
+// if the file stream is not nil, the error is guaranteed to be nil.
 func (l *Ledger) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
@@ -608,7 +630,7 @@ func (l *Ledger) trackerLog() logging.Logger {
 }
 
 // trackerEvalVerified is used by the accountUpdates to reconstruct the StateDelta from a given block during it's loadFromDisk execution.
-// when this function is called, the trackers mutex is expected alredy to be taken. The provided accUpdatesLedger would allow the
+// when this function is called, the trackers mutex is expected already to be taken. The provided accUpdatesLedger would allow the
 // evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
 func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
@@ -629,3 +651,8 @@ type txlease struct {
 	sender basics.Address
 	lease  [32]byte
 }
+
+var ledgerInitblocksdbCount = metrics.NewCounter("ledger_initblocksdb_count", "calls")
+var ledgerInitblocksdbMicros = metrics.NewCounter("ledger_initblocksdb_micros", "µs spent")
+var ledgerVerifygenhashCount = metrics.NewCounter("ledger_verifygenhash_count", "calls")
+var ledgerVerifygenhashMicros = metrics.NewCounter("ledger_verifygenhash_micros", "µs spent")

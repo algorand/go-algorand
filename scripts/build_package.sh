@@ -32,7 +32,12 @@ if [ ! -d "${PKG_ROOT}" ]; then
     exit 1
 fi
 
-export GOPATH=$(go env GOPATH)
+UNAME=$(uname)
+if [[ "${UNAME}" == *"MINGW"* ]]; then
+	GOPATH1=$HOME/go
+else
+	export GOPATH=$(go env GOPATH)
+fi
 export GOPATHBIN=${GOPATH%%:*}/bin
 REPO_DIR=$(pwd)
 
@@ -83,29 +88,15 @@ done
 
 mkdir ${PKG_ROOT}/genesis
 
-if [ ! -z "${RELEASE_GENESIS_PROCESS}" ]; then
-    genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
-    for dir in "${genesis_dirs[@]}"; do
-        mkdir -p ${PKG_ROOT}/genesis/${dir}
-        cp ${REPO_DIR}/installer/genesis/${dir}/genesis.json ${PKG_ROOT}/genesis/${dir}/
-        #${GOPATHBIN}/buildtools genesis ensure -n ${dir} --source ${REPO_DIR}/gen/${dir}/genesis.json --target ${PKG_ROOT}/genesis/${dir}/genesis.json --releasedir ${REPO_DIR}/installer/genesis
-        if [ $? -ne 0 ]; then exit 1; fi
-    done
-    # Copy the appropriate network genesis.json for our default (in root ./genesis folder)
-    cp ${PKG_ROOT}/genesis/${DEFAULT_RELEASE_NETWORK}/genesis.json ${PKG_ROOT}/genesis
+genesis_dirs=("devnet" "testnet" "mainnet" "betanet")
+for dir in "${genesis_dirs[@]}"; do
+    mkdir -p ${PKG_ROOT}/genesis/${dir}
+    cp ${REPO_DIR}/installer/genesis/${dir}/genesis.json ${PKG_ROOT}/genesis/${dir}/
     if [ $? -ne 0 ]; then exit 1; fi
-elif [[ "${CHANNEL}" == "dev" || "${CHANNEL}" == "stable" || "${CHANNEL}" == "nightly" || "${CHANNEL}" == "beta" ]]; then
-    cp ${REPO_DIR}/installer/genesis/${DEFAULTNETWORK}/genesis.json ${PKG_ROOT}/genesis/
-    #${GOPATHBIN}/buildtools genesis ensure -n ${DEFAULTNETWORK} --source ${REPO_DIR}/gen/${DEFAULTNETWORK}/genesis.json --target ${PKG_ROOT}/genesis/genesis.json --releasedir ${REPO_DIR}/installer/genesis
-    if [ $? -ne 0 ]; then exit 1; fi
-else
-    cp installer/genesis/${DEFAULTNETWORK}/genesis.json ${PKG_ROOT}/genesis
-    if [ $? -ne 0 ]; then exit 1; fi
-    #if [ -z "${TIMESTAMP}" ]; then
-    #  TIMESTAMP=$(date +%s)
-    #fi
-    #${GOPATHBIN}/buildtools genesis timestamp -f ${PKG_ROOT}/genesis/genesis.json -t ${TIMESTAMP}
-fi
+done
+# Copy the appropriate network genesis.json for our default (in root ./genesis folder)
+cp ${PKG_ROOT}/genesis/${DEFAULT_RELEASE_NETWORK}/genesis.json ${PKG_ROOT}/genesis
+if [ $? -ne 0 ]; then exit 1; fi
 
 TOOLS_ROOT=${PKG_ROOT}/tools
 

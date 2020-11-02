@@ -210,7 +210,11 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 
 		pnode, nodeID = childNode, cache.refurbishNode(curNodeID)
 		pnode.childrenMask = n.childrenMask
-		pnode.children = make([]childEntry, len(n.children), len(n.children))
+		if len(pnode.children) < len(n.children) {
+			pnode.children = make([]childEntry, len(n.children), len(n.children))
+		} else {
+			pnode.children = pnode.children[:len(n.children)]
+		}
 		copy(pnode.children, n.children)
 		pnode.children[curNodeIndex].id = updatedChild
 	}
@@ -228,7 +232,7 @@ func (n *node) calculateHash(cache *merkleTrieCache) error {
 		return nil
 	}
 	path := n.hash
-	hashAccumulator := make([]byte, 0, 64*256)                 // we can have up to 256 elements, so preallocate sufficient storage; append would expand the storage if it won't be enough.
+	hashAccumulator := cache.hashAccumulationBuffer[:0]        // use a preallocated storage and reuse the storage to avoid reallocation.
 	hashAccumulator = append(hashAccumulator, byte(len(path))) // we add this string length before the actual string so it could get "decoded"; in practice, it makes a good domain separator.
 	hashAccumulator = append(hashAccumulator, path...)
 	for _, child := range n.children {
@@ -278,7 +282,11 @@ func (n *node) remove(cache *merkleTrieCache, key []byte, path []byte) (nodeID s
 
 		pnode, nodeID = childNode, cache.refurbishNode(childNodeID)
 		pnode.childrenMask = n.childrenMask
-		pnode.children = make([]childEntry, len(n.children), len(n.children))
+		if len(pnode.children) < len(n.children) {
+			pnode.children = make([]childEntry, len(n.children), len(n.children))
+		} else {
+			pnode.children = pnode.children[:len(n.children)]
+		}
 		copy(pnode.children, n.children)
 		pnode.children[childIndex].id = updatedChildNodeID
 	}
@@ -323,8 +331,7 @@ func (n *node) serialize(buf []byte) int {
 		w += x
 	}
 	buf[w] = n.children[len(n.children)-1].hashIndex
-	w++
-	return w
+	return w + 1
 }
 
 // deserializeNode deserializes the node from a byte array
@@ -365,6 +372,37 @@ func deserializeNode(buf []byte) (n *node, s int) {
 		i++
 	}
 	n.children = make([]childEntry, i, i)
-	copy(n.children[:], childEntries[:i])
+	copy(n.children, childEntries[:i])
 	return
+}
+
+func (n *node) getUniqueChildPageCount(nodesPerPage int64) uint64 {
+	uniquePages := make(map[int64]struct{}, len(n.children))
+	for _, child := range n.children {
+		uniquePages[int64(child.id)/nodesPerPage] = struct{}{}
+	}
+	return uint64(len(uniquePages))
+}
+
+func (n *node) reallocateChildren(cache *merkleTrieCache) {
+	for i := range n.children {
+		n.children[i].id = cache.reallocateNode(n.children[i].id)
+	}
+}
+
+func (n *node) getChildCount() uint64 {
+	return uint64(len(n.children))
+}
+
+func (n *node) remapChildren(reallocationMap map[storedNodeIdentifier]storedNodeIdentifier) {
+	for i := range n.children {
+		for {
+			if newID, has := reallocationMap[n.children[i].id]; has {
+				delete(reallocationMap, n.children[i].id)
+				n.children[i].id = newID
+				continue
+			}
+			break
+		}
+	}
 }

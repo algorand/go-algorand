@@ -1,0 +1,47 @@
+div.hash {
+    font-family: monospace;
+}
+
+div.fname {
+    font-size: 120%;
+}
+
+section {
+    margin: 0 0 0 4em;
+}
+
+section h1 {
+    color: #000;
+    font-size: 175%;
+    margin-left: -3em;
+    padding: 20px;
+    width: 10em;
+}
+
+table {
+    border-collapse: collapse;
+}
+
+tr.spacer td {
+    border: 0;
+    padding: 20px 0;
+}
+
+th {
+    background-color: #DDD;
+    border: 2px inset gray;
+    padding: 10px;
+}
+
+td {
+    border: 2px inset gray;
+    padding: 1px;
+    text-align: center;
+    vertical-align: middle;
+    width: 200px;
+}
+
+td:first-child {
+    text-align: left;
+}
+

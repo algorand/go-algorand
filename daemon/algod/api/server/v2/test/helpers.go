@@ -81,10 +81,15 @@ type mockNode struct {
 	ledger    *data.Ledger
 	genesisID string
 	config    config.Local
+	err       error
 }
 
-func makeMockNode(ledger *data.Ledger, genesisID string) mockNode {
-	return mockNode{ledger: ledger, genesisID: genesisID, config: config.GetDefaultLocal()}
+func makeMockNode(ledger *data.Ledger, genesisID string, nodeError error) mockNode {
+	return mockNode{
+		ledger:    ledger,
+		genesisID: genesisID,
+		config:    config.GetDefaultLocal(),
+		err:       nodeError}
 }
 
 func (m mockNode) Ledger() *data.Ledger {
@@ -104,7 +109,7 @@ func (m mockNode) GenesisHash() crypto.Digest {
 }
 
 func (m mockNode) BroadcastSignedTxGroup(txgroup []transactions.SignedTxn) error {
-	return nil
+	return m.err
 }
 
 func (m mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWithStatus, found bool) {
@@ -114,7 +119,7 @@ func (m mockNode) GetPendingTransaction(txID transactions.Txid) (res node.TxnWit
 }
 
 func (m mockNode) GetPendingTxnsFromPool() ([]transactions.SignedTxn, error) {
-	return nil, nil
+	return nil, m.err
 }
 
 func (m mockNode) SuggestedFee() basics.MicroAlgos {
@@ -168,11 +173,11 @@ func (m mockNode) AssembleBlock(round basics.Round, deadline time.Time) (agreeme
 }
 
 func (m mockNode) StartCatchup(catchpoint string) error {
-	return nil
+	return m.err
 }
 
 func (m mockNode) AbortCatchup(catchpoint string) error {
-	return nil
+	return m.err
 }
 
 ////// mock ledger testing environment follows

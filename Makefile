@@ -1,9 +1,15 @@
-export GOPATH		:= $(shell go env GOPATH)
-GOPATH1		:= $(firstword $(subst :, ,$(GOPATH)))
+UNAME := $(shell uname)
+ifneq (, $(findstring MINGW,$(UNAME)))
+#Gopath is not saved across sessions, probably existing Windows env vars, override them
+export GOPATH := ${HOME}/go
+GOPATH1 := $(GOPATH)
+export PATH := $(PATH):$(GOPATH)/bin
+else
+export GOPATH := $(shell go env GOPATH)
+GOPATH1 := $(firstword $(subst :, ,$(GOPATH)))
+endif
 export GO111MODULE	:= on
 export GOPROXY := direct
-
-UNAME		:= $(shell uname)
 SRCPATH     := $(shell pwd)
 ARCH        := $(shell ./scripts/archtype.sh)
 OS_TYPE     := $(shell ./scripts/ostype.sh)
@@ -11,6 +17,7 @@ S3_RELEASE_BUCKET = $$S3_RELEASE_BUCKET
 
 # If build number already set, use it - to ensure same build number across multiple platforms being built
 BUILDNUMBER      ?= $(shell ./scripts/compute_build_number.sh)
+FULLBUILDNUMBER  ?= $(shell ./scripts/compute_build_number.sh -f)
 COMMITHASH       := $(shell ./scripts/compute_build_commit.sh)
 BUILDBRANCH      := $(shell ./scripts/compute_branch.sh)
 CHANNEL          ?= $(shell ./scripts/compute_branch_channel.sh $(BUILDBRANCH))
@@ -38,6 +45,11 @@ endif
 endif
 endif
 
+ifneq (, $(findstring MINGW,$(UNAME)))
+EXTLDFLAGS := -static-libstdc++ -static-libgcc
+export GOBUILDMODE := -buildmode=exe
+endif
+
 GOTAGS      := --tags "$(GOTAGSLIST)"
 GOTRIMPATH	:= $(shell go help build | grep -q .-trimpath && echo -trimpath)
 
@@ -53,7 +65,7 @@ GOLDFLAGS := $(GOLDFLAGS_BASE) \
 UNIT_TEST_SOURCES := $(sort $(shell GO111MODULE=off go list ./... | grep -v /go-algorand/test/ ))
 ALGOD_API_PACKAGES := $(sort $(shell GO111MODULE=off cd daemon/algod/api; go list ./... ))
 
-MSGP_GENERATE	:= ./protocol ./crypto ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./auction ./agreement ./rpcs ./node ./ledger
+MSGP_GENERATE	:= ./protocol ./crypto ./crypto/compactcert ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./auction ./agreement ./rpcs ./node ./ledger
 
 default: build
 
@@ -289,10 +301,6 @@ install: build
 ###### TARGETS FOR CICD PROCESS ######
 include ./scripts/release/mule/Makefile.mule
 
-SUPPORTED_ARCHIVE_OS_ARCH = linux/amd64 linux/arm64 linux/arm darwin/amd64
-
 archive:
 	CHANNEL=$(CHANNEL) \
-	PATH=$(SRCPATH)/tmp/node_pkgs/$(OS_TYPE)/$(ARCH)/bin:$${PATH} \
-	scripts/upload_version.sh $(CHANNEL) $(SRCPATH)/tmp/node_pkgs $(S3_RELEASE_BUCKET)
-
+	aws s3 cp tmp/node_pkgs s3://algorand-internal/channel/${CHANNEL}/$(FULLBUILDNUMBER) --recursive --exclude "*" --include "*${CHANNEL}*$(FULLBUILDNUMBER)*"
