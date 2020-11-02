@@ -182,9 +182,16 @@ func TestCowStorage(t *testing.T) {
 
 	allValues := make([]basics.TealValue, 100)
 	for i := 0; i < len(allValues); i++ {
-		allValues[i] = basics.TealValue{
-			Type:  basics.TealBytesType,
-			Bytes: fmt.Sprintf("%d", i),
+		if i%2 == 0 {
+			allValues[i] = basics.TealValue{
+				Type:  basics.TealBytesType,
+				Bytes: fmt.Sprintf("%d", i),
+			}
+		} else {
+			allValues[i] = basics.TealValue{
+				Type: basics.TealUintType,
+				Uint: uint64(i),
+			}
 		}
 	}
 
@@ -299,8 +306,18 @@ func TestCowStorage(t *testing.T) {
 					require.Equal(t, tval, cval)
 				}
 
+				var numByteSlices uint64
+				var numUints uint64
+				for _, v := range st.storage[aapp] {
+					if v.Type == basics.TealBytesType {
+						numByteSlices++
+					} else {
+						numUints++
+					}
+				}
 				tcounts := basics.StateSchema{
-					NumByteSlice: uint64(len(st.storage[aapp])),
+					NumByteSlice: numByteSlices,
+					NumUint:      numUints,
 				}
 				ccounts, err := cow.getStorageCounts(addr, sptr.aidx, sptr.global)
 				require.NoError(t, err)
@@ -308,4 +325,164 @@ func TestCowStorage(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestCowBuildDelta(t *testing.T) {
+	a := require.New(t)
+
+	creator := randomAddress()
+	sender := randomAddress()
+	aidx := basics.AppIndex(2)
+
+	cow := roundCowState{}
+	cow.mods.sdeltas = make(map[basics.Address]map[storagePtr]*storageDelta)
+	txn := transactions.Transaction{}
+	ed, err := cow.BuildDelta(aidx, &txn)
+	a.NoError(err)
+	a.Empty(ed)
+
+	cow.mods.sdeltas[creator] = make(map[storagePtr]*storageDelta)
+	ed, err = cow.BuildDelta(aidx, &txn)
+	a.NoError(err)
+	a.Empty(ed)
+
+	// check global delta
+	cow.mods.sdeltas[creator][storagePtr{aidx, true}] = &storageDelta{}
+	ed, err = cow.BuildDelta(1, &txn)
+	a.Error(err)
+	a.Contains(err.Error(), "found storage delta for different app")
+	a.Empty(ed)
+
+	cow.mods.sdeltas[creator][storagePtr{aidx, true}] = &storageDelta{}
+	ed, err = cow.BuildDelta(aidx, &txn)
+	a.NoError(err)
+	a.Equal(basics.EvalDelta{GlobalDelta: basics.StateDelta{}}, ed)
+
+	cow.mods.sdeltas[creator][storagePtr{aidx + 1, true}] = &storageDelta{}
+	ed, err = cow.BuildDelta(aidx, &txn)
+	a.Error(err)
+	a.Contains(err.Error(), "found storage delta for different app")
+	a.Empty(ed)
+
+	delete(cow.mods.sdeltas[creator], storagePtr{aidx + 1, true})
+	cow.mods.sdeltas[sender] = make(map[storagePtr]*storageDelta)
+	cow.mods.sdeltas[sender][storagePtr{aidx, true}] = &storageDelta{}
+	ed, err = cow.BuildDelta(aidx, &txn)
+	a.Error(err)
+	a.Contains(err.Error(), "found more than one global delta")
+	a.Empty(ed)
+
+	// check local delta
+	delete(cow.mods.sdeltas[sender], storagePtr{aidx, true})
+	cow.mods.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{}
+
+	ed, err = cow.BuildDelta(aidx, &txn)
+	a.Error(err)
+	a.Contains(err.Error(), "could not find offset")
+	a.Empty(ed)
+
+	txn.Sender = sender
+	ed, err = cow.BuildDelta(aidx, &txn)
+	a.NoError(err)
+	a.Equal(
+		basics.EvalDelta{
+			GlobalDelta: basics.StateDelta{},
+			LocalDeltas: map[uint64]basics.StateDelta{0: {}},
+		},
+		ed,
+	)
+
+	// check actual serialization
+	delete(cow.mods.sdeltas[creator], storagePtr{aidx, true})
+	cow.mods.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{
+		action: remainAllocAction,
+		kvCow: stateDelta{
+			"key1": valueDelta{
+				old:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+				new:       basics.TealValue{Type: basics.TealUintType, Uint: 2},
+				oldExists: true,
+				newExists: true,
+			},
+		},
+	}
+	ed, err = cow.BuildDelta(aidx, &txn)
+	a.NoError(err)
+	a.Equal(
+		basics.EvalDelta{
+			GlobalDelta: basics.StateDelta(nil),
+			LocalDeltas: map[uint64]basics.StateDelta{
+				0: {
+					"key1": basics.ValueDelta{Action: basics.SetUintAction, Uint: 2},
+				},
+			},
+		},
+		ed,
+	)
+}
+
+func TestCowDeltaSerialize(t *testing.T) {
+	a := require.New(t)
+
+	d := stateDelta{
+		"key1": valueDelta{
+			old:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+			new:       basics.TealValue{Type: basics.TealUintType, Uint: 2},
+			oldExists: true,
+			newExists: true,
+		},
+	}
+	sd := d.serialize()
+	a.Equal(
+		basics.StateDelta{
+			"key1": basics.ValueDelta{Action: basics.SetUintAction, Uint: 2},
+		},
+		sd,
+	)
+
+	d = stateDelta{
+		"key2": valueDelta{
+			old:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+			new:       basics.TealValue{Type: basics.TealBytesType, Bytes: "test"},
+			oldExists: true,
+			newExists: false,
+		},
+	}
+	sd = d.serialize()
+	a.Equal(
+		basics.StateDelta{
+			"key2": basics.ValueDelta{Action: basics.DeleteAction},
+		},
+		sd,
+	)
+
+	d = stateDelta{
+		"key3": valueDelta{
+			old:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+			new:       basics.TealValue{Type: basics.TealBytesType, Bytes: "test"},
+			oldExists: false,
+			newExists: true,
+		},
+	}
+	sd = d.serialize()
+	a.Equal(
+		basics.StateDelta{
+			"key3": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "test"},
+		},
+		sd,
+	)
+
+	d = stateDelta{
+		"key4": valueDelta{
+			old:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+			new:       basics.TealValue{Type: basics.TealUintType, Uint: 1},
+			oldExists: true,
+			newExists: true,
+		},
+	}
+	sd = d.serialize()
+	a.Equal(
+		basics.StateDelta{},
+		sd,
+	)
+
 }
