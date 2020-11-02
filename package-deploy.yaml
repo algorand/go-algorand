@@ -8,6 +8,20 @@ agents:
     env:
       - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - $HOME/.docker:/root/.docker
+    workDir: $HOME/projects/go-algorand
+
+  - name: releases-page
+    dockerFilePath: docker/build/releases-page.Dockerfile
+    image: algorand/releases-page
+    version: scripts/configure_dev-deps.sh
+    env:
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
     workDir: $HOME/projects/go-algorand
 
   - name: rpm
