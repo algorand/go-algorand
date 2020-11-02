@@ -837,10 +837,10 @@ func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (AccountTotal
 	return aul.au.totalsImpl(rnd)
 }
 
-// isDup return whether a transaction is a duplicate one. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
-func (aul *accountUpdatesLedgerEvaluator) isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error) {
+// checkDup test to see if the given transaction id/lease already exists. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
+func (aul *accountUpdatesLedgerEvaluator) checkDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) error {
 	// this is a non-issue since this call will never be made on non-validating evaluation
-	return false, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
+	return fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
 }
 
 // LookupWithoutRewards returns the account balance for a given address at a given round, without the reward

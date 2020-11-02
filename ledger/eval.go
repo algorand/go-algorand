@@ -103,8 +103,8 @@ func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
 	return accountData, err
 }
 
-func (x *roundCowBase) isDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
-	return x.l.isDup(x.proto, x.rnd+1, firstValid, lastValid, txid, txl)
+func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) error {
+	return x.l.checkDup(x.proto, x.rnd+1, firstValid, lastValid, txid, txl)
 }
 
 func (x *roundCowBase) txnCounter() uint64 {
@@ -248,7 +248,7 @@ type ledgerForEvaluator interface {
 	GenesisHash() crypto.Digest
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	Totals(basics.Round) (AccountTotals, error)
-	isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
+	checkDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
 	CompactCertVoters(basics.Round) (*VotersForRound, error)
@@ -505,12 +505,9 @@ func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, cow *rou
 
 	// Transaction already in the ledger?
 	txid := txn.ID()
-	dup, err := cow.isDup(txn.Txn.First(), txn.Txn.Last(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
+	err = cow.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
 	if err != nil {
 		return err
-	}
-	if dup {
-		return TransactionInLedgerError{txn.ID()}
 	}
 
 	return nil
@@ -665,12 +662,9 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *app
 		}
 
 		// Transaction already in the ledger?
-		dup, err := cow.isDup(txn.Txn.First(), txn.Txn.Last(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
+		err := cow.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
 		if err != nil {
 			return err
-		}
-		if dup {
-			return TransactionInLedgerError{txid}
 		}
 
 		// Does the address that authorized the transaction actually match whatever address the sender has rekeyed to?

@@ -34,7 +34,7 @@ import (
 
 type roundCowParent interface {
 	lookup(basics.Address) (basics.AccountData, error)
-	isDup(basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
+	checkDup(basics.Round, basics.Round, transactions.Txid, txlease) error
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	compactCertLast() basics.Round
@@ -109,20 +109,20 @@ func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, e
 	return cb.lookupParent.lookup(addr)
 }
 
-func (cb *roundCowState) isDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
+func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) error {
 	_, present := cb.mods.Txids[txid]
 	if present {
-		return true, nil
+		return &TransactionInLedgerError{Txid: txid}
 	}
 
 	if cb.proto.SupportTransactionLeases && (txl.lease != [32]byte{}) {
 		expires, ok := cb.mods.txleases[txl]
 		if ok && cb.mods.hdr.Round <= expires {
-			return true, nil
+			return &LeaseInLedgerError{txid: txid, lease: txl}
 		}
 	}
 
-	return cb.lookupParent.isDup(firstValid, lastValid, txid, txl)
+	return cb.lookupParent.checkDup(firstValid, lastValid, txid, txl)
 }
 
 func (cb *roundCowState) txnCounter() uint64 {
