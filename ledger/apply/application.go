@@ -402,10 +402,6 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 		return fmt.Errorf("transaction rejected by ApprovalProgram")
 	}
 
-	// Fill in applyData, so that consumers don't have to implement a
-	// stateful TEAL interpreter to apply state changes
-	// ad.EvalDelta = evalDelta
-
 	switch ac.OnCompletion {
 	case transactions.NoOpOC:
 		// Nothing to do

@@ -16,8 +16,6 @@
 
 package apply
 
-// TODO
-/*
 import (
 	"fmt"
 	"math/rand"
@@ -29,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -99,12 +98,18 @@ type testBalances struct {
 	balances    map[basics.Address]basics.AccountData
 	proto       config.ConsensusParams
 
-	put             int // Put calls counter
-	putWith         int // PutWithCreatable calls counter
-	putBalances     map[basics.Address]basics.AccountData
-	putWithBalances map[basics.Address]basics.AccountData
-	putWithNew      []basics.CreatableLocator
-	putWithDel      []basics.CreatableLocator
+	put               int // Put calls counter
+	putWith           int // PutWithCreatable calls counter
+	putBalances       map[basics.Address]basics.AccountData
+	putWithBalances   map[basics.Address]basics.AccountData
+	putWithNew        []basics.CreatableLocator
+	putWithDel        []basics.CreatableLocator
+	allocatedAppIdx   basics.AppIndex
+	deAllocatedAppIdx basics.AppIndex
+
+	// logic evaluator control
+	pass  bool
+	delta basics.EvalDelta
 }
 
 type testBalancesPass struct {
@@ -114,29 +119,29 @@ type testBalancesPass struct {
 const appIdxError basics.AppIndex = 0x11223344
 const appIdxOk basics.AppIndex = 1
 
-func (b *testBalances) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
+func (b *testBalances) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	ad, ok := b.balances[addr]
 	if !ok {
-		return basics.BalanceRecord{}, fmt.Errorf("mock balance not found")
+		return basics.AccountData{}, fmt.Errorf("mock balance not found")
 	}
-	return basics.BalanceRecord{Addr: addr, AccountData: ad}, nil
+	return ad, nil
 }
 
-func (b *testBalances) Put(record basics.BalanceRecord) error {
+func (b *testBalances) Put(addr basics.Address, ad basics.AccountData) error {
 	b.put++
 	if b.putBalances == nil {
 		b.putBalances = make(map[basics.Address]basics.AccountData)
 	}
-	b.putBalances[record.Addr] = record.AccountData
+	b.putBalances[addr] = ad
 	return nil
 }
 
-func (b *testBalances) PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
+func (b *testBalances) PutWithCreatable(addr basics.Address, ad basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
 	b.putWith++
 	if b.putWithBalances == nil {
 		b.putWithBalances = make(map[basics.Address]basics.AccountData)
 	}
-	b.putWithBalances[record.Addr] = record.AccountData
+	b.putWithBalances[addr] = ad
 	if newCreatable != nil {
 		b.putWithNew = append(b.putWithNew, *newCreatable)
 	}
@@ -163,32 +168,61 @@ func (b *testBalances) Move(src, dst basics.Address, amount basics.MicroAlgos, s
 	return nil
 }
 
-func (b *testBalancesPass) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
-	ad, ok := b.balances[addr]
-	if !ok {
-		return basics.BalanceRecord{}, fmt.Errorf("mock balance not found")
-	}
-	return basics.BalanceRecord{Addr: addr, AccountData: ad}, nil
-}
-
-func (b *testBalancesPass) Put(record basics.BalanceRecord) error {
-	if b.balances == nil {
-		b.balances = make(map[basics.Address]basics.AccountData)
-	}
-	b.balances[record.Addr] = record.AccountData
-	return nil
-}
-
-func (b *testBalancesPass) PutWithCreatable(record basics.BalanceRecord, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
-	if b.balances == nil {
-		b.balances = make(map[basics.Address]basics.AccountData)
-	}
-	b.balances[record.Addr] = record.AccountData
-	return nil
-}
-
 func (b *testBalances) ConsensusParams() config.ConsensusParams {
 	return b.proto
+}
+func (b *testBalances) Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
+	b.allocatedAppIdx = aidx
+	return nil
+}
+
+func (b *testBalances) Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error {
+	b.deAllocatedAppIdx = aidx
+	return nil
+}
+
+func (b *testBalances) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta basics.EvalDelta, err error) {
+	return b.pass, b.delta, nil
+}
+
+func (b *testBalancesPass) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
+	ad, ok := b.balances[addr]
+	if !ok {
+		return basics.AccountData{}, fmt.Errorf("mock balance not found")
+	}
+	return ad, nil
+}
+
+func (b *testBalancesPass) Put(addr basics.Address, ad basics.AccountData) error {
+	if b.balances == nil {
+		b.balances = make(map[basics.Address]basics.AccountData)
+	}
+	b.balances[addr] = ad
+	return nil
+}
+
+func (b *testBalancesPass) PutWithCreatable(addr basics.Address, ad basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) error {
+	if b.balances == nil {
+		b.balances = make(map[basics.Address]basics.AccountData)
+	}
+	b.balances[addr] = ad
+	return nil
+}
+
+func (b *testBalancesPass) ConsensusParams() config.ConsensusParams {
+	return b.proto
+}
+func (b *testBalancesPass) Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
+	b.allocatedAppIdx = aidx
+	return nil
+}
+
+func (b *testBalancesPass) Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error {
+	return nil
+}
+
+func (b *testBalancesPass) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (passed bool, evalDelta basics.EvalDelta, err error) {
+	return true, b.delta, nil
 }
 
 // ResetWrites clears side effects of Put/PutWithCreatable
@@ -199,6 +233,7 @@ func (b *testBalances) ResetWrites() {
 	b.putWithBalances = nil
 	b.putWithNew = []basics.CreatableLocator{}
 	b.putWithDel = []basics.CreatableLocator{}
+	b.allocatedAppIdx = 0
 }
 
 func (b *testBalances) SetProto(name protocol.ConsensusVersion) {
@@ -231,81 +266,6 @@ func (e *testEvaluator) InitLedger(balances Balances, appIdx basics.AppIndex, sc
 	e.appIdx = appIdx
 	return nil
 }
-
-// TODO
-// func TestAppCallApplyDelta(t *testing.T) {
-// 	a := require.New(t)
-
-// 	var tkv basics.TealKeyValue
-// 	var sd basics.StateDelta
-// 	err := applyStateDelta(tkv, sd)
-// 	a.Error(err)
-// 	a.Contains(err.Error(), "cannot apply delta to nil TealKeyValue")
-
-// 	tkv = basics.TealKeyValue{}
-// 	err = applyStateDelta(tkv, sd)
-// 	a.NoError(err)
-// 	a.True(len(tkv) == 0)
-
-// 	sd = basics.StateDelta{
-// 		"test": basics.ValueDelta{
-// 			Action: basics.DeltaAction(10),
-// 			Uint:   0,
-// 		},
-// 	}
-
-// 	err = applyStateDelta(tkv, sd)
-// 	a.Error(err)
-// 	a.Contains(err.Error(), "unknown delta action")
-
-// 	sd = basics.StateDelta{
-// 		"test": basics.ValueDelta{
-// 			Action: basics.SetUintAction,
-// 			Uint:   1,
-// 		},
-// 	}
-// 	err = applyStateDelta(tkv, sd)
-// 	a.NoError(err)
-// 	a.True(len(tkv) == 1)
-// 	a.Equal(uint64(1), tkv["test"].Uint)
-// 	a.Equal(basics.TealUintType, tkv["test"].Type)
-
-// 	sd = basics.StateDelta{
-// 		"test": basics.ValueDelta{
-// 			Action: basics.DeleteAction,
-// 		},
-// 	}
-// 	err = applyStateDelta(tkv, sd)
-// 	a.NoError(err)
-// 	a.True(len(tkv) == 0)
-
-// 	// nil bytes
-// 	sd = basics.StateDelta{
-// 		"test": basics.ValueDelta{
-// 			Action: basics.SetBytesAction,
-// 		},
-// 	}
-// 	err = applyStateDelta(tkv, sd)
-// 	a.NoError(err)
-// 	a.True(len(tkv) == 1)
-// 	a.Equal(basics.TealBytesType, tkv["test"].Type)
-// 	a.Equal("", tkv["test"].Bytes)
-// 	a.Equal(uint64(0), tkv["test"].Uint)
-
-// 	// check illformed update
-// 	sd = basics.StateDelta{
-// 		"test": basics.ValueDelta{
-// 			Action: basics.SetBytesAction,
-// 			Uint:   1,
-// 		},
-// 	}
-// 	err = applyStateDelta(tkv, sd)
-// 	a.NoError(err)
-// 	a.True(len(tkv) == 1)
-// 	a.Equal(basics.TealBytesType, tkv["test"].Type)
-// 	a.Equal("", tkv["test"].Bytes)
-// 	a.Equal(uint64(0), tkv["test"].Uint)
-// }
 
 func TestAppCallCloneEmpty(t *testing.T) {
 	a := require.New(t)
@@ -386,287 +346,34 @@ func TestAppCallCheckPrograms(t *testing.T) {
 	a := require.New(t)
 
 	var ac transactions.ApplicationCallTxnFields
-	var steva testEvaluator
+	var ep logic.EvalParams
+	proto := config.Consensus[protocol.ConsensusFuture]
+	ep.Proto = &proto
 
-	err := checkPrograms(&ac, &steva, 1)
+	err := checkPrograms(&ac, &ep, 1)
 	a.Error(err)
 	a.Contains(err.Error(), "check failed on ApprovalProgram")
 
 	program := []byte{2, 0x20, 1, 1, 0x22} // version, intcb, int 1
 	ac.ApprovalProgram = program
-	err = checkPrograms(&ac, &steva, 1)
+	err = checkPrograms(&ac, &ep, 1)
 	a.Error(err)
 	a.Contains(err.Error(), "ApprovalProgram too resource intensive")
 
-	err = checkPrograms(&ac, &steva, 10)
+	err = checkPrograms(&ac, &ep, 10)
 	a.Error(err)
 	a.Contains(err.Error(), "check failed on ClearStateProgram")
 
 	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
 	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
 	ac.ClearStateProgram = append(ac.ClearStateProgram, program...)
-	err = checkPrograms(&ac, &steva, 10)
+	err = checkPrograms(&ac, &ep, 10)
 	a.Error(err)
 	a.Contains(err.Error(), "ClearStateProgram too resource intensive")
 
 	ac.ClearStateProgram = program
-	err = checkPrograms(&ac, &steva, 10)
+	err = checkPrograms(&ac, &ep, 10)
 	a.NoError(err)
-}
-
-func TestAppCallApplyGlobalStateDeltas(t *testing.T) {
-	a := require.New(t)
-
-	var creator basics.Address
-	var sender basics.Address
-	var ac transactions.ApplicationCallTxnFields
-	var ed basics.EvalDelta
-	var params basics.AppParams
-	var appIdx basics.AppIndex
-	var b testBalances
-
-	// check empty input
-	err := applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.NoError(err)
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.NoError(err)
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-
-	ed.GlobalDelta = make(basics.StateDelta)
-	ed.GlobalDelta["uint"] = basics.ValueDelta{Action: basics.SetUintAction, Uint: 1}
-
-	// check global on unsupported proto
-	b.SetProto(protocol.ConsensusV23)
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.Error(err)
-	a.True(isApplyError(err))
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.Error(err)
-	a.Contains(err.Error(), "cannot apply GlobalState delta")
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-
-	// check global on supported proto
-	b.SetProto(protocol.ConsensusFuture)
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.Error(err)
-	a.True(isApplyError(err))
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.Error(err)
-	a.Contains(err.Error(), fmt.Sprintf("GlobalState for app %d would use too much space", appIdx))
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-
-	// check Action=Delete delta on empty params
-	ed.GlobalDelta["uint"] = basics.ValueDelta{Action: basics.DeleteAction}
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.Error(err)
-	a.Contains(err.Error(), "balance not found")
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-
-	// simulate balances.GetCreator and balances.Get get out of sync
-	// creator received from balances.GetCreator and has app params
-	// and its balances.Get record is out of sync/not initialized
-	// ensure even if AppParams were allocated they are empty
-	creator = getRandomAddress(a)
-	b.balances = make(map[basics.Address]basics.AccountData)
-	b.balances[creator] = basics.AccountData{}
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.NoError(err)
-	a.Equal(1, b.put)
-	a.Equal(0, b.putWith)
-	pad, ok := b.putBalances[creator]
-	a.True(ok)
-	// There is a side effect: Action=Delete bypasses all default checks and
-	// forces AppParams (empty before) to have an entry for appIdx
-	ap, ok := pad.AppParams[appIdx]
-	a.True(ok)
-	a.Equal(0, len(ap.GlobalState))
-	// ensure AppParams with pre-allocated fields is stored as empty AppParams{}
-	enc := protocol.Encode(&ap)
-	emp := protocol.Encode(&basics.AppParams{})
-	a.Equal(len(emp), len(enc))
-	// ensure original balance record in the mock was not changed
-	// this ensure proper cloning and any in-intended in-memory modifications
-	a.Equal(basics.AccountData{}, b.balances[creator])
-
-	b.ResetWrites()
-
-	// now check errors with non-default values
-	b.SetProto(protocol.ConsensusV23)
-	ed.GlobalDelta["uint"] = basics.ValueDelta{Action: basics.SetUintAction, Uint: 1}
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.Error(err)
-	a.True(isApplyError(err))
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-	a.Equal(basics.AccountData{}, b.balances[creator])
-
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.Error(err)
-	a.Contains(err.Error(), "cannot apply GlobalState delta")
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-	a.Equal(basics.AccountData{}, b.balances[creator])
-
-	b.SetProto(protocol.ConsensusFuture)
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.Error(err)
-	a.Contains(err.Error(), fmt.Sprintf("GlobalState for app %d would use too much space: store integer count", appIdx))
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-	a.Equal(basics.AccountData{}, b.balances[creator])
-
-	// try illformed delta
-	params.GlobalStateSchema = basics.StateSchema{NumUint: 1}
-	ed.GlobalDelta["bytes"] = basics.ValueDelta{Action: basics.SetBytesAction, Uint: 1}
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.Error(err)
-	a.Contains(err.Error(), fmt.Sprintf("GlobalState for app %d would use too much space: store bytes count", appIdx))
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-	a.Equal(basics.AccountData{}, b.balances[creator])
-
-	// check a happy case
-	params.GlobalStateSchema = basics.StateSchema{NumUint: 1, NumByteSlice: 1}
-	br := basics.AccountData{AppParams: map[basics.AppIndex]basics.AppParams{appIdx: params}}
-	cp := basics.AccountData{AppParams: map[basics.AppIndex]basics.AppParams{appIdx: params}}
-	b.balances[creator] = cp
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.NoError(err)
-	a.Equal(1, b.put)
-	pad, ok = b.putBalances[creator]
-	a.True(ok)
-	ap, ok = pad.AppParams[appIdx]
-	a.True(ok)
-	a.Equal(2, len(ap.GlobalState))
-	a.Equal(basics.TealBytesType, ap.GlobalState["bytes"].Type)
-	a.Equal(basics.TealUintType, ap.GlobalState["uint"].Type)
-	a.Equal(uint64(0), ap.GlobalState["bytes"].Uint)
-	a.Equal(uint64(1), ap.GlobalState["uint"].Uint)
-	a.Equal("", ap.GlobalState["bytes"].Bytes)
-	a.Equal("", ap.GlobalState["uint"].Bytes)
-	a.Equal(br, b.balances[creator])
-}
-
-func TestAppCallApplyLocalsStateDeltas(t *testing.T) {
-	a := require.New(t)
-
-	var creator basics.Address = getRandomAddress(a)
-	var sender basics.Address = getRandomAddress(a)
-	var ac transactions.ApplicationCallTxnFields
-	var ed basics.EvalDelta
-	var params basics.AppParams
-	var appIdx basics.AppIndex
-	var b testBalances
-
-	b.balances = make(map[basics.Address]basics.AccountData)
-	ed.LocalDeltas = make(map[uint64]basics.StateDelta)
-
-	err := applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.NoError(err)
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.NoError(err)
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-
-	ed.LocalDeltas[1] = basics.StateDelta{}
-
-	// non-existing account
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.Error(err)
-
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.Error(err)
-
-	// empty delta
-	ac.Accounts = append(ac.Accounts, sender, sender)
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.Error(err)
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-
-	// test duplicates in accounts
-	b.SetProto(protocol.ConsensusFuture)
-	ed.LocalDeltas[0] = basics.StateDelta{"uint": basics.ValueDelta{Action: basics.DeleteAction}}
-	ed.LocalDeltas[1] = basics.StateDelta{"bytes": basics.ValueDelta{Action: basics.DeleteAction}}
-	b.balances[sender] = basics.AccountData{}
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.Error(err)
-	a.True(isApplyError(err))
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-	a.Equal(basics.AccountData{}, b.balances[sender])
-	// not opted in
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.Error(err)
-	a.Contains(err.Error(), "acct has not opted in to app")
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-	// ensure original balance record in the mock was not changed
-	// this ensure proper cloning and any in-intended in-memory modifications
-	a.Equal(basics.AccountData{}, b.balances[sender])
-
-	states := map[basics.AppIndex]basics.AppLocalState{appIdx: {}, 1: {}}
-	cp := map[basics.AppIndex]basics.AppLocalState{appIdx: {}, 1: {}}
-	b.balances[sender] = basics.AccountData{
-		AppLocalStates: cp,
-	}
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.Error(err)
-	a.Contains(err.Error(), "duplicate LocalState delta")
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-	// ensure no changes in original balance record
-	a.Equal(basics.AccountData{AppLocalStates: states}, b.balances[sender])
-
-	// test valid deltas and accounts
-	ac.Accounts = nil
-	states = map[basics.AppIndex]basics.AppLocalState{appIdx: {}}
-	b.balances[sender] = basics.AccountData{AppLocalStates: states}
-	ed.LocalDeltas[0] = basics.StateDelta{
-		"uint":  basics.ValueDelta{Action: basics.SetUintAction, Uint: 1},
-		"bytes": basics.ValueDelta{Action: basics.SetBytesAction, Bytes: "value"},
-	}
-	delete(ed.LocalDeltas, 1)
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.Error(err)
-	a.Contains(err.Error(), "would use too much space")
-	a.Equal(0, b.put)
-	a.Equal(0, b.putWith)
-	a.Equal(basics.AccountData{AppLocalStates: states}, b.balances[sender])
-
-	// happy case
-	states = map[basics.AppIndex]basics.AppLocalState{appIdx: {
-		Schema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
-	}}
-	cp = map[basics.AppIndex]basics.AppLocalState{appIdx: {
-		Schema: basics.StateSchema{NumUint: 1, NumByteSlice: 1},
-	}}
-	b.balances[sender] = basics.AccountData{AppLocalStates: cp}
-	err = applyEvalDelta(&ac, ed, params, creator, sender, &b, appIdx)
-	a.NoError(err)
-	a.Equal(1, b.put)
-	a.Equal(0, b.putWith)
-	a.Equal(basics.AccountData{AppLocalStates: states}, b.balances[sender])
-	a.Equal(basics.TealUintType, b.putBalances[sender].AppLocalStates[appIdx].KeyValue["uint"].Type)
-	a.Equal(basics.TealBytesType, b.putBalances[sender].AppLocalStates[appIdx].KeyValue["bytes"].Type)
-	a.Equal(uint64(1), b.putBalances[sender].AppLocalStates[appIdx].KeyValue["uint"].Uint)
-	a.Equal("value", b.putBalances[sender].AppLocalStates[appIdx].KeyValue["bytes"].Bytes)
 }
 
 func TestAppCallCreate(t *testing.T) {
@@ -724,13 +431,13 @@ func TestAppCallApplyCreate(t *testing.T) {
 	h := transactions.Header{
 		Sender: sender,
 	}
-	var steva testEvaluator
+	var ep logic.EvalParams
 	var txnCounter uint64 = 1
 	var b testBalances
 
-	err := ApplicationCall(ac, h, &b, nil, txnCounter, &steva)
+	err := ApplicationCall(ac, h, &b, nil, &ep, txnCounter)
 	a.Error(err)
-	a.Contains(err.Error(), "cannot use empty ApplyData")
+	a.Contains(err.Error(), "ApplyData cannot be nil")
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 
@@ -738,25 +445,27 @@ func TestAppCallApplyCreate(t *testing.T) {
 	b.balances[creator] = basics.AccountData{}
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
 
-	err = ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "max created apps per acct is 0")
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 
 	b.SetProto(protocol.ConsensusFuture)
+	proto := b.ConsensusParams()
+	ep.Proto = &proto
 
 	// this test will succeed in creating the app, but then fail
 	// because the mock balances doesn't update the creators table
 	// so it will think the app doesn't exist
-	err = ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "applications that do not exist")
 	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 
-	createdAppIdx := basics.AppIndex(txnCounter + 1)
-	b.appCreators = map[basics.AppIndex]basics.Address{createdAppIdx: creator}
+	appIdx := basics.AppIndex(txnCounter + 1)
+	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
 	// save the created app info to the side
 	saved := b.putWithBalances[creator]
@@ -765,9 +474,9 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 	// now looking up the creator will succeed, but we reset writes, so
 	// they won't have the app params
-	err = ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
-	a.Contains(err.Error(), fmt.Sprintf("app %d not found in account", createdAppIdx))
+	a.Contains(err.Error(), fmt.Sprintf("app %d not found in account", appIdx))
 	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 
@@ -778,10 +487,10 @@ func TestAppCallApplyCreate(t *testing.T) {
 	cp.AppParams = cloneAppParams(saved.AppParams)
 	cp.AppLocalStates = cloneAppLocalStates(saved.AppLocalStates)
 	b.balances[creator] = cp
-	err = ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "transaction rejected by ApprovalProgram")
-	a.Equal(uint64(steva.appIdx), txnCounter+1)
+	a.Equal(uint64(b.allocatedAppIdx), txnCounter+1)
 	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 	// ensure original balance record in the mock was not changed
@@ -794,68 +503,27 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 	b.ResetWrites()
 
-	cp = basics.AccountData{}
-	cp.AppParams = cloneAppParams(saved.AppParams)
-	cp.AppLocalStates = cloneAppLocalStates(saved.AppLocalStates)
-
-	steva.pass = true
-	gd := map[string]basics.ValueDelta{"uint": {Action: basics.DeltaAction(4), Uint: 1}}
-	steva.delta = basics.EvalDelta{GlobalDelta: gd}
-	err = ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
-	a.Error(err)
-	a.Contains(err.Error(), "cannot apply GlobalState delta")
-	a.Equal(uint64(steva.appIdx), txnCounter+1)
-	a.Equal(0, b.put)
-	a.Equal(1, b.putWith)
-	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
-	a.Equal(saved, b.balances[creator])
-	saved = b.putWithBalances[creator]
-
-	b.ResetWrites()
-
-	cp = basics.AccountData{}
-	cp.AppParams = cloneAppParams(saved.AppParams)
-	cp.AppLocalStates = cloneAppLocalStates(saved.AppLocalStates)
-
-	gd = map[string]basics.ValueDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
-	steva.delta = basics.EvalDelta{GlobalDelta: gd}
-	ac.GlobalStateSchema = basics.StateSchema{NumUint: 1}
-	err = ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
-	a.Error(err)
-	a.Contains(err.Error(), "too much space: store integer")
-	a.Equal(uint64(steva.appIdx), txnCounter+1)
-	a.Equal(0, b.put)
-	a.Equal(1, b.putWith)
-	a.Equal(saved, b.balances[creator])
-	saved = b.putWithBalances[creator]
-
-	b.ResetWrites()
-
+	b.pass = true
 	cp = basics.AccountData{}
 	cp.AppParams = cloneAppParams(saved.AppParams)
 	cp.AppLocalStates = cloneAppLocalStates(saved.AppLocalStates)
 	cp.TotalAppSchema = saved.TotalAppSchema
 	b.balances[creator] = cp
 
-	err = ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
+	ac.GlobalStateSchema = basics.StateSchema{NumUint: 1}
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
-	appIdx := steva.appIdx
-	a.Equal(uint64(appIdx), txnCounter+1)
-	a.Equal(1, b.put)
+	a.Equal(appIdx, b.allocatedAppIdx)
+	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 	a.Equal(saved, b.balances[creator])
-	br := b.putBalances[creator]
-	a.Equal([]byte{1}, br.AppParams[appIdx].ApprovalProgram)
-	a.Equal([]byte{1}, br.AppParams[appIdx].ClearStateProgram)
-	a.Equal(basics.TealKeyValue{"uint": basics.TealValue{Type: basics.TealUintType, Uint: 1}}, br.AppParams[appIdx].GlobalState)
-	a.Equal(basics.StateSchema{NumUint: 1}, br.AppParams[appIdx].GlobalStateSchema)
-	a.Equal(basics.StateSchema{}, br.AppParams[appIdx].LocalStateSchema)
-	a.Equal(basics.StateSchema{NumUint: 1}, br.TotalAppSchema)
-	br = b.putWithBalances[creator]
+	br := b.putWithBalances[creator]
 	a.Equal([]byte{1}, br.AppParams[appIdx].ApprovalProgram)
 	a.Equal([]byte{1}, br.AppParams[appIdx].ClearStateProgram)
 	a.Equal(basics.TealKeyValue(nil), br.AppParams[appIdx].GlobalState)
 	a.Equal(basics.StateSchema{NumUint: 1}, br.AppParams[appIdx].GlobalStateSchema)
+	a.Equal(basics.StateSchema{}, br.AppParams[appIdx].LocalStateSchema)
+	a.Equal(basics.StateSchema{NumUint: 1}, br.TotalAppSchema)
 	a.Equal(basics.StateSchema{}, br.AppParams[appIdx].LocalStateSchema)
 }
 
@@ -876,7 +544,7 @@ func TestAppCallApplyCreateOptIn(t *testing.T) {
 	h := transactions.Header{
 		Sender: sender,
 	}
-	var steva testEvaluator
+	var ep logic.EvalParams
 	var txnCounter uint64 = 1
 	appIdx := basics.AppIndex(txnCounter + 1)
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
@@ -885,19 +553,20 @@ func TestAppCallApplyCreateOptIn(t *testing.T) {
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
 	b.SetProto(protocol.ConsensusFuture)
+	proto := b.ConsensusParams()
+	ep.Proto = &proto
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
-	steva.pass = true
 	gd := map[string]basics.ValueDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
-	steva.delta = basics.EvalDelta{GlobalDelta: gd}
+	b.delta = basics.EvalDelta{GlobalDelta: gd}
 
-	err := ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
+	err := ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
-	a.Equal(steva.appIdx, appIdx)
+	a.Equal(appIdx, b.allocatedAppIdx)
 	br := b.balances[creator]
 	a.Equal([]byte{1}, br.AppParams[appIdx].ApprovalProgram)
 	a.Equal([]byte{1}, br.AppParams[appIdx].ClearStateProgram)
-	a.Equal(basics.TealKeyValue{"uint": basics.TealValue{Type: basics.TealUintType, Uint: 1}}, br.AppParams[appIdx].GlobalState)
+	a.Equal(basics.TealKeyValue(nil), br.AppParams[appIdx].GlobalState)
 	a.Equal(basics.StateSchema{NumUint: 1}, br.AppParams[appIdx].GlobalStateSchema)
 	a.Equal(basics.StateSchema{NumByteSlice: 2}, br.AppParams[appIdx].LocalStateSchema)
 	a.Equal(basics.StateSchema{NumByteSlice: 2}, br.AppLocalStates[appIdx].Schema)
@@ -917,14 +586,14 @@ func TestAppCallOptIn(t *testing.T) {
 
 	var params basics.AppParams
 
-	err := applyOptIn(&b, sender, appIdx, params)
+	err := optInApplication(&b, sender, appIdx, params)
 	a.Error(err)
 	a.Contains(err.Error(), "cannot opt in app")
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 
 	b.SetProto(protocol.ConsensusFuture)
-	err = applyOptIn(&b, sender, appIdx, params)
+	err = optInApplication(&b, sender, appIdx, params)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	a.Equal(0, b.putWith)
@@ -936,7 +605,7 @@ func TestAppCallOptIn(t *testing.T) {
 	ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
 	ad.AppLocalStates[appIdx] = basics.AppLocalState{}
 	b.balances = map[basics.Address]basics.AccountData{sender: ad}
-	err = applyOptIn(&b, sender, appIdx, params)
+	err = optInApplication(&b, sender, appIdx, params)
 	a.Error(err)
 	a.Contains(err.Error(), "has already opted in to app")
 	a.Equal(0, b.put)
@@ -947,7 +616,7 @@ func TestAppCallOptIn(t *testing.T) {
 	delete(ad.AppLocalStates, appIdx)
 	ad.AppLocalStates[appIdx+1] = basics.AppLocalState{}
 	b.balances = map[basics.Address]basics.AccountData{sender: ad}
-	err = applyOptIn(&b, sender, appIdx, params)
+	err = optInApplication(&b, sender, appIdx, params)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	a.Equal(0, b.putWith)
@@ -960,7 +629,7 @@ func TestAppCallOptIn(t *testing.T) {
 	ad.TotalAppSchema = basics.StateSchema{NumByteSlice: 1}
 	params.LocalStateSchema = basics.StateSchema{NumUint: 1}
 	b.balances = map[basics.Address]basics.AccountData{sender: ad}
-	err = applyOptIn(&b, sender, appIdx, params)
+	err = optInApplication(&b, sender, appIdx, params)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	a.Equal(0, b.putWith)
@@ -982,22 +651,45 @@ func TestAppCallClearState(t *testing.T) {
 
 	creator := getRandomAddress(a)
 	sender := getRandomAddress(a)
-	ac := transactions.ApplicationCallTxnFields{}
-	var steva testEvaluator
 	var txnCounter uint64 = 1
 	appIdx := basics.AppIndex(txnCounter + 1)
 	var b testBalances
+	var ep logic.EvalParams
 
 	ad := &transactions.ApplyData{}
 	b.appCreators = make(map[basics.AppIndex]basics.Address)
 	b.balances = make(map[basics.Address]basics.AccountData, 2)
 	b.SetProto(protocol.ConsensusFuture)
+	proto := b.ConsensusParams()
+	ep.Proto = &proto
 
+	ac := transactions.ApplicationCallTxnFields{
+		ApplicationID: appIdx,
+		OnCompletion:  transactions.CloseOutOC,
+	}
+	params := basics.AppParams{
+		ApprovalProgram: []byte{1},
+		StateSchemas: basics.StateSchemas{
+			GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		},
+	}
+	h := transactions.Header{
+		Sender: sender,
+	}
+
+	b.balances = make(map[basics.Address]basics.AccountData)
+	cp := basics.AccountData{
+		AppParams: map[basics.AppIndex]basics.AppParams{appIdx: params},
+	}
+	b.balances[creator] = cp
+	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
+
+	b.pass = true
 	// check app not exist and not opted in
 	b.balances[sender] = basics.AccountData{}
-	err := applyClearState(&ac, &b, sender, appIdx, ad, &steva)
+	err := ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
-	a.Contains(err.Error(), "not currently opted in")
+	a.Contains(err.Error(), "is not opted in to app")
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 
@@ -1005,7 +697,7 @@ func TestAppCallClearState(t *testing.T) {
 	b.balances[sender] = basics.AccountData{
 		AppLocalStates: map[basics.AppIndex]basics.AppLocalState{appIdx: {}},
 	}
-	err = applyClearState(&ac, &b, sender, appIdx, ad, &steva)
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	a.Equal(0, b.putWith)
@@ -1024,7 +716,7 @@ func TestAppCallClearState(t *testing.T) {
 			appIdx: {Schema: basics.StateSchema{NumUint: 10}},
 		},
 	}
-	err = applyClearState(&ac, &b, sender, appIdx, ad, &steva)
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	a.Equal(0, b.putWith)
@@ -1049,27 +741,27 @@ func TestAppCallClearState(t *testing.T) {
 	b.appCreators[appIdx] = creator
 
 	// one put: to opt out
-	steva.pass = false
-	gd := map[string]basics.ValueDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
-	steva.delta = basics.EvalDelta{GlobalDelta: gd}
-	err = applyClearState(&ac, &b, sender, appIdx, ad, &steva)
+	gd := basics.StateDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
+	b.delta = basics.EvalDelta{GlobalDelta: gd}
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	a.Equal(0, b.putWith)
 	br = b.putBalances[sender]
 	a.Equal(0, len(br.AppLocalStates))
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
-	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
+	a.Equal(gd, ad.EvalDelta.GlobalDelta)
 
 	b.ResetWrites()
 
 	// check existing application with successful ClearStateProgram. two
-	// puts: one to write global state, one to opt out
-	steva.pass = true
-	err = applyClearState(&ac, &b, sender, appIdx, ad, &steva)
+	// one to opt out, one deallocate
+	b.pass = true
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
-	a.Equal(2, b.put)
+	a.Equal(1, b.put)
 	a.Equal(0, b.putWith)
+	a.Equal(appIdx, b.deAllocatedAppIdx)
 	a.Equal(0, len(br.AppLocalStates))
 	a.Equal(basics.StateSchema{}, br.TotalAppSchema)
 	a.Equal(basics.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
@@ -1096,7 +788,7 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	h := transactions.Header{
 		Sender: sender,
 	}
-	var steva testEvaluator
+	var ep logic.EvalParams
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
 	var b testBalances
 
@@ -1111,12 +803,13 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
 	b.SetProto(protocol.ConsensusFuture)
+	proto := b.ConsensusParams()
+	ep.Proto = &proto
 
-	steva.pass = false
-	err := ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
+	b.pass = false
+	err := ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "transaction rejected by ApprovalProgram")
-	a.Equal(steva.appIdx, appIdx)
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 	br := b.balances[creator]
@@ -1124,9 +817,9 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
 
 	// check closing on empty sender's balance record
-	steva.pass = true
+	b.pass = true
 	b.balances[sender] = basics.AccountData{}
-	err = ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "is not opted in to app")
 	a.Equal(0, b.put)
@@ -1139,17 +832,17 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 
 	// check a happy case
 	gd := map[string]basics.ValueDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
-	steva.delta = basics.EvalDelta{GlobalDelta: gd}
+	b.delta = basics.EvalDelta{GlobalDelta: gd}
 	b.balances[sender] = basics.AccountData{
 		AppLocalStates: map[basics.AppIndex]basics.AppLocalState{appIdx: {}},
 	}
-	err = ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
-	a.Equal(2, b.put)
+	a.Equal(1, b.put)
 	a.Equal(0, b.putWith)
 	br = b.putBalances[creator]
 	a.NotEqual(cbr, br)
-	a.Equal(basics.TealKeyValue{"uint": basics.TealValue{Type: basics.TealUintType, Uint: 1}}, br.AppParams[appIdx].GlobalState)
+	a.Equal(basics.TealKeyValue(nil), br.AppParams[appIdx].GlobalState)
 	br = b.putBalances[sender]
 	a.Equal(0, len(br.AppLocalStates))
 	a.Equal(basics.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
@@ -1168,7 +861,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 		ApplicationID:     appIdx,
 		OnCompletion:      transactions.UpdateApplicationOC,
 		ApprovalProgram:   []byte{2},
-		ClearStateProgram: []byte{3},
+		ClearStateProgram: []byte{2},
 	}
 	params := basics.AppParams{
 		ApprovalProgram: []byte{1},
@@ -1179,7 +872,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	h := transactions.Header{
 		Sender: sender,
 	}
-	var steva testEvaluator
+	var ep logic.EvalParams
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
 	var b testBalances
 
@@ -1194,12 +887,13 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
 	b.SetProto(protocol.ConsensusFuture)
+	proto := b.ConsensusParams()
+	ep.Proto = &proto
 
-	steva.pass = false
-	err := ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
+	b.pass = false
+	err := ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "transaction rejected by ApprovalProgram")
-	a.Equal(steva.appIdx, appIdx)
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 	br := b.balances[creator]
@@ -1207,9 +901,9 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
 
 	// check updating on empty sender's balance record - happy case
-	steva.pass = true
+	b.pass = true
 	b.balances[sender] = basics.AccountData{}
-	err = ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
 	a.Equal(1, b.put)
 	a.Equal(0, b.putWith)
@@ -1217,7 +911,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 	a.Equal(cbr, br)
 	br = b.putBalances[creator]
 	a.Equal([]byte{2}, br.AppParams[appIdx].ApprovalProgram)
-	a.Equal([]byte{3}, br.AppParams[appIdx].ClearStateProgram)
+	a.Equal([]byte{2}, br.AppParams[appIdx].ClearStateProgram)
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
 }
 
@@ -1242,7 +936,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 	h := transactions.Header{
 		Sender: sender,
 	}
-	var steva testEvaluator
+	var ep logic.EvalParams
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
 	var b testBalances
 
@@ -1257,12 +951,13 @@ func TestAppCallApplyDelete(t *testing.T) {
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
 	b.SetProto(protocol.ConsensusFuture)
+	proto := b.ConsensusParams()
+	ep.Proto = &proto
 
-	steva.pass = false
-	err := ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
+	b.pass = false
+	err := ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "transaction rejected by ApprovalProgram")
-	a.Equal(steva.appIdx, appIdx)
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 	br := b.balances[creator]
@@ -1270,10 +965,11 @@ func TestAppCallApplyDelete(t *testing.T) {
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
 
 	// check deletion on empty balance record - happy case
-	steva.pass = true
+	b.pass = true
 	b.balances[sender] = basics.AccountData{}
-	err = ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
+	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
+	a.Equal(appIdx, b.deAllocatedAppIdx)
 	a.Equal(0, b.put)
 	a.Equal(1, b.putWith)
 	br = b.balances[creator]
@@ -1299,7 +995,7 @@ func TestAppCallApplyCreateClearState(t *testing.T) {
 	h := transactions.Header{
 		Sender: sender,
 	}
-	var steva testEvaluator
+	var ep logic.EvalParams
 	var txnCounter uint64 = 1
 	appIdx := basics.AppIndex(txnCounter + 1)
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
@@ -1308,17 +1004,20 @@ func TestAppCallApplyCreateClearState(t *testing.T) {
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
 	b.SetProto(protocol.ConsensusFuture)
+	proto := b.ConsensusParams()
+	ep.Proto = &proto
+
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
-	steva.pass = true
+	b.pass = true
 	gd := map[string]basics.ValueDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
-	steva.delta = basics.EvalDelta{GlobalDelta: gd}
+	b.delta = basics.EvalDelta{GlobalDelta: gd}
 
 	// check creation on empty balance record
-	err := ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
+	err := ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
 	a.Contains(err.Error(), "not currently opted in")
-	a.Equal(steva.appIdx, appIdx)
+	a.Equal(appIdx, b.allocatedAppIdx)
 	a.Equal(basics.EvalDelta{}, ad.EvalDelta)
 	br := b.balances[creator]
 	a.Equal([]byte{1}, br.AppParams[appIdx].ApprovalProgram)
@@ -1344,7 +1043,7 @@ func TestAppCallApplyCreateDelete(t *testing.T) {
 	h := transactions.Header{
 		Sender: sender,
 	}
-	var steva testEvaluator
+	var ep logic.EvalParams
 	var txnCounter uint64 = 1
 	appIdx := basics.AppIndex(txnCounter + 1)
 	var ad *transactions.ApplyData = &transactions.ApplyData{}
@@ -1353,18 +1052,20 @@ func TestAppCallApplyCreateDelete(t *testing.T) {
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
 	b.SetProto(protocol.ConsensusFuture)
+	proto := b.ConsensusParams()
+	ep.Proto = &proto
+
 	b.appCreators = map[basics.AppIndex]basics.Address{appIdx: creator}
 
-	steva.pass = true
+	b.pass = true
 	gd := map[string]basics.ValueDelta{"uint": {Action: basics.SetUintAction, Uint: 1}}
-	steva.delta = basics.EvalDelta{GlobalDelta: gd}
+	b.delta = basics.EvalDelta{GlobalDelta: gd}
 
 	// check creation on empty balance record
-	err := ApplicationCall(ac, h, &b, ad, txnCounter, &steva)
+	err := ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.NoError(err)
-	a.Equal(steva.appIdx, appIdx)
+	a.Equal(appIdx, b.allocatedAppIdx)
 	a.Equal(basics.EvalDelta{GlobalDelta: gd}, ad.EvalDelta)
 	br := b.balances[creator]
 	a.Equal(basics.AppParams{}, br.AppParams[appIdx])
 }
-*/
