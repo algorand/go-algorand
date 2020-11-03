@@ -100,7 +100,7 @@ ${gcmd} account changeonlinestatus -a ${ACCOUNTA} -x ${LEASE} --online --firstva
 dsign ${TEMPDIR}/delegate.keyregkey ${TEMPDIR}/kr.lsig < ${TEMPDIR}/keyreg.tx > ${TEMPDIR}/keyreg.stx
 
 RES=$(${gcmd} clerk rawsend -f ${TEMPDIR}/keyreg.stx || true)
-EXPERROR='already in ledger'
+EXPERROR='using an overlapping lease'
 if [[ $RES != *"${EXPERROR}"* ]]; then
     date '+keyreg-teal-test FAIL replayed txn should be rejected %Y%m%d_%H%M%S'
     false
