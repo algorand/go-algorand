@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 set -ex
-shopt -s globstar
 
 echo "[$0] Verifying gpg signatures"
 
