@@ -1,7 +1,7 @@
 agents:
-  - name: deb
-    dockerFilePath: docker/build/cicd.ubuntu.Dockerfile
-    image: algorand/cicd-ubuntu
+  - name: docker
+    dockerFilePath: docker/build/docker.ubuntu.Dockerfile
+    image: algorand/docker-ubuntu
     version: scripts/configure_dev-deps.sh
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
@@ -33,8 +33,10 @@ agents:
     env:
       - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      - CHANNEL=$CHANNEL
       - PACKAGES_DIR=$PACKAGES_DIR
       - NO_DEPLOY=$NO_DEPLOY
+      - S3_SOURCE=$S3_SOURCE
       - VERSION=$VERSION
     volumes:
       - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent
@@ -43,19 +45,30 @@ agents:
 
 tasks:
   - task: docker.Make
+    name: docker
+    agent: docker
+    target: mule-docker
+
+  - task: docker.Make
+    name: releases-page
+    agent: releases-page
+    target: mule-releases-page
+
+  - task: docker.Make
     name: rpm
     agent: rpm
     target: mule-deploy-rpm
 
 jobs:
-  package-deploy:
-    tasks:
-      - docker.Make.rpm
-
-  package-deploy-deb:
-    tasks:
-      - docker.Make.deb
-
   package-deploy-rpm:
     tasks:
       - docker.Make.rpm
+
+  docker-hub:
+    tasks:
+      - docker.Make.docker
+
+  releases-page:
+    tasks:
+      - docker.Make.releases-page
+
