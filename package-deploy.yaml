@@ -12,6 +12,7 @@ agents:
       - VERSION=$VERSION
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - $HOME/.docker:/root/.docker
     workDir: $HOME/projects/go-algorand
 
   - name: releases-page
