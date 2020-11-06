@@ -13,15 +13,19 @@ WORKDIR /root
 
 COPY . .
 
-RUN aws s3 sync s3://algorand-internal/packages packages && \
-    aptly repo create -distribution=stable -architectures=amd64 -component=main -comment=mainnet algorand && \
-    aptly repo create -distribution=beta -architectures=amd64 -component=main -comment=betanet algorand-beta && \
-    aptly repo create -distribution=indexer -architectures=amd64 -component=main -comment=indexer algorand-indexer && \
-    aptly repo create -distribution=indexer-beta -architectures=amd64 -component=main -comment=indexer-beta algorand-indexer-beta && \
-    aptly repo add algorand packages/deb/stable/*.deb && \
-    aptly repo add algorand-beta packages/deb/beta/*.deb && \
-    aptly repo add algorand-indexer packages/deb/indexer/stable/*.deb && \
-    aptly repo add algorand-indexer-beta packages/deb/indexer/beta/*.deb
+RUN curl https://releases.algorand.com/key.pub | gpg --no-default-keyring --keyring trustedkeys.gpg --import - && \
+    aptly mirror create stable https://releases.algorand.com/deb/ stable main && \
+    aptly mirror create beta https://releases.algorand.com/deb/ beta main && \
+    aptly mirror create indexer https://releases.algorand.com/deb/ indexer main && \
+    aptly repo create -distribution=stable -architectures=amd64 -component=main -comment=mainnet stable && \
+    aptly repo create -distribution=beta -architectures=amd64 -component=main -comment=betanet beta && \
+    aptly repo create -distribution=indexer -architectures=amd64 -component=main -comment=indexer indexer && \
+    aptly mirror update stable && \
+    aptly mirror update beta && \
+    aptly mirror update indexer && \
+    aptly repo import stable stable algorand algorand-devtools && \
+    aptly repo import beta beta algorand-beta algorand-devtools-beta && \
+    aptly repo import indexer indexer algorand-indexer
 
 CMD ["/bin/bash"]
 
