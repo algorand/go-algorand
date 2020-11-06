@@ -3812,9 +3812,9 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 	}
 
 	cases := []testcase{
-		testcase{txngroup0, 0},
-		testcase{txngroup1, appsEnabledVersion},
-		testcase{txngroup2, rekeyingEnabledVersion},
+		{txngroup0, 0},
+		{txngroup1, appsEnabledVersion},
+		{txngroup2, rekeyingEnabledVersion},
 	}
 
 	for ci, cse := range cases {

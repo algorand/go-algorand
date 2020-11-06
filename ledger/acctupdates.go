@@ -489,11 +489,13 @@ func (au *accountUpdates) IsWritingCatchpointFile() bool {
 // LookupWithRewards returns the account data for a given address at a given round.
 // Note that the function doesn't update the account with the rewards,
 // even while it does return the AccoutData which represent the "rewarded" account data.
+// The resultant AccountData does not include application states.
 func (au *accountUpdates) LookupWithRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, err error) {
 	return au.lookupWithRewardsImpl(rnd, addr)
 }
 
 // LookupWithoutRewards returns the account data for a given address at a given round.
+// The resultant AccountData does not include application states.
 func (au *accountUpdates) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, validThrough basics.Round, err error) {
 	return au.lookupWithoutRewardsImpl(rnd, addr, true /* take lock*/)
 }
@@ -1750,6 +1752,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 // lookupWithRewardsImpl returns the account data for a given address at a given round.
 // The rewards are added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it does return the AccoutData which represent the "rewarded" account data.
+// The resultant AccountData does not include application states.
 func (au *accountUpdates) lookupWithRewardsImpl(rnd basics.Round, addr basics.Address) (data basics.AccountData, err error) {
 	au.accountsMu.RLock()
 	needUnlock := true
@@ -1832,6 +1835,7 @@ func (au *accountUpdates) lookupWithRewardsImpl(rnd basics.Round, addr basics.Ad
 }
 
 // lookupWithoutRewardsImpl returns the account data for a given address at a given round.
+// The resultant AccountData does not include application states.
 func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics.Address, syncronized bool) (data basics.AccountData, validThrough basics.Round, err error) {
 	needUnlock := false
 	if syncronized {
@@ -2022,7 +2026,7 @@ func (au *accountUpdates) getKeyForRoundImpl(rnd basics.Round, addr basics.Addre
 	}
 
 	// Assumption: if called, the storage is allocated. Callers MUST check
-	// that storage is allocted (by e.g. checking for AppParams or
+	// that storage is allocated (by e.g. checking for AppParams or
 	// AppLocalState) before calling this method.
 
 	// Check if this is the most recent round, in which case, we can

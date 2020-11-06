@@ -374,6 +374,5 @@ func TestFullCatchpointWriter(t *testing.T) {
 		acctData, err := l.FullLookup(0, addr)
 		require.NoError(t, err)
 		require.Equal(t, acct, acctData)
-		// require.Equal(t, basics.Round(0), validThrough)
 	}
 }

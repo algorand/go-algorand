@@ -136,8 +136,6 @@ type evalResult struct {
 	err  error
 }
 
-// type evalFn func(program []byte, ep logic.EvalParams, evaluator apply.Balances) (bool, error)
-
 // AppState encapsulates information about execution of stateful teal program
 type AppState struct {
 	appIdx  basics.AppIndex
