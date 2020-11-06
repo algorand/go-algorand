@@ -338,7 +338,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 
 		for _, balance := range balances.Balances {
 			var accountData basics.AccountData
-			err = protocol.Decode(balance.AccountData, &accountData)
+			err = protocol.Decode(balance.MiniAccountData, &accountData)
 			if err != nil {
 				return
 			}
@@ -362,7 +362,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 				}
 			}
 
-			hash := accountHashBuilder(balance.Address, accountData, balance.AccountData)
+			hash := accountHashBuilder(balance.Address, accountData, balance.MiniAccountData)
 			var added bool
 			added, err = progress.cachedTrie.Add(hash)
 			if !added {

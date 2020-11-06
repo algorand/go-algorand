@@ -66,6 +66,7 @@ func (vd valueDelta) serialize() (vdelta basics.ValueDelta, ok bool) {
 	return
 }
 
+//msgp:ignore stateDelta
 type stateDelta map[string]valueDelta
 
 func (sd stateDelta) serialize() basics.StateDelta {

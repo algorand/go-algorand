@@ -753,8 +753,8 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AppLocalStates")
 				return
 			}
-			if zb0020 > encodedMaxAppLocalStates {
-				err = msgp.ErrOverflow(uint64(zb0020), uint64(encodedMaxAppLocalStates))
+			if zb0020 > EncodedMaxAppLocalStates {
+				err = msgp.ErrOverflow(uint64(zb0020), uint64(EncodedMaxAppLocalStates))
 				err = msgp.WrapError(err, "struct-from-array", "AppLocalStates")
 				return
 			}
@@ -789,8 +789,8 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AppParams")
 				return
 			}
-			if zb0022 > encodedMaxAppParams {
-				err = msgp.ErrOverflow(uint64(zb0022), uint64(encodedMaxAppParams))
+			if zb0022 > EncodedMaxAppParams {
+				err = msgp.ErrOverflow(uint64(zb0022), uint64(EncodedMaxAppParams))
 				err = msgp.WrapError(err, "struct-from-array", "AppParams")
 				return
 			}
@@ -1123,8 +1123,8 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AppLocalStates")
 					return
 				}
-				if zb0035 > encodedMaxAppLocalStates {
-					err = msgp.ErrOverflow(uint64(zb0035), uint64(encodedMaxAppLocalStates))
+				if zb0035 > EncodedMaxAppLocalStates {
+					err = msgp.ErrOverflow(uint64(zb0035), uint64(EncodedMaxAppLocalStates))
 					err = msgp.WrapError(err, "AppLocalStates")
 					return
 				}
@@ -1157,8 +1157,8 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AppParams")
 					return
 				}
-				if zb0037 > encodedMaxAppParams {
-					err = msgp.ErrOverflow(uint64(zb0037), uint64(encodedMaxAppParams))
+				if zb0037 > EncodedMaxAppParams {
+					err = msgp.ErrOverflow(uint64(zb0037), uint64(EncodedMaxAppParams))
 					err = msgp.WrapError(err, "AppParams")
 					return
 				}
@@ -1559,8 +1559,8 @@ func (z *AppLocalState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "KeyValue")
 				return
 			}
-			if zb0007 > encodedMaxKeyValueEntries {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(encodedMaxKeyValueEntries))
+			if zb0007 > EncodedMaxKeyValueEntries {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(EncodedMaxKeyValueEntries))
 				err = msgp.WrapError(err, "struct-from-array", "KeyValue")
 				return
 			}
@@ -1687,8 +1687,8 @@ func (z *AppLocalState) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "KeyValue")
 					return
 				}
-				if zb0011 > encodedMaxKeyValueEntries {
-					err = msgp.ErrOverflow(uint64(zb0011), uint64(encodedMaxKeyValueEntries))
+				if zb0011 > EncodedMaxKeyValueEntries {
+					err = msgp.ErrOverflow(uint64(zb0011), uint64(EncodedMaxKeyValueEntries))
 					err = msgp.WrapError(err, "KeyValue")
 					return
 				}
@@ -1933,8 +1933,8 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "GlobalState")
 				return
 			}
-			if zb0007 > encodedMaxKeyValueEntries {
-				err = msgp.ErrOverflow(uint64(zb0007), uint64(encodedMaxKeyValueEntries))
+			if zb0007 > EncodedMaxKeyValueEntries {
+				err = msgp.ErrOverflow(uint64(zb0007), uint64(EncodedMaxKeyValueEntries))
 				err = msgp.WrapError(err, "struct-from-array", "GlobalState")
 				return
 			}
@@ -2167,8 +2167,8 @@ func (z *AppParams) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "GlobalState")
 					return
 				}
-				if zb0015 > encodedMaxKeyValueEntries {
-					err = msgp.ErrOverflow(uint64(zb0015), uint64(encodedMaxKeyValueEntries))
+				if zb0015 > EncodedMaxKeyValueEntries {
+					err = msgp.ErrOverflow(uint64(zb0015), uint64(EncodedMaxKeyValueEntries))
 					err = msgp.WrapError(err, "GlobalState")
 					return
 				}
@@ -3475,8 +3475,8 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AppLocalStates")
 				return
 			}
-			if zb0020 > encodedMaxAppLocalStates {
-				err = msgp.ErrOverflow(uint64(zb0020), uint64(encodedMaxAppLocalStates))
+			if zb0020 > EncodedMaxAppLocalStates {
+				err = msgp.ErrOverflow(uint64(zb0020), uint64(EncodedMaxAppLocalStates))
 				err = msgp.WrapError(err, "struct-from-array", "AppLocalStates")
 				return
 			}
@@ -3511,8 +3511,8 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AppParams")
 				return
 			}
-			if zb0022 > encodedMaxAppParams {
-				err = msgp.ErrOverflow(uint64(zb0022), uint64(encodedMaxAppParams))
+			if zb0022 > EncodedMaxAppParams {
+				err = msgp.ErrOverflow(uint64(zb0022), uint64(EncodedMaxAppParams))
 				err = msgp.WrapError(err, "struct-from-array", "AppParams")
 				return
 			}
@@ -3851,8 +3851,8 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AppLocalStates")
 					return
 				}
-				if zb0035 > encodedMaxAppLocalStates {
-					err = msgp.ErrOverflow(uint64(zb0035), uint64(encodedMaxAppLocalStates))
+				if zb0035 > EncodedMaxAppLocalStates {
+					err = msgp.ErrOverflow(uint64(zb0035), uint64(EncodedMaxAppLocalStates))
 					err = msgp.WrapError(err, "AppLocalStates")
 					return
 				}
@@ -3885,8 +3885,8 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AppParams")
 					return
 				}
-				if zb0037 > encodedMaxAppParams {
-					err = msgp.ErrOverflow(uint64(zb0037), uint64(encodedMaxAppParams))
+				if zb0037 > EncodedMaxAppParams {
+					err = msgp.ErrOverflow(uint64(zb0037), uint64(EncodedMaxAppParams))
 					err = msgp.WrapError(err, "AppParams")
 					return
 				}
@@ -5387,8 +5387,8 @@ func (z *TealKeyValue) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if zb0003 > encodedMaxKeyValueEntries {
-		err = msgp.ErrOverflow(uint64(zb0003), uint64(encodedMaxKeyValueEntries))
+	if zb0003 > EncodedMaxKeyValueEntries {
+		err = msgp.ErrOverflow(uint64(zb0003), uint64(EncodedMaxKeyValueEntries))
 		err = msgp.WrapError(err)
 		return
 	}

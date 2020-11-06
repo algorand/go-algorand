@@ -1264,11 +1264,11 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 			pendingAccounts += len(bal)
 			for _, balance := range bal {
 				var accountData basics.AccountData
-				err = protocol.Decode(balance.AccountData, &accountData)
+				err = protocol.Decode(balance.MiniAccountData, &accountData)
 				if err != nil {
 					return rnd, err
 				}
-				hash := accountHashBuilder(balance.Address, accountData, balance.AccountData)
+				hash := accountHashBuilder(balance.Address, accountData, balance.MiniAccountData)
 				added, err := trie.Add(hash)
 				if err != nil {
 					return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)

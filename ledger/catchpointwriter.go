@@ -29,6 +29,7 @@ import (
 
 	"github.com/algorand/msgp/msgp"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -41,12 +42,18 @@ const (
 
 	// catchpointFileVersion is the catchpoint file version
 	catchpointFileVersion = uint64(0200)
+
+	// maxEncodedAppStateEntries denotes max possible key/value entries for an account
+	maxEncodedAppStateEntries = basics.EncodedMaxKeyValueEntries * (basics.EncodedMaxAppParams + basics.EncodedMaxAppLocalStates)
 )
+
+// max key or value length including encoding overhead
+var maxAppKeyValueLen = config.MaxBytesKeyValueLen * 2
 
 // catchpointWriter is the struct managing the persistance of accounts data into the catchpoint file.
 // it's designed to work in a step fashion : a caller will call the WriteStep method in a loop until
 // the writing is complete. It might take multiple steps until the operation is over, and the caller
-// has the option of throtteling the CPU utilization in between the calls.
+// has the option of throttling the CPU utilization in between the calls.
 type catchpointWriter struct {
 	ctx               context.Context
 	hasher            hash.Hash
@@ -68,11 +75,22 @@ type catchpointWriter struct {
 	accountsIterator  encodedAccountsBatchIter
 }
 
+type storageData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Aidx   uint64 `codec:"i"`
+	Global bool   `codec:"g"`
+	Key    []byte `codec:"k,allocbound=maxAppKeyValueLen"`
+	Vtype  uint64 `codec:"t"`
+	Venc   []byte `codec:"v,allocbound=maxAppKeyValueLen"`
+}
+
 type encodedBalanceRecord struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Address     basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
-	AccountData msgp.Raw       `codec:"ad,allocbound=basics.MaxEncodedAccountDataSize"`
+	Address         basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
+	MiniAccountData msgp.Raw       `codec:"ad,allocbound=basics.MaxEncodedAccountDataSize"`
+	StorageData     []storageData  `codec:"sd,allocbound=maxEncodedAppStateEntries"`
 }
 
 // CatchpointFileHeader is the content we would have in the "content.msgpack" file in the catchpoint tar archive.

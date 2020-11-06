@@ -116,7 +116,7 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 		for i := uint64(0); i < appStatesCount; i++ {
 			ap := basics.AppLocalState{
 				Schema: basics.StateSchema{
-					NumUint:      crypto.RandUint64() % 5,
+					NumUint:      crypto.RandUint64()%5 + 1,
 					NumByteSlice: crypto.RandUint64() % 5,
 				},
 				KeyValue: make(map[string]basics.TealValue),
@@ -134,13 +134,10 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 				tv := basics.TealValue{
 					Type: basics.TealBytesType,
 				}
-				bytes := make([]byte, crypto.RandUint64()%512)
+				bytes := make([]byte, crypto.RandUint64()%uint64(config.MaxBytesKeyValueLen))
 				crypto.RandBytes(bytes[:])
 				tv.Bytes = string(bytes)
 				ap.KeyValue[appName] = tv
-			}
-			if len(ap.KeyValue) == 0 {
-				ap.KeyValue = nil
 			}
 			data.AppLocalStates[basics.AppIndex(crypto.RandUint64()%lastCreatableID)] = ap
 		}
@@ -162,11 +159,11 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 				GlobalState:       make(basics.TealKeyValue),
 				StateSchemas: basics.StateSchemas{
 					LocalStateSchema: basics.StateSchema{
-						NumUint:      crypto.RandUint64() % 5,
+						NumUint:      crypto.RandUint64()%5 + 1,
 						NumByteSlice: crypto.RandUint64() % 5,
 					},
 					GlobalStateSchema: basics.StateSchema{
-						NumUint:      crypto.RandUint64() % 5,
+						NumUint:      crypto.RandUint64()%5 + 1,
 						NumByteSlice: crypto.RandUint64() % 5,
 					},
 				},
@@ -194,13 +191,10 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 				tv := basics.TealValue{
 					Type: basics.TealBytesType,
 				}
-				bytes := make([]byte, crypto.RandUint64()%512)
+				bytes := make([]byte, crypto.RandUint64()%uint64(config.MaxBytesKeyValueLen))
 				crypto.RandBytes(bytes[:])
 				tv.Bytes = string(bytes)
 				ap.GlobalState[appName] = tv
-			}
-			if len(ap.GlobalState) == 0 {
-				ap.GlobalState = nil
 			}
 			lastCreatableID++
 			data.AppParams[basics.AppIndex(lastCreatableID)] = ap
@@ -885,7 +879,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 			var randomAccount encodedBalanceRecord
 			accountData := basics.AccountData{RewardsBase: accountsLoaded + i}
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
-			randomAccount.AccountData = protocol.Encode(&accountData)
+			randomAccount.MiniAccountData = protocol.Encode(&accountData)
 			crypto.RandBytes(randomAccount.Address[:])
 			if ascendingOrder {
 				binary.LittleEndian.PutUint64(randomAccount.Address[:], accountsLoaded+i)

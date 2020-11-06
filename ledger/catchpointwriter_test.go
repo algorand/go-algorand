@@ -45,6 +45,37 @@ func makeString(len int) string {
 	return s
 }
 
+func makeRandomStorageData(numEntries int) []storageData {
+	currentConsensusParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	if numEntries < 0 {
+		numEntries = maxEncodedAppStateEntries / 100
+	}
+
+	maxBytesLen := currentConsensusParams.MaxAppKeyLen
+	if maxBytesLen > currentConsensusParams.MaxAppBytesValueLen {
+		maxBytesLen = currentConsensusParams.MaxAppBytesValueLen
+	}
+	data := make([]storageData, numEntries)
+	for idx := 0; idx < numEntries; idx++ {
+		len := int(crypto.RandUint64() % uint64(maxBytesLen))
+		var key []byte
+		if len != 0 {
+			key = make([]byte, len)
+		}
+		crypto.RandBytes(key)
+		rndVal := crypto.RandUint64() % 2
+		entry := storageData{
+			Aidx:   uint64(idx),
+			Global: rndVal == 0,
+			Key:    key,
+			Vtype:  rndVal + 1,
+			Venc:   key,
+		}
+		data[idx] = entry
+	}
+	return data
+}
+
 func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
 	er := encodedBalanceRecord{}
 	hash := crypto.Hash([]byte{1, 2, 3})
@@ -93,9 +124,24 @@ func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
 	}
 	encodedAd, err := ad.MarshalMsg(nil)
 	require.NoError(t, err)
-	er.AccountData = encodedAd
+	er.MiniAccountData = encodedAd
+	er.StorageData = makeRandomStorageData(-1)
 	return er
 }
+
+func TestStorageDataEncoding(t *testing.T) {
+	ds := makeRandomStorageData(100)
+	for _, data := range ds {
+		enc, err := data.MarshalMsg(nil)
+		require.NoError(t, err)
+
+		var dec storageData
+		_, err = dec.UnmarshalMsg(enc)
+		require.NoError(t, err)
+		require.Equal(t, data, dec)
+	}
+}
+
 func TestEncodedBalanceRecordEncoding(t *testing.T) {
 	er := makeTestEncodedBalanceRecord(t)
 	encodedBr, err := er.MarshalMsg(nil)
@@ -324,10 +370,10 @@ func TestFullCatchpointWriter(t *testing.T) {
 
 	// verify that the account data aligns with what we originally stored :
 	for addr, acct := range accts {
-		acctData, validThrough, err := l.LookupWithoutRewards(0, addr)
+		// acctData, validThrough, err := l.LookupWithoutRewards(0, addr)
+		acctData, err := l.FullLookup(0, addr)
 		require.NoError(t, err)
 		require.Equal(t, acct, acctData)
-		require.Equal(t, basics.Round(0), validThrough)
-
+		// require.Equal(t, basics.Round(0), validThrough)
 	}
 }

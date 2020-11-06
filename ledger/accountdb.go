@@ -35,20 +35,20 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	listCreatablesStmt           *sql.Stmt
-	lookupStmt                   *sql.Stmt
-	lookupKeyStmt                *sql.Stmt
-	lookupStorageStmt            *sql.Stmt
-	countStorageStmt             *sql.Stmt
-	lookupCreatorStmt            *sql.Stmt
-	deleteStoredCatchpoint       *sql.Stmt
-	insertStoredCatchpoint       *sql.Stmt
-	selectOldestsCatchpointFiles *sql.Stmt
-	selectCatchpointStateUint64  *sql.Stmt
-	deleteCatchpointState        *sql.Stmt
-	insertCatchpointStateUint64  *sql.Stmt
-	selectCatchpointStateString  *sql.Stmt
-	insertCatchpointStateString  *sql.Stmt
+	listCreatablesStmt          *sql.Stmt
+	lookupStmt                  *sql.Stmt
+	lookupKeyStmt               *sql.Stmt
+	lookupStorageStmt           *sql.Stmt
+	countStorageStmt            *sql.Stmt
+	lookupCreatorStmt           *sql.Stmt
+	deleteStoredCatchpoint      *sql.Stmt
+	insertStoredCatchpoint      *sql.Stmt
+	selectOldestCatchpointFiles *sql.Stmt
+	selectCatchpointStateUint64 *sql.Stmt
+	deleteCatchpointState       *sql.Stmt
+	insertCatchpointStateUint64 *sql.Stmt
+	selectCatchpointStateString *sql.Stmt
+	insertCatchpointStateString *sql.Stmt
 }
 
 var accountsSchema = []string{
@@ -100,10 +100,19 @@ var storageMigration = []string{
 		vtype integer,
 		venc blob,
 		PRIMARY KEY(owner, aidx, global, key)
-	)`, // TODO WITHOUT ROWID?
+	)`,
+	// migration only table
 	`CREATE TABLE IF NOT EXISTS miniaccountbase (
 		address blob primary key,
-		data blob)`,
+		data blob
+	)`,
+	createStorageIndex("storage_idx", "storage"),
+}
+
+// these create index functions handle
+// storage/catchpointstorage and accountbase/catchpointbalances tables
+func createStorageIndex(idxname string, tablename string) string {
+	return fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s ( owner )", idxname, tablename)
 }
 
 func createNormalizedOnlineBalanceIndex(idxname string, tablename string) string {
@@ -126,6 +135,7 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS storedcatchpoints`,
 	`DROP TABLE IF EXISTS catchpointstate`,
 	`DROP TABLE IF EXISTS accounthashes`,
+	`DROP TABLE IF EXISTS storage`,
 }
 
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
@@ -278,7 +288,7 @@ func withoutAppKV(u basics.AccountData) (res basics.AccountData) {
 	return
 }
 
-// catchpointState is used to store catchpoint related varaibles into the catchpointstate table.
+// catchpointState is used to store catchpoint related variables into the catchpointstate table.
 type catchpointState string
 
 const (
@@ -308,21 +318,29 @@ func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, addr basic
 }
 
 func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []encodedBalanceRecord, proto config.ConsensusParams) error {
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
+	insertAcctStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
+	insertKeyStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointstorage (owner, aidx, global, key, vtype, venc) VALUES (?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
 
 	for _, balance := range bals {
 		var data basics.AccountData
-		err = protocol.Decode(balance.AccountData, &data)
+		err = protocol.Decode(balance.MiniAccountData, &data)
 		if err != nil {
 			return err
 		}
 
+		for _, entry := range balance.StorageData {
+			_, err = insertKeyStmt.Exec(balance.Address[:], entry.Aidx, entry.Global, entry.Key, entry.Vtype, entry.Venc)
+			if err != nil {
+				return err
+			}
+		}
+
 		normBalance := data.NormalizedOnlineBalance(proto)
 
-		result, err := insertStmt.ExecContext(ctx, balance.Address[:], normBalance, balance.AccountData)
+		result, err := insertAcctStmt.ExecContext(ctx, balance.Address[:], normBalance, balance.MiniAccountData)
 		if err != nil {
 			return err
 		}
@@ -343,6 +361,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		"DROP TABLE IF EXISTS catchpointbalances",
 		"DROP TABLE IF EXISTS catchpointassetcreators",
 		"DROP TABLE IF EXISTS catchpointaccounthashes",
+		"DROP TABLE IF EXISTS catchpointstorage",
 		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
 
@@ -352,13 +371,17 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		// around after we rename the table from "catchpointbalances"
 		// to "accountbase".  To construct a unique index name, we
 		// use the current time.
-		idxname := fmt.Sprintf("onlineaccountbals%d", time.Now().UnixNano())
+		// Apply the same logic to
+		idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", time.Now().UnixNano())
+		idxnameStorage := fmt.Sprintf("storage_idx_%d", time.Now().UnixNano())
 
 		s = append(s,
 			"CREATE TABLE IF NOT EXISTS catchpointassetcreators (asset integer primary key, creator blob, ctype integer)",
 			"CREATE TABLE IF NOT EXISTS catchpointbalances (address blob primary key, data blob, normalizedonlinebalance integer)",
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
-			createNormalizedOnlineBalanceIndex(idxname, "catchpointbalances"),
+			"CREATE TABLE IF NOT EXISTS catchpointstorage (owner blob, aidx integer, global boolean, key blob, vtype integer, venc blob, PRIMARY KEY(owner, aidx, global, key))",
+			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"),
+			createStorageIndex(idxnameStorage, "catchpointstorage"),
 		)
 	}
 
@@ -379,14 +402,17 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 		"ALTER TABLE accountbase RENAME TO accountbase_old",
 		"ALTER TABLE assetcreators RENAME TO assetcreators_old",
 		"ALTER TABLE accounthashes RENAME TO accounthashes_old",
+		"ALTER TABLE storage RENAME TO storage_old",
 
 		"ALTER TABLE catchpointbalances RENAME TO accountbase",
 		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
 		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
+		"ALTER TABLE catchpointstorage RENAME TO storage",
 
 		"DROP TABLE IF EXISTS accountbase_old",
 		"DROP TABLE IF EXISTS assetcreators_old",
 		"DROP TABLE IF EXISTS accounthashes_old",
+		"DROP TABLE IF EXISTS storage_old",
 	}
 
 	for _, stmt := range stmts {
@@ -662,7 +688,7 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 		return nil, err
 	}
 
-	qs.selectOldestsCatchpointFiles, err = r.Prepare("SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?")
+	qs.selectOldestCatchpointFiles, err = r.Prepare("SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
@@ -881,7 +907,7 @@ func (qs *accountsDbQueries) storeCatchpoint(ctx context.Context, round basics.R
 func (qs *accountsDbQueries) getOldestCatchpointFiles(ctx context.Context, fileCount int, filesToKeep int) (fileNames map[basics.Round]string, err error) {
 	err = db.Retry(func() (err error) {
 		var rows *sql.Rows
-		rows, err = qs.selectOldestsCatchpointFiles.QueryContext(ctx, filesToKeep, fileCount)
+		rows, err = qs.selectOldestCatchpointFiles.QueryContext(ctx, filesToKeep, fileCount)
 		if err != nil {
 			return
 		}
@@ -974,7 +1000,7 @@ func (qs *accountsDbQueries) close() {
 		&qs.lookupCreatorStmt,
 		&qs.deleteStoredCatchpoint,
 		&qs.insertStoredCatchpoint,
-		&qs.selectOldestsCatchpointFiles,
+		&qs.selectOldestCatchpointFiles,
 		&qs.selectCatchpointStateUint64,
 		&qs.deleteCatchpointState,
 		&qs.insertCatchpointStateUint64,
@@ -1195,7 +1221,7 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (
 }
 
 func storageNewRound(tx *sql.Tx, sdeltas map[basics.Address]map[storagePtr]*storageDelta, log logging.Logger) (err error) {
-	log.Warnf("MAXJ: storageNewRound: %d", len(sdeltas))
+	// log.Warnf("MAXJ: storageNewRound: %d", len(sdeltas))
 
 	replaceKeyStmt, err := tx.Prepare("REPLACE INTO storage (owner, aidx, global, key, vtype, venc) VALUES (?, ?, ?, ?, ?, ?)")
 	if err != nil {
@@ -1306,15 +1332,15 @@ func encodedAccountsRange(ctx context.Context, tx *sql.Tx, startAccountIndex, ac
 
 		copy(addr[:], addrbuf)
 
-		bals = append(bals, encodedBalanceRecord{Address: addr, AccountData: buf})
+		bals = append(bals, encodedBalanceRecord{Address: addr, MiniAccountData: buf})
 	}
 
 	err = rows.Err()
 	if err == nil {
 		// the encodedAccountsRange typically called in a loop iterating over all the accounts. This could clearly take more than the
 		// "standard" 1 second, so we want to extend the timeout on each iteration. If the last iteration takes more than a second, then
-		// it should be noted. The one second here is quite liberal to ensure symmetrical behaviour on low-power devices.
-		// The return value from ResetTransactionWarnDeadline can be safely ignored here since it would only default to writing the warnning
+		// it should be noted. The one second here is quite liberal to ensure symmetrical behavior on low-power devices.
+		// The return value from ResetTransactionWarnDeadline can be safely ignored here since it would only default to writing the warning
 		// message, which would let us know that it failed anyway.
 		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(time.Second))
 	}
@@ -1499,7 +1525,26 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 
 		copy(addr[:], addrbuf)
 
-		bals = append(bals, encodedBalanceRecord{Address: addr, AccountData: buf})
+		// fetch applications data that is stored in a separate table
+		var rows *sql.Rows
+		rows, err = tx.QueryContext(ctx, "SELECT aidx, global, key, vtype, venc FROM storage WHERE owner = ?", addr[:])
+		if err != nil {
+			return
+		}
+
+		var data []storageData
+		for rows.Next() {
+			var entry storageData
+			err = rows.Scan(&entry.Aidx, &entry.Global, &entry.Key, &entry.Vtype, &entry.Venc)
+			if err != nil {
+				rows.Close()
+				return
+			}
+			data = append(data, entry)
+		}
+		rows.Close()
+
+		bals = append(bals, encodedBalanceRecord{Address: addr, MiniAccountData: buf, StorageData: data})
 		if len(bals) == accountCount {
 			// we're done with this iteration.
 			return

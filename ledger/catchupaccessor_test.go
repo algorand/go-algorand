@@ -91,7 +91,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 			var randomAccount encodedBalanceRecord
 			accountData := basics.AccountData{}
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
-			randomAccount.AccountData = protocol.Encode(&accountData)
+			randomAccount.MiniAccountData = protocol.Encode(&accountData)
 			crypto.RandBytes(randomAccount.Address[:])
 			binary.LittleEndian.PutUint64(randomAccount.Address[:], accounts+i)
 			balances.Balances[i] = randomAccount

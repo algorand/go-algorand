@@ -48,21 +48,21 @@ const (
 	// protocol-specific constains would be tested once the decoding is complete.
 	encodedMaxAssetsPerAccount = 1024
 
-	// encodedMaxAppLocalStates is the decoder limit for number of opted-in apps in a single account.
+	// EncodedMaxAppLocalStates is the decoder limit for number of opted-in apps in a single account.
 	// It is verified in TestEncodedAccountAllocationBounds to align with
 	// config.Consensus[protocol.ConsensusCurrentVersion].MaxppsOptedIn
-	encodedMaxAppLocalStates = 64
+	EncodedMaxAppLocalStates = 64
 
-	// encodedMaxAppParams is the decoder limit for number of created apps in a single account.
+	// EncodedMaxAppParams is the decoder limit for number of created apps in a single account.
 	// It is verified in TestEncodedAccountAllocationBounds to align with
 	// config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsCreated
-	encodedMaxAppParams = 64
+	EncodedMaxAppParams = 64
 
-	// encodedMaxKeyValueEntries is the decoder limit for the length of a key/value store.
+	// EncodedMaxKeyValueEntries is the decoder limit for the length of a key/value store.
 	// It is verified in TestEncodedAccountAllocationBounds to align with
 	// config.Consensus[protocol.ConsensusCurrentVersion].MaxLocalSchemaEntries and
 	// config.Consensus[protocol.ConsensusCurrentVersion].MaxGlobalSchemaEntries
-	encodedMaxKeyValueEntries = 1024
+	EncodedMaxKeyValueEntries = 1024
 )
 
 func (s Status) String() string {
@@ -189,11 +189,11 @@ type AccountData struct {
 
 	// AppLocalStates stores the local states associated with any applications
 	// that this account has opted in to.
-	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=encodedMaxAppLocalStates"`
+	AppLocalStates map[AppIndex]AppLocalState `codec:"appl,allocbound=EncodedMaxAppLocalStates"`
 
 	// AppParams stores the global parameters and state associated with any
 	// applications that this account has created.
-	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=encodedMaxAppParams"`
+	AppParams map[AppIndex]AppParams `codec:"appp,allocbound=EncodedMaxAppParams"`
 
 	// TotalAppSchema stores the sum of all of the LocalStateSchemas
 	// and GlobalStateSchemas in this account (global for applications

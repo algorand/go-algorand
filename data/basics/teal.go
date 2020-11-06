@@ -268,7 +268,7 @@ func (tv *TealValue) String() string {
 
 // TealKeyValue represents a key/value store for use in an application's
 // LocalState or GlobalState
-//msgp:allocbound TealKeyValue encodedMaxKeyValueEntries
+//msgp:allocbound TealKeyValue EncodedMaxKeyValueEntries
 type TealKeyValue map[string]TealValue
 
 // Clone returns a copy of a TealKeyValue that may be modified without
