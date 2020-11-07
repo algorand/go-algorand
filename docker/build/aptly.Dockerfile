@@ -1,18 +1,17 @@
 FROM ubuntu:18.04
 
-ARG AWS_ACCESS_KEY_ID
-ARG AWS_SECRET_ACCESS_KEY
+ARG ARCH=amd64
+ARG GOLANG_VERSION
+ENV DEBIAN_FRONTEND noninteractive
 
-ENV DEBIAN_FRONTEND noninteractive \
-    AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID \
-    AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-
-RUN apt-get update && apt-get install aptly awscli binutils curl gnupg2 silversearcher-ag tree -y
+RUN apt-get update && apt-get install aptly awscli binutils build-essential curl gnupg2 silversearcher-ag tree -y
+RUN curl https://dl.google.com/go/go${GOLANG_VERSION}.linux-${ARCH%v*}.tar.gz | tar -xzf - && mv go /usr/local
+ENV GOROOT=/usr/local/go \
+    GOPATH=/root/go \
+    PATH=$GOPATH/bin:$GOROOT/bin:$PATH
 
 WORKDIR /root
-
-COPY . .
-
+COPY .aptly.conf .
 RUN curl https://releases.algorand.com/key.pub | gpg --no-default-keyring --keyring trustedkeys.gpg --import - && \
     aptly mirror create stable https://releases.algorand.com/deb/ stable main && \
     aptly mirror create beta https://releases.algorand.com/deb/ beta main && \
@@ -23,7 +22,7 @@ RUN curl https://releases.algorand.com/key.pub | gpg --no-default-keyring --keyr
     aptly mirror update stable && \
     aptly mirror update beta && \
     aptly mirror update indexer && \
-    aptly repo import stable stable algorand algorand-devtools && \
+    aptly repo import stable stable algorand algorand-devtools
     aptly repo import beta beta algorand-beta algorand-devtools-beta && \
     aptly repo import indexer indexer algorand-indexer
 
