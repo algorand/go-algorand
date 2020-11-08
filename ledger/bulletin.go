@@ -25,13 +25,13 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 )
 
-// notifier is a struct that encapsulates a single-shot channel; it will only be signalled once.
+// notifier is a struct that encapsulates a single-shot channel; it will only be signaled once.
 type notifier struct {
 	signal   chan struct{}
 	notified uint32
 }
 
-// makeNotifier constructs a notifier that has not been signalled.
+// makeNotifier constructs a notifier that has not been signaled.
 func makeNotifier() notifier {
 	return notifier{signal: make(chan struct{}), notified: 0}
 }

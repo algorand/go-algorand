@@ -1,30 +1,49 @@
 #!/usr/bin/env bash
 
-set -e
+set -eo pipefail
+export BASHOPTS
 
 PKG_NAME=@PKG_NAME@
 
-if [ "$1" != install ]
+if [ "$1" = install ]
 then
-    exit 0
+    if dpkg-query --list 'algorand*' &> /dev/null
+    then
+        if PKG_INFO=$(dpkg-query --show --showformat='${Package} ${Status}\n' 'algorand*' | grep "install ok installed")
+        then
+            # Filter out `algorand-indexer` and `algorand-devtools` packages, they are allowed to be
+            # installed alongside other `algorand` packages.
+            INSTALLED_PKG=$(grep -v -e algorand-indexer -e algorand-devtools <<< "$PKG_INFO" | awk '{print $1}')
+
+            if [ -n "$INSTALLED_PKG" ]
+            then
+                echo -e "\nAlgorand does not currently support multi-distribution installations!\n\
+        To install this package, it is necessary to first remove the \`$INSTALLED_PKG\` package:\n\n\
+        sudo apt-get remove $INSTALLED_PKG\n\
+        sudo apt-get install $PKG_NAME\n"
+                exit 1
+            fi
+        fi
+    fi
 fi
 
-if dpkg-query --list 'algorand*' &> /dev/null
+if [ "$1" = upgrade ]
 then
-    if PKG_INFO=$(dpkg-query --show --showformat='${Package} ${Status}\n' 'algorand*' | grep "install ok installed")
+    if [ -f /var/lib/algorand/genesis.json ]
     then
-        # Filter out `algorand-indexer` and `algorand-devtools` packages, they are allowed to be
-        # installed alongside other `algorand` packages.
-        INSTALLED_PKG=$(grep -v -e algorand-indexer -e algorand-devtools <<< "$PKG_INFO" | awk '{print $1}')
+        ALGO_MD5=$(md5sum /var/lib/algorand/genesis.json | awk '{print $1}')
+        ALGO_TIMESTAMP=$(stat -c %Y /var/lib/algorand/genesis.json)
 
-        if [ -n "$INSTALLED_PKG" ]
+        if [ "$ALGO_MD5" = "9afc34b96a2c4a9f936870cd26ae7873" ]
         then
-            echo -e "\nAlgorand does not currently support multi-distribution installations!\n\
-    To install this package, it is necessary to first remove the \`$INSTALLED_PKG\` package:\n\n\
-    sudo apt-get remove $INSTALLED_PKG\n\
-    sudo apt-get install $PKG_NAME\n"
-            exit 1
+            if [[ "$ALGO_TIMESTAMP" != 1600456830 ||
+                ( "$ALGO_TIMESTAMP" = 1600456830 && ! -d /var/lib/algorand/mainnet-v1.0 ) ]]
+            then
+                # 2.1.5 bug fix - back up user-modified genesis.json to restore after conffiles
+                cp -p /var/lib/algorand/genesis.json /var/lib/algorand/genesis.json-2.1.5-patch
+            fi
         fi
+
     fi
 fi
 

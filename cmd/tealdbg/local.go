@@ -137,14 +137,15 @@ type evalResult struct {
 
 type evalFn func(program []byte, ep logic.EvalParams) (bool, error)
 
-type appState struct {
+// AppState encapsulates information about execution of stateful teal program
+type AppState struct {
 	appIdx  basics.AppIndex
 	schemas basics.StateSchemas
 	global  map[basics.AppIndex]basics.TealKeyValue
 	locals  map[basics.Address]map[basics.AppIndex]basics.TealKeyValue
 }
 
-func (a *appState) clone() (b appState) {
+func (a *AppState) clone() (b AppState) {
 	b.appIdx = a.appIdx
 	b.global = make(map[basics.AppIndex]basics.TealKeyValue, len(a.global))
 	for aid, tkv := range a.global {
@@ -160,7 +161,7 @@ func (a *appState) clone() (b appState) {
 	return
 }
 
-func (a *appState) empty() bool {
+func (a *AppState) empty() bool {
 	return a.appIdx == 0 && len(a.global) == 0 && len(a.locals) == 0
 }
 
@@ -174,7 +175,7 @@ type evaluation struct {
 	eval         evalFn
 	ledger       logic.LedgerForLogic
 	result       evalResult
-	states       appState
+	states       AppState
 }
 
 // LocalRunner runs local eval
@@ -186,7 +187,7 @@ type LocalRunner struct {
 	runs      []evaluation
 }
 
-func makeAppState() (states appState) {
+func makeAppState() (states AppState) {
 	states.global = make(map[basics.AppIndex]basics.TealKeyValue)
 	states.locals = make(map[basics.Address]map[basics.AppIndex]basics.TealKeyValue)
 	return
@@ -339,7 +340,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			log.Printf("Run mode: %s", mode)
 			if mode == "application" {
 				var ledger logic.LedgerForLogic
-				var states appState
+				var states AppState
 				txn := r.txnGroup[dp.GroupIndex]
 				appIdx := txn.Txn.ApplicationID
 				if appIdx == 0 {
@@ -375,7 +376,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			r.runs = append(r.runs, run)
 		} else if stxn.Txn.Type == protocol.ApplicationCallTx {
 			var ledger logic.LedgerForLogic
-			var states appState
+			var states AppState
 			eval := func(program []byte, ep logic.EvalParams) (bool, error) {
 				pass, _, err := logic.EvalStateful(program, ep)
 				return pass, err

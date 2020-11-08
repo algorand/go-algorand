@@ -20,6 +20,20 @@ import (
 	"fmt"
 )
 
-var errAlgodExitedEarly = fmt.Errorf("node exited before we could contact it")
 var errKMDDataDirNotAbs = fmt.Errorf("kmd data dir must be absolute path")
 var errKMDExitedEarly = fmt.Errorf("kmd exited before we could contact it")
+
+type errAlgodExitedEarly struct {
+	innerError error
+}
+
+func (e *errAlgodExitedEarly) Error() string {
+	if e.innerError == nil {
+		return "node exited before we could contact it"
+	}
+	return fmt.Sprintf("node exited with an error code, check node.log for more details : %v", e.innerError)
+}
+
+func (e *errAlgodExitedEarly) Unwrap(err error) error {
+	return e.innerError
+}

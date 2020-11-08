@@ -55,6 +55,11 @@ if [ "${OS}-${ARCH}" = "linux-arm" ]; then
     exit 0
 fi
 
+if [ "${OS}-${ARCH}" = "windows-amd64" ]; then
+     echo "Skipping running 'go vet'/gofmt/golint for windows builds"
+     exit 0
+fi
+
 echo "Running go vet..."
 go vet $(GO111MODULE=off go list ./... | grep -v /test/e2e-go/)
 

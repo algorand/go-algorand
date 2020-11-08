@@ -18,7 +18,7 @@ ACCOUNT=$(${gcmd} account list|awk '{ print $3 }')
 
 # Create an ASA in account
 ${gcmd} asset create --creator ${ACCOUNT} --name bogocoin --unitname bogo --total 1337
-ASSET_ID=$(${gcmd} asset info --creator $ACCOUNT --asset bogo|grep 'Asset ID'|awk '{ print $3 }')
+ASSET_ID=$(${gcmd} asset info --creator $ACCOUNT --unitname bogo|grep 'Asset ID'|awk '{ print $3 }')
 
 # Create app that reads asset balance and checks asset details and checks round
 ROUND=$(goal node status | grep 'Last committed' | awk '{ print $4 }')

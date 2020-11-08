@@ -40,6 +40,24 @@ const StdErrFilename = "algod-err.log"
 // StdOutFilename is the name of the file in <datadir> where stdout will be captured if not redirected to host
 const StdOutFilename = "algod-out.log"
 
+// NodeNotRunningError thrown when StopAlgod is called but there is no running algod in requested directory
+type NodeNotRunningError struct {
+	algodDataDir string
+}
+
+func (e *NodeNotRunningError) Error() string {
+	return fmt.Sprintf("no running node in directory '%s'", e.algodDataDir)
+}
+
+// MissingDataDirError thrown when StopAlgod is called but requested directory does not exist
+type MissingDataDirError struct {
+	algodDataDir string
+}
+
+func (e *MissingDataDirError) Error() string {
+	return fmt.Sprintf("the provided directory '%s' does not exist", e.algodDataDir)
+}
+
 // AlgodClient attempts to build a client.RestClient for communication with
 // the algod REST API, but fails if we can't find the net file
 func (nc NodeController) AlgodClient() (algodClient client.RestClient, err error) {
@@ -133,7 +151,11 @@ func (nc NodeController) algodRunning() (isRunning bool) {
 }
 
 // StopAlgod reads the net file and kills the algod process
-func (nc *NodeController) StopAlgod() (alreadyStopped bool, err error) {
+func (nc *NodeController) StopAlgod() (err error) {
+	// Check for valid data directory
+	if !util.IsDir(nc.algodDataDir) {
+		return &MissingDataDirError{algodDataDir: nc.algodDataDir}
+	}
 	// Find algod PID
 	algodPID, err := nc.GetAlgodPID()
 	if err == nil {
@@ -143,8 +165,7 @@ func (nc *NodeController) StopAlgod() (alreadyStopped bool, err error) {
 			return
 		}
 	} else {
-		err = nil
-		alreadyStopped = true
+		return &NodeNotRunningError{algodDataDir: nc.algodDataDir}
 	}
 	return
 }
@@ -185,9 +206,8 @@ func (nc *NodeController) StartAlgod(args AlgodStartArgs) (alreadyRunning bool, 
 		errLogger.SetLinePrefix(linePrefix)
 		outLogger.SetLinePrefix(linePrefix)
 	}
-
 	// Wait on the algod process and check if exits
-	algodExitChan := make(chan struct{})
+	algodExitChan := make(chan error, 1)
 	startAlgodCompletedChan := make(chan struct{})
 	defer close(startAlgodCompletedChan)
 	go func() {
@@ -202,14 +222,14 @@ func (nc *NodeController) StartAlgod(args AlgodStartArgs) (alreadyRunning bool, 
 			}
 		default:
 		}
-		algodExitChan <- struct{}{}
+		algodExitChan <- err
 	}()
-
 	success := false
 	for !success {
 		select {
-		case <-algodExitChan:
-			return false, errAlgodExitedEarly
+		case err := <-algodExitChan:
+			err = &errAlgodExitedEarly{err}
+			return false, err
 		case <-time.After(time.Millisecond * 100):
 			// If we can't talk to the API yet, spin
 			algodClient, err := nc.AlgodClient()

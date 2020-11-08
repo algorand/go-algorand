@@ -228,7 +228,8 @@ func (accountList *AccountsList) outputAccount(addr string, acctInfo v1.Account,
 	if len(acctInfo.AssetParams) > 0 {
 		var out []string
 		for curid, params := range acctInfo.AssetParams {
-			out = append(out, fmt.Sprintf("%d (%d %s)", curid, params.Total, params.UnitName))
+			_, unitName := unicodePrintable(params.UnitName)
+			out = append(out, fmt.Sprintf("%d (%d %s)", curid, params.Total, unitName))
 		}
 		fmt.Printf("\t[created asset IDs: %s]", strings.Join(out, ", "))
 	}

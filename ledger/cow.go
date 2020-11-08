@@ -34,9 +34,11 @@ import (
 
 type roundCowParent interface {
 	lookup(basics.Address) (basics.AccountData, error)
-	isDup(basics.Round, basics.Round, transactions.Txid, txlease) (bool, error)
+	checkDup(basics.Round, basics.Round, transactions.Txid, txlease) error
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
+	compactCertLast() basics.Round
+	blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error)
 }
 
 type roundCowState struct {
@@ -62,6 +64,10 @@ type StateDelta struct {
 
 	// new block header; read-only
 	hdr *bookkeeping.BlockHeader
+
+	// last round for which we have seen a compact cert.
+	// zero if no compact cert seen.
+	compactCertSeen basics.Round
 }
 
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader) *roundCowState {
@@ -103,24 +109,35 @@ func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, e
 	return cb.lookupParent.lookup(addr)
 }
 
-func (cb *roundCowState) isDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
+func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) error {
 	_, present := cb.mods.Txids[txid]
 	if present {
-		return true, nil
+		return &TransactionInLedgerError{Txid: txid}
 	}
 
 	if cb.proto.SupportTransactionLeases && (txl.lease != [32]byte{}) {
 		expires, ok := cb.mods.txleases[txl]
 		if ok && cb.mods.hdr.Round <= expires {
-			return true, nil
+			return &LeaseInLedgerError{txid: txid, lease: txl}
 		}
 	}
 
-	return cb.lookupParent.isDup(firstValid, lastValid, txid, txl)
+	return cb.lookupParent.checkDup(firstValid, lastValid, txid, txl)
 }
 
 func (cb *roundCowState) txnCounter() uint64 {
 	return cb.lookupParent.txnCounter() + uint64(len(cb.mods.Txids))
+}
+
+func (cb *roundCowState) compactCertLast() basics.Round {
+	if cb.mods.compactCertSeen != 0 {
+		return cb.mods.compactCertSeen
+	}
+	return cb.lookupParent.compactCertLast()
+}
+
+func (cb *roundCowState) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
+	return cb.lookupParent.blockHdr(r)
 }
 
 func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) {
@@ -151,6 +168,10 @@ func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new ba
 func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {
 	cb.mods.Txids[txid] = txn.LastValid
 	cb.mods.txleases[txlease{sender: txn.Sender, lease: txn.Lease}] = txn.LastValid
+}
+
+func (cb *roundCowState) sawCompactCert(rnd basics.Round) {
+	cb.mods.compactCertSeen = rnd
 }
 
 func (cb *roundCowState) child() *roundCowState {
@@ -190,6 +211,7 @@ func (cb *roundCowState) commitToParent() {
 	for cidx, delta := range cb.mods.creatables {
 		cb.commitParent.mods.creatables[cidx] = delta
 	}
+	cb.commitParent.mods.compactCertSeen = cb.mods.compactCertSeen
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {

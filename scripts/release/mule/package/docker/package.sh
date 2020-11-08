@@ -6,13 +6,13 @@ echo
 date "+build_release begin PACKAGE DOCKER stage %Y%m%d_%H%M%S"
 echo
 
-ARCH=$(./scripts/archtype.sh)
+ARCH_TYPE=$(./scripts/archtype.sh)
 OS_TYPE=$(./scripts/ostype.sh)
 BRANCH=${BRANCH:-$(./scripts/compute_branch.sh "$BRANCH")}
 CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
-PKG_ROOT_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH"
-FULLVERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
-ALGOD_INSTALL_TAR_FILE="$PKG_ROOT_DIR/node_${CHANNEL}_${OS_TYPE}-${ARCH}_${FULLVERSION}.tar.gz"
+PKG_ROOT_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
+VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+ALGOD_INSTALL_TAR_FILE="$PKG_ROOT_DIR/node_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.tar.gz"
 
 if [ -f "$ALGOD_INSTALL_TAR_FILE" ]; then
     echo "using install file $ALGOD_INSTALL_TAR_FILE"
@@ -22,7 +22,7 @@ else
 fi
 
 INPUT_ALGOD_TAR_FILE="temp_install.tar.gz"
-CHANNEL_VERSION="${CHANNEL}_${FULLVERSION}"
+CHANNEL_VERSION="${CHANNEL}_${VERSION}"
 NEW_PKG_DIR="algod_pkg_$CHANNEL_VERSION"
 DOCKER_EXPORT_FILE="algod_docker_export_$CHANNEL_VERSION.tar.gz"
 DOCKER_PKG_FILE="algod_docker_package_$CHANNEL_VERSION.tar.gz"
