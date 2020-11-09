@@ -256,7 +256,7 @@ var createAssetCmd = &cobra.Command{
 var destroyAssetCmd = &cobra.Command{
 	Use:   "destroy",
 	Short: "Destroy an asset",
-	Long:  `Issue a transaction deleting an asset from the network. This transaction must be issued by the asset manager while the creator holds all asset tokens.`,
+	Long:  `Issue a transaction deleting an asset from the network. This transaction must be issued by the asset manager while the creator holds all of the asset's tokens.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
