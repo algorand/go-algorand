@@ -1,0 +1,170 @@
+#pragma version 2
+
+// This program writes some data on optin and then
+// validates stored values on subsequent invocations.
+// Invocation parameter is controlled by app arg ("first", "second", "third").
+// The program also establishes behavior for reading and deleting non-existing keys.
+
+// allow app creation and deletion
+txn ApplicationID
+int 0
+==
+bnz success
+
+txn OnCompletion
+int DeleteApplication
+==
+bnz success
+
+txn OnCompletion
+int OptIn
+==
+txna ApplicationArgs 0
+byte "first"
+==
+&&
+bnz first
+txna ApplicationArgs 0
+byte "second"
+==
+bnz second
+txna ApplicationArgs 0
+byte "third"
+==
+bnz third
+b fail
+
+// check non-existing keys deletion and reading
+// write some initial values
+// check same-txn opt-in
+first:
+int 0 // account idx
+int 0 // app idx
+app_opted_in
+bz fail // must be opted in
+// check global non-existing
+int 0
+byte "foo"
+app_global_get_ex
+bnz fail // value may not exist
+// keep one zero value (non-initialized value) on the stack from app_global_get_ex
+byte "foo"
+app_global_get
+// check local non-existing
+// re-use 0 in the top of the stack as account idx = 0 => sender
+// re-use 0 from the stack as app idx
+// this both are done by purpose to coin possible side effects of non-initialized stack values
+byte "bar"
+app_local_get_ex
+bnz fail // value may not exist
+// re-use 0 in the top of the stack as account idx = 0 => sender
+byte "bar"
+app_local_get
+// keep one zero value (non-initialized value) on the stack from app_local_get
+byte "foobar"
+app_global_del
+// re-use 0 in the top of the stack as account idx = 0 => sender
+byte "barfoo"
+app_local_del
+
+// now set some keys
+byte "gki"
+int 100
+app_global_put
+byte "gkb"
+byte "test"
+app_global_put
+int 0
+byte "lki"
+int 200
+app_local_put
+int 0
+byte "lkb"
+byte "anothertest"
+app_local_put
+b success
+
+// check keys written during previous invocation
+// delete one key and update another
+second:
+int 0 // app idx
+byte "gki"
+app_global_get_ex
+bz fail
+int 100
+!=
+bnz fail
+byte "gkb"
+app_global_get
+byte "test"
+!=
+bnz fail
+// check opted-in
+int 0 // account idx
+int 0 // app idx
+app_opted_in
+bz fail // must be opted in
+int 0 // account idx
+int 0 // app idx
+byte "lki"
+app_local_get_ex
+bz fail
+int 200
+!=
+bnz fail
+int 0
+byte "lkb"
+app_local_get
+byte "anothertest"
+!=
+bnz fail
+// delete and update keys
+byte "gki"
+app_global_del
+int 0
+byte "lkb"
+app_local_del
+byte "gkb"
+byte "data"
+app_global_put
+int 0
+byte "lki"
+int 201
+app_local_put
+b success
+
+// check keys updated
+// check deleted keys do not exist
+third:
+int 0 // app idx
+byte "gki"
+app_global_get_ex
+bnz fail
+// re-use 0 in the top of the stack as app idx
+byte "gkb"
+app_global_get_ex
+bz fail
+byte "data"
+!=
+bnz fail
+int 0 // acc idx
+int 0 // app idx
+byte "lki"
+app_local_get_ex
+bz fail
+int 201
+!=
+bnz fail
+int 0
+byte "lkb"
+app_local_get
+int 0 // no such value
+==
+bnz success
+
+// program tail
+fail:
+int 0
+return
+success:
+int 1
