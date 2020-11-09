@@ -36,8 +36,8 @@ func (ml *emptyLedger) lookup(addr basics.Address) (basics.AccountData, error) {
 	return basics.AccountData{}, nil
 }
 
-func (ml *emptyLedger) isDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl txlease) (bool, error) {
-	return false, nil
+func (ml *emptyLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl txlease) error {
+	return nil
 }
 
 func (ml *emptyLedger) getAssetCreator(assetIdx basics.AssetIndex) (basics.Address, bool, error) {

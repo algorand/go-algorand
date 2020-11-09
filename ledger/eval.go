@@ -77,7 +77,7 @@ func (x *roundCowBase) lookup(addr basics.Address) (acctData basics.AccountData,
 }
 
 func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) error {
-	return x.l.CheckDup(x.proto, x.rnd+1, firstValid, lastValid, txid, txl)
+	return x.l.CheckDup(x.proto, x.rnd+1, firstValid, lastValid, txid, TxLease{txl})
 }
 
 func (x *roundCowBase) txnCounter() uint64 {
