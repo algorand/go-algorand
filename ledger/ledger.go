@@ -498,11 +498,11 @@ func (l *Ledger) Totals(rnd basics.Round) (AccountTotals, error) {
 	return l.accts.Totals(rnd)
 }
 
-// IsDup return whether a transaction is a duplicate one.
-func (l *Ledger) IsDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl TxLease) (bool, error) {
+// CheckDup return whether a transaction is a duplicate one.
+func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl TxLease) error {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.txTail.isDup(currentProto, current, firstValid, lastValid, txid, txl.txlease)
+	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl.txlease)
 }
 
 // GetRoundTxIds returns a map of the transactions ids that we have for the given round

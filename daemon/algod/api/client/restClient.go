@@ -64,6 +64,19 @@ var rawRequestPaths = map[string]bool{
 	"/v2/teal/compile": true,
 }
 
+// unauthorizedRequestError is generated when we receive 401 error from the server. This error includes the inner error
+// as well as the likely parameters that caused the issue.
+type unauthorizedRequestError struct {
+	errorString string
+	apiToken    string
+	url         string
+}
+
+// Error format an error string for the unauthorizedRequestError error.
+func (e unauthorizedRequestError) Error() string {
+	return fmt.Sprintf("Unauthorized request to `%s` when using token `%s` : %s", e.url, e.apiToken, e.errorString)
+}
+
 // RestClient manages the REST interface for a calling user.
 type RestClient struct {
 	serverURL       url.URL
@@ -87,6 +100,20 @@ func (client *RestClient) SetAPIVersionAffinity(affinity APIVersion) (previousAf
 	return
 }
 
+// filterASCII filter out the non-ascii printable characters out of the given input string.
+// It's used as a security qualifier before adding network provided data into an error message.
+// The function allows only characters in the range of [32..126], which excludes all the
+// control character, new lines, deletion, etc. All the alpha numeric and punctuation characters
+// are included in this range.
+func filterASCII(unfilteredString string) (filteredString string) {
+	for i, r := range unfilteredString {
+		if int(r) >= 0x20 && int(r) <= 0x7e {
+			filteredString += string(unfilteredString[i])
+		}
+	}
+	return
+}
+
 // extractError checks if the response signifies an error (for now, StatusCode != 200 or StatusCode != 201).
 // If so, it returns the error.
 // Otherwise, it returns nil.
@@ -96,7 +123,14 @@ func extractError(resp *http.Response) error {
 	}
 
 	errorBuf, _ := ioutil.ReadAll(resp.Body) // ignore returned error
-	return fmt.Errorf("HTTP %v: %s", resp.Status, errorBuf)
+	errorString := filterASCII(string(errorBuf))
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		apiToken := resp.Request.Header.Get(authHeader)
+		return unauthorizedRequestError{errorString, apiToken, resp.Request.URL.String()}
+	}
+
+	return fmt.Errorf("HTTP %s: %s", resp.Status, errorString)
 }
 
 // stripTransaction gets a transaction of the form "tx-XXXXXXXX" and truncates the "tx-" part, if it starts with "tx-"

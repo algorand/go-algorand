@@ -1,0 +1,7 @@
+#!/usr/bin/env python3
+# a reverse hex timestamp is useful for putting newest things first in S3 bucket object sort order
+import sys
+import time
+
+sys.stdout.write('{:08x}'.format(0xfffffffff - int(time.time())))
+

@@ -1,11 +1,23 @@
 tasks:
   - task: s3.BucketCopy
-    name: upload
+    name: amd64
     src: $HOME/projects/go-algorand/tmp/node_pkgs/linux/amd64
-    dest: s3://algorand-staging/releases/$CHANNEL/$VERSION
+    dest: s3://$STAGING/$CHANNEL/$VERSION/
+
+  - task: s3.BucketCopy
+    name: arm
+    src: $HOME/projects/go-algorand/tmp/node_pkgs/linux/arm
+    dest: s3://$STAGING/$CHANNEL/$VERSION/
+
+  - task: s3.BucketCopy
+    name: arm64
+    src: $HOME/projects/go-algorand/tmp/node_pkgs/linux/arm64
+    dest: s3://$STAGING/$CHANNEL/$VERSION/
 
 jobs:
   package-upload:
     tasks:
-      - s3.BucketCopy.upload
+      - s3.BucketCopy.amd64
+      - s3.BucketCopy.arm
+      - s3.BucketCopy.arm64
 
