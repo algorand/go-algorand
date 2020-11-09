@@ -118,6 +118,9 @@ func (al *logicLedger) ApplicationID() basics.AppIndex {
 }
 
 func (al *logicLedger) OptedIn(addr basics.Address, appIdx basics.AppIndex) (bool, error) {
+	if appIdx == basics.AppIndex(0) {
+		appIdx = al.aidx
+	}
 	return al.cow.allocated(addr, appIdx, false)
 }
 
