@@ -1094,7 +1094,7 @@ func TestGetCatchpointStream(t *testing.T) {
 		require.NoError(t, err)
 
 		// Store the catchpoint into the database
-		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fileName, "", 0)
+		err := au.accountsq.storeCatchpoint(context.Background(), basics.Round(i), fileName, "", int64(len(data)))
 		require.NoError(t, err)
 	}
 
@@ -1108,6 +1108,9 @@ func TestGetCatchpointStream(t *testing.T) {
 	require.Equal(t, 3, n)
 	outData := []byte{1, 2, 3}
 	require.Equal(t, outData, dataRead)
+	len, err := reader.Length()
+	require.NoError(t, err)
+	require.Equal(t, int64(3), len)
 
 	// File deleted, but record in the database
 	err = os.Remove(filepath.Join(temporaryDirectroy, "catchpoints", "2.catchpoint"))
