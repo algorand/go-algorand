@@ -1108,7 +1108,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	require.Equal(t, 3, n)
 	outData := []byte{1, 2, 3}
 	require.Equal(t, outData, dataRead)
-	len, err := reader.Length()
+	len, err := reader.Size()
 	require.NoError(t, err)
 	require.Equal(t, int64(3), len)
 
