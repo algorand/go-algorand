@@ -50,7 +50,7 @@
     "LogSizeLimit": 1073741824,
     "MaxCatchpointDownloadTimeSec": 7200,
     "MaxConnectionsPerIP": 30,
-    "MinCatchpointFileDownloadRate": 20480,
+    "MinCatchpointFileDownloadBytesPerSecond": 20480,
     "NetAddress": "",
     "NetworkProtocolVersion": "",
     "NodeExporterListenAddress": ":9100",

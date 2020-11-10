@@ -40,8 +40,8 @@ var errNoLedgerForRound = errors.New("No ledger available for given round")
 const (
 	// maxCatchpointFileChunkSize is a rough estimate for the worst-case scenario we're going to have of all the accounts data per a single catchpoint file chunk.
 	maxCatchpointFileChunkSize = ledger.BalancesPerCatchpointFileChunk * basics.MaxEncodedAccountDataSize
-	// defaultMinCatchpointFileDownloadRate defines the worst case-scenario download speed we expect to get while downloading a catchpoint file
-	defaultMinCatchpointFileDownloadRate = 20 * 1024
+	// defaultMinCatchpointFileDownloadBytesPerSecond defines the worst case-scenario download speed we expect to get while downloading a catchpoint file
+	defaultMinCatchpointFileDownloadBytesPerSecond = 20 * 1024
 	// catchpointFileStreamReadSize defines the number of bytes we would attempt to read at each itration from the incoming http data stream
 	catchpointFileStreamReadSize = 4096
 )
@@ -136,10 +136,10 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 
 	// maxCatchpointFileChunkDownloadDuration is the maximum amount of time we would wait to download a single chunk off a catchpoint file
 	maxCatchpointFileChunkDownloadDuration := 2 * time.Minute
-	if lf.config.MinCatchpointFileDownloadRate > 0 {
-		maxCatchpointFileChunkDownloadDuration += maxCatchpointFileChunkSize * time.Second / time.Duration(lf.config.MinCatchpointFileDownloadRate)
+	if lf.config.MinCatchpointFileDownloadBytesPerSecond > 0 {
+		maxCatchpointFileChunkDownloadDuration += maxCatchpointFileChunkSize * time.Second / time.Duration(lf.config.MinCatchpointFileDownloadBytesPerSecond)
 	} else {
-		maxCatchpointFileChunkDownloadDuration += maxCatchpointFileChunkSize * time.Second / defaultMinCatchpointFileDownloadRate
+		maxCatchpointFileChunkDownloadDuration += maxCatchpointFileChunkSize * time.Second / defaultMinCatchpointFileDownloadBytesPerSecond
 	}
 
 	watchdogReader := makeWatchdogStreamReader(response.Body, catchpointFileStreamReadSize, 2*maxCatchpointFileChunkSize, maxCatchpointFileChunkDownloadDuration)
