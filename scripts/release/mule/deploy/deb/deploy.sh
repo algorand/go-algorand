@@ -14,9 +14,9 @@ then
     exit 1
 fi
 
-if [[ ! "$CHANNEL" =~ ^beta$|^stable$|^indexer$ ]]
+if [[ ! "$CHANNEL" =~ ^beta$|^stable$ ]]
 then
-    echo "[$0] Repository values must be either \`beta\`, \`stable\` or \`indexer\`."
+    echo "[$0] Repository values must be either \`beta\` or \`stable\`."
     exit 1
 fi
 
@@ -36,12 +36,10 @@ mkdir -p /root/packages
 
 aptly mirror update stable
 aptly mirror update beta
-aptly mirror update indexer
 
 # aptly repo import <src-mirror> <dst-repo> <package-query> ...
 aptly repo import stable stable algorand algorand-devtools
 aptly repo import beta beta algorand-beta algorand-devtools-beta
-aptly repo import indexer indexer algorand-indexer
 
 KEY_PREFIX="releases/$CHANNEL/$VERSION"
 FILENAME_SUFFIX="${CHANNEL}_linux-amd64_${VERSION}.deb"
