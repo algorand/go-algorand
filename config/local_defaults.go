@@ -69,7 +69,7 @@ var defaultLocal = Local{
 	LogArchiveMaxAge:                        "",
 	LogArchiveName:                          "node.archive.log",
 	LogSizeLimit:                            1073741824,
-	MaxCatchpointDownloadTimeSec:            7200,
+	MaxCatchpointDownloadDuration:           7200000000000,
 	MaxConnectionsPerIP:                     30,
 	MinCatchpointFileDownloadBytesPerSecond: 20480,
 	NetAddress:                              "",

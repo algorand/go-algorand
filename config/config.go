@@ -350,10 +350,10 @@ type Local struct {
 	// and their meanings are identical to the ones in LedgerSynchronousMode.
 	AccountsRebuildSynchronousMode int `version[12]:"1"`
 
-	// MaxCatchpointDownloadTimeSec defines the maximum amount of time a client will be keeping the outgoing connection of a catchpoint download request open for processing before
+	// MaxCatchpointDownloadDuration defines the maximum duration a client will be keeping the outgoing connection of a catchpoint download request open for processing before
 	// shutting it down. Networks that have large catchpoint files, slow connection or slow storage could be a good reason to increase this value. Note that this is a client-side only
 	// configuration value, and it's independent of the actual catchpoint file size.
-	MaxCatchpointDownloadTimeSec uint64 `version[13]:"7200"`
+	MaxCatchpointDownloadDuration time.Duration `version[13]:"7200000000000"`
 
 	// MinCatchpointFileDownloadBytesPerSecond defines the minimal download speed that would be considered to be "acceptable" by the catchpoint file fetcher, measured in bytes per seconds. If the
 	// provided stream speed drops below this threshold, the connection would be recycled. Note that this field is evaluated per catchpoint "chunk" and not on it's own. If this field is zero,

@@ -40,7 +40,7 @@ var errNoLedgerForRound = errors.New("No ledger available for given round")
 const (
 	// maxCatchpointFileChunkSize is a rough estimate for the worst-case scenario we're going to have of all the accounts data per a single catchpoint file chunk.
 	maxCatchpointFileChunkSize = ledger.BalancesPerCatchpointFileChunk * basics.MaxEncodedAccountDataSize
-	// defaultMinCatchpointFileDownloadBytesPerSecond defines the worst case-scenario download speed we expect to get while downloading a catchpoint file
+	// defaultMinCatchpointFileDownloadBytesPerSecond defines the worst-case scenario download speed we expect to get while downloading a catchpoint file
 	defaultMinCatchpointFileDownloadBytesPerSecond = 20 * 1024
 	// catchpointFileStreamReadSize defines the number of bytes we would attempt to read at each itration from the incoming http data stream
 	catchpointFileStreamReadSize = 4096
@@ -101,7 +101,7 @@ func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPee
 		return err
 	}
 
-	timeoutContext, timeoutContextCancel := context.WithTimeout(ctx, time.Duration(lf.config.MaxCatchpointDownloadTimeSec)*time.Second)
+	timeoutContext, timeoutContextCancel := context.WithTimeout(ctx, lf.config.MaxCatchpointDownloadDuration)
 	defer timeoutContextCancel()
 	request = request.WithContext(timeoutContext)
 	network.SetUserAgentHeader(request.Header)
