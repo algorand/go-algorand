@@ -4,7 +4,7 @@ ARG ARCH=amd64
 ARG GOLANG_VERSION
 ENV DEBIAN_FRONTEND noninteractive
 
-RUN apt-get update && apt-get install aptly awscli binutils build-essential curl gnupg2 silversearcher-ag tree -y
+RUN apt-get update && apt-get install aptly awscli binutils build-essential curl gnupg2 -y
 RUN curl https://dl.google.com/go/go${GOLANG_VERSION}.linux-${ARCH%v*}.tar.gz | tar -xzf - && mv go /usr/local
 ENV GOROOT=/usr/local/go \
     GOPATH=/root/go \
