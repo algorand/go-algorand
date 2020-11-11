@@ -8,19 +8,16 @@
 #
 set -ex
 
-NETWORK="$1"
-VERSION="$2"
-
-RED_FG=$(tput setaf 1 2>/dev/null)
-END_FG_COLOR=$(tput sgr0 2>/dev/null)
+NETWORK=${NEWORK:-mainnet}
+VERSION=${VERSION:-latest}
 
 if [[ ! "$NETWORK" =~ ^mainnet$|^testnet$|^betanet$ ]]
 then
-    echo "$RED_FG[$0]$END_FG_COLOR Network values must be either \`mainnet\`, \`testnet\` or \`betanet\`."
+    echo "[$0] Network values must be either \`mainnet\`, \`testnet\` or \`betanet\`."
     exit 1
 fi
 
-pushd "$HOME/projects/go-algorand/docker/releases"
+pushd docker/releases
 
 if [ "$NETWORK" = mainnet ]
 then
@@ -32,7 +29,7 @@ then
 
     if [ -z "$VERSION" ]
     then
-        echo "$RED_FG[$0]$END_FG_COLOR No version specified."
+        echo "[$0] No version specified."
         exit 1
     fi
 

@@ -4,6 +4,7 @@
 - [Build Stages](#build-stages)
 - [Custom Builds](#custom-builds)
 - [Examples](#examples)
+- [Manual Deploy](#manual-deploy)
 
 # Environment Variables
 
@@ -16,6 +17,11 @@ These env vars generally don't change between stages. Here is a list of variable
 - `CHANNEL`
 - `OS_TYPE`
 - `VERSION`
+
+In addition, make sure that the following AWS credentials are set in environment variables:
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
 
 # Build Stages
 
@@ -32,6 +38,7 @@ These env vars generally don't change between stages. Here is a list of variable
 #### `mule` jobs
 
     - package
+        + calls `ci-build` make target
         + packages `deb`, `rpm` and `docker`
 
     - package-deb
@@ -63,10 +70,13 @@ These env vars generally don't change between stages. Here is a list of variable
 
 - customizable environment variables:
 
+    + `BRANCH`
+    + `CHANNEL`
     + `ARCH_BIT`, i.e., the value from `uname -m`
     + `NETWORK`
     + `S3_SOURCE`, i.e., the S3 bucket from which to download
     + `SHA`, i.e., the value from `git rev-parse HEAD` if not passed on CLI
+    + `VERSION`
 
 #### `mule` jobs
 
@@ -85,8 +95,11 @@ These env vars generally don't change between stages. Here is a list of variable
 
 - customizable environment variables:
 
+    + `BRANCH`
+    + `CHANNEL`
     + `ARCH_BIT`, i.e., the value from `uname -m`
     + `S3_SOURCE`, i.e., the S3 bucket from which to download
+    + `VERSION`
 
 ### `mule` jobs
 
@@ -99,20 +112,23 @@ These env vars generally don't change between stages. Here is a list of variable
 
 - customizable environment variables:
 
+    + `CHANNEL`
     + `NETWORK`
     + `NO_DEPLOY`
     + `PACKAGES_DIR`
+    + `S3_SOURCE`
+    + `VERSION`
 
 #### `mule` jobs
 
-    - package-deploy
-        + deploys both `deb` and `rpm`
-
-    - package-deploy-deb
-        + deploys only `deb`
-
     - package-deploy-rpm
-        + deploys only `rpm`
+        + deploys `rpm`
+
+    - docker-hub
+        + pushes new image to docker hub
+
+    - releases-page
+        + creates and pushes new releases page to S3
 
 # Custom Builds
 
@@ -167,7 +183,7 @@ Let's look at some examples.
 
 ### Uploading
 
-    VERSION=latest mule -f package-upload.yaml package-upload
+    STAGING=the-staging-area CHANNEL=beta VERSION=latest mule -f package-upload.yaml package-upload
 
 ### Testing
 
@@ -179,9 +195,9 @@ Let's look at some examples.
 
         BRANCH=update_signing CHANNEL=dev VERSION=2.1.86615 mule -f package-test.yaml package-test
 
-1. Download packages from staging and test.  This will download the packages to the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
+1. By setting the `S3_SOURCE` variable, the script will know to download packages from staging (instead of getting them from the local filesystem) and test.  This will download the packages to the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
 
-    Note that this is used to test a pending official release.
+    Note that this can be used to test a pending official release.
 
         CHANNEL=beta S3_SOURCE=the-staging-area VERSION=2.1.6 mule -f package-test.yaml package-test
 
@@ -195,23 +211,60 @@ Let's look at some examples.
 
         CHANNEL=dev VERSION=2.1.86615 mule -f package-sign.yaml package-sign
 
-1. Download packages from staging and sign.  This will download the packages to the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
+1. Download packages from staging and sign. Again, the script will know to download from S3 because the `S3_SOURCE` has been set.  This will download the packages to the usual place, i.e., `./go-algorand/tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE/`.
 
         CHANNEL=beta S3_SOURCE=the-staging-area VERSION=2.1.6 mule -f package-sign.yaml package-sign
 
 ### Deploying
 
-1. Packages will be automatically downloaded from staging. Each package will then be pushed to `s3:algorand-releases:`.
+1. The new rpm packages will be downloaded from staging if the `S3_SOURCE` variable is set. Each package will then be pushed to `s3:algorand-releases:`.
 
-        VERSION=2.1.6 mule -f package-deploy.yaml package-deploy
+        S3_SOURCE=the-staging-area VERSION=2.1.6 mule -f package-deploy.yaml package-deploy-rpm
 
 1. Packages are not downloaded from staging but rather are copied from the location on the local filesystem specified by `PACKAGES_DIR` in the `mule` yaml file. Each package will then be pushed to `s3:algorand-releases:`.
 
-        PACKAGES_DIR=/packages_location/foo VERSION=2.1.86615 mule -f package-deploy.yaml package-deploy
+        PACKAGES_DIR=/packages_location/foo VERSION=2.1.86615 mule -f package-deploy.yaml package-deploy-rpm
 
 1. `NO_DEPLOY` is set to `true`. Instead of automatically pushing to `s3:algorand-releases:`, this will copy the `rpmrepo` directory that was created in the container to the `WORKDIR` in the host environment (the `WORKDIR` is set in the `mule` yaml file).
 
     This is handy when testing a deployment and not yet ready to deploy.
 
-        NO_DEPLOY=true VERSION=2.1.6 mule -f package-deploy.yaml package-deploy
+        NO_DEPLOY=true S3_SOURCE=the-staging-area VERSION=2.1.6 mule -f package-deploy.yaml package-deploy-rpm
+
+# Manual Deploy
+
+> Before any processes are run, make sure that the signing keys have been added to the `gpg-agent`. The `gpg_preset_passphrase.sh` helper script is provided just for this purpose.
+
+Currently, it is still necessary to run two stages manually: sign and deploy. This is for several reasons, though principally because GPG signing of the build assets occurs in both stages.
+
+The processes that make up both stages have been `mule-ified` as much as possible, and all but one can be run as a `mule` task (deploying deb packages, which are done in its own separate docker container).
+
+### Signing
+
+Usually, the packages are pulled down from S3 where the eks pipeline or the `mule` `package-upload` task had placed them. Issue the following command to download and sign them:
+
+```
+CHANNEL=stable S3_SOURCE=the-internal-area VERSION=2.1.6 mule -f package-sign.yaml package-sign
+```
+
+> These are downloaded to the usual location at `tmp/node_pkgs/OS_TYPE/ARCH/` on the local filesystem.
+
+### Misc
+
+The following is an example of several commands issued for all the stages when building locally:
+
+```
+mule -f package.yaml package
+CHANNEL=dev VERSION=2.1.87522 SHA=730b3fd0 mule -f package-test.yaml package-test
+CHANNEL=dev VERSION=2.1.87522 mule -f package-sign.yaml package-sign
+CHANNEL=dev VERSION=2.1.87522 mule -f package-upload.yaml package-upload
+CHANNEL=dev VERSION=2.1.87522 NO_DEPLOY=true mule -f package-deploy.yaml package-deploy
+mule -f package-deploy.yaml releases-page
+
+docker build --build-arg AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" --build-arg AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" -t aptly-test .
+
+docker run --name aptly-algorand --rm -i -v "$XDG_RUNTIME_DIR/gnupg/S.gpg-agent":/root/.gnupg/S.gpg-agent -v "$HOME/.gnupg/pubring.kbx":/root/.gnupg/pubring.kbx -e AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" -e AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" -e CHANNEL=dev -e REPO=algorand -e VERSION=2.1.87522 aptly-test bash create_and_push
+
+docker run --name aptly-algorand --rm -it aptly-test
+```
 

@@ -12,11 +12,11 @@ cd "./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 
 if [ "$PKG_TYPE" = deb ]
 then
-    dpkg -L algorand > "$RPMTMP/algorand.install"
-    dpkg -L algorand-devtools > "$RPMTMP/algorand-devtools.install"
+    dpkg -L "$ALGORAND_PACKAGE_NAME" > "$RPMTMP/algorand.install"
+    dpkg -L "$DEVTOOLS_PACKAGE_NAME" > "$RPMTMP/algorand-devtools.install"
 else
-    rpm -ql algorand > "$RPMTMP/algorand.install"
-    rpm -ql algorand-devtools > "$RPMTMP/algorand-devtools.install"
+    rpm -ql "$ALGORAND_PACKAGE_NAME" > "$RPMTMP/algorand.install"
+    rpm -ql "$DEVTOOLS_PACKAGE_NAME" > "$RPMTMP/algorand-devtools.install"
 fi
 
 ALGORAND_BINS=(

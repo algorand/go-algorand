@@ -45,12 +45,19 @@ mule = $(shell ls -d scripts/release/mule/*/ | awk 'BEGIN { FS="/" ; OFS="-" } {
 mule-deploy-rpm:
 	scripts/release/mule/deploy/rpm/deploy.sh
 
+mule-docker:
+	scripts/release/mule/deploy/docker/docker.sh
+
 mule-package-%: PKG_TYPE=$*
 mule-package-%:
 	echo Building algorand package...
-	scripts/release/mule/package/$(PKG_TYPE)/package.sh
+	scripts/release/mule/package/$(PKG_TYPE)/package.sh algorand
 	echo Building algorand-devtools package...
 	scripts/release/mule/package/$(PKG_TYPE)/package.sh algorand-devtools
+
+mule-releases-page:
+	echo Generating the releases page...
+	cd scripts/release/mule/deploy/releases_page && ./generate_releases_page.sh
 
 mule-sign:
 	scripts/release/mule/sign/sign.sh
