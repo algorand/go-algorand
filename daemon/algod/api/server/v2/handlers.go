@@ -167,11 +167,28 @@ func (v2 *Handlers) GetBlock(ctx echo.Context, round uint64, params generated.Ge
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
 
+	// Calculate transaction IDs
+	txIds := make([]string, 0)
+	for _, txib := range block.Payset {
+		var tx transactions.SignedTxn
+
+		tx, _, err = block.DecodeSignedTxn(txib)
+		if err != nil {
+			return internalError(ctx, err, err.Error(), v2.Log)
+		}
+
+		txIds = append(txIds, tx.Txn.ID().String())
+	}
+
 	// Encoding wasn't working well without embedding "real" objects.
 	response := struct {
 		Block bookkeeping.Block `codec:"block"`
+		Hash  string `codec:"block-hash"`
+		TxIDs  []string `codec:"tx-ids,omitempty"`
 	}{
 		Block: block,
+		Hash: crypto.Digest(block.Hash()).String(),
+		TxIDs: txIds,
 	}
 
 	data, err := encode(handle, response)
