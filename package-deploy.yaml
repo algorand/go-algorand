@@ -24,6 +24,24 @@ agents:
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
     workDir: $HOME/projects/go-algorand
 
+  - name: deb
+    dockerFilePath: docker/build/aptly.Dockerfile
+    image: algorand/aptly
+    version: scripts/configure_dev-deps.sh
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    env:
+      - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      - CHANNEL=$CHANNEL
+      - SNAPSHOT=$SNAPSHOT
+      - STAGING=$STAGING
+      - VERSION=$VERSION
+    volumes:
+      - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent
+      - $HOME/.gnupg/pubring.kbx:/root/.gnupg/pubring.kbx
+    workDir: $HOME/projects/go-algorand
+
   - name: rpm
     dockerFilePath: docker/build/cicd.centos.Dockerfile
     image: algorand/cicd-centos
@@ -55,11 +73,20 @@ tasks:
     target: mule-releases-page
 
   - task: docker.Make
+    name: deb
+    agent: deb
+    target: mule-deploy-deb
+
+  - task: docker.Make
     name: rpm
     agent: rpm
     target: mule-deploy-rpm
 
 jobs:
+  package-deploy-deb:
+    tasks:
+      - docker.Make.deb
+
   package-deploy-rpm:
     tasks:
       - docker.Make.rpm
