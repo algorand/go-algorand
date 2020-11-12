@@ -88,7 +88,25 @@ var accountsSchema = []string{
 // TODO: Post applications, rename assetcreators -> creatables and rename
 // 'asset' column -> 'creatable'
 var creatablesMigration = []string{
-	`ALTER TABLE assetcreators ADD COLUMN ctype INTEGER DEFAULT 0`,
+	`ALTER TABLE assetcreators ADD COLUMN ctype integer DEFAULT 0`,
+}
+
+// createNormalizedOnlineBalanceIndex handles accountbase/catchpointbalances tables
+func createNormalizedOnlineBalanceIndex(idxname string, tablename string) string {
+	return fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %s
+		ON %s ( normalizedonlinebalance, address, data )
+		WHERE normalizedonlinebalance>0`, idxname, tablename)
+}
+
+var createOnlineAccountIndex = []string{
+	`ALTER TABLE accountbase
+		ADD COLUMN normalizedonlinebalance integer`,
+	createNormalizedOnlineBalanceIndex("onlineaccountbals", "accountbase"),
+}
+
+// createStorageIndex handles storage/catchpointstorage tables
+func createStorageIndex(idxname string, tablename string) string {
+	return fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s ( owner )", idxname, tablename)
 }
 
 var storageMigration = []string{
@@ -101,30 +119,14 @@ var storageMigration = []string{
 		venc blob,
 		PRIMARY KEY(owner, aidx, global, key)
 	)`,
-	// migration only table
+	// migration only table, renamed to accountbase during migration
 	`CREATE TABLE IF NOT EXISTS miniaccountbase (
 		address blob primary key,
-		data blob
+		data blob,
+		normalizedonlinebalance integer
 	)`,
 	createStorageIndex("storage_idx", "storage"),
-}
-
-// these create index functions handle
-// storage/catchpointstorage and accountbase/catchpointbalances tables
-func createStorageIndex(idxname string, tablename string) string {
-	return fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s ( owner )", idxname, tablename)
-}
-
-func createNormalizedOnlineBalanceIndex(idxname string, tablename string) string {
-	return fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %s
-		ON %s ( normalizedonlinebalance, address, data )
-		WHERE normalizedonlinebalance>0`, idxname, tablename)
-}
-
-var createOnlineAccountIndex = []string{
-	`ALTER TABLE accountbase
-		ADD COLUMN normalizedonlinebalance INTEGER`,
-	createNormalizedOnlineBalanceIndex("onlineaccountbals", "accountbase"),
+	createNormalizedOnlineBalanceIndex("onlineaccountbalsmini", "miniaccountbase"),
 }
 
 var accountsResetExprs = []string{

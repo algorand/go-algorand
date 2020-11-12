@@ -1464,7 +1464,7 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 			return
 		}
 	}
-	_, err = db.SetUserVersion(ctx, tx, 4)
+	_, err = db.SetUserVersion(ctx, tx, 5)
 	if err != nil {
 		return 0, fmt.Errorf("upgradeDatabaseSchema3: unable to update database schema version from 3 to 4: %v", err)
 	}
@@ -1479,7 +1479,7 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 		return
 	}
 	defer insertKeyStmt.Close()
-	insertAcctStmt, err := tx.Prepare("INSERT INTO miniaccountbase (address, data) VALUES (?, ?)")
+	insertAcctStmt, err := tx.Prepare("INSERT INTO miniaccountbase (address, data, normalizedonlinebalance) VALUES (?, ?, ?)")
 	if err != nil {
 		return
 	}
@@ -1498,7 +1498,8 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 		}
 
 		var addrBuf, dataBuf []byte
-		err = rows.Scan(&addrBuf, &dataBuf)
+		var normAcctBalance uint64
+		err = rows.Scan(&addrBuf, &dataBuf, &normAcctBalance)
 		if err != nil {
 			return
 		}
@@ -1512,7 +1513,7 @@ func (au *accountUpdates) upgradeDatabaseSchema4(ctx context.Context, tx *sql.Tx
 		}
 
 		miniData := withoutAppKV(data)
-		_, err = insertAcctStmt.Exec(addr[:], protocol.Encode(&miniData))
+		_, err = insertAcctStmt.Exec(addr[:], protocol.Encode(&miniData), normAcctBalance)
 		if err != nil {
 			return
 		}
