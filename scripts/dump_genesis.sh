@@ -20,11 +20,13 @@ LEDGERS=$D/*/ledger.*sqlite
 
 for LEDGER in $LEDGERS; do
   TABLES=$(echo .tables | sqlite3 $LEDGER)
-  >&2 echo "$LEDGER tables: '$TABLES'"
   for T in $(echo .tables | sqlite3 $LEDGER); do
-    #remove trailing newlines echoed by Windows' sqlite3 app
+    # remove trailing newlines echoed by Windows' sqlite3 app
     T=${T//[$'\t\r\n ']}
-    >&2 echo "trimmed table: '$T'"
+    # ignore empty table names on Windows that appear in iteration
+    if [ "$T" = "" ]; then
+      continue
+    fi
     case $T in
       blocks)
         SORT=rnd
