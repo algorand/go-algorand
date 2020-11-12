@@ -1131,3 +1131,186 @@ func (iterator *encodedAccountsBatchIter) Close() {
 		iterator.rows = nil
 	}
 }
+
+// orderedAccountsBuilderIter allows us to iterate over the accounts addresses in the order of the account hashes.
+type orderedAccountsBuilderIter struct {
+	step         int
+	rows         *sql.Rows
+	tx           *sql.Tx
+	accountCount int
+	accountData  bool
+	insertStmt   *sql.Stmt
+}
+
+func makeOrderedAccountsBuilderIter(tx *sql.Tx, accountCount int, accountData bool) *orderedAccountsBuilderIter {
+	return &orderedAccountsBuilderIter{
+		tx:           tx,
+		accountCount: accountCount,
+		accountData:  accountData,
+		step:         0,
+	}
+}
+
+type accountAddressHashData struct {
+	address            basics.Address
+	digest             []byte
+	encodedAccountData []byte
+}
+
+func (iterator *orderedAccountsBuilderIter) Next(ctx context.Context) (acct []accountAddressHashData, ordered bool, err error) {
+	if iterator.step == 0 {
+		_, err = iterator.tx.ExecContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
+		if err != nil {
+			return
+		}
+		iterator.step = 1
+		return
+	}
+	if iterator.step == 1 {
+		_, err = iterator.tx.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(address blob, hash blob)")
+		if err != nil {
+			return
+		}
+		iterator.step = 2
+		return
+	}
+	if iterator.step == 2 {
+		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
+		if err != nil {
+			return
+		}
+		iterator.insertStmt, err = iterator.tx.PrepareContext(ctx, "INSERT INTO accountsiteratorhashes(address, hash) VALUES(?, ?)")
+		if err != nil {
+			return
+		}
+		iterator.step = 3
+		return
+	}
+	if iterator.step == 3 {
+		var addr basics.Address
+		count := 0
+		for iterator.rows.Next() {
+			var addrbuf []byte
+			var buf []byte
+			err = iterator.rows.Scan(&addrbuf, &buf)
+			if err != nil {
+				iterator.Close(ctx)
+				return
+			}
+
+			if len(addrbuf) != len(addr) {
+				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				return
+			}
+
+			copy(addr[:], addrbuf)
+
+			var accountData basics.AccountData
+			err = protocol.Decode(buf, &accountData)
+			if err != nil {
+				return
+			}
+			hash := accountHashBuilder(addr, accountData, buf)
+			_, err = iterator.insertStmt.ExecContext(ctx, addrbuf, hash)
+			if err != nil {
+				return
+			}
+
+			count++
+			if count == iterator.accountCount {
+				// we're done with this iteration.
+				acct = make([]accountAddressHashData, count, count)
+				return
+			}
+		}
+		acct = make([]accountAddressHashData, count, count)
+		iterator.step = 4
+		iterator.rows.Close()
+		iterator.rows = nil
+		iterator.insertStmt.Close()
+		iterator.insertStmt = nil
+		return
+	}
+	if iterator.step == 4 {
+		_, err = iterator.tx.ExecContext(ctx, "CREATE INDEX accountsiteratorhashesidx ON accountsiteratorhashes(hash)")
+		if err != nil {
+			return
+		}
+		iterator.step = 5
+		return
+	}
+	if iterator.step == 5 {
+		if iterator.accountData {
+			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT accountsiteratorhashes.address, accountsiteratorhashes.hash, accountbase.data FROM accountsiteratorhashes JOIN accountbase ON accountbase.address=accountsiteratorhashes.address ORDER BY accountsiteratorhashes.hash")
+		} else {
+			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, hash FROM accountsiteratorhashes ORDER BY hash")
+		}
+
+		if err != nil {
+			return
+		}
+		iterator.step = 6
+		return
+	}
+
+	if iterator.step == 6 {
+		acct = make([]accountAddressHashData, 0, iterator.accountCount)
+		var addr basics.Address
+		for iterator.rows.Next() {
+			var addrbuf []byte
+			var acctdata []byte
+			var hash []byte
+			if iterator.accountData {
+				err = iterator.rows.Scan(&addrbuf, &hash, &acctdata)
+			} else {
+				err = iterator.rows.Scan(&addrbuf, &hash)
+			}
+			if err != nil {
+				iterator.Close(ctx)
+				return
+			}
+
+			if len(addrbuf) != len(addr) {
+				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				return
+			}
+
+			copy(addr[:], addrbuf)
+
+			acct = append(acct, accountAddressHashData{address: addr, digest: hash, encodedAccountData: acctdata})
+			if len(acct) == iterator.accountCount {
+				// we're done with this iteration.
+				ordered = true
+				return
+			}
+		}
+		ordered = true
+		iterator.step = 7
+		iterator.rows.Close()
+		iterator.rows = nil
+		return
+	}
+	if iterator.step == 7 {
+		iterator.rows, err = iterator.tx.QueryContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
+		if err != nil {
+			return
+		}
+		iterator.step = 8
+		// fallthrough
+	}
+	return nil, true, sql.ErrNoRows
+}
+
+// Close shuts down the orderedAccountsBuilderIter, releasing database resources.
+func (iterator *orderedAccountsBuilderIter) Close(ctx context.Context) (err error) {
+	if iterator.rows != nil {
+		iterator.rows.Close()
+		iterator.rows = nil
+	}
+	if iterator.insertStmt != nil {
+		iterator.insertStmt.Close()
+		iterator.insertStmt = nil
+	}
+	_, err = iterator.tx.ExecContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
+	return
+}
