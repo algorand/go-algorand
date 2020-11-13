@@ -1132,8 +1132,8 @@ func (iterator *encodedAccountsBatchIter) Close() {
 	}
 }
 
-// orderedAccountsBuilderIter allows us to iterate over the accounts addresses in the order of the account hashes.
-type orderedAccountsBuilderIter struct {
+// orderedAccountsIter allows us to iterate over the accounts addresses in the order of the account hashes.
+type orderedAccountsIter struct {
 	step         int
 	rows         *sql.Rows
 	tx           *sql.Tx
@@ -1142,8 +1142,10 @@ type orderedAccountsBuilderIter struct {
 	insertStmt   *sql.Stmt
 }
 
-func makeOrderedAccountsBuilderIter(tx *sql.Tx, accountCount int, accountData bool) *orderedAccountsBuilderIter {
-	return &orderedAccountsBuilderIter{
+// makeOrderedAccountsIter creates an ordered account iterator. Note that due to implementation reasons,
+// only a single iterator can be active at a time.
+func makeOrderedAccountsIter(tx *sql.Tx, accountCount int, accountData bool) *orderedAccountsIter {
+	return &orderedAccountsIter{
 		tx:           tx,
 		accountCount: accountCount,
 		accountData:  accountData,
@@ -1151,14 +1153,25 @@ func makeOrderedAccountsBuilderIter(tx *sql.Tx, accountCount int, accountData bo
 	}
 }
 
+// accountAddressHashData is used by Next to return a single account address, hash and account data.
 type accountAddressHashData struct {
 	address            basics.Address
 	digest             []byte
 	encodedAccountData []byte
 }
 
-func (iterator *orderedAccountsBuilderIter) Next(ctx context.Context) (acct []accountAddressHashData, ordered bool, err error) {
+// Next returns an array containing the account address, hash and potentially data
+// the Next function works in multiple processing stages, where it first processs the current accounts and order them
+// followed by returning the ordered accounts. In the first phase, it would return empty accountAddressHashData array
+// whose size matches with the data that was processed, and set the ordered to false. On the second phase, the acct
+// would contain valid data ( and optionally the account data as well, if was asked in makeOrderedAccountsIter) and
+// would set the ordered to true. If err is sql.ErrNoRows it means that the iterator have completed it's work and no further
+// accounts exists. Otherwise, the caller is expected to keep calling "Next" to retrieve the next set of accounts
+// ( or let the Next function make some progress toward that goal )
+func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAddressHashData, ordered bool, err error) {
 	if iterator.step == 0 {
+		// although we're going to delete this table anyway when completing the iterator execution, we'll try to
+		// clean up any intermediate table.
 		_, err = iterator.tx.ExecContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
 		if err != nil {
 			return
@@ -1167,6 +1180,7 @@ func (iterator *orderedAccountsBuilderIter) Next(ctx context.Context) (acct []ac
 		return
 	}
 	if iterator.step == 1 {
+		// create the temporary table
 		_, err = iterator.tx.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(address blob, hash blob)")
 		if err != nil {
 			return
@@ -1175,10 +1189,12 @@ func (iterator *orderedAccountsBuilderIter) Next(ctx context.Context) (acct []ac
 		return
 	}
 	if iterator.step == 2 {
+		// iterate over the existing accounts
 		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
 		if err != nil {
 			return
 		}
+		// prepare the insert statement into the temporary table
 		iterator.insertStmt, err = iterator.tx.PrepareContext(ctx, "INSERT INTO accountsiteratorhashes(address, hash) VALUES(?, ?)")
 		if err != nil {
 			return
@@ -1232,6 +1248,8 @@ func (iterator *orderedAccountsBuilderIter) Next(ctx context.Context) (acct []ac
 		return
 	}
 	if iterator.step == 4 {
+		// create an index. It shown that even when we're making a single select statement in step 5, it would be better to have this index vs. not having it at all.
+		// note that this index is using the rowid of the accountsiteratorhashes table.
 		_, err = iterator.tx.ExecContext(ctx, "CREATE INDEX accountsiteratorhashesidx ON accountsiteratorhashes(hash)")
 		if err != nil {
 			return
@@ -1240,6 +1258,7 @@ func (iterator *orderedAccountsBuilderIter) Next(ctx context.Context) (acct []ac
 		return
 	}
 	if iterator.step == 5 {
+		// select the data from the ordered table
 		if iterator.accountData {
 			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT accountsiteratorhashes.address, accountsiteratorhashes.hash, accountbase.data FROM accountsiteratorhashes JOIN accountbase ON accountbase.address=accountsiteratorhashes.address ORDER BY accountsiteratorhashes.hash")
 		} else {
@@ -1302,7 +1321,7 @@ func (iterator *orderedAccountsBuilderIter) Next(ctx context.Context) (acct []ac
 }
 
 // Close shuts down the orderedAccountsBuilderIter, releasing database resources.
-func (iterator *orderedAccountsBuilderIter) Close(ctx context.Context) (err error) {
+func (iterator *orderedAccountsIter) Close(ctx context.Context) (err error) {
 	if iterator.rows != nil {
 		iterator.rows.Close()
 		iterator.rows = nil
