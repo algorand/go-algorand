@@ -1224,11 +1224,11 @@ func (iterator *orderedAccountsBuilderIter) Next(ctx context.Context) (acct []ac
 			}
 		}
 		acct = make([]accountAddressHashData, count, count)
-		iterator.step = 4
 		iterator.rows.Close()
 		iterator.rows = nil
 		iterator.insertStmt.Close()
 		iterator.insertStmt = nil
+		iterator.step = 4
 		return
 	}
 	if iterator.step == 4 {
@@ -1291,7 +1291,7 @@ func (iterator *orderedAccountsBuilderIter) Next(ctx context.Context) (acct []ac
 		return
 	}
 	if iterator.step == 7 {
-		iterator.rows, err = iterator.tx.QueryContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
+		err = iterator.Close(ctx)
 		if err != nil {
 			return
 		}
