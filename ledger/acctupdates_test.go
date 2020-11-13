@@ -1161,9 +1161,9 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
-	for i := 0; i < accountsNumber; {
+	for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
 		updates := make(map[basics.Address]accountDelta, 0)
-		for k := 0; i < accountsNumber && k < 1024; k++ {
+		for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 			addr := randomAddress()
 			acctData := basics.AccountData{}
 			acctData.MicroAlgos.Raw = 1
@@ -1189,4 +1189,72 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	require.NoError(b, err)
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "entries/trie")
+}
+
+func BenchmarkLargeCatchpointWriting(b *testing.B) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+
+	ml := makeMockLedgerForTracker(b, true)
+	defer ml.close()
+	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
+
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(5, true)}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	au := &accountUpdates{}
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	au.initialize(cfg, ".", proto, accts[0])
+	defer au.close()
+
+	temporaryDirectroy, err := ioutil.TempDir(os.TempDir(), "catchpoints")
+	require.NoError(b, err)
+	defer func() {
+		os.RemoveAll(temporaryDirectroy)
+	}()
+	catchpointsDirectory := filepath.Join(temporaryDirectroy, "catchpoints")
+	err = os.Mkdir(catchpointsDirectory, 0777)
+	require.NoError(b, err)
+
+	au.dbDirectory = temporaryDirectroy
+
+	err = au.loadFromDisk(ml)
+	require.NoError(b, err)
+
+	// at this point, the database was created. We want to fill the accounts data
+	accountsNumber := 6000000 * b.N
+	for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
+		updates := make(map[basics.Address]accountDelta, 0)
+		for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
+			addr := randomAddress()
+			acctData := basics.AccountData{}
+			acctData.MicroAlgos.Raw = 1
+			updates[addr] = accountDelta{new: acctData}
+			i++
+		}
+
+		err := ml.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			return accountsNewRound(tx, updates, nil, proto)
+		})
+		require.NoError(b, err)
+	}
+
+	err = ml.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		return updateAccountsRound(tx, 0, 1)
+	})
+	require.NoError(b, err)
+
+	b.ResetTimer()
+	au.generateCatchpoint(basics.Round(0), "0#ABCD", crypto.Digest{}, time.Second)
+	b.StopTimer()
+	b.ReportMetric(float64(accountsNumber), "accounts")
 }
