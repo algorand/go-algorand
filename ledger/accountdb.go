@@ -1132,24 +1132,50 @@ func (iterator *encodedAccountsBatchIter) Close() {
 	}
 }
 
+// orderedAccountsIterStep is used to by orderedAccountsIter to define the current step
+type orderedAccountsIterStep int
+
+const (
+	// startup step
+	oaiStepStartup = orderedAccountsIterStep(0)
+	// delete old ordering table if we have any leftover from previous invocation
+	oaiStepDeleteOldOrderingTable = orderedAccountsIterStep(0)
+	// create new ordering table
+	oaiStepCreateOrderingTable = orderedAccountsIterStep(1)
+	// query the existing accounts
+	oaiStepQueryAccounts = orderedAccountsIterStep(2)
+	// iterate over the existing accounts and insert their hash & address into the staging ordering table
+	oaiStepInsertAccountData = orderedAccountsIterStep(3)
+	// create an index on the ordering table so that we can efficiently scan it.
+	oaiStepCreateOrderingAccountIndex = orderedAccountsIterStep(4)
+	// query the ordering table
+	oaiStepSelectFromOrderedTable = orderedAccountsIterStep(5)
+	// iterate over the ordering table
+	oaiStepIterateOverOrderedTable = orderedAccountsIterStep(6)
+	// cleanup and delete ordering table
+	oaiStepShutdown = orderedAccountsIterStep(7)
+	// do nothing as we're done.
+	oaiStepDone = orderedAccountsIterStep(8)
+)
+
 // orderedAccountsIter allows us to iterate over the accounts addresses in the order of the account hashes.
 type orderedAccountsIter struct {
-	step         int
-	rows         *sql.Rows
-	tx           *sql.Tx
-	accountCount int
-	accountData  bool
-	insertStmt   *sql.Stmt
+	step             orderedAccountsIterStep
+	rows             *sql.Rows
+	tx               *sql.Tx
+	accountCount     int
+	fetchAccountData bool
+	insertStmt       *sql.Stmt
 }
 
 // makeOrderedAccountsIter creates an ordered account iterator. Note that due to implementation reasons,
 // only a single iterator can be active at a time.
-func makeOrderedAccountsIter(tx *sql.Tx, accountCount int, accountData bool) *orderedAccountsIter {
+func makeOrderedAccountsIter(tx *sql.Tx, accountCount int, fetchAccountData bool) *orderedAccountsIter {
 	return &orderedAccountsIter{
-		tx:           tx,
-		accountCount: accountCount,
-		accountData:  accountData,
-		step:         0,
+		tx:               tx,
+		accountCount:     accountCount,
+		fetchAccountData: fetchAccountData,
+		step:             oaiStepStartup,
 	}
 }
 
@@ -1169,26 +1195,26 @@ type accountAddressHashData struct {
 // accounts exists. Otherwise, the caller is expected to keep calling "Next" to retrieve the next set of accounts
 // ( or let the Next function make some progress toward that goal )
 func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAddressHashData, ordered bool, err error) {
-	if iterator.step == 0 {
+	if iterator.step == oaiStepDeleteOldOrderingTable {
 		// although we're going to delete this table anyway when completing the iterator execution, we'll try to
 		// clean up any intermediate table.
 		_, err = iterator.tx.ExecContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
 		if err != nil {
 			return
 		}
-		iterator.step = 1
+		iterator.step = oaiStepCreateOrderingTable
 		return
 	}
-	if iterator.step == 1 {
+	if iterator.step == oaiStepCreateOrderingTable {
 		// create the temporary table
 		_, err = iterator.tx.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(address blob, hash blob)")
 		if err != nil {
 			return
 		}
-		iterator.step = 2
+		iterator.step = oaiStepQueryAccounts
 		return
 	}
-	if iterator.step == 2 {
+	if iterator.step == oaiStepQueryAccounts {
 		// iterate over the existing accounts
 		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
 		if err != nil {
@@ -1199,10 +1225,10 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		if err != nil {
 			return
 		}
-		iterator.step = 3
+		iterator.step = oaiStepInsertAccountData
 		return
 	}
-	if iterator.step == 3 {
+	if iterator.step == oaiStepInsertAccountData {
 		var addr basics.Address
 		count := 0
 		for iterator.rows.Next() {
@@ -1244,22 +1270,22 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		iterator.rows = nil
 		iterator.insertStmt.Close()
 		iterator.insertStmt = nil
-		iterator.step = 4
+		iterator.step = oaiStepCreateOrderingAccountIndex
 		return
 	}
-	if iterator.step == 4 {
+	if iterator.step == oaiStepCreateOrderingAccountIndex {
 		// create an index. It shown that even when we're making a single select statement in step 5, it would be better to have this index vs. not having it at all.
 		// note that this index is using the rowid of the accountsiteratorhashes table.
 		_, err = iterator.tx.ExecContext(ctx, "CREATE INDEX accountsiteratorhashesidx ON accountsiteratorhashes(hash)")
 		if err != nil {
 			return
 		}
-		iterator.step = 5
+		iterator.step = oaiStepSelectFromOrderedTable
 		return
 	}
-	if iterator.step == 5 {
+	if iterator.step == oaiStepSelectFromOrderedTable {
 		// select the data from the ordered table
-		if iterator.accountData {
+		if iterator.fetchAccountData {
 			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT accountsiteratorhashes.address, accountsiteratorhashes.hash, accountbase.data FROM accountsiteratorhashes JOIN accountbase ON accountbase.address=accountsiteratorhashes.address ORDER BY accountsiteratorhashes.hash")
 		} else {
 			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, hash FROM accountsiteratorhashes ORDER BY hash")
@@ -1268,18 +1294,18 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		if err != nil {
 			return
 		}
-		iterator.step = 6
+		iterator.step = oaiStepIterateOverOrderedTable
 		return
 	}
 
-	if iterator.step == 6 {
+	if iterator.step == oaiStepIterateOverOrderedTable {
 		acct = make([]accountAddressHashData, 0, iterator.accountCount)
 		var addr basics.Address
 		for iterator.rows.Next() {
 			var addrbuf []byte
 			var acctdata []byte
 			var hash []byte
-			if iterator.accountData {
+			if iterator.fetchAccountData {
 				err = iterator.rows.Scan(&addrbuf, &hash, &acctdata)
 			} else {
 				err = iterator.rows.Scan(&addrbuf, &hash)
@@ -1304,17 +1330,17 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			}
 		}
 		ordered = true
-		iterator.step = 7
+		iterator.step = oaiStepShutdown
 		iterator.rows.Close()
 		iterator.rows = nil
 		return
 	}
-	if iterator.step == 7 {
+	if iterator.step == oaiStepShutdown {
 		err = iterator.Close(ctx)
 		if err != nil {
 			return
 		}
-		iterator.step = 8
+		iterator.step = oaiStepDone
 		// fallthrough
 	}
 	return nil, true, sql.ErrNoRows
