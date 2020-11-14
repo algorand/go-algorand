@@ -19,17 +19,20 @@ package pingpong
 import (
 	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/libgoal"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 func ensureAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, cfg PpConfig, err error) {
@@ -290,7 +293,7 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 						fmt.Printf("Distributing assets from %v to %v \n", addr, addr2)
 					}
 
-					tx, sendErr := constructTxn(addr, addr2, cfg.MaxFee, assetAmt, k, client, cfg)
+					tx, sendErr := constructTxn(addr, addr2, cfg.MaxFee, assetAmt, k, CreatablesInfo{}, client, cfg)
 					if sendErr != nil {
 						fmt.Printf("Cannot transfer asset %v from account %v\n", k, addr)
 						err = sendErr
@@ -357,47 +360,70 @@ func genBigNoOpAndBigHashes(numOps uint32, numHashes uint32, hashSize string) []
 	return progBytes
 }
 
-func genMaxClone(numKeys int) []byte {
+func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKeys uint32, numLocalKeys uint32) []byte {
 	// goto flip if first key exists
+	flipBranchSize := uint32(6)
 	flipBranch := `
-		int 0  // current app id
-		int 1  // key
-		itob
-		app_global_get_ex
-		bnz flip
+		int 0  // current app id  [0]
+		int 1  // key  [1, 0]
+		itob   // ["\x01", 0]
+		app_global_get_ex // [0|1, x]
+		bnz flip  // [x]
+		pop    // []
 	`
 
 	writePrefix := `
 		write:
-		int 0
+		int 0  // [0]
 	`
 
+	writeBlockSize := uint32(6)
 	writeBlock := `
-		int 1
-		+
-		dup
-		itob
-		dup
-		app_global_put
+		int 1           // [1, 0]
+		+               // [1]
+		dup             // [1, 1]
+		itob            // ["\x01", 1]
+		dup             // ["\x01", "\x01", 1]
+		app_global_put  // [1]
 	`
 
 	writeSuffix := `
-		int 1
+		pop    // []
+		int 1  // [1]
 		return
+	`
+
+	writeLocBlockSize := uint32(16)
+	writeLocBlock := `
+		int 1           // [1, n]
+		+               // [1+n]
+		dup             // [1+n, 1+n]
+		dup             // [1+n, 1+n, 1+n]
+		store 0         // [1+n, 1+n]
+		txn NumAccounts // [N, 1+n, 1+n]
+		int 1           // [1, N, 1+n, 1+n]
+		-               // [N-1, 1+n, 1+n],  exclude sender
+		%               // [A, 1+n], A = 1+n mod N
+		int 1           // [1, A, 1+n], A = 1+n mod N
+		+               // [A+1, 1+n]
+		load 0          // [1+n, A+1, 1+n]
+		itob            // ["\x n+1", A+1, 1+n]
+		dup             // ["\x n+1", "\x n+1", A, 1+n]
+		app_local_put   // [1+n]
 	`
 
 	// flip stored value's low bit
 	flipPrefix := `
-		flip:
-		btoi
-		int 1
-		^
-		itob
-		store 0
-		int 1
-		itob
-		load 0
-		app_global_put
+		flip:    // [x]
+		btoi     // [n]
+		int 1    // [1, n]
+		^        // [n^1]
+		itob     // ["\x n^1"]
+		store 0  // []
+		int 1    // [1]
+		itob     // ["x01"]
+		load 0   // ["\x n^1", "x01"]
+		app_global_put  // []
 	`
 
 	flipSuffix := `
@@ -406,15 +432,43 @@ func genMaxClone(numKeys int) []byte {
 	`
 
 	// generate assembly
-	progParts := []string{"#pragma version 2"}
+	prefixSize := uint32(6)
+	progParts := []string{
+		// allow fast creation and opt in
+		"#pragma version 2",
+		"txn ApplicationID",
+		"bz ok",
+		"txn OnCompletion",
+		"int OptIn",
+		"==",
+		"bnz ok",
+	}
 	progParts = append(progParts, flipBranch)
 	progParts = append(progParts, writePrefix)
-	for i := 0; i < numKeys; i++ {
+	for i := uint32(0); i < numGlobalKeys; i++ {
 		progParts = append(progParts, writeBlock)
+	}
+	for i := uint32(0); i < numLocalKeys; i++ {
+		progParts = append(progParts, writeLocBlock)
+	}
+	if numHashes > 0 {
+		progParts = append(progParts, `byte base64 AA==`)
+		for i := uint32(0); i < numHashes; i++ {
+			progParts = append(progParts, hashSize)
+		}
+	}
+	written := prefixSize + flipBranchSize + numHashes + numGlobalKeys*writeBlockSize + numLocalKeys*writeLocBlockSize
+	if written < numOps {
+		left := numOps - written - 20 // allow some space
+		for i := uint32(0); i < left/2; i++ {
+			progParts = append(progParts, `int 1`)
+			progParts = append(progParts, `pop`)
+		}
 	}
 	progParts = append(progParts, writeSuffix)
 	progParts = append(progParts, flipPrefix)
 	progParts = append(progParts, flipSuffix)
+	progParts = append(progParts, []string{"ok:", "int 1", "return"}...)
 	progAsm := strings.Join(progParts, "\n")
 
 	// assemble
@@ -425,22 +479,81 @@ func genMaxClone(numKeys int) []byte {
 	return progBytes
 }
 
-func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (appParams map[uint64]v1.AppParams, err error) {
+func sendAsGroup(txgroup []transactions.Transaction, client libgoal.Client, h []byte) (err error) {
+	if len(txgroup) == 0 {
+		err = fmt.Errorf("sendAsGroup: empty group")
+		return
+	}
+	gid, gidErr := client.GroupID(txgroup)
+	if gidErr != nil {
+		err = gidErr
+		return
+	}
+	var stxgroup []transactions.SignedTxn
+	for _, txn := range txgroup {
+		txn.Group = gid
+		signedTxn, signErr := client.SignTransactionWithWallet(h, nil, txn)
+		if signErr != nil {
+			fmt.Printf("Cannot sign app creation txn\n")
+			err = signErr
+			return
+		}
+		stxgroup = append(stxgroup, signedTxn)
+	}
 
-	var appAccount v1.Account
+	broadcastErr := client.BroadcastTransactionGroup(stxgroup)
+	if broadcastErr != nil {
+		fmt.Printf("Cannot broadcast app creation txn group\n")
+		err = broadcastErr
+		return
+	}
+	return
+}
+
+func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (appParams map[uint64]v1.AppParams, optIns map[uint64][]string, err error) {
+	toCreate := int(cfg.NumApp)
+	appsPerAcct := config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsCreated
+	// create min(groupSize, maxAppsPerAcct) per account to optimize sending in batches
+	groupSize := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize
+	if appsPerAcct > groupSize {
+		appsPerAcct = groupSize
+	}
+
+	acctNeeded := toCreate / appsPerAcct
+	if toCreate%appsPerAcct != 0 {
+		acctNeeded++
+	}
+	if acctNeeded >= len(accounts) { // >= because cfg.SrcAccount is skipped
+		err = fmt.Errorf("Need %d accts to create %d apps but got only %d accts", acctNeeded, toCreate, len(accounts))
+		return
+	}
+	maxOptIn := uint32(config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsOptedIn)
+	if cfg.NumAppOptIn > maxOptIn {
+		err = fmt.Errorf("Each acct can only opt in to %d but %d requested", maxOptIn, cfg.NumAppOptIn)
+		return
+	}
+
+	var appAccounts []v1.Account
 	for tempAccount := range accounts {
 		if tempAccount != cfg.SrcAccount {
+			var appAccount v1.Account
 			appAccount, err = client.AccountInformation(tempAccount)
 			if err != nil {
 				fmt.Printf("Warning, cannot lookup tempAccount account %s", tempAccount)
 				return
 			}
-			break
+			appAccounts = append(appAccounts, appAccount)
+			if len(appAccounts) == acctNeeded {
+				break
+			}
 		}
 	}
 
 	if !cfg.Quiet {
-		fmt.Printf("Selected temp account: %s\n", appAccount.Address)
+		fmt.Printf("Selected temp account:\n")
+		for _, acct := range appAccounts {
+			fmt.Printf("%s\n", acct.Address)
+		}
 	}
 
 	// Get wallet handle token
@@ -450,73 +563,136 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 		return
 	}
 
-	toCreate := int(cfg.NumApp)
+	// create apps
+	for idx, appAccount := range appAccounts {
+		begin := idx * appsPerAcct
+		end := (idx + 1) * appsPerAcct
+		if end > toCreate {
+			end = toCreate
+		}
+		fmt.Printf("%d: %d %d of (%d / %d)\n", idx, begin, end, toCreate, appsPerAcct)
+		var txgroup []transactions.Transaction
+		for i := begin; i < end; i++ {
+			var tx transactions.Transaction
 
-	// create apps in srcAccount
-	for i := 0; i < toCreate; i++ {
-		var tx transactions.Transaction
+			// generate app program with roughly some number of operations
+			prog := genAppProgram(cfg.AppProgOps, cfg.AppProgHashes, cfg.AppProgHashSize, cfg.AppGlobKeys, cfg.AppLocalKeys)
+			if !cfg.Quiet {
+				fmt.Printf("generated program: \n%s\n", prog)
+			}
 
-		// generate app program with roughly some number of operations
-		prog := genBigNoOpAndBigHashes(cfg.AppProgOps, cfg.AppProgHashs, cfg.AppProgHashSize)
-		if !cfg.Quiet {
-			fmt.Printf("generated program: \n%s\n", prog)
+			globSchema := basics.StateSchema{NumByteSlice: 64}
+			locSchema := basics.StateSchema{NumByteSlice: 16}
+			tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil)
+			if err != nil {
+				fmt.Printf("Cannot create app txn\n")
+				panic(err)
+			}
+
+			tx, err = client.FillUnsignedTxTemplate(appAccount.Address, 0, 0, cfg.MaxFee, tx)
+			if err != nil {
+				fmt.Printf("Cannot fill app creation txn\n")
+				panic(err)
+			}
+
+			// Ensure different txids
+			var note [8]byte
+			crypto.RandBytes(note[:])
+			tx.Note = note[:]
+
+			txgroup = append(txgroup, tx)
+			accounts[appAccount.Address] -= tx.Fee.Raw
 		}
 
-		globSchema := basics.StateSchema{NumByteSlice: 64}
-		locSchema := basics.StateSchema{}
-		tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil)
+		err = sendAsGroup(txgroup, client, h)
 		if err != nil {
-			fmt.Printf("Cannot create app txn\n")
-			panic(err)
-		}
-
-		tx, err = client.FillUnsignedTxTemplate(appAccount.Address, 0, 0, cfg.MaxFee, tx)
-		if err != nil {
-			fmt.Printf("Cannot fill app creation txn\n")
-			panic(err)
-		}
-
-		// Ensure different txids
-		var note [8]byte
-		crypto.RandBytes(note[:])
-		tx.Note = note[:]
-
-		signedTxn, signErr := client.SignTransactionWithWallet(h, nil, tx)
-		if signErr != nil {
-			fmt.Printf("Cannot sign app creation txn\n")
-			err = signErr
 			return
 		}
 
-		txid, broadcastErr := client.BroadcastTransaction(signedTxn)
-		if broadcastErr != nil {
-			fmt.Printf("Cannot broadcast app creation txn\n")
-			err = broadcastErr
-			return
-		}
-
 		if !cfg.Quiet {
-			fmt.Printf("Create a new app: txid=%s\n", txid)
+			fmt.Printf("Created new %d apps\n", len(txgroup))
 		}
-
-		accounts[appAccount.Address] -= tx.Fee.Raw
 	}
 
-	var account v1.Account
 	// get these apps
-	for {
-		account, err = client.AccountInformation(appAccount.Address)
-		if err != nil {
-			fmt.Printf("Warning, cannot lookup source account")
-			return
+	var aidxs []uint64
+	appParams = make(map[uint64]v1.AppParams)
+	for _, appAccount := range appAccounts {
+		var account v1.Account
+		for {
+			account, err = client.AccountInformation(appAccount.Address)
+			if err != nil {
+				fmt.Printf("Warning, cannot lookup source account")
+				return
+			}
+			for idx := range account.AppParams {
+				aidxs = append(aidxs, idx)
+			}
+			if len(account.AppParams) >= appsPerAcct || len(aidxs) >= int(cfg.NumApp) {
+				break
+			}
+			time.Sleep(time.Second)
 		}
-		if len(account.AppParams) >= int(cfg.NumApp) {
-			break
+		for k, v := range account.AppParams {
+			appParams[k] = v
 		}
-		time.Sleep(time.Second)
 	}
 
-	appParams = account.AppParams
+	// time to opt in to these apps
+	if cfg.NumAppOptIn > 0 {
+		optIns = make(map[uint64][]string)
+		for addr := range accounts {
+			var txgroup []transactions.Transaction
+			addrOptedIn := make(map[uint64]bool)
+			for i := uint32(0); i < cfg.NumAppOptIn; i++ {
+				var aidx uint64
+				for {
+					idx := rand.Intn(len(aidxs))
+					aidx = aidxs[idx]
+					if !addrOptedIn[aidx] {
+						break
+					}
+				}
+				var tx transactions.Transaction
+				tx, err = client.MakeUnsignedAppOptInTx(aidx, nil, nil, nil, nil)
+				if err != nil {
+					fmt.Printf("Cannot create app txn\n")
+					panic(err)
+				}
+
+				tx, err = client.FillUnsignedTxTemplate(addr, 0, 0, cfg.MaxFee, tx)
+				if err != nil {
+					fmt.Printf("Cannot fill app creation txn\n")
+					panic(err)
+				}
+
+				// Ensure different txids
+				var note [8]byte
+				crypto.RandBytes(note[:])
+				tx.Note = note[:]
+
+				addrOptedIn[aidx] = true
+				optIns[aidx] = append(optIns[aidx], addr)
+
+				txgroup = append(txgroup, tx)
+				if len(txgroup) == groupSize {
+					err = sendAsGroup(txgroup, client, h)
+					if err != nil {
+						return
+					}
+					txgroup = txgroup[:0]
+				}
+			}
+			// broadcast leftovers
+			if len(txgroup) > 0 {
+				err = sendAsGroup(txgroup, client, h)
+				if err != nil {
+					return
+				}
+			}
+		}
+	}
+
 	return
 }
 
