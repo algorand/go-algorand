@@ -176,6 +176,10 @@ buildsrc: crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN
 	mkdir -p tmp/go-cache && \
 	touch tmp/go-cache/file.txt && \
 	GOCACHE=$(SRCPATH)/tmp/go-cache go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+	UNAME=$(uname); \
+	if [[ "${UNAME}" == *"MINGW"* ]]; then \
+		cp /mingw64/bin/libwinpthread-1.dll $(GOPATH1)/bin/ ; \
+	fi
 
 SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
 
