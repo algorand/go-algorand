@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=2072
 
 set -eo pipefail
 
@@ -8,7 +9,7 @@ GOLANG_VERSION=$(./scripts/get_golang_version.sh)
 SYSTEM_GOLANG_VERSION=$(go version | awk '{ gsub(/go/, "", $3); print $3 }')
 
 # https://golang.org/doc/go1.11#modules
-if [[ "${SYSTEM_GOLANG_VERSION}" < 1.11 ]]
+if [[ "${SYSTEM_GOLANG_VERSION}" < 1.12 ]]
 then
     echo "The version of go on the system (${SYSTEM_GOLANG_VERSION}) is too old and does not support go modules. Please update to ${GOLANG_VERSION}"
     exit 1
