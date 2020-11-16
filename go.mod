@@ -3,7 +3,7 @@ module github.com/algorand/go-algorand
 go 1.14
 
 require (
-        github.com/go-swagger/go-swagger/cmd/swagger v0.25.0
+	github.com/go-swagger/go-swagger/cmd/swagger v0.25.0
 	github.com/algorand/go-codec/codec v0.0.0-20190507210007-269d70b6135d
 	github.com/algorand/go-deadlock v0.2.1
 	github.com/algorand/msgp v1.1.45
