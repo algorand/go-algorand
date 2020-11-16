@@ -360,9 +360,19 @@ func genBigNoOpAndBigHashes(numOps uint32, numHashes uint32, hashSize string) []
 	return progBytes
 }
 
-func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKeys uint32, numLocalKeys uint32) []byte {
+func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKeys uint32, numLocalKeys uint32) ([]byte, string) {
+	prologueSize := uint32(2 + 3 + 2 + 1 + 1 + 3)
+	prologue := `#pragma version 2
+		txn ApplicationID
+		bz ok
+		txn OnCompletion
+		int OptIn
+		==
+		bnz ok
+	`
+
 	// goto flip if first key exists
-	flipBranchSize := uint32(6)
+	flipBranchSize := uint32(1 + 1 + 1 + 1 + 3 + 1)
 	flipBranch := `
 		int 0  // current app id  [0]
 		int 1  // key  [1, 0]
@@ -393,14 +403,17 @@ func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKe
 		return
 	`
 
-	writeLocBlockSize := uint32(16)
-	writeLocBlock := `
+	writeLocBlockPrefix := `
 		// handle a rare case when there is no opt ins for this app
 		// the caller adds opted in accounts to txn.Accounts
-		txn NumAccounts // [x, 1, n]
-		int 1           // [1, x, 1, n]
-		==              // [0/1, 1, n]
-		bz ok           // [1, n]
+		txn NumAccounts // [x, n]
+		int 1           // [1, x, n]
+		==              // [0/1, n]
+		bnz ok          // [n]
+	`
+
+	writeLocBlockSize := uint32(15 + 2)
+	writeLocBlock := `
 		int 1           // [1, n]
 		+               // [1+n]
 		dup             // [1+n, 1+n]
@@ -409,8 +422,8 @@ func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKe
 		txn NumAccounts // [N, 1+n, 1+n]
 		int 1           // [1, N, 1+n, 1+n]
 		-               // [N-1, 1+n, 1+n],  exclude sender
-		%               // [A, 1+n], A = 1+n mod N
-		int 1           // [1, A, 1+n], A = 1+n mod N
+		%               // [A, 1+n], A = 1+n mod N-1
+		int 1           // [1, A, 1+n],
 		+               // [A+1, 1+n]
 		load 0          // [1+n, A+1, 1+n]
 		itob            // ["\x n+1", A+1, 1+n]
@@ -437,23 +450,20 @@ func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKe
 		return
 	`
 
+	epilogue := `
+		ok:
+		int 1
+		return
+	`
+
 	// generate assembly
-	prefixSize := uint32(6)
-	progParts := []string{
-		// allow fast creation and opt in
-		"#pragma version 2",
-		"txn ApplicationID",
-		"bz ok",
-		"txn OnCompletion",
-		"int OptIn",
-		"==",
-		"bnz ok",
-	}
+	progParts := append([]string{}, prologue)
 	progParts = append(progParts, flipBranch)
 	progParts = append(progParts, writePrefix)
 	for i := uint32(0); i < numGlobalKeys; i++ {
 		progParts = append(progParts, writeBlock)
 	}
+	progParts = append(progParts, writeLocBlockPrefix)
 	for i := uint32(0); i < numLocalKeys; i++ {
 		progParts = append(progParts, writeLocBlock)
 	}
@@ -463,7 +473,7 @@ func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKe
 			progParts = append(progParts, hashSize)
 		}
 	}
-	written := prefixSize + flipBranchSize + numHashes + numGlobalKeys*writeBlockSize + numLocalKeys*writeLocBlockSize
+	written := prologueSize + flipBranchSize + numHashes + numGlobalKeys*writeBlockSize + numLocalKeys*writeLocBlockSize
 	if written < numOps {
 		left := numOps - written - 20 // allow some space
 		for i := uint32(0); i < left/2; i++ {
@@ -474,7 +484,7 @@ func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKe
 	progParts = append(progParts, writeSuffix)
 	progParts = append(progParts, flipPrefix)
 	progParts = append(progParts, flipSuffix)
-	progParts = append(progParts, []string{"ok:", "int 1", "return"}...)
+	progParts = append(progParts, epilogue)
 	progAsm := strings.Join(progParts, "\n")
 
 	// assemble
@@ -482,7 +492,7 @@ func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKe
 	if err != nil {
 		panic(err)
 	}
-	return progBytes
+	return progBytes, progAsm
 }
 
 func sendAsGroup(txgroup []transactions.Transaction, client libgoal.Client, h []byte) (err error) {
@@ -517,10 +527,19 @@ func sendAsGroup(txgroup []transactions.Transaction, client libgoal.Client, h []
 }
 
 func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (appParams map[uint64]v1.AppParams, optIns map[uint64][]string, err error) {
+	status, err := client.Status()
+	if err != nil {
+		return
+	}
+	proto, err := client.ConsensusParams(status.LastRound)
+	if err != nil {
+		return
+	}
+
 	toCreate := int(cfg.NumApp)
-	appsPerAcct := config.Consensus[protocol.ConsensusCurrentVersion].MaxAppsCreated
+	appsPerAcct := proto.MaxAppsCreated
 	// create min(groupSize, maxAppsPerAcct) per account to optimize sending in batches
-	groupSize := config.Consensus[protocol.ConsensusCurrentVersion].MaxTxGroupSize
+	groupSize := proto.MaxTxGroupSize
 	if appsPerAcct > groupSize {
 		appsPerAcct = groupSize
 	}
@@ -581,13 +600,13 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 			var tx transactions.Transaction
 
 			// generate app program with roughly some number of operations
-			prog := genAppProgram(cfg.AppProgOps, cfg.AppProgHashes, cfg.AppProgHashSize, cfg.AppGlobKeys, cfg.AppLocalKeys)
+			prog, asm := genAppProgram(cfg.AppProgOps, cfg.AppProgHashes, cfg.AppProgHashSize, cfg.AppGlobKeys, cfg.AppLocalKeys)
 			if !cfg.Quiet {
-				fmt.Printf("generated program: \n%s\n", prog)
+				fmt.Printf("generated program: \n%s\n", asm)
 			}
 
-			globSchema := basics.StateSchema{NumByteSlice: 64}
-			locSchema := basics.StateSchema{NumByteSlice: 16}
+			globSchema := basics.StateSchema{NumByteSlice: proto.MaxGlobalSchemaEntries}
+			locSchema := basics.StateSchema{NumByteSlice: proto.MaxLocalSchemaEntries}
 			tx, err = client.MakeUnsignedAppCreateTx(transactions.NoOpOC, prog, prog, globSchema, locSchema, nil, nil, nil, nil)
 			if err != nil {
 				fmt.Printf("Cannot create app txn\n")
