@@ -1,7 +1,7 @@
 UNAME := $(shell uname)
-ifneq (, $(findstring MINGW,$(UNAME)))
+ifneq (,$(findstring MINGW,$(UNAME)))
 #Gopath is not saved across sessions, probably existing Windows env vars, override them
-export GOPATH := ${HOME}/go
+export GOPATH := $(HOME)/go
 GOPATH1 := $(GOPATH)
 export PATH := $(PATH):$(GOPATH)/bin
 else
@@ -51,7 +51,7 @@ export GOBUILDMODE := -buildmode=exe
 endif
 
 GOTAGS      := --tags "$(GOTAGSLIST)"
-GOTRIMPATH	:= $(shell go help build | grep -q .-trimpath && echo -trimpath)
+GOTRIMPATH	:= $(shell GOPATH=$(GOPATH) && go help build | grep -q .-trimpath && echo -trimpath)
 
 GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILDNUMBER) \
 		 -X github.com/algorand/go-algorand/config.CommitHash=$(COMMITHASH) \
@@ -62,8 +62,8 @@ GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILD
 GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(CHANNEL)
 
-UNIT_TEST_SOURCES := $(sort $(shell GO111MODULE=off go list ./... | grep -v /go-algorand/test/ ))
-ALGOD_API_PACKAGES := $(sort $(shell GO111MODULE=off cd daemon/algod/api; go list ./... ))
+UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
+ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
 MSGP_GENERATE	:= ./protocol ./crypto ./crypto/compactcert ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./auction ./agreement ./rpcs ./node ./ledger
 
