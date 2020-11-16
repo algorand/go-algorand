@@ -746,13 +746,35 @@ func (au *accountUpdates) Totals(rnd basics.Round) (totals AccountTotals, err er
 	return au.totalsImpl(rnd)
 }
 
-// GetCatchpointStream returns an io.Reader to the catchpoint file associated with the provided round
-func (au *accountUpdates) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
+// ReadCloseSizer interface implements the standard io.Reader and io.Closer as well
+// as supporting the Size() function that let the caller know what the size of the stream would be (in bytes).
+type ReadCloseSizer interface {
+	io.ReadCloser
+	Size() (int64, error)
+}
+
+// readCloseSizer is an instance of the ReadCloseSizer interface
+type readCloseSizer struct {
+	io.ReadCloser
+	size int64
+}
+
+// Size returns the length of the assiciated stream.
+func (r *readCloseSizer) Size() (int64, error) {
+	if r.size < 0 {
+		return 0, fmt.Errorf("unknown stream size")
+	}
+	return r.size, nil
+}
+
+// GetCatchpointStream returns a ReadCloseSizer to the catchpoint file associated with the provided round
+func (au *accountUpdates) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error) {
 	dbFileName := ""
+	fileSize := int64(0)
 	start := time.Now()
 	ledgerGetcatchpointCount.Inc(nil)
 	err := au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		dbFileName, _, _, err = getCatchpoint(tx, round)
+		dbFileName, _, fileSize, err = getCatchpoint(tx, round)
 		return
 	})
 	ledgerGetcatchpointMicros.AddMicrosecondsSince(start, nil)
@@ -764,7 +786,7 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (io.ReadCloser
 		catchpointPath := filepath.Join(au.dbDirectory, dbFileName)
 		file, err := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
 		if err == nil && file != nil {
-			return file, nil
+			return &readCloseSizer{ReadCloser: file, size: fileSize}, nil
 		}
 		// else, see if this is a file-not-found error
 		if os.IsNotExist(err) {
@@ -791,14 +813,14 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (io.ReadCloser
 		fileInfo, err := file.Stat()
 		if err != nil {
 			// we couldn't get the stat, so just return with the file.
-			return file, nil
+			return &readCloseSizer{ReadCloser: file, size: -1}, nil
 		}
 
 		err = au.saveCatchpointFile(round, fileName, fileInfo.Size(), "")
 		if err != nil {
 			au.log.Warnf("accountUpdates: getCatchpointStream: unable to save missing catchpoint entry: %v", err)
 		}
-		return file, nil
+		return &readCloseSizer{ReadCloser: file, size: fileInfo.Size()}, nil
 	}
 	return nil, ErrNoEntry{}
 }
@@ -844,10 +866,10 @@ func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (AccountTotal
 	return aul.au.totalsImpl(rnd)
 }
 
-// isDup return whether a transaction is a duplicate one. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
-func (aul *accountUpdatesLedgerEvaluator) isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error) {
+// checkDup test to see if the given transaction id/lease already exists. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
+func (aul *accountUpdatesLedgerEvaluator) checkDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) error {
 	// this is a non-issue since this call will never be made on non-validating evaluation
-	return false, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
+	return fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
 }
 
 // LookupWithoutRewards returns the account balance for a given address at a given round, without the reward

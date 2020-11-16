@@ -67,7 +67,7 @@ func init() {
 	createAssetCmd.MarkFlagRequired("creator")
 
 	destroyAssetCmd.Flags().StringVar(&assetManager, "manager", "", "Manager account to issue the destroy transaction (defaults to creator)")
-	destroyAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset to destroy")
+	destroyAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Creator account address for asset to destroy")
 	destroyAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "Asset ID to destroy")
 	destroyAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of asset to destroy")
 
@@ -256,7 +256,7 @@ var createAssetCmd = &cobra.Command{
 var destroyAssetCmd = &cobra.Command{
 	Use:   "destroy",
 	Short: "Destroy an asset",
-	Long:  `Issue a transaction deleting an asset from the network. This transaction must be issued by the asset owner, who must hold all outstanding asset tokens.`,
+	Long:  `Issue a transaction deleting an asset from the network. This transaction must be issued by the asset manager while the creator holds all of the asset's tokens.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, _ []string) {
 		checkTxValidityPeriodCmdFlags(cmd)
@@ -603,8 +603,8 @@ var infoAssetCmd = &cobra.Command{
 
 		fmt.Printf("Asset ID:         %d\n", assetID)
 		fmt.Printf("Creator:          %s\n", params.Creator)
-		fmt.Printf("Asset name:       %s\n", params.AssetName)
-		fmt.Printf("Unit name:        %s\n", params.UnitName)
+		reportInfof("Asset name:       %s\n", params.AssetName)
+		reportInfof("Unit name:        %s\n", params.UnitName)
 		fmt.Printf("Maximum issue:    %s %s\n", assetDecimalsFmt(params.Total, params.Decimals), params.UnitName)
 		fmt.Printf("Reserve amount:   %s %s\n", assetDecimalsFmt(res.Amount, params.Decimals), params.UnitName)
 		fmt.Printf("Issued:           %s %s\n", assetDecimalsFmt(params.Total-res.Amount, params.Decimals), params.UnitName)

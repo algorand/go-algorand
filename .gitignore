@@ -63,3 +63,6 @@ assets
 
 # test binaries
 *.test
+
+index.html
+
