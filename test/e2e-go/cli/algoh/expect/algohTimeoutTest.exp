@@ -13,7 +13,7 @@ if { [catch {
     exec mkdir -p $TEST_ALGO_DIR
     
     set TIME_STAMP [clock seconds]
-    set timeout 5
+    set timeout 60
 
     set TEST_ROOT_DIR $TEST_ALGO_DIR/root
     set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary
@@ -22,10 +22,13 @@ if { [catch {
     set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50Each.json"
     puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
 
-
     ::Algoh::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ROOT_DIR
 
     ::Algoh::StartNode $TEST_PRIMARY_NODE_DIR
+
+    puts "Successfully started node"
+
+    set timeout 5
 
     exec cat ./disabled_profiler_config.json > $TEST_NODE_DIR/config.json
     exec cat ./host-config.json > $TEST_NODE_DIR/host-config.json
