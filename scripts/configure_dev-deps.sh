@@ -36,6 +36,7 @@ function install_go_module {
 
 install_go_module golang.org/x/lint/golint
 install_go_module golang.org/x/tools/cmd/stringer
-install_go_module github.com/go-swagger/go-swagger/cmd/swagger v0.25.0
+#install_go_module github.com/go-swagger/go-swagger/cmd/swagger v0.25.0
+install_go_module github.com/go-swagger/go-swagger/cmd/swagger
 install_go_module github.com/algorand/msgp
 
