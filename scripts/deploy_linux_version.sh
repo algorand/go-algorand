@@ -78,7 +78,7 @@ echo scripts/deploy_private_version.sh -c \"${CHANNEL}\" -g \"${DEFAULTNETWORK}\
 chmod +x ${TMPDIR}/deploy_linux_version_exec.sh
 
 # Use go version specified by get_golang_version.sh
-if ! GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+if ! GOLANG_VERSION=$(./scripts/check_golang_version.sh)
 then
     echo "${GOLANG_VERSION}"
     exit 1

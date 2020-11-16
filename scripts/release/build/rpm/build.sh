@@ -20,7 +20,7 @@ then
 fi
 cd go-algorand
 # Install go version specified by get_golang_version.sh and build its own copy of go-algorand.
-if ! GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+if ! GOLANG_VERSION=$(./scripts/check_golang_version.sh)
 then
     echo "${GOLANG_VERSION}"
     exit 1
