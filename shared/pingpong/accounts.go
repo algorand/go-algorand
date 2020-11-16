@@ -395,6 +395,12 @@ func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKe
 
 	writeLocBlockSize := uint32(16)
 	writeLocBlock := `
+		// handle a rare case when there is no opt ins for this app
+		// the caller adds opted in accounts to txn.Accounts
+		txn NumAccounts // [x, 1, n]
+		int 1           // [1, x, 1, n]
+		==              // [0/1, 1, n]
+		bz ok           // [1, n]
 		int 1           // [1, n]
 		+               // [1+n]
 		dup             // [1+n, 1+n]
@@ -570,7 +576,6 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 		if end > toCreate {
 			end = toCreate
 		}
-		fmt.Printf("%d: %d %d of (%d / %d)\n", idx, begin, end, toCreate, appsPerAcct)
 		var txgroup []transactions.Transaction
 		for i := begin; i < end; i++ {
 			var tx transactions.Transaction
@@ -625,17 +630,21 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 				fmt.Printf("Warning, cannot lookup source account")
 				return
 			}
-			for idx := range account.AppParams {
-				aidxs = append(aidxs, idx)
-			}
 			if len(account.AppParams) >= appsPerAcct || len(aidxs) >= int(cfg.NumApp) {
 				break
 			}
 			time.Sleep(time.Second)
 		}
+		for idx := range account.AppParams {
+			aidxs = append(aidxs, idx)
+		}
 		for k, v := range account.AppParams {
 			appParams[k] = v
 		}
+	}
+	if len(aidxs) != len(appParams) {
+		err = fmt.Errorf("duplicates in aidxs, %d != %d", len(aidxs), len(appParams))
+		return
 	}
 
 	// time to opt in to these apps
@@ -643,16 +652,10 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 		optIns = make(map[uint64][]string)
 		for addr := range accounts {
 			var txgroup []transactions.Transaction
-			addrOptedIn := make(map[uint64]bool)
+			permAppIndices := rand.Perm(len(aidxs))
 			for i := uint32(0); i < cfg.NumAppOptIn; i++ {
-				var aidx uint64
-				for {
-					idx := rand.Intn(len(aidxs))
-					aidx = aidxs[idx]
-					if !addrOptedIn[aidx] {
-						break
-					}
-				}
+				j := permAppIndices[i]
+				aidx := aidxs[j]
 				var tx transactions.Transaction
 				tx, err = client.MakeUnsignedAppOptInTx(aidx, nil, nil, nil, nil)
 				if err != nil {
@@ -671,7 +674,6 @@ func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig
 				crypto.RandBytes(note[:])
 				tx.Note = note[:]
 
-				addrOptedIn[aidx] = true
 				optIns[aidx] = append(optIns[aidx], addr)
 
 				txgroup = append(txgroup, tx)

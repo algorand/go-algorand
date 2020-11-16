@@ -548,12 +548,16 @@ func constructTxn(from, to string, fee, amt, aidx uint64, cinfo CreatablesInfo, 
 
 	if cfg.NumApp > 0 { // Construct app transaction
 		// generate random assetID or appId if we send asset/app txns
-		accounts := cinfo.OptIns[aidx]
-		if len(accounts) > 0 {
-			limit := len(accounts) - 4
-			if limit > 0 {
-				start := rand.Intn(limit)
-				accounts = accounts[start : start+4]
+		var accounts []string
+		if len(cinfo.OptIns[aidx]) > 0 {
+			indices := rand.Perm(len(cinfo.OptIns[aidx]))
+			limit := 4
+			if len(indices) < limit {
+				limit = len(indices)
+			}
+			for i := 0; i < limit; i++ {
+				idx := indices[i]
+				accounts = append(accounts, cinfo.OptIns[aidx][idx])
 			}
 		}
 		txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil)
