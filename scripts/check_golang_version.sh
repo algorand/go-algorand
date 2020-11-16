@@ -4,10 +4,13 @@ set -eo pipefail
 
 GOLANG_VERSION=$(./scripts/get_golang_version.sh)
 
+# Get the field "go1.1.1" and then remove the "go" prefix.
+SYSTEM_GOLANG_VERSION=$(go version | awk '{ gsub(/go/, "", $3); print $3 }')
+
 # https://golang.org/doc/go1.11#modules
-if [[ "${GOLANG_VERSION}" < 1.1.1 ]]
+if [[ "${SYSTEM_GOLANG_VERSION}" < 1.11 ]]
 then
-    echo "The version of go on the system is too old and does not support go modules, please update to ${GOLANG_VERSION}"
+    echo "The version of go on the system (${SYSTEM_GOLANG_VERSION}) is too old and does not support go modules. Please update to ${GOLANG_VERSION}"
     exit 1
 fi
 
