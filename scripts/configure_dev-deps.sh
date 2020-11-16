@@ -6,12 +6,12 @@ function get_go_version {
     if [[ -z "$2" ]]
     then
         (
-        cd $(dirname "$0")
-        VERSION=$(cat ../go.mod | grep "$1" 2>/dev/null | awk -F " " '{print $2}')
-        echo $VERSION
+        cd "$(dirname "$0")"
+        VERSION=$( grep "$1" 2>/dev/null < ../go.mod | awk -F " " '{print $2}')
+        echo "$VERSION"
         )
     else
-        (echo $2)
+        (echo "$2")
     fi
     return
 }
