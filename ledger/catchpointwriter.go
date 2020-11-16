@@ -245,6 +245,7 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 	defer close(response)
 	balancesChunkNum := initialBalancesChunkNum
 	for bc := range balances {
+		balancesChunkNum++
 		if len(bc.Balances) == 0 {
 			break
 		}
@@ -279,8 +280,6 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 			cw.writtenBytes = fileInfo.Size()
 			break
 		}
-
-		balancesChunkNum++
 	}
 }
 
