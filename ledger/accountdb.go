@@ -1132,7 +1132,7 @@ func (iterator *encodedAccountsBatchIter) Close() {
 	}
 }
 
-// orderedAccountsIterStep is used to by orderedAccountsIter to define the current step
+// orderedAccountsIterStep is used by orderedAccountsIter to define the current step
 //msgp:ignore orderedAccountsIterStep
 type orderedAccountsIterStep int
 
