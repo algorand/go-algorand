@@ -17,7 +17,6 @@ require (
 	github.com/gen2brain/beeep v0.0.0-20180718162406-4e430518395f
 	github.com/getkin/kin-openapi v0.22.0
 	github.com/go-chi/chi v4.1.2+incompatible // indirect
-	github.com/go-swagger/go-swagger/cmd/swagger v0.25.0
 	github.com/godbus/dbus v0.0.0-20181101234600-2ff6f7ffd60f // indirect
 	github.com/gofrs/flock v0.7.0
 	github.com/google/go-querystring v1.0.0
