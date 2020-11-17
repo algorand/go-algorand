@@ -1143,7 +1143,11 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepCreateOrderingTable {
 		// create the temporary table
-		_, err = iterator.tx.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(address blob, hash blob)")
+		if iterator.fetchAccountData {
+			_, err = iterator.tx.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(accountbase_rawid INTEGER, hash blob)")
+		} else {
+			_, err = iterator.tx.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(address blob, hash blob)")
+		}
 		if err != nil {
 			return
 		}
@@ -1152,12 +1156,20 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepQueryAccounts {
 		// iterate over the existing accounts
-		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
+		if iterator.fetchAccountData {
+			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase")
+		} else {
+			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
+		}
 		if err != nil {
 			return
 		}
 		// prepare the insert statement into the temporary table
-		iterator.insertStmt, err = iterator.tx.PrepareContext(ctx, "INSERT INTO accountsiteratorhashes(address, hash) VALUES(?, ?)")
+		if iterator.fetchAccountData {
+			iterator.insertStmt, err = iterator.tx.PrepareContext(ctx, "INSERT INTO accountsiteratorhashes(accountbase_rawid, hash) VALUES(?, ?)")
+		} else {
+			iterator.insertStmt, err = iterator.tx.PrepareContext(ctx, "INSERT INTO accountsiteratorhashes(address, hash) VALUES(?, ?)")
+		}
 		if err != nil {
 			return
 		}
@@ -1170,7 +1182,12 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		for iterator.rows.Next() {
 			var addrbuf []byte
 			var buf []byte
-			err = iterator.rows.Scan(&addrbuf, &buf)
+			var rowid int
+			if iterator.fetchAccountData {
+				err = iterator.rows.Scan(&rowid, &addrbuf, &buf)
+			} else {
+				err = iterator.rows.Scan(&addrbuf, &buf)
+			}
 			if err != nil {
 				iterator.Close(ctx)
 				return
@@ -1191,7 +1208,11 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 				return
 			}
 			hash := accountHashBuilder(addr, accountData, buf)
-			_, err = iterator.insertStmt.ExecContext(ctx, addrbuf, hash)
+			if iterator.fetchAccountData {
+				_, err = iterator.insertStmt.ExecContext(ctx, rowid, hash)
+			} else {
+				_, err = iterator.insertStmt.ExecContext(ctx, addrbuf, hash)
+			}
 			if err != nil {
 				iterator.Close(ctx)
 				return
@@ -1226,7 +1247,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	if iterator.step == oaiStepSelectFromOrderedTable {
 		// select the data from the ordered table
 		if iterator.fetchAccountData {
-			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT accountsiteratorhashes.address, accountsiteratorhashes.hash, accountbase.data FROM accountsiteratorhashes JOIN accountbase ON accountbase.address=accountsiteratorhashes.address ORDER BY accountsiteratorhashes.hash")
+			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT accountbase.address, accountsiteratorhashes.hash, accountbase.data FROM accountbase JOIN accountsiteratorhashes ON accountbase.rowid=accountsiteratorhashes.accountbase_rawid ORDER BY accountsiteratorhashes.hash")
 		} else {
 			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, hash FROM accountsiteratorhashes ORDER BY hash")
 		}
