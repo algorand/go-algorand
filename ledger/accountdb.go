@@ -1123,7 +1123,7 @@ type accountAddressHashData struct {
 }
 
 // Next returns an array containing the account address, hash and potentially data
-// the Next function works in multiple processing stages, where it first processs the current accounts and order them
+// the Next function works in multiple processing stages, where it first processes the current accounts and order them
 // followed by returning the ordered accounts. In the first phase, it would return empty accountAddressHashData array
 // and sets the processedRecords to the number of accounts that were processed. On the second phase, the acct
 // would contain valid data ( and optionally the account data as well, if was asked in makeOrderedAccountsIter) and
