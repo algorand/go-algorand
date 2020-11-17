@@ -1323,6 +1323,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 
 			if len(addrbuf) != len(addr) {
 				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				iterator.Close(ctx)
 				return
 			}
 
