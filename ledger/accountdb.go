@@ -1190,12 +1190,12 @@ type accountAddressHashData struct {
 // Next returns an array containing the account address, hash and potentially data
 // the Next function works in multiple processing stages, where it first processs the current accounts and order them
 // followed by returning the ordered accounts. In the first phase, it would return empty accountAddressHashData array
-// whose size matches with the data that was processed, and set the ordered to false. On the second phase, the acct
+// and sets the processedRecords to the number of accounts that were processed. On the second phase, the acct
 // would contain valid data ( and optionally the account data as well, if was asked in makeOrderedAccountsIter) and
-// would set the ordered to true. If err is sql.ErrNoRows it means that the iterator have completed it's work and no further
+// the processedRecords would be zero. If err is sql.ErrNoRows it means that the iterator have completed it's work and no further
 // accounts exists. Otherwise, the caller is expected to keep calling "Next" to retrieve the next set of accounts
 // ( or let the Next function make some progress toward that goal )
-func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAddressHashData, ordered bool, err error) {
+func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAddressHashData, processedRecords int, err error) {
 	if iterator.step == oaiStepDeleteOldOrderingTable {
 		// although we're going to delete this table anyway when completing the iterator execution, we'll try to
 		// clean up any intermediate table.
@@ -1243,6 +1243,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 
 			if len(addrbuf) != len(addr) {
 				err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+				iterator.Close(ctx)
 				return
 			}
 
@@ -1251,22 +1252,24 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			var accountData basics.AccountData
 			err = protocol.Decode(buf, &accountData)
 			if err != nil {
+				iterator.Close(ctx)
 				return
 			}
 			hash := accountHashBuilder(addr, accountData, buf)
 			_, err = iterator.insertStmt.ExecContext(ctx, addrbuf, hash)
 			if err != nil {
+				iterator.Close(ctx)
 				return
 			}
 
 			count++
 			if count == iterator.accountCount {
 				// we're done with this iteration.
-				acct = make([]accountAddressHashData, count, count)
+				processedRecords = count
 				return
 			}
 		}
-		acct = make([]accountAddressHashData, count, count)
+		processedRecords = count
 		iterator.rows.Close()
 		iterator.rows = nil
 		iterator.insertStmt.Close()
@@ -1279,6 +1282,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		// note that this index is using the rowid of the accountsiteratorhashes table.
 		_, err = iterator.tx.ExecContext(ctx, "CREATE INDEX accountsiteratorhashesidx ON accountsiteratorhashes(hash)")
 		if err != nil {
+			iterator.Close(ctx)
 			return
 		}
 		iterator.step = oaiStepSelectFromOrderedTable
@@ -1293,6 +1297,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		}
 
 		if err != nil {
+			iterator.Close(ctx)
 			return
 		}
 		iterator.step = oaiStepIterateOverOrderedTable
@@ -1326,11 +1331,9 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 			acct = append(acct, accountAddressHashData{address: addr, digest: hash, encodedAccountData: acctdata})
 			if len(acct) == iterator.accountCount {
 				// we're done with this iteration.
-				ordered = true
 				return
 			}
 		}
-		ordered = true
 		iterator.step = oaiStepShutdown
 		iterator.rows.Close()
 		iterator.rows = nil
@@ -1344,7 +1347,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		iterator.step = oaiStepDone
 		// fallthrough
 	}
-	return nil, true, sql.ErrNoRows
+	return nil, 0, sql.ErrNoRows
 }
 
 // Close shuts down the orderedAccountsBuilderIter, releasing database resources.
