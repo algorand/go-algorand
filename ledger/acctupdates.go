@@ -1125,9 +1125,9 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 		accountsCount := 0
 		lastRebuildTime := startTrieBuildTime
 		pendingAccounts := 0
-		wasOrdered := false
+		totalOrderedAccounts := 0
 		for {
-			accts, ordered, err := accountBuilderIt.Next(ctx)
+			accts, processedRows, err := accountBuilderIt.Next(ctx)
 			if err == sql.ErrNoRows {
 				// the account builder would return sql.ErrNoRows when no more data is available.
 				break
@@ -1135,48 +1135,41 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 				return rnd, err
 			}
 
-			if !wasOrdered && ordered {
-				accountsCount = 0
-				wasOrdered = true
-			}
-
-			accountsCount += len(accts)
 			if len(accts) > 0 {
-				if ordered {
-					pendingAccounts += len(accts)
-					for _, acct := range accts {
-						added, err := trie.Add(acct.digest)
-						if err != nil {
-							return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
-						}
-						if !added {
-							au.log.Warnf("accountsInitialize attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(acct.digest), acct.address)
-						}
+				accountsCount += len(accts)
+				pendingAccounts += len(accts)
+				for _, acct := range accts {
+					added, err := trie.Add(acct.digest)
+					if err != nil {
+						return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
 					}
+					if !added {
+						au.log.Warnf("accountsInitialize attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(acct.digest), acct.address)
+					}
+				}
 
-					if pendingAccounts >= trieRebuildCommitFrequency {
-						// this trie Evict will commit using the current transaction.
-						// if anything goes wrong, it will still get rolled back.
-						_, err = trie.Evict(true)
-						if err != nil {
-							return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
-						}
-						pendingAccounts = 0
+				if pendingAccounts >= trieRebuildCommitFrequency {
+					// this trie Evict will commit using the current transaction.
+					// if anything goes wrong, it will still get rolled back.
+					_, err = trie.Evict(true)
+					if err != nil {
+						return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
 					}
+					pendingAccounts = 0
+				}
 
-					if time.Now().Sub(lastRebuildTime) > 5*time.Second {
-						// let the user know that the trie is still being rebuilt.
-						au.log.Infof("accountsInitialize still building the trie, and processed so far %d accounts", accountsCount)
-						lastRebuildTime = time.Now()
-					}
-
-				} else {
-					// if it's not ordered, we can ignore it for now; we'll just increase the counters and emit logs periodically.
-					if time.Now().Sub(lastRebuildTime) > 5*time.Second {
-						// let the user know that the trie is still being rebuilt.
-						au.log.Infof("accountsInitialize still building the trie, and hashed so far %d accounts", accountsCount)
-						lastRebuildTime = time.Now()
-					}
+				if time.Now().Sub(lastRebuildTime) > 5*time.Second {
+					// let the user know that the trie is still being rebuilt.
+					au.log.Infof("accountsInitialize still building the trie, and processed so far %d accounts", accountsCount)
+					lastRebuildTime = time.Now()
+				}
+			} else if processedRows > 0 {
+				totalOrderedAccounts += processedRows
+				// if it's not ordered, we can ignore it for now; we'll just increase the counters and emit logs periodically.
+				if time.Now().Sub(lastRebuildTime) > 5*time.Second {
+					// let the user know that the trie is still being rebuilt.
+					au.log.Infof("accountsInitialize still building the trie, and hashed so far %d accounts", totalOrderedAccounts)
+					lastRebuildTime = time.Now()
 				}
 			}
 		}

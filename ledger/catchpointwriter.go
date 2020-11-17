@@ -284,8 +284,8 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 }
 
 func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (err error) {
-	accts, ordered, err := cw.accountsIterator.Next(ctx)
-	if err == nil && ordered {
+	accts, _, err := cw.accountsIterator.Next(ctx)
+	if err == nil && len(accts) > 0 {
 		cw.balancesOffset += BalancesPerCatchpointFileChunk
 		cw.balancesChunk.Balances = make([]encodedBalanceRecord, len(accts))
 		for i, acct := range accts {
