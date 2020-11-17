@@ -1067,71 +1067,6 @@ func (mc *merkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 	return content, nil
 }
 
-// encodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.
-type encodedAccountsBatchIter struct {
-	rows           *sql.Rows
-	orderByAddress bool
-}
-
-// Next returns an array containing the account data, in the same way it appear in the database
-// returning accountCount accounts data at a time.
-func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int) (bals []encodedBalanceRecord, err error) {
-	if iterator.rows == nil {
-		if iterator.orderByAddress {
-			iterator.rows, err = tx.QueryContext(ctx, "SELECT address, data FROM accountbase ORDER BY address")
-		} else {
-			iterator.rows, err = tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
-		}
-
-		if err != nil {
-			return
-		}
-	}
-
-	// gather up to accountCount encoded accounts.
-	bals = make([]encodedBalanceRecord, 0, accountCount)
-	var addr basics.Address
-	for iterator.rows.Next() {
-		var addrbuf []byte
-		var buf []byte
-		err = iterator.rows.Scan(&addrbuf, &buf)
-		if err != nil {
-			iterator.Close()
-			return
-		}
-
-		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-			return
-		}
-
-		copy(addr[:], addrbuf)
-
-		bals = append(bals, encodedBalanceRecord{Address: addr, AccountData: buf})
-		if len(bals) == accountCount {
-			// we're done with this iteration.
-			return
-		}
-	}
-
-	err = iterator.rows.Err()
-	if err != nil {
-		iterator.Close()
-		return
-	}
-	// we just finished reading the table.
-	iterator.Close()
-	return
-}
-
-// Close shuts down the encodedAccountsBatchIter, releasing database resources.
-func (iterator *encodedAccountsBatchIter) Close() {
-	if iterator.rows != nil {
-		iterator.rows.Close()
-		iterator.rows = nil
-	}
-}
-
 // orderedAccountsIterStep is used by orderedAccountsIter to define the current step
 //msgp:ignore orderedAccountsIterStep
 type orderedAccountsIterStep int
@@ -1188,7 +1123,7 @@ type accountAddressHashData struct {
 }
 
 // Next returns an array containing the account address, hash and potentially data
-// the Next function works in multiple processing stages, where it first processs the current accounts and order them
+// the Next function works in multiple processing stages, where it first processes the current accounts and order them
 // followed by returning the ordered accounts. In the first phase, it would return empty accountAddressHashData array
 // and sets the processedRecords to the number of accounts that were processed. On the second phase, the acct
 // would contain valid data ( and optionally the account data as well, if was asked in makeOrderedAccountsIter) and
@@ -1208,7 +1143,11 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepCreateOrderingTable {
 		// create the temporary table
-		_, err = iterator.tx.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(address blob, hash blob)")
+		if iterator.fetchAccountData {
+			_, err = iterator.tx.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(accountbase_rawid INTEGER, hash blob)")
+		} else {
+			_, err = iterator.tx.ExecContext(ctx, "CREATE TABLE accountsiteratorhashes(address blob, hash blob)")
+		}
 		if err != nil {
 			return
 		}
@@ -1217,12 +1156,20 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepQueryAccounts {
 		// iterate over the existing accounts
-		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
+		if iterator.fetchAccountData {
+			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT rowid, address, data FROM accountbase")
+		} else {
+			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
+		}
 		if err != nil {
 			return
 		}
 		// prepare the insert statement into the temporary table
-		iterator.insertStmt, err = iterator.tx.PrepareContext(ctx, "INSERT INTO accountsiteratorhashes(address, hash) VALUES(?, ?)")
+		if iterator.fetchAccountData {
+			iterator.insertStmt, err = iterator.tx.PrepareContext(ctx, "INSERT INTO accountsiteratorhashes(accountbase_rawid, hash) VALUES(?, ?)")
+		} else {
+			iterator.insertStmt, err = iterator.tx.PrepareContext(ctx, "INSERT INTO accountsiteratorhashes(address, hash) VALUES(?, ?)")
+		}
 		if err != nil {
 			return
 		}
@@ -1235,7 +1182,12 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 		for iterator.rows.Next() {
 			var addrbuf []byte
 			var buf []byte
-			err = iterator.rows.Scan(&addrbuf, &buf)
+			var rowid int
+			if iterator.fetchAccountData {
+				err = iterator.rows.Scan(&rowid, &addrbuf, &buf)
+			} else {
+				err = iterator.rows.Scan(&addrbuf, &buf)
+			}
 			if err != nil {
 				iterator.Close(ctx)
 				return
@@ -1256,7 +1208,11 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 				return
 			}
 			hash := accountHashBuilder(addr, accountData, buf)
-			_, err = iterator.insertStmt.ExecContext(ctx, addrbuf, hash)
+			if iterator.fetchAccountData {
+				_, err = iterator.insertStmt.ExecContext(ctx, rowid, hash)
+			} else {
+				_, err = iterator.insertStmt.ExecContext(ctx, addrbuf, hash)
+			}
 			if err != nil {
 				iterator.Close(ctx)
 				return
@@ -1291,7 +1247,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	if iterator.step == oaiStepSelectFromOrderedTable {
 		// select the data from the ordered table
 		if iterator.fetchAccountData {
-			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT accountsiteratorhashes.address, accountsiteratorhashes.hash, accountbase.data FROM accountsiteratorhashes JOIN accountbase ON accountbase.address=accountsiteratorhashes.address ORDER BY accountsiteratorhashes.hash")
+			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT accountbase.address, accountsiteratorhashes.hash, accountbase.data FROM accountbase JOIN accountsiteratorhashes ON accountbase.rowid=accountsiteratorhashes.accountbase_rawid ORDER BY accountsiteratorhashes.hash")
 		} else {
 			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, hash FROM accountsiteratorhashes ORDER BY hash")
 		}
