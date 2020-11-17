@@ -11,9 +11,11 @@ function get_go_version {
 
 function install_go_module {
     local OUTPUT
-    local MODULE = $1
+    local MODULE
     if [[ "$2" != "" ]]; then
-        MODULE = "$2"
+        MODULE=$2
+    else
+        MODULE=$1
     fi
     # Check for version to go.mod version
     VERSION=$(get_go_version "$1")
