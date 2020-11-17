@@ -1232,23 +1232,23 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
-	for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
-		updates := make(map[basics.Address]accountDelta, 0)
-		for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
-			addr := randomAddress()
-			acctData := basics.AccountData{}
-			acctData.MicroAlgos.Raw = 1
-			updates[addr] = accountDelta{new: acctData}
-			i++
+	err = ml.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
+			updates := make(map[basics.Address]accountDelta, 0)
+			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
+				addr := randomAddress()
+				acctData := basics.AccountData{}
+				acctData.MicroAlgos.Raw = 1
+				updates[addr] = accountDelta{new: acctData}
+				i++
+			}
+
+			err = accountsNewRound(tx, updates, nil, proto)
+			if err != nil {
+				return
+			}
 		}
 
-		err := ml.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			return accountsNewRound(tx, updates, nil, proto)
-		})
-		require.NoError(b, err)
-	}
-
-	err = ml.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		return updateAccountsRound(tx, 0, 1)
 	})
 	require.NoError(b, err)
