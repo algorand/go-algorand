@@ -122,9 +122,21 @@ func (t *txTail) committedUpTo(rnd basics.Round) basics.Round {
 	return (rnd + 1).SubSaturate(maxlife)
 }
 
-func (t *txTail) isDup(proto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
+// txtailMissingRound is returned by checkDup when requested for a round number below the low watermark
+type txtailMissingRound struct {
+	round basics.Round
+}
+
+// Error satisfies builtin interface `error`
+func (t txtailMissingRound) Error() string {
+	return fmt.Sprintf("txTail: tried to check for dup in missing round %d", t.round)
+}
+
+// checkDup test to see if the given transaction id/lease already exists. It returns nil if neither exists, or
+// TransactionInLedgerError / LeaseInLedgerError respectively.
+func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl txlease) error {
 	if lastValid < t.lowWaterMark {
-		return true, fmt.Errorf("txTail: tried to check for dup in missing round %d", lastValid)
+		return &txtailMissingRound{round: lastValid}
 	}
 
 	if proto.SupportTransactionLeases && (txl.lease != [32]byte{}) {
@@ -138,13 +150,15 @@ func (t *txTail) isDup(proto config.ConsensusParams, current basics.Round, first
 		for rnd := firstChecked; rnd <= lastChecked; rnd++ {
 			expires, ok := t.recent[rnd].txleases[txl]
 			if ok && current <= expires {
-				return true, nil
+				return &LeaseInLedgerError{txid: txid, lease: txl}
 			}
 		}
 	}
 
-	_, confirmed := t.lastValid[lastValid][txid]
-	return confirmed, nil
+	if _, confirmed := t.lastValid[lastValid][txid]; confirmed {
+		return &TransactionInLedgerError{Txid: txid}
+	}
+	return nil
 }
 
 func (t *txTail) getRoundTxIds(rnd basics.Round) (txMap map[transactions.Txid]bool) {

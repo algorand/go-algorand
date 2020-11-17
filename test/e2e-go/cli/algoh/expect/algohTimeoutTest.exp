@@ -69,7 +69,7 @@ if { [catch {
     set timeout 201
     spawn $env(GOPATH)/bin/goal node wait -d $TEST_NODE_DIR -w 200
     expect {
-        "^Cannot contact Algorand node: open $TEST_NODE_DIR/algod.net: no such file or directory." {puts "ERROR: node shutdown"; close; exit 1}
+        "^Cannot contact Algorand node: open $TEST_NODE_DIR/algod.net: no such file or directory" {puts "ERROR: node shutdown"; close; exit 1}
         "^Timed out waiting for node to make progress" {puts "node correctly continued running despite relay shutdown"; close}
         timeout {puts "should not reached this case", close; exit 1}
     }

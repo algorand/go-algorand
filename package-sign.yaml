@@ -1,7 +1,7 @@
 agents:
   - name: deb
     dockerFilePath: docker/build/cicd.ubuntu.Dockerfile
-    image: algorand/cicd-ubuntu
+    image: algorand/go-algorand-ci-linux-ubuntu
     version: scripts/configure_dev-deps.sh
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
@@ -10,7 +10,7 @@ agents:
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
       - BRANCH=$BRANCH
       - CHANNEL=$CHANNEL
-      - USE_CACHE=$USE_CACHE
+      - S3_SOURCE=$S3_SOURCE
       - VERSION=$VERSION
     volumes:
       - $XDG_RUNTIME_DIR/gnupg/S.gpg-agent:/root/.gnupg/S.gpg-agent

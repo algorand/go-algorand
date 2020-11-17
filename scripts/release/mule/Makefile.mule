@@ -42,16 +42,23 @@ ci-build: buildsrc gen ci-setup
 # https://scene-si.org/2019/12/04/make-dynamic-makefile-targets/
 mule = $(shell ls -d scripts/release/mule/*/ | awk 'BEGIN { FS="/" ; OFS="-" } { print $$3, $$4 }')
 
-mule-deploy-rpm:
-	scripts/release/mule/deploy/rpm/deploy.sh
+mule-deploy-%: PKG_TYPE=$*
+mule-deploy-%:
+	scripts/release/mule/deploy/$(PKG_TYPE)/deploy.sh
 
-mule-package-deb: ci-build
+mule-docker:
+	scripts/release/mule/deploy/docker/docker.sh
+
 mule-package-%: PKG_TYPE=$*
 mule-package-%:
 	echo Building algorand package...
-	scripts/release/mule/package/$(PKG_TYPE)/package.sh
+	scripts/release/mule/package/$(PKG_TYPE)/package.sh algorand
 	echo Building algorand-devtools package...
 	scripts/release/mule/package/$(PKG_TYPE)/package.sh algorand-devtools
+
+mule-releases-page:
+	echo Generating the releases page...
+	cd scripts/release/mule/deploy/releases_page && ./generate_releases_page.sh
 
 mule-sign:
 	scripts/release/mule/sign/sign.sh
