@@ -896,15 +896,16 @@ type lineError struct {
 func addLine(line int, err error) error {
 	return &lineError{Line: line, Err: err}
 }
-func newLineError(line int, msg string) error {
-	return addLine(line, errors.New(msg))
-}
 func fmtLineError(line int, format string, args ...interface{}) error {
 	return addLine(line, fmt.Errorf(format, args...))
 }
 
-func (lew *lineError) Error() string {
-	return fmt.Sprintf("%d: %s", lew.Line, lew.Err.Error())
+func (le *lineError) Error() string {
+	return fmt.Sprintf("%d: %s", le.Line, le.Err.Error())
+}
+
+func (le *lineError) Unwrap() error {
+	return le.Err
 }
 
 func typecheck(expected, got StackType) bool {
@@ -1276,18 +1277,18 @@ func (ps *PragmaStream) Process(fin io.Reader) (err error) {
 			return fmtLineError(sourceLine, "invalid syntax: %s", fields[0])
 		}
 		if len(fields) < 2 {
-			return newLineError(sourceLine, "empty pragma")
+			return fmtLineError(sourceLine, "empty pragma")
 		}
 		key := fields[1]
 		switch key {
 		case "version":
 			if len(fields) < 3 {
-				return newLineError(sourceLine, "no version value")
+				return fmtLineError(sourceLine, "no version value")
 			}
 			value := fields[2]
 			var ver uint64
 			if sourceLine != 1 {
-				return newLineError(sourceLine, "#pragma version is only allowed on 1st line")
+				return fmtLineError(sourceLine, "#pragma version is only allowed on 1st line")
 			}
 			ver, err = strconv.ParseUint(value, 0, 64)
 			if err != nil {
