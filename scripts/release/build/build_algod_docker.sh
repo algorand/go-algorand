@@ -38,7 +38,7 @@ DOCKER_IMAGE="algorand/algod_${CHANNEL_VERSION}:${DOCKER_TAG}"
 RESULT_DIR="${HOME}/node_pkg/"
 DOCKERFILE="${HOME}/go/src/github.com/algorand/go-algorand/docker/build/algod.Dockerfile"
 START_ALGOD_FILE="start_algod_docker.sh"
-# Use go version specified by get_golang_version.sh
+# Use go build version specified by get_golang_version.sh
 pushd "${HOME}/go/src/github.com/algorand/go-algorand"
 if ! GOLANG_VERSION=$("./scripts/check_golang_version.sh")
 then

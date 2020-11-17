@@ -3,7 +3,7 @@
 
 set -exo pipefail
 
-./scripts/check_golang_version.sh
+./scripts/check_golang_version.sh dev
 
 function get_go_version {
     if [[ -z "$2" ]]
@@ -14,7 +14,7 @@ function get_go_version {
         echo "$VERSION"
         )
     else
-        (echo "$2")
+        echo "$2"
     fi
     return
 }

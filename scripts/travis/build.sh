@@ -34,7 +34,7 @@ SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 OS=$("${SCRIPTPATH}/../ostype.sh")
 ARCH=$("${SCRIPTPATH}/../archtype.sh")
-# Use go version specified by get_golang_version.sh
+# Use go build version specified by get_golang_version.sh
 if ! GOLANG_VERSION=$("${SCRIPTPATH}/../check_golang_version.sh")
 then
     echo "${GOLANG_VERSION}"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-./scripts/check_golang_version.sh
+./scripts/check_golang_version.sh dev
 
 HELP="Usage: $0 [-s]
 Installs host level dependencies necessary to build go-algorand.

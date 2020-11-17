@@ -49,7 +49,7 @@ COMMIT_HASH=$(git rev-parse "${BRANCH}")
 
 export DEBIAN_FRONTEND=noninteractive
 
-# Use go version specified by get_golang_version.sh
+# Use go build version specified by get_golang_version.sh
 if ! GOLANG_VERSION=$(./scripts/check_golang_version.sh)
 then
     echo "${GOLANG_VERSION}"
