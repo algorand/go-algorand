@@ -361,7 +361,7 @@ type Local struct {
 	MinCatchpointFileDownloadBytesPerSecond uint64 `version[13]:"20480"`
 
 	// TraceServer is a host:port to report graph propagation trace info to.
-	NetworkMessageTraceServer string `version[12]:""`
+	NetworkMessageTraceServer string `version[13]:""`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

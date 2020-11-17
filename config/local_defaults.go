@@ -73,6 +73,7 @@ var defaultLocal = Local{
 	MaxConnectionsPerIP:                     30,
 	MinCatchpointFileDownloadBytesPerSecond: 20480,
 	NetAddress:                              "",
+	NetworkMessageTraceServer:               "",
 	NetworkProtocolVersion:                  "",
 	NodeExporterListenAddress:               ":9100",
 	NodeExporterPath:                        "./node_exporter",
