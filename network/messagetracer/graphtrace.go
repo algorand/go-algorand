@@ -22,7 +22,7 @@ func (gmt *graphtraceMessageTracer) Init(cfg config.Local) MessageTracer {
 		return nil
 	}
 	var err error
-	gmt.tracer, err = graphtrace.NewTcpClient(cfg.NetworkMessageTraceServer)
+	gmt.tracer, err = graphtrace.NewTCPClient(cfg.NetworkMessageTraceServer, gmt.log)
 	if err != nil {
 		gmt.log.Errorf("unable to create trace client: %v", err)
 		return nil
