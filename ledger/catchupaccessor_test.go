@@ -18,7 +18,6 @@ package ledger
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"os"
 	"strings"
@@ -93,7 +92,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 			accountData.MicroAlgos.Raw = crypto.RandUint63()
 			randomAccount.AccountData = protocol.Encode(&accountData)
 			crypto.RandBytes(randomAccount.Address[:])
-			binary.LittleEndian.PutUint64(randomAccount.Address[:], accounts+i)
+			accountData.RewardsBase = accounts + i
 			balances.Balances[i] = randomAccount
 		}
 		encodedAccountChunks = append(encodedAccountChunks, protocol.Encode(&balances))

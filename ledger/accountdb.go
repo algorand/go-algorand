@@ -140,30 +140,37 @@ const (
 	catchpointStateCatchupBalancesRound = catchpointState("catchpointCatchupBalancesRound")
 )
 
-func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, addr basics.Address, cidx basics.CreatableIndex, ctype basics.CreatableType) error {
-	_, err := tx.ExecContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)", cidx, addr[:], ctype)
-	if err != nil {
-		return err
-	}
-	return nil
+type normalizedAccountBalance struct {
+	address            basics.Address
+	accountData        basics.AccountData
+	encodedAccountData []byte
+	accountHash        []byte
+	normalizedBalance  uint64
 }
 
-func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []encodedBalanceRecord, proto config.ConsensusParams) error {
+func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.ConsensusParams) (normalizedAccountBalances []normalizedAccountBalance, err error) {
+	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals), len(bals))
+	for i, balance := range bals {
+		normalizedAccountBalances[i].address = balance.Address
+		err = protocol.Decode(balance.AccountData, &(normalizedAccountBalances[i].accountData))
+		if err != nil {
+			return nil, err
+		}
+		normalizedAccountBalances[i].normalizedBalance = normalizedAccountBalances[i].accountData.NormalizedOnlineBalance(proto)
+		normalizedAccountBalances[i].encodedAccountData = balance.AccountData
+		normalizedAccountBalances[i].accountHash = accountHashBuilder(balance.Address, normalizedAccountBalances[i].accountData, balance.AccountData)
+	}
+	return
+}
+
+func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
 	}
 
 	for _, balance := range bals {
-		var data basics.AccountData
-		err = protocol.Decode(balance.AccountData, &data)
-		if err != nil {
-			return err
-		}
-
-		normBalance := data.NormalizedOnlineBalance(proto)
-
-		result, err := insertStmt.ExecContext(ctx, balance.Address[:], normBalance, balance.AccountData)
+		result, err := insertStmt.ExecContext(ctx, balance.address[:], balance.normalizedBalance, balance.encodedAccountData)
 		if err != nil {
 			return err
 		}
@@ -174,6 +181,35 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []enco
 		}
 		if aff != 1 {
 			return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+		}
+	}
+	return nil
+}
+
+func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)")
+	if err != nil {
+		return err
+	}
+
+	for _, balance := range bals {
+		// if the account has any asset params, it means that it's the creator of an asset.
+		if len(balance.accountData.AssetParams) > 0 {
+			for aidx := range balance.accountData.AssetParams {
+				_, err := insertStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AssetCreatable)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		if len(balance.accountData.AppParams) > 0 {
+			for aidx := range balance.accountData.AppParams {
+				_, err := insertStmt.ExecContext(ctx, basics.CreatableIndex(aidx), balance.address[:], basics.AppCreatable)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 	return nil
@@ -1023,11 +1059,18 @@ type merkleCommitter struct {
 	selectStmt *sql.Stmt
 }
 
-func makeMerkleCommitter(tx *sql.Tx, staging bool) (mc *merkleCommitter, err error) {
+func makeMerkleCommitter(tx *sql.Tx, staging, readonly bool) (mc *merkleCommitter, err error) {
 	mc = &merkleCommitter{tx: tx}
 	accountHashesTable := "accounthashes"
 	if staging {
 		accountHashesTable = "catchpointaccounthashes"
+	}
+	mc.selectStmt, err = tx.Prepare("SELECT data FROM " + accountHashesTable + " WHERE id = ?")
+	if err != nil {
+		return nil, err
+	}
+	if readonly {
+		return mc, nil
 	}
 	mc.deleteStmt, err = tx.Prepare("DELETE FROM " + accountHashesTable + " WHERE id=?")
 	if err != nil {
@@ -1037,10 +1080,7 @@ func makeMerkleCommitter(tx *sql.Tx, staging bool) (mc *merkleCommitter, err err
 	if err != nil {
 		return nil, err
 	}
-	mc.selectStmt, err = tx.Prepare("SELECT data FROM " + accountHashesTable + " WHERE id = ?")
-	if err != nil {
-		return nil, err
-	}
+
 	return mc, nil
 }
 
