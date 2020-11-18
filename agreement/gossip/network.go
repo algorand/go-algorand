@@ -69,6 +69,7 @@ func WrapNetwork(net network.GossipNode, log logging.Logger) agreement.Network {
 	return i
 }
 
+// SetTrace modifies the result of WrapNetwork to add network propagation tracing
 func SetTrace(net agreement.Network, trace messagetracer.MessageTracer) {
 	i := net.(*networkImpl)
 	i.trace = trace
