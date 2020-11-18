@@ -1198,12 +1198,12 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
 	for i := 0; i < accountsNumber; {
-		updates := make(map[basics.Address]accountDelta, 0)
+		updates := make(map[basics.Address]miniAccountDelta, 0)
 		for k := 0; i < accountsNumber && k < 1024; k++ {
 			addr := randomAddress()
 			acctData := basics.AccountData{}
 			acctData.MicroAlgos.Raw = 1
-			updates[addr] = accountDelta{new: acctData}
+			updates[addr] = miniAccountDelta{new: acctData}
 			i++
 		}
 
