@@ -16,7 +16,11 @@
 
 package telemetryspec
 
-import "time"
+import (
+	"strconv"
+	"strings"
+	"time"
+)
 
 // Telemetry metrics
 
@@ -35,21 +39,24 @@ type MetricDetails interface {
 
 // AssembleBlockStats is the set of stats captured when we compute AssemblePayset
 type AssembleBlockStats struct {
-	StartCount          int
-	IncludedCount       int
-	InvalidCount        int
-	MinFee              uint64
-	MaxFee              uint64
-	AverageFee          uint64
-	MinLength           int
-	MaxLength           int
-	MinPriority         uint64
-	MaxPriority         uint64
-	CommittedCount      int
-	StopReason          string
-	TotalLength         uint64
-	EarlyCommittedCount uint64
-	Nanoseconds         int64
+	StartCount                int
+	IncludedCount             int
+	InvalidCount              int
+	MinFee                    uint64
+	MaxFee                    uint64
+	AverageFee                uint64
+	MinLength                 int
+	MaxLength                 int
+	MinPriority               uint64
+	MaxPriority               uint64
+	CommittedCount            int
+	StopReason                string
+	TotalLength               uint64
+	EarlyCommittedCount       uint64
+	Nanoseconds               int64
+	ProcessingTime            transcationProcessingTimeDistibution
+	BlockGenerationDuration   uint64
+	TransactionsLoopStartTime int64
 }
 
 // AssembleBlockTimeout represents AssemblePayset exiting due to timeout
@@ -128,4 +135,45 @@ type RoundTimingMetrics struct {
 // Identifier implements the required MetricDetails interface, retrieving the Identifier for this set of metrics.
 func (m RoundTimingMetrics) Identifier() Metric {
 	return roundTimingMetricsIdentifier
+}
+
+type transcationProcessingTimeDistibution struct {
+	// 10 buckets: 0-100Kns, 100Kns-200Kns .. 900Kns-1ms
+	// 9 buckets: 1ms-2ms .. 9ms-10ms
+	// 9 buckets: 10ms-20ms .. 90ms-100ms
+	// 9 buckets: 100ms-200ms .. 900ms-1s
+	// 1 bucket: 1s+
+	transactionBuckets [38]int
+}
+
+// generate comma delimited text representing the transaction processing timing
+func (t *transcationProcessingTimeDistibution) MarshalText() (text []byte, err error) {
+	var outStr strings.Builder
+	for i, bucket := range t.transactionBuckets {
+		outStr.WriteString(strconv.Itoa(bucket))
+		if i != len(t.transactionBuckets)-1 {
+			outStr.WriteString(",")
+		}
+	}
+	return []byte(outStr.String()), nil
+}
+
+func (t *transcationProcessingTimeDistibution) AddTransaction(duration time.Duration) {
+	var idx int64
+	if duration < 10*time.Millisecond {
+		if duration < time.Millisecond {
+			idx = int64(duration / (100000 * time.Nanosecond))
+		} else {
+			idx = int64(10 + duration/(1*time.Millisecond))
+		}
+	} else {
+		if duration < 100*time.Millisecond {
+			idx = int64(19 + duration/(10*time.Millisecond))
+		} else if duration < time.Second {
+			idx = int64(28 + duration/(100*time.Millisecond))
+		} else {
+			idx = 37
+		}
+	}
+	t.transactionBuckets[idx]++
 }

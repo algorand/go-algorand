@@ -570,7 +570,10 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 	for i, tx := range txgroup {
 		txgroupad[i].SignedTxn = tx
 	}
+
+	transactionGroupProcessingStarts := time.Now()
 	err := pool.pendingBlockEvaluator.TransactionGroup(txgroupad)
+	stats.ProcessingTime.AddTransaction(time.Now().Sub(transactionGroupProcessingStarts))
 
 	if recomputing {
 		pool.assemblyMu.Lock()
@@ -585,12 +588,14 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 				}
 				pool.assemblyResults.stats = *stats
 
+				blockGenerationStarts := time.Now()
 				lvb, gerr := pool.pendingBlockEvaluator.GenerateBlock()
 				if gerr != nil {
 					pool.assemblyResults.err = fmt.Errorf("could not generate block for %d: %v", pool.assemblyResults.roundStartedEvaluating, gerr)
 				} else {
 					pool.assemblyResults.blk = lvb
 				}
+				stats.BlockGenerationDuration = uint64(time.Now().Sub(blockGenerationStarts))
 				pool.assemblyCond.Broadcast()
 			}
 		}
@@ -661,6 +666,9 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	var asmStats telemetryspec.AssembleBlockMetrics
 	asmStats.StartCount = len(txgroups)
 	asmStats.StopReason = telemetryspec.AssembleBlockEmpty
+	if (pool.assemblyDeadline != time.Time{}) {
+		asmStats.TransactionsLoopStartTime = int64(pool.assemblyDeadline.Sub(time.Now()))
+	}
 
 	// Feed the transactions in order
 	for i, txgroup := range txgroups {
