@@ -39,6 +39,8 @@ var (
 var messagesHandled = metrics.MakeCounter(metrics.AgreementMessagesHandled)
 var messagesDropped = metrics.MakeCounter(metrics.AgreementMessagesDropped)
 
+// Trace is the client for sending trace records for network propagation statistics.
+// It is public to allow configuration to be pushed in from node/node.go
 var Trace messagetracer.MessageTracer
 
 type messageMetadata struct {

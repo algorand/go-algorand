@@ -40,6 +40,7 @@ func (gmt *graphtraceMessageTracer) HashTrace(prefix string, data []byte) {
 	gmt.tracer.Trace(hash)
 }
 
+// NewGraphtraceMessageTracer returns a new MessageTracer that sends data to a graphtrace collector
 func NewGraphtraceMessageTracer(log logging.Logger) MessageTracer {
 	return &graphtraceMessageTracer{log: log}
 }
