@@ -170,7 +170,7 @@ func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 }
 
 func TestBasicCatchpointWriter(t *testing.T) {
-	// create new protocol version, which has lower back balance.
+	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBasicCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = 32
@@ -269,7 +269,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 }
 
 func TestFullCatchpointWriter(t *testing.T) {
-	// create new protocol version, which has lower back balance.
+	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestFullCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = 32

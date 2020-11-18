@@ -3,18 +3,23 @@
 set -ex
 
 function get_go_version {
-    (
-	cd $(dirname "$0")
-	VERSION=$(cat ../go.mod | grep "$1" 2>/dev/null | awk -F " " '{print $2}')
-	echo $VERSION
-    )
+    if [[ -z "$2" ]]
+    then
+        (
+        cd "$(dirname "$0")"
+        VERSION=$( grep "$1" 2>/dev/null < ../go.mod | awk -F " " '{print $2}')
+        echo "$VERSION"
+        )
+    else
+        (echo "$2")
+    fi
     return
 }
 
 function install_go_module {
     local OUTPUT
     # Check for version to go.mod version
-    VERSION=$(get_go_version "$1")
+    VERSION=$(get_go_version "$1" "$2")
     if [ -z "$VERSION" ]; then
      	OUTPUT=$(GO111MODULE=off go get -u "$1" 2>&1)
     else
@@ -28,5 +33,5 @@ function install_go_module {
 
 install_go_module golang.org/x/lint/golint
 install_go_module golang.org/x/tools/cmd/stringer
-install_go_module github.com/go-swagger/go-swagger/cmd/swagger
+install_go_module github.com/go-swagger/go-swagger/cmd/swagger v0.25.0
 install_go_module github.com/algorand/msgp
