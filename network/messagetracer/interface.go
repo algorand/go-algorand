@@ -53,3 +53,6 @@ func NewTracer(log logging.Logger) MessageTracer {
 	log.Info("graphtrace factory DISabled")
 	return &singletonNopMessageTracer
 }
+
+// Proposal is a prefix for HashTrace()
+const Proposal = "prop"

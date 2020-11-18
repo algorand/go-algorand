@@ -39,10 +39,6 @@ var (
 var messagesHandled = metrics.MakeCounter(metrics.AgreementMessagesHandled)
 var messagesDropped = metrics.MakeCounter(metrics.AgreementMessagesDropped)
 
-// Trace is the client for sending trace records for network propagation statistics.
-// It is public to allow configuration to be pushed in from node/node.go
-var Trace messagetracer.MessageTracer
-
 type messageMetadata struct {
 	raw network.IncomingMessage
 }
@@ -55,6 +51,8 @@ type networkImpl struct {
 
 	net network.GossipNode
 	log logging.Logger
+
+	trace messagetracer.MessageTracer
 }
 
 // WrapNetwork adapts a network.GossipNode into an agreement.Network.
@@ -69,6 +67,11 @@ func WrapNetwork(net network.GossipNode, log logging.Logger) agreement.Network {
 	i.log = log
 
 	return i
+}
+
+func SetTrace(net agreement.Network, trace messagetracer.MessageTracer) {
+	i := net.(*networkImpl)
+	i.trace = trace
 }
 
 func (i *networkImpl) Start() {
@@ -92,8 +95,8 @@ func (i *networkImpl) processVoteMessage(raw network.IncomingMessage) network.Ou
 }
 
 func (i *networkImpl) processProposalMessage(raw network.IncomingMessage) network.OutgoingMessage {
-	if Trace != nil {
-		Trace.HashTrace("prop", raw.Data)
+	if i.trace != nil {
+		i.trace.HashTrace(messagetracer.Proposal, raw.Data)
 	}
 	return i.processMessage(raw, i.proposalCh)
 }
