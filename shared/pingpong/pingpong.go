@@ -25,14 +25,21 @@ import (
 	"time"
 
 	"github.com/algorand/go-algorand/crypto"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/libgoal"
 )
 
+// CreatablesInfo has information about created assets, apps and opting in
+type CreatablesInfo struct {
+	AssetParams map[uint64]v1.AssetParams
+	AppParams   map[uint64]v1.AppParams
+	OptIns      map[uint64][]string
+}
+
 // PrepareAccounts to set up accounts and asset accounts required for Ping Pong run
-func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, assetParams map[uint64]v1.AssetParams, appParams map[uint64]v1.AppParams, cfg PpConfig, err error) {
+func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]uint64, cinfo CreatablesInfo, cfg PpConfig, err error) {
 	cfg = initCfg
 	accounts, cfg, err = ensureAccounts(ac, cfg)
 	if err != nil {
@@ -57,7 +64,7 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 			return
 		}
 
-		assetParams, err = prepareAssets(assetAccounts, ac, cfg)
+		cinfo.AssetParams, err = prepareAssets(assetAccounts, ac, cfg)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "prepare assets failed %v\n", err)
 			return
@@ -76,7 +83,7 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 			_, _ = fmt.Fprintf(os.Stderr, "prepare new accounts failed: %v\n", err)
 			return
 		}
-		appParams, err = prepareApps(appAccounts, ac, cfg)
+		cinfo.AppParams, cinfo.OptIns, err = prepareApps(appAccounts, ac, cfg)
 		if err != nil {
 			return
 		}
@@ -239,7 +246,7 @@ func listSufficientAccounts(accounts map[string]uint64, minimumAmount uint64, ex
 }
 
 // RunPingPong starts ping pong process
-func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uint64, assetParam map[uint64]v1.AssetParams, appParam map[uint64]v1.AppParams, cfg PpConfig) {
+func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uint64, cinfo CreatablesInfo, cfg PpConfig) {
 	// Infinite loop given:
 	//  - accounts -> map of accounts to include in transfers (including src account, which we don't want to use)
 	//  - cfg      -> configuration for how to proceed
@@ -292,7 +299,7 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 			}
 			toList := listSufficientAccounts(accounts, minimumAmount, cfg.SrcAccount)
 
-			sent, succeeded, err := sendFromTo(fromList, toList, accounts, assetParam, appParam, ac, cfg)
+			sent, succeeded, err := sendFromTo(fromList, toList, accounts, cinfo, ac, cfg)
 			totalSent += sent
 			totalSucceeded += succeeded
 			if err != nil {
@@ -320,11 +327,11 @@ func RunPingPong(ctx context.Context, ac libgoal.Client, accounts map[string]uin
 	}
 }
 
-func getCreatableID(cfg PpConfig, assetParams map[uint64]v1.AssetParams, appParams map[uint64]v1.AppParams) (aidx uint64) {
+func getCreatableID(cfg PpConfig, cinfo CreatablesInfo) (aidx uint64) {
 	if cfg.NumAsset > 0 {
-		rindex := rand.Intn(len(assetParams))
+		rindex := rand.Intn(len(cinfo.AssetParams))
 		i := 0
-		for k := range assetParams {
+		for k := range cinfo.AssetParams {
 			if i == rindex {
 				aidx = k
 				break
@@ -332,9 +339,9 @@ func getCreatableID(cfg PpConfig, assetParams map[uint64]v1.AssetParams, appPara
 			i++
 		}
 	} else if cfg.NumApp > 0 {
-		rindex := rand.Intn(len(appParams))
+		rindex := rand.Intn(len(cinfo.AppParams))
 		i := 0
-		for k := range appParams {
+		for k := range cinfo.AppParams {
 			if i == rindex {
 				aidx = k
 				break
@@ -347,7 +354,7 @@ func getCreatableID(cfg PpConfig, assetParams map[uint64]v1.AssetParams, appPara
 
 func sendFromTo(
 	fromList, toList []string, accounts map[string]uint64,
-	assetParams map[uint64]v1.AssetParams, appParams map[uint64]v1.AppParams,
+	cinfo CreatablesInfo,
 	client libgoal.Client, cfg PpConfig,
 ) (sentCount, successCount uint64, err error) {
 
@@ -380,9 +387,9 @@ func sendFromTo(
 
 		if cfg.GroupSize == 1 {
 			// generate random assetID or appId if we send asset/app txns
-			aidx := getCreatableID(cfg, assetParams, appParams)
+			aidx := getCreatableID(cfg, cinfo)
 			// Construct single txn
-			txn, consErr := constructTxn(from, to, fee, amt, aidx, client, cfg)
+			txn, consErr := constructTxn(from, to, fee, amt, aidx, cinfo, client, cfg)
 			if consErr != nil {
 				err = consErr
 				_, _ = fmt.Fprintf(os.Stderr, "constructTxn failed: %v\n", err)
@@ -425,17 +432,17 @@ func sendFromTo(
 				var txn transactions.Transaction
 				var signer string
 				if j%2 == 0 {
-					txn, err = constructTxn(from, to, fee, amt, 0, client, cfg)
+					txn, err = constructTxn(from, to, fee, amt, 0, cinfo, client, cfg)
 					fromBalanceChange -= int64(txn.Fee.Raw + amt)
 					toBalanceChange += int64(amt)
 					signer = from
 				} else if cfg.GroupSize == 2 && cfg.Rekey {
-					txn, err = constructTxn(from, to, fee, amt, 0, client, cfg)
+					txn, err = constructTxn(from, to, fee, amt, 0, cinfo, client, cfg)
 					fromBalanceChange -= int64(txn.Fee.Raw + amt)
 					toBalanceChange += int64(amt)
 					signer = to
 				} else {
-					txn, err = constructTxn(to, from, fee, amt, 0, client, cfg)
+					txn, err = constructTxn(to, from, fee, amt, 0, cinfo, client, cfg)
 					toBalanceChange -= int64(txn.Fee.Raw + amt)
 					fromBalanceChange += int64(amt)
 					signer = to
@@ -518,7 +525,7 @@ func sendFromTo(
 	return
 }
 
-func constructTxn(from, to string, fee, amt, aidx uint64, client libgoal.Client, cfg PpConfig) (txn transactions.Transaction, err error) {
+func constructTxn(from, to string, fee, amt, aidx uint64, cinfo CreatablesInfo, client libgoal.Client, cfg PpConfig) (txn transactions.Transaction, err error) {
 	var noteField []byte
 	const pingpongTag = "pingpong"
 	const tagLen = uint32(len(pingpongTag))
@@ -540,7 +547,20 @@ func constructTxn(from, to string, fee, amt, aidx uint64, client libgoal.Client,
 	}
 
 	if cfg.NumApp > 0 { // Construct app transaction
-		txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, nil, nil, nil)
+		// generate random assetID or appId if we send asset/app txns
+		var accounts []string
+		if len(cinfo.OptIns[aidx]) > 0 {
+			indices := rand.Perm(len(cinfo.OptIns[aidx]))
+			limit := 4
+			if len(indices) < limit {
+				limit = len(indices)
+			}
+			for i := 0; i < limit; i++ {
+				idx := indices[i]
+				accounts = append(accounts, cinfo.OptIns[aidx][idx])
+			}
+		}
+		txn, err = client.MakeUnsignedAppNoOpTx(aidx, nil, accounts, nil, nil)
 		if err != nil {
 			return
 		}
