@@ -27,7 +27,7 @@ then
     exit 1
 fi
 
-if [ "$1" == dev ]
+if [ "$1" == "dev" ]
 then
     if [[ "${SYSTEM_GOLANG_VERSION}" < "${MIN_VERSION}" ]]
     then
@@ -35,11 +35,10 @@ then
         echo "[$0] Please update to at least ${MIN_VERSION}"
     fi
 else
-    # Check to make sure that it matches what is specified in go.mod
+    # Check to make sure that it matches what is specified in `go.mod`.
     GOMOD_VERSION=$(go mod edit -json | jq -r ".Go")
-    TRIMMED_BUILD_VERSION=$(awk -F. '{ print $1 "." $2 }' <<< "${BUILD_VERSION}")
 
-    if ! [[ "${BUILD_VERSION}" == "${GOMOD_VERSION}" || "${TRIMMED_BUILD_VERSION}" == "${GOMOD_VERSION}" ]]
+    if [[ ! "${BUILD_VERSION}" =~ ^"${GOMOD_VERSION}" ]]
     then
         echo "[$0] ERROR: go version mismatch, go mod version ${GOMOD_VERSION} does not match required version ${BUILD_VERSION}"
         exit 1
