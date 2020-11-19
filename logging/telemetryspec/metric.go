@@ -54,7 +54,8 @@ type AssembleBlockStats struct {
 	TotalLength               uint64
 	EarlyCommittedCount       uint64
 	Nanoseconds               int64
-	ProcessingTime            transcationProcessingTimeDistibution
+	ProcessingTime            string
+	ProcessingTimeInternal    transcationProcessingTimeDistibution
 	BlockGenerationDuration   uint64
 	TransactionsLoopStartTime int64
 }
@@ -147,7 +148,7 @@ type transcationProcessingTimeDistibution struct {
 }
 
 // generate comma delimited text representing the transaction processing timing
-func (t transcationProcessingTimeDistibution) MarshalText() (text []byte, err error) {
+func (t transcationProcessingTimeDistibution) marshalText() (text []byte, err error) {
 	var outStr strings.Builder
 	for i, bucket := range t.transactionBuckets {
 		outStr.WriteString(strconv.Itoa(bucket))
@@ -158,8 +159,8 @@ func (t transcationProcessingTimeDistibution) MarshalText() (text []byte, err er
 	return []byte(outStr.String()), nil
 }
 
-func (t transcationProcessingTimeDistibution) String() string {
-	bytes, _ := t.MarshalText()
+func (t transcationProcessingTimeDistibution) ToString() string {
+	bytes, _ := t.marshalText()
 	return string(bytes)
 }
 
@@ -180,5 +181,7 @@ func (t *transcationProcessingTimeDistibution) AddTransaction(duration time.Dura
 			idx = 37
 		}
 	}
-	t.transactionBuckets[idx]++
+	if idx >= 0 && idx <= 37 {
+		t.transactionBuckets[idx]++
+	}
 }

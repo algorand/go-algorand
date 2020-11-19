@@ -576,7 +576,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 
 	if recomputing {
 		if stats != nil {
-			stats.ProcessingTime.AddTransaction(time.Now().Sub(transactionGroupProcessingStarts))
+			stats.ProcessingTimeInternal.AddTransaction(time.Now().Sub(transactionGroupProcessingStarts))
 		}
 		pool.assemblyMu.Lock()
 		defer pool.assemblyMu.Unlock()
@@ -777,6 +777,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 
 				stats.AverageFee = totalFees / uint64(stats.IncludedCount)
 			}
+			stats.ProcessingTime = stats.ProcessingTimeInternal.ToString()
 
 			var details struct {
 				Round uint64
