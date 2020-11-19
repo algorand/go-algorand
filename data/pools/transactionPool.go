@@ -573,9 +573,9 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 
 	transactionGroupProcessingStarts := time.Now()
 	err := pool.pendingBlockEvaluator.TransactionGroup(txgroupad)
-	stats.ProcessingTime.AddTransaction(time.Now().Sub(transactionGroupProcessingStarts))
 
 	if recomputing {
+		stats.ProcessingTime.AddTransaction(time.Now().Sub(transactionGroupProcessingStarts))
 		pool.assemblyMu.Lock()
 		defer pool.assemblyMu.Unlock()
 		if !pool.assemblyResults.ok {
