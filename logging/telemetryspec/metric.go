@@ -147,7 +147,7 @@ type transcationProcessingTimeDistibution struct {
 }
 
 // generate comma delimited text representing the transaction processing timing
-func (t *transcationProcessingTimeDistibution) MarshalText() (text []byte, err error) {
+func (t transcationProcessingTimeDistibution) MarshalText() (text []byte, err error) {
 	var outStr strings.Builder
 	for i, bucket := range t.transactionBuckets {
 		outStr.WriteString(strconv.Itoa(bucket))
