@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
-# shellcheck disable=2072
+
+# There are two primary use cases for this script.
+#
+# 1. Making sure that the builds for production are using the exact version specified in `get_golang_version.sh` (in $BUILD).
+#    This is the default case.
+#
+# 2. Ensuring that an end user that is building locally is using a version of go that will enable a successful compilation.
+#    In this case, we specify a minimum version that we know is enough to compile.
+#    This is the "dev" case.
+#    See `./scripts/{configure_dev,configure_dev-deps}.sh`.
 
 set -eo pipefail
 
