@@ -34,7 +34,7 @@ fi
 
 UNAME=$(uname)
 if [[ "${UNAME}" == *"MINGW"* ]]; then
-	GOPATH1=$HOME/go
+	export GOPATH=$HOME/go
 else
 	export GOPATH=$(go env GOPATH)
 fi
