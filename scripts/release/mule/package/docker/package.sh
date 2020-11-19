@@ -31,12 +31,12 @@ DOCKERFILE="./docker/build/algod.Dockerfile"
 START_ALGOD_FILE="./docker/release/start_algod_docker.sh"
 ALGOD_DOCKER_INIT="./docker/release/algod_docker_init.sh"
 
-# Use go build version specified by get_golang_version.sh
-if ! GOLANG_VERSION=$(./scripts/check_golang_version.sh)
+if ! ./scripts/check_golang_version.sh
 then
-    echo "${GOLANG_VERSION}"
     exit 1
 fi
+# Get the go build version.
+GOLANG_VERSION=$(./scripts/get_golang_version.sh)
 
 echo "building '$DOCKERFILE' with install file $ALGOD_INSTALL_TAR_FILE"
 cp "$ALGOD_INSTALL_TAR_FILE" "/tmp/$INPUT_ALGOD_TAR_FILE"
