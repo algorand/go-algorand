@@ -571,13 +571,13 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 		txgroupad[i].SignedTxn = tx
 	}
 
-	//transactionGroupProcessingStarts := time.Now()
+	transactionGroupProcessingStarts := time.Now()
 	err := pool.pendingBlockEvaluator.TransactionGroup(txgroupad)
 
 	if recomputing {
-		/*if stats != nil {
+		if stats != nil {
 			stats.ProcessingTime.AddTransaction(time.Now().Sub(transactionGroupProcessingStarts))
-		}*/
+		}
 		pool.assemblyMu.Lock()
 		defer pool.assemblyMu.Unlock()
 		if !pool.assemblyResults.ok {

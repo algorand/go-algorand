@@ -158,6 +158,11 @@ func (t transcationProcessingTimeDistibution) MarshalText() (text []byte, err er
 	return []byte(outStr.String()), nil
 }
 
+func (t transcationProcessingTimeDistibution) String() string {
+	bytes, _ := t.MarshalText()
+	return string(bytes)
+}
+
 func (t *transcationProcessingTimeDistibution) AddTransaction(duration time.Duration) {
 	var idx int64
 	if duration < 10*time.Millisecond {
