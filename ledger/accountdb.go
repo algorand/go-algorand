@@ -1477,7 +1477,7 @@ func (iterator *catchpointPendingHashesIterator) Next(ctx context.Context) (hash
 	return
 }
 
-// Close shuts down the encodedAccountsBatchIter, releasing database resources.
+// Close shuts down the catchpointPendingHashesIterator, releasing database resources.
 func (iterator *catchpointPendingHashesIterator) Close() {
 	if iterator.rows != nil {
 		iterator.rows.Close()

@@ -418,7 +418,7 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			var hashes [][]byte
 			for {
 				hashes, err = it.Next(transactionCtx)
-				if err != nil || len(hashes) == 0 {
+				if err != nil {
 					break
 				}
 				if len(hashes) > 0 {
@@ -428,6 +428,7 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 					break
 				}
 				if ctx.Err() != nil {
+					it.Close()
 					break
 				}
 			}
@@ -441,7 +442,6 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 	// starts the merkle trie writer
 	go func() {
 		defer wg.Done()
-
 		err := wdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
 			// create the merkle trie for the balances
 			var mc *merkleCommitter
@@ -519,11 +519,9 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 
 	select {
 	case err := <-errChan:
-		c.log.Infof("merkle trie generation complete with error %v!", err)
 		return err
 	default:
 	}
-	c.log.Infof("merkle trie generation complete!")
 
 	c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 	return err
