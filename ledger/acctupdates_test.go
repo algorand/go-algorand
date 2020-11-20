@@ -1270,12 +1270,12 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	accountsNumber := 6000000 * b.N
 	err = ml.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
-			updates := make(map[basics.Address]accountDelta, 0)
+			updates := make(map[basics.Address]miniAccountDelta, 0)
 			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 				addr := randomAddress()
 				acctData := basics.AccountData{}
 				acctData.MicroAlgos.Raw = 1
-				updates[addr] = accountDelta{new: acctData}
+				updates[addr] = miniAccountDelta{new: acctData}
 				i++
 			}
 
