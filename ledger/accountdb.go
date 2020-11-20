@@ -186,6 +186,29 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 	return nil
 }
 
+func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
+	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointpendinghashes(data) VALUES(?)")
+	if err != nil {
+		return err
+	}
+
+	for _, balance := range bals {
+		result, err := insertStmt.ExecContext(ctx, balance.accountHash[:])
+		if err != nil {
+			return err
+		}
+
+		aff, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if aff != 1 {
+			return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+		}
+	}
+	return nil
+}
+
 func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)")
 	if err != nil {
@@ -220,6 +243,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		"DROP TABLE IF EXISTS catchpointbalances",
 		"DROP TABLE IF EXISTS catchpointassetcreators",
 		"DROP TABLE IF EXISTS catchpointaccounthashes",
+		"DROP TABLE IF EXISTS catchpointpendinghashes",
 		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
 
@@ -234,6 +258,7 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		s = append(s,
 			"CREATE TABLE IF NOT EXISTS catchpointassetcreators (asset integer primary key, creator blob, ctype integer)",
 			"CREATE TABLE IF NOT EXISTS catchpointbalances (address blob primary key, data blob, normalizedonlinebalance integer)",
+			"CREATE TABLE IF NOT EXISTS catchpointpendinghashes (data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
 			createNormalizedOnlineBalanceIndex(idxname, "catchpointbalances"),
 		)
@@ -1399,4 +1424,61 @@ func (iterator *orderedAccountsIter) Close(ctx context.Context) (err error) {
 	}
 	_, err = iterator.tx.ExecContext(ctx, "DROP TABLE IF EXISTS accountsiteratorhashes")
 	return
+}
+
+//catchpointpendinghashes
+
+// catchpointPendingHashesIterator allows us to iterate over the hashes in the catchpointpendinghashes table in their order.
+type catchpointPendingHashesIterator struct {
+	HashCount int
+	Tx        *sql.Tx
+	rows      *sql.Rows
+}
+
+// Next returns an array containing the hashes, returning HashCount hashes at a time.
+func (iterator *catchpointPendingHashesIterator) Next(ctx context.Context) (hashes [][]byte, err error) {
+	if iterator.rows == nil {
+		_, err = iterator.Tx.ExecContext(ctx, "CREATE INDEX catchpointpendinghashesidx ON catchpointpendinghashes(data)")
+		if err != nil {
+			return
+		}
+		iterator.rows, err = iterator.Tx.QueryContext(ctx, "SELECT data FROM catchpointpendinghashes ORDER BY data")
+		if err != nil {
+			return
+		}
+	}
+
+	// gather up to accountCount encoded accounts.
+	hashes = make([][]byte, 0, iterator.HashCount)
+	for iterator.rows.Next() {
+		var hash []byte
+		err = iterator.rows.Scan(&hash)
+		if err != nil {
+			iterator.Close()
+			return
+		}
+
+		hashes = append(hashes, hash)
+		if len(hashes) == iterator.HashCount {
+			// we're done with this iteration.
+			return
+		}
+	}
+
+	err = iterator.rows.Err()
+	if err != nil {
+		iterator.Close()
+		return
+	}
+	// we just finished reading the table.
+	iterator.Close()
+	return
+}
+
+// Close shuts down the encodedAccountsBatchIter, releasing database resources.
+func (iterator *catchpointPendingHashesIterator) Close() {
+	if iterator.rows != nil {
+		iterator.rows.Close()
+		iterator.rows = nil
+	}
 }

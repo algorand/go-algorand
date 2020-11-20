@@ -32,7 +32,6 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -55,6 +54,9 @@ type CatchpointCatchupAccessor interface {
 
 	// ProgressStagingBalances deserialize the given bytes as a temporary staging balances
 	ProgressStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *CatchpointCatchupAccessorProgress) (err error)
+
+	// BuildMerkleTrie inserts the account hashes into the merkle trie
+	BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64)) (err error)
 
 	// GetCatchupBlockRound returns the latest block round matching the current catchpoint
 	GetCatchupBlockRound(ctx context.Context) (round basics.Round, err error)
@@ -313,7 +315,6 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	}
 
 	wdb := c.ledger.trackerDB().wdb
-	rdb := c.ledger.trackerDB().rdb
 	start := time.Now()
 	ledgerProcessstagingbalancesCount.Inc(nil)
 
@@ -323,11 +324,9 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	wg.Add(3)
 	errChan := make(chan error, 3)
 
-	var t1, t2, t3 time.Duration
 	// start the balances writer
 	go func() {
 		defer wg.Done()
-		s := time.Now()
 		err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			err = writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
 			if err != nil {
@@ -338,13 +337,11 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		if err != nil {
 			errChan <- err
 		}
-		t1 = time.Now().Sub(s)
 	}()
 
 	// starts the creatables writer
 	go func() {
 		defer wg.Done()
-		s := time.Now()
 		hasCreatables := false
 		for _, accBal := range normalizedAccountBalances {
 			if len(accBal.accountData.AssetParams) > 0 || len(accBal.accountData.AppParams) > 0 {
@@ -360,16 +357,27 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 			if err != nil {
 				errChan <- err
 			}
-			t2 = time.Now().Sub(s)
-		} else {
-			t2 = time.Duration(0)
+		}
+	}()
+
+	// start the accounts pending hashes writer
+	go func() {
+		defer wg.Done()
+		err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			err = writeCatchpointStagingHashes(ctx, tx, normalizedAccountBalances)
+			if err != nil {
+				return
+			}
+			return nil
+		})
+		if err != nil {
+			errChan <- err
 		}
 	}()
 
 	// starts the trie writer
-	go func() {
+	/*go func() {
 		defer wg.Done()
-		s := time.Now()
 		err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			// create the merkle trie for the balances
 			var mc *merkleCommitter
@@ -409,8 +417,8 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		if err != nil {
 			errChan <- err
 		}
-		t3 = time.Now().Sub(s)
-	}()
+	}()*/
+
 	wg.Wait()
 	select {
 	case err := <-errChan:
@@ -429,12 +437,136 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		// restore "normal" synchronous mode
 		c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 	}
-	c.log.Infof("catchpoint perf : %v %v %v", t1, t2, t3)
+	//c.log.Infof("catchpoint perf : %v %v %v", t1, t2, t3)
+	return err
+}
+
+// BuildMerkleTrie would process the catchpointpendinghashes and insert all the items in it into the merkle trie
+func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64)) (err error) {
+	wg := sync.WaitGroup{}
+	wg.Add(3)
+	errChan := make(chan error, 2)
+
+	wdb := c.ledger.trackerDB().wdb
+	rdb := c.ledger.trackerDB().rdb
+
+	writerQueue := make(chan [][]byte, 16)
+	c.ledger.setSynchronousMode(ctx, c.ledger.accountsRebuildSynchronousMode)
+
+	// starts the hashes reader
+	go func() {
+		defer wg.Done()
+		defer close(writerQueue)
+		err = rdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
+			it := catchpointPendingHashesIterator{HashCount: trieRebuildAccountChunkSize, Tx: tx}
+			var hashes [][]byte
+			for {
+				hashes, err = it.Next(transactionCtx)
+				if err != nil || len(hashes) == 0 {
+					break
+				}
+				writerQueue <- hashes
+				if ctx.Err() != nil {
+					break
+				}
+			}
+			return err
+		})
+		if err != nil {
+			errChan <- err
+		}
+	}()
+
+	// starts the merkle trie writer
+	go func() {
+		defer wg.Done()
+
+		err = wdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
+			// create the merkle trie for the balances
+			var mc *merkleCommitter
+			mc, err = makeMerkleCommitter(tx, true)
+			if err != nil {
+				return
+			}
+			var trie *merkletrie.Trie
+			trie, err = merkletrie.MakeTrie(mc, trieMemoryConfig)
+			if err != nil {
+				return
+			}
+
+			uncommitedHashesCount := 0
+			keepWriting := true
+			hashesWritten := uint64(0)
+			if progressUpdates != nil {
+				progressUpdates(hashesWritten)
+			}
+			for keepWriting {
+				var hashesToWrite [][]byte
+				select {
+				case hashesToWrite = <-writerQueue:
+					if hashesToWrite == nil {
+						// i.e. the writerQueue is closed.
+						keepWriting = false
+						continue
+					}
+				case <-ctx.Done():
+					keepWriting = false
+					continue
+				}
+
+				for _, accountHash := range hashesToWrite {
+					var added bool
+					added, err = trie.Add(accountHash)
+					if !added {
+						return fmt.Errorf("CatchpointCatchupAccessorImpl::BuildMerkleTrie: The provided catchpoint file contained the same account more than once. hash '%s'", hex.EncodeToString(accountHash))
+					}
+					if err != nil {
+						return
+					}
+
+				}
+				uncommitedHashesCount += len(hashesToWrite)
+				hashesWritten += uint64(len(hashesToWrite))
+				if uncommitedHashesCount >= trieRebuildCommitFrequency {
+					_, err = trie.Evict(true)
+					if err != nil {
+						return
+					}
+					uncommitedHashesCount = 0
+				}
+				if progressUpdates != nil {
+					progressUpdates(hashesWritten)
+				}
+			}
+			if uncommitedHashesCount > 0 {
+				_, err = trie.Evict(true)
+				if err != nil {
+					return
+				}
+			}
+			if progressUpdates != nil {
+				progressUpdates(hashesWritten)
+			}
+			return
+		})
+		if err != nil {
+			errChan <- err
+		}
+	}()
+
+	wg.Wait()
+	select {
+	case err := <-errChan:
+		return err
+	default:
+	}
+
+	c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 	return err
 }
 
 // EvictAsNeeded calls Evict on the cachedTrie periodically, or once we're done updating the trie.
-func (progress *CatchpointCatchupAccessorProgress) EvictAsNeeded(balancesCount uint64, wdb *db.Accessor) (err error) {
+/*func (progress *CatchpointCatchupAccessorProgress) EvictAsNeeded(balancesCount uint64, wdb *db.Accessor) (err error) {
 	if progress.cachedTrie == nil {
 		return nil
 	}
@@ -474,7 +606,7 @@ func (progress *CatchpointCatchupAccessorProgress) EvictAsNeeded(balancesCount u
 		}
 	}
 	return
-}
+}*/
 
 // GetCatchupBlockRound returns the latest block round matching the current catchpoint
 func (c *CatchpointCatchupAccessorImpl) GetCatchupBlockRound(ctx context.Context) (round basics.Round, err error) {
