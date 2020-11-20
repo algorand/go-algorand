@@ -13,7 +13,15 @@ if { [catch {
     exec mkdir -p $TEST_ALGO_DIR
     
     set TIME_STAMP [clock seconds]
-    set timeout 60
+
+    set archType [exec $TEST_DATA_DIR/../../scripts/archtype.sh]
+    puts "arch type: $archType"
+    if {[regexp "arm64" $archType]} {
+       set timeout 60
+    } else {
+       set timeout 5
+    }
+    puts "set timeout to $timeout"
 
     set TEST_ROOT_DIR $TEST_ALGO_DIR/root
     set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary
