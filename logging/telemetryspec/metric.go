@@ -56,8 +56,8 @@ type AssembleBlockStats struct {
 	Nanoseconds         int64
 	//ProcessingTime      string
 	//ProcessingTimeInternal    transcationProcessingTimeDistibution
-	//BlockGenerationDuration   uint64
-	//TransactionsLoopStartTime int64
+	BlockGenerationDuration   uint64
+	TransactionsLoopStartTime int64
 }
 
 // AssembleBlockTimeout represents AssemblePayset exiting due to timeout
