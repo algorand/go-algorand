@@ -241,6 +241,7 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		}
 	}
 }
+
 func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChunk, response chan error, initialBalancesChunkNum uint64) {
 	defer close(response)
 	balancesChunkNum := initialBalancesChunkNum
