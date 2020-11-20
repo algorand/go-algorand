@@ -65,7 +65,7 @@ type catchpointWriter struct {
 	blocksRound       basics.Round
 	blockHeaderDigest crypto.Digest
 	label             string
-	accountsIterator  *orderedAccountsIter
+	accountsIterator  encodedAccountsBatchIter
 }
 
 type encodedBalanceRecord struct {
@@ -103,12 +103,12 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, bloc
 		blocksRound:       blocksRound,
 		blockHeaderDigest: blockHeaderDigest,
 		label:             label,
-		accountsIterator:  makeOrderedAccountsIter(tx, BalancesPerCatchpointFileChunk, true),
+		accountsIterator:  encodedAccountsBatchIter{orderByAddress: true},
 	}
 }
 
 func (cw *catchpointWriter) Abort() error {
-	cw.accountsIterator.Close(cw.ctx)
+	cw.accountsIterator.Close()
 	if cw.tar != nil {
 		cw.tar.Close()
 	}
@@ -283,60 +283,10 @@ func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChun
 	}
 }
 
-func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChunk, response chan error, initialBalancesChunkNum uint64) {
-	defer close(response)
-	balancesChunkNum := initialBalancesChunkNum
-	for bc := range balances {
-		balancesChunkNum++
-		if len(bc.Balances) == 0 {
-			break
-		}
-
-		encodedChunk := protocol.Encode(&bc)
-		err := cw.tar.WriteHeader(&tar.Header{
-			Name: fmt.Sprintf("balances.%d.%d.msgpack", balancesChunkNum, cw.fileHeader.TotalChunks),
-			Mode: 0600,
-			Size: int64(len(encodedChunk)),
-		})
-		if err != nil {
-			response <- err
-			break
-		}
-		_, err = cw.tar.Write(encodedChunk)
-		if err != nil {
-			response <- err
-			break
-		}
-
-		if len(bc.Balances) < BalancesPerCatchpointFileChunk || balancesChunkNum == cw.fileHeader.TotalChunks {
-			cw.tar.Close()
-			cw.gzip.Close()
-			cw.file.Close()
-			cw.file = nil
-			var fileInfo os.FileInfo
-			fileInfo, err = os.Stat(cw.filePath)
-			if err != nil {
-				response <- err
-				break
-			}
-			cw.writtenBytes = fileInfo.Size()
-			break
-		}
-	}
-}
-
 func (cw *catchpointWriter) readDatabaseStep(ctx context.Context, tx *sql.Tx) (err error) {
-	accts, _, err := cw.accountsIterator.Next(ctx)
-	if err == nil && len(accts) > 0 {
+	cw.balancesChunk.Balances, err = cw.accountsIterator.Next(ctx, tx, BalancesPerCatchpointFileChunk)
+	if err == nil {
 		cw.balancesOffset += BalancesPerCatchpointFileChunk
-		cw.balancesChunk.Balances = make([]encodedBalanceRecord, len(accts))
-		for i, acct := range accts {
-			cw.balancesChunk.Balances[i] = encodedBalanceRecord{Address: acct.address, AccountData: acct.encodedAccountData}
-		}
-	}
-	// we're done, so just return nil.
-	if err == sql.ErrNoRows {
-		return nil
 	}
 	return
 }

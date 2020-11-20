@@ -373,7 +373,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			// create the merkle trie for the balances
 			var mc *merkleCommitter
-			mc, err = makeMerkleCommitter(tx, true, true)
+			mc, err = makeMerkleCommitter(tx, true)
 			if err != nil {
 				return
 			}
@@ -448,7 +448,7 @@ func (progress *CatchpointCatchupAccessorProgress) EvictAsNeeded(balancesCount u
 		err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			// create the merkle trie for the balances
 			var mc *merkleCommitter
-			mc, err = makeMerkleCommitter(tx, true, false)
+			mc, err = makeMerkleCommitter(tx, true)
 			if err != nil {
 				return
 			}
@@ -510,7 +510,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 	ledgerVerifycatchpointCount.Inc(nil)
 	err = rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		// create the merkle trie for the balances
-		mc, err0 := makeMerkleCommitter(tx, true, true)
+		mc, err0 := makeMerkleCommitter(tx, true)
 		if err0 != nil {
 			return fmt.Errorf("unable to make MerkleCommitter: %v", err0)
 		}

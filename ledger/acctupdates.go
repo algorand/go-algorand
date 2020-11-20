@@ -1100,7 +1100,7 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 	}
 
 	// create the merkle trie for the balances
-	committer, err := makeMerkleCommitter(tx, false, false)
+	committer, err := makeMerkleCommitter(tx, false)
 	if err != nil {
 		return 0, fmt.Errorf("accountsInitialize was unable to makeMerkleCommitter: %v", err)
 	}
@@ -1842,7 +1842,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	err := au.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
-			mc, err0 := makeMerkleCommitter(tx, false, false)
+			mc, err0 := makeMerkleCommitter(tx, false)
 			if err0 != nil {
 				return err0
 			}
