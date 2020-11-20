@@ -526,12 +526,27 @@ func sendAsGroup(txgroup []transactions.Transaction, client libgoal.Client, h []
 	return
 }
 
-func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (appParams map[uint64]v1.AppParams, optIns map[uint64][]string, err error) {
-	status, err := client.Status()
-	if err != nil {
-		return
+var proto *config.ConsensusParams
+
+func getProto(client libgoal.Client) (config.ConsensusParams, error) {
+	if proto == nil {
+		var err error
+		status, err := client.Status()
+		if err != nil {
+			return config.ConsensusParams{}, err
+		}
+		currentProto, err := client.ConsensusParams(status.LastRound)
+		if err != nil {
+			return config.ConsensusParams{}, err
+		}
+		proto = &currentProto
 	}
-	proto, err := client.ConsensusParams(status.LastRound)
+
+	return *proto, nil
+}
+
+func prepareApps(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (appParams map[uint64]v1.AppParams, optIns map[uint64][]string, err error) {
+	proto, err := getProto(client)
 	if err != nil {
 		return
 	}

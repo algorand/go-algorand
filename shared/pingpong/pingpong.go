@@ -127,8 +127,13 @@ func prepareNewAccounts(client libgoal.Client, cfg PpConfig, wallet []byte, acco
 }
 
 // determine the min balance per participant account
-func computeAccountMinBalance(cfg PpConfig) (requiredBalance uint64) {
-	const minActiveAccountBalance uint64 = 100000 // min balance for any active account
+func computeAccountMinBalance(client libgoal.Client, cfg PpConfig) (requiredBalance uint64, err error) {
+	proto, err := getProto(client)
+	if err != nil {
+		return
+	}
+
+	minActiveAccountBalance := proto.MinBalance
 
 	if cfg.NumApp > 0 {
 		requiredBalance = (cfg.MinAccountFunds + (cfg.MaxAmt+cfg.MaxFee)*10) * 2
@@ -141,6 +146,12 @@ func computeAccountMinBalance(cfg PpConfig) (requiredBalance uint64) {
 	}
 	if cfg.MaxFee != 0 {
 		fee = cfg.MaxFee
+	} else {
+		// follow the same logic as constructTxn
+		fee, err = client.SuggestedFee()
+		if err != nil {
+			return
+		}
 	}
 	requiredBalance = minActiveAccountBalance
 
@@ -151,6 +162,15 @@ func computeAccountMinBalance(cfg PpConfig) (requiredBalance uint64) {
 			(fee)*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts) + // asset opt-ins
 			(fee)*uint64(cfg.NumAsset)*uint64(cfg.NumPartAccounts) // asset distributions
 		requiredBalance += assetCost
+	}
+	if cfg.NumApp > 0 {
+		creationCost := uint64(cfg.NumApp) * proto.AppFlatParamsMinBalance * uint64(proto.MaxAppsCreated)
+		optInCost := uint64(cfg.NumApp) * proto.AppFlatOptInMinBalance * uint64(proto.MaxAppsOptedIn)
+		maxGlobalSchema := basics.StateSchema{NumUint: proto.MaxGlobalSchemaEntries, NumByteSlice: proto.MaxGlobalSchemaEntries}
+		maxLocalSchema := basics.StateSchema{NumUint: proto.MaxLocalSchemaEntries, NumByteSlice: proto.MaxLocalSchemaEntries}
+		schemaCost := uint64(cfg.NumApp) * (maxGlobalSchema.MinBalance(&proto).Raw*uint64(proto.MaxAppsCreated) +
+			maxLocalSchema.MinBalance(&proto).Raw*uint64(proto.MaxAppsOptedIn))
+		requiredBalance += creationCost + optInCost + schemaCost
 	}
 	// add cost of transactions
 	requiredBalance += (cfg.MaxAmt + fee) * 2 * cfg.TxnPerSec * uint64(math.Ceil(cfg.RefreshTime.Seconds()))
@@ -172,7 +192,10 @@ func fundAccounts(accounts map[string]uint64, client libgoal.Client, cfg PpConfi
 	// Fee of 0 will make cause the function to use the suggested one by network
 	fee := uint64(0)
 
-	minFund := computeAccountMinBalance(cfg)
+	minFund, err := computeAccountMinBalance(client, cfg)
+	if err != nil {
+		return err
+	}
 
 	fmt.Printf("adjusting account balance to %d\n", minFund)
 	for addr, balance := range accounts {
