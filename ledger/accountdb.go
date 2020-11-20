@@ -209,6 +209,14 @@ func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normal
 	return nil
 }
 
+func createCatchpointStagingHashesIndex(ctx context.Context, tx *sql.Tx) (err error) {
+	_, err = tx.ExecContext(ctx, "CREATE INDEX catchpointpendinghashesidx ON catchpointpendinghashes(data)")
+	if err != nil {
+		return
+	}
+	return
+}
+
 func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)")
 	if err != nil {
@@ -1426,8 +1434,6 @@ func (iterator *orderedAccountsIter) Close(ctx context.Context) (err error) {
 	return
 }
 
-//catchpointpendinghashes
-
 // catchpointPendingHashesIterator allows us to iterate over the hashes in the catchpointpendinghashes table in their order.
 type catchpointPendingHashesIterator struct {
 	HashCount int
@@ -1438,10 +1444,6 @@ type catchpointPendingHashesIterator struct {
 // Next returns an array containing the hashes, returning HashCount hashes at a time.
 func (iterator *catchpointPendingHashesIterator) Next(ctx context.Context) (hashes [][]byte, err error) {
 	if iterator.rows == nil {
-		_, err = iterator.Tx.ExecContext(ctx, "CREATE INDEX catchpointpendinghashesidx ON catchpointpendinghashes(data)")
-		if err != nil {
-			return
-		}
 		iterator.rows, err = iterator.Tx.QueryContext(ctx, "SELECT data FROM catchpointpendinghashes ORDER BY data")
 		if err != nil {
 			return
