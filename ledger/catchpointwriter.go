@@ -188,6 +188,24 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 		cw.headerWritten = true
 	}
 
+	writerRequest := make(chan catchpointFileBalancesChunk, 1)
+	writerResponse := make(chan error, 2)
+	go cw.asyncWriter(writerRequest, writerResponse, cw.balancesChunkNum)
+	defer func() {
+		close(writerRequest)
+		// wait for the writerResponse to close.
+		for {
+			select {
+			case writerError, open := <-writerResponse:
+				if open {
+					err = writerError
+				} else {
+					return
+				}
+			}
+		}
+	}()
+
 	for {
 		// have we timed-out / canceled by that point ?
 		if more, err = hasContextDeadlineExceeded(stepCtx); more == true || err != nil {
@@ -206,39 +224,80 @@ func (cw *catchpointWriter) WriteStep(stepCtx context.Context) (more bool, err e
 			return
 		}
 
+		// check if we had any error on the writer from previous iterations.
+		select {
+		case err := <-writerResponse:
+			// we ran into an error. wait for the channel to close before returning with the error.
+			select {
+			case <-writerResponse:
+			}
+			return false, err
+		default:
+		}
+
 		// write to disk.
 		if len(cw.balancesChunk.Balances) > 0 {
 			cw.balancesChunkNum++
-			encodedChunk := protocol.Encode(&cw.balancesChunk)
-			err = cw.tar.WriteHeader(&tar.Header{
-				Name: fmt.Sprintf("balances.%d.%d.msgpack", cw.balancesChunkNum, cw.fileHeader.TotalChunks),
-				Mode: 0600,
-				Size: int64(len(encodedChunk)),
-			})
-
-			if err != nil {
-				return
-			}
-			_, err = cw.tar.Write(encodedChunk)
-			if err != nil {
-				return
-			}
-
+			writerRequest <- cw.balancesChunk
 			if len(cw.balancesChunk.Balances) < BalancesPerCatchpointFileChunk || cw.balancesChunkNum == cw.fileHeader.TotalChunks {
-				cw.tar.Close()
-				cw.gzip.Close()
-				cw.file.Close()
-				cw.balancesChunk.Balances = nil
-				cw.file = nil
-				var fileInfo os.FileInfo
-				fileInfo, err = os.Stat(cw.filePath)
-				if err != nil {
-					return false, err
+				cw.accountsIterator.Close()
+				// if we're done, wait for the writer to complete it's writing.
+				select {
+				case err, opened := <-writerResponse:
+					if opened {
+						// we ran into an error. wait for the channel to close before returning with the error.
+						select {
+						case <-writerResponse:
+						}
+						return false, err
+					}
+					// channel is closed. we're done writing and no issues detected.
+					return false, nil
 				}
-				cw.writtenBytes = fileInfo.Size()
-				return false, nil
 			}
 			cw.balancesChunk.Balances = nil
+		}
+	}
+}
+
+func (cw *catchpointWriter) asyncWriter(balances chan catchpointFileBalancesChunk, response chan error, initialBalancesChunkNum uint64) {
+	defer close(response)
+	balancesChunkNum := initialBalancesChunkNum
+	for bc := range balances {
+		balancesChunkNum++
+		if len(bc.Balances) == 0 {
+			break
+		}
+
+		encodedChunk := protocol.Encode(&bc)
+		err := cw.tar.WriteHeader(&tar.Header{
+			Name: fmt.Sprintf("balances.%d.%d.msgpack", balancesChunkNum, cw.fileHeader.TotalChunks),
+			Mode: 0600,
+			Size: int64(len(encodedChunk)),
+		})
+		if err != nil {
+			response <- err
+			break
+		}
+		_, err = cw.tar.Write(encodedChunk)
+		if err != nil {
+			response <- err
+			break
+		}
+
+		if len(bc.Balances) < BalancesPerCatchpointFileChunk || balancesChunkNum == cw.fileHeader.TotalChunks {
+			cw.tar.Close()
+			cw.gzip.Close()
+			cw.file.Close()
+			cw.file = nil
+			var fileInfo os.FileInfo
+			fileInfo, err = os.Stat(cw.filePath)
+			if err != nil {
+				response <- err
+				break
+			}
+			cw.writtenBytes = fileInfo.Size()
+			break
 		}
 	}
 }

@@ -42,6 +42,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/messagetracer"
 	"github.com/algorand/go-algorand/node/indexer"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
@@ -128,6 +129,8 @@ type AlgorandFullNode struct {
 
 	oldKeyDeletionNotify        chan struct{}
 	monitoringRoutinesWaitGroup sync.WaitGroup
+
+	tracer messagetracer.MessageTracer
 }
 
 // TxnWithStatus represents information about a single transaction,
@@ -270,6 +273,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 			return nil, err
 		}
 	}
+
+	node.tracer = messagetracer.NewTracer(log).Init(cfg)
+	gossip.SetTrace(agreementParameters.Network, node.tracer)
 
 	return node, err
 }
