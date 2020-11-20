@@ -217,7 +217,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, uint64(len(accts)), uint64(len(balances.Balances)))
 		} else {
-			require.Failf(t, "unexpected tar chunk name %s", header.Name)
+			require.Failf(t, "unexpected tar chunk name", "tar chunk name %s", header.Name)
 		}
 	}
 }
