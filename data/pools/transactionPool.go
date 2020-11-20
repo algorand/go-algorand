@@ -777,7 +777,7 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 
 				stats.AverageFee = totalFees / uint64(stats.IncludedCount)
 			}
-			//stats.ProcessingTime = "ABCDE" //stats.ProcessingTimeInternal.ToString()
+			stats.ProcessingTime = "ABCDE" //stats.ProcessingTimeInternal.ToString()
 
 			var details struct {
 				Round uint64

@@ -54,7 +54,7 @@ type AssembleBlockStats struct {
 	TotalLength         uint64
 	EarlyCommittedCount uint64
 	Nanoseconds         int64
-	//ProcessingTime      string
+	ProcessingTime      string
 	//ProcessingTimeInternal    transcationProcessingTimeDistibution
 	BlockGenerationDuration   uint64
 	TransactionsLoopStartTime int64
