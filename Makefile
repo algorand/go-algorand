@@ -54,7 +54,7 @@ export GOBUILDMODE := -buildmode=exe
 endif
 
 GOTAGS      := --tags "$(GOTAGSLIST)"
-GOTRIMPATH	:= $(shell GOPATH=$(GOPATH) && go help build | grep -q .-trimpath && echo -trimpath)
+GOTRIMPATH	:= $(shell export GOPATH=$(GOPATH) && go help build | grep -q .-trimpath && echo -trimpath)
 
 GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILDNUMBER) \
 		 -X github.com/algorand/go-algorand/config.CommitHash=$(COMMITHASH) \
@@ -65,8 +65,8 @@ GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILD
 GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(CHANNEL)
 
-UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
-ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
+UNIT_TEST_SOURCES := $(sort $(shell export GOPATH=$(GOPATH) && export GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
+ALGOD_API_PACKAGES := $(sort $(shell export GOPATH=$(GOPATH) && export GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
 MSGP_GENERATE	:= ./protocol ./crypto ./crypto/compactcert ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./auction ./agreement ./rpcs ./node ./ledger
 
@@ -178,7 +178,7 @@ build: buildsrc gen
 buildsrc: crypto/libs/$(OS_TYPE)/$(ARCH)/lib/libsodium.a node_exporter NONGO_BIN deps $(ALGOD_API_SWAGGER_INJECT) $(KMD_API_SWAGGER_INJECT)
 	mkdir -p tmp/go-cache && \
 	touch tmp/go-cache/file.txt && \
-	GOCACHE=$(SRCPATH)/tmp/go-cache go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
+	GOCACHE=$(SRCPATH)/tmp/go-cache && go install $(GOTRIMPATH) $(GOTAGS) $(GOBUILDMODE) -ldflags="$(GOLDFLAGS)" ./...
 
 SOURCES_RACE := github.com/algorand/go-algorand/cmd/kmd
 
