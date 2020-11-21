@@ -140,6 +140,7 @@ const (
 	catchpointStateCatchupBalancesRound = catchpointState("catchpointCatchupBalancesRound")
 )
 
+// normalizedAccountBalance is a staging area for a catchpoint file account information before it's being added to the catchpoint staging tables.
 type normalizedAccountBalance struct {
 	address            basics.Address
 	accountData        basics.AccountData
@@ -148,6 +149,7 @@ type normalizedAccountBalance struct {
 	normalizedBalance  uint64
 }
 
+// prepareNormalizedBalances converts an array of encodedBalanceRecord into an equal size array of normalizedAccountBalances.
 func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.ConsensusParams) (normalizedAccountBalances []normalizedAccountBalance, err error) {
 	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals), len(bals))
 	for i, balance := range bals {
@@ -163,6 +165,7 @@ func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.Consens
 	return
 }
 
+// writeCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
 func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
 	if err != nil {
@@ -186,6 +189,7 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 	return nil
 }
 
+// writeCatchpointStagingBalances inserts all the account hashes in the provided array into the catchpoint pending hashes table catchpointpendinghashes.
 func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointpendinghashes(data) VALUES(?)")
 	if err != nil {
@@ -209,6 +213,7 @@ func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normal
 	return nil
 }
 
+// createCatchpointStagingHashesIndex creates an index on catchpointpendinghashes to allow faster scanning according to the hash order
 func createCatchpointStagingHashesIndex(ctx context.Context, tx *sql.Tx) (err error) {
 	_, err = tx.ExecContext(ctx, "CREATE INDEX catchpointpendinghashesidx ON catchpointpendinghashes(data)")
 	if err != nil {
@@ -217,6 +222,7 @@ func createCatchpointStagingHashesIndex(ctx context.Context, tx *sql.Tx) (err er
 	return
 }
 
+// writeCatchpointStagingCreatable inserts all the creatables in the provided array into the catchpoint asset creator staging table catchpointassetcreators.
 func writeCatchpointStagingCreatable(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointassetcreators(asset, creator, ctype) VALUES(?, ?, ?)")
 	if err != nil {
@@ -1138,20 +1144,14 @@ func (mc *merkleCommitter) LoadPage(page uint64) (content []byte, err error) {
 
 // encodedAccountsBatchIter allows us to iterate over the accounts data stored in the accountbase table.
 type encodedAccountsBatchIter struct {
-	rows           *sql.Rows
-	orderByAddress bool
+	rows *sql.Rows
 }
 
 // Next returns an array containing the account data, in the same way it appear in the database
 // returning accountCount accounts data at a time.
 func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, accountCount int) (bals []encodedBalanceRecord, err error) {
 	if iterator.rows == nil {
-		if iterator.orderByAddress {
-			iterator.rows, err = tx.QueryContext(ctx, "SELECT address, data FROM accountbase ORDER BY address")
-		} else {
-			iterator.rows, err = tx.QueryContext(ctx, "SELECT address, data FROM accountbase")
-		}
-
+		iterator.rows, err = tx.QueryContext(ctx, "SELECT address, data FROM accountbase ORDER BY address")
 		if err != nil {
 			return
 		}
@@ -1230,41 +1230,38 @@ const (
 
 // orderedAccountsIter allows us to iterate over the accounts addresses in the order of the account hashes.
 type orderedAccountsIter struct {
-	step             orderedAccountsIterStep
-	rows             *sql.Rows
-	tx               *sql.Tx
-	accountCount     int
-	fetchAccountData bool
-	insertStmt       *sql.Stmt
+	step         orderedAccountsIterStep
+	rows         *sql.Rows
+	tx           *sql.Tx
+	accountCount int
+	insertStmt   *sql.Stmt
 }
 
 // makeOrderedAccountsIter creates an ordered account iterator. Note that due to implementation reasons,
 // only a single iterator can be active at a time.
-func makeOrderedAccountsIter(tx *sql.Tx, accountCount int, fetchAccountData bool) *orderedAccountsIter {
+func makeOrderedAccountsIter(tx *sql.Tx, accountCount int) *orderedAccountsIter {
 	return &orderedAccountsIter{
-		tx:               tx,
-		accountCount:     accountCount,
-		fetchAccountData: fetchAccountData,
-		step:             oaiStepStartup,
+		tx:           tx,
+		accountCount: accountCount,
+		step:         oaiStepStartup,
 	}
 }
 
-// accountAddressHashData is used by Next to return a single account address, hash and account data.
-type accountAddressHashData struct {
-	address            basics.Address
-	digest             []byte
-	encodedAccountData []byte
+// accountAddressHash is used by Next to return a single account address and the associated hash.
+type accountAddressHash struct {
+	address basics.Address
+	digest  []byte
 }
 
-// Next returns an array containing the account address, hash and potentially data
+// Next returns an array containing the account address and hash
 // the Next function works in multiple processing stages, where it first processs the current accounts and order them
-// followed by returning the ordered accounts. In the first phase, it would return empty accountAddressHashData array
+// followed by returning the ordered accounts. In the first phase, it would return empty accountAddressHash array
 // and sets the processedRecords to the number of accounts that were processed. On the second phase, the acct
 // would contain valid data ( and optionally the account data as well, if was asked in makeOrderedAccountsIter) and
 // the processedRecords would be zero. If err is sql.ErrNoRows it means that the iterator have completed it's work and no further
 // accounts exists. Otherwise, the caller is expected to keep calling "Next" to retrieve the next set of accounts
 // ( or let the Next function make some progress toward that goal )
-func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAddressHashData, processedRecords int, err error) {
+func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAddressHash, processedRecords int, err error) {
 	if iterator.step == oaiStepDeleteOldOrderingTable {
 		// although we're going to delete this table anyway when completing the iterator execution, we'll try to
 		// clean up any intermediate table.
@@ -1359,11 +1356,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 	if iterator.step == oaiStepSelectFromOrderedTable {
 		// select the data from the ordered table
-		if iterator.fetchAccountData {
-			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT accountsiteratorhashes.address, accountsiteratorhashes.hash, accountbase.data FROM accountsiteratorhashes JOIN accountbase ON accountbase.address=accountsiteratorhashes.address ORDER BY accountsiteratorhashes.hash")
-		} else {
-			iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, hash FROM accountsiteratorhashes ORDER BY hash")
-		}
+		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT address, hash FROM accountsiteratorhashes ORDER BY hash")
 
 		if err != nil {
 			iterator.Close(ctx)
@@ -1374,17 +1367,12 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 	}
 
 	if iterator.step == oaiStepIterateOverOrderedTable {
-		acct = make([]accountAddressHashData, 0, iterator.accountCount)
+		acct = make([]accountAddressHash, 0, iterator.accountCount)
 		var addr basics.Address
 		for iterator.rows.Next() {
 			var addrbuf []byte
-			var acctdata []byte
 			var hash []byte
-			if iterator.fetchAccountData {
-				err = iterator.rows.Scan(&addrbuf, &hash, &acctdata)
-			} else {
-				err = iterator.rows.Scan(&addrbuf, &hash)
-			}
+			err = iterator.rows.Scan(&addrbuf, &hash)
 			if err != nil {
 				iterator.Close(ctx)
 				return
@@ -1398,7 +1386,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 
 			copy(addr[:], addrbuf)
 
-			acct = append(acct, accountAddressHashData{address: addr, digest: hash, encodedAccountData: acctdata})
+			acct = append(acct, accountAddressHash{address: addr, digest: hash})
 			if len(acct) == iterator.accountCount {
 				// we're done with this iteration.
 				return
@@ -1436,22 +1424,30 @@ func (iterator *orderedAccountsIter) Close(ctx context.Context) (err error) {
 
 // catchpointPendingHashesIterator allows us to iterate over the hashes in the catchpointpendinghashes table in their order.
 type catchpointPendingHashesIterator struct {
-	HashCount int
-	Tx        *sql.Tx
+	hashCount int
+	tx        *sql.Tx
 	rows      *sql.Rows
+}
+
+// makeCatchpointPendingHashesIterator create a pending hashes iterator that retrieves the hashes in the catchpointpendinghashes table.
+func makeCatchpointPendingHashesIterator(hashCount int, tx *sql.Tx) *catchpointPendingHashesIterator {
+	return &catchpointPendingHashesIterator{
+		hashCount: hashCount,
+		tx:        tx,
+	}
 }
 
 // Next returns an array containing the hashes, returning HashCount hashes at a time.
 func (iterator *catchpointPendingHashesIterator) Next(ctx context.Context) (hashes [][]byte, err error) {
 	if iterator.rows == nil {
-		iterator.rows, err = iterator.Tx.QueryContext(ctx, "SELECT data FROM catchpointpendinghashes ORDER BY data")
+		iterator.rows, err = iterator.tx.QueryContext(ctx, "SELECT data FROM catchpointpendinghashes ORDER BY data")
 		if err != nil {
 			return
 		}
 	}
 
 	// gather up to accountCount encoded accounts.
-	hashes = make([][]byte, 0, iterator.HashCount)
+	hashes = make([][]byte, 0, iterator.hashCount)
 	for iterator.rows.Next() {
 		var hash []byte
 		err = iterator.rows.Scan(&hash)
@@ -1461,7 +1457,7 @@ func (iterator *catchpointPendingHashesIterator) Next(ctx context.Context) (hash
 		}
 
 		hashes = append(hashes, hash)
-		if len(hashes) == iterator.HashCount {
+		if len(hashes) == iterator.hashCount {
 			// we're done with this iteration.
 			return
 		}

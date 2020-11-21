@@ -414,7 +414,7 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 			return
 		}
 		err = rdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
-			it := catchpointPendingHashesIterator{HashCount: trieRebuildAccountChunkSize, Tx: tx}
+			it := makeCatchpointPendingHashesIterator(trieRebuildAccountChunkSize, tx)
 			var hashes [][]byte
 			for {
 				hashes, err = it.Next(transactionCtx)
