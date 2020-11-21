@@ -215,7 +215,7 @@ func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normal
 
 // createCatchpointStagingHashesIndex creates an index on catchpointpendinghashes to allow faster scanning according to the hash order
 func createCatchpointStagingHashesIndex(ctx context.Context, tx *sql.Tx) (err error) {
-	_, err = tx.ExecContext(ctx, "CREATE INDEX catchpointpendinghashesidx ON catchpointpendinghashes(data)")
+	_, err = tx.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS catchpointpendinghashesidx ON catchpointpendinghashes(data)")
 	if err != nil {
 		return
 	}

@@ -407,6 +407,7 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 
 	writerQueue := make(chan [][]byte, 16)
 	c.ledger.setSynchronousMode(ctx, c.ledger.accountsRebuildSynchronousMode)
+	defer c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 
 	// starts the hashes reader
 	go func() {
@@ -523,7 +524,6 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 	default:
 	}
 
-	c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 	return err
 }
 
