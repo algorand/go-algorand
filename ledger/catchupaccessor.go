@@ -392,12 +392,18 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 
 // BuildMerkleTrie would process the catchpointpendinghashes and insert all the items in it into the merkle trie
 func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64)) (err error) {
+	wdb := c.ledger.trackerDB().wdb
+	rdb := c.ledger.trackerDB().rdb
+	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		return createCatchpointStagingHashesIndex(ctx, tx)
+	})
+	if err != nil {
+		return
+	}
+
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	errChan := make(chan error, 2)
-
-	wdb := c.ledger.trackerDB().wdb
-	rdb := c.ledger.trackerDB().rdb
 
 	writerQueue := make(chan [][]byte, 16)
 	c.ledger.setSynchronousMode(ctx, c.ledger.accountsRebuildSynchronousMode)
@@ -406,14 +412,8 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 	go func() {
 		defer wg.Done()
 		defer close(writerQueue)
-		err := wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			return createCatchpointStagingHashesIndex(ctx, tx)
-		})
-		if err != nil {
-			errChan <- err
-			return
-		}
-		err = rdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
+
+		err := rdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
 			it := makeCatchpointPendingHashesIterator(trieRebuildAccountChunkSize, tx)
 			var hashes [][]byte
 			for {
