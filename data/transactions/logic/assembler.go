@@ -352,7 +352,7 @@ func assembleInt(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return ops.addLine(err)
+		return ops.error(err)
 	}
 	return ops.Uint(val)
 }
@@ -361,14 +361,14 @@ func assembleInt(ops *OpStream, spec *OpSpec, args []string) error {
 func assembleIntC(ops *OpStream, spec *OpSpec, args []string) error {
 	constIndex, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return ops.addLine(err)
+		return ops.error(err)
 	}
 	return ops.Intc(uint(constIndex))
 }
 func assembleByteC(ops *OpStream, spec *OpSpec, args []string) error {
 	constIndex, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return ops.addLine(err)
+		return ops.error(err)
 	}
 	return ops.Bytec(uint(constIndex))
 }
@@ -528,7 +528,7 @@ func assembleByte(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	val, _, err = parseBinaryArgs(args)
 	if err != nil {
-		return ops.addLine(err)
+		return ops.error(err)
 	}
 	return ops.ByteLiteral(val)
 }
@@ -542,7 +542,7 @@ func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	for i, xs := range args {
 		cu, err := strconv.ParseUint(xs, 0, 64)
 		if err != nil {
-			return ops.addLine(err)
+			return ops.error(err)
 		}
 		l = binary.PutUvarint(scratch[:], cu)
 		ops.Out.Write(scratch[:l])
@@ -559,7 +559,7 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	for len(rest) > 0 {
 		val, consumed, err := parseBinaryArgs(rest)
 		if err != nil {
-			return ops.addLine(err)
+			return ops.error(err)
 		}
 		bvals = append(bvals, val)
 		rest = rest[consumed:]
@@ -585,7 +585,7 @@ func assembleAddr(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	addr, err := basics.UnmarshalChecksumAddress(args[0])
 	if err != nil {
-		return ops.addLine(err)
+		return ops.error(err)
 	}
 	return ops.ByteLiteral(addr[:])
 }
@@ -596,7 +596,7 @@ func assembleArg(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return ops.addLine(err)
+		return ops.error(err)
 	}
 	return ops.Arg(val)
 }
@@ -623,7 +623,7 @@ func assembleLoad(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return ops.addLine(err)
+		return ops.error(err)
 	}
 	if val > EvalMaxScratchSize {
 		return ops.errorf("load outside 0..255: %d", val)
@@ -640,7 +640,7 @@ func assembleStore(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return ops.addLine(err)
+		return ops.error(err)
 	}
 	if val > EvalMaxScratchSize {
 		return ops.errorf("store outside 0..255: %d", val)
@@ -660,14 +660,14 @@ func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	start, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return ops.addLine(err)
+		return ops.error(err)
 	}
 	if start > EvalMaxScratchSize {
 		return ops.error("substring limited to 0..255")
 	}
 	end, err := strconv.ParseUint(args[1], 0, 64)
 	if err != nil {
-		return ops.addLine(err)
+		return ops.error(err)
 	}
 	if end > EvalMaxScratchSize {
 		return ops.error("substring limited to 0..255")
@@ -749,7 +749,7 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[1], 0, 64)
 	if err != nil {
-		return ops.addLine(err)
+		return ops.error(err)
 	}
 	fieldNum := fs.field
 	return ops.Txna(uint64(fieldNum), uint64(arrayFieldIdx))
@@ -761,7 +761,7 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	gtid, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return ops.addLine(err)
+		return ops.error(err)
 	}
 	fs, ok := txnFieldSpecByName[args[1]]
 	if !ok {
@@ -794,7 +794,7 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	gtid, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return ops.addLine(err)
+		return ops.error(err)
 	}
 	fs, ok := txnFieldSpecByName[args[1]]
 	if !ok {
@@ -809,7 +809,7 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	arrayFieldIdx, err := strconv.ParseUint(args[2], 0, 64)
 	if err != nil {
-		return ops.addLine(err)
+		return ops.error(err)
 	}
 	fieldNum := fs.field
 	return ops.Gtxna(gtid, uint64(fieldNum), uint64(arrayFieldIdx))
@@ -871,7 +871,7 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 	}
 	err = ops.Out.WriteByte(spec.Opcode)
 	if err != nil {
-		return ops.addLine(err)
+		return ops.error(err)
 	}
 	return nil
 }
@@ -893,11 +893,8 @@ type lineError struct {
 	Err  error
 }
 
-func addLine(line int, err error) error {
-	return &lineError{Line: line, Err: err}
-}
 func fmtLineError(line int, format string, args ...interface{}) error {
-	return addLine(line, fmt.Errorf(format, args...))
+	return &lineError{Line: line, Err: fmt.Errorf(format, args...)}
 }
 
 func (le *lineError) Error() string {
@@ -1187,15 +1184,22 @@ func (ops *OpStream) Bytes() (program []byte, err error) {
 }
 
 func (ops *OpStream) addLine(err error) error {
-	return addLine(ops.sourceLine, err)
+	return &lineError{Line: ops.sourceLine, Err: err}
 }
 
-func (ops *OpStream) error(msg string) error {
-	return ops.addLine(errors.New(msg))
+func (ops *OpStream) error(problem interface{}) error {
+	switch p := problem.(type) {
+	case string:
+		return &lineError{Line: ops.sourceLine, Err: errors.New(p)}
+	case error:
+		return &lineError{Line: ops.sourceLine, Err: p}
+	default:
+		return &lineError{Line: ops.sourceLine, Err: fmt.Errorf("%#v", p)}
+	}
 }
 
 func (ops *OpStream) errorf(format string, a ...interface{}) error {
-	return ops.addLine(fmt.Errorf(format, a...))
+	return ops.error(fmt.Errorf(format, a...))
 }
 
 // AssembleString takes an entire program in a string and assembles it to bytecode using AssemblerDefaultVersion
@@ -1292,7 +1296,7 @@ func (ps *PragmaStream) Process(fin io.Reader) (err error) {
 			}
 			ver, err = strconv.ParseUint(value, 0, 64)
 			if err != nil {
-				return addLine(sourceLine, err)
+				return &lineError{Line: sourceLine, Err: err}
 			}
 			if ver < 1 || ver > AssemblerMaxVersion {
 				return fmtLineError(sourceLine, "unsupported version: %d", ver)
