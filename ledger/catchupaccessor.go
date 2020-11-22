@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -395,6 +396,8 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 	wdb := c.ledger.trackerDB().wdb
 	rdb := c.ledger.trackerDB().rdb
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		// creating the index can take a while, so ensure we don't generate false alerts for no good reason.
+		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(120*time.Second))
 		return createCatchpointStagingHashesIndex(ctx, tx)
 	})
 	if err != nil {
@@ -433,6 +436,9 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 					break
 				}
 			}
+			// disable the warning for over-long atomic operation execution. It's meaningless here since it's
+			// co-dependent on the other go-routine.
+			db.ResetTransactionWarnDeadline(transactionCtx, tx, time.Now().Add(5*time.Second))
 			return err
 		})
 		if err != nil {
@@ -443,39 +449,50 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 	// starts the merkle trie writer
 	go func() {
 		defer wg.Done()
+		var trie *merkletrie.Trie
+		uncommitedHashesCount := 0
+		keepWriting := true
+		hashesWritten := uint64(0)
+		var mc *merkleCommitter
+		if progressUpdates != nil {
+			progressUpdates(hashesWritten)
+		}
+
 		err := wdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
 			// create the merkle trie for the balances
-			var mc *merkleCommitter
 			mc, err = makeMerkleCommitter(tx, true)
 			if err != nil {
 				return
 			}
-			var trie *merkletrie.Trie
-			trie, err = merkletrie.MakeTrie(mc, trieMemoryConfig)
-			if err != nil {
-				return
-			}
 
-			uncommitedHashesCount := 0
-			keepWriting := true
-			hashesWritten := uint64(0)
-			if progressUpdates != nil {
-				progressUpdates(hashesWritten)
-			}
-			for keepWriting {
-				var hashesToWrite [][]byte
-				select {
-				case hashesToWrite = <-writerQueue:
-					if hashesToWrite == nil {
-						// i.e. the writerQueue is closed.
-						keepWriting = false
-						continue
-					}
-				case <-ctx.Done():
+			trie, err = merkletrie.MakeTrie(mc, trieMemoryConfig)
+			return err
+		})
+		if err != nil {
+			errChan <- err
+			return
+		}
+
+		for keepWriting {
+			var hashesToWrite [][]byte
+			select {
+			case hashesToWrite = <-writerQueue:
+				if hashesToWrite == nil {
+					// i.e. the writerQueue is closed.
 					keepWriting = false
 					continue
 				}
+			case <-ctx.Done():
+				keepWriting = false
+				continue
+			}
 
+			err = rdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
+				mc, err = makeMerkleCommitter(tx, true)
+				if err != nil {
+					return
+				}
+				trie.SetCommitter(mc)
 				for _, accountHash := range hashesToWrite {
 					var added bool
 					added, err = trie.Add(accountHash)
@@ -485,35 +502,62 @@ func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, pro
 					if err != nil {
 						return
 					}
-
 				}
 				uncommitedHashesCount += len(hashesToWrite)
 				hashesWritten += uint64(len(hashesToWrite))
-				if uncommitedHashesCount >= trieRebuildCommitFrequency {
+				return nil
+			})
+			if err != nil {
+				break
+			}
+
+			if uncommitedHashesCount >= trieRebuildCommitFrequency {
+				err = wdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
+					// set a long 30-second window for the evict before warning is generated.
+					db.ResetTransactionWarnDeadline(transactionCtx, tx, time.Now().Add(30*time.Second))
+					mc, err = makeMerkleCommitter(tx, true)
+					if err != nil {
+						return
+					}
+					trie.SetCommitter(mc)
 					_, err = trie.Evict(true)
 					if err != nil {
 						return
 					}
 					uncommitedHashesCount = 0
-				}
-				if progressUpdates != nil {
-					progressUpdates(hashesWritten)
-				}
-			}
-			if uncommitedHashesCount > 0 {
-				_, err = trie.Evict(true)
+					return nil
+				})
 				if err != nil {
-					return
+					keepWriting = false
+					continue
 				}
 			}
 			if progressUpdates != nil {
 				progressUpdates(hashesWritten)
 			}
+		}
+		if err != nil {
+			errChan <- err
 			return
-		})
+		}
+		if uncommitedHashesCount > 0 {
+			err = wdb.Atomic(func(transactionCtx context.Context, tx *sql.Tx) (err error) {
+				// set a long 30-second window for the evict before warning is generated.
+				db.ResetTransactionWarnDeadline(transactionCtx, tx, time.Now().Add(30*time.Second))
+				mc, err = makeMerkleCommitter(tx, true)
+				if err != nil {
+					return
+				}
+				trie.SetCommitter(mc)
+				_, err = trie.Evict(true)
+				return
+			})
+		}
+
 		if err != nil {
 			errChan <- err
 		}
+		return
 	}()
 
 	wg.Wait()
