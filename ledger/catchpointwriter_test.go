@@ -124,7 +124,7 @@ func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 }
 
 func TestBasicCatchpointWriter(t *testing.T) {
-	// create new protocol version, which has lower back balance.
+	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBasicCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = 32
@@ -217,13 +217,13 @@ func TestBasicCatchpointWriter(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, uint64(len(accts)), uint64(len(balances.Balances)))
 		} else {
-			require.Failf(t, "unexpected tar chunk name %s", header.Name)
+			require.Failf(t, "unexpected tar chunk name", "tar chunk name %s", header.Name)
 		}
 	}
 }
 
 func TestFullCatchpointWriter(t *testing.T) {
-	// create new protocol version, which has lower back balance.
+	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestFullCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = 32
