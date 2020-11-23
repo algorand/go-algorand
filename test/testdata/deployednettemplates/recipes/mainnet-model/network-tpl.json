@@ -6,17 +6,17 @@
   "instances": {
     "relays": {
       "config": "./configs/relay.json",
-      "type": "c5.xlarge",
+      "type": "c5d.xlarge",
       "count": 25
     },
     "participatingNodes": {
       "config": "./configs/node.json",
-      "type": "c5.xlarge",
+      "type": "c5d.xlarge",
       "count": 50
     },
     "nonParticipatingNodes": {
       "config": "./configs/nonPartNode.json",
-      "type": "c5.xlarge",
+      "type": "c5d.xlarge",
       "count": 10
     }
   },
@@ -28,7 +28,7 @@
         "participatingNodes": 0,
         "nonParticipatingNodes": 0
       },
-      "region": "us-west-1"
+      "region": "us-east-2"
     },
     {
       "name": "us-n",
@@ -37,7 +37,7 @@
         "participatingNodes": 14,
         "nonParticipatingNodes": 35
       },
-      "region": "us-west-1"
+      "region": "us-east-2"
     },
     {
       "name": "eu-r",
@@ -46,7 +46,7 @@
         "participatingNodes": 0,
         "nonParticipatingNodes": 0
       },
-      "region": "us-west-1"
+      "region": "us-east-2"
     },
     {
       "name": "eu-n",
@@ -55,7 +55,7 @@
         "participatingNodes": 18,
         "nonParticipatingNodes": 25
       },
-      "region": "us-west-1"
+      "region": "us-east-2"
     },
     {
       "name": "ap-r",
@@ -64,7 +64,7 @@
         "participatingNodes": 0,
         "nonParticipatingNodes": 0
       },
-      "region": "us-west-1"
+      "region": "us-east-2"
     },
     {
       "name": "ap-n",
@@ -73,7 +73,7 @@
         "participatingNodes": 44,
         "nonParticipatingNodes": 30
       },
-      "region": "us-west-1"
+      "region": "us-east-2"
     },
     {
       "name": "af-r",
@@ -82,7 +82,7 @@
         "participatingNodes": 0,
         "nonParticipatingNodes": 0
       },
-      "region": "us-west-1"
+      "region": "us-east-2"
     },
     {
       "name": "af-n",
@@ -91,7 +91,7 @@
         "participatingNodes": 14,
         "nonParticipatingNodes": 5
       },
-      "region": "us-west-1"
+      "region": "us-east-2"
     },
     {
       "name": "au-r",
@@ -100,7 +100,7 @@
         "participatingNodes": 0,
         "nonParticipatingNodes": 0
       },
-      "region": "us-west-1"
+      "region": "us-east-2"
     },
     {
       "name": "au-n",
@@ -109,7 +109,7 @@
         "participatingNodes": 10,
         "nonParticipatingNodes": 5
       },
-      "region": "us-west-1"
+      "region": "us-east-2"
     }
   ]
 }
