@@ -7,12 +7,13 @@ echo
 date "+build_release begin DEPLOY rpm stage %Y%m%d_%H%M%S"
 echo
 
-ARCH_TYPE=$(./scripts/archtype.sh)
-OS_TYPE=$(./scripts/ostype.sh)
-CHANNEL=${CHANNEL:-stable}
+if [ -z "$CHANNEL" ] || [ -z "$VERSION" ]; then
+    echo "[$0] CHANNEL=$CHANNEL or VERSION=$VERSION is missing."
+    exit 1
+fi
+
 NO_DEPLOY=${NO_DEPLOY:-false}
 PACKAGES_DIR=${PACKAGES_DIR:-"./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"}
-VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 
 if [ -n "$S3_SOURCE" ]
 then
