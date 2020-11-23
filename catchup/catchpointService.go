@@ -340,6 +340,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 				if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 					// try again.
 					blk = nil
+					cs.log.Infof("processStageLastestBlockDownload: block %d download failed, another attempt will be made; err = %v", blockRound, err)
 					continue
 				}
 				return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed to get block %d : %v", blockRound, err))
@@ -381,6 +382,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 				// try again.
 				blk = nil
+				cs.log.Infof("processStageLastestBlockDownload: block %d verification against catchpoint failed, another attempt will be made; err = %v", blockRound, err)
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed when calling VerifyCatchpoint : %v", err))
