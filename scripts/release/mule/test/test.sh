@@ -3,19 +3,22 @@
 
 set -ex
 
+echo
+date "+build_release begin TEST stage %Y%m%d_%H%M%S"
+echo
+
+if [ -z "$BRANCH" ] || [ -z "$CHANNEL" ] || [ -z "$NETWORK" ] || [ -z "$SHA" ] || [ -z "$VERSION" ]; then
+    echo "[$0] BRANCH=$BRANCH, CHANNEL=$CHANNEL, NETWORK=$NETWORK, SHA=$SHA or VERSION=$VERSION is missing."
+    exit 1
+fi
+
 export PKG_TYPE="$1"
 ARCH_BIT=$(uname -m)
 export ARCH_BIT
-ARCH_TYPE=$(./scripts/archtype.sh)
 export ARCH_TYPE
-OS_TYPE=$(./scripts/ostype.sh)
 export OS_TYPE
 
-export BRANCH=${BRANCH:-$(./scripts/compute_branch.sh)}
-export CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
-export NETWORK=${NETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
-export SHA=${SHA:-$(git rev-parse HEAD)}
-export VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+export SHA
 ALGORAND_PACKAGE_NAME=$([ "$CHANNEL" = beta ] && echo algorand-beta || echo algorand)
 DEVTOOLS_PACKAGE_NAME=$([ "$CHANNEL" = beta ] && echo algorand-devtools-beta || echo algorand-devtools)
 export ALGORAND_PACKAGE_NAME
@@ -94,4 +97,8 @@ do
     echo ">>>>>>>>>> POST TESTING $(basename "$test")"
     bash "$test"
 done
+
+echo
+date "+build_release end TEST stage %Y%m%d_%H%M%S"
+echo
 

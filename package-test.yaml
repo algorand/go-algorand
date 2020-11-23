@@ -6,11 +6,13 @@ agents:
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     env:
+      - ARCH_TYPE=`./scripts/archtype.sh`
       - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
       - BRANCH=$BRANCH
       - CHANNEL=$CHANNEL
       - NETWORK=$NETWORK
+      - OS_TYPE=`./scripts/ostype.sh`
       - S3_SOURCE=$S3_SOURCE
       - SHA=$SHA
       - VERSION=$VERSION
@@ -25,11 +27,13 @@ agents:
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     env:
+      - ARCH_TYPE=`./scripts/archtype.sh`
       - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
       - BRANCH=$BRANCH
       - CHANNEL=$CHANNEL
       - NETWORK=$NETWORK
+      - OS_TYPE=`./scripts/ostype.sh`
       - S3_SOURCE=$S3_SOURCE
       - SHA=$SHA
       - VERSION=$VERSION
