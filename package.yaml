@@ -5,6 +5,8 @@ agents:
     version: scripts/configure_dev-deps.sh
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    env:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     workDir: $HOME/projects/go-algorand
 
   - name: rpm
@@ -13,6 +15,9 @@ agents:
     version: scripts/configure_dev-deps.sh
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    env:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    workDir: $HOME/projects/go-algorand
     workDir: $HOME/projects/go-algorand
 
   - name: docker
@@ -21,6 +26,11 @@ agents:
     version: scripts/configure_dev-deps.sh
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    env:
+      - ARCH_TYPE=`./scripts/archtype.sh`
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+      - OS_TYPE=`./scripts/ostype.sh`
+    workDir: $HOME/projects/go-algorand
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     workDir: $HOME/projects/go-algorand

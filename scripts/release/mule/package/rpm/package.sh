@@ -5,15 +5,17 @@ set -ex
 
 echo "Building RPM package"
 
+if [ -z "$BRANCH" ] || [ -z "$CHANNEL" ] || [ -z "$NETWORK" ] || [ -z "$VERSION" ]; then
+    echo "[$0] BRANCH=$BRANCH, CHANNEL=$CHANNEL, NETWORK=$NETWORK or VERSION=$VERSION is missing."
+    exit 1
+fi
+
 REPO_DIR=$(pwd)
-FULLVERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
-BRANCH=${BRANCH:-$(./scripts/compute_branch.sh)}
-CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
-DEFAULTNETWORK=${DEFAULTNETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
+DEFAULTNETWORK="$NETWORK"
 DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "$DEFAULTNETWORK")
 PACKAGE_NAME="$1"
 
-find tmp/node_pkgs -name "*${CHANNEL}*linux*${FULLVERSION}*.tar.gz" | cut -d '/' -f3-4 | sort --unique | while read OS_ARCH; do
+find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3-4 | sort --unique | while read OS_ARCH; do
     OS_TYPE=$(echo "${OS_ARCH}" | cut -d '/' -f1)
     ARCH_TYPE=$(echo "${OS_ARCH}" | cut -d '/' -f2)
     ARCH_UNAME=$(./scripts/release/common/cpu_name.sh ${ARCH_TYPE})
@@ -43,7 +45,7 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${FULLVERSION}*.tar.gz" | cut -d '/'
     trap 'rm -rf $TEMPDIR' 0
     < "./installer/rpm/$INSTALLER_DIR/$INSTALLER_DIR.spec" \
         sed -e "s,@PKG_NAME@,$ALGORAND_PACKAGE_NAME," \
-            -e "s,@VER@,$FULLVERSION," \
+            -e "s,@VER@,$VERSION," \
             -e "s,@ARCH@,$ARCH_UNAME," \
             -e "s,@REQUIRED_ALGORAND_PKG@,$REQUIRED_ALGORAND_PACKAGE," \
         > "$TEMPDIR/$ALGORAND_PACKAGE_NAME.spec"

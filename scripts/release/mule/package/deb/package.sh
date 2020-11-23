@@ -7,13 +7,15 @@ echo
 date "+build_release begin PACKAGE DEB stage %Y%m%d_%H%M%S"
 echo
 
-BRANCH=${BRANCH:-$(./scripts/compute_branch.sh)}
-CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
-VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+if [ -z "$BRANCH" ] || [ -z "$CHANNEL" ] || [ -z "$NETWORK" ] || [ -z "$VERSION" ]; then
+    echo "[$0] BRANCH=$BRANCH, CHANNEL=$CHANNEL, NETWORK=$NETWORK or VERSION=$VERSION is missing."
+    exit 1
+fi
+
 # A make target in Makefile.mule may pass the name as an argument.
 PACKAGE_NAME="$1"
 
-DEFAULTNETWORK=${DEFAULTNETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
+DEFAULTNETWORK="$NETWORK"
 DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "$DEFAULTNETWORK")
 export DEFAULT_RELEASE_NETWORK
 
