@@ -9,9 +9,11 @@ echo
 date "+build_release begin SIGN stage %Y%m%d_%H%M%S"
 echo
 
-VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
-BRANCH=${BRANCH:-$(./scripts/compute_branch.sh)}
-CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
+if [ -z "$BRANCH" ] || [ -z "$CHANNEL" ] || [ -z "$VERSION" ]; then
+    echo "[$0] BRANCH=$BRANCH, CHANNEL=$CHANNEL or VERSION=$VERSION is missing."
+    exit 1
+fi
+
 PKG_DIR="./tmp/node_pkgs"
 SIGNING_KEY_ADDR=dev@algorand.com
 
