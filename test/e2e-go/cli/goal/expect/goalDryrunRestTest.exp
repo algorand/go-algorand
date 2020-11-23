@@ -52,6 +52,7 @@ if { [catch {
     set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
     set NETWORK_NAME test_net_expect_$TIME_STAMP
     set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+    set TEAL_PROGS_DIR "$TEST_DATA_DIR/../scripts/e2e_subs/tealprogs"
 
     exec cp $TEST_DATA_DIR/../../gen/devnet/genesis.json $TEST_ALGO_DIR
 
@@ -137,6 +138,18 @@ if { [catch {
     TestGoalDryrunExitCode $DRREQ_FILE_3 $TEST_PRIMARY_NODE_DIR 0 "PASS"
     TestGoalDryrunExitCode "" $TEST_PRIMARY_NODE_DIR 1 "Cannot read file : open : no such file or directory"
     TestGoalDryrunExitCode $INVALID_FILE_1 $TEST_PRIMARY_NODE_DIR 1 "dryrun-remote: HTTP 400 Bad Request:"
+
+    # check local state access during opt-in transaction
+    set GLOBAL_BYTE_SLICES 0
+    set LOCAL_BYTE_SLICES 1
+    set APP_ID [::AlgorandGoal::AppCreate0 $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TEAL_PROGS_DIR/app_optin_put.teal $GLOBAL_BYTE_SLICES $LOCAL_BYTE_SLICES $TEAL_PROGS_DIR/clear_program_state.teal $TEST_PRIMARY_NODE_DIR]
+    set DRREQ_FILE_OPTIN "$TEST_ROOT_DIR/app-optin-drreq.msgp"
+    spawn goal app optin --app-id $APP_ID --from $PRIMARY_ACCOUNT_ADDRESS -o $DRREQ_FILE_OPTIN --dryrun-dump --dryrun-dump-format=msgp -d $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { ::AlgorandGoal::Abort "goal app optin timeout" }
+    }
+
+    TestGoalDryrun $DRREQ_FILE_OPTIN $TEST_PRIMARY_NODE_DIR
 
     # Shutdown the network
     ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
