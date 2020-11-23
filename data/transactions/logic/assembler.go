@@ -1183,10 +1183,6 @@ func (ops *OpStream) Bytes() (program []byte, err error) {
 	return
 }
 
-func (ops *OpStream) addLine(err error) error {
-	return &lineError{Line: ops.sourceLine, Err: err}
-}
-
 func (ops *OpStream) error(problem interface{}) error {
 	switch p := problem.(type) {
 	case string:
