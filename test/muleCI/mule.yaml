@@ -19,11 +19,49 @@ agents:
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
+  - name: cicd.ubuntu.arm64
+    dockerFilePath: docker/build/cicd.ubuntu.Dockerfile
+    image: algorand/go-algorand-ci-linux-ubuntu
+    version: scripts/configure_dev-deps.sh
+    arch: arm64v8
+    env:
+      - TRAVIS_BRANCH=${GIT_BRANCH}
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+      - ARCH=arm64v8
+  - name: cicd.alpine.arm
+    dockerFilePath: docker/build/cicd.alpine.Dockerfile
+    image: algorand/go-algorand-ci-linux
+    version: scripts/configure_dev-deps.sh
+    arch: arm32v6
+    env:
+      - TRAVIS_BRANCH=${GIT_BRANCH}
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+      - ARCH=arm32v6
+  - name: docker-ubuntu
+    dockerFilePath: docker/build/docker.ubuntu.Dockerfile
+    image: algorand/go-algorand-docker-linux-ubuntu
+    version: scripts/configure_dev-deps.sh
+    env:
+      - TRAVIS_BRANCH=${GIT_BRANCH}
+    buildArgs:
+      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
 tasks:
   - task: docker.Make
     name: build.amd64
     agent: cicd.ubuntu.amd64
+    target: ci-build
+  - task: docker.Make
+    name: build.arm64
+    agent: cicd.ubuntu.arm64
+    target: ci-build
+  - task: docker.Make
+    name: build.arm
+    agent: cicd.alpine.arm
     target: ci-build
 
   - task: docker.Make
@@ -60,6 +98,24 @@ tasks:
       - gen/testnet/genesis.json
       - gen/mainnet/genesis.json
   - task: stash.Stash
+    name: linux-arm64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm64
+    globSpecs:
+      - tmp/node_pkgs/**
+      - gen/devnet/genesis.json
+      - gen/testnet/genesis.json
+      - gen/mainnet/genesis.json
+  - task: stash.Stash
+    name: linux-arm
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
+    globSpecs:
+      - tmp/node_pkgs/**
+      - gen/devnet/genesis.json
+      - gen/testnet/genesis.json
+      - gen/mainnet/genesis.json
+  - task: stash.Stash
     name: packages
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/packages
@@ -68,6 +124,10 @@ tasks:
 
     # Unstash tasks
   - task: stash.Unstash
+    name: linux-arm64
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm64
+  - task: stash.Unstash
     name: linux-amd64
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/linux-amd64
@@ -75,6 +135,10 @@ tasks:
     name: darwin-amd64
     bucketName: go-algorand-ci-cache
     stashId: ${JENKINS_JOB_CACHE_ID}/darwin-amd64
+  - task: stash.Unstash
+    name: linux-arm
+    bucketName: go-algorand-ci-cache
+    stashId: ${JENKINS_JOB_CACHE_ID}/linux-arm
   - task: stash.Unstash
     name: packages
     bucketName: go-algorand-ci-cache
@@ -90,10 +154,20 @@ jobs:
     tasks:
       - docker.Make.build.amd64
       - stash.Stash.linux-amd64
+  build-linux-arm64:
+    tasks:
+      - docker.Make.build.arm64
+      - stash.Stash.linux-arm64
+  build-linux-arm32:
+    tasks:
+      - docker.Make.build.arm
+      - stash.Stash.linux-arm
 
   package-linux-amd64:
     tasks:
       - stash.Unstash.linux-amd64
+      - stash.Unstash.linux-arm64
+      - stash.Unstash.linux-arm
       - docker.Make.deb.amd64
       - docker.Make.rpm.amd64
       - stash.Stash.packages
@@ -102,3 +176,6 @@ jobs:
       - stash.Unstash.packages
       - docker.Make.archive.amd64
 
+  package-docker:
+    tasks:
+      - docker.Make.docker-image
