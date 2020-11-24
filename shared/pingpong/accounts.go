@@ -130,12 +130,19 @@ func throttleTransactionRate(startTime time.Time, cfg PpConfig, totalSent uint64
 // Step 1) Create X assets for each of the participant accounts
 // Step 2) For each participant account, opt-in to assets of all other participant accounts
 // Step 3) Evenly distribute the assets across all participant accounts
-func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (resultAssetMaps map[uint64]v1.AssetParams, err error) {
+func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (resultAssetMaps map[uint64]v1.AssetParams, optIns map[uint64][]string, err error) {
+	proto, err := getProto(client)
+	if err != nil {
+		return
+	}
 
 	var startTime = time.Now()
 	var totalSent uint64 = 0
 	resultAssetMaps = make(map[uint64]v1.AssetParams)
 
+	// optIns contains own and explicitly opted-in assets
+	optIns = make(map[uint64][]string)
+	assetsInAcct := make(map[string]int)
 	// 1) Create X assets for each of the participant accounts
 	for addr := range accounts {
 		addrAccount, addrErr := client.AccountInformation(addr)
@@ -146,6 +153,7 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 		}
 
 		toCreate := int(cfg.NumAsset) - len(addrAccount.AssetParams)
+		assetsInAcct[addr] = toCreate
 
 		fmt.Printf("Creating %v create asset transaction for account %v \n", toCreate, addr)
 		fmt.Printf("cfg.NumAsset %v, addrAccount.AssetParams %v\n", cfg.NumAsset, addrAccount.AssetParams)
@@ -186,21 +194,36 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 			totalSent++
 			throttleTransactionRate(startTime, cfg, totalSent)
 		}
-		account, accountErr := client.AccountInformation(addr)
-		if accountErr != nil {
-			fmt.Printf("Cannot lookup source account %v\n", addr)
-			err = accountErr
-			return
-		}
-
-		assetParams := account.AssetParams
-		fmt.Printf("Configured  %d assets %+v\n", len(assetParams), assetParams)
-
 	}
 
-	time.Sleep(time.Second * 15)
+	// wait until all the assets created
+	for addr := range accounts {
+		var account v1.Account
+		for {
+			account, err = client.AccountInformation(addr)
+			if err != nil {
+				fmt.Printf("Warning, cannot lookup source account")
+				return
+			}
+			if len(account.AssetParams) >= assetsInAcct[addr] {
+				break
+			}
+			time.Sleep(time.Second)
+		}
+		assetParams := account.AssetParams
+		if !cfg.Quiet {
+			fmt.Printf("Configured  %d assets %+v\n", len(assetParams), assetParams)
+		}
+		// add own asset to opt-ins since asset creators are auto-opted in
+		for k := range account.AssetParams {
+			optIns[k] = append(optIns[k], addr)
+		}
+	}
 
-	// 2) For each participant account, opt-in to assets of all other participant accounts
+	// 2) For each participant account, opt-in up to proto.MaxAssetsPerAccount assets of all other participant accounts
+
+	// optInsByAddr tracks only explicitly opted-in assets
+	optInsByAddr := make(map[string]map[uint64]bool)
 	for addr := range accounts {
 		if !cfg.Quiet {
 			fmt.Printf("Opting in assets from account %v\n", addr)
@@ -228,11 +251,14 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 					if !cfg.Quiet {
 						fmt.Printf("Opting in assets to account %v \n", addr2)
 					}
-					_, addrErr2 := client.AccountInformation(addr2)
+					acct, addrErr2 := client.AccountInformation(addr2)
 					if addrErr2 != nil {
 						fmt.Printf("Cannot lookup optin account\n")
 						err = addrErr2
 						return
+					}
+					if len(acct.Assets) >= proto.MaxAssetsPerAccount {
+						break
 					}
 
 					// opt-in asset k for addr
@@ -254,6 +280,11 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 						_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset optin failed with error %v\n", err)
 						return
 					}
+					optIns[k] = append(optIns[k], addr2)
+					if _, ok := optInsByAddr[addr2]; !ok {
+						optInsByAddr[addr2] = make(map[uint64]bool)
+					}
+					optInsByAddr[addr2][k] = true
 
 					totalSent++
 					throttleTransactionRate(startTime, cfg, totalSent)
@@ -261,9 +292,25 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 			}
 		}
 	}
-	time.Sleep(time.Second * 15)
 
-	// Step 3) Evenly distribute the assets across all participant accounts
+	// wait until all opt-ins completed
+	for addr := range accounts {
+		expectedAssets := assetsInAcct[addr] + len(optInsByAddr[addr])
+		var account v1.Account
+		for {
+			account, err = client.AccountInformation(addr)
+			if err != nil {
+				fmt.Printf("Warning, cannot lookup source account")
+				return
+			}
+			if len(account.Assets) >= expectedAssets {
+				break
+			}
+			time.Sleep(time.Second)
+		}
+	}
+
+	// Step 3) Evenly distribute the assets across all opted-in accounts
 	for addr := range accounts {
 		if !cfg.Quiet {
 			fmt.Printf("Distributing assets from account %v\n", addr)
@@ -288,7 +335,13 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 
 			assetAmt := assetParams[k].Total / uint64(len(accounts))
 			for addr2 := range accounts {
-				if addr != addr2 {
+				optedIn := false
+				if m, ok := optInsByAddr[addr2]; ok {
+					if m[k] {
+						optedIn = true
+					}
+				}
+				if addr != addr2 && optedIn {
 					if !cfg.Quiet {
 						fmt.Printf("Distributing assets from %v to %v \n", addr, addr2)
 					}
