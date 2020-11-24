@@ -5,8 +5,8 @@ set -ex
 
 echo "Building RPM package"
 
-if [ -z "$BRANCH" ] || [ -z "$CHANNEL" ] || [ -z "$NETWORK" ] || [ -z "$VERSION" ]; then
-    echo "[$0] BRANCH=$BRANCH, CHANNEL=$CHANNEL, NETWORK=$NETWORK or VERSION=$VERSION is missing."
+if [ -z "$CHANNEL" ] || [ -z "$NETWORK" ] || [ -z "$VERSION" ]; then
+    echo "[$0] CHANNEL=$CHANNEL, NETWORK=$NETWORK or VERSION=$VERSION is missing."
     exit 1
 fi
 

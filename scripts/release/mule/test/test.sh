@@ -8,14 +8,17 @@ date "+build_release begin TEST stage %Y%m%d_%H%M%S"
 echo
 
 if [ -z "$BRANCH" ] || [ -z "$CHANNEL" ] || [ -z "$NETWORK" ] || [ -z "$SHA" ] || [ -z "$VERSION" ]; then
-    echo "[$0] BRANCH=$BRANCH, CHANNEL=$CHANNEL, NETWORK=$NETWORK, SHA=$SHA or VERSION=$VERSION is missing."
+    echo "[$0] BRANCH=$BRANCH, NETWORK=$NETWORK, SHA=$SHA or VERSION=$VERSION is missing."
     exit 1
 fi
 
+export BRANCH
 export PKG_TYPE="$1"
 ARCH_BIT=$(uname -m)
 export ARCH_BIT
+ARCH_TYPE=$(./scripts/archtype.sh)
 export ARCH_TYPE
+OS_TYPE=$(./scripts/ostype.sh)
 export OS_TYPE
 
 export SHA

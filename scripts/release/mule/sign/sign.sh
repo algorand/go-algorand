@@ -9,8 +9,8 @@ echo
 date "+build_release begin SIGN stage %Y%m%d_%H%M%S"
 echo
 
-if [ -z "$BRANCH" ] || [ -z "$CHANNEL" ] || [ -z "$VERSION" ]; then
-    echo "[$0] BRANCH=$BRANCH, CHANNEL=$CHANNEL or VERSION=$VERSION is missing."
+if [ -z "$CHANNEL" ] || [ -z "$VERSION" ]; then
+    echo "[$0] CHANNEL=$CHANNEL or VERSION=$VERSION is missing."
     exit 1
 fi
 

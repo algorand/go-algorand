@@ -6,7 +6,9 @@ agents:
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     env:
-      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
+      - CHANNEL=$CHANNEL
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
     workDir: $HOME/projects/go-algorand
 
   - name: rpm
@@ -16,8 +18,9 @@ agents:
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     env:
-      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
-    workDir: $HOME/projects/go-algorand
+      - CHANNEL=$CHANNEL
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
     workDir: $HOME/projects/go-algorand
 
   - name: docker
@@ -27,9 +30,8 @@ agents:
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     env:
-      - ARCH_TYPE=`./scripts/archtype.sh`
-      - GOLANG_VERSION=`./scripts/get_golang_version.sh`
-      - OS_TYPE=`./scripts/ostype.sh`
+      - CHANNEL=$CHANNEL
+      - VERSION=$VERSION
     workDir: $HOME/projects/go-algorand
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -66,12 +68,12 @@ jobs:
 
   package-deb:
     tasks:
-      - docker.Make.build
+      #      - docker.Make.build
       - docker.Make.deb
 
   package-rpm:
     tasks:
-      - docker.Make.build
+      #      - docker.Make.build
       - docker.Make.rpm
 
   package-docker:
