@@ -59,13 +59,22 @@ type TelemetryConfig struct {
 	URI                string
 	Name               string
 	GUID               string
-	MinLogLevel        logrus.Level
-	ReportHistoryLevel logrus.Level
-	FilePath           string // Path to file on disk, if any
-	ChainID            string `json:"-"`
-	SessionGUID        string `json:"-"`
+	MinLogLevel        logrus.Level `json:"-"` // these are the logrus.Level, but we can't use it directly since on logrus version 1.4.2 they added
+	ReportHistoryLevel logrus.Level `json:"-"` // text marshalers which breaks our backward compatibility.
+	FilePath           string       // Path to file on disk, if any
+	ChainID            string       `json:"-"`
+	SessionGUID        string       `json:"-"`
 	UserName           string
 	Password           string
+}
+
+// MarshalingTelemetryConfig is used for json serialization of the TelemetryConfig
+// so that we could replace the MinLogLevel/ReportHistoryLevel with our own types.
+type MarshalingTelemetryConfig struct {
+	TelemetryConfig
+
+	MinLogLevel        uint32
+	ReportHistoryLevel uint32
 }
 
 type asyncTelemetryHook struct {

@@ -103,7 +103,6 @@ func makeCatchpointWriter(ctx context.Context, filePath string, tx *sql.Tx, bloc
 		blocksRound:       blocksRound,
 		blockHeaderDigest: blockHeaderDigest,
 		label:             label,
-		accountsIterator:  encodedAccountsBatchIter{orderByAddress: true},
 	}
 }
 

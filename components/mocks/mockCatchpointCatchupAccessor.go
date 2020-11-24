@@ -57,6 +57,11 @@ func (m *MockCatchpointCatchupAccessor) ProgressStagingBalances(ctx context.Cont
 	return nil
 }
 
+// BuildMerkleTrie inserts the account hashes into the merkle trie
+func (m *MockCatchpointCatchupAccessor) BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64)) (err error) {
+	return nil
+}
+
 // GetCatchupBlockRound returns the latest block round matching the current catchpoint
 func (m *MockCatchpointCatchupAccessor) GetCatchupBlockRound(ctx context.Context) (round basics.Round, err error) {
 	return basics.Round(0), nil
