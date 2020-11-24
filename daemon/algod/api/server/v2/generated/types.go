@@ -483,7 +483,7 @@ type NodeStatusResponse struct {
 	// The number of blocks that have already been obtained by the node as part of the catchup
 	CatchpointAcquiredBlocks *uint64 `json:"catchpoint-acquired-blocks,omitempty"`
 
-	// The number of account from the current catchpoint that have been processed so far as part of the catchup
+	// The number of accounts from the current catchpoint that have been processed so far as part of the catchup
 	CatchpointProcessedAccounts *uint64 `json:"catchpoint-processed-accounts,omitempty"`
 
 	// The total number of accounts included in the current catchpoint
@@ -491,6 +491,9 @@ type NodeStatusResponse struct {
 
 	// The total number of blocks that are required to complete the current catchpoint catchup
 	CatchpointTotalBlocks *uint64 `json:"catchpoint-total-blocks,omitempty"`
+
+	// The number of accounts from the current catchpoint that have been verified so far as part of the catchup
+	CatchpointVerifiedAccounts *uint64 `json:"catchpoint-verified-accounts,omitempty"`
 
 	// CatchupTime in nanoseconds
 	CatchupTime uint64 `json:"catchup-time"`
