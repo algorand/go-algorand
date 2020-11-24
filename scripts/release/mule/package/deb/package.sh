@@ -16,8 +16,7 @@ CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
 # A make target in Makefile.mule may pass the name as an argument.
 PACKAGE_NAME="$1"
 
-DEFAULTNETWORK="$NETWORK"
-DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "$DEFAULTNETWORK")
+DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "$NETWORK")
 export DEFAULT_RELEASE_NETWORK
 
 find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3-4 | sort --unique | while read OS_ARCH; do

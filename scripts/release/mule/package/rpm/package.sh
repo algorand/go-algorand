@@ -12,8 +12,7 @@ fi
 
 REPO_DIR=$(pwd)
 CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
-DEFAULTNETWORK="$NETWORK"
-DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "$DEFAULTNETWORK")
+DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "$NETWORK")
 PACKAGE_NAME="$1"
 
 find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3-4 | sort --unique | while read OS_ARCH; do
@@ -29,7 +28,6 @@ find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3
     fi
 
     # The following need to be exported for use in ./go-algorand/installer/rpm/$ALGORAND_PACKAGE_NAME/$ALGORAND_PACKAGE_NAME.spec.
-    export DEFAULTNETWORK
     export DEFAULT_RELEASE_NETWORK
     export REPO_DIR
     export ALGO_BIN
