@@ -7,11 +7,12 @@ echo
 date "+build_release begin PACKAGE DEB stage %Y%m%d_%H%M%S"
 echo
 
-if [ -z "$CHANNEL" ] || [ -z "$NETWORK" ] || [ -z "$VERSION" ]; then
-    echo "[$0] CHANNEL=$CHANNEL, NETWORK=$NETWORK or VERSION=$VERSION is missing."
+if [ -z "$NETWORK" ] || [ -z "$VERSION" ]; then
+    echo "[$0] NETWORK=$NETWORK or VERSION=$VERSION is missing."
     exit 1
 fi
 
+CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
 # A make target in Makefile.mule may pass the name as an argument.
 PACKAGE_NAME="$1"
 

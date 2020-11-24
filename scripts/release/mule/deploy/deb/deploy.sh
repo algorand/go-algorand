@@ -2,21 +2,15 @@
 
 set -e
 
+if [ -z "$NETWORK" ]
+then
+    echo "[$0] Network is a required parameter."
+    exit 1
+fi
+
 if [ -z "$STAGING" ]
 then
     echo "[$0] Staging is a required parameter."
-    exit 1
-fi
-
-if [ -z "$CHANNEL" ]
-then
-    echo "[$0] Channel is a required parameter."
-    exit 1
-fi
-
-if [[ ! "$CHANNEL" =~ ^beta$|^stable$ ]]
-then
-    echo "[$0] Repository values must be either \`beta\` or \`stable\`."
     exit 1
 fi
 
@@ -31,6 +25,7 @@ then
     SNAPSHOT="$CHANNEL-$VERSION"
 fi
 
+CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
 PACKAGES_DIR=/root/packages
 mkdir -p /root/packages
 

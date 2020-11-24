@@ -7,11 +7,12 @@ echo
 date "+build_release begin DEPLOY rpm stage %Y%m%d_%H%M%S"
 echo
 
-if [ -z "$CHANNEL" ] || [ -z "$VERSION" ]; then
-    echo "[$0] CHANNEL=$CHANNEL or VERSION=$VERSION is missing."
+if [ -z "$NETWORK" ] || [ -z "$VERSION" ]; then
+    echo "[$0] NETWORK=$NETWORK or VERSION=$VERSION is missing."
     exit 1
 fi
 
+CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
 NO_DEPLOY=${NO_DEPLOY:-false}
 PACKAGES_DIR=${PACKAGES_DIR:-"./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"}
 

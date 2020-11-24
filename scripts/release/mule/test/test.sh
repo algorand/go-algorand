@@ -7,11 +7,13 @@ echo
 date "+build_release begin TEST stage %Y%m%d_%H%M%S"
 echo
 
-if [ -z "$BRANCH" ] || [ -z "$CHANNEL" ] || [ -z "$NETWORK" ] || [ -z "$SHA" ] || [ -z "$VERSION" ]; then
+if [ -z "$BRANCH" ] || [ -z "$NETWORK" ] || [ -z "$SHA" ] || [ -z "$VERSION" ]; then
     echo "[$0] BRANCH=$BRANCH, NETWORK=$NETWORK, SHA=$SHA or VERSION=$VERSION is missing."
     exit 1
 fi
 
+CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
+export CHANNEL
 export BRANCH
 export PKG_TYPE="$1"
 ARCH_BIT=$(uname -m)

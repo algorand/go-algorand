@@ -33,7 +33,7 @@ agents:
     env:
       - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-      - CHANNEL=$CHANNEL
+      - NETWORK=$NETWORK
       - SNAPSHOT=$SNAPSHOT
       - STAGING=$STAGING
       - VERSION=$VERSION
@@ -49,13 +49,11 @@ agents:
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     env:
-      - ARCH_TYPE=`./scripts/archtype.sh`
       - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-      - CHANNEL=$CHANNEL
+      - NETWORK=$NETWORK
       - PACKAGES_DIR=$PACKAGES_DIR
       - NO_DEPLOY=$NO_DEPLOY
-      - OS_TYPE=`./scripts/ostype.sh`
       - S3_SOURCE=$S3_SOURCE
       - VERSION=$VERSION
     volumes:
