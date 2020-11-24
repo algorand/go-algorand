@@ -13,8 +13,6 @@ agents:
       - S3_SOURCE=$S3_SOURCE
       - SHA=$SHA
       - VERSION=$VERSION
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
     workDir: $HOME/projects/go-algorand
 
   - name: rpm
@@ -31,8 +29,6 @@ agents:
       - S3_SOURCE=$S3_SOURCE
       - SHA=$SHA
       - VERSION=$VERSION
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
     workDir: $HOME/projects/go-algorand
 
 tasks:

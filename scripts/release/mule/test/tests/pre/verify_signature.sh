@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -ex
+set -exo pipefail
 
 echo "[$0] Verifying gpg signatures"
 
