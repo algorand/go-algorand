@@ -43,6 +43,7 @@ type CatchpointCatchupStats struct {
 	CatchpointLabel   string
 	TotalAccounts     uint64
 	ProcessedAccounts uint64
+	VerifiedAccounts  uint64
 	TotalBlocks       uint64
 	AcquiredBlocks    uint64
 	VerifiedBlocks    uint64
@@ -277,11 +278,15 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 		}
 		err = ledgerFetcher.downloadLedger(cs.ctx, round)
 		if err == nil {
-			break
+			err = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedAccounts)
+			if err == nil {
+				break
+			}
+			// failed to build the merkle trie for the above catchpoint file.
 		}
 		// instead of testing for err == cs.ctx.Err() , we'll check on the context itself.
 		// this is more robust, as the http client library sometimes wrap the context canceled
-		// error with other erros.
+		// error with other errors.
 		if cs.ctx.Err() != nil {
 			return cs.stopOrAbort()
 		}
@@ -298,6 +303,13 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to update stage to CatchpointCatchupStateLastestBlockDownload : %v", err))
 	}
 	return nil
+}
+
+// updateVerifiedAccounts update the user's statistics for the given verified accounts
+func (cs *CatchpointCatchupService) updateVerifiedAccounts(verifiedAccounts uint64) {
+	cs.statsMu.Lock()
+	defer cs.statsMu.Unlock()
+	cs.stats.VerifiedAccounts = verifiedAccounts
 }
 
 // processStageLastestBlockDownload is the third catchpoint catchup stage. It downloads the latest block and verify that against the previously downloaded ledger.
@@ -328,6 +340,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 				if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 					// try again.
 					blk = nil
+					cs.log.Infof("processStageLastestBlockDownload: block %d download failed, another attempt will be made; err = %v", blockRound, err)
 					continue
 				}
 				return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed to get block %d : %v", blockRound, err))
@@ -369,6 +382,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 				// try again.
 				blk = nil
+				cs.log.Infof("processStageLastestBlockDownload: block %d verification against catchpoint failed, another attempt will be made; err = %v", blockRound, err)
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed when calling VerifyCatchpoint : %v", err))
