@@ -15,8 +15,8 @@ fi
 CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 NO_DEPLOY=${NO_DEPLOY:-false}
-OS_TYPE=$("./scripts/ostype.sh")
-ARCH_TYPE=$("./scripts/archtype.sh")
+OS_TYPE=$(uname)
+OS_TYPE=${OS_TYPE,}
 PACKAGES_DIR=${PACKAGES_DIR:-"./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"}
 
 if [ -n "$S3_SOURCE" ]

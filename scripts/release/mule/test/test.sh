@@ -25,11 +25,8 @@ export PKG_TYPE="$1"
 ARCH_BIT=$(uname -m)
 export ARCH_BIT
 
-ARCH_TYPE=$(./scripts/archtype.sh)
-export ARCH_TYPE
-
-OS_TYPE=$(./scripts/ostype.sh)
-export OS_TYPE
+OS_TYPE=$(uname)
+export OS_TYPE=${OS_TYPE,}
 
 export SHA
 
