@@ -4,7 +4,7 @@ NETWORK="$1"
 
 if [ "$NETWORK" = betanet ]
 then
-    echo stable
+    echo beta
 elif [ "$NETWORK" = devnet ]
 then
     echo dev
