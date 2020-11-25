@@ -1519,3 +1519,38 @@ func TestErrShortBytecblock(t *testing.T) {
 	checkIntConstBlock(&cx)
 	require.Equal(t, cx.err, errShortIntcblock)
 }
+
+func TestBranchAssemblyTypeCheck(t *testing.T) {
+	text := `
+	int 0             // current app id  [0]
+	int 1             // key  [1, 0]
+	itob              // ["\x01", 0]
+	app_global_get_ex // [0|1, x]
+	pop               // [x]
+	btoi              // [n]
+`
+
+	sr := strings.NewReader(text)
+	var buf bytes.Buffer
+	ops := OpStream{Version: AssemblerMaxVersion, Stderr: &buf}
+	err := ops.assemble(sr)
+	require.NoError(t, err)
+	require.Empty(t, buf, buf.String())
+
+	text = `
+	int 0             // current app id  [0]
+	int 1             // key  [1, 0]
+	itob              // ["\x01", 0]
+	app_global_get_ex // [0|1, x]
+	bnz flip          // [x]
+flip:                 // [x]
+	btoi              // [n]
+`
+
+	sr = strings.NewReader(text)
+	buf.Reset()
+	ops = OpStream{Version: AssemblerMaxVersion, Stderr: &buf}
+	err = ops.assemble(sr)
+	require.NoError(t, err)
+	require.Empty(t, buf, buf.String())
+}
