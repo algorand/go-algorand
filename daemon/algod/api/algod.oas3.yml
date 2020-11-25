@@ -386,7 +386,7 @@
                   "type": "integer"
                 },
                 "catchpoint-processed-accounts": {
-                  "description": "The number of account from the current catchpoint that have been processed so far as part of the catchup",
+                  "description": "The number of accounts from the current catchpoint that have been processed so far as part of the catchup",
                   "type": "integer"
                 },
                 "catchpoint-total-accounts": {
@@ -395,6 +395,10 @@
                 },
                 "catchpoint-total-blocks": {
                   "description": "The total number of blocks that are required to complete the current catchpoint catchup",
+                  "type": "integer"
+                },
+                "catchpoint-verified-accounts": {
+                  "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
                   "type": "integer"
                 },
                 "catchup-time": {
@@ -2357,7 +2361,7 @@
                       "type": "integer"
                     },
                     "catchpoint-processed-accounts": {
-                      "description": "The number of account from the current catchpoint that have been processed so far as part of the catchup",
+                      "description": "The number of accounts from the current catchpoint that have been processed so far as part of the catchup",
                       "type": "integer"
                     },
                     "catchpoint-total-accounts": {
@@ -2366,6 +2370,10 @@
                     },
                     "catchpoint-total-blocks": {
                       "description": "The total number of blocks that are required to complete the current catchpoint catchup",
+                      "type": "integer"
+                    },
+                    "catchpoint-verified-accounts": {
+                      "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
                       "type": "integer"
                     },
                     "catchup-time": {
@@ -2480,7 +2488,7 @@
                       "type": "integer"
                     },
                     "catchpoint-processed-accounts": {
-                      "description": "The number of account from the current catchpoint that have been processed so far as part of the catchup",
+                      "description": "The number of accounts from the current catchpoint that have been processed so far as part of the catchup",
                       "type": "integer"
                     },
                     "catchpoint-total-accounts": {
@@ -2489,6 +2497,10 @@
                     },
                     "catchpoint-total-blocks": {
                       "description": "The total number of blocks that are required to complete the current catchpoint catchup",
+                      "type": "integer"
+                    },
+                    "catchpoint-verified-accounts": {
+                      "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
                       "type": "integer"
                     },
                     "catchup-time": {
