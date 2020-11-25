@@ -130,12 +130,19 @@ func throttleTransactionRate(startTime time.Time, cfg PpConfig, totalSent uint64
 // Step 1) Create X assets for each of the participant accounts
 // Step 2) For each participant account, opt-in to assets of all other participant accounts
 // Step 3) Evenly distribute the assets across all participant accounts
-func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (resultAssetMaps map[uint64]v1.AssetParams, err error) {
+func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConfig) (resultAssetMaps map[uint64]v1.AssetParams, optIns map[uint64][]string, err error) {
+	proto, err := getProto(client)
+	if err != nil {
+		return
+	}
 
 	var startTime = time.Now()
 	var totalSent uint64 = 0
 	resultAssetMaps = make(map[uint64]v1.AssetParams)
 
+	// optIns contains own and explicitly opted-in assets
+	optIns = make(map[uint64][]string)
+	numCreatedAssetsByAddr := make(map[string]int, len(accounts))
 	// 1) Create X assets for each of the participant accounts
 	for addr := range accounts {
 		addrAccount, addrErr := client.AccountInformation(addr)
@@ -146,6 +153,7 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 		}
 
 		toCreate := int(cfg.NumAsset) - len(addrAccount.AssetParams)
+		numCreatedAssetsByAddr[addr] = toCreate
 
 		fmt.Printf("Creating %v create asset transaction for account %v \n", toCreate, addr)
 		fmt.Printf("cfg.NumAsset %v, addrAccount.AssetParams %v\n", cfg.NumAsset, addrAccount.AssetParams)
@@ -186,135 +194,216 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 			totalSent++
 			throttleTransactionRate(startTime, cfg, totalSent)
 		}
-		account, accountErr := client.AccountInformation(addr)
-		if accountErr != nil {
-			fmt.Printf("Cannot lookup source account %v\n", addr)
-			err = accountErr
-			return
-		}
+	}
 
+	// wait until all the assets created
+	r, err := client.Status()
+	if err != nil {
+		fmt.Printf("Error: failed to obtain last round after assets creation")
+		return
+	}
+	nextRound := r.LastRound + 1
+	allAssets := make(map[uint64]string, int(cfg.NumAsset)*len(accounts))
+	for addr := range accounts {
+		var account v1.Account
+		deadline := time.Now().Add(3 * time.Minute)
+		for {
+			account, err = client.AccountInformation(addr)
+			if err != nil {
+				fmt.Printf("Warning: cannot lookup source account after assets creation")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			if len(account.AssetParams) >= numCreatedAssetsByAddr[addr] {
+				break
+			}
+			if time.Now().After(deadline) {
+				err = fmt.Errorf("asset creation took too long")
+				fmt.Printf("Error: %s\n", err.Error())
+				return
+			}
+			r, err = client.WaitForRound(nextRound)
+			if err != nil {
+				fmt.Printf("Warning: failed to wait for round %d after assets creation", nextRound)
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			nextRound = r.LastRound + 1
+		}
 		assetParams := account.AssetParams
-		fmt.Printf("Configured  %d assets %+v\n", len(assetParams), assetParams)
-
+		if !cfg.Quiet {
+			fmt.Printf("Configured %d assets %+v\n", len(assetParams), assetParams)
+		}
+		// add own asset to opt-ins since asset creators are auto-opted in
+		for k := range account.AssetParams {
+			optIns[k] = append(optIns[k], addr)
+			allAssets[k] = addr
+		}
 	}
 
-	time.Sleep(time.Second * 15)
+	// optInsByAddr tracks only explicitly opted-in assetsA
+	optInsByAddr := make(map[string]map[uint64]bool)
 
-	// 2) For each participant account, opt-in to assets of all other participant accounts
+	// 2) For each participant account, opt-in up to proto.MaxAssetsPerAccount assets of all other participant accounts
 	for addr := range accounts {
 		if !cfg.Quiet {
-			fmt.Printf("Opting in assets from account %v\n", addr)
+			fmt.Printf("Opting to account %v\n", addr)
 		}
-		addrAccount, addrErr := client.AccountInformation(addr)
+
+		acct, addrErr := client.AccountInformation(addr)
 		if addrErr != nil {
-			fmt.Printf("Cannot lookup source account\n")
+			fmt.Printf("Cannot lookup optin account\n")
 			err = addrErr
 			return
 		}
-
-		assetParams := addrAccount.AssetParams
-		if !cfg.Quiet {
-			fmt.Printf("Optining in %d assets %+v\n", len(assetParams), assetParams)
-		}
-
-		// Opt-in Accounts for each asset
-		for k := range assetParams {
-			if !cfg.Quiet {
-				fmt.Printf("optin asset %+v\n", k)
+		numSlots := proto.MaxAssetsPerAccount - len(acct.Assets)
+		i := 0
+		for k, creator := range allAssets {
+			if creator == addr {
+				continue
 			}
 
-			for addr2 := range accounts {
-				if addr != addr2 {
-					if !cfg.Quiet {
-						fmt.Printf("Opting in assets to account %v \n", addr2)
-					}
-					_, addrErr2 := client.AccountInformation(addr2)
-					if addrErr2 != nil {
-						fmt.Printf("Cannot lookup optin account\n")
-						err = addrErr2
-						return
-					}
-
-					// opt-in asset k for addr
-					tx, sendErr := client.MakeUnsignedAssetSendTx(k, 0, addr2, "", "")
-					if sendErr != nil {
-						fmt.Printf("Cannot initiate asset optin %v in account %v\n", k, addr2)
-						err = sendErr
-						return
-					}
-
-					tx, err = client.FillUnsignedTxTemplate(addr2, 0, 0, cfg.MaxFee, tx)
-					if err != nil {
-						fmt.Printf("Cannot fill asset optin %v in account %v\n", k, addr2)
-						return
-					}
-
-					_, err = signAndBroadcastTransaction(accounts, addr2, tx, client, cfg)
-					if err != nil {
-						_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset optin failed with error %v\n", err)
-						return
-					}
-
-					totalSent++
-					throttleTransactionRate(startTime, cfg, totalSent)
-				}
+			// opt-in asset k for addr
+			tx, sendErr := client.MakeUnsignedAssetSendTx(k, 0, addr, "", "")
+			if sendErr != nil {
+				fmt.Printf("Cannot initiate asset optin %v in account %v\n", k, addr)
+				err = sendErr
+				return
 			}
+
+			tx, err = client.FillUnsignedTxTemplate(addr, 0, 0, cfg.MaxFee, tx)
+			if err != nil {
+				fmt.Printf("Cannot fill asset optin %v in account %v\n", k, addr)
+				return
+			}
+
+			_, err = signAndBroadcastTransaction(accounts, addr, tx, client, cfg)
+			if err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset optin failed with error %v\n", err)
+				return
+			}
+			optIns[k] = append(optIns[k], addr)
+			if _, ok := optInsByAddr[addr]; !ok {
+				optInsByAddr[addr] = make(map[uint64]bool)
+			}
+			optInsByAddr[addr][k] = true
+
+			if i >= numSlots-1 {
+				break
+			}
+			i++
+
+			totalSent++
+			throttleTransactionRate(startTime, cfg, totalSent)
 		}
 	}
-	time.Sleep(time.Second * 15)
 
-	// Step 3) Evenly distribute the assets across all participant accounts
+	// wait until all opt-ins completed
+	r, err = client.Status()
+	if err != nil {
+		fmt.Printf("Error: failed to obtain last round after assets opt in")
+		return
+	}
+	nextRound = r.LastRound + 1
 	for addr := range accounts {
-		if !cfg.Quiet {
-			fmt.Printf("Distributing assets from account %v\n", addr)
+		expectedAssets := numCreatedAssetsByAddr[addr] + len(optInsByAddr[addr])
+		var account v1.Account
+		deadline := time.Now().Add(3 * time.Minute)
+		for {
+			account, err = client.AccountInformation(addr)
+			if err != nil {
+				fmt.Printf("Warning: cannot lookup source account after assets opt in")
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			if len(account.Assets) >= expectedAssets {
+				break
+			}
+			if time.Now().After(deadline) {
+				err = fmt.Errorf("asset opting in took too long")
+				fmt.Printf("Error: %s\n", err.Error())
+				return
+			}
+			r, err = client.WaitForRound(nextRound)
+			if err != nil {
+				fmt.Printf("Warning: failed to wait for round %d after assets opt in", nextRound)
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			nextRound = r.LastRound + 1
 		}
-		addrAccount, addrErr := client.AccountInformation(addr)
-		if addrErr != nil {
+	}
+
+	// Step 3) Evenly distribute the assets across all opted-in accounts
+	for k, creator := range allAssets {
+		if !cfg.Quiet {
+			fmt.Printf("Distributing asset %+v from account %v\n", k, creator)
+		}
+		creatorAccount, creatorErr := client.AccountInformation(creator)
+		if creatorErr != nil {
 			fmt.Printf("Cannot lookup source account\n")
-			err = addrErr
+			err = creatorErr
 			return
 		}
+		assetParams := creatorAccount.AssetParams
 
-		assetParams := addrAccount.AssetParams
-		if !cfg.Quiet {
-			fmt.Printf("Distributing  %d assets\n", len(assetParams))
-		}
-
-		// Distribute assets to each account
-		for k := range assetParams {
+		for _, addr := range optIns[k] {
+			assetAmt := assetParams[k].Total / uint64(len(optIns[k]))
 			if !cfg.Quiet {
-				fmt.Printf("Distributing asset %v \n", k)
+				fmt.Printf("Distributing assets from %v to %v \n", creator, addr)
 			}
 
-			assetAmt := assetParams[k].Total / uint64(len(accounts))
-			for addr2 := range accounts {
-				if addr != addr2 {
-					if !cfg.Quiet {
-						fmt.Printf("Distributing assets from %v to %v \n", addr, addr2)
-					}
-
-					tx, sendErr := constructTxn(addr, addr2, cfg.MaxFee, assetAmt, k, CreatablesInfo{}, client, cfg)
-					if sendErr != nil {
-						fmt.Printf("Cannot transfer asset %v from account %v\n", k, addr)
-						err = sendErr
-						return
-					}
-
-					_, err = signAndBroadcastTransaction(accounts, addr, tx, client, cfg)
-					if err != nil {
-						_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset distribution failed with error %v\n", err)
-						return
-					}
-
-					totalSent++
-					throttleTransactionRate(startTime, cfg, totalSent)
-				}
+			tx, sendErr := constructTxn(creator, addr, cfg.MaxFee, assetAmt, k, CreatablesInfo{}, client, cfg)
+			if sendErr != nil {
+				fmt.Printf("Cannot transfer asset %v from account %v\n", k, creator)
+				err = sendErr
+				return
 			}
-			// append the asset to the result assets
-			resultAssetMaps[k] = assetParams[k]
+
+			_, err = signAndBroadcastTransaction(accounts, creator, tx, client, cfg)
+			if err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "signing and broadcasting asset distribution failed with error %v\n", err)
+				return
+			}
+
+			totalSent++
+			throttleTransactionRate(startTime, cfg, totalSent)
 		}
+		// append the asset to the result assets
+		resultAssetMaps[k] = assetParams[k]
 	}
-	time.Sleep(time.Second * 10)
+
+	// wait for all transfers acceptance
+	r, err = client.Status()
+	if err != nil {
+		fmt.Printf("Error: failed to obtain last round after assets distribution")
+		return
+	}
+	nextRound = r.LastRound + 1
+	deadline := time.Now().Add(3 * time.Minute)
+	var pending v1.PendingTransactions
+	for {
+		pending, err = client.GetPendingTransactions(100)
+		if err != nil {
+			fmt.Printf("Warning: cannot get pending txn")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if pending.TotalTxns == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			fmt.Printf("Warning: assets distribution took too long")
+			break
+		}
+		r, err = client.WaitForRound(nextRound)
+		if err != nil {
+			fmt.Printf("Warning: failed to wait for round %d after assets distribution", nextRound)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		nextRound = r.LastRound + 1
+	}
 	return
 }
 
