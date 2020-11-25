@@ -208,14 +208,14 @@ Overflow is an error condition which halts execution and fails the transaction. 
 
 - Opcode: 0x1d
 - Pops: *... stack*, {uint64 A}, {uint64 B}
-- Pushes: uint64, uint64
+- Pushes: *... stack*, uint64, uint64
 - A times B out to 128-bit long result as low (top) and high uint64 values on the stack
 
 ## addw
 
 - Opcode: 0x1e
 - Pops: *... stack*, {uint64 A}, {uint64 B}
-- Pushes: uint64, uint64
+- Pushes: *... stack*, uint64, uint64
 - A plus B out to 128-bit long result as sum (top) and carry-bit uint64 values on the stack
 - LogicSigVersion >= 2
 
@@ -534,14 +534,14 @@ See `bnz` for details on how branches work. `b` always jumps to the offset.
 
 - Opcode: 0x49
 - Pops: *... stack*, any
-- Pushes: any, any
+- Pushes: *... stack*, any, any
 - duplicate last value on stack
 
 ## dup2
 
 - Opcode: 0x4a
 - Pops: *... stack*, {any A}, {any B}
-- Pushes: any, any, any, any
+- Pushes: *... stack*, any, any, any, any
 - duplicate two last values on stack: A, B -> A, B, A, B
 - LogicSigVersion >= 2
 
@@ -606,7 +606,7 @@ params: account index, state key. Return: value. The value is zero if the key do
 
 - Opcode: 0x63
 - Pops: *... stack*, {uint64 A}, {uint64 B}, {[]byte C}
-- Pushes: uint64, any
+- Pushes: *... stack*, any, uint64
 - read from account specified by Txn.Accounts[A] from local state of the application B key C => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
@@ -628,7 +628,7 @@ params: state key. Return: value. The value is zero if the key does not exist.
 
 - Opcode: 0x65
 - Pops: *... stack*, {uint64 A}, {[]byte B}
-- Pushes: uint64, any
+- Pushes: *... stack*, any, uint64
 - read from application Txn.ForeignApps[A] global state key B => {0 or 1 (top), value}. A is specified as an account index in the ForeignApps field of the ApplicationCall transaction, zero index means this app
 - LogicSigVersion >= 2
 - Mode: Application
@@ -685,7 +685,7 @@ Deleting a key which is already absent has no effect on the application global s
 
 - Opcode: 0x70 {uint8 asset holding field index}
 - Pops: *... stack*, {uint64 A}, {uint64 B}
-- Pushes: uint64, any
+- Pushes: *... stack*, any, uint64
 - read from account specified by Txn.Accounts[A] and asset B holding field X (imm arg) => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
@@ -704,7 +704,7 @@ params: account index, asset id. Return: did_exist flag (1 if exist and 0 otherw
 
 - Opcode: 0x71 {uint8 asset params field index}
 - Pops: *... stack*, uint64
-- Pushes: uint64, any
+- Pushes: *... stack*, any, uint64
 - read from asset Txn.ForeignAssets[A] params field X (imm arg) => {0 or 1 (top), value}
 - LogicSigVersion >= 2
 - Mode: Application
