@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=2035,2129,2162
+# shellcheck disable=2035,2129
 
 # TODO: This needs to be reworked a bit to support Darwin.
 
@@ -48,33 +48,34 @@ for os in "${OS_TYPES[@]}"; do
         ARCHS=(amd64 arm arm64)
         for arch in "${ARCHS[@]}"; do
             (
-                mkdir -p "$os/$arch"
-                cd "$os/$arch"
+                if [ -d "$os/$arch" ]; then
+                    cd "$os/$arch"
 
-                # Clean package directory of any previous operations.
-                rm -rf hashes* *.sig *.asc *.asc.gz
+                    # Clean package directory of any previous operations.
+                    rm -rf hashes* *.sig *.asc *.asc.gz
 
-                for file in *.tar.gz *.deb
-                do
-                    gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$file"
-                done
+                    for file in *.tar.gz *.deb
+                    do
+                        gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$file"
+                    done
 
-                for file in *.rpm
-                do
-                    gpg -u rpm@algorand.com --detach-sign "$file"
-                done
+                    for file in *.rpm
+                    do
+                        gpg -u rpm@algorand.com --detach-sign "$file"
+                    done
 
-                HASHFILE="hashes_${CHANNEL}_${os}_${arch}_${VERSION}"
-                md5sum *.tar.gz *.deb *.rpm >> "$HASHFILE"
-                shasum -a 256 *.tar.gz *.deb *.rpm >> "$HASHFILE"
-                shasum -a 512 *.tar.gz *.deb *.rpm >> "$HASHFILE"
+                    HASHFILE="hashes_${CHANNEL}_${os}_${arch}_${VERSION}"
+                    md5sum *.tar.gz *.deb *.rpm >> "$HASHFILE"
+                    shasum -a 256 *.tar.gz *.deb *.rpm >> "$HASHFILE"
+                    shasum -a 512 *.tar.gz *.deb *.rpm >> "$HASHFILE"
 
-                gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$HASHFILE"
-                gpg -u "$SIGNING_KEY_ADDR" --clearsign "$HASHFILE"
+                    gpg -u "$SIGNING_KEY_ADDR" --detach-sign "$HASHFILE"
+                    gpg -u "$SIGNING_KEY_ADDR" --clearsign "$HASHFILE"
 
-                STATUSFILE="build_status_${CHANNEL}_${os}-${arch}_${VERSION}"
-                gpg -u "$SIGNING_KEY_ADDR" --clearsign "$STATUSFILE"
-                gzip -c "$STATUSFILE.asc" > "$STATUSFILE.asc.gz"
+                    STATUSFILE="build_status_${CHANNEL}_${os}-${arch}_${VERSION}"
+                    gpg -u "$SIGNING_KEY_ADDR" --clearsign "$STATUSFILE"
+                    gzip -c "$STATUSFILE.asc" > "$STATUSFILE.asc.gz"
+                fi
             )
         done
     fi
