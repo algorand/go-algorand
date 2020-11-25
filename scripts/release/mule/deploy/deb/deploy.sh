@@ -14,18 +14,13 @@ then
     exit 1
 fi
 
-if [ -z "$VERSION" ]
-then
-    echo "[$0] Version is a required parameter."
-    exit 1
-fi
-
 if [ -z "$SNAPSHOT" ]
 then
     SNAPSHOT="$CHANNEL-$VERSION"
 fi
 
 CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
+VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 PACKAGES_DIR=/root/packages
 mkdir -p /root/packages
 
@@ -56,7 +51,12 @@ then
     aptly repo add "$CHANNEL" "$PACKAGES_DIR"/*.deb
     aptly repo show -with-packages "$CHANNEL"
     aptly snapshot create "$SNAPSHOT" from repo "$CHANNEL"
-    aptly publish snapshot -gpg-key=dev@algorand.com -origin=Algorand -label=Algorand "$SNAPSHOT" s3:algorand-releases:
+    if ! aptly publish show "$CHANNEL" s3:algorand-releases: &> /dev/null
+    then
+        aptly publish snapshot -gpg-key=dev@algorand.com -origin=Algorand -label=Algorand "$SNAPSHOT" s3:algorand-releases:
+    else
+        aptly publish switch "$CHANNEL" s3:algorand-releases: "$SNAPSHOT"
+    fi
 else
     echo "[$0] The packages directory is empty, so there is nothing to add the \`$CHANNEL\` repo."
     exit 1

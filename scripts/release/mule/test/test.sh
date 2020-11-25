@@ -7,23 +7,32 @@ echo
 date "+build_release begin TEST stage %Y%m%d_%H%M%S"
 echo
 
-if [ -z "$BRANCH" ] || [ -z "$NETWORK" ] || [ -z "$SHA" ] || [ -z "$VERSION" ]; then
-    echo "[$0] BRANCH=$BRANCH, NETWORK=$NETWORK, SHA=$SHA or VERSION=$VERSION is missing."
+if [ -z "$BRANCH" ] || [ -z "$NETWORK" ] || [ -z "$SHA" ]; then
+    echo "[$0] BRANCH=$BRANCH, NETWORK=$NETWORK or SHA=$SHA is missing."
     exit 1
 fi
 
 CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
 export CHANNEL
+
+VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+export VERSION
+
 export BRANCH
+
 export PKG_TYPE="$1"
+
 ARCH_BIT=$(uname -m)
 export ARCH_BIT
+
 ARCH_TYPE=$(./scripts/archtype.sh)
 export ARCH_TYPE
+
 OS_TYPE=$(./scripts/ostype.sh)
 export OS_TYPE
 
 export SHA
+
 ALGORAND_PACKAGE_NAME=$([ "$CHANNEL" = beta ] && echo algorand-beta || echo algorand)
 DEVTOOLS_PACKAGE_NAME=$([ "$CHANNEL" = beta ] && echo algorand-devtools-beta || echo algorand-devtools)
 export ALGORAND_PACKAGE_NAME

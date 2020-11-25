@@ -5,13 +5,14 @@ set -ex
 
 echo "Building RPM package"
 
-if [ -z "$NETWORK" ] || [ -z "$VERSION" ]; then
-    echo "[$0] NETWORK=$NETWORK or VERSION=$VERSION is missing."
+if [ -z "$NETWORK" ]; then
+    echo "[$0] NETWORK=$NETWORK is missing."
     exit 1
 fi
 
 REPO_DIR=$(pwd)
 CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
+VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 DEFAULT_RELEASE_NETWORK=$(./scripts/compute_branch_release_network.sh "$NETWORK")
 PACKAGE_NAME="$1"
 

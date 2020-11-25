@@ -9,12 +9,13 @@ echo
 date "+build_release begin SIGN stage %Y%m%d_%H%M%S"
 echo
 
-if [ -z "$NETWORK" ] || [ -z "$VERSION" ]; then
-    echo "[$0] NETWORK=$NETWORK or VERSION=$VERSION is missing."
+if [ -z "$NETWORK" ]; then
+    echo "[$0] NETWORK=$NETWORK is missing."
     exit 1
 fi
 
 CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
+VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 PKG_DIR="./tmp/node_pkgs"
 SIGNING_KEY_ADDR=dev@algorand.com
 
