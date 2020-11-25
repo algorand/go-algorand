@@ -197,33 +197,47 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 	}
 
 	// wait until all the assets created
-	allAssets := make(map[uint64]string, cfg.NumAsset)
+	r, err := client.Status()
+	if err != nil {
+		fmt.Printf("Error: failed to obtain last round after assets creation")
+		return
+	}
+	nextRound := r.LastRound + 1
+	allAssets := make(map[uint64]string, int(cfg.NumAsset)*len(accounts))
 	for addr := range accounts {
 		var account v1.Account
-		start := time.Now()
+		deadline := time.Now().Add(3 * time.Minute)
 		for {
 			account, err = client.AccountInformation(addr)
 			if err != nil {
-				fmt.Printf("Warning, cannot lookup source account")
-				return
+				fmt.Printf("Warning: cannot lookup source account after assets creation")
+				time.Sleep(1 * time.Second)
+				continue
 			}
 			if len(account.AssetParams) >= numCreatedAssetsByAddr[addr] {
 				break
 			}
-			if time.Now().After(start.Add(3 * time.Minute)) {
+			if time.Now().After(deadline) {
 				err = fmt.Errorf("asset creation took too long")
 				fmt.Printf("Error: %s\n", err.Error())
 				return
 			}
-			time.Sleep(time.Second)
+			r, err = client.WaitForRound(nextRound)
+			if err != nil {
+				fmt.Printf("Warning: failed to wait for round %d after assets creation", nextRound)
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			nextRound = r.LastRound + 1
 		}
 		assetParams := account.AssetParams
 		if !cfg.Quiet {
-			fmt.Printf("Configured  %d assets %+v\n", len(assetParams), assetParams)
+			fmt.Printf("Configured %d assets %+v\n", len(assetParams), assetParams)
 		}
 		// add own asset to opt-ins since asset creators are auto-opted in
 		for k := range account.AssetParams {
 			optIns[k] = append(optIns[k], addr)
+			allAssets[k] = addr
 		}
 	}
 
@@ -285,25 +299,38 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 	}
 
 	// wait until all opt-ins completed
+	r, err = client.Status()
+	if err != nil {
+		fmt.Printf("Error: failed to obtain last round after assets opt in")
+		return
+	}
+	nextRound = r.LastRound + 1
 	for addr := range accounts {
 		expectedAssets := numCreatedAssetsByAddr[addr] + len(optInsByAddr[addr])
 		var account v1.Account
-		start := time.Now()
+		deadline := time.Now().Add(3 * time.Minute)
 		for {
 			account, err = client.AccountInformation(addr)
 			if err != nil {
-				fmt.Printf("Warning, cannot lookup source account")
-				return
+				fmt.Printf("Warning: cannot lookup source account after assets opt in")
+				time.Sleep(1 * time.Second)
+				continue
 			}
 			if len(account.Assets) >= expectedAssets {
 				break
 			}
-			if time.Now().After(start.Add(3 * time.Minute)) {
+			if time.Now().After(deadline) {
 				err = fmt.Errorf("asset opting in took too long")
 				fmt.Printf("Error: %s\n", err.Error())
 				return
 			}
-			time.Sleep(time.Second)
+			r, err = client.WaitForRound(nextRound)
+			if err != nil {
+				fmt.Printf("Warning: failed to wait for round %d after assets opt in", nextRound)
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			nextRound = r.LastRound + 1
 		}
 	}
 
@@ -345,7 +372,38 @@ func prepareAssets(accounts map[string]uint64, client libgoal.Client, cfg PpConf
 		// append the asset to the result assets
 		resultAssetMaps[k] = assetParams[k]
 	}
-	time.Sleep(time.Second * 10)
+
+	// wait for all transfers acceptance
+	r, err = client.Status()
+	if err != nil {
+		fmt.Printf("Error: failed to obtain last round after assets distribution")
+		return
+	}
+	nextRound = r.LastRound + 1
+	deadline := time.Now().Add(3 * time.Minute)
+	var pending v1.PendingTransactions
+	for {
+		pending, err = client.GetPendingTransactions(100)
+		if err != nil {
+			fmt.Printf("Warning: cannot get pending txn")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		if pending.TotalTxns == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			fmt.Printf("Warning: assets distribution took too long")
+			break
+		}
+		r, err = client.WaitForRound(nextRound)
+		if err != nil {
+			fmt.Printf("Warning: failed to wait for round %d after assets distribution", nextRound)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		nextRound = r.LastRound + 1
+	}
 	return
 }
 
