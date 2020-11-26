@@ -739,13 +739,35 @@ func (au *accountUpdates) Totals(rnd basics.Round) (totals AccountTotals, err er
 	return au.totalsImpl(rnd)
 }
 
-// GetCatchpointStream returns an io.Reader to the catchpoint file associated with the provided round
-func (au *accountUpdates) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
+// ReadCloseSizer interface implements the standard io.Reader and io.Closer as well
+// as supporting the Size() function that let the caller know what the size of the stream would be (in bytes).
+type ReadCloseSizer interface {
+	io.ReadCloser
+	Size() (int64, error)
+}
+
+// readCloseSizer is an instance of the ReadCloseSizer interface
+type readCloseSizer struct {
+	io.ReadCloser
+	size int64
+}
+
+// Size returns the length of the assiciated stream.
+func (r *readCloseSizer) Size() (int64, error) {
+	if r.size < 0 {
+		return 0, fmt.Errorf("unknown stream size")
+	}
+	return r.size, nil
+}
+
+// GetCatchpointStream returns a ReadCloseSizer to the catchpoint file associated with the provided round
+func (au *accountUpdates) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error) {
 	dbFileName := ""
+	fileSize := int64(0)
 	start := time.Now()
 	ledgerGetcatchpointCount.Inc(nil)
 	err := au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		dbFileName, _, _, err = getCatchpoint(tx, round)
+		dbFileName, _, fileSize, err = getCatchpoint(tx, round)
 		return
 	})
 	ledgerGetcatchpointMicros.AddMicrosecondsSince(start, nil)
@@ -757,7 +779,7 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (io.ReadCloser
 		catchpointPath := filepath.Join(au.dbDirectory, dbFileName)
 		file, err := os.OpenFile(catchpointPath, os.O_RDONLY, 0666)
 		if err == nil && file != nil {
-			return file, nil
+			return &readCloseSizer{ReadCloser: file, size: fileSize}, nil
 		}
 		// else, see if this is a file-not-found error
 		if os.IsNotExist(err) {
@@ -784,14 +806,14 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (io.ReadCloser
 		fileInfo, err := file.Stat()
 		if err != nil {
 			// we couldn't get the stat, so just return with the file.
-			return file, nil
+			return &readCloseSizer{ReadCloser: file, size: -1}, nil
 		}
 
 		err = au.saveCatchpointFile(round, fileName, fileInfo.Size(), "")
 		if err != nil {
 			au.log.Warnf("accountUpdates: getCatchpointStream: unable to save missing catchpoint entry: %v", err)
 		}
-		return file, nil
+		return &readCloseSizer{ReadCloser: file, size: fileInfo.Size()}, nil
 	}
 	return nil, ErrNoEntry{}
 }
@@ -837,10 +859,10 @@ func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (AccountTotal
 	return aul.au.totalsImpl(rnd)
 }
 
-// isDup return whether a transaction is a duplicate one. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
-func (aul *accountUpdatesLedgerEvaluator) isDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) (bool, error) {
+// checkDup test to see if the given transaction id/lease already exists. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
+func (aul *accountUpdatesLedgerEvaluator) checkDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) error {
 	// this is a non-issue since this call will never be made on non-validating evaluation
-	return false, fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
+	return fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
 }
 
 // LookupWithoutRewards returns the account balance for a given address at a given round, without the reward
@@ -1097,56 +1119,58 @@ func (au *accountUpdates) accountsInitialize(ctx context.Context, tx *sql.Tx) (b
 
 	if rootHash.IsZero() {
 		au.log.Infof("accountsInitialize rebuilding merkle trie for round %d", rnd)
-		var accountsIterator encodedAccountsBatchIter
-		defer accountsIterator.Close()
+		accountBuilderIt := makeOrderedAccountsIter(tx, trieRebuildAccountChunkSize)
+		defer accountBuilderIt.Close(ctx)
 		startTrieBuildTime := time.Now()
 		accountsCount := 0
 		lastRebuildTime := startTrieBuildTime
 		pendingAccounts := 0
+		totalOrderedAccounts := 0
 		for {
-			bal, err := accountsIterator.Next(ctx, tx, trieRebuildAccountChunkSize)
-			if err != nil {
+			accts, processedRows, err := accountBuilderIt.Next(ctx)
+			if err == sql.ErrNoRows {
+				// the account builder would return sql.ErrNoRows when no more data is available.
+				break
+			} else if err != nil {
 				return rnd, err
 			}
-			if len(bal) == 0 {
-				break
-			}
-			accountsCount += len(bal)
-			pendingAccounts += len(bal)
-			for _, balance := range bal {
-				var accountData basics.AccountData
-				err = protocol.Decode(balance.AccountData, &accountData)
-				if err != nil {
-					return rnd, err
-				}
-				hash := accountHashBuilder(balance.Address, accountData, balance.AccountData)
-				added, err := trie.Add(hash)
-				if err != nil {
-					return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
-				}
-				if !added {
-					au.log.Warnf("accountsInitialize attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(hash), balance.Address)
-				}
-			}
 
-			if pendingAccounts >= trieRebuildCommitFrequency {
-				// this trie Evict will commit using the current transaction.
-				// if anything goes wrong, it will still get rolled back.
-				_, err = trie.Evict(true)
-				if err != nil {
-					return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
+			if len(accts) > 0 {
+				accountsCount += len(accts)
+				pendingAccounts += len(accts)
+				for _, acct := range accts {
+					added, err := trie.Add(acct.digest)
+					if err != nil {
+						return rnd, fmt.Errorf("accountsInitialize was unable to add changes to trie: %v", err)
+					}
+					if !added {
+						au.log.Warnf("accountsInitialize attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(acct.digest), acct.address)
+					}
 				}
-				pendingAccounts = 0
-			}
 
-			if len(bal) < trieRebuildAccountChunkSize {
-				break
-			}
+				if pendingAccounts >= trieRebuildCommitFrequency {
+					// this trie Evict will commit using the current transaction.
+					// if anything goes wrong, it will still get rolled back.
+					_, err = trie.Evict(true)
+					if err != nil {
+						return 0, fmt.Errorf("accountsInitialize was unable to commit changes to trie: %v", err)
+					}
+					pendingAccounts = 0
+				}
 
-			if time.Now().Sub(lastRebuildTime) > 5*time.Second {
-				// let the user know that the trie is still being rebuilt.
-				au.log.Infof("accountsInitialize still building the trie, and processed so far %d accounts", accountsCount)
-				lastRebuildTime = time.Now()
+				if time.Now().Sub(lastRebuildTime) > 5*time.Second {
+					// let the user know that the trie is still being rebuilt.
+					au.log.Infof("accountsInitialize still building the trie, and processed so far %d accounts", accountsCount)
+					lastRebuildTime = time.Now()
+				}
+			} else if processedRows > 0 {
+				totalOrderedAccounts += processedRows
+				// if it's not ordered, we can ignore it for now; we'll just increase the counters and emit logs periodically.
+				if time.Now().Sub(lastRebuildTime) > 5*time.Second {
+					// let the user know that the trie is still being rebuilt.
+					au.log.Infof("accountsInitialize still building the trie, and hashed so far %d accounts", totalOrderedAccounts)
+					lastRebuildTime = time.Now()
+				}
 			}
 		}
 
