@@ -504,19 +504,19 @@ done:`
 	t.Run("v=default", func(t *testing.T) {
 		_, err := AssembleString(source)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), ":4 label done is too far away")
+		require.Contains(t, err.Error(), "4: label done is too far away")
 	})
 
 	t.Run("v=0", func(t *testing.T) {
 		_, err := AssembleStringWithVersion(source, 0)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), ":4 label done is too far away")
+		require.Contains(t, err.Error(), "4: label done is too far away")
 	})
 
 	t.Run("v=1", func(t *testing.T) {
 		_, err := AssembleStringWithVersion(source, 1)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), ":4 label done is too far away")
+		require.Contains(t, err.Error(), "4: label done is too far away")
 	})
 
 	for v := uint64(2); v <= AssemblerMaxVersion; v++ {

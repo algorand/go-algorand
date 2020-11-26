@@ -58,9 +58,12 @@ var teal string
 var groupSize uint32
 var numAsset uint32
 var numApp uint32
+var numAppOptIn uint32
 var appProgOps uint32
-var appProgHashs uint32
+var appProgHashes uint32
 var appProgHashSize string
+var appProgGlobKeys uint32
+var appProgLocalKeys uint32
 var duration uint32
 var rekey bool
 
@@ -92,10 +95,13 @@ func init() {
 	runCmd.Flags().StringVar(&teal, "teal", "", "teal test scenario, can be light, normal, or heavy, this overrides --program")
 	runCmd.Flags().Uint32Var(&groupSize, "groupsize", 1, "The number of transactions in each group")
 	runCmd.Flags().Uint32Var(&numAsset, "numasset", 0, "The number of assets each account holds")
-	runCmd.Flags().Uint32Var(&numApp, "numapp", 0, "The number of apps each account opts in to")
+	runCmd.Flags().Uint32Var(&numApp, "numapp", 0, "The total number of apps to create")
+	runCmd.Flags().Uint32Var(&numAppOptIn, "numappoptin", 0, "The number of apps each account opts in to")
 	runCmd.Flags().Uint32Var(&appProgOps, "appprogops", 0, "The approximate number of TEAL operations to perform in each ApplicationCall transaction")
-	runCmd.Flags().Uint32Var(&appProgHashs, "appproghashes", 0, "The number of hashes to include in the Application")
+	runCmd.Flags().Uint32Var(&appProgHashes, "appproghashes", 0, "The number of hashes to include in the Application")
 	runCmd.Flags().StringVar(&appProgHashSize, "appproghashsize", "sha256", "The size of hashes to include in the Application")
+	runCmd.Flags().Uint32Var(&appProgGlobKeys, "appproggk", 0, "Number of global state writes in the Application")
+	runCmd.Flags().Uint32Var(&appProgLocalKeys, "appproglk", 0, "Number of local state writes in the Application. Number or local keys per account will be appproglk / proto.MaxAppTxnAccounts")
 	runCmd.Flags().BoolVar(&randomLease, "randomlease", false, "set the lease to contain a random value")
 	runCmd.Flags().BoolVar(&rekey, "rekey", false, "Create RekeyTo transactions. Requires groupsize=2 and any of random flags exc random dst")
 	runCmd.Flags().Uint32Var(&duration, "duration", 0, "The number of seconds to run the pingpong test, forever if 0")
@@ -258,13 +264,26 @@ var runCmd = &cobra.Command{
 		}
 
 		cfg.AppProgOps = appProgOps
-		cfg.AppProgHashs = appProgHashs
+		cfg.AppProgHashes = appProgHashes
 		cfg.AppProgHashSize = appProgHashSize
 
 		if numApp <= 1000 {
 			cfg.NumApp = numApp
 		} else {
 			reportErrorf("Invalid number of apps: %d, (valid number: 0 - 1000)\n", numApp)
+		}
+
+		if numAppOptIn > cfg.NumApp {
+			reportErrorf("Cannot opt in %d times of %d total apps\n", numAppOptIn, numApp)
+		}
+
+		cfg.NumAppOptIn = numAppOptIn
+
+		if appProgGlobKeys > 0 {
+			cfg.AppGlobKeys = appProgGlobKeys
+		}
+		if appProgLocalKeys > 0 {
+			cfg.AppLocalKeys = appProgLocalKeys
 		}
 
 		if numAsset != 0 && numApp != 0 {
@@ -285,7 +304,7 @@ var runCmd = &cobra.Command{
 		cfg.Dump(os.Stdout)
 
 		// Initialize accounts if necessary
-		accounts, assetParams, appParams, cfg, err := pingpong.PrepareAccounts(ac, cfg)
+		accounts, cinfo, cfg, err := pingpong.PrepareAccounts(ac, cfg)
 		if err != nil {
 			reportErrorf("Error preparing accounts for transfers: %v\n", err)
 		}
@@ -298,7 +317,7 @@ var runCmd = &cobra.Command{
 		cfg.Dump(os.Stdout)
 
 		// Kick off the real processing
-		pingpong.RunPingPong(context.Background(), ac, accounts, assetParams, appParams, cfg)
+		pingpong.RunPingPong(context.Background(), ac, accounts, cinfo, cfg)
 	},
 }
 

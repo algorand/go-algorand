@@ -63,7 +63,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
@@ -349,6 +349,19 @@ type Local struct {
 	// and is expected to happen only on either startup ( after enabling the catchpoint interval, or on certain database upgrades ) or during fast catchup. The values specified here
 	// and their meanings are identical to the ones in LedgerSynchronousMode.
 	AccountsRebuildSynchronousMode int `version[12]:"1"`
+
+	// MaxCatchpointDownloadDuration defines the maximum duration a client will be keeping the outgoing connection of a catchpoint download request open for processing before
+	// shutting it down. Networks that have large catchpoint files, slow connection or slow storage could be a good reason to increase this value. Note that this is a client-side only
+	// configuration value, and it's independent of the actual catchpoint file size.
+	MaxCatchpointDownloadDuration time.Duration `version[13]:"7200000000000"`
+
+	// MinCatchpointFileDownloadBytesPerSecond defines the minimal download speed that would be considered to be "acceptable" by the catchpoint file fetcher, measured in bytes per seconds. If the
+	// provided stream speed drops below this threshold, the connection would be recycled. Note that this field is evaluated per catchpoint "chunk" and not on it's own. If this field is zero,
+	// the default of 20480 would be used.
+	MinCatchpointFileDownloadBytesPerSecond uint64 `version[13]:"20480"`
+
+	// TraceServer is a host:port to report graph propagation trace info to.
+	NetworkMessageTraceServer string `version[13]:""`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

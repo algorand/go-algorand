@@ -1,7 +1,7 @@
 UNAME := $(shell uname)
-ifneq (, $(findstring MINGW,$(UNAME)))
+ifneq (,$(findstring MINGW,$(UNAME)))
 #Gopath is not saved across sessions, probably existing Windows env vars, override them
-export GOPATH := ${HOME}/go
+export GOPATH := $(HOME)/go
 GOPATH1 := $(GOPATH)
 export PATH := $(PATH):$(GOPATH)/bin
 else
@@ -26,6 +26,9 @@ DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILD
 
 GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 
+# e.g. make GOTAGSCUSTOM=msgtrace
+GOTAGSLIST += ${GOTAGSCUSTOM}
+
 ifeq ($(UNAME), Linux)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
 ifeq ($(ARCH), amd64)
@@ -46,12 +49,12 @@ endif
 endif
 
 ifneq (, $(findstring MINGW,$(UNAME)))
-EXTLDFLAGS := -static-libstdc++ -static-libgcc
+EXTLDFLAGS := -static -static-libstdc++ -static-libgcc
 export GOBUILDMODE := -buildmode=exe
 endif
 
 GOTAGS      := --tags "$(GOTAGSLIST)"
-GOTRIMPATH	:= $(shell go help build | grep -q .-trimpath && echo -trimpath)
+GOTRIMPATH	:= $(shell GOPATH=$(GOPATH) && go help build | grep -q .-trimpath && echo -trimpath)
 
 GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILDNUMBER) \
 		 -X github.com/algorand/go-algorand/config.CommitHash=$(COMMITHASH) \
@@ -62,8 +65,8 @@ GOLDFLAGS_BASE  := -X github.com/algorand/go-algorand/config.BuildNumber=$(BUILD
 GOLDFLAGS := $(GOLDFLAGS_BASE) \
 		 -X github.com/algorand/go-algorand/config.Channel=$(CHANNEL)
 
-UNIT_TEST_SOURCES := $(sort $(shell GO111MODULE=off go list ./... | grep -v /go-algorand/test/ ))
-ALGOD_API_PACKAGES := $(sort $(shell GO111MODULE=off cd daemon/algod/api; go list ./... ))
+UNIT_TEST_SOURCES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && go list ./... | grep -v /go-algorand/test/ ))
+ALGOD_API_PACKAGES := $(sort $(shell GOPATH=$(GOPATH) && GO111MODULE=off && cd daemon/algod/api; go list ./... ))
 
 MSGP_GENERATE	:= ./protocol ./crypto ./crypto/compactcert ./data/basics ./data/transactions ./data/committee ./data/bookkeeping ./data/hashable ./auction ./agreement ./rpcs ./node ./ledger
 
@@ -302,5 +305,4 @@ install: build
 include ./scripts/release/mule/Makefile.mule
 
 archive:
-	CHANNEL=$(CHANNEL) \
-	aws s3 cp tmp/node_pkgs s3://algorand-internal/channel/${CHANNEL}/$(FULLBUILDNUMBER) --recursive --exclude "*" --include "*${CHANNEL}*$(FULLBUILDNUMBER)*"
+	aws s3 cp tmp/node_pkgs s3://algorand-internal/channel/$(CHANNEL)/$(FULLBUILDNUMBER) --recursive --exclude "*" --include "*$(FULLBUILDNUMBER)*"
