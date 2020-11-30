@@ -692,16 +692,15 @@ func (v2 *Handlers) TealCompile(ctx echo.Context) error {
 	ctx.Request().Body = http.MaxBytesReader(nil, ctx.Request().Body, maxTealSourceBytes)
 	buf.ReadFrom(ctx.Request().Body)
 	source := buf.String()
-	program, err := logic.AssembleString(source)
+	ops, err := logic.AssembleString(source)
 	if err != nil {
 		return badRequest(ctx, err, err.Error(), v2.Log)
 	}
-
-	pd := logic.HashProgram(program)
+	pd := logic.HashProgram(ops.Program)
 	addr := basics.Address(pd)
 	response := generated.CompileResponse{
 		Hash:   addr.String(),
-		Result: base64.StdEncoding.EncodeToString(program),
+		Result: base64.StdEncoding.EncodeToString(ops.Program),
 	}
 	return ctx.JSON(http.StatusOK, response)
 }
