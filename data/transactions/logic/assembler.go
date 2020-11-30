@@ -1227,6 +1227,7 @@ func (ops *OpStream) warnf(format string, a ...interface{}) error {
 	return ops.warn(fmt.Errorf(format, a...))
 }
 
+// ReportProblems issues accumulated warnings and errors to stderr.
 func (ops *OpStream) ReportProblems(fname string) {
 	for _, e := range ops.Errors {
 		fmt.Fprintf(os.Stderr, "%s: %s\n", fname, e)
@@ -1244,10 +1245,8 @@ func AssembleString(text string) (*OpStream, error) {
 // AssembleStringWithVersion takes an entire program in a string and
 // assembles it to bytecode using the assembler version specified.  If
 // version is assemblerNoVersion it uses #pragma version or fallsback
-// to AssemblerDefaultVersion.
-
-// OpStream is returned to allow access to warnings, (multiple)
-// errors, or the PC to source line mapping.
+// to AssemblerDefaultVersion.  OpStream is returned to allow access
+// to warnings, (multiple) errors, or the PC to source line mapping.
 func AssembleStringWithVersion(text string, version uint64) (*OpStream, error) {
 	sr := strings.NewReader(text)
 	ps := PragmaStream{}

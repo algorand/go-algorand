@@ -109,7 +109,7 @@ func runBuildNetwork() (err error) {
 	}
 	for _, kev := range miscStringStringTokens {
 		ab := strings.SplitN(kev, "=", 2)
-		buildConfig.MiscStringString = append(buildConfig.MiscStringString, "{{" + ab[0] + "}}", ab[1])
+		buildConfig.MiscStringString = append(buildConfig.MiscStringString, "{{"+ab[0]+"}}", ab[1])
 	}
 
 	networkTemplateFile := resolveFile(r.NetworkFile, templateBaseDir)
