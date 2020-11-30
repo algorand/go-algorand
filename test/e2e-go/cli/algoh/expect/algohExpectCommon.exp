@@ -10,6 +10,7 @@ namespace eval ::Algoh {
   namespace export StopNode
   namespace export StartNode
 
+  namespace export WaitForRound
 
   # My Variables
    set version 1.0
@@ -26,6 +27,14 @@ proc ::Algoh::Info {} {
 
 proc ::Algoh::Abort { ERROR } {
     puts "Aborting with error: $ERROR"
+
+    if { "$::GLOBAL_TEST_ROOT_DIR" != "" } {
+        # terminate child algod processes, if there are active child processes the test will hang on a test failure
+        puts "GLOBAL_TEST_ALGO_DIR $::GLOBAL_TEST_ALGO_DIR"
+        puts "GLOBAL_TEST_ROOT_DIR $::GLOBAL_TEST_ROOT_DIR"
+        puts "GLOBAL_NETWORK_NAME $::GLOBAL_NETWORK_NAME"
+        ::Algoh::StopNetwork $::GLOBAL_NETWORK_NAME $::GLOBAL_TEST_ROOT_DIR
+    }
     exit 1
 }
 
@@ -35,6 +44,8 @@ package require Tcl 8.0
 
 # Start the network
 proc ::Algoh::CreateNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ROOT_DIR } {
+    set ::GLOBAL_TEST_ROOT_DIR $TEST_ROOT_DIR
+    set ::GLOBAL_NETWORK_NAME $NETWORK_NAME
 
     # Running on ARM64, it seems that network creation is pretty slow.
     # 30 second won't be enough here, so I'm changing this to 90 seconds.
@@ -50,14 +61,15 @@ proc ::Algoh::CreateNetwork { NETWORK_NAME NETWORK_TEMPLATE TEST_ROOT_DIR } {
             eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to create network"; Algoh::Abort } }
         }
     } EXCEPTION ] } {
-       ::AlgorandGoal::Abort "ERROR in CreateNetwork: $EXCEPTION"
+       ::Algoh::Abort "ERROR in CreateNetwork: $EXCEPTION"
     }
 }
 
 proc ::Algoh::StartNode { TEST_ALGO_DIR } {
+    set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
 
     puts "Primary node start"
-    # Start node
+
     if { [catch {
         spawn goal node start -d $TEST_ALGO_DIR
         expect {
@@ -71,6 +83,8 @@ proc ::Algoh::StartNode { TEST_ALGO_DIR } {
 }
 
 proc ::Algoh::StopNode { TEST_ALGO_DIR } {
+    set ::GLOBAL_TEST_ALGO_DIR $TEST_ALGO_DIR
+
     set timeout 15
 
     if { [catch {
@@ -102,8 +116,26 @@ proc ::Algoh::StopNetwork { NETWORK_NAME TEST_ROOT_DIR } {
 	      exit 1
 	    }
         "Network Stopped under.*" {set NETWORK_STOP_MESSAGE $expect_out(buffer); close}
-        eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to stop network"; Algoh::Abort } }
-
+        eof { catch wait result; if { [lindex $result 3] != 0 } { puts "Unable to stop network"; exit 1; } }
     }
     puts $NETWORK_STOP_MESSAGE
+}
+
+# Wait for node to reach a specific round
+proc ::Algoh::WaitForFile { WAITFILE } {
+    puts "waiting for file $WAITFILE "
+    set SLEEP_TIME 1
+    if { [catch {
+        set i 0
+        while 1 {
+            incr i
+
+            if {[file exists $WAITFILE]} then { break; }
+            if { $i >= 10 } then { ::Algoh::Abort "ERROR waiting for $WAITFILE failed after $i attempts"; break;}
+            puts "sleep time $SLEEP_TIME"
+            after [expr {int($SLEEP_TIME * 1000)}]
+        }
+    } EXCEPTION ] } {
+       ::Algoh::Abort "ERROR in WaitForFile: $EXCEPTION"
+    }
 }
