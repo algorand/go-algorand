@@ -25,6 +25,15 @@ import (
 	"github.com/miekg/dns"
 )
 
+// References
+// 1. DNS https://tools.ietf.org/html/rfc1035
+// 2. DNS clarifications https://tools.ietf.org/html/rfc2181
+// 3. DNSSEC proto change https://tools.ietf.org/html/rfc4035
+// 4. DNSSEC RR change https://tools.ietf.org/html/rfc4034
+// 5. DNSSEC clarifications https://tools.ietf.org/html/rfc6840
+// 6. DNSSEC keys management https://tools.ietf.org/html/rfc6781
+// 7. DNS SRV https://tools.ietf.org/html/rfc2782
+
 const defaultMaxHops = 10
 
 // List of DNSSEC-aware servers
@@ -40,9 +49,14 @@ const defaultMaxHops = 10
 
 var defaultDnssecAwareNSServers = []string{"1.1.1.1:53", "8.8.8.8:53", "77.88.8.8:53", "8.26.56.26:53"}
 
+// Querier provides a method for getting RRSet and RRSig from DNSSEC-aware server
+type Querier interface {
+	QueryRRSet(ctx context.Context, domain string, qtype uint16) ([]dns.RR, []dns.RRSIG, error)
+}
+
 // Resolver provides DNSSEC resolution
 type Resolver struct {
-	resolver   netResolverIf
+	client     Querier
 	trustChain *trustChain
 	maxHops    int
 }
@@ -52,24 +66,16 @@ var DefaultResolver = MakeDnssecResolver(defaultDnssecAwareNSServers, time.Secon
 
 // MakeDnssecResolver return resolver from given NS servers and timeout duration
 func MakeDnssecResolver(servers []string, timeout time.Duration) (r Resolver) {
-	rs := &resolverImpl{readTimeout: timeout, servers: servers, rootAnchor: rootAnchorXML}
+	dc := &dnsClient{readTimeout: timeout, servers: servers}
 
-	if len(rs.servers) == 0 {
-		rs.servers = append(rs.servers, defaultDnssecAwareNSServers...)
+	if len(dc.servers) == 0 {
+		dc.servers = append(dc.servers, defaultDnssecAwareNSServers...)
 	}
-	r.resolver = rs
-	r.trustChain = makeTrustChain(r.resolver)
+	tc := &QueryWrapper{dc}
+	r.client = dc
+	r.trustChain = makeTrustChain(tc)
 	r.maxHops = defaultMaxHops
 	return
-}
-
-type netResolverIf interface {
-	query(ctx context.Context, domain string, qtype uint16) (resp *dns.Msg, err error)
-	queryRRSet(ctx context.Context, domain string, qtype uint16) ([]dns.RR, []dns.RRSIG, error)
-	rootTrustAnchor() ([]dns.DS, error)
-
-	// test functions
-	serverList() []string
 }
 
 // TLSARec represents TLSA record content
@@ -81,21 +87,21 @@ type TLSARec struct {
 }
 
 // lookupImpl makes DNS request for a zone and verifies response signature
-func (r *Resolver) lookupImpl(ctx context.Context, name string, qt uint16) (rrSet []dns.RR, err error) {
-	rrSet, rrSig, err := r.resolver.queryRRSet(ctx, name, qt)
+func (r *Resolver) lookup(ctx context.Context, name string, qt uint16) (rrSet []dns.RR, err error) {
+	rrSet, rrSig, err := r.client.QueryRRSet(ctx, name, qt)
 	if err != nil {
 		return
 	}
-	err = r.trustChain.authenticate(ctx, rrSet, rrSig)
+	err = r.trustChain.Authenticate(ctx, rrSet, rrSig)
 	return
 }
 
-// lookupImplCnameAware like lookupImpl makes DNS request for a zone and verifies response signature
+// lookupImplCnameAware like lookupImpl requests a zone and verifies response signature
 // but also it is aware about possible A/CNAME entries for A-requests and supposed to be used for CNAME alias resolution.
 // if CNAME signature presents for requested domain name, then consider the response as CNAME
 // and extract CNAME record(s) and its RRSIG
-func (r *Resolver) lookupImplCnameAware(ctx context.Context, name string, qt uint16) (rrSet []dns.RR, err error) {
-	rrSet, rrSig, err := r.resolver.queryRRSet(ctx, name, qt)
+func (r *Resolver) lookupCnameAware(ctx context.Context, name string, qt uint16) (rrSet []dns.RR, err error) {
+	rrSet, rrSig, err := r.client.QueryRRSet(ctx, name, qt)
 	if err != nil {
 		return
 	}
@@ -104,7 +110,7 @@ func (r *Resolver) lookupImplCnameAware(ctx context.Context, name string, qt uin
 	// NS can return CNAME for A request if there are no A but CNAME
 	// in real world such A-response can also have second-level CNAME alias and A records with signatures
 	//
-	// so that leave only CNAME RR matching to requested name to verify signature and return the filtered set
+	// so that we leave only CNAME RR matching to requested name to verify signature and return the filtered set
 	if qt == dns.TypeA || qt == dns.TypeAAAA {
 		newRRSig := make([]dns.RRSIG, 0, len(rrSig))
 		for _, sig := range rrSig {
@@ -136,12 +142,12 @@ func (r *Resolver) lookupImplCnameAware(ctx context.Context, name string, qt uin
 			rrSig = newRRSig
 		}
 	}
-	err = r.trustChain.authenticate(ctx, rrSet, rrSig)
+	err = r.trustChain.Authenticate(ctx, rrSet, rrSig)
 	return
 }
 
 // LookupIPAddr resolves a given hostname to ipv4 or ipv6 address following CNAME aliaces
-func (r *Resolver) lookupIPAddrImpl(ctx context.Context, hostname string) (cname string, addrs []net.IPAddr, err error) {
+func (r *Resolver) lookupIPAddr(ctx context.Context, hostname string) (cname string, addrs []net.IPAddr, err error) {
 	var rrSet []dns.RR
 	nextName := hostname
 	seen := make(map[string]bool)
@@ -151,9 +157,9 @@ func (r *Resolver) lookupIPAddrImpl(ctx context.Context, hostname string) (cname
 			return
 		}
 
-		if rrSet, err = r.lookupImplCnameAware(ctx, nextName, dns.TypeA); err != nil {
+		if rrSet, err = r.lookupCnameAware(ctx, nextName, dns.TypeA); err != nil {
 			var err2 error
-			if rrSet, err2 = r.lookupImplCnameAware(ctx, nextName, dns.TypeAAAA); err2 != nil {
+			if rrSet, err2 = r.lookupCnameAware(ctx, nextName, dns.TypeAAAA); err2 != nil {
 				return // return original error
 			}
 		}
@@ -180,13 +186,13 @@ func (r *Resolver) lookupIPAddrImpl(ctx context.Context, hostname string) (cname
 
 // LookupIPAddr resolves a given hostname to ipv4 or ipv6 address
 func (r *Resolver) LookupIPAddr(ctx context.Context, host string) (addrs []net.IPAddr, err error) {
-	_, addrs, err = r.lookupIPAddrImpl(ctx, host)
+	_, addrs, err = r.lookupIPAddr(ctx, host)
 	return
 }
 
 // LookupCNAME returns CNAME record content for a given name
 func (r *Resolver) LookupCNAME(ctx context.Context, host string) (cname string, err error) {
-	cname, _, err = r.lookupIPAddrImpl(ctx, host)
+	cname, _, err = r.lookupIPAddr(ctx, host)
 	return
 }
 
@@ -201,7 +207,7 @@ func (r *Resolver) LookupSRV(ctx context.Context, service, proto, name string) (
 	}
 
 	var rrSet []dns.RR
-	if rrSet, err = r.lookupImpl(ctx, fullName, dns.TypeSRV); err != nil {
+	if rrSet, err = r.lookup(ctx, fullName, dns.TypeSRV); err != nil {
 		return
 	}
 
@@ -231,7 +237,7 @@ func (r *Resolver) LookupSRV(ctx context.Context, service, proto, name string) (
 // LookupMX returns MX records content for a given name
 func (r *Resolver) LookupMX(ctx context.Context, name string) (addrs []*net.MX, err error) {
 	var rrSet []dns.RR
-	if rrSet, err = r.lookupImpl(ctx, name, dns.TypeMX); err != nil {
+	if rrSet, err = r.lookup(ctx, name, dns.TypeMX); err != nil {
 		return
 	}
 
@@ -253,7 +259,7 @@ func (r *Resolver) LookupMX(ctx context.Context, name string) (addrs []*net.MX, 
 // LookupNS returns NS records content for a given name
 func (r *Resolver) LookupNS(ctx context.Context, name string) (addrs []*net.NS, err error) {
 	var rrSet []dns.RR
-	if rrSet, err = r.lookupImpl(ctx, name, dns.TypeNS); err != nil {
+	if rrSet, err = r.lookup(ctx, name, dns.TypeNS); err != nil {
 		return
 	}
 
@@ -274,7 +280,7 @@ func (r *Resolver) LookupNS(ctx context.Context, name string) (addrs []*net.NS, 
 // LookupTXT returns TXT records content for a given name
 func (r *Resolver) LookupTXT(ctx context.Context, name string) (addrs []string, err error) {
 	var rrSet []dns.RR
-	if rrSet, err = r.lookupImpl(ctx, name, dns.TypeTXT); err != nil {
+	if rrSet, err = r.lookup(ctx, name, dns.TypeTXT); err != nil {
 		return
 	}
 
@@ -300,7 +306,7 @@ func (r *Resolver) LookupTLSA(ctx context.Context, service, proto, name string) 
 	}
 
 	var rrSet []dns.RR
-	if rrSet, err = r.lookupImpl(ctx, fullName, dns.TypeTLSA); err != nil {
+	if rrSet, err = r.lookup(ctx, fullName, dns.TypeTLSA); err != nil {
 		return
 	}
 
