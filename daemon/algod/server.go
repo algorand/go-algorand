@@ -206,13 +206,9 @@ func (s *Server) Start() {
 
 	e := apiServer.NewRouter(s.log, s.node, s.stopping, apiToken, adminAPIToken, tcpListener)
 
-	errChan := make(chan error, 1)
-	go func() {
-		err := e.StartServer(&server)
-		errChan <- err
-	}()
-
 	// Set up files for our PID and our listening address
+	// before beginning to listen to prevent 'goal node start'
+	// quit earlier than these service files get created
 	s.pidFile = filepath.Join(s.RootPath, "algod.pid")
 	s.netFile = filepath.Join(s.RootPath, "algod.net")
 	ioutil.WriteFile(s.pidFile, []byte(fmt.Sprintf("%d\n", os.Getpid())), 0644)
@@ -223,6 +219,12 @@ func (s *Server) Start() {
 		s.netListenFile = filepath.Join(s.RootPath, "algod-listen.net")
 		ioutil.WriteFile(s.netListenFile, []byte(fmt.Sprintf("%s\n", listenAddr)), 0644)
 	}
+
+	errChan := make(chan error, 1)
+	go func() {
+		err := e.StartServer(&server)
+		errChan <- err
+	}()
 
 	// Handle signals cleanly
 	c := make(chan os.Signal)
