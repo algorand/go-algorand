@@ -34,9 +34,6 @@ if { [catch {
 
     puts "Successfully started node"
 
-    # ensure Primary listing before proceeding
-    ::Algoh::WaitForFile $TEST_PRIMARY_NODE_DIR/algod-listen.net
-
     exec cat ./disabled_profiler_config.json > $TEST_NODE_DIR/config.json
     exec cat ./host-config.json > $TEST_NODE_DIR/host-config.json
 
@@ -59,9 +56,6 @@ if { [catch {
         "^Logging to: *" {puts "algoh startup successful"}
         timeout {::Algoh::Abort "algoh failed to start";}
     }
-
-    # allow algoh time to put files in Node dir
-    ::Algoh::WaitForFile $TEST_NODE_DIR/algod.pid
 
     # wait until Node approves blocks to the network
     set timeout 60
