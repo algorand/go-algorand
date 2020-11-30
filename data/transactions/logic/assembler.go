@@ -53,6 +53,7 @@ type OpStream struct {
 	Out     bytes.Buffer
 	Version uint64
 	Trace   io.Writer
+	Stderr  io.Writer
 	vubytes [9]byte
 
 	intc        []uint64
@@ -1010,7 +1011,7 @@ func (ops *OpStream) checkArgs(spec OpSpec) error {
 		if !typecheck(argType, stype) {
 			msg := fmt.Sprintf("%s arg %d wanted type %s got %s", spec.Name, i, argType.String(), stype.String())
 			if len(ops.labelReferences) > 0 {
-				fmt.Fprintf(os.Stderr, "warning: %d: %s; but branches have happened and assembler does not precisely track types in this case\n", ops.sourceLine, msg)
+				fmt.Fprintf(ops.Stderr, "warning: %d: %s; but branches have happened and assembler does not precisely track types in this case\n", ops.sourceLine, msg)
 			} else {
 				return ops.error(msg)
 			}
@@ -1247,7 +1248,7 @@ func AssembleStringWithVersionEx(text string, version uint64) ([]byte, map[int]i
 	}
 
 	sr = strings.NewReader(text)
-	ops := OpStream{Version: version}
+	ops := OpStream{Version: version, Stderr: os.Stderr}
 	err = ops.assemble(sr)
 	if err != nil {
 		return nil, nil, err

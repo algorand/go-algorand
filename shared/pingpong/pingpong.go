@@ -64,7 +64,7 @@ func PrepareAccounts(ac libgoal.Client, initCfg PpConfig) (accounts map[string]u
 			return
 		}
 
-		cinfo.AssetParams, err = prepareAssets(assetAccounts, ac, cfg)
+		cinfo.AssetParams, cinfo.OptIns, err = prepareAssets(assetAccounts, ac, cfg)
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stderr, "prepare assets failed %v\n", err)
 			return
@@ -384,6 +384,11 @@ func sendFromTo(
 	amt := cfg.MaxAmt
 	fee := cfg.MaxFee
 
+	assetsByCreator := make(map[string][]*v1.AssetParams)
+	for _, p := range cinfo.AssetParams {
+		c := p.Creator
+		assetsByCreator[c] = append(assetsByCreator[c], &p)
+	}
 	for i, from := range fromList {
 		if cfg.RandomizeAmt {
 			amt = rand.Uint64()%cfg.MaxAmt + 1
@@ -570,7 +575,7 @@ func constructTxn(from, to string, fee, amt, aidx uint64, cinfo CreatablesInfo, 
 	}
 
 	if cfg.NumApp > 0 { // Construct app transaction
-		// generate random assetID or appId if we send asset/app txns
+		// select opted-in accounts for Txn.Accounts field
 		var accounts []string
 		if len(cinfo.OptIns[aidx]) > 0 {
 			indices := rand.Perm(len(cinfo.OptIns[aidx]))
@@ -594,6 +599,13 @@ func constructTxn(from, to string, fee, amt, aidx uint64, cinfo CreatablesInfo, 
 			_, _ = fmt.Fprintf(os.Stdout, "Calling app %d : %s\n", aidx, from)
 		}
 	} else if cfg.NumAsset > 0 { // Construct asset transaction
+		// select a pair of random opted-in accounts by aidx
+		// use them as from/to addresses
+		if len(cinfo.OptIns[aidx]) > 0 {
+			indices := rand.Perm(len(cinfo.OptIns[aidx]))
+			from = cinfo.OptIns[aidx][indices[0]]
+			to = cinfo.OptIns[aidx][indices[1]]
+		}
 		txn, err = client.MakeUnsignedAssetSendTx(aidx, amt, to, "", "")
 		if err != nil {
 			_, _ = fmt.Fprintf(os.Stdout, "error making unsigned asset send tx %v\n", err)
