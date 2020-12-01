@@ -11,6 +11,7 @@ namespace eval ::Algoh {
   namespace export StartNode
 
   namespace export WaitForRound
+  namespace export CheckEOF
 
   # My Variables
    set version 1.0
@@ -137,5 +138,16 @@ proc ::Algoh::WaitForFile { WAITFILE } {
         }
     } EXCEPTION ] } {
        ::Algoh::Abort "ERROR in WaitForFile: $EXCEPTION"
+    }
+}
+
+# CheckEOF checks if there was an error, and aborts if there was an error
+proc ::Algoh::CheckEOF { { ERROR_STRING "" } } {
+    upvar spawn_id spawn_id
+    catch { wait -i $spawn_id } result;
+    if { [lindex $result 3] != 0 } {
+        puts $ERROR_STRING
+        puts "returned error code is [lindex $result 3]"
+        exit 1
     }
 }
