@@ -28,7 +28,6 @@ agents:
     dockerFilePath: docker/build/aptly.Dockerfile
     image: algorand/aptly
     version: scripts/configure_dev-deps.sh
-    destroy: false
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     env:

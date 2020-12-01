@@ -43,14 +43,33 @@ pushd "$PKG_DIR"
 if [ -n "$S3_SOURCE" ]
 then
     PREFIX="$S3_SOURCE/$CHANNEL/$VERSION"
+    PACKAGE_NAME_SUFFIX="${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}"
 
     # deb
-    aws s3 cp "s3://$PREFIX/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
-    aws s3 cp "s3://$PREFIX/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
+    aws s3 cp "s3://$PREFIX/algorand_$PACKAGE_NAME_SUFFIX.deb" .
+    aws s3 cp "s3://$PREFIX/algorand-devtools_$PACKAGE_NAME_SUFFIX.deb" .
 
+    aws s3 cp "s3://$PREFIX/algorand_$PACKAGE_NAME_SUFFIX.deb.sig" .
+    aws s3 cp "s3://$PREFIX/algorand-devtools_$PACKAGE_NAME_SUFFIX.deb.sig" .
+
+    # Not only do we need to redefine the `PACKAGE_NAME_SUFFIX` for rpm but
+    # we need to check the channel before defining it.
+    #
+    # Remember, rpm packages don't include "stable" in the package name!
+    #
     # rpm
-    aws s3 cp "s3://$PREFIX/algorand-$VERSION-1.$ARCH_BIT.rpm" .
-    aws s3 cp "s3://$PREFIX/algorand-devtools-$VERSION-1.$ARCH_BIT.rpm" .
+    if [ "$CHANNEL" = "stable" ]
+    then
+        PACKAGE_NAME_SUFFIX="$VERSION-1.$ARCH_BIT"
+    else
+        PACKAGE_NAME_SUFFIX="$CHANNEL-$VERSION-1.$ARCH_BIT"
+    fi
+
+    aws s3 cp "s3://$PREFIX/algorand-$PACKAGE_NAME_SUFFIX.rpm" .
+    aws s3 cp "s3://$PREFIX/algorand-devtools-$PACKAGE_NAME_SUFFIX.rpm" .
+
+    aws s3 cp "s3://$PREFIX/algorand-$PACKAGE_NAME_SUFFIX.rpm.sig" .
+    aws s3 cp "s3://$PREFIX/algorand-devtools-$PACKAGE_NAME_SUFFIX.rpm.sig" .
 fi
 
 popd
