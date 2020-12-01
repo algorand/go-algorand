@@ -10,7 +10,7 @@ date "+build_release begin SIGN stage %Y%m%d_%H%M%S"
 echo
 
 if [ -z "$NETWORK" ]; then
-    echo "[$0] NETWORK=$NETWORK is missing."
+    echo "[$0] NETWORK is missing."
     exit 1
 fi
 

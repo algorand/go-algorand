@@ -6,7 +6,7 @@ set -ex
 echo "Building RPM package"
 
 if [ -z "$NETWORK" ]; then
-    echo "[$0] NETWORK=$NETWORK is missing."
+    echo "[$0] NETWORK is missing."
     exit 1
 fi
 
