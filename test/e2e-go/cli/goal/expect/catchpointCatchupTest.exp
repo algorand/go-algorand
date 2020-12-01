@@ -86,7 +86,7 @@ if { [catch {
         timeout {::AlgorandGoal::Abort "timed out listing $TEST_ROOT_DIR/Primary/algod-listen.net"}
         eof { ::AlgorandGoal::CheckEOF "Unable to list $TEST_ROOT_DIR/Primary/algod-listen.net" }
     }
-    
+
     if { $PRIMARY_LISTEN_ADDRESS == "" } {
         ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Primary
         puts "Primary node listening address could not be retrieved."
