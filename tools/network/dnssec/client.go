@@ -29,13 +29,6 @@ type dnsClient struct {
 	servers     []string
 }
 
-func makeDNSClient(net string, timeout time.Duration) (client *dns.Client) {
-	client = new(dns.Client)
-	client.ReadTimeout = timeout
-	client.Net = net
-	return
-}
-
 // queryDNSServer performs DNS query against provided server with respect of both context and timeout restrictions.
 // If UDP fails then retries with TCP client
 func queryDNSServer(ctx context.Context, server string, msg *dns.Msg, timeout time.Duration) (resp *dns.Msg, err error) {

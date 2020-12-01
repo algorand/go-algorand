@@ -26,34 +26,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// func TestResolverCreation(t *testing.T) {
-// 	a := require.New(t)
-// 	r := MakeDnssecResolver(nil, time.Second)
-// 	a.NotEmpty(r.resolver.serverList())
-// 	a.Equal("1.1.1.1:53", r.serverList()[0])
-// 	a.Equal("8.8.8.8:53", r.resolver.serverList()[1])
-// 	a.Equal("77.88.8.8:53", r.resolver.serverList()[2])
-// 	a.Equal("8.26.56.26:53", r.resolver.serverList()[3])
-// 	a.Equal(4, len(r.resolver.serverList()))
-
-// 	r = MakeDnssecResolver([]string{}, time.Second)
-// 	a.NotEmpty(r.resolver.serverList())
-// 	a.Equal("1.1.1.1:53", r.resolver.serverList()[0])
-// 	a.Equal("8.8.8.8:53", r.resolver.serverList()[1])
-// 	a.Equal(4, len(r.resolver.serverList()))
-
-// 	r = MakeDnssecResolver([]string{"8.8.8.8"}, time.Second)
-// 	a.NotEmpty(r.resolver.serverList())
-// 	a.Equal("8.8.8.8", r.resolver.serverList()[0])
-// 	a.Equal(1, len(r.resolver.serverList()))
-
-// 	r = MakeDnssecResolver([]string{"8.8.8.8", "1.1.1.1"}, time.Second)
-// 	a.NotEmpty(r.resolver.serverList())
-// 	a.Equal(2, len(r.resolver.serverList()))
-// 	a.Equal("8.8.8.8", r.resolver.serverList()[0])
-// 	a.Equal("1.1.1.1", r.resolver.serverList()[1])
-// }
-
 func TestLookup(t *testing.T) {
 	a := require.New(t)
 
@@ -61,7 +33,7 @@ func TestLookup(t *testing.T) {
 	dnssec := Resolver{
 		client:     r,
 		trustChain: makeTrustChain(r),
-		maxHops:    defaultMaxHops,
+		maxHops:    DefaultMaxHops,
 	}
 
 	var err error
@@ -204,7 +176,7 @@ func TestLookup(t *testing.T) {
 	err = r.updateRegRecord("follower2.test.", "test.", dns.TypeCNAME, []dns.RR{&cname3}, time.Time{})
 	a.NoError(err)
 
-	dnssec.maxHops = defaultMaxHops
+	dnssec.maxHops = DefaultMaxHops
 	addrs, err = dnssec.LookupIPAddr(context.Background(), "main.test.")
 	a.Error(err)
 	a.Contains(err.Error(), "loop detected: main.test. already seen")
@@ -232,7 +204,7 @@ func TestLookup(t *testing.T) {
 	dnssec = Resolver{
 		client:     r,
 		trustChain: makeTrustChain(r),
-		maxHops:    defaultMaxHops,
+		maxHops:    DefaultMaxHops,
 	}
 	addrs, err = dnssec.LookupIPAddr(context.Background(), "www.test.")
 	a.Error(err)
@@ -246,7 +218,7 @@ func TestLookupAux(t *testing.T) {
 	dnssec := Resolver{
 		client:     r,
 		trustChain: makeTrustChain(r),
-		maxHops:    defaultMaxHops,
+		maxHops:    DefaultMaxHops,
 	}
 
 	var err error
@@ -398,7 +370,7 @@ func TestRealRequests(t *testing.T) {
 
 	// fails, as well, no DNSSEC on the second hop
 	// but it is two-level aliasing
-	r.maxHops = 1
+	r.(*Resolver).maxHops = 1
 	addrs, err = r.LookupIPAddr(context.Background(), "relay-montreal-mainnet-algorand.algorand-mainnet.network.")
 	a.Error(err)
 	a.Contains(err.Error(), "exceed max attempts")

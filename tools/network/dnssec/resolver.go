@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/miekg/dns"
+
+	"github.com/algorand/go-algorand/logging"
 )
 
 // References
@@ -34,24 +36,22 @@ import (
 // 6. DNSSEC keys management https://tools.ietf.org/html/rfc6781
 // 7. DNS SRV https://tools.ietf.org/html/rfc2782
 
-const defaultMaxHops = 10
-
-// List of DNSSEC-aware servers
-// CloudFlare: 1.1.1.1:53 1.0.0.1:53
-// Google: 8.8.8.8:53 8.8.4.4:53
-// Yandex 77.88.8.8:53 77.88.8.1:53
-// Comodo 8.26.56.26:53 8.20.247.20:53
-//
-// Other - no DNSSEC
-// OpenDNS 208.67.222.222:53
-// Baidu 180.76.76.76:53
-// Alibaba 223.6.6.6:53
-
-var defaultDnssecAwareNSServers = []string{"1.1.1.1:53", "8.8.8.8:53", "77.88.8.8:53", "8.26.56.26:53"}
-
 // Querier provides a method for getting RRSet and RRSig from DNSSEC-aware server
 type Querier interface {
 	QueryRRSet(ctx context.Context, domain string, qtype uint16) ([]dns.RR, []dns.RRSIG, error)
+}
+
+// ResolverIf represents net.Resolver-compatible interface
+type ResolverIf interface {
+	LookupAddr(ctx context.Context, addr string) (names []string, err error)
+	LookupCNAME(ctx context.Context, host string) (cname string, err error)
+	LookupHost(ctx context.Context, host string) (addrs []string, err error)
+	LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error)
+	LookupMX(ctx context.Context, name string) ([]*net.MX, error)
+	LookupNS(ctx context.Context, name string) ([]*net.NS, error)
+	LookupPort(ctx context.Context, network, service string) (port int, err error)
+	LookupSRV(ctx context.Context, service, proto, name string) (cname string, addrs []*net.SRV, err error)
+	LookupTXT(ctx context.Context, name string) ([]string, error)
 }
 
 // Resolver provides DNSSEC resolution
@@ -61,21 +61,35 @@ type Resolver struct {
 	maxHops    int
 }
 
-// DefaultResolver with one DNS server and 1 second timeout
-var DefaultResolver = MakeDnssecResolver(defaultDnssecAwareNSServers, time.Second)
-
 // MakeDnssecResolver return resolver from given NS servers and timeout duration
-func MakeDnssecResolver(servers []string, timeout time.Duration) (r Resolver) {
+func MakeDnssecResolver(servers []string, timeout time.Duration) ResolverIf {
 	dc := &dnsClient{readTimeout: timeout, servers: servers}
 
-	if len(dc.servers) == 0 {
-		dc.servers = append(dc.servers, defaultDnssecAwareNSServers...)
-	}
 	tc := &QueryWrapper{dc}
-	r.client = dc
-	r.trustChain = makeTrustChain(tc)
-	r.maxHops = defaultMaxHops
-	return
+	return &Resolver{client: dc, trustChain: makeTrustChain(tc), maxHops: DefaultMaxHops}
+}
+
+// MakeDefaultDnssecResolver returns a resolver with all possible DNS servers:
+// system, fallback, default
+func MakeDefaultDnssecResolver(fallbackAddress string) ResolverIf {
+	log := logging.Base()
+	servers, timeout, err := SystemConfig()
+	if err != nil {
+		log.Debugf("retrieving system config failed with %s", err.Error())
+		timeout = DefaultTimeout
+	}
+
+	var fallback string
+	var dnsIPAddr *net.IPAddr
+	if dnsIPAddr, err = net.ResolveIPAddr("ip", fallbackAddress); err != nil {
+		log.Debugf("resolving fallback %s failed with %s", fallbackAddress, err.Error())
+	} else {
+		fallback = dnsIPAddr.String()
+	}
+
+	servers = append(servers, fallback+":53")
+	servers = append(servers, DefaultDnssecAwareNSServers...)
+	return MakeDnssecResolver(servers, timeout)
 }
 
 // TLSARec represents TLSA record content
@@ -340,9 +354,4 @@ func (r *Resolver) LookupAddr(ctx context.Context, addr string) (names []string,
 // LookupHost looks up the given host using the local resolver. It returns a slice of that host's addresses.
 func (r *Resolver) LookupHost(ctx context.Context, host string) (addrs []string, err error) {
 	return net.DefaultResolver.LookupHost(ctx, host)
-}
-
-// LookupSRV is convenience function using default dnssec resolver
-func LookupSRV(service, proto, name string) (cname string, addrs []*net.SRV, err error) {
-	return DefaultResolver.LookupSRV(context.Background(), service, proto, name)
 }
