@@ -571,13 +571,13 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 		txgroupad[i].SignedTxn = tx
 	}
 
-	//transactionGroupProcessingStarts := time.Now()
+	transactionGroupProcessingStarts := time.Now()
 	err := pool.pendingBlockEvaluator.TransactionGroup(txgroupad)
 
 	if recomputing {
-		/*if stats != nil {
-			stats.ProcessingTimeInternal.AddTransaction(time.Now().Sub(transactionGroupProcessingStarts))
-		}*/
+		if stats != nil {
+			stats.ProcessingTime.AddTransaction(time.Now().Sub(transactionGroupProcessingStarts))
+		}
 		pool.assemblyMu.Lock()
 		defer pool.assemblyMu.Unlock()
 		if !pool.assemblyResults.ok {
@@ -777,7 +777,6 @@ func (pool *TransactionPool) AssembleBlock(round basics.Round, deadline time.Tim
 
 				stats.AverageFee = totalFees / uint64(stats.IncludedCount)
 			}
-			stats.ProcessingTime = "ABCDE" //stats.ProcessingTimeInternal.ToString()
 
 			var details struct {
 				Round uint64

@@ -17,31 +17,31 @@
 package telemetryspec
 
 import (
-	"testing"
-	/*"encoding/json"
+	"encoding/json"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"*/)
+	"github.com/stretchr/testify/require"
+)
 
-func TestTranscationProcessingTimeDistibutionFormatting(t *testing.T) {
-	/*	var processingTime transcationProcessingTimeDistibution
-		processingTime.AddTransaction(50000 * time.Nanosecond)
-		processingTime.AddTransaction(80000 * time.Nanosecond)
-		processingTime.AddTransaction(120000 * time.Nanosecond)
-		processingTime.AddTransaction(150000 * time.Nanosecond)
-		processingTime.AddTransaction(180000 * time.Nanosecond)
-		processingTime.AddTransaction(950000 * time.Nanosecond)
-		processingTime.AddTransaction(2 * time.Millisecond)
-		bytes, err := processingTime.MarshalText()
-		require.NoError(t, err)
-		require.Equal(t, []byte("2,3,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0"), bytes)
+func TestTransactionProcessingTimeDistibutionFormatting(t *testing.T) {
+	var processingTime transactionProcessingTimeDistibution
+	processingTime.AddTransaction(50000 * time.Nanosecond)
+	processingTime.AddTransaction(80000 * time.Nanosecond)
+	processingTime.AddTransaction(120000 * time.Nanosecond)
+	processingTime.AddTransaction(150000 * time.Nanosecond)
+	processingTime.AddTransaction(180000 * time.Nanosecond)
+	processingTime.AddTransaction(950000 * time.Nanosecond)
+	processingTime.AddTransaction(2 * time.Millisecond)
+	bytes, err := processingTime.MarshalJSON()
+	require.NoError(t, err)
+	require.Equal(t, []byte("[2,3,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]"), bytes)
 
-		container := struct {
-			ProcessingTime transcationProcessingTimeDistibution
-		}{ProcessingTime: processingTime}
+	container := struct {
+		ProcessingTime transactionProcessingTimeDistibution
+	}{ProcessingTime: processingTime}
 
-		bytes, err = json.Marshal(container)
-		require.NoError(t, err)
-		require.Equal(t, []byte("{\"ProcessingTime\":\"2,3,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0\"}"), bytes)*/
+	bytes, err = json.Marshal(container)
+	require.NoError(t, err)
+	require.Equal(t, []byte("{\"ProcessingTime\":[2,3,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}"), bytes)
 }

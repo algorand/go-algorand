@@ -39,23 +39,22 @@ type MetricDetails interface {
 
 // AssembleBlockStats is the set of stats captured when we compute AssemblePayset
 type AssembleBlockStats struct {
-	StartCount          int
-	IncludedCount       int
-	InvalidCount        int
-	MinFee              uint64
-	MaxFee              uint64
-	AverageFee          uint64
-	MinLength           int
-	MaxLength           int
-	MinPriority         uint64
-	MaxPriority         uint64
-	CommittedCount      int
-	StopReason          string
-	TotalLength         uint64
-	EarlyCommittedCount uint64
-	Nanoseconds         int64
-	ProcessingTime      string
-	//ProcessingTimeInternal    transcationProcessingTimeDistibution
+	StartCount                int
+	IncludedCount             int
+	InvalidCount              int
+	MinFee                    uint64
+	MaxFee                    uint64
+	AverageFee                uint64
+	MinLength                 int
+	MaxLength                 int
+	MinPriority               uint64
+	MaxPriority               uint64
+	CommittedCount            int
+	StopReason                string
+	TotalLength               uint64
+	EarlyCommittedCount       uint64
+	Nanoseconds               int64
+	ProcessingTime            transactionProcessingTimeDistibution
 	BlockGenerationDuration   uint64
 	TransactionsLoopStartTime int64
 }
@@ -138,7 +137,7 @@ func (m RoundTimingMetrics) Identifier() Metric {
 	return roundTimingMetricsIdentifier
 }
 
-type transcationProcessingTimeDistibution struct {
+type transactionProcessingTimeDistibution struct {
 	// 10 buckets: 0-100Kns, 100Kns-200Kns .. 900Kns-1ms
 	// 9 buckets: 1ms-2ms .. 9ms-10ms
 	// 9 buckets: 10ms-20ms .. 90ms-100ms
@@ -147,24 +146,22 @@ type transcationProcessingTimeDistibution struct {
 	transactionBuckets [38]int
 }
 
+// MarshalJSON supports json.Marshaler interface
 // generate comma delimited text representing the transaction processing timing
-func (t transcationProcessingTimeDistibution) marshalText() (text []byte, err error) {
+func (t transactionProcessingTimeDistibution) MarshalJSON() ([]byte, error) {
 	var outStr strings.Builder
+	outStr.WriteString("[")
 	for i, bucket := range t.transactionBuckets {
 		outStr.WriteString(strconv.Itoa(bucket))
 		if i != len(t.transactionBuckets)-1 {
 			outStr.WriteString(",")
 		}
 	}
+	outStr.WriteString("]")
 	return []byte(outStr.String()), nil
 }
 
-func (t transcationProcessingTimeDistibution) ToString() string {
-	bytes, _ := t.marshalText()
-	return string(bytes)
-}
-
-func (t *transcationProcessingTimeDistibution) AddTransaction(duration time.Duration) {
+func (t *transactionProcessingTimeDistibution) AddTransaction(duration time.Duration) {
 	var idx int64
 	if duration < 10*time.Millisecond {
 		if duration < time.Millisecond {
