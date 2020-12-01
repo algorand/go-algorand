@@ -55,6 +55,7 @@ if { [catch {
     expect {
         "^Logging to: *" {puts "algoh startup successful"}
         timeout {::Algoh::Abort "algoh failed to start";}
+        eof { ::Algoh::CheckEOF "algoh failed to start" }
     }
 
     # allow algoh time to put files in Node dir
