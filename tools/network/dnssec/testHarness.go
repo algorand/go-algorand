@@ -197,10 +197,6 @@ func (r *testResolver) QueryRRSet(ctx context.Context, domain string, qtype uint
 	return nil, nil, fmt.Errorf("%s not found", domain)
 }
 
-func (r *testResolver) serverList() []string {
-	return nil
-}
-
 func (r *testResolver) queryDNSKeyRRSet(domain string) (zsk []dns.DNSKEY, ksk []dns.DNSKEY, rrSig []dns.RRSIG) {
 	rrs, rrsigs, _ := r.QueryRRSet(context.Background(), domain, dns.TypeDNSKEY)
 	for _, r := range rrs {

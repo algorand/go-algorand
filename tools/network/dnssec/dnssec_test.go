@@ -332,7 +332,7 @@ func TestRealRequests(t *testing.T) {
 	a := require.New(t)
 
 	// A
-	r := MakeDnssecResolver(nil, time.Second)
+	r := MakeDnssecResolver(DefaultDnssecAwareNSServers, time.Second)
 	addrs, err := r.LookupIPAddr(context.Background(), "example.com")
 	a.NoError(err)
 	a.Equal(1, len(addrs))

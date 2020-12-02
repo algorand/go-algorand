@@ -52,7 +52,7 @@ func (c *ResolveController) SystemResolver() ResolverIf {
 		if err != nil {
 			log.Debugf("retrieving system config failed with %s", err.Error())
 			servers = []string{}
-			timeout = 1 * time.Second
+			timeout = time.Millisecond
 		}
 		return dnssec.MakeDnssecResolver(servers, timeout)
 	}

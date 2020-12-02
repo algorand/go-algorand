@@ -14,6 +14,27 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
+/*
+Package dnssec provides net.Resolver-compatible methods for DNSSEC.
+
+Fully DNSSEC-compliant:
+LookupIPAddr, LookupCNAME, LookupSRV, LookupTXT, LookupMX, LookupNS, LookupTLSA
+
+Fallbacks to net.DefaultResolver:
+LookupAddr, LookupPort, LookupHost
+
+The package uses miekg/dns for low-level DNS intractions and DNS messages parsing.
+
+References
+1. DNS https://tools.ietf.org/html/rfc1035
+2. DNS clarifications https://tools.ietf.org/html/rfc2181
+3. DNSSEC proto change https://tools.ietf.org/html/rfc4035
+4. DNSSEC RR change https://tools.ietf.org/html/rfc4034
+5. DNSSEC clarifications https://tools.ietf.org/html/rfc6840
+6. DNSSEC keys management https://tools.ietf.org/html/rfc6781
+7. DNS SRV https://tools.ietf.org/html/rfc2782
+
+*/
 package dnssec
 
 import (
@@ -26,20 +47,6 @@ import (
 
 	"github.com/algorand/go-algorand/logging"
 )
-
-// References
-// 1. DNS https://tools.ietf.org/html/rfc1035
-// 2. DNS clarifications https://tools.ietf.org/html/rfc2181
-// 3. DNSSEC proto change https://tools.ietf.org/html/rfc4035
-// 4. DNSSEC RR change https://tools.ietf.org/html/rfc4034
-// 5. DNSSEC clarifications https://tools.ietf.org/html/rfc6840
-// 6. DNSSEC keys management https://tools.ietf.org/html/rfc6781
-// 7. DNS SRV https://tools.ietf.org/html/rfc2782
-
-// Querier provides a method for getting RRSet and RRSig from DNSSEC-aware server
-type Querier interface {
-	QueryRRSet(ctx context.Context, domain string, qtype uint16) ([]dns.RR, []dns.RRSIG, error)
-}
 
 // ResolverIf represents net.Resolver-compatible interface
 type ResolverIf interface {
@@ -63,8 +70,7 @@ type Resolver struct {
 
 // MakeDnssecResolver return resolver from given NS servers and timeout duration
 func MakeDnssecResolver(servers []string, timeout time.Duration) ResolverIf {
-	dc := &dnsClient{readTimeout: timeout, servers: servers}
-
+	dc := MakeDNSClient(servers, timeout)
 	tc := &QueryWrapper{dc}
 	return &Resolver{client: dc, trustChain: makeTrustChain(tc), maxHops: DefaultMaxHops}
 }

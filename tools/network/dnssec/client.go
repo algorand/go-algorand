@@ -24,14 +24,35 @@ import (
 	"github.com/miekg/dns"
 )
 
-type dnsClient struct {
-	readTimeout time.Duration
-	servers     []string
+// Querier provides a method for getting RRSet and RRSig from DNSSEC-aware server
+type Querier interface {
+	QueryRRSet(ctx context.Context, domain string, qtype uint16) ([]dns.RR, []dns.RRSIG, error)
 }
 
-// queryDNSServer performs DNS query against provided server with respect of both context and timeout restrictions.
+// dnsClient implements Querier interface and it is a DNS client that tries all entries servers until success
+type dnsClient struct {
+	servers     []string
+	readTimeout time.Duration
+	transport   queryServerIf
+}
+
+// MakeDNSClient creates a new instance of dnsClient
+func MakeDNSClient(servers []string, timeout time.Duration) Querier {
+	return &dnsClient{servers: servers, readTimeout: timeout, transport: qsi{}}
+}
+
+// queryServerIf abstracts network communication layer in DNSClient
+type queryServerIf interface {
+	queryServer(ctx context.Context, server string, msg *dns.Msg, timeout time.Duration) (resp *dns.Msg, err error)
+}
+
+// qsi type implements queryServerIf
+type qsi struct {
+}
+
+// queryServer performs DNS query against provided server with respect of both context and timeout restrictions.
 // If UDP fails then retries with TCP client
-func queryDNSServer(ctx context.Context, server string, msg *dns.Msg, timeout time.Duration) (resp *dns.Msg, err error) {
+func (t qsi) queryServer(ctx context.Context, server string, msg *dns.Msg, timeout time.Duration) (resp *dns.Msg, err error) {
 	for _, netType := range []string{"udp", "tcp"} {
 		if resp, _, err = (&dns.Client{Net: netType, ReadTimeout: timeout}).ExchangeContext(ctx, msg, server); err != nil {
 			return nil, err
@@ -47,10 +68,7 @@ func queryDNSServer(ctx context.Context, server string, msg *dns.Msg, timeout ti
 	return nil, fmt.Errorf("DNS response for %s is still truncated even after retrying TCP", name)
 }
 
-func (r *dnsClient) serverList() []string {
-	return r.servers
-}
-
+// query builds a DNS request and tries it against all servers
 func (r *dnsClient) query(ctx context.Context, name string, qtype uint16) (resp *dns.Msg, err error) {
 	name = dns.Fqdn(name)
 
@@ -60,7 +78,7 @@ func (r *dnsClient) query(ctx context.Context, name string, qtype uint16) (resp 
 	msg.SetEdns0(4096, true) // high enough value prevents truncation and retries with TCP
 
 	for _, server := range r.servers {
-		resp, err := queryDNSServer(ctx, server, msg, r.readTimeout)
+		resp, err := r.transport.queryServer(ctx, server, msg, r.readTimeout)
 		if err != nil {
 			continue
 		}
@@ -69,6 +87,7 @@ func (r *dnsClient) query(ctx context.Context, name string, qtype uint16) (resp 
 	return nil, fmt.Errorf("no answer for (%s, %d) from DNS servers %v", name, qtype, r.servers)
 }
 
+// QueryRRSet returns resource records of qtype for name and and its signatures
 func (r *dnsClient) QueryRRSet(ctx context.Context, name string, qtype uint16) ([]dns.RR, []dns.RRSIG, error) {
 	msg, err := r.query(ctx, name, qtype)
 	if err != nil {
