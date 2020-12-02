@@ -132,6 +132,7 @@ type poolAsmResults struct {
 	// roundStartedEvaluating is the round which we were attempted to evaluate last. It's a good measure for
 	// which round we started evaluating, but not a measure to whether the evaluation is complete.
 	roundStartedEvaluating basics.Round
+	assemblyComplete       bool // this variable is *not* protected via the pool.assemblyMu lock and should be accessed only from the OnNewBlock goroutine.
 }
 
 // TODO I moved this number to be a constant in the module, we should consider putting it in the local config
@@ -584,11 +585,12 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 
 	if recomputing {
 		transactionGroupDuration := time.Now().Sub(transactionGroupStartsTime)
-		pool.assemblyMu.Lock()
-		defer pool.assemblyMu.Unlock()
-		if !pool.assemblyResults.ok {
+		if !pool.assemblyResults.assemblyComplete {
+			pool.assemblyMu.Lock()
+			defer pool.assemblyMu.Unlock()
 			if (err == ledger.ErrNoSpace || (pool.assemblyDeadline != time.Time{} && time.Now().After(pool.assemblyDeadline))) && (pool.assemblyRound <= pool.pendingBlockEvaluator.Round()) {
 				pool.assemblyResults.ok = true
+				pool.assemblyResults.assemblyComplete = true
 				if err == ledger.ErrNoSpace {
 					stats.StopReason = telemetryspec.AssembleBlockFull
 				} else {
@@ -724,6 +726,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	if !pool.assemblyResults.ok && pool.assemblyRound <= pool.pendingBlockEvaluator.Round() {
 		pool.assemblyResults.ok = true
+		pool.assemblyResults.assemblyComplete = true
 		blockGenerationStarts := time.Now()
 		lvb, err := pool.pendingBlockEvaluator.GenerateBlock()
 		if err != nil {
