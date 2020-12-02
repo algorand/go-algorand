@@ -5,11 +5,10 @@ NETWORK="$1"
 if [ "$NETWORK" = betanet ]
 then
     echo beta
-elif [ "$NETWORK" = devnet ]
+elif [ "$NETWORK" = mainnet ] || [ "$NETWORK" = testnet ]
 then
-    echo dev
-else
-    # mainnet, testnet
     echo stable
+else
+    echo dev
 fi
 
