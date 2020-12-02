@@ -587,15 +587,14 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 		pool.assemblyMu.Lock()
 		defer pool.assemblyMu.Unlock()
 		if !pool.assemblyResults.ok {
-			if stats != nil {
-				stats.ProcessingTime.AddTransaction(transactionGroupDuration)
-			}
 			if (err == ledger.ErrNoSpace || (pool.assemblyDeadline != time.Time{} && time.Now().After(pool.assemblyDeadline))) && (pool.assemblyRound <= pool.pendingBlockEvaluator.Round()) {
 				pool.assemblyResults.ok = true
 				if err == ledger.ErrNoSpace {
 					stats.StopReason = telemetryspec.AssembleBlockFull
 				} else {
 					stats.StopReason = telemetryspec.AssembleBlockTimeout
+					// if the block is not full, it means that the above transaction made it to the block, so we want to add it here.
+					stats.ProcessingTime.AddTransaction(transactionGroupDuration)
 				}
 
 				blockGenerationStarts := time.Now()
@@ -608,6 +607,9 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 				stats.BlockGenerationDuration = uint64(time.Now().Sub(blockGenerationStarts))
 				pool.assemblyResults.stats = *stats
 				pool.assemblyCond.Broadcast()
+			} else if stats != nil {
+				// add the transaction time only if we didn't ended up finishing the block.
+				stats.ProcessingTime.AddTransaction(transactionGroupDuration)
 			}
 		}
 	}
