@@ -69,7 +69,8 @@ func (c *ResolveController) FallbackResolver() ResolverIf {
 	}
 
 	if c.secure {
-		return dnssec.MakeDnssecResolver([]dnssec.ResolverAddress{dnssec.MakeResolverAddress(dnsIPAddr.String(), "53")}, dnssec.DefaultTimeout)
+		address := dnssec.MakeResolverAddress(dnsIPAddr.String(), "53")
+		return dnssec.MakeDnssecResolver([]dnssec.ResolverAddress{address}, dnssec.DefaultTimeout)
 	}
 
 	r := Resolver{}

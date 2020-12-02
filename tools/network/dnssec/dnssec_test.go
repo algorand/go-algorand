@@ -380,6 +380,6 @@ func TestDefaultResolver(t *testing.T) {
 	a := require.New(t)
 	r := MakeDefaultDnssecResolver("127.0.0.1")
 	provided := len(DefaultDnssecAwareNSServers) + 1
-	actual := len(r.(*Resolver).client.(*dnsClient).servers)
+	actual := len(r.(*Resolver).EffectiveResolverDNS())
 	a.GreaterOrEqual(actual, provided)
 }

@@ -98,6 +98,11 @@ func MakeDefaultDnssecResolver(fallbackAddress string) ResolverIf {
 	return MakeDnssecResolver(servers, timeout)
 }
 
+// EffectiveResolverDNS return list of active DNS servers
+func (r *Resolver) EffectiveResolverDNS() (servers []ResolverAddress) {
+	return r.client.(*dnsClient).servers
+}
+
 // TLSARec represents TLSA record content
 type TLSARec struct {
 	Usage        uint8
