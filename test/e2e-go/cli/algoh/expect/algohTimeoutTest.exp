@@ -55,7 +55,11 @@ if { [catch {
     expect {
         "^Logging to: *" {puts "algoh startup successful"}
         timeout {::Algoh::Abort "algoh failed to start";}
+        eof { ::Algoh::CheckEOF "algoh failed to start" }
     }
+
+    # allow algoh time to put files in Node dir
+    ::Algoh::WaitForFile $TEST_NODE_DIR/algod.pid
 
     # wait until Node approves blocks to the network
     set timeout 60
