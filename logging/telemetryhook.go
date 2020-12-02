@@ -202,21 +202,24 @@ func (hook *dummyHook) waitForEventAndReady() bool {
 	return true
 }
 
+// the elasticClientLogger is used to bridge the elastic library error reporting
+// into our own logging system.
 type elasticClientLogger struct {
-	elastic.Logger
-	level logrus.Level
+	logger Logger       // points to the underlying logger which would perform the logging
+	level  logrus.Level // indicate what logging level we want to use for the logging
 }
 
+// Printf tunnel the log string into the log file.
 func (el elasticClientLogger) Printf(format string, v ...interface{}) {
 	switch el.level {
 	case logrus.DebugLevel:
-		Base().Debugf(format, v...)
+		el.logger.Debugf(format, v...)
 	case logrus.InfoLevel:
-		Base().Infof(format, v...)
+		el.logger.Infof(format, v...)
 	case logrus.WarnLevel:
-		Base().Warnf(format, v...)
+		el.logger.Warnf(format, v...)
 	default:
-		Base().Errorf(format, v...)
+		el.logger.Errorf(format, v...)
 	}
 }
 
@@ -231,9 +234,9 @@ func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 		elastic.SetBasicAuth(cfg.UserName, cfg.Password),
 		elastic.SetSniff(false),
 		elastic.SetGzip(true),
-		elastic.SetTraceLog(&elasticClientLogger{level: logrus.DebugLevel}),
-		elastic.SetInfoLog(&elasticClientLogger{level: logrus.InfoLevel}),
-		elastic.SetErrorLog(&elasticClientLogger{level: logrus.WarnLevel}),
+		elastic.SetTraceLog(&elasticClientLogger{logger: Base(), level: logrus.DebugLevel}),
+		elastic.SetInfoLog(&elasticClientLogger{logger: Base(), level: logrus.DebugLevel}),
+		elastic.SetErrorLog(&elasticClientLogger{logger: Base(), level: logrus.WarnLevel}),
 	)
 	if err != nil {
 		err = fmt.Errorf("Unable to create new elastic client on '%s' using '%s:%s' : %w", cfg.URI, cfg.UserName, cfg.Password, err)
