@@ -33,22 +33,38 @@ if { [catch {
     # Determine primary account
     set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME  $TEST_PRIMARY_NODE_DIR]
 
-    exec goal asset create --creator $PRIMARY_ACCOUNT_ADDRESS --total 90000 --name 'testassetname\b\b\b' --unitname 'u' --datadir $TEST_PRIMARY_NODE_DIR
+    # use goal node status command to wait for round 1
+    ::AlgorandGoal::WaitForRound 1 $TEST_PRIMARY_NODE_DIR
 
+    # set the timeout to allow up to 5 rounds of 4 seconds each.
+    # ( since the command would send a transaction and wait until it's being inclued in a block)
+    set timeout 20
+    spawn goal asset create --creator $PRIMARY_ACCOUNT_ADDRESS --total 90000 --name 'testassetname\b\b\b' --unitname 'u' --datadir $TEST_PRIMARY_NODE_DIR
+    expect {
+        timeout { close; ::AlgorandGoal::Abort "Asset Create timed out" }
+        -re "Created asset with asset index *" { set ASSET_CREATED 1; exp_continue }
+        eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "Unable to create asset" } }
+    }
+
+    # restore timeout
+    set timeout 5
     spawn goal asset info --creator $PRIMARY_ACCOUNT_ADDRESS --unitname 'u' --datadir $TEST_PRIMARY_NODE_DIR
     expect {
         timeout { close; ::AlgorandGoal::Abort "Asset Info Failed" }
         "Asset name:       'testassetname'" { puts "Successfully displayed asset"; close;}
-        eof { close; ::AlgorandGoal::Abort "Asset Info Unexpected Result" }
+        eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "Unable to query asset info" } }
     }
 
     spawn goal account info --address $PRIMARY_ACCOUNT_ADDRESS --datadir $TEST_PRIMARY_NODE_DIR
     expect {
         timeout { close; ::AlgorandGoal::Abort "Account Info Failed" }
         "'testassetname', supply" { puts "Successfully displayed account asset"; close;}
-        eof { close; ::AlgorandGoal::Abort "Account Info Unexpected Result" }
+        eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "Unable to query asset info" } }
     }
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
 } EXCEPTION] } {
-    puts "ERROR in goalFormattingTest: $EXCEPTION"
+    puts "ERROR in goalAssetTest: $EXCEPTION"
     exit 1
 }
