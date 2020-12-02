@@ -12,11 +12,10 @@ if [ -z "$NETWORK" ]; then
     exit 1
 fi
 
-CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
+CHANNEL=$(./scripts/release/mule/common/get_channel.sh "$NETWORK")
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 NO_DEPLOY=${NO_DEPLOY:-false}
-OS_TYPE=$(uname)
-OS_TYPE=${OS_TYPE,}
+OS_TYPE=$(./scripts/release/mule/common/ostype.sh)
 PACKAGES_DIR=${PACKAGES_DIR:-"./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"}
 
 if [ -n "$S3_SOURCE" ]

@@ -12,7 +12,7 @@ if [ -z "$BRANCH" ] || [ -z "$NETWORK" ] || [ -z "$SHA" ]; then
     exit 1
 fi
 
-CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
+CHANNEL=$(./scripts/release/mule/common/get_channel.sh "$NETWORK")
 export CHANNEL
 
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
@@ -25,8 +25,8 @@ export PKG_TYPE="$1"
 ARCH_BIT=$(uname -m)
 export ARCH_BIT
 
-OS_TYPE=$(uname)
-export OS_TYPE=${OS_TYPE,}
+OS_TYPE=$(./scripts/release/mule/common/ostype.sh)
+export OS_TYPE
 
 export SHA
 

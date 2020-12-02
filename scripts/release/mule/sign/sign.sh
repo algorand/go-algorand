@@ -14,12 +14,11 @@ if [ -z "$NETWORK" ]; then
     exit 1
 fi
 
-CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
+CHANNEL=$(./scripts/release/mule/common/get_channel.sh "$NETWORK")
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 PKG_DIR="./tmp/node_pkgs"
 SIGNING_KEY_ADDR=dev@algorand.com
-OS_TYPE=$(uname)
-OS_TYPE=${OS_TYPE,}
+OS_TYPE=$(./scripts/release/mule/common/ostype.sh)
 ARCHS=(amd64 arm arm64)
 ARCH_BITS=(x86_64 armv7l aarch64)
 

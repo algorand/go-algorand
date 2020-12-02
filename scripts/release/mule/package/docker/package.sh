@@ -11,10 +11,9 @@ if  [ -z "$NETWORK" ]; then
     exit 1
 fi
 
-CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
+CHANNEL=$(./scripts/release/mule/common/get_channel.sh "$NETWORK")
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
-OS_TYPE=$(uname)
-OS_TYPE=${OS_TYPE,}
+OS_TYPE=$(./scripts/release/mule/common/ostype.sh)
 PKG_ROOT_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 ALGOD_INSTALL_TAR_FILE="$PKG_ROOT_DIR/node_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.tar.gz"
 
