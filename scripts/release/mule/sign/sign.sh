@@ -21,6 +21,7 @@ SIGNING_KEY_ADDR=dev@algorand.com
 OS_TYPE=$(uname)
 OS_TYPE=${OS_TYPE,}
 ARCHS=(amd64 arm arm64)
+ARCH_BITS=(x86_64 armv7l aarch64)
 
 # It seems that copying/mounting the gpg dir from another machine can result in insecure
 # access privileges, so set the correct permissions to avoid the following warning:
@@ -34,18 +35,18 @@ find /root/.gnupg -type f -exec chmod 600 {} \;
 # Note that when downloading from the cloud that we'll get all packages for all architectures.
 if [ -n "$S3_SOURCE" ]
 then
+    i=0
     for arch in "${ARCHS[@]}"; do
+        arch_bit="${ARCH_BITS[$i]}"
         (
             mkdir -p "$PKG_DIR/$OS_TYPE/$arch"
             cd "$PKG_DIR/$OS_TYPE/$arch"
             # Note the underscore after ${arch}!
-            # Also, the order of the includes/excludes is important!
-            aws s3 cp --recursive --exclude "*" --include "*${arch}_*" --exclude "*.sig" --exclude "*.asc" --exclude "*.asc.gz" "s3://$S3_SOURCE/$CHANNEL/$VERSION" .
-
             # Recall that rpm packages have the arch bit in the filenames (i.e., "x86_64" rather than "amd64").
-            ARCH_BIT=$(uname -m)
-            aws s3 cp --recursive --exclude "*" --include "*$ARCH_BIT*" --include "*.rpm" --exclude "*.sig" --exclude "*.asc" --exclude "*.asc.gz" "s3://$S3_SOURCE/$CHANNEL/$VERSION" .
+            # Also, the order of the includes/excludes is important!
+            aws s3 cp --recursive --exclude "*" --include "*${arch}_*" --include "*$arch_bit.rpm" --exclude "*.sig" --exclude "*.asc" --exclude "*.asc.gz" "s3://$S3_SOURCE/$CHANNEL/$VERSION" .
         )
+        i=$((i + 1))
     done
 fi
 
@@ -62,8 +63,12 @@ for os in "${OS_TYPES[@]}"; do
     if [ "$os" = linux ]
     then
         for arch in "${ARCHS[@]}"; do
-            (
-                if [ -d "$os/$arch" ]; then
+            if [ -d "$os/$arch" ]
+            then
+                # Only do the subsequent operations in a subshell if the directory is not empty.
+                if stat -t "$os/$arch/"* > /dev/null 2>&1
+                then
+                (
                     cd "$os/$arch"
 
                     # Clean package directory of any previous operations.
@@ -90,8 +95,9 @@ for os in "${OS_TYPES[@]}"; do
                     STATUSFILE="build_status_${CHANNEL}_${os}-${arch}_${VERSION}"
                     gpg -u "$SIGNING_KEY_ADDR" --clearsign "$STATUSFILE"
                     gzip -c "$STATUSFILE.asc" > "$STATUSFILE.asc.gz"
+                )
                 fi
-            )
+            fi
         done
     fi
 done
