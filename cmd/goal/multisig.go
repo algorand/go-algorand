@@ -170,6 +170,7 @@ var signProgramCmd = &cobra.Command{
 				outname = fmt.Sprintf("%s.lsig", programSource)
 			}
 			lsig.Logic = ops.Program
+			program = ops.Program
 		} else if logicSigFile != "" {
 			if progByteFile != "" {
 				reportErrorf(multisigProgramCollision)
