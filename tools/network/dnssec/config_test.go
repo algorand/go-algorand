@@ -53,7 +53,7 @@ func TestConfig(t *testing.T) {
 	s, tm, err := systemConfig(b)
 	a.NoError(err)
 	a.Equal(1, len(s))
-	a.Equal("127.0.0.1:53", s[0])
+	a.Equal("127.0.0.1:53", string(s[0]))
 	a.Greater(uint64(tm), uint64(time.Microsecond))
 	a.Less(uint64(tm), uint64(100*time.Second))
 
@@ -61,7 +61,7 @@ func TestConfig(t *testing.T) {
 	s, tm, err = systemConfig(b)
 	a.NoError(err)
 	a.Equal(1, len(s))
-	a.Equal("127.0.0.1:53", s[0])
+	a.Equal("127.0.0.1:53", string(s[0]))
 	a.Equal(uint64(tm), uint64(time.Second))
 }
 

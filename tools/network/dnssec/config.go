@@ -42,17 +42,25 @@ const DefaultTimeout = 1 * time.Second
 // Other - no DNSSEC - last check 2020-12-01
 // Alibaba 223.6.6.6:53
 
+// ResolverAddress is ip addr + port as string
+type ResolverAddress string
+
 // DefaultDnssecAwareNSServers is a list of known public DNSSEC-aware servers
-var DefaultDnssecAwareNSServers = []string{"1.1.1.1:53", "208.67.222.222:53", "8.8.8.8:53", "77.88.8.8:53", "8.26.56.26:53", "180.76.76.76:53"}
+var DefaultDnssecAwareNSServers = []ResolverAddress{"1.1.1.1:53", "208.67.222.222:53", "8.8.8.8:53", "77.88.8.8:53", "8.26.56.26:53", "180.76.76.76:53"}
 
 const defaultConfigFile = "/etc/resolv.conf"
+
+// MakeResolverAddress creates a new ResolverAddress instance from address and port
+func MakeResolverAddress(addr, port string) ResolverAddress {
+	return ResolverAddress(addr + ":" + port)
+}
 
 // SystemConfig return list of servers and timeout from
 // This is Linux only.
 //
 // For Windows need to implement DNS servers retrieval from GetNetworkParams
 //  see https://docs.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getnetworkparams
-func SystemConfig() (servers []string, timeout time.Duration, err error) {
+func SystemConfig() (servers []ResolverAddress, timeout time.Duration, err error) {
 	f, err := os.Open(defaultConfigFile)
 	defer f.Close()
 	if err != nil {
@@ -61,7 +69,7 @@ func SystemConfig() (servers []string, timeout time.Duration, err error) {
 	return systemConfig(f)
 }
 
-func systemConfig(configFile io.Reader) (servers []string, timeout time.Duration, err error) {
+func systemConfig(configFile io.Reader) (servers []ResolverAddress, timeout time.Duration, err error) {
 	if configFile == nil {
 		err = fmt.Errorf("empty config reader")
 		return
@@ -71,7 +79,7 @@ func systemConfig(configFile io.Reader) (servers []string, timeout time.Duration
 		return
 	}
 	for _, addr := range cc.Servers {
-		servers = append(servers, addr+":"+cc.Port)
+		servers = append(servers, MakeResolverAddress(addr, cc.Port))
 	}
 	timeout = DefaultTimeout
 	if cc.Timeout != 0 && len(servers) > 0 {

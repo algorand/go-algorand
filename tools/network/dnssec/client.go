@@ -31,19 +31,19 @@ type Querier interface {
 
 // dnsClient implements Querier interface and it is a DNS client that tries all entries servers until success
 type dnsClient struct {
-	servers     []string
+	servers     []ResolverAddress
 	readTimeout time.Duration
 	transport   queryServerIf
 }
 
 // MakeDNSClient creates a new instance of dnsClient
-func MakeDNSClient(servers []string, timeout time.Duration) Querier {
+func MakeDNSClient(servers []ResolverAddress, timeout time.Duration) Querier {
 	return &dnsClient{servers: servers, readTimeout: timeout, transport: qsi{}}
 }
 
 // queryServerIf abstracts network communication layer in DNSClient
 type queryServerIf interface {
-	queryServer(ctx context.Context, server string, msg *dns.Msg, timeout time.Duration) (resp *dns.Msg, err error)
+	queryServer(ctx context.Context, server ResolverAddress, msg *dns.Msg, timeout time.Duration) (resp *dns.Msg, err error)
 }
 
 // qsi type implements queryServerIf
@@ -52,9 +52,9 @@ type qsi struct {
 
 // queryServer performs DNS query against provided server with respect of both context and timeout restrictions.
 // If UDP fails then retries with TCP client
-func (t qsi) queryServer(ctx context.Context, server string, msg *dns.Msg, timeout time.Duration) (resp *dns.Msg, err error) {
+func (t qsi) queryServer(ctx context.Context, server ResolverAddress, msg *dns.Msg, timeout time.Duration) (resp *dns.Msg, err error) {
 	for _, netType := range []string{"udp", "tcp"} {
-		if resp, _, err = (&dns.Client{Net: netType, ReadTimeout: timeout}).ExchangeContext(ctx, msg, server); err != nil {
+		if resp, _, err = (&dns.Client{Net: netType, ReadTimeout: timeout}).ExchangeContext(ctx, msg, string(server)); err != nil {
 			return nil, err
 		}
 		if !resp.Truncated {

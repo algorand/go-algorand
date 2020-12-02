@@ -69,7 +69,7 @@ type Resolver struct {
 }
 
 // MakeDnssecResolver return resolver from given NS servers and timeout duration
-func MakeDnssecResolver(servers []string, timeout time.Duration) ResolverIf {
+func MakeDnssecResolver(servers []ResolverAddress, timeout time.Duration) ResolverIf {
 	dc := MakeDNSClient(servers, timeout)
 	tc := &QueryWrapper{dc}
 	return &Resolver{client: dc, trustChain: makeTrustChain(tc), maxHops: DefaultMaxHops}
@@ -93,7 +93,7 @@ func MakeDefaultDnssecResolver(fallbackAddress string) ResolverIf {
 		fallback = dnsIPAddr.String()
 	}
 
-	servers = append(servers, fallback+":53")
+	servers = append(servers, MakeResolverAddress(fallback, "53"))
 	servers = append(servers, DefaultDnssecAwareNSServers...)
 	return MakeDnssecResolver(servers, timeout)
 }

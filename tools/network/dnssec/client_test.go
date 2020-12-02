@@ -34,13 +34,13 @@ func TestEmptyClient(t *testing.T) {
 	a.Empty(rr)
 	a.Empty(rsig)
 
-	c = MakeDNSClient([]string{}, time.Second)
+	c = MakeDNSClient([]ResolverAddress{}, time.Second)
 	rr, rsig, err = c.QueryRRSet(context.Background(), "test", 0)
 	a.Error(err)
 	a.Empty(rr)
 	a.Empty(rsig)
 
-	c = MakeDNSClient([]string{"example.com"}, time.Millisecond)
+	c = MakeDNSClient([]ResolverAddress{"example.com"}, time.Millisecond)
 	rr, rsig, err = c.QueryRRSet(context.Background(), "test", 0)
 	a.Error(err)
 	a.Empty(rr)
@@ -51,7 +51,7 @@ type ttr struct {
 	msg dns.Msg
 }
 
-func (t ttr) queryServer(ctx context.Context, server string, msg *dns.Msg, timeout time.Duration) (resp *dns.Msg, err error) {
+func (t ttr) queryServer(ctx context.Context, server ResolverAddress, msg *dns.Msg, timeout time.Duration) (resp *dns.Msg, err error) {
 	return &t.msg, nil
 }
 
@@ -59,7 +59,7 @@ func TestMockedClient(t *testing.T) {
 	a := require.New(t)
 
 	qs := ttr{}
-	c := dnsClient{[]string{"test"}, time.Second, qs}
+	c := dnsClient{[]ResolverAddress{"test"}, time.Second, qs}
 	rr, rsig, err := c.QueryRRSet(context.Background(), "test", 0)
 	a.Error(err)
 	a.Empty(rr)
@@ -67,7 +67,7 @@ func TestMockedClient(t *testing.T) {
 
 	var answer = []dns.RR{&dns.DNSKEY{}, &dns.RRSIG{}}
 	qs = ttr{msg: dns.Msg{MsgHdr: dns.MsgHdr{Rcode: dns.RcodeServerFailure}, Answer: answer}}
-	c = dnsClient{[]string{"test"}, time.Second, qs}
+	c = dnsClient{[]ResolverAddress{"test"}, time.Second, qs}
 	rr, rsig, err = c.QueryRRSet(context.Background(), "test", 0)
 	a.Error(err)
 	a.Contains(err.Error(), "SERVFAIL")
@@ -75,7 +75,7 @@ func TestMockedClient(t *testing.T) {
 	a.Empty(rsig)
 
 	qs = ttr{msg: dns.Msg{Answer: answer}}
-	c = dnsClient{[]string{"test"}, time.Second, qs}
+	c = dnsClient{[]ResolverAddress{"test"}, time.Second, qs}
 	rr, rsig, err = c.QueryRRSet(context.Background(), "test", 0)
 	a.NoError(err)
 	a.Equal(1, len(rr))

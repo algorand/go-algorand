@@ -51,7 +51,7 @@ func (c *ResolveController) SystemResolver() ResolverIf {
 		servers, timeout, err := dnssec.SystemConfig()
 		if err != nil {
 			log.Debugf("retrieving system config failed with %s", err.Error())
-			servers = []string{}
+			servers = nil
 			timeout = time.Millisecond
 		}
 		return dnssec.MakeDnssecResolver(servers, timeout)
@@ -69,7 +69,7 @@ func (c *ResolveController) FallbackResolver() ResolverIf {
 	}
 
 	if c.secure {
-		return dnssec.MakeDnssecResolver([]string{dnsIPAddr.String() + dnsPortSuffix}, dnssec.DefaultTimeout)
+		return dnssec.MakeDnssecResolver([]dnssec.ResolverAddress{dnssec.MakeResolverAddress(dnsIPAddr.String(), "53")}, dnssec.DefaultTimeout)
 	}
 
 	r := Resolver{}

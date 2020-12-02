@@ -314,14 +314,14 @@ func TestDeadNS(t *testing.T) {
 	t.Skip() // skip real network tests in autotest
 	a := require.New(t)
 
-	r := MakeDnssecResolver([]string{"192.168.12.34:5678", "10.12.34.56:890"}, time.Microsecond)
+	r := MakeDnssecResolver([]ResolverAddress{"192.168.12.34:5678", "10.12.34.56:890"}, time.Microsecond)
 	addrs, err := r.LookupIPAddr(context.Background(), "example.com")
 	a.Error(err)
 	a.Contains(err.Error(), "no answer for")
 	a.Empty(addrs)
 
 	// possible race :( with 100ms timeout
-	r = MakeDnssecResolver([]string{"192.168.12.34:5678", "1.1.1.1:53"}, 100*time.Millisecond)
+	r = MakeDnssecResolver([]ResolverAddress{"192.168.12.34:5678", "1.1.1.1:53"}, 100*time.Millisecond)
 	addrs, err = r.LookupIPAddr(context.Background(), "example.com")
 	a.NoError(err)
 	a.Equal(1, len(addrs))
@@ -374,4 +374,12 @@ func TestRealRequests(t *testing.T) {
 	addrs, err = r.LookupIPAddr(context.Background(), "relay-montreal-mainnet-algorand.algorand-mainnet.network.")
 	a.Error(err)
 	a.Contains(err.Error(), "exceed max attempts")
+}
+
+func TestDefaultResolver(t *testing.T) {
+	a := require.New(t)
+	r := MakeDefaultDnssecResolver("127.0.0.1")
+	provided := len(DefaultDnssecAwareNSServers) + 1
+	actual := len(r.(*Resolver).client.(*dnsClient).servers)
+	a.GreaterOrEqual(actual, provided)
 }
