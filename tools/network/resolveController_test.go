@@ -25,17 +25,19 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/tools/network/dnssec"
 )
 
 func TestSystemResolver(t *testing.T) {
 	a := require.New(t)
+	log := logging.Base()
 
-	c := NewResolveController(false, "127.0.0.1")
+	c := NewResolveController(false, "127.0.0.1", log)
 	r := c.SystemResolver()
 	a.IsType(&net.Resolver{}, r)
 
-	c = NewResolveController(true, "127.0.0.1")
+	c = NewResolveController(true, "127.0.0.1", log)
 	r = c.SystemResolver()
 	a.IsType(&dnssec.Resolver{}, r)
 	a.GreaterOrEqual(len(r.(*dnssec.Resolver).EffectiveResolverDNS()), 0)
@@ -43,13 +45,14 @@ func TestSystemResolver(t *testing.T) {
 
 func TestFallbackResolver(t *testing.T) {
 	a := require.New(t)
+	log := logging.Base()
 
-	c := NewResolveController(false, "127.0.0.1")
+	c := NewResolveController(false, "127.0.0.1", log)
 	r := c.FallbackResolver()
 	a.IsType(&Resolver{}, r)
 	a.Equal("127.0.0.1", r.(*Resolver).EffectiveResolverDNS())
 
-	c = NewResolveController(true, "127.0.0.1")
+	c = NewResolveController(true, "127.0.0.1", log)
 	r = c.FallbackResolver()
 	a.IsType(&dnssec.Resolver{}, r)
 	a.Equal(r.(*dnssec.Resolver).EffectiveResolverDNS(), []dnssec.ResolverAddress{dnssec.MakeResolverAddress("127.0.0.1", "53")})
@@ -57,13 +60,14 @@ func TestFallbackResolver(t *testing.T) {
 
 func TestDefaultResolver(t *testing.T) {
 	a := require.New(t)
+	log := logging.Base()
 
-	c := NewResolveController(false, "127.0.0.1")
+	c := NewResolveController(false, "127.0.0.1", log)
 	r := c.DefaultResolver()
 	a.IsType(&Resolver{}, r)
 	a.Equal(defaultDNSAddress, r.(*Resolver).EffectiveResolverDNS())
 
-	c = NewResolveController(true, "127.0.0.1")
+	c = NewResolveController(true, "127.0.0.1", log)
 	r = c.DefaultResolver()
 	a.IsType(&dnssec.Resolver{}, r)
 	a.Equal(r.(*dnssec.Resolver).EffectiveResolverDNS(), dnssec.DefaultDnssecAwareNSServers)
@@ -72,10 +76,11 @@ func TestDefaultResolver(t *testing.T) {
 func TestRealNamesWithResolver(t *testing.T) {
 	t.Skip() // skip real network tests in autotest
 	a := require.New(t)
+	log := logging.Base()
 
 	example := "example.com"
-	nsec := NewResolveController(false, "1.1.1.1")
-	sec := NewResolveController(true, "1.1.1.1")
+	nsec := NewResolveController(false, "1.1.1.1", log)
+	sec := NewResolveController(true, "1.1.1.1", log)
 	r := nsec.SystemResolver()
 	addrs, err := r.LookupIPAddr(context.Background(), example)
 	a.NoError(err)
@@ -93,7 +98,7 @@ func TestRealNamesWithResolver(t *testing.T) {
 	}
 
 	for _, secure := range []bool{false, true} {
-		c := NewResolveController(secure, "1.1.1.1")
+		c := NewResolveController(secure, "1.1.1.1", log)
 		r = c.FallbackResolver()
 		addrs, err = r.LookupIPAddr(context.Background(), example)
 		a.NoError(err)
@@ -104,7 +109,7 @@ func TestRealNamesWithResolver(t *testing.T) {
 		a.NoError(err)
 		a.GreaterOrEqual(len(addrs), 1)
 
-		c = NewResolveController(secure, "192.168.12.34")
+		c = NewResolveController(secure, "192.168.12.34", log)
 		r = c.FallbackResolver()
 		timeoutCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 		_, err = r.LookupIPAddr(timeoutCtx, example)

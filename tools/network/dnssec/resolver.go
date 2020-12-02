@@ -77,8 +77,7 @@ func MakeDnssecResolver(servers []ResolverAddress, timeout time.Duration) Resolv
 
 // MakeDefaultDnssecResolver returns a resolver with all possible DNS servers:
 // system, fallback, default
-func MakeDefaultDnssecResolver(fallbackAddress string) ResolverIf {
-	log := logging.Base()
+func MakeDefaultDnssecResolver(fallbackAddress string, log logging.Logger) ResolverIf {
 	servers, timeout, err := SystemConfig()
 	if err != nil {
 		log.Debugf("retrieving system config failed with %s", err.Error())

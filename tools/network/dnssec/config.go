@@ -30,6 +30,7 @@ const DefaultMaxHops = 10
 
 // DefaultTimeout is seconds before giving up request
 const DefaultTimeout = 1 * time.Second
+const maxTimeout = 5 * time.Second
 
 // List of DNSSEC-aware public servers
 // CloudFlare: 1.1.1.1:53 1.0.0.1:53
@@ -84,6 +85,9 @@ func systemConfig(configFile io.Reader) (servers []ResolverAddress, timeout time
 	timeout = DefaultTimeout
 	if cc.Timeout != 0 && len(servers) > 0 {
 		timeout = time.Duration(cc.Timeout) * time.Second
+	}
+	if timeout > maxTimeout {
+		timeout = maxTimeout
 	}
 	return
 }

@@ -57,9 +57,9 @@ func (tz *trustedZone) checkKeys(keytags []uint16) bool {
 func (tz *trustedZone) verifyDS(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time) (cacheOutdated bool, err error) {
 	// parent zone's DNSKEY RRSET is cached but DS is just came from the network
 	// and might be signed by newer key
-	kt := make([]uint16, 0, len(rrSig))
-	for _, sig := range rrSig {
-		kt = append(kt, sig.KeyTag)
+	kt := make([]uint16, len(rrSig))
+	for i, sig := range rrSig {
+		kt[i] = sig.KeyTag
 	}
 	// so if no such keys in a cache return cache outdated that must force this zone update
 	if !tz.checkKeys(kt) {
@@ -71,7 +71,7 @@ func (tz *trustedZone) verifyDS(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time) 
 	verifiedSig := verifyRRSig(rrSet, rrSig, t, tz.zsk)
 	if len(verifiedSig) == 0 {
 		requestedZone := (rrSig)[0].Hdr.Name
-		err = fmt.Errorf("DS signature verification failed for %s", requestedZone)
+		err = fmt.Errorf("DS signature verification failed for '%s'", requestedZone)
 	}
 
 	return

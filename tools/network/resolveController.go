@@ -38,20 +38,20 @@ var _ dnssec.ResolverIf = &dnssec.Resolver{}
 type ResolveController struct {
 	secure   bool
 	fallback string
+	log      logging.Logger
 }
 
 // NewResolveController creates a new ResolveController
-func NewResolveController(secure bool, fallbackDNSResolverAddress string) ResolveController {
-	return ResolveController{secure, fallbackDNSResolverAddress}
+func NewResolveController(secure bool, fallbackDNSResolverAddress string, log logging.Logger) ResolveController {
+	return ResolveController{secure, fallbackDNSResolverAddress, log}
 }
 
 // SystemResolver returns a resolver that uses OS-defined DNS servers
 func (c *ResolveController) SystemResolver() ResolverIf {
-	log := logging.Base()
 	if c.secure {
 		servers, timeout, err := dnssec.SystemConfig()
 		if err != nil {
-			log.Debugf("retrieving system config failed with %s", err.Error())
+			c.log.Debugf("retrieving system config failed with %s", err.Error())
 			servers = nil
 			timeout = time.Millisecond
 		}
@@ -62,11 +62,10 @@ func (c *ResolveController) SystemResolver() ResolverIf {
 
 // FallbackResolver returns a resolver that uses fallback DNS address
 func (c *ResolveController) FallbackResolver() ResolverIf {
-	log := logging.Base()
 	var dnsIPAddr *net.IPAddr
 	var err error
 	if dnsIPAddr, err = net.ResolveIPAddr("ip", c.fallback); err != nil {
-		log.Debugf("resolving fallback %s failed with %s", c.fallback, err.Error())
+		c.log.Debugf("resolving fallback '%s' failed with %s", c.fallback, err.Error())
 	}
 
 	if c.secure {

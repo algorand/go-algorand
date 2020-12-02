@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
 )
@@ -378,7 +379,7 @@ func TestRealRequests(t *testing.T) {
 
 func TestDefaultResolver(t *testing.T) {
 	a := require.New(t)
-	r := MakeDefaultDnssecResolver("127.0.0.1")
+	r := MakeDefaultDnssecResolver("127.0.0.1", logging.Base())
 	provided := len(DefaultDnssecAwareNSServers) + 1
 	actual := len(r.(*Resolver).EffectiveResolverDNS())
 	a.GreaterOrEqual(actual, provided)

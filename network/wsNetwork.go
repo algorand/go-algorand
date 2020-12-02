@@ -582,7 +582,7 @@ func (wn *WebsocketNetwork) GetPeers(options ...PeerOption) []Peer {
 func (wn *WebsocketNetwork) setup() {
 	var preferredResolver dnssec.ResolverIf
 	if wn.config.DNSSecurityRelayAddrEnforced() {
-		preferredResolver = dnssec.MakeDefaultDnssecResolver(wn.config.FallbackDNSResolverAddress)
+		preferredResolver = dnssec.MakeDefaultDnssecResolver(wn.config.FallbackDNSResolverAddress, wn.log)
 	}
 	wn.dialer = makeRateLimitingDialer(wn.phonebook, preferredResolver)
 	wn.transport = makeRateLimitingTransport(wn.phonebook, 10*time.Second, &wn.dialer)

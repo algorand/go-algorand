@@ -35,7 +35,7 @@ func ReadFromSRV(service string, protocol string, name string, fallbackDNSResolv
 		return
 	}
 
-	controller := NewResolveController(secure, fallbackDNSResolverAddress)
+	controller := NewResolveController(secure, fallbackDNSResolverAddress, log)
 
 	systemResolver := controller.SystemResolver()
 	_, records, sysLookupErr := systemResolver.LookupSRV(context.Background(), service, protocol, name)
@@ -47,14 +47,16 @@ func ReadFromSRV(service string, protocol string, name string, fallbackDNSResolv
 			fallbackResolver := controller.FallbackResolver()
 			_, records, fallbackLookupErr = fallbackResolver.LookupSRV(context.Background(), service, protocol, name)
 		}
-		if fallbackLookupErr != nil || fallbackDNSResolverAddress == "" {
-			log.Infof("ReadFromBootstrap: DNS LookupSRV failed when using fallback resolver: %v", fallbackLookupErr)
+		if fallbackLookupErr != nil {
+			log.Infof("ReadFromBootstrap: DNS LookupSRV failed when using fallback '%s' resolver: %v", fallbackDNSResolverAddress, fallbackLookupErr)
+		}
 
+		if fallbackLookupErr != nil || fallbackDNSResolverAddress == "" {
 			fallbackResolver := controller.DefaultResolver()
 			var defaultLookupErr error
 			_, records, defaultLookupErr = fallbackResolver.LookupSRV(context.Background(), service, protocol, name)
 			if defaultLookupErr != nil {
-				err = fmt.Errorf("ReadFromBootstrap: DNS LookupSRV failed when using system resolver(%v), fallback resolver(%v), as well as using default DNS due to %v", sysLookupErr, fallbackLookupErr, defaultLookupErr)
+				err = fmt.Errorf("ReadFromBootstrap: DNS LookupSRV failed when using system resolver(%v), fallback resolver(%v), as well as using default resolver due to %v", sysLookupErr, fallbackLookupErr, defaultLookupErr)
 				return
 			}
 		}
