@@ -18,6 +18,9 @@ CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 PKG_DIR="./tmp/node_pkgs"
 SIGNING_KEY_ADDR=dev@algorand.com
+OS_TYPE=$(uname)
+OS_TYPE=${OS_TYPE,}
+ARCHS=(amd64 arm arm64)
 
 # It seems that copying/mounting the gpg dir from another machine can result in insecure
 # access privileges, so set the correct permissions to avoid the following warning:
@@ -27,13 +30,26 @@ SIGNING_KEY_ADDR=dev@algorand.com
 find /root/.gnupg -type d -exec chmod 700 {} \;
 find /root/.gnupg -type f -exec chmod 600 {} \;
 
-mkdir -p "$PKG_DIR"
-cd "$PKG_DIR"
 
+# Note that when downloading from the cloud that we'll get all packages for all architectures.
 if [ -n "$S3_SOURCE" ]
 then
-    aws s3 cp --recursive --exclude "*" --include "*$CHANNEL*$VERSION*" "s3://$S3_SOURCE/$CHANNEL/$VERSION" .
+    for arch in "${ARCHS[@]}"; do
+        (
+            mkdir -p "$PKG_DIR/$OS_TYPE/$arch"
+            cd "$PKG_DIR/$OS_TYPE/$arch"
+            # Note the underscore after ${arch}!
+            # Also, the order of the includes/excludes is important!
+            aws s3 cp --recursive --exclude "*" --include "*${arch}_*" --exclude "*.sig" --exclude "*.asc" --exclude "*.asc.gz" "s3://$S3_SOURCE/$CHANNEL/$VERSION" .
+
+            # Recall that rpm packages have the arch bit in the filenames (i.e., "x86_64" rather than "amd64").
+            ARCH_BIT=$(uname -m)
+            aws s3 cp --recursive --exclude "*" --include "*$ARCH_BIT*" --include "*.rpm" --exclude "*.sig" --exclude "*.asc" --exclude "*.asc.gz" "s3://$S3_SOURCE/$CHANNEL/$VERSION" .
+        )
+    done
 fi
+
+cd "$PKG_DIR"
 
 # TODO: "$PKG_TYPE" == "source"
 
@@ -45,7 +61,6 @@ OS_TYPES=($(find . -mindepth 1 -maxdepth 1 -type d -printf '%f\n'))
 for os in "${OS_TYPES[@]}"; do
     if [ "$os" = linux ]
     then
-        ARCHS=(amd64 arm arm64)
         for arch in "${ARCHS[@]}"; do
             (
                 if [ -d "$os/$arch" ]; then

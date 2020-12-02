@@ -55,14 +55,17 @@ then
     # Not only do we need to redefine the `PACKAGE_NAME_SUFFIX` for rpm but
     # we need to check the channel before defining it.
     #
-    # Remember, rpm packages don't include "stable" in the package name!
+    # Remember, rpm packages don't include the channel in the package name!
+    #
+    # ( `betanet` builds are special b/c "beta" is part of the package name,
+    #   so although it appears as though I just lied to you, I did not :)
     #
     # rpm
-    if [ "$CHANNEL" = "stable" ]
+    if [ "$CHANNEL" = "beta" ]
     then
-        PACKAGE_NAME_SUFFIX="$VERSION-1.$ARCH_BIT"
-    else
         PACKAGE_NAME_SUFFIX="$CHANNEL-$VERSION-1.$ARCH_BIT"
+    else
+        PACKAGE_NAME_SUFFIX="$VERSION-1.$ARCH_BIT"
     fi
 
     aws s3 cp "s3://$PREFIX/algorand-$PACKAGE_NAME_SUFFIX.rpm" .

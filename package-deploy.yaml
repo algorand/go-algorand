@@ -83,6 +83,13 @@ tasks:
     target: mule-deploy-rpm
 
 jobs:
+  package-deploy:
+    tasks:
+      - docker.Make.deb
+      - docker.Make.rpm
+      - docker.Make.docker
+      - docker.Make.releases-page
+
   package-deploy-deb:
     tasks:
       - docker.Make.deb
