@@ -102,7 +102,7 @@ func TestMakeTrustedZone(t *testing.T) {
 
 	tt, _ := time.Parse(time.RFC3339, "2020-02-12T00:00:00Z")
 	r := makeTestResolver()
-	tzRoot, cacheOutdated, err := makeTrustedZone(context.Background(), ".", nil, r, tt)
+	tzRoot, cacheOutdated, err := makeTrustedZone(context.Background(), ".", trustedZone{}, r, tt)
 	a.NoError(err)
 	a.False(cacheOutdated)
 	a.NotEmpty(tzRoot)
@@ -165,7 +165,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	err = re.updateDNSKeyRecord(".", rootZSK, rootZSKsk, time.Time{})
 	a.NoError(err)
 
-	tzRoot, cacheOutdated, err = makeTrustedZone(context.Background(), ".", nil, re, tt)
+	tzRoot, cacheOutdated, err = makeTrustedZone(context.Background(), ".", trustedZone{}, re, tt)
 	a.Error(err)
 	a.Contains(err.Error(), "EOF")
 	a.False(cacheOutdated)
@@ -181,7 +181,7 @@ func TestMakeTrustedZone(t *testing.T) {
 	err = re.updateDNSKeyRecord("test.", testZSK, testZSKsk, time.Time{})
 	a.NoError(err)
 
-	tzTest, cacheOutdated, err := makeTrustedZone(context.Background(), "test.", nil, re, tt)
+	tzTest, cacheOutdated, err := makeTrustedZone(context.Background(), "test.", trustedZone{}, re, tt)
 	a.Error(err)
 	a.Contains(err.Error(), "test. not found")
 	a.False(cacheOutdated)

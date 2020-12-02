@@ -77,7 +77,7 @@ func (tz *trustedZone) verifyDS(rrSet []dns.RR, rrSig []dns.RRSIG, t time.Time) 
 	return
 }
 
-func getParentDS(ctx context.Context, fqZoneName string, c Querier, parent *trustedZone, t time.Time) (dss []dns.DS, cacheOutdated bool, err error) {
+func getParentDS(ctx context.Context, fqZoneName string, c Querier, parent trustedZone, t time.Time) (dss []dns.DS, cacheOutdated bool, err error) {
 	var rrSet []dns.RR
 	var rrSig []dns.RRSIG
 	rrSet, rrSig, err = c.QueryRRSet(ctx, fqZoneName, dns.TypeDS) // physically stored in parent zone of fqZoneName zone
@@ -113,10 +113,10 @@ func getParentDS(ctx context.Context, fqZoneName string, c Querier, parent *trus
 // Note2: the function requests both DNSKEY (from child) and DS (from parent)
 // and this allows to tolerate KSK rotation: if child zone refreshed KSK
 // then its digest is propagated to parent DS and used to sign child's DNSKEY
-func makeTrustedZone(ctx context.Context, fqZoneName string, parent *trustedZone, c TrustQuerier, t time.Time) (tz *trustedZone, cacheOutdated bool, err error) {
+func makeTrustedZone(ctx context.Context, fqZoneName string, parent trustedZone, c TrustQuerier, t time.Time) (tz trustedZone, cacheOutdated bool, err error) {
 	rrSet, rrSig, err := c.QueryRRSet(ctx, fqZoneName, dns.TypeDNSKEY)
 	if err != nil {
-		return nil, false, err
+		return
 	}
 
 	var dss []dns.DS
@@ -163,7 +163,7 @@ func makeTrustedZone(ctx context.Context, fqZoneName string, parent *trustedZone
 	}
 
 	// zone and keys are authenticated, create a new zone
-	tz = &trustedZone{
+	tz = trustedZone{
 		name:  fqZoneName,
 		zsk:   zsk,
 		ksk:   verifiedKSK,

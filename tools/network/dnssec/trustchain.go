@@ -34,14 +34,14 @@ type TrustQuerier interface {
 
 type trustChain struct {
 	client       TrustQuerier
-	trustedZones map[string]*trustedZone
+	trustedZones map[string]trustedZone
 	mu           deadlock.RWMutex
 }
 
 func makeTrustChain(c TrustQuerier) *trustChain {
 	return &trustChain{
 		client:       c,
-		trustedZones: make(map[string]*trustedZone),
+		trustedZones: make(map[string]trustedZone),
 	}
 }
 
@@ -112,7 +112,7 @@ func (t *trustChain) ensure(ctx context.Context, fqZoneName string, keytags []ui
 				return fmt.Errorf("cache outdated for already updated zone %s", zone)
 			}
 			var cacheOutdated bool
-			parentZone := &trustedZone{}
+			parentZone := trustedZone{}
 			if zoneIdx > 0 {
 				parentZone = t.trustedZones[zones[zoneIdx-1]]
 			}

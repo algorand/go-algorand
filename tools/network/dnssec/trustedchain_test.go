@@ -31,11 +31,11 @@ func TestTrustChainBasic(t *testing.T) {
 
 	r := makeTestResolver()
 	tch := makeTrustChain(r)
-	tch.trustedZones["."] = &trustedZone{}
-	tch.trustedZones["org."] = &trustedZone{}
-	tch.trustedZones["example.org."] = &trustedZone{}
-	tch.trustedZones["com."] = &trustedZone{}
-	tch.trustedZones["example.com."] = &trustedZone{}
+	tch.trustedZones["."] = trustedZone{}
+	tch.trustedZones["org."] = trustedZone{}
+	tch.trustedZones["example.org."] = trustedZone{}
+	tch.trustedZones["com."] = trustedZone{}
+	tch.trustedZones["example.com."] = trustedZone{}
 	tch.removeSelfAndChildren("example.com.")
 	a.Equal(4, len(tch.trustedZones))
 	tch.removeSelfAndChildren("org.")
@@ -43,7 +43,7 @@ func TestTrustChainBasic(t *testing.T) {
 	tch.removeSelfAndChildren(".")
 	a.Equal(0, len(tch.trustedZones))
 
-	tch.trustedZones["com."] = &trustedZone{
+	tch.trustedZones["com."] = trustedZone{
 		zsk: make(map[uint16]dns.DNSKEY),
 	}
 	tch.trustedZones["com."].zsk[123] = dns.DNSKEY{Algorithm: 1}
@@ -373,4 +373,37 @@ func TestAuthenticate(t *testing.T) {
 	a.Error(err)
 	err = tch.Authenticate(context.Background(), rrset, []dns.RRSIG{})
 	a.Error(err)
+}
+
+func TestQueryWrapper(t *testing.T) {
+	a := require.New(t)
+
+	r := makeEmptyTestResolver()
+	qr := QueryWrapper{r}
+
+	dss, err := qr.GetRootAnchorDS()
+	a.NoError(err)
+	a.Equal(2, len(dss))
+	currentDS := dss[1]
+	a.Equal("E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D", currentDS.Digest)
+	a.Equal(uint16(20326), currentDS.KeyTag)
+	a.Equal(uint8(8), currentDS.Algorithm)
+	a.Equal(uint8(2), currentDS.DigestType)
+
+	// make . zone
+	rootKSK, rootKSKsk := getKey(".", dns.ZONE|dns.SEP)
+	rootZSK, rootZSKsk := getKey(".", dns.ZONE)
+	rootAnchor := rootKSK.ToDS(dns.SHA256)
+	err = r.updateDSRecord(".", &[]dns.DS{*rootAnchor}, time.Time{})
+	a.NoError(err)
+	err = r.updateDNSKeyRecord(".", rootKSK, rootKSKsk, time.Time{})
+	a.NoError(err)
+	err = r.updateDNSKeyRecord(".", rootZSK, rootZSKsk, time.Time{})
+	a.NoError(err)
+
+	// check signerName validation
+	rrset, rrsig, err := qr.QueryRRSet(context.Background(), ".", dns.TypeDNSKEY)
+	a.NoError(err)
+	a.Equal(2, len(rrset))
+	a.Equal(1, len(rrsig))
 }
