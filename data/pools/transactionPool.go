@@ -120,7 +120,11 @@ type txPoolVerifyCacheVal struct {
 	params verify.Params
 }
 
+// poolAsmResults is used to syncronize the state of the block assembly process. The structure reading/writing is syncronized
+// via the pool.assemblyMu lock.
 type poolAsmResults struct {
+	// the ok variable indicates whther the assembly for the block roundStartedEvaluating was complete ( i.e. ok == true ) or
+	// whether it's still in-progress.
 	ok    bool
 	blk   *ledger.ValidatedBlock
 	stats telemetryspec.AssembleBlockMetrics
@@ -571,16 +575,21 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 		txgroupad[i].SignedTxn = tx
 	}
 
-	transactionGroupProcessingStarts := time.Now()
+	transactionGroupStartsTime := time.Time{}
+	if recomputing {
+		transactionGroupStartsTime = time.Now()
+	}
+
 	err := pool.pendingBlockEvaluator.TransactionGroup(txgroupad)
 
 	if recomputing {
-		if stats != nil {
-			stats.ProcessingTime.AddTransaction(time.Now().Sub(transactionGroupProcessingStarts))
-		}
+		transactionGroupDuration := time.Now().Sub(transactionGroupStartsTime)
 		pool.assemblyMu.Lock()
 		defer pool.assemblyMu.Unlock()
 		if !pool.assemblyResults.ok {
+			if stats != nil {
+				stats.ProcessingTime.AddTransaction(transactionGroupDuration)
+			}
 			if (err == ledger.ErrNoSpace || (pool.assemblyDeadline != time.Time{} && time.Now().After(pool.assemblyDeadline))) && (pool.assemblyRound <= pool.pendingBlockEvaluator.Round()) {
 				pool.assemblyResults.ok = true
 				if err == ledger.ErrNoSpace {
@@ -708,18 +717,20 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	pool.assemblyMu.Lock()
 	if (pool.assemblyDeadline != time.Time{}) {
-		asmStats.TransactionsLoopStartTime = int64(firstTxnGrpTime.Sub(pool.assemblyDeadline.Add(-250 * time.Millisecond)))
+		asmStats.TransactionsLoopStartTime = int64(firstTxnGrpTime.Sub(pool.assemblyDeadline.Add(-config.ProposalAssemblyTime)))
 	}
 
 	if !pool.assemblyResults.ok && pool.assemblyRound <= pool.pendingBlockEvaluator.Round() {
 		pool.assemblyResults.ok = true
-		pool.assemblyResults.stats = asmStats
+		blockGenerationStarts := time.Now()
 		lvb, err := pool.pendingBlockEvaluator.GenerateBlock()
 		if err != nil {
 			pool.assemblyResults.err = fmt.Errorf("could not generate block for %d (end): %v", pool.assemblyResults.roundStartedEvaluating, err)
 		} else {
 			pool.assemblyResults.blk = lvb
 		}
+		asmStats.BlockGenerationDuration = uint64(time.Now().Sub(blockGenerationStarts))
+		pool.assemblyResults.stats = asmStats
 		pool.assemblyCond.Broadcast()
 	}
 	pool.assemblyMu.Unlock()

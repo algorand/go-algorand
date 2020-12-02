@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/account"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
@@ -29,9 +30,6 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
 )
-
-// AssemblyTime is the max amount of time to spend on generating a proposal block.
-const AssemblyTime time.Duration = 250 * time.Millisecond
 
 // TODO put these in config
 const (
@@ -263,7 +261,7 @@ func (n asyncPseudonode) getParticipations(procName string, round basics.Round) 
 
 // makeProposals creates a slice of block proposals for the given round and period.
 func (n asyncPseudonode) makeProposals(round basics.Round, period period, accounts []account.Participation) ([]proposal, []unauthenticatedVote) {
-	deadline := time.Now().Add(AssemblyTime)
+	deadline := time.Now().Add(config.ProposalAssemblyTime)
 	ve, err := n.factory.AssembleBlock(round, deadline)
 	if err != nil {
 		if err != ErrAssembleBlockRoundStale {
