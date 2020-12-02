@@ -30,6 +30,7 @@ type ResolverIf interface {
 }
 
 // compile-time check
+var _ dnssec.ResolverIf = &net.Resolver{}
 var _ dnssec.ResolverIf = &Resolver{}
 var _ dnssec.ResolverIf = &dnssec.Resolver{}
 

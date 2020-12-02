@@ -111,7 +111,7 @@ type TLSARec struct {
 	Certificate  string `dns:"hex"`
 }
 
-// lookupImpl makes DNS request for a zone and verifies response signature
+// lookup makes DNS request for a zone and verifies response signature
 func (r *Resolver) lookup(ctx context.Context, name string, qt uint16) (rrSet []dns.RR, err error) {
 	rrSet, rrSig, err := r.client.QueryRRSet(ctx, name, qt)
 	if err != nil {
@@ -121,7 +121,7 @@ func (r *Resolver) lookup(ctx context.Context, name string, qt uint16) (rrSet []
 	return
 }
 
-// lookupImplCnameAware like lookupImpl requests a zone and verifies response signature
+// lookupCnameAware requests a zone and verifies response signature similarly to lookup,
 // but also it is aware about possible A/CNAME entries for A-requests and supposed to be used for CNAME alias resolution.
 // if CNAME signature presents for requested domain name, then consider the response as CNAME
 // and extract CNAME record(s) and its RRSIG
