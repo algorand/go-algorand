@@ -73,7 +73,6 @@ func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueD
 			exit = !hook.waitForEventAndReady()
 
 			hasEvents := true
-
 			for hasEvents {
 				select {
 				case entry := <-hook.entries:
@@ -87,7 +86,10 @@ func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueD
 					}
 					hook.Unlock()
 					if entry != nil {
-						hook.wrappedHook.Fire(entry)
+						err := hook.wrappedHook.Fire(entry)
+						if err != nil {
+							Base().Warnf("Unable to write event %#v to telemetry : %v", entry, err)
+						}
 						hook.wg.Done()
 					} else {
 						hasEvents = false
@@ -100,6 +102,7 @@ func createAsyncHookLevels(wrappedHook logrus.Hook, channelDepth uint, maxQueueD
 	return hook
 }
 
+// appendEntry adds the given entry to the pending slice and returns whether the hook is ready or not.
 func (hook *asyncTelemetryHook) appendEntry(entry *logrus.Entry) bool {
 	hook.Lock()
 	defer hook.Unlock()
@@ -199,6 +202,27 @@ func (hook *dummyHook) waitForEventAndReady() bool {
 	return true
 }
 
+// the elasticClientLogger is used to bridge the elastic library error reporting
+// into our own logging system.
+type elasticClientLogger struct {
+	logger Logger       // points to the underlying logger which would perform the logging
+	level  logrus.Level // indicate what logging level we want to use for the logging
+}
+
+// Printf tunnel the log string into the log file.
+func (el elasticClientLogger) Printf(format string, v ...interface{}) {
+	switch el.level {
+	case logrus.DebugLevel:
+		el.logger.Debugf(format, v...)
+	case logrus.InfoLevel:
+		el.logger.Infof(format, v...)
+	case logrus.WarnLevel:
+		el.logger.Warnf(format, v...)
+	default:
+		el.logger.Errorf(format, v...)
+	}
+}
+
 func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 	// Returning an error here causes issues... need the hooks to be created even if the elastic hook fails so that
 	// things can recover later.
@@ -209,13 +233,21 @@ func createElasticHook(cfg TelemetryConfig) (hook logrus.Hook, err error) {
 	client, err := elastic.NewClient(elastic.SetURL(cfg.URI),
 		elastic.SetBasicAuth(cfg.UserName, cfg.Password),
 		elastic.SetSniff(false),
-		elastic.SetGzip(true))
+		elastic.SetGzip(true),
+		elastic.SetTraceLog(&elasticClientLogger{logger: Base(), level: logrus.DebugLevel}),
+		elastic.SetInfoLog(&elasticClientLogger{logger: Base(), level: logrus.DebugLevel}),
+		elastic.SetErrorLog(&elasticClientLogger{logger: Base(), level: logrus.WarnLevel}),
+	)
 	if err != nil {
+		err = fmt.Errorf("Unable to create new elastic client on '%s' using '%s:%s' : %w", cfg.URI, cfg.UserName, cfg.Password, err)
 		return nil, err
 	}
 	hostName := cfg.getHostName()
 	hook, err = elogrus.NewElasticHook(client, hostName, cfg.MinLogLevel, cfg.ChainID)
 
+	if err != nil {
+		err = fmt.Errorf("Unable to create new elastic hook on host '%s' using chainID '%s' : %w", hostName, cfg.ChainID, err)
+	}
 	return hook, err
 }
 
