@@ -87,18 +87,18 @@ func (x *roundCowBase) getCreator(cidx basics.CreatableIndex, ctype basics.Creat
 // first, and if it cannot find it there, it would defer to the underlaying implementation.
 // note that errors in accounts data retrivals are not cached as these typically cause the transaction evaluation to fail.
 func (x *roundCowBase) lookup(addr basics.Address) (basics.AccountData, error) {
-	x.accountsMu.RLock()
+	//x.accountsMu.RLock()
 	if accountData, found := x.accounts[addr]; found {
-		x.accountsMu.RUnlock()
+		//x.accountsMu.RUnlock()
 		return accountData, nil
 	}
-	x.accountsMu.RUnlock()
+	//x.accountsMu.RUnlock()
 
 	accountData, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
 	if err == nil {
-		x.accountsMu.Lock()
+		//x.accountsMu.Lock()
 		x.accounts[addr] = accountData
-		x.accountsMu.Unlock()
+		//x.accountsMu.Unlock()
 	}
 	return accountData, err
 }
