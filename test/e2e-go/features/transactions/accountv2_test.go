@@ -171,8 +171,8 @@ int 1
 	a.Equal(1, len(ad.AppParams))
 	params, ok = ad.AppParams[appIdx]
 	a.True(ok)
-	a.Equal(approvalOps, params.ApprovalProgram)
-	a.Equal(clearstateOps, params.ClearStateProgram)
+	a.Equal(approvalOps.Program, params.ApprovalProgram)
+	a.Equal(clearstateOps.Program, params.ClearStateProgram)
 	a.Equal(schema, params.LocalStateSchema)
 	a.Equal(schema, params.GlobalStateSchema)
 	a.Equal(1, len(params.GlobalState))
