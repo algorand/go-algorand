@@ -318,3 +318,53 @@ func TestPrepareAppEvaluators(t *testing.T) {
 		})
 	}
 }
+
+func BenchmarkBlockEvaluator(b *testing.B) {
+	genesisInitState, addrs, keys := genesis(100000)
+	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
+	proto := config.Consensus[genesisInitState.Block.CurrentProtocol]
+	proto.MaxTxnBytesPerBlock = 1000000000 // very big, no limit
+	config.Consensus[protocol.ConsensusVersion(dbName)] = proto
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusVersion(dbName)
+	const inMem = false
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(b, err)
+	defer l.Close()
+
+	b.ResetTimer()
+
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	require.NoError(b, err)
+
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+
+	for i := 0; i < b.N; i++ {
+		sender := i % len(addrs)
+		receiver := (i + 1) % len(addrs)
+		txn := transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      addrs[sender],
+				Fee:         minFee,
+				FirstValid:  newBlock.Round(),
+				LastValid:   newBlock.Round(),
+				GenesisHash: genHash,
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: addrs[receiver],
+				Amount:   basics.MicroAlgos{Raw: 100},
+			},
+		}
+		st := txn.Sign(keys[sender])
+		err = eval.Transaction(st, transactions.ApplyData{})
+		require.NoError(b, err)
+	}
+
+	validatedBlock, err := eval.GenerateBlock()
+	require.NoError(b, err)
+
+	l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+}
