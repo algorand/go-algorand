@@ -718,7 +718,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	}
 
 	pool.assemblyMu.Lock()
-	if (pool.assemblyDeadline != time.Time{}) {
+	if !pool.assemblyDeadline.IsZero() {
 		asmStats.TransactionsLoopStartTime = int64(firstTxnGrpTime.Sub(pool.assemblyDeadline.Add(-config.ProposalAssemblyTime)))
 	}
 
