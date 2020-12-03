@@ -27,7 +27,7 @@ import (
 // Dialer wraps net.Dialer and provides a custom DNSSEC-aware resolver
 type Dialer struct {
 	InnerDialer *net.Dialer
-	Resolver    *Resolver
+	Resolver    ResolverIf
 }
 
 // DialContext connects to the address on the named network using the provided context.
