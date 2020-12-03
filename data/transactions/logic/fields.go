@@ -230,7 +230,7 @@ var TxnTypeNames = []string{
 }
 
 // map TxnTypeName to its enum index, for `txn TypeEnum`
-var txnTypeIndexes map[string]int
+var txnTypeIndexes map[string]uint64
 
 // map symbolic name to uint64 for assembleInt
 var txnTypeConstToUint64 map[string]uint64
@@ -262,7 +262,7 @@ var OnCompletionNames []string
 var onCompletionConstToUint64 map[string]uint64
 
 // GlobalField is an enum for `global` opcode
-type GlobalField int
+type GlobalField uint64
 
 const (
 	// MinTxnFee ConsensusParams.MinTxnFee
@@ -353,7 +353,7 @@ var assetHoldingFieldTypeList = []assetHoldingFieldType{
 // AssetHoldingFieldTypes is StackUint64 StackBytes in parallel with AssetHoldingFieldNames
 var AssetHoldingFieldTypes []StackType
 
-var assetHoldingFields map[string]uint
+var assetHoldingFields map[string]uint64
 
 // AssetParamsField is an enum for `asset_params_get` opcode
 type AssetParamsField int
@@ -409,7 +409,7 @@ var assetParamsFieldTypeList = []assetParamsFieldType{
 // AssetParamsFieldTypes is StackUint64 StackBytes in parallel with AssetParamsFieldNames
 var AssetParamsFieldTypes []StackType
 
-var assetParamsFields map[string]uint
+var assetParamsFields map[string]uint64
 
 func init() {
 	TxnFieldNames = make([]string, int(invalidTxnField))
@@ -453,9 +453,9 @@ func init() {
 	for _, ft := range assetHoldingFieldTypeList {
 		AssetHoldingFieldTypes[int(ft.field)] = ft.ftype
 	}
-	assetHoldingFields = make(map[string]uint)
+	assetHoldingFields = make(map[string]uint64)
 	for i, fn := range AssetHoldingFieldNames {
-		assetHoldingFields[fn] = uint(i)
+		assetHoldingFields[fn] = uint64(i)
 	}
 
 	AssetParamsFieldNames = make([]string, int(invalidAssetParamsField))
@@ -466,20 +466,20 @@ func init() {
 	for _, ft := range assetParamsFieldTypeList {
 		AssetParamsFieldTypes[int(ft.field)] = ft.ftype
 	}
-	assetParamsFields = make(map[string]uint)
+	assetParamsFields = make(map[string]uint64)
 	for i, fn := range AssetParamsFieldNames {
-		assetParamsFields[fn] = uint(i)
+		assetParamsFields[fn] = uint64(i)
 	}
 
-	txnTypeIndexes = make(map[string]int, len(TxnTypeNames))
+	txnTypeIndexes = make(map[string]uint64, len(TxnTypeNames))
 	for i, tt := range TxnTypeNames {
-		txnTypeIndexes[tt] = i
+		txnTypeIndexes[tt] = uint64(i)
 	}
 
 	txnTypeConstToUint64 = make(map[string]uint64, len(TxnTypeNames))
 	for tt, v := range txnTypeIndexes {
 		symbol := TypeNameDescription(tt)
-		txnTypeConstToUint64[symbol] = uint64(v)
+		txnTypeConstToUint64[symbol] = v
 	}
 
 	OnCompletionNames = make([]string, int(invalidOnCompletionConst))

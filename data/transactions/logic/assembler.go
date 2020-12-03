@@ -90,16 +90,16 @@ func (ops *OpStream) GetVersion() uint64 {
 	return ops.Version
 }
 
-// SetLabelHere inserts a label reference to point to the next instruction
-func (ops *OpStream) SetLabelHere(label string) error {
+// createLabel inserts a label reference to point to the next
+// instruction, reporting an error for a duplicate.
+func (ops *OpStream) createLabel(label string) {
 	if ops.labels == nil {
 		ops.labels = make(map[string]int)
 	}
 	if _, ok := ops.labels[label]; ok {
-		return ops.errorf("duplicate label %s", label)
+		ops.errorf("duplicate label %s", label)
 	}
 	ops.labels[label] = ops.pending.Len()
-	return nil
 }
 
 // RecordSourceLine adds an entry to pc to line mapping
@@ -135,7 +135,7 @@ func (ops *OpStream) tpop() (argType StackType) {
 }
 
 // Intc writes opcodes for loading a uint64 constant onto the stack.
-func (ops *OpStream) Intc(constIndex uint) error {
+func (ops *OpStream) Intc(constIndex uint) {
 	switch constIndex {
 	case 0:
 		ops.pending.WriteByte(0x22) // intc_0
@@ -147,20 +147,21 @@ func (ops *OpStream) Intc(constIndex uint) error {
 		ops.pending.WriteByte(0x25) // intc_3
 	default:
 		if constIndex > 0xff {
-			return ops.error("cannot have more than 256 int constants")
+			ops.error("cannot have more than 256 int constants")
 		}
 		ops.pending.WriteByte(0x21) // intc
 		ops.pending.WriteByte(uint8(constIndex))
 	}
 	if constIndex >= uint(len(ops.intc)) {
-		return ops.errorf("intc %d is not defined", constIndex)
+		ops.errorf("intc %d is not defined", constIndex)
+	} else {
+		ops.trace("intc %d %d", constIndex, ops.intc[constIndex])
 	}
 	ops.tpush(StackUint64)
-	return nil
 }
 
 // Uint writes opcodes for loading a uint literal
-func (ops *OpStream) Uint(val uint64) error {
+func (ops *OpStream) Uint(val uint64) {
 	found := false
 	var constIndex uint
 	for i, cv := range ops.intc {
@@ -174,11 +175,11 @@ func (ops *OpStream) Uint(val uint64) error {
 		constIndex = uint(len(ops.intc))
 		ops.intc = append(ops.intc, val)
 	}
-	return ops.Intc(constIndex)
+	ops.Intc(constIndex)
 }
 
 // Bytec writes opcodes for loading a []byte constant onto the stack.
-func (ops *OpStream) Bytec(constIndex uint) error {
+func (ops *OpStream) Bytec(constIndex uint) {
 	switch constIndex {
 	case 0:
 		ops.pending.WriteByte(0x28) // bytec_0
@@ -190,22 +191,22 @@ func (ops *OpStream) Bytec(constIndex uint) error {
 		ops.pending.WriteByte(0x2b) // bytec_3
 	default:
 		if constIndex > 0xff {
-			return ops.error("cannot have more than 256 byte constants")
+			ops.error("cannot have more than 256 byte constants")
 		}
 		ops.pending.WriteByte(0x27) // bytec
 		ops.pending.WriteByte(uint8(constIndex))
 	}
 	if constIndex >= uint(len(ops.bytec)) {
-		return ops.errorf("bytec %d is not defined", constIndex)
+		ops.errorf("bytec %d is not defined", constIndex)
+	} else {
+		ops.trace("bytec %d %s", constIndex, hex.EncodeToString(ops.bytec[constIndex]))
 	}
-	ops.trace("bytec %d %s", constIndex, hex.EncodeToString(ops.bytec[constIndex]))
 	ops.tpush(StackBytes)
-	return nil
 }
 
 // ByteLiteral writes opcodes and data for loading a []byte literal
 // Values are accumulated so that they can be put into a bytecblock
-func (ops *OpStream) ByteLiteral(val []byte) error {
+func (ops *OpStream) ByteLiteral(val []byte) {
 	found := false
 	var constIndex uint
 	for i, cv := range ops.bytec {
@@ -219,7 +220,7 @@ func (ops *OpStream) ByteLiteral(val []byte) error {
 		constIndex = uint(len(ops.bytec))
 		ops.bytec = append(ops.bytec, val)
 	}
-	return ops.Bytec(constIndex)
+	ops.Bytec(constIndex)
 }
 
 // Arg writes opcodes for loading from Lsig.Args
@@ -245,138 +246,154 @@ func (ops *OpStream) Arg(val uint64) error {
 }
 
 // Txn writes opcodes for loading a field from the current transaction
-func (ops *OpStream) Txn(val uint64) error {
+func (ops *OpStream) Txn(val uint64) {
 	if val >= uint64(len(TxnFieldNames)) {
-		return ops.errorf("invalid txn field: %d", val)
+		ops.errorf("invalid txn field: %d", val)
 	}
 	ops.pending.WriteByte(0x31)
 	ops.pending.WriteByte(uint8(val))
 	ops.tpush(TxnFieldTypes[val])
-	return nil
 }
 
 // Txna writes opcodes for loading array field from the current transaction
-func (ops *OpStream) Txna(fieldNum uint64, arrayFieldIdx uint64) error {
+func (ops *OpStream) Txna(fieldNum uint64, arrayFieldIdx uint64) {
 	if fieldNum >= uint64(len(TxnFieldNames)) {
-		return ops.errorf("invalid txn field: %d", fieldNum)
+		ops.errorf("invalid txn field: %d", fieldNum)
+		fieldNum = 0 // avoid further error in tpush as we forge ahead
 	}
 	if arrayFieldIdx > 255 {
-		return ops.errorf("txna array index beyond 255: %d", arrayFieldIdx)
+		ops.errorf("txna array index beyond 255: %d", arrayFieldIdx)
 	}
 	ops.pending.WriteByte(0x36)
 	ops.pending.WriteByte(uint8(fieldNum))
 	ops.pending.WriteByte(uint8(arrayFieldIdx))
 	ops.tpush(TxnFieldTypes[fieldNum])
-	return nil
 }
 
 // Gtxn writes opcodes for loading a field from the current transaction
-func (ops *OpStream) Gtxn(gid, val uint64) error {
+func (ops *OpStream) Gtxn(gid, val uint64) {
 	if val >= uint64(len(TxnFieldNames)) {
-		return ops.errorf("invalid txn field: %d", val)
+		ops.errorf("invalid gtxn field: %d", val)
+		val = 0 // avoid further error in tpush as we forge ahead
 	}
 	if gid > 255 {
-		return ops.errorf("gtxn transaction index beyond 255: %d", gid)
+		ops.errorf("gtxn transaction index beyond 255: %d", gid)
 	}
 	ops.pending.WriteByte(0x33)
 	ops.pending.WriteByte(uint8(gid))
 	ops.pending.WriteByte(uint8(val))
 	ops.tpush(TxnFieldTypes[val])
-	return nil
 }
 
 // Gtxna writes opcodes for loading an array field from the current transaction
-func (ops *OpStream) Gtxna(gid, fieldNum uint64, arrayFieldIdx uint64) error {
+func (ops *OpStream) Gtxna(gid, fieldNum uint64, arrayFieldIdx uint64) {
 	if fieldNum >= uint64(len(TxnFieldNames)) {
-		return ops.errorf("invalid txn field: %d", fieldNum)
+		ops.errorf("invalid txn field: %d", fieldNum)
+		fieldNum = 0 // avoid further error in tpush as we forge ahead
 	}
 	if gid > 255 {
-		return ops.errorf("gtxna group index beyond 255: %d", gid)
+		ops.errorf("gtxna group index beyond 255: %d", gid)
 	}
 	if arrayFieldIdx > 255 {
-		return ops.errorf("gtxna array index beyond 255: %d", arrayFieldIdx)
+		ops.errorf("gtxna array index beyond 255: %d", arrayFieldIdx)
 	}
 	ops.pending.WriteByte(0x37)
 	ops.pending.WriteByte(uint8(gid))
 	ops.pending.WriteByte(uint8(fieldNum))
 	ops.pending.WriteByte(uint8(arrayFieldIdx))
 	ops.tpush(TxnFieldTypes[fieldNum])
-	return nil
 }
 
 // Global writes opcodes for loading an evaluator-global field
-func (ops *OpStream) Global(val uint64) error {
-	if val >= uint64(len(GlobalFieldNames)) {
-		return ops.errorf("invalid global field: %d", val)
-	}
+func (ops *OpStream) Global(val GlobalField) {
 	ops.pending.WriteByte(0x32)
 	ops.pending.WriteByte(uint8(val))
 	ops.trace("%s (%s)", GlobalFieldNames[val], GlobalFieldTypes[val].String())
 	ops.tpush(GlobalFieldTypes[val])
-	return nil
 }
 
 // AssetHolding writes opcodes for accessing data from AssetHolding
-func (ops *OpStream) AssetHolding(val uint64) error {
+func (ops *OpStream) AssetHolding(val uint64) {
 	if val >= uint64(len(AssetHoldingFieldNames)) {
-		return ops.errorf("invalid asset holding field: %d", val)
+		ops.errorf("invalid asset holding field: %d", val)
+		val = 0 // avoid further error in tpush as we forge ahead
 	}
 	ops.pending.WriteByte(opsByName[ops.Version]["asset_holding_get"].Opcode)
 	ops.pending.WriteByte(uint8(val))
 	ops.tpush(AssetHoldingFieldTypes[val])
 	ops.tpush(StackUint64)
-	return nil
 }
 
 // AssetParams writes opcodes for accessing data from AssetParams
-func (ops *OpStream) AssetParams(val uint64) error {
+func (ops *OpStream) AssetParams(val uint64) {
 	if val >= uint64(len(AssetParamsFieldNames)) {
-		return ops.errorf("invalid asset params field: %d", val)
+		ops.errorf("invalid asset params field: %d", val)
+		val = 0 // avoid further error in tpush as we forge ahead
 	}
 	ops.pending.WriteByte(opsByName[ops.Version]["asset_params_get"].Opcode)
 	ops.pending.WriteByte(uint8(val))
 	ops.tpush(AssetParamsFieldTypes[val])
 	ops.tpush(StackUint64)
-	return nil
 }
 
 func assembleInt(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		ops.error("int needs one argument")
+		args = []string{"0"} // By continuing, Uint will maintain type stack.
+	}
 	// check friendly TypeEnum constants
 	te, isTypeEnum := txnTypeConstToUint64[args[0]]
 	if isTypeEnum {
-		return ops.Uint(uint64(te))
+		ops.Uint(te)
+		return nil
 	}
 	// check raw transaction type strings
 	tt, isTypeStr := txnTypeIndexes[args[0]]
 	if isTypeStr {
-		return ops.Uint(uint64(tt))
+		ops.Uint(tt)
+		return nil
 	}
 	// check OnCompetion constants
 	oc, isOCStr := onCompletionConstToUint64[args[0]]
 	if isOCStr {
-		return ops.Uint(uint64(oc))
+		ops.Uint(oc)
+		return nil
 	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return ops.error(err)
+		ops.error(err)
+		val = 0 // By continuing, Uint will maintain type stack.
 	}
-	return ops.Uint(val)
+	ops.Uint(val)
+	return nil
 }
 
 // Explicit invocation of const lookup and push
 func assembleIntC(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		ops.error("intc operation needs one argument")
+		args = []string{"0"} // By continuing, Intc will maintain type stack.
+	}
 	constIndex, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return ops.error(err)
+		ops.error(err)
+		constIndex = 0 // By continuing, Intc will maintain type stack.
 	}
-	return ops.Intc(uint(constIndex))
+	ops.Intc(uint(constIndex))
+	return nil
 }
 func assembleByteC(ops *OpStream, spec *OpSpec, args []string) error {
+	if len(args) != 1 {
+		ops.error("bytec operation needs one argument")
+		args = []string{"0"} // By continuing, Bytec will maintain type stack.
+	}
 	constIndex, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return ops.error(err)
+		ops.error(err)
+		constIndex = 0 // By continuing, Bytec will maintain type stack.
 	}
-	return ops.Bytec(uint(constIndex))
+	ops.Bytec(uint(constIndex))
+	return nil
 }
 
 func base32DecdodeAnyPadding(x string) (val []byte, err error) {
@@ -530,13 +547,16 @@ func assembleByte(ops *OpStream, spec *OpSpec, args []string) error {
 	var val []byte
 	var err error
 	if len(args) == 0 {
-		return ops.error("byte operation needs byte literal argument")
+		ops.error("byte operation needs byte literal argument")
+		args = []string{"0x00"} // By continuing, ByteLiteral will maintain type stack.
 	}
 	val, _, err = parseBinaryArgs(args)
 	if err != nil {
-		return ops.error(err)
+		ops.error(err)
+		val = []byte{} // By continuing, ByteLiteral will maintain type stack.
 	}
-	return ops.ByteLiteral(val)
+	ops.ByteLiteral(val)
+	return nil
 }
 
 func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
@@ -548,7 +568,7 @@ func assembleIntCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	for i, xs := range args {
 		cu, err := strconv.ParseUint(xs, 0, 64)
 		if err != nil {
-			return ops.error(err)
+			ops.error(err)
 		}
 		l = binary.PutUvarint(scratch[:], cu)
 		ops.pending.Write(scratch[:l])
@@ -565,7 +585,12 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 	for len(rest) > 0 {
 		val, consumed, err := parseBinaryArgs(rest)
 		if err != nil {
-			return ops.error(err)
+			// Would be nice to keep going, as in
+			// intcblock, but parseBinaryArgs would have
+			// to return a useful consumed value even in
+			// the face of errors.  Hard.
+			ops.error(err)
+			return nil
 		}
 		bvals = append(bvals, val)
 		rest = rest[consumed:]
@@ -587,35 +612,40 @@ func assembleByteCBlock(ops *OpStream, spec *OpSpec, args []string) error {
 // parses base32-with-checksum account address strings into a byte literal
 func assembleAddr(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("addr operation needs one argument")
+		ops.error("addr operation needs one argument")
+		// By continuing, ByteLiteral will maintain type stack.
+		args = []string{"7777777777777777777777777777777777777777777777777774MSJUVU"}
 	}
 	addr, err := basics.UnmarshalChecksumAddress(args[0])
 	if err != nil {
-		return ops.error(err)
+		ops.error(err)
+		addr = basics.Address{} // By continuing, ByteLiteral will maintain type stack.
 	}
-	return ops.ByteLiteral(addr[:])
+	ops.ByteLiteral(addr[:])
+	return nil
 }
 
 func assembleArg(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("arg operation needs one argument")
+		ops.error("arg operation needs one argument")
+		args = []string{"0"}
 	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return ops.error(err)
+		ops.error(err)
+		val = 0 // Let ops.Arg maintain type stack
 	}
-	return ops.Arg(val)
+	ops.Arg(val)
+	return nil
 }
 
 func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("branch operation needs label argument")
+		ops.error("branch operation needs label argument") // proceeding so checkArgs runs
+	} else {
+		ops.ReferToLabel(ops.pending.Len(), args[0])
 	}
-	ops.ReferToLabel(ops.pending.Len(), args[0])
-	err := ops.checkArgs(*spec)
-	if err != nil {
-		return err
-	}
+	ops.checkArgs(*spec)
 	ops.pending.WriteByte(spec.Opcode)
 	// zero bytes will get replaced with actual offset in resolveLabels()
 	ops.pending.WriteByte(0)
@@ -625,14 +655,17 @@ func assembleBranch(ops *OpStream, spec *OpSpec, args []string) error {
 
 func assembleLoad(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("load operation needs one argument")
+		ops.error("load operation needs one argument")
+		args = []string{"0"} // By continuing, tpush will maintain type stack.
 	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return ops.error(err)
+		ops.error(err)
+		val = 0
 	}
 	if val > EvalMaxScratchSize {
-		return ops.errorf("load outside 0..255: %d", val)
+		ops.errorf("load outside 0..255: %d", val)
+		val = 0
 	}
 	ops.pending.WriteByte(0x34)
 	ops.pending.WriteByte(byte(val))
@@ -642,19 +675,19 @@ func assembleLoad(ops *OpStream, spec *OpSpec, args []string) error {
 
 func assembleStore(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("store operation needs one argument")
+		ops.error("store operation needs one argument")
+		args = []string{"0"} // By continuing, checkArgs, tpush will maintain type stack.
 	}
 	val, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return ops.error(err)
+		ops.error(err)
+		val = 0
 	}
 	if val > EvalMaxScratchSize {
-		return ops.errorf("store outside 0..255: %d", val)
+		ops.errorf("store outside 0..255: %d", val)
+		val = 0
 	}
-	err = ops.checkArgs(*spec)
-	if err != nil {
-		return err
-	}
+	ops.checkArgs(*spec)
 	ops.pending.WriteByte(spec.Opcode)
 	ops.pending.WriteByte(byte(val))
 	return nil
@@ -662,31 +695,35 @@ func assembleStore(ops *OpStream, spec *OpSpec, args []string) error {
 
 func assembleSubstring(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 2 {
-		return ops.error("substring expects 2 args")
+		ops.error("substring expects 2 args")
+		args = []string{"0", "0"} // By continuing, checkArgs, tpush will maintain type stack.
 	}
 	start, err := strconv.ParseUint(args[0], 0, 64)
 	if err != nil {
-		return ops.error(err)
+		ops.error(err)
+		start = 0
 	}
 	if start > EvalMaxScratchSize {
-		return ops.error("substring limited to 0..255")
+		ops.error("substring limited to 0..255")
+		start = 0
 	}
+
 	end, err := strconv.ParseUint(args[1], 0, 64)
 	if err != nil {
-		return ops.error(err)
+		ops.error(err)
+		end = start
 	}
 	if end > EvalMaxScratchSize {
-		return ops.error("substring limited to 0..255")
+		ops.error("substring limited to 0..255")
+		end = start
 	}
 
 	if end < start {
-		return ops.error("substring end is before start")
+		ops.error("substring end is before start")
+		end = start
 	}
 	opcode := byte(0x51)
-	err = ops.checkArgs(*spec)
-	if err != nil {
-		return err
-	}
+	ops.checkArgs(*spec)
 	ops.pending.WriteByte(opcode)
 	ops.pending.WriteByte(byte(start))
 	ops.pending.WriteByte(byte(end))
@@ -724,7 +761,8 @@ func assembleTxn(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("txn %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
 	val := fs.field
-	return ops.Txn(uint64(val))
+	ops.Txn(uint64(val))
+	return nil
 }
 
 // assembleTxn2 delegates to assembleTxn or assembleTxna depending on number of operands
@@ -758,7 +796,8 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.error(err)
 	}
 	fieldNum := fs.field
-	return ops.Txna(uint64(fieldNum), uint64(arrayFieldIdx))
+	ops.Txna(uint64(fieldNum), uint64(arrayFieldIdx))
+	return nil
 }
 
 func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
@@ -781,7 +820,8 @@ func assembleGtxn(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.errorf("gtxn %s available in version %d. Missed #pragma version?", args[1], fs.version)
 	}
 	val := fs.field
-	return ops.Gtxn(gtid, uint64(val))
+	ops.Gtxn(gtid, uint64(val))
+	return nil
 }
 
 func assembleGtxn2(ops *OpStream, spec *OpSpec, args []string) error {
@@ -818,53 +858,59 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.error(err)
 	}
 	fieldNum := fs.field
-	return ops.Gtxna(gtid, uint64(fieldNum), uint64(arrayFieldIdx))
+	ops.Gtxna(gtid, uint64(fieldNum), uint64(arrayFieldIdx))
+	return nil
 }
 
 func assembleGlobal(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("global expects one argument")
+		ops.error("global expects one argument")
+		args = []string{GlobalFieldNames[0]}
 	}
 	fs, ok := globalFieldSpecByName[args[0]]
 	if !ok {
-		return ops.errorf("global unknown arg: %v", args[0])
+		ops.errorf("global unknown arg: %v", args[0])
+		fs, _ = globalFieldSpecByName[GlobalFieldNames[0]]
 	}
 	if fs.version > ops.Version {
-		return ops.errorf("global %s available in version %d. Missed #pragma version?", args[0], fs.version)
+		ops.errorf("global %s available in version %d. Missed #pragma version?", args[0], fs.version)
 	}
-	val := fs.gfield
-	return ops.Global(uint64(val))
+	ops.Global(fs.gfield)
+	return nil
 }
 
 func assembleAssetHolding(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("asset_holding_get expects one argument")
+		ops.error("asset_holding_get expects one argument")
+		args = []string{AssetHoldingFieldNames[0]}
 	}
 	val, ok := assetHoldingFields[args[0]]
 	if !ok {
-		return ops.errorf("asset_holding_get unknown arg: %v", args[0])
+		ops.errorf("asset_holding_get unknown arg: %v", args[0])
+		val = 0
 	}
-	return ops.AssetHolding(uint64(val))
+	ops.AssetHolding(val)
+	return nil
 }
 
 func assembleAssetParams(ops *OpStream, spec *OpSpec, args []string) error {
 	if len(args) != 1 {
-		return ops.error("asset_params_get expects one argument")
+		ops.error("asset_params_get expects one argument")
+		args = []string{AssetParamsFieldNames[0]}
 	}
 	val, ok := assetParamsFields[args[0]]
 	if !ok {
-		return ops.errorf("asset_params_get unknown arg: %v", args[0])
+		ops.errorf("asset_params_get unknown arg: %v", args[0])
+		val = 0
 	}
-	return ops.AssetParams(uint64(val))
+	ops.AssetParams(val)
+	return nil
 }
 
 type assembleFunc func(*OpStream, *OpSpec, []string) error
 
 func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
-	err := ops.checkArgs(*spec)
-	if err != nil {
-		return err
-	}
+	ops.checkArgs(*spec)
 	if len(spec.Returns) > 0 {
 		ops.tpusha(spec.Returns)
 		ops.trace(" pushes(%s", spec.Returns[0].String())
@@ -875,10 +921,7 @@ func asmDefault(ops *OpStream, spec *OpSpec, args []string) error {
 		}
 		ops.trace(")")
 	}
-	err = ops.pending.WriteByte(spec.Opcode)
-	if err != nil {
-		return ops.error(err)
-	}
+	ops.pending.WriteByte(spec.Opcode)
 	return nil
 }
 
@@ -1002,7 +1045,7 @@ func (ops *OpStream) trace(format string, args ...interface{}) {
 }
 
 // checks (and pops) arg types from arg type stack
-func (ops *OpStream) checkArgs(spec OpSpec) error {
+func (ops *OpStream) checkArgs(spec OpSpec) {
 	firstPop := true
 	for i := len(spec.Args) - 1; i >= 0; i-- {
 		argType := spec.Args[i]
@@ -1018,14 +1061,13 @@ func (ops *OpStream) checkArgs(spec OpSpec) error {
 			if len(ops.labelReferences) > 0 {
 				ops.warnf("%w; but branches have happened and assembler does not precisely track types in this case", err)
 			} else {
-				return ops.error(err)
+				ops.error(err)
 			}
 		}
 	}
 	if !firstPop {
 		ops.trace(")")
 	}
-	return nil
 }
 
 // assemble reads text from an input and accumulates the program
@@ -1072,8 +1114,7 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 			continue
 		}
 		if opstring[len(opstring)-1] == ':' {
-			// create a label
-			ops.SetLabelHere(opstring[:len(opstring)-1])
+			ops.createLabel(opstring[:len(opstring)-1])
 			continue
 		}
 		ops.errorf("unknown opcode: %v", opstring)
@@ -1105,11 +1146,15 @@ func (ops *OpStream) assemble(fin io.Reader) error {
 func (ops *OpStream) resolveLabels() {
 	saved := ops.sourceLine
 	raw := ops.pending.Bytes()
+	reported := make(map[string]bool)
 	for _, lr := range ops.labelReferences {
 		ops.sourceLine = lr.sourceLine
 		dest, ok := ops.labels[lr.label]
 		if !ok {
-			ops.errorf("reference to undefined label %v", lr.label)
+			if !reported[lr.label] {
+				ops.errorf("reference to undefined label %v", lr.label)
+			}
+			reported[lr.label] = true
 			continue
 		}
 		// all branch instructions (currently) are opcode byte and 2 offset bytes, and the destination is relative to the next pc as if the branch was a no-op
@@ -1229,10 +1274,16 @@ func (ops *OpStream) warnf(format string, a ...interface{}) error {
 
 // ReportProblems issues accumulated warnings and errors to stderr.
 func (ops *OpStream) ReportProblems(fname string) {
-	for _, e := range ops.Errors {
+	for i, e := range ops.Errors {
+		if i > 9 {
+			break
+		}
 		fmt.Fprintf(os.Stderr, "%s: %s\n", fname, e)
 	}
-	for _, w := range ops.Warnings {
+	for i, w := range ops.Warnings {
+		if i > 9 {
+			break
+		}
 		fmt.Fprintf(os.Stderr, "%s: %s\n", fname, w)
 	}
 }
