@@ -603,3 +603,6 @@ func (cfg Local) DNSSecurityRelayAddrEnforced() bool {
 func (cfg Local) DNSSecurityTelemeryAddrEnforced() bool {
 	return cfg.DNSSecurityFlags&dnssecTelemetryAddr != 0
 }
+
+// ProposalAssemblyTime is the max amount of time to spend on generating a proposal block. This should eventually have it's own configurable value.
+const ProposalAssemblyTime time.Duration = 250 * time.Millisecond
