@@ -79,3 +79,41 @@ func TestEmptyPaysetCommitment(t *testing.T) {
 	require.Equal(t, merklePaysetHash, Payset{}.Commit(false).String())
 	require.Equal(t, merklePaysetHash, nilPayset.Commit(false).String())
 }
+
+func BenchmarkCommit(b *testing.B) {
+	_, stxns, _, _ := generateTestObjects(5000, 50)
+	stxnb := make([]SignedTxnInBlock, len(stxns))
+	for i, stxn := range stxns {
+		stxnb[i] = SignedTxnInBlock{
+			SignedTxnWithAD: SignedTxnWithAD{
+				SignedTxn: stxn,
+			},
+		}
+	}
+	payset := Payset(stxnb)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		payset.Commit(true)
+	}
+	b.ReportMetric(float64(len(stxnb)), "transactions/block")
+}
+
+func BenchmarkToBeHashed(b *testing.B) {
+	_, stxns, _, _ := generateTestObjects(5000, 50)
+	stxnb := make([]SignedTxnInBlock, len(stxns))
+	for i, stxn := range stxns {
+		stxnb[i] = SignedTxnInBlock{
+			SignedTxnWithAD: SignedTxnWithAD{
+				SignedTxn: stxn,
+			},
+		}
+	}
+	payset := Payset(stxnb)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		payset.ToBeHashed()
+	}
+	b.ReportMetric(float64(len(stxnb)), "transactions/block")
+}
