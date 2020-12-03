@@ -12,6 +12,11 @@
 
 set -eo pipefail
 
+if [ "$USER" = "travis" ]
+then
+    exit
+fi
+
 read -ra GOLANG_VERSIONS <<< "$(./scripts/get_golang_version.sh all)"
 BUILD_VERSION="${GOLANG_VERSIONS[0]}"
 MIN_VERSION="${GOLANG_VERSIONS[1]}"
