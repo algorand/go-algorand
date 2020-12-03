@@ -7,12 +7,16 @@ echo
 date "+build_release begin DEPLOY rpm stage %Y%m%d_%H%M%S"
 echo
 
-ARCH_TYPE=$(./scripts/archtype.sh)
-OS_TYPE=$(./scripts/ostype.sh)
-CHANNEL=${CHANNEL:-stable}
-NO_DEPLOY=${NO_DEPLOY:-false}
-PACKAGES_DIR=${PACKAGES_DIR:-"./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"}
+if [ -z "$NETWORK" ]; then
+    echo "[$0] NETWORK is missing."
+    exit 1
+fi
+
+CHANNEL=$(./scripts/release/mule/common/get_channel.sh "$NETWORK")
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+NO_DEPLOY=${NO_DEPLOY:-false}
+OS_TYPE=$(./scripts/release/mule/common/ostype.sh)
+PACKAGES_DIR=${PACKAGES_DIR:-"./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"}
 
 if [ -n "$S3_SOURCE" ]
 then

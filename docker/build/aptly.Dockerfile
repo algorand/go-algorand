@@ -19,7 +19,7 @@ RUN curl https://releases.algorand.com/key.pub | gpg --no-default-keyring --keyr
     aptly repo create -distribution=beta -architectures=amd64 -component=main -comment=betanet beta && \
     aptly mirror update stable && \
     aptly mirror update beta && \
-    aptly repo import stable stable algorand algorand-devtools
+    aptly repo import stable stable algorand algorand-devtools && \
     aptly repo import beta beta algorand-beta algorand-devtools-beta
 
 CMD ["/bin/bash"]
