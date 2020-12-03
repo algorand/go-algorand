@@ -607,7 +607,7 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 				stats.BlockGenerationDuration = uint64(time.Now().Sub(blockGenerationStarts))
 				pool.assemblyResults.stats = *stats
 				pool.assemblyCond.Broadcast()
-			} else if stats != nil {
+			} else {
 				// add the transaction time only if we didn't ended up finishing the block.
 				stats.ProcessingTime.AddTransaction(transactionGroupDuration)
 			}
