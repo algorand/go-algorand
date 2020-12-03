@@ -26,6 +26,9 @@ DEFAULT_DEADLOCK ?= $(shell ./scripts/compute_branch_deadlock_default.sh $(BUILD
 
 GOTAGSLIST          := sqlite_unlock_notify sqlite_omit_load_extension
 
+# e.g. make GOTAGSCUSTOM=msgtrace
+GOTAGSLIST += ${GOTAGSCUSTOM}
+
 ifeq ($(UNAME), Linux)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
 ifeq ($(ARCH), amd64)
@@ -46,7 +49,7 @@ endif
 endif
 
 ifneq (, $(findstring MINGW,$(UNAME)))
-EXTLDFLAGS := -static-libstdc++ -static-libgcc
+EXTLDFLAGS := -static -static-libstdc++ -static-libgcc
 export GOBUILDMODE := -buildmode=exe
 endif
 
@@ -302,5 +305,4 @@ install: build
 include ./scripts/release/mule/Makefile.mule
 
 archive:
-	CHANNEL=$(CHANNEL) \
-	aws s3 cp tmp/node_pkgs s3://algorand-internal/channel/${CHANNEL}/$(FULLBUILDNUMBER) --recursive --exclude "*" --include "*${CHANNEL}*$(FULLBUILDNUMBER)*"
+	aws s3 cp tmp/node_pkgs s3://algorand-internal/channel/$(CHANNEL)/$(FULLBUILDNUMBER) --recursive --exclude "*" --include "*$(FULLBUILDNUMBER)*"

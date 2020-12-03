@@ -359,6 +359,9 @@ type Local struct {
 	// provided stream speed drops below this threshold, the connection would be recycled. Note that this field is evaluated per catchpoint "chunk" and not on it's own. If this field is zero,
 	// the default of 20480 would be used.
 	MinCatchpointFileDownloadBytesPerSecond uint64 `version[13]:"20480"`
+
+	// TraceServer is a host:port to report graph propagation trace info to.
+	NetworkMessageTraceServer string `version[13]:""`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
@@ -442,6 +445,12 @@ func loadConfig(reader io.Reader, config *Local) error {
 func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray []string) {
 	dnsBootstrapString := cfg.DNSBootstrap(networkID)
 	bootstrapArray = strings.Split(dnsBootstrapString, ";")
+	// omit zero length entries from the result set.
+	for i := len(bootstrapArray) - 1; i >= 0; i-- {
+		if len(bootstrapArray[i]) == 0 {
+			bootstrapArray = append(bootstrapArray[:i], bootstrapArray[i+1:]...)
+		}
+	}
 	return
 }
 
@@ -594,3 +603,6 @@ func (cfg Local) DNSSecurityRelayAddrEnforced() bool {
 func (cfg Local) DNSSecurityTelemeryAddrEnforced() bool {
 	return cfg.DNSSecurityFlags&dnssecTelemetryAddr != 0
 }
+
+// ProposalAssemblyTime is the max amount of time to spend on generating a proposal block. This should eventually have it's own configurable value.
+const ProposalAssemblyTime time.Duration = 250 * time.Millisecond

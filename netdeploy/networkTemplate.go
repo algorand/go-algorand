@@ -220,23 +220,24 @@ func (t NetworkTemplate) Validate() error {
 	return nil
 }
 
-// TODO: Build the JSON object using a real encoder
 func createConfigFile(node remote.NodeConfigGoal, configFile string, numNodes int) error {
+	cfg := config.GetDefaultLocal()
+	cfg.GossipFanout = numNodes
 	// Override default :8080 REST endpoint, and disable SRV lookup
-	configString := `{ "GossipFanout": ` + fmt.Sprintf("%d", numNodes) +
-		`, "EndpointAddress": "127.0.0.1:0", "DNSBootstrapID": "", "EnableProfiler": true`
+	cfg.EndpointAddress = "127.0.0.1:0"
+	cfg.DNSBootstrapID = ""
+	cfg.EnableProfiler = true
+
 	if node.IsRelay {
 		// Have relays listen on any localhost port
-		configString += `, "NetAddress": "127.0.0.1:0"`
+		cfg.NetAddress = "127.0.0.1:0"
 	} else {
 		// Non-relays should not open incoming connections
-		configString += `, "IncomingConnectionsLimit": 0`
+		cfg.IncomingConnectionsLimit = 0
 	}
 
 	if node.DeadlockDetection != 0 {
-		configString += fmt.Sprintf(`, "DeadlockDetection": %d`, node.DeadlockDetection)
+		cfg.DeadlockDetection = node.DeadlockDetection
 	}
-
-	configString += " }"
-	return ioutil.WriteFile(configFile, []byte(configString), os.ModePerm)
+	return cfg.SaveToFile(configFile)
 }

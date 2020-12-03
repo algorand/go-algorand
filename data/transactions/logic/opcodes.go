@@ -154,16 +154,16 @@ var OpSpecs = []OpSpec{
 	{0x60, "balance", opBalance, asmDefault, disDefault, oneInt, oneInt, 2, runModeApplication, opSizeDefault},
 	{0x61, "app_opted_in", opAppCheckOptedIn, asmDefault, disDefault, twoInts, oneInt, 2, runModeApplication, opSizeDefault},
 	{0x62, "app_local_get", opAppGetLocalState, asmDefault, disDefault, oneInt.plus(oneBytes), oneAny, 2, runModeApplication, opSizeDefault},
-	{0x63, "app_local_get_ex", opAppGetLocalStateEx, asmDefault, disDefault, twoInts.plus(oneBytes), oneInt.plus(oneAny), 2, runModeApplication, opSizeDefault},
+	{0x63, "app_local_get_ex", opAppGetLocalStateEx, asmDefault, disDefault, twoInts.plus(oneBytes), oneAny.plus(oneInt), 2, runModeApplication, opSizeDefault},
 	{0x64, "app_global_get", opAppGetGlobalState, asmDefault, disDefault, oneBytes, oneAny, 2, runModeApplication, opSizeDefault},
-	{0x65, "app_global_get_ex", opAppGetGlobalStateEx, asmDefault, disDefault, oneInt.plus(oneBytes), oneInt.plus(oneAny), 2, runModeApplication, opSizeDefault},
+	{0x65, "app_global_get_ex", opAppGetGlobalStateEx, asmDefault, disDefault, oneInt.plus(oneBytes), oneAny.plus(oneInt), 2, runModeApplication, opSizeDefault},
 	{0x66, "app_local_put", opAppPutLocalState, asmDefault, disDefault, oneInt.plus(oneBytes).plus(oneAny), nil, 2, runModeApplication, opSizeDefault},
 	{0x67, "app_global_put", opAppPutGlobalState, asmDefault, disDefault, oneBytes.plus(oneAny), nil, 2, runModeApplication, opSizeDefault},
 	{0x68, "app_local_del", opAppDeleteLocalState, asmDefault, disDefault, oneInt.plus(oneBytes), nil, 2, runModeApplication, opSizeDefault},
 	{0x69, "app_global_del", opAppDeleteGlobalState, asmDefault, disDefault, oneBytes, nil, 2, runModeApplication, opSizeDefault},
 
-	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, twoInts, oneInt.plus(oneAny), 2, runModeApplication, opSize{1, 2, nil}},
-	{0x71, "asset_params_get", opAssetParamsGet, assembleAssetParams, disAssetParams, oneInt, oneInt.plus(oneAny), 2, runModeApplication, opSize{1, 2, nil}},
+	{0x70, "asset_holding_get", opAssetHoldingGet, assembleAssetHolding, disAssetHolding, twoInts, oneAny.plus(oneInt), 2, runModeApplication, opSize{1, 2, nil}},
+	{0x71, "asset_params_get", opAssetParamsGet, assembleAssetParams, disAssetParams, oneInt, oneAny.plus(oneInt), 2, runModeApplication, opSize{1, 2, nil}},
 }
 
 type sortByOpcode []OpSpec
