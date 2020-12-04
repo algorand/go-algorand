@@ -23,19 +23,19 @@ ${gcmd} clerk send -a 1000000 -f $ACCOUNT -t $ACCOUNTB
 #############################################
 # Account - create / close / create / close #
 #############################################
-ACCOUNT_NEW=$(${gcmd} account new | grep "Created" | awk '{ sub("\r", "", $NF); print $NF }')
-${gcmd} clerk send -a 100000 -f $ACCOUNT -t $ACCOUNT_NEW
-${gcmd} clerk send -a 0 -f $ACCOUNT_NEW -t $ACCOUNT -c $ACCOUNT
-${gcmd} clerk send -a 100000 -f $ACCOUNT -t $ACCOUNT_NEW
-${gcmd} clerk send -a 0 -f $ACCOUNT_NEW -t $ACCOUNT -c $ACCOUNT
+ACCOUNTC=$(${gcmd} account new | grep "Created" | awk '{ sub("\r", "", $NF); print $NF }')
+${gcmd} clerk send -a 100000 -f $ACCOUNT -t $ACCOUNTC
+${gcmd} clerk send -a 0 -f $ACCOUNTC -t $ACCOUNT -c $ACCOUNT
+${gcmd} clerk send -a 100000 -f $ACCOUNT -t $ACCOUNTC
+${gcmd} clerk send -a 0 -f $ACCOUNTC -t $ACCOUNT -c $ACCOUNT
 
 #####################################
 # Account - create / close / create #
 #####################################
-ACCOUNT_NEW=$(${gcmd} account new | grep "Created" | awk '{ sub("\r", "", $NF); print $NF }')
-${gcmd} clerk send -a 100000 -f $ACCOUNT -t $ACCOUNT_NEW
-${gcmd} clerk send -a 0 -f $ACCOUNT_NEW -t $ACCOUNT -c $ACCOUNT
-${gcmd} clerk send -a 100000 -f $ACCOUNT -t $ACCOUNT_NEW
+ACCOUNTD=$(${gcmd} account new | grep "Created" | awk '{ sub("\r", "", $NF); print $NF }')
+${gcmd} clerk send -a 100000 -f $ACCOUNT -t $ACCOUNTD
+${gcmd} clerk send -a 0 -f $ACCOUNTD -t $ACCOUNT -c $ACCOUNT
+${gcmd} clerk send -a 100000 -f $ACCOUNT -t $ACCOUNTD
 
 ##############################
 # Create an ASA, then delete #
