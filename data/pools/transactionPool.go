@@ -132,9 +132,9 @@ type poolAsmResults struct {
 	// roundStartedEvaluating is the round which we were attempted to evaluate last. It's a good measure for
 	// which round we started evaluating, but not a measure to whether the evaluation is complete.
 	roundStartedEvaluating basics.Round
-	// assemblyComplete is *not* protected via the pool.assemblyMu lock and should be accessed only from the OnNewBlock goroutine.
+	// assemblyCompletedOrAbandoned is *not* protected via the pool.assemblyMu lock and should be accessed only from the OnNewBlock goroutine.
 	// it's equivilent to the "ok" variable, and used for avoiding taking the lock.
-	assemblyComplete bool
+	assemblyCompletedOrAbandoned bool
 }
 
 const (
@@ -606,22 +606,22 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 	err := pool.pendingBlockEvaluator.TransactionGroup(txgroupad)
 
 	if recomputing {
-		if !pool.assemblyResults.assemblyComplete {
+		if !pool.assemblyResults.assemblyCompletedOrAbandoned {
 			transactionGroupDuration := time.Now().Sub(transactionGroupStartsTime)
 			pool.assemblyMu.Lock()
 			defer pool.assemblyMu.Unlock()
 			if pool.assemblyRound > pool.pendingBlockEvaluator.Round() {
 				// the block we're assembling now isn't the one the the AssembleBlock is waiting for. While it would be really cool
 				// to finish generating the block, it would also be pointless to spend time on it.
-				// we're going to set the ok and assemblyComplete to "true" so we can complete this loop asap
+				// we're going to set the ok and assemblyCompletedOrAbandoned to "true" so we can complete this loop asap
 				pool.assemblyResults.ok = true
-				pool.assemblyResults.assemblyComplete = true
+				pool.assemblyResults.assemblyCompletedOrAbandoned = true
 				stats.StopReason = telemetryspec.AssembleBlockAbandon
 				pool.assemblyResults.stats = *stats
 				pool.assemblyCond.Broadcast()
 			} else if err == ledger.ErrNoSpace || pool.isAssemblyTimedOut() {
 				pool.assemblyResults.ok = true
-				pool.assemblyResults.assemblyComplete = true
+				pool.assemblyResults.assemblyCompletedOrAbandoned = true
 				if err == ledger.ErrNoSpace {
 					stats.StopReason = telemetryspec.AssembleBlockFull
 				} else {
@@ -761,7 +761,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	if !pool.assemblyResults.ok && pool.assemblyRound <= pool.pendingBlockEvaluator.Round() {
 		pool.assemblyResults.ok = true
-		pool.assemblyResults.assemblyComplete = true // this is not strictly needed, since the value would only get inspected by this go-routine, but we'll adjust it along with "ok" for consistency
+		pool.assemblyResults.assemblyCompletedOrAbandoned = true // this is not strictly needed, since the value would only get inspected by this go-routine, but we'll adjust it along with "ok" for consistency
 		blockGenerationStarts := time.Now()
 		lvb, err := pool.pendingBlockEvaluator.GenerateBlock()
 		if err != nil {
