@@ -10,7 +10,8 @@ RUN wget https://dl.google.com/go/go${GOLANG_VERSION}.linux-${ARCH%v*}.tar.gz \
     && tar -xvf go${GOLANG_VERSION}.linux-${ARCH%v*}.tar.gz && \
     mv go /usr/local
 ENV GOROOT=/usr/local/go \
-    GOPATH=$HOME/go
+    GOPATH=$HOME/go \
+    ARCH_TYPE=${ARCH}
 RUN mkdir -p $GOPATH/src/github.com/algorand
 COPY . $GOPATH/src/github.com/algorand/go-algorand
 ENV PATH=$GOPATH/bin:$GOROOT/bin:$PATH \

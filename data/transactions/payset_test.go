@@ -22,27 +22,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestPaysetCommitsToTxnOrder(t *testing.T) {
-	for _, flat := range []bool{true, false} {
-		_, stxns, _, _ := generateTestObjects(50, 50)
-		var stxnb []SignedTxnInBlock
-		for _, stxn := range stxns {
-			stxnb = append(stxnb, SignedTxnInBlock{
-				SignedTxnWithAD: SignedTxnWithAD{
-					SignedTxn: stxn,
-				},
-			})
-		}
-		payset := Payset(stxnb)
-		commit1 := payset.Commit(flat)
-		payset[0], payset[1] = payset[1], payset[0]
-		commit2 := payset.Commit(flat)
-		require.NotEqual(t, commit1, commit2)
-	}
-}
-
-func TestPaysetDoesNotCommitToSignatures(t *testing.T) {
-	_, stxns, _, _ := generateTestObjects(50, 50)
+func preparePayset(txnCount, acctCount int) Payset {
+	_, stxns, _, _ := generateTestObjects(txnCount, acctCount)
 	var stxnb []SignedTxnInBlock
 	for _, stxn := range stxns {
 		stxnb = append(stxnb, SignedTxnInBlock{
@@ -51,7 +32,20 @@ func TestPaysetDoesNotCommitToSignatures(t *testing.T) {
 			},
 		})
 	}
-	payset := Payset(stxnb)
+	return Payset(stxnb)
+}
+func TestPaysetCommitsToTxnOrder(t *testing.T) {
+	for _, flat := range []bool{true, false} {
+		payset := preparePayset(50, 50)
+		commit1 := payset.Commit(flat)
+		payset[0], payset[1] = payset[1], payset[0]
+		commit2 := payset.Commit(flat)
+		require.NotEqual(t, commit1, commit2)
+	}
+}
+
+func TestPaysetDoesNotCommitToSignatures(t *testing.T) {
+	payset := preparePayset(50, 50)
 	commit1 := payset.Commit(false)
 	payset[0].SignedTxn.MessUpSigForTesting()
 	commit2 := payset.Commit(false)
@@ -78,4 +72,23 @@ func TestEmptyPaysetCommitment(t *testing.T) {
 	require.Equal(t, merklePaysetHash, nilPayset.CommitGenesis(false).String())
 	require.Equal(t, merklePaysetHash, Payset{}.Commit(false).String())
 	require.Equal(t, merklePaysetHash, nilPayset.Commit(false).String())
+}
+
+func BenchmarkCommit(b *testing.B) {
+	payset := preparePayset(5000, 50)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		payset.Commit(true)
+	}
+	b.ReportMetric(float64(len(payset)), "transactions/block")
+}
+
+func BenchmarkToBeHashed(b *testing.B) {
+	payset := preparePayset(5000, 50)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		payset.ToBeHashed()
+	}
+	b.ReportMetric(float64(len(payset)), "transactions/block")
 }

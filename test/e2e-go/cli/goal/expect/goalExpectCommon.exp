@@ -479,6 +479,10 @@ proc ::AlgorandGoal::AssetCreate { CREATOR WALLET_NAME WALLET_PASSWORD TOTAL_SUP
 
 # Transfer asset
 proc ::AlgorandGoal::AssetTransfer { WALLET_NAME WALLET_PASSWORD FROM_ADDR TO_ADDR ASSET_ID ASSET_AMOUNT TEST_PRIMARY_NODE_DIR} {
+    # The asset transfer is being sent, and the goal command would wait until the created transaction included in a block.
+    # if a round is 4 second, we're going to wait 5 times that to allow enough time for the transaction to get propageted,
+    # proposed and included in a block.
+    set timeout 20
     if { [ catch {
         spawn goal asset send -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME --from $FROM_ADDR --to $TO_ADDR --assetid $ASSET_ID --amount $ASSET_AMOUNT
         expect {
@@ -509,7 +513,7 @@ proc ::AlgorandGoal::AssetFreeze { WALLET_NAME WALLET_PASSWORD FREEZE_ADDR ACCOU
     if { [ catch {
         spawn goal asset freeze -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME --freezer $FREEZE_ADDR --account $ACCOUNT_ADDR --assetid $ASSET_ID --freeze=$FREEZE_VALUE
         expect {
-            timeout { ::AlgorandGoal::Abort "Timed out asset transfer"  }
+            timeout { ::AlgorandGoal::Abort "Timed out asset freeze"  }
 	        "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r"; exp_continue }
 	        eof
         }

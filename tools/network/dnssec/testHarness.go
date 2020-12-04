@@ -157,7 +157,21 @@ func makeTestResolver() *testResolver {
 	return r
 }
 
-func (r *testResolver) queryRRSet(ctx context.Context, domain string, qtype uint16) ([]dns.RR, []dns.RRSIG, error) {
+func (r *testResolver) GetRootAnchorDS() (dss []dns.DS, err error) {
+	if r.anchor != nil {
+		dss = r.anchor
+	} else {
+		var a TrustAnchor
+		a, err = makeRootTrustAnchor(r.rootAnchorXML)
+		if err != nil {
+			return
+		}
+		dss = a.ToDS()
+	}
+	return
+}
+
+func (r *testResolver) QueryRRSet(ctx context.Context, domain string, qtype uint16) ([]dns.RR, []dns.RRSIG, error) {
 	if zone, ok := r.entries[domain]; ok {
 		if entry, ok := zone[qtype]; ok {
 			return entry.rr, entry.sig, nil
@@ -183,30 +197,8 @@ func (r *testResolver) queryRRSet(ctx context.Context, domain string, qtype uint
 	return nil, nil, fmt.Errorf("%s not found", domain)
 }
 
-func (r *testResolver) query(ctx context.Context, domain string, qtype uint16) (resp *dns.Msg, err error) {
-	msg := new(dns.Msg)
-	msg.RecursionDesired = true
-	msg.SetQuestion(domain, qtype)
-	if zone, ok := r.entries[domain]; ok {
-		if entry, ok := zone[qtype]; ok {
-			for _, rr := range entry.rr {
-				msg.Answer = append(msg.Answer, rr)
-			}
-			for _, rr := range entry.sig {
-				var rrsig dns.RRSIG = rr
-				msg.Answer = append(msg.Answer, &rrsig)
-			}
-		}
-	}
-	return msg, nil
-}
-
-func (r *testResolver) serverList() []string {
-	return nil
-}
-
 func (r *testResolver) queryDNSKeyRRSet(domain string) (zsk []dns.DNSKEY, ksk []dns.DNSKEY, rrSig []dns.RRSIG) {
-	rrs, rrsigs, _ := r.queryRRSet(context.Background(), domain, dns.TypeDNSKEY)
+	rrs, rrsigs, _ := r.QueryRRSet(context.Background(), domain, dns.TypeDNSKEY)
 	for _, r := range rrs {
 		switch t := r.(type) {
 		case *dns.DNSKEY:
@@ -219,13 +211,6 @@ func (r *testResolver) queryDNSKeyRRSet(domain string) (zsk []dns.DNSKEY, ksk []
 	}
 	rrSig = append(rrSig, rrsigs[0])
 	return
-}
-
-func (r *testResolver) rootTrustAnchor() ([]dns.DS, error) {
-	if r.anchor != nil {
-		return r.anchor, nil
-	}
-	return parseRootTrustAnchor(r.rootAnchorXML)
 }
 
 func (r *testResolver) setRootAnchor(dss *[]dns.DS) {
@@ -249,7 +234,7 @@ func (r *testResolver) sign(rrset []dns.RR, signer string, keytag uint16, expTim
 func (r *testResolver) updateDNSKEYRRSet(zone string, key *dns.DNSKEY, sk crypto.PrivateKey) ([]dns.RR, map[uint16]crypto.PrivateKey) {
 	var rrset []dns.RR
 	var err error
-	if rrset, _, err = r.queryRRSet(context.Background(), zone, dns.TypeDNSKEY); err != nil {
+	if rrset, _, err = r.QueryRRSet(context.Background(), zone, dns.TypeDNSKEY); err != nil {
 		// no entry, create a new one
 		rr := []dns.RR{key}
 		secretKeys := make(map[uint16]crypto.PrivateKey)
@@ -349,7 +334,7 @@ func (r *testResolver) updateDNSKeyRecord(zone string, key *dns.DNSKEY, sk crypt
 		// ensure parent's DS updated
 		var dss []dns.DS
 		if zone == "." {
-			if dss, err = r.rootTrustAnchor(); err != nil {
+			if dss, err = r.GetRootAnchorDS(); err != nil {
 				return err
 			}
 		} else {
@@ -487,7 +472,7 @@ func (r *testResolver) updateRegRecord(domain string, signer string, tp uint16, 
 }
 
 func (r *testResolver) queryDSRRSet(domain string) (dss []dns.DS, rrSig []dns.RRSIG, err error) {
-	rrs, rrsigs, err := r.queryRRSet(context.Background(), domain, dns.TypeDS)
+	rrs, rrsigs, err := r.QueryRRSet(context.Background(), domain, dns.TypeDS)
 	if err != nil {
 		return
 	}
@@ -499,4 +484,17 @@ func (r *testResolver) queryDSRRSet(domain string) (dss []dns.DS, rrSig []dns.RR
 	}
 	rrSig = append(rrSig, rrsigs[0])
 	return
+}
+
+func getKey(zone string, flags uint16) (*dns.DNSKEY, crypto.PrivateKey) {
+	rootKSK := new(dns.DNSKEY)
+	rootKSK.Hdr.Name = zone
+	rootKSK.Hdr.Rrtype = dns.TypeDNSKEY
+	rootKSK.Hdr.Class = dns.ClassINET
+	rootKSK.Hdr.Ttl = 86400
+	rootKSK.Flags = flags
+	rootKSK.Protocol = 3
+	rootKSK.Algorithm = dns.RSASHA256
+	rootKSKsk, _ := rootKSK.Generate(1024)
+	return rootKSK, rootKSKsk
 }

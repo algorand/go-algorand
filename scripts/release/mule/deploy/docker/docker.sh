@@ -8,8 +8,10 @@
 #
 set -ex
 
-NETWORK=${NEWORK:-mainnet}
-VERSION=${VERSION:-latest}
+if [ -z "$NETWORK" ] || [ -z "$VERSION" ]; then
+    echo "[$0] NETWORK=$NETWORK or VERSION=$VERSION is missing."
+    exit 1
+fi
 
 if [[ ! "$NETWORK" =~ ^mainnet$|^testnet$|^betanet$ ]]
 then

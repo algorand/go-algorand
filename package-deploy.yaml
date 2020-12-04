@@ -1,7 +1,7 @@
 agents:
   - name: docker
     dockerFilePath: docker/build/docker.ubuntu.Dockerfile
-    image: algorand/docker-ubuntu
+    image: algorand/go-algorand-ci-linux-ubuntu
     version: scripts/configure_dev-deps.sh
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
@@ -22,6 +22,8 @@ agents:
     env:
       - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
     workDir: $HOME/projects/go-algorand
 
   - name: deb
@@ -33,7 +35,7 @@ agents:
     env:
       - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-      - CHANNEL=$CHANNEL
+      - NETWORK=$NETWORK
       - SNAPSHOT=$SNAPSHOT
       - STAGING=$STAGING
       - VERSION=$VERSION
@@ -44,14 +46,14 @@ agents:
 
   - name: rpm
     dockerFilePath: docker/build/cicd.centos.Dockerfile
-    image: algorand/cicd-centos
+    image: algorand/go-algorand-ci-linux-centos
     version: scripts/configure_dev-deps.sh
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     env:
       - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-      - CHANNEL=$CHANNEL
+      - NETWORK=$NETWORK
       - PACKAGES_DIR=$PACKAGES_DIR
       - NO_DEPLOY=$NO_DEPLOY
       - S3_SOURCE=$S3_SOURCE
@@ -83,6 +85,13 @@ tasks:
     target: mule-deploy-rpm
 
 jobs:
+  package-deploy:
+    tasks:
+      - docker.Make.deb
+      - docker.Make.rpm
+      - docker.Make.docker
+      - docker.Make.releases-page
+
   package-deploy-deb:
     tasks:
       - docker.Make.deb
