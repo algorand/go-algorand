@@ -445,6 +445,12 @@ func loadConfig(reader io.Reader, config *Local) error {
 func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray []string) {
 	dnsBootstrapString := cfg.DNSBootstrap(networkID)
 	bootstrapArray = strings.Split(dnsBootstrapString, ";")
+	// omit zero length entries from the result set.
+	for i := len(bootstrapArray) - 1; i >= 0; i-- {
+		if len(bootstrapArray[i]) == 0 {
+			bootstrapArray = append(bootstrapArray[:i], bootstrapArray[i+1:]...)
+		}
+	}
 	return
 }
 
@@ -597,3 +603,6 @@ func (cfg Local) DNSSecurityRelayAddrEnforced() bool {
 func (cfg Local) DNSSecurityTelemeryAddrEnforced() bool {
 	return cfg.DNSSecurityFlags&dnssecTelemetryAddr != 0
 }
+
+// ProposalAssemblyTime is the max amount of time to spend on generating a proposal block. This should eventually have it's own configurable value.
+const ProposalAssemblyTime time.Duration = 250 * time.Millisecond

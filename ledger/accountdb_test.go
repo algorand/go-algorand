@@ -889,9 +889,11 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		balanceLoopDuration := time.Now().Sub(balancesLoopStart)
 		last64KAccountCreationTime += balanceLoopDuration
 		accountsGenerationDuration += balanceLoopDuration
+
+		normalizedAccountBalances, err := prepareNormalizedBalances(balances.Balances, proto)
 		b.StartTimer()
 		err = l.trackerDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			err = writeCatchpointStagingBalances(ctx, tx, balances.Balances, proto)
+			err = writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
 			return
 		})
 

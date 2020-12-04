@@ -3,19 +3,33 @@
 
 set -ex
 
+echo
+date "+build_release begin TEST stage %Y%m%d_%H%M%S"
+echo
+
+if [ -z "$BRANCH" ] || [ -z "$NETWORK" ] || [ -z "$SHA" ]; then
+    echo "[$0] BRANCH=$BRANCH, NETWORK=$NETWORK or SHA=$SHA is missing."
+    exit 1
+fi
+
+CHANNEL=$(./scripts/release/mule/common/get_channel.sh "$NETWORK")
+export CHANNEL
+
+VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+export VERSION
+
+export BRANCH
+
 export PKG_TYPE="$1"
+
 ARCH_BIT=$(uname -m)
 export ARCH_BIT
-ARCH_TYPE=$(./scripts/archtype.sh)
-export ARCH_TYPE
-OS_TYPE=$(./scripts/ostype.sh)
+
+OS_TYPE=$(./scripts/release/mule/common/ostype.sh)
 export OS_TYPE
 
-export BRANCH=${BRANCH:-$(./scripts/compute_branch.sh)}
-export CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
-export NETWORK=${NETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
-export SHA=${SHA:-$(git rev-parse HEAD)}
-export VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+export SHA
+
 ALGORAND_PACKAGE_NAME=$([ "$CHANNEL" = beta ] && echo algorand-beta || echo algorand)
 DEVTOOLS_PACKAGE_NAME=$([ "$CHANNEL" = beta ] && echo algorand-devtools-beta || echo algorand-devtools)
 export ALGORAND_PACKAGE_NAME
@@ -29,14 +43,36 @@ pushd "$PKG_DIR"
 if [ -n "$S3_SOURCE" ]
 then
     PREFIX="$S3_SOURCE/$CHANNEL/$VERSION"
+    PACKAGE_NAME_SUFFIX="${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}"
 
     # deb
-    aws s3 cp "s3://$PREFIX/algorand_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
-    aws s3 cp "s3://$PREFIX/algorand-devtools_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.deb" .
+    aws s3 cp "s3://$PREFIX/algorand_$PACKAGE_NAME_SUFFIX.deb" .
+    aws s3 cp "s3://$PREFIX/algorand-devtools_$PACKAGE_NAME_SUFFIX.deb" .
 
+    aws s3 cp "s3://$PREFIX/algorand_$PACKAGE_NAME_SUFFIX.deb.sig" .
+    aws s3 cp "s3://$PREFIX/algorand-devtools_$PACKAGE_NAME_SUFFIX.deb.sig" .
+
+    # Not only do we need to redefine the `PACKAGE_NAME_SUFFIX` for rpm but
+    # we need to check the channel before defining it.
+    #
+    # Remember, rpm packages don't include the channel in the package name!
+    #
+    # ( `betanet` builds are special b/c "beta" is part of the package name,
+    #   so although it appears as though I just lied to you, I did not :)
+    #
     # rpm
-    aws s3 cp "s3://$PREFIX/algorand-$VERSION-1.$ARCH_BIT.rpm" .
-    aws s3 cp "s3://$PREFIX/algorand-devtools-$VERSION-1.$ARCH_BIT.rpm" .
+    if [ "$CHANNEL" = "beta" ]
+    then
+        PACKAGE_NAME_SUFFIX="$CHANNEL-$VERSION-1.$ARCH_BIT"
+    else
+        PACKAGE_NAME_SUFFIX="$VERSION-1.$ARCH_BIT"
+    fi
+
+    aws s3 cp "s3://$PREFIX/algorand-$PACKAGE_NAME_SUFFIX.rpm" .
+    aws s3 cp "s3://$PREFIX/algorand-devtools-$PACKAGE_NAME_SUFFIX.rpm" .
+
+    aws s3 cp "s3://$PREFIX/algorand-$PACKAGE_NAME_SUFFIX.rpm.sig" .
+    aws s3 cp "s3://$PREFIX/algorand-devtools-$PACKAGE_NAME_SUFFIX.rpm.sig" .
 fi
 
 popd
@@ -94,4 +130,8 @@ do
     echo ">>>>>>>>>> POST TESTING $(basename "$test")"
     bash "$test"
 done
+
+echo
+date "+build_release end TEST stage %Y%m%d_%H%M%S"
+echo
 

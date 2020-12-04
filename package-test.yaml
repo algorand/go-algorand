@@ -1,7 +1,7 @@
 agents:
   - name: deb
     dockerFilePath: docker/build/cicd.ubuntu.Dockerfile
-    image: algorand/mule-linux-debian
+    image: algorand/go-algorand-ci-linux-ubuntu
     version: scripts/configure_dev-deps.sh
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
@@ -9,13 +9,10 @@ agents:
       - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
       - BRANCH=$BRANCH
-      - CHANNEL=$CHANNEL
       - NETWORK=$NETWORK
       - S3_SOURCE=$S3_SOURCE
       - SHA=$SHA
       - VERSION=$VERSION
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
     workDir: $HOME/projects/go-algorand
 
   - name: rpm
@@ -28,13 +25,10 @@ agents:
       - AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
       - BRANCH=$BRANCH
-      - CHANNEL=$CHANNEL
       - NETWORK=$NETWORK
       - S3_SOURCE=$S3_SOURCE
       - SHA=$SHA
       - VERSION=$VERSION
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
     workDir: $HOME/projects/go-algorand
 
 tasks:

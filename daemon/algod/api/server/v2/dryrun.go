@@ -481,6 +481,21 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 					appIdx = basics.AppIndex(dr.Apps[0].Id)
 				}
 			}
+			if stxn.Txn.OnCompletion == transactions.OptInOC {
+				if idx, ok := dl.accountsIn[stxn.Txn.Sender]; ok {
+					acct := dl.dr.Accounts[idx]
+					var ad basics.AccountData
+					if ad, err = AccountToAccountData(&acct); err != nil {
+						response.Error = err.Error()
+						return
+					}
+					if ad.AppLocalStates == nil {
+						ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+					}
+					ad.AppLocalStates[appIdx] = basics.AppLocalState{KeyValue: make(basics.TealKeyValue)}
+					dl.accounts[stxn.Txn.Sender] = basics.BalanceRecord{Addr: stxn.Txn.Sender, AccountData: ad}
+				}
+			}
 
 			ba, err := makeBalancesAdapter(&dl, &stxn.Txn, appIdx)
 			if err != nil {

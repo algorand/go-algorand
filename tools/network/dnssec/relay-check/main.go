@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/tools/network/dnssec"
 )
 
@@ -44,7 +44,7 @@ Where\n
 	success := make(map[string]bool)
 	errors := make(map[string]string)
 	nonSigned := make(map[string]string)
-	r := dnssec.MakeDnssecResolver(nil, time.Second)
+	r := dnssec.MakeDefaultDnssecResolver("", logging.Base())
 	_, entries, err := r.LookupSRV(context.Background(), srvService, srvProto, srvName)
 	if err != nil {
 		fmt.Printf("%v\n", err)

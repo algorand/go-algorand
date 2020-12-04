@@ -135,6 +135,7 @@ func TestGetStatus(t *testing.T) {
 		Catchpoint:                  &stat.Catchpoint,
 		CatchpointTotalAccounts:     &stat.CatchpointCatchupTotalAccounts,
 		CatchpointProcessedAccounts: &stat.CatchpointCatchupProcessedAccounts,
+		CatchpointVerifiedAccounts:  &stat.CatchpointCatchupVerifiedAccounts,
 		CatchpointTotalBlocks:       &stat.CatchpointCatchupTotalBlocks,
 		CatchpointAcquiredBlocks:    &stat.CatchpointCatchupAcquiredBlocks,
 	}
