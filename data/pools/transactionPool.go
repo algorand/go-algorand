@@ -132,19 +132,28 @@ type poolAsmResults struct {
 	// roundStartedEvaluating is the round which we were attempted to evaluate last. It's a good measure for
 	// which round we started evaluating, but not a measure to whether the evaluation is complete.
 	roundStartedEvaluating basics.Round
-	assemblyComplete       bool // this variable is *not* protected via the pool.assemblyMu lock and should be accessed only from the OnNewBlock goroutine.
+	// assemblyComplete is *not* protected via the pool.assemblyMu lock and should be accessed only from the OnNewBlock goroutine.
+	// it's equivilent to the "ok" variable, and used for avoiding taking the lock.
+	assemblyComplete bool
 }
 
-// TODO I moved this number to be a constant in the module, we should consider putting it in the local config
-const expiredHistory = 10
+const (
+	// TODO I moved this number to be a constant in the module, we should consider putting it in the local config
+	expiredHistory = 10
 
-// timeoutOnNewBlock determines how long Test() and Remember() wait for
-// OnNewBlock() to process a new block that appears to be in the ledger.
-const timeoutOnNewBlock = time.Second
+	// timeoutOnNewBlock determines how long Test() and Remember() wait for
+	// OnNewBlock() to process a new block that appears to be in the ledger.
+	timeoutOnNewBlock = time.Second
 
-// assemblyWaitEps is the extra time AssembleBlock() waits past the
-// deadline before giving up.
-const assemblyWaitEps = 150 * time.Millisecond
+	// assemblyWaitEps is the extra time AssembleBlock() waits past the
+	// deadline before giving up.
+	assemblyWaitEps = 150 * time.Millisecond
+
+	// The following two constants are used by the isAssemblyTimedOut function, and used to estimate the projected
+	// duration it would take to execute the GenerateBlock() function
+	generateBlockBaseDuration        = 2 * time.Millisecond
+	generateBlockTransactionDuration = 2155 * time.Nanosecond
+)
 
 // ErrStaleBlockAssemblyRequest returned by AssembleBlock when requested block number is older than the current transaction pool round
 // i.e. typically it means that we're trying to make a proposal for an older round than what the ledger is currently pointing at.
@@ -568,8 +577,6 @@ func (pool *TransactionPool) isAssemblyTimedOut() bool {
 		// we have no deadline, so no reason to timeout.
 		return false
 	}
-	const generateBlockBaseDuration = 2 * time.Millisecond
-	const generateBlockTransactionDuration = 2155 * time.Nanosecond
 	generateBlockDuration := generateBlockBaseDuration + time.Duration(pool.pendingBlockEvaluator.TxnCounter())*generateBlockTransactionDuration
 	return time.Now().After(pool.assemblyDeadline.Add(-generateBlockDuration))
 }
@@ -754,7 +761,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 
 	if !pool.assemblyResults.ok && pool.assemblyRound <= pool.pendingBlockEvaluator.Round() {
 		pool.assemblyResults.ok = true
-		pool.assemblyResults.assemblyComplete = true
+		pool.assemblyResults.assemblyComplete = true // this is not strictly needed, since the value would only get inspected by this go-routine, but we'll adjust it along with "ok" for consistency
 		blockGenerationStarts := time.Now()
 		lvb, err := pool.pendingBlockEvaluator.GenerateBlock()
 		if err != nil {
