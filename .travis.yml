@@ -52,7 +52,7 @@ jobs:
           packages:
             - awscli
       script:
-        - scripts/travis/external_build.sh ./scripts/travis/build_test.sh
+        - travis_retry scripts/travis/external_build.sh ./scripts/travis/build_test.sh
     - # same stage, parallel job
       name: External ARM64 Integration Test
       os: linux
