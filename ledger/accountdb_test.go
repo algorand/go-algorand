@@ -712,12 +712,19 @@ func benchmarkInitBalances(b *testing.B, dbs dbPair, proto config.ConsensusParam
 	return
 }
 
+func cleanupTestDb(dbs dbPair, dbName string, inMemory bool) {
+	dbs.close()
+	if !inMemory {
+		os.Remove(dbName)
+	}
+}
+
 func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	//b.N = 50000
-	dbs, _ := dbOpenTest(b, inMemory)
+	dbs, fn := dbOpenTest(b, inMemory)
 	setDbLogging(b, dbs)
-	defer dbs.close()
+	defer cleanupTestDb(dbs, fn, inMemory)
 
 	benchmarkInitBalances(b, dbs, proto)
 	tx, err := dbs.rdb.Handle.Begin()
@@ -747,9 +754,9 @@ func BenchmarkReadingAllBalancesDisk(b *testing.B) {
 
 func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	dbs, _ := dbOpenTest(b, inMemory)
+	dbs, fn := dbOpenTest(b, inMemory)
 	setDbLogging(b, dbs)
-	defer dbs.close()
+	defer cleanupTestDb(dbs, fn, inMemory)
 
 	accounts := benchmarkInitBalances(b, dbs, proto)
 

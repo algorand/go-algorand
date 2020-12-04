@@ -19,6 +19,8 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -320,6 +322,19 @@ func TestPrepareAppEvaluators(t *testing.T) {
 	}
 }
 
+func testLedgerCleanup(l *Ledger, dbName string, inMem bool) {
+	l.Close()
+	if !inMem {
+		hits, err := filepath.Glob(dbName + "*.sqlite")
+		if err != nil {
+			return
+		}
+		for _, fname := range hits {
+			os.Remove(fname)
+		}
+	}
+}
+
 func BenchmarkBlockEvaluator(b *testing.B) {
 	start := time.Now()
 	genesisInitState, addrs, keys := genesis(100000)
@@ -333,11 +348,12 @@ func BenchmarkBlockEvaluator(b *testing.B) {
 	cfg.Archival = true
 	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
-	defer l.Close()
+	defer testLedgerCleanup(l, dbName, inMem)
 
-	l2, err := OpenLedger(logging.Base(), dbName+"_2", inMem, genesisInitState, cfg)
+	dbName2 := dbName + "_2"
+	l2, err := OpenLedger(logging.Base(), dbName2, inMem, genesisInitState, cfg)
 	require.NoError(b, err)
-	defer l2.Close()
+	defer testLedgerCleanup(l2, dbName2, inMem)
 
 	setupDone := time.Now()
 	setupTime := setupDone.Sub(start)
@@ -347,7 +363,7 @@ func BenchmarkBlockEvaluator(b *testing.B) {
 
 	// test speed of block building
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
-	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 	require.NoError(b, err)
 
 	genHash := genesisInitState.Block.BlockHeader.GenesisHash
@@ -370,30 +386,32 @@ func BenchmarkBlockEvaluator(b *testing.B) {
 			},
 		}
 		st := txn.Sign(keys[sender])
-		err = eval.Transaction(st, transactions.ApplyData{})
+		err = bev.Transaction(st, transactions.ApplyData{})
 		require.NoError(b, err)
 	}
 
-	validatedBlock, err := eval.GenerateBlock()
+	validatedBlock, err := bev.GenerateBlock()
 	require.NoError(b, err)
 
 	blockBuildDone := time.Now()
 	blockBuildTime := blockBuildDone.Sub(setupDone)
-	b.Logf("build block of %d txns in %s", b.N, blockBuildTime.String())
+	b.ReportMetric(float64(blockBuildTime)/float64(b.N), "ns/block_build_tx")
 
 	l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
 
 	avbDone := time.Now()
 	avbTime := avbDone.Sub(blockBuildDone)
-	b.Logf("AddValidatedBlock %s", avbTime.String())
+	b.ReportMetric(float64(avbTime)/float64(b.N), "ns/AddValidatedBlock_tx")
 
 	// test speed of block validation
-	err = l2.AddBlock(validatedBlock.blk, agreement.Certificate{})
+	// This should be the same as the eval line in ledger.go AddBlock()
+	// This is pulled out to isolate eval() time from db ops of AddValidatedBlock()
+	_, err = eval(context.Background(), l2, validatedBlock.blk, false, nil, nil)
 	require.NoError(b, err)
 
 	abDone := time.Now()
 	abTime := abDone.Sub(avbDone)
-	b.Logf("AddBlock %s", abTime.String())
+	b.ReportMetric(float64(abTime)/float64(b.N), "ns/eval_validate_tx")
 
 	b.StopTimer()
 }
