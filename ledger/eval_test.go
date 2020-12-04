@@ -337,11 +337,17 @@ func testLedgerCleanup(l *Ledger, dbName string, inMem bool) {
 	}
 }
 
-func BenchmarkBlockEvaluatorRAM(b *testing.B) {
-	benchmarkBlockEvaluator(b, true)
+func BenchmarkBlockEvaluatorRAMCrypto(b *testing.B) {
+	benchmarkBlockEvaluator(b, true, true)
 }
-func BenchmarkBlockEvaluatorDisk(b *testing.B) {
-	benchmarkBlockEvaluator(b, false)
+func BenchmarkBlockEvaluatorRAMNoCrypto(b *testing.B) {
+	benchmarkBlockEvaluator(b, true, false)
+}
+func BenchmarkBlockEvaluatorDiskCrypto(b *testing.B) {
+	benchmarkBlockEvaluator(b, false, true)
+}
+func BenchmarkBlockEvaluatorDiskNoCrypto(b *testing.B) {
+	benchmarkBlockEvaluator(b, false, false)
 }
 
 // this variant builds a block of b.N txns and then validates it.
@@ -444,7 +450,7 @@ func benchmarkBlockEvaluatorBuildAndValidate(b *testing.B, inMem bool) {
 }
 
 // this variant focuses on benchmarking ledger.go `eval()`, the rest is setup, it runs eval() b.N times.
-func benchmarkBlockEvaluator(b *testing.B, inMem bool) {
+func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 	deadlockDisable := deadlock.Opts.Disable
 	deadlock.Opts.Disable = true
 	defer func() { deadlock.Opts.Disable = deadlockDisable }()
@@ -530,12 +536,19 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool) {
 	avbTime := avbDone.Sub(blockBuildDone)
 	b.ReportMetric(float64(avbTime)/float64(numTxns), "ns/AddValidatedBlock_tx")
 
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+
 	// test speed of block validation
 	// This should be the same as the eval line in ledger.go AddBlock()
 	// This is pulled out to isolate eval() time from db ops of AddValidatedBlock()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err = eval(context.Background(), l2, validatedBlock.blk, false, nil, nil)
+		if withCrypto {
+			_, err = l2.Validate(context.Background(), validatedBlock.blk, nil, backlogPool)
+		} else {
+			_, err = eval(context.Background(), l2, validatedBlock.blk, false, nil, nil)
+		}
 		require.NoError(b, err)
 	}
 
