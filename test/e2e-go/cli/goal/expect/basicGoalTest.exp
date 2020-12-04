@@ -93,7 +93,7 @@ if { [catch {
     #if { $NEW_ACCOUNT_1_BALANCE != $EXPECTED_ACCOUNT_1_AMOUNT } then { ::AlgorandGoal::Abort "Account 1 is not correct, expected $EXPECTED_ACCOUNT_1_AMOUNT, but received $NEW_ACCOUNT_1_BALANCE " }
 
     # Delete an account
-    ::AlgorandGoal::DeleteAccount $WALLET_1_NAME $ACCOUNT_1_ADDRESS
+    ::AlgorandGoal::DeleteAccount $WALLET_1_NAME $WALLET_1_PASSWORD $ACCOUNT_1_ADDRESS $TEST_PRIMARY_NODE_DIR
 
     # Shutdown the network
     ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
