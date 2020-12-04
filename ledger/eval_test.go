@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -320,6 +321,7 @@ func TestPrepareAppEvaluators(t *testing.T) {
 }
 
 func BenchmarkBlockEvaluator(b *testing.B) {
+	start := time.Now()
 	genesisInitState, addrs, keys := genesis(100000)
 	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
 	proto := config.Consensus[genesisInitState.Block.CurrentProtocol]
@@ -333,8 +335,17 @@ func BenchmarkBlockEvaluator(b *testing.B) {
 	require.NoError(b, err)
 	defer l.Close()
 
+	l2, err := OpenLedger(logging.Base(), dbName+"_2", inMem, genesisInitState, cfg)
+	require.NoError(b, err)
+	defer l2.Close()
+
+	setupDone := time.Now()
+	setupTime := setupDone.Sub(start)
+	b.Logf("BenchmarkBlockEvaluator setup time %s", setupTime.String())
+
 	b.ResetTimer()
 
+	// test speed of block building
 	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
 	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
 	require.NoError(b, err)
@@ -366,5 +377,23 @@ func BenchmarkBlockEvaluator(b *testing.B) {
 	validatedBlock, err := eval.GenerateBlock()
 	require.NoError(b, err)
 
+	blockBuildDone := time.Now()
+	blockBuildTime := blockBuildDone.Sub(setupDone)
+	b.Logf("build block of %d txns in %s", b.N, blockBuildTime.String())
+
 	l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+
+	avbDone := time.Now()
+	avbTime := avbDone.Sub(blockBuildDone)
+	b.Logf("AddValidatedBlock %s", avbTime.String())
+
+	// test speed of block validation
+	err = l2.AddBlock(validatedBlock.blk, agreement.Certificate{})
+	require.NoError(b, err)
+
+	abDone := time.Now()
+	abTime := abDone.Sub(avbDone)
+	b.Logf("AddBlock %s", abTime.String())
+
+	b.StopTimer()
 }
