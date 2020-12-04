@@ -606,8 +606,8 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 	err := pool.pendingBlockEvaluator.TransactionGroup(txgroupad)
 
 	if recomputing {
-		transactionGroupDuration := time.Now().Sub(transactionGroupStartsTime)
 		if !pool.assemblyResults.assemblyComplete {
+			transactionGroupDuration := time.Now().Sub(transactionGroupStartsTime)
 			pool.assemblyMu.Lock()
 			defer pool.assemblyMu.Unlock()
 			if pool.assemblyRound > pool.pendingBlockEvaluator.Round() {
