@@ -335,7 +335,13 @@ func testLedgerCleanup(l *Ledger, dbName string, inMem bool) {
 	}
 }
 
-func BenchmarkBlockEvaluator(b *testing.B) {
+func BenchmarkBlockEvaluatorRAM(b *testing.B) {
+	benchmarkBlockEvaluator(b, true)
+}
+func BenchmarkBlockEvaluatorDisk(b *testing.B) {
+	benchmarkBlockEvaluator(b, false)
+}
+func benchmarkBlockEvaluator(b *testing.B, inMem bool) {
 	start := time.Now()
 	genesisInitState, addrs, keys := genesis(100000)
 	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
@@ -343,7 +349,6 @@ func BenchmarkBlockEvaluator(b *testing.B) {
 	proto.MaxTxnBytesPerBlock = 1000000000 // very big, no limit
 	config.Consensus[protocol.ConsensusVersion(dbName)] = proto
 	genesisInitState.Block.CurrentProtocol = protocol.ConsensusVersion(dbName)
-	const inMem = false
 	cfg := config.GetDefaultLocal()
 	cfg.Archival = true
 	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
