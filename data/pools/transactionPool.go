@@ -559,6 +559,21 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledger.St
 	}
 }
 
+// isAssemblyTimedOut determines if we should keep attempting complete the block assembly by adding more transactions to the pending evaluator,
+// or whether we've ran out of time. It takes into consideration the assemblyDeadline that was set by the AssembleBlock function as well as the
+// projected time it's going to take to call the GenerateBlock function before the block assembly would be ready.
+// The function expects that the pool.assemblyMu lock would be taken before being called.
+func (pool *TransactionPool) isAssemblyTimedOut() bool {
+	if pool.assemblyDeadline.IsZero() {
+		// we have no deadline, so no reason to timeout.
+		return false
+	}
+	const generateBlockBaseDuration = 2 * time.Millisecond
+	const generateBlockTransactionDuration = 2155 * time.Nanosecond
+	generateBlockDuration := generateBlockBaseDuration + time.Duration(pool.pendingBlockEvaluator.TxnCounter())*generateBlockTransactionDuration
+	return time.Now().After(pool.assemblyDeadline.Add(-generateBlockDuration))
+}
+
 func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactions.SignedTxn, recomputing bool, stats *telemetryspec.AssembleBlockMetrics) error {
 	r := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
 	for _, tx := range txgroup {
@@ -588,7 +603,16 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 		if !pool.assemblyResults.assemblyComplete {
 			pool.assemblyMu.Lock()
 			defer pool.assemblyMu.Unlock()
-			if (err == ledger.ErrNoSpace || (pool.assemblyDeadline != time.Time{} && time.Now().After(pool.assemblyDeadline))) && (pool.assemblyRound <= pool.pendingBlockEvaluator.Round()) {
+			if pool.assemblyRound > pool.pendingBlockEvaluator.Round() {
+				// the block we're assembling now isn't the one the the AssembleBlock is waiting for. While it would be really cool
+				// to finish generating the block, it would also be pointless to spend time on it.
+				// we're going to set the ok and assemblyComplete to "true" so we can complete this loop asap
+				pool.assemblyResults.ok = true
+				pool.assemblyResults.assemblyComplete = true
+				stats.StopReason = telemetryspec.AssembleBlockAbandon
+				pool.assemblyResults.stats = *stats
+				pool.assemblyCond.Broadcast()
+			} else if err == ledger.ErrNoSpace || pool.isAssemblyTimedOut() {
 				pool.assemblyResults.ok = true
 				pool.assemblyResults.assemblyComplete = true
 				if err == ledger.ErrNoSpace {
