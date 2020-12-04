@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -974,4 +975,71 @@ func TestStateDeltaToStateDelta(t *testing.T) {
 	require.Contains(t, keys, b64("intkey"))
 	require.Contains(t, keys, b64("byteskey"))
 	require.Contains(t, keys, b64("delkey"))
+}
+
+func randomAddress() basics.Address {
+	var addr basics.Address
+	crypto.RandBytes(addr[:])
+	return addr
+}
+
+func TestDryrunOptIn(t *testing.T) {
+	t.Parallel()
+
+	approval, err := logic.AssembleString(`#pragma version 2
+txn ApplicationID
+bz ok
+int 0
+byte "key"
+byte "value"
+app_local_put
+ok:
+int 1`)
+	require.NoError(t, err)
+	clst, err := logic.AssembleString("int 1")
+	require.NoError(t, err)
+	var appIdx basics.AppIndex = 1
+	creator := randomAddress()
+	sender := randomAddress()
+	dr := DryrunRequest{
+		Txns: []transactions.SignedTxn{
+			{
+				Txn: transactions.Transaction{
+					Header: transactions.Header{Sender: sender},
+					Type:   protocol.ApplicationCallTx,
+					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+						ApplicationID: appIdx,
+						OnCompletion:  transactions.OptInOC,
+					},
+				},
+			},
+		},
+		Apps: []generated.Application{
+			{
+				Id: uint64(appIdx),
+				Params: generated.ApplicationParams{
+					Creator:           creator.String(),
+					ApprovalProgram:   approval,
+					ClearStateProgram: clst,
+					LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+				},
+			},
+		},
+		Accounts: []generated.Account{
+			{
+				Address: sender.String(),
+				Status:  "Online",
+				Amount:  10000000,
+			},
+		},
+	}
+	dr.ProtocolVersion = string(dryrunProtoVersion)
+
+	var response generated.DryrunResponse
+	doDryrunRequest(&dr, &response)
+	require.NoError(t, err)
+	checkAppCallPass(t, &response)
+	if t.Failed() {
+		logResponse(t, &response)
+	}
 }

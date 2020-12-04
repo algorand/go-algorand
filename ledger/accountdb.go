@@ -318,6 +318,7 @@ type normalizedAccountBalance struct {
 	encodedAccountData []byte
 	accountHash        []byte
 	normalizedBalance  uint64
+	storageData        []storageData
 }
 
 // prepareNormalizedBalances converts an array of encodedBalanceRecord into an equal size array of normalizedAccountBalances.
@@ -325,13 +326,14 @@ func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.Consens
 	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals), len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].address = balance.Address
-		err = protocol.Decode(balance.AccountData, &(normalizedAccountBalances[i].accountData))
+		err = protocol.Decode(balance.MiniAccountData, &(normalizedAccountBalances[i].accountData))
 		if err != nil {
 			return nil, err
 		}
 		normalizedAccountBalances[i].normalizedBalance = normalizedAccountBalances[i].accountData.NormalizedOnlineBalance(proto)
-		normalizedAccountBalances[i].encodedAccountData = balance.AccountData
-		normalizedAccountBalances[i].accountHash = accountHashBuilder(balance.Address, normalizedAccountBalances[i].accountData, balance.AccountData)
+		normalizedAccountBalances[i].encodedAccountData = balance.MiniAccountData
+		normalizedAccountBalances[i].accountHash = accountHashBuilder(balance.Address, normalizedAccountBalances[i].accountData, balance.MiniAccountData)
+		normalizedAccountBalances[i].storageData = balance.StorageData
 	}
 	return
 }
@@ -339,30 +341,35 @@ func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.Consens
 // writeCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
 func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
 	insertAcctStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
-	insertKeyStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointstorage (owner, aidx, global, key, vtype, venc) VALUES (?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
 
 	for _, balance := range bals {
-		result, err := insertStmt.ExecContext(ctx, balance.address[:], balance.normalizedBalance, balance.encodedAccountData)
+		result, err := insertAcctStmt.ExecContext(ctx, balance.address[:], balance.normalizedBalance, balance.encodedAccountData)
 		if err != nil {
 			return err
 		}
-
-		for _, entry := range balance.StorageData {
-			_, err = insertKeyStmt.Exec(balance.Address[:], entry.Aidx, entry.Global, entry.Key, entry.Vtype, entry.Venc)
-			if err != nil {
-				return err
-			}
-		}
-
 		aff, err := result.RowsAffected()
 		if err != nil {
 			return err
 		}
 		if aff != 1 {
 			return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
+		}
+	}
+
+	insertKeyStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointstorage (owner, aidx, global, key, vtype, venc) VALUES (?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer insertKeyStmt.Close()
+	for _, balance := range bals {
+		for _, entry := range balance.storageData {
+			_, err = insertKeyStmt.Exec(balance.address[:], entry.Aidx, entry.Global, entry.Key, entry.Vtype, entry.Venc)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

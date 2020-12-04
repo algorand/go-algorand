@@ -484,16 +484,34 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 			if stxn.Txn.OnCompletion == transactions.OptInOC {
 				if idx, ok := dl.accountsIn[stxn.Txn.Sender]; ok {
 					acct := dl.dr.Accounts[idx]
-					var ad basics.AccountData
-					if ad, err = AccountToAccountData(&acct); err != nil {
-						response.Error = err.Error()
-						return
+					ls := generated.ApplicationLocalState{
+						Id:       uint64(appIdx),
+						KeyValue: new(generated.TealKeyValueStore),
 					}
-					if ad.AppLocalStates == nil {
-						ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+					for _, app := range dr.Apps {
+						if basics.AppIndex(app.Id) == appIdx {
+							if app.Params.LocalStateSchema != nil {
+								ls.Schema = *app.Params.LocalStateSchema
+							}
+							break
+						}
 					}
-					ad.AppLocalStates[appIdx] = basics.AppLocalState{KeyValue: make(basics.TealKeyValue)}
-					dl.accounts[stxn.Txn.Sender] = basics.BalanceRecord{Addr: stxn.Txn.Sender, AccountData: ad}
+					if acct.AppsLocalState == nil {
+						lss := []generated.ApplicationLocalState{ls}
+						acct.AppsLocalState = &lss
+					} else {
+						found := false
+						for _, apls := range *acct.AppsLocalState {
+							if apls.Id == uint64(appIdx) {
+								// already opted in
+								found = true
+							}
+						}
+						if !found {
+							(*acct.AppsLocalState) = append(*acct.AppsLocalState, ls)
+						}
+					}
+					dl.dr.Accounts[idx] = acct
 				}
 			}
 
