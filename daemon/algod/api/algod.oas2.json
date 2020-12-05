@@ -895,7 +895,7 @@
     },
     "/v2/teal/compile": {
       "post": {
-        "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style).",
+        "description": "Given TEAL source code in plain text, return base64 encoded program bytes and base32 SHA512_256 hash of program bytes (Address style). This endpoint is only enabled when a node's configureation file sets EnableDeveloperAPI to true.",
         "consumes": [
           "text/plain"
         ],
@@ -935,6 +935,9 @@
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
+          },
+          "404": {
+            "description": "Developer API not enabled"
           },
           "500": {
             "description": "Internal Error",
@@ -1055,7 +1058,7 @@
     },
     "/v2/teal/dryrun": {
       "post": {
-        "description": "Executes TEAL program(s) in context and returns debugging information about the execution.",
+        "description": "Executes TEAL program(s) in context and returns debugging information about the execution. This endpoint is only enabled when a node's configureation file sets EnableDeveloperAPI to true.",
         "consumes": [
           "application/json",
           "application/msgpack"
@@ -1094,6 +1097,9 @@
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
+          },
+          "404": {
+            "description": "Developer API not enabled"
           },
           "500": {
             "description": "Internal Error",
@@ -2098,7 +2104,11 @@
             "type": "integer"
           },
           "catchpoint-processed-accounts": {
-            "description": "The number of account from the current catchpoint that have been processed so far as part of the catchup",
+            "description": "The number of accounts from the current catchpoint that have been processed so far as part of the catchup",
+            "type": "integer"
+          },
+          "catchpoint-verified-accounts": {
+            "description": "The number of accounts from the current catchpoint that have been verified so far as part of the catchup",
             "type": "integer"
           },
           "catchpoint-total-blocks": {

@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/messagetracer"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -50,6 +51,8 @@ type networkImpl struct {
 
 	net network.GossipNode
 	log logging.Logger
+
+	trace messagetracer.MessageTracer
 }
 
 // WrapNetwork adapts a network.GossipNode into an agreement.Network.
@@ -64,6 +67,12 @@ func WrapNetwork(net network.GossipNode, log logging.Logger) agreement.Network {
 	i.log = log
 
 	return i
+}
+
+// SetTrace modifies the result of WrapNetwork to add network propagation tracing
+func SetTrace(net agreement.Network, trace messagetracer.MessageTracer) {
+	i := net.(*networkImpl)
+	i.trace = trace
 }
 
 func (i *networkImpl) Start() {
@@ -87,6 +96,9 @@ func (i *networkImpl) processVoteMessage(raw network.IncomingMessage) network.Ou
 }
 
 func (i *networkImpl) processProposalMessage(raw network.IncomingMessage) network.OutgoingMessage {
+	if i.trace != nil {
+		i.trace.HashTrace(messagetracer.Proposal, raw.Data)
+	}
 	return i.processMessage(raw, i.proposalCh)
 }
 

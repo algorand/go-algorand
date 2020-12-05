@@ -33,7 +33,7 @@ const VersionMajor = 2
 
 // VersionMinor is the Minor semantic version number (x.#.z) - changed when backwards-compatible features are introduced.
 // Not enforced until after initial public release (x > 0).
-const VersionMinor = 2
+const VersionMinor = 3
 
 // Version is the type holding our full version information.
 type Version struct {
@@ -113,7 +113,7 @@ func GetCurrentVersion() Version {
 // FormatVersionAndLicense prints current version and license information
 func FormatVersionAndLicense() string {
 	version := GetCurrentVersion()
-	return fmt.Sprintf("%d\n%s.%s [%s] (commit #%s)\n%s\n", version.AsUInt64(), version.String(),
+	return fmt.Sprintf("%d\n%s.%s [%s] (commit #%s)\n%s", version.AsUInt64(), version.String(),
 		version.Channel, version.Branch, version.GetCommitHash(), GetLicenseInfo())
 }
 
