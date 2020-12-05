@@ -20,7 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"io"
 	"os"
 	"time"
 
@@ -470,10 +469,10 @@ func (l *Ledger) Totals(rnd basics.Round) (AccountTotals, error) {
 	return l.accts.Totals(rnd)
 }
 
-func (l *Ledger) isDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl txlease) (bool, error) {
+func (l *Ledger) checkDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl txlease) error {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.txTail.isDup(currentProto, current, firstValid, lastValid, txid, txl)
+	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl)
 }
 
 // GetRoundTxIds returns a map of the transactions ids that we have for the given round
@@ -604,12 +603,12 @@ func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state Catchpoin
 	return MakeCatchpointCatchupAccessor(l, l.log).GetState(ctx)
 }
 
-// GetCatchpointStream returns an io.ReadCloser file stream from which the catchpoint file
+// GetCatchpointStream returns a ReadCloseSizer file stream from which the catchpoint file
 // for the provided round could be retrieved. If no such stream can be generated, a non-nil
 // error is returned. The io.ReadCloser and the error are mutually exclusive -
 // if error is returned, the file stream is guaranteed to be nil, and vice versa,
 // if the file stream is not nil, the error is guaranteed to be nil.
-func (l *Ledger) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
+func (l *Ledger) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.GetCatchpointStream(round)
