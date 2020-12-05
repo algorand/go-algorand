@@ -394,6 +394,11 @@ func (eval *BlockEvaluator) workaroundOverspentRewards(rewardPoolBalance basics.
 	return
 }
 
+// TxnCounter returns the number of transactions that have been added to the block evaluator so far.
+func (eval *BlockEvaluator) TxnCounter() int {
+	return len(eval.block.Payset)
+}
+
 // Round returns the round number of the block being evaluated by the BlockEvaluator.
 func (eval *BlockEvaluator) Round() basics.Round {
 	return eval.block.Round()
