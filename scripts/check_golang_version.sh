@@ -14,7 +14,7 @@ set -eo pipefail
 
 if [ "$USER" = "travis" ]
 then
-    exit
+    exit 0
 fi
 
 read -ra GOLANG_VERSIONS <<< "$(./scripts/get_golang_version.sh all)"

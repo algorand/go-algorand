@@ -88,7 +88,7 @@ elif [ "${OS}" = "darwin" ]; then
     install_or_upgrade shellcheck
     install_or_upgrade python3
 elif [ "${OS}" = "windows" ]; then
-    if $msys2 pacman -S --disable-download-timeout --noconfirm git automake autoconf m4 libtool make mingw-w64-x86_64-gcc mingw-w64-x86_64-boost mingw-w64-x86_64-python mingw-w64-x86_64-jq unzip procps; then
+    if ! $msys2 pacman -S --disable-download-timeout --noconfirm git automake autoconf m4 libtool make mingw-w64-x86_64-gcc mingw-w64-x86_64-boost mingw-w64-x86_64-python mingw-w64-x86_64-jq unzip procps; then
         echo "Error installing pacman dependencies"
         exit 1
     fi
