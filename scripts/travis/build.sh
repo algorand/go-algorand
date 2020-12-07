@@ -82,19 +82,12 @@ if [ "${MAKE_DEBUG_OPTION}" != "" ]; then
     # we want to have that only on system where we have some debugging abilities. Platforms that do not support
     # debugging ( i.e. arm ) are also usually under powered and making this extra step
     # would be very costly there.
-    make msgp
+    if [ "${BUILD_TYPE}" = "integration" ]; then
+        echo "Skipping msgp regeneration on integration test"
+    else
+        make msgp
+    fi
     make build build-race
 else
     make build
-fi
-
-echo Checking Enlistment...
-
-if [[ -n $(git status --porcelain) ]]; then
-    echo Enlistment is dirty - did you forget to run make?
-    git status -s
-    git diff
-    exit 1
-else
-    echo Enlistment is clean
 fi

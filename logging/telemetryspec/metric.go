@@ -40,8 +40,8 @@ type MetricDetails interface {
 // AssembleBlockStats is the set of stats captured when we compute AssemblePayset
 type AssembleBlockStats struct {
 	StartCount                int
-	IncludedCount             int
-	InvalidCount              int
+	IncludedCount             int // number of transactions that are included in a block
+	InvalidCount              int // number of transaction groups that are included in a block
 	MinFee                    uint64
 	MaxFee                    uint64
 	AverageFee                uint64
@@ -49,10 +49,10 @@ type AssembleBlockStats struct {
 	MaxLength                 int
 	MinPriority               uint64
 	MaxPriority               uint64
-	CommittedCount            int
+	CommittedCount            int // number of transaction blocks that are included in a block
 	StopReason                string
 	TotalLength               uint64
-	EarlyCommittedCount       uint64
+	EarlyCommittedCount       uint64 // number of transaction groups that were pending on the transaction pool but have been included in previous block
 	Nanoseconds               int64
 	ProcessingTime            transactionProcessingTimeDistibution
 	BlockGenerationDuration   uint64
@@ -67,6 +67,9 @@ const AssembleBlockFull = "block-full"
 
 // AssembleBlockEmpty represents AssemblePayset exiting due to no more txns
 const AssembleBlockEmpty = "pool-empty"
+
+// AssembleBlockAbandon represents the block generation being abandoned since it won't be needed.
+const AssembleBlockAbandon = "block-abandon"
 
 const assembleBlockMetricsIdentifier Metric = "AssembleBlock"
 
