@@ -19,7 +19,6 @@ package network
 import (
 	"context"
 	"net"
-	"runtime"
 	"testing"
 	"time"
 
@@ -90,12 +89,8 @@ func TestRealNamesWithResolver(t *testing.T) {
 	timeoutCtx, cancel := context.WithTimeout(context.Background(), time.Second)
 	addrs, err = r.LookupIPAddr(timeoutCtx, example)
 	cancel()
-	if runtime.GOOS == "windows" {
-		a.Error(err) // dnssec implementation does not support system resolver on Windows
-	} else {
-		a.NoError(err)
-		a.Equal(len(addrs), 1) // ipv4 only
-	}
+	a.NoError(err)
+	a.Equal(len(addrs), 1) // ipv4 only
 
 	for _, secure := range []bool{false, true} {
 		c := NewResolveController(secure, "1.1.1.1", log)

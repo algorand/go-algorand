@@ -364,10 +364,18 @@ proc ::AlgorandGoal::VerifyAccount { WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS
 }
 
 # Delete an account
-proc ::AlgorandGoal::DeleteAccount { WALLET_NAME ACCOUNT_ADDRESS } {
+proc ::AlgorandGoal::DeleteAccount { WALLET_NAME WALLET_PASSWORD ACCOUNT_ADDRESS TEST_PRIMARY_NODE_DIR } {
     set timeout 60
-    spawn goal account delete --wallet $WALLET_NAME --address $ACCOUNT_ADDRESS
-    expect {*}
+    if { [catch {
+        spawn goal account delete -d $TEST_PRIMARY_NODE_DIR --wallet $WALLET_NAME --address $ACCOUNT_ADDRESS
+        expect {
+            timeout { ::AlgorandGoal::Abort "Failed to delete account: $WALLET_NAME $ACCOUNT_ADDRESS"  }
+            "Please enter the password for wallet*" { send "$WALLET_PASSWORD\r"; exp_continue }
+            eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed deleting account : error code [lindex $result 3]"} }
+        }
+    } EXCEPTION ] } {
+       ::AlgorandGoal::Abort "ERROR in DeleteAccount: $EXCEPTION"
+    }
 }
 
 #Select an account from the Wallet
@@ -377,7 +385,8 @@ proc ::AlgorandGoal::GetAccountAddress { WALLET_NAME TEST_PRIMARY_NODE_DIR } {
         spawn goal account list -w $WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
         expect {
             timeout { ::AlgorandGoal::Abort "Failed to find primary wallet: $WALLET_NAME"  }
-            -re {\[online\]\t([a-zA-Z0-9]+)\t([a-zA-Z0-9]+)\t([0-9]+)} {set ACCOUNT_ADDRESS $expect_out(2,string); set ACCOUNT_BALANCE $expect_out(3,string);close }
+            -re {\[online\]\t([a-zA-Z0-9]+)\t([a-zA-Z0-9]+)\t([0-9]+)} {set ACCOUNT_ADDRESS $expect_out(2,string); set ACCOUNT_BALANCE $expect_out(3,string); exp_continue }
+            eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed retrieving account address : error code [lindex $result 3]"} }
         }
         puts "Primary Account Address: $ACCOUNT_ADDRESS   Balance: $ACCOUNT_BALANCE"
     } EXCEPTION ] } {
@@ -393,7 +402,8 @@ proc ::AlgorandGoal::GetAccountBalance { WALLET_NAME ACCOUNT_ADDRESS TEST_PRIMAR
         spawn goal account balance -w $WALLET_NAME -a $ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out retrieving account balance for wallet $WALLET_NAME and account $ACCOUNT_ADDRESS"  }
-            -re {\d+} {set ACCOUNT_BALANCE  $expect_out(0,string)}
+            -re {\d+} {set ACCOUNT_BALANCE  $expect_out(0,string); exp_continue }
+            eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed retrieving account balance : error code [lindex $result 3]"} }
         }
         puts "Wallet: $WALLET_NAME, Account: $ACCOUNT_ADDRESS, Balance: $ACCOUNT_BALANCE"
     } EXCEPTION ] } {
@@ -422,8 +432,9 @@ proc ::AlgorandGoal::AccountTransfer { FROM_WALLET_NAME FROM_WALLET_PASSWORD FRO
         spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timed out transferring funds"  }
-            "Please enter the password for wallet '$FROM_WALLET_NAME':" { send "$FROM_WALLET_PASSWORD\r" }
-            -re {transaction ID: ([A-Z0-9]{52})} {set TRANSACTION_ID $expect_out(1,string); close }
+            "Please enter the password for wallet '$FROM_WALLET_NAME':" { send "$FROM_WALLET_PASSWORD\r"; exp_continue }
+            -re {transaction ID: ([A-Z0-9]{52})} {set TRANSACTION_ID $expect_out(1,string); exp_continue }
+            eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed account transfer : error code [lindex $result 3]"} }
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in AccountTransfer: $EXCEPTION"
@@ -444,7 +455,8 @@ proc ::AlgorandGoal::WaitForAccountBalance { WALLET_NAME ACCOUNT_ADDRESS EXPECTE
             spawn goal account balance -a $ACCOUNT_ADDRESS -w $WALLET_NAME -d $TEST_PRIMARY_NODE_DIR
             expect {
                 timeout { ::AlgorandGoal::Abort "Timed out retrieving account balance"  }
-                -re {(\d+)} {set ACCOUNT_BALANCE $expect_out(0,string); close }
+                -re {(\d+)} {set ACCOUNT_BALANCE $expect_out(0,string); exp_continue }
+                eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to read account balance : error code [lindex $result 3]"} }
             }
             puts "Account Balance: $ACCOUNT_BALANCE"
 
@@ -479,12 +491,16 @@ proc ::AlgorandGoal::AssetCreate { CREATOR WALLET_NAME WALLET_PASSWORD TOTAL_SUP
 
 # Transfer asset
 proc ::AlgorandGoal::AssetTransfer { WALLET_NAME WALLET_PASSWORD FROM_ADDR TO_ADDR ASSET_ID ASSET_AMOUNT TEST_PRIMARY_NODE_DIR} {
+    # The asset transfer is being sent, and the goal command would wait until the created transaction included in a block.
+    # if a round is 4 second, we're going to wait 5 times that to allow enough time for the transaction to get propageted,
+    # proposed and included in a block.
+    set timeout 20
     if { [ catch {
         spawn goal asset send -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME --from $FROM_ADDR --to $TO_ADDR --assetid $ASSET_ID --amount $ASSET_AMOUNT
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out asset transfer"  }
-	        "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r"; exp_continue }
-	        eof
+            "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r"; exp_continue }
+            eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to transfer asset : error code [lindex $result 3]"} }
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in AssetTransfer: $EXCEPTION"
@@ -495,9 +511,9 @@ proc ::AlgorandGoal::AssetTransfer { WALLET_NAME WALLET_PASSWORD FROM_ADDR TO_AD
 proc ::AlgorandGoal::CreateAssetTransfer { FROM_ADDR TO_ADDR ASSET_ID ASSET_AMOUNT TEST_PRIMARY_NODE_DIR TXN_OUTPUT} {
     if { [ catch {
         spawn goal asset send -d $TEST_PRIMARY_NODE_DIR --from $FROM_ADDR --to $TO_ADDR --assetid $ASSET_ID --amount $ASSET_AMOUNT -o $TXN_OUTPUT
-	expect {
+        expect {
             timeout { ::AlgorandGoal::Abort "Timed out creating asset transfer transaction"  }
-	    close
+            eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to create asset transfer transaction : error code [lindex $result 3]"} }
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in CreateAssetTransfer: $EXCEPTION"
@@ -509,9 +525,9 @@ proc ::AlgorandGoal::AssetFreeze { WALLET_NAME WALLET_PASSWORD FREEZE_ADDR ACCOU
     if { [ catch {
         spawn goal asset freeze -d $TEST_PRIMARY_NODE_DIR -w $WALLET_NAME --freezer $FREEZE_ADDR --account $ACCOUNT_ADDR --assetid $ASSET_ID --freeze=$FREEZE_VALUE
         expect {
-            timeout { ::AlgorandGoal::Abort "Timed out asset transfer"  }
+            timeout { ::AlgorandGoal::Abort "Timed out asset freeze"  }
 	        "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r"; exp_continue }
-	        eof
+	        eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to freeze asset : error code [lindex $result 3]"} }
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in AssetTransfer: $EXCEPTION"
@@ -522,11 +538,12 @@ proc ::AlgorandGoal::AssetFreeze { WALLET_NAME WALLET_PASSWORD FREEZE_ADDR ACCOU
 proc ::AlgorandGoal::AssetLookup { CREATOR UNIT_NAME TEST_PRIMARY_NODE_DIR } {
     set timeout 10
     if { [ catch {
-	set ASSET_ID "NOT SET"
+        set ASSET_ID "NOT SET"
         spawn goal asset info -d $TEST_PRIMARY_NODE_DIR --creator $CREATOR  --unitname $UNIT_NAME
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out asset lookup"  }
-            -re {Asset ID:\s+([0-9]+)} {set ASSET_ID $expect_out(1,string); close }
+            -re {Asset ID:\s+([0-9]+)} {set ASSET_ID $expect_out(1,string); exp_continue }
+            eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to get asset info : error code [lindex $result 3]"} }
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in AssetLookup: $EXCEPTION"
@@ -567,7 +584,7 @@ proc ::AlgorandGoal::LimitOrder {TEAL_DRIVER SWAP_N SWAP_D MIN_TRD OWNER FEE TIM
         spawn python $TEAL_DRIVER "limit-order" --swapn $SWAP_N --swapd $SWAP_D --mintrd $MIN_TRD --own $OWNER  --fee $FEE --timeout $TIME_OUT --asset $ASSET_ID
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out limit order"  }
-	    -re {^.+$} { puts $limitf $expect_out(buffer); close $limitf; close }
+            -re {^.+$} { puts $limitf $expect_out(buffer); close $limitf; close }
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in LimitOrder: $EXCEPTION"
@@ -581,7 +598,8 @@ proc ::AlgorandGoal::TealCompile { TEAL_SOURCE } {
         spawn goal clerk compile $TEAL_SOURCE
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out compiling $TEAL_SOURCE"  }
-            -re {[A-Z2-9]{58}} {set TEAL_HASH $expect_out(0,string); close }
+            -re {[A-Z2-9]{58}} {set TEAL_HASH $expect_out(0,string); exp_continue }
+            eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to compile teal : error code [lindex $result 3]"} }
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in TealCompile: $EXCEPTION"
@@ -596,7 +614,8 @@ proc ::AlgorandGoal::TealCompileSign { TEAL_SOURCE TEAL_BYTES ACCOUNT_ADDRESS } 
         spawn goal clerk compile $TEAL_SOURCE -o $TEAL_BYTES -s -a $ACCOUNT_ADDRESS
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out compiling and signing $TEAL_SOURCE using $ACCOUNT_ADDRESS"  }
-            -re {[A-Z2-9]{58}} {set TEAL_HASH $expect_out(0,string); close }
+            -re {[A-Z2-9]{58}} {set TEAL_HASH $expect_out(0,string); exp_continue }
+            eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to compile teal and sign: error code [lindex $result 3]"} }
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in TealCompileSign: $EXCEPTION"
@@ -608,9 +627,9 @@ proc ::AlgorandGoal::TealCompileSign { TEAL_SOURCE TEAL_BYTES ACCOUNT_ADDRESS } 
 proc ::AlgorandGoal::TealTxnCreate { TEAL_SOURCE TO_ADDR CLOSE_TO SEND_AMOUNT NODE_DIR OUTPUT_TXN } {
     if { [ catch {
         spawn goal clerk send --from-program $TEAL_SOURCE --to $TO_ADDR -c $CLOSE_TO --amount $SEND_AMOUNT -d $NODE_DIR -o $OUTPUT_TXN
-	expect {
+    expect {
             timeout { ::AlgorandGoal::Abort "Timed out Teal transaction create"  }
-	    close
+            eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to create teal transaction: error code [lindex $result 3]"} }
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in TealTxnCreate: $EXCEPTION"

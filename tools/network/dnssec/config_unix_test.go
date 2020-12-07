@@ -14,20 +14,54 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
+// +build !windows
+
 package dnssec
 
 import (
+	"bytes"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestConfigSystem(t *testing.T) {
+func TestConfigEmpty(t *testing.T) {
 	a := require.New(t)
-	s, tm, err := SystemConfig()
+
+	s, tm, err := systemConfig(nil)
+	a.Error(err)
+	a.Empty(s)
+	a.Empty(tm)
+
+	b := bytes.NewBuffer(nil)
+	s, tm, err = systemConfig(b)
 	a.NoError(err)
-	a.True(len(s) >= 0)
+	a.Empty(s)
+	a.NotEmpty(tm)
+
+	b = bytes.NewBuffer([]byte("somedata"))
+	s, tm, err = systemConfig(b)
+	a.NoError(err)
+	a.Empty(s)
+	a.NotEmpty(tm)
+}
+
+func TestConfig(t *testing.T) {
+	a := require.New(t)
+
+	b := bytes.NewBuffer([]byte("nameserver 127.0.0.1\n"))
+	s, tm, err := systemConfig(b)
+	a.NoError(err)
+	a.Equal(1, len(s))
+	a.Equal("127.0.0.1:53", string(s[0]))
 	a.Greater(uint64(tm), uint64(time.Microsecond))
 	a.Less(uint64(tm), uint64(100*time.Second))
+
+	b = bytes.NewBuffer([]byte("nameserver 127.0.0.1\noptions timeout:1"))
+	s, tm, err = systemConfig(b)
+	a.NoError(err)
+	a.Equal(1, len(s))
+	a.Equal("127.0.0.1:53", string(s[0]))
+	a.Equal(uint64(tm), uint64(time.Second))
 }
