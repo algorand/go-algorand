@@ -317,7 +317,9 @@ func TestFullCatchpointWriter(t *testing.T) {
 	// create a ledger.
 	var initState InitState
 	initState.Block.CurrentProtocol = protocol.ConsensusCurrentVersion
-	l, err := OpenLedger(ml.log, "TestFullCatchpointWriter", true, initState, conf)
+
+	// TODO: remove after getting rid of storage table
+	l, err := OpenLedger(ml.log, "TestFullCatchpointWriter", false, initState, conf)
 	require.NoError(t, err)
 	defer l.Close()
 	accessor := MakeCatchpointCatchupAccessor(l, l.log)
