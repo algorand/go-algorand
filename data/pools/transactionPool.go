@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
@@ -497,6 +498,51 @@ func (pool *TransactionPool) Verified(txn transactions.SignedTxn, params verify.
 	}
 	pendingSigTxn := cacheval.txn
 	return pendingSigTxn.Sig == txn.Sig && pendingSigTxn.Msig.Equal(txn.Msig) && pendingSigTxn.Lsig.Equal(&txn.Lsig) && (pendingSigTxn.AuthAddr == txn.AuthAddr)
+}
+
+// UnverifiedTxnGroups returns a list of unverified transaction groups given a payset
+func (pool *TransactionPool) UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxnWithAD, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn) {
+	if pool == nil {
+		signedTxnGroups = make([][]transactions.SignedTxn, len(txnGroups))
+		for _, group := range txnGroups {
+			signedTxnGroup := make([]transactions.SignedTxn, len(group))
+			for j, txn := range group {
+				signedTxnGroup[j] = txn.SignedTxn
+			}
+			signedTxnGroups = append(signedTxnGroups, signedTxnGroup)
+		}
+		return
+	}
+	pool.pendingMu.RLock()
+	defer pool.pendingMu.RUnlock()
+	signedTxnGroups = make([][]transactions.SignedTxn, len(txnGroups))
+	for _, group := range txnGroups {
+		verifiedGroup := true
+		signedTxnGroup := make([]transactions.SignedTxn, len(group))
+		for j, txn := range group {
+			signedTxnGroup[j] = txn.SignedTxn
+		}
+		for _, txn := range group {
+			cacheval, ok := pool.pendingTxids[txn.ID()]
+			if !ok {
+				verifiedGroup = false
+				break
+			}
+			if cacheval.params.CurrProto != params.CurrProto || cacheval.params.CurrSpecAddrs != params.CurrSpecAddrs || cacheval.params.MinTealVersion != logic.ComputeMinTealVersion(signedTxnGroup) {
+				verifiedGroup = false
+				break
+			}
+			pendingSigTxn := cacheval.txn
+			if !(pendingSigTxn.Sig == txn.Sig && pendingSigTxn.Msig.Equal(txn.Msig) && pendingSigTxn.Lsig.Equal(&txn.Lsig) && (pendingSigTxn.AuthAddr == txn.AuthAddr)) {
+				verifiedGroup = false
+				break
+			}
+		}
+		if !verifiedGroup {
+			signedTxnGroups = append(signedTxnGroups, signedTxnGroup)
+		}
+	}
+	return
 }
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired

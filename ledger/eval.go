@@ -49,6 +49,7 @@ const maxPaysetHint = 20000
 // pool object.
 type VerifiedTxnCache interface {
 	Verified(txn transactions.SignedTxn, params verify.Params) bool
+	UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxnWithAD, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn)
 }
 
 type roundCowBase struct {
@@ -920,6 +921,7 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 	return &vb, nil
 }
 
+/*
 type evalTxValidator struct {
 	txcache          VerifiedTxnCache
 	block            bookkeeping.Block
@@ -975,7 +977,7 @@ func validateTransaction(txn transactions.SignedTxn, block bookkeeping.Block, pr
 		}
 	}
 	return nil
-}
+}*/
 
 // used by Ledger.Validate() Ledger.AddBlock() Ledger.trackerEvalVerified()(accountUpdates.loadFromDisk())
 //
@@ -994,41 +996,67 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		return StateDelta{}, err
 	}
 
-	var txvalidator evalTxValidator
+	//var txvalidator evalTxValidator
 	ctx, cf := context.WithCancel(ctx)
 	defer cf()
 	if validate {
-		proto, ok := config.Consensus[blk.CurrentProtocol]
-		if !ok {
-			return StateDelta{}, protocol.Error(blk.CurrentProtocol)
+		verifyParams := verify.Params{
+			CurrSpecAddrs: transactions.SpecialAddresses{
+				FeeSink:     blk.BlockHeader.FeeSink,
+				RewardsPool: blk.BlockHeader.RewardsPool,
+			},
+			CurrProto: blk.BlockHeader.CurrentProtocol,
 		}
-		txvalidator.txcache = txcache
-		txvalidator.block = blk
-		txvalidator.proto = proto
-		txvalidator.verificationPool = executionPool
+		var unverifiedTxnGroups [][]transactions.SignedTxn
+		if txcache != nil {
+			unverifiedTxnGroups = txcache.UnverifiedTxnGroups(paysetgroups, verifyParams)
+		} else {
+			unverifiedTxnGroups = make([][]transactions.SignedTxn, len(paysetgroups))
+			for _, group := range paysetgroups {
+				signedTxnGroup := make([]transactions.SignedTxn, len(group))
+				for j, txn := range group {
+					signedTxnGroup[j] = txn.SignedTxn
+				}
+				unverifiedTxnGroups = append(unverifiedTxnGroups, signedTxnGroup)
+			}
+		}
+		err = verify.PaysetGroups(ctx, unverifiedTxnGroups, blk, executionPool)
+		if err != nil {
+			return StateDelta{}, err
+		}
+		/*
+			proto, ok := config.Consensus[blk.CurrentProtocol]
+			if !ok {
+				return StateDelta{}, protocol.Error(blk.CurrentProtocol)
+			}
+			txvalidator.txcache = txcache
+			txvalidator.block = blk
+			txvalidator.proto = proto
+			txvalidator.verificationPool = executionPool
 
-		txvalidator.ctx = ctx
-		txvalidator.cf = cf
-		txvalidator.txgroups = make(chan []transactions.SignedTxnWithAD, len(paysetgroups))
-		txvalidator.done = make(chan error, 1)
-		go txvalidator.run()
+			txvalidator.ctx = ctx
+			txvalidator.cf = cf
+			txvalidator.txgroups = make(chan []transactions.SignedTxnWithAD, len(paysetgroups))
+			txvalidator.done = make(chan error, 1)
+			go txvalidator.run()
+		*/
 	}
 
 	for _, txgroup := range paysetgroups {
 		select {
 		case <-ctx.Done():
-			select {
+			/*select {
 			case err := <-txvalidator.done:
 				return StateDelta{}, err
 			default:
-			}
+			}*/
 			return StateDelta{}, ctx.Err()
 		default:
 		}
 
-		if validate {
+		/*if validate {
 			txvalidator.txgroups <- txgroup
-		}
+		}*/
 		err = eval.TransactionGroup(txgroup)
 		if err != nil {
 			return StateDelta{}, err
@@ -1043,11 +1071,11 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 
 	// If validating, do final block checks that depend on our new state
 	if validate {
-		close(txvalidator.txgroups)
-		err, gotErr := <-txvalidator.done
+		//close(txvalidator.txgroups)
+		/*err, gotErr := <-txvalidator.done
 		if gotErr && err != nil {
 			return StateDelta{}, err
-		}
+		}*/
 		err = eval.finalValidation()
 		if err != nil {
 			return StateDelta{}, err

@@ -314,3 +314,110 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 	return nil
 
 }
+
+// PaysetGroups verifies that the payset have a good signature and that the underlying
+// transactions are properly constructed.
+// Note that this does not check whether a payset is valid against the ledger:
+// a PaysetGroups may be well-formed, but a payset might contain an overspend.
+//
+// This version of verify is performing the verification over the provided execution pool.
+func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bookkeeping.Block, verificationPool execpool.BacklogPool) (err error) {
+	txnGroupIdx := 0
+	const txnPerGroupThreshold = 32
+	proto, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]
+	if !ok {
+		return protocol.Error(blk.BlockHeader.CurrentProtocol)
+	}
+	spec := transactions.SpecialAddresses{
+		FeeSink:     blk.BlockHeader.FeeSink,
+		RewardsPool: blk.BlockHeader.RewardsPool,
+	}
+	var txnGroups [][]transactions.SignedTxn
+	worksets := make(chan struct{}, 16)
+	worksDoneCh := make(chan interface{}, 16)
+	zeroAddress := basics.Address{}
+	processing := 0
+	tasksCtx, cancelTasksCtx := context.WithCancel(ctx)
+	defer cancelTasksCtx()
+	for processing >= 0 {
+		if txnGroupIdx < len(payset) && (txnGroups == nil) {
+			txnCounter := 0
+			for i := txnGroupIdx + 1; i < len(payset); i++ {
+				if txnCounter+len(payset[i]) > txnPerGroupThreshold {
+					txnGroups = payset[txnGroupIdx:i]
+					txnGroupIdx = i
+					break
+				}
+				if i == len(payset)-1 {
+					txnGroups = payset[txnGroupIdx:]
+					txnGroupIdx = len(payset)
+					break
+				}
+				txnCounter += len(payset[i])
+			}
+		}
+
+		select {
+		case <-tasksCtx.Done():
+			return tasksCtx.Err()
+		case worksets <- struct{}{}:
+			if len(txnGroups) > 0 {
+				err := verificationPool.EnqueueBacklog(ctx, func(arg interface{}) interface{} {
+					// check if we've canceled the request while this was in the queue.
+					if tasksCtx.Err() != nil {
+						return tasksCtx.Err()
+					}
+					txnGroups := arg.([][]transactions.SignedTxn)
+					for _, signTxnsGrp := range txnGroups {
+						if !proto.SupportRekeying {
+							for _, signTxn := range signTxnsGrp {
+								if (signTxn.AuthAddr != basics.Address{}) {
+									return errors.New("nonempty AuthAddr but rekeying not supported")
+								}
+							}
+						}
+						ctxs := PrepareContexts(signTxnsGrp, blk.BlockHeader)
+						for k, signTxn := range signTxnsGrp {
+							err := signTxn.Txn.Alive(blk)
+							if err != nil {
+								return err
+							}
+							if err := signTxn.Txn.WellFormed(spec, proto); err != nil {
+								return err
+							}
+							if signTxn.Txn.Src() == zeroAddress {
+								return errors.New("empty address")
+							}
+
+							err = stxnVerifyCore(&signTxn, &ctxs[k])
+							if err != nil {
+								return err
+							}
+						}
+					}
+					return nil
+				}, txnGroups, worksDoneCh)
+				if err != nil {
+					return err
+				}
+				processing++
+				txnGroups = nil
+			}
+		case processingResult := <-worksDoneCh:
+			processing--
+			<-worksets
+			if processing == 0 && txnGroupIdx >= len(payset) && len(txnGroups) == 0 {
+				// we're done.
+				processing = -1
+			}
+			if processingResult != nil {
+				err = processingResult.(error)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+	}
+	return err
+}
