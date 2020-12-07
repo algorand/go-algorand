@@ -11,3 +11,4 @@ KEYGRIP=$(gpg -K --with-keygrip --textmode rpm@algorand.com | grep Keygrip | hea
 echo "enter rpm@ password"
 $gpgp --verbose --preset "$KEYGRIP"
 
+
