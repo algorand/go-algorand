@@ -328,6 +328,9 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 	if !ok {
 		return protocol.Error(blk.BlockHeader.CurrentProtocol)
 	}
+	if len(payset) == 0 {
+		return nil
+	}
 	spec := transactions.SpecialAddresses{
 		FeeSink:     blk.BlockHeader.FeeSink,
 		RewardsPool: blk.BlockHeader.RewardsPool,
@@ -355,6 +358,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 				}
 				txnCounter += len(payset[i])
 			}
+
 		}
 
 		select {
