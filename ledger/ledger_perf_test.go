@@ -134,8 +134,8 @@ func (vc *alwaysVerifiedCache) Verified(txn transactions.SignedTxn, params verif
 	return true
 }
 
-// SignedTxn returns a list of unverified transaction groups given a payset
-func (vc *alwaysVerifiedCache) SignedTxn(txnGroups [][]transactions.SignedTxn, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn) {
+// UnverifiedTxnGroups returns a list of unverified transaction groups given a payset
+func (vc *alwaysVerifiedCache) UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxn, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn) {
 	return [][]transactions.SignedTxn{}
 }
 
