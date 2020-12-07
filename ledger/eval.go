@@ -921,63 +921,43 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 	return &vb, nil
 }
 
-/*
 type evalTxValidator struct {
 	txcache          VerifiedTxnCache
 	block            bookkeeping.Block
-	proto            config.ConsensusParams
 	verificationPool execpool.BacklogPool
 
 	ctx      context.Context
-	cf       context.CancelFunc
-	txgroups chan []transactions.SignedTxnWithAD
+	txgroups [][]transactions.SignedTxnWithAD
 	done     chan error
 }
 
 func (validator *evalTxValidator) run() {
-	for txgroup := range validator.txgroups {
-		select {
-		case <-validator.ctx.Done():
-			validator.done <- validator.ctx.Err()
-			validator.cf()
-			close(validator.done)
-			return
-		default:
-		}
-		groupNoAD := make([]transactions.SignedTxn, len(txgroup))
-		for i := range txgroup {
-			groupNoAD[i] = txgroup[i].SignedTxn
-		}
-		ctxs := verify.PrepareContexts(groupNoAD, validator.block.BlockHeader)
-
-		for gi, tx := range txgroup {
-			err := validateTransaction(tx.SignedTxn, validator.block, validator.proto, validator.txcache, ctxs[gi], validator.verificationPool)
-			if err != nil {
-				validator.done <- err
-				validator.cf()
-				close(validator.done)
-				return
+	defer close(validator.done)
+	verifyParams := verify.Params{
+		CurrSpecAddrs: transactions.SpecialAddresses{
+			FeeSink:     validator.block.BlockHeader.FeeSink,
+			RewardsPool: validator.block.BlockHeader.RewardsPool,
+		},
+		CurrProto: validator.block.BlockHeader.CurrentProtocol,
+	}
+	var unverifiedTxnGroups [][]transactions.SignedTxn
+	if validator.txcache != nil {
+		unverifiedTxnGroups = validator.txcache.UnverifiedTxnGroups(validator.txgroups, verifyParams)
+	} else {
+		unverifiedTxnGroups = make([][]transactions.SignedTxn, len(validator.txgroups))
+		for _, group := range validator.txgroups {
+			signedTxnGroup := make([]transactions.SignedTxn, len(group))
+			for j, txn := range group {
+				signedTxnGroup[j] = txn.SignedTxn
 			}
+			unverifiedTxnGroups = append(unverifiedTxnGroups, signedTxnGroup)
 		}
 	}
-	close(validator.done)
-}
-
-func validateTransaction(txn transactions.SignedTxn, block bookkeeping.Block, proto config.ConsensusParams, txcache VerifiedTxnCache, ctx verify.Context, verificationPool execpool.BacklogPool) error {
-	// Transaction valid (not expired)?
-	err := txn.Txn.Alive(block)
+	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block, validator.verificationPool)
 	if err != nil {
-		return err
+		validator.done <- err
 	}
-
-	if txcache == nil || !txcache.Verified(txn, ctx.Params) {
-		err = verify.TxnPool(&txn, ctx, verificationPool)
-		if err != nil {
-			return fmt.Errorf("transaction %v: failed to verify: %v", txn.ID(), err)
-		}
-	}
-	return nil
-}*/
+}
 
 // used by Ledger.Validate() Ledger.AddBlock() Ledger.trackerEvalVerified()(accountUpdates.loadFromDisk())
 //
@@ -996,67 +976,37 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		return StateDelta{}, err
 	}
 
-	//var txvalidator evalTxValidator
-	ctx, cf := context.WithCancel(ctx)
-	defer cf()
+	var txvalidator evalTxValidator
+	validationCtx, validationCancel := context.WithCancel(ctx)
+	defer validationCancel()
 	if validate {
-		verifyParams := verify.Params{
-			CurrSpecAddrs: transactions.SpecialAddresses{
-				FeeSink:     blk.BlockHeader.FeeSink,
-				RewardsPool: blk.BlockHeader.RewardsPool,
-			},
-			CurrProto: blk.BlockHeader.CurrentProtocol,
+		_, ok := config.Consensus[blk.CurrentProtocol]
+		if !ok {
+			return StateDelta{}, protocol.Error(blk.CurrentProtocol)
 		}
-		var unverifiedTxnGroups [][]transactions.SignedTxn
-		if txcache != nil {
-			unverifiedTxnGroups = txcache.UnverifiedTxnGroups(paysetgroups, verifyParams)
-		} else {
-			unverifiedTxnGroups = make([][]transactions.SignedTxn, len(paysetgroups))
-			for _, group := range paysetgroups {
-				signedTxnGroup := make([]transactions.SignedTxn, len(group))
-				for j, txn := range group {
-					signedTxnGroup[j] = txn.SignedTxn
-				}
-				unverifiedTxnGroups = append(unverifiedTxnGroups, signedTxnGroup)
-			}
-		}
-		err = verify.PaysetGroups(ctx, unverifiedTxnGroups, blk, executionPool)
-		if err != nil {
-			return StateDelta{}, err
-		}
-		/*
-			proto, ok := config.Consensus[blk.CurrentProtocol]
-			if !ok {
-				return StateDelta{}, protocol.Error(blk.CurrentProtocol)
-			}
-			txvalidator.txcache = txcache
-			txvalidator.block = blk
-			txvalidator.proto = proto
-			txvalidator.verificationPool = executionPool
+		txvalidator.txcache = txcache
+		txvalidator.block = blk
+		txvalidator.verificationPool = executionPool
 
-			txvalidator.ctx = ctx
-			txvalidator.cf = cf
-			txvalidator.txgroups = make(chan []transactions.SignedTxnWithAD, len(paysetgroups))
-			txvalidator.done = make(chan error, 1)
-			go txvalidator.run()
-		*/
+		txvalidator.ctx = validationCtx
+		txvalidator.txgroups = paysetgroups
+		txvalidator.done = make(chan error, 1)
+		go txvalidator.run()
+
 	}
 
 	for _, txgroup := range paysetgroups {
 		select {
 		case <-ctx.Done():
-			/*select {
-			case err := <-txvalidator.done:
-				return StateDelta{}, err
-			default:
-			}*/
 			return StateDelta{}, ctx.Err()
+		case err, open := <-txvalidator.done:
+			// if we're not validating, then `txvalidator.done` would be nil, in which case this case statement would never be executed.
+			if open && err != nil {
+				return StateDelta{}, err
+			}
 		default:
 		}
 
-		/*if validate {
-			txvalidator.txgroups <- txgroup
-		}*/
 		err = eval.TransactionGroup(txgroup)
 		if err != nil {
 			return StateDelta{}, err
@@ -1071,11 +1021,16 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 
 	// If validating, do final block checks that depend on our new state
 	if validate {
-		//close(txvalidator.txgroups)
-		/*err, gotErr := <-txvalidator.done
-		if gotErr && err != nil {
-			return StateDelta{}, err
-		}*/
+		// wait for the validation to complete.
+		select {
+		case err, open := <-txvalidator.done:
+			if !open {
+				break
+			}
+			if err != nil {
+				return StateDelta{}, err
+			}
+		}
 		err = eval.finalValidation()
 		if err != nil {
 			return StateDelta{}, err

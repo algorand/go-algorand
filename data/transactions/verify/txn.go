@@ -336,6 +336,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 		RewardsPool: blk.BlockHeader.RewardsPool,
 	}
 	var txnGroups [][]transactions.SignedTxn
+	// prepare up to 16 concurrent worksets.
 	worksets := make(chan struct{}, 16)
 	worksDoneCh := make(chan interface{}, 16)
 	zeroAddress := basics.Address{}
@@ -343,10 +344,13 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 	tasksCtx, cancelTasksCtx := context.WithCancel(ctx)
 	defer cancelTasksCtx()
 	for processing >= 0 {
-		if txnGroupIdx < len(payset) && (txnGroups == nil) {
-			txnCounter := 0
-			for i := txnGroupIdx + 1; i < len(payset); i++ {
+		if txnGroupIdx < len(payset) && (len(txnGroups) == 0) {
+			txnCounter := 0 // how many transaction we already included in the current workset.
+			for i := txnGroupIdx; i < len(payset); i++ {
 				if txnCounter+len(payset[i]) > txnPerGroupThreshold {
+					if i == txnGroupIdx {
+						i++
+					}
 					txnGroups = payset[txnGroupIdx:i]
 					txnGroupIdx = i
 					break
