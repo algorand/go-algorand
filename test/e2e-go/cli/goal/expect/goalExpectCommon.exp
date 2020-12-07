@@ -935,33 +935,41 @@ proc ::AlgorandGoal::Report { TEST_PRIMARY_NODE_DIR } {
             -re {Last committed block: (\d+)} {puts "status check ok"}
         }
     } EXCEPTION ] } {
-    ::AlgorandGoal::Abort "ERROR in Report: $EXCEPTION"
+        ::AlgorandGoal::Abort "ERROR in Report: $EXCEPTION"
     }
 }
 
 # List Participation keys
 proc ::AlgorandGoal::ListParticipationKeys { TEST_PRIMARY_NODE_DIR } {
+    # the function account.RestoreParticipation.func1 seems to be running slow on
+    # arm64; for now, we'll give it abit more time to run:
+    set GOARCH [exec go env GOARCH]
+    if { $GOARCH == "arm64" } {
+        set timeout 20
+    }
     if { [ catch {
         spawn goal account listpartkeys -d $TEST_PRIMARY_NODE_DIR
         expect {
             timeout { ::AlgorandGoal::Abort "goal ListParticipationKeys timed out"  }
-            close
+            eof { ::AlgorandGoal::CheckEOF "failed to list participation keys" }
         }
     } EXCEPTION ] } {
-    ::AlgorandGoal::Abort "ERROR in ListParticipationKeys: $EXCEPTION"
+        ::AlgorandGoal::Abort "ERROR in ListParticipationKeys: $EXCEPTION"
     }
 }
 
 # Add a participation key
 proc ::AlgorandGoal::AddParticipationKey { ADDRESS FIRST_ROUND LAST_ROUND TEST_PRIMARY_NODE_DIR } {
+    # we need to set the timeout to more than one round, since it might take few rounds for the transaction to be accepted, transmitted, proposed, etc.
+    set timeout 20
     if { [ catch {
         spawn goal account addpartkey --address $ADDRESS --roundFirstValid $FIRST_ROUND --roundLastValid $LAST_ROUND -d $TEST_PRIMARY_NODE_DIR
         expect {
             timeout { ::AlgorandGoal::Abort "goal AddParticipationKey timed out"  }
-            close
+            eof { ::AlgorandGoal::CheckEOF "failed to AddParticipationKey" }
         }
     } EXCEPTION ] } {
-    ::AlgorandGoal::Abort "ERROR in AddParticipationKey: $EXCEPTION"
+        ::AlgorandGoal::Abort "ERROR in AddParticipationKey: $EXCEPTION"
     }
 }
 
@@ -974,7 +982,7 @@ proc ::AlgorandGoal::TakeAccountOnline { ADDRESS FIRST_ROUND LAST_ROUND TEST_PRI
        spawn goal account changeonlinestatus --address $ADDRESS --firstvalid $FIRST_ROUND --lastvalid $LAST_ROUND -d $TEST_PRIMARY_NODE_DIR
        expect {
            timeout { ::AlgorandGoal::Abort "goal TakeAccountOnline timed out"  }
-           close
+           eof { ::AlgorandGoal::CheckEOF "failed to change account online status" }
        }
    } EXCEPTION ] } {
    ::AlgorandGoal::Abort "ERROR in TakeAccountOnline: $EXCEPTION"
