@@ -12,7 +12,11 @@
 
 set -eo pipefail
 
-if [ "$USER" = "travis" ]
+# Exit early if running in travis. The reason for this is that travis starts a build with an older version of go that will
+# fail the first check (GO_MOD_SUPPORT), and this isn't necessary for travis builds.
+#
+# https://docs.travis-ci.com/user/environment-variables/#default-environment-variables
+if $CI && $TRAVIS
 then
     exit 0
 fi
