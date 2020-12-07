@@ -49,7 +49,7 @@ const maxPaysetHint = 20000
 // pool object.
 type VerifiedTxnCache interface {
 	Verified(txn transactions.SignedTxn, params verify.Params) bool
-	UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxnWithAD, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn)
+	UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxn, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn)
 }
 
 type roundCowBase struct {
@@ -941,17 +941,21 @@ func (validator *evalTxValidator) run() {
 		CurrProto: validator.block.BlockHeader.CurrentProtocol,
 	}
 	var unverifiedTxnGroups [][]transactions.SignedTxn
-	if validator.txcache != nil {
-		unverifiedTxnGroups = validator.txcache.UnverifiedTxnGroups(validator.txgroups, verifyParams)
-	} else {
-		unverifiedTxnGroups = make([][]transactions.SignedTxn, len(validator.txgroups))
-		for _, group := range validator.txgroups {
-			signedTxnGroup := make([]transactions.SignedTxn, len(group))
-			for j, txn := range group {
-				signedTxnGroup[j] = txn.SignedTxn
+	unverifiedTxnGroups = make([][]transactions.SignedTxn, len(validator.txgroups))
+	for _, group := range validator.txgroups {
+		signedTxnGroup := make([]transactions.SignedTxn, len(group))
+		for j, txn := range group {
+			signedTxnGroup[j] = txn.SignedTxn
+			err := txn.SignedTxn.Txn.Alive(validator.block)
+			if err != nil {
+				validator.done <- err
+				return
 			}
-			unverifiedTxnGroups = append(unverifiedTxnGroups, signedTxnGroup)
 		}
+		unverifiedTxnGroups = append(unverifiedTxnGroups, signedTxnGroup)
+	}
+	if validator.txcache != nil {
+		unverifiedTxnGroups = validator.txcache.UnverifiedTxnGroups(unverifiedTxnGroups, verifyParams)
 	}
 	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block, validator.verificationPool)
 	if err != nil {

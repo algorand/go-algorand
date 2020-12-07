@@ -501,34 +501,23 @@ func (pool *TransactionPool) Verified(txn transactions.SignedTxn, params verify.
 }
 
 // UnverifiedTxnGroups returns a list of unverified transaction groups given a payset
-func (pool *TransactionPool) UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxnWithAD, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn) {
+func (pool *TransactionPool) UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxn, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn) {
 	if pool == nil {
-		signedTxnGroups = make([][]transactions.SignedTxn, len(txnGroups))
-		for _, group := range txnGroups {
-			signedTxnGroup := make([]transactions.SignedTxn, len(group))
-			for j, txn := range group {
-				signedTxnGroup[j] = txn.SignedTxn
-			}
-			signedTxnGroups = append(signedTxnGroups, signedTxnGroup)
-		}
-		return
+		return txnGroups
 	}
 	pool.pendingMu.RLock()
 	defer pool.pendingMu.RUnlock()
 	signedTxnGroups = make([][]transactions.SignedTxn, len(txnGroups))
-	for _, group := range txnGroups {
+	for _, signedTxnGroup := range txnGroups {
 		verifiedGroup := true
-		signedTxnGroup := make([]transactions.SignedTxn, len(group))
-		for j, txn := range group {
-			signedTxnGroup[j] = txn.SignedTxn
-		}
-		for _, txn := range group {
+		params.MinTealVersion = logic.ComputeMinTealVersion(signedTxnGroup)
+		for _, txn := range signedTxnGroup {
 			cacheval, ok := pool.pendingTxids[txn.ID()]
 			if !ok {
 				verifiedGroup = false
 				break
 			}
-			if cacheval.params.CurrProto != params.CurrProto || cacheval.params.CurrSpecAddrs != params.CurrSpecAddrs || cacheval.params.MinTealVersion != logic.ComputeMinTealVersion(signedTxnGroup) {
+			if cacheval.params != params {
 				verifiedGroup = false
 				break
 			}

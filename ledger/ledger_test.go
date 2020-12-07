@@ -126,16 +126,8 @@ func (x DummyVerifiedTxnCache) Verified(txn transactions.SignedTxn, params verif
 }
 
 // UnverifiedTxnGroups returns a list of unverified transaction groups given a payset
-func (x DummyVerifiedTxnCache) UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxnWithAD, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn) {
-	signedTxnGroups = make([][]transactions.SignedTxn, len(txnGroups))
-	for _, group := range txnGroups {
-		signedTxnGroup := make([]transactions.SignedTxn, len(group))
-		for j, txn := range group {
-			signedTxnGroup[j] = txn.SignedTxn
-		}
-		signedTxnGroups = append(signedTxnGroups, signedTxnGroup)
-	}
-	return
+func (x DummyVerifiedTxnCache) UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxn, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn) {
+	return txnGroups
 }
 
 func (x DummyVerifiedTxnCache) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, err error) {
