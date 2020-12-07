@@ -528,7 +528,7 @@ func (t pseudonodeProposalsTask) execute(verifier *AsyncVoteVerifier, quit chan 
 	for _, payload := range verifiedPayloads {
 		msg := message{Tag: protocol.ProposalPayloadTag, UnauthenticatedProposal: payload.u(), Proposal: payload}
 		select {
-		case t.out <- messageEvent{T: payloadVerified, Input: msg}:
+		case t.out <- messageEvent{T: payloadVerified, Input: msg, TaskIndex: 1}:
 		case <-quit:
 			return
 		case <-t.context.Done():
