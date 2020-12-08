@@ -17,6 +17,7 @@
 package agreement
 
 import (
+	"github.com/algorand/go-algorand/logging"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -556,29 +557,25 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			ep := ef.(payloadProcessedEvent)
 			if ep.Round == p.Round {
 				up := e.Input.UnauthenticatedProposal
-				uv := ef.(payloadProcessedEvent).Vote.u()
-				a := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
+
+				a := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: ef.(payloadProcessedEvent).Vote.u()})
 				actions = append(actions, a)
 				return append(actions, verifyPayloadAction(e, ep.Round, ep.Period, ep.Pinned))
 			}
 		}
 
+		var uv unauthenticatedVote
+		switch ef.t() {
+		case payloadPipelined, payloadAccepted:
+			uv = ef.(payloadProcessedEvent).Vote.u()
+		case proposalCommittable:
+			uv = ef.(committableEvent).Vote.u()
+		}
+		up := e.Input.UnauthenticatedProposal
 
-
-
+		// relay as the proposer
 		if e.TaskIndex == 1 {
 			r.t.timeR().RecBlockAssembled()
-
-			var uv unauthenticatedVote
-			switch ef.t() {
-			case payloadPipelined, payloadAccepted:
-				uv = ef.(payloadProcessedEvent).Vote.u()
-			case proposalCommittable:
-				uv = ef.(committableEvent).Vote.u()
-			}
-
-			up := e.Input.UnauthenticatedProposal
-
 			a := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: uv})
 			actions = append(actions, a)
 		}
