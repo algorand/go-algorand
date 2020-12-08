@@ -315,10 +315,10 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 	normalizedAccountBalances, err := prepareNormalizedBalances(balances.Balances, c.ledger.GenesisProto())
 
 	wg := sync.WaitGroup{}
-	wg.Add(3)
 	errChan := make(chan error, 3)
 
 	// start the balances writer
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		err := wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -333,7 +333,13 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		}
 	}()
 
+	// on a in-memory database, wait for the writer to finish before starting the new writer
+	if wdb.IsSharedCacheConnection() {
+		wg.Wait()
+	}
+
 	// starts the creatables writer
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		hasCreatables := false
@@ -354,7 +360,13 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		}
 	}()
 
+	// on a in-memory database, wait for the writer to finish before starting the new writer
+	if wdb.IsSharedCacheConnection() {
+		wg.Wait()
+	}
+
 	// start the accounts pending hashes writer
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		err := wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
