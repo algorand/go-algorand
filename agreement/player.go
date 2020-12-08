@@ -17,7 +17,6 @@
 package agreement
 
 import (
-	"github.com/algorand/go-algorand/logging"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
