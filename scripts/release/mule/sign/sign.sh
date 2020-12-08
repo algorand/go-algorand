@@ -22,14 +22,16 @@ OS_TYPE=$(./scripts/release/mule/common/ostype.sh)
 ARCHS=(amd64 arm arm64)
 ARCH_BITS=(x86_64 armv7l aarch64)
 
-# It seems that copying/mounting the gpg dir from another machine can result in insecure
-# access privileges, so set the correct permissions to avoid the following warning:
-#
-#   gpg: WARNING: unsafe permissions on homedir '/root/.gnupg'
-#
-find /root/.gnupg -type d -exec chmod 700 {} \;
-find /root/.gnupg -type f -exec chmod 600 {} \;
-
+if ./scripts/release/mule/common/running_in_docker.sh
+then
+    # It seems that copying/mounting the gpg dir from another machine can result in insecure
+    # access privileges, so set the correct permissions to avoid the following warning:
+    #
+    #   gpg: WARNING: unsafe permissions on homedir '/root/.gnupg'
+    #
+    find /root/.gnupg -type d -exec chmod 700 {} \;
+    find /root/.gnupg -type f -exec chmod 600 {} \;
+fi
 
 # Note that when downloading from the cloud that we'll get all packages for all architectures.
 if [ -n "$S3_SOURCE" ]
@@ -39,7 +41,7 @@ then
         arch_bit="${ARCH_BITS[$i]}"
         (
             mkdir -p "$PKG_DIR/$OS_TYPE/$arch"
-            cd "$PKG_DIR/$OS_TYPE/$arch"
+            cd "$PKG_DIR"
             # Note the underscore after ${arch}!
             # Recall that rpm packages have the arch bit in the filenames (i.e., "x86_64" rather than "amd64").
             # Also, the order of the includes/excludes is important!
