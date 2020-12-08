@@ -386,10 +386,6 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 						}
 						ctxs := PrepareContexts(signTxnsGrp, blk.BlockHeader)
 						for k, signTxn := range signTxnsGrp {
-							err := signTxn.Txn.Alive(blk)
-							if err != nil {
-								return err
-							}
 							if err := signTxn.Txn.WellFormed(spec, proto); err != nil {
 								return err
 							}

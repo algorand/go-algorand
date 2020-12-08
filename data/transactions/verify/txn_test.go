@@ -20,6 +20,7 @@ import (
 	"context"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -245,8 +246,10 @@ func TestPaysetGroups(t *testing.T) {
 		i += txnPerGroup
 	}
 
+	startPaysetGroupsTime := time.Now()
 	err := PaysetGroups(context.Background(), txnGroups, blk, verificationPool)
 	require.NoError(t, err)
+	paysetGroupDuration := time.Now().Sub(startPaysetGroupsTime)
 
 	// break the signature and see if it fails.
 	txnGroups[0][0].Sig[0] = txnGroups[0][0].Sig[0] + 1
@@ -256,6 +259,53 @@ func TestPaysetGroups(t *testing.T) {
 	// ensure the rest are fine
 	err = PaysetGroups(context.Background(), txnGroups[1:], blk, verificationPool)
 	require.NoError(t, err)
+
+	// test the context cancelation:
+	// we define a test that would take 10 seconds to execute, and try to abort at 1.5 seconds.
+	txnCount := len(signedTxn) * 10 * int(time.Second/paysetGroupDuration)
+
+	_, signedTxn, _, _ = generateTestObjects(txnCount, 20, 50)
+
+	// divide the transactions into transaction groups.
+	txnGroups = make([][]transactions.SignedTxn, 0, len(signedTxn))
+	for i := 0; i < len(signedTxn)-16; i++ {
+		txnPerGroup := rand.Intn(16)
+		txnGroups = append(txnGroups, signedTxn[i:i+txnPerGroup+1])
+		i += txnPerGroup
+	}
+
+	ctx, ctxCancelFunc := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer ctxCancelFunc()
+	waitCh := make(chan error, 1)
+	go func() {
+		defer close(waitCh)
+		waitCh <- PaysetGroups(ctx, txnGroups, blk, verificationPool)
+	}()
+	startPaysetGroupsTime = time.Now()
+	select {
+	case err, ok := <-waitCh:
+		if !ok {
+			// channel is closed without a return
+			require.Failf(t, "Channel got closed ?!", "")
+		} else {
+			actualDuration := time.Now().Sub(startPaysetGroupsTime)
+			if err == nil {
+				if actualDuration > 4*time.Second {
+					// it took at least 2.5 seconds more than it should have had!
+					require.Failf(t, "Failed after exceeding timeout with incorrect return code", "The function PaysetGroups was supposed to abort after 1.5 seconds with context.DeadlineExceeded, but aborted only after %v without any error", actualDuration)
+				}
+			} else {
+				require.Equal(t, ctx.Err(), err)
+				require.Equal(t, ctx.Err(), context.DeadlineExceeded)
+				if actualDuration > 4*time.Second {
+					// it took at least 2.5 seconds more than it should have had!
+					require.Failf(t, "Failed after exceeding timeout", "The function PaysetGroups was supposed to abort after 1.5 seconds, but aborted only after %v", actualDuration)
+				}
+			}
+		}
+	case <-time.After(15 * time.Second):
+		require.Failf(t, "Failed after exceeding timeout", "waited for 15 seconds while it should have aborted after 1.5 seconds")
+	}
 }
 
 func BenchmarkPaysetGroups(b *testing.B) {
@@ -291,5 +341,46 @@ func BenchmarkPaysetGroups(b *testing.B) {
 	b.ResetTimer()
 	err := PaysetGroups(context.Background(), txnGroups, blk, verificationPool)
 	require.NoError(b, err)
+	b.StopTimer()
+}
+
+func BenchmarkTxnPool(b *testing.B) {
+	if b.N < 2000 {
+		b.N = 2000
+	}
+	_, signedTxn, _, _ := generateTestObjects(b.N, 20, 50)
+	blk := bookkeeping.Block{
+		BlockHeader: bookkeeping.BlockHeader{
+			Round:       50,
+			GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: protocol.ConsensusCurrentVersion,
+			},
+			RewardsState: bookkeeping.RewardsState{
+				FeeSink:     feeSink,
+				RewardsPool: poolAddr,
+			},
+		},
+	}
+	execPool := execpool.MakePool(b)
+	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, b)
+	defer verificationPool.Shutdown()
+
+	// divide the transactions into transaction groups.
+	txnGroups := make([][]transactions.SignedTxn, 0, len(signedTxn))
+	for i := 0; i < len(signedTxn)-16; i++ {
+		txnPerGroup := rand.Intn(16)
+		txnGroups = append(txnGroups, signedTxn[i:i+txnPerGroup+1])
+		i += txnPerGroup
+	}
+
+	b.ResetTimer()
+	for _, txnGroup := range txnGroups {
+		ctxs := PrepareContexts(txnGroup, blk.BlockHeader)
+		for i, txn := range txnGroup {
+			err := TxnPool(&txn, ctxs[i], verificationPool)
+			require.NoError(b, err)
+		}
+	}
 	b.StopTimer()
 }
