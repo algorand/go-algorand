@@ -21,6 +21,12 @@ SIGNING_KEY_ADDR=dev@algorand.com
 OS_TYPE=$(./scripts/release/mule/common/ostype.sh)
 ARCHS=(amd64 arm arm64)
 ARCH_BITS=(x86_64 armv7l aarch64)
+# Note that we don't want to use $GNUPGHOME here because that is a documented env var for the gnupg
+# project and if it's set in the environment mule will automatically pick it up, which could have
+# unintended consequences and be hard to debug.
+#
+# By naming it something other than $GNUPGHOME, it's essentially acting as an opt-in.
+GPG_DIR=${GPG_DIR:-/root/.gnupg}
 
 if ./scripts/release/mule/common/running_in_docker.sh
 then
@@ -29,8 +35,8 @@ then
     #
     #   gpg: WARNING: unsafe permissions on homedir '/root/.gnupg'
     #
-    find /root/.gnupg -type d -exec chmod 700 {} \;
-    find /root/.gnupg -type f -exec chmod 600 {} \;
+    find "$GPG_DIR" -type d -exec chmod 700 {} \;
+    find "$GPG_DIR" -type f -exec chmod 600 {} \;
 fi
 
 # Note that when downloading from the cloud that we'll get all packages for all architectures.
