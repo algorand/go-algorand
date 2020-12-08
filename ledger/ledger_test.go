@@ -121,26 +121,27 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 
 type DummyVerifiedTxnCache struct{}
 
-func (x DummyVerifiedTxnCache) Verified(txn transactions.SignedTxn, params verify.Params) bool {
+func (x DummyVerifiedTxnCache) Add(txgroup []transactions.SignedTxn, verifyParams []verify.Params, pinned bool) error {
+	return nil
+}
+
+func (x DummyVerifiedTxnCache) Check(txgroup []transactions.SignedTxn, verifyParams []verify.Params) bool {
 	return false
 }
 
-// UnverifiedTxnGroups returns a list of unverified transaction groups given a payset
-func (x DummyVerifiedTxnCache) UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxn, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn) {
-	return txnGroups
+func (x DummyVerifiedTxnCache) GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, params verify.Params) [][]transactions.SignedTxn {
+	return payset
 }
 
-func (x DummyVerifiedTxnCache) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, err error) {
-	return false, nil
-}
-func (x DummyVerifiedTxnCache) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, err error) {
+func (x DummyVerifiedTxnCache) UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) error {
+	return nil
 }
 
 func (l *Ledger) appendUnvalidated(blk bookkeeping.Block) error {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
-
-	vb, err := l.Validate(context.Background(), blk, DummyVerifiedTxnCache{}, backlogPool)
+	l.verifiedTxnCache = &DummyVerifiedTxnCache{}
+	vb, err := l.Validate(context.Background(), blk, backlogPool)
 	if err != nil {
 		return fmt.Errorf("appendUnvalidated error in Validate: %s", err.Error())
 	}

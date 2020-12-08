@@ -321,7 +321,7 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 // a PaysetGroups may be well-formed, but a payset might contain an overspend.
 //
 // This version of verify is performing the verification over the provided execution pool.
-func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bookkeeping.Block, verificationPool execpool.BacklogPool) (err error) {
+func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bookkeeping.Block, verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (err error) {
 	txnGroupIdx := 0
 	const txnPerGroupThreshold = 32
 	proto, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]
@@ -396,6 +396,8 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 							if err := stxnVerifyCore(&signTxn, &ctxs[k]); err != nil {
 								return err
 							}
+							// todo : refactor this..
+							cache.Add([]transactions.SignedTxn{signTxn}, []Params{ctxs[k].Params}, false)
 						}
 					}
 					return nil

@@ -186,7 +186,7 @@ func TestRekeying(t *testing.T) {
 
 		backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 		defer backlogPool.Shutdown()
-		_, err = l.Validate(context.Background(), validatedBlock.Block(), nil, backlogPool)
+		_, err = l.Validate(context.Background(), validatedBlock.Block(), backlogPool)
 		return err
 	}
 

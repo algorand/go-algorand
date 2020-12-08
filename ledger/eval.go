@@ -44,14 +44,6 @@ var ErrNoSpace = errors.New("block does not have space for transaction")
 // many transactions in a block.
 const maxPaysetHint = 20000
 
-// VerifiedTxnCache captures the interface for a cache of previously
-// verified transactions.  This is expected to match the transaction
-// pool object.
-type VerifiedTxnCache interface {
-	Verified(txn transactions.SignedTxn, params verify.Params) bool
-	UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxn, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn)
-}
-
 type roundCowBase struct {
 	l ledgerForEvaluator
 
@@ -922,7 +914,7 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 }
 
 type evalTxValidator struct {
-	txcache          VerifiedTxnCache
+	txcache          verify.VerifiedTransactionCache
 	block            bookkeeping.Block
 	verificationPool execpool.BacklogPool
 
@@ -955,9 +947,9 @@ func (validator *evalTxValidator) run() {
 		unverifiedTxnGroups = append(unverifiedTxnGroups, signedTxnGroup)
 	}
 	if validator.txcache != nil {
-		unverifiedTxnGroups = validator.txcache.UnverifiedTxnGroups(unverifiedTxnGroups, verifyParams)
+		unverifiedTxnGroups = validator.txcache.GetUnverifiedTranscationGroups(unverifiedTxnGroups, verifyParams)
 	}
-	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block, validator.verificationPool)
+	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block, validator.verificationPool, validator.txcache)
 	if err != nil {
 		validator.done <- err
 	}
@@ -968,7 +960,7 @@ func (validator *evalTxValidator) run() {
 // Validate: eval(ctx, blk, true, txcache, executionPool)
 // AddBlock: eval(context.Background(), blk, false, nil, nil)
 // tracker:  eval(context.Background(), blk, false, nil, nil)
-func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (StateDelta, error) {
+func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (StateDelta, error) {
 	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
 	if err != nil {
 		return StateDelta{}, err
@@ -979,7 +971,6 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	if err != nil {
 		return StateDelta{}, err
 	}
-
 	var txvalidator evalTxValidator
 	validationCtx, validationCancel := context.WithCancel(ctx)
 	defer validationCancel()
@@ -1048,8 +1039,8 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 // It returns an error if blk is not the expected next block, or if blk is
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
-func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, txcache VerifiedTxnCache, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
-	delta, err := eval(ctx, l, blk, true, txcache, executionPool)
+func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
+	delta, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
 	if err != nil {
 		return nil, err
 	}

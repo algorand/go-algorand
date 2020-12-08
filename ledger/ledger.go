@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -79,6 +80,9 @@ type Ledger struct {
 	trackerMu deadlock.RWMutex
 
 	headerCache heapLRUCache
+
+	// verifiedTxnCache holds all the verified transactions state
+	verifiedTxnCache verify.VerifiedTransactionCache
 }
 
 // InitState structure defines blockchain init params
@@ -104,6 +108,7 @@ func OpenLedger(
 		genesisProto:                   config.Consensus[genesisInitState.Block.CurrentProtocol],
 		synchronousMode:                db.SynchronousMode(cfg.LedgerSynchronousMode),
 		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
+		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(cfg.TxPoolSize * 5 /* todo : move this to a separate config value */),
 	}
 
 	l.headerCache.maxEntries = 10
@@ -531,7 +536,7 @@ func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreem
 func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
 
-	updates, err := eval(context.Background(), l, blk, false, nil, nil)
+	updates, err := eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
 	if err != nil {
 		return err
 	}
@@ -633,7 +638,7 @@ func (l *Ledger) trackerLog() logging.Logger {
 // evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
 func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
 	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
-	return eval(context.Background(), accUpdatesLedger, blk, false, nil, nil)
+	return eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
 }
 
 // IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
@@ -642,6 +647,11 @@ func (l *Ledger) IsWritingCatchpointFile() bool {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.IsWritingCatchpointFile()
+}
+
+// VerifiedTransactionCache returns the verify.VerifiedTransactionCache
+func (l *Ledger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
+	return l.verifiedTxnCache
 }
 
 // A txlease is a transaction (sender, lease) pair which uniquely specifies a

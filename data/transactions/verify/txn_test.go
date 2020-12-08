@@ -247,17 +247,17 @@ func TestPaysetGroups(t *testing.T) {
 	}
 
 	startPaysetGroupsTime := time.Now()
-	err := PaysetGroups(context.Background(), txnGroups, blk, verificationPool)
+	err := PaysetGroups(context.Background(), txnGroups, blk, verificationPool, MakeVerifiedTransactionCache(50000))
 	require.NoError(t, err)
 	paysetGroupDuration := time.Now().Sub(startPaysetGroupsTime)
 
 	// break the signature and see if it fails.
 	txnGroups[0][0].Sig[0] = txnGroups[0][0].Sig[0] + 1
-	err = PaysetGroups(context.Background(), txnGroups, blk, verificationPool)
+	err = PaysetGroups(context.Background(), txnGroups, blk, verificationPool, MakeVerifiedTransactionCache(50000))
 	require.Error(t, err)
 
 	// ensure the rest are fine
-	err = PaysetGroups(context.Background(), txnGroups[1:], blk, verificationPool)
+	err = PaysetGroups(context.Background(), txnGroups[1:], blk, verificationPool, MakeVerifiedTransactionCache(50000))
 	require.NoError(t, err)
 
 	// test the context cancelation:
@@ -279,7 +279,8 @@ func TestPaysetGroups(t *testing.T) {
 	waitCh := make(chan error, 1)
 	go func() {
 		defer close(waitCh)
-		waitCh <- PaysetGroups(ctx, txnGroups, blk, verificationPool)
+		cache := MakeVerifiedTransactionCache(50000)
+		waitCh <- PaysetGroups(ctx, txnGroups, blk, verificationPool, cache)
 	}()
 	startPaysetGroupsTime = time.Now()
 	select {
@@ -337,9 +338,10 @@ func BenchmarkPaysetGroups(b *testing.B) {
 		txnGroups = append(txnGroups, signedTxn[i:i+txnPerGroup+1])
 		i += txnPerGroup
 	}
+	cache := MakeVerifiedTransactionCache(50000)
 
 	b.ResetTimer()
-	err := PaysetGroups(context.Background(), txnGroups, blk, verificationPool)
+	err := PaysetGroups(context.Background(), txnGroups, blk, verificationPool, cache)
 	require.NoError(b, err)
 	b.StopTimer()
 }

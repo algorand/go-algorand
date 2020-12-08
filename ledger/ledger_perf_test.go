@@ -130,13 +130,20 @@ func makeUnsignedPaymentTx(sender basics.Address, round int) transactions.Transa
 
 type alwaysVerifiedCache struct{}
 
-func (vc *alwaysVerifiedCache) Verified(txn transactions.SignedTxn, params verify.Params) bool {
+func (vc *alwaysVerifiedCache) Add(txgroup []transactions.SignedTxn, verifyParams []verify.Params, pinned bool) error {
+	return nil
+}
+
+func (vc *alwaysVerifiedCache) Check(txgroup []transactions.SignedTxn, verifyParams []verify.Params) bool {
 	return true
 }
 
-// UnverifiedTxnGroups returns a list of unverified transaction groups given a payset
-func (vc *alwaysVerifiedCache) UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxn, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn) {
-	return [][]transactions.SignedTxn{}
+func (vc *alwaysVerifiedCache) GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, params verify.Params) [][]transactions.SignedTxn {
+	return nil
+}
+
+func (vc *alwaysVerifiedCache) UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) error {
+	return nil
 }
 
 func benchmarkFullBlocks(params testParams, b *testing.B) {

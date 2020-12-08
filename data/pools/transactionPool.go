@@ -28,7 +28,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
@@ -59,6 +58,7 @@ type TransactionPool struct {
 	expFeeFactor         uint64
 	txPoolMaxSize        int
 	ledger               *ledger.Ledger
+	verifiedTxnCache     verify.VerifiedTransactionCache
 
 	mu                     deadlock.Mutex
 	cond                   sync.Cond
@@ -79,7 +79,7 @@ type TransactionPool struct {
 	pendingMu           deadlock.RWMutex
 	pendingTxGroups     [][]transactions.SignedTxn
 	pendingVerifyParams [][]verify.Params
-	pendingTxids        map[transactions.Txid]txPoolVerifyCacheVal
+	pendingTxids        map[transactions.Txid]transactions.SignedTxn
 
 	// Calls to remember() add transactions to rememberedTxGroups and
 	// rememberedTxids.  Calling rememberCommit() adds them to the
@@ -88,7 +88,7 @@ type TransactionPool struct {
 	// to PendingTxGroups() or Verified().
 	rememberedTxGroups     [][]transactions.SignedTxn
 	rememberedVerifyParams [][]verify.Params
-	rememberedTxids        map[transactions.Txid]txPoolVerifyCacheVal
+	rememberedTxids        map[transactions.Txid]transactions.SignedTxn
 
 	log logging.Logger
 }
@@ -99,8 +99,8 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 		cfg.TxPoolExponentialIncreaseFactor = 1
 	}
 	pool := TransactionPool{
-		pendingTxids:         make(map[transactions.Txid]txPoolVerifyCacheVal),
-		rememberedTxids:      make(map[transactions.Txid]txPoolVerifyCacheVal),
+		pendingTxids:         make(map[transactions.Txid]transactions.SignedTxn),
+		rememberedTxids:      make(map[transactions.Txid]transactions.SignedTxn),
 		expiredTxCount:       make(map[basics.Round]int),
 		ledger:               ledger,
 		statusCache:          makeStatusCache(cfg.TxPoolSize),
@@ -109,6 +109,7 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 		expFeeFactor:         cfg.TxPoolExponentialIncreaseFactor,
 		txPoolMaxSize:        cfg.TxPoolSize,
 		log:                  log,
+		verifiedTxnCache:     ledger.VerifiedTransactionCache(),
 	}
 	pool.cond.L = &pool.mu
 	pool.assemblyCond.L = &pool.assemblyMu
@@ -162,10 +163,10 @@ var ErrStaleBlockAssemblyRequest = fmt.Errorf("AssembleBlock: requested block as
 
 // Reset resets the content of the transaction pool
 func (pool *TransactionPool) Reset() {
-	pool.pendingTxids = make(map[transactions.Txid]txPoolVerifyCacheVal)
+	pool.pendingTxids = make(map[transactions.Txid]transactions.SignedTxn)
 	pool.pendingVerifyParams = nil
 	pool.pendingTxGroups = nil
-	pool.rememberedTxids = make(map[transactions.Txid]txPoolVerifyCacheVal)
+	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
 	pool.rememberedVerifyParams = nil
 	pool.rememberedTxGroups = nil
 	pool.expiredTxCount = make(map[basics.Round]int)
@@ -231,6 +232,7 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 		pool.pendingTxGroups = pool.rememberedTxGroups
 		pool.pendingVerifyParams = pool.rememberedVerifyParams
 		pool.pendingTxids = pool.rememberedTxids
+		pool.verifiedTxnCache.UpdatePinned(pool.pendingTxids)
 	} else {
 		pool.pendingTxGroups = append(pool.pendingTxGroups, pool.rememberedTxGroups...)
 		pool.pendingVerifyParams = append(pool.pendingVerifyParams, pool.rememberedVerifyParams...)
@@ -241,7 +243,7 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 
 	pool.rememberedTxGroups = nil
 	pool.rememberedVerifyParams = nil
-	pool.rememberedTxids = make(map[transactions.Txid]txPoolVerifyCacheVal)
+	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
 }
 
 // PendingCount returns the number of transactions currently pending in the pool.
@@ -421,10 +423,10 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, verifyPara
 
 	pool.rememberedTxGroups = append(pool.rememberedTxGroups, txgroup)
 	pool.rememberedVerifyParams = append(pool.rememberedVerifyParams, verifyParams)
-	for i, t := range txgroup {
-		pool.rememberedTxids[t.ID()] = txPoolVerifyCacheVal{txn: t, params: verifyParams[i]}
+	for _, t := range txgroup {
+		pool.rememberedTxids[t.ID()] = t
 	}
-
+	pool.verifiedTxnCache.Add(txgroup, verifyParams, false)
 	return nil
 }
 
@@ -467,8 +469,7 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	pool.pendingMu.RLock()
 	defer pool.pendingMu.RUnlock()
 
-	cacheval, inPool := pool.pendingTxids[txid]
-	tx = cacheval.txn
+	tx, inPool := pool.pendingTxids[txid]
 	if inPool {
 		return tx, "", true
 	}
@@ -483,55 +484,12 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 // re-checking signatures on transactions that we have already
 // verified.
 func (pool *TransactionPool) Verified(txn transactions.SignedTxn, params verify.Params) bool {
-	if pool == nil {
-		return false
-	}
-	pool.pendingMu.RLock()
-	defer pool.pendingMu.RUnlock()
-	cacheval, ok := pool.pendingTxids[txn.ID()]
-	if !ok {
-		return false
-	}
-
-	if cacheval.params != params {
-		return false
-	}
-	pendingSigTxn := cacheval.txn
-	return pendingSigTxn.Sig == txn.Sig && pendingSigTxn.Msig.Equal(txn.Msig) && pendingSigTxn.Lsig.Equal(&txn.Lsig) && (pendingSigTxn.AuthAddr == txn.AuthAddr)
+	return pool.verifiedTxnCache.Check([]transactions.SignedTxn{txn}, []verify.Params{params})
 }
 
 // UnverifiedTxnGroups returns a list of unverified transaction groups given a payset
 func (pool *TransactionPool) UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxn, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn) {
-	if pool == nil {
-		return txnGroups
-	}
-	pool.pendingMu.RLock()
-	defer pool.pendingMu.RUnlock()
-	signedTxnGroups = make([][]transactions.SignedTxn, len(txnGroups))
-	for _, signedTxnGroup := range txnGroups {
-		verifiedGroup := true
-		params.MinTealVersion = logic.ComputeMinTealVersion(signedTxnGroup)
-		for _, txn := range signedTxnGroup {
-			cacheval, ok := pool.pendingTxids[txn.ID()]
-			if !ok {
-				verifiedGroup = false
-				break
-			}
-			if cacheval.params != params {
-				verifiedGroup = false
-				break
-			}
-			pendingSigTxn := cacheval.txn
-			if !(pendingSigTxn.Sig == txn.Sig && pendingSigTxn.Msig.Equal(txn.Msig) && pendingSigTxn.Lsig.Equal(&txn.Lsig) && (pendingSigTxn.AuthAddr == txn.AuthAddr)) {
-				verifiedGroup = false
-				break
-			}
-		}
-		if !verifiedGroup {
-			signedTxnGroups = append(signedTxnGroups, signedTxnGroup)
-		}
-	}
-	return
+	return pool.verifiedTxnCache.GetUnverifiedTranscationGroups(txnGroups, params)
 }
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
