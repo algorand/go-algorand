@@ -393,8 +393,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 								return errors.New("empty address")
 							}
 
-							err = stxnVerifyCore(&signTxn, &ctxs[k])
-							if err != nil {
+							if err := stxnVerifyCore(&signTxn, &ctxs[k]); err != nil {
 								return err
 							}
 						}
