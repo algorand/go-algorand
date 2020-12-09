@@ -37,6 +37,21 @@ var logicGoodTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_
 var logicRejTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_rej", Description: "Total transaction scripts executed and rejected"})
 var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_err", Description: "Total transaction scripts executed and errored"})
 
+// The PaysetGroups is taking large set of transaction groups and attempt to verify their validity using multiple go-routines.
+// When doing so, it attempts to break these into smaller "worksets" where each workset takes about 2ms of execution time in order
+// to avoid context switching overhead while providing good validation cancelation responsiveness. Each one of these worksets is
+// "populated" with roughly txnPerWorksetThreshold transactions. ( note that the real evaluation time is unknown, but benchmarks
+// showen that these are realistic numbers )
+const txnPerWorksetThreshold = 32
+
+// When the PaysetGroups is generating worksets, it enqueues up to concurrentWorksets entries to the execution pool. This serves several
+// purposes :
+// - if the verification task need to be aborted, there are only concurrentWorksets entries that are currently redundent on the execution pool queue.
+// - that number of concurrent tasks would not get beyond the capacity of the execution pool back buffer.
+// - if we were to "redundently" execute all these during context cancelation, we would spent at most 2ms * 16 = 32ms time.
+// - it allows us to linearly scan the input, and process elements only once we're going to queue them into the pool.
+const concurrentWorksets = 16
+
 // Context encapsulates the context needed to perform stateless checks
 // on a signed transaction.
 type Context struct {
@@ -323,7 +338,6 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 // This version of verify is performing the verification over the provided execution pool.
 func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bookkeeping.Block, verificationPool execpool.BacklogPool) (err error) {
 	txnGroupIdx := 0
-	const txnPerGroupThreshold = 32
 	proto, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]
 	if !ok {
 		return protocol.Error(blk.BlockHeader.CurrentProtocol)
@@ -337,17 +351,19 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 	}
 	var txnGroups [][]transactions.SignedTxn
 	// prepare up to 16 concurrent worksets.
-	worksets := make(chan struct{}, 16)
-	worksDoneCh := make(chan interface{}, 16)
+	worksets := make(chan struct{}, concurrentWorksets)
+	worksDoneCh := make(chan interface{}, concurrentWorksets)
 	zeroAddress := basics.Address{}
 	processing := 0
 	tasksCtx, cancelTasksCtx := context.WithCancel(ctx)
 	defer cancelTasksCtx()
 	for processing >= 0 {
+		// see if we need to get another workset
 		if txnGroupIdx < len(payset) && (len(txnGroups) == 0) {
 			txnCounter := 0 // how many transaction we already included in the current workset.
+			// scan starting from the current position until we filled up the workset.
 			for i := txnGroupIdx; i < len(payset); i++ {
-				if txnCounter+len(payset[i]) > txnPerGroupThreshold {
+				if txnCounter+len(payset[i]) > txnPerWorksetThreshold {
 					if i == txnGroupIdx {
 						i++
 					}
@@ -362,7 +378,6 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 				}
 				txnCounter += len(payset[i])
 			}
-
 		}
 
 		select {
@@ -376,14 +391,17 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 						return tasksCtx.Err()
 					}
 					txnGroups := arg.([][]transactions.SignedTxn)
-					for _, signTxnsGrp := range txnGroups {
-						if !proto.SupportRekeying {
+					if !proto.SupportRekeying {
+						for _, signTxnsGrp := range txnGroups {
 							for _, signTxn := range signTxnsGrp {
 								if (signTxn.AuthAddr != basics.Address{}) {
 									return errors.New("nonempty AuthAddr but rekeying not supported")
 								}
 							}
 						}
+					}
+
+					for _, signTxnsGrp := range txnGroups {
 						ctxs := PrepareContexts(signTxnsGrp, blk.BlockHeader)
 						for k, signTxn := range signTxnsGrp {
 							if err := signTxn.Txn.WellFormed(spec, proto); err != nil {
