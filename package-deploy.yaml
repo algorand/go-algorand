@@ -1,7 +1,7 @@
 agents:
   - name: docker
     dockerFilePath: docker/build/docker.ubuntu.Dockerfile
-    image: algorand/go-algorand-ci-linux-ubuntu
+    image: algorand/docker
     version: scripts/configure_dev-deps.sh
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
