@@ -956,8 +956,8 @@ func (validator *evalTxValidator) run() {
 // used by Ledger.Validate() Ledger.AddBlock() Ledger.trackerEvalVerified()(accountUpdates.loadFromDisk())
 //
 // Validate: eval(ctx, blk, true, txcache, executionPool)
-// AddBlock: eval(context.Background(), blk, false, nil, nil)
-// tracker:  eval(context.Background(), blk, false, nil, nil)
+// AddBlock: eval(context.Background(), blk, false, txcache, nil)
+// tracker:  eval(context.Background(), blk, false, txcache, nil)
 func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (StateDelta, error) {
 	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
 	if err != nil {

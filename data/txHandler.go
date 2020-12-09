@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/algorand/go-algorand/crypto"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
@@ -304,7 +305,7 @@ func (handler *TxHandler) processDecoded(unverifiedTxGroup []transactions.Signed
 		return network.OutgoingMessage{}, true
 	}
 
-	unverifiedTxnGroups := transactions.SignedTxnArray(unverifiedTxGroup).TransactionGroups()
+	unverifiedTxnGroups := bookkeeping.SignedTxnsToGroups(unverifiedTxGroup)
 	err = verify.PaysetGroups(context.Background(), unverifiedTxnGroups, latestHdr, handler.txVerificationPool, handler.ledger.VerifiedTransactionCache())
 	if err != nil {
 		// transaction is invalid

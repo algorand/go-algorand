@@ -127,9 +127,9 @@ func TestSignedPayment(t *testing.T) {
 func TestTxnValidationEncodeDecode(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50, 0)
 
-	ctxs := PrepareContexts(signed, blockHeader)
-	for i, txn := range signed {
-		if Txn(&txn, ctxs[i]) != nil {
+	for _, txn := range signed {
+		ctxs := PrepareContexts([]transactions.SignedTxn{txn}, blockHeader)
+		if Txn(&txn, ctxs[0]) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 
@@ -137,7 +137,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 		var signedTx transactions.SignedTxn
 		protocol.Decode(x, &signedTx)
 
-		if Txn(&signedTx, ctxs[i]) != nil {
+		if Txn(&signedTx, ctxs[0]) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 	}
@@ -146,16 +146,16 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 func TestTxnValidationEmptySig(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50, 0)
 
-	ctxs := PrepareContexts(signed, blockHeader)
-	for i, txn := range signed {
-		if Txn(&txn, ctxs[i]) != nil {
+	for _, txn := range signed {
+		ctxs := PrepareContexts([]transactions.SignedTxn{txn}, blockHeader)
+		if Txn(&txn, ctxs[0]) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 
 		txn.Sig = crypto.Signature{}
 		txn.Msig = crypto.MultisigSig{}
 		txn.Lsig = transactions.LogicSig{}
-		if Txn(&txn, ctxs[i]) == nil {
+		if Txn(&txn, ctxs[0]) == nil {
 			t.Errorf("transaction %#v verified without sig", txn)
 		}
 	}
@@ -265,8 +265,18 @@ func TestPaysetGroups(t *testing.T) {
 	// divide the transactions into transaction groups.
 	txnGroups := make([][]transactions.SignedTxn, 0, len(signedTxn))
 	for i := 0; i < len(signedTxn)-16; i++ {
-		txnPerGroup := rand.Intn(16)
-		txnGroups = append(txnGroups, signedTxn[i:i+txnPerGroup+1])
+		txnPerGroup := 1 + rand.Intn(15)
+		newGroup := signedTxn[i : i+txnPerGroup+1]
+		var txGroup transactions.TxGroup
+		for _, txn := range newGroup {
+			txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.HashObj(txn.Txn))
+		}
+		groupHash := crypto.HashObj(txGroup)
+		for i := range newGroup {
+			newGroup[i].Txn.Group = groupHash
+		}
+		txnGroups = append(txnGroups, newGroup)
+
 		i += txnPerGroup
 	}
 
@@ -293,8 +303,18 @@ func TestPaysetGroups(t *testing.T) {
 	// divide the transactions into transaction groups.
 	txnGroups = make([][]transactions.SignedTxn, 0, len(signedTxn))
 	for i := 0; i < len(signedTxn)-16; i++ {
-		txnPerGroup := rand.Intn(16)
-		txnGroups = append(txnGroups, signedTxn[i:i+txnPerGroup+1])
+		txnPerGroup := 1 + rand.Intn(15)
+		newGroup := signedTxn[i : i+txnPerGroup+1]
+		var txGroup transactions.TxGroup
+		for _, txn := range newGroup {
+			txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.HashObj(txn.Txn))
+		}
+		groupHash := crypto.HashObj(txGroup)
+		for i := range newGroup {
+			newGroup[i].Txn.Group = groupHash
+		}
+		txnGroups = append(txnGroups, newGroup)
+
 		i += txnPerGroup
 	}
 

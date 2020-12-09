@@ -64,6 +64,9 @@ type GroupParams struct {
 // PrepareContexts prepares verification contexts for a transaction
 // group.
 func PrepareContexts(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader) []Context {
+	if len(group) == 0 {
+		return nil
+	}
 	ctxs := make([]Context, len(group))
 	minTealVersion := logic.ComputeMinTealVersion(group)
 	params := GroupParams{
@@ -75,9 +78,20 @@ func PrepareContexts(group []transactions.SignedTxn, contextHdr bookkeeping.Bloc
 		MinTealVersion:  minTealVersion,
 		SignedGroupTxns: group,
 	}
-	if len(group) > 0 {
-		params.GroupDigest = group[0].Txn.Group
+
+	if (!group[0].Txn.Group.IsZero()) || len(group) > 1 {
+		var txGroup transactions.TxGroup
+		var grouplessTxn transactions.Transaction
+		txGroup.TxGroupHashes = make([]crypto.Digest, len(group))
+
+		for i, stxn := range group {
+			grouplessTxn = stxn.Txn
+			grouplessTxn.Group = crypto.Digest{}
+			txGroup.TxGroupHashes[i] = crypto.HashObj(grouplessTxn)
+		}
+		params.GroupDigest = crypto.HashObj(txGroup)
 	}
+
 	for i := range group {
 		ctx := Context{
 			groupParams: &params,
@@ -146,6 +160,9 @@ func Txn(s *transactions.SignedTxn, ctx Context) error {
 	if !proto.SupportRekeying && (s.AuthAddr != basics.Address{}) {
 		return errors.New("nonempty AuthAddr but rekeying not supported")
 	}
+	if !bytes.Equal(s.Txn.Group[:], ctx.groupParams.GroupDigest[:]) {
+		return errors.New("mismatching group digest")
+	}
 
 	return stxnVerifyCore(s, &ctx)
 }
@@ -201,14 +218,30 @@ func stxnVerifyCore(s *transactions.SignedTxn, ctx *Context) error {
 	}
 
 	if hasSig {
-		if crypto.SignatureVerifier(s.Authorizer()).Verify(s.Txn, s.Sig) {
-			return nil
+		if s.Txn.Group.IsZero() {
+			if crypto.SignatureVerifier(s.Authorizer()).Verify(s.Txn, s.Sig) {
+				return nil
+			}
+		} else {
+			groupLessTxn := s.Txn
+			groupLessTxn.Group = crypto.Digest{}
+			if crypto.SignatureVerifier(s.Authorizer()).Verify(groupLessTxn, s.Sig) {
+				return nil
+			}
 		}
 		return errors.New("signature validation failed")
 	}
 	if hasMsig {
-		if ok, _ := crypto.MultisigVerify(s.Txn, crypto.Digest(s.Authorizer()), s.Msig); ok {
-			return nil
+		if s.Txn.Group.IsZero() {
+			if ok, _ := crypto.MultisigVerify(s.Txn, crypto.Digest(s.Authorizer()), s.Msig); ok {
+				return nil
+			}
+		} else {
+			groupLessTxn := s.Txn
+			groupLessTxn.Group = crypto.Digest{}
+			if ok, _ := crypto.MultisigVerify(groupLessTxn, crypto.Digest(s.Authorizer()), s.Msig); ok {
+				return nil
+			}
 		}
 		return errors.New("multisig validation failed")
 	}
@@ -404,7 +437,9 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHdr
 							if signTxn.Txn.Src() == zeroAddress {
 								return errors.New("empty address")
 							}
-
+							if !bytes.Equal(signTxn.Txn.Group[:], ctxs[0].groupParams.GroupDigest[:]) {
+								return errors.New("mismatching group digest")
+							}
 							if err := stxnVerifyCore(&signTxn, &ctxs[k]); err != nil {
 								return err
 							}
