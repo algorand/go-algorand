@@ -58,7 +58,6 @@ type TransactionPool struct {
 	expFeeFactor         uint64
 	txPoolMaxSize        int
 	ledger               *ledger.Ledger
-	verifiedTxnCache     verify.VerifiedTransactionCache
 
 	mu                     deadlock.Mutex
 	cond                   sync.Cond
@@ -107,7 +106,6 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 		expFeeFactor:         cfg.TxPoolExponentialIncreaseFactor,
 		txPoolMaxSize:        cfg.TxPoolSize,
 		log:                  log,
-		verifiedTxnCache:     ledger.VerifiedTransactionCache(),
 	}
 	pool.cond.L = &pool.mu
 	pool.assemblyCond.L = &pool.assemblyMu
@@ -222,7 +220,7 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 	if flush {
 		pool.pendingTxGroups = pool.rememberedTxGroups
 		pool.pendingTxids = pool.rememberedTxids
-		pool.verifiedTxnCache.UpdatePinned(pool.pendingTxids)
+		pool.ledger.VerifiedTransactionCache().UpdatePinned(pool.pendingTxids)
 	} else {
 		pool.pendingTxGroups = append(pool.pendingTxGroups, pool.rememberedTxGroups...)
 

@@ -102,7 +102,7 @@ func (ctx Context) Equal(other Context) bool {
 // a SignedTxn may be well-formed, but a payset might contain an overspend.
 //
 // This version of verify is performing the verification over the provided execution pool.
-/*func TxnPool(s *transactions.SignedTxn, ctx Context, verificationPool execpool.BacklogPool) error {
+func TxnPool(s *transactions.SignedTxn, ctx Context, verificationPool execpool.BacklogPool) error {
 	proto, ok := config.Consensus[ctx.groupParams.CurrProto]
 	if !ok {
 		return protocol.Error(ctx.groupParams.CurrProto)
@@ -126,7 +126,7 @@ func (ctx Context) Equal(other Context) bool {
 		return err
 	}
 	return nil
-}*/
+}
 
 // Txn verifies a SignedTxn as being signed and having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
