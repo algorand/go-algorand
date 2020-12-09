@@ -454,10 +454,20 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 			return err
 		}
 	}
+	err = node.ledger.VerifiedTransactionCache().Add(txgroup, contexts, false)
+	if err != nil {
+		logging.Base().Warnf("unable to add transactions to verified transaction cache: %v", err)
+	}
+
 	err = node.transactionPool.Remember(txgroup)
 	if err != nil {
 		node.log.Infof("rejected by local pool: %v - transaction group was %+v", err, txgroup)
 		return err
+	}
+
+	err = node.ledger.VerifiedTransactionCache().Pin(txgroup)
+	if err != nil {
+		logging.Base().Warnf("unable to pin transaction: %v", err)
 	}
 
 	var enc []byte

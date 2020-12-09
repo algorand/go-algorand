@@ -31,7 +31,6 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/pools"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -131,7 +130,7 @@ func BenchmarkAssembleBlock(b *testing.B) {
 			if okcount == 0 {
 				worstTxID = signedTx.ID()
 			}
-			err := tp.Remember([]transactions.SignedTxn{signedTx}, []verify.Params{verify.Params{}})
+			err := tp.Remember([]transactions.SignedTxn{signedTx})
 			if err != nil {
 				errcount++
 				b.Logf("(%d/%d) could not send [%d] %s -> [%d] %s: %s", errcount, okcount, sourcei, addresses[sourcei], desti, addresses[desti], err)

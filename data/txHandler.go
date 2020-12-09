@@ -210,7 +210,9 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 			}
 		}
 		if tx.verificationErr == nil {
-			handler.ledger.VerifiedTransactionCache().Add(tx.unverifiedTxGroup, ctxs, false)
+			if err := handler.ledger.VerifiedTransactionCache().Add(tx.unverifiedTxGroup, ctxs, false); err != nil {
+				logging.Base().Warnf("unable to add transactions to verified transaction cache: %v", err)
+			}
 		}
 	}
 
