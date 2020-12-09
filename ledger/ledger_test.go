@@ -121,19 +121,23 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 
 type DummyVerifiedTxnCache struct{}
 
-func (x DummyVerifiedTxnCache) Add(txgroup []transactions.SignedTxn, verifyParams []verify.Params, pinned bool) error {
+func (x DummyVerifiedTxnCache) Add(txgroup []transactions.SignedTxn, verifyContext []verify.Context, pinned bool) error {
 	return nil
 }
 
-func (x DummyVerifiedTxnCache) Check(txgroup []transactions.SignedTxn, verifyParams []verify.Params) bool {
+func (x DummyVerifiedTxnCache) Check(txgroup []transactions.SignedTxn, verifyContext []verify.Context) bool {
 	return false
 }
 
-func (x DummyVerifiedTxnCache) GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, params verify.Params) [][]transactions.SignedTxn {
+func (x DummyVerifiedTxnCache) GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn {
 	return payset
 }
 
 func (x DummyVerifiedTxnCache) UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) error {
+	return nil
+}
+
+func (x DummyVerifiedTxnCache) Pin(txgroup []transactions.SignedTxn) error {
 	return nil
 }
 

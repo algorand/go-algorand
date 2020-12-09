@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 const entriesPerBucket = 8179 // pick a prime number to promote lower collisions.
@@ -33,17 +34,18 @@ var errMissingPinnedEntry = errors.New("Missing pinned entry")
 
 // VerifiedTransactionCache provides a cached store of recently verified transactions
 type VerifiedTransactionCache interface {
-	Add(txgroup []transactions.SignedTxn, verifyParams []Params, pinned bool) error
-	Check(txgroup []transactions.SignedTxn, verifyParams []Params) bool
-	GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, params Params) [][]transactions.SignedTxn
+	Add(txgroup []transactions.SignedTxn, verifyContext []Context, pinned bool) error
+	Check(txgroup []transactions.SignedTxn, verifyContext []Context) bool
+	GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn
 	UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) error
+	Pin(txgroup []transactions.SignedTxn) error
 }
 
 // VerifiedTransactionCacheImpl provides an implementation of the VerifiedTransactionCache interface
 type verifiedTransactionCacheImpl struct {
 	bucketsLock deadlock.RWMutex
-	buckets     []map[transactions.Txid]Params
-	pinned      map[transactions.Txid]Params
+	buckets     []map[transactions.Txid]Context
+	pinned      map[transactions.Txid]Context
 	base        int
 }
 
@@ -51,17 +53,17 @@ type verifiedTransactionCacheImpl struct {
 func MakeVerifiedTransactionCache(cacheSize int) VerifiedTransactionCache {
 	bucketsCount := 1 + (cacheSize / entriesPerBucket)
 	impl := &verifiedTransactionCacheImpl{
-		buckets: make([]map[transactions.Txid]Params, bucketsCount),
-		pinned:  make(map[transactions.Txid]Params, cacheSize),
+		buckets: make([]map[transactions.Txid]Context, bucketsCount),
+		pinned:  make(map[transactions.Txid]Context, cacheSize),
 		base:    0,
 	}
 	for i := 0; i < bucketsCount; i++ {
-		impl.buckets[i] = make(map[transactions.Txid]Params, entriesPerBucket)
+		impl.buckets[i] = make(map[transactions.Txid]Context, entriesPerBucket)
 	}
 	return impl
 }
 
-func (v *verifiedTransactionCacheImpl) Add(txgroup []transactions.SignedTxn, verifyParams []Params, pinned bool) error {
+func (v *verifiedTransactionCacheImpl) Add(txgroup []transactions.SignedTxn, verifyContext []Context, pinned bool) error {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
 	if pinned {
@@ -71,23 +73,23 @@ func (v *verifiedTransactionCacheImpl) Add(txgroup []transactions.SignedTxn, ver
 			return errTooManyPinnedEntries
 		}
 		for i, txn := range txgroup {
-			v.pinned[txn.ID()] = verifyParams[i]
+			v.pinned[txn.ID()] = verifyContext[i]
 		}
 		return nil
 	}
 	if len(v.buckets[v.base])+len(txgroup) > entriesPerBucket {
 		// move to the next bucket while deleting the content of the next bucket.
 		v.base = (v.base + 1) % len(v.buckets)
-		v.buckets[v.base] = make(map[transactions.Txid]Params, entriesPerBucket)
+		v.buckets[v.base] = make(map[transactions.Txid]Context, entriesPerBucket)
 	}
 	currentBucket := v.buckets[v.base]
 	for i, txn := range txgroup {
-		currentBucket[txn.ID()] = verifyParams[i]
+		currentBucket[txn.ID()] = verifyContext[i]
 	}
 	return nil
 }
 
-func (v *verifiedTransactionCacheImpl) Check(txgroup []transactions.SignedTxn, verifyParams []Params) (found bool) {
+func (v *verifiedTransactionCacheImpl) Check(txgroup []transactions.SignedTxn, verifyContext []Context) (found bool) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
 	found = false
@@ -95,7 +97,7 @@ func (v *verifiedTransactionCacheImpl) Check(txgroup []transactions.SignedTxn, v
 		id := txn.ID()
 		found = false
 		// check pinned first
-		if param, has := v.pinned[id]; has && param == verifyParams[i] {
+		if ctx, has := v.pinned[id]; has && ctx.Equal(verifyContext[i]) {
 			found = true
 		}
 		if !found {
@@ -103,7 +105,7 @@ func (v *verifiedTransactionCacheImpl) Check(txgroup []transactions.SignedTxn, v
 			// we use the (base + W) % W trick here so we can go backward and wrap around the zero.
 			for offsetBucketIdx := v.base + len(v.buckets); offsetBucketIdx > v.base; offsetBucketIdx-- {
 				bucketIdx := offsetBucketIdx % len(v.buckets)
-				if param, has := v.buckets[bucketIdx][id]; has && param == verifyParams[i] {
+				if ctx, has := v.buckets[bucketIdx][id]; has && ctx.Equal(verifyContext[i]) {
 					found = true
 					break
 				}
@@ -116,17 +118,27 @@ func (v *verifiedTransactionCacheImpl) Check(txgroup []transactions.SignedTxn, v
 	return
 }
 
-func (v *verifiedTransactionCacheImpl) GetUnverifiedTranscationGroups(txnGroups [][]transactions.SignedTxn, params Params) (unverifiedGroups [][]transactions.SignedTxn) {
+func (v *verifiedTransactionCacheImpl) GetUnverifiedTranscationGroups(txnGroups [][]transactions.SignedTxn, currSpecAddrs transactions.SpecialAddresses, currProto protocol.ConsensusVersion) (unverifiedGroups [][]transactions.SignedTxn) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
+	groupParams := GroupParams{
+		CurrSpecAddrs: currSpecAddrs,
+		CurrProto:     currProto,
+	}
 	unverifiedGroups = make([][]transactions.SignedTxn, len(txnGroups))
 	for _, signedTxnGroup := range txnGroups {
 		verifiedTxn := 0
-		params.MinTealVersion = logic.ComputeMinTealVersion(signedTxnGroup)
-		for _, txn := range signedTxnGroup {
+
+		groupParams.MinTealVersion = logic.ComputeMinTealVersion(signedTxnGroup)
+		for i, txn := range signedTxnGroup {
+			txnContext := Context{
+				groupParams: &groupParams,
+				groupIndex:  i,
+			}
+			groupParams.GroupDigest = txn.Txn.Group
 			id := txn.ID()
 			// check pinned first
-			if entryParams, has := v.pinned[id]; has && entryParams == params {
+			if entryCtx, has := v.pinned[id]; has && entryCtx.Equal(txnContext) {
 				verifiedTxn++
 				continue
 			}
@@ -134,7 +146,7 @@ func (v *verifiedTransactionCacheImpl) GetUnverifiedTranscationGroups(txnGroups 
 			// we use the (base + W) % W trick here so we can go backward and wrap around the zero.
 			for offsetBucketIdx := v.base + len(v.buckets); offsetBucketIdx > v.base; offsetBucketIdx-- {
 				bucketIdx := offsetBucketIdx % len(v.buckets)
-				if entryParams, has := v.buckets[bucketIdx][id]; has && entryParams == params {
+				if entryCtx, has := v.buckets[bucketIdx][id]; has && entryCtx.Equal(txnContext) {
 					verifiedTxn++
 					break
 				}
@@ -150,10 +162,10 @@ func (v *verifiedTransactionCacheImpl) GetUnverifiedTranscationGroups(txnGroups 
 func (v *verifiedTransactionCacheImpl) UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) (err error) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
-	pinned := make(map[transactions.Txid]Params, len(pinnedTxns))
+	pinned := make(map[transactions.Txid]Context, len(pinnedTxns))
 	for txID := range pinnedTxns {
-		if params, has := v.pinned[txID]; has {
-			pinned[txID] = params
+		if ctx, has := v.pinned[txID]; has {
+			pinned[txID] = ctx
 			continue
 		}
 
@@ -162,8 +174,8 @@ func (v *verifiedTransactionCacheImpl) UpdatePinned(pinnedTxns map[transactions.
 		// we use the (base + W) % W trick here so we can go backward and wrap around the zero.
 		for offsetBucketIdx := v.base + len(v.buckets); offsetBucketIdx > v.base; offsetBucketIdx-- {
 			bucketIdx := offsetBucketIdx % len(v.buckets)
-			if params, has := v.buckets[bucketIdx][txID]; has {
-				pinned[txID] = params
+			if ctx, has := v.buckets[bucketIdx][txID]; has {
+				pinned[txID] = ctx
 				found = true
 				break
 			}
@@ -175,4 +187,44 @@ func (v *verifiedTransactionCacheImpl) UpdatePinned(pinnedTxns map[transactions.
 	}
 	v.pinned = pinned
 	return err
+}
+
+// Pin sets a given transaction group as pinned items, after they have already been verified.
+func (v *verifiedTransactionCacheImpl) Pin(txgroup []transactions.SignedTxn) (err error) {
+	v.bucketsLock.Lock()
+	defer v.bucketsLock.Unlock()
+	transcationMissing := false
+	if len(v.pinned)+len(txgroup) > maxPinnedEntries {
+		// reaching this number likely means that we have an issue not removing entries from the pinned map.
+		// return an error ( which would get logged )
+		return errTooManyPinnedEntries
+	}
+	for _, txn := range txgroup {
+		txID := txn.ID()
+		if _, has := v.pinned[txID]; has {
+			// it's already pinned; keep going.
+			continue
+		}
+
+		// entry isn't in pinned; maybe we have it in one of the buckets ?
+		found := false
+		// we use the (base + W) % W trick here so we can go backward and wrap around the zero.
+		for offsetBucketIdx := v.base + len(v.buckets); offsetBucketIdx > v.base; offsetBucketIdx-- {
+			bucketIdx := offsetBucketIdx % len(v.buckets)
+			if ctx, has := v.buckets[bucketIdx][txID]; has {
+				// move it to the pinned items :
+				v.pinned[txID] = ctx
+				delete(v.buckets[bucketIdx], txID)
+				found = true
+				break
+			}
+		}
+		if !found {
+			transcationMissing = true
+		}
+	}
+	if transcationMissing {
+		err = errMissingPinnedEntry
+	}
+	return
 }

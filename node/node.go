@@ -447,16 +447,14 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 	}
 
 	contexts := verify.PrepareContexts(txgroup, b)
-	params := make([]verify.Params, len(txgroup))
 	for i, tx := range txgroup {
 		err = verify.Txn(&tx, contexts[i])
 		if err != nil {
 			node.log.Warnf("malformed transaction: %v - transaction was %+v", err, tx)
 			return err
 		}
-		params[i] = contexts[i].Params
 	}
-	err = node.transactionPool.Remember(txgroup, params)
+	err = node.transactionPool.Remember(txgroup)
 	if err != nil {
 		node.log.Infof("rejected by local pool: %v - transaction group was %+v", err, txgroup)
 		return err

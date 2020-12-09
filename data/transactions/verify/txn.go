@@ -17,6 +17,7 @@
 package verify
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -40,12 +41,11 @@ var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_l
 // Context encapsulates the context needed to perform stateless checks
 // on a signed transaction.
 type Context struct {
-	Params
-	Group      []transactions.SignedTxn
-	GroupIndex int
+	groupParams *GroupParams
+	groupIndex  int // the index of the transaction in the group.
 }
 
-// Params is the set of parameters external to a transaction which
+// GroupParams is the set of parameters external to a transaction which
 // stateless checks are performed against.
 //
 // For efficient caching, these parameters should either be constant
@@ -53,10 +53,12 @@ type Context struct {
 //
 // Group data are omitted because they are committed to in the
 // transaction and its ID.
-type Params struct {
-	CurrSpecAddrs  transactions.SpecialAddresses
-	CurrProto      protocol.ConsensusVersion
-	MinTealVersion uint64
+type GroupParams struct {
+	CurrSpecAddrs   transactions.SpecialAddresses
+	CurrProto       protocol.ConsensusVersion
+	MinTealVersion  uint64
+	SignedGroupTxns []transactions.SignedTxn
+	GroupDigest     crypto.Digest // the group digest found in the transaction header ( i.e. transaction.Header.Group )
 }
 
 // PrepareContexts prepares verification contexts for a transaction
@@ -64,24 +66,34 @@ type Params struct {
 func PrepareContexts(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader) []Context {
 	ctxs := make([]Context, len(group))
 	minTealVersion := logic.ComputeMinTealVersion(group)
-	for i := range group {
-		spec := transactions.SpecialAddresses{
+	params := GroupParams{
+		CurrSpecAddrs: transactions.SpecialAddresses{
 			FeeSink:     contextHdr.FeeSink,
 			RewardsPool: contextHdr.RewardsPool,
-		}
+		},
+		CurrProto:       contextHdr.CurrentProtocol,
+		MinTealVersion:  minTealVersion,
+		SignedGroupTxns: group,
+	}
+	if len(group) > 0 {
+		params.GroupDigest = group[0].Txn.Group
+	}
+	for i := range group {
 		ctx := Context{
-			Params: Params{
-				CurrSpecAddrs:  spec,
-				CurrProto:      contextHdr.CurrentProtocol,
-				MinTealVersion: minTealVersion,
-			},
-			Group:      group,
-			GroupIndex: i,
+			groupParams: &params,
+			groupIndex:  i,
 		}
 		ctxs[i] = ctx
 	}
-
 	return ctxs
+}
+
+// Equal compares two contexts to see if they would represent the same verification context for a given transaction.
+func (ctx Context) Equal(other Context) bool {
+	return ctx.groupIndex == other.groupIndex &&
+		bytes.Equal(ctx.groupParams.GroupDigest[:], other.groupParams.GroupDigest[:]) &&
+		ctx.groupParams.MinTealVersion == other.groupParams.MinTealVersion &&
+		ctx.groupParams.CurrProto == other.groupParams.CurrProto
 }
 
 // TxnPool verifies that a SignedTxn has a good signature and that the underlying
@@ -90,12 +102,12 @@ func PrepareContexts(group []transactions.SignedTxn, contextHdr bookkeeping.Bloc
 // a SignedTxn may be well-formed, but a payset might contain an overspend.
 //
 // This version of verify is performing the verification over the provided execution pool.
-func TxnPool(s *transactions.SignedTxn, ctx Context, verificationPool execpool.BacklogPool) error {
-	proto, ok := config.Consensus[ctx.CurrProto]
+/*func TxnPool(s *transactions.SignedTxn, ctx Context, verificationPool execpool.BacklogPool) error {
+	proto, ok := config.Consensus[ctx.groupParams.CurrProto]
 	if !ok {
-		return protocol.Error(ctx.CurrProto)
+		return protocol.Error(ctx.groupParams.CurrProto)
 	}
-	if err := s.Txn.WellFormed(ctx.CurrSpecAddrs, proto); err != nil {
+	if err := s.Txn.WellFormed(ctx.groupParams.CurrSpecAddrs, proto); err != nil {
 		return err
 	}
 
@@ -114,16 +126,16 @@ func TxnPool(s *transactions.SignedTxn, ctx Context, verificationPool execpool.B
 		return err
 	}
 	return nil
-}
+}*/
 
 // Txn verifies a SignedTxn as being signed and having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
 func Txn(s *transactions.SignedTxn, ctx Context) error {
-	proto, ok := config.Consensus[ctx.CurrProto]
+	proto, ok := config.Consensus[ctx.groupParams.CurrProto]
 	if !ok {
-		return protocol.Error(ctx.CurrProto)
+		return protocol.Error(ctx.groupParams.CurrProto)
 	}
-	if err := s.Txn.WellFormed(ctx.CurrSpecAddrs, proto); err != nil {
+	if err := s.Txn.WellFormed(ctx.groupParams.CurrSpecAddrs, proto); err != nil {
 		return err
 	}
 
@@ -210,9 +222,9 @@ func stxnVerifyCore(s *transactions.SignedTxn, ctx *Context) error {
 // It does not evaluate the logic.
 func LogicSigSanityCheck(txn *transactions.SignedTxn, ctx *Context) error {
 	lsig := txn.Lsig
-	proto, ok := config.Consensus[ctx.CurrProto]
+	proto, ok := config.Consensus[ctx.groupParams.CurrProto]
 	if !ok {
-		return protocol.Error(ctx.CurrProto)
+		return protocol.Error(ctx.groupParams.CurrProto)
 	}
 	if proto.LogicSigVersion == 0 {
 		return errors.New("LogicSig not enabled")
@@ -234,9 +246,9 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, ctx *Context) error {
 	ep := logic.EvalParams{
 		Txn:            txn,
 		Proto:          &proto,
-		TxnGroup:       ctx.Group,
-		GroupIndex:     ctx.GroupIndex,
-		MinTealVersion: &ctx.MinTealVersion,
+		TxnGroup:       ctx.groupParams.SignedGroupTxns,
+		GroupIndex:     ctx.groupIndex,
+		MinTealVersion: &ctx.groupParams.MinTealVersion,
 	}
 	cost, err := logic.Check(lsig.Logic, ep)
 	if err != nil {
@@ -284,9 +296,9 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, ctx *Context) error {
 
 // LogicSig checks that the signature is valid, executing the program.
 func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
-	proto, ok := config.Consensus[ctx.CurrProto]
+	proto, ok := config.Consensus[ctx.groupParams.CurrProto]
 	if !ok {
-		return protocol.Error(ctx.CurrProto)
+		return protocol.Error(ctx.groupParams.CurrProto)
 	}
 
 	err := LogicSigSanityCheck(txn, ctx)
@@ -297,9 +309,9 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 	ep := logic.EvalParams{
 		Txn:            txn,
 		Proto:          &proto,
-		TxnGroup:       ctx.Group,
-		GroupIndex:     ctx.GroupIndex,
-		MinTealVersion: &ctx.MinTealVersion,
+		TxnGroup:       ctx.groupParams.SignedGroupTxns,
+		GroupIndex:     ctx.groupIndex,
+		MinTealVersion: &ctx.groupParams.MinTealVersion,
 	}
 	pass, err := logic.Eval(txn.Lsig.Logic, ep)
 	if err != nil {
@@ -321,19 +333,19 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 // a PaysetGroups may be well-formed, but a payset might contain an overspend.
 //
 // This version of verify is performing the verification over the provided execution pool.
-func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bookkeeping.Block, verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (err error) {
+func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHdr bookkeeping.BlockHeader, verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (err error) {
 	txnGroupIdx := 0
 	const txnPerGroupThreshold = 32
-	proto, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]
+	proto, ok := config.Consensus[blkHdr.CurrentProtocol]
 	if !ok {
-		return protocol.Error(blk.BlockHeader.CurrentProtocol)
+		return protocol.Error(blkHdr.CurrentProtocol)
 	}
 	if len(payset) == 0 {
 		return nil
 	}
 	spec := transactions.SpecialAddresses{
-		FeeSink:     blk.BlockHeader.FeeSink,
-		RewardsPool: blk.BlockHeader.RewardsPool,
+		FeeSink:     blkHdr.FeeSink,
+		RewardsPool: blkHdr.RewardsPool,
 	}
 	var txnGroups [][]transactions.SignedTxn
 	// prepare up to 16 concurrent worksets.
@@ -384,7 +396,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 								}
 							}
 						}
-						ctxs := PrepareContexts(signTxnsGrp, blk.BlockHeader)
+						ctxs := PrepareContexts(signTxnsGrp, blkHdr)
 						for k, signTxn := range signTxnsGrp {
 							if err := signTxn.Txn.WellFormed(spec, proto); err != nil {
 								return err
@@ -396,9 +408,8 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 							if err := stxnVerifyCore(&signTxn, &ctxs[k]); err != nil {
 								return err
 							}
-							// todo : refactor this..
-							cache.Add([]transactions.SignedTxn{signTxn}, []Params{ctxs[k].Params}, false)
 						}
+						cache.Add(signTxnsGrp, ctxs, false)
 					}
 					return nil
 				}, txnGroups, worksDoneCh)

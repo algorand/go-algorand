@@ -379,7 +379,13 @@ var sendCmd = &cobra.Command{
 				Txn:  payment,
 				Lsig: lsig,
 			}
-			err = verify.LogicSigSanityCheck(&uncheckedTxn, &verify.Context{Params: verify.Params{CurrProto: proto}})
+			blockHeader := bookkeeping.BlockHeader{
+				UpgradeState: bookkeeping.UpgradeState{
+					CurrentProtocol: proto,
+				},
+			}
+			ctxs := verify.PrepareContexts([]transactions.SignedTxn{uncheckedTxn}, blockHeader)
+			err = verify.LogicSigSanityCheck(&uncheckedTxn, &ctxs[0])
 			if err != nil {
 				reportErrorf("%s: txn[0] error %s", outFilename, err)
 			}
@@ -733,7 +739,13 @@ var signCmd = &cobra.Command{
 			if lsig.Logic != nil {
 				proto, _ := getProto(protoVersion)
 				uncheckedTxn.Lsig = lsig
-				err = verify.LogicSigSanityCheck(&uncheckedTxn, &verify.Context{Params: verify.Params{CurrProto: proto}})
+				blockHeader := bookkeeping.BlockHeader{
+					UpgradeState: bookkeeping.UpgradeState{
+						CurrentProtocol: proto,
+					},
+				}
+				ctxs := verify.PrepareContexts([]transactions.SignedTxn{uncheckedTxn}, blockHeader)
+				err = verify.LogicSigSanityCheck(&uncheckedTxn, &ctxs[0])
 				if err != nil {
 					reportErrorf("%s: txn[%d] error %s", txFilename, count, err)
 				}

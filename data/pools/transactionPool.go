@@ -76,19 +76,17 @@ type TransactionPool struct {
 	assemblyResults poolAsmResults
 
 	// pendingMu protects pendingTxGroups and pendingTxids
-	pendingMu           deadlock.RWMutex
-	pendingTxGroups     [][]transactions.SignedTxn
-	pendingVerifyParams [][]verify.Params
-	pendingTxids        map[transactions.Txid]transactions.SignedTxn
+	pendingMu       deadlock.RWMutex
+	pendingTxGroups [][]transactions.SignedTxn
+	pendingTxids    map[transactions.Txid]transactions.SignedTxn
 
 	// Calls to remember() add transactions to rememberedTxGroups and
 	// rememberedTxids.  Calling rememberCommit() adds them to the
 	// pendingTxGroups and pendingTxids.  This allows us to batch the
 	// changes in OnNewBlock() without preventing a concurrent call
 	// to PendingTxGroups() or Verified().
-	rememberedTxGroups     [][]transactions.SignedTxn
-	rememberedVerifyParams [][]verify.Params
-	rememberedTxids        map[transactions.Txid]transactions.SignedTxn
+	rememberedTxGroups [][]transactions.SignedTxn
+	rememberedTxids    map[transactions.Txid]transactions.SignedTxn
 
 	log logging.Logger
 }
@@ -115,11 +113,6 @@ func MakeTransactionPool(ledger *ledger.Ledger, cfg config.Local, log logging.Lo
 	pool.assemblyCond.L = &pool.assemblyMu
 	pool.recomputeBlockEvaluator(make(map[transactions.Txid]basics.Round))
 	return &pool
-}
-
-type txPoolVerifyCacheVal struct {
-	txn    transactions.SignedTxn
-	params verify.Params
 }
 
 // poolAsmResults is used to syncronize the state of the block assembly process. The structure reading/writing is syncronized
@@ -164,10 +157,8 @@ var ErrStaleBlockAssemblyRequest = fmt.Errorf("AssembleBlock: requested block as
 // Reset resets the content of the transaction pool
 func (pool *TransactionPool) Reset() {
 	pool.pendingTxids = make(map[transactions.Txid]transactions.SignedTxn)
-	pool.pendingVerifyParams = nil
 	pool.pendingTxGroups = nil
 	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
-	pool.rememberedVerifyParams = nil
 	pool.rememberedTxGroups = nil
 	pool.expiredTxCount = make(map[basics.Round]int)
 	pool.numPendingWholeBlocks = 0
@@ -230,19 +221,17 @@ func (pool *TransactionPool) rememberCommit(flush bool) {
 
 	if flush {
 		pool.pendingTxGroups = pool.rememberedTxGroups
-		pool.pendingVerifyParams = pool.rememberedVerifyParams
 		pool.pendingTxids = pool.rememberedTxids
 		pool.verifiedTxnCache.UpdatePinned(pool.pendingTxids)
 	} else {
 		pool.pendingTxGroups = append(pool.pendingTxGroups, pool.rememberedTxGroups...)
-		pool.pendingVerifyParams = append(pool.pendingVerifyParams, pool.rememberedVerifyParams...)
+
 		for txid, txn := range pool.rememberedTxids {
 			pool.pendingTxids[txid] = txn
 		}
 	}
 
 	pool.rememberedTxGroups = nil
-	pool.rememberedVerifyParams = nil
 	pool.rememberedTxids = make(map[transactions.Txid]transactions.SignedTxn)
 }
 
@@ -370,21 +359,21 @@ type poolIngestParams struct {
 }
 
 // remember attempts to add a transaction group to the pool.
-func (pool *TransactionPool) remember(txgroup []transactions.SignedTxn, verifyParams []verify.Params) error {
+func (pool *TransactionPool) remember(txgroup []transactions.SignedTxn) error {
 	params := poolIngestParams{
 		recomputing: false,
 	}
-	return pool.ingest(txgroup, verifyParams, params)
+	return pool.ingest(txgroup, params)
 }
 
 // add tries to add the transaction group to the pool, bypassing the fee
 // priority checks.
-func (pool *TransactionPool) add(txgroup []transactions.SignedTxn, verifyParams []verify.Params, stats *telemetryspec.AssembleBlockMetrics) error {
+func (pool *TransactionPool) add(txgroup []transactions.SignedTxn, stats *telemetryspec.AssembleBlockMetrics) error {
 	params := poolIngestParams{
 		recomputing: true,
 		stats:       stats,
 	}
-	return pool.ingest(txgroup, verifyParams, params)
+	return pool.ingest(txgroup, params)
 }
 
 // ingest checks whether a transaction group could be remembered in the pool,
@@ -392,7 +381,7 @@ func (pool *TransactionPool) add(txgroup []transactions.SignedTxn, verifyParams 
 //
 // ingest assumes that pool.mu is locked.  It might release the lock
 // while it waits for OnNewBlock() to be called.
-func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, verifyParams []verify.Params, params poolIngestParams) error {
+func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, params poolIngestParams) error {
 	if pool.pendingBlockEvaluator == nil {
 		return fmt.Errorf("TransactionPool.ingest: no pending block evaluator")
 	}
@@ -422,23 +411,21 @@ func (pool *TransactionPool) ingest(txgroup []transactions.SignedTxn, verifyPara
 	}
 
 	pool.rememberedTxGroups = append(pool.rememberedTxGroups, txgroup)
-	pool.rememberedVerifyParams = append(pool.rememberedVerifyParams, verifyParams)
 	for _, t := range txgroup {
 		pool.rememberedTxids[t.ID()] = t
 	}
-	pool.verifiedTxnCache.Add(txgroup, verifyParams, false)
 	return nil
 }
 
 // RememberOne stores the provided transaction.
 // Precondition: Only RememberOne() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
-func (pool *TransactionPool) RememberOne(t transactions.SignedTxn, verifyParams verify.Params) error {
-	return pool.Remember([]transactions.SignedTxn{t}, []verify.Params{verifyParams})
+func (pool *TransactionPool) RememberOne(t transactions.SignedTxn) error {
+	return pool.Remember([]transactions.SignedTxn{t})
 }
 
 // Remember stores the provided transaction group.
 // Precondition: Only Remember() properly-signed and well-formed transactions (i.e., ensure t.WellFormed())
-func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn, verifyParams []verify.Params) error {
+func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn) error {
 	if err := pool.checkPendingQueueSize(len(txgroup)); err != nil {
 		return err
 	}
@@ -446,7 +433,7 @@ func (pool *TransactionPool) Remember(txgroup []transactions.SignedTxn, verifyPa
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
-	err := pool.remember(txgroup, verifyParams)
+	err := pool.remember(txgroup)
 	if err != nil {
 		return fmt.Errorf("TransactionPool.Remember: %v", err)
 	}
@@ -475,21 +462,6 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 	}
 
 	return pool.statusCache.check(txid)
-}
-
-// Verified returns whether a given SignedTxn is already in the
-// pool, and, since only verified transactions should be added
-// to the pool, whether that transaction is verified (i.e., Verify
-// returned success).  This is used as an optimization to avoid
-// re-checking signatures on transactions that we have already
-// verified.
-func (pool *TransactionPool) Verified(txn transactions.SignedTxn, params verify.Params) bool {
-	return pool.verifiedTxnCache.Check([]transactions.SignedTxn{txn}, []verify.Params{params})
-}
-
-// UnverifiedTxnGroups returns a list of unverified transaction groups given a payset
-func (pool *TransactionPool) UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxn, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn) {
-	return pool.verifiedTxnCache.GetUnverifiedTranscationGroups(txnGroups, params)
 }
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
@@ -684,7 +656,6 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	// Grab the transactions to be played through the new block evaluator
 	pool.pendingMu.RLock()
 	txgroups := pool.pendingTxGroups
-	verifyParams := pool.pendingVerifyParams
 	pendingCount := pool.pendingCountNoLock()
 	pool.pendingMu.RUnlock()
 
@@ -709,7 +680,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	firstTxnGrpTime := time.Now()
 
 	// Feed the transactions in order
-	for i, txgroup := range txgroups {
+	for _, txgroup := range txgroups {
 		if len(txgroup) == 0 {
 			asmStats.InvalidCount++
 			continue
@@ -718,7 +689,7 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 			asmStats.EarlyCommittedCount++
 			continue
 		}
-		err := pool.add(txgroup, verifyParams[i], &asmStats)
+		err := pool.add(txgroup, &asmStats)
 		if err != nil {
 			for _, tx := range txgroup {
 				pool.statusCache.put(tx, err.Error())

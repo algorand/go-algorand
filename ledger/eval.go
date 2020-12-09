@@ -925,13 +925,11 @@ type evalTxValidator struct {
 
 func (validator *evalTxValidator) run() {
 	defer close(validator.done)
-	verifyParams := verify.Params{
-		CurrSpecAddrs: transactions.SpecialAddresses{
-			FeeSink:     validator.block.BlockHeader.FeeSink,
-			RewardsPool: validator.block.BlockHeader.RewardsPool,
-		},
-		CurrProto: validator.block.BlockHeader.CurrentProtocol,
+	specialAddresses := transactions.SpecialAddresses{
+		FeeSink:     validator.block.BlockHeader.FeeSink,
+		RewardsPool: validator.block.BlockHeader.RewardsPool,
 	}
+
 	var unverifiedTxnGroups [][]transactions.SignedTxn
 	unverifiedTxnGroups = make([][]transactions.SignedTxn, len(validator.txgroups))
 	for _, group := range validator.txgroups {
@@ -946,10 +944,10 @@ func (validator *evalTxValidator) run() {
 		}
 		unverifiedTxnGroups = append(unverifiedTxnGroups, signedTxnGroup)
 	}
-	if validator.txcache != nil {
-		unverifiedTxnGroups = validator.txcache.GetUnverifiedTranscationGroups(unverifiedTxnGroups, verifyParams)
-	}
-	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block, validator.verificationPool, validator.txcache)
+
+	unverifiedTxnGroups = validator.txcache.GetUnverifiedTranscationGroups(unverifiedTxnGroups, specialAddresses, validator.block.BlockHeader.CurrentProtocol)
+
+	err := verify.PaysetGroups(validator.ctx, unverifiedTxnGroups, validator.block.BlockHeader, validator.verificationPool, validator.txcache)
 	if err != nil {
 		validator.done <- err
 	}

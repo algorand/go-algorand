@@ -579,3 +579,24 @@ func (tc ExplicitTxnContext) GenesisID() string {
 func (tc ExplicitTxnContext) GenesisHash() crypto.Digest {
 	return tc.GenHash
 }
+
+// SignedTxnArray is used as a helper to reconstruct the transaction groups from a flat list of transactions.
+//msgp:ignore SignedTxnArray
+type SignedTxnArray []SignedTxn
+
+// TransactionGroups creates an array of all the signed transactions, grouped by their Group field ( when available )
+func (txar SignedTxnArray) TransactionGroups() [][]SignedTxn {
+	var res [][]SignedTxn
+	var lastGroup []SignedTxn
+	for _, stnx := range txar {
+		if lastGroup != nil && (lastGroup[0].Txn.Group != stnx.Txn.Group || lastGroup[0].Txn.Group.IsZero()) {
+			res = append(res, lastGroup)
+			lastGroup = nil
+		}
+		lastGroup = append(lastGroup, stnx)
+	}
+	if lastGroup != nil {
+		res = append(res, lastGroup)
+	}
+	return res
+}

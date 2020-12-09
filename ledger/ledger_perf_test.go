@@ -130,19 +130,23 @@ func makeUnsignedPaymentTx(sender basics.Address, round int) transactions.Transa
 
 type alwaysVerifiedCache struct{}
 
-func (vc *alwaysVerifiedCache) Add(txgroup []transactions.SignedTxn, verifyParams []verify.Params, pinned bool) error {
+func (vc *alwaysVerifiedCache) Add(txgroup []transactions.SignedTxn, verifyContext []verify.Context, pinned bool) error {
 	return nil
 }
 
-func (vc *alwaysVerifiedCache) Check(txgroup []transactions.SignedTxn, verifyParams []verify.Params) bool {
+func (vc *alwaysVerifiedCache) Check(txgroup []transactions.SignedTxn, verifyContext []verify.Context) bool {
 	return true
 }
 
-func (vc *alwaysVerifiedCache) GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, params verify.Params) [][]transactions.SignedTxn {
+func (vc *alwaysVerifiedCache) GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn {
 	return nil
 }
 
 func (vc *alwaysVerifiedCache) UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) error {
+	return nil
+}
+
+func (vc *alwaysVerifiedCache) Pin(txgroup []transactions.SignedTxn) error {
 	return nil
 }
 

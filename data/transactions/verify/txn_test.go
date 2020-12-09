@@ -35,6 +35,15 @@ import (
 
 var feeSink = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1, 0x75, 0x76, 0xbd, 0x45, 0x9a, 0xe6, 0x42, 0x1d, 0x48, 0x6d, 0xa3, 0xd4, 0xef, 0x22, 0x47, 0xc4, 0x9, 0xa3, 0x96, 0xb8, 0x2e, 0xa2, 0x21}
 var poolAddr = basics.Address{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+var blockHeader = bookkeeping.BlockHeader{
+	RewardsState: bookkeeping.RewardsState{
+		FeeSink:     feeSink,
+		RewardsPool: poolAddr,
+	},
+	UpgradeState: bookkeeping.UpgradeState{
+		CurrentProtocol: protocol.ConsensusCurrentVersion,
+	},
+}
 
 var spec = transactions.SpecialAddresses{
 	FeeSink:     feeSink,
@@ -100,15 +109,17 @@ func TestSignedPayment(t *testing.T) {
 	payments, stxns, secrets, addrs := generateTestObjects(1, 1, 0)
 	payment, stxn, secret, addr := payments[0], stxns[0], secrets[0], addrs[0]
 
+	ctxs := PrepareContexts(stxns, blockHeader)
+
 	require.NoError(t, payment.WellFormed(spec, proto), "generateTestObjects generated an invalid payment")
-	require.NoError(t, Txn(&stxn, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: protocol.ConsensusCurrentVersion}}), "generateTestObjects generated a bad signedtxn")
+	require.NoError(t, Txn(&stxn, ctxs[0]), "generateTestObjects generated a bad signedtxn")
 
 	stxn2 := payment.Sign(secret)
 	require.Equal(t, stxn2.Sig, stxn.Sig, "got two different signatures for the same transaction (our signing function is deterministic)")
 
 	stxn2.MessUpSigForTesting()
 	require.Equal(t, stxn.ID(), stxn2.ID(), "changing sig caused txid to change")
-	require.Error(t, Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: protocol.ConsensusCurrentVersion}}), "verify succeeded with bad sig")
+	require.Error(t, Txn(&stxn2, ctxs[0]), "verify succeeded with bad sig")
 
 	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
 }
@@ -116,8 +127,9 @@ func TestSignedPayment(t *testing.T) {
 func TestTxnValidationEncodeDecode(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50, 0)
 
-	for _, txn := range signed {
-		if Txn(&txn, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: protocol.ConsensusCurrentVersion}}) != nil {
+	ctxs := PrepareContexts(signed, blockHeader)
+	for i, txn := range signed {
+		if Txn(&txn, ctxs[i]) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 
@@ -125,7 +137,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 		var signedTx transactions.SignedTxn
 		protocol.Decode(x, &signedTx)
 
-		if Txn(&signedTx, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: protocol.ConsensusCurrentVersion}}) != nil {
+		if Txn(&signedTx, ctxs[i]) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 	}
@@ -134,15 +146,16 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 func TestTxnValidationEmptySig(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50, 0)
 
-	for _, txn := range signed {
-		if Txn(&txn, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: protocol.ConsensusCurrentVersion}}) != nil {
+	ctxs := PrepareContexts(signed, blockHeader)
+	for i, txn := range signed {
+		if Txn(&txn, ctxs[i]) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 
 		txn.Sig = crypto.Signature{}
 		txn.Msig = crypto.MultisigSig{}
 		txn.Lsig = transactions.LogicSig{}
-		if Txn(&txn, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: protocol.ConsensusCurrentVersion}}) == nil {
+		if Txn(&txn, ctxs[i]) == nil {
 			t.Errorf("transaction %#v verified without sig", txn)
 		}
 	}
@@ -166,13 +179,25 @@ func TestTxnValidationCompactCert(t *testing.T) {
 		},
 	}
 
-	err := Txn(&stxn, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	var blockHeader = bookkeeping.BlockHeader{
+		RewardsState: bookkeeping.RewardsState{
+			FeeSink:     feeSink,
+			RewardsPool: poolAddr,
+		},
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: ccProto,
+		},
+	}
+
+	ctxs := PrepareContexts([]transactions.SignedTxn{stxn}, blockHeader)
+
+	err := Txn(&stxn, ctxs[0])
 	require.NoError(t, err, "compact cert txn %#v did not verify", stxn)
 
 	stxn2 := stxn
 	stxn2.Txn.Type = protocol.PaymentTx
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
-	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	err = Txn(&stxn2, ctxs[0])
 	require.Error(t, err, "payment txn %#v verified from CompactCertSender", stxn2)
 
 	secret := keypair()
@@ -180,28 +205,28 @@ func TestTxnValidationCompactCert(t *testing.T) {
 	stxn2.Txn.Header.Sender = basics.Address(secret.SignatureVerifier)
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
 	stxn2 = stxn2.Txn.Sign(secret)
-	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	err = Txn(&stxn2, ctxs[0])
 	require.Error(t, err, "compact cert txn %#v verified from non-CompactCertSender", stxn2)
 
 	// Compact cert txns are not allowed to have non-zero values for many fields
 	stxn2 = stxn
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
-	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	err = Txn(&stxn2, ctxs[0])
 	require.Error(t, err, "compact cert txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.Header.Note = []byte{'A'}
-	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	err = Txn(&stxn2, ctxs[0])
 	require.Error(t, err, "compact cert txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.Lease[0] = 1
-	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	err = Txn(&stxn2, ctxs[0])
 	require.Error(t, err, "compact cert txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.RekeyTo = basics.Address(secret.SignatureVerifier)
-	err = Txn(&stxn2, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: ccProto}})
+	err = Txn(&stxn2, ctxs[0])
 	require.Error(t, err, "compact cert txn %#v verified", stxn2)
 }
 
@@ -215,23 +240,22 @@ func TestDecodeNil(t *testing.T) {
 	err := protocol.Decode(nilEncoding, &st)
 	if err == nil {
 		// This used to panic when run on a zero value of SignedTxn.
-		Txn(&st, Context{Params: Params{CurrSpecAddrs: spec, CurrProto: protocol.ConsensusCurrentVersion}})
+		ctxs := PrepareContexts([]transactions.SignedTxn{st}, blockHeader)
+		Txn(&st, ctxs[0])
 	}
 }
 
 func TestPaysetGroups(t *testing.T) {
 	_, signedTxn, _, _ := generateTestObjects(10000, 20, 50)
-	blk := bookkeeping.Block{
-		BlockHeader: bookkeeping.BlockHeader{
-			Round:       50,
-			GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-			UpgradeState: bookkeeping.UpgradeState{
-				CurrentProtocol: protocol.ConsensusCurrentVersion,
-			},
-			RewardsState: bookkeeping.RewardsState{
-				FeeSink:     feeSink,
-				RewardsPool: poolAddr,
-			},
+	blkHdr := bookkeeping.BlockHeader{
+		Round:       50,
+		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
+		},
+		RewardsState: bookkeeping.RewardsState{
+			FeeSink:     feeSink,
+			RewardsPool: poolAddr,
 		},
 	}
 	execPool := execpool.MakePool(t)
@@ -247,17 +271,17 @@ func TestPaysetGroups(t *testing.T) {
 	}
 
 	startPaysetGroupsTime := time.Now()
-	err := PaysetGroups(context.Background(), txnGroups, blk, verificationPool, MakeVerifiedTransactionCache(50000))
+	err := PaysetGroups(context.Background(), txnGroups, blkHdr, verificationPool, MakeVerifiedTransactionCache(50000))
 	require.NoError(t, err)
 	paysetGroupDuration := time.Now().Sub(startPaysetGroupsTime)
 
 	// break the signature and see if it fails.
 	txnGroups[0][0].Sig[0] = txnGroups[0][0].Sig[0] + 1
-	err = PaysetGroups(context.Background(), txnGroups, blk, verificationPool, MakeVerifiedTransactionCache(50000))
+	err = PaysetGroups(context.Background(), txnGroups, blkHdr, verificationPool, MakeVerifiedTransactionCache(50000))
 	require.Error(t, err)
 
 	// ensure the rest are fine
-	err = PaysetGroups(context.Background(), txnGroups[1:], blk, verificationPool, MakeVerifiedTransactionCache(50000))
+	err = PaysetGroups(context.Background(), txnGroups[1:], blkHdr, verificationPool, MakeVerifiedTransactionCache(50000))
 	require.NoError(t, err)
 
 	// test the context cancelation:
@@ -280,7 +304,7 @@ func TestPaysetGroups(t *testing.T) {
 	go func() {
 		defer close(waitCh)
 		cache := MakeVerifiedTransactionCache(50000)
-		waitCh <- PaysetGroups(ctx, txnGroups, blk, verificationPool, cache)
+		waitCh <- PaysetGroups(ctx, txnGroups, blkHdr, verificationPool, cache)
 	}()
 	startPaysetGroupsTime = time.Now()
 	select {
@@ -314,17 +338,15 @@ func BenchmarkPaysetGroups(b *testing.B) {
 		b.N = 2000
 	}
 	_, signedTxn, _, _ := generateTestObjects(b.N, 20, 50)
-	blk := bookkeeping.Block{
-		BlockHeader: bookkeeping.BlockHeader{
-			Round:       50,
-			GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
-			UpgradeState: bookkeeping.UpgradeState{
-				CurrentProtocol: protocol.ConsensusCurrentVersion,
-			},
-			RewardsState: bookkeeping.RewardsState{
-				FeeSink:     feeSink,
-				RewardsPool: poolAddr,
-			},
+	blkHdr := bookkeeping.BlockHeader{
+		Round:       50,
+		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
+		UpgradeState: bookkeeping.UpgradeState{
+			CurrentProtocol: protocol.ConsensusCurrentVersion,
+		},
+		RewardsState: bookkeeping.RewardsState{
+			FeeSink:     feeSink,
+			RewardsPool: poolAddr,
 		},
 	}
 	execPool := execpool.MakePool(b)
@@ -341,7 +363,7 @@ func BenchmarkPaysetGroups(b *testing.B) {
 	cache := MakeVerifiedTransactionCache(50000)
 
 	b.ResetTimer()
-	err := PaysetGroups(context.Background(), txnGroups, blk, verificationPool, cache)
+	err := PaysetGroups(context.Background(), txnGroups, blkHdr, verificationPool, cache)
 	require.NoError(b, err)
 	b.StopTimer()
 }
