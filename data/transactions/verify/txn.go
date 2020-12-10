@@ -350,15 +350,10 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 	if len(payset) == 0 {
 		return nil
 	}
-	/*spec := transactions.SpecialAddresses{
-		FeeSink:     blk.BlockHeader.FeeSink,
-		RewardsPool: blk.BlockHeader.RewardsPool,
-	}*/
 
 	// prepare up to 16 concurrent worksets.
 	worksets := make(chan struct{}, concurrentWorksets)
 	worksDoneCh := make(chan interface{}, concurrentWorksets)
-	//zeroAddress := basics.Address{}
 	processing := 0
 	tasksCtx, cancelTasksCtx := context.WithCancel(ctx)
 	defer cancelTasksCtx()
