@@ -218,30 +218,14 @@ func stxnVerifyCore(s *transactions.SignedTxn, ctx *Context) error {
 	}
 
 	if hasSig {
-		if s.Txn.Group.IsZero() {
-			if crypto.SignatureVerifier(s.Authorizer()).Verify(s.Txn, s.Sig) {
-				return nil
-			}
-		} else {
-			groupLessTxn := s.Txn
-			groupLessTxn.Group = crypto.Digest{}
-			if crypto.SignatureVerifier(s.Authorizer()).Verify(groupLessTxn, s.Sig) {
-				return nil
-			}
+		if crypto.SignatureVerifier(s.Authorizer()).Verify(s.Txn, s.Sig) {
+			return nil
 		}
 		return errors.New("signature validation failed")
 	}
 	if hasMsig {
-		if s.Txn.Group.IsZero() {
-			if ok, _ := crypto.MultisigVerify(s.Txn, crypto.Digest(s.Authorizer()), s.Msig); ok {
-				return nil
-			}
-		} else {
-			groupLessTxn := s.Txn
-			groupLessTxn.Group = crypto.Digest{}
-			if ok, _ := crypto.MultisigVerify(groupLessTxn, crypto.Digest(s.Authorizer()), s.Msig); ok {
-				return nil
-			}
+		if ok, _ := crypto.MultisigVerify(s.Txn, crypto.Digest(s.Authorizer()), s.Msig); ok {
+			return nil
 		}
 		return errors.New("multisig validation failed")
 	}
@@ -437,8 +421,10 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHdr
 							if signTxn.Txn.Src() == zeroAddress {
 								return errors.New("empty address")
 							}
-							if !bytes.Equal(signTxn.Txn.Group[:], ctxs[0].groupParams.GroupDigest[:]) {
-								return errors.New("mismatching group digest")
+							if len(signTxnsGrp) > 1 || !signTxn.Txn.Group.IsZero() {
+								if !bytes.Equal(signTxn.Txn.Group[:], ctxs[0].groupParams.GroupDigest[:]) {
+									return errors.New("mismatching group digest")
+								}
 							}
 							if err := stxnVerifyCore(&signTxn, &ctxs[k]); err != nil {
 								return err
