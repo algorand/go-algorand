@@ -246,7 +246,7 @@ func TestDecodeNil(t *testing.T) {
 }
 
 func TestPaysetGroups(t *testing.T) {
-	_, signedTxn, _, _ := generateTestObjects(10000, 20, 50)
+	_, signedTxn, secrets, addrs := generateTestObjects(10000, 20, 50)
 	blkHdr := bookkeeping.BlockHeader{
 		Round:       50,
 		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
@@ -258,6 +258,11 @@ func TestPaysetGroups(t *testing.T) {
 			RewardsPool: poolAddr,
 		},
 	}
+	addrToSecret := make(map[basics.Address]*crypto.SignatureSecrets)
+	for i, addr := range addrs {
+		addrToSecret[addr] = secrets[i]
+	}
+
 	execPool := execpool.MakePool(t)
 	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
 	defer verificationPool.Shutdown()
@@ -272,8 +277,9 @@ func TestPaysetGroups(t *testing.T) {
 			txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.HashObj(txn.Txn))
 		}
 		groupHash := crypto.HashObj(txGroup)
-		for i := range newGroup {
-			newGroup[i].Txn.Group = groupHash
+		for j := range newGroup {
+			newGroup[j].Txn.Group = groupHash
+			newGroup[j].Sig = addrToSecret[newGroup[j].Txn.Sender].Sign(&newGroup[j].Txn)
 		}
 		txnGroups = append(txnGroups, newGroup)
 
@@ -298,7 +304,12 @@ func TestPaysetGroups(t *testing.T) {
 	// we define a test that would take 10 seconds to execute, and try to abort at 1.5 seconds.
 	txnCount := len(signedTxn) * 10 * int(time.Second/paysetGroupDuration)
 
-	_, signedTxn, _, _ = generateTestObjects(txnCount, 20, 50)
+	_, signedTxn, secrets, addrs = generateTestObjects(txnCount, 20, 50)
+
+	addrToSecret = make(map[basics.Address]*crypto.SignatureSecrets)
+	for i, addr := range addrs {
+		addrToSecret[addr] = secrets[i]
+	}
 
 	// divide the transactions into transaction groups.
 	txnGroups = make([][]transactions.SignedTxn, 0, len(signedTxn))
@@ -310,11 +321,11 @@ func TestPaysetGroups(t *testing.T) {
 			txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.HashObj(txn.Txn))
 		}
 		groupHash := crypto.HashObj(txGroup)
-		for i := range newGroup {
-			newGroup[i].Txn.Group = groupHash
+		for j := range newGroup {
+			newGroup[j].Txn.Group = groupHash
+			newGroup[j].Sig = addrToSecret[newGroup[j].Txn.Sender].Sign(&newGroup[j].Txn)
 		}
 		txnGroups = append(txnGroups, newGroup)
-
 		i += txnPerGroup
 	}
 
@@ -357,7 +368,7 @@ func BenchmarkPaysetGroups(b *testing.B) {
 	if b.N < 2000 {
 		b.N = 2000
 	}
-	_, signedTxn, _, _ := generateTestObjects(b.N, 20, 50)
+	_, signedTxn, secrets, addrs := generateTestObjects(b.N, 20, 50)
 	blkHdr := bookkeeping.BlockHeader{
 		Round:       50,
 		GenesisHash: crypto.Hash([]byte{1, 2, 3, 4, 5}),
@@ -369,6 +380,10 @@ func BenchmarkPaysetGroups(b *testing.B) {
 			RewardsPool: poolAddr,
 		},
 	}
+	addrToSecret := make(map[basics.Address]*crypto.SignatureSecrets)
+	for i, addr := range addrs {
+		addrToSecret[addr] = secrets[i]
+	}
 	execPool := execpool.MakePool(b)
 	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, b)
 	defer verificationPool.Shutdown()
@@ -376,8 +391,18 @@ func BenchmarkPaysetGroups(b *testing.B) {
 	// divide the transactions into transaction groups.
 	txnGroups := make([][]transactions.SignedTxn, 0, len(signedTxn))
 	for i := 0; i < len(signedTxn)-16; i++ {
-		txnPerGroup := rand.Intn(16)
-		txnGroups = append(txnGroups, signedTxn[i:i+txnPerGroup+1])
+		txnPerGroup := 1 + rand.Intn(15)
+		newGroup := signedTxn[i : i+txnPerGroup+1]
+		var txGroup transactions.TxGroup
+		for _, txn := range newGroup {
+			txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.HashObj(txn.Txn))
+		}
+		groupHash := crypto.HashObj(txGroup)
+		for j := range newGroup {
+			newGroup[j].Txn.Group = groupHash
+			newGroup[j].Sig = addrToSecret[newGroup[j].Txn.Sender].Sign(&newGroup[j].Txn)
+		}
+		txnGroups = append(txnGroups, newGroup)
 		i += txnPerGroup
 	}
 	cache := MakeVerifiedTransactionCache(50000)
@@ -392,7 +417,7 @@ func BenchmarkTxnPool(b *testing.B) {
 	if b.N < 2000 {
 		b.N = 2000
 	}
-	_, signedTxn, _, _ := generateTestObjects(b.N, 20, 50)
+	_, signedTxn, secrets, addrs := generateTestObjects(b.N, 20, 50)
 	blk := bookkeeping.Block{
 		BlockHeader: bookkeeping.BlockHeader{
 			Round:       50,
@@ -406,6 +431,10 @@ func BenchmarkTxnPool(b *testing.B) {
 			},
 		},
 	}
+	addrToSecret := make(map[basics.Address]*crypto.SignatureSecrets)
+	for i, addr := range addrs {
+		addrToSecret[addr] = secrets[i]
+	}
 	execPool := execpool.MakePool(b)
 	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, b)
 	defer verificationPool.Shutdown()
@@ -413,8 +442,18 @@ func BenchmarkTxnPool(b *testing.B) {
 	// divide the transactions into transaction groups.
 	txnGroups := make([][]transactions.SignedTxn, 0, len(signedTxn))
 	for i := 0; i < len(signedTxn)-16; i++ {
-		txnPerGroup := rand.Intn(16)
-		txnGroups = append(txnGroups, signedTxn[i:i+txnPerGroup+1])
+		txnPerGroup := 1 + rand.Intn(15)
+		newGroup := signedTxn[i : i+txnPerGroup+1]
+		var txGroup transactions.TxGroup
+		for _, txn := range newGroup {
+			txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.HashObj(txn.Txn))
+		}
+		groupHash := crypto.HashObj(txGroup)
+		for j := range newGroup {
+			newGroup[j].Txn.Group = groupHash
+			newGroup[j].Sig = addrToSecret[newGroup[j].Txn.Sender].Sign(&newGroup[j].Txn)
+		}
+		txnGroups = append(txnGroups, newGroup)
 		i += txnPerGroup
 	}
 
