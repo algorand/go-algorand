@@ -39,8 +39,7 @@ if { [catch {
     ::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT2 $PRIMARY_ACCOUNT_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR $TXN_FILE2
 
     set TXNS_FILE "$TEST_PRIMARY_NODE_DIR/txns"
-    exec cat $TXN_FILE1 > $TXNS_FILE
-    exec cat $TXN_FILE2 >> $TXNS_FILE
+    exec cat $TXN_FILE1 $TXN_FILE2 > $TXNS_FILE
 
     set GROUPED_TXN_FILE "$TEST_PRIMARY_NODE_DIR/txns.grouped"
     ::AlgorandGoal::AssembleGroup $TXNS_FILE $GROUPED_TXN_FILE
@@ -49,8 +48,7 @@ if { [catch {
     set SIGNED_TXN_FILE2 "$TEST_PRIMARY_NODE_DIR/txns2.signed"
     ::AlgorandGoal::SignTransaction $PRIMARY_WALLET_NAME "" $TXN_FILE2 $SIGNED_TXN_FILE2 $TEST_PRIMARY_NODE_DIR
 
-    exec cat $TXN_FILE1 > $TXNS_FILE
-    exec cat $SIGNED_TXN_FILE2 >> $TXNS_FILE
+    exec cat $TXN_FILE1 $SIGNED_TXN_FILE2 > $TXNS_FILE
 
     spawn goal clerk group -i $TXNS_FILE -o $GROUPED_TXN_FILE
     expect {
