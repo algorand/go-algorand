@@ -1,0 +1,70 @@
+#!/usr/bin/expect -f
+set err 0
+log_user 1
+
+if { [catch {
+    source  goalExpectCommon.exp
+    set TEST_ALGO_DIR [lindex $argv 0]
+    set TEST_DATA_DIR [lindex $argv 1]
+
+    puts "TEST_ALGO_DIR: $TEST_ALGO_DIR"
+    puts "TEST_DATA_DIR: $TEST_DATA_DIR"
+
+    set TIME_STAMP [clock seconds]
+
+    set TEST_ROOT_DIR $TEST_ALGO_DIR/root
+    set TEST_PRIMARY_NODE_DIR $TEST_ROOT_DIR/Primary/
+    set NETWORK_NAME test_net_expect_$TIME_STAMP
+    set NETWORK_TEMPLATE "$TEST_DATA_DIR/nettemplates/TwoNodes50EachFuture.json"
+
+    # Create network
+    ::AlgorandGoal::CreateNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    # Start network
+    ::AlgorandGoal::StartNetwork $NETWORK_NAME $NETWORK_TEMPLATE $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    set PRIMARY_WALLET_NAME unencrypted-default-wallet
+
+    # Determine primary account
+    set PRIMARY_ACCOUNT_ADDRESS [::AlgorandGoal::GetHighestFundedAccountForWallet $PRIMARY_WALLET_NAME $TEST_PRIMARY_NODE_DIR]
+
+    set FEE_AMOUNT 1000
+
+    set TXN_FILE1 "$TEST_PRIMARY_NODE_DIR/txns1"
+    set TRANSFER_AMOUNT1 3800
+    ::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT1 $PRIMARY_ACCOUNT_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR $TXN_FILE1
+
+    set TXN_FILE2 "$TEST_PRIMARY_NODE_DIR/txns2"
+    set TRANSFER_AMOUNT2 5200
+    ::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT2 $PRIMARY_ACCOUNT_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR $TXN_FILE2
+
+    set TXNS_FILE "$TEST_PRIMARY_NODE_DIR/txns"
+    exec cat $TXN_FILE1 > $TXNS_FILE
+    exec cat $TXN_FILE2 >> $TXNS_FILE
+
+    set GROUPED_TXN_FILE "$TEST_PRIMARY_NODE_DIR/txns.grouped"
+    ::AlgorandGoal::AssembleGroup $TXNS_FILE $GROUPED_TXN_FILE
+
+    # test again, but this time we want to sign the second transaction first.
+    set SIGNED_TXN_FILE2 "$TEST_PRIMARY_NODE_DIR/txns2.signed"
+    ::AlgorandGoal::SignTransaction $PRIMARY_WALLET_NAME "" $TXN_FILE2 $SIGNED_TXN_FILE2 $TEST_PRIMARY_NODE_DIR
+
+    exec cat $TXN_FILE1 > $TXNS_FILE
+    exec cat $SIGNED_TXN_FILE2 >> $TXNS_FILE
+
+    spawn goal clerk group -i $TXNS_FILE -o $GROUPED_TXN_FILE
+    expect {
+        timeout { ::AlgorandGoal::Abort "Timed out assembling group transaction"  }
+        eof { catch wait result; if { [lindex $result 3] != 1 } { ::AlgorandGoal::Abort "group assembly was expected to fail due to pre-existing signature, but it didn't. error code [lindex $result 3]"} }
+    }
+
+    # Shutdown the network
+    ::AlgorandGoal::StopNetwork $NETWORK_NAME $TEST_ALGO_DIR $TEST_ROOT_DIR
+
+    puts "goal clerk group test Successful"
+
+    exit 0
+
+} EXCEPTION ] } {
+   ::AlgorandGoal::Abort "ERROR in goal clerk group test: $EXCEPTION"
+}
