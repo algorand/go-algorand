@@ -758,7 +758,7 @@ var signCmd = &cobra.Command{
 var groupCmd = &cobra.Command{
 	Use:   "group",
 	Short: "Group transactions together",
-	Long:  `Form a transaction group.  The input file must contain one or more unsigned transactions that will form a group.  The output file will contain the same transactions, in order, with a group flag added to each transaction, which requires that the transactions must be committed together.`,
+	Long:  `Form a transaction group.  The input file must contain one or more unsigned transactions that will form a group.  The output file will contain the same transactions, in order, with a group flag added to each transaction, which requires that the transactions must be committed together. The group command would retain the logic signature, if present, as the TEAL program could verify the group using a logic signature argument.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		data, err := readFile(txFilename)
@@ -786,7 +786,7 @@ var groupCmd = &cobra.Command{
 				reportErrorf("Transaction #%d with ID of %s is already part of a group.", transactionIdx, stxn.ID().String())
 			}
 
-			if (!stxn.Sig.Blank()) || (!stxn.Msig.Blank()) || (!stxn.Lsig.Blank()) {
+			if (!stxn.Sig.Blank()) || (!stxn.Msig.Blank()) {
 				reportErrorf("Transaction #%d with ID of %s is already signed", transactionIdx, stxn.ID().String())
 			}
 

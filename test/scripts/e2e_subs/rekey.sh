@@ -32,15 +32,14 @@ ${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ACCOUNTD}"
 # one is regular payment from v1 escrow. (Should fail when we send it).
 
 ${gcmd} clerk send -a 1 -f "${ACCOUNTD}" -t "${ACCOUNTD}" --rekey-to "${ACCOUNT}" -o "${TEMPDIR}/txn0.tx"
-${gcmd} clerk send -a 1 -f "${ESCROWV1}" -t "${ACCOUNTD}" -o "${TEMPDIR}/txn1.tx"
+${gcmd} clerk send -a 1 --from-program "${TEMPDIR}/simplev1.teal" -t "${ACCOUNTD}" -o "${TEMPDIR}/txn1.tx"
 cat "${TEMPDIR}/txn0.tx" "${TEMPDIR}/txn1.tx" > "${TEMPDIR}/group0.tx"
 
 # Build + sign group
 ${gcmd} clerk group -i "${TEMPDIR}/group0.tx" -o "${TEMPDIR}/group0_grouped.tx"
 ${gcmd} clerk split -i "${TEMPDIR}/group0_grouped.tx" -o "${TEMPDIR}/group0_split.txn"
 ${gcmd} clerk sign -i "${TEMPDIR}/group0_split-0.txn" -o "${TEMPDIR}/group0_split-0.stxn"
-${gcmd} clerk sign -i "${TEMPDIR}/group0_split-1.txn" -o "${TEMPDIR}/group0_split-1.stxn" -program "${TEMPDIR}/simplev1.teal"
-cat "${TEMPDIR}/group0_split-0.stxn" "${TEMPDIR}/group0_split-1.stxn" > "${TEMPDIR}/group0_signed.stxn"
+cat "${TEMPDIR}/group0_split-0.stxn" "${TEMPDIR}/group0_split-1.txn" > "${TEMPDIR}/group0_signed.stxn"
 
 # Broadcast group (should fail)
 RES=$(${gcmd} clerk rawsend -f "${TEMPDIR}/group0_signed.stxn" 2>&1 || true)
