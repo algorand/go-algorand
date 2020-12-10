@@ -138,19 +138,25 @@ func Txn(s *transactions.SignedTxn, ctx Context) error {
 	if !ok {
 		return protocol.Error(ctx.CurrProto)
 	}
-	if err := s.Txn.WellFormed(ctx.CurrSpecAddrs, proto); err != nil {
-		return err
-	}
 
-	zeroAddress := basics.Address{}
-	if s.Txn.Src() == zeroAddress {
-		return errors.New("empty address")
-	}
 	if !proto.SupportRekeying && (s.AuthAddr != basics.Address{}) {
 		return errors.New("nonempty AuthAddr but rekeying not supported")
 	}
 
-	return stxnVerifyCore(s, &ctx)
+	return txnCoreCheck(s, &ctx, proto)
+}
+
+// txnCoreCheck perform the WellFormed test as well as the signature verification test
+func txnCoreCheck(s *transactions.SignedTxn, ctx *Context, proto config.ConsensusParams) error {
+	if err := s.Txn.WellFormed(ctx.CurrSpecAddrs, proto); err != nil {
+		return err
+	}
+
+	if s.Txn.Src().IsZero() {
+		return errors.New("empty address")
+	}
+
+	return stxnVerifyCore(s, ctx)
 }
 
 type asyncVerifyContext struct {
@@ -337,7 +343,6 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 //
 // This version of verify is performing the verification over the provided execution pool.
 func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bookkeeping.Block, verificationPool execpool.BacklogPool) (err error) {
-	txnGroupIdx := 0
 	proto, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]
 	if !ok {
 		return protocol.Error(blk.BlockHeader.CurrentProtocol)
@@ -345,46 +350,31 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 	if len(payset) == 0 {
 		return nil
 	}
-	spec := transactions.SpecialAddresses{
+	/*spec := transactions.SpecialAddresses{
 		FeeSink:     blk.BlockHeader.FeeSink,
 		RewardsPool: blk.BlockHeader.RewardsPool,
-	}
-	var txnGroups [][]transactions.SignedTxn
+	}*/
+
 	// prepare up to 16 concurrent worksets.
 	worksets := make(chan struct{}, concurrentWorksets)
 	worksDoneCh := make(chan interface{}, concurrentWorksets)
-	zeroAddress := basics.Address{}
+	//zeroAddress := basics.Address{}
 	processing := 0
 	tasksCtx, cancelTasksCtx := context.WithCancel(ctx)
 	defer cancelTasksCtx()
+	builder := worksetBuilder{payset: payset}
+	var nextWorkset [][]transactions.SignedTxn
 	for processing >= 0 {
 		// see if we need to get another workset
-		if txnGroupIdx < len(payset) && (len(txnGroups) == 0) {
-			txnCounter := 0 // how many transaction we already included in the current workset.
-			// scan starting from the current position until we filled up the workset.
-			for i := txnGroupIdx; i < len(payset); i++ {
-				if txnCounter+len(payset[i]) > txnPerWorksetThreshold {
-					if i == txnGroupIdx {
-						i++
-					}
-					txnGroups = payset[txnGroupIdx:i]
-					txnGroupIdx = i
-					break
-				}
-				if i == len(payset)-1 {
-					txnGroups = payset[txnGroupIdx:]
-					txnGroupIdx = len(payset)
-					break
-				}
-				txnCounter += len(payset[i])
-			}
+		if len(nextWorkset) == 0 && !builder.completed() {
+			nextWorkset = builder.next()
 		}
 
 		select {
 		case <-tasksCtx.Done():
 			return tasksCtx.Err()
 		case worksets <- struct{}{}:
-			if len(txnGroups) > 0 {
+			if len(nextWorkset) > 0 {
 				err := verificationPool.EnqueueBacklog(ctx, func(arg interface{}) interface{} {
 					// check if we've canceled the request while this was in the queue.
 					if tasksCtx.Err() != nil {
@@ -404,30 +394,24 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 					for _, signTxnsGrp := range txnGroups {
 						ctxs := PrepareContexts(signTxnsGrp, blk.BlockHeader)
 						for k, signTxn := range signTxnsGrp {
-							if err := signTxn.Txn.WellFormed(spec, proto); err != nil {
-								return err
-							}
-							if signTxn.Txn.Src() == zeroAddress {
-								return errors.New("empty address")
-							}
-
-							if err := stxnVerifyCore(&signTxn, &ctxs[k]); err != nil {
+							if err := txnCoreCheck(&signTxn, &ctxs[k], proto); err != nil {
 								return err
 							}
 						}
 					}
 					return nil
-				}, txnGroups, worksDoneCh)
+				}, nextWorkset, worksDoneCh)
 				if err != nil {
 					return err
 				}
 				processing++
-				txnGroups = nil
+				nextWorkset = nil
 			}
 		case processingResult := <-worksDoneCh:
 			processing--
 			<-worksets
-			if processing == 0 && txnGroupIdx >= len(payset) && len(txnGroups) == 0 {
+			// if there is nothing in the queue, the nextWorkset doesn't contain any work and the builder has no more entries, then we're done.
+			if processing == 0 && builder.completed() && len(nextWorkset) == 0 {
 				// we're done.
 				processing = -1
 			}
@@ -441,4 +425,39 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 
 	}
 	return err
+}
+
+// worksetBuilder is a helper struct used to construct well sized worksets for the execution pool to process
+type worksetBuilder struct {
+	payset [][]transactions.SignedTxn
+	idx    int
+}
+
+func (w *worksetBuilder) next() (txnGroups [][]transactions.SignedTxn) {
+	txnCounter := 0 // how many transaction we already included in the current workset.
+	// scan starting from the current position until we filled up the workset.
+	for i := w.idx; i < len(w.payset); i++ {
+		if txnCounter+len(w.payset[i]) > txnPerWorksetThreshold {
+			if i == w.idx {
+				i++
+			}
+			txnGroups = w.payset[w.idx:i]
+			w.idx = i
+			return
+		}
+		if i == len(w.payset)-1 {
+			txnGroups = w.payset[w.idx:]
+			w.idx = len(w.payset)
+			return
+		}
+		txnCounter += len(w.payset[i])
+	}
+	// we can reach here only if w.idx >= len(w.payset). This is not really a usecase, but just
+	// for code-completeness, we'll return an empty array here.
+	return nil
+}
+
+// test to see if we have any more worksets we can extract from our payset.
+func (w *worksetBuilder) completed() bool {
+	return w.idx >= len(w.payset)
 }
