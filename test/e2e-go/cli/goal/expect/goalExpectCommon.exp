@@ -425,11 +425,15 @@ proc ::AlgorandGoal::GetAccountRewards { WALLET_NAME ACCOUNT_ADDRESS TEST_PRIMAR
 }
 
 # Account Transfer
-proc ::AlgorandGoal::AccountTransfer { FROM_WALLET_NAME FROM_WALLET_PASSWORD FROM_ACCOUNT_ADDRESS TRANSFER_AMOUNT TO_ACCOUNT_ADDRESS FEE_AMOUNT TEST_PRIMARY_NODE_DIR } {
+proc ::AlgorandGoal::AccountTransfer { FROM_WALLET_NAME FROM_WALLET_PASSWORD FROM_ACCOUNT_ADDRESS TRANSFER_AMOUNT TO_ACCOUNT_ADDRESS FEE_AMOUNT TEST_PRIMARY_NODE_DIR OUT_FILE } {
     set timeout 60
     if { [ catch {
         set TRANSACTION_ID "NOT SET"
-        spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
+        if { $OUT_FILE == "" } {
+            spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR
+        } else {
+            spawn goal clerk send --fee $FEE_AMOUNT --wallet $FROM_WALLET_NAME --amount $TRANSFER_AMOUNT --from $FROM_ACCOUNT_ADDRESS --to $TO_ACCOUNT_ADDRESS -d $TEST_PRIMARY_NODE_DIR --out $OUT_FILE
+        }
         expect {
             timeout { close; ::AlgorandGoal::Abort "Timed out transferring funds"  }
             "Please enter the password for wallet '$FROM_WALLET_NAME':" { send "$FROM_WALLET_PASSWORD\r"; exp_continue }
@@ -557,7 +561,7 @@ proc ::AlgorandGoal::AssembleGroup { INPUT_GROUP OUTPUT_GROUP } {
         spawn goal clerk group -i $INPUT_GROUP -o $OUTPUT_GROUP
 	    expect {
             timeout { ::AlgorandGoal::Abort "Timed out assembling group transaction"  }
-	        eof
+	        eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to assemble group : error code [lindex $result 3]"} }
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in AssembleGroup: $EXCEPTION"
@@ -675,12 +679,18 @@ proc ::AlgorandGoal::GetHighestFundedAccountForWallet { WALLET_NAME NODE_DIR } {
         set ACCOUNT_ADDRESS "NONE"
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out finding primary wallet: $WALLET_NAME"  }
+            -re {\[n/a\]\t([a-zA-Z0-9]+)\t([a-zA-Z0-9]+)\t\[n/a\]} {
+                    set CURRENT_ACCOUNT_ADDRESS $expect_out(2,string);
+                    if { $ACCOUNT_BALANCE == 0 } then { set ACCOUNT_ADDRESS $CURRENT_ACCOUNT_ADDRESS };
+                    exp_continue;
+                }
             -re {\[online\]\t([a-zA-Z0-9]+)\t([a-zA-Z0-9]+)\t([0-9]+)} {
                     set CURRENT_ACCOUNT_ADDRESS $expect_out(2,string);
                     set  CURRENT_ACCOUNT_BALANCE $expect_out(3,string);
                     if { $CURRENT_ACCOUNT_BALANCE > $ACCOUNT_BALANCE } then { set ACCOUNT_BALANCE $CURRENT_ACCOUNT_BALANCE; set ACCOUNT_ADDRESS $CURRENT_ACCOUNT_ADDRESS };
-                    close;
+                    exp_continue;
                 }
+            eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to retrieve highest funded account : error code [lindex $result 3]"} }
         }
         puts "Account Address: $ACCOUNT_ADDRESS   Balance: $ACCOUNT_BALANCE"
     } EXCEPTION ] } {
