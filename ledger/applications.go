@@ -172,5 +172,5 @@ func (al *logicLedger) DelGlobal(key string) error {
 }
 
 func (al *logicLedger) GetDelta(txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
-	return al.cow.BuildDelta(al.aidx, txn)
+	return al.cow.BuildEvalDelta(al.aidx, txn)
 }

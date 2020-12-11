@@ -122,24 +122,71 @@ func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
 		}
 		ad.Assets[basics.AssetIndex(0x1234123412341234-assetHolderAssets)] = ah
 	}
+
+	numEntries := maxEncodedAppStateEntries / 100
+	maxApps := currentConsensusParams.MaxAppsCreated
+	maxOptIns := currentConsensusParams.MaxAppsOptedIn
+	maxBytesLen := currentConsensusParams.MaxAppKeyLen
+	if maxBytesLen > currentConsensusParams.MaxAppBytesValueLen {
+		maxBytesLen = currentConsensusParams.MaxAppBytesValueLen
+	}
+	genKey := func() (string, basics.TealValue) {
+		len := int(crypto.RandUint64() % uint64(maxBytesLen))
+		if len == 0 {
+			return "k", basics.TealValue{Type: basics.TealUintType, Uint: 0}
+		}
+		key := make([]byte, len)
+		crypto.RandBytes(key)
+		return string(key), basics.TealValue{Type: basics.TealUintType, Bytes: string(key)}
+	}
+	startIndex := crypto.RandUint64() % 100000
+	ad.AppParams = make(map[basics.AppIndex]basics.AppParams, maxApps)
+	for aidx := startIndex; aidx < startIndex+uint64(maxApps); aidx++ {
+		ap := basics.AppParams{}
+		ap.GlobalState = make(basics.TealKeyValue)
+		for i := uint64(0); i < currentConsensusParams.MaxGlobalSchemaEntries/4; i++ {
+			k, v := genKey()
+			ap.GlobalState[k] = v
+		}
+		ad.AppParams[basics.AppIndex(aidx)] = ap
+		optins := maxApps
+		if maxApps > maxOptIns {
+			optins = maxOptIns
+		}
+		ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, optins)
+		keys := currentConsensusParams.MaxLocalSchemaEntries / 4
+		lkv := make(basics.TealKeyValue, keys)
+		for i := 0; i < optins; i++ {
+			for j := uint64(0); j < keys; j++ {
+				k, v := genKey()
+				lkv[k] = v
+			}
+		}
+		ad.AppLocalStates[basics.AppIndex(aidx)] = basics.AppLocalState{KeyValue: lkv}
+	}
+	data := make([]storageData, numEntries)
+	for idx := 0; idx < numEntries; idx++ {
+		len := int(crypto.RandUint64() % uint64(maxBytesLen))
+		var key []byte
+		if len != 0 {
+			key = make([]byte, len)
+		}
+		crypto.RandBytes(key)
+		rndVal := crypto.RandUint64() % 2
+		entry := storageData{
+			Aidx:   uint64(idx),
+			Global: rndVal == 0,
+			Key:    key,
+			Vtype:  rndVal + 1,
+			Venc:   key,
+		}
+		data[idx] = entry
+	}
+
 	encodedAd, err := ad.MarshalMsg(nil)
 	require.NoError(t, err)
-	er.MiniAccountData = encodedAd
-	er.StorageData = makeRandomStorageData(-1)
+	er.AccountData = encodedAd
 	return er
-}
-
-func TestStorageDataEncoding(t *testing.T) {
-	ds := makeRandomStorageData(100)
-	for _, data := range ds {
-		enc, err := data.MarshalMsg(nil)
-		require.NoError(t, err)
-
-		var dec storageData
-		_, err = dec.UnmarshalMsg(enc)
-		require.NoError(t, err)
-		require.Equal(t, data, dec)
-	}
 }
 
 func TestEncodedBalanceRecordEncoding(t *testing.T) {
@@ -370,9 +417,9 @@ func TestFullCatchpointWriter(t *testing.T) {
 
 	// verify that the account data aligns with what we originally stored :
 	for addr, acct := range accts {
-		// acctData, validThrough, err := l.LookupWithoutRewards(0, addr)
-		acctData, err := l.FullLookup(0, addr)
+		acctData, validThrough, err := l.LookupWithoutRewards(0, addr)
 		require.NoError(t, err)
 		require.Equal(t, acct, acctData)
+		require.Equal(t, basics.Round(0), validThrough)
 	}
 }

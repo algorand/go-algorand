@@ -97,7 +97,7 @@ func (v2 *Handlers) AccountInformation(ctx echo.Context, address string, params 
 
 	myLedger := v2.Node.Ledger()
 	lastRound := myLedger.Latest()
-	record, err := myLedger.FullLookup(lastRound, addr)
+	record, err := myLedger.Lookup(lastRound, addr)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}
@@ -619,7 +619,7 @@ func (v2 *Handlers) GetApplicationByID(ctx echo.Context, applicationID uint64) e
 	}
 
 	lastRound := ledger.Latest()
-	record, err := ledger.FullLookup(lastRound, creator)
+	record, _, err := ledger.LookupWithoutRewards(lastRound, creator)
 	if err != nil {
 		return internalError(ctx, err, errFailedLookingUpLedger, v2.Log)
 	}

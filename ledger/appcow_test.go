@@ -292,7 +292,7 @@ func TestCowStorage(t *testing.T) {
 			actuallyAllocated := st.allocated(aapp)
 			cowAllocated, err := cow.allocated(addr, sptr.aidx, sptr.global)
 			require.NoError(t, err)
-			require.Equal(t, actuallyAllocated, cowAllocated)
+			require.Equal(t, actuallyAllocated, cowAllocated, fmt.Sprintf("%d, %v, %s", sptr.aidx, sptr.global, addr.String()))
 
 			// All storage should match
 			if actuallyAllocated {
@@ -335,54 +335,54 @@ func TestCowBuildDelta(t *testing.T) {
 	aidx := basics.AppIndex(2)
 
 	cow := roundCowState{}
-	cow.mods.sdeltas = make(map[basics.Address]map[storagePtr]*storageDelta)
+	cow.sdeltas = make(map[basics.Address]map[storagePtr]*storageDelta)
 	txn := transactions.Transaction{}
-	ed, err := cow.BuildDelta(aidx, &txn)
+	ed, err := cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Empty(ed)
 
-	cow.mods.sdeltas[creator] = make(map[storagePtr]*storageDelta)
-	ed, err = cow.BuildDelta(aidx, &txn)
+	cow.sdeltas[creator] = make(map[storagePtr]*storageDelta)
+	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Empty(ed)
 
 	// check global delta
-	cow.mods.sdeltas[creator][storagePtr{aidx, true}] = &storageDelta{}
-	ed, err = cow.BuildDelta(1, &txn)
+	cow.sdeltas[creator][storagePtr{aidx, true}] = &storageDelta{}
+	ed, err = cow.BuildEvalDelta(1, &txn)
 	a.Error(err)
 	a.Contains(err.Error(), "found storage delta for different app")
 	a.Empty(ed)
 
-	cow.mods.sdeltas[creator][storagePtr{aidx, true}] = &storageDelta{}
-	ed, err = cow.BuildDelta(aidx, &txn)
+	cow.sdeltas[creator][storagePtr{aidx, true}] = &storageDelta{}
+	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(basics.EvalDelta{GlobalDelta: basics.StateDelta{}}, ed)
 
-	cow.mods.sdeltas[creator][storagePtr{aidx + 1, true}] = &storageDelta{}
-	ed, err = cow.BuildDelta(aidx, &txn)
+	cow.sdeltas[creator][storagePtr{aidx + 1, true}] = &storageDelta{}
+	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.Error(err)
 	a.Contains(err.Error(), "found storage delta for different app")
 	a.Empty(ed)
 
-	delete(cow.mods.sdeltas[creator], storagePtr{aidx + 1, true})
-	cow.mods.sdeltas[sender] = make(map[storagePtr]*storageDelta)
-	cow.mods.sdeltas[sender][storagePtr{aidx, true}] = &storageDelta{}
-	ed, err = cow.BuildDelta(aidx, &txn)
+	delete(cow.sdeltas[creator], storagePtr{aidx + 1, true})
+	cow.sdeltas[sender] = make(map[storagePtr]*storageDelta)
+	cow.sdeltas[sender][storagePtr{aidx, true}] = &storageDelta{}
+	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.Error(err)
 	a.Contains(err.Error(), "found more than one global delta")
 	a.Empty(ed)
 
 	// check local delta
-	delete(cow.mods.sdeltas[sender], storagePtr{aidx, true})
-	cow.mods.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{}
+	delete(cow.sdeltas[sender], storagePtr{aidx, true})
+	cow.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{}
 
-	ed, err = cow.BuildDelta(aidx, &txn)
+	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.Error(err)
 	a.Contains(err.Error(), "could not find offset")
 	a.Empty(ed)
 
 	txn.Sender = sender
-	ed, err = cow.BuildDelta(aidx, &txn)
+	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
 		basics.EvalDelta{
@@ -393,8 +393,8 @@ func TestCowBuildDelta(t *testing.T) {
 	)
 
 	// check actual serialization
-	delete(cow.mods.sdeltas[creator], storagePtr{aidx, true})
-	cow.mods.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{
+	delete(cow.sdeltas[creator], storagePtr{aidx, true})
+	cow.sdeltas[sender][storagePtr{aidx, false}] = &storageDelta{
 		action: remainAllocAction,
 		kvCow: stateDelta{
 			"key1": valueDelta{
@@ -405,7 +405,7 @@ func TestCowBuildDelta(t *testing.T) {
 			},
 		},
 	}
-	ed, err = cow.BuildDelta(aidx, &txn)
+	ed, err = cow.BuildEvalDelta(aidx, &txn)
 	a.NoError(err)
 	a.Equal(
 		basics.EvalDelta{

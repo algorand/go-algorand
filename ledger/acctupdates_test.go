@@ -294,7 +294,7 @@ func TestAcctUpdates(t *testing.T) {
 	for i := basics.Round(10); i < basics.Round(proto.MaxBalLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
-		var updates map[basics.Address]miniAccountDelta
+		var updates map[basics.Address]accountDelta
 		var totals map[basics.Address]basics.AccountData
 		updates, totals, lastCreatableID = randomDeltasBalancedFull(1, accts[i-1], rewardLevel, lastCreatableID)
 		prevTotals, err := au.Totals(basics.Round(i - 1))
@@ -303,7 +303,7 @@ func TestAcctUpdates(t *testing.T) {
 		oldPool := accts[i-1][testPoolAddr]
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates[testPoolAddr] = miniAccountDelta{old: oldPool, new: newPool}
+		updates[testPoolAddr] = accountDelta{old: oldPool, new: newPool}
 		totals[testPoolAddr] = newPool
 
 		blk := bookkeeping.Block{
@@ -389,7 +389,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		oldPool := accts[i-1][testPoolAddr]
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates[testPoolAddr] = miniAccountDelta{old: oldPool, new: newPool}
+		updates[testPoolAddr] = accountDelta{old: oldPool, new: newPool}
 		totals[testPoolAddr] = newPool
 
 		blk := bookkeeping.Block{
@@ -479,7 +479,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		oldPool := accts[i-1][testPoolAddr]
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates[testPoolAddr] = miniAccountDelta{old: oldPool, new: newPool}
+		updates[testPoolAddr] = accountDelta{old: oldPool, new: newPool}
 		totals[testPoolAddr] = newPool
 
 		blk := bookkeeping.Block{
@@ -609,7 +609,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		oldPool := accts[i-1][testPoolAddr]
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates[testPoolAddr] = miniAccountDelta{old: oldPool, new: newPool}
+		updates[testPoolAddr] = accountDelta{old: oldPool, new: newPool}
 		totals[testPoolAddr] = newPool
 
 		blk := bookkeeping.Block{
@@ -714,7 +714,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		i := basics.Round(10)
 		roundCount := 50
 		for ; i < basics.Round(10+roundCount); i++ {
-			updates := make(map[basics.Address]miniAccountDelta)
+			updates := make(map[basics.Address]accountDelta)
 			moneyAccountsExpectedAmounts = append(moneyAccountsExpectedAmounts, make([]uint64, len(moneyAccounts)))
 			toAccount := moneyAccounts[0]
 			toAccountDataOld, validThrough, err := au.LookupWithoutRewards(i-1, toAccount)
@@ -734,7 +734,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 
 				fromAccountDataNew.MicroAlgos.Raw -= uint64(i - 10)
 				toAccountDataNew.MicroAlgos.Raw += uint64(i - 10)
-				updates[fromAccount] = miniAccountDelta{
+				updates[fromAccount] = accountDelta{
 					old: fromAccountDataOld,
 					new: fromAccountDataNew,
 				}
@@ -776,7 +776,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 				}
 			}
 
-			updates[toAccount] = miniAccountDelta{
+			updates[toAccount] = accountDelta{
 				old: toAccountDataOld,
 				new: toAccountDataNew,
 			}
@@ -1017,7 +1017,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* All results are obtained from the database. Empty cache *******
 	// ******* No deletes	                                           *******
 	// sync with the database
-	var updates map[basics.Address]miniAccountDelta
+	var updates map[basics.Address]accountDelta
 	err = accountsNewRound(tx, updates, ctbsWithDeletes, proto)
 	require.NoError(t, err)
 	// nothing left in cache
@@ -1198,12 +1198,12 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
 	for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
-		updates := make(map[basics.Address]miniAccountDelta, 0)
+		updates := make(map[basics.Address]accountDelta, 0)
 		for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 			addr := randomAddress()
 			acctData := basics.AccountData{}
 			acctData.MicroAlgos.Raw = 1
-			updates[addr] = miniAccountDelta{new: acctData}
+			updates[addr] = accountDelta{new: acctData}
 			i++
 		}
 
@@ -1270,12 +1270,12 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	accountsNumber := 6000000 * b.N
 	err = ml.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
-			updates := make(map[basics.Address]miniAccountDelta, 0)
+			updates := make(map[basics.Address]accountDelta, 0)
 			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 				addr := randomAddress()
 				acctData := basics.AccountData{}
 				acctData.MicroAlgos.Raw = 1
-				updates[addr] = miniAccountDelta{new: acctData}
+				updates[addr] = accountDelta{new: acctData}
 				i++
 			}
 

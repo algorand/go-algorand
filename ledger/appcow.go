@@ -42,6 +42,17 @@ type valueDelta struct {
 	oldExists, newExists bool
 }
 
+type storagePtr struct {
+	aidx   basics.AppIndex
+	global bool
+}
+
+type addrApp struct {
+	addr   basics.Address
+	aidx   basics.AppIndex
+	global bool
+}
+
 // ok is false if the provided valueDelta is redundant,
 // which means that it encodes no update.
 func (vd valueDelta) serialize() (vdelta basics.ValueDelta, ok bool) {
@@ -124,7 +135,7 @@ func (lsd *storageDelta) applyChild(child *storageDelta) {
 func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.AppIndex, global bool, defaultAction storageAction) (*storageDelta, error) {
 	// If we already have a storageDelta, return it
 	aapp := storagePtr{aidx, global}
-	lsd, ok := cb.mods.sdeltas[addr][aapp]
+	lsd, ok := cb.sdeltas[addr][aapp]
 	if ok {
 		return lsd, nil
 	}
@@ -148,11 +159,11 @@ func (cb *roundCowState) ensureStorageDelta(addr basics.Address, aidx basics.App
 		maxCounts: &maxCounts,
 	}
 
-	_, ok = cb.mods.sdeltas[addr]
+	_, ok = cb.sdeltas[addr]
 	if !ok {
-		cb.mods.sdeltas[addr] = make(map[storagePtr]*storageDelta)
+		cb.sdeltas[addr] = make(map[storagePtr]*storageDelta)
 	}
-	cb.mods.sdeltas[addr][aapp] = lsd
+	cb.sdeltas[addr][aapp] = lsd
 	return lsd, nil
 }
 
@@ -168,7 +179,7 @@ func (cb *roundCowState) getStorageCounts(addr basics.Address, aidx basics.AppIn
 
 	// If we already have a storageDelta, return the counts from it
 	aapp := storagePtr{aidx, global}
-	lsd, ok := cb.mods.sdeltas[addr][aapp]
+	lsd, ok := cb.sdeltas[addr][aapp]
 	if ok {
 		return *lsd.counts, nil
 	}
@@ -189,7 +200,7 @@ func (cb *roundCowState) getStorageLimits(addr basics.Address, aidx basics.AppIn
 
 	// If we already have a storageDelta, return the counts from it
 	aapp := storagePtr{aidx, global}
-	lsd, ok := cb.mods.sdeltas[addr][aapp]
+	lsd, ok := cb.sdeltas[addr][aapp]
 	if ok {
 		return *lsd.maxCounts, nil
 	}
@@ -201,7 +212,7 @@ func (cb *roundCowState) getStorageLimits(addr basics.Address, aidx basics.AppIn
 func (cb *roundCowState) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
 	// Check if we've allocated or deallocate within this very cow
 	aapp := storagePtr{aidx, global}
-	lsd, ok := cb.mods.sdeltas[addr][aapp]
+	lsd, ok := cb.sdeltas[addr][aapp]
 	if ok {
 		if lsd.action == allocAction {
 			return true, nil
@@ -291,7 +302,7 @@ func (cb *roundCowState) getKey(addr basics.Address, aidx basics.AppIndex, globa
 	// Check if key is in a storage delta, if so return it (the "hasDelta"
 	// boolean will be true if the kvCow holds _any_ delta for the key,
 	// including if that delta is a "delete" delta)
-	lsd, ok := cb.mods.sdeltas[addr][storagePtr{aidx, global}]
+	lsd, ok := cb.sdeltas[addr][storagePtr{aidx, global}]
 	if ok {
 		vdelta, hasDelta := lsd.kvCow[key]
 		if hasDelta {
@@ -417,7 +428,7 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 }
 
 // MakeDebugBalances creates a ledger suitable for dryrun and debugger
-func MakeDebugBalances(l CowBaseForEvaluator, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
+func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.ConsensusVersion, prevTimestamp int64) apply.Balances {
 	base := &roundCowBase{
 		l:     l,
 		rnd:   round - 1,
@@ -446,9 +457,9 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 		return false, basics.EvalDelta{}, err
 	}
 
-	// If program passed, build our eval delta and commit to state changes
+	// If program passed, build our eval delta, and commit to state changes
 	if pass {
-		evalDelta, err = calf.BuildDelta(aidx, &params.Txn.Txn)
+		evalDelta, err = calf.BuildEvalDelta(aidx, &params.Txn.Txn)
 		if err != nil {
 			return false, basics.EvalDelta{}, err
 		}
@@ -458,9 +469,9 @@ func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIn
 	return pass, evalDelta, nil
 }
 
-func (cb *roundCowState) BuildDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
+func (cb *roundCowState) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
 	foundGlobal := false
-	for addr, smod := range cb.mods.sdeltas {
+	for addr, smod := range cb.sdeltas {
 		for aapp, sdelta := range smod {
 			// Check that all of these deltas are for the correct app
 			if aapp.aidx != aidx {
@@ -532,4 +543,82 @@ func checkCounts(lsd *storageDelta) error {
 		return fmt.Errorf("store bytes count %d exceeds schema bytes count %d", lsd.counts.NumByteSlice, lsd.maxCounts.NumByteSlice)
 	}
 	return nil
+}
+
+func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageDelta) (basics.AccountData, error) {
+	// duplicate code in branches is proven to be a bit faster than
+	// having basics.AppParams and basics.AppLocalState under a common interface with additional loops and type assertions
+	if aapp.global {
+		owned := make(map[basics.AppIndex]basics.AppParams, len(data.AppParams))
+		for k, v := range data.AppParams {
+			owned[k] = v
+		}
+
+		switch store.action {
+		case deallocAction:
+			delete(owned, aapp.aidx)
+		case allocAction, remainAllocAction:
+			// TODO verify this assertion
+			// note: these should always exist because they were
+			// at least preceded by a call to PutWithCreatable?
+			params, ok := owned[aapp.aidx]
+			if !ok {
+				return basics.AccountData{}, fmt.Errorf("could not find existing params for %v", aapp.aidx)
+			}
+			params = params.Clone()
+			if store.action == allocAction {
+				// TODO does this ever accidentally clobber?
+				params.GlobalState = make(basics.TealKeyValue)
+			}
+			// note: if this is an allocAction, there will be no
+			// DeleteActions below
+			for k, v := range store.kvCow {
+				if !v.newExists {
+					delete(params.GlobalState, k)
+				} else {
+					params.GlobalState[k] = v.new
+				}
+			}
+			owned[aapp.aidx] = params
+		}
+
+		data.AppParams = owned
+
+	} else {
+		owned := make(map[basics.AppIndex]basics.AppLocalState, len(data.AppLocalStates))
+		for k, v := range data.AppLocalStates {
+			owned[k] = v
+		}
+
+		switch store.action {
+		case deallocAction:
+			delete(owned, aapp.aidx)
+		case allocAction, remainAllocAction:
+			// TODO verify this assertion
+			// note: these should always exist because they were
+			// at least preceded by a call to Put?
+			states, ok := owned[aapp.aidx]
+			if !ok {
+				return basics.AccountData{}, fmt.Errorf("could not find existing states for %v", aapp.aidx)
+			}
+			states = states.Clone()
+			if store.action == allocAction {
+				// TODO does this ever accidentally clobber?
+				states.KeyValue = make(basics.TealKeyValue)
+			}
+			// note: if this is an allocAction, there will be no
+			// DeleteActions below
+			for k, v := range store.kvCow {
+				if !v.newExists {
+					delete(states.KeyValue, k)
+				} else {
+					states.KeyValue[k] = v.new
+				}
+			}
+			owned[aapp.aidx] = states
+		}
+
+		data.AppLocalStates = owned
+	}
+	return data, nil
 }

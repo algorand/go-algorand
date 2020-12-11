@@ -95,7 +95,7 @@ func TestLogicLedgerBalances(t *testing.T) {
 
 	addr1 := getRandomAddress(a)
 	ble := basics.MicroAlgos{Raw: 100}
-	c.mods.accts = map[basics.Address]miniAccountDelta{addr1: {new: basics.AccountData{MicroAlgos: ble}}}
+	c.mods.accts = map[basics.Address]accountDelta{addr1: {new: basics.AccountData{MicroAlgos: ble}}}
 	bla, err := l.Balance(addr1)
 	a.NoError(err)
 	a.Equal(ble, bla)
@@ -120,7 +120,7 @@ func TestLogicLedgerGetters(t *testing.T) {
 	c.mods.prevTimestamp = ts
 
 	addr1 := getRandomAddress(a)
-	c.mods.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr1: {storagePtr{aidx, false}: &storageDelta{action: allocAction}},
 	}
 
@@ -152,7 +152,7 @@ func TestLogicLedgerAsset(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), fmt.Sprintf("asset %d does not exist", aidx))
 
-	c.mods.accts = map[basics.Address]miniAccountDelta{
+	c.mods.accts = map[basics.Address]accountDelta{
 		addr1: {
 			new: basics.AccountData{
 				AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}},
@@ -167,7 +167,7 @@ func TestLogicLedgerAsset(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), "has not opted in to asset")
 
-	c.mods.accts = map[basics.Address]miniAccountDelta{
+	c.mods.accts = map[basics.Address]accountDelta{
 		addr1: {
 			new: basics.AccountData{
 				AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}},
@@ -205,7 +205,7 @@ func TestLogicLedgerGetKey(t *testing.T) {
 	a.False(ok)
 	a.Contains(err.Error(), fmt.Sprintf("app %d does not exist", assetIdx))
 
-	c.mods.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {storagePtr{aidx, true}: &storageDelta{action: deallocAction}},
 	}
 	_, ok, err = l.GetGlobal(aidx, "gkey")
@@ -213,7 +213,7 @@ func TestLogicLedgerGetKey(t *testing.T) {
 	a.False(ok)
 	a.Contains(err.Error(), "cannot fetch key")
 
-	c.mods.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {storagePtr{aidx, true}: &storageDelta{action: allocAction}},
 	}
 	_, ok, err = l.GetGlobal(aidx, "gkey")
@@ -224,7 +224,7 @@ func TestLogicLedgerGetKey(t *testing.T) {
 	a.False(ok)
 
 	tv := basics.TealValue{Type: basics.TealUintType, Uint: 1}
-	c.mods.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {
 			storagePtr{aidx, true}: &storageDelta{
 				action: allocAction,
@@ -236,7 +236,7 @@ func TestLogicLedgerGetKey(t *testing.T) {
 	a.NoError(err)
 	a.False(ok)
 
-	c.mods.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {
 			storagePtr{aidx, true}: &storageDelta{
 				action: allocAction,
@@ -249,7 +249,7 @@ func TestLogicLedgerGetKey(t *testing.T) {
 	a.True(ok)
 	a.Equal(tv, val)
 
-	c.mods.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {
 			storagePtr{aidx, true}: &storageDelta{
 				action: remainAllocAction,
@@ -259,7 +259,7 @@ func TestLogicLedgerGetKey(t *testing.T) {
 	}
 
 	// check local
-	c.mods.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {
 			storagePtr{aidx, false}: &storageDelta{
 				action: allocAction,
@@ -302,7 +302,7 @@ func TestLogicLedgerSetKey(t *testing.T) {
 
 	val = "val"
 	tv = basics.TealValue{Type: basics.TealBytesType, Bytes: val}
-	c.mods.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {storagePtr{aidx, true}: &storageDelta{action: deallocAction}},
 	}
 	err = l.SetGlobal(key, tv)
@@ -311,7 +311,7 @@ func TestLogicLedgerSetKey(t *testing.T) {
 
 	counts := basics.StateSchema{}
 	maxCounts := basics.StateSchema{}
-	c.mods.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {
 			storagePtr{aidx, true}: &storageDelta{
 				action:    allocAction,
@@ -332,7 +332,7 @@ func TestLogicLedgerSetKey(t *testing.T) {
 	a.Contains(err.Error(), "exceeds schema integer")
 
 	tv2 := basics.TealValue{Type: basics.TealUintType, Uint: 1}
-	c.mods.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {
 			storagePtr{aidx, true}: &storageDelta{
 				action:    allocAction,
@@ -351,7 +351,7 @@ func TestLogicLedgerSetKey(t *testing.T) {
 	a.NoError(err)
 
 	// check local
-	c.mods.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {
 			storagePtr{aidx, false}: &storageDelta{
 				action:    allocAction,
@@ -378,7 +378,7 @@ func TestLogicLedgerDelKey(t *testing.T) {
 	a.NotNil(l)
 
 	key := "key"
-	c.mods.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {storagePtr{aidx, true}: &storageDelta{action: deallocAction}},
 	}
 	err = l.DelGlobal(key)
@@ -387,7 +387,7 @@ func TestLogicLedgerDelKey(t *testing.T) {
 
 	counts := basics.StateSchema{}
 	maxCounts := basics.StateSchema{}
-	c.mods.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {
 			storagePtr{aidx, true}: &storageDelta{
 				action:    allocAction,
@@ -400,7 +400,7 @@ func TestLogicLedgerDelKey(t *testing.T) {
 	err = l.DelGlobal(key)
 	a.NoError(err)
 
-	c.mods.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
 		addr: {
 			storagePtr{aidx, false}: &storageDelta{
 				action:    allocAction,

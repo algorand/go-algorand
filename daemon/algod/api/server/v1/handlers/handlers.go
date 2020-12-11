@@ -733,7 +733,7 @@ func AccountInformation(ctx lib.ReqContext, context echo.Context) {
 
 	ledger := ctx.Node.Ledger()
 	lastRound := ledger.Latest()
-	record, err := ledger.FullLookup(lastRound, basics.Address(addr))
+	record, err := ledger.Lookup(lastRound, basics.Address(addr))
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return

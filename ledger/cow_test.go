@@ -90,7 +90,7 @@ func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.
 	require.Equal(t, d, basics.AccountData{})
 }
 
-func applyUpdates(cow *roundCowState, updates map[basics.Address]miniAccountDelta) {
+func applyUpdates(cow *roundCowState, updates map[basics.Address]accountDelta) {
 	for addr, delta := range updates {
 		cow.put(addr, delta.old, delta.new, nil, nil)
 	}

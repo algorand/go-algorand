@@ -88,9 +88,8 @@ type storageData struct {
 type encodedBalanceRecord struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Address         basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
-	MiniAccountData msgp.Raw       `codec:"ad,allocbound=basics.MaxEncodedAccountDataSize"`
-	StorageData     []storageData  `codec:"sd,allocbound=maxEncodedAppStateEntries"`
+	Address     basics.Address `codec:"pk,allocbound=crypto.DigestSize"`
+	AccountData msgp.Raw       `codec:"ad,allocbound=basics.MaxEncodedAccountDataSize"`
 }
 
 // CatchpointFileHeader is the content we would have in the "content.msgpack" file in the catchpoint tar archive.

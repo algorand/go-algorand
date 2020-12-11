@@ -27,7 +27,6 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -37,9 +36,6 @@ import (
 type accountsDbQueries struct {
 	listCreatablesStmt          *sql.Stmt
 	lookupStmt                  *sql.Stmt
-	lookupKeyStmt               *sql.Stmt
-	lookupStorageStmt           *sql.Stmt
-	countStorageStmt            *sql.Stmt
 	lookupCreatorStmt           *sql.Stmt
 	deleteStoredCatchpoint      *sql.Stmt
 	insertStoredCatchpoint      *sql.Stmt
@@ -104,31 +100,6 @@ var createOnlineAccountIndex = []string{
 	createNormalizedOnlineBalanceIndex("onlineaccountbals", "accountbase"),
 }
 
-// createStorageIndex handles storage/catchpointstorage tables
-func createStorageIndex(idxname string, tablename string) string {
-	return fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s ( owner )", idxname, tablename)
-}
-
-var storageMigration = []string{
-	`CREATE TABLE IF NOT EXISTS storage (
-		owner blob,
-		aidx integer,
-		global boolean,
-		key blob,
-		vtype integer,
-		venc blob,
-		PRIMARY KEY(owner, aidx, global, key)
-	)`,
-	// migration only table, renamed to accountbase during migration
-	`CREATE TABLE IF NOT EXISTS miniaccountbase (
-		address blob primary key,
-		data blob,
-		normalizedonlinebalance integer
-	)`,
-	createStorageIndex("storage_idx", "storage"),
-	createNormalizedOnlineBalanceIndex("onlineaccountbalsmini", "miniaccountbase"),
-}
-
 var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS acctrounds`,
 	`DROP TABLE IF EXISTS accounttotals`,
@@ -137,7 +108,6 @@ var accountsResetExprs = []string{
 	`DROP TABLE IF EXISTS storedcatchpoints`,
 	`DROP TABLE IF EXISTS catchpointstate`,
 	`DROP TABLE IF EXISTS accounthashes`,
-	`DROP TABLE IF EXISTS storage`,
 }
 
 // accountDBVersion is the database version that this binary would know how to support and how to upgrade to.
@@ -148,146 +118,6 @@ var accountDBVersion = int32(4)
 type accountDelta struct {
 	old basics.AccountData
 	new basics.AccountData
-}
-
-func applyMiniDelta(data basics.AccountData, delta miniAccountDelta) (res basics.AccountData) {
-	res.Status = delta.new.Status
-	res.MicroAlgos = delta.new.MicroAlgos
-	res.RewardsBase = delta.new.RewardsBase
-	res.RewardedMicroAlgos = delta.new.RewardedMicroAlgos
-	res.VoteID = delta.new.VoteID
-	res.SelectionID = delta.new.SelectionID
-	res.VoteFirstValid = delta.new.VoteFirstValid
-	res.VoteLastValid = delta.new.VoteLastValid
-	res.VoteKeyDilution = delta.new.VoteKeyDilution
-	res.AssetParams = delta.new.AssetParams
-	res.Assets = delta.new.Assets
-	res.AuthAddr = delta.new.AuthAddr
-	res.TotalAppSchema = delta.new.TotalAppSchema
-
-	// TODO what if a deletion happens here? or creation? does this still work?
-	res.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, len(delta.new.AppLocalStates))
-	for k, v := range delta.new.AppLocalStates {
-		state := v
-		state.KeyValue = data.AppLocalStates[k].KeyValue // TODO is cloning required here?
-		res.AppLocalStates[k] = state
-	}
-
-	res.AppParams = make(map[basics.AppIndex]basics.AppParams, len(delta.new.AppParams))
-	for k, v := range delta.new.AppParams {
-		params := v
-		params.GlobalState = data.AppParams[k].GlobalState // TODO is cloning required here?
-		res.AppParams[k] = params
-	}
-	return
-}
-
-func applyStorageDelta(data basics.AccountData, aapp storagePtr, store *storageDelta) (basics.AccountData, error) {
-	// TODO de-duplicate redundant code across branches
-	if aapp.global {
-		owned := make(map[basics.AppIndex]basics.AppParams, len(data.AppParams))
-		for k, v := range data.AppParams {
-			owned[k] = v
-		}
-
-		switch store.action {
-		case deallocAction:
-			delete(owned, aapp.aidx)
-		case allocAction, remainAllocAction:
-			// TODO verify this assertion
-			// note: these should always exist because they were
-			// at least preceded by a call to PutWithCreatable?
-			params, ok := owned[aapp.aidx]
-			if !ok {
-				return basics.AccountData{}, fmt.Errorf("could not find existing params for %v", aapp.aidx)
-			}
-			params = params.Clone()
-			if store.action == allocAction {
-				// TODO does this ever accidentally clobber?
-				params.GlobalState = make(basics.TealKeyValue)
-			}
-			// note: if this is an allocAction, there will be no
-			// DeleteActions below
-			for k, v := range store.kvCow {
-				if !v.newExists {
-					delete(params.GlobalState, k)
-				} else {
-					params.GlobalState[k] = v.new
-				}
-			}
-			owned[aapp.aidx] = params
-		}
-
-		data.AppParams = owned
-
-	} else {
-		owned := make(map[basics.AppIndex]basics.AppLocalState, len(data.AppLocalStates))
-		for k, v := range data.AppLocalStates {
-			owned[k] = v
-		}
-
-		switch store.action {
-		case deallocAction:
-			delete(owned, aapp.aidx)
-		case allocAction, remainAllocAction:
-			// TODO verify this assertion
-			// note: these should always exist because they were
-			// at least preceded by a call to Put?
-			states, ok := owned[aapp.aidx]
-			if !ok {
-				return basics.AccountData{}, fmt.Errorf("could not find existing states for %v", aapp.aidx)
-			}
-			states = states.Clone()
-			if store.action == allocAction {
-				// TODO does this ever accidentally clobber?
-				states.KeyValue = make(basics.TealKeyValue)
-			}
-			// note: if this is an allocAction, there will be no
-			// DeleteActions below
-			for k, v := range store.kvCow {
-				if !v.newExists {
-					delete(states.KeyValue, k)
-				} else {
-					states.KeyValue[k] = v.new
-				}
-			}
-			owned[aapp.aidx] = states
-		}
-
-		data.AppLocalStates = owned
-	}
-	return data, nil
-}
-
-func withoutAppKV(u basics.AccountData) (res basics.AccountData) {
-	res.Status = u.Status
-	res.MicroAlgos = u.MicroAlgos
-	res.RewardsBase = u.RewardsBase
-	res.RewardedMicroAlgos = u.RewardedMicroAlgos
-	res.VoteID = u.VoteID
-	res.SelectionID = u.SelectionID
-	res.VoteFirstValid = u.VoteFirstValid
-	res.VoteLastValid = u.VoteLastValid
-	res.VoteKeyDilution = u.VoteKeyDilution
-	res.AssetParams = u.AssetParams
-	res.Assets = u.Assets
-	res.AuthAddr = u.AuthAddr
-	res.TotalAppSchema = u.TotalAppSchema
-
-	res.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, len(u.AppLocalStates))
-	for k, v := range u.AppLocalStates {
-		res.AppLocalStates[k] = basics.AppLocalState{Schema: v.Schema}
-	}
-
-	res.AppParams = make(map[basics.AppIndex]basics.AppParams, len(u.AppParams))
-	for k, v := range u.AppParams {
-		res.AppParams[k] = basics.AppParams{
-			ApprovalProgram:   v.ApprovalProgram,
-			ClearStateProgram: v.ClearStateProgram,
-			StateSchemas:      v.StateSchemas,
-		}
-	}
-	return
 }
 
 // catchpointState is used to store catchpoint related variables into the catchpointstate table.
@@ -318,7 +148,6 @@ type normalizedAccountBalance struct {
 	encodedAccountData []byte
 	accountHash        []byte
 	normalizedBalance  uint64
-	storageData        []storageData
 }
 
 // prepareNormalizedBalances converts an array of encodedBalanceRecord into an equal size array of normalizedAccountBalances.
@@ -326,14 +155,13 @@ func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.Consens
 	normalizedAccountBalances = make([]normalizedAccountBalance, len(bals), len(bals))
 	for i, balance := range bals {
 		normalizedAccountBalances[i].address = balance.Address
-		err = protocol.Decode(balance.MiniAccountData, &(normalizedAccountBalances[i].accountData))
+		err = protocol.Decode(balance.AccountData, &(normalizedAccountBalances[i].accountData))
 		if err != nil {
 			return nil, err
 		}
 		normalizedAccountBalances[i].normalizedBalance = normalizedAccountBalances[i].accountData.NormalizedOnlineBalance(proto)
-		normalizedAccountBalances[i].encodedAccountData = balance.MiniAccountData
-		normalizedAccountBalances[i].accountHash = accountHashBuilder(balance.Address, normalizedAccountBalances[i].accountData, balance.MiniAccountData)
-		normalizedAccountBalances[i].storageData = balance.StorageData
+		normalizedAccountBalances[i].encodedAccountData = balance.AccountData
+		normalizedAccountBalances[i].accountHash = accountHashBuilder(balance.Address, normalizedAccountBalances[i].accountData, balance.AccountData)
 	}
 	return
 }
@@ -356,20 +184,6 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 		}
 		if aff != 1 {
 			return fmt.Errorf("number of affected record in insert was expected to be one, but was %d", aff)
-		}
-	}
-
-	insertKeyStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointstorage (owner, aidx, global, key, vtype, venc) VALUES (?, ?, ?, ?, ?, ?)")
-	if err != nil {
-		return err
-	}
-	defer insertKeyStmt.Close()
-	for _, balance := range bals {
-		for _, entry := range balance.storageData {
-			_, err = insertKeyStmt.Exec(balance.address[:], entry.Aidx, entry.Global, entry.Key, entry.Vtype, entry.Venc)
-			if err != nil {
-				return err
-			}
 		}
 	}
 	return nil
@@ -444,7 +258,6 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		"DROP TABLE IF EXISTS catchpointassetcreators",
 		"DROP TABLE IF EXISTS catchpointaccounthashes",
 		"DROP TABLE IF EXISTS catchpointpendinghashes",
-		"DROP TABLE IF EXISTS catchpointstorage",
 		"DELETE FROM accounttotals where id='catchpointStaging'",
 	}
 
@@ -456,16 +269,13 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		// use the current time.
 		// Apply the same logic to
 		idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", time.Now().UnixNano())
-		idxnameStorage := fmt.Sprintf("storage_idx_%d", time.Now().UnixNano())
 
 		s = append(s,
 			"CREATE TABLE IF NOT EXISTS catchpointassetcreators (asset integer primary key, creator blob, ctype integer)",
 			"CREATE TABLE IF NOT EXISTS catchpointbalances (address blob primary key, data blob, normalizedonlinebalance integer)",
 			"CREATE TABLE IF NOT EXISTS catchpointpendinghashes (data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
-			"CREATE TABLE IF NOT EXISTS catchpointstorage (owner blob, aidx integer, global boolean, key blob, vtype integer, venc blob, PRIMARY KEY(owner, aidx, global, key))",
 			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"),
-			createStorageIndex(idxnameStorage, "catchpointstorage"),
 		)
 	}
 
@@ -486,17 +296,14 @@ func applyCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, balancesRou
 		"ALTER TABLE accountbase RENAME TO accountbase_old",
 		"ALTER TABLE assetcreators RENAME TO assetcreators_old",
 		"ALTER TABLE accounthashes RENAME TO accounthashes_old",
-		"ALTER TABLE storage RENAME TO storage_old",
 
 		"ALTER TABLE catchpointbalances RENAME TO accountbase",
 		"ALTER TABLE catchpointassetcreators RENAME TO assetcreators",
 		"ALTER TABLE catchpointaccounthashes RENAME TO accounthashes",
-		"ALTER TABLE catchpointstorage RENAME TO storage",
 
 		"DROP TABLE IF EXISTS accountbase_old",
 		"DROP TABLE IF EXISTS assetcreators_old",
 		"DROP TABLE IF EXISTS accounthashes_old",
-		"DROP TABLE IF EXISTS storage_old",
 	}
 
 	for _, stmt := range stmts {
@@ -550,55 +357,14 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 		return err
 	}
 
-	// Run storage migration if it hasn't run yet
-	var storageMigrated bool
-	err = tx.QueryRow("SELECT 1 FROM sqlite_master WHERE type='table' AND name='storage'").Scan(&storageMigrated)
-	if err == sql.ErrNoRows {
-		for _, migrateCmd := range storageMigration {
-			_, err = tx.Exec(migrateCmd)
-			if err != nil {
-				return err
-			}
-		}
-	} else if err != nil {
-		return err
-	}
-
-	insertKeyStmt, err := tx.Prepare("INSERT INTO storage (owner, aidx, global, key, vtype, venc) VALUES (?, ?, ?, ?, ?, ?)")
-	if err != nil {
-		return err
-	}
 	_, err = tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
 	if err == nil {
 		var ot basics.OverflowTracker
 		var totals AccountTotals
 
 		for addr, data := range initAccounts {
-			global := true
-			for aidx, params := range data.AppParams {
-				for key, tv := range params.GlobalState {
-					venc := protocol.Encode(&tv)
-					_, err = insertKeyStmt.Exec(addr[:], aidx, global, key, tv.Type, venc)
-					if err != nil {
-						return err
-					}
-				}
-			}
-
-			global = false
-			for aidx, state := range data.AppLocalStates {
-				for key, tv := range state.KeyValue {
-					venc := protocol.Encode(&tv)
-					_, err = insertKeyStmt.Exec(addr[:], aidx, global, key, tv.Type, venc)
-					if err != nil {
-						return err
-					}
-				}
-			}
-
-			miniData := withoutAppKV(data)
 			_, err = tx.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
-				addr[:], protocol.Encode(&miniData))
+				addr[:], protocol.Encode(&data))
 			if err != nil {
 				return err
 			}
@@ -747,21 +513,6 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 		return nil, err
 	}
 
-	qs.lookupKeyStmt, err = r.Prepare("SELECT venc FROM storage WHERE owner = ? AND aidx = ? AND global = ? AND key = ?")
-	if err != nil {
-		return nil, err
-	}
-
-	qs.lookupStorageStmt, err = r.Prepare("SELECT key, venc FROM storage WHERE owner = ? AND aidx = ? AND global = ?")
-	if err != nil {
-		return nil, err
-	}
-
-	qs.countStorageStmt, err = r.Prepare("SELECT COUNT(*) FROM storage WHERE owner = ? AND aidx = ? AND global = ? AND vtype = ?")
-	if err != nil {
-		return nil, err
-	}
-
 	qs.deleteStoredCatchpoint, err = w.Prepare("DELETE FROM storedcatchpoints WHERE round=?")
 	if err != nil {
 		return nil, err
@@ -832,92 +583,6 @@ func (qs *accountsDbQueries) listCreatables(maxIdx basics.CreatableIndex, maxRes
 			cl.Type = ctype
 			results = append(results, cl)
 		}
-		return nil
-	})
-	return
-}
-
-func (qs *accountsDbQueries) lookupKey(addr basics.Address, aapp storagePtr, key string) (val basics.TealValue, ok bool, err error) {
-	err = db.Retry(func() error {
-		var buf []byte
-		err := qs.lookupKeyStmt.QueryRow(addr[:], aapp.aidx, aapp.global, key).Scan(&buf)
-		// Common error: entry does not exist
-		if err == sql.ErrNoRows {
-			return nil
-		}
-
-		// Some other database error
-		if err != nil {
-			return err
-		}
-
-		err = protocol.Decode(buf, &val)
-		if err != nil {
-			return err
-		}
-
-		// Got a legitimate value
-		ok = true
-
-		return nil
-	})
-	return
-}
-
-func (qs *accountsDbQueries) lookupStorage(addr basics.Address, aapp storagePtr) (kv basics.TealKeyValue, counts basics.StateSchema, err error) {
-	rows, err := qs.lookupStorageStmt.Query(addr[:], aapp.aidx, aapp.global)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-
-	kv = make(basics.TealKeyValue)
-	for rows.Next() {
-		var key, venc []byte
-		err = rows.Scan(&key, &venc)
-		if err != nil {
-			return
-		}
-
-		var val basics.TealValue
-		err = protocol.Decode(venc, &val)
-		if err != nil {
-			return
-		}
-
-		switch val.Type {
-		case basics.TealBytesType:
-			counts.NumByteSlice++
-		case basics.TealUintType:
-			counts.NumUint++
-		default:
-			err = fmt.Errorf("unexpected teal type %v for %+v", val.Type, aapp)
-			return
-		}
-
-		kv[string(key)] = val
-	}
-
-	err = rows.Err()
-	return
-}
-
-func (qs *accountsDbQueries) countStorage(addr basics.Address, aapp storagePtr) (schema basics.StateSchema, err error) {
-	err = db.Retry(func() error {
-		var bytesCount, uintCount uint64
-		err := qs.countStorageStmt.QueryRow(addr[:], aapp.aidx, aapp.global, basics.TealBytesType).Scan(&bytesCount)
-		if err != nil {
-			return err
-		}
-
-		err = qs.countStorageStmt.QueryRow(addr[:], aapp.aidx, aapp.global, basics.TealUintType).Scan(&uintCount)
-		if err != nil {
-			return err
-		}
-
-		schema.NumByteSlice = bytesCount
-		schema.NumUint = uintCount
-
 		return nil
 	})
 	return
@@ -1172,7 +837,7 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool)
 }
 
 // accountsNewRound updates the accountbase and assetcreators by applying the provided deltas to the accounts / creatables.
-func accountsNewRound(tx *sql.Tx, updates map[basics.Address]miniAccountDelta, creatables map[basics.CreatableIndex]modifiedCreatable, proto config.ConsensusParams) (err error) {
+func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creatables map[basics.CreatableIndex]modifiedCreatable, proto config.ConsensusParams) (err error) {
 
 	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteStmt, replaceStmt *sql.Stmt
 
@@ -1230,7 +895,7 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]miniAccountDelta, c
 }
 
 // totalsNewRounds updates the accountsTotals by applying series of round changes
-func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]miniAccountDelta, accountTotals []AccountTotals, protos []config.ConsensusParams) (err error) {
+func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, accountTotals []AccountTotals, protos []config.ConsensusParams) (err error) {
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx, false)
 	if err != nil {
@@ -1304,92 +969,6 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (
 	return
 }
 
-func storageNewRound(tx *sql.Tx, sdeltas map[basics.Address]map[storagePtr]*storageDelta, log logging.Logger) (err error) {
-	// log.Warnf("MAXJ: storageNewRound: %d", len(sdeltas))
-
-	replaceKeyStmt, err := tx.Prepare("REPLACE INTO storage (owner, aidx, global, key, vtype, venc) VALUES (?, ?, ?, ?, ?, ?)")
-	if err != nil {
-		return
-	}
-	defer replaceKeyStmt.Close()
-
-	deleteKeyStmt, err := tx.Prepare("DELETE FROM storage WHERE owner=? AND aidx=? AND global=? AND key=?")
-	if err != nil {
-		return
-	}
-	defer deleteKeyStmt.Close()
-
-	deallocStmt, err := tx.Prepare("DELETE FROM storage WHERE owner=? AND aidx=? AND global=?")
-	if err != nil {
-		return
-	}
-	defer deallocStmt.Close()
-
-	for addr, smap := range sdeltas {
-		for aapp, sdelta := range smap {
-			// For both alloc and dealloc, clear all existing storage.
-			switch sdelta.action {
-			case allocAction:
-				// deallocate existing storage
-				_, err = deallocStmt.Exec(addr[:], aapp.aidx, aapp.global)
-				if err != nil {
-					return
-				}
-			case deallocAction:
-				// deallocate existing storage
-				_, err = deallocStmt.Exec(addr[:], aapp.aidx, aapp.global)
-				if err != nil {
-					return
-				}
-				if len(sdelta.kvCow) > 0 {
-					log.Warnf("storageNewRound: kvCow len > 0 but dealloc? %+v %+v", aapp, sdelta)
-				}
-			case remainAllocAction:
-				// noop
-			default:
-				log.Panic("storageNewRound: unknown storage action %v", sdelta.action)
-			}
-
-			// Then, apply any key/value deltas
-			for key, vd := range sdelta.kvCow {
-				vdelta, ok := vd.serialize()
-				if !ok {
-					continue
-				}
-				tv, tvok := vdelta.ToTealValue()
-				switch vdelta.Action {
-				case basics.SetUintAction:
-					if !tvok {
-						log.Panic("storageNewRound: failed to encode tv: %v", vdelta)
-					}
-					venc := protocol.Encode(&tv)
-					_, err = replaceKeyStmt.Exec(addr[:], aapp.aidx, aapp.global, key, basics.TealUintType, venc)
-					if err != nil {
-						return
-					}
-				case basics.SetBytesAction:
-					if !tvok {
-						log.Panic("storageNewRound: failed to encode tv: %v", vdelta)
-					}
-					venc := protocol.Encode(&tv)
-					_, err = replaceKeyStmt.Exec(addr[:], aapp.aidx, aapp.global, key, basics.TealBytesType, venc)
-					if err != nil {
-						return
-					}
-				case basics.DeleteAction:
-					_, err = deleteKeyStmt.Exec(addr[:], aapp.aidx, aapp.global, key)
-					if err != nil {
-						return
-					}
-				default:
-					log.Panic("storageNewRound: unknown delta action %v", vdelta.Action)
-				}
-			}
-		}
-	}
-	return nil
-}
-
 // encodedAccountsRange returns an array containing the account data, in the same way it appear in the database
 // starting at entry startAccountIndex, and up to accountCount accounts long.
 func encodedAccountsRange(ctx context.Context, tx *sql.Tx, startAccountIndex, accountCount int) (bals []encodedBalanceRecord, err error) {
@@ -1416,7 +995,7 @@ func encodedAccountsRange(ctx context.Context, tx *sql.Tx, startAccountIndex, ac
 
 		copy(addr[:], addrbuf)
 
-		bals = append(bals, encodedBalanceRecord{Address: addr, MiniAccountData: buf})
+		bals = append(bals, encodedBalanceRecord{Address: addr, AccountData: buf})
 	}
 
 	err = rows.Err()
@@ -1603,26 +1182,7 @@ func (iterator *encodedAccountsBatchIter) Next(ctx context.Context, tx *sql.Tx, 
 
 		copy(addr[:], addrbuf)
 
-		// fetch applications data that is stored in a separate table
-		var rows *sql.Rows
-		rows, err = tx.QueryContext(ctx, "SELECT aidx, global, key, vtype, venc FROM storage WHERE owner = ?", addr[:])
-		if err != nil {
-			return
-		}
-
-		var data []storageData
-		for rows.Next() {
-			var entry storageData
-			err = rows.Scan(&entry.Aidx, &entry.Global, &entry.Key, &entry.Vtype, &entry.Venc)
-			if err != nil {
-				rows.Close()
-				return
-			}
-			data = append(data, entry)
-		}
-		rows.Close()
-
-		bals = append(bals, encodedBalanceRecord{Address: addr, MiniAccountData: buf, StorageData: data})
+		bals = append(bals, encodedBalanceRecord{Address: addr, AccountData: buf})
 		if len(bals) == accountCount {
 			// we're done with this iteration.
 			return

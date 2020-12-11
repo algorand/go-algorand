@@ -52,7 +52,7 @@ type VerifiedTxnCache interface {
 }
 
 type roundCowBase struct {
-	l CowBaseForEvaluator
+	l ledgerForCowBase
 
 	// The round number of the previous block, for looking up prior state.
 	rnd basics.Round
@@ -273,14 +273,14 @@ type BlockEvaluator struct {
 }
 
 type ledgerForEvaluator interface {
-	CowBaseForEvaluator
+	ledgerForCowBase
 	GenesisHash() crypto.Digest
 	Totals(basics.Round) (AccountTotals, error)
 	CompactCertVoters(basics.Round) (*VotersForRound, error)
 }
 
-// CowBaseForEvaluator represents subset of Ledger functionality needed for cow business
-type CowBaseForEvaluator interface {
+// ledgerForCowBase represents subset of Ledger functionality needed for cow business
+type ledgerForCowBase interface {
 	BlockHdr(basics.Round) (bookkeeping.BlockHeader, error)
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
@@ -963,7 +963,7 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 
 	vb := ValidatedBlock{
 		blk:   eval.block,
-		delta: eval.state.mods,
+		delta: eval.state.deltas(),
 	}
 	eval.blockGenerated = true
 	eval.state = makeRoundCowState(eval.state, eval.block.BlockHeader, eval.prevHeader.TimeStamp)
@@ -1104,7 +1104,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		}
 	}
 
-	return eval.state.mods, nil
+	return eval.state.deltas(), nil
 }
 
 // Validate uses the ledger to validate block blk as a candidate next block.
