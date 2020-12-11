@@ -125,6 +125,14 @@ func ed25519Verify(public ed25519PublicKey, data []byte, sig ed25519Signature) b
 // produced by a holder of a cryptographic secret.
 type Signature ed25519Signature
 
+// BlankSignature is an empty signature structure, containing nothing but zeroes
+var BlankSignature = Signature{}
+
+// Blank tests to see if the given signature contains only zeros
+func (s *Signature) Blank() bool {
+	return (*s) == BlankSignature
+}
+
 // A SignatureVerifier is used to identify the holder of SignatureSecrets
 // and verify the authenticity of Signatures.
 type SignatureVerifier = PublicKey
