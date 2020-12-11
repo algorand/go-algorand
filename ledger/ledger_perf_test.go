@@ -134,6 +134,11 @@ func (vc *alwaysVerifiedCache) Verified(txn transactions.SignedTxn, params verif
 	return true
 }
 
+// UnverifiedTxnGroups returns a list of unverified transaction groups given a payset
+func (vc *alwaysVerifiedCache) UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxn, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn) {
+	return [][]transactions.SignedTxn{}
+}
+
 func benchmarkFullBlocks(params testParams, b *testing.B) {
 	// disable deadlock checking code
 	deadlockDisable := deadlock.Opts.Disable

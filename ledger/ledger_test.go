@@ -124,6 +124,12 @@ type DummyVerifiedTxnCache struct{}
 func (x DummyVerifiedTxnCache) Verified(txn transactions.SignedTxn, params verify.Params) bool {
 	return false
 }
+
+// UnverifiedTxnGroups returns a list of unverified transaction groups given a payset
+func (x DummyVerifiedTxnCache) UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxn, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn) {
+	return txnGroups
+}
+
 func (x DummyVerifiedTxnCache) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, err error) {
 	return false, nil
 }
