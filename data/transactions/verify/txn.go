@@ -17,7 +17,6 @@
 package verify
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -58,7 +57,6 @@ type GroupParams struct {
 	CurrProto       protocol.ConsensusVersion
 	MinTealVersion  uint64
 	SignedGroupTxns []transactions.SignedTxn
-	GroupDigest     crypto.Digest // the group digest found in the transaction header ( i.e. transaction.Header.Group )
 }
 
 // PrepareContexts prepares verification contexts for a transaction
@@ -79,19 +77,6 @@ func PrepareContexts(group []transactions.SignedTxn, contextHdr bookkeeping.Bloc
 		SignedGroupTxns: group,
 	}
 
-	if (!group[0].Txn.Group.IsZero()) || len(group) > 1 {
-		var txGroup transactions.TxGroup
-		var grouplessTxn transactions.Transaction
-		txGroup.TxGroupHashes = make([]crypto.Digest, len(group))
-
-		for i, stxn := range group {
-			grouplessTxn = stxn.Txn
-			grouplessTxn.Group = crypto.Digest{}
-			txGroup.TxGroupHashes[i] = crypto.HashObj(grouplessTxn)
-		}
-		params.GroupDigest = crypto.HashObj(txGroup)
-	}
-
 	for i := range group {
 		ctx := Context{
 			groupParams: &params,
@@ -105,7 +90,6 @@ func PrepareContexts(group []transactions.SignedTxn, contextHdr bookkeeping.Bloc
 // Equal compares two contexts to see if they would represent the same verification context for a given transaction.
 func (ctx Context) Equal(other Context) bool {
 	return ctx.groupIndex == other.groupIndex &&
-		bytes.Equal(ctx.groupParams.GroupDigest[:], other.groupParams.GroupDigest[:]) &&
 		ctx.groupParams.MinTealVersion == other.groupParams.MinTealVersion &&
 		ctx.groupParams.CurrProto == other.groupParams.CurrProto
 }
@@ -159,9 +143,6 @@ func Txn(s *transactions.SignedTxn, ctx Context) error {
 	}
 	if !proto.SupportRekeying && (s.AuthAddr != basics.Address{}) {
 		return errors.New("nonempty AuthAddr but rekeying not supported")
-	}
-	if !bytes.Equal(s.Txn.Group[:], ctx.groupParams.GroupDigest[:]) {
-		return errors.New("mismatching group digest")
 	}
 
 	return stxnVerifyCore(s, &ctx)
@@ -420,11 +401,6 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHdr
 							}
 							if signTxn.Txn.Src() == zeroAddress {
 								return errors.New("empty address")
-							}
-							if len(signTxnsGrp) > 1 || !signTxn.Txn.Group.IsZero() {
-								if !bytes.Equal(signTxn.Txn.Group[:], ctxs[0].groupParams.GroupDigest[:]) {
-									return errors.New("mismatching group digest")
-								}
 							}
 							if err := stxnVerifyCore(&signTxn, &ctxs[k]); err != nil {
 								return err

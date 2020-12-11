@@ -135,7 +135,6 @@ func (v *verifiedTransactionCacheImpl) GetUnverifiedTranscationGroups(txnGroups 
 				groupParams: &groupParams,
 				groupIndex:  i,
 			}
-			groupParams.GroupDigest = txn.Txn.Group
 			id := txn.ID()
 			// check pinned first
 			if entryCtx, has := v.pinned[id]; has && entryCtx.Equal(txnContext) {
