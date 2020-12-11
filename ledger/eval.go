@@ -1016,6 +1016,8 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	if validate {
 		// wait for the validation to complete.
 		select {
+		case <-ctx.Done():
+			return StateDelta{}, ctx.Err()
 		case err, open := <-txvalidator.done:
 			if !open {
 				break

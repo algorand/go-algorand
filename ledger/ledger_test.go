@@ -129,6 +129,7 @@ func (x DummyVerifiedTxnCache) Check(txgroup []transactions.SignedTxn, verifyCon
 	return false
 }
 
+// GetUnverifiedTranscationGroups returns a list of unverified transaction groups given a payset
 func (x DummyVerifiedTxnCache) GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn {
 	return payset
 }
