@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
+	"math/rand"
 	"os"
 	"sort"
 	"strings"
@@ -662,16 +663,15 @@ func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
 	return assetIdx, creatable
 }
 
-func benchmarkInitBalances(b *testing.B, dbs dbPair, proto config.ConsensusParams) (updates map[basics.Address]basics.AccountData) {
+func benchmarkInitBalances(b testing.TB, numAccounts int, dbs dbPair, proto config.ConsensusParams) (updates map[basics.Address]basics.AccountData) {
 	tx, err := dbs.wdb.Handle.Begin()
 	require.NoError(b, err)
 
 	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
-	//updates := map[basics.Address]basics.AccountData{}
-	updates = make(map[basics.Address]basics.AccountData, b.N)
+	updates = make(map[basics.Address]basics.AccountData, numAccounts)
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; i < numAccounts; i++ {
 		addr := randomAddress()
 		updates[addr] = basics.AccountData{
 			MicroAlgos:         basics.MicroAlgos{Raw: 0x000ffffffffffffff},
@@ -721,12 +721,11 @@ func cleanupTestDb(dbs dbPair, dbName string, inMemory bool) {
 
 func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	//b.N = 50000
 	dbs, fn := dbOpenTest(b, inMemory)
 	setDbLogging(b, dbs)
 	defer cleanupTestDb(dbs, fn, inMemory)
 
-	benchmarkInitBalances(b, dbs, proto)
+	benchmarkInitBalances(b, b.N, dbs, proto)
 	tx, err := dbs.rdb.Handle.Begin()
 	require.NoError(b, err)
 
@@ -758,14 +757,23 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 	setDbLogging(b, dbs)
 	defer cleanupTestDb(dbs, fn, inMemory)
 
-	accounts := benchmarkInitBalances(b, dbs, proto)
+	accounts := benchmarkInitBalances(b, b.N, dbs, proto)
 
 	qs, err := accountsDbInit(dbs.rdb.Handle, dbs.wdb.Handle)
 	require.NoError(b, err)
 
+	// read all the balances in the database, shuffled
+	addrs := make([]basics.Address, len(accounts))
+	pos := 0
+	for addr := range accounts {
+		addrs[pos] = addr
+		pos++
+	}
+	rand.Shuffle(len(addrs), func(i, j int) { addrs[i], addrs[j] = addrs[j], addrs[i] })
+
+	// only measure the actual fetch time
 	b.ResetTimer()
-	// read all the balances in the database, shuffled by map-iterator hash order
-	for addr, _ := range accounts {
+	for _, addr := range addrs {
 		_, _, err = qs.lookup(addr)
 		require.NoError(b, err)
 	}
