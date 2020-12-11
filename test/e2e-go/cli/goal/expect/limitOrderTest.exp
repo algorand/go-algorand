@@ -67,7 +67,7 @@ if { [catch {
     set MIN_BALANCE 1000000
     set TRANSFER_AMOUNT  [expr {1000 * $MIN_BALANCE}]
     set FEE_AMOUNT 1000
-    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_1_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_1_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR ""]
 
     # Print the transaction id
     puts "TRANSACTION_ID 1: $TRANSACTION_ID"
@@ -76,7 +76,7 @@ if { [catch {
     ::AlgorandGoal::WaitForAccountBalance $WALLET_1_NAME $ACCOUNT_1_ADDRESS $TRANSFER_AMOUNT $TEST_PRIMARY_NODE_DIR
 
     # Transfer Algos from primary account to account 2
-    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_2_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $TRANSFER_AMOUNT $ACCOUNT_2_ADDRESS $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR ""]
 
     # Print the transaction id
     puts "TRANSACTION_ID 2: $TRANSACTION_ID"
@@ -134,7 +134,7 @@ if { [catch {
 
     # initialize the escrow by sending 1000000 microAlgos into it
     set CONTRACT_MICRO_ALGO 200000
-    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $CONTRACT_MICRO_ALGO $CONTRACT_HASH $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR]
+    set TRANSACTION_ID [::AlgorandGoal::AccountTransfer $PRIMARY_WALLET_NAME "" $PRIMARY_ACCOUNT_ADDRESS $CONTRACT_MICRO_ALGO $CONTRACT_HASH $FEE_AMOUNT $TEST_PRIMARY_NODE_DIR ""]
     puts "Fund contract account on transaction $TRANSACTION_ID"
 
      # Check to make sure that the transfer is reflected in the to account

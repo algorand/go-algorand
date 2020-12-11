@@ -120,7 +120,11 @@ type txPoolVerifyCacheVal struct {
 	params verify.Params
 }
 
+// poolAsmResults is used to syncronize the state of the block assembly process. The structure reading/writing is syncronized
+// via the pool.assemblyMu lock.
 type poolAsmResults struct {
+	// the ok variable indicates whther the assembly for the block roundStartedEvaluating was complete ( i.e. ok == true ) or
+	// whether it's still in-progress.
 	ok    bool
 	blk   *ledger.ValidatedBlock
 	stats telemetryspec.AssembleBlockMetrics
@@ -128,18 +132,28 @@ type poolAsmResults struct {
 	// roundStartedEvaluating is the round which we were attempted to evaluate last. It's a good measure for
 	// which round we started evaluating, but not a measure to whether the evaluation is complete.
 	roundStartedEvaluating basics.Round
+	// assemblyCompletedOrAbandoned is *not* protected via the pool.assemblyMu lock and should be accessed only from the OnNewBlock goroutine.
+	// it's equivilent to the "ok" variable, and used for avoiding taking the lock.
+	assemblyCompletedOrAbandoned bool
 }
 
-// TODO I moved this number to be a constant in the module, we should consider putting it in the local config
-const expiredHistory = 10
+const (
+	// TODO I moved this number to be a constant in the module, we should consider putting it in the local config
+	expiredHistory = 10
 
-// timeoutOnNewBlock determines how long Test() and Remember() wait for
-// OnNewBlock() to process a new block that appears to be in the ledger.
-const timeoutOnNewBlock = time.Second
+	// timeoutOnNewBlock determines how long Test() and Remember() wait for
+	// OnNewBlock() to process a new block that appears to be in the ledger.
+	timeoutOnNewBlock = time.Second
 
-// assemblyWaitEps is the extra time AssembleBlock() waits past the
-// deadline before giving up.
-const assemblyWaitEps = 150 * time.Millisecond
+	// assemblyWaitEps is the extra time AssembleBlock() waits past the
+	// deadline before giving up.
+	assemblyWaitEps = 150 * time.Millisecond
+
+	// The following two constants are used by the isAssemblyTimedOut function, and used to estimate the projected
+	// duration it would take to execute the GenerateBlock() function
+	generateBlockBaseDuration        = 2 * time.Millisecond
+	generateBlockTransactionDuration = 2155 * time.Nanosecond
+)
 
 // ErrStaleBlockAssemblyRequest returned by AssembleBlock when requested block number is older than the current transaction pool round
 // i.e. typically it means that we're trying to make a proposal for an older round than what the ledger is currently pointing at.
@@ -554,6 +568,19 @@ func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledger.St
 	}
 }
 
+// isAssemblyTimedOut determines if we should keep attempting complete the block assembly by adding more transactions to the pending evaluator,
+// or whether we've ran out of time. It takes into consideration the assemblyDeadline that was set by the AssembleBlock function as well as the
+// projected time it's going to take to call the GenerateBlock function before the block assembly would be ready.
+// The function expects that the pool.assemblyMu lock would be taken before being called.
+func (pool *TransactionPool) isAssemblyTimedOut() bool {
+	if pool.assemblyDeadline.IsZero() {
+		// we have no deadline, so no reason to timeout.
+		return false
+	}
+	generateBlockDuration := generateBlockBaseDuration + time.Duration(pool.pendingBlockEvaluator.TxnCounter())*generateBlockTransactionDuration
+	return time.Now().After(pool.assemblyDeadline.Add(-generateBlockDuration))
+}
+
 func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactions.SignedTxn, recomputing bool, stats *telemetryspec.AssembleBlockMetrics) error {
 	r := pool.pendingBlockEvaluator.Round() + pool.numPendingWholeBlocks
 	for _, tx := range txgroup {
@@ -570,28 +597,52 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 	for i, tx := range txgroup {
 		txgroupad[i].SignedTxn = tx
 	}
+
+	transactionGroupStartsTime := time.Time{}
+	if recomputing {
+		transactionGroupStartsTime = time.Now()
+	}
+
 	err := pool.pendingBlockEvaluator.TransactionGroup(txgroupad)
 
 	if recomputing {
-		pool.assemblyMu.Lock()
-		defer pool.assemblyMu.Unlock()
-		if !pool.assemblyResults.ok {
-			if (err == ledger.ErrNoSpace || (pool.assemblyDeadline != time.Time{} && time.Now().After(pool.assemblyDeadline))) && (pool.assemblyRound <= pool.pendingBlockEvaluator.Round()) {
+		if !pool.assemblyResults.assemblyCompletedOrAbandoned {
+			transactionGroupDuration := time.Now().Sub(transactionGroupStartsTime)
+			pool.assemblyMu.Lock()
+			defer pool.assemblyMu.Unlock()
+			if pool.assemblyRound > pool.pendingBlockEvaluator.Round() {
+				// the block we're assembling now isn't the one the the AssembleBlock is waiting for. While it would be really cool
+				// to finish generating the block, it would also be pointless to spend time on it.
+				// we're going to set the ok and assemblyCompletedOrAbandoned to "true" so we can complete this loop asap
 				pool.assemblyResults.ok = true
+				pool.assemblyResults.assemblyCompletedOrAbandoned = true
+				stats.StopReason = telemetryspec.AssembleBlockAbandon
+				pool.assemblyResults.stats = *stats
+				pool.assemblyCond.Broadcast()
+			} else if err == ledger.ErrNoSpace || pool.isAssemblyTimedOut() {
+				pool.assemblyResults.ok = true
+				pool.assemblyResults.assemblyCompletedOrAbandoned = true
 				if err == ledger.ErrNoSpace {
 					stats.StopReason = telemetryspec.AssembleBlockFull
 				} else {
 					stats.StopReason = telemetryspec.AssembleBlockTimeout
+					// if the block is not full, it means that the above transaction made it to the block, so we want to add it here.
+					stats.ProcessingTime.AddTransaction(transactionGroupDuration)
 				}
-				pool.assemblyResults.stats = *stats
 
+				blockGenerationStarts := time.Now()
 				lvb, gerr := pool.pendingBlockEvaluator.GenerateBlock()
 				if gerr != nil {
 					pool.assemblyResults.err = fmt.Errorf("could not generate block for %d: %v", pool.assemblyResults.roundStartedEvaluating, gerr)
 				} else {
 					pool.assemblyResults.blk = lvb
 				}
+				stats.BlockGenerationDuration = uint64(time.Now().Sub(blockGenerationStarts))
+				pool.assemblyResults.stats = *stats
 				pool.assemblyCond.Broadcast()
+			} else {
+				// add the transaction time only if we didn't ended up finishing the block.
+				stats.ProcessingTime.AddTransaction(transactionGroupDuration)
 			}
 		}
 	}
@@ -662,6 +713,8 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	asmStats.StartCount = len(txgroups)
 	asmStats.StopReason = telemetryspec.AssembleBlockEmpty
 
+	firstTxnGrpTime := time.Now()
+
 	// Feed the transactions in order
 	for i, txgroup := range txgroups {
 		if len(txgroup) == 0 {
@@ -698,15 +751,26 @@ func (pool *TransactionPool) recomputeBlockEvaluator(committedTxIds map[transact
 	}
 
 	pool.assemblyMu.Lock()
+	if !pool.assemblyDeadline.IsZero() {
+		// The deadline was generated by the agreement, allocating ProposalAssemblyTime milliseconds for completing proposal
+		// assembly. We want to figure out how long have we spent before trying to evaluate the first transaction.
+		// ( ideally it's near zero. The goal here is to see if we get to a near time-out situation before processing the
+		// first transaction group )
+		asmStats.TransactionsLoopStartTime = int64(firstTxnGrpTime.Sub(pool.assemblyDeadline.Add(-config.ProposalAssemblyTime)))
+	}
+
 	if !pool.assemblyResults.ok && pool.assemblyRound <= pool.pendingBlockEvaluator.Round() {
 		pool.assemblyResults.ok = true
-		pool.assemblyResults.stats = asmStats
+		pool.assemblyResults.assemblyCompletedOrAbandoned = true // this is not strictly needed, since the value would only get inspected by this go-routine, but we'll adjust it along with "ok" for consistency
+		blockGenerationStarts := time.Now()
 		lvb, err := pool.pendingBlockEvaluator.GenerateBlock()
 		if err != nil {
 			pool.assemblyResults.err = fmt.Errorf("could not generate block for %d (end): %v", pool.assemblyResults.roundStartedEvaluating, err)
 		} else {
 			pool.assemblyResults.blk = lvb
 		}
+		asmStats.BlockGenerationDuration = uint64(time.Now().Sub(blockGenerationStarts))
+		pool.assemblyResults.stats = asmStats
 		pool.assemblyCond.Broadcast()
 	}
 	pool.assemblyMu.Unlock()
