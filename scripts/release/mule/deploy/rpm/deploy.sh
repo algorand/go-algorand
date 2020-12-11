@@ -78,7 +78,6 @@ then
     cp -r /root/rpmrepo .
 else
     aws s3 sync rpmrepo "s3://algorand-releases/rpm/$CHANNEL/"
-    aws s3 cp *"$VERSION"*.rpm "s3://algorand-internal/packages/rpm/$CHANNEL/"
 fi
 
 echo

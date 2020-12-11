@@ -350,7 +350,6 @@ var sendCmd = &cobra.Command{
 				reportErrorf(err.Error())
 			}
 		}
-
 		client := ensureFullClient(dataDir)
 		firstValid, lastValid, err = client.ComputeValidityRounds(firstValid, lastValid, numValidRounds)
 		if err != nil {
@@ -369,11 +368,11 @@ var sendCmd = &cobra.Command{
 
 		var stx transactions.SignedTxn
 		if lsig.Logic != nil {
+
 			params, err := client.SuggestedParams()
 			if err != nil {
 				reportErrorf(errorNodeStatus, err)
 			}
-
 			proto := protocol.ConsensusVersion(params.ConsensusVersion)
 			uncheckedTxn := transactions.SignedTxn{
 				Txn:  payment,
@@ -759,7 +758,7 @@ var signCmd = &cobra.Command{
 var groupCmd = &cobra.Command{
 	Use:   "group",
 	Short: "Group transactions together",
-	Long:  `Form a transaction group.  The input file must contain one or more transactions that will form a group.  The output file will contain the same transactions, in order, with a group flag added to each transaction, which requires that the transactions must be committed together.`,
+	Long:  `Form a transaction group.  The input file must contain one or more unsigned transactions that will form a group.  The output file will contain the same transactions, in order, with a group flag added to each transaction, which requires that the transactions must be committed together. The group command would retain the logic signature, if present, as the TEAL program could verify the group using a logic signature argument.`,
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		data, err := readFile(txFilename)
@@ -769,11 +768,13 @@ var groupCmd = &cobra.Command{
 
 		dec := protocol.NewDecoderBytes(data)
 
-		var txns []transactions.SignedTxn
+		var stxns []transactions.SignedTxn
 		var group transactions.TxGroup
+		transactionIdx := 0
 		for {
-			var txn transactions.SignedTxn
-			err = dec.Decode(&txn)
+			var stxn transactions.SignedTxn
+			// we decode the file into a SignedTxn since we want to verify the absense of the signature as well as preserve the AuthAddr.
+			err = dec.Decode(&stxn)
 			if err == io.EOF {
 				break
 			}
@@ -781,18 +782,23 @@ var groupCmd = &cobra.Command{
 				reportErrorf(txDecodeError, txFilename, err)
 			}
 
-			if !txn.Txn.Group.IsZero() {
-				reportErrorf("Transaction %s is already part of a group.", txn.ID().String())
+			if !stxn.Txn.Group.IsZero() {
+				reportErrorf("Transaction #%d with ID of %s is already part of a group.", transactionIdx, stxn.ID().String())
 			}
 
-			txns = append(txns, txn)
-			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(txn.Txn))
+			if (!stxn.Sig.Blank()) || (!stxn.Msig.Blank()) {
+				reportErrorf("Transaction #%d with ID of %s is already signed", transactionIdx, stxn.ID().String())
+			}
+
+			stxns = append(stxns, stxn)
+			group.TxGroupHashes = append(group.TxGroupHashes, crypto.HashObj(stxn.Txn))
+			transactionIdx++
 		}
 
 		var outData []byte
-		for _, txn := range txns {
-			txn.Txn.Group = crypto.HashObj(group)
-			outData = append(outData, protocol.Encode(&txn)...)
+		for _, stxn := range stxns {
+			stxn.Txn.Group = crypto.HashObj(group)
+			outData = append(outData, protocol.Encode(&stxn)...)
 		}
 
 		err = writeFile(outFilename, outData, 0600)
