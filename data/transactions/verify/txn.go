@@ -143,11 +143,6 @@ func Txn(s *transactions.SignedTxn, ctx Context) error {
 		return errors.New("nonempty AuthAddr but rekeying not supported")
 	}
 
-	return txnCoreCheck(s, &ctx, proto)
-}
-
-// txnCoreCheck perform the WellFormed test as well as the signature verification test
-func txnCoreCheck(s *transactions.SignedTxn, ctx *Context, proto config.ConsensusParams) error {
 	if err := s.Txn.WellFormed(ctx.CurrSpecAddrs, proto); err != nil {
 		return err
 	}
@@ -156,7 +151,7 @@ func txnCoreCheck(s *transactions.SignedTxn, ctx *Context, proto config.Consensu
 		return errors.New("empty address")
 	}
 
-	return stxnVerifyCore(s, ctx)
+	return stxnVerifyCore(s, &ctx)
 }
 
 type asyncVerifyContext struct {
@@ -343,10 +338,6 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 //
 // This version of verify is performing the verification over the provided execution pool.
 func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bookkeeping.Block, verificationPool execpool.BacklogPool) (err error) {
-	proto, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]
-	if !ok {
-		return protocol.Error(blk.BlockHeader.CurrentProtocol)
-	}
 	if len(payset) == 0 {
 		return nil
 	}
@@ -376,20 +367,10 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blk bo
 						return tasksCtx.Err()
 					}
 					txnGroups := arg.([][]transactions.SignedTxn)
-					if !proto.SupportRekeying {
-						for _, signTxnsGrp := range txnGroups {
-							for _, signTxn := range signTxnsGrp {
-								if (signTxn.AuthAddr != basics.Address{}) {
-									return errors.New("nonempty AuthAddr but rekeying not supported")
-								}
-							}
-						}
-					}
-
 					for _, signTxnsGrp := range txnGroups {
 						ctxs := PrepareContexts(signTxnsGrp, blk.BlockHeader)
 						for k, signTxn := range signTxnsGrp {
-							if err := txnCoreCheck(&signTxn, &ctxs[k], proto); err != nil {
+							if err := Txn(&signTxn, ctxs[k]); err != nil {
 								return err
 							}
 						}
