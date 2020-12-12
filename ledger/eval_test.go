@@ -446,7 +446,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if withCrypto {
-			_, err = l2.Validate(context.Background(), validatedBlock.blk, nil, backlogPool)
+			_, err = l2.Validate(context.Background(), validatedBlock.blk, backlogPool)
 		} else {
 			_, err = eval(context.Background(), l2, validatedBlock.blk, false, nil, nil)
 		}
