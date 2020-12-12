@@ -413,7 +413,7 @@ func BenchmarkPaysetGroups(b *testing.B) {
 	b.StopTimer()
 }
 
-func BenchmarkTxnPool(b *testing.B) {
+func BenchmarkTxn(b *testing.B) {
 	if b.N < 2000 {
 		b.N = 2000
 	}
@@ -435,9 +435,6 @@ func BenchmarkTxnPool(b *testing.B) {
 	for i, addr := range addrs {
 		addrToSecret[addr] = secrets[i]
 	}
-	execPool := execpool.MakePool(b)
-	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, b)
-	defer verificationPool.Shutdown()
 
 	// divide the transactions into transaction groups.
 	txnGroups := make([][]transactions.SignedTxn, 0, len(signedTxn))
@@ -461,7 +458,7 @@ func BenchmarkTxnPool(b *testing.B) {
 	for _, txnGroup := range txnGroups {
 		ctxs := PrepareContexts(txnGroup, blk.BlockHeader)
 		for i, txn := range txnGroup {
-			err := TxnPool(&txn, ctxs[i], verificationPool)
+			err := Txn(&txn, ctxs[i])
 			require.NoError(b, err)
 		}
 	}

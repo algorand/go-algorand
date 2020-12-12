@@ -109,38 +109,6 @@ func (ctx Context) Equal(other Context) bool {
 		ctx.groupParams.CurrProto == other.groupParams.CurrProto
 }
 
-// TxnPool verifies that a SignedTxn has a good signature and that the underlying
-// transaction is properly constructed.
-// Note that this does not check whether a payset is valid against the ledger:
-// a SignedTxn may be well-formed, but a payset might contain an overspend.
-//
-// This version of verify is performing the verification over the provided execution pool.
-func TxnPool(s *transactions.SignedTxn, ctx Context, verificationPool execpool.BacklogPool) error {
-	proto, ok := config.Consensus[ctx.groupParams.CurrProto]
-	if !ok {
-		return protocol.Error(ctx.groupParams.CurrProto)
-	}
-	if err := s.Txn.WellFormed(ctx.groupParams.CurrSpecAddrs, proto); err != nil {
-		return err
-	}
-
-	zeroAddress := basics.Address{}
-	if s.Txn.Src() == zeroAddress {
-		return errors.New("empty address")
-	}
-	if !proto.SupportRekeying && (s.AuthAddr != basics.Address{}) {
-		return errors.New("nonempty AuthAddr but rekeying not supported")
-	}
-
-	outCh := make(chan error, 1)
-	cx := asyncVerifyContext{s: s, outCh: outCh, ctx: &ctx}
-	verificationPool.EnqueueBacklog(context.Background(), stxnAsyncVerify, &cx, nil)
-	if err, hasErr := <-outCh; hasErr {
-		return err
-	}
-	return nil
-}
-
 // Txn verifies a SignedTxn as being signed and having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
 func Txn(s *transactions.SignedTxn, ctx Context) error {
@@ -162,6 +130,22 @@ func Txn(s *transactions.SignedTxn, ctx Context) error {
 	}
 
 	return stxnVerifyCore(s, &ctx)
+}
+
+// TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
+func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (err error) {
+	ctxs := PrepareContexts(stxs, contextHdr)
+	for i, stxn := range stxs {
+		err = Txn(&stxn, ctxs[i])
+		if err != nil {
+			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
+			return
+		}
+	}
+	if cache != nil {
+		err = cache.Add(stxs, ctxs)
+	}
+	return
 }
 
 type asyncVerifyContext struct {
@@ -384,7 +368,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 								return err
 							}
 						}
-						cache.Add(signTxnsGrp, ctxs, false)
+						cache.Add(signTxnsGrp, ctxs)
 					}
 					return nil
 				}, nextWorkset, worksDoneCh)

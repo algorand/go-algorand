@@ -121,12 +121,8 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 
 type DummyVerifiedTxnCache struct{}
 
-func (x DummyVerifiedTxnCache) Add(txgroup []transactions.SignedTxn, verifyContext []verify.Context, pinned bool) error {
+func (x DummyVerifiedTxnCache) Add(txgroup []transactions.SignedTxn, verifyContext []verify.Context) error {
 	return nil
-}
-
-func (x DummyVerifiedTxnCache) Check(txgroup []transactions.SignedTxn, verifyContext []verify.Context) bool {
-	return false
 }
 
 // GetUnverifiedTranscationGroups returns a list of unverified transaction groups given a payset

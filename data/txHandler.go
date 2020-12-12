@@ -19,6 +19,7 @@ package data
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -203,17 +204,12 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 		logging.Base().Warnf("Could not get header for previous block %d: %v", latest, err)
 	} else {
 		// we can't use PaysetGroups here since it's using a execpool like this go-routine and we don't want to deadlock.
-		ctxs := verify.PrepareContexts(tx.unverifiedTxGroup, latestHdr)
-		for i, txn := range tx.unverifiedTxGroup {
-			tx.verificationErr = verify.Txn(&txn, ctxs[i])
-			if tx.verificationErr != nil {
-				break
-			}
-		}
-		if tx.verificationErr == nil {
-			if err := handler.ledger.VerifiedTransactionCache().Add(tx.unverifiedTxGroup, ctxs, false); err != nil {
-				logging.Base().Warnf("unable to add transactions to verified transaction cache: %v", err)
-			}
+		err := verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache())
+		var cacheError *verify.VerifiedTxnCacheError
+		if errors.As(err, &cacheError) {
+			logging.Base().Warnf("unable to add transactions to verified transaction cache: %v", cacheError)
+		} else {
+			tx.verificationErr = err
 		}
 	}
 

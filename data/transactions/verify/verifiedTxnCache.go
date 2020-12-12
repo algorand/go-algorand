@@ -29,13 +29,25 @@ import (
 const entriesPerBucket = 8179 // pick a prime number to promote lower collisions.
 const maxPinnedEntries = 500000
 
-var errTooManyPinnedEntries = errors.New("Too many pinned entries")
-var errMissingPinnedEntry = errors.New("Missing pinned entry")
+// VerifiedTxnCacheError helps to identifiy the errors of a cache error and diffrenciate these from a general verification errors.
+type VerifiedTxnCacheError struct {
+	inner error
+}
+
+func (e *VerifiedTxnCacheError) Unwrap() error {
+	return e.inner
+}
+
+func (e *VerifiedTxnCacheError) Error() string {
+	return e.inner.Error()
+}
+
+var errTooManyPinnedEntries = &VerifiedTxnCacheError{errors.New("Too many pinned entries")}
+var errMissingPinnedEntry = &VerifiedTxnCacheError{errors.New("Missing pinned entry")}
 
 // VerifiedTransactionCache provides a cached store of recently verified transactions
 type VerifiedTransactionCache interface {
-	Add(txgroup []transactions.SignedTxn, verifyContext []Context, pinned bool) error
-	Check(txgroup []transactions.SignedTxn, verifyContext []Context) bool
+	Add(txgroup []transactions.SignedTxn, verifyContext []Context) error
 	GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn
 	UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) error
 	Pin(txgroup []transactions.SignedTxn) error
@@ -63,20 +75,9 @@ func MakeVerifiedTransactionCache(cacheSize int) VerifiedTransactionCache {
 	return impl
 }
 
-func (v *verifiedTransactionCacheImpl) Add(txgroup []transactions.SignedTxn, verifyContext []Context, pinned bool) error {
+func (v *verifiedTransactionCacheImpl) Add(txgroup []transactions.SignedTxn, verifyContext []Context) error {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
-	if pinned {
-		if len(v.pinned)+len(txgroup) > maxPinnedEntries {
-			// reaching this number likely means that we have an issue not removing entries from the pinned map.
-			// return an error ( which would get logged )
-			return errTooManyPinnedEntries
-		}
-		for i, txn := range txgroup {
-			v.pinned[txn.ID()] = verifyContext[i]
-		}
-		return nil
-	}
 	if len(v.buckets[v.base])+len(txgroup) > entriesPerBucket {
 		// move to the next bucket while deleting the content of the next bucket.
 		v.base = (v.base + 1) % len(v.buckets)
@@ -87,35 +88,6 @@ func (v *verifiedTransactionCacheImpl) Add(txgroup []transactions.SignedTxn, ver
 		currentBucket[txn.ID()] = verifyContext[i]
 	}
 	return nil
-}
-
-func (v *verifiedTransactionCacheImpl) Check(txgroup []transactions.SignedTxn, verifyContext []Context) (found bool) {
-	v.bucketsLock.Lock()
-	defer v.bucketsLock.Unlock()
-	found = false
-	for i, txn := range txgroup {
-		id := txn.ID()
-		found = false
-		// check pinned first
-		if ctx, has := v.pinned[id]; has && ctx.Equal(verifyContext[i]) {
-			found = true
-		}
-		if !found {
-			// try to look in the previously verified buckets.
-			// we use the (base + W) % W trick here so we can go backward and wrap around the zero.
-			for offsetBucketIdx := v.base + len(v.buckets); offsetBucketIdx > v.base; offsetBucketIdx-- {
-				bucketIdx := offsetBucketIdx % len(v.buckets)
-				if ctx, has := v.buckets[bucketIdx][id]; has && ctx.Equal(verifyContext[i]) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return
-			}
-		}
-	}
-	return
 }
 
 func (v *verifiedTransactionCacheImpl) GetUnverifiedTranscationGroups(txnGroups [][]transactions.SignedTxn, currSpecAddrs transactions.SpecialAddresses, currProto protocol.ConsensusVersion) (unverifiedGroups [][]transactions.SignedTxn) {

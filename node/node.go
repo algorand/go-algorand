@@ -19,6 +19,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -446,17 +447,13 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 		return err
 	}
 
-	contexts := verify.PrepareContexts(txgroup, b)
-	for i, tx := range txgroup {
-		err = verify.Txn(&tx, contexts[i])
-		if err != nil {
-			node.log.Warnf("malformed transaction: %v - transaction was %+v", err, tx)
-			return err
-		}
-	}
-	err = node.ledger.VerifiedTransactionCache().Add(txgroup, contexts, false)
-	if err != nil {
-		logging.Base().Warnf("unable to add transactions to verified transaction cache: %v", err)
+	err = verify.TxnGroup(txgroup, b, node.ledger.VerifiedTransactionCache())
+	var cacheError *verify.VerifiedTxnCacheError
+	if errors.As(err, &cacheError) {
+		logging.Base().Warnf("unable to add transactions to verified transaction cache: %v", cacheError)
+	} else {
+		node.log.Warnf("malformed transaction: %v", err)
+		return err
 	}
 
 	err = node.transactionPool.Remember(txgroup)
