@@ -362,7 +362,7 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 					}
 					txnGroups := arg.([][]transactions.SignedTxn)
 					for _, signTxnsGrp := range txnGroups {
-						err = TxnGroup(signTxnsGrp, blkHeader, cache)
+						err := TxnGroup(signTxnsGrp, blkHeader, cache)
 						// abort only if it's a non-cache error.
 						if err != nil {
 							if _, cacheErr := err.(*VerifiedTxnCacheError); !cacheErr {
