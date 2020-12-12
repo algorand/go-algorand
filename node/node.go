@@ -448,12 +448,14 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 	}
 
 	err = verify.TxnGroup(txgroup, b, node.ledger.VerifiedTransactionCache())
-	var cacheError *verify.VerifiedTxnCacheError
-	if errors.As(err, &cacheError) {
-		logging.Base().Warnf("unable to add transactions to verified transaction cache: %v", cacheError)
-	} else {
-		node.log.Warnf("malformed transaction: %v", err)
-		return err
+	if err != nil {
+		var cacheError *verify.VerifiedTxnCacheError
+		if errors.As(err, &cacheError) {
+			logging.Base().Warnf("unable to add transactions to verified transaction cache: %v", cacheError)
+		} else {
+			node.log.Warnf("malformed transaction: %v", err)
+			return err
+		}
 	}
 
 	err = node.transactionPool.Remember(txgroup)

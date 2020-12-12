@@ -205,11 +205,13 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 	} else {
 		// we can't use PaysetGroups here since it's using a execpool like this go-routine and we don't want to deadlock.
 		err := verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache())
-		var cacheError *verify.VerifiedTxnCacheError
-		if errors.As(err, &cacheError) {
-			logging.Base().Warnf("unable to add transactions to verified transaction cache: %v", cacheError)
-		} else {
-			tx.verificationErr = err
+		if err != nil {
+			var cacheError *verify.VerifiedTxnCacheError
+			if errors.As(err, &cacheError) {
+				logging.Base().Warnf("unable to add transactions to verified transaction cache: %v", cacheError)
+			} else {
+				tx.verificationErr = err
+			}
 		}
 	}
 
