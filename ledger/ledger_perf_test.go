@@ -134,6 +134,10 @@ func (vc *alwaysVerifiedCache) Add(txgroup []transactions.SignedTxn, verifyConte
 	return nil
 }
 
+func (vc *alwaysVerifiedCache) AddPayset(txgroup [][]transactions.SignedTxn, verifyContext [][]verify.Context) error {
+	return nil
+}
+
 func (vc *alwaysVerifiedCache) GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn {
 	return nil
 }

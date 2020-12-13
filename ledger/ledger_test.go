@@ -125,6 +125,10 @@ func (x DummyVerifiedTxnCache) Add(txgroup []transactions.SignedTxn, verifyConte
 	return nil
 }
 
+func (x DummyVerifiedTxnCache) AddPayset(txgroup [][]transactions.SignedTxn, verifyContext [][]verify.Context) error {
+	return nil
+}
+
 // GetUnverifiedTranscationGroups returns a list of unverified transaction groups given a payset
 func (x DummyVerifiedTxnCache) GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn {
 	return payset

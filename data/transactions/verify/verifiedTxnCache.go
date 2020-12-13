@@ -48,6 +48,7 @@ var errMissingPinnedEntry = &VerifiedTxnCacheError{errors.New("Missing pinned en
 // VerifiedTransactionCache provides a cached store of recently verified transactions
 type VerifiedTransactionCache interface {
 	Add(txgroup []transactions.SignedTxn, verifyContext []Context) error
+	AddPayset(txgroup [][]transactions.SignedTxn, verifyContext [][]Context) error
 	GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn
 	UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) error
 	Pin(txgroup []transactions.SignedTxn) error
@@ -78,14 +79,17 @@ func MakeVerifiedTransactionCache(cacheSize int) VerifiedTransactionCache {
 func (v *verifiedTransactionCacheImpl) Add(txgroup []transactions.SignedTxn, verifyContext []Context) error {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
-	if len(v.buckets[v.base])+len(txgroup) > entriesPerBucket {
-		// move to the next bucket while deleting the content of the next bucket.
-		v.base = (v.base + 1) % len(v.buckets)
-		v.buckets[v.base] = make(map[transactions.Txid]Context, entriesPerBucket)
-	}
-	currentBucket := v.buckets[v.base]
-	for i, txn := range txgroup {
-		currentBucket[txn.ID()] = verifyContext[i]
+	return v.add(txgroup, verifyContext)
+}
+
+func (v *verifiedTransactionCacheImpl) AddPayset(txgroup [][]transactions.SignedTxn, verifyContext [][]Context) error {
+	v.bucketsLock.Lock()
+	defer v.bucketsLock.Unlock()
+	for i := range txgroup {
+		err := v.add(txgroup[i], verifyContext[i])
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -198,4 +202,17 @@ func (v *verifiedTransactionCacheImpl) Pin(txgroup []transactions.SignedTxn) (er
 		err = errMissingPinnedEntry
 	}
 	return
+}
+
+func (v *verifiedTransactionCacheImpl) add(txgroup []transactions.SignedTxn, verifyContext []Context) error {
+	if len(v.buckets[v.base])+len(txgroup) > entriesPerBucket {
+		// move to the next bucket while deleting the content of the next bucket.
+		v.base = (v.base + 1) % len(v.buckets)
+		v.buckets[v.base] = make(map[transactions.Txid]Context, entriesPerBucket)
+	}
+	currentBucket := v.buckets[v.base]
+	for i, txn := range txgroup {
+		currentBucket[txn.ID()] = verifyContext[i]
+	}
+	return nil
 }

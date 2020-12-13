@@ -133,8 +133,8 @@ func Txn(s *transactions.SignedTxn, ctx Context) error {
 }
 
 // TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
-func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (err error) {
-	ctxs := PrepareContexts(stxs, contextHdr)
+func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (ctxs []Context, err error) {
+	ctxs = PrepareContexts(stxs, contextHdr)
 	for i, stxn := range stxs {
 		err = Txn(&stxn, ctxs[i])
 		if err != nil {
@@ -356,20 +356,21 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 		case worksets <- struct{}{}:
 			if len(nextWorkset) > 0 {
 				err := verificationPool.EnqueueBacklog(ctx, func(arg interface{}) interface{} {
+					var grpErr error
 					// check if we've canceled the request while this was in the queue.
 					if tasksCtx.Err() != nil {
 						return tasksCtx.Err()
 					}
 					txnGroups := arg.([][]transactions.SignedTxn)
-					for _, signTxnsGrp := range txnGroups {
-						err := TxnGroup(signTxnsGrp, blkHeader, cache)
+					ctxs := make([][]Context, len(txnGroups))
+					for i, signTxnsGrp := range txnGroups {
+						ctxs[i], grpErr = TxnGroup(signTxnsGrp, blkHeader, nil)
 						// abort only if it's a non-cache error.
-						if err != nil {
-							if _, cacheErr := err.(*VerifiedTxnCacheError); !cacheErr {
-								return err
-							}
+						if grpErr != nil {
+							return grpErr
 						}
 					}
+					cache.AddPayset(txnGroups, ctxs)
 					return nil
 				}, nextWorkset, worksDoneCh)
 				if err != nil {
