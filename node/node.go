@@ -447,7 +447,7 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 		return err
 	}
 
-	err = verify.TxnGroup(txgroup, b, node.ledger.VerifiedTransactionCache())
+	_, err = verify.TxnGroup(txgroup, b, node.ledger.VerifiedTransactionCache())
 	if err != nil {
 		var cacheError *verify.VerifiedTxnCacheError
 		if errors.As(err, &cacheError) {

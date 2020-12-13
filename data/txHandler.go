@@ -204,7 +204,7 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 		logging.Base().Warnf("Could not get header for previous block %d: %v", latest, err)
 	} else {
 		// we can't use PaysetGroups here since it's using a execpool like this go-routine and we don't want to deadlock.
-		err := verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache())
+		_, err := verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache())
 		if err != nil {
 			var cacheError *verify.VerifiedTxnCacheError
 			if errors.As(err, &cacheError) {
