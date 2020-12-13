@@ -716,38 +716,70 @@ var signCmd = &cobra.Command{
 
 		var outData []byte
 		dec := protocol.NewDecoderBytes(data)
+		// read the entire file and prepare in-memory copy of each signed transaction, with grouping.
+		txnGroups := make(map[crypto.Digest][]*transactions.SignedTxn)
+		groupsOrder := make([]crypto.Digest, 0)
+		txnIndex := make(map[*transactions.SignedTxn]int)
 		count := 0
 		for {
-			// transaction file comes in as a SignedTxn with no signature
-			var uncheckedTxn transactions.SignedTxn
-			err = dec.Decode(&uncheckedTxn)
+			uncheckedTxn := new(transactions.SignedTxn)
+			err = dec.Decode(uncheckedTxn)
 			if err == io.EOF {
 				break
 			}
 			if err != nil {
 				reportErrorf(txDecodeError, txFilename, err)
 			}
-
-			var signedTxn transactions.SignedTxn
-			if lsig.Logic != nil {
-				proto, _ := getProto(protoVersion)
-				uncheckedTxn.Lsig = lsig
-				err = verify.LogicSigSanityCheck(&uncheckedTxn, &verify.Context{Params: verify.Params{CurrProto: proto}})
-				if err != nil {
-					reportErrorf("%s: txn[%d] error %s", txFilename, count, err)
-				}
-				signedTxn = uncheckedTxn
-			} else {
-				// sign the usual way
-				signedTxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, uncheckedTxn.Txn)
-				if err != nil {
-					reportErrorf(errorSigningTX, err)
-				}
+			group := uncheckedTxn.Txn.Group
+			if group.IsZero() {
+				// create a dummy group.
+				randGroupBytes := crypto.Digest{}
+				crypto.RandBytes(randGroupBytes[:])
+				group = randGroupBytes
 			}
+			if _, hasGroup := txnGroups[group]; !hasGroup {
+				// add a new group as needed.
+				groupsOrder = append(groupsOrder, group)
 
-			outData = append(outData, protocol.Encode(&signedTxn)...)
+			}
+			txnGroups[group] = append(txnGroups[group], uncheckedTxn)
+			txnIndex[uncheckedTxn] = count
 			count++
 		}
+
+		consensusVersion, _ := getProto(protoVersion)
+		contextHdr := bookkeeping.BlockHeader{
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: consensusVersion,
+			},
+		}
+
+		for _, group := range groupsOrder {
+			txnGroup := []transactions.SignedTxn{}
+			for _, txn := range txnGroups[group] {
+				txnGroup = append(txnGroup, *txn)
+			}
+			ctxs := verify.PrepareContexts(txnGroup, contextHdr)
+			for i, txn := range txnGroup {
+				var signedTxn transactions.SignedTxn
+				if lsig.Logic != nil {
+					txn.Lsig = lsig
+					err = verify.LogicSigSanityCheck(&txn, &ctxs[i])
+					if err != nil {
+						reportErrorf("%s: txn[%d] error %s", txFilename, txnIndex[txnGroups[group][i]], err)
+					}
+					signedTxn = txn
+				} else {
+					// sign the usual way
+					signedTxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, txn.Txn)
+					if err != nil {
+						reportErrorf(errorSigningTX, err)
+					}
+				}
+				outData = append(outData, protocol.Encode(&signedTxn)...)
+			}
+		}
+
 		err = writeFile(outFilename, outData, 0600)
 		if err != nil {
 			reportErrorf(fileWriteError, outFilename, err)
