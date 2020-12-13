@@ -216,3 +216,41 @@ func (v *verifiedTransactionCacheImpl) add(txgroup []transactions.SignedTxn, ver
 	}
 	return nil
 }
+
+var alwaysVerifiedCache = mockedCache{true}
+var neverVerifiedCache = mockedCache{false}
+
+type mockedCache struct {
+	alwaysVerified bool
+}
+
+func (v *mockedCache) Add(txgroup []transactions.SignedTxn, verifyContext []Context) error {
+	return nil
+}
+
+func (v *mockedCache) AddPayset(txgroup [][]transactions.SignedTxn, verifyContext [][]Context) error {
+	return nil
+}
+
+func (v *mockedCache) GetUnverifiedTranscationGroups(txnGroups [][]transactions.SignedTxn, currSpecAddrs transactions.SpecialAddresses, currProto protocol.ConsensusVersion) (unverifiedGroups [][]transactions.SignedTxn) {
+	if v.alwaysVerified {
+		return nil
+	}
+	return txnGroups
+}
+
+func (v *mockedCache) UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) (err error) {
+	return nil
+}
+
+func (v *mockedCache) Pin(txgroup []transactions.SignedTxn) (err error) {
+	return nil
+}
+
+// GetMockedCache returns a mocked transaction cache implementation
+func GetMockedCache(alwaysVerified bool) VerifiedTransactionCache {
+	if alwaysVerified {
+		return &alwaysVerifiedCache
+	}
+	return &neverVerifiedCache
+}

@@ -119,33 +119,10 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 	return
 }
 
-type DummyVerifiedTxnCache struct{}
-
-func (x DummyVerifiedTxnCache) Add(txgroup []transactions.SignedTxn, verifyContext []verify.Context) error {
-	return nil
-}
-
-func (x DummyVerifiedTxnCache) AddPayset(txgroup [][]transactions.SignedTxn, verifyContext [][]verify.Context) error {
-	return nil
-}
-
-// GetUnverifiedTranscationGroups returns a list of unverified transaction groups given a payset
-func (x DummyVerifiedTxnCache) GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn {
-	return payset
-}
-
-func (x DummyVerifiedTxnCache) UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) error {
-	return nil
-}
-
-func (x DummyVerifiedTxnCache) Pin(txgroup []transactions.SignedTxn) error {
-	return nil
-}
-
 func (l *Ledger) appendUnvalidated(blk bookkeeping.Block) error {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
-	l.verifiedTxnCache = &DummyVerifiedTxnCache{}
+	l.verifiedTxnCache = verify.GetMockedCache(false)
 	vb, err := l.Validate(context.Background(), blk, backlogPool)
 	if err != nil {
 		return fmt.Errorf("appendUnvalidated error in Validate: %s", err.Error())

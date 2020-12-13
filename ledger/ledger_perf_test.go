@@ -128,28 +128,6 @@ func makeUnsignedPaymentTx(sender basics.Address, round int) transactions.Transa
 	}
 }
 
-type alwaysVerifiedCache struct{}
-
-func (vc *alwaysVerifiedCache) Add(txgroup []transactions.SignedTxn, verifyContext []verify.Context) error {
-	return nil
-}
-
-func (vc *alwaysVerifiedCache) AddPayset(txgroup [][]transactions.SignedTxn, verifyContext [][]verify.Context) error {
-	return nil
-}
-
-func (vc *alwaysVerifiedCache) GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn {
-	return nil
-}
-
-func (vc *alwaysVerifiedCache) UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) error {
-	return nil
-}
-
-func (vc *alwaysVerifiedCache) Pin(txgroup []transactions.SignedTxn) error {
-	return nil
-}
-
 func benchmarkFullBlocks(params testParams, b *testing.B) {
 	// disable deadlock checking code
 	deadlockDisable := deadlock.Opts.Disable
@@ -338,10 +316,10 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	b.Logf("built %d blocks, each with %d txns", numBlocks, txPerBlock)
 
 	// eval + add all the (valid) blocks to the second ledger, measuring it this time
-	vc := alwaysVerifiedCache{}
+	vc := verify.GetMockedCache(true)
 	b.ResetTimer()
 	for _, blk := range blocks {
-		_, err = eval(context.Background(), l1, blk, true, &vc, nil)
+		_, err = eval(context.Background(), l1, blk, true, vc, nil)
 		require.NoError(b, err)
 		err = l1.AddBlock(blk, cert)
 		require.NoError(b, err)
