@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
+	"math/rand"
 	"os"
 	"sort"
 	"strings"
@@ -662,21 +663,15 @@ func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
 	return assetIdx, creatable
 }
 
-func BenchmarkReadingAllBalances(b *testing.B) {
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	//b.N = 50000
-	dbs, _ := dbOpenTest(b, true)
-	setDbLogging(b, dbs)
-	defer dbs.close()
-
+func benchmarkInitBalances(b testing.TB, numAccounts int, dbs dbPair, proto config.ConsensusParams) (updates map[basics.Address]basics.AccountData) {
 	tx, err := dbs.wdb.Handle.Begin()
 	require.NoError(b, err)
 
 	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
-	updates := map[basics.Address]basics.AccountData{}
+	updates = make(map[basics.Address]basics.AccountData, numAccounts)
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; i < numAccounts; i++ {
 		addr := randomAddress()
 		updates[addr] = basics.AccountData{
 			MicroAlgos:         basics.MicroAlgos{Raw: 0x000ffffffffffffff},
@@ -712,8 +707,26 @@ func BenchmarkReadingAllBalances(b *testing.B) {
 		}
 	}
 	accountsInit(tx, updates, proto)
-	tx.Commit()
-	tx, err = dbs.rdb.Handle.Begin()
+	err = tx.Commit()
+	require.NoError(b, err)
+	return
+}
+
+func cleanupTestDb(dbs dbPair, dbName string, inMemory bool) {
+	dbs.close()
+	if !inMemory {
+		os.Remove(dbName)
+	}
+}
+
+func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	dbs, fn := dbOpenTest(b, inMemory)
+	setDbLogging(b, dbs)
+	defer cleanupTestDb(dbs, fn, inMemory)
+
+	benchmarkInitBalances(b, b.N, dbs, proto)
+	tx, err := dbs.rdb.Handle.Begin()
 	require.NoError(b, err)
 
 	b.ResetTimer()
@@ -728,6 +741,50 @@ func BenchmarkReadingAllBalances(b *testing.B) {
 		prevHash = crypto.Hash(append(encodedAccountBalance, ([]byte(prevHash[:]))...))
 	}
 	require.Equal(b, b.N, len(bal))
+}
+
+func BenchmarkReadingAllBalancesRAM(b *testing.B) {
+	benchmarkReadingAllBalances(b, true)
+}
+
+func BenchmarkReadingAllBalancesDisk(b *testing.B) {
+	benchmarkReadingAllBalances(b, false)
+}
+
+func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
+	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	dbs, fn := dbOpenTest(b, inMemory)
+	setDbLogging(b, dbs)
+	defer cleanupTestDb(dbs, fn, inMemory)
+
+	accounts := benchmarkInitBalances(b, b.N, dbs, proto)
+
+	qs, err := accountsDbInit(dbs.rdb.Handle, dbs.wdb.Handle)
+	require.NoError(b, err)
+
+	// read all the balances in the database, shuffled
+	addrs := make([]basics.Address, len(accounts))
+	pos := 0
+	for addr := range accounts {
+		addrs[pos] = addr
+		pos++
+	}
+	rand.Shuffle(len(addrs), func(i, j int) { addrs[i], addrs[j] = addrs[j], addrs[i] })
+
+	// only measure the actual fetch time
+	b.ResetTimer()
+	for _, addr := range addrs {
+		_, _, err = qs.lookup(addr)
+		require.NoError(b, err)
+	}
+}
+
+func BenchmarkReadingRandomBalancesRAM(b *testing.B) {
+	benchmarkReadingRandomBalances(b, true)
+}
+
+func BenchmarkReadingRandomBalancesDisk(b *testing.B) {
+	benchmarkReadingRandomBalances(b, false)
 }
 
 func TestAccountsReencoding(t *testing.T) {
