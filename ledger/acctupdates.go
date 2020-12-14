@@ -1471,7 +1471,6 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 // lookupWithRewards returns the account data for a given address at a given round.
 // The rewards are added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it does return the AccoutData which represent the "rewarded" account data.
-// The resultant AccountData does not include application states.
 func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, err error) {
 	au.accountsMu.RLock()
 	needUnlock := true
@@ -1554,7 +1553,6 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 }
 
 // lookupWithoutRewards returns the account data for a given address at a given round.
-// The resultant AccountData does not include application states.
 func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Address, syncronized bool) (data basics.AccountData, validThrough basics.Round, err error) {
 	needUnlock := false
 	if syncronized {

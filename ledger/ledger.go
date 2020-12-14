@@ -448,7 +448,7 @@ func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountDa
 	return data, nil
 }
 
-// LookupWithoutRewards is like lookup but does not apply pending rewards up
+// LookupWithoutRewards is like Lookup but does not apply pending rewards up
 // to the requested round rnd.
 func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
 	l.trackerMu.RLock()
