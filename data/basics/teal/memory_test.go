@@ -16,13 +16,13 @@ func TestMemorySegment_Snapshot(t *testing.T) {
 	m.SaveSnapshot()
 	before := m.String()
 	barr := NewByteArray(4)
-	barr.Set(0, 7)
+	barr.Set(0, 7, nil)
 	m.AllocateAt(0, barr)
 
 	t.Run("InitialSetup",
 		func(t *testing.T) {
 			want = "Memory Segment: (maxSize:5)\n[0, *teal.ByteArray)]--->[7 0 0 0]\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->22\n[3, <nil>)]---><nil>\n[4, <nil>)]---><nil>"
-			//if we put t.Error inside check() we won't be able to see the correct line number anymore
+			// if we put t.Error inside check() we won't be able to see the correct line number anymore
 			if s := check(m.String(), want, t); s != "pass" {
 				t.Error(s)
 			}
@@ -48,6 +48,22 @@ func TestMemorySegment_Snapshot(t *testing.T) {
 			if s := check(m.String(), want, t); s != "pass" {
 				t.Error(s)
 			}
+			m.MinPackingGain = 0.4
+			m.SaveSnapshot()
+			m.DiscardSnapshot()
+			want = "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->22\n[3, <nil>)]---><nil>\n[4, <nil>)]---><nil>"
+			if s := check(m.String(), want, t); s != "pass" {
+				t.Error(s)
+			}
+			m.MinPackingGain = 0.39
+			m.SaveSnapshot()
+			m.DiscardSnapshot()
+			want = "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->22"
+			if s := check(m.String(), want, t); s != "pass" {
+				t.Error(s)
+			}
+			m.MinPackingGain = 0.15
+
 			m.SaveSnapshot()
 			m.AllocateAt(4, barr)
 			m.DiscardSnapshot()
@@ -60,15 +76,15 @@ func TestMemorySegment_Snapshot(t *testing.T) {
 	t.Run("RestoringMultipleUpdates",
 		func(t *testing.T) {
 			m.SaveSnapshot()
-			barr.Set(0, 3)
+			barr.Set(0, 3, m)
 			m.SaveSnapshot()
 			before = m.String()
-			barr.Set(0, 5)
-			barr.Set(2, 6)
-			barr.Set(2, 10)
+			barr.Set(0, 5, m)
+			barr.Set(2, 6, m)
+			barr.Set(2, 10, m)
 			m.compact()
 			i, _ := m.Get(2)
-			i.(*UInt).SetValue(45)
+			i.(*UInt).SetValue(45, m)
 			m.Delete(2)
 			want = "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, <nil>)]---><nil>\n[3, <nil>)]---><nil>\n[4, *teal.ByteArray)]--->[5 0 10 0]"
 			if s := check(m.String(), want, t); s != "pass" {
@@ -77,8 +93,8 @@ func TestMemorySegment_Snapshot(t *testing.T) {
 			m.AllocateAt(2, NewUInt(42))
 			m.AllocateAt(0, NewUInt(11))
 			i, _ = m.Get(0)
-			i.(*UInt).SetValue(15)
-			i.(*UInt).SetValue(16)
+			i.(*UInt).SetValue(15, m)
+			i.(*UInt).SetValue(16, m)
 			want = "Memory Segment: (maxSize:5)\n[0, *teal.UInt)]--->16\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->42\n[3, <nil>)]---><nil>\n[4, *teal.ByteArray)]--->[5 0 10 0]"
 			if s := check(m.String(), want, t); s != "pass" {
 				t.Error(s)
@@ -88,13 +104,6 @@ func TestMemorySegment_Snapshot(t *testing.T) {
 				t.Error(s)
 			}
 		})
-
-	/*
-		t.Run("RestoringOnMainArray",
-			func(t *testing.T) {
-			})
-	*/
-
 }
 
 func TestMemorySegment_AllocateAt(t *testing.T) {
@@ -142,7 +151,7 @@ func TestMemorySegment_Get(t *testing.T) {
 	}
 	m = NewMemorySegment(8)
 	barr := NewByteArray(3)
-	barr.Set(2, 12)
+	barr.Set(2, 12, m)
 	m.AllocateAt(2, barr)
 	m.DiscardSnapshot()
 	_, err = m.Get(0)
@@ -160,6 +169,32 @@ func TestMemorySegment_Get(t *testing.T) {
 	}
 	if b, _ := barr.Get(2); b != 12 {
 		t.Errorf("Error in getting values of a ByteArray. we got: %v we wanted %v", b, 12)
+	}
+}
+
+func TestConstByteArray(t *testing.T) {
+	b1 := []byte{2, 0, 4, 1}
+	cb := NewConstByteArray(b1)
+	want := "[2 0 4 1]"
+	if s := check(cb.String(), want, t); s != "pass" {
+		t.Error(s)
+	}
+	b2 := []byte{2, 0, 4, 1}
+	if !cb.EqualsToSlice(b2) {
+		t.Error("Equals returned false instead of true.")
+	}
+	b2[2] = 3
+	if cb.EqualsToSlice(b2) {
+		t.Error("Equals returned true instead of false.")
+	}
+	other := NewConstByteArray(b2)
+	if cb.Equals(other) {
+		t.Error("Equals returned true instead of false.")
+	}
+	b2[2] = 4
+	other = NewConstByteArray(b2)
+	if !cb.Equals(other) {
+		t.Error("Equals returned false instead of true.")
 	}
 }
 

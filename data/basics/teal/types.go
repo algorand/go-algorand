@@ -12,30 +12,29 @@ import (
 )
 
 type DataType interface {
-	setSnapshotManager(*snapshotManager)
-	String() string
+	fmt.Stringer
+	imTeal()
 }
 
 type UInt struct {
-	manager *snapshotManager
-	value   uint64
+	value uint64
 }
 
 func NewUInt(value uint64) *UInt {
 	return &UInt{value: value}
 }
 
-func (i *UInt) setSnapshotManager(sm *snapshotManager) {
-	i.manager = sm
+func (i *UInt) imTeal() {
+	panic("implement me")
 }
 
 func (i *UInt) Value() uint64 {
 	return i.value
 }
 
-func (i *UInt) SetValue(value uint64) {
-	if i.manager != nil {
-		i.manager.notifyUpdate(&i.value, i.value)
+func (i *UInt) SetValue(value uint64, container *MemorySegment) {
+	if container != nil {
+		container.snapManager.notifyUpdate(&i.value, i.value)
 	}
 	i.value = value
 }
@@ -50,12 +49,12 @@ type ConstByteArray struct {
 
 func NewConstByteArray(b []byte) *ConstByteArray {
 	temp := make([]byte, len(b))
-	copy(b, temp)
+	copy(temp, b)
 	return &ConstByteArray{values: temp}
 }
 
-func (cba *ConstByteArray) setSnapshotManager(*snapshotManager) {
-	//do nothing!
+func (cba *ConstByteArray) imTeal() {
+	panic("implement me")
 }
 
 func (cba *ConstByteArray) Get(i int) (byte, *OutOfBoundsError) {
@@ -79,29 +78,24 @@ func (cba *ConstByteArray) String() string {
 
 type ByteArray struct {
 	ConstByteArray
-	manager *snapshotManager
 }
 
 func NewByteArray(size int) *ByteArray {
 	return &ByteArray{ConstByteArray: ConstByteArray{values: make([]byte, size)}}
 }
 
-func (ba *ByteArray) setSnapshotManager(sm *snapshotManager) {
-	ba.manager = sm
-}
-
-func (ba *ByteArray) Set(i int, b byte) *OutOfBoundsError {
+func (ba *ByteArray) Set(i int, b byte, container *MemorySegment) *OutOfBoundsError {
 	if l := len(ba.values); i < 0 || i >= l {
 		return &OutOfBoundsError{Value: i, LowerBound: 0, HigherBound: l - 1}
 	}
-	if ba.manager != nil {
-		ba.manager.notifyUpdate(&ba.values[i], ba.values[i])
+	if container != nil {
+		container.snapManager.notifyUpdate(&ba.values[i], ba.values[i])
 	}
 	ba.values[i] = b
 	return nil
 }
 
-//OutOfBoundsError is an error type indicating that some integer value is out of its valid range.
+// OutOfBoundsError is an error type indicating that some integer value is out of its valid range.
 type OutOfBoundsError struct {
 	Value       int
 	LowerBound  int

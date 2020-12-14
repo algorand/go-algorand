@@ -14,7 +14,7 @@ var (
 // Every address can either be empty or contain a teal.DataType.
 //
 // MemorySegment is able to  save a snapshot of its state which can later be restored by calling RestoreSnapshot.
-// After calling SaveSnapshot memory and runtime overhead of MemorySegment increases, calling DiscardSnapshot will re-optimize MemorySegment again.
+// After calling SaveSnapshot memory and runtime overhead of MemorySegment increases, calling DiscardSnapshot will re-optimize MemorySegment.
 //
 // Example Usage:
 //		m := teal.NewMemorySegment(schemaSize)
@@ -28,11 +28,18 @@ type MemorySegment struct {
 	segment     []DataType
 	snapManager snapshotManager
 	maxSize     int
+	// MinPackingGain determines when DiscardSnapshot should not compact the segment. If the improvement in the size
+	// of the segment is less than MinPackingGain the segment will not be copied to a smaller segment.
+	MinPackingGain float32
 }
 
 // NewMemorySegment creates an empty MemorySegment which its last valid address is size - 1.
 func NewMemorySegment(size int) *MemorySegment {
-	return &MemorySegment{maxSize: size, segment: make([]DataType, size)}
+	return &MemorySegment{
+		segment:        make([]DataType, size),
+		maxSize:        size,
+		MinPackingGain: 0.15,
+	}
 }
 
 // AllocateAt puts "item" at the specified position by "index". If that position is not empty it will return an error.
@@ -51,23 +58,22 @@ func (ms *MemorySegment) AllocateAt(index int, item DataType) error {
 	if ms.segment[index] != nil {
 		return ErrCellNotEmpty
 	}
-	//we need to notify our snapshot manager about change in segment[]
+	// we need to notify our snapshot manager about change in segment[]
 	ms.snapManager.notifyUpdate(&ms.segment[index], ms.segment[index])
-	//adding item
-	item.setSnapshotManager(&ms.snapManager)
+	// adding item
 	ms.segment[index] = item
 	return nil
 }
 
 // Delete deletes any data stored at the specified position by index. it returns an error if that memory location is empty.
 func (ms *MemorySegment) Delete(index int) error {
-	//if Get(index) returns an error we will return an error too
+	// if Get(index) returns an error we will return an error too
 	if _, err := ms.Get(index); err != nil {
 		return err
 	}
-	//we need to notify our snapshot manager about change in segment[]
+	// we need to notify our snapshot manager about change in segment[]
 	ms.snapManager.notifyUpdate(&ms.segment[index], ms.segment[index])
-	//removing item
+	// removing item
 	ms.segment[index] = nil
 	return nil
 }
@@ -89,7 +95,7 @@ func (ms *MemorySegment) Get(index int) (DataType, error) {
 // and updating any data will have an extra overhead.
 func (ms *MemorySegment) SaveSnapshot() {
 	ms.snapManager.reset()
-	//we'd better call expand() here. otherwise AllocateAt may fail if the memory is updated.
+	// we'd better call expand() here. otherwise AllocateAt may fail if the memory is updated.
 	ms.expand()
 }
 
@@ -103,12 +109,12 @@ func (ms *MemorySegment) DiscardSnapshot() {
 // RestoreSnapshot restores a previously saved snapshot.
 func (ms *MemorySegment) RestoreSnapshot() {
 	ms.snapManager.restoreSnapshot()
-	//we don't need the old snapshot anymore, so we reset snapManager to improve performance of MemorySegment
+	// we don't need the old snapshot anymore, so we reset snapManager to improve performance of MemorySegment
 	ms.snapManager.reset()
 }
 
-//expand expands the memory to its original size. Expanding will cause a runtime error, if there is
-//a non empty saved snapshot in the MemorySegment.
+// expand expands the memory to its original size. Expanding will cause a runtime error, if there is
+// a non empty saved snapshot in the MemorySegment.
 func (ms *MemorySegment) expand() {
 	if len(ms.segment) == ms.maxSize {
 		return
@@ -122,15 +128,20 @@ func (ms *MemorySegment) expand() {
 }
 
 func (ms *MemorySegment) compact() {
-	//when we have a saved snapshot compact does nothing
+	// when we have a saved snapshot compact does nothing
 	if len(ms.snapManager.savedSnapshots) > 0 {
 		return
 	}
-	//we need to find last element like this cuz we have a Delete() function which can remove elements
-	last := len(ms.segment) - 1
+	// we need to find last element like this cuz we have a Delete() function which can remove elements
+	oldLen := len(ms.segment)
+	last := oldLen - 1
 	for ; last >= 0 && ms.segment[last] == nil; last-- {
 	}
-	newSegment := make([]DataType, last+1)
+	newLen := last + 1
+	if float32(newLen) >= (1-ms.MinPackingGain)*float32(oldLen) {
+		return
+	}
+	newSegment := make([]DataType, newLen)
 	copy(newSegment, ms.segment)
 	ms.segment = newSegment
 }
@@ -193,7 +204,7 @@ func (sm *snapshotManager) restoreSnapshot() {
 }
 
 func (sm *snapshotManager) notifyUpdate(pointer interface{}, oldValue interface{}) {
-	//if sm.savedSnapshots is nil that means the snapshotManager is turned off and this function has no effect.
+	// if sm.savedSnapshots is nil that means the snapshotManager is turned off and this function has no effect.
 	if sm.savedSnapshots == nil {
 		return
 	}
