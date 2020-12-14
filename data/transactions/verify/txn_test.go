@@ -109,17 +109,17 @@ func TestSignedPayment(t *testing.T) {
 	payments, stxns, secrets, addrs := generateTestObjects(1, 1, 0)
 	payment, stxn, secret, addr := payments[0], stxns[0], secrets[0], addrs[0]
 
-	ctxs := PrepareContexts(stxns, blockHeader)
-
+	groupParams, err := PrepareGroupParams(stxns, blockHeader)
+	require.NoError(t, err)
 	require.NoError(t, payment.WellFormed(spec, proto), "generateTestObjects generated an invalid payment")
-	require.NoError(t, Txn(&stxn, ctxs[0]), "generateTestObjects generated a bad signedtxn")
+	require.NoError(t, Txn(&stxn, 0, groupParams), "generateTestObjects generated a bad signedtxn")
 
 	stxn2 := payment.Sign(secret)
 	require.Equal(t, stxn2.Sig, stxn.Sig, "got two different signatures for the same transaction (our signing function is deterministic)")
 
 	stxn2.MessUpSigForTesting()
 	require.Equal(t, stxn.ID(), stxn2.ID(), "changing sig caused txid to change")
-	require.Error(t, Txn(&stxn2, ctxs[0]), "verify succeeded with bad sig")
+	require.Error(t, Txn(&stxn2, 0, groupParams), "verify succeeded with bad sig")
 
 	require.True(t, crypto.SignatureVerifier(addr).Verify(payment, stxn.Sig), "signature on the transaction is not the signature of the hash of the transaction under the spender's key")
 }
@@ -128,8 +128,9 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50, 0)
 
 	for _, txn := range signed {
-		ctxs := PrepareContexts([]transactions.SignedTxn{txn}, blockHeader)
-		if Txn(&txn, ctxs[0]) != nil {
+		groupParams, err := PrepareGroupParams([]transactions.SignedTxn{txn}, blockHeader)
+		require.NoError(t, err)
+		if Txn(&txn, 0, groupParams) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 
@@ -137,7 +138,7 @@ func TestTxnValidationEncodeDecode(t *testing.T) {
 		var signedTx transactions.SignedTxn
 		protocol.Decode(x, &signedTx)
 
-		if Txn(&signedTx, ctxs[0]) != nil {
+		if Txn(&signedTx, 0, groupParams) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 	}
@@ -147,15 +148,16 @@ func TestTxnValidationEmptySig(t *testing.T) {
 	_, signed, _, _ := generateTestObjects(100, 50, 0)
 
 	for _, txn := range signed {
-		ctxs := PrepareContexts([]transactions.SignedTxn{txn}, blockHeader)
-		if Txn(&txn, ctxs[0]) != nil {
+		groupParams, err := PrepareGroupParams([]transactions.SignedTxn{txn}, blockHeader)
+		require.NoError(t, err)
+		if Txn(&txn, 0, groupParams) != nil {
 			t.Errorf("signed transaction %#v did not verify", txn)
 		}
 
 		txn.Sig = crypto.Signature{}
 		txn.Msig = crypto.MultisigSig{}
 		txn.Lsig = transactions.LogicSig{}
-		if Txn(&txn, ctxs[0]) == nil {
+		if Txn(&txn, 0, groupParams) == nil {
 			t.Errorf("transaction %#v verified without sig", txn)
 		}
 	}
@@ -189,15 +191,16 @@ func TestTxnValidationCompactCert(t *testing.T) {
 		},
 	}
 
-	ctxs := PrepareContexts([]transactions.SignedTxn{stxn}, blockHeader)
+	groupParams, err := PrepareGroupParams([]transactions.SignedTxn{stxn}, blockHeader)
+	require.NoError(t, err)
 
-	err := Txn(&stxn, ctxs[0])
+	err = Txn(&stxn, 0, groupParams)
 	require.NoError(t, err, "compact cert txn %#v did not verify", stxn)
 
 	stxn2 := stxn
 	stxn2.Txn.Type = protocol.PaymentTx
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
-	err = Txn(&stxn2, ctxs[0])
+	err = Txn(&stxn2, 0, groupParams)
 	require.Error(t, err, "payment txn %#v verified from CompactCertSender", stxn2)
 
 	secret := keypair()
@@ -205,28 +208,28 @@ func TestTxnValidationCompactCert(t *testing.T) {
 	stxn2.Txn.Header.Sender = basics.Address(secret.SignatureVerifier)
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
 	stxn2 = stxn2.Txn.Sign(secret)
-	err = Txn(&stxn2, ctxs[0])
+	err = Txn(&stxn2, 0, groupParams)
 	require.Error(t, err, "compact cert txn %#v verified from non-CompactCertSender", stxn2)
 
 	// Compact cert txns are not allowed to have non-zero values for many fields
 	stxn2 = stxn
 	stxn2.Txn.Header.Fee = basics.MicroAlgos{Raw: proto.MinTxnFee}
-	err = Txn(&stxn2, ctxs[0])
+	err = Txn(&stxn2, 0, groupParams)
 	require.Error(t, err, "compact cert txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.Header.Note = []byte{'A'}
-	err = Txn(&stxn2, ctxs[0])
+	err = Txn(&stxn2, 0, groupParams)
 	require.Error(t, err, "compact cert txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.Lease[0] = 1
-	err = Txn(&stxn2, ctxs[0])
+	err = Txn(&stxn2, 0, groupParams)
 	require.Error(t, err, "compact cert txn %#v verified", stxn2)
 
 	stxn2 = stxn
 	stxn2.Txn.RekeyTo = basics.Address(secret.SignatureVerifier)
-	err = Txn(&stxn2, ctxs[0])
+	err = Txn(&stxn2, 0, groupParams)
 	require.Error(t, err, "compact cert txn %#v verified", stxn2)
 }
 
@@ -240,8 +243,9 @@ func TestDecodeNil(t *testing.T) {
 	err := protocol.Decode(nilEncoding, &st)
 	if err == nil {
 		// This used to panic when run on a zero value of SignedTxn.
-		ctxs := PrepareContexts([]transactions.SignedTxn{st}, blockHeader)
-		Txn(&st, ctxs[0])
+		groupParams, err := PrepareGroupParams([]transactions.SignedTxn{st}, blockHeader)
+		require.NoError(t, err)
+		Txn(&st, 0, groupParams)
 	}
 }
 
@@ -456,9 +460,10 @@ func BenchmarkTxn(b *testing.B) {
 
 	b.ResetTimer()
 	for _, txnGroup := range txnGroups {
-		ctxs := PrepareContexts(txnGroup, blk.BlockHeader)
+		groupParams, err := PrepareGroupParams(txnGroup, blk.BlockHeader)
+		require.NoError(b, err)
 		for i, txn := range txnGroup {
-			err := Txn(&txn, ctxs[i])
+			err := Txn(&txn, i, groupParams)
 			require.NoError(b, err)
 		}
 	}

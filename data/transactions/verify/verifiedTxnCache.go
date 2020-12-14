@@ -47,8 +47,8 @@ var errMissingPinnedEntry = &VerifiedTxnCacheError{errors.New("Missing pinned en
 
 // VerifiedTransactionCache provides a cached store of recently verified transactions
 type VerifiedTransactionCache interface {
-	Add(txgroup []transactions.SignedTxn, verifyContext []Context) error
-	AddPayset(txgroup [][]transactions.SignedTxn, verifyContext [][]Context) error
+	Add(txgroup []transactions.SignedTxn, groupParams *GroupParams) error
+	AddPayset(txgroup [][]transactions.SignedTxn, groupParams []*GroupParams) error
 	GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn
 	UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) error
 	Pin(txgroup []transactions.SignedTxn) error
@@ -57,8 +57,8 @@ type VerifiedTransactionCache interface {
 // VerifiedTransactionCacheImpl provides an implementation of the VerifiedTransactionCache interface
 type verifiedTransactionCacheImpl struct {
 	bucketsLock deadlock.RWMutex
-	buckets     []map[transactions.Txid]Context
-	pinned      map[transactions.Txid]Context
+	buckets     []map[transactions.Txid]*GroupParams
+	pinned      map[transactions.Txid]*GroupParams
 	base        int
 }
 
@@ -66,27 +66,27 @@ type verifiedTransactionCacheImpl struct {
 func MakeVerifiedTransactionCache(cacheSize int) VerifiedTransactionCache {
 	bucketsCount := 1 + (cacheSize / entriesPerBucket)
 	impl := &verifiedTransactionCacheImpl{
-		buckets: make([]map[transactions.Txid]Context, bucketsCount),
-		pinned:  make(map[transactions.Txid]Context, cacheSize),
+		buckets: make([]map[transactions.Txid]*GroupParams, bucketsCount),
+		pinned:  make(map[transactions.Txid]*GroupParams, cacheSize),
 		base:    0,
 	}
 	for i := 0; i < bucketsCount; i++ {
-		impl.buckets[i] = make(map[transactions.Txid]Context, entriesPerBucket)
+		impl.buckets[i] = make(map[transactions.Txid]*GroupParams, entriesPerBucket)
 	}
 	return impl
 }
 
-func (v *verifiedTransactionCacheImpl) Add(txgroup []transactions.SignedTxn, verifyContext []Context) error {
+func (v *verifiedTransactionCacheImpl) Add(txgroup []transactions.SignedTxn, groupParams *GroupParams) error {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
-	return v.add(txgroup, verifyContext)
+	return v.add(txgroup, groupParams)
 }
 
-func (v *verifiedTransactionCacheImpl) AddPayset(txgroup [][]transactions.SignedTxn, verifyContext [][]Context) error {
+func (v *verifiedTransactionCacheImpl) AddPayset(txgroup [][]transactions.SignedTxn, groupParams []*GroupParams) error {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
 	for i := range txgroup {
-		err := v.add(txgroup[i], verifyContext[i])
+		err := v.add(txgroup[i], groupParams[i])
 		if err != nil {
 			return err
 		}
@@ -97,35 +97,45 @@ func (v *verifiedTransactionCacheImpl) AddPayset(txgroup [][]transactions.Signed
 func (v *verifiedTransactionCacheImpl) GetUnverifiedTranscationGroups(txnGroups [][]transactions.SignedTxn, currSpecAddrs transactions.SpecialAddresses, currProto protocol.ConsensusVersion) (unverifiedGroups [][]transactions.SignedTxn) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
-	groupParams := GroupParams{
-		CurrSpecAddrs: currSpecAddrs,
-		CurrProto:     currProto,
+	groupParams := &GroupParams{
+		specAddrs:        currSpecAddrs,
+		consensusVersion: currProto,
 	}
 	unverifiedGroups = make([][]transactions.SignedTxn, len(txnGroups))
+	var entryGroup *GroupParams
 	for _, signedTxnGroup := range txnGroups {
 		verifiedTxn := 0
 
-		groupParams.MinTealVersion = logic.ComputeMinTealVersion(signedTxnGroup)
+		groupParams.minTealVersion = logic.ComputeMinTealVersion(signedTxnGroup)
 		for i, txn := range signedTxnGroup {
-			txnContext := Context{
-				groupParams: &groupParams,
-				groupIndex:  i,
-			}
 			id := txn.ID()
 			// check pinned first
-			if entryCtx, has := v.pinned[id]; has && entryCtx.Equal(txnContext) {
-				verifiedTxn++
-				continue
-			}
-			// try to look in the previously verified buckets.
-			// we use the (base + W) % W trick here so we can go backward and wrap around the zero.
-			for offsetBucketIdx := v.base + len(v.buckets); offsetBucketIdx > v.base; offsetBucketIdx-- {
-				bucketIdx := offsetBucketIdx % len(v.buckets)
-				if entryCtx, has := v.buckets[bucketIdx][id]; has && entryCtx.Equal(txnContext) {
-					verifiedTxn++
-					break
+			entryGroup = v.pinned[id]
+			// if not found in the pinned map, try to find in the verified buckets:
+			if entryGroup == nil {
+				// try to look in the previously verified buckets.
+				// we use the (base + W) % W trick here so we can go backward and wrap around the zero.
+				for offsetBucketIdx := v.base + len(v.buckets); offsetBucketIdx > v.base; offsetBucketIdx-- {
+					bucketIdx := offsetBucketIdx % len(v.buckets)
+					if params, has := v.buckets[bucketIdx][id]; has {
+						entryGroup = params
+						break
+					}
 				}
 			}
+
+			if entryGroup == nil {
+				break
+			}
+			if !entryGroup.Equal(groupParams) {
+				break
+			}
+
+			if entryGroup.signedGroupTxns[i].Sig != txn.Sig || (!entryGroup.signedGroupTxns[i].Msig.Equal(txn.Msig)) || (!entryGroup.signedGroupTxns[i].Lsig.Equal(&txn.Lsig)) || (entryGroup.signedGroupTxns[i].AuthAddr != txn.AuthAddr) {
+				break
+			}
+
+			verifiedTxn++
 		}
 		if verifiedTxn == len(signedTxnGroup) && verifiedTxn > 0 {
 			unverifiedGroups = append(unverifiedGroups, signedTxnGroup)
@@ -137,10 +147,10 @@ func (v *verifiedTransactionCacheImpl) GetUnverifiedTranscationGroups(txnGroups 
 func (v *verifiedTransactionCacheImpl) UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) (err error) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
-	pinned := make(map[transactions.Txid]Context, len(pinnedTxns))
+	pinned := make(map[transactions.Txid]*GroupParams, len(pinnedTxns))
 	for txID := range pinnedTxns {
-		if ctx, has := v.pinned[txID]; has {
-			pinned[txID] = ctx
+		if groupEntry, has := v.pinned[txID]; has {
+			pinned[txID] = groupEntry
 			continue
 		}
 
@@ -149,8 +159,8 @@ func (v *verifiedTransactionCacheImpl) UpdatePinned(pinnedTxns map[transactions.
 		// we use the (base + W) % W trick here so we can go backward and wrap around the zero.
 		for offsetBucketIdx := v.base + len(v.buckets); offsetBucketIdx > v.base; offsetBucketIdx-- {
 			bucketIdx := offsetBucketIdx % len(v.buckets)
-			if ctx, has := v.buckets[bucketIdx][txID]; has {
-				pinned[txID] = ctx
+			if groupEntry, has := v.buckets[bucketIdx][txID]; has {
+				pinned[txID] = groupEntry
 				found = true
 				break
 			}
@@ -204,15 +214,15 @@ func (v *verifiedTransactionCacheImpl) Pin(txgroup []transactions.SignedTxn) (er
 	return
 }
 
-func (v *verifiedTransactionCacheImpl) add(txgroup []transactions.SignedTxn, verifyContext []Context) error {
+func (v *verifiedTransactionCacheImpl) add(txgroup []transactions.SignedTxn, groupParams *GroupParams) error {
 	if len(v.buckets[v.base])+len(txgroup) > entriesPerBucket {
 		// move to the next bucket while deleting the content of the next bucket.
 		v.base = (v.base + 1) % len(v.buckets)
-		v.buckets[v.base] = make(map[transactions.Txid]Context, entriesPerBucket)
+		v.buckets[v.base] = make(map[transactions.Txid]*GroupParams, entriesPerBucket)
 	}
 	currentBucket := v.buckets[v.base]
-	for i, txn := range txgroup {
-		currentBucket[txn.ID()] = verifyContext[i]
+	for _, txn := range txgroup {
+		currentBucket[txn.ID()] = groupParams
 	}
 	return nil
 }
@@ -224,11 +234,11 @@ type mockedCache struct {
 	alwaysVerified bool
 }
 
-func (v *mockedCache) Add(txgroup []transactions.SignedTxn, verifyContext []Context) error {
+func (v *mockedCache) Add(txgroup []transactions.SignedTxn, groupParams *GroupParams) error {
 	return nil
 }
 
-func (v *mockedCache) AddPayset(txgroup [][]transactions.SignedTxn, verifyContext [][]Context) error {
+func (v *mockedCache) AddPayset(txgroup [][]transactions.SignedTxn, groupParams []*GroupParams) error {
 	return nil
 }
 
