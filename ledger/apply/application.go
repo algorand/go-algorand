@@ -307,7 +307,7 @@ func ApplicationCall(ac transactions.ApplicationCallTxnFields, header transactio
 
 	// Ensure we are always passed a non-nil ApplyData
 	if ad == nil {
-		err = fmt.Errorf("ApplyData cannot be nil")
+		err = fmt.Errorf("ApplicationCall cannot have nil ApplyData")
 		return
 	}
 

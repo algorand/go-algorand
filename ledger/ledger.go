@@ -435,36 +435,31 @@ func (l *Ledger) ListApplications(maxAppIdx basics.AppIndex, maxResults uint64) 
 // Lookup uses the accounts tracker to return the account state for a
 // given account in a particular round.  The account values reflect
 // the changes of all blocks up to and including rnd.
-//
-// Note: Lookup will omit application key-value pairs.  To get the
-// all application key-value pairs corresponding to an account, call
-// FullLookup.
 func (l *Ledger) Lookup(rnd basics.Round, addr basics.Address) (basics.AccountData, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
 	// Intentionally apply (pending) rewards up to rnd.
-	mini, err := l.accts.LookupWithRewards(rnd, addr)
+	data, err := l.accts.LookupWithRewards(rnd, addr)
 	if err != nil {
 		return basics.AccountData{}, err
 	}
 
-	return mini, nil
+	return data, nil
 }
 
 // LookupWithoutRewards is like lookup but does not apply pending rewards up
 // to the requested round rnd.
-// Note: LookupWithoutRewards will omit application key-value pairs.
 func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 
-	mini, validThrough, err := l.accts.LookupWithoutRewards(rnd, addr)
+	data, validThrough, err := l.accts.LookupWithoutRewards(rnd, addr)
 	if err != nil {
 		return basics.AccountData{}, basics.Round(0), err
 	}
 
-	return mini, validThrough, nil
+	return data, validThrough, nil
 }
 
 // Totals returns the totals of all accounts at the end of round rnd.

@@ -378,7 +378,7 @@ func (cb *roundCowState) SetKey(addr basics.Address, aidx basics.AppIndex, globa
 		return err
 	}
 
-	return checkCounts(lsd)
+	return lsd.checkCounts()
 }
 
 func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) error {
@@ -534,7 +534,7 @@ func updateCounts(lsd *storageDelta, bv basics.TealValue, bok bool, av basics.Te
 	return nil
 }
 
-func checkCounts(lsd *storageDelta) error {
+func (lsd *storageDelta) checkCounts() error {
 	// Check against the max schema
 	if lsd.counts.NumUint > lsd.maxCounts.NumUint {
 		return fmt.Errorf("store integer count %d exceeds schema integer count %d", lsd.counts.NumUint, lsd.maxCounts.NumUint)

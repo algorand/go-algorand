@@ -437,7 +437,7 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 	err := ApplicationCall(ac, h, &b, nil, &ep, txnCounter)
 	a.Error(err)
-	a.Contains(err.Error(), "ApplyData cannot be nil")
+	a.Contains(err.Error(), "ApplicationCall cannot have nil ApplyData")
 	a.Equal(0, b.put)
 	a.Equal(0, b.putWith)
 

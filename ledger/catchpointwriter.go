@@ -75,16 +75,6 @@ type catchpointWriter struct {
 	accountsIterator  encodedAccountsBatchIter
 }
 
-type storageData struct {
-	_struct struct{} `codec:",omitempty,omitemptyarray"`
-
-	Aidx   uint64 `codec:"i"`
-	Global bool   `codec:"g"`
-	Key    []byte `codec:"k,allocbound=maxAppKeyValueLen"`
-	Vtype  uint64 `codec:"t"`
-	Venc   []byte `codec:"v,allocbound=maxAppKeyValueLen"`
-}
-
 type encodedBalanceRecord struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 

@@ -106,17 +106,18 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimest
 
 func (cb *roundCowState) deltas() StateDelta {
 	var err error
-	if len(cb.sdeltas) > 0 {
-		for addr, delta := range cb.mods.accts {
-			if smap, ok := cb.sdeltas[addr]; ok {
-				for aapp, storeDelta := range smap {
-					if delta.new, err = applyStorageDelta(delta.new, aapp, storeDelta); err != nil {
-						panic(fmt.Sprintf("applying storage delta failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
-					}
+	if len(cb.sdeltas) == 0 {
+		return cb.mods
+	}
+	for addr, delta := range cb.mods.accts {
+		if smap, ok := cb.sdeltas[addr]; ok {
+			for aapp, storeDelta := range smap {
+				if delta.new, err = applyStorageDelta(delta.new, aapp, storeDelta); err != nil {
+					panic(fmt.Sprintf("applying storage delta failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
 				}
 			}
-			cb.mods.accts[addr] = delta
 		}
+		cb.mods.accts[addr] = delta
 	}
 	return cb.mods
 }
