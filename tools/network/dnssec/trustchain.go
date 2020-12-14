@@ -46,15 +46,9 @@ func makeTrustChain(c TrustQuerier) *trustChain {
 }
 
 // QueryWrapper implements TrustQuerier
-// QueryRRSet is forwarded to Querier.QueryRRSet
 // GetRootAnchor is forwared to MakeRootTrustAnchor
 type QueryWrapper struct {
-	c Querier
-}
-
-// QueryRRSet is transparent wrapper for Querier.QueryRRSet
-func (qw QueryWrapper) QueryRRSet(ctx context.Context, domain string, qtype uint16) ([]dns.RR, []dns.RRSIG, error) {
-	return qw.c.QueryRRSet(ctx, domain, qtype)
+	Querier
 }
 
 // GetRootAnchorDS returns DS from a real trust anchor
