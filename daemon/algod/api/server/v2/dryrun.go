@@ -370,53 +370,6 @@ func (dl *dryrunLedger) getLocalKV(addr basics.Address, aidx basics.AppIndex) (k
 	return
 }
 
-// Important to note, all state changes for the current round are cached internally
-// in LedgerForLogic implementation, and GetKeyForRound needs only to lookup own base records
-func (dl *dryrunLedger) GetKeyForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool, key string) (value basics.TealValue, exists bool, err error) {
-	if global {
-		var params basics.AppParams
-		params, err = dl.getAppParams(addr, aidx)
-		if err != nil {
-			return
-		}
-		value, exists = params.GlobalState[key]
-		return
-	}
-
-	tkv, err := dl.getLocalKV(addr, aidx)
-	if err != nil {
-		return
-	}
-	value, exists = tkv[key]
-	return
-}
-
-func (dl *dryrunLedger) CountStorageForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool) (storage basics.StateSchema, err error) {
-	count := func(kv basics.TealKeyValue) (s basics.StateSchema) {
-		for _, v := range kv {
-			if v.Type == basics.TealBytesType {
-				s.NumByteSlice++
-			} else {
-				s.NumUint++
-			}
-		}
-		return s
-	}
-	if global {
-		var params basics.AppParams
-		params, err = dl.getAppParams(addr, aidx)
-		if err != nil {
-			return
-		}
-		return count(params.GlobalState), nil
-	}
-	tkv, err := dl.getLocalKV(addr, aidx)
-	if err != nil {
-		return
-	}
-	return count(tkv), nil
-}
-
 func makeBalancesAdapter(dl *dryrunLedger, txn *transactions.Transaction, appIdx basics.AppIndex) (ba apply.Balances, err error) {
 	ba = ledger.MakeDebugBalances(dl, basics.Round(dl.dr.Round), protocol.ConsensusVersion(dl.dr.ProtocolVersion), dl.dr.LatestTimestamp)
 

@@ -109,12 +109,70 @@ func (x *roundCowBase) allocated(addr basics.Address, aidx basics.AppIndex, glob
 	return ok, nil
 }
 
+// getKey gets the value for a particular key in some storage
+// associated with an application globally or locally
 func (x *roundCowBase) getKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
-	return x.l.GetKeyForRound(x.rnd, addr, aidx, global, key)
+	ad, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	if err != nil {
+		return basics.TealValue{}, false, err
+	}
+
+	exist := false
+	kv := basics.TealKeyValue{}
+	if global {
+		var app basics.AppParams
+		if app, exist = ad.AppParams[aidx]; exist {
+			kv = app.GlobalState
+		}
+	} else {
+		var ls basics.AppLocalState
+		if ls, exist = ad.AppLocalStates[aidx]; exist {
+			kv = ls.KeyValue
+		}
+	}
+	if !exist {
+		err = fmt.Errorf("cannot fetch key, %v", errNoStorage(addr, aidx, global))
+		return basics.TealValue{}, false, err
+	}
+
+	val, exist := kv[key]
+	return val, exist, nil
 }
 
+// getStorageCounts counts the storage types used by some account
+// associated with an application globally or locally
 func (x *roundCowBase) getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
-	return x.l.CountStorageForRound(x.rnd, addr, aidx, global)
+	ad, _, err := x.l.LookupWithoutRewards(x.rnd, addr)
+	if err != nil {
+		return basics.StateSchema{}, err
+	}
+
+	count := basics.StateSchema{}
+	exist := false
+	kv := basics.TealKeyValue{}
+	if global {
+		var app basics.AppParams
+		if app, exist = ad.AppParams[aidx]; exist {
+			kv = app.GlobalState
+		}
+	} else {
+		var ls basics.AppLocalState
+		if ls, exist = ad.AppLocalStates[aidx]; exist {
+			kv = ls.KeyValue
+		}
+	}
+	if !exist {
+		return count, nil
+	}
+
+	for _, v := range kv {
+		if v.Type == basics.TealUintType {
+			count.NumUint++
+		} else {
+			count.NumByteSlice++
+		}
+	}
+	return count, nil
 }
 
 func (x *roundCowBase) getStorageLimits(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
@@ -285,8 +343,6 @@ type ledgerForCowBase interface {
 	CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error
 	LookupWithoutRewards(basics.Round, basics.Address) (basics.AccountData, basics.Round, error)
 	GetCreatorForRound(basics.Round, basics.CreatableIndex, basics.CreatableType) (basics.Address, bool, error)
-	GetKeyForRound(basics.Round, basics.Address, basics.AppIndex, bool, string) (basics.TealValue, bool, error)
-	CountStorageForRound(basics.Round, basics.Address, basics.AppIndex, bool) (basics.StateSchema, error)
 }
 
 // StartEvaluator creates a BlockEvaluator, given a ledger and a block header

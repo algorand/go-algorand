@@ -139,6 +139,9 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 				tv.Bytes = string(bytes)
 				ap.KeyValue[appName] = tv
 			}
+			if len(ap.KeyValue) == 0 {
+				ap.KeyValue = nil
+			}
 			data.AppLocalStates[basics.AppIndex(crypto.RandUint64()%lastCreatableID)] = ap
 		}
 	}
@@ -195,6 +198,9 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 				crypto.RandBytes(bytes[:])
 				tv.Bytes = string(bytes)
 				ap.GlobalState[appName] = tv
+			}
+			if len(ap.GlobalState) == 0 {
+				ap.GlobalState = nil
 			}
 			lastCreatableID++
 			data.AppParams[basics.AppIndex(lastCreatableID)] = ap

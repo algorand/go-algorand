@@ -84,7 +84,7 @@ var accountsSchema = []string{
 // TODO: Post applications, rename assetcreators -> creatables and rename
 // 'asset' column -> 'creatable'
 var creatablesMigration = []string{
-	`ALTER TABLE assetcreators ADD COLUMN ctype integer DEFAULT 0`,
+	`ALTER TABLE assetcreators ADD COLUMN ctype INTEGER DEFAULT 0`,
 }
 
 // createNormalizedOnlineBalanceIndex handles accountbase/catchpointbalances tables
@@ -96,7 +96,7 @@ func createNormalizedOnlineBalanceIndex(idxname string, tablename string) string
 
 var createOnlineAccountIndex = []string{
 	`ALTER TABLE accountbase
-		ADD COLUMN normalizedonlinebalance integer`,
+		ADD COLUMN normalizedonlinebalance INTEGER`,
 	createNormalizedOnlineBalanceIndex("onlineaccountbals", "accountbase"),
 }
 
@@ -965,47 +965,6 @@ func updateAccountsRound(tx *sql.Tx, rnd basics.Round, hashRound basics.Round) (
 	if aff != 1 {
 		err = fmt.Errorf("updateAccountsRound(hashbase,%d): expected to update 1 row but got %d", hashRound, aff)
 		return
-	}
-	return
-}
-
-// encodedAccountsRange returns an array containing the account data, in the same way it appear in the database
-// starting at entry startAccountIndex, and up to accountCount accounts long.
-func encodedAccountsRange(ctx context.Context, tx *sql.Tx, startAccountIndex, accountCount int) (bals []encodedBalanceRecord, err error) {
-	rows, err := tx.QueryContext(ctx, "SELECT address, data FROM accountbase ORDER BY rowid LIMIT ? OFFSET ?", accountCount, startAccountIndex)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-
-	bals = make([]encodedBalanceRecord, 0, accountCount)
-	var addr basics.Address
-	for rows.Next() {
-		var addrbuf []byte
-		var buf []byte
-		err = rows.Scan(&addrbuf, &buf)
-		if err != nil {
-			return
-		}
-
-		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-			return
-		}
-
-		copy(addr[:], addrbuf)
-
-		bals = append(bals, encodedBalanceRecord{Address: addr, AccountData: buf})
-	}
-
-	err = rows.Err()
-	if err == nil {
-		// the encodedAccountsRange typically called in a loop iterating over all the accounts. This could clearly take more than the
-		// "standard" 1 second, so we want to extend the timeout on each iteration. If the last iteration takes more than a second, then
-		// it should be noted. The one second here is quite liberal to ensure symmetrical behavior on low-power devices.
-		// The return value from ResetTransactionWarnDeadline can be safely ignored here since it would only default to writing the warning
-		// message, which would let us know that it failed anyway.
-		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(time.Second))
 	}
 	return
 }

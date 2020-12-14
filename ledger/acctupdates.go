@@ -369,13 +369,11 @@ func (au *accountUpdates) IsWritingCatchpointFile() bool {
 // LookupWithRewards returns the account data for a given address at a given round.
 // Note that the function doesn't update the account with the rewards,
 // even while it does return the AccoutData which represent the "rewarded" account data.
-// The resultant AccountData does not include application states.
 func (au *accountUpdates) LookupWithRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, err error) {
 	return au.lookupWithRewards(rnd, addr)
 }
 
 // LookupWithoutRewards returns the account data for a given address at a given round.
-// The resultant AccountData does not include application states.
 func (au *accountUpdates) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, validThrough basics.Round, err error) {
 	return au.lookupWithoutRewards(rnd, addr, true /* take lock*/)
 }
@@ -741,18 +739,6 @@ func (au *accountUpdates) Totals(rnd basics.Round) (totals AccountTotals, err er
 	return au.totalsImpl(rnd)
 }
 
-func (au *accountUpdates) CountStorageForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-	return au.countStorageForRound(rnd, addr, aidx, global)
-}
-
-func (au *accountUpdates) GetKeyForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
-	au.accountsMu.RLock()
-	defer au.accountsMu.RUnlock()
-	return au.getKeyForRound(rnd, addr, aidx, global, key)
-}
-
 // ReadCloseSizer interface implements the standard io.Reader and io.Closer as well
 // as supporting the Size() function that let the caller know what the size of the stream would be (in bytes).
 type ReadCloseSizer interface {
@@ -887,14 +873,6 @@ func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round,
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
 func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	return aul.au.getCreatorForRound(rnd, cidx, ctype, false /* don't sync */)
-}
-
-func (aul *accountUpdatesLedgerEvaluator) CountStorageForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
-	return aul.au.countStorageForRound(rnd, addr, aidx, global)
-}
-
-func (aul *accountUpdatesLedgerEvaluator) GetKeyForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
-	return aul.au.getKeyForRound(rnd, addr, aidx, global, key)
 }
 
 // totalsImpl returns the totals for a given round
@@ -1682,7 +1660,7 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 
 		// If this is the most recent round, au.creatables has the latest
 		// state and we can skip scanning backwards over creatableDeltas
-		if offset == uint64(len(au.creatableDeltas)) {
+		if offset == uint64(len(au.deltas)) {
 			// Check if we already have the asset/creator in cache
 			creatableDelta, ok := au.creatables[cidx]
 			if ok {
@@ -1729,54 +1707,6 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 			return basics.Address{}, false, &MismatchingDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 		}
 	}
-}
-
-func (au *accountUpdates) countStorageForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error) {
-	ad, _, err := au.lookupWithoutRewards(rnd, addr, false /* do not take lock */)
-	if err != nil {
-		return basics.StateSchema{}, err
-	}
-
-	count := basics.StateSchema{}
-	kv := basics.TealKeyValue{}
-	if global {
-		if app, ok := ad.AppParams[aidx]; ok {
-			kv = app.GlobalState
-		}
-	} else {
-		if ls, ok := ad.AppLocalStates[aidx]; ok {
-			kv = ls.KeyValue
-		}
-	}
-
-	for _, v := range kv {
-		if v.Type == basics.TealUintType {
-			count.NumUint++
-		} else {
-			count.NumByteSlice++
-		}
-	}
-	return count, nil
-}
-
-func (au *accountUpdates) getKeyForRound(rnd basics.Round, addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
-	ad, _, err := au.lookupWithoutRewards(rnd, addr, false /* do not take lock */)
-	if err != nil {
-		return basics.TealValue{}, false, err
-	}
-
-	kv := basics.TealKeyValue{}
-	if global {
-		if app, ok := ad.AppParams[aidx]; ok {
-			kv = app.GlobalState
-		}
-	} else {
-		if ls, ok := ad.AppLocalStates[aidx]; ok {
-			kv = ls.KeyValue
-		}
-	}
-	val, exist := kv[key]
-	return val, exist, nil
 }
 
 // accountsCreateCatchpointLabel creates a catchpoint label and write it.
