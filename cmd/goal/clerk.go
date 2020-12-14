@@ -383,9 +383,9 @@ var sendCmd = &cobra.Command{
 					CurrentProtocol: proto,
 				},
 			}
-			groupParams, err := verify.PrepareGroupParams([]transactions.SignedTxn{uncheckedTxn}, blockHeader)
+			groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, blockHeader)
 			if err == nil {
-				err = verify.LogicSigSanityCheck(&uncheckedTxn, 0, groupParams)
+				err = verify.LogicSigSanityCheck(&uncheckedTxn, 0, groupCtx)
 			}
 			if err != nil {
 				reportErrorf("%s: txn[0] error %s", outFilename, err)
@@ -745,9 +745,9 @@ var signCmd = &cobra.Command{
 						CurrentProtocol: proto,
 					},
 				}
-				groupParams, err := verify.PrepareGroupParams([]transactions.SignedTxn{uncheckedTxn}, blockHeader)
+				groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, blockHeader)
 				if err == nil {
-					err = verify.LogicSigSanityCheck(&uncheckedTxn, 0, groupParams)
+					err = verify.LogicSigSanityCheck(&uncheckedTxn, 0, groupCtx)
 				}
 				if err != nil {
 					reportErrorf("%s: txn[%d] error %s", txFilename, count, err)

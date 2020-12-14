@@ -52,7 +52,7 @@ const txnPerWorksetThreshold = 32
 // - it allows us to linearly scan the input, and process elements only once we're going to queue them into the pool.
 const concurrentWorksets = 16
 
-// GroupParams is the set of parameters external to a transaction which
+// GroupContext is the set of parameters external to a transaction which
 // stateless checks are performed against.
 //
 // For efficient caching, these parameters should either be constant
@@ -60,7 +60,7 @@ const concurrentWorksets = 16
 //
 // Group data are omitted because they are committed to in the
 // transaction and its ID.
-type GroupParams struct {
+type GroupContext struct {
 	specAddrs        transactions.SpecialAddresses
 	consensusVersion protocol.ConsensusVersion
 	consensusParams  config.ConsensusParams
@@ -68,9 +68,9 @@ type GroupParams struct {
 	signedGroupTxns  []transactions.SignedTxn
 }
 
-// PrepareGroupParams prepares a verification group parameter object for a given transaction
+// PrepareGroupContext prepares a verification group parameter object for a given transaction
 // group.
-func PrepareGroupParams(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader) (*GroupParams, error) {
+func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader) (*GroupContext, error) {
 	if len(group) == 0 {
 		return nil, nil
 	}
@@ -78,7 +78,7 @@ func PrepareGroupParams(group []transactions.SignedTxn, contextHdr bookkeeping.B
 	if !ok {
 		return nil, protocol.Error(contextHdr.CurrentProtocol)
 	}
-	return &GroupParams{
+	return &GroupContext{
 		specAddrs: transactions.SpecialAddresses{
 			FeeSink:     contextHdr.FeeSink,
 			RewardsPool: contextHdr.RewardsPool,
@@ -90,8 +90,8 @@ func PrepareGroupParams(group []transactions.SignedTxn, contextHdr bookkeeping.B
 	}, nil
 }
 
-// Equal compares two group params to see if they would represent the same verification context for a given transaction.
-func (g *GroupParams) Equal(other *GroupParams) bool {
+// Equal compares two group contexts to see if they would represent the same verification context for a given transaction.
+func (g *GroupContext) Equal(other *GroupContext) bool {
 	return g.specAddrs == other.specAddrs &&
 		g.consensusVersion == other.consensusVersion &&
 		g.minTealVersion == other.minTealVersion
@@ -99,12 +99,12 @@ func (g *GroupParams) Equal(other *GroupParams) bool {
 
 // Txn verifies a SignedTxn as being signed and having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
-func Txn(s *transactions.SignedTxn, txnIdx int, groupParams *GroupParams) error {
-	if !groupParams.consensusParams.SupportRekeying && (s.AuthAddr != basics.Address{}) {
+func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
+	if !groupCtx.consensusParams.SupportRekeying && (s.AuthAddr != basics.Address{}) {
 		return errors.New("nonempty AuthAddr but rekeying not supported")
 	}
 
-	if err := s.Txn.WellFormed(groupParams.specAddrs, groupParams.consensusParams); err != nil {
+	if err := s.Txn.WellFormed(groupCtx.specAddrs, groupCtx.consensusParams); err != nil {
 		return err
 	}
 
@@ -112,29 +112,29 @@ func Txn(s *transactions.SignedTxn, txnIdx int, groupParams *GroupParams) error 
 		return errors.New("empty address")
 	}
 
-	return stxnVerifyCore(s, txnIdx, groupParams)
+	return stxnVerifyCore(s, txnIdx, groupCtx)
 }
 
 // TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
-func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (groupParam *GroupParams, err error) {
-	groupParam, err = PrepareGroupParams(stxs, contextHdr)
+func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (groupCtx *GroupContext, err error) {
+	groupCtx, err = PrepareGroupContext(stxs, contextHdr)
 	if err != nil {
 		return nil, err
 	}
 	for i, stxn := range stxs {
-		err = Txn(&stxn, i, groupParam)
+		err = Txn(&stxn, i, groupCtx)
 		if err != nil {
 			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
 			return
 		}
 	}
 	if cache != nil {
-		err = cache.Add(stxs, groupParam)
+		err = cache.Add(stxs, groupCtx)
 	}
 	return
 }
 
-func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupParams *GroupParams) error {
+func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 	numSigs := 0
 	hasSig := false
 	hasMsig := false
@@ -180,17 +180,17 @@ func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupParams *GroupPar
 		return errors.New("multisig validation failed")
 	}
 	if hasLogicSig {
-		return logicSig(s, txnIdx, groupParams)
+		return logicSig(s, txnIdx, groupCtx)
 	}
 	return errors.New("has one mystery sig. WAT?")
 }
 
 // LogicSigSanityCheck checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
-func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupParams *GroupParams) error {
+func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
 	lsig := txn.Lsig
 
-	if groupParams.consensusParams.LogicSigVersion == 0 {
+	if groupCtx.consensusParams.LogicSigVersion == 0 {
 		return errors.New("LogicSig not enabled")
 	}
 	if len(lsig.Logic) == 0 {
@@ -200,26 +200,26 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupParam
 	if vlen <= 0 {
 		return errors.New("LogicSig.Logic bad version")
 	}
-	if version > groupParams.consensusParams.LogicSigVersion {
+	if version > groupCtx.consensusParams.LogicSigVersion {
 		return errors.New("LogicSig.Logic version too new")
 	}
-	if uint64(lsig.Len()) > groupParams.consensusParams.LogicSigMaxSize {
+	if uint64(lsig.Len()) > groupCtx.consensusParams.LogicSigMaxSize {
 		return errors.New("LogicSig.Logic too long")
 	}
 
 	ep := logic.EvalParams{
 		Txn:            txn,
-		Proto:          &groupParams.consensusParams,
-		TxnGroup:       groupParams.signedGroupTxns,
+		Proto:          &groupCtx.consensusParams,
+		TxnGroup:       groupCtx.signedGroupTxns,
 		GroupIndex:     groupIndex,
-		MinTealVersion: &groupParams.minTealVersion,
+		MinTealVersion: &groupCtx.minTealVersion,
 	}
 	cost, err := logic.Check(lsig.Logic, ep)
 	if err != nil {
 		return err
 	}
-	if cost > int(groupParams.consensusParams.LogicSigMaxCost) {
-		return fmt.Errorf("LogicSig.Logic too slow, %d > %d", cost, groupParams.consensusParams.LogicSigMaxCost)
+	if cost > int(groupCtx.consensusParams.LogicSigMaxCost) {
+		return fmt.Errorf("LogicSig.Logic too slow, %d > %d", cost, groupCtx.consensusParams.LogicSigMaxCost)
 	}
 
 	hasMsig := false
@@ -259,18 +259,18 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupParam
 }
 
 // logicSig checks that the signature is valid, executing the program.
-func logicSig(txn *transactions.SignedTxn, groupIndex int, groupParams *GroupParams) error {
-	err := LogicSigSanityCheck(txn, groupIndex, groupParams)
+func logicSig(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
+	err := LogicSigSanityCheck(txn, groupIndex, groupCtx)
 	if err != nil {
 		return err
 	}
 
 	ep := logic.EvalParams{
 		Txn:            txn,
-		Proto:          &groupParams.consensusParams,
-		TxnGroup:       groupParams.signedGroupTxns,
+		Proto:          &groupCtx.consensusParams,
+		TxnGroup:       groupCtx.signedGroupTxns,
 		GroupIndex:     groupIndex,
-		MinTealVersion: &groupParams.minTealVersion,
+		MinTealVersion: &groupCtx.minTealVersion,
 	}
 	pass, err := logic.Eval(txn.Lsig.Logic, ep)
 	if err != nil {
@@ -323,15 +323,15 @@ func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHea
 						return tasksCtx.Err()
 					}
 					txnGroups := arg.([][]transactions.SignedTxn)
-					groupParams := make([]*GroupParams, len(txnGroups))
+					groupCtxs := make([]*GroupContext, len(txnGroups))
 					for i, signTxnsGrp := range txnGroups {
-						groupParams[i], grpErr = TxnGroup(signTxnsGrp, blkHeader, nil)
+						groupCtxs[i], grpErr = TxnGroup(signTxnsGrp, blkHeader, nil)
 						// abort only if it's a non-cache error.
 						if grpErr != nil {
 							return grpErr
 						}
 					}
-					cache.AddPayset(txnGroups, groupParams)
+					cache.AddPayset(txnGroups, groupCtxs)
 					return nil
 				}, nextWorkset, worksDoneCh)
 				if err != nil {
