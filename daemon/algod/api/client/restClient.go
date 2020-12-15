@@ -35,7 +35,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/spec/common"
-	"github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
+	v1 "github.com/algorand/go-algorand/daemon/algod/api/spec/v1"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/protocol"
@@ -333,7 +333,7 @@ type rawblockParams struct {
 	Raw uint64 `url:"raw"`
 }
 
-type rawAccountParams struct {
+type rawFormat struct {
 	Format string `url:"format"`
 }
 
@@ -392,7 +392,7 @@ func (blob *Blob) SetBytes(b []byte) {
 // RawAccountInformationV2 gets the raw AccountData associated with the passed address
 func (client RestClient) RawAccountInformationV2(address string) (response []byte, err error) {
 	var blob Blob
-	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s", address), rawAccountParams{Format: "msgpack"})
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/accounts/%s", address), rawFormat{Format: "msgpack"})
 	response = blob
 	return
 }
@@ -459,6 +459,14 @@ func (client RestClient) Block(round uint64) (response v1.Block, err error) {
 // RawBlock gets the encoded, raw msgpack block for the given round
 func (client RestClient) RawBlock(round uint64) (response v1.RawBlock, err error) {
 	err = client.getRaw(&response, fmt.Sprintf("/v1/block/%d", round), rawblockParams{1})
+	return
+}
+
+// RawBlockV2 gets the raw block info for the given round
+func (client RestClient) RawBlockV2(round uint64) (response []byte, err error) {
+	var blob Blob
+	err = client.getRaw(&blob, fmt.Sprintf("/v2/blocks/%d", round), rawFormat{Format: "msgpack"})
+	response = blob
 	return
 }
 

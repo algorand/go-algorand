@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
@@ -147,7 +148,7 @@ func (l *Ledger) appendUnvalidatedTx(t *testing.T, initAccounts map[basics.Addre
 	return l.appendUnvalidatedSignedTx(t, initAccounts, stx, ad)
 }
 
-func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics.Address]basics.AccountData, stx transactions.SignedTxn, ad transactions.ApplyData) error {
+func makeNewEmptyBlock(t *testing.T, l *Ledger, initAccounts map[basics.Address]basics.AccountData) (blk bookkeeping.Block) {
 	a := require.New(t)
 
 	lastBlock, err := l.Block(l.Latest())
@@ -181,20 +182,28 @@ func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics
 	}
 
 	if proto.TxnCounter {
-		correctBlkHeader.TxnCounter = lastBlock.TxnCounter + 1
+		correctBlkHeader.TxnCounter = lastBlock.TxnCounter
 	}
 
-	var blk bookkeeping.Block
 	blk.BlockHeader = correctBlkHeader
+	blk.RewardsPool = testPoolAddr
+	blk.FeeSink = testSinkAddr
+	blk.CurrentProtocol = lastBlock.CurrentProtocol
+	return
+}
+
+func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics.Address]basics.AccountData, stx transactions.SignedTxn, ad transactions.ApplyData) error {
+	blk := makeNewEmptyBlock(t, l, initAccounts)
+	proto := config.Consensus[blk.CurrentProtocol]
 	txib, err := blk.EncodeSignedTxn(stx, ad)
 	if err != nil {
 		return fmt.Errorf("could not sign txn: %s", err.Error())
 	}
+	if proto.TxnCounter {
+		blk.TxnCounter = blk.TxnCounter + 1
+	}
 	blk.Payset = append(blk.Payset, txib)
 	blk.TxnRoot = blk.Payset.Commit(proto.PaysetCommitFlat)
-	blk.RewardsPool = testPoolAddr
-	blk.FeeSink = testSinkAddr
-
 	return l.appendUnvalidated(blk)
 }
 
@@ -211,9 +220,6 @@ func TestLedgerBasic(t *testing.T) {
 
 func TestLedgerBlockHeaders(t *testing.T) {
 	a := require.New(t)
-
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
 
 	genesisInitState, _ := testGenerateInitState(t, protocol.ConsensusCurrentVersion)
 	const inMem = true
@@ -349,9 +355,6 @@ func TestLedgerBlockHeaders(t *testing.T) {
 
 func TestLedgerSingleTx(t *testing.T) {
 	a := require.New(t)
-
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
 
 	genesisInitState, initSecrets := testGenerateInitState(t, protocol.ConsensusV7)
 	const inMem = true
@@ -542,9 +545,6 @@ func TestLedgerSingleTx(t *testing.T) {
 func TestLedgerSingleTxV24(t *testing.T) {
 	a := require.New(t)
 
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
-
 	protoName := protocol.ConsensusV24
 	genesisInitState, initSecrets := testGenerateInitState(t, protoName)
 	const inMem = true
@@ -670,7 +670,7 @@ func TestLedgerSingleTxV24(t *testing.T) {
 	a.Contains(err.Error(), fmt.Sprintf("asset %d missing from", assetIdx))
 
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctAppCreate, ad))
-	appIdx = 2 // the first txn
+	appIdx = 2 // the second successful txn
 
 	badTx = correctAppCreate
 	program := make([]byte, len(approvalProgram))
@@ -695,6 +695,154 @@ func TestLedgerSingleTxV24(t *testing.T) {
 
 	correctAppCall.ApplicationID = appIdx
 	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, correctAppCall, ad))
+}
+
+func addEmptyValidatedBlock(t *testing.T, l *Ledger, initAccounts map[basics.Address]basics.AccountData) {
+	a := require.New(t)
+
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+
+	blk := makeNewEmptyBlock(t, l, initAccounts)
+	vb, err := l.Validate(context.Background(), blk, DummyVerifiedTxnCache{}, backlogPool)
+	a.NoError(err)
+	err = l.AddValidatedBlock(*vb, agreement.Certificate{})
+	a.NoError(err)
+}
+
+// TestLedgerAppCrossRoundWrites ensures app state writes survive between rounds
+func TestLedgerAppCrossRoundWrites(t *testing.T) {
+	a := require.New(t)
+
+	protoName := protocol.ConsensusV24
+	genesisInitState, initSecrets := testGenerateInitState(t, protoName)
+	const inMem = true
+	log := logging.TestingLog(t)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	a.NoError(err, "could not open ledger")
+	defer l.Close()
+
+	proto := config.Consensus[protoName]
+	poolAddr := testPoolAddr
+	sinkAddr := testSinkAddr
+
+	initAccounts := genesisInitState.Accounts
+	var addrList []basics.Address
+	for addr := range initAccounts {
+		if addr != poolAddr && addr != sinkAddr {
+			addrList = append(addrList, addr)
+		}
+	}
+
+	creator := addrList[0]
+	user := addrList[1]
+	correctTxHeader := transactions.Header{
+		Sender:      creator,
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
+		GenesisID:   t.Name(),
+		GenesisHash: genesisInitState.GenesisHash,
+	}
+
+	counter := `#pragma version 2
+// a simple global and local calls counter app
+byte "counter"
+dup
+app_global_get
+int 1
++
+app_global_put  // update the counter
+int 0
+int 0
+app_opted_in
+bnz opted_in
+int 1
+return
+opted_in:
+int 0  // account idx for app_local_put
+byte "counter"
+int 0
+byte "counter"
+app_local_get
+int 1  // increment
++
+app_local_put
+int 1
+`
+	approvalProgram, err := logic.AssembleString(counter)
+	a.NoError(err)
+
+	clearStateProgram := []byte("\x02") // empty
+	appcreateFields := transactions.ApplicationCallTxnFields{
+		ApprovalProgram:   approvalProgram,
+		ClearStateProgram: clearStateProgram,
+		GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		LocalStateSchema:  basics.StateSchema{NumUint: 1},
+	}
+	appcreate := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   correctTxHeader,
+		ApplicationCallTxnFields: appcreateFields,
+	}
+
+	ad := transactions.ApplyData{EvalDelta: basics.EvalDelta{GlobalDelta: basics.StateDelta{
+		"counter": basics.ValueDelta{Action: basics.SetUintAction, Uint: 1},
+	}}}
+	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcreate, ad))
+	var appIdx basics.AppIndex = 1
+
+	rnd := l.Latest()
+	acct, _, err := l.LookupWithoutRewards(l.Latest(), creator)
+	a.NoError(err)
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acct.AppParams[appIdx].GlobalState["counter"])
+
+	addEmptyValidatedBlock(t, l, initAccounts)
+	addEmptyValidatedBlock(t, l, initAccounts)
+
+	appcallFields := transactions.ApplicationCallTxnFields{
+		OnCompletion: transactions.OptInOC,
+	}
+
+	correctTxHeader.Sender = user
+	appcall := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   correctTxHeader,
+		ApplicationCallTxnFields: appcallFields,
+	}
+	appcall.ApplicationID = appIdx
+	ad = transactions.ApplyData{EvalDelta: basics.EvalDelta{
+		GlobalDelta: basics.StateDelta{
+			"counter": basics.ValueDelta{Action: basics.SetUintAction, Uint: 2},
+		},
+		LocalDeltas: map[uint64]basics.StateDelta{
+			0: {
+				"counter": basics.ValueDelta{Action: basics.SetUintAction, Uint: 1},
+			},
+		},
+	}}
+	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcall, ad))
+
+	rnd = l.Latest()
+	acctwor, _, err := l.LookupWithoutRewards(rnd, creator)
+	a.NoError(err)
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctwor.AppParams[appIdx].GlobalState["counter"])
+
+	acctwr, err := l.Lookup(rnd, creator)
+	a.NoError(err)
+	a.Equal(acctwor.AppParams[appIdx].GlobalState["counter"], acctwr.AppParams[appIdx].GlobalState["counter"])
+
+	addEmptyValidatedBlock(t, l, initAccounts)
+
+	acctwor, _, err = l.LookupWithoutRewards(l.Latest()-1, creator)
+	a.NoError(err)
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 2}, acctwor.AppParams[appIdx].GlobalState["counter"])
+
+	acct, _, err = l.LookupWithoutRewards(rnd, user)
+	a.NoError(err)
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acct.AppLocalStates[appIdx].KeyValue["counter"])
 }
 
 func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion) {
@@ -958,9 +1106,6 @@ func TestLedgerRegressionFaultyLeaseFirstValidCheckFuture(t *testing.T) {
 
 func testLedgerRegressionFaultyLeaseFirstValidCheck2f3880f7(t *testing.T, version protocol.ConsensusVersion) {
 	a := require.New(t)
-
-	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
-	defer backlogPool.Shutdown()
 
 	genesisInitState, initSecrets := testGenerateInitState(t, version)
 	const inMem = true

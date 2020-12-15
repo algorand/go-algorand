@@ -17,6 +17,7 @@
 package transactions
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -27,9 +28,51 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
+	"github.com/algorand/go-algorand/libgoal"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/test/framework/fixtures"
 )
+
+func checkEvalDelta(t *testing.T, client *libgoal.Client, startRnd, endRnd uint64, gval uint64, lval uint64) {
+	a := require.New(t)
+
+	foundGlobal := false
+	foundLocal := false
+	for r := startRnd; r < endRnd; r++ {
+		lastRound, err := client.CurrentRound()
+		a.NoError(err)
+		if r > lastRound {
+			break
+		}
+		b, err := client.BlockV2(r)
+		a.NoError(err)
+		for _, ps := range b.Payset {
+			ed, ok := ps.ApplyData.EvalDelta.GlobalDelta["counter"]
+			if ok && foundGlobal {
+				a.Fail("Duplicate entry for global counter: %#v", ed)
+			}
+			if ok {
+				foundGlobal = true
+				a.Equal(basics.SetUintAction, ed.Action)
+				a.Equal(gval, ed.Uint)
+			}
+			sd, ok := ps.ApplyData.EvalDelta.LocalDeltas[0]
+			if ok {
+				ed, ok := sd["counter"]
+				if ok && foundLocal {
+					a.Fail("Duplicate entry for local counter: %#v", ed)
+				}
+				if ok {
+					foundLocal = true
+					a.Equal(basics.SetUintAction, ed.Action)
+					a.Equal(lval, ed.Uint)
+				}
+			}
+		}
+	}
+	a.True(foundGlobal, fmt.Sprintf("global delta not found in rounds %d-%d", startRnd, endRnd))
+	a.True(foundLocal, fmt.Sprintf("local delta not found in rounds %d-%d", startRnd, endRnd))
+}
 
 func TestAccountInformationV2(t *testing.T) {
 	t.Parallel()
@@ -152,6 +195,9 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(1), value.Uint)
 
+	// 1 global state update in total, 1 local state updates
+	checkEvalDelta(t, &client, round, round+5, 1, 1)
+
 	// call the app
 	tx, err = client.MakeUnsignedAppOptInTx(uint64(appIdx), nil, nil, nil, nil)
 	a.NoError(err)
@@ -163,7 +209,12 @@ int 1
 	a.NoError(err)
 	_, err = client.BroadcastTransaction(signedTxn)
 	a.NoError(err)
-	client.WaitForRound(round + 2)
+	_, err = client.WaitForRound(round + 3)
+	a.NoError(err)
+	// Ensure the txn committed
+	resp, err := client.GetPendingTransactions(2)
+	a.NoError(err)
+	a.Equal(uint64(0), resp.TotalTxns)
 
 	// check creator's balance record for the app entry and the state changes
 	ad, err = client.AccountData(creator)
@@ -205,10 +256,43 @@ int 1
 	a.True(ok)
 	a.Equal(uint64(1), value.Uint)
 
+	// 2 global state update in total, 1 local state updates
+	checkEvalDelta(t, &client, round, round+5, 2, 1)
+
 	a.Equal(basics.MicroAlgos{Raw: 10000000000 - fee}, ad.MicroAlgos)
 
 	app, err := client.ApplicationInformation(uint64(appIdx))
 	a.NoError(err)
 	a.Equal(uint64(appIdx), app.Id)
 	a.Equal(creator, app.Params.Creator)
+
+	// call the app
+	tx, err = client.MakeUnsignedAppNoOpTx(uint64(appIdx), nil, nil, nil, nil)
+	a.NoError(err)
+	tx, err = client.FillUnsignedTxTemplate(user, 0, 0, fee, tx)
+	a.NoError(err)
+	signedTxn, err = client.SignTransactionWithWallet(wh, nil, tx)
+	a.NoError(err)
+	round, err = client.CurrentRound()
+	a.NoError(err)
+	_, err = client.BroadcastTransaction(signedTxn)
+	a.NoError(err)
+	_, err = client.WaitForRound(round + 2)
+	a.NoError(err)
+	// Ensure the txn committed
+	resp, err = client.GetPendingTransactions(2)
+	a.NoError(err)
+	a.Equal(uint64(0), resp.TotalTxns)
+
+	ad, err = client.AccountData(creator)
+	a.NoError(err)
+	a.Equal(1, len(ad.AppParams))
+	params, ok = ad.AppParams[appIdx]
+	a.True(ok)
+	value, ok = params.GlobalState["counter"]
+	a.True(ok)
+	a.Equal(uint64(3), value.Uint)
+
+	// 3 global state update in total, 2 local state updates
+	checkEvalDelta(t, &client, round, round+5, 3, 2)
 }
