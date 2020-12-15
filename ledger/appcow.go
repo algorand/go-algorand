@@ -311,12 +311,9 @@ func (cb *roundCowState) getKey(addr basics.Address, aidx basics.AppIndex, globa
 
 		// If this storage delta is remainAllocAction, then check our
 		// parent. Otherwise, the key does not exist.
-		if lsd.action == remainAllocAction {
-			// Check our parent
-			return cb.lookupParent.getKey(addr, aidx, global, key)
+		if lsd.action != remainAllocAction {
+			return basics.TealValue{}, false, nil
 		}
-
-		return basics.TealValue{}, false, nil
 	}
 
 	// At this point, we know we're allocated, and we don't have a delta,
@@ -366,11 +363,7 @@ func (cb *roundCowState) SetKey(addr basics.Address, aidx basics.AppIndex, globa
 	vdelta.newExists = true
 	lsd.kvCow[key] = vdelta
 
-	// Fetch the new value + presence so we know how to update
-	newValue, newOk, err := cb.GetKey(addr, aidx, global, key)
-	if err != nil {
-		return err
-	}
+	newValue, newOk := vdelta.new, vdelta.newExists
 
 	// Update counts
 	err = updateCounts(lsd, oldValue, oldOk, newValue, newOk)
@@ -412,11 +405,7 @@ func (cb *roundCowState) DelKey(addr basics.Address, aidx basics.AppIndex, globa
 	vdelta.newExists = false
 	lsd.kvCow[key] = vdelta
 
-	// Fetch the new value + presence so we know how to update counts
-	newValue, newOk, err := cb.GetKey(addr, aidx, global, key)
-	if err != nil {
-		return err
-	}
+	newValue, newOk := vdelta.new, vdelta.newExists
 
 	// Update counts
 	err = updateCounts(lsd, oldValue, oldOk, newValue, newOk)

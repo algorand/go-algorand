@@ -109,12 +109,24 @@ func (cb *roundCowState) deltas() StateDelta {
 	if len(cb.sdeltas) == 0 {
 		return cb.mods
 	}
-	for addr, delta := range cb.mods.accts {
-		if smap, ok := cb.sdeltas[addr]; ok {
-			for aapp, storeDelta := range smap {
-				if delta.new, err = applyStorageDelta(delta.new, aapp, storeDelta); err != nil {
-					panic(fmt.Sprintf("applying storage delta failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
-				}
+
+	// Apply storage deltas to account deltas
+	// 1. Ensure all addresses from sdeltas have entries in accts because
+	//    SetKey/DelKey work only with sdeltas, so need to pull missing accounts
+	// 2. Call applyStorageDelta for every delta per account
+	for addr, smap := range cb.sdeltas {
+		var delta accountDelta
+		var exist bool
+		if delta, exist = cb.mods.accts[addr]; !exist {
+			ad, err := cb.lookup(addr)
+			if err != nil {
+				panic(fmt.Sprintf("fetching account data failed for addr %s: %s", addr.String(), err.Error()))
+			}
+			delta = accountDelta{old: ad, new: ad}
+		}
+		for aapp, storeDelta := range smap {
+			if delta.new, err = applyStorageDelta(delta.new, aapp, storeDelta); err != nil {
+				panic(fmt.Sprintf("applying storage delta failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
 			}
 		}
 		cb.mods.accts[addr] = delta
