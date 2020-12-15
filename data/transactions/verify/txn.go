@@ -129,7 +129,7 @@ func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader,
 		}
 	}
 	if cache != nil {
-		err = cache.Add(stxs, groupCtx)
+		cache.Add(stxs, groupCtx)
 	}
 	return
 }

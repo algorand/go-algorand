@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
-const entriesPerBucket = 8179 // pick a prime number to promote lower collisions.
+const entriesPerBucket = 8179 // the default bucket size; a prime number could promote a lower hash collisions in case the hash function isn't perfect.
 const maxPinnedEntries = 500000
 
 // VerifiedTxnCacheError helps to identifiy the errors of a cache error and diffrenciate these from a general verification errors.
@@ -47,7 +47,7 @@ var errMissingPinnedEntry = &VerifiedTxnCacheError{errors.New("Missing pinned en
 
 // VerifiedTransactionCache provides a cached store of recently verified transactions
 type VerifiedTransactionCache interface {
-	Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) error
+	Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext)
 	AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) error
 	GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn
 	UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) error
@@ -76,20 +76,17 @@ func MakeVerifiedTransactionCache(cacheSize int) VerifiedTransactionCache {
 	return impl
 }
 
-func (v *verifiedTransactionCacheImpl) Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) error {
+func (v *verifiedTransactionCacheImpl) Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
-	return v.add(txgroup, groupCtx)
+	v.add(txgroup, groupCtx)
 }
 
 func (v *verifiedTransactionCacheImpl) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) error {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
 	for i := range txgroup {
-		err := v.add(txgroup[i], groupCtxs[i])
-		if err != nil {
-			return err
-		}
+		v.add(txgroup[i], groupCtxs[i])
 	}
 	return nil
 }
@@ -101,8 +98,7 @@ func (v *verifiedTransactionCacheImpl) GetUnverifiedTranscationGroups(txnGroups 
 		specAddrs:        currSpecAddrs,
 		consensusVersion: currProto,
 	}
-	unverifiedGroups = make([][]transactions.SignedTxn, len(txnGroups))
-	var entryGroup *GroupContext
+	unverifiedGroups = make([][]transactions.SignedTxn, 0, len(txnGroups))
 	for _, signedTxnGroup := range txnGroups {
 		verifiedTxn := 0
 
@@ -110,7 +106,7 @@ func (v *verifiedTransactionCacheImpl) GetUnverifiedTranscationGroups(txnGroups 
 		for i, txn := range signedTxnGroup {
 			id := txn.ID()
 			// check pinned first
-			entryGroup = v.pinned[id]
+			entryGroup := v.pinned[id]
 			// if not found in the pinned map, try to find in the verified buckets:
 			if entryGroup == nil {
 				// try to look in the previously verified buckets.
@@ -127,6 +123,7 @@ func (v *verifiedTransactionCacheImpl) GetUnverifiedTranscationGroups(txnGroups 
 			if entryGroup == nil {
 				break
 			}
+
 			if !entryGroup.Equal(groupCtx) {
 				break
 			}
@@ -134,14 +131,13 @@ func (v *verifiedTransactionCacheImpl) GetUnverifiedTranscationGroups(txnGroups 
 			if entryGroup.signedGroupTxns[i].Sig != txn.Sig || (!entryGroup.signedGroupTxns[i].Msig.Equal(txn.Msig)) || (!entryGroup.signedGroupTxns[i].Lsig.Equal(&txn.Lsig)) || (entryGroup.signedGroupTxns[i].AuthAddr != txn.AuthAddr) {
 				break
 			}
-
 			verifiedTxn++
 		}
-		if verifiedTxn == len(signedTxnGroup) && verifiedTxn > 0 {
+		if verifiedTxn != len(signedTxnGroup) || verifiedTxn == 0 {
 			unverifiedGroups = append(unverifiedGroups, signedTxnGroup)
 		}
 	}
-	return nil
+	return
 }
 
 func (v *verifiedTransactionCacheImpl) UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) (err error) {
@@ -214,7 +210,7 @@ func (v *verifiedTransactionCacheImpl) Pin(txgroup []transactions.SignedTxn) (er
 	return
 }
 
-func (v *verifiedTransactionCacheImpl) add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) error {
+func (v *verifiedTransactionCacheImpl) add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) {
 	if len(v.buckets[v.base])+len(txgroup) > entriesPerBucket {
 		// move to the next bucket while deleting the content of the next bucket.
 		v.base = (v.base + 1) % len(v.buckets)
@@ -224,7 +220,6 @@ func (v *verifiedTransactionCacheImpl) add(txgroup []transactions.SignedTxn, gro
 	for _, txn := range txgroup {
 		currentBucket[txn.ID()] = groupCtx
 	}
-	return nil
 }
 
 var alwaysVerifiedCache = mockedCache{true}
@@ -234,8 +229,8 @@ type mockedCache struct {
 	alwaysVerified bool
 }
 
-func (v *mockedCache) Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) error {
-	return nil
+func (v *mockedCache) Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) {
+	return
 }
 
 func (v *mockedCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) error {

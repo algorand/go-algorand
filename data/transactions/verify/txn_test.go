@@ -70,11 +70,12 @@ func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transa
 		addresses[i] = addr
 	}
 	var iss, exp int
+	u := uint64(0)
 	for i := 0; i < numTxs; i++ {
 		s := rand.Intn(numAccs)
 		r := rand.Intn(numAccs)
 		a := rand.Intn(1000)
-		f := config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee + uint64(rand.Intn(10))
+		f := config.Consensus[protocol.ConsensusCurrentVersion].MinTxnFee + uint64(rand.Intn(10)) + u
 		if blockRound == 0 {
 			iss = 50 + rand.Intn(30)
 			exp = iss + 10
@@ -98,6 +99,7 @@ func generateTestObjects(numTxs, numAccs int, blockRound basics.Round) ([]transa
 			},
 		}
 		signed[i] = txs[i].Sign(secrets[s])
+		u += 100
 	}
 
 	return txs, signed, secrets, addresses
@@ -262,33 +264,12 @@ func TestPaysetGroups(t *testing.T) {
 			RewardsPool: poolAddr,
 		},
 	}
-	addrToSecret := make(map[basics.Address]*crypto.SignatureSecrets)
-	for i, addr := range addrs {
-		addrToSecret[addr] = secrets[i]
-	}
 
 	execPool := execpool.MakePool(t)
 	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, t)
 	defer verificationPool.Shutdown()
 
-	// divide the transactions into transaction groups.
-	txnGroups := make([][]transactions.SignedTxn, 0, len(signedTxn))
-	for i := 0; i < len(signedTxn)-16; i++ {
-		txnPerGroup := 1 + rand.Intn(15)
-		newGroup := signedTxn[i : i+txnPerGroup+1]
-		var txGroup transactions.TxGroup
-		for _, txn := range newGroup {
-			txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.HashObj(txn.Txn))
-		}
-		groupHash := crypto.HashObj(txGroup)
-		for j := range newGroup {
-			newGroup[j].Txn.Group = groupHash
-			newGroup[j].Sig = addrToSecret[newGroup[j].Txn.Sender].Sign(&newGroup[j].Txn)
-		}
-		txnGroups = append(txnGroups, newGroup)
-
-		i += txnPerGroup
-	}
+	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
 
 	startPaysetGroupsTime := time.Now()
 	err := PaysetGroups(context.Background(), txnGroups, blkHdr, verificationPool, MakeVerifiedTransactionCache(50000))
@@ -310,28 +291,7 @@ func TestPaysetGroups(t *testing.T) {
 
 	_, signedTxn, secrets, addrs = generateTestObjects(txnCount, 20, 50)
 
-	addrToSecret = make(map[basics.Address]*crypto.SignatureSecrets)
-	for i, addr := range addrs {
-		addrToSecret[addr] = secrets[i]
-	}
-
-	// divide the transactions into transaction groups.
-	txnGroups = make([][]transactions.SignedTxn, 0, len(signedTxn))
-	for i := 0; i < len(signedTxn)-16; i++ {
-		txnPerGroup := 1 + rand.Intn(15)
-		newGroup := signedTxn[i : i+txnPerGroup+1]
-		var txGroup transactions.TxGroup
-		for _, txn := range newGroup {
-			txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.HashObj(txn.Txn))
-		}
-		groupHash := crypto.HashObj(txGroup)
-		for j := range newGroup {
-			newGroup[j].Txn.Group = groupHash
-			newGroup[j].Sig = addrToSecret[newGroup[j].Txn.Sender].Sign(&newGroup[j].Txn)
-		}
-		txnGroups = append(txnGroups, newGroup)
-		i += txnPerGroup
-	}
+	txnGroups = generateTransactionGroups(signedTxn, secrets, addrs)
 
 	ctx, ctxCancelFunc := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer ctxCancelFunc()
@@ -384,19 +344,33 @@ func BenchmarkPaysetGroups(b *testing.B) {
 			RewardsPool: poolAddr,
 		},
 	}
-	addrToSecret := make(map[basics.Address]*crypto.SignatureSecrets)
-	for i, addr := range addrs {
-		addrToSecret[addr] = secrets[i]
-	}
+
 	execPool := execpool.MakePool(b)
 	verificationPool := execpool.MakeBacklog(execPool, 64, execpool.LowPriority, b)
 	defer verificationPool.Shutdown()
 
-	// divide the transactions into transaction groups.
-	txnGroups := make([][]transactions.SignedTxn, 0, len(signedTxn))
-	for i := 0; i < len(signedTxn)-16; i++ {
+	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+	cache := MakeVerifiedTransactionCache(50000)
+
+	b.ResetTimer()
+	err := PaysetGroups(context.Background(), txnGroups, blkHdr, verificationPool, cache)
+	require.NoError(b, err)
+	b.StopTimer()
+}
+
+func generateTransactionGroups(signedTxns []transactions.SignedTxn, secrets []*crypto.SignatureSecrets, addrs []basics.Address) [][]transactions.SignedTxn {
+	addrToSecret := make(map[basics.Address]*crypto.SignatureSecrets)
+	for i, addr := range addrs {
+		addrToSecret[addr] = secrets[i]
+	}
+
+	txnGroups := make([][]transactions.SignedTxn, 0, len(signedTxns))
+	for i := 0; i < len(signedTxns); i++ {
 		txnPerGroup := 1 + rand.Intn(15)
-		newGroup := signedTxn[i : i+txnPerGroup+1]
+		if i+txnPerGroup >= len(signedTxns) {
+			txnPerGroup = len(signedTxns) - i - 1
+		}
+		newGroup := signedTxns[i : i+txnPerGroup+1]
 		var txGroup transactions.TxGroup
 		for _, txn := range newGroup {
 			txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.HashObj(txn.Txn))
@@ -409,12 +383,8 @@ func BenchmarkPaysetGroups(b *testing.B) {
 		txnGroups = append(txnGroups, newGroup)
 		i += txnPerGroup
 	}
-	cache := MakeVerifiedTransactionCache(50000)
 
-	b.ResetTimer()
-	err := PaysetGroups(context.Background(), txnGroups, blkHdr, verificationPool, cache)
-	require.NoError(b, err)
-	b.StopTimer()
+	return txnGroups
 }
 
 func BenchmarkTxn(b *testing.B) {
@@ -435,28 +405,7 @@ func BenchmarkTxn(b *testing.B) {
 			},
 		},
 	}
-	addrToSecret := make(map[basics.Address]*crypto.SignatureSecrets)
-	for i, addr := range addrs {
-		addrToSecret[addr] = secrets[i]
-	}
-
-	// divide the transactions into transaction groups.
-	txnGroups := make([][]transactions.SignedTxn, 0, len(signedTxn))
-	for i := 0; i < len(signedTxn)-16; i++ {
-		txnPerGroup := 1 + rand.Intn(15)
-		newGroup := signedTxn[i : i+txnPerGroup+1]
-		var txGroup transactions.TxGroup
-		for _, txn := range newGroup {
-			txGroup.TxGroupHashes = append(txGroup.TxGroupHashes, crypto.HashObj(txn.Txn))
-		}
-		groupHash := crypto.HashObj(txGroup)
-		for j := range newGroup {
-			newGroup[j].Txn.Group = groupHash
-			newGroup[j].Sig = addrToSecret[newGroup[j].Txn.Sender].Sign(&newGroup[j].Txn)
-		}
-		txnGroups = append(txnGroups, newGroup)
-		i += txnPerGroup
-	}
+	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
 
 	b.ResetTimer()
 	for _, txnGroup := range txnGroups {
