@@ -124,3 +124,51 @@ func BenchmarkGetUnverifiedTranscationGroups50(b *testing.B) {
 	t := int(duration*10000) / (measuringMultipler * b.N)
 	b.ReportMetric(float64(t)/float64(time.Millisecond), "ms/10K_cache_compares")
 }
+
+func TestUpdatePinned(t *testing.T) {
+	size := entriesPerBucket
+	icache := MakeVerifiedTransactionCache(size * 10)
+	impl := icache.(*verifiedTransactionCacheImpl)
+	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0)
+	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+
+	// insert half of the entries.
+	for i := 0; i < len(txnGroups); i++ {
+		groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader)
+		impl.Add(txnGroups[i], groupCtx)
+	}
+
+	// pin the first half.
+	for i := 0; i < len(txnGroups)/2; i++ {
+		require.NoError(t, impl.Pin(txnGroups[i]))
+	}
+
+	pinnedTxns := make(map[transactions.Txid]transactions.SignedTxn)
+	for i := len(txnGroups) / 4; i < len(txnGroups)*3/4; i++ {
+		for _, txn := range txnGroups[i] {
+			pinnedTxns[txn.ID()] = txn
+		}
+	}
+	require.NoError(t, impl.UpdatePinned(pinnedTxns))
+}
+
+func TestPinningTransactions(t *testing.T) {
+	size := entriesPerBucket
+	icache := MakeVerifiedTransactionCache(size)
+	impl := icache.(*verifiedTransactionCacheImpl)
+	_, signedTxn, secrets, addrs := generateTestObjects(size*2, 10, 0)
+	txnGroups := generateTransactionGroups(signedTxn, secrets, addrs)
+
+	// insert half of the entries.
+	for i := 0; i < len(txnGroups)/2; i++ {
+		groupCtx, _ := PrepareGroupContext(txnGroups[i], blockHeader)
+		impl.Add(txnGroups[i], groupCtx)
+	}
+
+	// try to pin a previously added entry.
+	require.NoError(t, impl.Pin(txnGroups[0]))
+
+	// try to pin an entry that was not added.
+	require.Error(t, impl.Pin(txnGroups[len(txnGroups)-1]))
+
+}
