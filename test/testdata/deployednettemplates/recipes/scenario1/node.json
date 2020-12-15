@@ -5,7 +5,7 @@
     "TelemetryURI": "{{TelemetryURI}}",
     "EnableMetrics": false,
     "MetricsURI": "{{MetricsURI}}",
-    "ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"CadaverSizeTarget\": 0  }",
+    "ConfigJSONOverride": "{  \"TxPoolExponentialIncreaseFactor\": 1, \"DNSBootstrapID\": \"<network>.algodev.network\", \"DeadlockDetection\": -1, \"PeerPingPeriodSeconds\": 30, \"BaseLoggerDebugLevel\": 4, \"EnableProfiler\": true, \"CadaverSizeTarget\": 0  }",
     "AltConfigs": [
         {
             "APIToken": "{{APIToken}}",
