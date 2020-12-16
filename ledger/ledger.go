@@ -108,7 +108,7 @@ func OpenLedger(
 		genesisProto:                   config.Consensus[genesisInitState.Block.CurrentProtocol],
 		synchronousMode:                db.SynchronousMode(cfg.LedgerSynchronousMode),
 		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
-		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(cfg.TxPoolSize * 5 /* todo : move this to a separate config value */),
+		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(cfg.VerifiedTranscationsCacheSize),
 	}
 
 	l.headerCache.maxEntries = 10

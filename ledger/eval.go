@@ -931,7 +931,7 @@ func (validator *evalTxValidator) run() {
 	}
 
 	var unverifiedTxnGroups [][]transactions.SignedTxn
-	unverifiedTxnGroups = make([][]transactions.SignedTxn, len(validator.txgroups))
+	unverifiedTxnGroups = make([][]transactions.SignedTxn, 0, len(validator.txgroups))
 	for _, group := range validator.txgroups {
 		signedTxnGroup := make([]transactions.SignedTxn, len(group))
 		for j, txn := range group {

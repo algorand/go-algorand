@@ -1,5 +1,5 @@
 {
-    "Version": 13,
+    "Version": 14,
     "AccountsRebuildSynchronousMode": 1,
     "AnnounceParticipationKey": true,
     "Archival": false,
@@ -78,5 +78,6 @@
     "TxSyncIntervalSeconds": 60,
     "TxSyncServeResponseSize": 1000000,
     "TxSyncTimeoutSeconds": 30,
-    "UseXForwardedForAddressField": ""
+    "UseXForwardedForAddressField": "",
+    "VerifiedTranscationsCacheSize": 30000
 }
