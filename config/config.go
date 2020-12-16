@@ -364,7 +364,7 @@ type Local struct {
 	NetworkMessageTraceServer string `version[13]:""`
 
 	// VerifiedTranscationsCacheSize defines the number of transactions that the verified transactions cache would hold before cycling the cache storage in a round-robin fashion.
-	VerifiedTranscationsCacheSize uint64 `version[14]:"30000"`
+	VerifiedTranscationsCacheSize int `version[14]:"30000"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)

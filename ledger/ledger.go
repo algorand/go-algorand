@@ -100,6 +100,13 @@ func OpenLedger(
 	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState InitState, cfg config.Local,
 ) (*Ledger, error) {
 	var err error
+
+	verifiedCacheSize := cfg.VerifiedTranscationsCacheSize
+	if verifiedCacheSize < cfg.TxPoolSize {
+		verifiedCacheSize = cfg.TxPoolSize
+		log.Warnf("The VerifiedTranscationsCacheSize in the config file was misconfigured to have smaller size then the TxPoolSize; The verified cache size was adjusted from %d to %d.", cfg.VerifiedTranscationsCacheSize, cfg.TxPoolSize)
+	}
+
 	l := &Ledger{
 		log:                            log,
 		archival:                       cfg.Archival,
@@ -108,7 +115,7 @@ func OpenLedger(
 		genesisProto:                   config.Consensus[genesisInitState.Block.CurrentProtocol],
 		synchronousMode:                db.SynchronousMode(cfg.LedgerSynchronousMode),
 		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
-		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(cfg.VerifiedTranscationsCacheSize),
+		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
 	}
 
 	l.headerCache.maxEntries = 10
