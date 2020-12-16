@@ -47,8 +47,12 @@ var errMissingPinnedEntry = &VerifiedTxnCacheError{errors.New("Missing pinned en
 
 // VerifiedTransactionCache provides a cached store of recently verified transactions
 type VerifiedTransactionCache interface {
+	// Add adds a given transaction group and it's associated group context to the cache. If any of the transactions already appear
+	// in the cache, the new entry overrides the old one.
 	Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext)
+	// AddPayset works in a similar way to Add, but is intended for adding an array of transaction groups, along with their corresponding contexts.
 	AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) error
+	// GetUnverifiedTranscationGroups compares the provided payset against the currently cached transactions and figure which transaction groups aren't fully cached.
 	GetUnverifiedTranscationGroups(payset [][]transactions.SignedTxn, CurrSpecAddrs transactions.SpecialAddresses, CurrProto protocol.ConsensusVersion) [][]transactions.SignedTxn
 	UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) error
 	Pin(txgroup []transactions.SignedTxn) error
@@ -99,22 +103,27 @@ func (v *verifiedTransactionCacheImpl) GetUnverifiedTranscationGroups(txnGroups 
 		consensusVersion: currProto,
 	}
 	unverifiedGroups = make([][]transactions.SignedTxn, 0, len(txnGroups))
-	for _, signedTxnGroup := range txnGroups {
-		verifiedTxn := 0
 
+	for txnGroupIndex := 0; txnGroupIndex < len(txnGroups); txnGroupIndex++ {
+		signedTxnGroup := txnGroups[txnGroupIndex]
+		verifiedTxn := 0
 		groupCtx.minTealVersion = logic.ComputeMinTealVersion(signedTxnGroup)
-		for i, txn := range signedTxnGroup {
-			id := txn.ID()
+
+		baseBucket := v.base
+		for txnIdx := 0; txnIdx < len(signedTxnGroup); txnIdx++ {
+			txn := &signedTxnGroup[txnIdx]
+			id := txn.Txn.ID()
 			// check pinned first
 			entryGroup := v.pinned[id]
 			// if not found in the pinned map, try to find in the verified buckets:
 			if entryGroup == nil {
 				// try to look in the previously verified buckets.
 				// we use the (base + W) % W trick here so we can go backward and wrap around the zero.
-				for offsetBucketIdx := v.base + len(v.buckets); offsetBucketIdx > v.base; offsetBucketIdx-- {
+				for offsetBucketIdx := baseBucket + len(v.buckets); offsetBucketIdx > baseBucket; offsetBucketIdx-- {
 					bucketIdx := offsetBucketIdx % len(v.buckets)
 					if params, has := v.buckets[bucketIdx][id]; has {
 						entryGroup = params
+						baseBucket = bucketIdx
 						break
 					}
 				}
@@ -128,7 +137,7 @@ func (v *verifiedTransactionCacheImpl) GetUnverifiedTranscationGroups(txnGroups 
 				break
 			}
 
-			if entryGroup.signedGroupTxns[i].Sig != txn.Sig || (!entryGroup.signedGroupTxns[i].Msig.Equal(txn.Msig)) || (!entryGroup.signedGroupTxns[i].Lsig.Equal(&txn.Lsig)) || (entryGroup.signedGroupTxns[i].AuthAddr != txn.AuthAddr) {
+			if entryGroup.signedGroupTxns[txnIdx].Sig != txn.Sig || (!entryGroup.signedGroupTxns[txnIdx].Msig.Equal(txn.Msig)) || (!entryGroup.signedGroupTxns[txnIdx].Lsig.Equal(&txn.Lsig)) || (entryGroup.signedGroupTxns[txnIdx].AuthAddr != txn.AuthAddr) {
 				break
 			}
 			verifiedTxn++
@@ -180,6 +189,7 @@ func (v *verifiedTransactionCacheImpl) Pin(txgroup []transactions.SignedTxn) (er
 		// return an error ( which would get logged )
 		return errTooManyPinnedEntries
 	}
+	baseBucket := v.base
 	for _, txn := range txgroup {
 		txID := txn.ID()
 		if _, has := v.pinned[txID]; has {
@@ -190,13 +200,14 @@ func (v *verifiedTransactionCacheImpl) Pin(txgroup []transactions.SignedTxn) (er
 		// entry isn't in pinned; maybe we have it in one of the buckets ?
 		found := false
 		// we use the (base + W) % W trick here so we can go backward and wrap around the zero.
-		for offsetBucketIdx := v.base + len(v.buckets); offsetBucketIdx > v.base; offsetBucketIdx-- {
+		for offsetBucketIdx := baseBucket + len(v.buckets); offsetBucketIdx > baseBucket; offsetBucketIdx-- {
 			bucketIdx := offsetBucketIdx % len(v.buckets)
 			if ctx, has := v.buckets[bucketIdx][txID]; has {
 				// move it to the pinned items :
 				v.pinned[txID] = ctx
 				delete(v.buckets[bucketIdx], txID)
 				found = true
+				baseBucket = bucketIdx
 				break
 			}
 		}

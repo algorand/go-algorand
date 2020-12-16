@@ -123,6 +123,7 @@ func BenchmarkGetUnverifiedTranscationGroups50(b *testing.B) {
 	// calculate time per 10K verified entries:
 	t := int(duration*10000) / (measuringMultipler * b.N)
 	b.ReportMetric(float64(t)/float64(time.Millisecond), "ms/10K_cache_compares")
+
 }
 
 func TestUpdatePinned(t *testing.T) {
