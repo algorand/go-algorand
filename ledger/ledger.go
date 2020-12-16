@@ -541,7 +541,7 @@ func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreem
 // in-memory queue and is written to the disk in the background.  An error
 // is returned if this is not the expected next block number.
 func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
-	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
+	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
 
 	updates, err := eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
 	if err != nil {
@@ -644,7 +644,7 @@ func (l *Ledger) trackerLog() logging.Logger {
 // when this function is called, the trackers mutex is expected already to be taken. The provided accUpdatesLedger would allow the
 // evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
 func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
-	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
+	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
 	return eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
 }
 

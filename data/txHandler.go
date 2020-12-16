@@ -19,7 +19,6 @@ package data
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -185,7 +184,7 @@ func (handler *TxHandler) postprocessCheckedTxn(wi *txBacklogMsg) {
 	// if we remembered without any error ( i.e. txpool wasn't full ), then we should pin these transactions.
 	err = handler.ledger.VerifiedTransactionCache().Pin(verifiedTxGroup)
 	if err != nil {
-		logging.Base().Warnf("unable to pin transaction: %v", err)
+		logging.Base().Infof("unable to pin transaction: %v", err)
 	}
 
 	// We reencode here instead of using rawmsg.Data to avoid broadcasting non-canonical encodings
@@ -204,15 +203,7 @@ func (handler *TxHandler) asyncVerifySignature(arg interface{}) interface{} {
 		logging.Base().Warnf("Could not get header for previous block %d: %v", latest, err)
 	} else {
 		// we can't use PaysetGroups here since it's using a execpool like this go-routine and we don't want to deadlock.
-		_, err := verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache())
-		if err != nil {
-			var cacheError *verify.VerifiedTxnCacheError
-			if errors.As(err, &cacheError) {
-				logging.Base().Warnf("unable to add transactions to verified transaction cache: %v", cacheError)
-			} else {
-				tx.verificationErr = err
-			}
-		}
+		_, tx.verificationErr = verify.TxnGroup(tx.unverifiedTxGroup, latestHdr, handler.ledger.VerifiedTransactionCache())
 	}
 
 	select {
