@@ -1258,3 +1258,36 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "accounts")
 }
+
+func BenchmarkCompactDeltas(b *testing.B) {
+	b.Run("account-deltas", func(b *testing.B) {
+		if b.N < 500 {
+			b.N = 500
+		}
+		window := 5000
+		accountDeltas := make([]map[basics.Address]accountDelta, b.N)
+		addrs := make([]basics.Address, b.N*window)
+		for i := 0; i < len(addrs); i++ {
+			addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
+		}
+		for rnd := 0; rnd < b.N; rnd++ {
+			m := make(map[basics.Address]accountDelta)
+			start := 0
+			if rnd > 0 {
+				start = window/2 + (rnd-1)*window
+			}
+			for k := start; k < start+window; k++ {
+				m[addrs[k]] = accountDelta{
+					old: basics.AccountData{},
+					new: basics.AccountData{},
+				}
+			}
+
+			accountDeltas[rnd] = m
+		}
+		b.ResetTimer()
+
+		compactDeltas(accountDeltas, []map[basics.CreatableIndex]modifiedCreatable{map[basics.CreatableIndex]modifiedCreatable{}})
+
+	})
+}

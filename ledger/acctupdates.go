@@ -1362,48 +1362,47 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 }
 
 // accountsUpdateBalances applies the given deltas array to the merkle trie
-func (au *accountUpdates) accountsUpdateBalances(accountsDeltasRound []map[basics.Address]accountDelta, offset uint64) (err error) {
+func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Address]accountDelta) (err error) {
 	if au.catchpointInterval == 0 {
 		return nil
 	}
 	var added, deleted bool
 	accumulatedChanges := 0
-	for i := uint64(0); i < offset; i++ {
-		accountsDeltas := accountsDeltasRound[i]
-		for addr, delta := range accountsDeltas {
-			if !delta.old.IsZero() {
-				deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
-				deleted, err = au.balancesTrie.Delete(deleteHash)
-				if err != nil {
-					return err
-				}
-				if !deleted {
-					au.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
-				} else {
-					accumulatedChanges++
-				}
+
+	for addr, delta := range accountsDeltas {
+		if !delta.old.IsZero() {
+			deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
+			deleted, err = au.balancesTrie.Delete(deleteHash)
+			if err != nil {
+				return err
 			}
-			if !delta.new.IsZero() {
-				addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
-				added, err = au.balancesTrie.Add(addHash)
-				if err != nil {
-					return err
-				}
-				if !added {
-					au.log.Warnf("attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
-				} else {
-					accumulatedChanges++
-				}
+			if !deleted {
+				au.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
+			} else {
+				accumulatedChanges++
 			}
 		}
-		if accumulatedChanges >= trieAccumulatedChangesFlush {
-			accumulatedChanges = 0
-			_, err = au.balancesTrie.Commit()
+		if !delta.new.IsZero() {
+			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
+			added, err = au.balancesTrie.Add(addHash)
 			if err != nil {
-				return
+				return err
+			}
+			if !added {
+				au.log.Warnf("attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
+			} else {
+				accumulatedChanges++
 			}
 		}
 	}
+	if accumulatedChanges >= trieAccumulatedChangesFlush {
+		accumulatedChanges = 0
+		_, err = au.balancesTrie.Commit()
+		if err != nil {
+			return
+		}
+	}
+
 	// write it all to disk.
 	if accumulatedChanges > 0 {
 		_, err = au.balancesTrie.Commit()
@@ -1831,6 +1830,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 	}
 
+	compactDeltas, compactCreatableDeltas := compactDeltas(deltas, creatableDeltas)
+
 	var catchpointLabel string
 	beforeUpdatingBalancesTime := time.Now()
 	var trieBalancesHash crypto.Digest
@@ -1858,18 +1859,18 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			}
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
-		for i := uint64(0); i < offset; i++ {
-			err = accountsNewRound(tx, deltas[i], creatableDeltas[i], genesisProto)
-			if err != nil {
-				return err
-			}
+		//for i := uint64(0); i < offset; i++ {
+		err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto)
+		if err != nil {
+			return err
 		}
+		//}
 		err = totalsNewRounds(tx, deltas[:offset], roundTotals[1:offset+1], protos[1:offset+1])
 		if err != nil {
 			return err
 		}
 
-		err = au.accountsUpdateBalances(deltas, offset)
+		err = au.accountsUpdateBalances(compactDeltas)
 		if err != nil {
 			return err
 		}
@@ -1969,6 +1970,51 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest, updatingBalancesDuration)
 	}
 
+}
+
+func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable) (outAccountDeltas map[basics.Address]accountDelta, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
+	if len(accountDeltas) == 1 && len(creatableDeltas) == 1 {
+		outAccountDeltas = accountDeltas[0]
+		outCreatableDeltas = creatableDeltas[0]
+		return
+	}
+	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
+	if len(accountDeltas) > 0 {
+		outAccountDeltas = make(map[basics.Address]accountDelta, len(accountDeltas[0])*len(accountDeltas))
+		for _, roundDelta := range accountDeltas {
+			for addr, acctDelta := range roundDelta {
+				if prev, has := outAccountDeltas[addr]; has {
+					outAccountDeltas[addr] = accountDelta{
+						old: prev.old,
+						new: acctDelta.new,
+					}
+				} else {
+					// it's a new entry.
+					outAccountDeltas[addr] = acctDelta
+				}
+			}
+		}
+	}
+
+	if len(creatableDeltas) > 0 {
+		outCreatableDeltas = make(map[basics.CreatableIndex]modifiedCreatable, len(creatableDeltas[0])*len(creatableDeltas))
+		for _, roundCreatable := range creatableDeltas {
+			for creatableIdx, creatable := range roundCreatable {
+				if prev, has := outCreatableDeltas[creatableIdx]; has {
+					outCreatableDeltas[creatableIdx] = modifiedCreatable{
+						ctype:   creatable.ctype,
+						created: creatable.created,
+						creator: creatable.creator,
+						ndeltas: creatable.ndeltas + prev.ndeltas,
+					}
+				} else {
+					outCreatableDeltas[creatableIdx] = creatable
+				}
+			}
+		}
+	}
+
+	return
 }
 
 // latest returns the latest round
