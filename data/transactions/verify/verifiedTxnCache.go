@@ -63,12 +63,12 @@ type VerifiedTransactionCache interface {
 	// UpdatePinned replaces the pinned entries with the one provided in the pinnedTxns map. This is typically expected to be a subset of the
 	// already-pinned transactions. If a transaction is not currently pinned, and it's can't be found in the cache, a errMissingPinnedEntry error would be generated.
 	UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) error
-	// Pin pins the given transaction group.
+	// Pin function would mark the given transaction group as pinned.
 	Pin(txgroup []transactions.SignedTxn) error
 }
 
-// VerifiedTransactionCacheImpl provides an implementation of the VerifiedTransactionCache interface
-type verifiedTransactionCacheImpl struct {
+// verifiedTransactionCache provides an implementation of the VerifiedTransactionCache interface
+type verifiedTransactionCache struct {
 	// bucketsLock is the lock for syncornizing the access to the cache
 	bucketsLock deadlock.Mutex
 	// buckets is the circular cache buckets buffer
@@ -79,10 +79,10 @@ type verifiedTransactionCacheImpl struct {
 	base int
 }
 
-// MakeVerifiedTransactionCache creates an instance of verifiedTransactionCacheImpl and returns it.
+// MakeVerifiedTransactionCache creates an instance of verifiedTransactionCache and returns it.
 func MakeVerifiedTransactionCache(cacheSize int) VerifiedTransactionCache {
 	bucketsCount := 1 + (cacheSize / entriesPerBucket)
-	impl := &verifiedTransactionCacheImpl{
+	impl := &verifiedTransactionCache{
 		buckets: make([]map[transactions.Txid]*GroupContext, bucketsCount),
 		pinned:  make(map[transactions.Txid]*GroupContext, cacheSize),
 		base:    0,
@@ -95,14 +95,14 @@ func MakeVerifiedTransactionCache(cacheSize int) VerifiedTransactionCache {
 
 // Add adds a given transaction group and it's associated group context to the cache. If any of the transactions already appear
 // in the cache, the new entry overrides the old one.
-func (v *verifiedTransactionCacheImpl) Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) {
+func (v *verifiedTransactionCache) Add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
 	v.add(txgroup, groupCtx)
 }
 
 // AddPayset works in a similar way to Add, but is intended for adding an array of transaction groups, along with their corresponding contexts.
-func (v *verifiedTransactionCacheImpl) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) error {
+func (v *verifiedTransactionCache) AddPayset(txgroup [][]transactions.SignedTxn, groupCtxs []*GroupContext) error {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
 	for i := range txgroup {
@@ -112,7 +112,7 @@ func (v *verifiedTransactionCacheImpl) AddPayset(txgroup [][]transactions.Signed
 }
 
 // GetUnverifiedTranscationGroups compares the provided payset against the currently cached transactions and figure which transaction groups aren't fully cached.
-func (v *verifiedTransactionCacheImpl) GetUnverifiedTranscationGroups(txnGroups [][]transactions.SignedTxn, currSpecAddrs transactions.SpecialAddresses, currProto protocol.ConsensusVersion) (unverifiedGroups [][]transactions.SignedTxn) {
+func (v *verifiedTransactionCache) GetUnverifiedTranscationGroups(txnGroups [][]transactions.SignedTxn, currSpecAddrs transactions.SpecialAddresses, currProto protocol.ConsensusVersion) (unverifiedGroups [][]transactions.SignedTxn) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
 	groupCtx := &GroupContext{
@@ -168,7 +168,7 @@ func (v *verifiedTransactionCacheImpl) GetUnverifiedTranscationGroups(txnGroups 
 
 // UpdatePinned replaces the pinned entries with the one provided in the pinnedTxns map. This is typically expected to be a subset of the
 // already-pinned transactions. If a transaction is not currently pinned, and it's can't be found in the cache, a errMissingPinnedEntry error would be generated.
-func (v *verifiedTransactionCacheImpl) UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) (err error) {
+func (v *verifiedTransactionCache) UpdatePinned(pinnedTxns map[transactions.Txid]transactions.SignedTxn) (err error) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
 	pinned := make(map[transactions.Txid]*GroupContext, len(pinnedTxns))
@@ -199,7 +199,7 @@ func (v *verifiedTransactionCacheImpl) UpdatePinned(pinnedTxns map[transactions.
 }
 
 // Pin sets a given transaction group as pinned items, after they have already been verified.
-func (v *verifiedTransactionCacheImpl) Pin(txgroup []transactions.SignedTxn) (err error) {
+func (v *verifiedTransactionCache) Pin(txgroup []transactions.SignedTxn) (err error) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
 	transcationMissing := false
@@ -241,7 +241,7 @@ func (v *verifiedTransactionCacheImpl) Pin(txgroup []transactions.SignedTxn) (er
 }
 
 // add is the internal implementation of Add/AddPayset which adds a transaction group to the buffer.
-func (v *verifiedTransactionCacheImpl) add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) {
+func (v *verifiedTransactionCache) add(txgroup []transactions.SignedTxn, groupCtx *GroupContext) {
 	if len(v.buckets[v.base])+len(txgroup) > entriesPerBucket {
 		// move to the next bucket while deleting the content of the next bucket.
 		v.base = (v.base + 1) % len(v.buckets)
