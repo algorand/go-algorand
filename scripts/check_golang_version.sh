@@ -12,14 +12,6 @@
 
 set -eo pipefail
 
-# Exit early if running in travis. The reason for this is that travis starts a build with an older version of go that will
-# fail the first check (GO_MOD_SUPPORT), and this isn't necessary for travis builds.
-#
-# https://docs.travis-ci.com/user/environment-variables/#default-environment-variables
-if [[ -n $CI ]] && [[ -n $TRAVIS ]]; then
-    exit 0
-fi
-
 read -ra GOLANG_VERSIONS <<< "$(./scripts/get_golang_version.sh all)"
 BUILD_VERSION="${GOLANG_VERSIONS[0]}"
 MIN_VERSION="${GOLANG_VERSIONS[1]}"
