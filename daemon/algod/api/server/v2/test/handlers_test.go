@@ -442,17 +442,17 @@ func TestTealDryrun(t *testing.T) {
 		gdr.Txns = append(gdr.Txns, enc)
 	}
 
-	sucProgram, err := logic.AssembleStringV2("int 1")
+	sucOps, err := logic.AssembleStringWithVersion("int 1", 2)
 	require.NoError(t, err)
 
-	failProgram, err := logic.AssembleStringV2("int 0")
+	failOps, err := logic.AssembleStringWithVersion("int 0", 2)
 	require.NoError(t, err)
 
 	gdr.Apps = []generated.Application{
 		{
 			Id: 1,
 			Params: generated.ApplicationParams{
-				ApprovalProgram: sucProgram,
+				ApprovalProgram: sucOps.Program,
 			},
 		},
 	}
@@ -490,7 +490,7 @@ func TestTealDryrun(t *testing.T) {
 	ddr := tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
 	require.Equal(t, string(protocol.ConsensusFuture), ddr.ProtocolVersion)
 
-	gdr.Apps[0].Params.ApprovalProgram = failProgram
+	gdr.Apps[0].Params.ApprovalProgram = failOps.Program
 	tealDryrunTest(t, &gdr, "json", 200, "REJECT", true)
 	tealDryrunTest(t, &gdr, "msgp", 200, "REJECT", true)
 	tealDryrunTest(t, &gdr, "json", 404, "", false)
