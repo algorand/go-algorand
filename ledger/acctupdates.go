@@ -1362,7 +1362,7 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 }
 
 // accountsUpdateBalances applies the given deltas map to the merkle trie
-func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Address]accountDelta) (err error) {
+func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Address]accountDeltaCount) (err error) {
 	if au.catchpointInterval == 0 {
 		return nil
 	}
@@ -1798,12 +1798,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	copy(roundTotals, au.roundTotals[:offset+1])
 	copy(protos, au.protos[:offset+1])
 
-	// Keep track of how many changes to each account we flush to the
-	// account DB, so that we can drop the corresponding refcounts in
-	// au.accounts.
-	flushcount := make(map[basics.Address]int)
-	creatableFlushcount := make(map[basics.CreatableIndex]int)
-
 	var committedRoundDigest crypto.Digest
 
 	if isCatchpointRound {
@@ -1820,15 +1814,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			close(au.catchpointWriting)
 		}
 	}()
-
-	for i := uint64(0); i < offset; i++ {
-		for addr := range deltas[i] {
-			flushcount[addr] = flushcount[addr] + 1
-		}
-		for cidx := range creatableDeltas[i] {
-			creatableFlushcount[cidx] = creatableFlushcount[cidx] + 1
-		}
-	}
 
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
@@ -1918,7 +1903,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
-	for addr, cnt := range flushcount {
+	for addr, acctDltCnt := range compactDeltas {
+		cnt := acctDltCnt.ndeltas
 		macct, ok := au.accounts[addr]
 		if !ok {
 			au.log.Panicf("inconsistency: flushed %d changes to %s, but not in au.accounts", cnt, addr)
@@ -1926,17 +1912,16 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 		if cnt > macct.ndeltas {
 			au.log.Panicf("inconsistency: flushed %d changes to %s, but au.accounts had %d", cnt, addr, macct.ndeltas)
-		}
-
-		macct.ndeltas -= cnt
-		if macct.ndeltas == 0 {
+		} else if cnt == macct.ndeltas {
 			delete(au.accounts, addr)
 		} else {
+			macct.ndeltas -= cnt
 			au.accounts[addr] = macct
 		}
 	}
 
-	for cidx, cnt := range creatableFlushcount {
+	for cidx, modCrt := range compactCreatableDeltas {
+		cnt := modCrt.ndeltas
 		mcreat, ok := au.creatables[cidx]
 		if !ok {
 			au.log.Panicf("inconsistency: flushed %d changes to creatable %d, but not in au.creatables", cnt, cidx)
@@ -1944,12 +1929,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 		if cnt > mcreat.ndeltas {
 			au.log.Panicf("inconsistency: flushed %d changes to creatable %d, but au.creatables had %d", cnt, cidx, mcreat.ndeltas)
-		}
-
-		mcreat.ndeltas -= cnt
-		if mcreat.ndeltas == 0 {
+		} else if cnt == mcreat.ndeltas {
 			delete(au.creatables, cidx)
 		} else {
+			mcreat.ndeltas -= cnt
 			au.creatables[cidx] = mcreat
 		}
 	}
@@ -1976,30 +1959,26 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 // compactDeltas takes an arary of account map deltas ( one array entry per round ), and corresponding creatables array, and compact the arrays into a single
 // map that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
-// The function returns a map that could be the same as the input map, and therefore both the outputs of this function as well as the inputs to this function
-// should be kept read-only ( unless we don't care about the correctness of the data anymore ).
-func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable) (outAccountDeltas map[basics.Address]accountDelta, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
-	// this is a common case where we have only a single round that we try to flush. In this case, we're just going to return
-	// the first entry.
-	if len(accountDeltas) == 1 && len(creatableDeltas) == 1 {
-		outAccountDeltas = accountDeltas[0]
-		outCreatableDeltas = creatableDeltas[0]
-		return
-	}
-
+func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable) (outAccountDeltas map[basics.Address]accountDeltaCount, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
 	if len(accountDeltas) > 0 {
 		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
-		outAccountDeltas = make(map[basics.Address]accountDelta, 1+len(accountDeltas[0])*len(accountDeltas))
+		outAccountDeltas = make(map[basics.Address]accountDeltaCount, 1+len(accountDeltas[0])*len(accountDeltas))
 		for _, roundDelta := range accountDeltas {
 			for addr, acctDelta := range roundDelta {
 				if prev, has := outAccountDeltas[addr]; has {
-					outAccountDeltas[addr] = accountDelta{
-						old: prev.old,
-						new: acctDelta.new,
+					outAccountDeltas[addr] = accountDeltaCount{
+						accountDelta: accountDelta{
+							old: prev.old,
+							new: acctDelta.new,
+						},
+						ndeltas: prev.ndeltas + 1,
 					}
 				} else {
 					// it's a new entry.
-					outAccountDeltas[addr] = acctDelta
+					outAccountDeltas[addr] = accountDeltaCount{
+						accountDelta: acctDelta,
+						ndeltas:      1,
+					}
 				}
 			}
 		}
@@ -2015,12 +1994,15 @@ func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDel
 						ctype:   creatable.ctype,
 						created: creatable.created,
 						creator: creatable.creator,
-						// The following ndeltas is not currently used
-						// TODO : it should be "converted" to counting the number of updates for a particular creatable entry and replace the creatableFlushcount in commitRound.
-						ndeltas: creatable.ndeltas + prev.ndeltas,
+						ndeltas: prev.ndeltas + 1,
 					}
 				} else {
-					outCreatableDeltas[creatableIdx] = creatable
+					outCreatableDeltas[creatableIdx] = modifiedCreatable{
+						ctype:   creatable.ctype,
+						created: creatable.created,
+						creator: creatable.creator,
+						ndeltas: 1,
+					}
 				}
 			}
 		}

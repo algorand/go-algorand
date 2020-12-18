@@ -529,7 +529,9 @@ func TestAccountDBRound(t *testing.T) {
 		accts = newaccts
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
 			expectedDbImage, numElementsPerSegement)
-		err = accountsNewRound(tx, updates, ctbsWithDeletes, proto)
+
+		updatesCnt, _ := compactDeltas([]map[basics.Address]accountDelta{updates}, nil)
+		err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto)
 		require.NoError(t, err)
 		err = totalsNewRounds(tx, []map[basics.Address]accountDelta{updates}, []AccountTotals{{}}, []config.ConsensusParams{proto})
 		require.NoError(t, err)

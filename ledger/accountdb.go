@@ -119,6 +119,11 @@ type accountDelta struct {
 	new basics.AccountData
 }
 
+type accountDeltaCount struct {
+	accountDelta
+	ndeltas int
+}
+
 // catchpointState is used to store catchpoint related variables into the catchpointstate table.
 type catchpointState string
 
@@ -872,7 +877,7 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool)
 }
 
 // accountsNewRound updates the accountbase and assetcreators by applying the provided deltas to the accounts / creatables.
-func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creatables map[basics.CreatableIndex]modifiedCreatable, proto config.ConsensusParams) (err error) {
+func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, creatables map[basics.CreatableIndex]modifiedCreatable, proto config.ConsensusParams) (err error) {
 
 	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteStmt, replaceStmt *sql.Stmt
 

@@ -1017,7 +1017,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* All results are obtained from the database. Empty cache *******
 	// ******* No deletes	                                           *******
 	// sync with the database
-	var updates map[basics.Address]accountDelta
+	var updates map[basics.Address]accountDeltaCount
 	err = accountsNewRound(tx, updates, ctbsWithDeletes, proto)
 	require.NoError(t, err)
 	// nothing left in cache
@@ -1162,12 +1162,12 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
 	for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
-		updates := make(map[basics.Address]accountDelta, 0)
+		updates := make(map[basics.Address]accountDeltaCount, 0)
 		for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 			addr := randomAddress()
 			acctData := basics.AccountData{}
 			acctData.MicroAlgos.Raw = 1
-			updates[addr] = accountDelta{new: acctData}
+			updates[addr] = accountDeltaCount{accountDelta: accountDelta{new: acctData}}
 			i++
 		}
 
@@ -1234,12 +1234,12 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	accountsNumber := 6000000 * b.N
 	err = ml.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
-			updates := make(map[basics.Address]accountDelta, 0)
+			updates := make(map[basics.Address]accountDeltaCount, 0)
 			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 				addr := randomAddress()
 				acctData := basics.AccountData{}
 				acctData.MicroAlgos.Raw = 1
-				updates[addr] = accountDelta{new: acctData}
+				updates[addr] = accountDeltaCount{accountDelta: accountDelta{new: acctData}}
 				i++
 			}
 
@@ -1307,8 +1307,8 @@ func TestCompactDeltas(t *testing.T) {
 	creatableDeltas[0][100] = modifiedCreatable{creator: addrs[2], created: true}
 	outAccountDeltas, outCreatableDeltas := compactDeltas(accountDeltas, creatableDeltas)
 
-	require.Equal(t, accountDeltas[0], outAccountDeltas)
-	require.Equal(t, creatableDeltas[0], outCreatableDeltas)
+	require.Equal(t, len(accountDeltas[0]), len(outAccountDeltas))
+	require.Equal(t, len(creatableDeltas[0]), len(outCreatableDeltas))
 
 	// add another round
 	accountDeltas = append(accountDeltas, make(map[basics.Address]accountDelta))
