@@ -202,7 +202,7 @@ func (v *verifiedTransactionCache) UpdatePinned(pinnedTxns map[transactions.Txid
 func (v *verifiedTransactionCache) Pin(txgroup []transactions.SignedTxn) (err error) {
 	v.bucketsLock.Lock()
 	defer v.bucketsLock.Unlock()
-	transcationMissing := false
+	transactionMissing := false
 	if len(v.pinned)+len(txgroup) > maxPinnedEntries {
 		// reaching this number likely means that we have an issue not removing entries from the pinned map.
 		// return an error ( which would get logged )
@@ -231,10 +231,10 @@ func (v *verifiedTransactionCache) Pin(txgroup []transactions.SignedTxn) (err er
 			}
 		}
 		if !found {
-			transcationMissing = true
+			transactionMissing = true
 		}
 	}
-	if transcationMissing {
+	if transactionMissing {
 		err = errMissingPinnedEntry
 	}
 	return
