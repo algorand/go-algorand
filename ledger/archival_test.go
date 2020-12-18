@@ -301,12 +301,12 @@ func makeUnsignedApplicationCallTx(appIdx uint64, onCompletion transactions.OnCo
 
 			int 1
 		`
-		prog, err := logic.AssembleString(testprog)
+		ops, err := logic.AssembleString(testprog)
 		if err != nil {
 			return tx, err
 		}
-		tx.ApprovalProgram = prog
-		tx.ClearStateProgram = prog
+		tx.ApprovalProgram = ops.Program
+		tx.ClearStateProgram = ops.Program
 		tx.GlobalStateSchema = basics.StateSchema{
 			NumByteSlice: 1,
 		}

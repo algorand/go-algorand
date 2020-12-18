@@ -108,10 +108,10 @@ func TestDebuggerSimple(t *testing.T) {
 int 1
 +
 `
-	program, err := logic.AssembleStringV1(source)
+	ops, err := logic.AssembleStringWithVersion(source, 1)
 	require.NoError(t, err)
 
-	_, err = logic.Eval(program, ep)
+	_, err = logic.Eval(ops.Program, ep)
 	require.NoError(t, err)
 
 	da.WaitForCompletion()
@@ -123,22 +123,22 @@ int 1
 
 func TestSession(t *testing.T) {
 	source := fmt.Sprintf("#pragma version %d\nint 1\ndup\n+\n", logic.LogicVersion)
-	program, offsets, err := logic.AssembleStringWithVersionEx(source, logic.LogicVersion)
+	ops, err := logic.AssembleStringWithVersion(source, logic.LogicVersion)
 	require.NoError(t, err)
-	disassembly, err := logic.Disassemble(program)
+	disassembly, err := logic.Disassemble(ops.Program)
 	require.NoError(t, err)
 
 	// create a sample disassembly line to pc mapping
 	// this simple source is similar to disassembly except intcblock at the begining
-	pcOffset := make(map[int]int, len(offsets))
-	for pc, line := range offsets {
+	pcOffset := make(map[int]int, len(ops.OffsetToLine))
+	for pc, line := range ops.OffsetToLine {
 		pcOffset[line+1] = pc
 	}
 
 	s := makeSession(disassembly, 0)
 	s.source = source
 	s.programName = "test"
-	s.offsetToLine = offsets
+	s.offsetToLine = ops.OffsetToLine
 	s.pcOffset = pcOffset
 	err = s.SetBreakpoint(2)
 	require.NoError(t, err)
