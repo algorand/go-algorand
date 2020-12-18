@@ -51,7 +51,10 @@ var errTooManyPinnedEntries = &VerifiedTxnCacheError{errors.New("Too many pinned
 // errMissingPinnedEntry is being generated when we're trying to pin a transaction that does not appear in the cache
 var errMissingPinnedEntry = &VerifiedTxnCacheError{errors.New("Missing pinned entry")}
 
-// VerifiedTransactionCache provides a cached store of recently verified transactions
+// VerifiedTransactionCache provides a cached store of recently verified transactions. The cache is desiged two have two separate "levels". On the
+// bottom tier, the cache would be using a cyclic buffer, where old transactions would end up overridden by new ones. In order to support transactions
+// that goes into the transaction pool, we have a higher tier of pinned cache. Pinned transactions would not be cycled-away by new incoming transactions,
+// and would only get eliminated by updates to the transaction pool, which would inform the cache of updates to the pinned items.
 type VerifiedTransactionCache interface {
 	// Add adds a given transaction group and it's associated group context to the cache. If any of the transactions already appear
 	// in the cache, the new entry overrides the old one.
