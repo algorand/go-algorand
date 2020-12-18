@@ -1291,3 +1291,47 @@ func BenchmarkCompactDeltas(b *testing.B) {
 
 	})
 }
+func TestCompactDeltas(t *testing.T) {
+	addrs := make([]basics.Address, 10)
+	for i := 0; i < len(addrs); i++ {
+		addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
+	}
+	var accountDeltas []map[basics.Address]accountDelta
+	var creatableDeltas []map[basics.CreatableIndex]modifiedCreatable
+
+	accountDeltas = make([]map[basics.Address]accountDelta, 1, 1)
+	creatableDeltas = make([]map[basics.CreatableIndex]modifiedCreatable, 1, 1)
+	accountDeltas[0] = make(map[basics.Address]accountDelta)
+	creatableDeltas[0] = make(map[basics.CreatableIndex]modifiedCreatable)
+	accountDeltas[0][addrs[0]] = accountDelta{old: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}, new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}}
+	creatableDeltas[0][100] = modifiedCreatable{creator: addrs[2], created: true}
+	outAccountDeltas, outCreatableDeltas := compactDeltas(accountDeltas, creatableDeltas)
+
+	require.Equal(t, accountDeltas[0], outAccountDeltas)
+	require.Equal(t, creatableDeltas[0], outCreatableDeltas)
+
+	// add another round
+	accountDeltas = append(accountDeltas, make(map[basics.Address]accountDelta))
+	creatableDeltas = append(creatableDeltas, make(map[basics.CreatableIndex]modifiedCreatable))
+	accountDeltas[1][addrs[0]] = accountDelta{old: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}, new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 3}}}
+	accountDeltas[1][addrs[3]] = accountDelta{old: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 0}}, new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 8}}}
+
+	creatableDeltas[1][100] = modifiedCreatable{creator: addrs[2], created: false}
+	creatableDeltas[1][101] = modifiedCreatable{creator: addrs[4], created: true}
+
+	outAccountDeltas, outCreatableDeltas = compactDeltas(accountDeltas, creatableDeltas)
+
+	require.Equal(t, 2, len(outAccountDeltas))
+	require.Equal(t, 2, len(outCreatableDeltas))
+
+	require.Equal(t, uint64(1), outAccountDeltas[addrs[0]].old.MicroAlgos.Raw)
+	require.Equal(t, uint64(3), outAccountDeltas[addrs[0]].new.MicroAlgos.Raw)
+	require.Equal(t, uint64(0), outAccountDeltas[addrs[3]].old.MicroAlgos.Raw)
+	require.Equal(t, uint64(8), outAccountDeltas[addrs[3]].new.MicroAlgos.Raw)
+
+	require.Equal(t, addrs[2], outCreatableDeltas[100].creator)
+	require.Equal(t, addrs[4], outCreatableDeltas[101].creator)
+	require.Equal(t, false, outCreatableDeltas[100].created)
+	require.Equal(t, true, outCreatableDeltas[101].created)
+
+}
