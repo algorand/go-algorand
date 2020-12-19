@@ -1361,49 +1361,48 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 	return nil
 }
 
-// accountsUpdateBalances applies the given deltas array to the merkle trie
-func (au *accountUpdates) accountsUpdateBalances(accountsDeltasRound []map[basics.Address]accountDelta, offset uint64) (err error) {
+// accountsUpdateBalances applies the given deltas map to the merkle trie
+func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Address]accountDelta) (err error) {
 	if au.catchpointInterval == 0 {
 		return nil
 	}
 	var added, deleted bool
 	accumulatedChanges := 0
-	for i := uint64(0); i < offset; i++ {
-		accountsDeltas := accountsDeltasRound[i]
-		for addr, delta := range accountsDeltas {
-			if !delta.old.IsZero() {
-				deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
-				deleted, err = au.balancesTrie.Delete(deleteHash)
-				if err != nil {
-					return err
-				}
-				if !deleted {
-					au.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
-				} else {
-					accumulatedChanges++
-				}
+
+	for addr, delta := range accountsDeltas {
+		if !delta.old.IsZero() {
+			deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
+			deleted, err = au.balancesTrie.Delete(deleteHash)
+			if err != nil {
+				return err
 			}
-			if !delta.new.IsZero() {
-				addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
-				added, err = au.balancesTrie.Add(addHash)
-				if err != nil {
-					return err
-				}
-				if !added {
-					au.log.Warnf("attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
-				} else {
-					accumulatedChanges++
-				}
+			if !deleted {
+				au.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
+			} else {
+				accumulatedChanges++
 			}
 		}
-		if accumulatedChanges >= trieAccumulatedChangesFlush {
-			accumulatedChanges = 0
-			_, err = au.balancesTrie.Commit()
+		if !delta.new.IsZero() {
+			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
+			added, err = au.balancesTrie.Add(addHash)
 			if err != nil {
-				return
+				return err
+			}
+			if !added {
+				au.log.Warnf("attempted to add duplicate hash '%s' to merkle trie for account %v", hex.EncodeToString(addHash), addr)
+			} else {
+				accumulatedChanges++
 			}
 		}
 	}
+	if accumulatedChanges >= trieAccumulatedChangesFlush {
+		accumulatedChanges = 0
+		_, err = au.balancesTrie.Commit()
+		if err != nil {
+			return
+		}
+	}
+
 	// write it all to disk.
 	if accumulatedChanges > 0 {
 		_, err = au.balancesTrie.Commit()
@@ -1831,6 +1830,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 	}
 
+	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
+	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
+	compactDeltas, compactCreatableDeltas := compactDeltas(deltas, creatableDeltas)
+
 	var catchpointLabel string
 	beforeUpdatingBalancesTime := time.Now()
 	var trieBalancesHash crypto.Digest
@@ -1858,18 +1861,18 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			}
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
-		for i := uint64(0); i < offset; i++ {
-			err = accountsNewRound(tx, deltas[i], creatableDeltas[i], genesisProto)
-			if err != nil {
-				return err
-			}
+
+		err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto)
+		if err != nil {
+			return err
 		}
+
 		err = totalsNewRounds(tx, deltas[:offset], roundTotals[1:offset+1], protos[1:offset+1])
 		if err != nil {
 			return err
 		}
 
-		err = au.accountsUpdateBalances(deltas, offset)
+		err = au.accountsUpdateBalances(compactDeltas)
 		if err != nil {
 			return err
 		}
@@ -1969,6 +1972,61 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		au.generateCatchpoint(basics.Round(offset)+dbRound+lookback, catchpointLabel, committedRoundDigest, updatingBalancesDuration)
 	}
 
+}
+
+// compactDeltas takes an arary of account map deltas ( one array entry per round ), and corresponding creatables array, and compact the arrays into a single
+// map that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
+// The function returns a map that could be the same as the input map, and therefore both the outputs of this function as well as the inputs to this function
+// should be kept read-only ( unless we don't care about the correctness of the data anymore ).
+func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable) (outAccountDeltas map[basics.Address]accountDelta, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
+	// this is a common case where we have only a single round that we try to flush. In this case, we're just going to return
+	// the first entry.
+	if len(accountDeltas) == 1 && len(creatableDeltas) == 1 {
+		outAccountDeltas = accountDeltas[0]
+		outCreatableDeltas = creatableDeltas[0]
+		return
+	}
+
+	if len(accountDeltas) > 0 {
+		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
+		outAccountDeltas = make(map[basics.Address]accountDelta, 1+len(accountDeltas[0])*len(accountDeltas))
+		for _, roundDelta := range accountDeltas {
+			for addr, acctDelta := range roundDelta {
+				if prev, has := outAccountDeltas[addr]; has {
+					outAccountDeltas[addr] = accountDelta{
+						old: prev.old,
+						new: acctDelta.new,
+					}
+				} else {
+					// it's a new entry.
+					outAccountDeltas[addr] = acctDelta
+				}
+			}
+		}
+	}
+
+	if len(creatableDeltas) > 0 {
+		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
+		outCreatableDeltas = make(map[basics.CreatableIndex]modifiedCreatable, 1+len(creatableDeltas[0])*len(creatableDeltas))
+		for _, roundCreatable := range creatableDeltas {
+			for creatableIdx, creatable := range roundCreatable {
+				if prev, has := outCreatableDeltas[creatableIdx]; has {
+					outCreatableDeltas[creatableIdx] = modifiedCreatable{
+						ctype:   creatable.ctype,
+						created: creatable.created,
+						creator: creatable.creator,
+						// The following ndeltas is not currently used
+						// TODO : it should be "converted" to counting the number of updates for a particular creatable entry and replace the creatableFlushcount in commitRound.
+						ndeltas: creatable.ndeltas + prev.ndeltas,
+					}
+				} else {
+					outCreatableDeltas[creatableIdx] = creatable
+				}
+			}
+		}
+	}
+
+	return
 }
 
 // latest returns the latest round

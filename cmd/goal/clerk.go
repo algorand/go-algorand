@@ -851,7 +851,7 @@ var splitCmd = &cobra.Command{
 func mustReadFile(fname string) []byte {
 	contents, err := readFile(fname)
 	if err != nil {
-		reportErrorf("%s: %s\n", fname, err)
+		reportErrorf("%s: %s", fname, err)
 	}
 	return contents
 }
@@ -859,19 +859,20 @@ func mustReadFile(fname string) []byte {
 func assembleFile(fname string) (program []byte) {
 	text, err := readFile(fname)
 	if err != nil {
-		reportErrorf("%s: %s\n", fname, err)
+		reportErrorf("%s: %s", fname, err)
 	}
-	program, err = logic.AssembleString(string(text))
+	ops, err := logic.AssembleString(string(text))
 	if err != nil {
-		reportErrorf("%s: %s\n", fname, err)
+		ops.ReportProblems(fname)
+		reportErrorf("%s: %s", fname, err)
 	}
-	return program
+	return ops.Program
 }
 
 func disassembleFile(fname, outname string) {
 	program, err := readFile(fname)
 	if err != nil {
-		reportErrorf("%s: %s\n", fname, err)
+		reportErrorf("%s: %s", fname, err)
 	}
 	// try parsing it as a msgpack LogicSig
 	var lsig transactions.LogicSig
@@ -889,7 +890,7 @@ func disassembleFile(fname, outname string) {
 	}
 	text, err := logic.Disassemble(program)
 	if err != nil {
-		reportErrorf("%s: %s\n", fname, err)
+		reportErrorf("%s: %s", fname, err)
 	}
 	if extra != "" {
 		text = text + extra + "\n"
@@ -899,7 +900,7 @@ func disassembleFile(fname, outname string) {
 	} else {
 		err = writeFile(outname, []byte(text), 0666)
 		if err != nil {
-			reportErrorf("%s: %s\n", outname, err)
+			reportErrorf("%s: %s", outname, err)
 		}
 	}
 }
@@ -950,7 +951,7 @@ var compileCmd = &cobra.Command{
 			if !noProgramOutput {
 				err := writeFile(outname, outblob, 0666)
 				if err != nil {
-					reportErrorf("%s: %s\n", outname, err)
+					reportErrorf("%s: %s", outname, err)
 				}
 			}
 			if !signProgram && outname != stdoutFilenameValue {
@@ -1051,7 +1052,7 @@ var dryrunRemoteCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 		resp, err := client.Dryrun(data)
 		if err != nil {
-			reportErrorf("dryrun-remote: %s\n", err.Error())
+			reportErrorf("dryrun-remote: %s", err.Error())
 		}
 		if rawOutput {
 			fmt.Fprintf(os.Stdout, string(protocol.EncodeJSON(&resp)))

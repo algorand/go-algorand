@@ -82,21 +82,21 @@ func DryrunRequestFromGenerated(gdr *generated.DryrunRequest) (dr DryrunRequest,
 // puts into appropriate DryrunRequest.Apps entry
 func (dr *DryrunRequest) ExpandSources() error {
 	for i, s := range dr.Sources {
-		program, err := logic.AssembleString(s.Source)
+		ops, err := logic.AssembleString(s.Source)
 		if err != nil {
 			return fmt.Errorf("Dryrun Source[%d]: %v", i, err)
 		}
 		switch s.FieldName {
 		case "lsig":
-			dr.Txns[s.TxnIndex].Lsig.Logic = program
+			dr.Txns[s.TxnIndex].Lsig.Logic = ops.Program
 		case "approv", "clearp":
 			for ai, app := range dr.Apps {
 				if app.Id == s.AppIndex {
 					switch s.FieldName {
 					case "approv":
-						dr.Apps[ai].Params.ApprovalProgram = program
+						dr.Apps[ai].Params.ApprovalProgram = ops.Program
 					case "clearp":
-						dr.Apps[ai].Params.ClearStateProgram = program
+						dr.Apps[ai].Params.ClearStateProgram = ops.Program
 					}
 				}
 			}
