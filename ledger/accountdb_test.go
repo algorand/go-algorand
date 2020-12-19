@@ -686,7 +686,7 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs dbPair, proto conf
 			VoteLastValid:      basics.Round(0x000ffffffffffffff),
 			VoteKeyDilution:    0x000ffffffffffffff,
 			AssetParams: map[basics.AssetIndex]basics.AssetParams{
-				0x000ffffffffffffff: basics.AssetParams{
+				0x000ffffffffffffff: {
 					Total:         0x000ffffffffffffff,
 					Decimals:      0x2ffffff,
 					DefaultFrozen: true,
@@ -701,7 +701,7 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs dbPair, proto conf
 				},
 			},
 			Assets: map[basics.AssetIndex]basics.AssetHolding{
-				0x000ffffffffffffff: basics.AssetHolding{
+				0x000ffffffffffffff: {
 					Amount: 0x000ffffffffffffff,
 					Frozen: true,
 				},
@@ -829,7 +829,7 @@ func TestAccountsReencoding(t *testing.T) {
 				VoteLastValid:      basics.Round(0x000ffffffffffffff),
 				VoteKeyDilution:    0x000ffffffffffffff,
 				AssetParams: map[basics.AssetIndex]basics.AssetParams{
-					0x000ffffffffffffff: basics.AssetParams{
+					0x000ffffffffffffff: {
 						Total:         0x000ffffffffffffff,
 						Decimals:      0x2ffffff,
 						DefaultFrozen: true,
@@ -844,7 +844,7 @@ func TestAccountsReencoding(t *testing.T) {
 					},
 				},
 				Assets: map[basics.AssetIndex]basics.AssetHolding{
-					0x000ffffffffffffff: basics.AssetHolding{
+					0x000ffffffffffffff: {
 						Amount: 0x000ffffffffffffff,
 						Frozen: true,
 					},

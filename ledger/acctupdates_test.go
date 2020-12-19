@@ -1287,7 +1287,7 @@ func BenchmarkCompactDeltas(b *testing.B) {
 		}
 		b.ResetTimer()
 
-		compactDeltas(accountDeltas, []map[basics.CreatableIndex]modifiedCreatable{map[basics.CreatableIndex]modifiedCreatable{}})
+		compactDeltas(accountDeltas, []map[basics.CreatableIndex]modifiedCreatable{{}})
 
 	})
 }
@@ -1310,6 +1310,10 @@ func TestCompactDeltas(t *testing.T) {
 	require.Equal(t, len(accountDeltas[0]), len(outAccountDeltas))
 	require.Equal(t, len(creatableDeltas[0]), len(outCreatableDeltas))
 
+	require.Equal(t, basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}, outAccountDeltas[addrs[0]].old)
+	require.Equal(t, basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}, outAccountDeltas[addrs[0]].new)
+	require.Equal(t, modifiedCreatable{creator: addrs[2], created: true, ndeltas: 1}, outCreatableDeltas[100])
+
 	// add another round
 	accountDeltas = append(accountDeltas, make(map[basics.Address]accountDelta))
 	creatableDeltas = append(creatableDeltas, make(map[basics.CreatableIndex]modifiedCreatable))
@@ -1326,12 +1330,16 @@ func TestCompactDeltas(t *testing.T) {
 
 	require.Equal(t, uint64(1), outAccountDeltas[addrs[0]].old.MicroAlgos.Raw)
 	require.Equal(t, uint64(3), outAccountDeltas[addrs[0]].new.MicroAlgos.Raw)
+	require.Equal(t, int(2), outAccountDeltas[addrs[0]].ndeltas)
 	require.Equal(t, uint64(0), outAccountDeltas[addrs[3]].old.MicroAlgos.Raw)
 	require.Equal(t, uint64(8), outAccountDeltas[addrs[3]].new.MicroAlgos.Raw)
+	require.Equal(t, int(1), outAccountDeltas[addrs[3]].ndeltas)
 
 	require.Equal(t, addrs[2], outCreatableDeltas[100].creator)
 	require.Equal(t, addrs[4], outCreatableDeltas[101].creator)
 	require.Equal(t, false, outCreatableDeltas[100].created)
 	require.Equal(t, true, outCreatableDeltas[101].created)
+	require.Equal(t, 2, outCreatableDeltas[100].ndeltas)
+	require.Equal(t, 1, outCreatableDeltas[101].ndeltas)
 
 }

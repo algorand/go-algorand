@@ -119,6 +119,9 @@ type accountDelta struct {
 	new basics.AccountData
 }
 
+// accountDeltaCount is an extention to accountDelta that is being used by the commitRound function for counting the
+// number of changes we've made per account. The ndeltas is used execlusively for consistency checking - making sure that
+// all the pending changes were written and that there are no outstanding writes missing.
 type accountDeltaCount struct {
 	accountDelta
 	ndeltas int
