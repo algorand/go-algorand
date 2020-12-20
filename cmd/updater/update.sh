@@ -330,6 +330,19 @@ function validate_update() {
     return 0
 }
 
+function run_systemd_action() {
+    local action=$1
+    local data_dir=$2
+
+    # Get the owner of a running process.
+    owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod"))
+    if [[ "$owner" = "root" ]] || grep sudo <(groups "$owner"); then
+        sudo -n systemctl "${action}" "algorand@$(systemd-escape "${data_dir}")"
+    else
+        systemctl --user "${action}" "algorand@$(systemd-escape "${data_dir}")"
+    fi
+}
+
 function shutdown_node() {
     echo Stopping node...
     if [ "$(pgrep -x algod)" != "" ] || [ "$(pgrep -x kmd)" != "" ] ; then
@@ -337,7 +350,7 @@ function shutdown_node() {
             for DD in ${DATADIRS[@]}; do
                 if [ -f ${DD}/algod.pid ] || [ -f ${DD}/**/kmd.pid ] ; then
                     echo Stopping node and waiting...
-                    sudo -n systemctl stop algorand@$(systemd-escape ${DD})
+                    run_systemd_action stop "${DD}"
                     ${BINDIR}/goal node stop -d ${DD}
                     sleep 5
                 else
@@ -512,8 +525,7 @@ function startup_node() {
         fail_and_exit "Installation does not appear to be valid"
     fi
 
-    sudo -n systemctl start algorand@$(systemd-escape ${CURDATADIR})
-    if [ $? -ne 0 ]; then
+    if ! run_systemd_action start "${CURDATADIR}"; then
         ${BINDIR}/goal node start -d ${CURDATADIR} ${HOSTEDFLAG}
     fi
 }
