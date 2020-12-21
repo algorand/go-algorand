@@ -238,10 +238,12 @@ var runCmd = &cobra.Command{
 			default:
 				reportErrorf("Invalid argument for --teal: %v\n", teal)
 			}
-			cfg.Program, err = logic.AssembleString(programStr)
+			ops, err := logic.AssembleString(programStr)
 			if err != nil {
+				ops.ReportProblems(teal)
 				reportErrorf("Internal error, cannot assemble %v \n", programStr)
 			}
+			cfg.Program = ops.Program
 		}
 
 		if logicProg != "" {

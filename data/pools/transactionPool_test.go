@@ -847,9 +847,9 @@ func TestLogicSigOK(t *testing.T) {
 	}
 
 	src := `int 1`
-	program, err := logic.AssembleString(src)
+	ops, err := logic.AssembleString(src)
 	require.NoError(t, err)
-	programAddress := logic.HashProgram(program)
+	programAddress := logic.HashProgram(ops.Program)
 	addresses[0] = basics.Address(programAddress)
 
 	limitedAccounts := make(map[basics.Address]uint64)
@@ -879,7 +879,7 @@ func TestLogicSigOK(t *testing.T) {
 	signedTx := transactions.SignedTxn{
 		Txn: tx,
 		Lsig: transactions.LogicSig{
-			Logic: program,
+			Logic: ops.Program,
 		},
 	}
 	require.NoError(t, transactionPool.RememberOne(signedTx, verify.Params{}))
