@@ -75,7 +75,7 @@ if [ "${OS}" = "linux" ]; then
     fi
 
     sudo apt-get update
-    sudo apt-get install -y libboost-all-dev expect jq autoconf shellcheck sqlite3 python3-venv
+    sudo apt-get install -y libboost-all-dev expect jq autoconf shellcheck sqlite3 python3-venv make g++
 elif [ "${OS}" = "darwin" ]; then
     brew update
     brew tap homebrew/cask
