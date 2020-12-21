@@ -44,6 +44,16 @@ if { [catch {
     set GROUPED_TXN_FILE "$TEST_PRIMARY_NODE_DIR/txns.grouped"
     ::AlgorandGoal::AssembleGroup $TXNS_FILE $GROUPED_TXN_FILE
 
+    set GROUPED_TXN_SIGNED_FILE "$TEST_PRIMARY_NODE_DIR/txns.grouped.signed"
+    set TEAL_SIG_GTXN5 "$TEST_PRIMARY_NODE_DIR/gtxn5.teal"
+    exec echo "#pragma version 2\ngtxn 5 Sender\nint 1" > $TEAL_SIG_GTXN5
+    spawn goal clerk sign -d $TEST_PRIMARY_NODE_DIR -w $PRIMARY_WALLET_NAME -i $GROUPED_TXN_FILE -o $GROUPED_TXN_SIGNED_FILE --program $TEAL_SIG_GTXN5
+    expect {
+        timeout { ::AlgorandGoal::Abort "Timed out signing transaction"  }
+        "Please enter the password for wallet '$PRIMARY_WALLET_NAME':" { send "\r" ; exp_continue}
+        eof { catch wait result; if { [lindex $result 3] != 1 } { ::AlgorandGoal::Abort "goal clerk sign was expected to fail due to invalid teal signature, but it didn't. error code [lindex $result 3]"} }
+    }
+
     # test again, but this time we want to sign the second transaction first.
     set SIGNED_TXN_FILE2 "$TEST_PRIMARY_NODE_DIR/txns2.signed"
     ::AlgorandGoal::SignTransaction $PRIMARY_WALLET_NAME "" $TXN_FILE2 $SIGNED_TXN_FILE2 $TEST_PRIMARY_NODE_DIR

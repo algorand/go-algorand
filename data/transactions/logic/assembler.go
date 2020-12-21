@@ -1656,6 +1656,29 @@ func disTxna(dis *disassembleState, spec *OpSpec) {
 	_, dis.err = fmt.Fprintf(dis.out, "txna %s %d\n", TxnFieldNames[txarg], arrayFieldIdx)
 }
 
+// checkGtxn checks the gtnx instuction parameters, and return the execution cost.
+func checkGtxn(cx *evalContext) int {
+	lastIdx := cx.pc + 2
+	spec := &opsByOpcode[cx.version][cx.program[cx.pc]]
+	if len(cx.program) <= lastIdx {
+		missing := lastIdx - len(cx.program) + 1
+		cx.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return 0
+	}
+	cx.nextpc = cx.pc + 3
+	gi := cx.program[cx.pc+1]
+	txarg := cx.program[cx.pc+2]
+	if int(txarg) >= len(TxnFieldNames) {
+		cx.err = fmt.Errorf("invalid %s arg index %d at pc=%d", spec.Name, txarg, cx.pc)
+		return 0
+	}
+	if int(gi) >= len(cx.TxnGroup) {
+		cx.err = fmt.Errorf("invalid %s group index %d at pc=%d, transaction group has %d transactions", spec.Name, gi, cx.pc, len(cx.TxnGroup))
+		return 0
+	}
+	return 1
+}
+
 func disGtxn(dis *disassembleState, spec *OpSpec) {
 	lastIdx := dis.pc + 2
 	if len(dis.program) <= lastIdx {
@@ -1671,6 +1694,30 @@ func disGtxn(dis *disassembleState, spec *OpSpec) {
 		return
 	}
 	_, dis.err = fmt.Fprintf(dis.out, "gtxn %d %s\n", gi, TxnFieldNames[txarg])
+}
+
+// checkGtxna checks the gtnx instuction parameters, and return the execution cost.
+func checkGtxna(cx *evalContext) int {
+	lastIdx := cx.pc + 3
+	spec := &opsByOpcode[cx.version][cx.program[cx.pc]]
+	if len(cx.program) <= lastIdx {
+		missing := lastIdx - len(cx.program) + 1
+		cx.err = fmt.Errorf("unexpected %s opcode end: missing %d bytes", spec.Name, missing)
+		return 0
+	}
+	cx.nextpc = cx.pc + 4
+	gi := cx.program[cx.pc+1]
+	txarg := cx.program[cx.pc+2]
+	if int(txarg) >= len(TxnFieldNames) {
+		cx.err = fmt.Errorf("invalid %s arg index %d at pc=%d", spec.Name, txarg, cx.pc)
+		return 0
+	}
+	if int(gi) >= len(cx.TxnGroup) {
+		cx.err = fmt.Errorf("invalid %s group index %d at pc=%d, transaction group has %d transactions", spec.Name, gi, cx.pc, len(cx.TxnGroup))
+		return 0
+	}
+	// arrayFieldIdx := dis.program[dis.pc+3]
+	return 1
 }
 
 func disGtxna(dis *disassembleState, spec *OpSpec) {

@@ -647,7 +647,7 @@ proc ::AlgorandGoal::SignTransaction { WALLET_NAME WALLET_PASSWORD INPUT_TXN OUT
         expect {
             timeout { ::AlgorandGoal::Abort "Timed out signing transaction"  }
 	        "Please enter the password for wallet '$WALLET_NAME':" { send "$WALLET_PASSWORD\r" ; exp_continue}
-	        eof
+	        eof { catch wait result; if { [lindex $result 3] != 0 } { ::AlgorandGoal::Abort "failed to sign teal transaction: error code [lindex $result 3]"} }
         }
     } EXCEPTION ] } {
        ::AlgorandGoal::Abort "ERROR in SignTransaction: $EXCEPTION"

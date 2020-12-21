@@ -132,8 +132,8 @@ var OpSpecs = []OpSpec{
 	// generates 'txna' opcode in that particular case
 	{0x31, "txn", opTxn, assembleTxn2, disTxn, nil, oneAny, 2, modeAny, opSize{1, 2, nil}},
 	{0x32, "global", opGlobal, assembleGlobal, disGlobal, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},
-	{0x33, "gtxn", opGtxn, assembleGtxn, disGtxn, nil, oneAny, 1, modeAny, opSize{1, 3, nil}},
-	{0x33, "gtxn", opGtxn, assembleGtxn2, disGtxn, nil, oneAny, 2, modeAny, opSize{1, 3, nil}},
+	{0x33, "gtxn", opGtxn, assembleGtxn, disGtxn, nil, oneAny, 1, modeAny, opSize{1, 3, checkGtxn}},
+	{0x33, "gtxn", opGtxn, assembleGtxn2, disGtxn, nil, oneAny, 2, modeAny, opSize{1, 3, checkGtxna}},
 	{0x34, "load", opLoad, assembleLoad, disLoad, nil, oneAny, 1, modeAny, opSize{1, 2, nil}},
 	{0x35, "store", opStore, assembleStore, disStore, oneAny, nil, 1, modeAny, opSize{1, 2, nil}},
 	{0x36, "txna", opTxna, assembleTxna, disTxna, nil, oneAny, 2, modeAny, opSize{1, 3, nil}},
