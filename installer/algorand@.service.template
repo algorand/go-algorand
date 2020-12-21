@@ -24,7 +24,11 @@
 ##
 ## On an Ubuntu machine, replace /usr/bin/systemctl with /bin/systemctl.
 ##
-## We do not use systemd user services because they are disabled in CentOS.
+## To install as a systemd user service, see systemd-setup.sh and
+## algorand@.service.template-user.
+##
+## Note that not all distros currently support the user service feature.
+## Run `systemctl --user status` to determine if it's supported.
 
 [Unit]
 Description=Algorand daemon under %I

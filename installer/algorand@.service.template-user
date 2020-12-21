@@ -12,8 +12,6 @@
 ## This assumes a directory layout where the algod binary lives at
 ## /home/algo/algorand/testnet/algod, and the data lives under
 ## /home/algo/algorand/testnet/data/relay.
-##
-## We do not use systemd user services because they are disabled in CentOS.
 
 [Unit]
 Description=Algorand daemon under %I
