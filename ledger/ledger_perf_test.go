@@ -128,17 +128,6 @@ func makeUnsignedPaymentTx(sender basics.Address, round int) transactions.Transa
 	}
 }
 
-type alwaysVerifiedCache struct{}
-
-func (vc *alwaysVerifiedCache) Verified(txn transactions.SignedTxn, params verify.Params) bool {
-	return true
-}
-
-// UnverifiedTxnGroups returns a list of unverified transaction groups given a payset
-func (vc *alwaysVerifiedCache) UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxn, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn) {
-	return [][]transactions.SignedTxn{}
-}
-
 func benchmarkFullBlocks(params testParams, b *testing.B) {
 	// disable deadlock checking code
 	deadlockDisable := deadlock.Opts.Disable
@@ -327,10 +316,10 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	b.Logf("built %d blocks, each with %d txns", numBlocks, txPerBlock)
 
 	// eval + add all the (valid) blocks to the second ledger, measuring it this time
-	vc := alwaysVerifiedCache{}
+	vc := verify.GetMockedCache(true)
 	b.ResetTimer()
 	for _, blk := range blocks {
-		_, err = eval(context.Background(), l1, blk, true, &vc, nil)
+		_, err = eval(context.Background(), l1, blk, true, vc, nil)
 		require.NoError(b, err)
 		err = l1.AddBlock(blk, cert)
 		require.NoError(b, err)

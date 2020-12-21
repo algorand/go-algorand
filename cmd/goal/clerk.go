@@ -378,7 +378,15 @@ var sendCmd = &cobra.Command{
 				Txn:  payment,
 				Lsig: lsig,
 			}
-			err = verify.LogicSigSanityCheck(&uncheckedTxn, &verify.Context{Params: verify.Params{CurrProto: proto}})
+			blockHeader := bookkeeping.BlockHeader{
+				UpgradeState: bookkeeping.UpgradeState{
+					CurrentProtocol: proto,
+				},
+			}
+			groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, blockHeader)
+			if err == nil {
+				err = verify.LogicSigSanityCheck(&uncheckedTxn, 0, groupCtx)
+			}
 			if err != nil {
 				reportErrorf("%s: txn[0] error %s", outFilename, err)
 			}
@@ -759,12 +767,19 @@ var signCmd = &cobra.Command{
 			for _, txn := range txnGroups[group] {
 				txnGroup = append(txnGroup, *txn)
 			}
-			ctxs := verify.PrepareContexts(txnGroup, contextHdr)
+			var groupCtx *verify.GroupContext
+			if lsig.Logic != nil {
+				groupCtx, err = verify.PrepareGroupContext(txnGroup, contextHdr)
+				if err != nil {
+					// this error has to be unsupported protocol
+					reportErrorf("%s: %v", txFilename, err)
+				}
+			}
 			for i, txn := range txnGroup {
 				var signedTxn transactions.SignedTxn
 				if lsig.Logic != nil {
 					txn.Lsig = lsig
-					err = verify.LogicSigSanityCheck(&txn, &ctxs[i])
+					err = verify.LogicSigSanityCheck(&txn, i, groupCtx)
 					if err != nil {
 						reportErrorf("%s: txn[%d] error %s", txFilename, txnIndex[txnGroups[group][i]], err)
 					}
