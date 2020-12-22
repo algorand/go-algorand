@@ -1696,8 +1696,15 @@ func disGtxn(dis *disassembleState, spec *OpSpec) {
 	_, dis.err = fmt.Fprintf(dis.out, "gtxn %d %s\n", gi, TxnFieldNames[txarg])
 }
 
-// checkGtxna checks the gtnx instuction parameters, and return the execution cost.
+// checkGtxna checks the gtnxa instuction parameters, and return the execution cost.
+// in case it's being called against a gtxn ( which has only 2 arguments ), it redirect
+// the execution to checkGtxn.
 func checkGtxna(cx *evalContext) int {
+	// the gtxn command can have either 2 or 3 argument. If it has 2 arguments, it's being encoded as the v1 varient ( i.e. 0x33 ), whereas the v2
+	// has the three arguments.
+	if opsByOpcode[cx.version][cx.program[cx.pc]].opSize.size == 3 {
+		return checkGtxn(cx)
+	}
 	lastIdx := cx.pc + 3
 	spec := &opsByOpcode[cx.version][cx.program[cx.pc]]
 	if len(cx.program) <= lastIdx {

@@ -1125,7 +1125,9 @@ func TestTxnBadField(t *testing.T) {
 func TestGtxnBadIndex(t *testing.T) {
 	t.Parallel()
 	program := []byte{0x01, 0x33, 0x1, 0x01}
-	cost, err := Check(program, defaultEvalParams(nil, nil))
+	evalParams := defaultEvalParams(nil, nil)
+	evalParams.TxnGroup = make([]transactions.SignedTxn, 4)
+	cost, err := Check(program, evalParams)
 	require.NoError(t, err) // TODO: Check should know the type stack was wrong
 	require.True(t, cost < 1000)
 	sb := strings.Builder{}
@@ -1148,10 +1150,28 @@ func TestGtxnBadIndex(t *testing.T) {
 
 func TestGtxnBadField(t *testing.T) {
 	t.Parallel()
-	program := []byte{0x01, 0x33, 0x0, 0x7f}
-	cost, err := Check(program, defaultEvalParams(nil, nil))
+	program := []byte{0x01, 0x33, 0x0, 0x3}
+	evalParams := defaultEvalParams(nil, nil)
+	evalParams.TxnGroup = make([]transactions.SignedTxn, 4)
+	cost, err := Check(program, evalParams)
 	require.NoError(t, err) // TODO: Check should know the type stack was wrong
-	require.True(t, cost < 1000)
+	require.Equal(t, 1, cost)
+
+	program = []byte{0x01, 0x33, 0x3, 0}
+	evalParams = defaultEvalParams(nil, nil)
+	evalParams.TxnGroup = make([]transactions.SignedTxn, 1)
+	cost, err = Check(program, evalParams)
+	require.Equal(t, 1, cost)
+	require.Error(t, err) // expected error : gtxn group index too big.
+
+	program = []byte{0x01, 0x33, 0x0, 0x7f}
+	evalParams = defaultEvalParams(nil, nil)
+	evalParams.TxnGroup = make([]transactions.SignedTxn, 1)
+	cost, err = Check(program, evalParams)
+	require.Equal(t, 1, cost)
+	require.Error(t, err) // expected error : invalid gtxn arg index 127 at pc=1
+
+	program = []byte{0x01, 0x33, 0x0, 0x7f}
 	sb := strings.Builder{}
 	var txn transactions.SignedTxn
 	txn.Lsig.Logic = program
@@ -1838,7 +1858,9 @@ return
 	ops, err := AssembleStringWithVersion(cachedTxnProg, 2)
 	require.NoError(t, err)
 	sb := strings.Builder{}
-	cost, err := Check(ops.Program, defaultEvalParams(&sb, nil))
+	ep := defaultEvalParams(&sb, nil)
+	ep.TxnGroup = make([]transactions.SignedTxn, 2)
+	cost, err := Check(ops.Program, ep)
 	if err != nil {
 		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
@@ -1855,7 +1877,7 @@ return
 		txid1[:],
 	}
 	sb = strings.Builder{}
-	ep := defaultEvalParams(&sb, &txn)
+	ep = defaultEvalParams(&sb, &txn)
 	ep.TxnGroup = txgroup
 	pass, err := Eval(ops.Program, ep)
 	if !pass || err != nil {
@@ -1949,7 +1971,9 @@ int 1
 			ops, err := AssembleStringWithVersion(source, v)
 			require.NoError(t, err)
 			sb := strings.Builder{}
-			cost, err := Check(ops.Program, defaultEvalParams(&sb, nil))
+			evalParams := defaultEvalParams(&sb, nil)
+			evalParams.TxnGroup = make([]transactions.SignedTxn, 2)
+			cost, err := Check(ops.Program, evalParams)
 			if err != nil {
 				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(sb.String())
@@ -3909,6 +3933,7 @@ func TestAllowedOpcodesV2(t *testing.T) {
 	}
 
 	ep := defaultEvalParams(nil, nil)
+	ep.TxnGroup = make([]transactions.SignedTxn, 1)
 
 	cnt := 0
 	for _, spec := range OpSpecs {
