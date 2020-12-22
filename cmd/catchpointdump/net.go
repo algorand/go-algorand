@@ -37,16 +37,18 @@ import (
 
 var networkName string
 var round int
+var relayAddress string
 
 func init() {
 	netCmd.Flags().StringVarP(&networkName, "net", "n", "", "Specify the network name ( i.e. mainnet.algorand.network )")
 	netCmd.Flags().IntVarP(&round, "round", "r", 0, "Specify the round number ( i.e. 7700000 )")
+	netCmd.Flags().StringVarP(&relayAddress, "relay", "p", "", "Relay address to use ( i.e. r-ru.algorand-mainnet.network:4160 )")
 }
 
 var netCmd = &cobra.Command{
 	Use:   "net",
-	Short: "Download and decode all the catchpoints files from all the relays on the network for a particular round",
-	Long:  "Download and decode all the catchpoints files from all the relays on the network for a particular round",
+	Short: "Download and decode (possibly all) catchpoint files from all or specified the relay(s) on the network for a particular round",
+	Long:  "Download and decode (possibly all) catchpoint files from all or specified the relay(s) on the network for a particular round",
 	Args:  validateNoPosArgsFn,
 	Run: func(cmd *cobra.Command, args []string) {
 		if networkName == "" || round == 0 {
@@ -54,10 +56,17 @@ var netCmd = &cobra.Command{
 			return
 		}
 
-		addrs, err := tools.ReadFromSRV("algobootstrap", "tcp", networkName, "", false)
-		if err != nil || len(addrs) == 0 {
-			reportErrorf("Unable to bootstrap records for '%s' : %v", networkName, err)
+		var addrs []string
+		var err error
+		if relayAddress != "" {
+			addrs = []string{relayAddress}
+		} else {
+			addrs, err = tools.ReadFromSRV("algobootstrap", "tcp", networkName, "", false)
+			if err != nil || len(addrs) == 0 {
+				reportErrorf("Unable to bootstrap records for '%s' : %v", networkName, err)
+			}
 		}
+
 		for _, addr := range addrs {
 			catchpointFileBytes, err := downloadCatchpoint(addr)
 			if err != nil || catchpointFileBytes == nil {

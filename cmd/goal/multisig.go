@@ -161,14 +161,16 @@ var signProgramCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf(fileReadError, programSource, err)
 			}
-			program, err = logic.AssembleString(string(text))
+			ops, err := logic.AssembleString(string(text))
 			if err != nil {
+				ops.ReportProblems(programSource)
 				reportErrorf("%s: %s", programSource, err)
 			}
 			if outname == "" {
 				outname = fmt.Sprintf("%s.lsig", programSource)
 			}
-			lsig.Logic = program
+			lsig.Logic = ops.Program
+			program = ops.Program
 		} else if logicSigFile != "" {
 			if progByteFile != "" {
 				reportErrorf(multisigProgramCollision)
