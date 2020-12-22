@@ -1046,11 +1046,11 @@ func TestIsWritingCatchpointFile(t *testing.T) {
 
 	au := &accountUpdates{}
 
-	au.catchpointWriting = make(chan struct{}, 1)
+	au.catchpointWriting = -1
 	ans := au.IsWritingCatchpointFile()
 	require.True(t, ans)
 
-	close(au.catchpointWriting)
+	au.catchpointWriting = 0
 	ans = au.IsWritingCatchpointFile()
 	require.False(t, ans)
 }
