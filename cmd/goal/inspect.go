@@ -94,9 +94,9 @@ func (prog inspectProgram) MarshalText() ([]byte, error) {
 }
 
 func (prog *inspectProgram) UnmarshalText(text []byte) error {
-	program, err := logic.AssembleString(string(text))
+	ops, err := logic.AssembleString(string(text))
 	if err == nil {
-		*prog = program
+		*prog = ops.Program
 	}
 	return err
 }

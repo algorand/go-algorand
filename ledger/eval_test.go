@@ -191,7 +191,7 @@ func TestRekeying(t *testing.T) {
 
 		backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 		defer backlogPool.Shutdown()
-		_, err = l.Validate(context.Background(), validatedBlock.Block(), nil, backlogPool)
+		_, err = l.Validate(context.Background(), validatedBlock.Block(), backlogPool)
 		return err
 	}
 
@@ -446,7 +446,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if withCrypto {
-			_, err = l2.Validate(context.Background(), validatedBlock.blk, nil, backlogPool)
+			_, err = l2.Validate(context.Background(), validatedBlock.blk, backlogPool)
 		} else {
 			_, err = eval(context.Background(), l2, validatedBlock.blk, false, nil, nil)
 		}
