@@ -26,10 +26,7 @@ ${gcmd} clerk send -a 40000000 -f $ACCOUNT_SPLIT -t $ACCOUNTC -o ${TEMPDIR}/c.tx
 cat ${TEMPDIR}/b.tx ${TEMPDIR}/c.tx > ${TEMPDIR}/pregroup.tx
 
 ${gcmd} clerk group -i ${TEMPDIR}/pregroup.tx -o ${TEMPDIR}/group.tx
-${gcmd} clerk split -i ${TEMPDIR}/group.tx -o ${TEMPDIR}/gx.tx
-${gcmd} clerk sign -i ${TEMPDIR}/gx-0.tx -p ${TEMPDIR}/split.teal -o ${TEMPDIR}/gx-0.stx
-${gcmd} clerk sign -i ${TEMPDIR}/gx-1.tx -p ${TEMPDIR}/split.teal -o ${TEMPDIR}/gx-1.stx
-cat ${TEMPDIR}/gx-0.stx ${TEMPDIR}/gx-1.stx > ${TEMPDIR}/group.stx
+${gcmd} clerk sign -i ${TEMPDIR}/group.tx -p ${TEMPDIR}/split.teal -o ${TEMPDIR}/group.stx
 
 ${gcmd} clerk dryrun -t ${TEMPDIR}/group.stx
 

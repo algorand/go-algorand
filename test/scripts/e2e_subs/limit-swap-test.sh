@@ -131,10 +131,11 @@ cat ${TEMPDIR}/algotrade.tx ${TEMPDIR}/assettrade.tx > ${TEMPDIR}/groupRaw.tx
 ${gcmd} clerk group -i ${TEMPDIR}/groupRaw.tx -o ${TEMPDIR}/group.tx
 ${gcmd} clerk split -i ${TEMPDIR}/group.tx -o ${TEMPDIR}/gx.tx
 
-${gcmd} clerk sign -i ${TEMPDIR}/gx-0.tx -p ${TEMPDIR}/limit-order-a.teal -o ${TEMPDIR}/gx-0.stx
+${gcmd} clerk sign -i ${TEMPDIR}/group.tx -p ${TEMPDIR}/limit-order-a.teal -o ${TEMPDIR}/group.astx
+${gcmd} clerk split -i ${TEMPDIR}/group.astx -o ${TEMPDIR}/gxa.stx
 ${gcmd} clerk sign -i ${TEMPDIR}/gx-1.tx -p ${TEMPDIR}/limit-order-b.teal -o ${TEMPDIR}/gx-1.stx
 
-cat ${TEMPDIR}/gx-0.stx ${TEMPDIR}/gx-1.stx > ${TEMPDIR}/group.stx
+cat ${TEMPDIR}/gxa-0.stx ${TEMPDIR}/gx-1.stx > ${TEMPDIR}/group.stx
 
 ${gcmd} account balance -a $ACCOUNT; ${gcmd} account balance -a $ACCOUNT_ALGO_TRADER; ${gcmd} account balance -a $ACCOUNT_ASSET_TRADER
 
