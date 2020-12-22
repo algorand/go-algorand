@@ -184,7 +184,7 @@ func BenchmarkValidate(b *testing.B) {
 		newblk.BlockHeader.TxnRoot = newblk.Payset.Commit(false)
 
 		b.StartTimer()
-		_, err = l.Validate(context.Background(), newblk, nil, backlogPool)
+		_, err = l.Validate(context.Background(), newblk, backlogPool)
 		b.StopTimer()
 		require.NoError(b, err)
 	}
