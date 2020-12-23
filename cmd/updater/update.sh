@@ -20,6 +20,11 @@ GENESIS_NETWORK_DIR=""
 GENESIS_NETWORK_DIR_SPEC=""
 SKIP_UPDATE=0
 TOOLS_OUTPUT_DIR=""
+IS_ROOT=false
+if [ $EUID -eq 0 ]; then
+    IS_ROOT=true
+fi
+
 
 set -o pipefail
 
@@ -330,33 +335,59 @@ function validate_update() {
     return 0
 }
 
+function is_system_service() {
+    systemctl status "algorand@$(systemd-escape "$1")" &> /dev/null
+    echo $?
+}
+
+function is_user_service() {
+    systemctl --user status "algorand@$(systemd-escape "$1")" &> /dev/null
+    echo $?
+}
+
 function run_systemd_action() {
     local action=$1
     local data_dir=$2
 
-    # Get the owner of a running process.
-    owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod"))
-    if [[ "$owner" = "root" ]] || grep sudo <(groups "$owner"); then
-        sudo -n systemctl "${action}" "algorand@$(systemd-escape "${data_dir}")"
+    system_service=$(is_system_service "${data_dir}")
+    if [ "$system_service" -eq 0 ]; then
+        process_owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod -d ${data_dir}"))
+        if [ "$action" = "stop" ] && $IS_ROOT || $(grep sudo <(groups "$process_owner" &> /dev/null)); then
+            sudo -n systemctl "${action}" "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
+        fi
+    elif [ "$system_service" -ne 4 ]; then
+        if [ "$action" = "start" ]; then
+            sudo -n systemctl "${action}" "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
+        fi
     else
-        systemctl --user "${action}" "algorand@$(systemd-escape "${data_dir}")"
+        user_service=$(is_user_service "$data_dir")
+        if [ "$user_service" -eq 0 ]; then
+            process_owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod -d ${data_dir}"))
+            if [ "$action" = "stop" ] && [ "$(whoami)" = "$process_owner" ]; then
+                systemctl --user "${action}" "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
+            fi
+        elif [ "$user_service" -ne 4 ]; then
+            if [ "$action" = "start" ]; then
+                systemctl --user "${action}" "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
+            fi
+        fi
     fi
 }
 
 function shutdown_node() {
     echo Stopping node...
     if [ "$(pgrep -x algod)" != "" ] || [ "$(pgrep -x kmd)" != "" ] ; then
-        if [ -f ${BINDIR}/goal ]; then
-            for DD in ${DATADIRS[@]}; do
-                if [ -f ${DD}/algod.pid ] || [ -f ${DD}/**/kmd.pid ] ; then
+        if [ -f "${BINDIR}/goal" ]; then
+            for DD in "${DATADIRS[@]}"; do
+                if [ -f "${DD}/algod.pid" ] || [ -f "${DD}"/**/kmd.pid ] ; then
                     echo Stopping node and waiting...
                     run_systemd_action stop "${DD}"
-                    ${BINDIR}/goal node stop -d ${DD}
+                    ${BINDIR}/goal node stop -d "${DD}"
                     sleep 5
                 else
                     echo "Node is running but not in ${DD} - not stopping"
                     # Clean up zombie (algod|kmd).net files
-                    rm -f ${DD}/algod.net ${DD}/**/kmd.net
+                    rm -f "${DD}/algod.net" "${DD}"/**/kmd.net
                 fi
             done
         fi
@@ -526,7 +557,7 @@ function startup_node() {
     fi
 
     if ! run_systemd_action start "${CURDATADIR}"; then
-        ${BINDIR}/goal node start -d ${CURDATADIR} ${HOSTEDFLAG}
+        ${BINDIR}/goal node start -d "${CURDATADIR}" ${HOSTEDFLAG}
     fi
 }
 
