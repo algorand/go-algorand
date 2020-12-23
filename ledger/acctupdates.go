@@ -28,6 +28,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/algorand/go-deadlock"
@@ -174,7 +175,7 @@ type accountUpdates struct {
 	// the accounts DB (bumping dbRound).
 	lastFlushTime time.Time
 
-	// ledger is the source ledger, which is used to syncronize
+	// ledger is the source ledger, which is used to synchronize
 	// the rounds at which we need to flush the balances to disk
 	// in favor of the catchpoint to be generated.
 	ledger ledgerForTracker
@@ -187,9 +188,9 @@ type accountUpdates struct {
 	// note that this is the last catchpoint *label* and not the catchpoint file.
 	lastCatchpointLabel string
 
-	// catchpointWriting help to syncronize the catchpoint file writing. When this channel is closed, no writing is going on.
-	// the channel is non-closed while writing the current accounts state to disk.
-	catchpointWriting chan struct{}
+	// catchpointWriting help to synchronize the catchpoint file writing. When this atomic variable is 0, no writing is going on.
+	// Any non-zero value indicates a catchpoint being written.
+	catchpointWriting int32
 
 	// catchpointSlowWriting suggest to the accounts writer that it should finish writing up the catchpoint file ASAP.
 	// when this channel is closed, the accounts writer would try and complete the writing as soon as possible.
@@ -253,8 +254,8 @@ func (e *StaleDatabaseRoundError) Error() string {
 }
 
 // MismatchingDatabaseRoundError is generated when we detect that the database round is different than the accountUpdates in-memory dbRound. This
-// could happen normally when the database and the in-memory dbRound aren't syncronized. However, when we work in non-sync mode, we expect the database to be
-// always syncronized with the in-memory data. When that condition is violated, this error is generated.
+// could happen normally when the database and the in-memory dbRound aren't synchronized. However, when we work in non-sync mode, we expect the database to be
+// always synchronized with the in-memory data. When that condition is violated, this error is generated.
 type MismatchingDatabaseRoundError struct {
 	memoryRound   basics.Round
 	databaseRound basics.Round
@@ -353,17 +354,7 @@ func (au *accountUpdates) close() {
 // IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
 // to avoid memory pressure until the catchpoint file writing is complete.
 func (au *accountUpdates) IsWritingCatchpointFile() bool {
-	au.accountsMu.Lock()
-	defer au.accountsMu.Unlock()
-	// if we're still writing the previous balances, we can't move forward yet.
-	select {
-	case <-au.catchpointWriting:
-		// the channel catchpointWriting is currently closed, meaning that we're currently not writing any
-		// catchpoint file.
-		return false
-	default:
-		return true
-	}
+	return atomic.LoadInt32(&au.catchpointWriting) != 0
 }
 
 // LookupWithRewards returns the account data for a given address at a given round.
@@ -668,13 +659,9 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	}
 
 	// if we're still writing the previous balances, we can't move forward yet.
-	select {
-	case <-au.catchpointWriting:
-		// the channel catchpointWriting is currently closed, meaning that we're currently not writing any
-		// catchpoint file. At this point, we should attempt to enqueue further tasks as usual.
-	default:
-		// if we hit this path, it means that the channel is currently non-closed, which means that we're still writing a catchpoint.
-		// see if we're writing a catchpoint in that range.
+	if au.IsWritingCatchpointFile() {
+		// if we hit this path, it means that we're still writing a catchpoint.
+		// see if the new delta range contains another catchpoint.
 		if hasIntermediateCatchpoint {
 			// check if we're already attempting to perform fast-writing.
 			select {
@@ -707,7 +694,8 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	}
 
 	if isCatchpointRound && au.archivalLedger {
-		au.catchpointWriting = make(chan struct{}, 1)
+		// store non-zero ( all ones ) into the catchpointWriting atomic variable to indicate that a catchpoint is being written ( or, queued to be written )
+		atomic.StoreInt32(&au.catchpointWriting, int32(-1))
 		au.catchpointSlowWriting = make(chan struct{}, 1)
 		if hasMultipleIntermediateCatchpoint {
 			close(au.catchpointSlowWriting)
@@ -997,11 +985,10 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	au.creatables = make(map[basics.CreatableIndex]modifiedCreatable)
 	au.deltasAccum = []int{0}
 
+	au.catchpointWriting = 0
 	// keep these channel closed if we're not generating catchpoint
-	au.catchpointWriting = make(chan struct{}, 1)
 	au.catchpointSlowWriting = make(chan struct{}, 1)
 	close(au.catchpointSlowWriting)
-	close(au.catchpointWriting)
 	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
 	au.committedOffset = make(chan deferedCommit, 1)
 	au.commitSyncerClosed = make(chan struct{})
@@ -1362,7 +1349,7 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 }
 
 // accountsUpdateBalances applies the given deltas map to the merkle trie
-func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Address]accountDelta) (err error) {
+func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Address]accountDeltaCount) (err error) {
 	if au.catchpointInterval == 0 {
 		return nil
 	}
@@ -1552,9 +1539,9 @@ func (au *accountUpdates) lookupWithRewardsImpl(rnd basics.Round, addr basics.Ad
 }
 
 // lookupWithoutRewardsImpl returns the account data for a given address at a given round.
-func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics.Address, syncronized bool) (data basics.AccountData, validThrough basics.Round, err error) {
+func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics.Address, synchronized bool) (data basics.AccountData, validThrough basics.Round, err error) {
 	needUnlock := false
-	if syncronized {
+	if synchronized {
 		au.accountsMu.RLock()
 		needUnlock = true
 	}
@@ -1601,7 +1588,7 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 			rnd = currentDbRound + basics.Round(currentDeltaLen)
 		}
 
-		if syncronized {
+		if synchronized {
 			au.accountsMu.RUnlock()
 			needUnlock = false
 		}
@@ -1615,7 +1602,7 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 		if dbRound == currentDbRound {
 			return data, rnd, err
 		}
-		if syncronized {
+		if synchronized {
 			if dbRound < currentDbRound {
 				au.log.Errorf("accountUpdates.lookupWithoutRewardsImpl: database round %d is behind in-memory round %d", dbRound, currentDbRound)
 				return basics.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
@@ -1626,7 +1613,7 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 				au.accountsReadCond.Wait()
 			}
 		} else {
-			// in non-sync mode, we don't wait since we already assume that we're syncronized.
+			// in non-sync mode, we don't wait since we already assume that we're synchronized.
 			au.log.Errorf("accountUpdates.lookupWithoutRewardsImpl: database round %d mismatching in-memory round %d", dbRound, currentDbRound)
 			return basics.AccountData{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 		}
@@ -1634,9 +1621,9 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 }
 
 // getCreatorForRoundImpl returns the asset/app creator for a given asset/app index at a given round
-func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType, syncronized bool) (creator basics.Address, ok bool, err error) {
+func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType, synchronized bool) (creator basics.Address, ok bool, err error) {
 	unlock := false
-	if syncronized {
+	if synchronized {
 		au.accountsMu.RLock()
 		unlock = true
 	}
@@ -1679,7 +1666,7 @@ func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.C
 			}
 		}
 
-		if syncronized {
+		if synchronized {
 			au.accountsMu.RUnlock()
 			unlock = false
 		}
@@ -1689,7 +1676,7 @@ func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.C
 		if dbRound == currentDbRound {
 			return
 		}
-		if syncronized {
+		if synchronized {
 			if dbRound < currentDbRound {
 				au.log.Errorf("accountUpdates.getCreatorForRoundImpl: database round %d is behind in-memory round %d", dbRound, currentDbRound)
 				return basics.Address{}, false, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
@@ -1767,13 +1754,13 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	// we can exit right away, as this is the result of mis-ordered call to committedUpTo.
 	if au.dbRound < dbRound || offset < uint64(au.dbRound-dbRound) {
-		// if this is an archival ledger, we might need to close the catchpointWriting channel
+		// if this is an archival ledger, we might need to update the catchpointWriting variable.
 		if au.archivalLedger {
 			// determine if this was a catchpoint round
 			isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+dbRound))) % au.catchpointInterval))
 			if isCatchpointRound {
-				// it was a catchpoint round, so close the channel.
-				close(au.catchpointWriting)
+				// it was a catchpoint round, so update the catchpointWriting to indicate that we're done.
+				atomic.StoreInt32(&au.catchpointWriting, 0)
 			}
 		}
 		au.accountsMu.RUnlock()
@@ -1798,12 +1785,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	copy(roundTotals, au.roundTotals[:offset+1])
 	copy(protos, au.protos[:offset+1])
 
-	// Keep track of how many changes to each account we flush to the
-	// account DB, so that we can drop the corresponding refcounts in
-	// au.accounts.
-	flushcount := make(map[basics.Address]int)
-	creatableFlushcount := make(map[basics.CreatableIndex]int)
-
 	var committedRoundDigest crypto.Digest
 
 	if isCatchpointRound {
@@ -1812,23 +1793,14 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	au.accountsMu.RUnlock()
 
-	// in committedUpTo, we expect that this function we close the catchpointWriting when
+	// in committedUpTo, we expect that this function to update the catchpointWriting when
 	// it's on a catchpoint round and it's an archival ledger. Doing this in a deferred function
-	// here would prevent us from "forgetting" to close that channel later on.
+	// here would prevent us from "forgetting" to update this variable later on.
 	defer func() {
 		if isCatchpointRound && au.archivalLedger {
-			close(au.catchpointWriting)
+			atomic.StoreInt32(&au.catchpointWriting, 0)
 		}
 	}()
-
-	for i := uint64(0); i < offset; i++ {
-		for addr := range deltas[i] {
-			flushcount[addr] = flushcount[addr] + 1
-		}
-		for cidx := range creatableDeltas[i] {
-			creatableFlushcount[cidx] = creatableFlushcount[cidx] + 1
-		}
-	}
 
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
@@ -1918,7 +1890,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
-	for addr, cnt := range flushcount {
+	for addr, acctDltCnt := range compactDeltas {
+		cnt := acctDltCnt.ndeltas
 		macct, ok := au.accounts[addr]
 		if !ok {
 			au.log.Panicf("inconsistency: flushed %d changes to %s, but not in au.accounts", cnt, addr)
@@ -1926,17 +1899,16 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 		if cnt > macct.ndeltas {
 			au.log.Panicf("inconsistency: flushed %d changes to %s, but au.accounts had %d", cnt, addr, macct.ndeltas)
-		}
-
-		macct.ndeltas -= cnt
-		if macct.ndeltas == 0 {
+		} else if cnt == macct.ndeltas {
 			delete(au.accounts, addr)
 		} else {
+			macct.ndeltas -= cnt
 			au.accounts[addr] = macct
 		}
 	}
 
-	for cidx, cnt := range creatableFlushcount {
+	for cidx, modCrt := range compactCreatableDeltas {
+		cnt := modCrt.ndeltas
 		mcreat, ok := au.creatables[cidx]
 		if !ok {
 			au.log.Panicf("inconsistency: flushed %d changes to creatable %d, but not in au.creatables", cnt, cidx)
@@ -1944,12 +1916,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 		if cnt > mcreat.ndeltas {
 			au.log.Panicf("inconsistency: flushed %d changes to creatable %d, but au.creatables had %d", cnt, cidx, mcreat.ndeltas)
-		}
-
-		mcreat.ndeltas -= cnt
-		if mcreat.ndeltas == 0 {
+		} else if cnt == mcreat.ndeltas {
 			delete(au.creatables, cidx)
 		} else {
+			mcreat.ndeltas -= cnt
 			au.creatables[cidx] = mcreat
 		}
 	}
@@ -1975,31 +1945,28 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 }
 
 // compactDeltas takes an arary of account map deltas ( one array entry per round ), and corresponding creatables array, and compact the arrays into a single
-// map that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
-// The function returns a map that could be the same as the input map, and therefore both the outputs of this function as well as the inputs to this function
-// should be kept read-only ( unless we don't care about the correctness of the data anymore ).
-func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable) (outAccountDeltas map[basics.Address]accountDelta, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
-	// this is a common case where we have only a single round that we try to flush. In this case, we're just going to return
-	// the first entry.
-	if len(accountDeltas) == 1 && len(creatableDeltas) == 1 {
-		outAccountDeltas = accountDeltas[0]
-		outCreatableDeltas = creatableDeltas[0]
-		return
-	}
-
+// map that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes. For both the account deltas as well as for the creatables,
+// it counts the number of changes per round by specifying it in the ndeltas field of the accountDeltaCount/modifiedCreatable. The ndeltas field of the input creatableDeltas is ignored.
+func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable) (outAccountDeltas map[basics.Address]accountDeltaCount, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
 	if len(accountDeltas) > 0 {
 		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
-		outAccountDeltas = make(map[basics.Address]accountDelta, 1+len(accountDeltas[0])*len(accountDeltas))
+		outAccountDeltas = make(map[basics.Address]accountDeltaCount, 1+len(accountDeltas[0])*len(accountDeltas))
 		for _, roundDelta := range accountDeltas {
 			for addr, acctDelta := range roundDelta {
 				if prev, has := outAccountDeltas[addr]; has {
-					outAccountDeltas[addr] = accountDelta{
-						old: prev.old,
-						new: acctDelta.new,
+					outAccountDeltas[addr] = accountDeltaCount{
+						accountDelta: accountDelta{
+							old: prev.old,
+							new: acctDelta.new,
+						},
+						ndeltas: prev.ndeltas + 1,
 					}
 				} else {
 					// it's a new entry.
-					outAccountDeltas[addr] = acctDelta
+					outAccountDeltas[addr] = accountDeltaCount{
+						accountDelta: acctDelta,
+						ndeltas:      1,
+					}
 				}
 			}
 		}
@@ -2015,12 +1982,15 @@ func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDel
 						ctype:   creatable.ctype,
 						created: creatable.created,
 						creator: creatable.creator,
-						// The following ndeltas is not currently used
-						// TODO : it should be "converted" to counting the number of updates for a particular creatable entry and replace the creatableFlushcount in commitRound.
-						ndeltas: creatable.ndeltas + prev.ndeltas,
+						ndeltas: prev.ndeltas + 1,
 					}
 				} else {
-					outCreatableDeltas[creatableIdx] = creatable
+					outCreatableDeltas[creatableIdx] = modifiedCreatable{
+						ctype:   creatable.ctype,
+						created: creatable.created,
+						creator: creatable.creator,
+						ndeltas: 1,
+					}
 				}
 			}
 		}
