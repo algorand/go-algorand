@@ -173,6 +173,7 @@ func (ms *MemorySegment) SetMaxCost(maxCost int) {
 	ms.maxCost = maxCost
 }
 
+// CurrentCost returns the current cost of MemorySegment as defined in the protocol.
 func (ms *MemorySegment) CurrentCost() int {
 	return ms.cost
 }

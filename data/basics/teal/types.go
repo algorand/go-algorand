@@ -50,6 +50,9 @@ func (i *UInt) Value() uint64 {
 	return i.value
 }
 
+// SetValue sets the specified value for this UInt. If the UInt is stored in a MemorySegment container must be
+// a pointer to the MemorySegment which contains that UInt. if the UInt is not stored in any MemorySegment the
+// container must be nil. Passing wrong value for the container can result in unexpected behaviour.
 func (i *UInt) SetValue(value uint64, container *MemorySegment) {
 	if container != nil {
 		container.snapManager.notifyUpdate(&i.value, i.value)
@@ -102,6 +105,10 @@ func NewByteArray(size int) *ByteArray {
 	return &ByteArray{ConstByteArray: ConstByteArray{values: make([]byte, size)}}
 }
 
+// Set sets the value of the ByteArray at the specified index by i to the value b. If the ByteArray is stored in
+// a MemorySegment container must be a pointer to the MemorySegment which contains that ByteArray. if the ByteArray
+// is not stored in any MemorySegment the container must be nil. Passing wrong value for the container can
+// result in unexpected behaviour.
 func (ba *ByteArray) Set(i int, b byte, container *MemorySegment) *OutOfBoundsError {
 	if l := len(ba.values); i < 0 || i >= l {
 		return &OutOfBoundsError{Value: i, LowerBound: 0, HigherBound: l - 1}
