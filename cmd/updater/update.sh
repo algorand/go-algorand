@@ -346,6 +346,10 @@ function is_user_service() {
 }
 
 function run_systemd_action() {
+    if [ "$(uname)" = "Darwin" ]; then
+        return 1
+    fi
+
     local action=$1
     local data_dir=$2
 
