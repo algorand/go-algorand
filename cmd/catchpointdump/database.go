@@ -53,5 +53,8 @@ var databaseCmd = &cobra.Command{
 		if err != nil {
 			reportErrorf("Unable to print account database : %v", err)
 		}
+		if outFileName != "" {
+			outFile.Close()
+		}
 	},
 }

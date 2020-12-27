@@ -19,7 +19,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -33,6 +33,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	tools "github.com/algorand/go-algorand/tools/network"
+	"github.com/algorand/go-algorand/util"
 )
 
 var networkName string
@@ -87,6 +88,60 @@ var netCmd = &cobra.Command{
 	},
 }
 
+func formatSize(dld int64) string {
+	if dld < 1024 {
+		return fmt.Sprintf("%d bytes", dld)
+	} else if dld < 1024*1024 {
+		return fmt.Sprintf("%d KB", dld/1024)
+	} else if dld < 1024*1024*1024 {
+		return fmt.Sprintf("%d MB", dld/(1024*1024))
+	} else if dld < 1024*1024*1024*1024 {
+		return fmt.Sprintf("%d GB", dld/(1024*1024*1024))
+	} else if dld < 1024*1024*1024*1024*1024 {
+		return fmt.Sprintf("%d TB", dld/(1024*1024*1024*1024))
+	}
+	return fmt.Sprintf("%d bytes", dld)
+}
+
+func printDownloadProgressLine(progress int, barLength int, url string, dld int64) {
+	const (
+		CUU    = string("\033[A") // Cursor Up
+		DL     = string("\033[M") // Delete Line
+		SQUARE = string("▪")
+		DOT    = string("·")
+	)
+	if barLength == 0 {
+		fmt.Printf(CUU+DL+"[ Done ] Downloaded %s\n", url)
+		return
+	}
+	if progress >= barLength {
+		progress = progress % barLength
+	}
+	start, end := progress, progress+barLength/2
+	end = end % barLength
+
+	outString := "["
+	if start < end {
+		for i := 0; i < barLength; i++ {
+			if i < start || i > end {
+				outString += SQUARE
+			} else {
+				outString += DOT
+			}
+		}
+	} else {
+		for i := 0; i < barLength; i++ {
+			if i > start || i < end {
+				outString += DOT
+			} else {
+				outString += SQUARE
+			}
+		}
+	}
+	outString += "] Downloading " + url + " ..."
+	fmt.Printf(CUU+DL+outString+" %s\n", formatSize(dld))
+}
+
 func downloadCatchpoint(addr string) ([]byte, error) {
 	genesisID := strings.Split(networkName, ".")[0] + "-v1.0"
 	url := "http://" + addr + "/v1/" + genesisID + "/ledger/" + strconv.FormatUint(uint64(round), 36)
@@ -95,7 +150,8 @@ func downloadCatchpoint(addr string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	timeoutContext, timeoutContextCancel := context.WithTimeout(context.Background(), 40*time.Second)
+
+	timeoutContext, timeoutContextCancel := context.WithTimeout(context.Background(), config.GetDefaultLocal().MaxCatchpointDownloadDuration)
 	defer timeoutContextCancel()
 	request = request.WithContext(timeoutContext)
 	network.SetUserAgentHeader(request.Header)
@@ -113,36 +169,135 @@ func downloadCatchpoint(addr string) ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("error response status code %d", response.StatusCode)
 	}
-	bytes, err := ioutil.ReadAll(response.Body)
-	return bytes, err
+	wdReader := util.MakeWatchdogStreamReader(response.Body, 4096, 4096, 2*time.Second)
+	outBytes := make([]byte, 0, 4096)
+	tempBytes := make([]byte, 4096)
+	lastProgressUpdate := time.Now()
+	progress := -25
+	printDownloadProgressLine(progress, 50, url, 0)
+	defer printDownloadProgressLine(0, 0, url, 0)
+	for {
+		n, err := wdReader.Read(tempBytes)
+		if err != nil {
+			if err == io.EOF {
+				outBytes = append(outBytes, tempBytes[:n]...)
+				return outBytes, nil
+			}
+			return nil, err
+		}
+		if cap(outBytes) < len(outBytes)+n {
+			// need to increase buffer.
+			newBuffer := make([]byte, cap(outBytes)+n, cap(outBytes)+1024*1024)
+			copy(newBuffer, outBytes)
+			copy(newBuffer[len(outBytes):], tempBytes[:n])
+			outBytes = newBuffer
+		} else {
+			outBytes = append(outBytes, tempBytes[:n]...)
+		}
+		err = wdReader.Reset()
+		if err != nil {
+			if err == io.EOF {
+				return outBytes, nil
+			}
+			return nil, err
+		}
+		if time.Now().Sub(lastProgressUpdate) > 50*time.Millisecond {
+			lastProgressUpdate = time.Now()
+			printDownloadProgressLine(progress, 50, url, int64(len(outBytes)))
+			progress++
+		}
+	}
 }
 
-func saveCatchpointTarFile(addr string, catchpointFileBytes []byte) error {
+func printSaveProgressLine(progress int, barLength int, filename string, dld int64) {
+	const (
+		CUU    = string("\033[A") // Cursor Up
+		DL     = string("\033[M") // Delete Line
+		SQUARE = string("▪")
+		DOT    = string("·")
+	)
+	if barLength == 0 {
+		fmt.Printf(CUU+DL+"[ Done ] Saved %s\n", filename)
+		return
+	}
+
+	outString := "["
+	for i := 0; i < barLength; i++ {
+		if i < progress {
+			outString += SQUARE
+		} else {
+			outString += DOT
+		}
+	}
+	outString += "] Saving " + filename + " ..."
+	fmt.Printf(CUU+DL+outString+" %s\n", formatSize(dld))
+}
+
+func saveCatchpointTarFile(addr string, catchpointFileBytes []byte) (err error) {
 	// make a directory:
 	dirName := "./" + strings.Split(networkName, ".")[0] + "/" + strings.Split(addr, ".")[0]
 	os.RemoveAll(dirName)
-	err := os.MkdirAll(dirName, 0777)
+	err = os.MkdirAll(dirName, 0777)
 	if err != nil && !os.IsExist(err) {
-		return err
+		return
 	}
-	err = ioutil.WriteFile(dirName+"/"+strconv.FormatUint(uint64(round), 10)+".tar", catchpointFileBytes, 0666)
-	return err
+	destFileName := dirName + "/" + strconv.FormatUint(uint64(round), 10) + ".tar"
+	file, err2 := os.Create(destFileName) // will create a file with 0666 permission.
+	if err2 != nil {
+		return err2
+	}
+	defer func() {
+		err = file.Close()
+	}()
+	writeChunkSize := 64 * 1024
+	lastProgressUpdate := time.Now()
+	fmt.Printf("\n")
+	printSaveProgressLine(0, 50, destFileName, 0)
+	progress := uint64(0)
+	defer printSaveProgressLine(0, 0, destFileName, 0)
+	total := len(catchpointFileBytes)
+	for {
+		writeSize := writeChunkSize
+		if len(catchpointFileBytes) < writeSize {
+			writeSize = len(catchpointFileBytes)
+		}
+		if writeSize <= 0 {
+			break
+		}
+		n, err2 := file.Write(catchpointFileBytes[:writeSize])
+		if err2 != nil || n != writeSize {
+			return err
+		}
+		catchpointFileBytes = catchpointFileBytes[n:]
+		if time.Now().Sub(lastProgressUpdate) > 50*time.Millisecond && total > 0 {
+			lastProgressUpdate = time.Now()
+			printSaveProgressLine(int(float64(progress)*50.0/float64(total)), 50, destFileName, int64(progress))
+
+		}
+		progress += uint64(n)
+	}
+	return
 }
 
 func makeFileDump(addr string, catchpointFileBytes []byte) error {
 	genesisInitState := ledger.InitState{}
+	deleteLedgerFiles := func() {
+		os.Remove("./ledger.block.sqlite")
+		os.Remove("./ledger.block.sqlite-shm")
+		os.Remove("./ledger.block.sqlite-wal")
+		os.Remove("./ledger.tracker.sqlite")
+		os.Remove("./ledger.tracker.sqlite-shm")
+		os.Remove("./ledger.tracker.sqlite-wal")
+	}
+	// delete current ledger files.
+	deleteLedgerFiles()
 	cfg := config.GetDefaultLocal()
 	l, err := ledger.OpenLedger(logging.Base(), "./ledger", false, genesisInitState, cfg)
 	if err != nil {
 		reportErrorf("Unable to open ledger : %v", err)
 	}
 
-	defer os.Remove("./ledger.block.sqlite")
-	defer os.Remove("./ledger.block.sqlite-shm")
-	defer os.Remove("./ledger.block.sqlite-wal")
-	defer os.Remove("./ledger.tracker.sqlite")
-	defer os.Remove("./ledger.tracker.sqlite-shm")
-	defer os.Remove("./ledger.tracker.sqlite-wal")
+	defer deleteLedgerFiles()
 	defer l.Close()
 
 	catchupAccessor := ledger.MakeCatchpointCatchupAccessor(l, logging.Base())
@@ -165,5 +320,6 @@ func makeFileDump(addr string, catchpointFileBytes []byte) error {
 	if err != nil {
 		return err
 	}
+	outFile.Close()
 	return nil
 }
