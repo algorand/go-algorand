@@ -334,15 +334,16 @@ done:
 var localStateCheckProg []byte
 
 func init() {
-	var err error
-	globalTestProgram, err = logic.AssembleString(globalTestSource)
+	ops, err := logic.AssembleString(globalTestSource)
 	if err != nil {
 		panic(err)
 	}
-	localStateCheckProg, err = logic.AssembleString(localStateCheckSource)
+	globalTestProgram = ops.Program
+	ops, err = logic.AssembleString(localStateCheckSource)
 	if err != nil {
 		panic(err)
 	}
+	localStateCheckProg = ops.Program
 }
 
 func checkLogicSigPass(t *testing.T, response *generated.DryrunResponse) {

@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                 13,
+	Version:                                 14,
 	AccountsRebuildSynchronousMode:          1,
 	AnnounceParticipationKey:                true,
 	Archival:                                false,
@@ -73,6 +73,7 @@ var defaultLocal = Local{
 	MaxConnectionsPerIP:                     30,
 	MinCatchpointFileDownloadBytesPerSecond: 20480,
 	NetAddress:                              "",
+	NetworkMessageTraceServer:               "",
 	NetworkProtocolVersion:                  "",
 	NodeExporterListenAddress:               ":9100",
 	NodeExporterPath:                        "./node_exporter",
@@ -99,4 +100,5 @@ var defaultLocal = Local{
 	TxSyncServeResponseSize:                 1000000,
 	TxSyncTimeoutSeconds:                    30,
 	UseXForwardedForAddressField:            "",
+	VerifiedTranscationsCacheSize:           30000,
 }

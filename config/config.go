@@ -63,7 +63,7 @@ type Local struct {
 	// Version tracks the current version of the defaults so we can migrate old -> new
 	// This is specifically important whenever we decide to change the default value
 	// for an existing parameter. This field tag must be updated any time we add a new version.
-	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13"`
+	Version uint32 `version[0]:"0" version[1]:"1" version[2]:"2" version[3]:"3" version[4]:"4" version[5]:"5" version[6]:"6" version[7]:"7" version[8]:"8" version[9]:"9" version[10]:"10" version[11]:"11" version[12]:"12" version[13]:"13" version[14]:"14"`
 
 	// environmental (may be overridden)
 	// When enabled, stores blocks indefinitally, otherwise, only the most recents blocks
@@ -359,6 +359,12 @@ type Local struct {
 	// provided stream speed drops below this threshold, the connection would be recycled. Note that this field is evaluated per catchpoint "chunk" and not on it's own. If this field is zero,
 	// the default of 20480 would be used.
 	MinCatchpointFileDownloadBytesPerSecond uint64 `version[13]:"20480"`
+
+	// TraceServer is a host:port to report graph propagation trace info to.
+	NetworkMessageTraceServer string `version[13]:""`
+
+	// VerifiedTranscationsCacheSize defines the number of transactions that the verified transactions cache would hold before cycling the cache storage in a round-robin fashion.
+	VerifiedTranscationsCacheSize int `version[14]:"30000"`
 }
 
 // Filenames of config files within the configdir (e.g. ~/.algorand)
@@ -446,6 +452,12 @@ func loadConfig(reader io.Reader, config *Local) error {
 func (cfg Local) DNSBootstrapArray(networkID protocol.NetworkID) (bootstrapArray []string) {
 	dnsBootstrapString := cfg.DNSBootstrap(networkID)
 	bootstrapArray = strings.Split(dnsBootstrapString, ";")
+	// omit zero length entries from the result set.
+	for i := len(bootstrapArray) - 1; i >= 0; i-- {
+		if len(bootstrapArray[i]) == 0 {
+			bootstrapArray = append(bootstrapArray[:i], bootstrapArray[i+1:]...)
+		}
+	}
 	return
 }
 
@@ -598,3 +610,6 @@ func (cfg Local) DNSSecurityRelayAddrEnforced() bool {
 func (cfg Local) DNSSecurityTelemeryAddrEnforced() bool {
 	return cfg.DNSSecurityFlags&dnssecTelemetryAddr != 0
 }
+
+// ProposalAssemblyTime is the max amount of time to spend on generating a proposal block. This should eventually have it's own configurable value.
+const ProposalAssemblyTime time.Duration = 250 * time.Millisecond

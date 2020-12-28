@@ -43,6 +43,7 @@ import (
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
+	"github.com/algorand/go-algorand/network/messagetracer"
 	"github.com/algorand/go-algorand/node/indexer"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
@@ -71,6 +72,7 @@ type StatusReport struct {
 	Catchpoint                         string // the catchpoint where we're currently catching up to. If the node isn't in fast catchup mode, it will be empty.
 	CatchpointCatchupTotalAccounts     uint64
 	CatchpointCatchupProcessedAccounts uint64
+	CatchpointCatchupVerifiedAccounts  uint64
 	CatchpointCatchupTotalBlocks       uint64
 	CatchpointCatchupAcquiredBlocks    uint64
 }
@@ -118,7 +120,7 @@ type AlgorandFullNode struct {
 
 	// syncStatusMu used for locking lastRoundTimestamp and hasSyncedSinceStartup
 	// syncStatusMu added so OnNewBlock wouldn't be blocked by oldKeyDeletionThread during catchup
-	syncStatusMu                deadlock.Mutex
+	syncStatusMu          deadlock.Mutex
 	lastRoundTimestamp    time.Time
 	hasSyncedSinceStartup bool
 
@@ -129,6 +131,8 @@ type AlgorandFullNode struct {
 
 	oldKeyDeletionNotify        chan struct{}
 	monitoringRoutinesWaitGroup sync.WaitGroup
+
+	tracer messagetracer.MessageTracer
 
 	compactCert *compactcert.Worker
 }
@@ -231,7 +235,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	blockValidator := blockValidatorImpl{l: node.ledger, tp: node.transactionPool, verificationPool: node.highPriorityCryptoVerificationPool}
+	blockValidator := blockValidatorImpl{l: node.ledger, verificationPool: node.highPriorityCryptoVerificationPool}
 	agreementLedger := makeAgreementLedger(node.ledger, node.net)
 
 	agreementParameters := agreement.Parameters{
@@ -273,6 +277,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 			return nil, err
 		}
 	}
+
+	node.tracer = messagetracer.NewTracer(log).Init(cfg)
+	gossip.SetTrace(agreementParameters.Network, node.tracer)
 
 	compactCertPathname := filepath.Join(genesisDir, config.CompactCertFilename)
 	compactCertAccess, err := db.MakeAccessor(compactCertPathname, false, false)
@@ -452,20 +459,21 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 		return err
 	}
 
-	contexts := verify.PrepareContexts(txgroup, b)
-	params := make([]verify.Params, len(txgroup))
-	for i, tx := range txgroup {
-		err = verify.Txn(&tx, contexts[i])
-		if err != nil {
-			node.log.Warnf("malformed transaction: %v - transaction was %+v", err, tx)
-			return err
-		}
-		params[i] = contexts[i].Params
+	_, err = verify.TxnGroup(txgroup, b, node.ledger.VerifiedTransactionCache())
+	if err != nil {
+		node.log.Warnf("malformed transaction: %v", err)
+		return err
 	}
-	err = node.transactionPool.Remember(txgroup, params)
+
+	err = node.transactionPool.Remember(txgroup)
 	if err != nil {
 		node.log.Infof("rejected by local pool: %v - transaction group was %+v", err, txgroup)
 		return err
+	}
+
+	err = node.ledger.VerifiedTransactionCache().Pin(txgroup)
+	if err != nil {
+		logging.Base().Infof("unable to pin transaction: %v", err)
 	}
 
 	var enc []byte
@@ -617,6 +625,7 @@ func (node *AlgorandFullNode) Status() (s StatusReport, err error) {
 		s.Catchpoint = stats.CatchpointLabel
 		s.CatchpointCatchupTotalAccounts = stats.TotalAccounts
 		s.CatchpointCatchupProcessedAccounts = stats.ProcessedAccounts
+		s.CatchpointCatchupVerifiedAccounts = stats.VerifiedAccounts
 		s.CatchpointCatchupTotalBlocks = stats.TotalBlocks
 		s.CatchpointCatchupAcquiredBlocks = stats.AcquiredBlocks
 		s.CatchupTime = time.Now().Sub(stats.StartTime)
