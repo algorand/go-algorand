@@ -726,7 +726,7 @@ var signCmd = &cobra.Command{
 		dec := protocol.NewDecoderBytes(data)
 		// read the entire file and prepare in-memory copy of each signed transaction, with grouping.
 		txnGroups := make(map[crypto.Digest][]*transactions.SignedTxn)
-		groupsOrder := make([]crypto.Digest, 0)
+		var groupsOrder []crypto.Digest
 		txnIndex := make(map[*transactions.SignedTxn]int)
 		count := 0
 		for {
