@@ -33,6 +33,7 @@ func (ph peersHeap) Pop() interface{} {
 	wn := ph.wn
 	end := len(wn.peers) - 1
 	p := wn.peers[end]
+	wn.peers[end] = nil // remove the entry from the peers list, so that the GC can recycle it's memory as needed.
 	wn.peers = wn.peers[:end]
 	return p
 }
