@@ -453,7 +453,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	blocksFetched := uint64(1) // we already got the first block in the previous step.
 	var blk *bookkeeping.Block
 	var client FetcherClient
-	for attemptsCount := uint64(1); blocksFetched <= lookback; {
+	for retryCount := uint64(1); blocksFetched <= lookback; {
 		if err := cs.ctx.Err(); err != nil {
 			return cs.stopOrAbort()
 		}
@@ -478,10 +478,10 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 				if cs.ctx.Err() != nil {
 					return cs.stopOrAbort()
 				}
-				if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
+				if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 					// try again.
-					cs.log.Infof("Failed to download block %d on attempt %d out of %d. %v", topBlock.Round()-basics.Round(blocksFetched), attemptsCount, cs.config.CatchupBlockDownloadRetryAttempts, err)
-					attemptsCount++
+					cs.log.Infof("Failed to download block %d on attempt %d out of %d. %v", topBlock.Round()-basics.Round(blocksFetched), retryCount, cs.config.CatchupBlockDownloadRetryAttempts, err)
+					retryCount++
 					continue
 				}
 				return cs.abort(fmt.Errorf("processStageBlocksDownload failed after multiple blocks download attempts"))
@@ -497,9 +497,9 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			// not identical, retry download.
 			cs.log.Warnf("processStageBlocksDownload downloaded block(%d) did not match it's successor(%d) block hash %v != %v", blk.Round(), prevBlock.Round(), blk.Hash(), prevBlock.BlockHeader.Branch)
 			cs.updateBlockRetrievalStatistics(-1, 0)
-			if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
+			if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 				// try again.
-				attemptsCount++
+				retryCount++
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageBlocksDownload downloaded block(%d) did not match it's successor(%d) block hash %v != %v", blk.Round(), prevBlock.Round(), blk.Hash(), prevBlock.BlockHeader.Branch))
@@ -509,9 +509,9 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		if _, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
 			cs.log.Warnf("processStageBlocksDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol)
 			cs.updateBlockRetrievalStatistics(-1, 0)
-			if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
+			if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 				// try again.
-				attemptsCount++
+				retryCount++
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageBlocksDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol))
@@ -522,9 +522,9 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			cs.log.Warnf("processStageBlocksDownload: downloaded block content does not match downloaded block header")
 			// try again.
 			cs.updateBlockRetrievalStatistics(-1, 0)
-			if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
+			if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 				// try again.
-				attemptsCount++
+				retryCount++
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageBlocksDownload: downloaded block content does not match downloaded block header"))
@@ -537,9 +537,9 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		if err != nil {
 			cs.log.Warnf("processStageBlocksDownload failed to store downloaded staging block for round %d", blk.Round())
 			cs.updateBlockRetrievalStatistics(-1, -1)
-			if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
+			if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 				// try again.
-				attemptsCount++
+				retryCount++
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageBlocksDownload failed to store downloaded staging block for round %d", blk.Round()))
