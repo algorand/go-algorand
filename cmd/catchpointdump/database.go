@@ -48,6 +48,7 @@ var databaseCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("Unable to create file '%s' : %v", outFileName, err)
 			}
+			defer outFile.Close()
 		}
 		err = printAccountsDatabase(ledgerTrackerFilename, ledger.CatchpointFileHeader{}, outFile)
 		if err != nil {
