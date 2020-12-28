@@ -40,6 +40,13 @@ var networkName string
 var round int
 var relayAddress string
 
+const (
+	escapeCursorUp   = string("\033[A") // Cursor Up
+	escapeDeleteLine = string("\033[M") // Delete Line
+	escapeSquare     = string("▪")
+	escapeDot        = string("·")
+)
+
 func init() {
 	netCmd.Flags().StringVarP(&networkName, "net", "n", "", "Specify the network name ( i.e. mainnet.algorand.network )")
 	netCmd.Flags().IntVarP(&round, "round", "r", 0, "Specify the round number ( i.e. 7700000 )")
@@ -104,14 +111,8 @@ func formatSize(dld int64) string {
 }
 
 func printDownloadProgressLine(progress int, barLength int, url string, dld int64) {
-	const (
-		CUU    = string("\033[A") // Cursor Up
-		DL     = string("\033[M") // Delete Line
-		SQUARE = string("▪")
-		DOT    = string("·")
-	)
 	if barLength == 0 {
-		fmt.Printf(CUU+DL+"[ Done ] Downloaded %s\n", url)
+		fmt.Printf(escapeCursorUp+escapeDeleteLine+"[ Done ] Downloaded %s\n", url)
 		return
 	}
 	if progress >= barLength {
@@ -124,22 +125,22 @@ func printDownloadProgressLine(progress int, barLength int, url string, dld int6
 	if start < end {
 		for i := 0; i < barLength; i++ {
 			if i < start || i > end {
-				outString += SQUARE
+				outString += escapeSquare
 			} else {
-				outString += DOT
+				outString += escapeDot
 			}
 		}
 	} else {
 		for i := 0; i < barLength; i++ {
 			if i > start || i < end {
-				outString += DOT
+				outString += escapeDot
 			} else {
-				outString += SQUARE
+				outString += escapeSquare
 			}
 		}
 	}
 	outString += "] Downloading " + url + " ..."
-	fmt.Printf(CUU+DL+outString+" %s\n", formatSize(dld))
+	fmt.Printf(escapeCursorUp+escapeDeleteLine+outString+" %s\n", formatSize(dld))
 }
 
 func downloadCatchpoint(addr string) ([]byte, error) {
@@ -210,27 +211,14 @@ func downloadCatchpoint(addr string) ([]byte, error) {
 }
 
 func printSaveProgressLine(progress int, barLength int, filename string, dld int64) {
-	const (
-		CUU    = string("\033[A") // Cursor Up
-		DL     = string("\033[M") // Delete Line
-		SQUARE = string("▪")
-		DOT    = string("·")
-	)
 	if barLength == 0 {
-		fmt.Printf(CUU+DL+"[ Done ] Saved %s\n", filename)
+		fmt.Printf(escapeCursorUp+escapeDeleteLine+"[ Done ] Saved %s\n", filename)
 		return
 	}
 
-	outString := "["
-	for i := 0; i < barLength; i++ {
-		if i < progress {
-			outString += SQUARE
-		} else {
-			outString += DOT
-		}
-	}
-	outString += "] Saving " + filename + " ..."
-	fmt.Printf(CUU+DL+outString+" %s\n", formatSize(dld))
+	outString := "[" + strings.Repeat(escapeSquare, progress) + strings.Repeat(escapeDot, barLength-progress) + "] Saving " + filename + " ..."
+
+	fmt.Printf(escapeCursorUp+escapeDeleteLine+outString+" %s\n", formatSize(dld))
 }
 
 func saveCatchpointTarFile(addr string, catchpointFileBytes []byte) (err error) {

@@ -27,6 +27,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -93,41 +94,24 @@ var fileCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("Unable to create file '%s' : %v", outFileName, err)
 			}
+			defer outFile.Close()
 		}
 
 		err = printAccountsDatabase("./ledger.tracker.sqlite", fileHeader, outFile)
 		if err != nil {
 			reportErrorf("Unable to print account database : %v", err)
 		}
-		if outFileName != "" {
-			outFile.Close()
-		}
-
 	},
 }
 
 func printLoadCatchpointProgressLine(progress int, barLength int, dld int64) {
-	const (
-		CUU    = string("\033[A") // Cursor Up
-		DL     = string("\033[M") // Delete Line
-		SQUARE = string("▪")
-		DOT    = string("·")
-	)
 	if barLength == 0 {
-		fmt.Printf(CUU + DL + "[ Done ] Loaded\n")
+		fmt.Printf(escapeCursorUp + escapeDeleteLine + "[ Done ] Loaded\n")
 		return
 	}
 
-	outString := "["
-	for i := 0; i < barLength; i++ {
-		if i < progress {
-			outString += SQUARE
-		} else {
-			outString += DOT
-		}
-	}
-	outString += "] Loading..."
-	fmt.Printf(CUU+DL+outString+" %s\n", formatSize(dld))
+	outString := "[" + strings.Repeat(escapeSquare, progress) + strings.Repeat(escapeDot, barLength-progress) + "] Loading..."
+	fmt.Printf(escapeCursorUp+escapeDeleteLine+outString+" %s\n", formatSize(dld))
 }
 
 func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.CatchpointCatchupAccessor, fileBytes []byte) (fileHeader ledger.CatchpointFileHeader, err error) {
@@ -181,30 +165,16 @@ func loadCatchpointIntoDatabase(ctx context.Context, catchupAccessor ledger.Catc
 }
 
 func printDumpingCatchpointProgressLine(progress int, barLength int, dld int64) {
-	const (
-		CUU    = string("\033[A") // Cursor Up
-		DL     = string("\033[M") // Delete Line
-		SQUARE = string("▪")
-		DOT    = string("·")
-	)
 	if barLength == 0 {
-		fmt.Printf(CUU + DL + "[ Done ] Dumped\n")
+		fmt.Printf(escapeCursorUp + escapeDeleteLine + "[ Done ] Dumped\n")
 		return
 	}
 
-	outString := "["
-	for i := 0; i < barLength; i++ {
-		if i < progress {
-			outString += SQUARE
-		} else {
-			outString += DOT
-		}
-	}
-	outString += "] Dumping..."
+	outString := "[" + strings.Repeat(escapeSquare, progress) + strings.Repeat(escapeDot, barLength-progress) + "] Dumping..."
 	if dld > 0 {
 		outString = fmt.Sprintf(outString+" %d", dld)
 	}
-	fmt.Printf(CUU + DL + outString + "\n")
+	fmt.Printf(escapeCursorUp + escapeDeleteLine + outString + "\n")
 }
 
 func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFileHeader, outFile *os.File) error {
