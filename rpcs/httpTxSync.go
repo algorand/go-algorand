@@ -113,7 +113,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 		hts.log.Warnf("txSync bad url %v: %s", hts.rootURL, err)
 		return nil, err
 	}
-	parsedURL.Path = hpeer.PrepareURL(path.Join(parsedURL.Path, TxServiceHTTPPath))
+	parsedURL.Path = hts.peers.SubstituteGenesisID(path.Join(parsedURL.Path, TxServiceHTTPPath))
 	syncURL := parsedURL.String()
 	hts.log.Infof("http sync from %s", syncURL)
 	params := url.Values{}
