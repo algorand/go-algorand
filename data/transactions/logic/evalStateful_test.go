@@ -527,18 +527,18 @@ pop
 
 	for mode, test := range tests {
 		t.Run(fmt.Sprintf("opcodes_mode=%d", mode), func(t *testing.T) {
-			program, err := AssembleStringWithVersion(test.source, AssemblerMaxVersion)
+			ops, err := AssembleStringWithVersion(test.source, AssemblerMaxVersion)
 			require.NoError(t, err)
 			sb := strings.Builder{}
 			ep := defaultEvalParams(&sb, &txn)
 			ep.TxnGroup = txgroup
 			ep.Ledger = ledger
 			ep.Txn.Txn.ApplicationID = 100
-			_, err = test.check(program, ep)
+			_, err = test.check(ops.Program, ep)
 			require.NoError(t, err)
-			_, err = test.eval(program, ep)
+			_, err = test.eval(ops.Program, ep)
 			if err != nil {
-				t.Log(hex.EncodeToString(program))
+				t.Log(hex.EncodeToString(ops.Program))
 				t.Log(sb.String())
 			}
 			require.NoError(t, err)
@@ -549,12 +549,12 @@ pop
 	for mode, test := range tests {
 		t.Run(fmt.Sprintf("err_mode=%d", mode), func(t *testing.T) {
 			source := "err"
-			program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 			require.NoError(t, err)
 			ep := defaultEvalParams(nil, nil)
-			_, err = test.check(program, ep)
+			_, err = test.check(ops.Program, ep)
 			require.NoError(t, err)
-			_, err = test.eval(program, ep)
+			_, err = test.eval(ops.Program, ep)
 			require.Error(t, err)
 			require.NotContains(t, err.Error(), "not allowed in current mode")
 			require.Contains(t, err.Error(), "err opcode")
@@ -571,12 +571,12 @@ pop
 		"arg_3",
 	}
 	for _, source := range disallowed {
-		program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+		ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 		require.NoError(t, err)
 		ep := defaultEvalParams(nil, nil)
-		_, err = CheckStateful(program, ep)
+		_, err = CheckStateful(ops.Program, ep)
 		require.Error(t, err)
-		_, err = EvalStateful(program, ep)
+		_, _, err = EvalStateful(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not allowed in current mode")
 	}
@@ -597,12 +597,12 @@ pop
 	}
 
 	for _, source := range newOpcodeCalls {
-		program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+		ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 		require.NoError(t, err)
 		ep := defaultEvalParams(nil, nil)
-		_, err = Check(program, ep)
+		_, err = Check(ops.Program, ep)
 		require.Error(t, err)
-		_, err = Eval(program, ep)
+		_, err = Eval(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "not allowed in current mode")
 	}
@@ -620,7 +620,7 @@ func TestBalance(t *testing.T) {
 balance
 int 1
 ==`
-	program, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	txn := makeSampleTxn()
@@ -628,7 +628,7 @@ int 1
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
@@ -637,7 +637,7 @@ int 1
 			txn.Txn.Receiver: 1,
 		},
 	)
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot load account")
 
@@ -645,12 +645,12 @@ int 1
 balance
 int 1
 ==`
-	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err := CheckStateful(program, ep)
+	cost, err := CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err := EvalStateful(program, ep)
+	pass, _, err := EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -658,7 +658,7 @@ int 1
 balance
 int 1
 ==`
-	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 	var addr basics.Address
 	copy(addr[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
@@ -667,7 +667,7 @@ int 1
 			addr: 1,
 		},
 	)
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to fetch balance")
 	require.False(t, pass)
@@ -677,10 +677,10 @@ int 1
 			txn.Txn.Sender: 1,
 		},
 	)
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -693,7 +693,7 @@ int 100  // app idx
 app_opted_in
 int 1
 ==`
-	program, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	txn := makeSampleTxn()
@@ -701,7 +701,7 @@ int 1
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
@@ -710,7 +710,7 @@ int 1
 			txn.Txn.Receiver: 1,
 		},
 	)
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot load account")
 
@@ -720,12 +720,12 @@ int 100  // app idx
 app_opted_in
 int 0
 ==`
-	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err := CheckStateful(program, ep)
+	cost, err := CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err := EvalStateful(program, ep)
+	pass, _, err := EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -735,7 +735,7 @@ int 100  // app idx
 app_opted_in
 int 0
 ==`
-	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 	ledger := makeTestLedger(
 		map[basics.Address]uint64{
@@ -743,10 +743,10 @@ int 0
 		},
 	)
 	ep.Ledger = ledger
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -758,9 +758,9 @@ int 1
 ==`
 	ledger.newApp(txn.Txn.Receiver, 100)
 
-	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -772,9 +772,9 @@ int 1
 ==`
 	ledger.newApp(txn.Txn.Sender, 100)
 
-	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -796,7 +796,7 @@ err
 exit:
 int 1
 ==`
-	program, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	txn := makeSampleTxn()
@@ -805,10 +805,10 @@ int 1
 	ep.Txn = &txn
 	ep.Txn.Txn.ApplicationID = 100
 	ep.TxnGroup = txgroup
-	cost, err := CheckStateful(program, ep)
+	cost, err := CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
@@ -818,7 +818,7 @@ int 1
 		},
 	)
 	ep.Ledger = ledger
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot load account")
 
@@ -834,9 +834,9 @@ exist:
 err
 exit:
 int 1`
-	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no app for account")
 
@@ -848,14 +848,14 @@ int 1`
 	ep.Ledger = ledger
 	ledger.newApp(txn.Txn.Receiver, 9999)
 
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no app for account")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
 	ledger.newApp(txn.Txn.Receiver, 100)
 
-	pass, err := EvalStateful(program, ep)
+	pass, _, err := EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -870,14 +870,14 @@ byte 0x414c474f
 ==`
 	ledger.balances[txn.Txn.Receiver].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 
-	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
 
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -893,11 +893,11 @@ exist:
 byte 0x414c474f
 ==`
 
-	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -914,11 +914,11 @@ exist:
 byte 0x414c474f
 ==`
 
-	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	ledger.balances[txn.Txn.Sender].apps[101][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -929,11 +929,11 @@ app_local_get
 byte 0x414c474f
 ==`
 
-	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -944,11 +944,11 @@ app_local_get
 int 0
 ==`
 
-	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -979,7 +979,7 @@ byte 0x414c474f
 ==
 &&
 `
-	program, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	txn := makeSampleTxn()
@@ -987,10 +987,10 @@ byte 0x414c474f
 	ep := defaultEvalParams(nil, nil)
 	ep.Txn = &txn
 	ep.TxnGroup = txgroup
-	cost, err := CheckStateful(program, ep)
+	cost, err := CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
@@ -1003,23 +1003,23 @@ byte 0x414c474f
 
 	ep.Txn.Txn.ApplicationID = 100
 	ep.Txn.Txn.ForeignApps = []basics.AppIndex{ep.Txn.Txn.ApplicationID}
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no such app")
 
 	// create the app and check the value from ApplicationArgs[0] (protocol.PaymentTx) does not exist
 	ledger.newApp(txn.Txn.Sender, 100)
 
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "err opcode")
 
 	ledger.applications[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
 
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err := EvalStateful(program, ep)
+	pass, _, err := EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -1028,10 +1028,10 @@ byte 0x414c474f
 txn ApplicationArgs 0
 app_global_get_ex
 `
-	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid ForeignApps index 2")
 
@@ -1041,11 +1041,11 @@ app_global_get
 int 0
 ==`
 
-	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	ledger.balances[txn.Txn.Sender].apps[100][string(protocol.PaymentTx)] = basics.TealValue{Type: basics.TealBytesType, Bytes: "ALGO"}
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -1065,12 +1065,12 @@ int 4141
 	// check that even during application creation (Txn.ApplicationID == 0)
 	// we will use the the kvCow if the exact application ID (100) is
 	// specified in the transaction
-	program, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	ep.Txn.Txn.ApplicationID = 0
 	ep.Txn.Txn.ForeignApps = []basics.AppIndex{100}
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -1198,16 +1198,16 @@ func TestAssets(t *testing.T) {
 		{"int 5\nasset_params_get AssetTotal", "invalid ForeignAssets index 5"},
 	}
 	for _, sourceErr := range sources {
-		program, err := AssembleStringWithVersion(sourceErr.src, AssemblerMaxVersion)
+		ops, err := AssembleStringWithVersion(sourceErr.src, AssemblerMaxVersion)
 		require.NoError(t, err)
 
 		txn := makeSampleTxn()
 		ep := defaultEvalParams(nil, nil)
 		ep.Txn = &txn
-		cost, err := CheckStateful(program, ep)
+		cost, err := CheckStateful(ops.Program, ep)
 		require.NoError(t, err)
 		require.True(t, cost < 1000)
-		_, err = EvalStateful(program, ep)
+		_, _, err = EvalStateful(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "ledger not available")
 
@@ -1218,14 +1218,14 @@ func TestAssets(t *testing.T) {
 		)
 		ep.Ledger = ledger
 
-		_, err = EvalStateful(program, ep)
+		_, _, err = EvalStateful(ops.Program, ep)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), sourceErr.err)
 	}
 
-	program, err := AssembleStringWithVersion(assetsTestProgram, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(assetsTestProgram, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err := CheckStateful(program, defaultEvalParams(nil, nil))
+	cost, err := CheckStateful(ops.Program, defaultEvalParams(nil, nil))
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
 
@@ -1253,12 +1253,12 @@ func TestAssets(t *testing.T) {
 
 	ep := defaultEvalParams(&sb, &txn)
 	ep.Ledger = ledger
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err := EvalStateful(program, ep)
+	pass, _, err := EvalStateful(ops.Program, ep)
 	if !pass {
-		t.Log(hex.EncodeToString(program))
+		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
 	}
 	require.NoError(t, err)
@@ -1278,20 +1278,20 @@ err
 ok:
 int 1
 `
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	ledger.setHolding(txn.Txn.Sender, 55, basics.AssetHolding{Amount: 123, Frozen: false})
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
 	// check holdings invalid offsets
-	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_holding_get"].Opcode, program[8])
-	program[9] = 0x02
-	_, err = EvalStateful(program, ep)
+	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_holding_get"].Opcode, ops.Program[8])
+	ops.Program[9] = 0x02
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset holding field 2")
 
@@ -1308,17 +1308,17 @@ err
 ok:
 int 1
 `
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	params.DefaultFrozen = true
 	ledger.newAsset(55, params)
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	// check holdings invalid offsets
-	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_params_get"].Opcode, program[6])
-	program[7] = 0x20
-	_, err = EvalStateful(program, ep)
+	require.Equal(t, opsByName[ep.Proto.LogicSigVersion]["asset_params_get"].Opcode, ops.Program[6])
+	ops.Program[7] = 0x20
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid asset params field 32")
 
@@ -1336,11 +1336,11 @@ err
 ok:
 int 1
 `
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	params.URL = ""
 	ledger.newAsset(55, params)
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -1357,11 +1357,11 @@ err
 ok:
 int 1
 `
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	params.URL = "foobarbaz"
 	ledger.newAsset(77, params)
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 
@@ -1377,14 +1377,14 @@ err
 ok:
 int 1
 `
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	params.URL = ""
 	ledger.newAsset(55, params)
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot compare ([]byte == uint64)")
 	require.False(t, pass)
@@ -1442,17 +1442,17 @@ int 100
 			source := test.source
 			firstCmdOffset := test.accNumOffset
 
-			program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 			require.NoError(t, err)
 
 			txn := makeSampleTxn()
 			ep := defaultEvalParams(nil, nil)
 			ep.Txn = &txn
 			ep.Txn.Txn.ApplicationID = 100
-			cost, err := CheckStateful(program, ep)
+			cost, err := CheckStateful(ops.Program, ep)
 			require.NoError(t, err)
 			require.True(t, cost < 1000)
-			_, err = EvalStateful(program, ep)
+			_, _, err = EvalStateful(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "ledger not available")
 
@@ -1463,22 +1463,22 @@ int 100
 			)
 			ep.Ledger = ledger
 
-			saved := program[firstCmdOffset]
+			saved := ops.Program[firstCmdOffset]
 			require.Equal(t, opsByName[0]["intc_0"].Opcode, saved)
-			program[firstCmdOffset] = opsByName[0]["intc_1"].Opcode
-			_, err = EvalStateful(program, ep)
+			ops.Program[firstCmdOffset] = opsByName[0]["intc_1"].Opcode
+			_, _, err = EvalStateful(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "cannot load account[100]")
 
-			program[firstCmdOffset] = saved
-			_, err = EvalStateful(program, ep)
+			ops.Program[firstCmdOffset] = saved
+			_, _, err = EvalStateful(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "no app for account")
 
 			ledger.newApp(txn.Txn.Sender, 100)
 
 			if name == "read" {
-				_, err = EvalStateful(program, ep)
+				_, _, err = EvalStateful(ops.Program, ep)
 				require.Error(t, err)
 				require.Contains(t, err.Error(), "err opcode") // no such key
 			}
@@ -1487,7 +1487,7 @@ int 100
 			ledger.balances[txn.Txn.Sender].apps[100]["ALGOA"] = basics.TealValue{Type: basics.TealUintType, Uint: 1}
 
 			ledger.reset()
-			pass, err := EvalStateful(program, ep)
+			pass, delta, err := EvalStateful(ops.Program, ep)
 			require.NoError(t, err)
 			require.True(t, pass)
 			delta, err := ledger.GetDelta(&ep.Txn.Txn)
@@ -1546,12 +1546,12 @@ int 0x77
 ==
 &&
 `
-	program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err := CheckStateful(program, ep)
+	cost, err := CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-
+	pass, delta, err := EvalStateful(ops.Program, ep)
 	pass, err := EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -1591,12 +1591,12 @@ int 0x77
 	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
 	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
 
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	pass, err = EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -1630,9 +1630,9 @@ exist2:
 	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
 	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
 
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -1651,9 +1651,9 @@ int 1
 	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
 	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
 
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -1684,9 +1684,9 @@ int 0x78
 	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
 	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
 
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -1715,9 +1715,9 @@ app_local_put
 	ledger.balances[txn.Txn.Sender].apps[100]["ALGO"] = algoValue
 	delete(ledger.balances[txn.Txn.Sender].apps[100], "ALGOA")
 
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -1755,12 +1755,12 @@ int 1
 	ledger.balances[txn.Txn.Receiver] = makeBalanceRecord(txn.Txn.Receiver, 500)
 	ledger.balances[txn.Txn.Receiver].apps[100] = make(map[string]basics.TealValue)
 
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -1817,13 +1817,13 @@ int 1
 	}
 	for name, source := range tests {
 		t.Run(fmt.Sprintf("test=%s", name), func(t *testing.T) {
-			program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+			ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 			require.NoError(t, err)
 
 			txn := makeSampleTxn()
 			ep := defaultEvalParams(nil, nil)
 			ep.Txn = &txn
-			_, err = EvalStateful(program, ep)
+			_, _, err = EvalStateful(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "ledger not available")
 
@@ -1835,7 +1835,7 @@ int 1
 			ep.Ledger = ledger
 
 			txn.Txn.ApplicationID = 100
-			_, err = EvalStateful(program, ep)
+			_, _, err = EvalStateful(ops.Program, ep)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "no such app")
 
@@ -1843,14 +1843,14 @@ int 1
 
 			// a special test for read
 			if name == "read" {
-				_, err = EvalStateful(program, ep)
+				_, _, err = EvalStateful(ops.Program, ep)
 				require.Error(t, err)
 				require.Contains(t, err.Error(), "err opcode") // no such key
 			}
 			ledger.applications[100]["ALGO"] = basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
 
 			ledger.reset()
-			pass, err := EvalStateful(program, ep)
+			pass, delta, err := EvalStateful(ops.Program, ep)
 			require.NoError(t, err)
 			require.True(t, pass)
 			delta, err := ledger.GetDelta(&ep.Txn.Txn)
@@ -1936,12 +1936,12 @@ int 0x77
 	ep.Ledger = ledger
 	ledger.newApp(txn.Txn.Sender, 100)
 
-	program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err := CheckStateful(program, ep)
+	cost, err := CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-
+	pass, delta, err := EvalStateful(ops.Program, ep)
 	pass, err := EvalStateful(program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
@@ -1975,9 +1975,9 @@ int 0x77
 	algoValue := basics.TealValue{Type: basics.TealUintType, Uint: 0x77}
 	ledger.applications[100]["ALGO"] = algoValue
 
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -2006,9 +2006,9 @@ int 0x77
 	delete(ledger.applications[100], "ALGOA")
 	ledger.applications[100]["ALGO"] = algoValue
 
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -2052,16 +2052,16 @@ byte 0x414c474f
 	delete(ledger.applications[100], "ALGOA")
 	ledger.applications[100]["ALGO"] = algoValue
 
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	sb := strings.Builder{}
 	ep.Trace = &sb
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	if !pass {
-		t.Log(hex.EncodeToString(program))
+		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
 	}
 	require.NoError(t, err)
@@ -2112,12 +2112,12 @@ byte "myval"
 	ep.Ledger = ledger
 	ledger.newApp(txn.Txn.Sender, 100)
 
-	program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err := CheckStateful(program, ep)
+	cost, err := CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err := EvalStateful(program, ep)
+	pass, delta, err := EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no such app")
 	require.False(t, pass)
@@ -2131,7 +2131,7 @@ byte "myval"
 	algoValue := basics.TealValue{Type: basics.TealBytesType, Bytes: "myval"}
 	ledger.applications[101]["mykey"] = algoValue
 
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -2139,7 +2139,6 @@ byte "myval"
 	require.Equal(t, 0, len(delta.GlobalDelta))
 	require.Equal(t, 0, len(delta.LocalDeltas))
 }
-
 func TestAppGlobalDelete(t *testing.T) {
 	t.Parallel()
 
@@ -2183,14 +2182,14 @@ int 1
 	sb := strings.Builder{}
 	ep.Trace = &sb
 
-	program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err := CheckStateful(program, ep)
+	cost, err := CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err := EvalStateful(program, ep)
+	pass, delta, err := EvalStateful(ops.Program, ep)
 	if !pass {
-		t.Log(hex.EncodeToString(program))
+		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
 	}
 	require.NoError(t, err)
@@ -2216,9 +2215,9 @@ app_global_get_ex
 ==  // two zeros
 `
 	ep.Txn.Txn.ForeignApps = []basics.AppIndex{txn.Txn.ApplicationID}
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -2248,9 +2247,9 @@ byte 0x414c474f41
 int 0x78
 app_global_put
 `
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -2277,9 +2276,9 @@ int 0x78
 app_global_put
 int 1
 `
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -2306,12 +2305,12 @@ byte 0x414c474f
 app_global_del
 int 1
 `
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -2338,12 +2337,12 @@ byte 0x414c474f41
 app_global_del
 int 1
 `
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -2404,14 +2403,14 @@ int 1
 	sb := strings.Builder{}
 	ep.Trace = &sb
 
-	program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err := CheckStateful(program, ep)
+	cost, err := CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err := EvalStateful(program, ep)
+	pass, delta, err := EvalStateful(ops.Program, ep)
 	if !pass {
-		t.Log(hex.EncodeToString(program))
+		t.Log(hex.EncodeToString(ops.Program))
 		t.Log(sb.String())
 	}
 	require.NoError(t, err)
@@ -2441,12 +2440,12 @@ app_local_get_ex
 ==  // two zeros
 `
 
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -2478,12 +2477,12 @@ byte 0x414c474f41
 int 0x78
 app_local_put
 `
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -2511,12 +2510,12 @@ int 0x78
 app_local_put
 int 1
 `
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -2547,12 +2546,12 @@ byte 0x414c474f
 app_local_del
 int 1
 `
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -2583,12 +2582,12 @@ byte 0x414c474f41
 app_local_del
 int 1
 `
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	cost, err = CheckStateful(program, ep)
+	cost, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, cost < 1000)
-	pass, err = EvalStateful(program, ep)
+	pass, delta, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 	delta, err = ledger.GetDelta(&ep.Txn.Txn)
@@ -2608,12 +2607,12 @@ func TestEnumFieldErrors(t *testing.T) {
 		TxnFieldTypes[Amount] = origTxnType
 	}()
 
-	program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	_, err = Eval(program, ep)
+	_, err = Eval(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Amount expected field type is []byte but got uint64")
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Amount expected field type is []byte but got uint64")
 
@@ -2624,12 +2623,12 @@ func TestEnumFieldErrors(t *testing.T) {
 		GlobalFieldTypes[MinTxnFee] = origGlobalType
 	}()
 
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	_, err = Eval(program, ep)
+	_, err = Eval(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "MinTxnFee expected field type is []byte but got uint64")
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "MinTxnFee expected field type is []byte but got uint64")
 
@@ -2668,9 +2667,9 @@ pop
 		AssetHoldingFieldTypes[AssetBalance] = origAssetHoldingType
 	}()
 
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "AssetBalance expected field type is []byte but got uint64")
 
@@ -2684,9 +2683,9 @@ pop
 		AssetParamsFieldTypes[AssetTotal] = origAssetTotalType
 	}()
 
-	program, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err = AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "AssetTotal expected field type is []byte but got uint64")
 }
@@ -2785,14 +2784,14 @@ func TestReturnTypes(t *testing.T) {
 					sb.WriteString(name + "\n")
 				}
 				source := sb.String()
-				program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+				ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 				require.NoError(t, err)
 
 				var cx evalContext
 				cx.EvalParams = ep
 				cx.runModeFlags = m
 
-				eval(program, &cx)
+				eval(ops.Program, &cx)
 
 				require.Equal(
 					t,
@@ -2821,23 +2820,23 @@ int 1
 	ledger := makeTestLedger(
 		map[basics.Address]uint64{},
 	)
-	program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	ep := defaultEvalParams(nil, nil)
-	_, err = CheckStateful(program, ep)
+	_, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
-	pass, err := Eval(program, ep)
+	pass, err := Eval(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not allowed in current mode")
 	require.False(t, pass)
 
 	ep.Ledger = ledger
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -2850,23 +2849,23 @@ int 1
 	ledger := makeTestLedger(
 		map[basics.Address]uint64{},
 	)
-	program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	ep := defaultEvalParams(nil, nil)
-	_, err = CheckStateful(program, ep)
+	_, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
-	pass, err := Eval(program, ep)
+	pass, err := Eval(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not allowed in current mode")
 	require.False(t, pass)
 
 	ep.Ledger = ledger
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 }
@@ -2880,23 +2879,23 @@ int 42
 		map[basics.Address]uint64{},
 	)
 	ledger.appID = 42
-	program, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
+	ops, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 
 	ep := defaultEvalParams(nil, nil)
-	_, err = CheckStateful(program, ep)
+	_, err = CheckStateful(ops.Program, ep)
 	require.NoError(t, err)
-	_, err = EvalStateful(program, ep)
+	_, _, err = EvalStateful(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "ledger not available")
 
-	pass, err := Eval(program, ep)
+	pass, err := Eval(ops.Program, ep)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not allowed in current mode")
 	require.False(t, pass)
 
 	ep.Ledger = ledger
-	pass, err = EvalStateful(program, ep)
+	pass, _, err = EvalStateful(ops.Program, ep)
 	require.NoError(t, err)
 	require.True(t, pass)
 }

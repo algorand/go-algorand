@@ -378,7 +378,15 @@ var sendCmd = &cobra.Command{
 				Txn:  payment,
 				Lsig: lsig,
 			}
-			err = verify.LogicSigSanityCheck(&uncheckedTxn, &verify.Context{Params: verify.Params{CurrProto: proto}})
+			blockHeader := bookkeeping.BlockHeader{
+				UpgradeState: bookkeeping.UpgradeState{
+					CurrentProtocol: proto,
+				},
+			}
+			groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, blockHeader)
+			if err == nil {
+				err = verify.LogicSigSanityCheck(&uncheckedTxn, 0, groupCtx)
+			}
 			if err != nil {
 				reportErrorf("%s: txn[0] error %s", outFilename, err)
 			}
@@ -716,38 +724,77 @@ var signCmd = &cobra.Command{
 
 		var outData []byte
 		dec := protocol.NewDecoderBytes(data)
+		// read the entire file and prepare in-memory copy of each signed transaction, with grouping.
+		txnGroups := make(map[crypto.Digest][]*transactions.SignedTxn)
+		var groupsOrder []crypto.Digest
+		txnIndex := make(map[*transactions.SignedTxn]int)
 		count := 0
 		for {
-			// transaction file comes in as a SignedTxn with no signature
-			var uncheckedTxn transactions.SignedTxn
-			err = dec.Decode(&uncheckedTxn)
+			uncheckedTxn := new(transactions.SignedTxn)
+			err = dec.Decode(uncheckedTxn)
 			if err == io.EOF {
 				break
 			}
 			if err != nil {
 				reportErrorf(txDecodeError, txFilename, err)
 			}
-
-			var signedTxn transactions.SignedTxn
-			if lsig.Logic != nil {
-				proto, _ := getProto(protoVersion)
-				uncheckedTxn.Lsig = lsig
-				err = verify.LogicSigSanityCheck(&uncheckedTxn, &verify.Context{Params: verify.Params{CurrProto: proto}})
-				if err != nil {
-					reportErrorf("%s: txn[%d] error %s", txFilename, count, err)
-				}
-				signedTxn = uncheckedTxn
-			} else {
-				// sign the usual way
-				signedTxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, uncheckedTxn.Txn)
-				if err != nil {
-					reportErrorf(errorSigningTX, err)
-				}
+			group := uncheckedTxn.Txn.Group
+			if group.IsZero() {
+				// create a dummy group.
+				randGroupBytes := crypto.Digest{}
+				crypto.RandBytes(randGroupBytes[:])
+				group = randGroupBytes
 			}
+			if _, hasGroup := txnGroups[group]; !hasGroup {
+				// add a new group as needed.
+				groupsOrder = append(groupsOrder, group)
 
-			outData = append(outData, protocol.Encode(&signedTxn)...)
+			}
+			txnGroups[group] = append(txnGroups[group], uncheckedTxn)
+			txnIndex[uncheckedTxn] = count
 			count++
 		}
+
+		consensusVersion, _ := getProto(protoVersion)
+		contextHdr := bookkeeping.BlockHeader{
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: consensusVersion,
+			},
+		}
+
+		for _, group := range groupsOrder {
+			txnGroup := []transactions.SignedTxn{}
+			for _, txn := range txnGroups[group] {
+				txnGroup = append(txnGroup, *txn)
+			}
+			var groupCtx *verify.GroupContext
+			if lsig.Logic != nil {
+				groupCtx, err = verify.PrepareGroupContext(txnGroup, contextHdr)
+				if err != nil {
+					// this error has to be unsupported protocol
+					reportErrorf("%s: %v", txFilename, err)
+				}
+			}
+			for i, txn := range txnGroup {
+				var signedTxn transactions.SignedTxn
+				if lsig.Logic != nil {
+					txn.Lsig = lsig
+					err = verify.LogicSigSanityCheck(&txn, i, groupCtx)
+					if err != nil {
+						reportErrorf("%s: txn[%d] error %s", txFilename, txnIndex[txnGroups[group][i]], err)
+					}
+					signedTxn = txn
+				} else {
+					// sign the usual way
+					signedTxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, txn.Txn)
+					if err != nil {
+						reportErrorf(errorSigningTX, err)
+					}
+				}
+				outData = append(outData, protocol.Encode(&signedTxn)...)
+			}
+		}
+
 		err = writeFile(outFilename, outData, 0600)
 		if err != nil {
 			reportErrorf(fileWriteError, outFilename, err)
@@ -851,7 +898,7 @@ var splitCmd = &cobra.Command{
 func mustReadFile(fname string) []byte {
 	contents, err := readFile(fname)
 	if err != nil {
-		reportErrorf("%s: %s\n", fname, err)
+		reportErrorf("%s: %s", fname, err)
 	}
 	return contents
 }
@@ -859,19 +906,20 @@ func mustReadFile(fname string) []byte {
 func assembleFile(fname string) (program []byte) {
 	text, err := readFile(fname)
 	if err != nil {
-		reportErrorf("%s: %s\n", fname, err)
+		reportErrorf("%s: %s", fname, err)
 	}
-	program, err = logic.AssembleString(string(text))
+	ops, err := logic.AssembleString(string(text))
 	if err != nil {
-		reportErrorf("%s: %s\n", fname, err)
+		ops.ReportProblems(fname)
+		reportErrorf("%s: %s", fname, err)
 	}
-	return program
+	return ops.Program
 }
 
 func disassembleFile(fname, outname string) {
 	program, err := readFile(fname)
 	if err != nil {
-		reportErrorf("%s: %s\n", fname, err)
+		reportErrorf("%s: %s", fname, err)
 	}
 	// try parsing it as a msgpack LogicSig
 	var lsig transactions.LogicSig
@@ -889,7 +937,7 @@ func disassembleFile(fname, outname string) {
 	}
 	text, err := logic.Disassemble(program)
 	if err != nil {
-		reportErrorf("%s: %s\n", fname, err)
+		reportErrorf("%s: %s", fname, err)
 	}
 	if extra != "" {
 		text = text + extra + "\n"
@@ -899,7 +947,7 @@ func disassembleFile(fname, outname string) {
 	} else {
 		err = writeFile(outname, []byte(text), 0666)
 		if err != nil {
-			reportErrorf("%s: %s\n", outname, err)
+			reportErrorf("%s: %s", outname, err)
 		}
 	}
 }
@@ -950,7 +998,7 @@ var compileCmd = &cobra.Command{
 			if !noProgramOutput {
 				err := writeFile(outname, outblob, 0666)
 				if err != nil {
-					reportErrorf("%s: %s\n", outname, err)
+					reportErrorf("%s: %s", outname, err)
 				}
 			}
 			if !signProgram && outname != stdoutFilenameValue {
@@ -1008,7 +1056,7 @@ var dryrunCmd = &cobra.Command{
 			if txn.Lsig.Blank() {
 				continue
 			}
-			ep := logic.EvalParams{Txn: &txn, Proto: &params}
+			ep := logic.EvalParams{Txn: &txn, Proto: &params, GroupIndex: i, TxnGroup: txgroup}
 			cost, err := logic.Check(txn.Lsig.Logic, ep)
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)
@@ -1051,7 +1099,7 @@ var dryrunRemoteCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 		resp, err := client.Dryrun(data)
 		if err != nil {
-			reportErrorf("dryrun-remote: %s\n", err.Error())
+			reportErrorf("dryrun-remote: %s", err.Error())
 		}
 		if rawOutput {
 			fmt.Fprintf(os.Stdout, string(protocol.EncodeJSON(&resp)))

@@ -152,7 +152,7 @@ func TestGroupTransactionsDifferentSizes(t *testing.T) {
 
 		// broadcasting group should succeed
 		err = client.BroadcastTransactionGroup(stxns)
-		a.NoError(err)
+		a.NoErrorf(err, "group size = %d", gs)
 
 		// wait for the txids and check balances
 		_, curRound := fixture.GetBalanceAndRound(account0)

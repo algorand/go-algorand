@@ -1017,7 +1017,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* All results are obtained from the database. Empty cache *******
 	// ******* No deletes	                                           *******
 	// sync with the database
-	var updates map[basics.Address]accountDelta
+	var updates map[basics.Address]accountDeltaCount
 	err = accountsNewRound(tx, updates, ctbsWithDeletes, proto)
 	require.NoError(t, err)
 	// nothing left in cache
@@ -1046,11 +1046,11 @@ func TestIsWritingCatchpointFile(t *testing.T) {
 
 	au := &accountUpdates{}
 
-	au.catchpointWriting = make(chan struct{}, 1)
+	au.catchpointWriting = -1
 	ans := au.IsWritingCatchpointFile()
 	require.True(t, ans)
 
-	close(au.catchpointWriting)
+	au.catchpointWriting = 0
 	ans = au.IsWritingCatchpointFile()
 	require.False(t, ans)
 }
@@ -1198,12 +1198,12 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
 	for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
-		updates := make(map[basics.Address]accountDelta, 0)
+		updates := make(map[basics.Address]accountDeltaCount, 0)
 		for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 			addr := randomAddress()
 			acctData := basics.AccountData{}
 			acctData.MicroAlgos.Raw = 1
-			updates[addr] = accountDelta{new: acctData}
+			updates[addr] = accountDeltaCount{accountDelta: accountDelta{new: acctData}}
 			i++
 		}
 
@@ -1270,12 +1270,12 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	accountsNumber := 6000000 * b.N
 	err = ml.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
-			updates := make(map[basics.Address]accountDelta, 0)
+			updates := make(map[basics.Address]accountDeltaCount, 0)
 			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 				addr := randomAddress()
 				acctData := basics.AccountData{}
 				acctData.MicroAlgos.Raw = 1
-				updates[addr] = accountDelta{new: acctData}
+				updates[addr] = accountDeltaCount{accountDelta: accountDelta{new: acctData}}
 				i++
 			}
 
@@ -1293,4 +1293,89 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	au.generateCatchpoint(basics.Round(0), "0#ABCD", crypto.Digest{}, time.Second)
 	b.StopTimer()
 	b.ReportMetric(float64(accountsNumber), "accounts")
+}
+
+func BenchmarkCompactDeltas(b *testing.B) {
+	b.Run("account-deltas", func(b *testing.B) {
+		if b.N < 500 {
+			b.N = 500
+		}
+		window := 5000
+		accountDeltas := make([]map[basics.Address]accountDelta, b.N)
+		addrs := make([]basics.Address, b.N*window)
+		for i := 0; i < len(addrs); i++ {
+			addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
+		}
+		for rnd := 0; rnd < b.N; rnd++ {
+			m := make(map[basics.Address]accountDelta)
+			start := 0
+			if rnd > 0 {
+				start = window/2 + (rnd-1)*window
+			}
+			for k := start; k < start+window; k++ {
+				m[addrs[k]] = accountDelta{
+					old: basics.AccountData{},
+					new: basics.AccountData{},
+				}
+			}
+
+			accountDeltas[rnd] = m
+		}
+		b.ResetTimer()
+
+		compactDeltas(accountDeltas, []map[basics.CreatableIndex]modifiedCreatable{{}})
+
+	})
+}
+func TestCompactDeltas(t *testing.T) {
+	addrs := make([]basics.Address, 10)
+	for i := 0; i < len(addrs); i++ {
+		addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
+	}
+	var accountDeltas []map[basics.Address]accountDelta
+	var creatableDeltas []map[basics.CreatableIndex]modifiedCreatable
+
+	accountDeltas = make([]map[basics.Address]accountDelta, 1, 1)
+	creatableDeltas = make([]map[basics.CreatableIndex]modifiedCreatable, 1, 1)
+	accountDeltas[0] = make(map[basics.Address]accountDelta)
+	creatableDeltas[0] = make(map[basics.CreatableIndex]modifiedCreatable)
+	accountDeltas[0][addrs[0]] = accountDelta{old: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}, new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}}
+	creatableDeltas[0][100] = modifiedCreatable{creator: addrs[2], created: true}
+	outAccountDeltas, outCreatableDeltas := compactDeltas(accountDeltas, creatableDeltas)
+
+	require.Equal(t, len(accountDeltas[0]), len(outAccountDeltas))
+	require.Equal(t, len(creatableDeltas[0]), len(outCreatableDeltas))
+
+	require.Equal(t, basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}, outAccountDeltas[addrs[0]].old)
+	require.Equal(t, basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}, outAccountDeltas[addrs[0]].new)
+	require.Equal(t, modifiedCreatable{creator: addrs[2], created: true, ndeltas: 1}, outCreatableDeltas[100])
+
+	// add another round
+	accountDeltas = append(accountDeltas, make(map[basics.Address]accountDelta))
+	creatableDeltas = append(creatableDeltas, make(map[basics.CreatableIndex]modifiedCreatable))
+	accountDeltas[1][addrs[0]] = accountDelta{old: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}, new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 3}}}
+	accountDeltas[1][addrs[3]] = accountDelta{old: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 0}}, new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 8}}}
+
+	creatableDeltas[1][100] = modifiedCreatable{creator: addrs[2], created: false}
+	creatableDeltas[1][101] = modifiedCreatable{creator: addrs[4], created: true}
+
+	outAccountDeltas, outCreatableDeltas = compactDeltas(accountDeltas, creatableDeltas)
+
+	require.Equal(t, 2, len(outAccountDeltas))
+	require.Equal(t, 2, len(outCreatableDeltas))
+
+	require.Equal(t, uint64(1), outAccountDeltas[addrs[0]].old.MicroAlgos.Raw)
+	require.Equal(t, uint64(3), outAccountDeltas[addrs[0]].new.MicroAlgos.Raw)
+	require.Equal(t, int(2), outAccountDeltas[addrs[0]].ndeltas)
+	require.Equal(t, uint64(0), outAccountDeltas[addrs[3]].old.MicroAlgos.Raw)
+	require.Equal(t, uint64(8), outAccountDeltas[addrs[3]].new.MicroAlgos.Raw)
+	require.Equal(t, int(1), outAccountDeltas[addrs[3]].ndeltas)
+
+	require.Equal(t, addrs[2], outCreatableDeltas[100].creator)
+	require.Equal(t, addrs[4], outCreatableDeltas[101].creator)
+	require.Equal(t, false, outCreatableDeltas[100].created)
+	require.Equal(t, true, outCreatableDeltas[101].created)
+	require.Equal(t, 2, outCreatableDeltas[100].ndeltas)
+	require.Equal(t, 1, outCreatableDeltas[101].ndeltas)
+
 }
