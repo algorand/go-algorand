@@ -1737,3 +1737,80 @@ func TestMaliciousCheckServerResponseVariables(t *testing.T) {
 	require.Equal(t, false, responseVariableOk)
 	require.Equal(t, "", matchingVersion)
 }
+
+func BenchmarkVariableTransactionMessageBlockSizes(t *testing.B) {
+	netA := makeTestWebsocketNode(t)
+	netA.log.SetLevel(logging.Warn)
+	netA.config.GossipFanout = 1
+	netA.config.EnablePingHandler = false
+	netA.Start()
+	defer func() { netA.Stop() }()
+
+	netB := makeTestWebsocketNode(t)
+	netB.log.SetLevel(logging.Warn)
+	netB.config.GossipFanout = 1
+	netB.config.EnablePingHandler = false
+	addrA, postListen := netA.Address()
+	require.True(t, postListen)
+	t.Log(addrA)
+	netB.phonebook.ReplacePeerList([]string{addrA}, "default")
+	netB.Start()
+	defer func() { netB.Stop() }()
+
+	const txnSize = 250
+	var msgProcessed chan struct{}
+
+	msgHandlerA := func(msg IncomingMessage) (out OutgoingMessage) {
+		// spend some time, linear to the size of the message -
+		txnCount := len(msg.Data) / txnSize
+		time.Sleep(time.Nanosecond * time.Duration(10000*txnCount))
+		msgProcessed <- struct{}{}
+		return
+	}
+	// register all the handlers.
+	taggedHandlersA := []TaggedMessageHandler{
+		{
+			Tag:            protocol.TxnTag,
+			MessageHandler: HandlerFunc(msgHandlerA),
+		},
+	}
+	netA.ClearHandlers()
+	netA.RegisterHandlers(taggedHandlersA)
+
+	netB.ClearHandlers()
+
+	readyTimeout := time.NewTimer(2 * time.Second)
+	waitReady(t, netA, readyTimeout.C)
+	waitReady(t, netB, readyTimeout.C)
+
+	highestRate := float64(1)
+	sinceHighestRate := 0
+	rate := float64(0)
+	for txnCount := 1; txnCount < 1024; {
+		t.Run(fmt.Sprintf("%d-TxnPerMessage", txnCount), func(t *testing.B) {
+			msgProcessed = make(chan struct{}, t.N/txnCount)
+			dataBuffer := make([]byte, txnSize*txnCount)
+			crypto.RandBytes(dataBuffer[:])
+			t.ResetTimer()
+			startTime := time.Now()
+			for i := 0; i < t.N/txnCount; i++ {
+				netB.Broadcast(context.Background(), protocol.TxnTag, dataBuffer, true, nil)
+				<-msgProcessed
+			}
+			deltaTime := time.Now().Sub(startTime)
+			rate = float64(t.N) * float64(time.Second) / float64(deltaTime)
+			t.ReportMetric(rate, "txn/sec")
+		})
+		if rate > highestRate {
+			highestRate = rate
+			sinceHighestRate = 0
+			txnCount += txnCount/10 + 1
+			continue
+		}
+		sinceHighestRate++
+		if sinceHighestRate > 4 {
+			break
+		}
+		txnCount += txnCount/4 + 1
+	}
+}
