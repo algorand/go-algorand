@@ -26,52 +26,50 @@ import (
 // Segment represents a fixed size segment of a random access memory which its starting address is 0.
 // Every address can either be empty or contain a DataType.
 //
-// memory.Segment is able to  save a snapshot of its state which can later be restored by calling RestoreSnapshot.
+// Segment is able to  save a snapshot of its state which can later be restored by calling RestoreSnapshot.
 // After calling SaveSnapshot runtime overhead and memory usage of Segment increases, calling DiscardSnapshot can
-// re-optimize memory.Segment.
+// re-optimize Segment.
 //
 // By using MarshalBinaryTo a Segment can be efficiently serialized to a compact and simple binary representation.
-// by using ReadSegment function a Segment can be reconstructed from this binary representation.
+// by using ReadSegment a Segment can be reconstructed from this binary representation.
 //
-// Any type which implements DataType interface can be stored in a Segment. To enable serialization a newly defined type
+// Any type which implements DataType interface can be stored in a Segment. To enable serialization, a newly defined type
 // needs to register a DataTypeReader using RegisterReader function. Also for correct restoration of snapshots,
-// it must use NotifyUpdate method properly. memory.Segment can support up to 126 different data types.
+// it must use NotifyUpdate method properly. Current implementation can support up to 126 different data types.
 //
-// The overall cost of a memory.Segment can never be exceeded beyond MaxCost value. The value of MaxCost is set
-// when creating a memory.Segment and can be updated using SetMaxCost function. The cost calculation is done using
+// The overall cost of a Segment can never be exceeded beyond MaxCost value. The value of MaxCost is set
+// when creating a Segment and can be updated using SetMaxCost function. The cost calculation is done using
 // Cost method in DataType interface and EmptySegmentCost, CostAfterAdding and CostAfterRemoving functions.
 // These functions can be changed without recompiling the memory package.
 //
 // For a usage example see NewSegment.
 type Segment struct {
-	segment     []DataType
-	snapManager snapshotManager
-	maxSize     int
-	cost        int
-	maxCost     int
-
-	// MinPackingGain determines when DiscardSnapshot should not compact the segment. If the improvement in the size
-	// of the segment is less than MinPackingGain the segment will not be copied to a smaller segment.
-	MinPackingGain float32
+	segment        []DataType
+	snapManager    snapshotManager
+	maxSize        int
+	cost           int
+	maxCost        int
+	minPackingGain float32
 }
 
-// NewSegment creates an empty memory.Segment which its last valid address is 'size - 1' and its protocol defined
+// NewSegment creates an empty Segment which its last valid address is 'size - 1' and its protocol defined
 // cost will never exceed maxCost.
 func NewSegment(size int, maxCost int) *Segment {
 	if size > MaxSegmentSize {
 		log.Panicf("%d is bigger than max allowed segment size: %d", size, MaxSegmentSize)
 	}
 	r := &Segment{
-		segment:        make([]DataType, size),
-		maxSize:        size,
-		MinPackingGain: DefaultMinPackingGain,
+		segment: make([]DataType, size),
+		maxSize: size,
 		// the cost of an empty memory segment:
 		cost: EmptySegmentCost(size),
 	}
+	r.SetMinPackingGain(DefaultMinPackingGain)
 	r.SetMaxCost(maxCost)
 	return r
 }
 
+// TODO: add documentation
 // ReadSegment
 func ReadSegment(r io.ByteReader) (*Segment, error) {
 	temp, err := binary.ReadUInt(r)
@@ -88,17 +86,17 @@ func ReadSegment(r io.ByteReader) (*Segment, error) {
 	}
 	maxCost := int(temp)
 	ms := &Segment{
-		segment:        make([]DataType, size),
-		maxSize:        size,
-		maxCost:        maxCost,
-		MinPackingGain: DefaultMinPackingGain,
+		segment: make([]DataType, size),
+		maxSize: size,
+		maxCost: maxCost,
 	}
+	ms.SetMinPackingGain(DefaultMinPackingGain)
 	var typeID uint8
 	var count int
 	for start := 0; start < len(ms.segment); {
 		typeID, err = r.ReadByte()
 		if err != nil {
-			return nil, binary.NewSimpleDecodingErr("typeID", err)
+			return nil, binary.NewSimpleDecodingErr(fmt.Sprintf("segment[%d].typeID", start), err)
 		}
 		if typeID > 0x7F {
 			typeID &= 0x7F
@@ -106,12 +104,12 @@ func ReadSegment(r io.ByteReader) (*Segment, error) {
 		} else {
 			temp, err = binary.ReadUInt(r)
 			if err != nil {
-				return nil, binary.NewSimpleDecodingErr(fmt.Sprintf("type(%d).count", typeID), err)
+				return nil, binary.NewSimpleDecodingErr(fmt.Sprintf("segment[%d](T:%d).count", start, typeID), err)
 			}
 			count = int(temp)
 		}
 		if count < 0 || start+count > len(ms.segment) {
-			return nil, binary.NewSimpleDecodingErr(fmt.Sprintf("type(%d).count", typeID), ErrValueTooBig)
+			return nil, binary.NewSimpleDecodingErr(fmt.Sprintf("segment[%d](T:%d).count", start, typeID), ErrValueTooBig)
 		}
 		if typeID != NilTypeID {
 			dtReader := readers[typeID]
@@ -132,10 +130,10 @@ func ReadSegment(r io.ByteReader) (*Segment, error) {
 }
 
 // AllocateAt puts 'item' at the specified position by 'index'. If that position is not empty it will return
-// ErrCellNotEmpty. If the memory.Segment is compacted and the index is outside of the compacted memory, AllocateAt will
-// try to expand the memory.Segment.
+// ErrCellNotEmpty. If the Segment is compacted and the index is outside of the compacted memory, AllocateAt will
+// try to expand the Segment.
 //
-// If after adding item the cost of memory.Segment exceeds the maxCost the item will
+// If after adding item the cost of Segment exceeds the maxCost the item will
 // not be added and ErrMaxCostExceeded will be returned.
 func (ms *Segment) AllocateAt(index int, item DataType) error {
 	if item == nil {
@@ -191,8 +189,8 @@ func (ms *Segment) Get(index int) (DataType, error) {
 	return ms.segment[index], nil
 }
 
-// SaveSnapshot saves a snapshot of the current state of memory.Segment. If the memory.Segment is compacted it will
-// expand it to its original size. After calling SaveSnapshot the memory usage of memory.Segment increases
+// SaveSnapshot saves a snapshot of the current state of Segment. If the Segment is compacted it will
+// expand it to its original size. After calling SaveSnapshot the memory usage of Segment increases
 // and updating any data will have an extra overhead.
 func (ms *Segment) SaveSnapshot() {
 	ms.snapManager.reset()
@@ -200,7 +198,7 @@ func (ms *Segment) SaveSnapshot() {
 	ms.expand()
 }
 
-// DiscardSnapshot discards any snapshots saved in memory.Segment. It also compacts memory.Segment to optimize its memory
+// DiscardSnapshot discards any snapshots saved in Segment. It also compacts Segment to optimize its memory
 // usage.
 func (ms *Segment) DiscardSnapshot() {
 	ms.snapManager.turnOff()
@@ -210,7 +208,7 @@ func (ms *Segment) DiscardSnapshot() {
 // RestoreSnapshot restores a previously saved snapshot.
 func (ms *Segment) RestoreSnapshot() {
 	ms.snapManager.restoreSnapshot()
-	// we don't need the old snapshot anymore, so we reset snapManager to improve performance of memory.Segment
+	// we don't need the old snapshot anymore, so we reset snapManager to improve performance of memory segment
 	ms.snapManager.reset()
 }
 
@@ -232,11 +230,22 @@ func (ms *Segment) NotifyUpdate(pointer interface{}, oldValue interface{}) {
 	ms.snapManager.notifyUpdate(pointer, oldValue)
 }
 
+// MinPackingGain determines when DiscardSnapshot should not compact the segment. If the improvement in the size
+// of the segment is less than MinPackingGain the segment will not be copied to a smaller segment.
+func (ms *Segment) MinPackingGain() float32 {
+	return ms.minPackingGain
+}
+
+// SetMinPackingGain sets the value of MinPackingGain
+func (ms *Segment) SetMinPackingGain(value float32) {
+	ms.minPackingGain = value
+}
+
 func (ms *Segment) MaxCost() int {
 	return ms.maxCost
 }
 
-// SetMaxCost sets a new maximum cost for the memory.Segment and panics if the new maxCost is not a valid cost.
+// SetMaxCost sets a new maximum cost for the Segment and panics if the new maxCost is not a valid cost.
 func (ms *Segment) SetMaxCost(maxCost int) {
 	if ms.cost > maxCost {
 		log.Panicf("maxCost's already exceeded. current cost is %d.", ms.cost)
@@ -244,7 +253,7 @@ func (ms *Segment) SetMaxCost(maxCost int) {
 	ms.maxCost = maxCost
 }
 
-// CurrentCost returns the current cost of memory.Segment as defined in the protocol.
+// CurrentCost returns the current cost of Segment as defined in the protocol.
 func (ms *Segment) CurrentCost() int {
 	return ms.cost
 }
@@ -268,7 +277,7 @@ func (ms *Segment) Content() string {
 }
 
 // expand expands the memory to its original size. Expanding will cause a runtime error, if there is
-// a non empty saved snapshot in the memory.Segment.
+// a non empty saved snapshot in the Segment.
 func (ms *Segment) expand() {
 	if len(ms.segment) == ms.maxSize {
 		return
@@ -292,7 +301,7 @@ func (ms *Segment) compact() {
 	for ; last >= 0 && ms.segment[last] == nil; last-- {
 	}
 	newLen := last + 1
-	if float32(newLen) >= (1-ms.MinPackingGain)*float32(oldLen) {
+	if float32(newLen) >= (1-ms.minPackingGain)*float32(oldLen) {
 		return
 	}
 	newSegment := make([]DataType, newLen)

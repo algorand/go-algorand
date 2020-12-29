@@ -81,9 +81,9 @@ func (i *UInt) TypeID() uint8 {
 	return UintID
 }
 
-// SetValue sets the specified 'value' for this UInt. If the UInt is stored in a MemorySegment container must be
-// a pointer to the MemorySegment which contains that UInt. if the UInt is not stored in any MemorySegment the
-// container must be nil. Passing wrong value for the container can result in unexpected behaviour.
+// SetValue sets the specified 'value' for this UInt. If the UInt is stored in a memory.Segment, 'container' must be
+// a pointer to the memory.Segment which contains that UInt. if the UInt is not stored in any memory.Segment the
+// 'container' must be nil. Passing wrong value for 'container' can result in unexpected behaviour.
 func (i *UInt) SetValue(value uint64, container *memory.Segment) {
 	if container != nil {
 		container.NotifyUpdate(&i.value, i.value)
@@ -182,8 +182,8 @@ func (ba *ByteArray) TypeID() uint8 {
 }
 
 // Set sets the value of the ByteArray at the specified index by 'i' to the value 'b'. If the ByteArray is stored in
-// a MemorySegment container must be a pointer to the MemorySegment which contains that ByteArray. if the ByteArray
-// is not stored in any MemorySegment the container must be nil. Passing wrong value for the container can
+// a memory.Segment, 'container' must be a pointer to the memory.Segment which contains that ByteArray. if the ByteArray
+// is not stored in any memory.Segment the 'container' must be nil. Passing wrong value for 'container' can
 // result in unexpected behaviour.
 func (ba *ByteArray) Set(i int, b byte, container *memory.Segment) error {
 	if l := len(ba.values); i < 0 || i >= l {

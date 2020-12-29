@@ -60,19 +60,19 @@ func TestMemorySegment_Snapshot(t *testing.T) {
 			want = "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->22"
 			require.Equal(t, want, m.Content())
 
-			m.MinPackingGain = 0.4
+			m.SetMinPackingGain(0.4)
 			m.SaveSnapshot()
 			m.DiscardSnapshot()
 			want = "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->22\n[3, <nil>)]---><nil>\n[4, <nil>)]---><nil>"
 			require.Equal(t, want, m.Content())
 
-			m.MinPackingGain = 0.39
+			m.SetMinPackingGain(0.39)
 			m.SaveSnapshot()
 			m.DiscardSnapshot()
 			want = "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->22"
 			require.Equal(t, want, m.Content())
 
-			m.MinPackingGain = 0.15
+			m.SetMinPackingGain(0.15)
 			m.SaveSnapshot()
 			m.AllocateAt(4, barr)
 			m.DiscardSnapshot()
