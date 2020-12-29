@@ -137,7 +137,7 @@ func (l *Ledger) appendUnvalidatedTx(t *testing.T, initAccounts map[basics.Addre
 	return l.appendUnvalidatedSignedTx(t, initAccounts, stx, ad)
 }
 
-func makeNewEmptyBlock(t *testing.T, l *Ledger, initAccounts map[basics.Address]basics.AccountData) (blk bookkeeping.Block) {
+func makeNewEmptyBlock(t *testing.T, l *Ledger, GenesisID string, initAccounts map[basics.Address]basics.AccountData) (blk bookkeeping.Block) {
 	a := require.New(t)
 
 	lastBlock, err := l.Block(l.Latest())
@@ -155,7 +155,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, initAccounts map[basics.Address]
 	a.NoError(err, "could not get incentive pool balance")
 
 	correctBlkHeader := bookkeeping.BlockHeader{
-		GenesisID:    t.Name(),
+		GenesisID:    GenesisID,
 		Round:        l.Latest() + 1,
 		Branch:       lastBlock.Hash(),
 		TxnRoot:      emptyPayset.Commit(proto.PaysetCommitFlat),
@@ -167,7 +167,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, initAccounts map[basics.Address]
 	}
 
 	if proto.SupportGenesisHash {
-		correctBlkHeader.GenesisHash = crypto.Hash([]byte(t.Name()))
+		correctBlkHeader.GenesisHash = crypto.Hash([]byte(GenesisID))
 	}
 
 	if proto.TxnCounter {
@@ -182,7 +182,7 @@ func makeNewEmptyBlock(t *testing.T, l *Ledger, initAccounts map[basics.Address]
 }
 
 func (l *Ledger) appendUnvalidatedSignedTx(t *testing.T, initAccounts map[basics.Address]basics.AccountData, stx transactions.SignedTxn, ad transactions.ApplyData) error {
-	blk := makeNewEmptyBlock(t, l, initAccounts)
+	blk := makeNewEmptyBlock(t, l, t.Name(), initAccounts)
 	proto := config.Consensus[blk.CurrentProtocol]
 	txib, err := blk.EncodeSignedTxn(stx, ad)
 	if err != nil {
@@ -692,7 +692,7 @@ func addEmptyValidatedBlock(t *testing.T, l *Ledger, initAccounts map[basics.Add
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
 
-	blk := makeNewEmptyBlock(t, l, initAccounts)
+	blk := makeNewEmptyBlock(t, l, t.Name(), initAccounts)
 	vb, err := l.Validate(context.Background(), blk, backlogPool)
 	a.NoError(err)
 	err = l.AddValidatedBlock(*vb, agreement.Certificate{})
@@ -833,6 +833,169 @@ int 1
 	acct, _, err = l.LookupWithoutRewards(rnd, user)
 	a.NoError(err)
 	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: 1}, acct.AppLocalStates[appIdx].KeyValue["counter"])
+}
+
+// TestLedgerAppMultiTxnWrites ensures app state writes in multiple txn are applied
+func TestLedgerAppMultiTxnWrites(t *testing.T) {
+	a := require.New(t)
+
+	protoName := protocol.ConsensusV24
+	genesisInitState, initSecrets := testGenerateInitState(t, protoName)
+	const inMem = true
+	log := logging.TestingLog(t)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(log, t.Name(), inMem, genesisInitState, cfg)
+	a.NoError(err, "could not open ledger")
+	defer l.Close()
+
+	proto := config.Consensus[protoName]
+	poolAddr := testPoolAddr
+	sinkAddr := testSinkAddr
+
+	initAccounts := genesisInitState.Accounts
+	var addrList []basics.Address
+	for addr := range initAccounts {
+		if addr != poolAddr && addr != sinkAddr {
+			addrList = append(addrList, addr)
+		}
+	}
+
+	creator := addrList[0]
+	user := addrList[1]
+	genesisID := t.Name()
+	correctTxHeader := transactions.Header{
+		Sender:      creator,
+		Fee:         basics.MicroAlgos{Raw: proto.MinTxnFee * 2},
+		FirstValid:  l.Latest() + 1,
+		LastValid:   l.Latest() + 10,
+		GenesisID:   genesisID,
+		GenesisHash: genesisInitState.GenesisHash,
+	}
+
+	value := byte(10)
+	sum := `#pragma version 2
+// add a value from args to a key
+byte "key"              // [key]
+dup                     // [key, key]
+app_global_get          // [key, val]
+txna ApplicationArgs 0  // [key, val, arg]
+btoi                    // [key, val, arg]
++                       // [key, val+arg]
+app_global_put          // []
+int 1                   // [1]
+`
+	ops, err := logic.AssembleString(sum)
+	a.NoError(err)
+	approvalProgram := ops.Program
+
+	clearStateProgram := []byte("\x02") // empty
+	appcreateFields := transactions.ApplicationCallTxnFields{
+		ApprovalProgram:   approvalProgram,
+		ClearStateProgram: clearStateProgram,
+		GlobalStateSchema: basics.StateSchema{NumUint: 1},
+		ApplicationArgs:   [][]byte{{value}},
+	}
+	correctTxHeader.Sender = creator
+	appcreate := transactions.Transaction{
+		Type:                     protocol.ApplicationCallTx,
+		Header:                   correctTxHeader,
+		ApplicationCallTxnFields: appcreateFields,
+	}
+
+	ad := transactions.ApplyData{EvalDelta: basics.EvalDelta{GlobalDelta: basics.StateDelta{
+		"key": basics.ValueDelta{Action: basics.SetUintAction, Uint: uint64(value)},
+	}}}
+
+	a.NoError(l.appendUnvalidatedTx(t, initAccounts, initSecrets, appcreate, ad))
+	var appIdx basics.AppIndex = 1
+
+	rnd := l.Latest()
+	acct, _, err := l.LookupWithoutRewards(l.Latest(), creator)
+	a.NoError(err)
+	a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: uint64(value)}, acct.AppParams[appIdx].GlobalState["key"])
+
+	// make two app call txns and put into the same block, with and without groupping
+	var tests = []struct {
+		groupped bool
+		base     byte
+		val1     byte
+		val2     byte
+	}{
+		{true, byte(value), byte(11), byte(17)},
+		{false, byte(value + 11 + 17), byte(13), byte(19)},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("groupped %v", test.groupped), func(t *testing.T) {
+			a := require.New(t)
+
+			base := test.base
+			value1 := test.val1
+			appcallFields1 := transactions.ApplicationCallTxnFields{
+				ApplicationID:   appIdx,
+				OnCompletion:    transactions.NoOpOC,
+				ApplicationArgs: [][]byte{{value1}},
+			}
+			correctTxHeader.Sender = creator
+			appcall1 := transactions.Transaction{
+				Type:                     protocol.ApplicationCallTx,
+				Header:                   correctTxHeader,
+				ApplicationCallTxnFields: appcallFields1,
+			}
+			ad1 := transactions.ApplyData{EvalDelta: basics.EvalDelta{GlobalDelta: basics.StateDelta{
+				"key": basics.ValueDelta{Action: basics.SetUintAction, Uint: uint64(base + value1)},
+			}}}
+
+			value2 := test.val2
+			appcallFields2 := transactions.ApplicationCallTxnFields{
+				ApplicationID:   appIdx,
+				OnCompletion:    transactions.NoOpOC,
+				ApplicationArgs: [][]byte{{value2}},
+			}
+			correctTxHeader.Sender = user
+			appcall2 := transactions.Transaction{
+				Type:                     protocol.ApplicationCallTx,
+				Header:                   correctTxHeader,
+				ApplicationCallTxnFields: appcallFields2,
+			}
+			ad2 := transactions.ApplyData{EvalDelta: basics.EvalDelta{GlobalDelta: basics.StateDelta{
+				"key": basics.ValueDelta{Action: basics.SetUintAction, Uint: uint64(base + value1 + value2)},
+			}}}
+
+			a.NotEqual(appcall1.Sender, appcall2.Sender)
+
+			if test.groupped {
+				var group transactions.TxGroup
+				group.TxGroupHashes = []crypto.Digest{crypto.HashObj(appcall1), crypto.HashObj(appcall2)}
+				appcall1.Group = crypto.HashObj(group)
+				appcall2.Group = crypto.HashObj(group)
+			}
+
+			stx1 := sign(initSecrets, appcall1)
+			stx2 := sign(initSecrets, appcall2)
+
+			blk := makeNewEmptyBlock(t, l, genesisID, initAccounts)
+			txib1, err := blk.EncodeSignedTxn(stx1, ad1)
+			a.NoError(err)
+			txib2, err := blk.EncodeSignedTxn(stx2, ad2)
+			a.NoError(err)
+			blk.TxnCounter = blk.TxnCounter + 2
+			blk.Payset = append(blk.Payset, txib1, txib2)
+			blk.TxnRoot = blk.Payset.Commit(proto.PaysetCommitFlat)
+			err = l.appendUnvalidated(blk)
+			a.NoError(err)
+
+			expected := uint64(base + value1 + value2)
+			rnd = l.Latest()
+			acctwor, _, err := l.LookupWithoutRewards(rnd, creator)
+			a.NoError(err)
+			a.Equal(basics.TealValue{Type: basics.TealUintType, Uint: expected}, acctwor.AppParams[appIdx].GlobalState["key"])
+
+			acctwr, err := l.Lookup(rnd, creator)
+			a.NoError(err)
+			a.Equal(acctwor.AppParams[appIdx].GlobalState["key"], acctwr.AppParams[appIdx].GlobalState["key"])
+		})
+	}
 }
 
 func testLedgerSingleTxApplyData(t *testing.T, version protocol.ConsensusVersion) {
