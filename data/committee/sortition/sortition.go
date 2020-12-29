@@ -17,6 +17,7 @@
 package sortition
 
 // #cgo CFLAGS: -O3
+// #cgo CXXFLAGS: -std=c++11
 // #include <stdint.h>
 // #include <stdlib.h>
 // #include "sortition.h"

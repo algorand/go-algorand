@@ -72,8 +72,9 @@ int 2
 ==
 &&
 `
-	program, err := logic.AssembleString(source)
+	ops, err := logic.AssembleString(source)
 	a.NoError(err)
+	program := ops.Program
 	addr, err := basics.UnmarshalChecksumAddress("47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU")
 	a.NoError(err)
 

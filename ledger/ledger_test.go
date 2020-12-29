@@ -693,7 +693,7 @@ func addEmptyValidatedBlock(t *testing.T, l *Ledger, initAccounts map[basics.Add
 	defer backlogPool.Shutdown()
 
 	blk := makeNewEmptyBlock(t, l, initAccounts)
-	vb, err := l.Validate(context.Background(), blk, DummyVerifiedTxnCache{}, backlogPool)
+	vb, err := l.Validate(context.Background(), blk, backlogPool)
 	a.NoError(err)
 	err = l.AddValidatedBlock(*vb, agreement.Certificate{})
 	a.NoError(err)
@@ -761,8 +761,9 @@ int 1  // increment
 app_local_put
 int 1
 `
-	approvalProgram, err := logic.AssembleString(counter)
+	ops, err := logic.AssembleString(counter)
 	a.NoError(err)
+	approvalProgram := ops.Program
 
 	clearStateProgram := []byte("\x02") // empty
 	appcreateFields := transactions.ApplicationCallTxnFields{

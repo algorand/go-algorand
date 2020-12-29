@@ -987,7 +987,7 @@ func randomAddress() basics.Address {
 func TestDryrunOptIn(t *testing.T) {
 	t.Parallel()
 
-	approval, err := logic.AssembleString(`#pragma version 2
+	ops, err := logic.AssembleString(`#pragma version 2
 txn ApplicationID
 bz ok
 int 0
@@ -997,7 +997,9 @@ app_local_put
 ok:
 int 1`)
 	require.NoError(t, err)
-	clst, err := logic.AssembleString("int 1")
+	approval := ops.Program
+	ops, err = logic.AssembleString("int 1")
+	clst := ops.Program
 	require.NoError(t, err)
 	var appIdx basics.AppIndex = 1
 	creator := randomAddress()
