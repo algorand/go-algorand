@@ -313,7 +313,7 @@ func TestEquivocationVoteValidation(t *testing.T) {
 			_, err = v1.Cred.Verify(config.Consensus[protocol.ConsensusCurrentVersion], m)
 
 			noSig := ev
-			noSig.Sigs = [2]crypto.OneTimeSignature{crypto.OneTimeSignature{}, crypto.OneTimeSignature{}}
+			noSig.Sigs = [2]crypto.OneTimeSignature{{}, {}}
 			_, err = noSig.verify(ledger)
 			require.Error(t, err)
 

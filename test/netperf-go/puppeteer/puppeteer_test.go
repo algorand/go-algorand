@@ -24,21 +24,21 @@ func TestMetricsPrintout(t *testing.T) {
 	// this test function was meant for local development test and not as an official unit test.
 	t.Skip()
 	puppets := []*puppet{
-		&puppet{
+		{
 			recipeName: "recipename1.json",
 			metrics: map[string]float64{
 				"message_count": 10.0,
 				"sent_bytes":    30000,
 			},
 		},
-		&puppet{
+		{
 			recipeName: "recipename2_or_maybe_something_else.json",
 			metrics: map[string]float64{
 				"message_count":  13.0,
 				"received_bytes": 200000,
 			},
 		},
-		&puppet{
+		{
 			recipeName: "recipename3.json",
 			metrics: map[string]float64{
 				"message_count":  50.0,

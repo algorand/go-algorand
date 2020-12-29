@@ -65,7 +65,7 @@ func TestMultiplexer(t *testing.T) {
 	}
 
 	// Registering our handler should succeed
-	m.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{protocol.TxnTag, handler}})
+	m.RegisterHandlers([]TaggedMessageHandler{{protocol.TxnTag, handler}})
 
 	// Can't register two handlers for the same typetag
 	panicked := false
@@ -76,7 +76,7 @@ func TestMultiplexer(t *testing.T) {
 			}
 		}()
 		m := MakeMultiplexer(logging.TestingLog(t))
-		m.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{protocol.TxnTag, handler}, TaggedMessageHandler{protocol.TxnTag, handler}})
+		m.RegisterHandlers([]TaggedMessageHandler{{protocol.TxnTag, handler}, {protocol.TxnTag, handler}})
 
 	}()
 	require.True(t, panicked)
@@ -88,8 +88,8 @@ func TestMultiplexer(t *testing.T) {
 			}
 		}()
 		m := MakeMultiplexer(logging.TestingLog(t))
-		m.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{protocol.TxnTag, handler}})
-		m.RegisterHandlers([]TaggedMessageHandler{TaggedMessageHandler{protocol.TxnTag, handler}})
+		m.RegisterHandlers([]TaggedMessageHandler{{protocol.TxnTag, handler}})
+		m.RegisterHandlers([]TaggedMessageHandler{{protocol.TxnTag, handler}})
 
 	}()
 	require.True(t, panicked)

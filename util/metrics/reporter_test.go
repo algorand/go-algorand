@@ -24,15 +24,15 @@ import (
 
 func TestParseNodeExporterArgs(t *testing.T) {
 	passTestcases := map[string][]string{
-		"./node_exporter":                                                                           []string{"./node_exporter", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"},                                               // simple case
-		"./node_exporter --collector.systemd":                                                       []string{"./node_exporter", "--collector.systemd", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"},                        // extended case with one argument
-		"./node_exporter random --collector.systemd":                                                []string{"./node_exporter", "random", "--collector.systemd", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"},              // extended case multiple arguments
-		"/usr/bin/local/node_exporter --collector.systemd random":                                   []string{"/usr/bin/local/node_exporter", "--collector.systemd", "random", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"}, // other executable path
-		" /usr/bin/local/node_exporter --collector.systemd random":                                  []string{"/usr/bin/local/node_exporter", "--collector.systemd", "random", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"}, // space at beginning of option
-		"./node_exporter --web.telemetry-path=/foobar --web.listen-address=:9090 ":                  []string{"./node_exporter", "--web.listen-address=:9090", "--web.telemetry-path=/foobar"},                                                // overriding defaults
-		"./node_exporter --web.listen-address=:8080  --web.telemetry-path=/barfoo":                  []string{"./node_exporter", "--web.listen-address=:8080", "--web.telemetry-path=/barfoo"},                                                // overriding defaults different order and multiple spaces
-		"./node_exporter --web.listen-address=:9090  --collector.proc --web.telemetry-path=/foobar": []string{"./node_exporter", "--collector.proc", "--web.listen-address=:9090", "--web.telemetry-path=/foobar"},                            // argument in between the persistent ones
-		"./node_exporter --web.listen-address=:9090  --collector.test  --collector.systemd ":        []string{"./node_exporter", "--collector.test", "--collector.systemd", "--web.listen-address=:9090", "--web.telemetry-path=/metrics"},    // argument after persistent one
+		"./node_exporter":                                                                           {"./node_exporter", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"},                                               // simple case
+		"./node_exporter --collector.systemd":                                                       {"./node_exporter", "--collector.systemd", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"},                        // extended case with one argument
+		"./node_exporter random --collector.systemd":                                                {"./node_exporter", "random", "--collector.systemd", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"},              // extended case multiple arguments
+		"/usr/bin/local/node_exporter --collector.systemd random":                                   {"/usr/bin/local/node_exporter", "--collector.systemd", "random", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"}, // other executable path
+		" /usr/bin/local/node_exporter --collector.systemd random":                                  {"/usr/bin/local/node_exporter", "--collector.systemd", "random", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"}, // space at beginning of option
+		"./node_exporter --web.telemetry-path=/foobar --web.listen-address=:9090 ":                  {"./node_exporter", "--web.listen-address=:9090", "--web.telemetry-path=/foobar"},                                                // overriding defaults
+		"./node_exporter --web.listen-address=:8080  --web.telemetry-path=/barfoo":                  {"./node_exporter", "--web.listen-address=:8080", "--web.telemetry-path=/barfoo"},                                                // overriding defaults different order and multiple spaces
+		"./node_exporter --web.listen-address=:9090  --collector.proc --web.telemetry-path=/foobar": {"./node_exporter", "--collector.proc", "--web.listen-address=:9090", "--web.telemetry-path=/foobar"},                            // argument in between the persistent ones
+		"./node_exporter --web.listen-address=:9090  --collector.test  --collector.systemd ":        {"./node_exporter", "--collector.test", "--collector.systemd", "--web.listen-address=:9090", "--web.telemetry-path=/metrics"},    // argument after persistent one
 	}
 	for test, expected := range passTestcases {
 		vargs := parseNodeExporterArgs(test, ":9100", "/metrics")
@@ -40,10 +40,10 @@ func TestParseNodeExporterArgs(t *testing.T) {
 	}
 
 	failTestcases := map[string][]string{
-		"./node_exporter":                                          []string{"./node_exporter", "--web.listen-address=:9090", "--web.telemetry-path=/foobar"},                                                 // default arguments not being passed
-		"./node_exporter --collector.systemd":                      []string{"./node_exporter", "--web.listen-address=:9100", "--web.telemetry-path=/metrics", "--collector.systemd"},                         // incorrect order of persistent and added options
-		"./node_exporter random --collector.systemd":               []string{"./node_exporter", "--collector.systemd", "random", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"},               // reversed order of persistent options
-		" /usr/bin/local/node_exporter --collector.systemd random": []string{" /usr/bin/local/node_exporter", "--collector.systemd", "random", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"}, // space at beginning of option preserved
+		"./node_exporter":                                          {"./node_exporter", "--web.listen-address=:9090", "--web.telemetry-path=/foobar"},                                                 // default arguments not being passed
+		"./node_exporter --collector.systemd":                      {"./node_exporter", "--web.listen-address=:9100", "--web.telemetry-path=/metrics", "--collector.systemd"},                         // incorrect order of persistent and added options
+		"./node_exporter random --collector.systemd":               {"./node_exporter", "--collector.systemd", "random", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"},               // reversed order of persistent options
+		" /usr/bin/local/node_exporter --collector.systemd random": {" /usr/bin/local/node_exporter", "--collector.systemd", "random", "--web.listen-address=:9100", "--web.telemetry-path=/metrics"}, // space at beginning of option preserved
 	}
 	for test, notexpected := range failTestcases {
 		vargs := parseNodeExporterArgs(test, ":9100", "/metrics")

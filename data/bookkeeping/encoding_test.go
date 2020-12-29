@@ -48,7 +48,7 @@ func TestBlockWithTxnEncoding(t *testing.T) {
 
 	var b Block
 	b.Payset = []transactions.SignedTxnInBlock{
-		transactions.SignedTxnInBlock{
+		{
 			SignedTxnWithAD: transactions.SignedTxnWithAD{
 				SignedTxn: sigtxn,
 			},
