@@ -14,22 +14,26 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package teal
+package memory_test
 
 import (
+	"github.com/algorand/go-algorand/data/basics/newpkg/memory"
+	"github.com/algorand/go-algorand/data/basics/newpkg/teal"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
 
+// TODO: add more test for serialization and type registration
+
 func TestMemorySegment_Snapshot(t *testing.T) {
 	var want string
 
-	m := NewMemorySegment(5, 500)
-	m.AllocateAt(2, NewUInt(22))
+	m := memory.NewSegment(5, 500)
+	m.AllocateAt(2, teal.NewUInt(22))
 	m.SaveSnapshot()
 	before := m.Content()
 	costBefore := m.CurrentCost()
-	barr := NewByteArray(4)
+	barr := teal.NewByteArray(4)
 	barr.Set(0, 7, nil)
 	m.AllocateAt(0, barr)
 
@@ -44,7 +48,7 @@ func TestMemorySegment_Snapshot(t *testing.T) {
 			m.RestoreSnapshot()
 			require.Equal(t, before, m.Content())
 
-			m.AllocateAt(4, NewUInt(3))
+			m.AllocateAt(4, teal.NewUInt(3))
 			m.RestoreSnapshot()
 			require.Equal(t, before, m.Content())
 			require.Equal(t, costBefore, m.CurrentCost())
@@ -86,21 +90,20 @@ func TestMemorySegment_Snapshot(t *testing.T) {
 			barr.Set(0, 5, m)
 			barr.Set(2, 6, m)
 			barr.Set(2, 10, m)
-			m.compact()
 			i, _ := m.Get(2)
-			i.(*UInt).SetValue(45, m)
+			i.(*teal.UInt).SetValue(45, m)
 			m.Delete(2)
 			want = "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, <nil>)]---><nil>\n[3, <nil>)]---><nil>\n[4, *teal.ByteArray)]--->[5 0 10 0]"
 			require.Equal(t, want, m.Content())
 
-			m.AllocateAt(2, NewUInt(42))
-			m.AllocateAt(0, NewUInt(11))
+			m.AllocateAt(2, teal.NewUInt(42))
+			m.AllocateAt(0, teal.NewUInt(11))
 			i, _ = m.Get(0)
-			i.(*UInt).SetValue(15, m)
-			i.(*UInt).SetValue(16, m)
+			i.(*teal.UInt).SetValue(15, m)
+			i.(*teal.UInt).SetValue(16, m)
 			want = "Memory Segment: (maxSize:5)\n[0, *teal.UInt)]--->16\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->42\n[3, <nil>)]---><nil>\n[4, *teal.ByteArray)]--->[5 0 10 0]"
 			require.Equal(t, want, m.Content())
-			require.Equal(t, NewMemorySegment(5, 600).CurrentCost()+2*i.Cost()+barr.Cost(), m.CurrentCost())
+			require.Equal(t, memory.NewSegment(5, 600).CurrentCost()+2*i.Cost()+barr.Cost(), m.CurrentCost())
 
 			m.RestoreSnapshot()
 			require.Equal(t, before, m.Content())
@@ -109,16 +112,16 @@ func TestMemorySegment_Snapshot(t *testing.T) {
 }
 
 func TestMemorySegment_Cost(t *testing.T) {
-	require.Panics(t, func() { NewMemorySegment(7, 50) })
+	require.Panics(t, func() { memory.NewSegment(7, 50) })
 
-	m := NewMemorySegment(6, 500)
-	b := NewByteArray(10)
-	i := NewUInt(20)
+	m := memory.NewSegment(6, 500)
+	b := teal.NewByteArray(10)
+	i := teal.NewUInt(20)
 	c := m.CurrentCost() + b.Cost() + i.Cost()
 	m.SetMaxCost(c - 1)
 	m.AllocateAt(2, b)
-	err := m.AllocateAt(0, NewUInt(2))
-	require.EqualError(t, err, ErrMaxCostExceeded.Error())
+	err := m.AllocateAt(0, teal.NewUInt(2))
+	require.EqualError(t, err, memory.ErrMaxCostExceeded.Error())
 	want := "Memory Segment: (maxSize:6)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, *teal.ByteArray)]--->[0 0 0 0 0 0 0 0 0 0]\n[3, <nil>)]---><nil>\n[4, <nil>)]---><nil>\n[5, <nil>)]---><nil>"
 	require.Equal(t, want, m.Content())
 	require.Panics(t, func() { m.SetMaxCost(b.Cost()) })
@@ -139,53 +142,53 @@ func TestMemorySegment_Cost(t *testing.T) {
 
 func TestMemorySegment_AllocateAt(t *testing.T) {
 	var err error
-	m := NewMemorySegment(0, 500)
+	m := memory.NewSegment(0, 500)
 
-	err = m.AllocateAt(0, NewUInt(6))
-	require.IsTypef(t, new(OutOfBoundsError), err, "Invalid error in 0 size memory")
+	err = m.AllocateAt(0, teal.NewUInt(6))
+	require.IsTypef(t, new(memory.OutOfBoundsError), err, "Invalid error in 0 size memory")
 
-	m = NewMemorySegment(5, 500)
+	m = memory.NewSegment(5, 500)
 	m.DiscardSnapshot()
-	err = m.AllocateAt(5, NewUInt(5))
-	require.IsType(t, new(OutOfBoundsError), err)
+	err = m.AllocateAt(5, teal.NewUInt(5))
+	require.IsType(t, new(memory.OutOfBoundsError), err)
 
 	want := "Memory Segment: (maxSize:5)"
 	require.Equal(t, want, m.Content())
 
-	m.AllocateAt(2, NewUInt(12))
+	m.AllocateAt(2, teal.NewUInt(12))
 	want = "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->12\n[3, <nil>)]---><nil>\n[4, <nil>)]---><nil>"
 	require.Equal(t, want, m.Content())
 
 	m.DiscardSnapshot()
-	err = m.AllocateAt(2, NewUInt(12))
-	require.EqualError(t, err, ErrCellNotEmpty.Error())
+	err = m.AllocateAt(2, teal.NewUInt(12))
+	require.EqualError(t, err, memory.ErrCellNotEmpty.Error())
 
-	m.AllocateAt(0, NewUInt(7))
+	m.AllocateAt(0, teal.NewUInt(7))
 	want = "Memory Segment: (maxSize:5)\n[0, *teal.UInt)]--->7\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->12"
 	require.Equal(t, want, m.Content())
 }
 
 func TestMemorySegment_Get(t *testing.T) {
 	var err error
-	m := NewMemorySegment(0, 500)
+	m := memory.NewSegment(0, 500)
 
 	_, err = m.Get(0)
-	require.IsTypef(t, new(OutOfBoundsError), err, "Invalid error in 0 size memory")
+	require.IsTypef(t, new(memory.OutOfBoundsError), err, "Invalid error in 0 size memory")
 
-	m = NewMemorySegment(8, 500)
-	barr := NewByteArray(3)
+	m = memory.NewSegment(8, 500)
+	barr := teal.NewByteArray(3)
 	barr.Set(2, 12, m)
 	m.AllocateAt(2, barr)
 	m.DiscardSnapshot()
 	_, err = m.Get(0)
-	require.EqualError(t, err, ErrCellIsEmpty.Error())
+	require.EqualError(t, err, memory.ErrCellIsEmpty.Error())
 
 	_, err = m.Get(3)
-	require.EqualError(t, err, ErrCellIsEmpty.Error(), "Invalid error after compaction")
+	require.EqualError(t, err, memory.ErrCellIsEmpty.Error(), "Invalid error after compaction")
 
 	temp, _ := m.Get(2)
-	_, err = temp.(*ByteArray).Get(3)
-	require.IsType(t, new(OutOfBoundsError), err)
+	_, err = temp.(*teal.ByteArray).Get(3)
+	require.IsType(t, new(memory.OutOfBoundsError), err)
 
 	b, _ := barr.Get(2)
 	require.Equal(t, uint8(12), b, "Error in getting values of a ByteArray")
@@ -193,7 +196,7 @@ func TestMemorySegment_Get(t *testing.T) {
 
 func TestConstByteArray(t *testing.T) {
 	b1 := []byte{2, 0, 4, 1}
-	cb := NewConstByteArray(b1)
+	cb := teal.NewConstByteArray(b1, true)
 	want := "[2 0 4 1]"
 	require.Equal(t, want, cb.String())
 
@@ -203,10 +206,10 @@ func TestConstByteArray(t *testing.T) {
 	b2[2] = 3
 	require.False(t, cb.EqualsToSlice(b2))
 
-	other := NewConstByteArray(b2)
+	other := teal.NewConstByteArray(b2, true)
 	require.False(t, cb.Equals(other))
 
 	b2[2] = 4
-	other = NewConstByteArray(b2)
+	other = teal.NewConstByteArray(b2, true)
 	require.True(t, cb.Equals(other))
 }
