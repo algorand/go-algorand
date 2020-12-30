@@ -78,7 +78,7 @@ func TestAlgoCountMarshalMsg(t *testing.T) {
 }
 
 var uniqueAccountTotals = []AccountTotals{
-	AccountTotals{
+	{
 		Online: AlgoCount{
 			Money:       basics.MicroAlgos{Raw: 0x1234123412340000},
 			RewardUnits: 0x1234123412340000,
@@ -93,7 +93,7 @@ var uniqueAccountTotals = []AccountTotals{
 		},
 		RewardsLevel: 0x1234123412340000,
 	},
-	AccountTotals{
+	{
 		Online: AlgoCount{
 			Money:       basics.MicroAlgos{Raw: 0x1234123412340001},
 			RewardUnits: 0x1234123412340000,
@@ -108,7 +108,7 @@ var uniqueAccountTotals = []AccountTotals{
 		},
 		RewardsLevel: 0x1234123412340000,
 	},
-	AccountTotals{
+	{
 		Online: AlgoCount{
 			Money:       basics.MicroAlgos{Raw: 0x1234123412340000},
 			RewardUnits: 0x1234123412340001,
@@ -123,7 +123,7 @@ var uniqueAccountTotals = []AccountTotals{
 		},
 		RewardsLevel: 0x1234123412340000,
 	},
-	AccountTotals{
+	{
 		Online: AlgoCount{
 			Money:       basics.MicroAlgos{Raw: 0x1234123412340000},
 			RewardUnits: 0x1234123412340000,
@@ -138,7 +138,7 @@ var uniqueAccountTotals = []AccountTotals{
 		},
 		RewardsLevel: 0x1234123412340000,
 	},
-	AccountTotals{
+	{
 		Online: AlgoCount{
 			Money:       basics.MicroAlgos{Raw: 0x1234123412340000},
 			RewardUnits: 0x1234123412340000,
@@ -153,7 +153,7 @@ var uniqueAccountTotals = []AccountTotals{
 		},
 		RewardsLevel: 0x1234123412340000,
 	},
-	AccountTotals{
+	{
 		Online: AlgoCount{
 			Money:       basics.MicroAlgos{Raw: 0x1234123412340000},
 			RewardUnits: 0x1234123412340000,
@@ -168,7 +168,7 @@ var uniqueAccountTotals = []AccountTotals{
 		},
 		RewardsLevel: 0x1234123412340000,
 	},
-	AccountTotals{
+	{
 		Online: AlgoCount{
 			Money:       basics.MicroAlgos{Raw: 0x1234123412340000},
 			RewardUnits: 0x1234123412340000,
@@ -183,7 +183,7 @@ var uniqueAccountTotals = []AccountTotals{
 		},
 		RewardsLevel: 0x1234123412340000,
 	},
-	AccountTotals{
+	{
 		Online: AlgoCount{
 			Money:       basics.MicroAlgos{Raw: 0x1234123412340000},
 			RewardUnits: 0x1234123412340000,

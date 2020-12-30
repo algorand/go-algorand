@@ -117,22 +117,22 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 
 		if n.hash[idiff] < d[idiff] {
 			pnode.children = []childEntry{
-				childEntry{
+				{
 					id:        curChildNodeID,
 					hashIndex: n.hash[idiff],
 				},
-				childEntry{
+				{
 					id:        newChildNodeID,
 					hashIndex: d[idiff],
 				},
 			}
 		} else {
 			pnode.children = []childEntry{
-				childEntry{
+				{
 					id:        newChildNodeID,
 					hashIndex: d[idiff],
 				},
-				childEntry{
+				{
 					id:        curChildNodeID,
 					hashIndex: n.hash[idiff],
 				},
@@ -145,7 +145,7 @@ func (n *node) add(cache *merkleTrieCache, d []byte, path []byte) (nodeID stored
 			pnode2, nodeID2 := cache.allocateNewNode()
 			pnode2.childrenMask.SetBit(d[i])
 			pnode2.children = []childEntry{
-				childEntry{
+				{
 					id:        nodeID,
 					hashIndex: d[i],
 				},
