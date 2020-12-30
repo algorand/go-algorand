@@ -118,6 +118,7 @@ func (lsd *storageDelta) applyChild(child *storageDelta) {
 
 			delta.new = child.kvCow[key].new
 			delta.newExists = child.kvCow[key].newExists
+			lsd.kvCow[key] = delta
 		}
 
 		// counts can just get overwritten because they are absolute
