@@ -69,8 +69,8 @@ type demuxTestUsecase struct {
 }
 
 var demuxTestUsecases = []demuxTestUsecase{
-	demuxTestUsecase{
-		queue:               []testChanState{testChanState{eventCount: 1, closed: false}},
+	{
+		queue:               []testChanState{{eventCount: 1, closed: false}},
 		rawVotes:            testChanState{eventCount: 1, closed: false},
 		rawProposals:        testChanState{eventCount: 0, closed: false},
 		rawBundles:          testChanState{eventCount: 0, closed: false},
@@ -87,8 +87,8 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   messageEvent{Err: makeSerErrStr("QueueEvent-0-0")},
 		ok:                  true,
 	},
-	demuxTestUsecase{
-		queue:               []testChanState{testChanState{eventCount: 0, closed: true}, testChanState{eventCount: 1, closed: true}},
+	{
+		queue:               []testChanState{{eventCount: 0, closed: true}, {eventCount: 1, closed: true}},
 		rawVotes:            testChanState{eventCount: 1, closed: false},
 		rawProposals:        testChanState{eventCount: 0, closed: false},
 		rawBundles:          testChanState{eventCount: 0, closed: false},
@@ -105,8 +105,8 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   messageEvent{Err: makeSerErrStr("QueueEvent-1-0")},
 		ok:                  true,
 	},
-	demuxTestUsecase{
-		queue:               []testChanState{testChanState{eventCount: 0, closed: false}},
+	{
+		queue:               []testChanState{{eventCount: 0, closed: false}},
 		rawVotes:            testChanState{eventCount: 1, closed: false},
 		rawProposals:        testChanState{eventCount: 0, closed: false},
 		rawBundles:          testChanState{eventCount: 0, closed: false},
@@ -123,7 +123,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   emptyEvent{},
 		ok:                  false,
 	},
-	demuxTestUsecase{
+	{
 		queue:               []testChanState{},
 		rawVotes:            testChanState{eventCount: 0, closed: false},
 		rawProposals:        testChanState{eventCount: 1, closed: false},
@@ -141,7 +141,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   messageEvent{T: payloadPresent},
 		ok:                  true,
 	},
-	demuxTestUsecase{
+	{
 		queue:               []testChanState{},
 		rawVotes:            testChanState{eventCount: 0, closed: false},
 		rawProposals:        testChanState{eventCount: 0, closed: false},
@@ -159,7 +159,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   messageEvent{T: bundlePresent},
 		ok:                  true,
 	},
-	demuxTestUsecase{
+	{
 		queue:               []testChanState{},
 		rawVotes:            testChanState{eventCount: 1, closed: false},
 		rawProposals:        testChanState{eventCount: 1, closed: false},
@@ -177,7 +177,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   messageEvent{T: bundlePresent},
 		ok:                  true,
 	},
-	demuxTestUsecase{
+	{
 		queue:               []testChanState{},
 		rawVotes:            testChanState{eventCount: 1, closed: false},
 		rawProposals:        testChanState{eventCount: 1, closed: false},
@@ -195,7 +195,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   messageEvent{T: votePresent},
 		ok:                  true,
 	},
-	demuxTestUsecase{
+	{
 		queue:               []testChanState{},
 		rawVotes:            testChanState{eventCount: 0, closed: false},
 		rawProposals:        testChanState{eventCount: 1, closed: false},
@@ -213,7 +213,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   messageEvent{T: bundlePresent},
 		ok:                  true,
 	},
-	demuxTestUsecase{
+	{
 		queue:               []testChanState{},
 		rawVotes:            testChanState{eventCount: 0, closed: false},
 		rawProposals:        testChanState{eventCount: 0, closed: false},
@@ -231,7 +231,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   roundInterruptionEvent{},
 		ok:                  true,
 	},
-	demuxTestUsecase{
+	{
 		queue:               []testChanState{},
 		rawVotes:            testChanState{eventCount: 1, closed: false},
 		rawProposals:        testChanState{eventCount: 1, closed: false},
@@ -249,7 +249,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   emptyEvent{},
 		ok:                  false,
 	},
-	demuxTestUsecase{
+	{
 		queue:               []testChanState{},
 		rawVotes:            testChanState{eventCount: 1, closed: false},
 		rawProposals:        testChanState{eventCount: 1, closed: false},
@@ -267,7 +267,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   roundInterruptionEvent{},
 		ok:                  true,
 	},
-	demuxTestUsecase{
+	{
 		queue:               []testChanState{},
 		rawVotes:            testChanState{eventCount: 1, closed: false},
 		rawProposals:        testChanState{eventCount: 1, closed: false},
@@ -285,7 +285,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   timeoutEvent{T: timeout},
 		ok:                  true,
 	},
-	demuxTestUsecase{
+	{
 		queue:               []testChanState{},
 		rawVotes:            testChanState{eventCount: 0, closed: false},
 		rawProposals:        testChanState{eventCount: 0, closed: false},
@@ -303,7 +303,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   messageEvent{T: voteVerified, Err: makeSerErrStr("Verified-AV-{test_index}-0")},
 		ok:                  true,
 	},
-	demuxTestUsecase{
+	{
 		queue:               []testChanState{},
 		rawVotes:            testChanState{eventCount: 0, closed: false},
 		rawProposals:        testChanState{eventCount: 0, closed: false},
@@ -321,7 +321,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   messageEvent{T: payloadVerified, Err: makeSerErrStr("Verified-PP-{test_index}-0")},
 		ok:                  true,
 	},
-	demuxTestUsecase{
+	{
 		queue:               []testChanState{},
 		rawVotes:            testChanState{eventCount: 0, closed: false},
 		rawProposals:        testChanState{eventCount: 0, closed: false},
@@ -339,7 +339,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   messageEvent{T: bundleVerified, Err: makeSerErrStr("Verified-VB-{test_index}-0")},
 		ok:                  true,
 	},
-	demuxTestUsecase{
+	{
 		queue:               []testChanState{},
 		rawVotes:            testChanState{eventCount: 0, closed: true},
 		rawProposals:        testChanState{eventCount: 0, closed: false},
@@ -357,7 +357,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   emptyEvent{},
 		ok:                  false,
 	},
-	demuxTestUsecase{
+	{
 		queue:               []testChanState{},
 		rawVotes:            testChanState{eventCount: 0, closed: false},
 		rawProposals:        testChanState{eventCount: 0, closed: true},
@@ -375,7 +375,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   emptyEvent{},
 		ok:                  false,
 	},
-	demuxTestUsecase{
+	{
 		queue:               []testChanState{},
 		rawVotes:            testChanState{eventCount: 0, closed: false},
 		rawProposals:        testChanState{eventCount: 0, closed: false},
@@ -393,7 +393,7 @@ var demuxTestUsecases = []demuxTestUsecase{
 		e:                   emptyEvent{},
 		ok:                  false,
 	},
-	demuxTestUsecase{
+	{
 		queue:               []testChanState{},
 		rawVotes:            testChanState{eventCount: 0, closed: false},
 		rawProposals:        testChanState{eventCount: 1, closed: false},

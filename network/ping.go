@@ -64,6 +64,6 @@ func pingReplyHandler(message IncomingMessage) OutgoingMessage {
 }
 
 var pingHandlers = []TaggedMessageHandler{
-	TaggedMessageHandler{protocol.PingTag, HandlerFunc(pingHandler)},
-	TaggedMessageHandler{protocol.PingReplyTag, HandlerFunc(pingReplyHandler)},
+	{protocol.PingTag, HandlerFunc(pingHandler)},
+	{protocol.PingReplyTag, HandlerFunc(pingReplyHandler)},
 }

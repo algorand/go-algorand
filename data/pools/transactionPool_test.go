@@ -823,7 +823,7 @@ func TestRemove(t *testing.T) {
 	}
 	signedTx := tx.Sign(secrets[0])
 	require.NoError(t, transactionPool.RememberOne(signedTx))
-	require.Equal(t, transactionPool.PendingTxGroups(), [][]transactions.SignedTxn{[]transactions.SignedTxn{signedTx}})
+	require.Equal(t, transactionPool.PendingTxGroups(), [][]transactions.SignedTxn{{signedTx}})
 }
 
 func TestLogicSigOK(t *testing.T) {

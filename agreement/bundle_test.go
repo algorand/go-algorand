@@ -258,7 +258,7 @@ func TestBundleCreationWithEquivocationVotes(t *testing.T) {
 	require.Error(t, err)
 
 	evBadEVBundle := unauthenticatedBundles[4]
-	evBadEVBundle.EquivocationVotes[0].Sigs = [2]crypto.OneTimeSignature{crypto.OneTimeSignature{}, crypto.OneTimeSignature{}}
+	evBadEVBundle.EquivocationVotes[0].Sigs = [2]crypto.OneTimeSignature{{}, {}}
 	_, err = evBadEVBundle.verify(context.Background(), ledger, avv)
 	require.Error(t, err)
 
