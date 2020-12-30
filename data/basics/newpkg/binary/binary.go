@@ -67,6 +67,10 @@ func (sw *SilentWriter) SilentWriteBytes(b []byte) {
 	sw.count += n
 }
 
+func ReadUInt(r io.ByteReader) (uint64, error) {
+	return binary.ReadUvarint(r)
+}
+
 // DecodingError
 type DecodingError struct {
 	ComponentName string
@@ -105,8 +109,4 @@ func (de *DecodingError) FinalPosition() int {
 		return de.Position + e.Position
 	}
 	return de.Position
-}
-
-func ReadUInt(r io.ByteReader) (uint64, error) {
-	return binary.ReadUvarint(r)
 }

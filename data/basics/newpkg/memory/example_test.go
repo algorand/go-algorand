@@ -25,7 +25,7 @@ import (
 )
 
 func ExampleNewSegment() {
-	ms := memory.NewSegment(7, 120)
+	ms := memory.NewSegment(8, 120)
 	ms.AllocateAt(1, teal.NewUInt(35))
 	ms.AllocateAt(2, teal.NewUInt(44))
 	ms.AllocateAt(4, teal.NewByteArray(4))
@@ -56,7 +56,7 @@ func ExampleNewSegment() {
 	fmt.Printf("After Restoring Snapshot:\n%v\nCost: %d/%d\n=====\n", ms.Content(), ms.CurrentCost(), ms.MaxCost())
 	// Output:
 	// =====
-	// Memory Segment: (maxSize:7)
+	// Memory Segment: (maxSize:8)
 	// [0, *teal.UInt)]--->12345
 	// [1, *teal.UInt)]--->37
 	// [2, *teal.UInt)]--->55
@@ -64,13 +64,14 @@ func ExampleNewSegment() {
 	// [4, *teal.ByteArray)]--->[0 100 0 0]
 	// [5, <nil>)]---><nil>
 	// [6, <nil>)]---><nil>
-	// Cost: 84/120
+	// [7, <nil>)]---><nil>
+	// Cost: 92/120
 	// =====
-	// Serialization: [7 120 1 3 185 96 37 55 128 131 4 0 100 0 0 0 2]
+	// Serialization: [8 120 1 3 185 96 37 55 128 131 4 0 100 0 0 0 3]
 	// Size of Serialization: 17 Bytes
 	// =====
 	// Read:
-	// Memory Segment: (maxSize:7)
+	// Memory Segment: (maxSize:8)
 	// [0, *teal.UInt)]--->12345
 	// [1, *teal.UInt)]--->37
 	// [2, *teal.UInt)]--->55
@@ -78,10 +79,11 @@ func ExampleNewSegment() {
 	// [4, *teal.ByteArray)]--->[0 100 0 0]
 	// [5, <nil>)]---><nil>
 	// [6, <nil>)]---><nil>
-	// Cost: 84/120
+	// [7, <nil>)]---><nil>
+	// Cost: 92/120
 	// =====
 	// After Restoring Snapshot:
-	// Memory Segment: (maxSize:7)
+	// Memory Segment: (maxSize:8)
 	// [0, <nil>)]---><nil>
 	// [1, *teal.UInt)]--->35
 	// [2, *teal.UInt)]--->44
@@ -89,9 +91,9 @@ func ExampleNewSegment() {
 	// [4, *teal.ByteArray)]--->[0 0 0 0]
 	// [5, <nil>)]---><nil>
 	// [6, <nil>)]---><nil>
-	// Cost: 76/120
+	// [7, <nil>)]---><nil>
+	// Cost: 84/120
 	// =====
-
 }
 
 func ExampleSegment_SaveSnapshot() {

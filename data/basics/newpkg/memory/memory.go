@@ -35,7 +35,8 @@ import (
 //
 // Any type which implements DataType interface can be stored in a Segment. To enable serialization, a newly defined type
 // needs to register a DataTypeReader using RegisterReader function. Also for correct restoration of snapshots,
-// it must use NotifyUpdate method properly. Current implementation can support up to 126 different data types.
+// the new DataType must use NotifyUpdate method properly. Current implementation of memory package can support
+// up to 126 different data types.
 //
 // The overall cost of a Segment can never be exceeded beyond MaxCost value. The value of MaxCost is set
 // when creating a Segment and can be updated using SetMaxCost function. The cost calculation is done using
@@ -263,7 +264,7 @@ func (ms *Segment) String() string {
 	for i, data := range ms.segment {
 		str += fmt.Sprintf("\n[%d, %T)]--->%v", i, data, data)
 	}
-	str += fmt.Sprintf("\nCost:%d", ms.cost)
+	str += fmt.Sprintf("\nCost:%d/%d", ms.cost, ms.maxCost)
 	str += fmt.Sprintf("\nSaved Snapshots:%v", &ms.snapManager)
 	return str
 }

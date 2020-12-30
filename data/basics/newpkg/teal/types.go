@@ -123,7 +123,7 @@ func ReadConstByteArray(r io.ByteReader) (memory.DataType, error) {
 	for i := 0; i < len(buf); i++ {
 		buf[i], err = r.ReadByte()
 		if err != nil {
-			return nil, binary.NewSimpleDecodingErr("ByteArray.values", err)
+			return nil, binary.NewSimpleDecodingErr(fmt.Sprintf("ByteArray.values[%d]", i), err)
 		}
 	}
 	return NewConstByteArray(buf, true), nil
@@ -174,6 +174,9 @@ func NewByteArray(size int) *ByteArray {
 
 func ReadByteArray(r io.ByteReader) (memory.DataType, error) {
 	cba, err := ReadConstByteArray(r)
+	if cba == nil {
+		return nil, err
+	}
 	return &ByteArray{*cba.(*ConstByteArray)}, err
 }
 
