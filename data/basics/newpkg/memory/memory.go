@@ -45,12 +45,11 @@ import (
 //
 // For a usage example see NewSegment.
 type Segment struct {
-	segment        []DataType
-	snapManager    snapshotManager
-	maxSize        int
-	cost           int
-	maxCost        int
-	minPackingGain float32
+	segment     []DataType
+	snapManager snapshotManager
+	maxSize     int
+	cost        int
+	maxCost     int
 }
 
 // NewSegment creates an empty Segment which its last valid address is 'size - 1' and its protocol defined
@@ -65,7 +64,6 @@ func NewSegment(size int, maxCost int) *Segment {
 		// the cost of an empty memory segment:
 		cost: EmptySegmentCost(size),
 	}
-	r.SetMinPackingGain(DefaultMinPackingGain)
 	r.SetMaxCost(maxCost)
 	return r
 }
@@ -91,7 +89,6 @@ func ReadSegment(r io.ByteReader) (*Segment, error) {
 		maxSize: size,
 		maxCost: maxCost,
 	}
-	ms.SetMinPackingGain(DefaultMinPackingGain)
 	var typeID uint8
 	var count int
 	for start := 0; start < len(ms.segment); {
@@ -143,9 +140,6 @@ func (ms *Segment) AllocateAt(index int, item DataType) error {
 	if index < 0 || index >= ms.maxSize {
 		return &OutOfBoundsError{Value: index, LowerBound: 0, HigherBound: ms.maxSize - 1}
 	}
-	if index >= len(ms.segment) {
-		ms.expand()
-	}
 	if ms.segment[index] != nil {
 		return ErrCellNotEmpty
 	}
@@ -195,15 +189,12 @@ func (ms *Segment) Get(index int) (DataType, error) {
 // and updating any data will have an extra overhead.
 func (ms *Segment) SaveSnapshot() {
 	ms.snapManager.reset()
-	// we'd better call expand() here. otherwise AllocateAt may fail if the memory is updated.
-	ms.expand()
 }
 
 // DiscardSnapshot discards any snapshots saved in Segment. It also compacts Segment to optimize its memory
 // usage.
 func (ms *Segment) DiscardSnapshot() {
 	ms.snapManager.turnOff()
-	ms.compact()
 }
 
 // RestoreSnapshot restores a previously saved snapshot.
@@ -219,27 +210,11 @@ func (ms *Segment) MarshalBinaryTo(w io.Writer) (n int, err error) {
 	sw.WriteUInt(uint64(ms.maxSize))
 	sw.WriteUInt(uint64(ms.maxCost))
 	recursiveWrite(ms.segment, sw)
-	extraNils := ms.maxSize - len(ms.segment)
-	if extraNils > 0 {
-		sw.SilentWriteBytes([]byte{NilTypeID})
-		sw.WriteUInt(uint64(extraNils))
-	}
 	return sw.Count(), sw.Error()
 }
 
 func (ms *Segment) NotifyUpdate(pointer interface{}, oldValue interface{}) {
 	ms.snapManager.notifyUpdate(pointer, oldValue)
-}
-
-// MinPackingGain determines when DiscardSnapshot should not compact the segment. If the improvement in the size
-// of the segment is less than MinPackingGain the segment will not be copied to a smaller segment.
-func (ms *Segment) MinPackingGain() float32 {
-	return ms.minPackingGain
-}
-
-// SetMinPackingGain sets the value of MinPackingGain
-func (ms *Segment) SetMinPackingGain(value float32) {
-	ms.minPackingGain = value
 }
 
 func (ms *Segment) MaxCost() int {
@@ -275,39 +250,6 @@ func (ms *Segment) Content() string {
 		str += fmt.Sprintf("\n[%d, %T)]--->%v", i, data, data)
 	}
 	return str
-}
-
-// expand expands the memory to its original size. Expanding will cause a runtime error, if there is
-// a non empty saved snapshot in the Segment.
-func (ms *Segment) expand() {
-	if len(ms.segment) == ms.maxSize {
-		return
-	}
-	if len(ms.snapManager.savedSnapshots) > 0 {
-		log.Panic("We can not expand while there is a saved snapshot!")
-	}
-	newSegment := make([]DataType, ms.maxSize)
-	copy(newSegment, ms.segment)
-	ms.segment = newSegment
-}
-
-func (ms *Segment) compact() {
-	// when we have a saved snapshot compact does nothing
-	if len(ms.snapManager.savedSnapshots) > 0 {
-		return
-	}
-	// we need to find last element like this cuz we have a Delete() function which can remove elements
-	oldLen := len(ms.segment)
-	last := oldLen - 1
-	for ; last >= 0 && ms.segment[last] == nil; last-- {
-	}
-	newLen := last + 1
-	if float32(newLen) >= (1-ms.minPackingGain)*float32(oldLen) {
-		return
-	}
-	newSegment := make([]DataType, newLen)
-	copy(newSegment, ms.segment)
-	ms.segment = newSegment
 }
 
 func recursiveWrite(data []DataType, sw *binary.SilentWriter) {

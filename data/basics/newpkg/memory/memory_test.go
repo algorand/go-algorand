@@ -54,34 +54,9 @@ func TestMemorySegment_Snapshot(t *testing.T) {
 			require.Equal(t, costBefore, m.CurrentCost())
 		})
 
-	t.Run("CompactAndExpand",
-		func(t *testing.T) {
-			m.DiscardSnapshot()
-			want = "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->22"
-			require.Equal(t, want, m.Content())
-
-			m.SetMinPackingGain(0.4)
-			m.SaveSnapshot()
-			m.DiscardSnapshot()
-			want = "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->22\n[3, <nil>)]---><nil>\n[4, <nil>)]---><nil>"
-			require.Equal(t, want, m.Content())
-
-			m.SetMinPackingGain(0.39)
-			m.SaveSnapshot()
-			m.DiscardSnapshot()
-			want = "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->22"
-			require.Equal(t, want, m.Content())
-
-			m.SetMinPackingGain(0.15)
-			m.SaveSnapshot()
-			m.AllocateAt(4, barr)
-			m.DiscardSnapshot()
-			want = "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->22\n[3, <nil>)]---><nil>\n[4, *teal.ByteArray)]--->[7 0 0 0]"
-			require.Equal(t, want, m.Content())
-		})
-
 	t.Run("RestoringMultipleUpdates",
 		func(t *testing.T) {
+			m.AllocateAt(4, barr)
 			m.SaveSnapshot()
 			barr.Set(0, 3, m)
 			m.SaveSnapshot()
@@ -152,11 +127,8 @@ func TestMemorySegment_AllocateAt(t *testing.T) {
 	err = m.AllocateAt(5, teal.NewUInt(5))
 	require.IsType(t, new(memory.OutOfBoundsError), err)
 
-	want := "Memory Segment: (maxSize:5)"
-	require.Equal(t, want, m.Content())
-
 	m.AllocateAt(2, teal.NewUInt(12))
-	want = "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->12\n[3, <nil>)]---><nil>\n[4, <nil>)]---><nil>"
+	want := "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->12\n[3, <nil>)]---><nil>\n[4, <nil>)]---><nil>"
 	require.Equal(t, want, m.Content())
 
 	m.DiscardSnapshot()
@@ -164,7 +136,7 @@ func TestMemorySegment_AllocateAt(t *testing.T) {
 	require.EqualError(t, err, memory.ErrCellNotEmpty.Error())
 
 	m.AllocateAt(0, teal.NewUInt(7))
-	want = "Memory Segment: (maxSize:5)\n[0, *teal.UInt)]--->7\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->12"
+	want = "Memory Segment: (maxSize:5)\n[0, *teal.UInt)]--->7\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->12\n[3, <nil>)]---><nil>\n[4, <nil>)]---><nil>"
 	require.Equal(t, want, m.Content())
 }
 

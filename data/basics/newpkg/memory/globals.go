@@ -25,9 +25,8 @@ import (
 )
 
 const (
-	MaxSegmentSize        = 128 * 1024 * 1024
-	DefaultMinPackingGain = 0.15
-	DefaultPointerCost    = 8
+	MaxSegmentSize     = 128 * 1024 * 1024
+	DefaultPointerCost = 8
 )
 
 const NilTypeID = 0
