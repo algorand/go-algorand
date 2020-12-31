@@ -64,7 +64,7 @@ func prioResponseHandler(message IncomingMessage) OutgoingMessage {
 }
 
 var prioHandlers = []TaggedMessageHandler{
-	TaggedMessageHandler{protocol.NetPrioResponseTag, HandlerFunc(prioResponseHandler)},
+	{protocol.NetPrioResponseTag, HandlerFunc(prioResponseHandler)},
 }
 
 // The prioTracker sorts active peers by priority, and ensures

@@ -838,7 +838,7 @@ func TestRegossipinngElimination(t *testing.T) {
 					&MessageRegossipFilter{},
 				},
 				Schedule: []SchedulerFilterSchedule{
-					SchedulerFilterSchedule{
+					{
 						Operation: 4, // not before
 						FirstTick: 0, // zero
 						Nodes:     nodesIndices,

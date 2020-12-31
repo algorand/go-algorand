@@ -488,7 +488,7 @@ func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, cow *rou
 // an error is returned and the block evaluator state is unchanged.
 func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error {
 	return eval.transactionGroup([]transactions.SignedTxnWithAD{
-		transactions.SignedTxnWithAD{
+		{
 			SignedTxn: txn,
 			ApplyData: ad,
 		},
