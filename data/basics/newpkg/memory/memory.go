@@ -31,7 +31,7 @@ import (
 // re-optimize Segment.
 //
 // By using MarshalBinaryTo a Segment can be efficiently serialized to a compact and simple binary representation.
-// by using ReadSegment a Segment can be reconstructed from this binary representation.
+// by using ReadSegment the Segment can be reconstructed from this binary representation.
 //
 // Any type which implements DataType interface can be stored in a Segment. To enable serialization, a newly defined type
 // needs to register a DataTypeReader using RegisterReader function. Also for correct restoration of snapshots,
@@ -128,8 +128,7 @@ func ReadSegment(r io.ByteReader) (*Segment, error) {
 }
 
 // AllocateAt puts 'item' at the specified position by 'index'. If that position is not empty it will return
-// ErrCellNotEmpty. If the Segment is compacted and the index is outside of the compacted memory, AllocateAt will
-// try to expand the Segment.
+// ErrCellNotEmpty.
 //
 // If after adding item the cost of Segment exceeds the maxCost the item will
 // not be added and ErrMaxCostExceeded will be returned.
@@ -184,15 +183,13 @@ func (ms *Segment) Get(index int) (DataType, error) {
 	return ms.segment[index], nil
 }
 
-// SaveSnapshot saves a snapshot of the current state of Segment. If the Segment is compacted it will
-// expand it to its original size. After calling SaveSnapshot the memory usage of Segment increases
-// and updating any data will have an extra overhead.
+// SaveSnapshot saves a snapshot of the current state of Segment. After calling SaveSnapshot the memory
+// usage of Segment increases and updating any data will have an extra overhead.
 func (ms *Segment) SaveSnapshot() {
 	ms.snapManager.reset()
 }
 
-// DiscardSnapshot discards any snapshots saved in Segment. It also compacts Segment to optimize its memory
-// usage.
+// DiscardSnapshot discards any snapshots saved in Segment. This will improve memory usage of Segment.
 func (ms *Segment) DiscardSnapshot() {
 	ms.snapManager.turnOff()
 }

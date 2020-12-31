@@ -99,14 +99,14 @@ func (de *DecodingError) Unwrap() error {
 
 func (de *DecodingError) FullName() string {
 	if e, ok := de.Err.(*DecodingError); ok {
-		return de.ComponentName + "." + e.ComponentName
+		return de.ComponentName + "." + e.FullName()
 	}
 	return de.ComponentName
 }
 
 func (de *DecodingError) FinalPosition() int {
 	if e, ok := de.Err.(*DecodingError); ok {
-		return de.Position + e.Position
+		return de.Position + e.FinalPosition()
 	}
 	return de.Position
 }
