@@ -465,6 +465,10 @@ func (s *Service) periodicSync() {
 				sleepDuration = s.deadlineTimeout
 				continue
 			}
+			// if the catchup is disabled in the config file, just skip it.
+			if s.parallelBlocks == 0 {
+				continue
+			}
 			// check to see if we're currently writing a catchpoint file. If so, wait longer before attempting again.
 			if s.ledger.IsWritingCatchpointFile() {
 				// keep the existing sleep duration and try again later.

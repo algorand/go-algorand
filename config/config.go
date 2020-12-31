@@ -219,6 +219,7 @@ type Local struct {
 
 	// The maximal number of blocks that catchup will fetch in parallel.
 	// If less than Protocol.SeedLookback, then Protocol.SeedLookback will be used as to limit the catchup.
+	// Setting this variable to 0 would disable the catchup
 	CatchupParallelBlocks uint64 `version[3]:"50" version[5]:"16"`
 
 	// Generate AssembleBlockMetrics telemetry event
