@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/textproto"
@@ -637,7 +636,7 @@ func (wn *WebsocketNetwork) setup() {
 	wn.readBuffer = make(chan IncomingMessage, readBufferLen)
 
 	var rbytes [10]byte
-	rand.Read(rbytes[:])
+	crypto.RandBytes(rbytes[:])
 	wn.RandomID = base64.StdEncoding.EncodeToString(rbytes[:])
 
 	if wn.config.EnableIncomingMessageFilter {
@@ -915,7 +914,10 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 		wn.log.Warn(filterASCII(fmt.Sprintf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", request.RemoteAddr, wn.GenesisID, otherGenesisID, request.Header)))
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "mismatching genesis-id"})
 		response.WriteHeader(http.StatusPreconditionFailed)
-		response.Write([]byte("mismatching genesis ID"))
+		n, err := response.Write([]byte("mismatching genesis ID"))
+		if err != nil {
+			wn.log.Warnf("ws failed to write mismatching genesis ID response '%s' : n = %d err = %v", n, err)
+		}
 		return http.StatusPreconditionFailed
 	}
 
@@ -1080,9 +1082,15 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 				wn.wg.Add(1)
 				go wn.disconnectThread(msg.Sender, disconnectBadData)
 			case Broadcast:
-				wn.Broadcast(wn.ctx, msg.Tag, msg.Data, false, msg.Sender)
+				err := wn.Broadcast(wn.ctx, msg.Tag, msg.Data, false, msg.Sender)
+				if err != nil && err != errBcastQFull {
+					wn.log.Warnf("WebsocketNetwork.messageHandlerThread: WebsocketNetwork.Broadcast returned unexpected error %v", err)
+				}
 			case Respond:
-				msg.Sender.(*wsPeer).Respond(wn.ctx, msg, outmsg.Topics)
+				err := msg.Sender.(*wsPeer).Respond(wn.ctx, msg, outmsg.Topics)
+				if err != nil && err != wn.ctx.Err() {
+					wn.log.Warnf("WebsocketNetwork.messageHandlerThread: wsPeer.Respond returned unexpected error %v", err)
+				}
 			default:
 			}
 		case <-inactivityCheckTicker.C:
@@ -1130,7 +1138,10 @@ func (wn *WebsocketNetwork) checkSlowWritingPeers() {
 func (wn *WebsocketNetwork) sendFilterMessage(msg IncomingMessage) {
 	digest := generateMessageDigest(msg.Tag, msg.Data)
 	//wn.log.Debugf("send filter %s(%d) %v", msg.Tag, len(msg.Data), digest)
-	wn.Broadcast(context.Background(), protocol.MsgDigestSkipTag, digest[:], false, msg.Sender)
+	err := wn.Broadcast(context.Background(), protocol.MsgDigestSkipTag, digest[:], false, msg.Sender)
+	if err != nil && err != errBcastQFull {
+		wn.log.Warnf("WebsocketNetwork.sendFilterMessage: WebsocketNetwork.Broadcast returned unexpected error %v", err)
+	}
 }
 
 func (wn *WebsocketNetwork) broadcastThread() {

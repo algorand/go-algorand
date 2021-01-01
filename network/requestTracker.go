@@ -300,7 +300,10 @@ func (rt *RequestTracker) Accept() (conn net.Conn, err error) {
 			// we've already *doubled* the amount of allowed connections; disconnect right away.
 			// we don't want to create more go routines beyond this point.
 			if originConnections > rt.config.ConnectionsRateLimitingCount*2 {
-				conn.Close()
+				err := conn.Close()
+				if err != nil {
+					rt.log.With("connection", "tcp").With("count", originConnections).Debugf("Failed to close connection : %v", err)
+				}
 			} else {
 				// we want to make an attempt to read the connection reqest and send a response, but not within this go routine -
 				// this go routine is used single-threaded and should not get blocked.
@@ -320,8 +323,22 @@ func (rt *RequestTracker) Accept() (conn net.Conn, err error) {
 
 // sendBlockedConnectionResponse reads the incoming connection request followed by sending a "too many requests" response.
 func (rt *RequestTracker) sendBlockedConnectionResponse(conn net.Conn, requestTime time.Time) {
-	conn.SetReadDeadline(requestTime.Add(500 * time.Millisecond))
-	conn.SetWriteDeadline(requestTime.Add(500 * time.Millisecond))
+	defer func() {
+		err := conn.Close()
+		if err != nil {
+			rt.log.With("connection", "tcp").Debugf("Failed to close connection of blocked connection response: %v", err)
+		}
+	}()
+	err := conn.SetReadDeadline(requestTime.Add(500 * time.Millisecond))
+	if err != nil {
+		rt.log.With("connection", "tcp").Debugf("Failed to set a read deadline of blocked connection response: %v", err)
+		return
+	}
+	err = conn.SetWriteDeadline(requestTime.Add(500 * time.Millisecond))
+	if err != nil {
+		rt.log.With("connection", "tcp").Debugf("Failed to set a write deadline of blocked connection response: %v", err)
+		return
+	}
 	var dummyBuffer [1024]byte
 	var readingErr error
 	for readingErr == nil {
@@ -331,9 +348,12 @@ func (rt *RequestTracker) sendBlockedConnectionResponse(conn net.Conn, requestTi
 	// http handler can handle, or getting requests that fails before the header retrieval is complete.
 	// in this case, we want to send our response right away and disconnect. If the client is currently still sending it's request, it might not know how to handle
 	// this correctly. This use case is similar to the issue handled by the go-server in the same manner. ( see "431 Request Header Fields Too Large" in the server.go )
-	conn.Write([]byte(
+	_, err = conn.Write([]byte(
 		fmt.Sprintf("HTTP/1.1 %d %s\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\n%s: %d\r\n\r\n", http.StatusTooManyRequests, http.StatusText(http.StatusTooManyRequests), TooManyRequestsRetryAfterHeader, rt.config.ConnectionsRateLimitingWindowSeconds)))
-	conn.Close()
+	if err != nil {
+		rt.log.With("connection", "tcp").Debugf("Failed to write response to a blocked connection response: %v", err)
+		return
+	}
 }
 
 // pruneAcceptedConnections clean stale items form the acceptedConnections map; it's syncornized via the acceptedConnectionsMu mutex which is expected to be taken by the caller.
