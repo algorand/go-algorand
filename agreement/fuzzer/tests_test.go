@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -838,7 +838,7 @@ func TestRegossipinngElimination(t *testing.T) {
 					&MessageRegossipFilter{},
 				},
 				Schedule: []SchedulerFilterSchedule{
-					SchedulerFilterSchedule{
+					{
 						Operation: 4, // not before
 						FirstTick: 0, // zero
 						Nodes:     nodesIndices,

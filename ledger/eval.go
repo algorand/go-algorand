@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -605,10 +605,12 @@ func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, cow *rou
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
 func (eval *BlockEvaluator) Transaction(txn transactions.SignedTxn, ad transactions.ApplyData) error {
-	return eval.transactionGroup([]transactions.SignedTxnWithAD{{
-		SignedTxn: txn,
-		ApplyData: ad,
-	}})
+	return eval.transactionGroup([]transactions.SignedTxnWithAD{
+		{
+			SignedTxn: txn,
+			ApplyData: ad,
+		},
+	})
 }
 
 // TransactionGroup tentatively adds a new transaction group as part of this block evaluation.
