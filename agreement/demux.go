@@ -172,6 +172,13 @@ func (d *demux) verifyPayload(ctx context.Context, m message, r round, p period,
 	d.crypto.VerifyProposal(ctx, cryptoProposalRequest{message: m, Round: r, Period: p, Pinned: pinned})
 }
 
+// verifyPayload enqueues a proposal payload message to be verified.
+func (d *demux) scanPayload(ctx context.Context, m message, r round, p period, pinned bool) {
+	d.UpdateEventsQueue(eventQueueCryptoVerifierProposal, 1)
+	d.monitor.inc(cryptoVerifierCoserviceType)
+	d.crypto.ScanProposal(ctx, cryptoProposalRequest{message: m, Round: r, Period: p, Pinned: pinned})
+}
+
 // verifyBundle enqueues a bundle message to be verified.
 func (d *demux) verifyBundle(ctx context.Context, m message, r round, p period, s step) {
 	d.UpdateEventsQueue(eventQueueCryptoVerifierBundle, 1)
@@ -343,6 +350,12 @@ func (d *demux) next(s *Service, deadline time.Duration, fastDeadline time.Durat
 		e = messageEvent{T: bundleVerified, Input: r.message, Err: r.Err, Cancelled: r.Cancelled}
 		d.UpdateEventsQueue(eventQueueDemux, 1)
 		d.UpdateEventsQueue(eventQueueCryptoVerifierBundle, 0)
+		d.monitor.inc(demuxCoserviceType)
+		d.monitor.dec(cryptoVerifierCoserviceType)
+	case r := <-d.crypto.ScannedProposals():
+		e = messageEvent{T: payloadScanned, Input: r.message, Err: r.Err, Cancelled: r.Cancelled}
+		d.UpdateEventsQueue(eventQueueDemux, 1)
+		d.UpdateEventsQueue(eventQueueCryptoVerifierProposal, 0)
 		d.monitor.inc(demuxCoserviceType)
 		d.monitor.dec(cryptoVerifierCoserviceType)
 	}

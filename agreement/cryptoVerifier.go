@@ -56,6 +56,11 @@ type (
 		// The passed-in context ctx may be used to cancel the enqueuing request.
 		VerifyBundle(ctx context.Context, request cryptoBundleRequest)
 
+		// ScanProposal enqueues the request to be scanned (seed checked).
+		//
+		// The passed-in context ctx may be used to cancel the enqueuing request.
+		ScanProposal(ctx context.Context, request cryptoProposalRequest)
+
 		// Verified returns a channel which contains verification results.
 		//
 		// The type of results returned depends on the given tag.
@@ -66,8 +71,10 @@ type (
 		// and instead cryptoResult.Err is set.
 		//
 		// VerifiedVote is like Verified but for votes.
+		// ScannedProposals is like Verified but for scanned proposals
 		Verified(tag protocol.Tag) <-chan cryptoResult
 		VerifiedVotes() <-chan asyncVerifyVoteResponse
+		ScannedProposals() <-chan cryptoResult
 
 		// ChannelFull determines if the input channel for a given tag is currently full.
 		//
@@ -117,6 +124,8 @@ type (
 		votes        voteChanPair
 		proposals    proposalChanPair
 		bundles      bundleChanPair
+
+		scannedProposals proposalChanPair
 
 		validator        BlockValidator
 		ledger           LedgerReader
@@ -174,6 +183,10 @@ func makeCryptoVerifier(l LedgerReader, v BlockValidator, voteVerifier *AsyncVot
 		in:  make(chan cryptoProposalRequest, 1),
 		out: make(chan cryptoResult, maxVotes+baseBuffer),
 	}
+	c.scannedProposals = proposalChanPair{
+		in:  make(chan cryptoProposalRequest, 1),
+		out: make(chan cryptoResult, maxVotes+baseBuffer),
+	}
 
 	c.wg.Add(3)
 
@@ -181,6 +194,7 @@ func makeCryptoVerifier(l LedgerReader, v BlockValidator, voteVerifier *AsyncVot
 	go c.voteFillWorker(bundleFutures)
 	go c.bundleWaitWorker(bundleFutures)
 	go c.proposalVerifyWorker()
+	go c.proposalScanWorker()
 
 	c.voteVerifier = voteVerifier
 	c.log = logger
@@ -289,6 +303,20 @@ func (c *poolCryptoVerifier) VerifyProposal(ctx context.Context, request cryptoP
 	}
 }
 
+func (c *poolCryptoVerifier) ScanProposal(ctx context.Context, request cryptoProposalRequest) {
+	c.proposalContexts.clearStaleContexts(request.Round, request.Period, request.Pinned, false)
+	request.ctx = c.proposalContexts.addProposal(request)
+	switch request.Tag {
+	case protocol.ProposalPayloadTag:
+		select {
+		case c.scannedProposals.in <- request:
+		case <-ctx.Done():
+		}
+	default:
+		logging.Base().Panicf("Verify action called on bad type: request is %v", request)
+	}
+}
+
 func (c *poolCryptoVerifier) VerifyBundle(ctx context.Context, request cryptoBundleRequest) {
 	c.proposalContexts.clearStaleContexts(request.Round, request.Period, false, request.Certify)
 	request.ctx = c.proposalContexts.addBundle(request)
@@ -319,6 +347,11 @@ func (c *poolCryptoVerifier) VerifiedVotes() <-chan asyncVerifyVoteResponse {
 	return c.votes.out
 }
 
+func (c *poolCryptoVerifier) ScannedProposals() <-chan cryptoResult {
+	return c.scannedProposals.out
+}
+
+
 func (c *poolCryptoVerifier) ChannelFull(tag protocol.Tag) (ret bool) {
 	switch tag {
 	// 1. can we enqueue another message?
@@ -341,6 +374,7 @@ func (c *poolCryptoVerifier) Quit() {
 	close(c.votes.in)
 	close(c.bundles.in)
 	close(c.proposals.in)
+	close(c.scannedProposals.in)
 	c.wg.Wait()
 }
 
@@ -373,5 +407,37 @@ func (c *poolCryptoVerifier) verifyProposalPayload(request cryptoProposalRequest
 	}
 
 	m.Proposal = p
+	return cryptoResult{message: m, TaskIndex: request.TaskIndex}
+}
+
+func (c *poolCryptoVerifier) proposalScanWorker() {
+	defer c.wg.Done()
+	for req := range c.scannedProposals.in {
+		select {
+		case c.scannedProposals.out <- c.scanProposalPayload(req):
+		case <-c.quit:
+			return
+		}
+	}
+}
+
+func (c *poolCryptoVerifier) scanProposalPayload(request cryptoProposalRequest) cryptoResult {
+	m := request.message
+	up := request.UnauthenticatedProposal
+
+	err := up.scan(request.Round, c.ledger)
+	select {
+	case <-request.ctx.Done():
+		m.UnauthenticatedProposal = up
+		return cryptoResult{message: m, TaskIndex: request.TaskIndex, Err: makeSerErr(request.ctx.Err()), Cancelled: true}
+	default:
+	}
+
+	if err != nil {
+		err := makeSerErrf("rejected invalid proposalPayload: %v", err)
+		return cryptoResult{message: m, Err: err, TaskIndex: request.TaskIndex}
+	}
+
+	m.UnauthenticatedProposal = up
 	return cryptoResult{message: m, TaskIndex: request.TaskIndex}
 }

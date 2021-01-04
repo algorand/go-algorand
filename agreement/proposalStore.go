@@ -240,6 +240,28 @@ func (store *proposalStore) handle(r routerHandle, p player, e event) event {
 			UnauthenticatedPayload: up,
 		}
 
+	case payloadScanned:
+		up := e.(messageEvent).Input.UnauthenticatedProposal
+		pv := up.value()
+		ea, ok := store.Assemblers[pv]
+		if !ok {
+			return payloadProcessedEvent{
+				T:   payloadRejected,
+				Err: makeSerErrStr("proposalStore: no accepting blockAssembler found on payloadPresent"),
+			}
+		}
+
+		relevantPeriod, pinned := store.lastRelevant(pv)
+		authVote := ea.authenticator(p.Period)
+		return payloadProcessedEvent{
+			T:                      payloadPipelined,
+			Vote:                   authVote,
+			Period:                 relevantPeriod,
+			Pinned:                 pinned,
+			Proposal:               pv,
+			UnauthenticatedPayload: up,
+		}
+
 	case payloadVerified:
 		pp := e.(messageEvent).Input.Proposal
 		pv := pp.value()

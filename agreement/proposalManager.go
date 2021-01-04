@@ -55,7 +55,7 @@ func (m *proposalManager) underlying() listener {
 // For more details, see each method's respective documentation below.
 func (m *proposalManager) handle(r routerHandle, p player, e event) event {
 	switch e.t() {
-	case votePresent, voteVerified, payloadPresent, payloadVerified:
+	case votePresent, voteVerified, payloadPresent, payloadScanned, payloadVerified:
 		return m.handleMessageEvent(r, p, e.(filterableMessageEvent))
 	case roundInterruption:
 		return m.handleNewRound(r, p, e.(roundInterruptionEvent).Round)
@@ -162,7 +162,7 @@ func (m *proposalManager) handleMessageEvent(r routerHandle, p player, e filtera
 
 		return r.dispatch(p, e.messageEvent, proposalMachineRound, v.R.Round, v.R.Period, 0)
 
-	case payloadPresent:
+	case payloadPresent, payloadScanned:
 		propRound := e.Input.UnauthenticatedProposal.Round()
 		in := e.messageEvent
 
