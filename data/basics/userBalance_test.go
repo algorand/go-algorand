@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@ func TestEmptyEncoding(t *testing.T) {
 
 func TestRewards(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	accountAlgos := []MicroAlgos{MicroAlgos{Raw: 0}, MicroAlgos{Raw: 8000}, MicroAlgos{Raw: 13000}, MicroAlgos{Raw: 83000}}
+	accountAlgos := []MicroAlgos{{Raw: 0}, {Raw: 8000}, {Raw: 13000}, {Raw: 83000}}
 	for _, accountAlgo := range accountAlgos {
 		ad := AccountData{
 			Status:             Online,
