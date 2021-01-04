@@ -293,15 +293,15 @@ func (nc NodeController) Clone(targetDir string, copyLedger bool) (err error) {
 		return fmt.Errorf("unable to delete directory '%s' : %v", targetDir, err)
 	}
 
-	sourceFolderStat, statError := os.Stat(nc.algodDataDir)
-	if statError != nil {
-		err = statError
+	var sourceFolderStat os.FileInfo
+	sourceFolderStat, err = os.Stat(nc.algodDataDir)
+	if err != nil {
 		return
 	}
 
-	err = os.Mkdir(targetDir, sourceFolderStat.Mode())
-	if err != nil && !os.IsExist(err) {
-		return
+	mkDirErr := os.Mkdir(targetDir, sourceFolderStat.Mode())
+	if mkDirErr != nil && !os.IsExist(mkDirErr) {
+		return mkDirErr
 	}
 
 	// Copy Core Files, silently failing to copy any that don't exist
@@ -331,16 +331,16 @@ func (nc NodeController) Clone(targetDir string, copyLedger bool) (err error) {
 		}
 
 		genesisFolder := filepath.Join(nc.algodDataDir, genesis.ID())
-		genesisFolderStat, statError := os.Stat(genesisFolder)
-		if statError != nil {
-			err = statError
+		var genesisFolderStat os.FileInfo
+		genesisFolderStat, err = os.Stat(genesisFolder)
+		if err != nil {
 			return
 		}
 
 		targetGenesisFolder := filepath.Join(targetDir, genesis.ID())
-		err = os.Mkdir(targetGenesisFolder, genesisFolderStat.Mode())
-		if err != nil && !os.IsExist(err) {
-			return
+		mkDirErr = os.Mkdir(targetGenesisFolder, genesisFolderStat.Mode())
+		if mkDirErr != nil && !os.IsExist(mkDirErr) {
+			return mkDirErr
 		}
 
 		files := []string{"ledger.block.sqlite", "ledger.block.sqlite-shm", "ledger.block.sqlite-wal", "ledger.tracker.sqlite", "ledger.tracker.sqlite-shm", "ledger.tracker.sqlite-wal"}
