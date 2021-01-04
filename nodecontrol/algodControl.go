@@ -191,7 +191,12 @@ func (nc *NodeController) StartAlgod(args AlgodStartArgs) (alreadyRunning bool, 
 		files := nc.setAlgodCmdLogFiles(algodCmd)
 		// Descriptors will get dup'd after exec, so OK to close when we return
 		for _, file := range files {
-			defer file.Close()
+			defer func(file *os.File) {
+				localError := file.Close()
+				if localError != nil && err == nil {
+					err = localError
+				}
+			}(file)
 		}
 	}
 
@@ -283,10 +288,20 @@ func (nc NodeController) GetAlgodPath() string {
 
 // Clone creates a new DataDir based on the controller's DataDir; if copyLedger is true, we'll clone the ledger.sqlite file
 func (nc NodeController) Clone(targetDir string, copyLedger bool) (err error) {
-	os.RemoveAll(targetDir)
-	err = os.Mkdir(targetDir, 0700)
-	if err != nil && !os.IsExist(err) {
+	err = os.RemoveAll(targetDir)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("unable to delete directory '%s' : %v", targetDir, err)
+	}
+
+	var sourceFolderStat os.FileInfo
+	sourceFolderStat, err = os.Stat(nc.algodDataDir)
+	if err != nil {
 		return
+	}
+
+	mkDirErr := os.Mkdir(targetDir, sourceFolderStat.Mode())
+	if mkDirErr != nil && !os.IsExist(mkDirErr) {
+		return mkDirErr
 	}
 
 	// Copy Core Files, silently failing to copy any that don't exist
@@ -316,19 +331,25 @@ func (nc NodeController) Clone(targetDir string, copyLedger bool) (err error) {
 		}
 
 		genesisFolder := filepath.Join(nc.algodDataDir, genesis.ID())
-		targetGenesisFolder := filepath.Join(targetDir, genesis.ID())
-		err = os.Mkdir(targetGenesisFolder, 0770)
+		var genesisFolderStat os.FileInfo
+		genesisFolderStat, err = os.Stat(genesisFolder)
 		if err != nil {
 			return
 		}
 
-		files := []string{"ledger.sqlite"}
+		targetGenesisFolder := filepath.Join(targetDir, genesis.ID())
+		mkDirErr = os.Mkdir(targetGenesisFolder, genesisFolderStat.Mode())
+		if mkDirErr != nil && !os.IsExist(mkDirErr) {
+			return mkDirErr
+		}
+
+		files := []string{"ledger.block.sqlite", "ledger.block.sqlite-shm", "ledger.block.sqlite-wal", "ledger.tracker.sqlite", "ledger.tracker.sqlite-shm", "ledger.tracker.sqlite-wal"}
 		for _, file := range files {
 			src := filepath.Join(genesisFolder, file)
 			dest := filepath.Join(targetGenesisFolder, file)
 			_, err = util.CopyFile(src, dest)
 			if err != nil {
-				return
+				return fmt.Errorf("unable to copy '%s' to '%s' : %v", src, dest, err)
 			}
 		}
 	}
