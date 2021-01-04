@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -282,15 +282,15 @@ func TestPrepareAppEvaluators(t *testing.T) {
 
 	// Create some groups with these transactions
 	cases := []evalTestCase{
-		evalTestCase{[]transactions.SignedTxnWithAD{payment}, []bool{false}},
-		evalTestCase{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}},
-		evalTestCase{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}},
-		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}},
-		evalTestCase{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}},
-		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}},
-		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}},
-		evalTestCase{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}},
-		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}},
+		{[]transactions.SignedTxnWithAD{payment}, []bool{false}},
+		{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}},
+		{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}},
+		{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}},
+		{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}},
+		{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}},
+		{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}},
+		{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}},
+		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}},
 	}
 
 	for i, testCase := range cases {
