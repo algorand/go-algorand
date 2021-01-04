@@ -3,7 +3,7 @@
 THISDIR=$(dirname $0)
 
 cat <<EOM | gofmt > $THISDIR/homepage.go
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
