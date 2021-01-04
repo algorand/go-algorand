@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1019,8 +1019,8 @@ func TestAssets(t *testing.T) {
 	}
 	// check generic errors
 	sources := []sourceError{
-		sourceError{"int 5\nint 55\nasset_holding_get AssetBalance", "cannot load account[5]"},
-		sourceError{"int 5\nasset_params_get AssetTotal", "invalid ForeignAssets index 5"},
+		{"int 5\nint 55\nasset_holding_get AssetBalance", "cannot load account[5]"},
+		{"int 5\nasset_params_get AssetTotal", "invalid ForeignAssets index 5"},
 	}
 	for _, sourceErr := range sources {
 		ops, err := AssembleStringWithVersion(sourceErr.src, AssemblerMaxVersion)

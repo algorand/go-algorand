@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -97,7 +97,7 @@ func MakeTxHandler(txPool *pools.TransactionPool, ledger *Ledger, net network.Go
 // Start enables the processing of incoming messages at the transaction handler
 func (handler *TxHandler) Start() {
 	handler.net.RegisterHandlers([]network.TaggedMessageHandler{
-		network.TaggedMessageHandler{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
+		{Tag: protocol.TxnTag, MessageHandler: network.HandlerFunc(handler.processIncomingTxn)},
 	})
 	handler.backlogWg.Add(1)
 	go handler.backlogWorker()
