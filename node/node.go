@@ -182,11 +182,9 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 
 	// create initial ledger, if it doesn't exist
 	err = os.Mkdir(genesisDir, 0700)
-	if err != nil {
-		if !os.IsExist(err) {
-			log.Errorf("Unable to create genesis directroy: %v", err)
-			return nil, err
-		}
+	if err != nil && !os.IsExist(err) {
+		log.Errorf("Unable to create genesis directroy: %v", err)
+		return nil, err
 	}
 	var genalloc data.GenesisBalances
 	genalloc, err = bootstrapData(genesis, log)
