@@ -193,7 +193,7 @@ func (nc *NodeController) StartAlgod(args AlgodStartArgs) (alreadyRunning bool, 
 		for _, file := range files {
 			defer func(file *os.File) {
 				localError := file.Close()
-				if localError != nil {
+				if localError != nil && err == nil {
 					err = localError
 				}
 			}(file)
@@ -289,11 +289,10 @@ func (nc NodeController) GetAlgodPath() string {
 // Clone creates a new DataDir based on the controller's DataDir; if copyLedger is true, we'll clone the ledger.sqlite file
 func (nc NodeController) Clone(targetDir string, copyLedger bool) (err error) {
 	err = os.RemoveAll(targetDir)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return fmt.Errorf("unable to delete directory '%s' : %v", targetDir, err)
-		}
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("unable to delete directory '%s' : %v", targetDir, err)
 	}
+
 	sourceFolderStat, statError := os.Stat(nc.algodDataDir)
 	if statError != nil {
 		err = statError

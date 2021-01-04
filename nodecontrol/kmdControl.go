@@ -221,8 +221,8 @@ func (kc *KMDController) StartKMD(args KMDStartArgs) (alreadyRunning bool, err e
 	for _, file := range files {
 		defer func(file *os.File) {
 			localError := file.Close()
-			if localError != nil {
-				err = nil
+			if localError != nil && err == nil {
+				err = localError
 			}
 		}(file)
 	}
