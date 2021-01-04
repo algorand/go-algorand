@@ -181,7 +181,11 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	ledgerPathnamePrefix := filepath.Join(genesisDir, config.LedgerFilenamePrefix)
 
 	// create initial ledger, if it doesn't exist
-	os.Mkdir(genesisDir, 0700)
+	err = os.Mkdir(genesisDir, 0700)
+	if err != nil && !os.IsExist(err) {
+		log.Errorf("Unable to create genesis directroy: %v", err)
+		return nil, err
+	}
 	var genalloc data.GenesisBalances
 	genalloc, err = bootstrapData(genesis, log)
 	if err != nil {
@@ -687,7 +691,10 @@ func (node *AlgorandFullNode) checkForParticipationKeys() {
 	for {
 		select {
 		case <-ticker.C:
-			node.loadParticipationKeys()
+			err := node.loadParticipationKeys()
+			if err != nil {
+				node.log.Error("Could not refresh participation keys: %v", err)
+			}
 		case <-node.ctx.Done():
 			ticker.Stop()
 			return
@@ -723,11 +730,13 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			handle.Close()
 			if err == account.ErrUnsupportedSchema {
 				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
-				msg := fmt.Sprintf("loadParticipationKeys: not loading unsupported participation key: %v; renaming to *.old", info.Name())
-				fmt.Println(msg)
-				node.log.Warn(msg)
+				node.log.Warn("loadParticipationKeys: not loading unsupported participation key: %s; renaming to *.old", info.Name())
 				fullname := filepath.Join(genesisDir, info.Name())
-				os.Rename(fullname, filepath.Join(fullname, ".old"))
+				renamedFileName := filepath.Join(fullname, ".old")
+				err = os.Rename(fullname, renamedFileName)
+				if err != nil {
+					node.log.Warn("loadParticipationKeys: failed to rename unsupported participation key file '%s' to '%s': %v", fullname, renamedFileName, err)
+				}
 			} else {
 				return fmt.Errorf("AlgorandFullNode.loadParticipationKeys: cannot load account at %v: %v", info.Name(), err)
 			}
