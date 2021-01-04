@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package converter
+package convert
 
 import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -86,7 +86,7 @@ func TestBranchInst_Convert(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			br := NewBranchInst(test.inst)
+			br := newBranchInst(test.inst)
 			addrMap := test.addrMap
 			br.SetTranslator(addrMap)
 			i, err := br.Convert()
@@ -155,7 +155,7 @@ func TestProgram_ConvertTo(t *testing.T) {
 			wantByteCode: []byte{0x2, 0x42, 0x0, 0xd, 0x35, 0xff, 0x26, 0x1, 0x1, 0xfe, 0x28, 0x34, 0xff, 0x67, 0x40, 0x0, 0x6, 0x26, 0x1, 0x1, 0x11, 0x28, 0x68, 0x1c},
 		},
 		{
-			name:         "disassmble",
+			name:         "disassemble",
 			byteCode:     []byte{0x03, 0x62, 0x33, 0x42, 0x0, 0x02, 0x67, 0x77, 0x71, 0x04, 0x36, 0x1, 0x1},
 			wantAssembly: "// version 2\nbytecblock 0x33\nbytec_0\napp_local_get\nb label1\nstore 255\nbytecblock 0x77\nbytec_0\nload 255\napp_global_put\nlabel1:\nasset_params_get AssetName\ntxna Fee 1\n",
 		},
@@ -188,11 +188,11 @@ func TestProgram_ConvertTo(t *testing.T) {
 }
 
 func TestNewBranchInst(t *testing.T) {
-	br := NewBranchInst(NewInstruction(0x40, []byte{0x20, 0x25}, 5))
+	br := newBranchInst(NewInstruction(0x40, []byte{0x20, 0x25}, 5))
 	want := "5:[40,2025] 8229"
 	require.Equal(t, want, br.String())
 
-	br = NewBranchInst(NewInstruction(0x40, []byte{0x7f, 0xff}, 5))
+	br = newBranchInst(NewInstruction(0x40, []byte{0x7f, 0xff}, 5))
 	require.Equal(t, 32767, br.offset)
 	require.Panics(t, func() { br.Convert() })
 }

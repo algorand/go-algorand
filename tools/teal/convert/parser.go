@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package converter
+package convert
 
 import (
 	"encoding/binary"
@@ -28,20 +28,41 @@ import (
 const MaxOperandsCount = 255
 const MaxByteArrayLen = 4 * 1024
 
+type OpcodeLenType int
+
+const (
+	OneByte OpcodeLenType = iota
+	TwoByte
+	ThreeByte
+	FourByte
+	VarLenIntC
+	VarLenByteC
+)
+
+// OpcodeLenGroups categorizes opcodes based on their instruction length. opcodes that are not in this list will
+// be considered one byte length
+var OpcodeLenGroups = [][]Opcode{
+	TwoByte:     {0x21, 0x27, 0x2c, 0x31, 0x32, 0x34, 0x35, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x70, 0x71},
+	ThreeByte:   {0x33, 0x36, 0x40, 0x41, 0x42, 0x51},
+	FourByte:    {0x37},
+	VarLenIntC:  {0x20},
+	VarLenByteC: {0x26},
+}
+
+var GetOpcodeLenType func(Opcode) OpcodeLenType
+
+func init() {
+	GetOpcodeLenType = func() func(Opcode) OpcodeLenType {
+		lenTypes := categorize(OpcodeLenGroups, 256)
+		return func(opcode Opcode) OpcodeLenType {
+			return OpcodeLenType(lenTypes[opcode])
+		}
+	}()
+}
+
 type Reader interface {
 	io.Reader
 	io.ByteReader
-}
-
-type Version int
-
-func (v *Version) Bytes() []byte {
-	return []byte{byte(*v)}
-}
-
-func readVersion(r Reader) (Version, error) {
-	v, err := r.ReadByte()
-	return Version(v), err
 }
 
 func ReadInstructions(r Reader) (code []*Instruction, codeLength int, v Version, err error) {
@@ -62,12 +83,12 @@ func ReadInstructions(r Reader) (code []*Instruction, codeLength int, v Version,
 		opcode := Opcode(opcodeByte)
 		var operands []byte
 		switch GetOpcodeLenType(opcode) {
-		case oneByte, twoByte, threeByte, fourByte:
+		case OneByte, TwoByte, ThreeByte, FourByte:
 			operands = make([]byte, GetOpcodeLenType(opcode))
 			_, err = io.ReadFull(r, operands)
-		case varLenIntC:
+		case VarLenIntC:
 			operands, err = readOperandsIntC(r)
-		case varLenByteC:
+		case VarLenByteC:
 			operands, err = readOperandsByteC(r)
 		default:
 			log.Panicf("length of this opcode:%d is not known", opcode)

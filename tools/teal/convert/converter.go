@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package converter
+package convert
 
 import (
 	"errors"
@@ -24,62 +24,98 @@ import (
 
 const MaxBranchOffset = 0x7FFF
 
-func CanConvert(from Version, to Version) bool {
+type OpcodeConversionType int
+
+const (
+	WithoutChange OpcodeConversionType = iota
+	// MemoryAccess instructions will be converted to [0x26 0x01 0x01 {i} 0x28 opcode]
+	MemoryAccess
+	// MemoryWrite instructions will be converted to [0x35 0xFF 0x26 0x01 0x01 {i} 0x28 0x34 0xFF opcode]
+	MemoryWrite
+	Branch
+)
+
+// OpcodeConversionGroups categorizes opcodes based on how they can be converted to older version opcodes. opcodes
+// that are not in this list will be considered to be in WithoutChange group. these opcodes can be used in an older version
+// teal script without any change
+var OpcodeConversionGroups = [][]Opcode{
+	MemoryAccess: {0x62, 0x63, 0x64, 0x65, 0x68, 0x69},
+	MemoryWrite:  {0x66, 0x67},
+	Branch:       {0x40, 0x41, 0x42},
+}
+
+var GetOpcodeConversionType func(Opcode) OpcodeConversionType
+
+func init() {
+	GetOpcodeConversionType = func() func(Opcode) OpcodeConversionType {
+		convTypes := categorize(OpcodeConversionGroups, 256)
+		return func(opcode Opcode) OpcodeConversionType {
+			return OpcodeConversionType(convTypes[opcode])
+		}
+	}()
+}
+
+func (d *DefaultConverterMaker) CanConvert(from Version, to Version) bool {
 	return from == 3 && to == 2
 }
 
-func makeConverter(inst *Instruction, from Version, to Version) (Converter, error) {
-	if !CanConvert(from, to) {
+type DefaultConverterMaker struct {
+}
+
+func (d *DefaultConverterMaker) MakeConverter(inst *Instruction, from Version, to Version) (Converter, error) {
+	if !d.CanConvert(from, to) {
 		return nil, fmt.Errorf("can not convert from version %d to version %d", from, to)
 	}
 	switch GetOpcodeConversionType(inst.opcode) {
 	case WithoutChange:
-		return NewFixedInst(inst), nil
+		return newFixedInst(inst), nil
 	case MemoryAccess:
-		return NewMemAccessInst(inst), nil
+		return newMemAccessInst(inst), nil
 	case MemoryWrite:
-		return NewMemWriteInst(inst), nil
+		return newMemWriteInst(inst), nil
 	case Branch:
-		return NewBranchInst(inst), nil
+		return newBranchInst(inst), nil
 	default:
 		log.Panic("unknown opcode conversion type")
 		return nil, nil
 	}
 }
 
-type FixedInst struct {
+type fixedInst struct {
 	Instruction
 }
 
-func NewFixedInst(inst *Instruction) *FixedInst {
-	return &FixedInst{Instruction: *inst}
+func newFixedInst(inst *Instruction) *fixedInst {
+	return &fixedInst{Instruction: *inst}
 }
 
-func (f FixedInst) Convert() ([]*Instruction, error) {
+func (f fixedInst) Convert() ([]*Instruction, error) {
 	return []*Instruction{NewInstruction(f.opcode, f.operands, f.position)}, nil
 }
 
-func (f FixedInst) LengthDelta() int {
+func (f fixedInst) LengthDelta() int {
 	return 0
 }
 
-type MemAccessInst struct {
+func (*fixedInst) SetTranslator(interface{}) {}
+
+type memAccessInst struct {
 	Instruction
 }
 
-func NewMemAccessInst(inst *Instruction) *MemAccessInst {
+func newMemAccessInst(inst *Instruction) *memAccessInst {
 	if len(inst.operands) != 1 {
 		log.Panic("invalid operands")
 	}
-	return &MemAccessInst{Instruction: *inst}
+	return &memAccessInst{Instruction: *inst}
 }
 
-func (ma *MemAccessInst) LengthDelta() int {
+func (ma *memAccessInst) LengthDelta() int {
 	// new len is 6 old len was 2 so delta is 4
 	return 4
 }
 
-func (ma *MemAccessInst) Convert() ([]*Instruction, error) {
+func (ma *memAccessInst) Convert() ([]*Instruction, error) {
 	// 0x26 0x01 len(i) {i} 0x28 op
 	return []*Instruction{
 		NewInstruction(0x26, []byte{0x01, 0x01, ma.operands[0]}, ma.position),
@@ -88,18 +124,20 @@ func (ma *MemAccessInst) Convert() ([]*Instruction, error) {
 	}, nil
 }
 
-type MemWriteInst struct {
+func (*memAccessInst) SetTranslator(interface{}) {}
+
+type memWriteInst struct {
 	Instruction
 }
 
-func NewMemWriteInst(inst *Instruction) *MemWriteInst {
+func newMemWriteInst(inst *Instruction) *memWriteInst {
 	if len(inst.operands) != 1 {
 		log.Panic("invalid operands")
 	}
-	return &MemWriteInst{Instruction: *inst}
+	return &memWriteInst{Instruction: *inst}
 }
 
-func (mw MemWriteInst) Convert() ([]*Instruction, error) {
+func (mw memWriteInst) Convert() ([]*Instruction, error) {
 	// 0x35 0xFF 0x26 0x01 len(i) {i} 0x28 0x34 0xFF op
 	return []*Instruction{
 		NewInstruction(0x35, []byte{0xFF}, mw.position),
@@ -110,28 +148,30 @@ func (mw MemWriteInst) Convert() ([]*Instruction, error) {
 	}, nil
 }
 
-func (mw MemWriteInst) LengthDelta() int {
+func (mw memWriteInst) LengthDelta() int {
 	// new len is 10 old len was 2 so delta is 8
 	return 8
 }
 
-type BranchInst struct {
+func (*memWriteInst) SetTranslator(interface{}) {}
+
+type branchInst struct {
 	Instruction
 	offset     int
 	translator []int
 }
 
-func NewBranchInst(inst *Instruction) *BranchInst {
+func newBranchInst(inst *Instruction) *branchInst {
 	if len(inst.operands) != 2 {
 		log.Panic("invalid operands for branch instruction")
 	}
-	return &BranchInst{
+	return &branchInst{
 		Instruction: *inst,
 		offset:      int(inst.operands[0])<<8 | int(inst.operands[1]),
 	}
 }
 
-func (bi *BranchInst) Convert() ([]*Instruction, error) {
+func (bi *branchInst) Convert() ([]*Instruction, error) {
 	if bi.translator == nil {
 		log.Panic("no translator is available for offset conversion")
 	}
@@ -148,14 +188,14 @@ func (bi *BranchInst) Convert() ([]*Instruction, error) {
 	}, nil
 }
 
-func (bi *BranchInst) String() string {
+func (bi *branchInst) String() string {
 	return fmt.Sprintf("%s %d", bi.Instruction.String(), bi.offset)
 }
 
-func (bi *BranchInst) SetTranslator(addrTranslator interface{}) {
+func (bi *branchInst) SetTranslator(addrTranslator interface{}) {
 	bi.translator = addrTranslator.([]int)
 }
 
-func (bi *BranchInst) LengthDelta() int {
+func (bi *branchInst) LengthDelta() int {
 	return 0
 }

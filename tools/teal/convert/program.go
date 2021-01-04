@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package converter
+package convert
 
 import (
 	"bytes"
@@ -28,13 +28,44 @@ type Converter interface {
 	LengthDelta() int
 }
 
-type ConverterMaker interface {
+type Maker interface {
+	MakeConverter(inst *Instruction, from Version, to Version) (Converter, error)
+}
+
+type Opcode byte
+
+func (o *Opcode) Bytes() []byte {
+	return []byte{byte(*o)}
+}
+
+type Version int
+
+func (v *Version) Bytes() []byte {
+	return []byte{byte(*v)}
+}
+
+func readVersion(r Reader) (Version, error) {
+	v, err := r.ReadByte()
+	return Version(v), err
+}
+
+// categorize makes a categoryMap for members of 'groups'. category of members that are not in groups list will
+// be considered 0
+func categorize(groups [][]Opcode, resultSize int) (categoryMap []int) {
+	categoryMap = make([]int, resultSize)
+	for i, group := range groups {
+		for _, member := range group {
+			categoryMap[member] = i
+		}
+	}
+	return categoryMap
 }
 
 type Program struct {
-	version    Version
-	code       []*Instruction
-	codeLength int
+	version        Version
+	code           []*Instruction
+	codeLength     int
+	converterMaker Maker
 }
 
 func NewProgram(byteCode []byte) (*Program, error) {
@@ -43,16 +74,26 @@ func NewProgram(byteCode []byte) (*Program, error) {
 		return nil, err
 	}
 	return &Program{
-		version:    version,
-		code:       code,
-		codeLength: codeLen,
+		version:        version,
+		code:           code,
+		codeLength:     codeLen,
+		converterMaker: new(DefaultConverterMaker),
 	}, nil
 }
 
+func (p *Program) Version() Version {
+	return p.version
+}
+
+func (p *Program) SetConverterMaker(converterMaker Maker) {
+	p.converterMaker = converterMaker
+}
+
+// ConvertTo returns the converted code of the Program to a byte-code of version 'v'.
 func (p *Program) ConvertTo(v Version) (byteCode []byte, err error) {
 	converters := make([]Converter, len(p.code))
 	for i, instruction := range p.code {
-		converters[i], err = makeConverter(instruction, p.version, v)
+		converters[i], err = p.converterMaker.MakeConverter(instruction, p.version, v)
 		if err != nil {
 			return nil, err
 		}
@@ -112,8 +153,6 @@ func (inst *Instruction) Length() int {
 func (inst *Instruction) ByteCode() []byte {
 	return append(inst.opcode.Bytes(), inst.operands...)
 }
-
-func (inst *Instruction) SetTranslator(interface{}) {}
 
 func (inst *Instruction) String() string {
 	return fmt.Sprintf("%d:[%x,%x]", inst.position, inst.opcode, inst.operands)
