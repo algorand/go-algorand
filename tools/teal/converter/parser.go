@@ -25,7 +25,10 @@ import (
 	"math"
 )
 
+// MaxOperandsCount is the maximum number of constants which an intcblock or a bytecblock instruction could have.
 const MaxOperandsCount = 255
+
+// MaxByteArrayLen is the maximum length which is allowed for a byte array in a bytecblock instruction.
 const MaxByteArrayLen = 4 * 1024
 
 type OpcodeLenType int

@@ -23,7 +23,11 @@ import (
 )
 
 const MaxBranchOffset = 0x7FFF
+
+// DefaultNewTealVersion is the version number that DefaultConverterMaker assumes for TEAL scripts it is converting from.
 const DefaultNewTealVersion = 3
+
+// DefaultOldTealVersion is the version number that DefaultConverterMaker assumes for TEAL scripts it is converting to.
 const DefaultOldTealVersion = 2
 
 type OpcodeConversionType int

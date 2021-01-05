@@ -304,6 +304,7 @@ func checkPrograms(ac *transactions.ApplicationCallTxnFields, steva StateEvaluat
 	return nil
 }
 
+// DisallowObsoletePrograms when is set to true the installation of TEAL scripts with version <= 2 will be rejected.
 const DisallowObsoletePrograms = false
 
 func prepareProgram(bytecode []byte) ([]byte, error) {

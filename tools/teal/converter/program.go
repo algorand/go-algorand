@@ -21,14 +21,23 @@ import (
 	"fmt"
 )
 
+// Converter represents an instruction which can convert itself to a sequence of instructions of another version.
 type Converter interface {
+	// Convert converts the Converter to a sequence of instruction in another version. if the conversion is not
+	// possible it returns an error
 	Convert() ([]*Instruction, error)
+	// SetTranslator provides Converter with additional information it might need for conversion
 	SetTranslator(interface{})
+	// Length is the length of the byte-code of a Converter before conversion
 	Length() int
+	// LengthDelta represents the change in the byte-code's length of a Converter after conversion
 	LengthDelta() int
 }
 
+// Maker is responsible for transforming an Instruction to a Converter.
 type Maker interface {
+	// MakeConverter transforms 'inst' from a script of version 'from' to a Converter which can be converted to a
+	// script of version 'to'.
 	MakeConverter(inst *Instruction, from Version, to Version) (Converter, error)
 }
 
@@ -68,6 +77,9 @@ type Program struct {
 	converterMaker Maker
 }
 
+// NewProgram parses the 'byteCode' and creates a Program from it. By default it will initialize Program's converter
+// maker with a DefaultConverterMaker. if the user needs to use another converter.Maker he can change this by using
+// SetConverterMaker method.
 func NewProgram(byteCode []byte) (*Program, error) {
 	code, codeLen, version, err := ReadInstructions(bytes.NewBuffer(byteCode))
 	if err != nil {
@@ -89,7 +101,7 @@ func (p *Program) SetConverterMaker(converterMaker Maker) {
 	p.converterMaker = converterMaker
 }
 
-// ConvertTo returns the converted code of the Program to a byte-code of version 'v'.
+// ConvertTo returns the converted byte-code of the Program to a byte-code of version 'v'.
 func (p *Program) ConvertTo(v Version) (byteCode []byte, err error) {
 	converters := make([]Converter, len(p.code))
 	for i, instruction := range p.code {
@@ -146,6 +158,7 @@ func NewInstruction(o Opcode, operands []byte, position int) *Instruction {
 	}
 }
 
+// Length is the number of bytes the byte-code of this instruction has.
 func (inst *Instruction) Length() int {
 	return len(inst.operands) + len(inst.opcode.Bytes())
 }
