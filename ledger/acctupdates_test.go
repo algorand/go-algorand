@@ -1487,7 +1487,9 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	}
 
 	// test in revese what happens when we try to repeat the exact same blocks.
-	for startingRound := basics.Round((testCatchpointLabelsCount - 1) * cfg.CatchpointInterval); startingRound > basics.Round(cfg.CatchpointInterval); startingRound -= basics.Round(cfg.CatchpointInterval) {
+	// start off with the catchpoint before the last one
+	startingRound := basics.Round((testCatchpointLabelsCount - 1) * cfg.CatchpointInterval)
+	for ; startingRound > basics.Round(cfg.CatchpointInterval); startingRound -= basics.Round(cfg.CatchpointInterval) {
 		au.close()
 		err := au.loadFromDisk(ledgerHistory[startingRound])
 		require.NoError(t, err)
