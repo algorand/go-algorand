@@ -197,6 +197,7 @@ func (ccw *Worker) builder() {
 		nextrnd := ccw.ledger.Latest() + 1
 		select {
 		case <-ccw.ctx.Done():
+			ccw.wg.Done()
 			return
 
 		case <-ccw.ledger.Wait(nextrnd):

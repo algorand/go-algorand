@@ -19,6 +19,7 @@ package compactcert
 import (
 	"context"
 	"database/sql"
+	"sync"
 
 	"github.com/algorand/go-algorand/crypto/compactcert"
 	"github.com/algorand/go-algorand/data"
@@ -68,6 +69,7 @@ type Worker struct {
 
 	ctx      context.Context
 	shutdown context.CancelFunc
+	wg       sync.WaitGroup
 }
 
 // MkWorker constructs a new Worker, as used by the node.
@@ -104,12 +106,16 @@ func (ccw *Worker) Start() {
 	}
 	ccw.net.RegisterHandlers(handlers)
 
+	ccw.wg.Add(1)
 	go ccw.signer()
+
+	ccw.wg.Add(1)
 	go ccw.builder()
 }
 
 // Shutdown stops any goroutines associated with this worker.
 func (ccw *Worker) Shutdown() {
 	ccw.shutdown()
+	ccw.wg.Wait()
 	ccw.db.Close()
 }

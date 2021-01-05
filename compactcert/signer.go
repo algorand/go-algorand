@@ -93,6 +93,7 @@ func (ccw *Worker) signer() {
 			}
 
 		case <-ccw.ctx.Done():
+			ccw.wg.Done()
 			return
 		}
 	}
