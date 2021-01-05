@@ -42,21 +42,29 @@ import (
 )
 
 type mockLedgerForTracker struct {
-	dbs      dbPair
-	blocks   []blockEntry
-	deltas   []StateDelta
-	log      logging.Logger
-	filename string
-	inMemory bool
+	dbs             dbPair
+	blocks          []blockEntry
+	deltas          []StateDelta
+	log             logging.Logger
+	filename        string
+	inMemory        bool
+	consensusParams config.ConsensusParams
 }
 
-func makeMockLedgerForTracker(t testing.TB, inMemory bool) *mockLedgerForTracker {
+func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion) *mockLedgerForTracker {
 	dbs, fileName := dbOpenTest(t, inMemory)
 	dblogger := logging.TestingLog(t)
 	dblogger.SetLevel(logging.Info)
 	dbs.rdb.SetLogger(dblogger)
 	dbs.wdb.SetLogger(dblogger)
-	return &mockLedgerForTracker{dbs: dbs, log: dblogger, filename: fileName, inMemory: inMemory}
+
+	blocks := randomInitChain(consensusVersion, initialBlocksCount)
+	deltas := make([]StateDelta, initialBlocksCount)
+	for i := range deltas {
+		deltas[i] = StateDelta{hdr: &bookkeeping.BlockHeader{}}
+	}
+	consensusParams := config.Consensus[consensusVersion]
+	return &mockLedgerForTracker{dbs: dbs, log: dblogger, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: consensusParams}
 }
 
 // fork creates another database which has the same content as the current one. Works only for non-memory databases.
@@ -118,7 +126,8 @@ func (ml *mockLedgerForTracker) addMockBlock(be blockEntry, delta StateDelta) er
 }
 
 func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
-	// support returning the deltas if the client explicitly provided them by calling addMockBlock
+	// support returning the deltas if the client explicitly provided them by calling addMockBlock, otherwise,
+	// just return an empty state delta ( since the client clearly didn't care about these )
 	if len(ml.deltas) > int(blk.Round()) {
 		return ml.deltas[uint64(blk.Round())], nil
 	}
@@ -163,10 +172,7 @@ func (ml *mockLedgerForTracker) GenesisHash() crypto.Digest {
 }
 
 func (ml *mockLedgerForTracker) GenesisProto() config.ConsensusParams {
-	if len(ml.blocks) > 0 {
-		return config.Consensus[ml.blocks[0].block.CurrentProtocol]
-	}
-	return config.Consensus[protocol.ConsensusCurrentVersion]
+	return ml.consensusParams
 }
 
 // this function used to be in acctupdates.go, but we were never using it for production purposes. This
@@ -304,9 +310,8 @@ func TestAcctUpdates(t *testing.T) {
 	}
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(t, true)
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
@@ -390,9 +395,8 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	}
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(t, true)
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
@@ -482,10 +486,11 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 	proto := config.Consensus[protocolVersion]
 
-	ml := makeMockLedgerForTracker(b, true)
-	defer ml.close()
 	initialRounds := uint64(1)
-	ml.blocks = randomInitChain(protocolVersion, int(initialRounds))
+
+	ml := makeMockLedgerForTracker(b, true, int(initialRounds), protocolVersion)
+	defer ml.close()
+
 	accountsCount := 5000
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
 	rewardsLevels := []uint64{0}
@@ -615,9 +620,8 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		os.RemoveAll("./catchpoints")
 	}()
 
-	ml := makeMockLedgerForTracker(t, true)
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(testProtocolVersion, 10)
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(100000, true)}
 	rewardsLevels := []uint64{0}
 
@@ -707,9 +711,8 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	inMemory := true
 
 	testFunction := func(t *testing.T) {
-		ml := makeMockLedgerForTracker(t, inMemory)
+		ml := makeMockLedgerForTracker(t, inMemory, 10, testProtocolVersion)
 		defer ml.close()
-		ml.blocks = randomInitChain(testProtocolVersion, 10)
 
 		accts := []map[basics.Address]basics.AccountData{randomAccounts(9, true)}
 
@@ -873,9 +876,8 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(t, true)
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	au := &accountUpdates{}
@@ -1108,9 +1110,8 @@ func TestGetCatchpointStream(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(t, true)
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	au := &accountUpdates{}
@@ -1183,9 +1184,8 @@ func TestGetCatchpointStream(t *testing.T) {
 func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(b, true)
+	ml := makeMockLedgerForTracker(b, true, 10, protocol.ConsensusCurrentVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(5, true)}
 
@@ -1243,9 +1243,8 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(b, true)
+	ml := makeMockLedgerForTracker(b, true, 10, protocol.ConsensusCurrentVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(5, true)}
 
@@ -1397,12 +1396,19 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
 		t.Skip("This test is too slow on ARM and causes travis builds to time out")
 	}
-	proto := config.Consensus[protocol.ConsensusCurrentVersion]
+	// create new protocol version, which has lower lookback
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 32
+	protoParams.SeedLookback = 2
+	protoParams.SeedRefreshInterval = 8
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
 
-	ml := makeMockLedgerForTracker(t, false)
+	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 1)
-	ml.deltas = []StateDelta{StateDelta{}}
 
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
@@ -1419,9 +1425,9 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 
 	au := &accountUpdates{}
 	cfg := config.GetDefaultLocal()
-	cfg.CatchpointInterval = 500
+	cfg.CatchpointInterval = 50
 	cfg.CatchpointTracking = 1
-	au.initialize(cfg, ".", proto, accts[0])
+	au.initialize(cfg, ".", protoParams, accts[0])
 	defer au.close()
 
 	err := au.loadFromDisk(ml)
@@ -1429,7 +1435,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 
 	rewardLevel := uint64(0)
 
-	const testCatchpointLabelsCount = 4
+	const testCatchpointLabelsCount = 5
 
 	// lastCreatableID stores asset or app max used index to get rid of conflicts
 	lastCreatableID := crypto.RandUint64() % 512
@@ -1438,7 +1444,6 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	ledgerHistory := make(map[basics.Round]*mockLedgerForTracker)
 	roundDeltas := make(map[basics.Round]StateDelta)
 	for i := basics.Round(1); i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
-
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
 		var updates map[basics.Address]accountDelta
@@ -1459,7 +1464,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 			},
 		}
 		blk.RewardsLevel = rewardLevel
-		blk.CurrentProtocol = protocol.ConsensusCurrentVersion
+		blk.CurrentProtocol = testProtocolVersion
 		delta := StateDelta{
 			accts:      updates,
 			hdr:        &blk.BlockHeader,
@@ -1494,7 +1499,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 				},
 			}
 			blk.RewardsLevel = rewardsLevels[i]
-			blk.CurrentProtocol = protocol.ConsensusCurrentVersion
+			blk.CurrentProtocol = testProtocolVersion
 			delta := roundDeltas[i]
 			au.newBlock(blk, delta)
 			au.committedUpTo(i)
