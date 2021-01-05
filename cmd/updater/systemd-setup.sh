@@ -6,9 +6,10 @@
 # If wanting to run as a user service, substitute "--user" for the groupname.
 
 setup_user() {
-    mkdir -p "/home/$1/.config/systemd/user"
+    homedir=$(grep "$1" <<< "$(awk -F: '{ print $6 }' /etc/passwd)")
+    mkdir -p "$homedir/.config/systemd/user"
     cp "${SCRIPTPATH}/algorand@.service.template-user" \
-        "/home/$1/.config/systemd/user/algorand@.service"
+        "$homedir/.config/systemd/user/algorand@.service"
 
     systemctl --user daemon-reload
 }
