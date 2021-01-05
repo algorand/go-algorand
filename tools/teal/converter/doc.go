@@ -15,7 +15,7 @@
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
 /*
-Package convert implements a converter for converting array-style memory manipulation instructions to key-value
+Package converter implements a converter for converting array-style memory manipulation instructions to key-value
 instructions which TEALv2 uses. These array-style memory instructions have the following description:
 
 app_local_get
@@ -180,7 +180,7 @@ Instructions of type MemoryAccess will be converted to the following byte-code:
 Instructions of type MemoryWrite will be converted to the following byte-code:
 	[0x35 0xFF 0x26 0x01 0x01 {i} 0x28 0x34 0xFF opcode]
 
-Besides these instructions converter updates offset of branch instructions to make sure that all branches in the
+Besides these instructions converter updates offset of Branch instructions to make sure that all branches in the
 converted code branch to the same instruction as in the original code.
 */
-package convert
+package converter

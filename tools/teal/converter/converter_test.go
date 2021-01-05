@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package convert
+package converter
 
 import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
@@ -159,6 +159,11 @@ func TestProgram_ConvertTo(t *testing.T) {
 			byteCode:     []byte{0x03, 0x62, 0x33, 0x42, 0x0, 0x02, 0x67, 0x77, 0x71, 0x04, 0x36, 0x1, 0x1},
 			wantAssembly: "// version 2\nbytecblock 0x33\nbytec_0\napp_local_get\nb label1\nstore 255\nbytecblock 0x77\nbytec_0\nload 255\napp_global_put\nlabel1:\nasset_params_get AssetName\ntxna Fee 1\n",
 		},
+		{
+			name:         "disaasemble br to changed",
+			byteCode:     []byte{0x03, 0x4a, 0x41, 0x0, 0x02, 0x62, 0x22, 0x64, 0x33},
+			wantAssembly: "// version 2\ndup2\nbz label1\nbytecblock 0x22\nbytec_0\napp_local_get\nlabel1:\nbytecblock 0x33\nbytec_0\napp_global_get\n",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -169,7 +174,7 @@ func TestProgram_ConvertTo(t *testing.T) {
 			}
 			require.NoError(t, err)
 			if test.v == 0 {
-				test.v = 2
+				test.v = DefaultOldTealVersion
 			}
 			b, err := p.ConvertTo(test.v)
 			if test.wantConversionErr != "" {

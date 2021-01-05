@@ -18,10 +18,10 @@ package apply
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/tools/teal/convert"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/tools/teal/converter"
 )
 
 // Allocate the map of LocalStates if it is nil, and return a copy. We do *not*
@@ -312,7 +312,7 @@ func prepareProgram(bytecode []byte) ([]byte, error) {
 	}
 	version := int(bytecode[0])
 	if version == 3 {
-		p, err := convert.NewProgram(bytecode)
+		p, err := converter.NewProgram(bytecode)
 		if err != nil {
 			return nil, err
 		}

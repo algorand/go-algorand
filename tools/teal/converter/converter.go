@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package convert
+package converter
 
 import (
 	"errors"
@@ -23,15 +23,22 @@ import (
 )
 
 const MaxBranchOffset = 0x7FFF
+const DefaultNewTealVersion = 3
+const DefaultOldTealVersion = 2
 
 type OpcodeConversionType int
 
 const (
+	// WithoutChange instructions can be converted to older TEAL version without change.
 	WithoutChange OpcodeConversionType = iota
-	// MemoryAccess instructions will be converted to [0x26 0x01 0x01 {i} 0x28 opcode]
+	// MemoryAccess instructions access memory location 'i' but do not write that location. These instructions will
+	// be converted to byte-code: [0x26 0x01 0x01 {i} 0x28 opcode]
 	MemoryAccess
-	// MemoryWrite instructions will be converted to [0x35 0xFF 0x26 0x01 0x01 {i} 0x28 0x34 0xFF opcode]
+	// MemoryWrite instructions write a value at memory location 'i'. These instructions will be converted
+	// to byte-code: [0x35 0xFF 0x26 0x01 0x01 {i} 0x28 0x34 0xFF opcode]
 	MemoryWrite
+	// Branch instructions are considered to have a two bytes offset. This offset will be updated to make sure all branches in the
+	// converted code branch to the same instruction as in the original code.
 	Branch
 )
 
@@ -56,7 +63,7 @@ func init() {
 }
 
 func (d *DefaultConverterMaker) CanConvert(from Version, to Version) bool {
-	return from == 3 && to == 2
+	return from == DefaultNewTealVersion && to == DefaultOldTealVersion
 }
 
 type DefaultConverterMaker struct {

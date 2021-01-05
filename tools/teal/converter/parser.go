@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package convert
+package converter
 
 import (
 	"encoding/binary"
@@ -39,13 +39,15 @@ const (
 	VarLenByteC
 )
 
-// OpcodeLenGroups categorizes opcodes based on their instruction length. opcodes that are not in this list will
-// be considered one byte length
+// OpcodeLenGroups categorizes opcodes based on their instruction length. opcodes that are not in this list are
+// considered to have one byte length instructions.
 var OpcodeLenGroups = [][]Opcode{
-	TwoByte:     {0x21, 0x27, 0x2c, 0x31, 0x32, 0x34, 0x35, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x70, 0x71},
-	ThreeByte:   {0x33, 0x36, 0x40, 0x41, 0x42, 0x51},
-	FourByte:    {0x37},
-	VarLenIntC:  {0x20},
+	TwoByte:   {0x21, 0x27, 0x2c, 0x31, 0x32, 0x34, 0x35, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x70, 0x71},
+	ThreeByte: {0x33, 0x36, 0x40, 0x41, 0x42, 0x51},
+	FourByte:  {0x37},
+	// VarLenIntC are instructions that have the same variable length format as 'incblock'
+	VarLenIntC: {0x20},
+	// VarLenByteC are instructions that have the same variable length format as 'bytecblock'
 	VarLenByteC: {0x26},
 }
 
@@ -65,10 +67,14 @@ type Reader interface {
 	io.ByteReader
 }
 
+// ReadInstructions reads and parses instructions from a byte-code and returns them as a slice of Instruction structs.
+// It also returns the number of read bytes and the version tag of the byte-code. when an error occurs it returns a non-nil
+// error but it does not return zero values for other return variables. The caller would be able to use these values
+// for better error handling.
 func ReadInstructions(r Reader) (code []*Instruction, bytesRead int, v Version, err error) {
 	v, err = ReadVersion(r)
 	if err != nil {
-		return
+		return code, 1, v, err
 	}
 	var opcodeByte byte
 	var position int
@@ -77,7 +83,7 @@ func ReadInstructions(r Reader) (code []*Instruction, bytesRead int, v Version, 
 		if err == io.EOF {
 			return code, position, v, nil
 		} else if err != nil {
-			return
+			return code, position, v, err
 		}
 		opcode := Opcode(opcodeByte)
 		var operands []byte
@@ -93,8 +99,7 @@ func ReadInstructions(r Reader) (code []*Instruction, bytesRead int, v Version, 
 			log.Panicf("length of this opcode:%d is not known", opcode)
 		}
 		if err != nil {
-			err = fmt.Errorf("while parsing opcode %x: %v", opcode, err)
-			return
+			return code, position, v, fmt.Errorf("while parsing opcode %x: %v", opcode, err)
 		}
 		inst := NewInstruction(opcode, operands, position)
 		position += inst.Length()
