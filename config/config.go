@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -219,6 +219,7 @@ type Local struct {
 
 	// The maximal number of blocks that catchup will fetch in parallel.
 	// If less than Protocol.SeedLookback, then Protocol.SeedLookback will be used as to limit the catchup.
+	// Setting this variable to 0 would disable the catchup
 	CatchupParallelBlocks uint64 `version[3]:"50" version[5]:"16"`
 
 	// Generate AssembleBlockMetrics telemetry event
