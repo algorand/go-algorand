@@ -44,7 +44,7 @@ func (v *Version) Bytes() []byte {
 	return []byte{byte(*v)}
 }
 
-func readVersion(r Reader) (Version, error) {
+func ReadVersion(r Reader) (Version, error) {
 	v, err := r.ReadByte()
 	return Version(v), err
 }
@@ -103,15 +103,15 @@ func (p *Program) ConvertTo(v Version) (byteCode []byte, err error) {
 	byteCode = append(byteCode, v.Bytes()...)
 	for _, converter := range converters {
 		converter.SetTranslator(addrMap)
-		instList, e := converter.Convert()
-		if e != nil {
-			return nil, e
+		instList, err := converter.Convert()
+		if err != nil {
+			return nil, err
 		}
 		for _, inst := range instList {
 			byteCode = append(byteCode, inst.ByteCode()...)
 		}
 	}
-	return
+	return byteCode, nil
 }
 
 func (p *Program) String() string {

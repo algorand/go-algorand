@@ -65,12 +65,11 @@ type Reader interface {
 	io.ByteReader
 }
 
-func ReadInstructions(r Reader) (code []*Instruction, codeLength int, v Version, err error) {
-	v, err = readVersion(r)
+func ReadInstructions(r Reader) (code []*Instruction, bytesRead int, v Version, err error) {
+	v, err = ReadVersion(r)
 	if err != nil {
 		return
 	}
-
 	var opcodeByte byte
 	var position int
 	for {
@@ -110,8 +109,7 @@ func readOperandsByteC(r Reader) ([]byte, error) {
 	}
 	operands := append([]byte{}, got...)
 	for i := 0; i < int(count); i++ {
-		var length uint64
-		length, got, err = readVarUint(r, MaxByteArrayLen)
+		length, got, err := readVarUint(r, MaxByteArrayLen)
 		if err != nil {
 			return nil, err
 		}

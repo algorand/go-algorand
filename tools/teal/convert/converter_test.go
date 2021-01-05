@@ -162,21 +162,21 @@ func TestProgram_ConvertTo(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			p, err1 := NewProgram(test.byteCode)
+			p, err := NewProgram(test.byteCode)
 			if test.wantParsErr != "" {
-				require.EqualError(t, err1, test.wantParsErr)
+				require.EqualError(t, err, test.wantParsErr)
 				return
 			}
-			require.NoError(t, err1)
+			require.NoError(t, err)
 			if test.v == 0 {
 				test.v = 2
 			}
-			b, err2 := p.ConvertTo(test.v)
+			b, err := p.ConvertTo(test.v)
 			if test.wantConversionErr != "" {
-				require.EqualError(t, err2, test.wantConversionErr)
+				require.EqualError(t, err, test.wantConversionErr)
 				return
 			}
-			require.NoError(t, err2)
+			require.NoError(t, err)
 			if test.wantByteCode != nil {
 				require.Equal(t, test.wantByteCode, b)
 			} else {

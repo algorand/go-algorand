@@ -18,6 +18,7 @@ package apply
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/tools/teal/convert"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -303,6 +304,26 @@ func checkPrograms(ac *transactions.ApplicationCallTxnFields, steva StateEvaluat
 	return nil
 }
 
+const DisallowObsoletePrograms = false
+
+func prepareProgram(bytecode []byte) ([]byte, error) {
+	if len(bytecode) == 0 {
+		return bytecode, nil
+	}
+	version := int(bytecode[0])
+	if version == 3 {
+		p, err := convert.NewProgram(bytecode)
+		if err != nil {
+			return nil, err
+		}
+		return p.ConvertTo(2)
+	}
+	if DisallowObsoletePrograms && version <= 2 {
+		return nil, fmt.Errorf("TEAL version %d is obsolete", version)
+	}
+	return bytecode, nil
+}
+
 // createApplication writes a new AppParams entry and returns application ID
 func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balances, creator basics.Address, txnCounter uint64) (appIdx basics.AppIndex, err error) {
 	// Fetch the creator's (sender's) balance record
@@ -318,14 +339,23 @@ func createApplication(ac *transactions.ApplicationCallTxnFields, balances Balan
 		return
 	}
 
+	convertedAp, err := prepareProgram(ac.ApprovalProgram)
+	if err != nil {
+		return 0, err
+	}
+	convertedCsp, err := prepareProgram(ac.ClearStateProgram)
+	if err != nil {
+		return 0, err
+	}
+
 	// Clone app params, so that we have a copy that is safe to modify
 	record.AppParams = cloneAppParams(record.AppParams)
 
 	// Allocate the new app params (+ 1 to match Assets Idx namespace)
 	appIdx = basics.AppIndex(txnCounter + 1)
 	record.AppParams[appIdx] = basics.AppParams{
-		ApprovalProgram:   ac.ApprovalProgram,
-		ClearStateProgram: ac.ClearStateProgram,
+		ApprovalProgram:   convertedAp,
+		ClearStateProgram: convertedCsp,
 		StateSchemas: basics.StateSchemas{
 			LocalStateSchema:  ac.LocalStateSchema,
 			GlobalStateSchema: ac.GlobalStateSchema,
