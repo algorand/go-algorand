@@ -89,11 +89,6 @@ const (
 	payloadPresent
 	bundlePresent
 
-	// payloadScanned is emitted by the cryptoVerifier as input to the
-	// player state machine as basic cryptographic verification
-	// completes for messages.
-	payloadScanned
-
 	// voteVerified, payloadVerified, and bundleVerified are emitted by the
 	// cryptoVerifier as input to the player state machine as cryptographic
 	// verification completes for messages.
@@ -301,7 +296,7 @@ func (e messageEvent) ConsensusRound() round {
 	switch e.T {
 	case votePresent, voteVerified:
 		return e.Input.UnauthenticatedVote.R.Round
-	case payloadPresent, payloadScanned, payloadVerified:
+	case payloadPresent, payloadVerified:
 		return e.Input.UnauthenticatedProposal.Round()
 	case bundlePresent, bundleVerified:
 		return e.Input.UnauthenticatedBundle.Round
@@ -738,7 +733,7 @@ func zeroEvent(t eventType) event {
 	switch t {
 	case none:
 		return emptyEvent{}
-	case votePresent, voteVerified, payloadPresent, payloadScanned, payloadVerified, bundlePresent, bundleVerified:
+	case votePresent, voteVerified, payloadPresent, payloadVerified, bundlePresent, bundleVerified:
 		return messageEvent{}
 	case roundInterruption:
 		return roundInterruptionEvent{}

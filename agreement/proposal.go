@@ -270,17 +270,3 @@ func (p unauthenticatedProposal) validate(ctx context.Context, current round, le
 
 	return makeProposal(ve, p.SeedProof, p.OriginalPeriod, p.OriginalProposer), nil
 }
-
-func (p unauthenticatedProposal) scan(current round, ledger LedgerReader) error {
-	entry := p.Block
-
-	if entry.Round() != current {
-		return fmt.Errorf("proposed entry from wrong round: entry.Round() != current: %v != %v", entry.Round(), current)
-	}
-
-	err := verifyNewSeed(p, ledger)
-	if err != nil {
-		return fmt.Errorf("proposal has bad seed: %v", err)
-	}
-	return nil
-}

@@ -17,7 +17,6 @@
 package agreement
 
 import (
-	"github.com/algorand/go-algorand/logging"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
@@ -545,9 +544,8 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 	}
 
 	switch e.t() {
-	case payloadPresent, payloadScanned, payloadVerified:
+	case payloadPresent, payloadVerified:
 		ef := r.dispatch(*p, delegatedE, proposalMachine, 0, 0, 0)
-		logging.Base().Infof("e: %v, ef: %v", e.t(), ef.t())
 		switch ef.t() {
 		case payloadMalformed:
 			err := makeSerErrf("rejected message since it was invalid: %v", ef.(filteredEvent).Err)
@@ -559,14 +557,9 @@ func (p *player) handleMessageEvent(r routerHandle, e messageEvent) (actions []a
 			if ep.Round == p.Round {
 				up := e.Input.UnauthenticatedProposal
 
-				switch e.t() {
-				case payloadPresent:
-					return append(actions, scanPayloadAction(e, ep.Round, ep.Period, ep.Pinned))
-				case payloadScanned:
-					a := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: ef.(payloadProcessedEvent).Vote.u()})
-					actions = append(actions, a)
-					return append(actions, verifyPayloadAction(e, ep.Round, ep.Period, ep.Pinned))
-				}
+				a := relayAction(e, protocol.ProposalPayloadTag, compoundMessage{Proposal: up, Vote: ef.(payloadProcessedEvent).Vote.u()})
+				actions = append(actions, a)
+				return append(actions, verifyPayloadAction(e, ep.Round, ep.Period, ep.Pinned))
 			}
 		}
 

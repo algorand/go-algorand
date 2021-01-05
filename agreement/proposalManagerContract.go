@@ -24,7 +24,7 @@ type proposalManagerContract struct{}
 
 func (c proposalManagerContract) pre(p player, in event) (pre []error) {
 	switch in.t() {
-	case votePresent, voteVerified, payloadPresent, payloadScanned, payloadVerified, roundInterruption, certThreshold, softThreshold, nextThreshold:
+	case votePresent, voteVerified, payloadPresent, payloadVerified, roundInterruption, certThreshold, softThreshold, nextThreshold:
 	default:
 		pre = append(pre, fmt.Errorf("bad event type delivered: %v", in.t()))
 	}

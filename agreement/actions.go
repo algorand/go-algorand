@@ -43,7 +43,6 @@ const (
 	verifyVote
 	verifyPayload
 	verifyBundle
-	scanPayload
 
 	// ledger
 	ensure
@@ -201,8 +200,6 @@ func (a cryptoAction) do(ctx context.Context, s *Service) {
 		s.demux.verifyPayload(ctx, a.M, a.Round, a.Period, a.Pinned)
 	case verifyBundle:
 		s.demux.verifyBundle(ctx, a.M, a.Round, a.Period, a.Step)
-	case scanPayload:
-		s.demux.scanPayload(ctx, a.M, a.Round, a.Period, a.Pinned)
 	}
 }
 
@@ -444,10 +441,6 @@ func verifyPayloadAction(e messageEvent, r round, p period, pinned bool) action 
 
 func verifyBundleAction(e messageEvent, r round, p period, s step) action {
 	return cryptoAction{T: verifyBundle, M: e.Input, Round: r, Period: p, Step: s}
-}
-
-func scanPayloadAction(e messageEvent, r round, p period, pinned bool) action {
-	return cryptoAction{T: scanPayload, M: e.Input, Round: r, Period: p, Pinned: pinned}
 }
 
 func zeroAction(t actionType) action {
