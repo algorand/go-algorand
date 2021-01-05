@@ -79,7 +79,7 @@ func init() {
 	configAssetCmd.Flags().StringVar(&assetNewReserve, "new-reserve", "", "New reserve address")
 	configAssetCmd.Flags().StringVar(&assetNewFreezer, "new-freezer", "", "New freeze address")
 	configAssetCmd.Flags().StringVar(&assetNewClawback, "new-clawback", "", "New clawback address")
-	createAssetCmd.MarkFlagRequired("manager")
+	configAssetCmd.MarkFlagRequired("manager")
 
 	sendAssetCmd.Flags().StringVar(&assetClawback, "clawback", "", "Address to issue a clawback transaction from (defaults to no clawback)")
 	sendAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset creator")
