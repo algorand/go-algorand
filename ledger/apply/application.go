@@ -307,13 +307,17 @@ func checkPrograms(ac *transactions.ApplicationCallTxnFields, steva StateEvaluat
 // DisallowObsoletePrograms when is set to true the installation of TEAL scripts with version <= 2 will be rejected.
 const DisallowObsoletePrograms = false
 
-func prepareProgram(bytecode []byte) ([]byte, error) {
-	if len(bytecode) == 0 {
-		return bytecode, nil
+// prepareProgram converts a TEAL byte-code with version equal to converter.DefaultNewTealVersion to a byte-code of
+// TEAL v2. If DisallowObsoletePrograms is set to true and if the byte code has a version <= 2 it will return an error.
+// If a TEAL scripts has a version <= 2 and DisallowObsoletePrograms is false prepareProgram returns its input
+// 'byteCode' intact.
+func prepareProgram(byteCode []byte) ([]byte, error) {
+	if len(byteCode) == 0 {
+		return byteCode, nil
 	}
-	version := int(bytecode[0])
-	if version == 3 {
-		p, err := converter.NewProgram(bytecode)
+	version := int(byteCode[0])
+	if version == converter.DefaultNewTealVersion {
+		p, err := converter.NewProgram(byteCode)
 		if err != nil {
 			return nil, err
 		}
@@ -322,7 +326,7 @@ func prepareProgram(bytecode []byte) ([]byte, error) {
 	if DisallowObsoletePrograms && version <= 2 {
 		return nil, fmt.Errorf("TEAL version %d is obsolete", version)
 	}
-	return bytecode, nil
+	return byteCode, nil
 }
 
 // createApplication writes a new AppParams entry and returns application ID

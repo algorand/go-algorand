@@ -22,7 +22,7 @@ import (
 	"testing"
 )
 
-func TestReadInstructions(t *testing.T) {
+func TestNewProgram(t *testing.T) {
 	byteCode := []byte{0x03, 0x63}
 	p, err := NewProgram(byteCode)
 	require.EqualError(t, err, "while parsing opcode 63: EOF")
@@ -40,9 +40,9 @@ func TestReadInstructions(t *testing.T) {
 		store 24`
 	code, _ := logic.AssembleStringWithVersion(text, 2)
 	want := "[0:[20,03010203] 5:[26,02043132333406616263646566] 19:[28,] 20:[22,] 21:[23,] 22:[8,] 23:[42,0001] 26:[29,] 27:[51,0219] 30:[24,] 31:[35,18]]"
-	code.Program[0] = 3
 	p, _ = NewProgram(code.Program)
 	require.Equal(t, want, p.String())
+	require.Equal(t, []byte{2}, p.version.Bytes())
 }
 
 func TestBranchInst_Convert(t *testing.T) {
