@@ -71,14 +71,15 @@ func init() {
 	destroyAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "Asset ID to destroy")
 	destroyAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of asset to destroy")
 
-	configAssetCmd.Flags().StringVar(&assetManager, "manager", "", "Manager account to issue the config transaction (defaults to creator)")
-	configAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset to configure")
+	configAssetCmd.Flags().StringVar(&assetManager, "manager", "", "Manager account to issue the config transaction")
+	configAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset to configure (defaults to manager)")
 	configAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "Asset ID to configure")
 	configAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of asset to configure")
 	configAssetCmd.Flags().StringVar(&assetNewManager, "new-manager", "", "New manager address")
 	configAssetCmd.Flags().StringVar(&assetNewReserve, "new-reserve", "", "New reserve address")
 	configAssetCmd.Flags().StringVar(&assetNewFreezer, "new-freezer", "", "New freeze address")
 	configAssetCmd.Flags().StringVar(&assetNewClawback, "new-clawback", "", "New clawback address")
+	createAssetCmd.MarkFlagRequired("manager")
 
 	sendAssetCmd.Flags().StringVar(&assetClawback, "clawback", "", "Address to issue a clawback transaction from (defaults to no clawback)")
 	sendAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset creator")
@@ -336,12 +337,8 @@ var configAssetCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
 
-		if assetManager == "" && assetCreator == "" {
-			reportErrorf("Missing required parameter [--manager] or [--creator]")
-		}
-
-		if assetManager == "" {
-			assetManager = assetCreator
+		if assetCreator == "" {
+			assetCreator = assetManager
 		}
 
 		creator := accountList.getAddressByName(assetCreator)
