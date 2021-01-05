@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -724,46 +724,77 @@ var signCmd = &cobra.Command{
 
 		var outData []byte
 		dec := protocol.NewDecoderBytes(data)
+		// read the entire file and prepare in-memory copy of each signed transaction, with grouping.
+		txnGroups := make(map[crypto.Digest][]*transactions.SignedTxn)
+		var groupsOrder []crypto.Digest
+		txnIndex := make(map[*transactions.SignedTxn]int)
 		count := 0
 		for {
-			// transaction file comes in as a SignedTxn with no signature
-			var uncheckedTxn transactions.SignedTxn
-			err = dec.Decode(&uncheckedTxn)
+			uncheckedTxn := new(transactions.SignedTxn)
+			err = dec.Decode(uncheckedTxn)
 			if err == io.EOF {
 				break
 			}
 			if err != nil {
 				reportErrorf(txDecodeError, txFilename, err)
 			}
-
-			var signedTxn transactions.SignedTxn
-			if lsig.Logic != nil {
-				proto, _ := getProto(protoVersion)
-				uncheckedTxn.Lsig = lsig
-				blockHeader := bookkeeping.BlockHeader{
-					UpgradeState: bookkeeping.UpgradeState{
-						CurrentProtocol: proto,
-					},
-				}
-				groupCtx, err := verify.PrepareGroupContext([]transactions.SignedTxn{uncheckedTxn}, blockHeader)
-				if err == nil {
-					err = verify.LogicSigSanityCheck(&uncheckedTxn, 0, groupCtx)
-				}
-				if err != nil {
-					reportErrorf("%s: txn[%d] error %s", txFilename, count, err)
-				}
-				signedTxn = uncheckedTxn
-			} else {
-				// sign the usual way
-				signedTxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, uncheckedTxn.Txn)
-				if err != nil {
-					reportErrorf(errorSigningTX, err)
-				}
+			group := uncheckedTxn.Txn.Group
+			if group.IsZero() {
+				// create a dummy group.
+				randGroupBytes := crypto.Digest{}
+				crypto.RandBytes(randGroupBytes[:])
+				group = randGroupBytes
 			}
+			if _, hasGroup := txnGroups[group]; !hasGroup {
+				// add a new group as needed.
+				groupsOrder = append(groupsOrder, group)
 
-			outData = append(outData, protocol.Encode(&signedTxn)...)
+			}
+			txnGroups[group] = append(txnGroups[group], uncheckedTxn)
+			txnIndex[uncheckedTxn] = count
 			count++
 		}
+
+		consensusVersion, _ := getProto(protoVersion)
+		contextHdr := bookkeeping.BlockHeader{
+			UpgradeState: bookkeeping.UpgradeState{
+				CurrentProtocol: consensusVersion,
+			},
+		}
+
+		for _, group := range groupsOrder {
+			txnGroup := []transactions.SignedTxn{}
+			for _, txn := range txnGroups[group] {
+				txnGroup = append(txnGroup, *txn)
+			}
+			var groupCtx *verify.GroupContext
+			if lsig.Logic != nil {
+				groupCtx, err = verify.PrepareGroupContext(txnGroup, contextHdr)
+				if err != nil {
+					// this error has to be unsupported protocol
+					reportErrorf("%s: %v", txFilename, err)
+				}
+			}
+			for i, txn := range txnGroup {
+				var signedTxn transactions.SignedTxn
+				if lsig.Logic != nil {
+					txn.Lsig = lsig
+					err = verify.LogicSigSanityCheck(&txn, i, groupCtx)
+					if err != nil {
+						reportErrorf("%s: txn[%d] error %s", txFilename, txnIndex[txnGroups[group][i]], err)
+					}
+					signedTxn = txn
+				} else {
+					// sign the usual way
+					signedTxn, err = client.SignTransactionWithWalletAndSigner(wh, pw, signerAddress, txn.Txn)
+					if err != nil {
+						reportErrorf(errorSigningTX, err)
+					}
+				}
+				outData = append(outData, protocol.Encode(&signedTxn)...)
+			}
+		}
+
 		err = writeFile(outFilename, outData, 0600)
 		if err != nil {
 			reportErrorf(fileWriteError, outFilename, err)
@@ -1025,7 +1056,7 @@ var dryrunCmd = &cobra.Command{
 			if txn.Lsig.Blank() {
 				continue
 			}
-			ep := logic.EvalParams{Txn: &txn, Proto: &params}
+			ep := logic.EvalParams{Txn: &txn, Proto: &params, GroupIndex: i, TxnGroup: txgroup}
 			cost, err := logic.Check(txn.Lsig.Logic, ep)
 			if err != nil {
 				reportErrorf("program failed Check: %s", err)

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -313,7 +313,7 @@ func TestEquivocationVoteValidation(t *testing.T) {
 			_, err = v1.Cred.Verify(config.Consensus[protocol.ConsensusCurrentVersion], m)
 
 			noSig := ev
-			noSig.Sigs = [2]crypto.OneTimeSignature{crypto.OneTimeSignature{}, crypto.OneTimeSignature{}}
+			noSig.Sigs = [2]crypto.OneTimeSignature{{}, {}}
 			_, err = noSig.verify(ledger)
 			require.Error(t, err)
 
