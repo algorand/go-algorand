@@ -59,8 +59,8 @@ func makeMockLedgerForTracker(t testing.TB, inMemory bool) *mockLedgerForTracker
 	return &mockLedgerForTracker{dbs: dbs, log: dblogger, filename: fileName, inMemory: inMemory}
 }
 
-// Fork creates another database which has the same content as the current one. Works only for non-memory databases.
-func (ml *mockLedgerForTracker) Fork(t testing.TB) *mockLedgerForTracker {
+// fork creates another database which has the same content as the current one. Works only for non-memory databases.
+func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
 	if ml.inMemory {
 		return nil
 	}
@@ -118,13 +118,13 @@ func (ml *mockLedgerForTracker) addMockBlock(be blockEntry, delta StateDelta) er
 }
 
 func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
+	// support returning the deltas if the client explicitly provided them by calling addMockBlock
 	if len(ml.deltas) > int(blk.Round()) {
 		return ml.deltas[uint64(blk.Round())], nil
-	} else {
-		return StateDelta{
-			hdr: &bookkeeping.BlockHeader{},
-		}, nil
 	}
+	return StateDelta{
+		hdr: &bookkeeping.BlockHeader{},
+	}, nil
 }
 
 func (ml *mockLedgerForTracker) Block(rnd basics.Round) (bookkeeping.Block, error) {
@@ -1476,7 +1476,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		if uint64(i)%cfg.CatchpointInterval == 0 {
 			au.waitAccountsWriting()
 			catchpointLabels[i] = au.GetLastCatchpointLabel()
-			ledgerHistory[i] = ml.Fork(t)
+			ledgerHistory[i] = ml.fork(t)
 			defer ledgerHistory[i].close()
 		}
 	}
