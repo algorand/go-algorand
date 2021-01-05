@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -95,8 +95,8 @@ func makeUnsignedASATx(appIdx uint64, creator basics.Address, round int) transac
 			creator[:],
 			creator[:],
 			creator[:],
-			[]byte{0, 0, 0, 1, 0, 0, 0, 0},
-			[]byte{0, 0, 0, 0, 0, 0, 0, 0},
+			{0, 0, 0, 1, 0, 0, 0, 0},
+			{0, 0, 0, 0, 0, 0, 0, 0},
 		}
 		tx.OnCompletion = transactions.NoOpOC
 		tx.ApprovalProgram = asaAppovalProgram
@@ -126,17 +126,6 @@ func makeUnsignedPaymentTx(sender basics.Address, round int) transactions.Transa
 			Amount:   basics.MicroAlgos{Raw: 1234},
 		},
 	}
-}
-
-type alwaysVerifiedCache struct{}
-
-func (vc *alwaysVerifiedCache) Verified(txn transactions.SignedTxn, params verify.Params) bool {
-	return true
-}
-
-// UnverifiedTxnGroups returns a list of unverified transaction groups given a payset
-func (vc *alwaysVerifiedCache) UnverifiedTxnGroups(txnGroups [][]transactions.SignedTxn, params verify.Params) (signedTxnGroups [][]transactions.SignedTxn) {
-	return [][]transactions.SignedTxn{}
 }
 
 func benchmarkFullBlocks(params testParams, b *testing.B) {
@@ -237,11 +226,11 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 				if createdAppIdx != 0 {
 					// Creator spends to an opted in acct
 					tx.ApplicationArgs = [][]byte{
-						[]byte{0, 0, 0, 0, 0, 0, 0, 1},
+						{0, 0, 0, 0, 0, 0, 0, 1},
 					}
 					tx.Accounts = []basics.Address{
 						accts[j%len(accts)],
-						basics.Address{},
+						{},
 					}
 				}
 			default:
@@ -327,10 +316,10 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	b.Logf("built %d blocks, each with %d txns", numBlocks, txPerBlock)
 
 	// eval + add all the (valid) blocks to the second ledger, measuring it this time
-	vc := alwaysVerifiedCache{}
+	vc := verify.GetMockedCache(true)
 	b.ResetTimer()
 	for _, blk := range blocks {
-		_, err = eval(context.Background(), l1, blk, true, &vc, nil)
+		_, err = eval(context.Background(), l1, blk, true, vc, nil)
 		require.NoError(b, err)
 		err = l1.AddBlock(blk, cert)
 		require.NoError(b, err)
