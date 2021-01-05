@@ -984,6 +984,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	au.accounts = make(map[basics.Address]modifiedAccount)
 	au.creatables = make(map[basics.CreatableIndex]modifiedCreatable)
 	au.deltasAccum = []int{0}
+	au.roundDigest = nil
 
 	au.catchpointWriting = 0
 	// keep these channel closed if we're not generating catchpoint
