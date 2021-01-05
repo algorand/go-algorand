@@ -79,7 +79,6 @@ func init() {
 	configAssetCmd.Flags().StringVar(&assetNewReserve, "new-reserve", "", "New reserve address")
 	configAssetCmd.Flags().StringVar(&assetNewFreezer, "new-freezer", "", "New freeze address")
 	configAssetCmd.Flags().StringVar(&assetNewClawback, "new-clawback", "", "New clawback address")
-	configAssetCmd.MarkFlagRequired("manager")
 
 	sendAssetCmd.Flags().StringVar(&assetClawback, "clawback", "", "Address to issue a clawback transaction from (defaults to no clawback)")
 	sendAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset creator")
@@ -145,7 +144,7 @@ func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 	}
 
 	if !assetOrUnit {
-		reportErrorf("Either [--assetid] or [--unitname and --creator] must be specified")
+		reportErrorf("Missing required parameter [--assetid] or [--unitname and --creator] must be specified")
 	}
 
 	if !cmd.Flags().Changed("creator") {
@@ -265,6 +264,10 @@ var destroyAssetCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
 
+		if assetManager == "" && assetCreator == "" {
+			reportErrorf("Missing required parameter [--manager] or [--creator]")
+		}
+
 		if assetManager == "" {
 			assetManager = assetCreator
 		}
@@ -332,6 +335,10 @@ var configAssetCmd = &cobra.Command{
 		dataDir := ensureSingleDataDir()
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
+
+		if assetManager == "" && assetCreator == "" {
+			reportErrorf("Missing required parameter [--manager] or [--creator]")
+		}
 
 		if assetManager == "" {
 			assetManager = assetCreator
