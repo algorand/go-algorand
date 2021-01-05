@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -181,7 +181,11 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 	ledgerPathnamePrefix := filepath.Join(genesisDir, config.LedgerFilenamePrefix)
 
 	// create initial ledger, if it doesn't exist
-	os.Mkdir(genesisDir, 0700)
+	err = os.Mkdir(genesisDir, 0700)
+	if err != nil && !os.IsExist(err) {
+		log.Errorf("Unable to create genesis directroy: %v", err)
+		return nil, err
+	}
 	var genalloc data.GenesisBalances
 	genalloc, err = bootstrapData(genesis, log)
 	if err != nil {
@@ -232,7 +236,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		return nil, err
 	}
 
-	blockValidator := blockValidatorImpl{l: node.ledger, tp: node.transactionPool, verificationPool: node.highPriorityCryptoVerificationPool}
+	blockValidator := blockValidatorImpl{l: node.ledger, verificationPool: node.highPriorityCryptoVerificationPool}
 	agreementLedger := makeAgreementLedger(node.ledger, node.net)
 
 	agreementParameters := agreement.Parameters{
@@ -446,20 +450,21 @@ func (node *AlgorandFullNode) BroadcastSignedTxGroup(txgroup []transactions.Sign
 		return err
 	}
 
-	contexts := verify.PrepareContexts(txgroup, b)
-	params := make([]verify.Params, len(txgroup))
-	for i, tx := range txgroup {
-		err = verify.Txn(&tx, contexts[i])
-		if err != nil {
-			node.log.Warnf("malformed transaction: %v - transaction was %+v", err, tx)
-			return err
-		}
-		params[i] = contexts[i].Params
+	_, err = verify.TxnGroup(txgroup, b, node.ledger.VerifiedTransactionCache())
+	if err != nil {
+		node.log.Warnf("malformed transaction: %v", err)
+		return err
 	}
-	err = node.transactionPool.Remember(txgroup, params)
+
+	err = node.transactionPool.Remember(txgroup)
 	if err != nil {
 		node.log.Infof("rejected by local pool: %v - transaction group was %+v", err, txgroup)
 		return err
+	}
+
+	err = node.ledger.VerifiedTransactionCache().Pin(txgroup)
+	if err != nil {
+		logging.Base().Infof("unable to pin transaction: %v", err)
 	}
 
 	var enc []byte
@@ -686,7 +691,10 @@ func (node *AlgorandFullNode) checkForParticipationKeys() {
 	for {
 		select {
 		case <-ticker.C:
-			node.loadParticipationKeys()
+			err := node.loadParticipationKeys()
+			if err != nil {
+				node.log.Error("Could not refresh participation keys: %v", err)
+			}
 		case <-node.ctx.Done():
 			ticker.Stop()
 			return
@@ -722,11 +730,13 @@ func (node *AlgorandFullNode) loadParticipationKeys() error {
 			handle.Close()
 			if err == account.ErrUnsupportedSchema {
 				node.log.Infof("Loaded participation keys from storage: %s %s", part.Address(), info.Name())
-				msg := fmt.Sprintf("loadParticipationKeys: not loading unsupported participation key: %v; renaming to *.old", info.Name())
-				fmt.Println(msg)
-				node.log.Warn(msg)
+				node.log.Warn("loadParticipationKeys: not loading unsupported participation key: %s; renaming to *.old", info.Name())
 				fullname := filepath.Join(genesisDir, info.Name())
-				os.Rename(fullname, filepath.Join(fullname, ".old"))
+				renamedFileName := filepath.Join(fullname, ".old")
+				err = os.Rename(fullname, renamedFileName)
+				if err != nil {
+					node.log.Warn("loadParticipationKeys: failed to rename unsupported participation key file '%s' to '%s': %v", fullname, renamedFileName, err)
+				}
 			} else {
 				return fmt.Errorf("AlgorandFullNode.loadParticipationKeys: cannot load account at %v: %v", info.Name(), err)
 			}

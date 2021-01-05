@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -46,15 +46,9 @@ func makeTrustChain(c TrustQuerier) *trustChain {
 }
 
 // QueryWrapper implements TrustQuerier
-// QueryRRSet is forwarded to Querier.QueryRRSet
 // GetRootAnchor is forwared to MakeRootTrustAnchor
 type QueryWrapper struct {
-	c Querier
-}
-
-// QueryRRSet is transparent wrapper for Querier.QueryRRSet
-func (qw QueryWrapper) QueryRRSet(ctx context.Context, domain string, qtype uint16) ([]dns.RR, []dns.RRSIG, error) {
-	return qw.c.QueryRRSet(ctx, domain, qtype)
+	Querier
 }
 
 // GetRootAnchorDS returns DS from a real trust anchor

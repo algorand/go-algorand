@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -1303,7 +1303,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case Type:
 		sv.Bytes = []byte(txn.Type)
 	case TypeEnum:
-		sv.Uint = uint64(txnTypeIndexes[string(txn.Type)])
+		sv.Uint = txnTypeIndexes[string(txn.Type)]
 	case XferAsset:
 		sv.Uint = uint64(txn.XferAsset)
 	case AssetAmount:

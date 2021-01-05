@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -88,6 +88,10 @@ type fixedInfoWithOverlay struct {
 	overlay [ipAddrStringSizeof * 32]uint8 // space for max 32 IP_ADDR_STRING entries in the overlay
 }
 
+// SystemConfig return list of DNS servers from Windows configuration
+//
+// See GetNetworkParams for details:
+// https://docs.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getnetworkparams
 func SystemConfig() (servers []ResolverAddress, timeout time.Duration, err error) {
 	// disable GC to prevent fi collection earlier than lookups in fi completed
 	pct := debug.SetGCPercent(-1)

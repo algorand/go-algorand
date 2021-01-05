@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -238,10 +238,12 @@ var runCmd = &cobra.Command{
 			default:
 				reportErrorf("Invalid argument for --teal: %v\n", teal)
 			}
-			cfg.Program, err = logic.AssembleString(programStr)
+			ops, err := logic.AssembleString(programStr)
 			if err != nil {
+				ops.ReportProblems(teal)
 				reportErrorf("Internal error, cannot assemble %v \n", programStr)
 			}
+			cfg.Program = ops.Program
 		}
 
 		if logicProg != "" {

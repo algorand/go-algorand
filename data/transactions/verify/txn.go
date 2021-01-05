@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,15 +37,22 @@ var logicGoodTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_
 var logicRejTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_rej", Description: "Total transaction scripts executed and rejected"})
 var logicErrTotal = metrics.MakeCounter(metrics.MetricName{Name: "algod_ledger_logic_err", Description: "Total transaction scripts executed and errored"})
 
-// Context encapsulates the context needed to perform stateless checks
-// on a signed transaction.
-type Context struct {
-	Params
-	Group      []transactions.SignedTxn
-	GroupIndex int
-}
+// The PaysetGroups is taking large set of transaction groups and attempt to verify their validity using multiple go-routines.
+// When doing so, it attempts to break these into smaller "worksets" where each workset takes about 2ms of execution time in order
+// to avoid context switching overhead while providing good validation cancelation responsiveness. Each one of these worksets is
+// "populated" with roughly txnPerWorksetThreshold transactions. ( note that the real evaluation time is unknown, but benchmarks
+// showen that these are realistic numbers )
+const txnPerWorksetThreshold = 32
 
-// Params is the set of parameters external to a transaction which
+// When the PaysetGroups is generating worksets, it enqueues up to concurrentWorksets entries to the execution pool. This serves several
+// purposes :
+// - if the verification task need to be aborted, there are only concurrentWorksets entries that are currently redundent on the execution pool queue.
+// - that number of concurrent tasks would not get beyond the capacity of the execution pool back buffer.
+// - if we were to "redundently" execute all these during context cancelation, we would spent at most 2ms * 16 = 32ms time.
+// - it allows us to linearly scan the input, and process elements only once we're going to queue them into the pool.
+const concurrentWorksets = 16
+
+// GroupContext is the set of parameters external to a transaction which
 // stateless checks are performed against.
 //
 // For efficient caching, these parameters should either be constant
@@ -53,109 +60,81 @@ type Context struct {
 //
 // Group data are omitted because they are committed to in the
 // transaction and its ID.
-type Params struct {
-	CurrSpecAddrs  transactions.SpecialAddresses
-	CurrProto      protocol.ConsensusVersion
-	MinTealVersion uint64
+type GroupContext struct {
+	specAddrs        transactions.SpecialAddresses
+	consensusVersion protocol.ConsensusVersion
+	consensusParams  config.ConsensusParams
+	minTealVersion   uint64
+	signedGroupTxns  []transactions.SignedTxn
 }
 
-// PrepareContexts prepares verification contexts for a transaction
+// PrepareGroupContext prepares a verification group parameter object for a given transaction
 // group.
-func PrepareContexts(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader) []Context {
-	ctxs := make([]Context, len(group))
-	minTealVersion := logic.ComputeMinTealVersion(group)
-	for i := range group {
-		spec := transactions.SpecialAddresses{
+func PrepareGroupContext(group []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader) (*GroupContext, error) {
+	if len(group) == 0 {
+		return nil, nil
+	}
+	consensusParams, ok := config.Consensus[contextHdr.CurrentProtocol]
+	if !ok {
+		return nil, protocol.Error(contextHdr.CurrentProtocol)
+	}
+	return &GroupContext{
+		specAddrs: transactions.SpecialAddresses{
 			FeeSink:     contextHdr.FeeSink,
 			RewardsPool: contextHdr.RewardsPool,
-		}
-		ctx := Context{
-			Params: Params{
-				CurrSpecAddrs:  spec,
-				CurrProto:      contextHdr.CurrentProtocol,
-				MinTealVersion: minTealVersion,
-			},
-			Group:      group,
-			GroupIndex: i,
-		}
-		ctxs[i] = ctx
-	}
-
-	return ctxs
+		},
+		consensusVersion: contextHdr.CurrentProtocol,
+		consensusParams:  consensusParams,
+		minTealVersion:   logic.ComputeMinTealVersion(group),
+		signedGroupTxns:  group,
+	}, nil
 }
 
-// TxnPool verifies that a SignedTxn has a good signature and that the underlying
-// transaction is properly constructed.
-// Note that this does not check whether a payset is valid against the ledger:
-// a SignedTxn may be well-formed, but a payset might contain an overspend.
-//
-// This version of verify is performing the verification over the provided execution pool.
-func TxnPool(s *transactions.SignedTxn, ctx Context, verificationPool execpool.BacklogPool) error {
-	proto, ok := config.Consensus[ctx.CurrProto]
-	if !ok {
-		return protocol.Error(ctx.CurrProto)
-	}
-	if err := s.Txn.WellFormed(ctx.CurrSpecAddrs, proto); err != nil {
-		return err
-	}
-
-	zeroAddress := basics.Address{}
-	if s.Txn.Src() == zeroAddress {
-		return errors.New("empty address")
-	}
-	if !proto.SupportRekeying && (s.AuthAddr != basics.Address{}) {
-		return errors.New("nonempty AuthAddr but rekeying not supported")
-	}
-
-	outCh := make(chan error, 1)
-	cx := asyncVerifyContext{s: s, outCh: outCh, ctx: &ctx}
-	verificationPool.EnqueueBacklog(context.Background(), stxnAsyncVerify, &cx, nil)
-	if err, hasErr := <-outCh; hasErr {
-		return err
-	}
-	return nil
+// Equal compares two group contexts to see if they would represent the same verification context for a given transaction.
+func (g *GroupContext) Equal(other *GroupContext) bool {
+	return g.specAddrs == other.specAddrs &&
+		g.consensusVersion == other.consensusVersion &&
+		g.minTealVersion == other.minTealVersion
 }
 
 // Txn verifies a SignedTxn as being signed and having no obviously inconsistent data.
 // Block-assembly time checks of LogicSig and accounting rules may still block the txn.
-func Txn(s *transactions.SignedTxn, ctx Context) error {
-	proto, ok := config.Consensus[ctx.CurrProto]
-	if !ok {
-		return protocol.Error(ctx.CurrProto)
-	}
-	if err := s.Txn.WellFormed(ctx.CurrSpecAddrs, proto); err != nil {
-		return err
-	}
-
-	zeroAddress := basics.Address{}
-	if s.Txn.Src() == zeroAddress {
-		return errors.New("empty address")
-	}
-	if !proto.SupportRekeying && (s.AuthAddr != basics.Address{}) {
+func Txn(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
+	if !groupCtx.consensusParams.SupportRekeying && (s.AuthAddr != basics.Address{}) {
 		return errors.New("nonempty AuthAddr but rekeying not supported")
 	}
 
-	return stxnVerifyCore(s, &ctx)
-}
-
-type asyncVerifyContext struct {
-	s     *transactions.SignedTxn
-	outCh chan error
-	ctx   *Context
-}
-
-func stxnAsyncVerify(arg interface{}) interface{} {
-	cx := arg.(*asyncVerifyContext)
-	err := stxnVerifyCore(cx.s, cx.ctx)
-	if err != nil {
-		cx.outCh <- err
-	} else {
-		close(cx.outCh)
+	if err := s.Txn.WellFormed(groupCtx.specAddrs, groupCtx.consensusParams); err != nil {
+		return err
 	}
-	return nil
+
+	if s.Txn.Src().IsZero() {
+		return errors.New("empty address")
+	}
+
+	return stxnVerifyCore(s, txnIdx, groupCtx)
 }
 
-func stxnVerifyCore(s *transactions.SignedTxn, ctx *Context) error {
+// TxnGroup verifies a []SignedTxn as being signed and having no obviously inconsistent data.
+func TxnGroup(stxs []transactions.SignedTxn, contextHdr bookkeeping.BlockHeader, cache VerifiedTransactionCache) (groupCtx *GroupContext, err error) {
+	groupCtx, err = PrepareGroupContext(stxs, contextHdr)
+	if err != nil {
+		return nil, err
+	}
+	for i, stxn := range stxs {
+		err = Txn(&stxn, i, groupCtx)
+		if err != nil {
+			err = fmt.Errorf("transaction %+v invalid : %w", stxn, err)
+			return
+		}
+	}
+	if cache != nil {
+		cache.Add(stxs, groupCtx)
+	}
+	return
+}
+
+func stxnVerifyCore(s *transactions.SignedTxn, txnIdx int, groupCtx *GroupContext) error {
 	numSigs := 0
 	hasSig := false
 	hasMsig := false
@@ -201,20 +180,17 @@ func stxnVerifyCore(s *transactions.SignedTxn, ctx *Context) error {
 		return errors.New("multisig validation failed")
 	}
 	if hasLogicSig {
-		return LogicSig(s, ctx)
+		return logicSig(s, txnIdx, groupCtx)
 	}
 	return errors.New("has one mystery sig. WAT?")
 }
 
 // LogicSigSanityCheck checks that the signature is valid and that the program is basically well formed.
 // It does not evaluate the logic.
-func LogicSigSanityCheck(txn *transactions.SignedTxn, ctx *Context) error {
+func LogicSigSanityCheck(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
 	lsig := txn.Lsig
-	proto, ok := config.Consensus[ctx.CurrProto]
-	if !ok {
-		return protocol.Error(ctx.CurrProto)
-	}
-	if proto.LogicSigVersion == 0 {
+
+	if groupCtx.consensusParams.LogicSigVersion == 0 {
 		return errors.New("LogicSig not enabled")
 	}
 	if len(lsig.Logic) == 0 {
@@ -224,26 +200,26 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, ctx *Context) error {
 	if vlen <= 0 {
 		return errors.New("LogicSig.Logic bad version")
 	}
-	if version > proto.LogicSigVersion {
+	if version > groupCtx.consensusParams.LogicSigVersion {
 		return errors.New("LogicSig.Logic version too new")
 	}
-	if uint64(lsig.Len()) > proto.LogicSigMaxSize {
+	if uint64(lsig.Len()) > groupCtx.consensusParams.LogicSigMaxSize {
 		return errors.New("LogicSig.Logic too long")
 	}
 
 	ep := logic.EvalParams{
 		Txn:            txn,
-		Proto:          &proto,
-		TxnGroup:       ctx.Group,
-		GroupIndex:     ctx.GroupIndex,
-		MinTealVersion: &ctx.MinTealVersion,
+		Proto:          &groupCtx.consensusParams,
+		TxnGroup:       groupCtx.signedGroupTxns,
+		GroupIndex:     groupIndex,
+		MinTealVersion: &groupCtx.minTealVersion,
 	}
 	cost, err := logic.Check(lsig.Logic, ep)
 	if err != nil {
 		return err
 	}
-	if cost > int(proto.LogicSigMaxCost) {
-		return fmt.Errorf("LogicSig.Logic too slow, %d > %d", cost, proto.LogicSigMaxCost)
+	if cost > int(groupCtx.consensusParams.LogicSigMaxCost) {
+		return fmt.Errorf("LogicSig.Logic too slow, %d > %d", cost, groupCtx.consensusParams.LogicSigMaxCost)
 	}
 
 	hasMsig := false
@@ -282,24 +258,19 @@ func LogicSigSanityCheck(txn *transactions.SignedTxn, ctx *Context) error {
 	return nil
 }
 
-// LogicSig checks that the signature is valid, executing the program.
-func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
-	proto, ok := config.Consensus[ctx.CurrProto]
-	if !ok {
-		return protocol.Error(ctx.CurrProto)
-	}
-
-	err := LogicSigSanityCheck(txn, ctx)
+// logicSig checks that the signature is valid, executing the program.
+func logicSig(txn *transactions.SignedTxn, groupIndex int, groupCtx *GroupContext) error {
+	err := LogicSigSanityCheck(txn, groupIndex, groupCtx)
 	if err != nil {
 		return err
 	}
 
 	ep := logic.EvalParams{
 		Txn:            txn,
-		Proto:          &proto,
-		TxnGroup:       ctx.Group,
-		GroupIndex:     ctx.GroupIndex,
-		MinTealVersion: &ctx.MinTealVersion,
+		Proto:          &groupCtx.consensusParams,
+		TxnGroup:       groupCtx.signedGroupTxns,
+		GroupIndex:     groupIndex,
+		MinTealVersion: &groupCtx.minTealVersion,
 	}
 	pass, err := logic.Eval(txn.Lsig.Logic, ep)
 	if err != nil {
@@ -313,4 +284,113 @@ func LogicSig(txn *transactions.SignedTxn, ctx *Context) error {
 	logicGoodTotal.Inc(nil)
 	return nil
 
+}
+
+// PaysetGroups verifies that the payset have a good signature and that the underlying
+// transactions are properly constructed.
+// Note that this does not check whether a payset is valid against the ledger:
+// a PaysetGroups may be well-formed, but a payset might contain an overspend.
+//
+// This version of verify is performing the verification over the provided execution pool.
+func PaysetGroups(ctx context.Context, payset [][]transactions.SignedTxn, blkHeader bookkeeping.BlockHeader, verificationPool execpool.BacklogPool, cache VerifiedTransactionCache) (err error) {
+	if len(payset) == 0 {
+		return nil
+	}
+
+	// prepare up to 16 concurrent worksets.
+	worksets := make(chan struct{}, concurrentWorksets)
+	worksDoneCh := make(chan interface{}, concurrentWorksets)
+	processing := 0
+	tasksCtx, cancelTasksCtx := context.WithCancel(ctx)
+	defer cancelTasksCtx()
+	builder := worksetBuilder{payset: payset}
+	var nextWorkset [][]transactions.SignedTxn
+	for processing >= 0 {
+		// see if we need to get another workset
+		if len(nextWorkset) == 0 && !builder.completed() {
+			nextWorkset = builder.next()
+		}
+
+		select {
+		case <-tasksCtx.Done():
+			return tasksCtx.Err()
+		case worksets <- struct{}{}:
+			if len(nextWorkset) > 0 {
+				err := verificationPool.EnqueueBacklog(ctx, func(arg interface{}) interface{} {
+					var grpErr error
+					// check if we've canceled the request while this was in the queue.
+					if tasksCtx.Err() != nil {
+						return tasksCtx.Err()
+					}
+					txnGroups := arg.([][]transactions.SignedTxn)
+					groupCtxs := make([]*GroupContext, len(txnGroups))
+					for i, signTxnsGrp := range txnGroups {
+						groupCtxs[i], grpErr = TxnGroup(signTxnsGrp, blkHeader, nil)
+						// abort only if it's a non-cache error.
+						if grpErr != nil {
+							return grpErr
+						}
+					}
+					cache.AddPayset(txnGroups, groupCtxs)
+					return nil
+				}, nextWorkset, worksDoneCh)
+				if err != nil {
+					return err
+				}
+				processing++
+				nextWorkset = nil
+			}
+		case processingResult := <-worksDoneCh:
+			processing--
+			<-worksets
+			// if there is nothing in the queue, the nextWorkset doesn't contain any work and the builder has no more entries, then we're done.
+			if processing == 0 && builder.completed() && len(nextWorkset) == 0 {
+				// we're done.
+				processing = -1
+			}
+			if processingResult != nil {
+				err = processingResult.(error)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+	}
+	return err
+}
+
+// worksetBuilder is a helper struct used to construct well sized worksets for the execution pool to process
+type worksetBuilder struct {
+	payset [][]transactions.SignedTxn
+	idx    int
+}
+
+func (w *worksetBuilder) next() (txnGroups [][]transactions.SignedTxn) {
+	txnCounter := 0 // how many transaction we already included in the current workset.
+	// scan starting from the current position until we filled up the workset.
+	for i := w.idx; i < len(w.payset); i++ {
+		if txnCounter+len(w.payset[i]) > txnPerWorksetThreshold {
+			if i == w.idx {
+				i++
+			}
+			txnGroups = w.payset[w.idx:i]
+			w.idx = i
+			return
+		}
+		if i == len(w.payset)-1 {
+			txnGroups = w.payset[w.idx:]
+			w.idx = len(w.payset)
+			return
+		}
+		txnCounter += len(w.payset[i])
+	}
+	// we can reach here only if w.idx >= len(w.payset). This is not really a usecase, but just
+	// for code-completeness, we'll return an empty array here.
+	return nil
+}
+
+// test to see if we have any more worksets we can extract from our payset.
+func (w *worksetBuilder) completed() bool {
+	return w.idx >= len(w.payset)
 }

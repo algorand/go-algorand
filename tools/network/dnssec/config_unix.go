@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,17 +27,21 @@ import (
 	"github.com/miekg/dns"
 )
 
-// SystemConfig return list of servers and timeout from
-// This is Linux only.
-//
-// For Windows need to implement DNS servers retrieval from GetNetworkParams
-//  see https://docs.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getnetworkparams
+const defaultConfigFile = "/etc/resolv.conf"
+
+// SystemConfig return list of DNS servers and timeout from /etc/resolv.conf
 func SystemConfig() (servers []ResolverAddress, timeout time.Duration, err error) {
-	f, err := os.Open(defaultConfigFile)
-	defer f.Close()
+	var f *os.File
+	f, err = os.Open(defaultConfigFile)
 	if err != nil {
 		return
 	}
+	defer func() {
+		localErr := f.Close()
+		if err == nil {
+			err = localErr
+		}
+	}()
 	return systemConfig(f)
 }
 
