@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -41,20 +42,67 @@ import (
 )
 
 type mockLedgerForTracker struct {
-	dbs      dbPair
-	blocks   []blockEntry
-	log      logging.Logger
-	filename string
-	inMemory bool
+	dbs             dbPair
+	blocks          []blockEntry
+	deltas          []StateDelta
+	log             logging.Logger
+	filename        string
+	inMemory        bool
+	consensusParams config.ConsensusParams
 }
 
-func makeMockLedgerForTracker(t testing.TB, inMemory bool) *mockLedgerForTracker {
+func makeMockLedgerForTracker(t testing.TB, inMemory bool, initialBlocksCount int, consensusVersion protocol.ConsensusVersion) *mockLedgerForTracker {
 	dbs, fileName := dbOpenTest(t, inMemory)
 	dblogger := logging.TestingLog(t)
 	dblogger.SetLevel(logging.Info)
 	dbs.rdb.SetLogger(dblogger)
 	dbs.wdb.SetLogger(dblogger)
-	return &mockLedgerForTracker{dbs: dbs, log: dblogger, filename: fileName, inMemory: inMemory}
+
+	blocks := randomInitChain(consensusVersion, initialBlocksCount)
+	deltas := make([]StateDelta, initialBlocksCount)
+	for i := range deltas {
+		deltas[i] = StateDelta{hdr: &bookkeeping.BlockHeader{}}
+	}
+	consensusParams := config.Consensus[consensusVersion]
+	return &mockLedgerForTracker{dbs: dbs, log: dblogger, filename: fileName, inMemory: inMemory, blocks: blocks, deltas: deltas, consensusParams: consensusParams}
+}
+
+// fork creates another database which has the same content as the current one. Works only for non-memory databases.
+func (ml *mockLedgerForTracker) fork(t testing.TB) *mockLedgerForTracker {
+	if ml.inMemory {
+		return nil
+	}
+	// create a new random file name.
+	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
+
+	dblogger := logging.TestingLog(t)
+	dblogger.SetLevel(logging.Info)
+	newLedgerTracker := &mockLedgerForTracker{
+		inMemory: false,
+		log:      dblogger,
+		blocks:   make([]blockEntry, len(ml.blocks)),
+		deltas:   make([]StateDelta, len(ml.deltas)),
+		filename: fn,
+	}
+	copy(newLedgerTracker.blocks, ml.blocks)
+	copy(newLedgerTracker.deltas, ml.deltas)
+
+	// calling Vacuum implies flushing the datbaase content to disk..
+	ml.dbs.wdb.Vacuum(context.Background())
+	// copy the database files.
+	for _, ext := range []string{"", "-shm", "-wal"} {
+		bytes, err := ioutil.ReadFile(ml.filename + ext)
+		require.NoError(t, err)
+		err = ioutil.WriteFile(newLedgerTracker.filename+ext, bytes, 0600)
+		require.NoError(t, err)
+	}
+	dbs, err := dbOpen(newLedgerTracker.filename, false)
+	require.NoError(t, err)
+	dbs.rdb.SetLogger(dblogger)
+	dbs.wdb.SetLogger(dblogger)
+
+	newLedgerTracker.dbs = dbs
+	return newLedgerTracker
 }
 
 func (ml *mockLedgerForTracker) close() {
@@ -71,11 +119,21 @@ func (ml *mockLedgerForTracker) Latest() basics.Round {
 	return basics.Round(len(ml.blocks)) - 1
 }
 
+func (ml *mockLedgerForTracker) addMockBlock(be blockEntry, delta StateDelta) error {
+	ml.blocks = append(ml.blocks, be)
+	ml.deltas = append(ml.deltas, delta)
+	return nil
+}
+
 func (ml *mockLedgerForTracker) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
-	delta := StateDelta{
-		hdr: &bookkeeping.BlockHeader{},
+	// support returning the deltas if the client explicitly provided them by calling addMockBlock, otherwise,
+	// just return an empty state delta ( since the client clearly didn't care about these )
+	if len(ml.deltas) > int(blk.Round()) {
+		return ml.deltas[uint64(blk.Round())], nil
 	}
-	return delta, nil
+	return StateDelta{
+		hdr: &bookkeeping.BlockHeader{},
+	}, nil
 }
 
 func (ml *mockLedgerForTracker) Block(rnd basics.Round) (bookkeeping.Block, error) {
@@ -114,10 +172,7 @@ func (ml *mockLedgerForTracker) GenesisHash() crypto.Digest {
 }
 
 func (ml *mockLedgerForTracker) GenesisProto() config.ConsensusParams {
-	if len(ml.blocks) > 0 {
-		return config.Consensus[ml.blocks[0].block.CurrentProtocol]
-	}
-	return config.Consensus[protocol.ConsensusCurrentVersion]
+	return ml.consensusParams
 }
 
 // this function used to be in acctupdates.go, but we were never using it for production purposes. This
@@ -255,9 +310,8 @@ func TestAcctUpdates(t *testing.T) {
 	}
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(t, true)
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
@@ -341,9 +395,8 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 	}
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(t, true)
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	rewardsLevels := []uint64{0}
@@ -433,10 +486,11 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 	proto := config.Consensus[protocolVersion]
 
-	ml := makeMockLedgerForTracker(b, true)
-	defer ml.close()
 	initialRounds := uint64(1)
-	ml.blocks = randomInitChain(protocolVersion, int(initialRounds))
+
+	ml := makeMockLedgerForTracker(b, true, int(initialRounds), protocolVersion)
+	defer ml.close()
+
 	accountsCount := 5000
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(accountsCount, true)}
 	rewardsLevels := []uint64{0}
@@ -566,9 +620,8 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		os.RemoveAll("./catchpoints")
 	}()
 
-	ml := makeMockLedgerForTracker(t, true)
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(testProtocolVersion, 10)
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(100000, true)}
 	rewardsLevels := []uint64{0}
 
@@ -658,9 +711,8 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 	inMemory := true
 
 	testFunction := func(t *testing.T) {
-		ml := makeMockLedgerForTracker(t, inMemory)
+		ml := makeMockLedgerForTracker(t, inMemory, 10, testProtocolVersion)
 		defer ml.close()
-		ml.blocks = randomInitChain(testProtocolVersion, 10)
 
 		accts := []map[basics.Address]basics.AccountData{randomAccounts(9, true)}
 
@@ -824,9 +876,8 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 func TestAcctUpdatesDeleteStoredCatchpoints(t *testing.T) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(t, true)
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	au := &accountUpdates{}
@@ -1059,9 +1110,8 @@ func TestGetCatchpointStream(t *testing.T) {
 
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(t, true)
+	ml := makeMockLedgerForTracker(t, true, 10, protocol.ConsensusCurrentVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
 	au := &accountUpdates{}
@@ -1170,9 +1220,8 @@ func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err er
 func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(b, true)
+	ml := makeMockLedgerForTracker(b, true, 10, protocol.ConsensusCurrentVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(5, true)}
 
@@ -1230,9 +1279,8 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
-	ml := makeMockLedgerForTracker(b, true)
+	ml := makeMockLedgerForTracker(b, true, 10, protocol.ConsensusCurrentVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 10)
 
 	accts := []map[basics.Address]basics.AccountData{randomAccounts(5, true)}
 
@@ -1378,4 +1426,127 @@ func TestCompactDeltas(t *testing.T) {
 	require.Equal(t, 2, outCreatableDeltas[100].ndeltas)
 	require.Equal(t, 1, outCreatableDeltas[101].ndeltas)
 
+}
+
+func TestReproducibleCatchpointLabels(t *testing.T) {
+	if runtime.GOARCH == "arm" || runtime.GOARCH == "arm64" {
+		t.Skip("This test is too slow on ARM and causes travis builds to time out")
+	}
+	// create new protocol version, which has lower lookback
+	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestReproducibleCatchpointLabels")
+	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
+	protoParams.MaxBalLookback = 32
+	protoParams.SeedLookback = 2
+	protoParams.SeedRefreshInterval = 8
+	config.Consensus[testProtocolVersion] = protoParams
+	defer func() {
+		delete(config.Consensus, testProtocolVersion)
+	}()
+
+	ml := makeMockLedgerForTracker(t, false, 1, testProtocolVersion)
+	defer ml.close()
+
+	accts := []map[basics.Address]basics.AccountData{randomAccounts(20, true)}
+	rewardsLevels := []uint64{0}
+
+	pooldata := basics.AccountData{}
+	pooldata.MicroAlgos.Raw = 100 * 1000 * 1000 * 1000 * 1000
+	pooldata.Status = basics.NotParticipating
+	accts[0][testPoolAddr] = pooldata
+
+	sinkdata := basics.AccountData{}
+	sinkdata.MicroAlgos.Raw = 1000 * 1000 * 1000 * 1000
+	sinkdata.Status = basics.NotParticipating
+	accts[0][testSinkAddr] = sinkdata
+
+	au := &accountUpdates{}
+	cfg := config.GetDefaultLocal()
+	cfg.CatchpointInterval = 50
+	cfg.CatchpointTracking = 1
+	au.initialize(cfg, ".", protoParams, accts[0])
+	defer au.close()
+
+	err := au.loadFromDisk(ml)
+	require.NoError(t, err)
+
+	rewardLevel := uint64(0)
+
+	const testCatchpointLabelsCount = 5
+
+	// lastCreatableID stores asset or app max used index to get rid of conflicts
+	lastCreatableID := crypto.RandUint64() % 512
+	knownCreatables := make(map[basics.CreatableIndex]bool)
+	catchpointLabels := make(map[basics.Round]string)
+	ledgerHistory := make(map[basics.Round]*mockLedgerForTracker)
+	roundDeltas := make(map[basics.Round]StateDelta)
+	for i := basics.Round(1); i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
+		rewardLevelDelta := crypto.RandUint64() % 5
+		rewardLevel += rewardLevelDelta
+		var updates map[basics.Address]accountDelta
+		var totals map[basics.Address]basics.AccountData
+		updates, totals, lastCreatableID = randomDeltasBalancedFull(1, accts[i-1], rewardLevel, lastCreatableID)
+		prevTotals, err := au.Totals(basics.Round(i - 1))
+		require.NoError(t, err)
+
+		oldPool := accts[i-1][testPoolAddr]
+		newPool := totals[testPoolAddr]
+		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
+		updates[testPoolAddr] = accountDelta{old: oldPool, new: newPool}
+		totals[testPoolAddr] = newPool
+
+		blk := bookkeeping.Block{
+			BlockHeader: bookkeeping.BlockHeader{
+				Round: basics.Round(i),
+			},
+		}
+		blk.RewardsLevel = rewardLevel
+		blk.CurrentProtocol = testProtocolVersion
+		delta := StateDelta{
+			accts:      updates,
+			hdr:        &blk.BlockHeader,
+			creatables: creatablesFromUpdates(updates, knownCreatables),
+		}
+		au.newBlock(blk, delta)
+		au.committedUpTo(i)
+		ml.addMockBlock(blockEntry{block: blk}, delta)
+		accts = append(accts, totals)
+		rewardsLevels = append(rewardsLevels, rewardLevel)
+		roundDeltas[i] = delta
+
+		// if this is a catchpoint round, save the label.
+		if uint64(i)%cfg.CatchpointInterval == 0 {
+			au.waitAccountsWriting()
+			catchpointLabels[i] = au.GetLastCatchpointLabel()
+			ledgerHistory[i] = ml.fork(t)
+			defer ledgerHistory[i].close()
+		}
+	}
+
+	// test in revese what happens when we try to repeat the exact same blocks.
+	// start off with the catchpoint before the last one
+	startingRound := basics.Round((testCatchpointLabelsCount - 1) * cfg.CatchpointInterval)
+	for ; startingRound > basics.Round(cfg.CatchpointInterval); startingRound -= basics.Round(cfg.CatchpointInterval) {
+		au.close()
+		err := au.loadFromDisk(ledgerHistory[startingRound])
+		require.NoError(t, err)
+
+		for i := startingRound + 1; i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
+			blk := bookkeeping.Block{
+				BlockHeader: bookkeeping.BlockHeader{
+					Round: basics.Round(i),
+				},
+			}
+			blk.RewardsLevel = rewardsLevels[i]
+			blk.CurrentProtocol = testProtocolVersion
+			delta := roundDeltas[i]
+			au.newBlock(blk, delta)
+			au.committedUpTo(i)
+
+			// if this is a catchpoint round, check the label.
+			if uint64(i)%cfg.CatchpointInterval == 0 {
+				au.waitAccountsWriting()
+				require.Equal(t, catchpointLabels[i], au.GetLastCatchpointLabel())
+			}
+		}
+	}
 }

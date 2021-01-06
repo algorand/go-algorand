@@ -180,9 +180,8 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		os.RemoveAll(temporaryDirectroy)
 	}()
 
-	ml := makeMockLedgerForTracker(t, true)
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(testProtocolVersion, 10)
 	accts := randomAccounts(300, false)
 
 	au := &accountUpdates{}
@@ -279,9 +278,8 @@ func TestFullCatchpointWriter(t *testing.T) {
 		os.RemoveAll(temporaryDirectroy)
 	}()
 
-	ml := makeMockLedgerForTracker(t, true)
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(testProtocolVersion, 10)
 	accts := randomAccounts(BalancesPerCatchpointFileChunk*3, false)
 
 	au := &accountUpdates{}
