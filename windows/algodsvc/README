@@ -1,0 +1,9 @@
+
+To install the service and it's associated keys:
+
+make install SVCEXE="C:\src\go-algorand-rl\windows\algodsvc\algodsvc.exe" ALGODEXE="E:\algod\algod.exe" NODEDATADIR="E:\algod\data"
+
+Replace SVCEXE, ALGODEXE, NODEDATADIR with your desired locations for service executable, algod daemon executable and data directory.
+
+Use make uninstall to remove service entry from Windows registry.
+
