@@ -93,15 +93,15 @@ func (d *DefaultConverterMaker) MakeConverter(inst *Instruction, from Version, t
 }
 
 type fixedInst struct {
-	Instruction
+	*Instruction
 }
 
 func newFixedInst(inst *Instruction) *fixedInst {
-	return &fixedInst{Instruction: *inst}
+	return &fixedInst{Instruction: inst}
 }
 
 func (f fixedInst) Convert() ([]*Instruction, error) {
-	return []*Instruction{NewInstruction(f.opcode, f.operands, f.position)}, nil
+	return []*Instruction{f.Instruction}, nil
 }
 
 func (f fixedInst) LengthDelta() int {
@@ -111,18 +111,18 @@ func (f fixedInst) LengthDelta() int {
 func (*fixedInst) SetTranslator(interface{}) {}
 
 type memAccessInst struct {
-	Instruction
+	*Instruction
 }
 
 func newMemAccessInst(inst *Instruction) *memAccessInst {
 	if len(inst.operands) != 1 {
 		log.Panic("invalid operands")
 	}
-	return &memAccessInst{Instruction: *inst}
+	return &memAccessInst{Instruction: inst}
 }
 
 func (ma *memAccessInst) LengthDelta() int {
-	// new len is 6 old len was 2 so delta is 4
+	// new len is 6, old len was 2 so delta is 4
 	return 4
 }
 
@@ -138,14 +138,14 @@ func (ma *memAccessInst) Convert() ([]*Instruction, error) {
 func (*memAccessInst) SetTranslator(interface{}) {}
 
 type memWriteInst struct {
-	Instruction
+	*Instruction
 }
 
 func newMemWriteInst(inst *Instruction) *memWriteInst {
 	if len(inst.operands) != 1 {
 		log.Panic("invalid operands")
 	}
-	return &memWriteInst{Instruction: *inst}
+	return &memWriteInst{Instruction: inst}
 }
 
 func (mw memWriteInst) Convert() ([]*Instruction, error) {
@@ -160,14 +160,14 @@ func (mw memWriteInst) Convert() ([]*Instruction, error) {
 }
 
 func (mw memWriteInst) LengthDelta() int {
-	// new len is 10 old len was 2 so delta is 8
+	// new len is 10, old len was 2 so delta is 8
 	return 8
 }
 
 func (*memWriteInst) SetTranslator(interface{}) {}
 
 type branchInst struct {
-	Instruction
+	*Instruction
 	offset     int
 	translator []int
 }
@@ -177,7 +177,7 @@ func newBranchInst(inst *Instruction) *branchInst {
 		log.Panic("invalid operands for branch instruction")
 	}
 	return &branchInst{
-		Instruction: *inst,
+		Instruction: inst,
 		offset:      int(inst.operands[0])<<8 | int(inst.operands[1]),
 	}
 }

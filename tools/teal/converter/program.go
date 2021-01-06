@@ -43,14 +43,14 @@ type Maker interface {
 
 type Opcode byte
 
-func (o *Opcode) Bytes() []byte {
-	return []byte{byte(*o)}
+func (o Opcode) Bytes() []byte {
+	return []byte{byte(o)}
 }
 
 type Version int
 
-func (v *Version) Bytes() []byte {
-	return []byte{byte(*v)}
+func (v Version) Bytes() []byte {
+	return []byte{byte(v)}
 }
 
 func ReadVersion(r Reader) (Version, error) {
@@ -58,8 +58,8 @@ func ReadVersion(r Reader) (Version, error) {
 	return Version(v), err
 }
 
-// categorize makes a categoryMap for members of 'groups'. category of members that are not in groups list will
-// be considered 0
+// categorize makes a category mapping for members of opcode groups specified by 'groups' parameter. Category of
+// members that are not in 'groups' list will be considered 0.
 func categorize(groups [][]Opcode, resultSize int) (categoryMap []int) {
 	categoryMap = make([]int, resultSize)
 	for i, group := range groups {
@@ -144,18 +144,36 @@ func generateAddrMap(code []Converter, codeLength int) (addrMap []int) {
 	return
 }
 
+// Instruction is an immutable struct that represents a binary instruction.
 type Instruction struct {
 	opcode   Opcode
 	operands []byte
 	position int
 }
 
+// NewInstruction creates a new Instruction. 'position' is the address of the instruction in the bytecode.
+//
+// NewInstruction does not copy the 'operands' byte slice and the caller should not keep any references to it.
 func NewInstruction(o Opcode, operands []byte, position int) *Instruction {
 	return &Instruction{
 		opcode:   o,
 		operands: operands,
 		position: position,
 	}
+}
+
+func (inst *Instruction) Operands() []byte {
+	cp := make([]byte, len(inst.operands))
+	copy(cp, inst.operands)
+	return cp
+}
+
+func (inst *Instruction) Position() int {
+	return inst.position
+}
+
+func (inst *Instruction) Opcode() Opcode {
+	return inst.opcode
 }
 
 // Length is the number of bytes the byte-code of this instruction has.
