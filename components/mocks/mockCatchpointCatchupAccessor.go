@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -54,6 +54,11 @@ func (m *MockCatchpointCatchupAccessor) ResetStagingBalances(ctx context.Context
 
 // ProgressStagingBalances deserialize the given bytes as a temporary staging balances
 func (m *MockCatchpointCatchupAccessor) ProgressStagingBalances(ctx context.Context, sectionName string, bytes []byte, progress *ledger.CatchpointCatchupAccessorProgress) (err error) {
+	return nil
+}
+
+// BuildMerkleTrie inserts the account hashes into the merkle trie
+func (m *MockCatchpointCatchupAccessor) BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64)) (err error) {
 	return nil
 }
 

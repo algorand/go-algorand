@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -124,7 +124,7 @@ func TestCatchpointFileBalancesChunkEncoding(t *testing.T) {
 }
 
 func TestBasicCatchpointWriter(t *testing.T) {
-	// create new protocol version, which has lower back balance.
+	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestBasicCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = 32
@@ -137,9 +137,8 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		os.RemoveAll(temporaryDirectroy)
 	}()
 
-	ml := makeMockLedgerForTracker(t, true)
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(testProtocolVersion, 10)
 	accts := randomAccounts(300, false)
 
 	au := &accountUpdates{}
@@ -217,13 +216,13 @@ func TestBasicCatchpointWriter(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, uint64(len(accts)), uint64(len(balances.Balances)))
 		} else {
-			require.Failf(t, "unexpected tar chunk name %s", header.Name)
+			require.Failf(t, "unexpected tar chunk name", "tar chunk name %s", header.Name)
 		}
 	}
 }
 
 func TestFullCatchpointWriter(t *testing.T) {
-	// create new protocol version, which has lower back balance.
+	// create new protocol version, which has lower lookback
 	testProtocolVersion := protocol.ConsensusVersion("test-protocol-TestFullCatchpointWriter")
 	protoParams := config.Consensus[protocol.ConsensusCurrentVersion]
 	protoParams.MaxBalLookback = 32
@@ -236,9 +235,8 @@ func TestFullCatchpointWriter(t *testing.T) {
 		os.RemoveAll(temporaryDirectroy)
 	}()
 
-	ml := makeMockLedgerForTracker(t, true)
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(testProtocolVersion, 10)
 	accts := randomAccounts(BalancesPerCatchpointFileChunk*3, false)
 
 	au := &accountUpdates{}

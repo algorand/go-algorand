@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"io"
 	"os"
 	"time"
 
@@ -32,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -80,6 +80,9 @@ type Ledger struct {
 	trackerMu deadlock.RWMutex
 
 	headerCache heapLRUCache
+
+	// verifiedTxnCache holds all the verified transactions state
+	verifiedTxnCache verify.VerifiedTransactionCache
 }
 
 // InitState structure defines blockchain init params
@@ -97,6 +100,13 @@ func OpenLedger(
 	log logging.Logger, dbPathPrefix string, dbMem bool, genesisInitState InitState, cfg config.Local,
 ) (*Ledger, error) {
 	var err error
+
+	verifiedCacheSize := cfg.VerifiedTranscationsCacheSize
+	if verifiedCacheSize < cfg.TxPoolSize {
+		verifiedCacheSize = cfg.TxPoolSize
+		log.Warnf("The VerifiedTranscationsCacheSize in the config file was misconfigured to have smaller size then the TxPoolSize; The verified cache size was adjusted from %d to %d.", cfg.VerifiedTranscationsCacheSize, cfg.TxPoolSize)
+	}
+
 	l := &Ledger{
 		log:                            log,
 		archival:                       cfg.Archival,
@@ -105,6 +115,7 @@ func OpenLedger(
 		genesisProto:                   config.Consensus[genesisInitState.Block.CurrentProtocol],
 		synchronousMode:                db.SynchronousMode(cfg.LedgerSynchronousMode),
 		accountsRebuildSynchronousMode: db.SynchronousMode(cfg.AccountsRebuildSynchronousMode),
+		verifiedTxnCache:               verify.MakeVerifiedTransactionCache(verifiedCacheSize),
 	}
 
 	l.headerCache.maxEntries = 10
@@ -530,9 +541,9 @@ func (l *Ledger) BlockCert(rnd basics.Round) (blk bookkeeping.Block, cert agreem
 // in-memory queue and is written to the disk in the background.  An error
 // is returned if this is not the expected next block number.
 func (l *Ledger) AddBlock(blk bookkeeping.Block, cert agreement.Certificate) error {
-	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
+	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
 
-	updates, err := eval(context.Background(), l, blk, false, nil, nil)
+	updates, err := eval(context.Background(), l, blk, false, l.verifiedTxnCache, nil)
 	if err != nil {
 		return err
 	}
@@ -604,12 +615,12 @@ func (l *Ledger) GetCatchpointCatchupState(ctx context.Context) (state Catchpoin
 	return MakeCatchpointCatchupAccessor(l, l.log).GetState(ctx)
 }
 
-// GetCatchpointStream returns an io.ReadCloser file stream from which the catchpoint file
+// GetCatchpointStream returns a ReadCloseSizer file stream from which the catchpoint file
 // for the provided round could be retrieved. If no such stream can be generated, a non-nil
 // error is returned. The io.ReadCloser and the error are mutually exclusive -
 // if error is returned, the file stream is guaranteed to be nil, and vice versa,
 // if the file stream is not nil, the error is guaranteed to be nil.
-func (l *Ledger) GetCatchpointStream(round basics.Round) (io.ReadCloser, error) {
+func (l *Ledger) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.GetCatchpointStream(round)
@@ -633,8 +644,8 @@ func (l *Ledger) trackerLog() logging.Logger {
 // when this function is called, the trackers mutex is expected already to be taken. The provided accUpdatesLedger would allow the
 // evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
 func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
-	// passing nil as the verificationPool is ok since we've asking the evaluator to skip verification.
-	return eval(context.Background(), accUpdatesLedger, blk, false, nil, nil)
+	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
+	return eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
 }
 
 // IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
@@ -643,6 +654,11 @@ func (l *Ledger) IsWritingCatchpointFile() bool {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.IsWritingCatchpointFile()
+}
+
+// VerifiedTransactionCache returns the verify.VerifiedTransactionCache
+func (l *Ledger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
+	return l.verifiedTxnCache
 }
 
 // A txlease is a transaction (sender, lease) pair which uniquely specifies a

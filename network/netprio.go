@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -64,7 +64,7 @@ func prioResponseHandler(message IncomingMessage) OutgoingMessage {
 }
 
 var prioHandlers = []TaggedMessageHandler{
-	TaggedMessageHandler{protocol.NetPrioResponseTag, HandlerFunc(prioResponseHandler)},
+	{protocol.NetPrioResponseTag, HandlerFunc(prioResponseHandler)},
 }
 
 // The prioTracker sorts active peers by priority, and ensures

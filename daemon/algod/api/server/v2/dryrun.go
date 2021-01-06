@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -82,21 +82,21 @@ func DryrunRequestFromGenerated(gdr *generated.DryrunRequest) (dr DryrunRequest,
 // puts into appropriate DryrunRequest.Apps entry
 func (dr *DryrunRequest) ExpandSources() error {
 	for i, s := range dr.Sources {
-		program, err := logic.AssembleString(s.Source)
+		ops, err := logic.AssembleString(s.Source)
 		if err != nil {
 			return fmt.Errorf("Dryrun Source[%d]: %v", i, err)
 		}
 		switch s.FieldName {
 		case "lsig":
-			dr.Txns[s.TxnIndex].Lsig.Logic = program
+			dr.Txns[s.TxnIndex].Lsig.Logic = ops.Program
 		case "approv", "clearp":
 			for ai, app := range dr.Apps {
 				if app.Id == s.AppIndex {
 					switch s.FieldName {
 					case "approv":
-						dr.Apps[ai].Params.ApprovalProgram = program
+						dr.Apps[ai].Params.ApprovalProgram = ops.Program
 					case "clearp":
-						dr.Apps[ai].Params.ClearStateProgram = program
+						dr.Apps[ai].Params.ClearStateProgram = ops.Program
 					}
 				}
 			}
@@ -436,6 +436,21 @@ func doDryrunRequest(dr *DryrunRequest, proto *config.ConsensusParams, response 
 				// check and use the first entry in dr.Apps
 				if len(dr.Apps) > 0 && dr.Apps[0].Params.Creator == creator {
 					appIdx = basics.AppIndex(dr.Apps[0].Id)
+				}
+			}
+			if stxn.Txn.OnCompletion == transactions.OptInOC {
+				if idx, ok := dl.accountsIn[stxn.Txn.Sender]; ok {
+					acct := dl.dr.Accounts[idx]
+					var ad basics.AccountData
+					if ad, err = AccountToAccountData(&acct); err != nil {
+						response.Error = err.Error()
+						return
+					}
+					if ad.AppLocalStates == nil {
+						ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState)
+					}
+					ad.AppLocalStates[appIdx] = basics.AppLocalState{KeyValue: make(basics.TealKeyValue)}
+					dl.accounts[stxn.Txn.Sender] = basics.BalanceRecord{Addr: stxn.Txn.Sender, AccountData: ad}
 				}
 			}
 

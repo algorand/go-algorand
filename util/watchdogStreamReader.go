@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package catchup
+package util
 
 import (
 	"fmt"
@@ -56,8 +56,15 @@ type watchdogStreamReader struct {
 	readerCond    *sync.Cond     // conditional check variable for the reader goroutine
 }
 
-// makeWatchdogStreamReader creates a watchdogStreamReader and initializes it.
-func makeWatchdogStreamReader(underlayingReader io.Reader, readSize uint64, readaheadSize uint64, readaheadDuration time.Duration) *watchdogStreamReader {
+// WatchdogStreamReader is the public interface for the watchdogStreamReader implementation.
+type WatchdogStreamReader interface {
+	Reset() error
+	Read(p []byte) (n int, err error)
+	Close()
+}
+
+// MakeWatchdogStreamReader creates a watchdogStreamReader and initializes it.
+func MakeWatchdogStreamReader(underlayingReader io.Reader, readSize uint64, readaheadSize uint64, readaheadDuration time.Duration) WatchdogStreamReader {
 	reader := &watchdogStreamReader{
 		underlayingReader: underlayingReader,
 		readerClose:       make(chan struct{}, 1),

@@ -1,16 +1,27 @@
 #!/usr/bin/env bash
-# Required GOLANG Version for project specified here
-GOLANG_VERSION="1.14.7"
 
-# Check to make sure that it matches what is specified in go.mod
+# The "all" argument is used in the `./scripts/check_golang_version.sh` script
+# and parsed as an array to check against the system's golang version depending
+# upon the context in which the project is being built.
+#
+# "dev" is to be used to satisfy the minium requirement we have to successfully
+# build the project.
+#
+# The default is to return the pinned version needed for our production builds.
+# Our build task-runner `mule` will refer to this script and will automatically
+# build a new image whenever the version number has been changed.
 
-GOMOD_VERSION=$(awk '/^go[ \t]+[0-9]+\.[0-9]+(\.[0-9]+)?[ \t]*$/{print $2}' go.mod)
-TRIMMED_GOLANG_VERSION=$(echo ${GOLANG_VERSION} |awk -F. '{ print $1 "." $2 }')
+BUILD=1.14.7
+MIN=1.14
+GO_MOD_SUPPORT=1.12
 
-if ! [[ ${GOLANG_VERSION} == "${GOMOD_VERSION}" || ${TRIMMED_GOLANG_VERSION} == "${GOMOD_VERSION}" ]]
+if [ "$1" = all ]
 then
-    echo "go version mismatch, go mod version ${GOMOD_VERSION} does not match required version ${GOLANG_VERSION}"
-    exit 1;
+    echo $BUILD $MIN $GO_MOD_SUPPORT
+elif [ "$1" = dev ]
+then
+    echo $MIN
 else
-    echo ${GOLANG_VERSION}
+    echo $BUILD
 fi
+

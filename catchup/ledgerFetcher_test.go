@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/components/mocks"
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
@@ -38,7 +39,7 @@ func (lf *dummyLedgerFetcherReporter) updateLedgerFetcherProgress(*ledger.Catchp
 }
 
 func TestNoPeersAvailable(t *testing.T) {
-	lf := makeLedgerFetcher(&mocks.MockNetwork{}, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{})
+	lf := makeLedgerFetcher(&mocks.MockNetwork{}, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{}, config.GetDefaultLocal())
 	err := lf.downloadLedger(context.Background(), basics.Round(0))
 	require.Equal(t, errNoPeersAvailable, err)
 	lf.peers = append(lf.peers, &lf) // The peer is an opaque interface.. we can add anything as a Peer.
@@ -47,7 +48,7 @@ func TestNoPeersAvailable(t *testing.T) {
 }
 
 func TestNonParsableAddress(t *testing.T) {
-	lf := makeLedgerFetcher(&mocks.MockNetwork{}, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{})
+	lf := makeLedgerFetcher(&mocks.MockNetwork{}, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{}, config.GetDefaultLocal())
 	peer := testHTTPPeer(":def")
 	err := lf.getPeerLedger(context.Background(), &peer, basics.Round(0))
 	require.Error(t, err)
@@ -75,7 +76,7 @@ func TestLedgerFetcherErrorResponseHandling(t *testing.T) {
 		w.WriteHeader(httpServerResponse)
 	})
 
-	lf := makeLedgerFetcher(&mocks.MockNetwork{}, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{})
+	lf := makeLedgerFetcher(&mocks.MockNetwork{}, &mocks.MockCatchpointCatchupAccessor{}, logging.TestingLog(t), &dummyLedgerFetcherReporter{}, config.GetDefaultLocal())
 	peer := testHTTPPeer(listener.Addr().String())
 	err = lf.getPeerLedger(context.Background(), &peer, basics.Round(0))
 	require.Equal(t, errNoLedgerForRound, err)

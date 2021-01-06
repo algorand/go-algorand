@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -47,14 +47,11 @@ const (
 	// e.g. .Handle(LedgerServiceLedgerPath, &ls)
 	LedgerServiceLedgerPath = "/v{version:[0-9.]+}/{genesisID}/ledger/{round:[0-9a-z]+}"
 
-	// maxCatchpointFileSize is a rough estimate for the worst-case scenario we're going to have of all the accounts data per a single catchpoint file chunk.
+	// maxCatchpointFileSize is the default catchpoint file size, if we can't get a concreate number from the ledger.
 	maxCatchpointFileSize = 512 * 1024 * 1024 // 512MB
 
-	// expectedWorstDownloadSpeedBytesPerSecond defines the worst-case scenario upload speed we expect to get while uploading a catchpoint file
-	expectedWorstDownloadSpeedBytesPerSecond = 200 * 1024
-
-	// maxCatchpointFileChunkDownloadDuration is the maximum amount of time we would wait to download a single chunk off a catchpoint file
-	maxCatchpointFileWritingDuration = 2*time.Minute + maxCatchpointFileSize*time.Second/expectedWorstDownloadSpeedBytesPerSecond
+	// expectedWorstUploadSpeedBytesPerSecond defines the worst-case scenario upload speed we expect to get while uploading a catchpoint file
+	expectedWorstUploadSpeedBytesPerSecond = 20 * 1024
 )
 
 // LedgerService represents the Ledger RPC API
@@ -177,11 +174,6 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		response.Write([]byte(fmt.Sprintf("specified round number could not be parsed using base 36 : %v", err)))
 		return
 	}
-	if conn := ls.net.GetHTTPRequestConnection(request); conn != nil {
-		conn.SetWriteDeadline(time.Now().Add(maxCatchpointFileWritingDuration))
-	} else {
-		logging.Base().Warnf("LedgerService.ServeHTTP unable to set connection timeout")
-	}
 	cs, err := ls.ledger.GetCatchpointStream(basics.Round(round))
 	if err != nil {
 		switch err.(type) {
@@ -199,6 +191,20 @@ func (ls *LedgerService) ServeHTTP(response http.ResponseWriter, request *http.R
 		}
 	}
 	defer cs.Close()
+	if conn := ls.net.GetHTTPRequestConnection(request); conn != nil {
+		maxCatchpointFileWritingDuration := 2 * time.Minute
+
+		catchpointFileSize, err := cs.Size()
+		if err != nil || catchpointFileSize <= 0 {
+			maxCatchpointFileWritingDuration += maxCatchpointFileSize * time.Second / expectedWorstUploadSpeedBytesPerSecond
+		} else {
+			maxCatchpointFileWritingDuration += time.Duration(catchpointFileSize) * time.Second / expectedWorstUploadSpeedBytesPerSecond
+		}
+		conn.SetWriteDeadline(time.Now().Add(maxCatchpointFileWritingDuration))
+	} else {
+		logging.Base().Warnf("LedgerService.ServeHTTP unable to set connection timeout")
+	}
+
 	response.Header().Set("Content-Type", LedgerResponseContentType)
 	requestedCompressedResponse := strings.Contains(request.Header.Get("Accept-Encoding"), "gzip")
 	if requestedCompressedResponse {

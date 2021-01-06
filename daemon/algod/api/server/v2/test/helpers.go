@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -50,6 +50,7 @@ var cannedStatusReportGolden = node.StatusReport{
 	Catchpoint:                         "",
 	CatchpointCatchupAcquiredBlocks:    0,
 	CatchpointCatchupProcessedAccounts: 0,
+	CatchpointCatchupVerifiedAccounts:  0,
 	CatchpointCatchupTotalAccounts:     0,
 	CatchpointCatchupTotalBlocks:       0,
 	LastCatchpoint:                     "",

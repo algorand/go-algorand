@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -68,9 +68,14 @@ func (c *cadaver) filename() string {
 }
 
 func (c *cadaver) init() (err error) {
-	f, err := os.OpenFile(c.filename(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	f, err := os.OpenFile(c.filename(), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return fmt.Errorf("cadaver: failed to create file %v: %v", c.filename(), err)
+	}
+
+	err = f.Chmod(0666)
+	if err != nil {
+		return err
 	}
 
 	c.out, err = makeCadaverHandle(f)
@@ -116,8 +121,11 @@ func (c *cadaver) trySetup() bool {
 	}
 
 	if c.out.bytesWritten >= c.fileSizeTarget {
-		c.out.Close()
-		err := os.Rename(c.filename(), c.filename()+".archive")
+		err := c.out.Close()
+		if err != nil {
+			logging.Base().Warn("unable to close cadaver file : %v", err)
+		}
+		err = os.Rename(c.filename(), c.filename()+".archive")
 		if err != nil {
 			if os.IsNotExist(err) {
 				// we can't rename the cadaver file since it doesn't exists.

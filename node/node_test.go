@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -458,4 +458,41 @@ func TestStatusReport_TimeSinceLastRound(t *testing.T) {
 			}
 		})
 	}
+}
+
+type mismatchingDirectroyPermissionsLog struct {
+	logging.Logger
+	t *testing.T
+}
+
+func (m mismatchingDirectroyPermissionsLog) Errorf(fmts string, args ...interface{}) {
+	fmtStr := fmt.Sprintf(fmts, args...)
+	require.Contains(m.t, fmtStr, "Unable to create genesis directroy")
+}
+
+// TestMismatchingGenesisDirectoryPermissions tests to see that the os.MkDir check we have in MakeFull works as expected. It tests both the return error as well as the logged error.
+func TestMismatchingGenesisDirectoryPermissions(t *testing.T) {
+	testDirectroy, err := ioutil.TempDir(os.TempDir(), t.Name())
+	require.NoError(t, err)
+
+	genesis := bookkeeping.Genesis{
+		SchemaID:    "go-test-node-genesis",
+		Proto:       protocol.ConsensusCurrentVersion,
+		Network:     config.Devtestnet,
+		FeeSink:     sinkAddr.String(),
+		RewardsPool: poolAddr.String(),
+	}
+
+	log := mismatchingDirectroyPermissionsLog{logging.TestingLog(t), t}
+
+	require.NoError(t, os.Chmod(testDirectroy, 0200))
+
+	node, err := MakeFull(log, testDirectroy, config.GetDefaultLocal(), []string{}, genesis)
+
+	require.Nil(t, node)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "permission denied")
+
+	require.NoError(t, os.Chmod(testDirectroy, 1700))
+	require.NoError(t, os.RemoveAll(testDirectroy))
 }

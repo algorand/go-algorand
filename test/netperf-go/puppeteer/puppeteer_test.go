@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,21 +24,21 @@ func TestMetricsPrintout(t *testing.T) {
 	// this test function was meant for local development test and not as an official unit test.
 	t.Skip()
 	puppets := []*puppet{
-		&puppet{
+		{
 			recipeName: "recipename1.json",
 			metrics: map[string]float64{
 				"message_count": 10.0,
 				"sent_bytes":    30000,
 			},
 		},
-		&puppet{
+		{
 			recipeName: "recipename2_or_maybe_something_else.json",
 			metrics: map[string]float64{
 				"message_count":  13.0,
 				"received_bytes": 200000,
 			},
 		},
-		&puppet{
+		{
 			recipeName: "recipename3.json",
 			metrics: map[string]float64{
 				"message_count":  50.0,
