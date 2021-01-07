@@ -674,11 +674,6 @@ type TxLease struct {
 	txlease
 }
 
-// FromTx populates TxLease object from SignedTxn
-func (l *TxLease) FromTx(txn transactions.SignedTxn) {
-	l.txlease = txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease}
-}
-
 var ledgerInitblocksdbCount = metrics.NewCounter("ledger_initblocksdb_count", "calls")
 var ledgerInitblocksdbMicros = metrics.NewCounter("ledger_initblocksdb_micros", "µs spent")
 var ledgerVerifygenhashCount = metrics.NewCounter("ledger_verifygenhash_count", "calls")

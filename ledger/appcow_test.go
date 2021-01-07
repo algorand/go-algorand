@@ -29,6 +29,12 @@ import (
 	"github.com/algorand/go-algorand/protocol"
 )
 
+type addrApp struct {
+	addr   basics.Address
+	aidx   basics.AppIndex
+	global bool
+}
+
 type emptyLedger struct {
 }
 
@@ -484,5 +490,250 @@ func TestCowDeltaSerialize(t *testing.T) {
 		basics.StateDelta{},
 		sd,
 	)
+}
 
+func TestApplyChild(t *testing.T) {
+	a := require.New(t)
+
+	emptyStorageDelta := func(action storageAction) storageDelta {
+		return storageDelta{
+			action:    action,
+			kvCow:     make(stateDelta),
+			counts:    &basics.StateSchema{},
+			maxCounts: &basics.StateSchema{},
+		}
+	}
+	getSchema := func(u, b int) basics.StateSchema {
+		return basics.StateSchema{NumUint: uint64(u), NumByteSlice: uint64(b)}
+	}
+
+	parent := emptyStorageDelta(0)
+	child := emptyStorageDelta(0)
+
+	chkEmpty := func(delta *storageDelta) {
+		a.Empty(delta.action)
+		a.Empty(*delta.counts)
+		a.Empty(*delta.maxCounts)
+		a.Equal(0, len(delta.kvCow))
+	}
+
+	parent.applyChild(&child)
+	chkEmpty(&parent)
+	chkEmpty(&child)
+
+	child.action = deallocAction
+	child.kvCow["key1"] = valueDelta{}
+	a.Panics(func() { parent.applyChild(&child) })
+
+	// check child overwrites values
+	child.action = allocAction
+	s1 := getSchema(1, 2)
+	s2 := getSchema(3, 4)
+	child.counts = &s1
+	child.maxCounts = &s2
+	parent.applyChild(&child)
+	a.Equal(allocAction, parent.action)
+	a.Equal(1, len(parent.kvCow))
+	a.Equal(getSchema(1, 2), *parent.counts)
+	a.Equal(getSchema(3, 4), *parent.maxCounts)
+
+	// check child is correctly merged into parent
+	empty := func() valueDelta {
+		return valueDelta{
+			old:       basics.TealValue{},
+			new:       basics.TealValue{},
+			oldExists: false, newExists: false,
+		}
+	}
+	created := func(v uint64) valueDelta {
+		return valueDelta{
+			old:       basics.TealValue{},
+			new:       basics.TealValue{Type: basics.TealUintType, Uint: v},
+			oldExists: false, newExists: true,
+		}
+	}
+	updated := func(v1, v2 uint64) valueDelta {
+		return valueDelta{
+			old:       basics.TealValue{Type: basics.TealUintType, Uint: v1},
+			new:       basics.TealValue{Type: basics.TealUintType, Uint: v2},
+			oldExists: true, newExists: true,
+		}
+	}
+	deleted := func(v uint64) valueDelta {
+		return valueDelta{
+			old:       basics.TealValue{Type: basics.TealUintType, Uint: v},
+			new:       basics.TealValue{},
+			oldExists: true, newExists: false,
+		}
+	}
+
+	var tests = []struct {
+		name   string
+		pkv    stateDelta
+		ckv    stateDelta
+		result stateDelta
+	}{
+		{
+			// parent and child have unique keys
+			name:   "unique-keys",
+			pkv:    map[string]valueDelta{"key1": created(1), "key2": updated(1, 2), "key3": deleted(3)},
+			ckv:    map[string]valueDelta{"key4": created(4), "key5": updated(4, 5), "key6": deleted(6)},
+			result: map[string]valueDelta{"key1": created(1), "key2": updated(1, 2), "key3": deleted(3), "key4": created(4), "key5": updated(4, 5), "key6": deleted(6)},
+		},
+		{
+			// child updates all parent keys
+			name:   "update-keys",
+			pkv:    map[string]valueDelta{"key1": created(1), "key2": updated(1, 2), "key3": deleted(3)},
+			ckv:    map[string]valueDelta{"key1": updated(1, 2), "key2": updated(2, 3), "key3": updated(0, 4)},
+			result: map[string]valueDelta{"key1": created(2), "key2": updated(1, 3), "key3": updated(3, 4)},
+		},
+		{
+			// child deletes all parent keys
+			name:   "delete-keys",
+			pkv:    map[string]valueDelta{"key1": created(1), "key2": updated(1, 2), "key3": deleted(3)},
+			ckv:    map[string]valueDelta{"key1": deleted(1), "key2": deleted(2), "key3": deleted(4)},
+			result: map[string]valueDelta{"key1": empty(), "key2": deleted(1), "key3": deleted(3)},
+		},
+		{
+			// child re-creates all parent keys
+			name:   "delete-keys",
+			pkv:    map[string]valueDelta{"key1": created(1), "key2": updated(1, 2), "key3": deleted(3)},
+			ckv:    map[string]valueDelta{"key1": created(2), "key2": created(3), "key3": created(4)},
+			result: map[string]valueDelta{"key1": created(2), "key2": updated(1, 3), "key3": updated(3, 4)},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			parent := emptyStorageDelta(0)
+			ps := getSchema(len(test.pkv), 0)
+			parent.counts = &ps
+			parent.kvCow = test.pkv
+
+			child := emptyStorageDelta(remainAllocAction)
+			cs := getSchema(len(test.ckv)+len(test.pkv), 0)
+			child.counts = &cs
+			child.kvCow = test.ckv
+
+			parent.applyChild(&child)
+			a.Equal(test.result, parent.kvCow)
+			a.Equal(cs, *parent.counts)
+		})
+	}
+}
+
+func TestApplyStorageDelta(t *testing.T) {
+	a := require.New(t)
+
+	created := valueDelta{
+		old:       basics.TealValue{},
+		new:       basics.TealValue{Type: basics.TealUintType, Uint: 11},
+		oldExists: false, newExists: true,
+	}
+	updated := valueDelta{
+		old:       basics.TealValue{Type: basics.TealUintType, Uint: 22},
+		new:       basics.TealValue{Type: basics.TealUintType, Uint: 33},
+		oldExists: true, newExists: true,
+	}
+	deleted := valueDelta{
+		old:       basics.TealValue{Type: basics.TealUintType, Uint: 44},
+		new:       basics.TealValue{},
+		oldExists: true, newExists: false,
+	}
+
+	freshAD := func(kv basics.TealKeyValue) basics.AccountData {
+		ad := basics.AccountData{}
+		ad.AppParams = map[basics.AppIndex]basics.AppParams{
+			1: {GlobalState: make(basics.TealKeyValue)},
+			2: {GlobalState: kv},
+		}
+		ad.AppLocalStates = map[basics.AppIndex]basics.AppLocalState{
+			1: {KeyValue: make(basics.TealKeyValue)},
+			2: {KeyValue: kv},
+		}
+		return ad
+	}
+
+	applyAll := func(kv basics.TealKeyValue, sd *storageDelta) basics.AccountData {
+		data, err := applyStorageDelta(freshAD(kv), storagePtr{1, true}, sd)
+		a.NoError(err)
+		data, err = applyStorageDelta(data, storagePtr{2, true}, sd)
+		a.NoError(err)
+		data, err = applyStorageDelta(data, storagePtr{1, false}, sd)
+		a.NoError(err)
+		data, err = applyStorageDelta(data, storagePtr{2, false}, sd)
+		a.NoError(err)
+		return data
+	}
+
+	kv := basics.TealKeyValue{
+		"key1": basics.TealValue{Type: basics.TealUintType, Uint: 1},
+		"key2": basics.TealValue{Type: basics.TealUintType, Uint: 2},
+		"key3": basics.TealValue{Type: basics.TealUintType, Uint: 3},
+	}
+	sdu := storageDelta{kvCow: map[string]valueDelta{"key4": created, "key5": updated, "key6": deleted}}
+	sdd := storageDelta{kvCow: map[string]valueDelta{"key1": created, "key2": updated, "key3": deleted}}
+
+	// check no action
+	// no op
+	data := applyAll(kv, &sdu)
+	a.Equal(0, len(data.AppParams[1].GlobalState))
+	a.Equal(len(kv), len(data.AppParams[2].GlobalState))
+	a.Equal(0, len(data.AppLocalStates[1].KeyValue))
+	a.Equal(len(kv), len(data.AppLocalStates[2].KeyValue))
+
+	// check dealloc action
+	// delete all
+	sdu.action = deallocAction
+	data = applyAll(kv, &sdu)
+	a.Equal(0, len(data.AppParams[1].GlobalState))
+	a.Equal(0, len(data.AppParams[2].GlobalState))
+	a.Equal(0, len(data.AppLocalStates[1].KeyValue))
+	a.Equal(0, len(data.AppLocalStates[2].KeyValue))
+
+	// check alloc action
+	// re-alloc storage and apply delta
+	sdu.action = allocAction
+	data = applyAll(kv, &sdu)
+	a.Equal(2, len(data.AppParams[1].GlobalState))
+	a.Equal(2, len(data.AppParams[2].GlobalState))
+	a.Equal(2, len(data.AppLocalStates[1].KeyValue))
+	a.Equal(2, len(data.AppLocalStates[2].KeyValue))
+
+	// check remain action
+	// unique keys: merge storage and deltas
+	testUniqueKeys := func(state1 basics.TealKeyValue, state2 basics.TealKeyValue) {
+		a.Equal(2, len(state1))
+		a.Equal(created.new.Uint, state1["key4"].Uint)
+		a.Equal(updated.new.Uint, state1["key5"].Uint)
+
+		a.Equal(5, len(state2))
+		a.Equal(uint64(1), state2["key1"].Uint)
+		a.Equal(uint64(2), state2["key2"].Uint)
+		a.Equal(uint64(3), state2["key3"].Uint)
+		a.Equal(created.new.Uint, state2["key4"].Uint)
+		a.Equal(updated.new.Uint, state2["key5"].Uint)
+	}
+
+	sdu.action = remainAllocAction
+	data = applyAll(kv, &sdu)
+	testUniqueKeys(data.AppParams[1].GlobalState, data.AppParams[2].GlobalState)
+	testUniqueKeys(data.AppLocalStates[1].KeyValue, data.AppLocalStates[2].KeyValue)
+
+	// check remain action
+	// duplicate keys: merge storage and deltas
+	testDuplicateKeys := func(state1 basics.TealKeyValue, state2 basics.TealKeyValue) {
+		a.Equal(2, len(state1))
+		a.Equal(created.new.Uint, state1["key1"].Uint)
+		a.Equal(updated.new.Uint, state1["key2"].Uint)
+
+		a.Equal(2, len(state2))
+		a.Equal(created.new.Uint, state1["key1"].Uint)
+		a.Equal(updated.new.Uint, state1["key2"].Uint)
+	}
+
+	sdd.action = remainAllocAction
+	data = applyAll(kv, &sdd)
+	testDuplicateKeys(data.AppParams[1].GlobalState, data.AppParams[2].GlobalState)
+	testDuplicateKeys(data.AppLocalStates[1].KeyValue, data.AppLocalStates[2].KeyValue)
 }

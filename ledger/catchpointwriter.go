@@ -29,7 +29,6 @@ import (
 
 	"github.com/algorand/msgp/msgp"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/protocol"
@@ -42,13 +41,7 @@ const (
 
 	// catchpointFileVersion is the catchpoint file version
 	catchpointFileVersion = uint64(0200)
-
-	// maxEncodedAppStateEntries denotes max possible key/value entries for an account
-	maxEncodedAppStateEntries = basics.EncodedMaxKeyValueEntries * (basics.EncodedMaxAppParams + basics.EncodedMaxAppLocalStates)
 )
-
-// max key or value length including encoding overhead
-var maxAppKeyValueLen = config.MaxBytesKeyValueLen * 2
 
 // catchpointWriter is the struct managing the persistance of accounts data into the catchpoint file.
 // it's designed to work in a step fashion : a caller will call the WriteStep method in a loop until
