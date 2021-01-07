@@ -321,6 +321,8 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		return err
 	}
 
+	au.baseAccounts.init(1000)
+
 	writingCatchpointDigest, err = au.initializeCaches(lastBalancesRound, lastestBlockRound, basics.Round(writingCatchpointRound))
 	if err != nil {
 		return err
@@ -331,7 +333,7 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	}
 
 	au.voters = &votersTracker{}
-	au.baseAccounts.init(1000)
+
 	err = au.voters.loadFromDisk(l, au)
 	if err != nil {
 		return err
@@ -1423,6 +1425,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	if rnd != au.latest()+1 {
 		au.log.Panicf("accountUpdates: newBlockImpl %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
 	}
+	au.log.Infof("newBlockImpl for round %d", rnd)
 	au.deltas = append(au.deltas, delta.accts)
 	au.protos = append(au.protos, proto)
 	au.creatableDeltas = append(au.creatableDeltas, delta.creatables)
@@ -1441,8 +1444,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	var oldPersistedData persistedAccountData
 	var err error
 	loadedFromAccounts, loadedFromBaseAccounts, lookedup := 0, 0, 0
+	au.log.Infof("(tsachi) newBlockImpl last rewards : %#v", newTotals)
 	for addr, data := range delta.accts {
-
 		if latestAcctData, has := au.accounts[addr]; has {
 			oldAcctData = latestAcctData.data
 			loadedFromAccounts++
@@ -1455,11 +1458,20 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 			if err != nil {
 				au.log.Panicf("accountUpdates: newBlockImpl failed to lookup account %v when processing round %d : %v", addr, rnd, err)
 			}
+			//au.log.Infof("(tsachi) newBlockImpl loaded account data for address %v on block %d", addr, rnd)
 			oldAcctData = oldPersistedData.accountData
 			lookedup++
 		}
+		au.log.Infof("(tsachi) newBlockImpl old account : %#v", oldAcctData)
+		au.log.Infof("(tsachi) newBlockImpl new account : %#v", data.new)
 		newTotals.delAccount(proto, oldAcctData, &ot)
+		if ot.Overflowed {
+			au.log.Panicf("accountUpdates: newBlockImpl %d overflowed totals after del", rnd)
+		}
 		newTotals.addAccount(proto, data.new, &ot)
+		if ot.Overflowed {
+			au.log.Panicf("accountUpdates: newBlockImpl %d overflowed totals after add", rnd)
+		}
 
 		macct := au.accounts[addr]
 		macct.ndeltas++
@@ -1475,7 +1487,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 		mcreat.ndeltas++
 		au.creatables[cidx] = mcreat
 	}
-
+	au.log.Infof("(tsachi) newBlockImpl accounts %d base accounts %d lookup %d", loadedFromAccounts, loadedFromBaseAccounts, lookedup)
 	if ot.Overflowed {
 		au.log.Panicf("accountUpdates: newBlockImpl %d overflowed totals", rnd)
 	}
@@ -1487,7 +1499,12 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	au.roundTotals = append(au.roundTotals, newTotals)
 
 	au.voters.newBlock(blk.BlockHeader)
-	au.log.Infof("(tsachi) newBlockImpl accounts %d base accounts %d lookup %d", loadedFromAccounts, loadedFromBaseAccounts, lookedup)
+
+	// calling resize would drop old entries from the base accounts.
+	newBaseAccountSize := (len(au.accounts) + 1) + 1000
+	/*removedCount := */ au.baseAccounts.resize(newBaseAccountSize)
+
+	//au.log.Infof("(tsachi) newBlockImpl resizing to %d, removed entries count %d", newBaseAccountSize, removedCount)
 }
 
 // lookupWithRewardsImpl returns the account data for a given address at a given round.
@@ -1551,6 +1568,7 @@ func (au *accountUpdates) lookupWithRewardsImpl(rnd basics.Round, addr basics.Ad
 
 		// check the baseAccounts -
 		if macct, has := au.baseAccounts.read(addr); has {
+			au.baseAccounts.queueDeferredWrite(macct)
 			return macct.accountData, nil
 		}
 
@@ -1634,6 +1652,7 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 
 		// check the baseAccounts -
 		if macct, has := au.baseAccounts.read(addr); has {
+			au.baseAccounts.queueDeferredWrite(macct)
 			return macct.accountData, rnd, nil
 		}
 
@@ -1912,7 +1931,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			return err
 		}
 
-		err = totalsNewRounds(tx, deltas[:offset], roundTotals[1:offset+1], protos[1:offset+1], baseAccounts)
+		err = totalsNewRounds(tx, deltas[:offset], roundTotals[1:offset+1], protos[1:offset+1], baseAccounts, dbRound+basics.Round(offset))
 		if err != nil {
 			return err
 		}
@@ -2013,11 +2032,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.creatableDeltas = au.creatableDeltas[offset:]
 	au.dbRound = newBase
 	au.lastFlushTime = flushTime
-
-	// calling resize would drop old entries from the base accounts.
-	removedCount := au.baseAccounts.resize((len(au.accounts) + 1) * int(lookback))
-
-	au.log.Infof("(tsachi) commitRound resizing to %d, removed entries count %d", (len(au.accounts)+1)*int(lookback), removedCount)
 
 	au.accountsMu.Unlock()
 	au.accountsReadCond.Broadcast()

@@ -20,6 +20,7 @@ import (
 	"container/list"
 
 	"github.com/algorand/go-algorand/data/basics"
+	//"github.com/algorand/go-algorand/logging"
 )
 
 // mruAccounts provides a storage class for the most recently used accounts data.
@@ -49,6 +50,7 @@ func (m *mruAccounts) queueDeferredWrite(acct persistedAccountData) {
 	select {
 	case m.deferredWrites <- acct:
 	default:
+		//logging.Base().Infof("(tsachi) queueDeferredWrite unable to write defferred entry")
 	}
 }
 

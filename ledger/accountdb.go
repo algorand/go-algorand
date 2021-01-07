@@ -27,6 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -634,9 +635,9 @@ func (qs *accountsDbQueries) lookup(addr basics.Address) (data persistedAccountD
 		var rowid sql.NullInt64
 		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &dbRound, &buf)
 		if err == nil {
+			data.addr = addr
 			if len(buf) > 0 && rowid.Valid {
 				data.rowid = rowid.Int64
-				data.addr = addr
 				return protocol.Decode(buf, &data.accountData)
 			}
 			// we don't have that account, just return the database round.
@@ -939,14 +940,24 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 			// non-zero rowid means we had a previous value.
 			if data.new.IsZero() {
 				// new value is zero, which means we need to delete the current value.
-				_, err = deleteByRowIDStmt.Exec(baseAcct.rowid)
+				result, err = deleteByRowIDStmt.Exec(baseAcct.rowid)
 				if err == nil {
 					baseAcct.rowid = 0
 					baseAccounts[addr] = baseAcct
 				}
+				var rowsAffected int64
+				rowsAffected, err = result.RowsAffected()
+				if rowsAffected != 1 {
+					err = fmt.Errorf("failed to delete row %d", baseAcct.rowid)
+				}
 			} else {
 				normBalance := data.new.NormalizedOnlineBalance(proto)
-				_, err = updateStmt.Exec(normBalance, protocol.Encode(&data.new), baseAcct.rowid)
+				result, err = updateStmt.Exec(normBalance, protocol.Encode(&data.new), baseAcct.rowid)
+				var rowsAffected int64
+				rowsAffected, err = result.RowsAffected()
+				if rowsAffected != 1 {
+					err = fmt.Errorf("failed to update row %d", baseAcct.rowid)
+				}
 			}
 		}
 
@@ -984,7 +995,7 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 }
 
 // totalsNewRounds updates the accountsTotals by applying series of round changes
-func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, accountTotals []AccountTotals, protos []config.ConsensusParams, baseAccounts map[basics.Address]persistedAccountData) (err error) {
+func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, accountTotals []AccountTotals, protos []config.ConsensusParams, baseAccounts map[basics.Address]persistedAccountData, endRound basics.Round) (err error) {
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx, false)
 	if err != nil {
@@ -1017,7 +1028,7 @@ func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, acco
 		err = fmt.Errorf("overflow computing totals")
 		return
 	}
-
+	logging.Base().Infof("(tsachi) : totals for round %d are %#v", endRound, totals)
 	err = accountsPutTotals(tx, totals, false)
 	if err != nil {
 		return
