@@ -127,6 +127,12 @@ type accountDeltaCount struct {
 	ndeltas int
 }
 
+type persistedAccountData struct {
+	addr        basics.Address
+	accountData basics.AccountData
+	rowid       int64
+}
+
 // catchpointState is used to store catchpoint related variables into the catchpointstate table.
 type catchpointState string
 
@@ -510,7 +516,7 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 		return nil, err
 	}
 
-	qs.lookupStmt, err = r.Prepare("SELECT rnd, data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
+	qs.lookupStmt, err = r.Prepare("SELECT accountbase.rowid, rnd, data FROM acctrounds LEFT JOIN accountbase ON address=? WHERE id='acctbase'")
 	if err != nil {
 		return nil, err
 	}
@@ -622,13 +628,16 @@ func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype bas
 // lookup looks up for a the account data given it's address. It returns the current database round and the matching
 // account data, if such was found. If no matching account data could be found for the given address, an empty account data would
 // be retrieved.
-func (qs *accountsDbQueries) lookup(addr basics.Address) (data basics.AccountData, dbRound basics.Round, err error) {
+func (qs *accountsDbQueries) lookup(addr basics.Address) (data persistedAccountData, dbRound basics.Round, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
-		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&dbRound, &buf)
+		var rowid sql.NullInt64
+		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &dbRound, &buf)
 		if err == nil {
-			if len(buf) > 0 {
-				return protocol.Decode(buf, &data)
+			if len(buf) > 0 && rowid.Valid {
+				data.rowid = rowid.Int64
+				data.addr = addr
+				return protocol.Decode(buf, &data.accountData)
 			}
 			// we don't have that account, just return the database round.
 			return nil
@@ -880,9 +889,9 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool)
 }
 
 // accountsNewRound updates the accountbase and assetcreators by applying the provided deltas to the accounts / creatables.
-func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, creatables map[basics.CreatableIndex]modifiedCreatable, proto config.ConsensusParams) (err error) {
+func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, creatables map[basics.CreatableIndex]modifiedCreatable, baseAccounts map[basics.Address]persistedAccountData, proto config.ConsensusParams) (err error) {
 
-	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteStmt, replaceStmt *sql.Stmt
+	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteStmt, deleteByRowIDStmt, insertStmt, updateStmt *sql.Stmt
 
 	deleteStmt, err = tx.Prepare("DELETE FROM accountbase WHERE address=?")
 	if err != nil {
@@ -890,20 +899,57 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 	}
 	defer deleteStmt.Close()
 
-	replaceStmt, err = tx.Prepare("REPLACE INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
+	deleteByRowIDStmt, err = tx.Prepare("DELETE FROM accountbase WHERE rowid=?")
 	if err != nil {
 		return
 	}
-	defer replaceStmt.Close()
+	defer deleteByRowIDStmt.Close()
 
+	insertStmt, err = tx.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
+	if err != nil {
+		return
+	}
+	defer insertStmt.Close()
+
+	updateStmt, err = tx.Prepare("UPDATE accountbase SET normalizedonlinebalance = ?, data = ? WHERE rowid = ?")
+	if err != nil {
+		return
+	}
+	defer updateStmt.Close()
+	var result sql.Result
 	for addr, data := range updates {
-		if data.new.IsZero() {
-			// prune empty accounts
-			_, err = deleteStmt.Exec(addr[:])
+		baseAcct := baseAccounts[addr]
+		if baseAcct.rowid == 0 {
+			// zero rowid means we don't have a previous value.
+			if data.new.IsZero() {
+				// if we didn't had it before, and we don't have anything now, just skip it.
+			} else {
+				// create a new entry.
+				normBalance := data.new.NormalizedOnlineBalance(proto)
+				result, err = insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data.new))
+				if err != nil {
+					return
+				}
+				baseAcct.rowid, err = result.LastInsertId()
+				if err == nil {
+					baseAccounts[addr] = baseAcct
+				}
+			}
 		} else {
-			normBalance := data.new.NormalizedOnlineBalance(proto)
-			_, err = replaceStmt.Exec(addr[:], normBalance, protocol.Encode(&data.new))
+			// non-zero rowid means we had a previous value.
+			if data.new.IsZero() {
+				// new value is zero, which means we need to delete the current value.
+				_, err = deleteByRowIDStmt.Exec(baseAcct.rowid)
+				if err == nil {
+					baseAcct.rowid = 0
+					baseAccounts[addr] = baseAcct
+				}
+			} else {
+				normBalance := data.new.NormalizedOnlineBalance(proto)
+				_, err = updateStmt.Exec(normBalance, protocol.Encode(&data.new), baseAcct.rowid)
+			}
 		}
+
 		if err != nil {
 			return
 		}
@@ -938,19 +984,32 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 }
 
 // totalsNewRounds updates the accountsTotals by applying series of round changes
-func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, accountTotals []AccountTotals, protos []config.ConsensusParams) (err error) {
+func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, accountTotals []AccountTotals, protos []config.ConsensusParams, baseAccounts map[basics.Address]persistedAccountData) (err error) {
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx, false)
 	if err != nil {
 		return
 	}
 
+	// copy the baseAccount map, since we don't want to modify the input map.
+	accounts := make(map[basics.Address]basics.AccountData, len(baseAccounts))
+	for addr, acctData := range baseAccounts {
+		accounts[addr] = acctData.accountData
+	}
+
 	for i := 0; i < len(updates); i++ {
 		totals.applyRewards(accountTotals[i].RewardsLevel, &ot)
 
-		for _, data := range updates[i] {
-			totals.delAccount(protos[i], data.old, &ot)
+		for addr, data := range updates[i] {
+			if oldAccountData, has := accounts[addr]; has {
+				totals.delAccount(protos[i], oldAccountData, &ot)
+			} else {
+				err = fmt.Errorf("missing old account data")
+				return
+			}
+
 			totals.addAccount(protos[i], data.new, &ot)
+			accounts[addr] = data.new
 		}
 	}
 
@@ -964,6 +1023,45 @@ func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, acco
 		return
 	}
 
+	return
+}
+
+// loadMissingBaseAccountsEntries updates the entries on the baseAccounts map with the provided addresses
+func loadMissingBaseAccountsEntries(tx *sql.Tx, addresses []basics.Address, baseAccounts map[basics.Address]persistedAccountData) (err error) {
+	if len(addresses) == 0 {
+		return nil
+	}
+	selectStmt, err := tx.Prepare("SELECT rowid, data FROM accountbase WHERE address=?")
+	if err != nil {
+		return
+	}
+	defer selectStmt.Close()
+	var rowid int64
+	var acctDataBuf []byte
+	var acctData basics.AccountData
+	for _, addr := range addresses {
+		err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &acctDataBuf)
+		switch err {
+		case nil:
+			if len(acctDataBuf) > 0 {
+				err = protocol.Decode(acctDataBuf, &acctData)
+				if err != nil {
+					return err
+				}
+				baseAccounts[addr] = persistedAccountData{addr: addr, accountData: acctData, rowid: rowid}
+			} else {
+				// to retain backward compatability, we will treat this condition as if we don't have the account.
+				baseAccounts[addr] = persistedAccountData{addr: addr}
+			}
+		case sql.ErrNoRows:
+			// we don't have that account, just return an empty record.
+			baseAccounts[addr] = persistedAccountData{addr: addr}
+			err = nil
+		default:
+			// unexpected error - let the caller know that we couldn't complete the operation.
+			return err
+		}
+	}
 	return
 }
 
