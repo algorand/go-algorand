@@ -3850,7 +3850,7 @@ func TestAnyRekeyToOrApplicationRaisesMinTealVersion(t *testing.T) {
 				require.Contains(t, err.Error(), expected)
 			}
 
-			// Should succeed for all versions >= validFromVersionn
+			// Should succeed for all versions >= validFromVersion
 			for v := cse.validFromVersion; v <= AssemblerMaxVersion; v++ {
 				ops, err := AssembleStringWithVersion(source, v)
 				require.NoError(t, err)
