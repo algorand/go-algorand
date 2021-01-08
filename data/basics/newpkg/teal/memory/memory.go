@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,16 +27,16 @@ import (
 // Every address can either be empty or contain a DataType.
 //
 // Segment is able to  save a snapshot of its state which can later be restored by calling RestoreSnapshot.
-// After calling SaveSnapshot runtime overhead and memory usage of Segment increases, calling DiscardSnapshot can
-// re-optimize Segment.
+// After calling SaveSnapshot runtime overhead and memory usage of Segment increases, calling DiscardSnapshot will
+// remove this overhead.
 //
 // By using MarshalBinaryTo a Segment can be efficiently serialized to a compact and simple binary representation.
 // by using ReadSegment the Segment can be reconstructed from this binary representation.
 //
 // Any type which implements DataType interface can be stored in a Segment. To enable serialization, a newly defined type
 // needs to register a DataTypeReader using RegisterReader function. Also for correct restoration of snapshots,
-// the new DataType must use NotifyUpdate method properly. Current implementation of memory package can support
-// up to 126 different data types.
+// the new DataType must use NotifyUpdate or NotifyUpdateWithKey method properly. Current implementation of memory
+// package can support up to 126 different data types.
 //
 // The overall cost of a Segment can never be exceeded beyond MaxCost value. The value of MaxCost is set
 // when creating a Segment and can be updated using SetMaxCost function. The cost calculation is done using
@@ -68,8 +68,7 @@ func NewSegment(size int, maxCost int) *Segment {
 	return r
 }
 
-// TODO: add documentation
-// ReadSegment
+// ReadSegment reads the binary representation of a Segment from an io.ByteReader.
 func ReadSegment(r io.ByteReader) (*Segment, error) {
 	temp, err := binary.ReadUInt(r)
 	if err != nil {
@@ -201,7 +200,8 @@ func (ms *Segment) RestoreSnapshot() {
 	ms.snapManager.reset()
 }
 
-// MarshalBinaryTo
+// MarshalBinaryTo will write the binary representation of this memory segment using an io.Writer. The format of
+// this representation is as follows: ...
 func (ms *Segment) MarshalBinaryTo(w io.Writer) (n int, err error) {
 	sw := binary.NewSilentWriter(w)
 	sw.WriteUInt(uint64(ms.maxSize))
@@ -210,10 +210,26 @@ func (ms *Segment) MarshalBinaryTo(w io.Writer) (n int, err error) {
 	return sw.Count(), sw.Error()
 }
 
+// NotifyUpdate notifies this memory Segment that a value which is stored inside this memory Segment has changed. 'pointer' is a
+// pointer to that value which essentially must be a go's primitive data type. This pointer will be used for rewriting
+// the saved snapshot of that value when RestoreSnapshot is called. NotifyUpdate can only
+// be used for data types that have a fixed location in RAM. DataTypes without a fixed memory location, like maps or
+// dynamic lists, should only use NotifyUpdateWithKey method.
 func (ms *Segment) NotifyUpdate(pointer interface{}, oldValue interface{}) {
 	ms.snapManager.notifyUpdate(pointer, oldValue)
 }
 
+// NotifyUpdateWithKey notifies this memory Segment that a value which is stored inside this memory Segment has changed.
+// This value belongs to a DataType that implements the Restorer interface and is the 'owner' of this value.
+// 'internalKey' is any type of internal address Restorer uses for relocating the internal value that its state must be restored.
+// 'OldValue' represents the old state of Restorer that must be restored after calling RestoreSnapshot.
+// Only the oldest 'oldValue' for any (owner, internalKey) pair will be kept.
+func (ms *Segment) NotifyUpdateWithKey(owner Restorer, internalKey string, oldValue interface{}) {
+	ms.snapManager.notifyUpdateWithKey(owner, internalKey, oldValue)
+}
+
+// MaxCost returns the maximum protocol defined cost that this Segment may have. The overall cost of a Segment can
+// never be exceeded beyond MaxCost value.
 func (ms *Segment) MaxCost() int {
 	return ms.maxCost
 }
@@ -241,6 +257,8 @@ func (ms *Segment) String() string {
 	return str
 }
 
+// Content returns a text representation of this Segment which is less verbose than String() and only shows
+// the main content of Segment.
 func (ms *Segment) Content() string {
 	str := fmt.Sprintf("Memory Segment: (maxSize:%d)", ms.maxSize)
 	for i, data := range ms.segment {

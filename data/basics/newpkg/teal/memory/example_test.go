@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,9 +19,10 @@ package memory_test
 import (
 	"bytes"
 	"fmt"
-	"github.com/algorand/go-algorand/data/basics/newpkg/memory"
-	"github.com/algorand/go-algorand/data/basics/newpkg/teal"
 	"io"
+
+	"github.com/algorand/go-algorand/data/basics/newpkg/teal"
+	"github.com/algorand/go-algorand/data/basics/newpkg/teal/memory"
 )
 
 func ExampleNewSegment() {

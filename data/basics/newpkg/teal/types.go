@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/algorand/go-algorand/data/basics/newpkg/binary"
-	"github.com/algorand/go-algorand/data/basics/newpkg/memory"
+	"github.com/algorand/go-algorand/data/basics/newpkg/teal/memory"
 	"io"
 	"log"
 )
@@ -99,6 +99,8 @@ type ConstByteArray struct {
 	values []byte
 }
 
+// NewConstByteArray creates a new ConstByteArray that contains 'b'. When useInput is false it will make an internal copy
+// of 'b'. When useInput is true it will not make a copy of 'b' and the caller should not keep any references to it.
 func NewConstByteArray(b []byte, useInput bool) *ConstByteArray {
 	if len(b) > MaxArrayLength {
 		log.Panicf("%d exceeds max allowed array length: %d", len(b), MaxArrayLength)

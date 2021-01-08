@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -17,10 +17,11 @@
 package memory_test
 
 import (
-	"github.com/algorand/go-algorand/data/basics/newpkg/memory"
-	"github.com/algorand/go-algorand/data/basics/newpkg/teal"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/algorand/go-algorand/data/basics/newpkg/teal"
+	"github.com/algorand/go-algorand/data/basics/newpkg/teal/memory"
+	"github.com/stretchr/testify/require"
 )
 
 // TODO: add more test for serialization and type registration
@@ -65,10 +66,15 @@ func TestMemorySegment_Snapshot(t *testing.T) {
 			barr.Set(0, 5, m)
 			barr.Set(2, 6, m)
 			barr.Set(2, 10, m)
+			barr.Set(0, 6, m)
+			barr.Set(2, 15, m)
 			i, _ := m.Get(2)
 			i.(*teal.UInt).SetValue(45, m)
+			i.(*teal.UInt).SetValue(79, m)
+			want = "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->79\n[3, <nil>)]---><nil>\n[4, *teal.ByteArray)]--->[6 0 15 0]"
+			require.Equal(t, want, m.Content())
 			m.Delete(2)
-			want = "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, <nil>)]---><nil>\n[3, <nil>)]---><nil>\n[4, *teal.ByteArray)]--->[5 0 10 0]"
+			want = "Memory Segment: (maxSize:5)\n[0, <nil>)]---><nil>\n[1, <nil>)]---><nil>\n[2, <nil>)]---><nil>\n[3, <nil>)]---><nil>\n[4, *teal.ByteArray)]--->[6 0 15 0]"
 			require.Equal(t, want, m.Content())
 
 			m.AllocateAt(2, teal.NewUInt(42))
@@ -76,7 +82,7 @@ func TestMemorySegment_Snapshot(t *testing.T) {
 			i, _ = m.Get(0)
 			i.(*teal.UInt).SetValue(15, m)
 			i.(*teal.UInt).SetValue(16, m)
-			want = "Memory Segment: (maxSize:5)\n[0, *teal.UInt)]--->16\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->42\n[3, <nil>)]---><nil>\n[4, *teal.ByteArray)]--->[5 0 10 0]"
+			want = "Memory Segment: (maxSize:5)\n[0, *teal.UInt)]--->16\n[1, <nil>)]---><nil>\n[2, *teal.UInt)]--->42\n[3, <nil>)]---><nil>\n[4, *teal.ByteArray)]--->[6 0 15 0]"
 			require.Equal(t, want, m.Content())
 			require.Equal(t, memory.NewSegment(5, 600).CurrentCost()+2*i.Cost()+barr.Cost(), m.CurrentCost())
 

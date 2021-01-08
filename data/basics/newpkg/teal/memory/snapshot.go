@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -21,23 +21,42 @@ import (
 	"log"
 )
 
+type Restorer interface {
+	// Restore restores the oldValue for some value inside this Restorer that is specified by 'internalKey'.
+	Restore(internalKey string, oldValue interface{})
+}
+
+type snapshotKey struct {
+	owner       Restorer
+	internalKey string
+}
+
 type snapshotManager struct {
-	savedSnapshots map[interface{}]interface{}
+	pointerSnapshots  map[interface{}]interface{}
+	restorerSnapshots map[snapshotKey]interface{}
+	isOn              bool
 }
 
 func (sm *snapshotManager) reset() {
-	sm.savedSnapshots = make(map[interface{}]interface{})
+	sm.pointerSnapshots = make(map[interface{}]interface{})
+	sm.restorerSnapshots = make(map[snapshotKey]interface{})
+	sm.isOn = true
 }
 
 func (sm *snapshotManager) turnOff() {
-	sm.savedSnapshots = nil
+	sm.pointerSnapshots = nil
+	sm.restorerSnapshots = nil
+	sm.isOn = false
 }
 
 func (sm *snapshotManager) restoreSnapshot() {
-	if sm.savedSnapshots == nil {
+	if !sm.isOn {
 		log.Panic("For restoring a snapshot u need to save one first!")
 	}
-	for pointer, value := range sm.savedSnapshots {
+	for key, oldValue := range sm.restorerSnapshots {
+		key.owner.Restore(key.internalKey, oldValue)
+	}
+	for pointer, value := range sm.pointerSnapshots {
 		switch p := pointer.(type) {
 		case *DataType:
 			if value == nil {
@@ -64,22 +83,34 @@ func (sm *snapshotManager) restoreSnapshot() {
 }
 
 func (sm *snapshotManager) notifyUpdate(pointer interface{}, oldValue interface{}) {
-	// if sm.savedSnapshots is nil that means the snapshotManager is turned off and this function has no effect.
-	if sm.savedSnapshots == nil {
-		return
+	// when snapshotManager is turned off this function has no effect.
+	if sm.isOn {
+		if _, exists := sm.pointerSnapshots[pointer]; !exists {
+			sm.pointerSnapshots[pointer] = oldValue
+		}
 	}
-	if _, exists := sm.savedSnapshots[pointer]; !exists {
-		sm.savedSnapshots[pointer] = oldValue
+}
+
+func (sm *snapshotManager) notifyUpdateWithKey(owner Restorer, internalKey string, oldValue interface{}) {
+	if sm.isOn {
+		key := snapshotKey{owner: owner, internalKey: internalKey}
+		if _, exists := sm.restorerSnapshots[key]; !exists {
+			sm.restorerSnapshots[key] = oldValue
+		}
 	}
 }
 
 func (sm *snapshotManager) String() string {
-	if sm.savedSnapshots == nil {
+	if sm.pointerSnapshots == nil {
 		return "<nil>"
 	}
-	str := "["
-	for _, v := range sm.savedSnapshots {
+	str := "pointers:["
+	for _, v := range sm.pointerSnapshots {
 		str += fmt.Sprintf("(%T %v)", v, v)
+	}
+	str += "] keys:["
+	for k, v := range sm.restorerSnapshots {
+		str += fmt.Sprintf("%v:(%T %v) ", k, v, v)
 	}
 	return str + "]"
 }
