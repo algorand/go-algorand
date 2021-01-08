@@ -1432,7 +1432,6 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	if rnd != au.latest()+1 {
 		au.log.Panicf("accountUpdates: newBlockImpl %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
 	}
-	au.log.Infof("newBlockImpl for round %d", rnd)
 	au.deltas = append(au.deltas, delta.accts)
 	au.protos = append(au.protos, proto)
 	au.creatableDeltas = append(au.creatableDeltas, delta.creatables)
@@ -1465,13 +1464,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 		}
 
 		newTotals.delAccount(proto, oldAcctData, &ot)
-		if ot.Overflowed {
-			au.log.Panicf("accountUpdates: newBlockImpl %d overflowed totals after del", rnd)
-		}
 		newTotals.addAccount(proto, data.new, &ot)
-		if ot.Overflowed {
-			au.log.Panicf("accountUpdates: newBlockImpl %d overflowed totals after add", rnd)
-		}
 
 		macct := au.accounts[addr]
 		macct.ndeltas++
