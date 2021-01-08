@@ -1373,8 +1373,8 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Addre
 					return err
 				}
 				if !deleted {
-					au.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
-					panic(nil)
+					au.log.Warnf("failed to delete hash '%s' from merkle trie for account %v, old account data %#v, delta old account data %#v", hex.EncodeToString(deleteHash), addr, oldAcctData, delta.old)
+					return fmt.Errorf("failed to delete hash")
 				} else {
 					accumulatedChanges++
 				}
@@ -1437,14 +1437,13 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	allBefore := newTotals.All()
 	newTotals.applyRewards(delta.hdr.RewardsLevel, &ot)
 
-	baseAccounts := au.baseAccounts.getDeferredWrites()
-	au.baseAccounts.writeAccounts(baseAccounts)
+	au.baseAccounts.flushPendingWrites()
 
 	var oldAcctData basics.AccountData
 	var oldPersistedData persistedAccountData
 	var err error
 	loadedFromAccounts, loadedFromBaseAccounts, lookedup := 0, 0, 0
-	au.log.Infof("(tsachi) newBlockImpl last rewards : %#v", newTotals)
+
 	for addr, data := range delta.accts {
 		if latestAcctData, has := au.accounts[addr]; has {
 			oldAcctData = latestAcctData.data
@@ -1458,12 +1457,10 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 			if err != nil {
 				au.log.Panicf("accountUpdates: newBlockImpl failed to lookup account %v when processing round %d : %v", addr, rnd, err)
 			}
-			//au.log.Infof("(tsachi) newBlockImpl loaded account data for address %v on block %d", addr, rnd)
 			oldAcctData = oldPersistedData.accountData
 			lookedup++
 		}
-		au.log.Infof("(tsachi) newBlockImpl old account : %#v", oldAcctData)
-		au.log.Infof("(tsachi) newBlockImpl new account : %#v", data.new)
+
 		newTotals.delAccount(proto, oldAcctData, &ot)
 		if ot.Overflowed {
 			au.log.Panicf("accountUpdates: newBlockImpl %d overflowed totals after del", rnd)
@@ -1487,7 +1484,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 		mcreat.ndeltas++
 		au.creatables[cidx] = mcreat
 	}
-	au.log.Infof("(tsachi) newBlockImpl accounts %d base accounts %d lookup %d", loadedFromAccounts, loadedFromBaseAccounts, lookedup)
+
 	if ot.Overflowed {
 		au.log.Panicf("accountUpdates: newBlockImpl %d overflowed totals", rnd)
 	}
@@ -1502,9 +1499,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 
 	// calling resize would drop old entries from the base accounts.
 	newBaseAccountSize := (len(au.accounts) + 1) + 1000
-	/*removedCount := */ au.baseAccounts.resize(newBaseAccountSize)
-
-	//au.log.Infof("(tsachi) newBlockImpl resizing to %d, removed entries count %d", newBaseAccountSize, removedCount)
+	au.baseAccounts.resize(newBaseAccountSize)
 }
 
 // lookupWithRewardsImpl returns the account data for a given address at a given round.
@@ -1567,10 +1562,12 @@ func (au *accountUpdates) lookupWithRewardsImpl(rnd basics.Round, addr basics.Ad
 		}
 
 		// check the baseAccounts -
-		if macct, has := au.baseAccounts.read(addr); has {
-			au.baseAccounts.queueDeferredWrite(macct)
+		/*if macct, has := au.baseAccounts.read(addr); has && macct.round == currentDbRound {
+			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
+			// would ensure that we promote this field.
+			au.baseAccounts.writePending(macct)
 			return macct.accountData, nil
-		}
+		}*/
 
 		au.accountsMu.RUnlock()
 		needUnlock = false
@@ -1583,7 +1580,7 @@ func (au *accountUpdates) lookupWithRewardsImpl(rnd basics.Round, addr basics.Ad
 		// against the database.
 		persistedData, dbRound, err = au.accountsq.lookup(addr)
 		if dbRound == currentDbRound {
-			au.baseAccounts.queueDeferredWrite(persistedData)
+			au.baseAccounts.writePending(persistedData)
 			return persistedData.accountData, err
 		}
 
@@ -1651,10 +1648,12 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 		}
 
 		// check the baseAccounts -
-		if macct, has := au.baseAccounts.read(addr); has {
-			au.baseAccounts.queueDeferredWrite(macct)
+		/*if macct, has := au.baseAccounts.read(addr); has && macct.round == currentDbRound {
+			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
+			// would ensure that we promote this field.
+			au.baseAccounts.writePending(macct)
 			return macct.accountData, rnd, nil
-		}
+		}*/
 
 		if synchronized {
 			au.accountsMu.RUnlock()
@@ -1668,7 +1667,7 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 		// against the database.
 		persistedData, dbRound, err = au.accountsq.lookup(addr)
 		if dbRound == currentDbRound {
-			au.baseAccounts.queueDeferredWrite(persistedData)
+			au.baseAccounts.writePending(persistedData)
 			return persistedData.accountData, rnd, err
 		}
 		if synchronized {
@@ -1882,7 +1881,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	}
 
 	au.accountsMu.RUnlock()
-	au.log.Infof("(tsachi) commitRound missing acct %d / %d", len(missingBaseAccountAddresses), len(compactDeltas))
 
 	// in committedUpTo, we expect that this function to update the catchpointWriting when
 	// it's on a catchpoint round and it's an archival ledger. Doing this in a deferred function
@@ -1921,7 +1919,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 
-		err = loadMissingBaseAccountsEntries(tx, missingBaseAccountAddresses, baseAccounts)
+		err = accountsGet(tx, missingBaseAccountAddresses, baseAccounts)
 		if err != nil {
 			return err
 		}
@@ -1931,7 +1929,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			return err
 		}
 
-		err = totalsNewRounds(tx, deltas[:offset], roundTotals[1:offset+1], protos[1:offset+1], baseAccounts, dbRound+basics.Round(offset))
+		err = totalsNewRounds(tx, deltas[:offset], roundTotals[1:offset+1], protos[1:offset+1], baseAccounts)
 		if err != nil {
 			return err
 		}
@@ -1957,7 +1955,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		au.balancesTrie = nil
-		au.log.Warnf("unable to advance account snapshot: %v", err)
+		au.log.Warnf("unable to advance account snapshot (%d-%d): %v", dbRound, dbRound+basics.Round(offset), err)
 		return
 	}
 
@@ -1981,8 +1979,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	au.accountsMu.Lock()
 
-	au.baseAccounts.writeAccounts(baseAccounts)
-
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
 	for addr, acctDltCnt := range compactDeltas {
@@ -2000,11 +1996,12 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			macct.ndeltas -= cnt
 			au.accounts[addr] = macct
 		}
-	}
 
-	for addr, baseAccountsUpdate := range baseAccounts {
-		baseAccountsUpdate.accountData = compactDeltas[addr].accountDelta.new
-		au.baseAccounts.write(baseAccountsUpdate)
+		// update the au.baseAccounts with the changes we've made to the account:
+		persistedAcct := baseAccounts[addr]
+		persistedAcct.accountData = acctDltCnt.new
+		persistedAcct.round = dbRound + basics.Round(offset)
+		au.baseAccounts.write(persistedAcct)
 	}
 
 	for cidx, modCrt := range compactCreatableDeltas {
@@ -2056,6 +2053,7 @@ func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDel
 				if prev, has := outAccountDeltas[addr]; has {
 					outAccountDeltas[addr] = accountDeltaCount{
 						accountDelta: accountDelta{
+							old: prev.old,
 							new: acctDelta.new,
 						},
 						ndeltas: prev.ndeltas + 1,
@@ -2282,6 +2280,10 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 	if !au.vacuumOnStartup {
 		return
 	}
+
+	// vaccumming the database would modify the some of the tables rowid, so we need to make sure any stored in-memory
+	// rowid are flushed.
+	au.baseAccounts.resize(0)
 
 	startTime := time.Now()
 	vacuumExitCh := make(chan struct{}, 1)

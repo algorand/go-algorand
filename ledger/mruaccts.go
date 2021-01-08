@@ -20,23 +20,26 @@ import (
 	"container/list"
 
 	"github.com/algorand/go-algorand/data/basics"
-	//"github.com/algorand/go-algorand/logging"
 )
 
 // mruAccounts provides a storage class for the most recently used accounts data.
-// It doesn't have any syncronization primitive on it's own, but instead desiged so that it's
-// methods have a clear designation of the required syncronization model.
+// It doesn't have any syncronization primitive on it's own and require to be
+// syncronized by the caller.
 type mruAccounts struct {
+	// accountsList contain the list of persistedAccountData, where the front ones are the most "fresh"
+	// and the ones on the back are the oldest.
 	accountsList *list.List
-	accounts     map[basics.Address]*list.Element
-
-	deferredWrites chan persistedAccountData
+	// accounts provides fast access to the various elements in the list by using the account address
+	accounts map[basics.Address]*list.Element
+	// pendingAccounts are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
+	// it would call flushPendingWrites and these would be merged into the accounts/accountsList
+	pendingAccounts chan persistedAccountData
 }
 
 func (m *mruAccounts) init(deferredWrites int) {
 	m.accountsList = list.New()
 	m.accounts = make(map[basics.Address]*list.Element)
-	m.deferredWrites = make(chan persistedAccountData, deferredWrites)
+	m.pendingAccounts = make(chan persistedAccountData, deferredWrites)
 }
 
 func (m *mruAccounts) read(addr basics.Address) (data persistedAccountData, has bool) {
@@ -46,20 +49,11 @@ func (m *mruAccounts) read(addr basics.Address) (data persistedAccountData, has 
 	return persistedAccountData{}, false
 }
 
-func (m *mruAccounts) queueDeferredWrite(acct persistedAccountData) {
-	select {
-	case m.deferredWrites <- acct:
-	default:
-		//logging.Base().Infof("(tsachi) queueDeferredWrite unable to write defferred entry")
-	}
-}
-
-func (m *mruAccounts) getDeferredWrites() (updates map[basics.Address]persistedAccountData) {
-	updates = make(map[basics.Address]persistedAccountData)
+func (m *mruAccounts) flushPendingWrites() {
 	for {
 		select {
-		case br := <-m.deferredWrites:
-			updates[br.addr] = br
+		case pendingAccountData := <-m.pendingAccounts:
+			m.write(pendingAccountData)
 		default:
 			return
 		}
@@ -67,24 +61,28 @@ func (m *mruAccounts) getDeferredWrites() (updates map[basics.Address]persistedA
 	return
 }
 
+func (m *mruAccounts) writePending(acct persistedAccountData) {
+	select {
+	case m.pendingAccounts <- acct:
+	default:
+	}
+}
+
 func (m *mruAccounts) writeAccounts(updates map[basics.Address]persistedAccountData) {
 	for _, update := range updates {
-		if el := m.accounts[update.addr]; el != nil {
-			// already exists, update and promote.
-			el.Value = update
-			m.accountsList.MoveToFront(el)
-		} else {
-			// new entry.
-			m.accounts[update.addr] = m.accountsList.PushFront(update)
-		}
+		m.write(update)
 	}
 	return
 }
 
 func (m *mruAccounts) write(acctData persistedAccountData) {
 	if el := m.accounts[acctData.addr]; el != nil {
-		// already exists, update and promote.
-		el.Value = acctData
+		// already exists; is it a newer ?
+		existing := el.Value.(persistedAccountData)
+		if existing.round < acctData.round {
+			// we update with a newer version.
+			el.Value = acctData
+		}
 		m.accountsList.MoveToFront(el)
 	} else {
 		// new entry.
