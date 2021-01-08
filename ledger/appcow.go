@@ -204,7 +204,7 @@ func errAlreadyStorage(addr basics.Address, aidx basics.AppIndex, global bool) e
 	return fmt.Errorf("%v has already opted in to app %d", addr, aidx)
 }
 
-// Allocate creates kv storage for a given {addr, aidx, global} and happens on app creation (global) or opting in (local)
+// Allocate creates kv storage for a given {addr, aidx, global}. It is called on app creation (global) or opting in (local)
 func (cb *roundCowState) Allocate(addr basics.Address, aidx basics.AppIndex, global bool, space basics.StateSchema) error {
 	// Check that account is not already opted in
 	allocated, err := cb.allocated(addr, aidx, global)
@@ -227,7 +227,7 @@ func (cb *roundCowState) Allocate(addr basics.Address, aidx basics.AppIndex, glo
 	return nil
 }
 
-// Deallocate clears storage for {addr, aidx, global} and happens on app deletion (global) or closing out (local)
+// Deallocate clears storage for {addr, aidx, global}. It happens on app deletion (global) or closing out (local)
 func (cb *roundCowState) Deallocate(addr basics.Address, aidx basics.AppIndex, global bool) error {
 	// Check that account has allocated storage
 	allocated, err := cb.allocated(addr, aidx, global)
@@ -405,7 +405,7 @@ func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.Co
 }
 
 // StatefulEval runs application.
-// Executuion happens in a child cow and all modifications merged into parent if the program passes
+// Execution happens in a child cow and all modifications are merged into parent if the program passes
 func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta basics.EvalDelta, err error) {
 	// Make a child cow to eval our program in
 	calf := cb.child()
