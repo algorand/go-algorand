@@ -69,6 +69,16 @@ var trieCachedNodesCount = 9000
 // value was calibrated using BenchmarkCalibrateNodesPerPage
 var merkleCommitterNodesPerPage = int64(116)
 
+// baseAccountsPendingAccountsBufferSize defines the size of the base account pending accounts buffer size.
+// once a round, the entries from this buffer are being flushed into the base accounts map. Exceeding this
+// value would not be a failuire, but could slow things down ( since we would need to reload the missing account
+// data from the disk )
+const baseAccountsPendingAccountsBufferSize = 100000
+
+// baseAccountsPendingAccountsWarnThreshold defines the threshold at which the mruAccounts would generate a warning
+// after we've surpassed a given pending account size.
+const baseAccountsPendingAccountsWarnThreshold = 85000
+
 var trieMemoryConfig = merkletrie.MemoryConfig{
 	NodesCountPerPage:         merkleCommitterNodesPerPage,
 	CachedNodesCount:          trieCachedNodesCount,
@@ -80,7 +90,7 @@ var trieMemoryConfig = merkletrie.MemoryConfig{
 // the persistent state stored in the account DB (i.e., in the range of
 // rounds covered by the accountUpdates tracker).
 type modifiedAccount struct {
-	// data stores the most recent persistedAccountData for this modified
+	// data stores the most recent AccountData for this modified
 	// account.
 	data basics.AccountData
 
@@ -321,8 +331,6 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 		return err
 	}
 
-	au.baseAccounts.init(1000)
-
 	writingCatchpointDigest, err = au.initializeCaches(lastBalancesRound, lastestBlockRound, basics.Round(writingCatchpointRound))
 	if err != nil {
 		return err
@@ -333,7 +341,6 @@ func (au *accountUpdates) loadFromDisk(l ledgerForTracker) error {
 	}
 
 	au.voters = &votersTracker{}
-
 	err = au.voters.loadFromDisk(l, au)
 	if err != nil {
 		return err
@@ -1003,6 +1010,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	go au.commitSyncer(au.committedOffset)
 
 	lastBalancesRound = au.dbRound
+	au.baseAccounts.init(au.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
 
 	return
 }
@@ -1373,8 +1381,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Addre
 					return err
 				}
 				if !deleted {
-					au.log.Warnf("failed to delete hash '%s' from merkle trie for account %v, old account data %#v, delta old account data %#v", hex.EncodeToString(deleteHash), addr, oldAcctData, delta.old)
-					return fmt.Errorf("failed to delete hash")
+					au.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
 				} else {
 					accumulatedChanges++
 				}
@@ -1442,15 +1449,12 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	var oldAcctData basics.AccountData
 	var oldPersistedData persistedAccountData
 	var err error
-	loadedFromAccounts, loadedFromBaseAccounts, lookedup := 0, 0, 0
 
 	for addr, data := range delta.accts {
 		if latestAcctData, has := au.accounts[addr]; has {
 			oldAcctData = latestAcctData.data
-			loadedFromAccounts++
 		} else if baseAccountData, has := au.baseAccounts.read(addr); has {
 			oldAcctData = baseAccountData.accountData
-			loadedFromBaseAccounts++
 		} else {
 			// it's missing from the base accounts, so we'll try to load it from disk.
 			oldPersistedData, _, err = au.accountsq.lookup(addr)
@@ -1458,7 +1462,6 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 				au.log.Panicf("accountUpdates: newBlockImpl failed to lookup account %v when processing round %d : %v", addr, rnd, err)
 			}
 			oldAcctData = oldPersistedData.accountData
-			lookedup++
 		}
 
 		newTotals.delAccount(proto, oldAcctData, &ot)
@@ -1498,7 +1501,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	au.voters.newBlock(blk.BlockHeader)
 
 	// calling resize would drop old entries from the base accounts.
-	newBaseAccountSize := (len(au.accounts) + 1) + 1000
+	newBaseAccountSize := (len(au.accounts) + 1) + baseAccountsPendingAccountsBufferSize
 	au.baseAccounts.resize(newBaseAccountSize)
 }
 
@@ -1671,9 +1674,6 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 			return persistedData.accountData, rnd, err
 		}
 		if synchronized {
-			if err != nil {
-				au.log.Errorf("accountUpdates.lookupWithoutRewardsImpl: error calling lookup : %v", err)
-			}
 			if dbRound < currentDbRound {
 				au.log.Errorf("accountUpdates.lookupWithoutRewardsImpl: database round %d is behind in-memory round %d", dbRound, currentDbRound)
 				return basics.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
@@ -1684,9 +1684,6 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 				au.accountsReadCond.Wait()
 			}
 		} else {
-			if err != nil {
-				au.log.Errorf("accountUpdates.lookupWithoutRewardsImpl: error calling lookup : %v", err)
-			}
 			// in non-sync mode, we don't wait since we already assume that we're synchronized.
 			au.log.Errorf("accountUpdates.lookupWithoutRewardsImpl: database round %d mismatching in-memory round %d", dbRound, currentDbRound)
 			return basics.AccountData{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}

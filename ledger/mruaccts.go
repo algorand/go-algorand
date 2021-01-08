@@ -20,6 +20,7 @@ import (
 	"container/list"
 
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/logging"
 )
 
 // mruAccounts provides a storage class for the most recently used accounts data.
@@ -34,12 +35,18 @@ type mruAccounts struct {
 	// pendingAccounts are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the accounts/accountsList
 	pendingAccounts chan persistedAccountData
+	// log interface
+	log logging.Logger
+	// pendingWritesWarnThreshold is the threshold beyond we would write a warning for exceeding the number of pendingAccounts entries
+	pendingWritesWarnThreshold int
 }
 
-func (m *mruAccounts) init(deferredWrites int) {
+func (m *mruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	m.accountsList = list.New()
 	m.accounts = make(map[basics.Address]*list.Element)
-	m.pendingAccounts = make(chan persistedAccountData, deferredWrites)
+	m.pendingAccounts = make(chan persistedAccountData, pendingWrites)
+	m.log = log
+	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
 }
 
 func (m *mruAccounts) read(addr basics.Address) (data persistedAccountData, has bool) {
@@ -50,7 +57,11 @@ func (m *mruAccounts) read(addr basics.Address) (data persistedAccountData, has 
 }
 
 func (m *mruAccounts) flushPendingWrites() {
-	for {
+	pendingEntriesCount := len(m.pendingAccounts)
+	if pendingEntriesCount >= m.pendingWritesWarnThreshold {
+		m.log.Warnf("mruAccounts: number of entries in pendingAccounts(%d) exceed the warning threshold of %d", pendingEntriesCount, m.pendingWritesWarnThreshold)
+	}
+	for ; pendingEntriesCount > 0; pendingEntriesCount-- {
 		select {
 		case pendingAccountData := <-m.pendingAccounts:
 			m.write(pendingAccountData)
