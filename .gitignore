@@ -66,3 +66,8 @@ assets
 
 index.html
 
+windows/algodsvc/*.exe
+windows/algodsvc/MSG00001.bin
+windows/algodsvc/algodsvc.rc
+windows/algodsvc/algodsvc.h
+windows/algodsvc/algodsvc_res.o
