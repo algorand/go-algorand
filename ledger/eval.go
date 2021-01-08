@@ -991,6 +991,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	if err != nil {
 		return StateDelta{}, err
 	}
+	go prefetchThread(ctx, eval.state.lookupParent, blk.Payset)
 
 	// Next, transactions
 	paysetgroups, err := blk.DecodePaysetGroups()
@@ -1061,6 +1062,38 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	}
 
 	return eval.state.mods, nil
+}
+
+func prefetchThread(ctx context.Context, state roundCowParent, payset []transactions.SignedTxnInBlock) {
+	maybelookup := func(addr basics.Address) {
+		if addr.IsZero() {
+			return
+		}
+		state.lookup(addr)
+	}
+	bail := 10
+	for _, stxn := range payset {
+		state.lookup(stxn.Txn.Sender)
+		maybelookup(stxn.Txn.Receiver)
+		maybelookup(stxn.Txn.CloseRemainderTo)
+		maybelookup(stxn.Txn.AssetSender)
+		maybelookup(stxn.Txn.AssetReceiver)
+		maybelookup(stxn.Txn.AssetCloseTo)
+		maybelookup(stxn.Txn.FreezeAccount)
+		for _, xa := range stxn.Txn.Accounts {
+			maybelookup(xa)
+		}
+		if bail == 0 {
+			bail = 10
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+		} else {
+			bail--
+		}
+	}
 }
 
 // Validate uses the ledger to validate block blk as a candidate next block.
