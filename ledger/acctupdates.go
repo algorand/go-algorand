@@ -1445,25 +1445,23 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 
 	au.baseAccounts.flushPendingWrites()
 
-	var oldAcctData basics.AccountData
-	var oldPersistedData persistedAccountData
-	var err error
-
+	var previousAccountData basics.AccountData
 	for addr, data := range delta.accts {
 		if latestAcctData, has := au.accounts[addr]; has {
-			oldAcctData = latestAcctData.data
+			previousAccountData = latestAcctData.data
 		} else if baseAccountData, has := au.baseAccounts.read(addr); has {
-			oldAcctData = baseAccountData.accountData
+			previousAccountData = baseAccountData.accountData
 		} else {
 			// it's missing from the base accounts, so we'll try to load it from disk.
-			oldPersistedData, _, err = au.accountsq.lookup(addr)
-			if err != nil {
+			if acctData, err := au.accountsq.lookup(addr); err != nil {
 				au.log.Panicf("accountUpdates: newBlockImpl failed to lookup account %v when processing round %d : %v", addr, rnd, err)
+			} else {
+				previousAccountData = acctData.accountData
+				au.baseAccounts.write(acctData)
 			}
-			oldAcctData = oldPersistedData.accountData
 		}
 
-		newTotals.delAccount(proto, oldAcctData, &ot)
+		newTotals.delAccount(proto, previousAccountData, &ot)
 		newTotals.addAccount(proto, data.new, &ot)
 
 		macct := au.accounts[addr]
@@ -1558,31 +1556,30 @@ func (au *accountUpdates) lookupWithRewardsImpl(rnd basics.Round, addr basics.Ad
 		}
 
 		// check the baseAccounts -
-		/*if macct, has := au.baseAccounts.read(addr); has && macct.round == currentDbRound {
+		if macct, has := au.baseAccounts.read(addr); has && macct.round == currentDbRound {
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.writePending(macct)
 			return macct.accountData, nil
-		}*/
+		}
 
 		au.accountsMu.RUnlock()
 		needUnlock = false
 
-		var dbRound basics.Round
 		// No updates of this account in the in-memory deltas; use on-disk DB.
 		// The check in roundOffset() made sure the round is exactly the one
 		// present in the on-disk DB.  As an optimization, we avoid creating
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
-		persistedData, dbRound, err = au.accountsq.lookup(addr)
-		if dbRound == currentDbRound {
+		persistedData, err = au.accountsq.lookup(addr)
+		if persistedData.round == currentDbRound {
 			au.baseAccounts.writePending(persistedData)
 			return persistedData.accountData, err
 		}
 
-		if dbRound < currentDbRound {
-			au.log.Errorf("accountUpdates.lookupWithRewardsImpl: database round %d is behind in-memory round %d", dbRound, currentDbRound)
-			return basics.AccountData{}, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
+		if persistedData.round < currentDbRound {
+			au.log.Errorf("accountUpdates.lookupWithRewardsImpl: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
+			return basics.AccountData{}, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 		}
 		au.accountsMu.RLock()
 		needUnlock = true
@@ -1644,32 +1641,31 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 		}
 
 		// check the baseAccounts -
-		/*if macct, has := au.baseAccounts.read(addr); has && macct.round == currentDbRound {
+		if macct, has := au.baseAccounts.read(addr); has {
 			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
 			// would ensure that we promote this field.
 			au.baseAccounts.writePending(macct)
 			return macct.accountData, rnd, nil
-		}*/
+		}
 
 		if synchronized {
 			au.accountsMu.RUnlock()
 			needUnlock = false
 		}
-		var dbRound basics.Round
 		// No updates of this account in the in-memory deltas; use on-disk DB.
 		// The check in roundOffset() made sure the round is exactly the one
 		// present in the on-disk DB.  As an optimization, we avoid creating
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
-		persistedData, dbRound, err = au.accountsq.lookup(addr)
-		if dbRound == currentDbRound {
+		persistedData, err = au.accountsq.lookup(addr)
+		if persistedData.round == currentDbRound {
 			au.baseAccounts.writePending(persistedData)
 			return persistedData.accountData, rnd, err
 		}
 		if synchronized {
-			if dbRound < currentDbRound {
-				au.log.Errorf("accountUpdates.lookupWithoutRewardsImpl: database round %d is behind in-memory round %d", dbRound, currentDbRound)
-				return basics.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
+			if persistedData.round < currentDbRound {
+				au.log.Errorf("accountUpdates.lookupWithoutRewardsImpl: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
+				return basics.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 			}
 			au.accountsMu.RLock()
 			needUnlock = true
@@ -1678,8 +1674,8 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 			}
 		} else {
 			// in non-sync mode, we don't wait since we already assume that we're synchronized.
-			au.log.Errorf("accountUpdates.lookupWithoutRewardsImpl: database round %d mismatching in-memory round %d", dbRound, currentDbRound)
-			return basics.AccountData{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
+			au.log.Errorf("accountUpdates.lookupWithoutRewardsImpl: database round %d mismatching in-memory round %d", persistedData.round, currentDbRound)
+			return basics.AccountData{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 		}
 	}
 }
@@ -1968,7 +1964,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	updatingBalancesDuration := time.Now().Sub(beforeUpdatingBalancesTime)
 
 	au.accountsMu.Lock()
-
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
 	for addr, acctDltCnt := range compactDeltas {

@@ -626,17 +626,16 @@ func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype bas
 	return
 }
 
-// lookup looks up for a the account data given it's address. It returns the current database round and the matching
+// lookup looks up for a the account data given it's address. It returns the persistedAccountData, which includes the current database round and the matching
 // account data, if such was found. If no matching account data could be found for the given address, an empty account data would
 // be retrieved.
-func (qs *accountsDbQueries) lookup(addr basics.Address) (data persistedAccountData, dbRound basics.Round, err error) {
+func (qs *accountsDbQueries) lookup(addr basics.Address) (data persistedAccountData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
-		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &dbRound, &buf)
+		err := qs.lookupStmt.QueryRow(addr[:]).Scan(&rowid, &data.round, &buf)
 		if err == nil {
 			data.addr = addr
-			data.round = dbRound
 			if len(buf) > 0 && rowid.Valid {
 				data.rowid = rowid.Int64
 				return protocol.Decode(buf, &data.accountData)
