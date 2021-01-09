@@ -291,7 +291,7 @@ func MakeFull(log logging.Logger, rootDir string, cfg config.Local, phonebookAdd
 		log.Errorf("Cannot load compact cert data: %v", err)
 		return nil, err
 	}
-	node.compactCert = compactcert.MkWorker(compactCertAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
+	node.compactCert = compactcert.NewWorker(compactCertAccess, node.log, node.accountManager, node.ledger.Ledger, node.net, node)
 
 	return node, err
 }

@@ -72,8 +72,8 @@ type Worker struct {
 	wg       sync.WaitGroup
 }
 
-// MkWorker constructs a new Worker, as used by the node.
-func MkWorker(db db.Accessor, log logging.Logger, accts *data.AccountManager, ledger *ledger.Ledger, net network.GossipNode, txnSender TransactionSender) *Worker {
+// NewWorker constructs a new Worker, as used by the node.
+func NewWorker(db db.Accessor, log logging.Logger, accts *data.AccountManager, ledger *ledger.Ledger, net network.GossipNode, txnSender TransactionSender) *Worker {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Worker{
