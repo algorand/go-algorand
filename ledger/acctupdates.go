@@ -1849,7 +1849,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
-	compactDeltas, unavailableBaseAccounts, compactCreatableDeltas := au.compactDeltas(deltas, creatableDeltas)
+	compactDeltas, unavailableBaseAccounts, compactCreatableDeltas := compactDeltas(deltas, creatableDeltas, au.baseAccounts)
 
 	au.accountsMu.RUnlock()
 
@@ -2014,7 +2014,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 // compactDeltas takes an arary of account map deltas ( one array entry per round ), and corresponding creatables array, and compact the arrays into a single
 // map that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes. For both the account deltas as well as for the creatables,
 // it counts the number of changes per round by specifying it in the ndeltas field of the accountDeltaCount/modifiedCreatable. The ndeltas field of the input creatableDeltas is ignored.
-func (au *accountUpdates) compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable) (outAccountDeltas map[basics.Address]accountDeltaCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
+func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable, baseAccounts mruAccounts) (outAccountDeltas map[basics.Address]accountDeltaCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
 	if len(accountDeltas) > 0 {
 		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
 		outAccountDeltas = make(map[basics.Address]accountDeltaCount, 1+len(accountDeltas[0])*len(accountDeltas))
@@ -2033,7 +2033,7 @@ func (au *accountUpdates) compactDeltas(accountDeltas []map[basics.Address]accou
 						new:     acctDelta.new,
 						ndeltas: 1,
 					}
-					if baseAccountData, has := au.baseAccounts.read(addr); has {
+					if baseAccountData, has := baseAccounts.read(addr); has {
 						newEntry.old = baseAccountData
 					} else {
 						unavailableBaseAccounts = append(unavailableBaseAccounts, addr)

@@ -351,7 +351,8 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	var totalOnline, totalOffline, totalNotPart uint64
 
 	for addr, data := range accts {
-		d, _, err := aq.lookup(addr)
+		pad, err := aq.lookup(addr)
+		d := pad.accountData
 		require.NoError(t, err)
 		require.Equal(t, d, data)
 
@@ -379,10 +380,10 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
 	require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
 
-	d, dbRound, err := aq.lookup(randomAddress())
+	d, err := aq.lookup(randomAddress())
 	require.NoError(t, err)
-	require.Equal(t, rnd, dbRound)
-	require.Equal(t, d, basics.AccountData{})
+	require.Equal(t, rnd, d.round)
+	require.Equal(t, d.accountData, basics.AccountData{})
 
 	onlineAccounts := make(map[basics.Address]*onlineAccount)
 	for addr, data := range accts {
@@ -522,6 +523,8 @@ func TestAccountDBRound(t *testing.T) {
 	lastCreatableID := crypto.RandUint64() % 512
 	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
 	expectedDbImage := make(map[basics.CreatableIndex]modifiedCreatable)
+	var baseAccounts mruAccounts
+	baseAccounts.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
 		var updates map[basics.Address]accountDelta
 		var newaccts map[basics.Address]basics.AccountData
@@ -530,10 +533,13 @@ func TestAccountDBRound(t *testing.T) {
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
 			expectedDbImage, numElementsPerSegement)
 
-		updatesCnt, _ := compactDeltas([]map[basics.Address]accountDelta{updates}, nil)
+		updatesCnt, needLoadAddresses, _ := compactDeltas([]map[basics.Address]accountDelta{updates}, nil, baseAccounts)
+
+		err = accountsGet(tx, needLoadAddresses, updatesCnt)
+		require.NoError(t, err)
 		err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto)
 		require.NoError(t, err)
-		err = totalsNewRounds(tx, []map[basics.Address]accountDelta{updates}, []AccountTotals{{}}, []config.ConsensusParams{proto})
+		err = totalsNewRounds(tx, []map[basics.Address]accountDelta{updates}, updatesCnt, []AccountTotals{{}}, []config.ConsensusParams{proto})
 		require.NoError(t, err)
 		err = updateAccountsRound(tx, basics.Round(i), 0)
 		require.NoError(t, err)
@@ -776,7 +782,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 	// only measure the actual fetch time
 	b.ResetTimer()
 	for _, addr := range addrs {
-		_, _, err = qs.lookup(addr)
+		_, err = qs.lookup(addr)
 		require.NoError(b, err)
 	}
 }
