@@ -1365,7 +1365,7 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 }
 
 // accountsUpdateBalances applies the given deltas map to the merkle trie
-func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Address]accountDeltaCount, baseAccounts map[basics.Address]persistedAccountData) (err error) {
+func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Address]accountDeltaCount) (err error) {
 	if au.catchpointInterval == 0 {
 		return nil
 	}
@@ -1373,23 +1373,19 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Addre
 	accumulatedChanges := 0
 
 	for addr, delta := range accountsDeltas {
-		if oldAcctData, has := baseAccounts[addr]; has {
-			if !oldAcctData.accountData.IsZero() {
-				deleteHash := accountHashBuilder(addr, oldAcctData.accountData, protocol.Encode(&oldAcctData.accountData))
-				deleted, err = au.balancesTrie.Delete(deleteHash)
-				if err != nil {
-					return err
-				}
-				if !deleted {
-					au.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
-				} else {
-					accumulatedChanges++
-				}
+		if !delta.old.accountData.IsZero() {
+			deleteHash := accountHashBuilder(addr, delta.old.accountData, protocol.Encode(&delta.old.accountData))
+			deleted, err = au.balancesTrie.Delete(deleteHash)
+			if err != nil {
+				return err
 			}
-		} else {
-			err = fmt.Errorf("account %v was missing from baseAccounts", addr)
-			return
+			if !deleted {
+				au.log.Warnf("failed to delete hash '%s' from merkle trie for account %v", hex.EncodeToString(deleteHash), addr)
+			} else {
+				accumulatedChanges++
+			}
 		}
+
 		if !delta.new.IsZero() {
 			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
 			added, err = au.balancesTrie.Add(addHash)
@@ -1853,18 +1849,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
-	compactDeltas, compactCreatableDeltas := compactDeltas(deltas, creatableDeltas)
-
-	baseAccounts := make(map[basics.Address]persistedAccountData)
-	missingBaseAccountAddresses := make([]basics.Address, 0, len(compactDeltas))
-
-	for addr := range compactDeltas {
-		if acctData, has := au.baseAccounts.read(addr); has {
-			baseAccounts[addr] = acctData
-		} else {
-			missingBaseAccountAddresses = append(missingBaseAccountAddresses, addr)
-		}
-	}
+	compactDeltas, unavailableBaseAccounts, compactCreatableDeltas := au.compactDeltas(deltas, creatableDeltas)
 
 	au.accountsMu.RUnlock()
 
@@ -1905,22 +1890,22 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 
-		err = accountsGet(tx, missingBaseAccountAddresses, baseAccounts)
+		err = accountsGet(tx, unavailableBaseAccounts, compactDeltas)
 		if err != nil {
 			return err
 		}
 
-		err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, baseAccounts, genesisProto)
+		err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto)
 		if err != nil {
 			return err
 		}
 
-		err = totalsNewRounds(tx, deltas[:offset], roundTotals[1:offset+1], protos[1:offset+1], baseAccounts)
+		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], protos[1:offset+1])
 		if err != nil {
 			return err
 		}
 
-		err = au.accountsUpdateBalances(compactDeltas, baseAccounts)
+		err = au.accountsUpdateBalances(compactDeltas)
 		if err != nil {
 			return err
 		}
@@ -1983,7 +1968,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 
 		// update the au.baseAccounts with the changes we've made to the account:
-		persistedAcct := baseAccounts[addr]
+		persistedAcct := acctDltCnt.old
 		persistedAcct.accountData = acctDltCnt.new
 		persistedAcct.round = dbRound + basics.Round(offset)
 		au.baseAccounts.write(persistedAcct)
@@ -2029,26 +2014,31 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 // compactDeltas takes an arary of account map deltas ( one array entry per round ), and corresponding creatables array, and compact the arrays into a single
 // map that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes. For both the account deltas as well as for the creatables,
 // it counts the number of changes per round by specifying it in the ndeltas field of the accountDeltaCount/modifiedCreatable. The ndeltas field of the input creatableDeltas is ignored.
-func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable) (outAccountDeltas map[basics.Address]accountDeltaCount, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
+func (au *accountUpdates) compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable) (outAccountDeltas map[basics.Address]accountDeltaCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
 	if len(accountDeltas) > 0 {
 		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
 		outAccountDeltas = make(map[basics.Address]accountDeltaCount, 1+len(accountDeltas[0])*len(accountDeltas))
+		unavailableBaseAccounts = make([]basics.Address, 0, 1+len(accountDeltas[0])*len(accountDeltas))
 		for _, roundDelta := range accountDeltas {
 			for addr, acctDelta := range roundDelta {
 				if prev, has := outAccountDeltas[addr]; has {
 					outAccountDeltas[addr] = accountDeltaCount{
-						accountDelta: accountDelta{
-							old: prev.old,
-							new: acctDelta.new,
-						},
+						old:     prev.old,
+						new:     acctDelta.new,
 						ndeltas: prev.ndeltas + 1,
 					}
 				} else {
 					// it's a new entry.
-					outAccountDeltas[addr] = accountDeltaCount{
-						accountDelta: acctDelta,
-						ndeltas:      1,
+					newEntry := accountDeltaCount{
+						new:     acctDelta.new,
+						ndeltas: 1,
 					}
+					if baseAccountData, has := au.baseAccounts.read(addr); has {
+						newEntry.old = baseAccountData
+					} else {
+						unavailableBaseAccounts = append(unavailableBaseAccounts, addr)
+					}
+					outAccountDeltas[addr] = newEntry
 				}
 			}
 		}

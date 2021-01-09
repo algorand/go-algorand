@@ -119,19 +119,20 @@ type accountDelta struct {
 	new basics.AccountData
 }
 
-// accountDeltaCount is an extention to accountDelta that is being used by the commitRound function for counting the
-// number of changes we've made per account. The ndeltas is used execlusively for consistency checking - making sure that
-// all the pending changes were written and that there are no outstanding writes missing.
-type accountDeltaCount struct {
-	accountDelta
-	ndeltas int
-}
-
 type persistedAccountData struct {
 	addr        basics.Address
 	accountData basics.AccountData
 	rowid       int64
 	round       basics.Round
+}
+
+// accountDeltaCount is an extention to accountDelta that is being used by the commitRound function for counting the
+// number of changes we've made per account. The ndeltas is used execlusively for consistency checking - making sure that
+// all the pending changes were written and that there are no outstanding writes missing.
+type accountDeltaCount struct {
+	old     persistedAccountData
+	new     basics.AccountData
+	ndeltas int
 }
 
 // catchpointState is used to store catchpoint related variables into the catchpointstate table.
@@ -890,7 +891,7 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool)
 }
 
 // accountsNewRound updates the accountbase and assetcreators by applying the provided deltas to the accounts / creatables.
-func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, creatables map[basics.CreatableIndex]modifiedCreatable, baseAccounts map[basics.Address]persistedAccountData, proto config.ConsensusParams) (err error) {
+func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, creatables map[basics.CreatableIndex]modifiedCreatable, proto config.ConsensusParams) (err error) {
 
 	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteByRowIDStmt, insertStmt, updateStmt *sql.Stmt
 
@@ -914,8 +915,7 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 	var result sql.Result
 	var rowsAffected int64
 	for addr, data := range updates {
-		baseAcct := baseAccounts[addr]
-		if baseAcct.rowid == 0 {
+		if data.old.rowid == 0 {
 			// zero rowid means we don't have a previous value.
 			if data.new.IsZero() {
 				// if we didn't had it before, and we don't have anything now, just skip it.
@@ -924,10 +924,10 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 				normBalance := data.new.NormalizedOnlineBalance(proto)
 				result, err = insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data.new))
 				if err == nil {
-					baseAcct.rowid, err = result.LastInsertId()
+					data.old.rowid, err = result.LastInsertId()
 					// this would never err since sqlite driver doesn't know how to error here.
 					if err == nil {
-						baseAccounts[addr] = baseAcct
+						updates[addr] = data
 					}
 				}
 			}
@@ -935,22 +935,22 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 			// non-zero rowid means we had a previous value.
 			if data.new.IsZero() {
 				// new value is zero, which means we need to delete the current value.
-				result, err = deleteByRowIDStmt.Exec(baseAcct.rowid)
+				result, err = deleteByRowIDStmt.Exec(data.old.rowid)
 				if err == nil {
-					baseAcct.rowid = 0
-					baseAccounts[addr] = baseAcct
+					data.old.rowid = 0
+					updates[addr] = data
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", addr, baseAcct.rowid)
+						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", addr, data.old.rowid)
 					}
 				}
 			} else {
 				normBalance := data.new.NormalizedOnlineBalance(proto)
-				result, err = updateStmt.Exec(normBalance, protocol.Encode(&data.new), baseAcct.rowid)
+				result, err = updateStmt.Exec(normBalance, protocol.Encode(&data.new), data.old.rowid)
 				if err == nil {
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
-						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", addr, baseAcct.rowid)
+						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", addr, data.old.rowid)
 					}
 				}
 			}
@@ -990,23 +990,24 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 }
 
 // totalsNewRounds updates the accountsTotals by applying series of round changes
-func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, accountTotals []AccountTotals, protos []config.ConsensusParams, baseAccounts map[basics.Address]persistedAccountData) (err error) {
+func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, compactUpdates map[basics.Address]accountDeltaCount, accountTotals []AccountTotals, protos []config.ConsensusParams) (err error) {
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx, false)
 	if err != nil {
 		return
 	}
 
-	// copy the baseAccount map, since we don't want to modify the input map.
-	accounts := make(map[basics.Address]basics.AccountData, len(baseAccounts))
-	for addr, acctData := range baseAccounts {
-		accounts[addr] = acctData.accountData
+	// copy the updates base account map, since we don't want to modify the input map.
+	accounts := make(map[basics.Address]basics.AccountData, len(compactUpdates))
+	for addr, acctData := range compactUpdates {
+		accounts[addr] = acctData.old.accountData
 	}
 
 	for i := 0; i < len(updates); i++ {
 		totals.applyRewards(accountTotals[i].RewardsLevel, &ot)
 
 		for addr, data := range updates[i] {
+
 			if oldAccountData, has := accounts[addr]; has {
 				totals.delAccount(protos[i], oldAccountData, &ot)
 			} else {
@@ -1035,7 +1036,7 @@ func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, acco
 // accountsGet updates the entries on the baseAccounts map with the provided addresses
 // the round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // to populate this field.
-func accountsGet(tx *sql.Tx, addresses []basics.Address, baseAccounts map[basics.Address]persistedAccountData) (err error) {
+func accountsGet(tx *sql.Tx, addresses []basics.Address, deltas map[basics.Address]accountDeltaCount) (err error) {
 	if len(addresses) == 0 {
 		return nil
 	}
@@ -1056,14 +1057,20 @@ func accountsGet(tx *sql.Tx, addresses []basics.Address, baseAccounts map[basics
 				if err != nil {
 					return err
 				}
-				baseAccounts[addr] = *persistedAcctData
+				delta := deltas[addr]
+				delta.old = *persistedAcctData
+				deltas[addr] = delta
 			} else {
 				// to retain backward compatability, we will treat this condition as if we don't have the account.
-				baseAccounts[addr] = persistedAccountData{addr: addr, rowid: rowid.Int64}
+				delta := deltas[addr]
+				delta.old = persistedAccountData{addr: addr, rowid: rowid.Int64}
+				deltas[addr] = delta
 			}
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
-			baseAccounts[addr] = persistedAccountData{addr: addr}
+			delta := deltas[addr]
+			delta.old = persistedAccountData{addr: addr}
+			deltas[addr] = delta
 			err = nil
 		default:
 			// unexpected error - let the caller know that we couldn't complete the operation.
