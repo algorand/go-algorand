@@ -41,6 +41,8 @@ type mruAccounts struct {
 	pendingWritesWarnThreshold int
 }
 
+// init initializes the mruAccounts for use.
+// thread locking semantics : write lock
 func (m *mruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	m.accountsList = list.New()
 	m.accounts = make(map[basics.Address]*list.Element)
@@ -49,6 +51,8 @@ func (m *mruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesW
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
 }
 
+// read the persistedAccountData object that the mruAccounts has for the given address.
+// thread locking semantics : read lock
 func (m *mruAccounts) read(addr basics.Address) (data persistedAccountData, has bool) {
 	if el := m.accounts[addr]; el != nil {
 		return el.Value.(persistedAccountData), true
@@ -56,6 +60,8 @@ func (m *mruAccounts) read(addr basics.Address) (data persistedAccountData, has 
 	return persistedAccountData{}, false
 }
 
+// flushPendingWrites flushes the pending writes to the main mruAccounts cache.
+// thread locking semantics : write lock
 func (m *mruAccounts) flushPendingWrites() {
 	pendingEntriesCount := len(m.pendingAccounts)
 	if pendingEntriesCount >= m.pendingWritesWarnThreshold {
@@ -72,6 +78,9 @@ func (m *mruAccounts) flushPendingWrites() {
 	return
 }
 
+// writePending write a single persistedAccountData entry to the pendingAccounts buffer.
+// the function doesn't block, and in case of a buffer overflow the entry would not be added.
+// thread locking semantics : no lock is required.
 func (m *mruAccounts) writePending(acct persistedAccountData) {
 	select {
 	case m.pendingAccounts <- acct:
@@ -79,13 +88,11 @@ func (m *mruAccounts) writePending(acct persistedAccountData) {
 	}
 }
 
-func (m *mruAccounts) writeAccounts(updates map[basics.Address]persistedAccountData) {
-	for _, update := range updates {
-		m.write(update)
-	}
-	return
-}
-
+// write a single persistedAccountData to the mruAccounts cache.
+// when writing the entry, the round number would be used to determine if it's a newer
+// version of what's already on the cache or not. In all cases, the entry is going
+// to be promoted to the front of the list.
+// thread locking semantics : write lock
 func (m *mruAccounts) write(acctData persistedAccountData) {
 	if el := m.accounts[acctData.addr]; el != nil {
 		// already exists; is it a newer ?
@@ -101,6 +108,8 @@ func (m *mruAccounts) write(acctData persistedAccountData) {
 	}
 }
 
+// resize adjust the current size of the mruAccounts cache, by dropping the least
+// recenrly used entries.
 func (m *mruAccounts) resize(newSize int) (removed int) {
 	for {
 		if len(m.accounts) <= newSize {
