@@ -43,10 +43,10 @@ type pendingSig struct {
 }
 
 func initDB(tx *sql.Tx) error {
-	for _, tableCreate := range schema {
+	for i, tableCreate := range schema {
 		_, err := tx.Exec(tableCreate)
 		if err != nil {
-			return fmt.Errorf("could not create table %v", err)
+			return fmt.Errorf("could not create compactcert table %d: %v", i, err)
 		}
 	}
 
