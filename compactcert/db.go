@@ -26,16 +26,34 @@ import (
 )
 
 var schema = []string{
+	// sigs tracks signatures used to build a compact certificate, for
+	// rounds that have not formed a compact certificate yet.
+	//
+	// There can be at most one signature for a given (certrnd, signer):
+	// that is, a signer (account address) can produce at most one signature
+	// for a given certrnd (the round of the block being signed).
+	//
+	// Signatures produced by this node are special because we broadcast
+	// them early; other signatures are retransmitted later on.
 	`CREATE TABLE IF NOT EXISTS sigs (
 		certrnd integer,
 		signer blob,
 		sig blob,
 		from_this_node integer,
 		UNIQUE (certrnd, signer))`,
+
+	`CREATE INDEX IF NOT EXISTS sigs_from_this_node ON sigs (from_this_node)`,
+
+	// signed_last keeps track of the round number of the last block that
+	// this node already signed with each of its voting keys.  This is used
+	// on startup to determine what blocks need to be signed (because this
+	// node might have been offline and missed them) and which blocks need
+	// not be signed (because they were already signed, and those signatures
+	// might have already been removed from the sigs table because a compact
+	// certificate was formed).
 	`CREATE TABLE IF NOT EXISTS signed_last (
 		votingkey blob primary key,
 		rnd integer)`,
-	`CREATE INDEX IF NOT EXISTS sigs_from_this_node ON sigs (from_this_node)`,
 }
 
 type pendingSig struct {
