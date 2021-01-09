@@ -24,11 +24,7 @@
 ##
 ## On an Ubuntu machine, replace /usr/bin/systemctl with /bin/systemctl.
 ##
-## To install as a systemd user service, see systemd-setup.sh and
-## algorand@.service.template-user.
-##
-## Note that not all distros currently support the user service feature.
-## Run `systemctl --user status` to determine if it's supported.
+## We do not use systemd user services because they are disabled in CentOS.
 
 [Unit]
 Description=Algorand daemon under %I
@@ -36,7 +32,7 @@ After=network.target
 AssertPathExists=%I
 
 [Service]
-ExecStart=/bin/bash -c "exec /%I/../../algod -d %I"
+ExecStart=/bin/bash -c "exec /%I/../algod -d %I"
 User=@@USER@@
 Group=@@GROUP@@
 Restart=always

@@ -5,8 +5,19 @@
 # The arguments are the username and groupname that algod should run as.
 # If wanting to run as a user service, substitute "--user" for the groupname.
 
+set -e
+
 setup_user() {
-    homedir=$(grep "$1" <<< "$(awk -F: '{ print $6 }' /etc/passwd)")
+    local user="$1"
+    local userline
+
+    if ! userline=$(getent passwd "$user"); then
+        echo "[ERROR] \`$USER\' not found on system. Aborting..."
+        exit 1
+    else
+        homedir=$(awk -F: '{ print $6 }' <<< "$userline")
+    fi
+
     mkdir -p "$homedir/.config/systemd/user"
     cp "${SCRIPTPATH}/algorand@.service.template-user" \
         "$homedir/.config/systemd/user/algorand@.service"
@@ -15,7 +26,7 @@ setup_user() {
 }
 
 setup_root() {
-    sedargs="-e s,@@USER@@,$1, -e s,@@GROUP@@,$2,"
+    local sedargs="-e s,@@USER@@,$1, -e s,@@GROUP@@,$2,"
     sed ${sedargs} "${SCRIPTPATH}/sudoers.template" \
         > /etc/sudoers.d/99-algo-systemctl
 
@@ -28,14 +39,14 @@ setup_root() {
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 
 if [ "$#" != 2 ]; then
-    echo "Usage: $0 username groupname"
+    echo "Usage: $0 username [group|--user]"
     exit 1
 fi
 
 USER="$1"
 
-if ! id -u "${USER}"; then
-    echo "$0 [ERROR] User \`$USER\` does not exist on system"
+if ! id -u "${USER}"> /dev/null; then
+    echo "$0 [ERROR] Username \`$USER\` does not exist on system"
     exit 1
 fi
 

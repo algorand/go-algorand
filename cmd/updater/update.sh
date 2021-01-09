@@ -374,6 +374,8 @@ function run_systemd_action() {
             if [ "$action" = "start" ]; then
                 systemctl --user "${action}" "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
             fi
+        else
+            return 1
         fi
     fi
 }
