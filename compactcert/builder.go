@@ -207,6 +207,7 @@ func (ccw *Worker) builder() {
 		hdr, err := ccw.ledger.BlockHdr(nextrnd)
 		if err != nil {
 			ccw.log.Warnf("ccw.builder: BlockHdr(%d): %v", nextrnd, err)
+			continue
 		} else {
 			ccw.deleteOldSigs(hdr.CompactCertLastRound)
 		}
