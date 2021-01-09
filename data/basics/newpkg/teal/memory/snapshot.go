@@ -34,23 +34,21 @@ type snapshotKey struct {
 type snapshotManager struct {
 	pointerSnapshots  map[interface{}]interface{}
 	restorerSnapshots map[snapshotKey]interface{}
-	isOn              bool
 }
 
 func (sm *snapshotManager) reset() {
 	sm.pointerSnapshots = make(map[interface{}]interface{})
 	sm.restorerSnapshots = make(map[snapshotKey]interface{})
-	sm.isOn = true
 }
 
 func (sm *snapshotManager) turnOff() {
 	sm.pointerSnapshots = nil
 	sm.restorerSnapshots = nil
-	sm.isOn = false
 }
 
 func (sm *snapshotManager) restoreSnapshot() {
-	if !sm.isOn {
+	// in the current implementation sm.pointerSnapshots and sm.restorerSnapshots will be nil or non-nil at the same type
+	if sm.pointerSnapshots == nil {
 		log.Panic("For restoring a snapshot u need to save one first!")
 	}
 	for key, oldValue := range sm.restorerSnapshots {
@@ -84,23 +82,26 @@ func (sm *snapshotManager) restoreSnapshot() {
 
 func (sm *snapshotManager) notifyUpdate(pointer interface{}, oldValue interface{}) {
 	// when snapshotManager is turned off this function has no effect.
-	if sm.isOn {
-		if _, exists := sm.pointerSnapshots[pointer]; !exists {
-			sm.pointerSnapshots[pointer] = oldValue
-		}
+	if sm.pointerSnapshots == nil {
+		return
+	}
+	if _, exists := sm.pointerSnapshots[pointer]; !exists {
+		sm.pointerSnapshots[pointer] = oldValue
 	}
 }
 
 func (sm *snapshotManager) notifyUpdateWithKey(owner Restorer, internalKey string, oldValue interface{}) {
-	if sm.isOn {
-		key := snapshotKey{owner: owner, internalKey: internalKey}
-		if _, exists := sm.restorerSnapshots[key]; !exists {
-			sm.restorerSnapshots[key] = oldValue
-		}
+	if sm.restorerSnapshots == nil {
+		return
+	}
+	key := snapshotKey{owner: owner, internalKey: internalKey}
+	if _, exists := sm.restorerSnapshots[key]; !exists {
+		sm.restorerSnapshots[key] = oldValue
 	}
 }
 
 func (sm *snapshotManager) String() string {
+	// in the current implementation sm.pointerSnapshots and sm.restorerSnapshots will be nil or non-nil at the same type
 	if sm.pointerSnapshots == nil {
 		return "<nil>"
 	}

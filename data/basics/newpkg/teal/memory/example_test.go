@@ -43,6 +43,12 @@ func ExampleNewSegment() {
 	b.Set(1, 100, ms)
 
 	ms.Delete(2)
+	ms.AllocateAt(3, teal.NewConstByteArray(make([]byte, 36), false))
+	err := ms.AllocateAt(2, teal.NewUInt(55))
+	if err == memory.ErrMaxCostExceeded {
+		fmt.Printf("ERROR: %v.\n", err)
+	}
+	ms.Delete(3)
 	ms.AllocateAt(2, teal.NewUInt(55))
 	fmt.Printf("=====\n%v\nCost: %d/%d\n=====\n", ms.Content(), ms.CurrentCost(), ms.MaxCost())
 
@@ -55,7 +61,9 @@ func ExampleNewSegment() {
 
 	ms.RestoreSnapshot()
 	fmt.Printf("After Restoring Snapshot:\n%v\nCost: %d/%d\n=====\n", ms.Content(), ms.CurrentCost(), ms.MaxCost())
+
 	// Output:
+	// ERROR: max protocol's cost is exceeded.
 	// =====
 	// Memory Segment: (maxSize:8)
 	// [0, *teal.UInt)]--->12345
