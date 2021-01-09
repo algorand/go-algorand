@@ -30,10 +30,12 @@ var schema = []string{
 		certrnd integer,
 		signer blob,
 		sig blob,
-		from_this_node integer)`,
+		from_this_node integer,
+		UNIQUE (certrnd, signer))`,
 	`CREATE TABLE IF NOT EXISTS signed_last (
-		votingkey blob,
+		votingkey blob primary key,
 		rnd integer)`,
+	`CREATE INDEX IF NOT EXISTS sigs_from_this_node ON sigs (from_this_node)`,
 }
 
 type pendingSig struct {
