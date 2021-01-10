@@ -119,6 +119,9 @@ type accountDelta struct {
 	new basics.AccountData
 }
 
+// persistedAccountData is used for representing a single account stored on the disk. In addition to the
+// basics.AccountData, it also stores complete referencing information used to maintain the base accounts
+// list.
 type persistedAccountData struct {
 	addr        basics.Address
 	accountData basics.AccountData
@@ -890,8 +893,9 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool)
 	return err
 }
 
-// accountsNewRound updates the accountbase and assetcreators by applying the provided deltas to the accounts / creatables.
-func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, creatables map[basics.CreatableIndex]modifiedCreatable, proto config.ConsensusParams) (err error) {
+// accountsNewRound updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
+// The updates.old entries are being updated to reflect the latest value that was written to the database.
+func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, creatables map[basics.CreatableIndex]modifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (err error) {
 
 	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteByRowIDStmt, insertStmt, updateStmt *sql.Stmt
 
@@ -925,10 +929,7 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 				result, err = insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data.new))
 				if err == nil {
 					data.old.rowid, err = result.LastInsertId()
-					// this would never err since sqlite driver doesn't know how to error here.
-					if err == nil {
-						updates[addr] = data
-					}
+					data.old.accountData = data.new
 				}
 			}
 		} else {
@@ -937,8 +938,9 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 				// new value is zero, which means we need to delete the current value.
 				result, err = deleteByRowIDStmt.Exec(data.old.rowid)
 				if err == nil {
+					// we deleted the entry successfully.
 					data.old.rowid = 0
-					updates[addr] = data
+					data.old.accountData = basics.AccountData{}
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", addr, data.old.rowid)
@@ -948,6 +950,7 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 				normBalance := data.new.NormalizedOnlineBalance(proto)
 				result, err = updateStmt.Exec(normBalance, protocol.Encode(&data.new), data.old.rowid)
 				if err == nil {
+					data.old.accountData = data.new
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", addr, data.old.rowid)
@@ -959,6 +962,10 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 		if err != nil {
 			return
 		}
+
+		// update the old entry so that we could store that as the baseAccounts in commitRound
+		data.old.round = lastUpdateRound
+		updates[addr] = data
 	}
 
 	if len(creatables) > 0 {

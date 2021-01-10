@@ -1069,7 +1069,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* No deletes	                                           *******
 	// sync with the database
 	var updates map[basics.Address]accountDeltaCount
-	err = accountsNewRound(tx, updates, ctbsWithDeletes, proto)
+	err = accountsNewRound(tx, updates, ctbsWithDeletes, proto, basics.Round(1))
 	require.NoError(t, err)
 	// nothing left in cache
 	au.creatables = make(map[basics.CreatableIndex]modifiedCreatable)
@@ -1085,7 +1085,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* Results are obtained from the database and from the cache *******
 	// ******* Deletes are in the database and in the cache              *******
 	// sync with the database. This has deletes synced to the database.
-	err = accountsNewRound(tx, updates, au.creatables, proto)
+	err = accountsNewRound(tx, updates, au.creatables, proto, basics.Round(1))
 	require.NoError(t, err)
 	// get new creatables in the cache. There will be deletes in the cache from the previous batch.
 	au.creatables = randomCreatableSampling(3, ctbsList, randomCtbs,
@@ -1221,7 +1221,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 		}
 
 		err := ml.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-			return accountsNewRound(tx, updates, nil, proto)
+			return accountsNewRound(tx, updates, nil, proto, basics.Round(1))
 		})
 		require.NoError(b, err)
 	}
@@ -1291,7 +1291,7 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 				i++
 			}
 
-			err = accountsNewRound(tx, updates, nil, proto)
+			err = accountsNewRound(tx, updates, nil, proto, basics.Round(1))
 			if err != nil {
 				return
 			}

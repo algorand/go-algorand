@@ -1895,17 +1895,19 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			return err
 		}
 
-		err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto)
-		if err != nil {
-			return err
-		}
-
 		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], protos[1:offset+1])
 		if err != nil {
 			return err
 		}
 
 		err = au.accountsUpdateBalances(compactDeltas)
+		if err != nil {
+			return err
+		}
+
+		// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
+		// so that we can update the base account back.
+		err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
 		if err != nil {
 			return err
 		}
@@ -1951,8 +1953,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
-	for addr, acctDltCnt := range compactDeltas {
-		cnt := acctDltCnt.ndeltas
+	for addr, acctUpdate := range compactDeltas {
+		cnt := acctUpdate.ndeltas
 		macct, ok := au.accounts[addr]
 		if !ok {
 			au.log.Panicf("inconsistency: flushed %d changes to %s, but not in au.accounts", cnt, addr)
@@ -1967,11 +1969,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			au.accounts[addr] = macct
 		}
 
-		// update the au.baseAccounts with the changes we've made to the account:
-		persistedAcct := acctDltCnt.old
-		persistedAcct.accountData = acctDltCnt.new
-		persistedAcct.round = dbRound + basics.Round(offset)
-		au.baseAccounts.write(persistedAcct)
+		// the acctUpdate.old was updated by accountsNewRound and contains now the latest entry stored to the database.
+		au.baseAccounts.write(acctUpdate.old)
 	}
 
 	for cidx, modCrt := range compactCreatableDeltas {

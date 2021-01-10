@@ -538,9 +538,9 @@ func TestAccountDBRound(t *testing.T) {
 
 		err = accountsGet(tx, needLoadAddresses, updatesCnt)
 		require.NoError(t, err)
-		err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto)
-		require.NoError(t, err)
 		err = totalsNewRounds(tx, []map[basics.Address]accountDelta{updates}, updatesCnt, []AccountTotals{{}}, []config.ConsensusParams{proto})
+		require.NoError(t, err)
+		err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
 		err = updateAccountsRound(tx, basics.Round(i), 0)
 		require.NoError(t, err)
