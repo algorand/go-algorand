@@ -1,0 +1,167 @@
+#pragma version 2
+// check if the app is being created
+// if so save creator
+int 0
+txn ApplicationID
+==
+bz not_creation
+byte "Creator"
+txn Sender
+app_global_put
+//4 args on creation
+int 1
+return
+not_creation:
+// check if this is deletion transaction
+int DeleteApplication
+txn OnCompletion
+==
+bz not_deletion
+byte "Creator"
+app_global_get
+txn Sender
+==
+bz fail
+int 1
+return
+not_deletion:
+//---
+// check if this is update ---
+int UpdateApplication
+txn OnCompletion
+==
+bz not_update
+// verify that the creator is
+// making the call
+byte "Creator"
+app_global_get
+txn Sender
+==
+bz fail
+int 1
+return
+not_update:
+// check if this is update ---
+int OptIn
+txn OnCompletion
+==
+bz not_optin
+int 1
+return
+not_optin:
+int CloseOut
+txn OnCompletion
+==
+bz not_close
+int 1
+return
+not_close:
+//normal call
+int NoOp
+txn OnCompletion
+==
+bz fail
+// the call support 
+// either open, close or execute
+// every call has two parms
+txn NumAppArgs
+int 2
+==
+bz fail
+txna ApplicationArgs 0
+byte "open"
+==
+bnz open
+txna ApplicationArgs 0
+byte "close"
+==
+bnz close
+txna ApplicationArgs 0
+byte "execute"
+==
+bnz execute
+err
+open:
+// only works for app call
+global GroupSize
+int 1
+==
+bz fail
+int 0 //sender
+txn ApplicationID //current smart contract
+// 2nd arg is order number
+txna ApplicationArgs 1
+app_local_get_ex
+// if the value already exists fail
+bnz p_fail
+pop
+// store the ordernumber as the key
+int 0
+txna ApplicationArgs 1
+int 1
+app_local_put
+int 1
+return
+
+execute:
+// Must be three transacitons
+global GroupSize
+int 3
+==
+// First Transaction must be a call to a stateful contract
+gtxn 0 TypeEnum
+int appl
+==
+&&
+// The second transaction must be a payment transaction 
+gtxn 1 TypeEnum
+int pay
+==
+&&
+// The third transaction must be an asset transfer
+gtxn 2 TypeEnum
+int axfer
+==
+&&
+bz fail
+int 1 // Creator of order
+txn ApplicationID // Current stateful smart contract
+txna ApplicationArgs 1 // 2nd argument is order number
+app_local_get_ex
+bz p_fail // If the value doesnt exists fail
+pop
+// Delete the ordernumber
+int 1 //creator of order
+// 2nd arg is order number
+txna ApplicationArgs 1
+app_local_del
+int 1
+return
+close:
+// only works for app call
+global GroupSize
+int 1
+==
+bz fail
+int 0 //account that opened order
+txn ApplicationID //current smart contract
+// 2nd arg is order number
+txna ApplicationArgs 1
+app_local_get_ex
+// if the value doesnt exists fail
+bz p_fail
+pop
+// delete the ordernumber
+int 0 //account that opened order
+// 2nd arg is order number
+txna ApplicationArgs 1
+app_local_del
+int 1
+return
+fail:
+int 0 
+return
+p_fail:
+pop
+int 0 
+return
