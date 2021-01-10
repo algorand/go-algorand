@@ -819,6 +819,53 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 
 		r := node.ledger.Latest()
 
+		// We need the latest header to determine the next compact cert
+		// round, if any.
+		latestHdr, err := node.ledger.BlockHdr(r)
+		if err != nil {
+			switch err.(type) {
+			case ledger.ErrNoEntry:
+				// No need to warn; expected during catchup.
+			default:
+				node.log.Warnf("Cannot look up latest block %d for deleting ephemeral keys: %v", r, err)
+			}
+			continue
+		}
+		latestProto := config.Consensus[latestHdr.CurrentProtocol]
+
+		// If compact certs are enabled, we need to determine what signatures
+		// we already computed, since we can then delete ephemeral keys that
+		// were already used to compute a signature (stored in the compact
+		// cert db).
+		ccSigs, err := node.compactCert.LatestSigsFromThisNode()
+		if err != nil {
+			node.log.Warnf("Cannot look up latest compact cert sigs: %v", err)
+			continue
+		}
+
+		nextRoundFunc := func(part account.Participation) basics.Round {
+			// We need a key for round r+1 for agreement.
+			nextAgreement := r + 1
+
+			if latestProto.CompactCertRounds > 0 {
+				// We need a key for the next compact cert round.
+				// This would be CompactCertNextRound+1 (+1 because compact
+				// cert code uses the next round's ephemeral key), except
+				// if we already used that key to produce a signature (as
+				// reported in ccSigs).
+				nextCC := latestHdr.CompactCertNextRound + 1
+				if ccSigs[part.Parent] >= nextCC {
+					nextCC = ccSigs[part.Parent] + basics.Round(latestProto.CompactCertRounds) + 1
+				}
+
+				if nextCC < nextAgreement {
+					return nextCC
+				}
+			}
+
+			return nextAgreement
+		}
+
 		// We need to find the consensus protocol used to agree on block r,
 		// since that determines the params used for ephemeral keys in block
 		// r.  The params come from agreement.ParamsRound(r), which is r-2.
@@ -828,15 +875,16 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 			case ledger.ErrNoEntry:
 				// No need to warn; expected during catchup.
 			default:
-				node.log.Warnf("Cannot look up block %d for deleting ephemeral keys: %v", agreement.ParamsRound(r), err)
+				node.log.Warnf("Cannot look up params block %d for deleting ephemeral keys: %v", agreement.ParamsRound(r), err)
 			}
-		} else {
-			proto := config.Consensus[hdr.CurrentProtocol]
-
-			node.mu.Lock()
-			node.accountManager.DeleteOldKeys(r+1, proto)
-			node.mu.Unlock()
+			continue
 		}
+
+		agreementProto := config.Consensus[hdr.CurrentProtocol]
+
+		node.mu.Lock()
+		node.accountManager.DeleteOldKeys(nextRoundFunc, agreementProto)
+		node.mu.Unlock()
 	}
 }
 

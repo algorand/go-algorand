@@ -120,18 +120,20 @@ func (manager *AccountManager) AddParticipation(participation account.Participat
 }
 
 // DeleteOldKeys deletes all accounts' ephemeral keys strictly older than the
-// current round.
-func (manager *AccountManager) DeleteOldKeys(current basics.Round, proto config.ConsensusParams) {
+// next round needed for each account.
+func (manager *AccountManager) DeleteOldKeys(nextRoundFunc func(account.Participation) basics.Round, proto config.ConsensusParams) {
 	manager.mu.Lock()
 	pendingItems := make(map[string]<-chan error, len(manager.partIntervals))
 	func() {
 		defer manager.mu.Unlock()
 		for _, part := range manager.partIntervals {
+			nextRound := nextRoundFunc(part)
+
 			// we pre-create the reported error string here, so that we won't need to have the participation key object if error is detected.
 			first, last := part.ValidInterval()
-			errString := fmt.Sprintf("AccountManager.DeleteOldKeys(%d): key for %s (%d-%d)",
-				current, part.Address().String(), first, last)
-			errCh := part.DeleteOldKeys(current, proto)
+			errString := fmt.Sprintf("AccountManager.DeleteOldKeys(): key for %s (%d-%d), nextRound %d",
+				part.Address().String(), first, last, nextRound)
+			errCh := part.DeleteOldKeys(nextRound, proto)
 
 			pendingItems[errString] = errCh
 		}
