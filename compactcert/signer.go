@@ -17,15 +17,12 @@
 package compactcert
 
 import (
-	"context"
-	"database/sql"
 	"time"
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger"
 )
 
 // sigFromAddr encapsulates a signature on a block header, which
@@ -40,38 +37,23 @@ type sigFromAddr struct {
 }
 
 func (ccw *Worker) signer() {
-	var sigkeys []crypto.OneTimeSignatureVerifier
 	var nextrnd basics.Round
 
-	err := ccw.db.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
-		sigkeys, nextrnd, err = getSignedLast(tx)
-		return
-	})
-
-	if err != nil {
-		nextrnd := ccw.ledger.Latest() + 1
-		ccw.log.Warnf("ccw.signer(): using nextrnd=%d, cannot obtain last signed: %v", nextrnd, err)
-	} else {
-		// Check if we have any keys in common with the last signed set.
-		// If so, try to sign the next round after that.  Otherwise, if
-		// there is no overlap in keys, start with latest round.
-		sigkeysmap := make(map[crypto.OneTimeSignatureVerifier]bool)
-		for _, key := range sigkeys {
-			sigkeysmap[key] = true
+	for {
+		latest := ccw.ledger.Latest()
+		latestHdr, err := ccw.ledger.BlockHdr(latest)
+		if err != nil {
+			ccw.log.Warnf("ccw.signer(): BlockHdr(latest %d): %v", latest, err)
+			time.Sleep(1 * time.Second)
+			continue
 		}
 
-		overlap := false
-		for _, key := range ccw.accts.Keys() {
-			if sigkeysmap[key.Voting.OneTimeSignatureVerifier] {
-				overlap = true
-			}
+		nextrnd := latestHdr.CompactCertNextRound
+		if nextrnd == 0 {
+			// Compact certs not enabled yet.  Keep monitoring new blocks.
+			nextrnd = latest + 1
 		}
-
-		if overlap {
-			nextrnd++
-		} else {
-			nextrnd = ccw.ledger.Latest() + 1
-		}
+		break
 	}
 
 	for {
@@ -79,18 +61,13 @@ func (ccw *Worker) signer() {
 		case <-ccw.ledger.Wait(nextrnd):
 			hdr, err := ccw.ledger.BlockHdr(nextrnd)
 			if err != nil {
-				ccw.log.Warnf("ccw.signer(): BlockHdr(%d): %v", nextrnd, err)
-				switch err.(type) {
-				case ledger.ErrNoEntry:
-					nextrnd = ccw.ledger.Latest() + 1
-
-				default:
-					time.Sleep(1 * time.Second)
-				}
-			} else {
-				ccw.signBlock(hdr)
-				nextrnd++
+				ccw.log.Warnf("ccw.signer(): BlockHdr(next %d): %v", nextrnd, err)
+				time.Sleep(1 * time.Second)
+				continue
 			}
+
+			ccw.signBlock(hdr)
+			nextrnd++
 
 		case <-ccw.ctx.Done():
 			ccw.wg.Done()
@@ -164,12 +141,5 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 		if err != nil {
 			ccw.log.Warnf("ccw.signBlock(%d): handleSig: %v", hdr.Round, err)
 		}
-	}
-
-	err = ccw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return setSignedLast(tx, hdr.Round, sigkeys)
-	})
-	if err != nil {
-		ccw.log.Warnf("ccw.signBlock(%d): setSignedLast: %v", hdr.Round, err)
 	}
 }

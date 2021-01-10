@@ -144,7 +144,7 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 			return network.Disconnect, err
 		}
 
-		if sfa.Round <= latestHdr.CompactCertLastRound {
+		if sfa.Round < latestHdr.CompactCertNextRound {
 			// Already have a complete compact cert in ledger.
 			// Ignore this sig.
 			return network.Ignore, nil
@@ -209,7 +209,7 @@ func (ccw *Worker) builder() {
 			ccw.log.Warnf("ccw.builder: BlockHdr(%d): %v", nextrnd, err)
 			continue
 		} else {
-			ccw.deleteOldSigs(hdr.CompactCertLastRound)
+			ccw.deleteOldSigs(hdr.CompactCertNextRound)
 		}
 
 		// Broadcast signatures based on the previous block that
@@ -277,19 +277,19 @@ func (ccw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 	}
 }
 
-func (ccw *Worker) deleteOldSigs(lastCert basics.Round) {
+func (ccw *Worker) deleteOldSigs(nextCert basics.Round) {
 	ccw.mu.Lock()
 	defer ccw.mu.Unlock()
 
 	err := ccw.db.Atomic(func(ctx context.Context, tx *sql.Tx) error {
-		return deletePendingSigsUpToRound(tx, lastCert)
+		return deletePendingSigsBeforeRound(tx, nextCert)
 	})
 	if err != nil {
-		ccw.log.Warnf("deletePendingSigsUpToRound(%d): %v", lastCert, err)
+		ccw.log.Warnf("deletePendingSigsBeforeRound(%d): %v", nextCert, err)
 	}
 
 	for rnd := range ccw.builders {
-		if rnd <= lastCert {
+		if rnd < nextCert {
 			delete(ccw.builders, rnd)
 		}
 	}

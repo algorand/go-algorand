@@ -468,7 +468,7 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			UpgradeApprove: b.UpgradeApprove,
 		},
 		CompactCertVotersTotal: b.CompactCertVotersTotal.ToUint64(),
-		CompactCertLastRound:   uint64(b.CompactCertLastRound),
+		CompactCertNextRound:   uint64(b.CompactCertNextRound),
 	}
 
 	if !b.CompactCertVoters.IsZero() {

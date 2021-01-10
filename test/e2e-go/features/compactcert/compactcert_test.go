@@ -77,7 +77,7 @@ func TestCompactCerts(t *testing.T) {
 			}
 		}
 
-		for lastCertBlock.Round < blk.CompactCertLastRound {
+		for lastCertBlock.Round != 0 && lastCertBlock.Round+consensusParams.CompactCertRounds < blk.CompactCertNextRound {
 			nextCertRound := lastCertBlock.Round + consensusParams.CompactCertRounds
 
 			// Find the cert transaction

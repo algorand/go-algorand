@@ -43,17 +43,6 @@ var schema = []string{
 		UNIQUE (certrnd, signer))`,
 
 	`CREATE INDEX IF NOT EXISTS sigs_from_this_node ON sigs (from_this_node)`,
-
-	// signed_last keeps track of the round number of the last block that
-	// this node already signed with each of its voting keys.  This is used
-	// on startup to determine what blocks need to be signed (because this
-	// node might have been offline and missed them) and which blocks need
-	// not be signed (because they were already signed, and those signatures
-	// might have already been removed from the sigs table because a compact
-	// certificate was formed).
-	`CREATE TABLE IF NOT EXISTS signed_last (
-		votingkey blob primary key,
-		rnd integer)`,
 }
 
 type pendingSig struct {
@@ -73,51 +62,6 @@ func initDB(tx *sql.Tx) error {
 	return nil
 }
 
-func getSignedLast(tx *sql.Tx) ([]crypto.OneTimeSignatureVerifier, basics.Round, error) {
-	rows, err := tx.Query("SELECT votingkey, rnd FROM signed_last")
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-
-	var res []crypto.OneTimeSignatureVerifier
-	var maxRound basics.Round
-	for rows.Next() {
-		var rnd basics.Round
-		var buf []byte
-		err = rows.Scan(&rnd, &buf)
-		if err != nil {
-			return nil, 0, err
-		}
-
-		var votingkey crypto.OneTimeSignatureVerifier
-		copy(votingkey[:], buf)
-		res = append(res, votingkey)
-
-		if rnd > maxRound {
-			maxRound = rnd
-		}
-	}
-
-	return res, maxRound, rows.Err()
-}
-
-func setSignedLast(tx *sql.Tx, rnd basics.Round, keys []crypto.OneTimeSignatureVerifier) error {
-	_, err := tx.Exec("DELETE FROM signed_last")
-	if err != nil {
-		return err
-	}
-
-	for _, key := range keys {
-		_, err = tx.Exec("INSERT INTO signed_last (votingkey, rnd) VALUES (?, ?)", key[:], rnd)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 func addPendingSig(tx *sql.Tx, rnd basics.Round, psig pendingSig) error {
 	_, err := tx.Exec("INSERT INTO sigs (certrnd, signer, sig, from_this_node) VALUES (?, ?, ?, ?)",
 		rnd,
@@ -127,8 +71,8 @@ func addPendingSig(tx *sql.Tx, rnd basics.Round, psig pendingSig) error {
 	return err
 }
 
-func deletePendingSigsUpToRound(tx *sql.Tx, rnd basics.Round) error {
-	_, err := tx.Exec("DELETE FROM sigs WHERE certrnd<=?", rnd)
+func deletePendingSigsBeforeRound(tx *sql.Tx, rnd basics.Round) error {
+	_, err := tx.Exec("DELETE FROM sigs WHERE certrnd<?", rnd)
 	return err
 }
 

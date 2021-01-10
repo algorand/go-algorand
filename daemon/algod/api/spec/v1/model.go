@@ -949,11 +949,11 @@ type Block struct {
 	// required: true
 	CompactCertVotersTotal uint64 `json:"compactCertVotersTotal"`
 
-	// CompactCertLastRound is the last round for which a compact certificate has
-	// been recorded using a compactcert transaction.
+	// CompactCertNextRound is the next round for which a compact certificate is
+	// expected.
 	//
 	// required: true
-	CompactCertLastRound uint64 `json:"compactCertLastRound"`
+	CompactCertNextRound uint64 `json:"compactCertNextRound"`
 }
 
 // UpgradeState contains the information about a current state of an upgrade
