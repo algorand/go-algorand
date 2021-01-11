@@ -27,7 +27,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 )
 
-func TestBasicMRUAccounts(t *testing.T) {
+func TestBasicLRUAccounts(t *testing.T) {
 	var baseAcct lruAccounts
 	baseAcct.init(logging.TestingLog(t), 10, 5)
 
@@ -83,7 +83,7 @@ func TestBasicMRUAccounts(t *testing.T) {
 	}
 }
 
-func TestMRUAccountsPendingWrites(t *testing.T) {
+func TestLRUAccountsPendingWrites(t *testing.T) {
 	var baseAcct lruAccounts
 	accountsNum := 250
 	baseAcct.init(logging.TestingLog(t), accountsNum*2, accountsNum)
@@ -133,7 +133,7 @@ func (cl *lruAccountsTestLogger) Warnf(s string, args ...interface{}) {
 	cl.warnMsgCount++
 }
 
-func TestMRUAccountsPendingWritesWarning(t *testing.T) {
+func TestLRUAccountsPendingWritesWarning(t *testing.T) {
 	var baseAcct lruAccounts
 	pendingWritesBuffer := 50
 	pendingWritesThreshold := 40
@@ -157,7 +157,7 @@ func TestMRUAccountsPendingWritesWarning(t *testing.T) {
 	}
 }
 
-func TestMRUAccountsOmittedPendingWrites(t *testing.T) {
+func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
 	var baseAcct lruAccounts
 	pendingWritesBuffer := 50
 	pendingWritesThreshold := 40
