@@ -1608,3 +1608,9 @@ func (iterator *catchpointPendingHashesIterator) Close() {
 		iterator.rows = nil
 	}
 }
+
+// before compares the round numbers of two persistedAccountData and determines if the current persistedAccountData
+// happened before the other.
+func (pac *persistedAccountData) before(other *persistedAccountData) bool {
+	return pac.round < other.round
+}

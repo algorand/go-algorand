@@ -97,7 +97,7 @@ func (m *mruAccounts) write(acctData persistedAccountData) {
 	if el := m.accounts[acctData.addr]; el != nil {
 		// already exists; is it a newer ?
 		existing := el.Value.(persistedAccountData)
-		if existing.round < acctData.round {
+		if existing.before(&acctData) {
 			// we update with a newer version.
 			el.Value = acctData
 		}
