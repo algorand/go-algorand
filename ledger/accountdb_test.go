@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 func randomAddress() basics.Address {
@@ -665,10 +666,7 @@ func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
 	return assetIdx, creatable
 }
 
-func benchmarkInitBalances(b testing.TB, numAccounts int, dbs dbPair, proto config.ConsensusParams) (updates map[basics.Address]basics.AccountData) {
-	tx, err := dbs.wdb.Handle.Begin()
-	require.NoError(b, err)
-
+func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.Address]basics.AccountData) {
 	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
 	updates = make(map[basics.Address]basics.AccountData, numAccounts)
@@ -708,7 +706,19 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs dbPair, proto conf
 			},
 		}
 	}
-	accountsInit(tx, updates, proto)
+	return
+}
+
+func benchmarkInitBalances(b testing.TB, numAccounts int, dbs dbPair, proto config.ConsensusParams) (updates map[basics.Address]basics.AccountData) {
+	tx, err := dbs.wdb.Handle.Begin()
+	require.NoError(b, err)
+
+	updates = generateRandomTestingAccountBalances(numAccounts)
+
+	err = accountsInit(tx, updates, proto)
+	require.NoError(b, err)
+	err = accountsAddNormalizedBalance(tx, proto)
+	require.NoError(b, err)
 	err = tx.Commit()
 	require.NoError(b, err)
 	return
@@ -788,7 +798,129 @@ func BenchmarkReadingRandomBalancesRAM(b *testing.B) {
 func BenchmarkReadingRandomBalancesDisk(b *testing.B) {
 	benchmarkReadingRandomBalances(b, false)
 }
+func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
+	totalStartupAccountsNumber := 5000000
+	batchCount := 1000
+	startupAcct := 5
+	initDatabase := func() (*sql.Tx, func(), error) {
+		proto := config.Consensus[protocol.ConsensusCurrentVersion]
+		dbs, fn := dbOpenTest(b, false)
+		setDbLogging(b, dbs)
+		cleanup := func() {
+			cleanupTestDb(dbs, fn, false)
+		}
 
+		benchmarkInitBalances(b, startupAcct, dbs, proto)
+		dbs.wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
+
+		// insert 1M accounts data, in batches of 1000
+		for batch := 0; batch <= batchCount; batch++ {
+			fmt.Printf("\033[M\r %d / %d accounts written", totalStartupAccountsNumber*batch/batchCount, totalStartupAccountsNumber)
+
+			tx, err := dbs.wdb.Handle.Begin()
+
+			require.NoError(b, err)
+
+			acctsData := generateRandomTestingAccountBalances(totalStartupAccountsNumber / batchCount)
+			replaceStmt, err := tx.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
+			require.NoError(b, err)
+			defer replaceStmt.Close()
+			for addr, acctData := range acctsData {
+				_, err = replaceStmt.Exec(addr[:], uint64(0), protocol.Encode(&acctData))
+				require.NoError(b, err)
+			}
+
+			err = tx.Commit()
+			require.NoError(b, err)
+		}
+		dbs.wdb.SetSynchronousMode(context.Background(), db.SynchronousModeFull, true)
+		tx, err := dbs.wdb.Handle.Begin()
+		require.NoError(b, err)
+		fmt.Printf("\033[M\r")
+		return tx, cleanup, err
+	}
+
+	selectAccounts := func(tx *sql.Tx) (accountsAddress [][]byte, accountsRowID []int) {
+		accountsAddress = make([][]byte, 0, totalStartupAccountsNumber+startupAcct)
+		accountsRowID = make([]int, 0, totalStartupAccountsNumber+startupAcct)
+
+		// read all the accounts to obtain the addrs.
+		rows, err := tx.Query("SELECT rowid, address FROM accountbase")
+		defer rows.Close()
+		for rows.Next() {
+			var addrbuf []byte
+			var rowid int
+			err = rows.Scan(&rowid, &addrbuf)
+			require.NoError(b, err)
+			accountsAddress = append(accountsAddress, addrbuf)
+			accountsRowID = append(accountsRowID, rowid)
+		}
+		return
+	}
+
+	tx, cleanup, err := initDatabase()
+	require.NoError(b, err)
+	defer cleanup()
+
+	accountsAddress, accountsRowID := selectAccounts(tx)
+
+	b.Run("ByAddr", func(b *testing.B) {
+		preparedUpdate, err := tx.Prepare("UPDATE accountbase SET data = ? WHERE address = ?")
+		require.NoError(b, err)
+		defer preparedUpdate.Close()
+		// updates accounts by address
+		randomAccountData := make([]byte, 200)
+		crypto.RandBytes(randomAccountData)
+		updateOrder := rand.Perm(len(accountsRowID))
+		b.ResetTimer()
+		startTime := time.Now()
+		for n := 0; n < b.N; n++ {
+			for _, acctIdx := range updateOrder {
+				res, err := preparedUpdate.Exec(randomAccountData[:], accountsAddress[acctIdx])
+				require.NoError(b, err)
+				rowsAffected, err := res.RowsAffected()
+				require.NoError(b, err)
+				require.Equal(b, int64(1), rowsAffected)
+				n++
+				if n == b.N {
+					break
+				}
+			}
+
+		}
+		b.ReportMetric(float64(int(time.Now().Sub(startTime))/b.N), "ns/acct_update")
+	})
+
+	b.Run("ByRowID", func(b *testing.B) {
+		preparedUpdate, err := tx.Prepare("UPDATE accountbase SET data = ? WHERE rowid = ?")
+		require.NoError(b, err)
+		defer preparedUpdate.Close()
+		// updates accounts by address
+		randomAccountData := make([]byte, 200)
+		crypto.RandBytes(randomAccountData)
+		updateOrder := rand.Perm(len(accountsRowID))
+		b.ResetTimer()
+		startTime := time.Now()
+		for n := 0; n < b.N; n++ {
+			for _, acctIdx := range updateOrder {
+				res, err := preparedUpdate.Exec(randomAccountData[:], accountsRowID[acctIdx])
+				require.NoError(b, err)
+				rowsAffected, err := res.RowsAffected()
+				require.NoError(b, err)
+				require.Equal(b, int64(1), rowsAffected)
+				n++
+				if n == b.N {
+					break
+				}
+			}
+		}
+		b.ReportMetric(float64(int(time.Now().Sub(startTime))/b.N), "ns/acct_update")
+
+	})
+
+	err = tx.Commit()
+	require.NoError(b, err)
+}
 func TestAccountsReencoding(t *testing.T) {
 	oldEncodedAccountsData := [][]byte{
 		{132, 164, 97, 108, 103, 111, 206, 5, 234, 236, 80, 164, 97, 112, 97, 114, 129, 206, 0, 3, 60, 164, 137, 162, 97, 109, 196, 32, 49, 54, 101, 102, 97, 97, 51, 57, 50, 52, 97, 54, 102, 100, 57, 100, 51, 97, 52, 56, 50, 52, 55, 57, 57, 97, 52, 97, 99, 54, 53, 100, 162, 97, 110, 167, 65, 80, 84, 75, 73, 78, 71, 162, 97, 117, 174, 104, 116, 116, 112, 58, 47, 47, 115, 111, 109, 101, 117, 114, 108, 161, 99, 196, 32, 183, 97, 139, 76, 1, 45, 180, 52, 183, 186, 220, 252, 85, 135, 185, 87, 156, 87, 158, 83, 49, 200, 133, 169, 43, 205, 26, 148, 50, 121, 28, 105, 161, 102, 196, 32, 183, 97, 139, 76, 1, 45, 180, 52, 183, 186, 220, 252, 85, 135, 185, 87, 156, 87, 158, 83, 49, 200, 133, 169, 43, 205, 26, 148, 50, 121, 28, 105, 161, 109, 196, 32, 60, 69, 244, 159, 234, 26, 168, 145, 153, 184, 85, 182, 46, 124, 227, 144, 84, 113, 176, 206, 109, 204, 245, 165, 100, 23, 71, 49, 32, 242, 146, 68, 161, 114, 196, 32, 183, 97, 139, 76, 1, 45, 180, 52, 183, 186, 220, 252, 85, 135, 185, 87, 156, 87, 158, 83, 49, 200, 133, 169, 43, 205, 26, 148, 50, 121, 28, 105, 161, 116, 205, 3, 32, 162, 117, 110, 163, 65, 80, 75, 165, 97, 115, 115, 101, 116, 129, 206, 0, 3, 60, 164, 130, 161, 97, 0, 161, 102, 194, 165, 101, 98, 97, 115, 101, 205, 98, 54},
