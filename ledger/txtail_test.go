@@ -31,8 +31,7 @@ import (
 )
 
 func TestTxTailCheckdup(t *testing.T) {
-	ledger := makeMockLedgerForTracker(t, true)
-	ledger.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 1)
+	ledger := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	tail := txTail{}
 	require.NoError(t, tail.loadFromDisk(ledger))

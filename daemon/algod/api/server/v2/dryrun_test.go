@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/config"
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
@@ -125,16 +126,16 @@ func logResponse(t *testing.T, response *generated.DryrunResponse) {
 	}
 }
 
+var dryrunProtoVersion protocol.ConsensusVersion = "dryrunTestProto"
+
 func TestDryrunLogicSig(t *testing.T) {
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 
 	var dr DryrunRequest
-	var proto config.ConsensusParams
 	var response generated.DryrunResponse
 
-	proto.LogicSigVersion = 2
-	proto.LogicSigMaxCost = 1000
+	dr.ProtocolVersion = string(dryrunProtoVersion)
 
 	dr.Txns = []transactions.SignedTxn{
 		{
@@ -144,7 +145,7 @@ func TestDryrunLogicSig(t *testing.T) {
 		},
 		// it doesn't actually care about any txn content
 	}
-	doDryrunRequest(&dr, &proto, &response)
+	doDryrunRequest(&dr, &response)
 	checkLogicSigPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)
@@ -156,11 +157,9 @@ func TestDryrunLogicSigSource(t *testing.T) {
 	t.Parallel()
 
 	var dr DryrunRequest
-	var proto config.ConsensusParams
 	var response generated.DryrunResponse
 
-	proto.LogicSigVersion = 2
-	proto.LogicSigMaxCost = 1000
+	dr.ProtocolVersion = string(dryrunProtoVersion)
 
 	dr.Txns = []transactions.SignedTxn{{}}
 	dr.Sources = []generated.DryrunSource{
@@ -170,7 +169,7 @@ func TestDryrunLogicSigSource(t *testing.T) {
 			TxnIndex:  0,
 		},
 	}
-	doDryrunRequest(&dr, &proto, &response)
+	doDryrunRequest(&dr, &response)
 	checkLogicSigPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)
@@ -344,6 +343,15 @@ func init() {
 		panic(err)
 	}
 	localStateCheckProg = ops.Program
+
+	// legder requires proto string and proto params set
+	var proto config.ConsensusParams
+	proto.LogicSigVersion = 2
+	proto.LogicSigMaxCost = 1000
+	proto.MaxAppKeyLen = 64
+	proto.MaxAppBytesValueLen = 64
+
+	config.Consensus[dryrunProtoVersion] = proto
 }
 
 func checkLogicSigPass(t *testing.T, response *generated.DryrunResponse) {
@@ -378,13 +386,9 @@ func TestDryrunGlobal1(t *testing.T) {
 	t.Parallel()
 
 	var dr DryrunRequest
-	var proto config.ConsensusParams
 	var response generated.DryrunResponse
 
-	proto.LogicSigVersion = 2
-	proto.LogicSigMaxCost = 1000
-	proto.MaxAppKeyLen = 64
-	proto.MaxAppBytesValueLen = 64
+	dr.ProtocolVersion = string(dryrunProtoVersion)
 
 	dr.Txns = []transactions.SignedTxn{
 		{
@@ -411,10 +415,14 @@ func TestDryrunGlobal1(t *testing.T) {
 			Params: generated.ApplicationParams{
 				ApprovalProgram: globalTestProgram,
 				GlobalState:     &gkv,
+				GlobalStateSchema: &generated.ApplicationStateSchema{
+					NumByteSlice: 10,
+					NumUint:      10,
+				},
 			},
 		},
 	}
-	doDryrunRequest(&dr, &proto, &response)
+	doDryrunRequest(&dr, &response)
 	checkAppCallPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)
@@ -426,13 +434,9 @@ func TestDryrunGlobal2(t *testing.T) {
 	t.Parallel()
 
 	var dr DryrunRequest
-	var proto config.ConsensusParams
 	var response generated.DryrunResponse
 
-	proto.LogicSigVersion = 2
-	proto.LogicSigMaxCost = 1000
-	proto.MaxAppKeyLen = 64
-	proto.MaxAppBytesValueLen = 64
+	dr.ProtocolVersion = string(dryrunProtoVersion)
 
 	dr.Txns = []transactions.SignedTxn{
 		{
@@ -463,7 +467,7 @@ func TestDryrunGlobal2(t *testing.T) {
 			},
 		},
 	}
-	doDryrunRequest(&dr, &proto, &response)
+	doDryrunRequest(&dr, &response)
 	if len(response.Txns) < 1 {
 		t.Error("no response txns")
 	} else if response.Txns[0].AppCallMessages == nil || len(*response.Txns[0].AppCallMessages) < 1 {
@@ -482,13 +486,9 @@ func TestDryrunLocal1(t *testing.T) {
 	t.Parallel()
 
 	var dr DryrunRequest
-	var proto config.ConsensusParams
 	var response generated.DryrunResponse
 
-	proto.LogicSigVersion = 2
-	proto.LogicSigMaxCost = 1000
-	proto.MaxAppKeyLen = 64
-	proto.MaxAppBytesValueLen = 64
+	dr.ProtocolVersion = string(dryrunProtoVersion)
 
 	dr.Txns = []transactions.SignedTxn{
 		{
@@ -509,6 +509,10 @@ func TestDryrunLocal1(t *testing.T) {
 			Id: 1,
 			Params: generated.ApplicationParams{
 				ApprovalProgram: localStateCheckProg,
+				LocalStateSchema: &generated.ApplicationStateSchema{
+					NumByteSlice: 10,
+					NumUint:      10,
+				},
 			},
 		},
 	}
@@ -519,7 +523,7 @@ func TestDryrunLocal1(t *testing.T) {
 			AppsLocalState: &[]generated.ApplicationLocalState{{Id: 1}},
 		},
 	}
-	doDryrunRequest(&dr, &proto, &response)
+	doDryrunRequest(&dr, &response)
 	checkAppCallPass(t, &response)
 	if response.Txns[0].LocalDeltas == nil {
 		t.Fatal("empty local delta")
@@ -555,13 +559,9 @@ func TestDryrunLocal1A(t *testing.T) {
 	t.Parallel()
 
 	var dr DryrunRequest
-	var proto config.ConsensusParams
 	var response generated.DryrunResponse
 
-	proto.LogicSigVersion = 2
-	proto.LogicSigMaxCost = 1000
-	proto.MaxAppKeyLen = 64
-	proto.MaxAppBytesValueLen = 64
+	dr.ProtocolVersion = string(dryrunProtoVersion)
 
 	dr.Txns = []transactions.SignedTxn{
 		{
@@ -580,6 +580,12 @@ func TestDryrunLocal1A(t *testing.T) {
 	dr.Apps = []generated.Application{
 		{
 			Id: 1,
+			Params: generated.ApplicationParams{
+				LocalStateSchema: &generated.ApplicationStateSchema{
+					NumByteSlice: 10,
+					NumUint:      10,
+				},
+			},
 		},
 	}
 	dr.Accounts = []generated.Account{
@@ -597,7 +603,7 @@ func TestDryrunLocal1A(t *testing.T) {
 			AppIndex:  1,
 		},
 	}
-	doDryrunRequest(&dr, &proto, &response)
+	doDryrunRequest(&dr, &response)
 	checkAppCallPass(t, &response)
 	if response.Txns[0].LocalDeltas == nil {
 		t.Fatal("empty local delta")
@@ -632,13 +638,9 @@ func TestDryrunLocalCheck(t *testing.T) {
 	// {"txns":[{"lsig":{"l":"AiABASI="},"txn":{}}]}
 	t.Parallel()
 	var dr DryrunRequest
-	var proto config.ConsensusParams
 	var response generated.DryrunResponse
 
-	proto.LogicSigVersion = 2
-	proto.LogicSigMaxCost = 1000
-	proto.MaxAppKeyLen = 64
-	proto.MaxAppBytesValueLen = 64
+	dr.ProtocolVersion = string(dryrunProtoVersion)
 
 	dr.Txns = []transactions.SignedTxn{
 		{
@@ -682,7 +684,7 @@ func TestDryrunLocalCheck(t *testing.T) {
 		},
 	}
 
-	doDryrunRequest(&dr, &proto, &response)
+	doDryrunRequest(&dr, &response)
 	checkAppCallPass(t, &response)
 }
 func TestDryrunEncodeDecode(t *testing.T) {
@@ -827,10 +829,10 @@ func TestDryrunMakeLedger(t *testing.T) {
 			},
 		},
 	}
-	dl := dryrunLedger{dr: &dr, proto: &proto}
+	dl := dryrunLedger{dr: &dr}
 	err = dl.init()
 	require.NoError(t, err)
-	_, err = makeAppLedger(&dl, &dr.Txns[0].Txn, 1)
+	_, err = makeBalancesAdapter(&dl, &dr.Txns[0].Txn, 1)
 	require.NoError(t, err)
 }
 
@@ -916,13 +918,11 @@ func TestDryrunRequestJSON(t *testing.T) {
 	require.Equal(t, 1, len(dr.Accounts))
 	require.Equal(t, 1, len(dr.Apps))
 
-	var proto config.ConsensusParams
 	var response generated.DryrunResponse
 
-	proto.LogicSigVersion = 2
-	proto.LogicSigMaxCost = 1000
+	dr.ProtocolVersion = string(dryrunProtoVersion)
 
-	doDryrunRequest(&dr, &proto, &response)
+	doDryrunRequest(&dr, &response)
 	checkAppCallPass(t, &response)
 	if t.Failed() {
 		logResponse(t, &response)
@@ -971,4 +971,73 @@ func TestStateDeltaToStateDelta(t *testing.T) {
 	require.Contains(t, keys, b64("intkey"))
 	require.Contains(t, keys, b64("byteskey"))
 	require.Contains(t, keys, b64("delkey"))
+}
+
+func randomAddress() basics.Address {
+	var addr basics.Address
+	crypto.RandBytes(addr[:])
+	return addr
+}
+
+func TestDryrunOptIn(t *testing.T) {
+	t.Parallel()
+
+	ops, err := logic.AssembleString(`#pragma version 2
+txn ApplicationID
+bz ok
+int 0
+byte "key"
+byte "value"
+app_local_put
+ok:
+int 1`)
+	require.NoError(t, err)
+	approval := ops.Program
+	ops, err = logic.AssembleString("int 1")
+	clst := ops.Program
+	require.NoError(t, err)
+	var appIdx basics.AppIndex = 1
+	creator := randomAddress()
+	sender := randomAddress()
+	dr := DryrunRequest{
+		Txns: []transactions.SignedTxn{
+			{
+				Txn: transactions.Transaction{
+					Header: transactions.Header{Sender: sender},
+					Type:   protocol.ApplicationCallTx,
+					ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+						ApplicationID: appIdx,
+						OnCompletion:  transactions.OptInOC,
+					},
+				},
+			},
+		},
+		Apps: []generated.Application{
+			{
+				Id: uint64(appIdx),
+				Params: generated.ApplicationParams{
+					Creator:           creator.String(),
+					ApprovalProgram:   approval,
+					ClearStateProgram: clst,
+					LocalStateSchema:  &generated.ApplicationStateSchema{NumByteSlice: 1},
+				},
+			},
+		},
+		Accounts: []generated.Account{
+			{
+				Address: sender.String(),
+				Status:  "Online",
+				Amount:  10000000,
+			},
+		},
+	}
+	dr.ProtocolVersion = string(dryrunProtoVersion)
+
+	var response generated.DryrunResponse
+	doDryrunRequest(&dr, &response)
+	require.NoError(t, err)
+	checkAppCallPass(t, &response)
+	if t.Failed() {
+		logResponse(t, &response)
+	}
 }

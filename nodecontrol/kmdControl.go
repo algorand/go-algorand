@@ -134,10 +134,15 @@ func (kc *KMDController) StopKMD() (alreadyStopped bool, err error) {
 
 // cleanUpZombieKMD removes files that a kmd node that's not actually running
 // might have left behind
-func (kc KMDController) cleanUpZombieKMD() {
+func (kc KMDController) cleanUpZombieKMD() (err error) {
 	if kc.kmdPIDPath != "" {
-		os.Remove(kc.kmdPIDPath)
+		err = os.Remove(kc.kmdPIDPath)
+		// file not exists error here is legit, and should not be considered an error.
+		if err != nil && os.IsNotExist(err) {
+			err = nil
+		}
 	}
+	return
 }
 
 func (kc *KMDController) setKmdCmdLogFiles(cmd *exec.Cmd) (files []*os.File) {
@@ -178,7 +183,11 @@ func (kc *KMDController) StartKMD(args KMDStartArgs) (alreadyRunning bool, err e
 			return true, nil
 		}
 		// Nope, clean up the files the zombie may have left behind
-		kc.cleanUpZombieKMD()
+		err = kc.cleanUpZombieKMD()
+		// this error is expected in cases where we don't have permission to clear the old file.
+		if err != nil {
+			return false, err
+		}
 	}
 
 	if !filepath.IsAbs(kc.kmdDataDir) {
@@ -192,7 +201,7 @@ func (kc *KMDController) StartKMD(args KMDStartArgs) (alreadyRunning bool, err e
 			return false, errors.New("bad kmd data dir")
 		}
 		if (dataDirStat.Mode() & 0077) != 0 {
-			logging.Base().Errorf("%s: kmd data dir exists but is too permissive (%o)", kc.kmdDataDir, dataDirStat.Mode()&0777)
+			logging.Base().Errorf("%s: kmd data dir exists but is too permissive (%o), change to (%o)", kc.kmdDataDir, dataDirStat.Mode()&0777, DefaultKMDDataDirPerms)
 			return false, errors.New("kmd data dir not secure")
 		}
 	} else {
@@ -210,7 +219,12 @@ func (kc *KMDController) StartKMD(args KMDStartArgs) (alreadyRunning bool, err e
 	files := kc.setKmdCmdLogFiles(kmdCmd)
 	// Descriptors will get dup'd after exec, so OK to close when we return
 	for _, file := range files {
-		defer file.Close()
+		defer func(file *os.File) {
+			localError := file.Close()
+			if localError != nil && err == nil {
+				err = localError
+			}
+		}(file)
 	}
 
 	err = kmdCmd.Start()

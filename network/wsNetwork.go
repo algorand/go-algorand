@@ -197,6 +197,9 @@ type GossipNode interface {
 	// newly connecting peers.  This should be called before the network
 	// is started.
 	RegisterMessageInterest(protocol.Tag) error
+
+	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
+	SubstituteGenesisID(rawURL string) string
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -723,8 +726,10 @@ func (wn *WebsocketNetwork) Start() {
 		wn.wg.Add(1)
 		go wn.broadcastThread()
 	}
-	wn.wg.Add(1)
-	go wn.prioWeightRefresh()
+	if wn.prioScheme != nil {
+		wn.wg.Add(1)
+		go wn.prioWeightRefresh()
+	}
 	wn.log.Infof("serving genesisID=%s on %#v with RandomID=%s", wn.GenesisID, wn.PublicAddress(), wn.RandomID)
 }
 
@@ -2088,4 +2093,9 @@ func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) error {
 
 	wn.messagesOfInterest[t] = true
 	return nil
+}
+
+// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
+func (wn *WebsocketNetwork) SubstituteGenesisID(rawURL string) string {
+	return strings.Replace(rawURL, "{genesisID}", wn.GenesisID, -1)
 }
