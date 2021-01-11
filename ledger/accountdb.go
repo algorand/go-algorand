@@ -1040,9 +1040,9 @@ func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, comp
 	return
 }
 
-// accountsGet updates the entries on the baseAccounts map with the provided addresses
-// the round number of the persistedAccountData is not updated by this function, and the caller is responsible
-// to populate this field.
+// accountsGet updates the entries on the deltas.old map that matches the provided addresses.
+// The round number of the persistedAccountData is not updated by this function, and the caller is responsible
+// for populating this field.
 func accountsGet(tx *sql.Tx, addresses []basics.Address, deltas map[basics.Address]accountDeltaCount) (err error) {
 	if len(addresses) == 0 {
 		return nil

@@ -70,13 +70,12 @@ var trieCachedNodesCount = 9000
 var merkleCommitterNodesPerPage = int64(116)
 
 // baseAccountsPendingAccountsBufferSize defines the size of the base account pending accounts buffer size.
-// once a round, the entries from this buffer are being flushed into the base accounts map. Exceeding this
-// value would not be a failuire, but could slow things down ( since we would need to reload the missing account
-// data from the disk )
+// At the begining of a new round, the entries from this buffer are being flushed into the base accounts map.
 const baseAccountsPendingAccountsBufferSize = 100000
 
 // baseAccountsPendingAccountsWarnThreshold defines the threshold at which the mruAccounts would generate a warning
-// after we've surpassed a given pending account size.
+// after we've surpassed a given pending account size. The warning is being generated when the pending accounts data
+// is being flushed into the main base account cache.
 const baseAccountsPendingAccountsWarnThreshold = 85000
 
 var trieMemoryConfig = merkletrie.MemoryConfig{

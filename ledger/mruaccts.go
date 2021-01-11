@@ -35,7 +35,7 @@ type mruAccounts struct {
 	// pendingAccounts are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the accounts/accountsList
 	pendingAccounts chan persistedAccountData
-	// log interface
+	// log interface; used for logging the threshold event.
 	log logging.Logger
 	// pendingWritesWarnThreshold is the threshold beyond we would write a warning for exceeding the number of pendingAccounts entries
 	pendingWritesWarnThreshold int
@@ -110,6 +110,7 @@ func (m *mruAccounts) write(acctData persistedAccountData) {
 
 // resize adjust the current size of the mruAccounts cache, by dropping the least
 // recenrly used entries.
+// thread locking semantics : write lock
 func (m *mruAccounts) resize(newSize int) (removed int) {
 	for {
 		if len(m.accounts) <= newSize {
