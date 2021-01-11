@@ -918,13 +918,8 @@ func TestDryrunRequestJSON(t *testing.T) {
 	require.Equal(t, 1, len(dr.Accounts))
 	require.Equal(t, 1, len(dr.Apps))
 
-	// var proto config.ConsensusParams
 	var response generated.DryrunResponse
 
-	// proto.LogicSigVersion = 2
-	// proto.LogicSigMaxCost = 1000
-
-	// config.Consensus[dryrunProtoVersion] = proto
 	dr.ProtocolVersion = string(dryrunProtoVersion)
 
 	doDryrunRequest(&dr, &response)

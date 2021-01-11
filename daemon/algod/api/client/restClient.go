@@ -457,16 +457,17 @@ func (client RestClient) Block(round uint64) (response v1.Block, err error) {
 }
 
 // RawBlock gets the encoded, raw msgpack block for the given round
-func (client RestClient) RawBlock(round uint64) (response v1.RawBlock, err error) {
-	err = client.getRaw(&response, fmt.Sprintf("/v1/block/%d", round), rawblockParams{1})
-	return
-}
-
-// RawBlockV2 gets the raw block info for the given round
-func (client RestClient) RawBlockV2(round uint64) (response []byte, err error) {
-	var blob Blob
-	err = client.getRaw(&blob, fmt.Sprintf("/v2/blocks/%d", round), rawFormat{Format: "msgpack"})
-	response = blob
+func (client RestClient) RawBlock(round uint64) (response []byte, err error) {
+	switch client.versionAffinity {
+	case APIVersionV2:
+		var blob Blob
+		err = client.getRaw(&blob, fmt.Sprintf("/v2/blocks/%d", round), rawFormat{Format: "msgpack"})
+		response = blob
+	default:
+		var raw v1.RawBlock
+		err = client.getRaw(&raw, fmt.Sprintf("/v1/block/%d", round), rawblockParams{1})
+		response = raw
+	}
 	return
 }
 

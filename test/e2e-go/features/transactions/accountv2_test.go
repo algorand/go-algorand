@@ -44,7 +44,7 @@ func checkEvalDelta(t *testing.T, client *libgoal.Client, startRnd, endRnd uint6
 		if r > lastRound {
 			break
 		}
-		b, err := client.BlockV2(r)
+		b, err := client.BookkeepingBlock(r)
 		a.NoError(err)
 		for _, ps := range b.Payset {
 			ed, ok := ps.ApplyData.EvalDelta.GlobalDelta["counter"]

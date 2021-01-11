@@ -739,12 +739,12 @@ func (c *Client) RawBlock(round uint64) (resp v1.RawBlock, err error) {
 	return
 }
 
-// BlockV2 takes a round and returns its block
-func (c *Client) BlockV2(round uint64) (block bookkeeping.Block, err error) {
+// BookkeepingBlock takes a round and returns its block
+func (c *Client) BookkeepingBlock(round uint64) (block bookkeeping.Block, err error) {
 	algod, err := c.ensureAlgodClient()
 	if err == nil {
 		var resp []byte
-		resp, err = algod.RawBlockV2(round)
+		resp, err = algod.RawBlock(round)
 		if err == nil {
 			var b rpcs.EncodedBlockCert
 			err = protocol.DecodeReflect(resp, &b)

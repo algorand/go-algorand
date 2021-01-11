@@ -19,7 +19,6 @@ $GOPATH1/bin/algod -d $D -g "$GENJSON" -x >/dev/null
 LEDGERS=$D/*/ledger.*sqlite
 
 for LEDGER in $LEDGERS; do
-  TABLES=$(echo .tables | sqlite3 $LEDGER)
   for T in $(echo .tables | sqlite3 $LEDGER); do
     # remove trailing newlines echoed by Windows' sqlite3 app
     T=${T//[$'\t\r\n ']}
