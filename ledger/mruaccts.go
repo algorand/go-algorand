@@ -109,7 +109,7 @@ func (m *mruAccounts) write(acctData persistedAccountData) {
 }
 
 // resize adjust the current size of the mruAccounts cache, by dropping the least
-// recenrly used entries.
+// recently used entries.
 // thread locking semantics : write lock
 func (m *mruAccounts) resize(newSize int) (removed int) {
 	for {

@@ -100,6 +100,7 @@ func TestMRUAccountsPendingWrites(t *testing.T) {
 			baseAcct.writePending(acct)
 		}(i)
 	}
+	testStarted := time.Now()
 	for {
 		baseAcct.flushPendingWrites()
 		// check if all accounts were loaded into "main" cache.
@@ -114,6 +115,9 @@ func TestMRUAccountsPendingWrites(t *testing.T) {
 		}
 		if allAccountsLoaded {
 			break
+		}
+		if time.Since(testStarted).Seconds() > 20 {
+			require.Fail(t, "failed after waiting for 20 second")
 		}
 		// not yet, keep looping.
 	}
