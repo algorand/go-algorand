@@ -524,7 +524,7 @@ func TestAccountDBRound(t *testing.T) {
 	lastCreatableID := crypto.RandUint64() % 512
 	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
 	expectedDbImage := make(map[basics.CreatableIndex]modifiedCreatable)
-	var baseAccounts mruAccounts
+	var baseAccounts lruAccounts
 	baseAccounts.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
 		var updates map[basics.Address]accountDelta

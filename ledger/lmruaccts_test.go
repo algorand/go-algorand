@@ -28,7 +28,7 @@ import (
 )
 
 func TestBasicMRUAccounts(t *testing.T) {
-	var baseAcct mruAccounts
+	var baseAcct lruAccounts
 	baseAcct.init(logging.TestingLog(t), 10, 5)
 
 	accountsNum := 50
@@ -84,7 +84,7 @@ func TestBasicMRUAccounts(t *testing.T) {
 }
 
 func TestMRUAccountsPendingWrites(t *testing.T) {
-	var baseAcct mruAccounts
+	var baseAcct lruAccounts
 	accountsNum := 250
 	baseAcct.init(logging.TestingLog(t), accountsNum*2, accountsNum)
 
@@ -123,21 +123,21 @@ func TestMRUAccountsPendingWrites(t *testing.T) {
 	}
 }
 
-type mruAccountsTestLogger struct {
+type lruAccountsTestLogger struct {
 	logging.Logger
 	WarnfCallback func(string, ...interface{})
 	warnMsgCount  int
 }
 
-func (cl *mruAccountsTestLogger) Warnf(s string, args ...interface{}) {
+func (cl *lruAccountsTestLogger) Warnf(s string, args ...interface{}) {
 	cl.warnMsgCount++
 }
 
 func TestMRUAccountsPendingWritesWarning(t *testing.T) {
-	var baseAcct mruAccounts
+	var baseAcct lruAccounts
 	pendingWritesBuffer := 50
 	pendingWritesThreshold := 40
-	log := &mruAccountsTestLogger{Logger: logging.TestingLog(t)}
+	log := &lruAccountsTestLogger{Logger: logging.TestingLog(t)}
 	baseAcct.init(log, pendingWritesBuffer, pendingWritesThreshold)
 	for j := 0; j < 50; j++ {
 		for i := 0; i < j; i++ {
@@ -158,10 +158,10 @@ func TestMRUAccountsPendingWritesWarning(t *testing.T) {
 }
 
 func TestMRUAccountsOmittedPendingWrites(t *testing.T) {
-	var baseAcct mruAccounts
+	var baseAcct lruAccounts
 	pendingWritesBuffer := 50
 	pendingWritesThreshold := 40
-	log := &mruAccountsTestLogger{Logger: logging.TestingLog(t)}
+	log := &lruAccountsTestLogger{Logger: logging.TestingLog(t)}
 	baseAcct.init(log, pendingWritesBuffer, pendingWritesThreshold)
 
 	for i := 0; i < pendingWritesBuffer*2; i++ {

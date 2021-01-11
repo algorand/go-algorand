@@ -73,7 +73,7 @@ var merkleCommitterNodesPerPage = int64(116)
 // At the begining of a new round, the entries from this buffer are being flushed into the base accounts map.
 const baseAccountsPendingAccountsBufferSize = 100000
 
-// baseAccountsPendingAccountsWarnThreshold defines the threshold at which the mruAccounts would generate a warning
+// baseAccountsPendingAccountsWarnThreshold defines the threshold at which the lruAccounts would generate a warning
 // after we've surpassed a given pending account size. The warning is being generated when the pending accounts data
 // is being flushed into the main base account cache.
 const baseAccountsPendingAccountsWarnThreshold = 85000
@@ -235,7 +235,7 @@ type accountUpdates struct {
 	voters *votersTracker
 
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
-	baseAccounts mruAccounts
+	baseAccounts lruAccounts
 }
 
 type deferredCommit struct {
@@ -2012,7 +2012,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 // compactDeltas takes an arary of account map deltas ( one array entry per round ), and corresponding creatables array, and compact the arrays into a single
 // map that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes. For both the account deltas as well as for the creatables,
 // it counts the number of changes per round by specifying it in the ndeltas field of the accountDeltaCount/modifiedCreatable. The ndeltas field of the input creatableDeltas is ignored.
-func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable, baseAccounts mruAccounts) (outAccountDeltas map[basics.Address]accountDeltaCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
+func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable, baseAccounts lruAccounts) (outAccountDeltas map[basics.Address]accountDeltaCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
 	if len(accountDeltas) > 0 {
 		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
 		outAccountDeltas = make(map[basics.Address]accountDeltaCount, 1+len(accountDeltas[0])*len(accountDeltas))

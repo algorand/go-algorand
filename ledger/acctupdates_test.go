@@ -1369,7 +1369,7 @@ func BenchmarkCompactDeltas(b *testing.B) {
 
 			accountDeltas[rnd] = m
 		}
-		var baseAccounts mruAccounts
+		var baseAccounts lruAccounts
 		baseAccounts.init(nil, 100, 80)
 		b.ResetTimer()
 
@@ -1391,7 +1391,7 @@ func TestCompactDeltas(t *testing.T) {
 	creatableDeltas[0] = make(map[basics.CreatableIndex]modifiedCreatable)
 	accountDeltas[0][addrs[0]] = accountDelta{old: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}, new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}}
 	creatableDeltas[0][100] = modifiedCreatable{creator: addrs[2], created: true}
-	var baseAccounts mruAccounts
+	var baseAccounts lruAccounts
 	baseAccounts.init(nil, 100, 80)
 	outAccountDeltas, misssingAccounts, outCreatableDeltas := compactDeltas(accountDeltas, creatableDeltas, baseAccounts)
 
