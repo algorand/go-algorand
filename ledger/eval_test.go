@@ -34,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -228,7 +229,7 @@ func TestRekeying(t *testing.T) {
 	// TODO: More tests
 }
 
-func TestPrepareAppEvaluators(t *testing.T) {
+func TestPrepareEvalParams(t *testing.T) {
 	eval := BlockEvaluator{
 		prevHeader: bookkeeping.BlockHeader{
 			TimeStamp: 1234,
@@ -295,7 +296,7 @@ func TestPrepareAppEvaluators(t *testing.T) {
 
 	for i, testCase := range cases {
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
-			res := eval.prepareAppEvaluators(testCase.group)
+			res := eval.prepareEvalParams(testCase.group)
 			require.Equal(t, len(res), len(testCase.group))
 
 			// Compute the expected transaction group without ApplyData for
@@ -310,12 +311,10 @@ func TestPrepareAppEvaluators(t *testing.T) {
 			for j, present := range testCase.expected {
 				if present {
 					require.NotNil(t, res[j])
-					require.Equal(t, res[j].evalParams.GroupIndex, j)
-					require.Equal(t, res[j].evalParams.TxnGroup, expGroupNoAD)
-					require.Equal(t, *res[j].evalParams.Proto, eval.proto)
-					require.Equal(t, *res[j].evalParams.Txn, testCase.group[j].SignedTxn)
-					require.Equal(t, res[j].AppTealGlobals.CurrentRound, eval.prevHeader.Round+1)
-					require.Equal(t, res[j].AppTealGlobals.LatestTimestamp, eval.prevHeader.TimeStamp)
+					require.Equal(t, res[j].GroupIndex, j)
+					require.Equal(t, res[j].TxnGroup, expGroupNoAD)
+					require.Equal(t, *res[j].Proto, eval.proto)
+					require.Equal(t, *res[j].Txn, testCase.group[j].SignedTxn)
 				} else {
 					require.Nil(t, res[j])
 				}
@@ -335,6 +334,115 @@ func testLedgerCleanup(l *Ledger, dbName string, inMem bool) {
 			os.Remove(fname)
 		}
 	}
+}
+
+func testEvalAppGroup(t *testing.T, schema basics.StateSchema) (*BlockEvaluator, basics.Address, error) {
+	genesisInitState, addrs, keys := genesis(10)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	require.NoError(t, err)
+	eval.validate = true
+	eval.generate = false
+
+	ops, err := logic.AssembleString(`#pragma version 2
+	txn ApplicationID
+	bz create
+	byte "caller"
+	txn Sender
+	app_global_put
+	b ok
+create:
+	byte "creator"
+	txn Sender
+	app_global_put
+ok:
+	int 1`)
+	require.NoError(t, err, ops.Errors)
+	approval := ops.Program
+	ops, err = logic.AssembleString("#pragma version 2\nint 1")
+	require.NoError(t, err)
+	clear := ops.Program
+
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	header := transactions.Header{
+		Sender:      addrs[0],
+		Fee:         minFee,
+		FirstValid:  newBlock.Round(),
+		LastValid:   newBlock.Round(),
+		GenesisHash: genHash,
+	}
+	appcall1 := transactions.Transaction{
+		Type:   protocol.ApplicationCallTx,
+		Header: header,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			GlobalStateSchema: schema,
+			ApprovalProgram:   approval,
+			ClearStateProgram: clear,
+		},
+	}
+
+	appcall2 := transactions.Transaction{
+		Type:   protocol.ApplicationCallTx,
+		Header: header,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: 1,
+		},
+	}
+
+	var group transactions.TxGroup
+	group.TxGroupHashes = []crypto.Digest{crypto.HashObj(appcall1), crypto.HashObj(appcall2)}
+	appcall1.Group = crypto.HashObj(group)
+	appcall2.Group = crypto.HashObj(group)
+	stxn1 := appcall1.Sign(keys[0])
+	stxn2 := appcall2.Sign(keys[0])
+
+	g := []transactions.SignedTxnWithAD{
+		{
+			SignedTxn: stxn1,
+			ApplyData: transactions.ApplyData{
+				EvalDelta: basics.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
+					"creator": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
+				}},
+		},
+		{
+			SignedTxn: stxn2,
+			ApplyData: transactions.ApplyData{
+				EvalDelta: basics.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
+					"caller": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
+				}},
+		},
+	}
+	err = eval.transactionGroup(g)
+	return eval, addrs[0], err
+}
+
+// TestEvalAppStateCountsWithTxnGroup ensures txns in a group can't violate app state schema limits
+// the test ensures that
+// commitToParent -> applyChild copies child's cow state usage counts into parent
+// and the usage counts correctly propagated from parent cow to child cow and back
+func TestEvalAppStateCountsWithTxnGroup(t *testing.T) {
+	_, _, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 1})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "store bytes count 2 exceeds schema bytes count 1")
+}
+
+// TestEvalAppAllocStateWithTxnGroup ensures roundCowState.deltas and applyStorageDelta
+// produce correct results when a txn group has storage allocate and storage update actions
+func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
+	eval, addr, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 2})
+	require.NoError(t, err)
+	deltas := eval.state.deltas()
+	state := deltas.accts[addr].new.AppParams[1].GlobalState
+	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
+	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
 }
 
 func BenchmarkBlockEvaluatorRAMCrypto(b *testing.B) {

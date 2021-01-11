@@ -207,7 +207,7 @@ type accountUpdates struct {
 	deltasAccum []int
 
 	// committedOffset is the offset at which we'd like to persist all the previous account information to disk.
-	committedOffset chan deferedCommit
+	committedOffset chan deferredCommit
 
 	// accountsMu is the synchronization mutex for accessing the various non-static variables.
 	accountsMu deadlock.RWMutex
@@ -226,7 +226,7 @@ type accountUpdates struct {
 	voters *votersTracker
 }
 
-type deferedCommit struct {
+type deferredCommit struct {
 	offset   uint64
 	dbRound  basics.Round
 	lookback basics.Round
@@ -361,12 +361,12 @@ func (au *accountUpdates) IsWritingCatchpointFile() bool {
 // Note that the function doesn't update the account with the rewards,
 // even while it does return the AccoutData which represent the "rewarded" account data.
 func (au *accountUpdates) LookupWithRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, err error) {
-	return au.lookupWithRewardsImpl(rnd, addr)
+	return au.lookupWithRewards(rnd, addr)
 }
 
 // LookupWithoutRewards returns the account data for a given address at a given round.
 func (au *accountUpdates) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, validThrough basics.Round, err error) {
-	return au.lookupWithoutRewardsImpl(rnd, addr, true /* take lock*/)
+	return au.lookupWithoutRewards(rnd, addr, true /* take lock*/)
 }
 
 // ListAssets lists the assets by their asset index, limiting to the first maxResults
@@ -600,7 +600,7 @@ func (au *accountUpdates) GetLastCatchpointLabel() string {
 
 // GetCreatorForRound returns the creator for a given asset/app index at a given round
 func (au *accountUpdates) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
-	return au.getCreatorForRoundImpl(rnd, cidx, ctype, true /* take the lock */)
+	return au.getCreatorForRound(rnd, cidx, ctype, true /* take the lock */)
 }
 
 // committedUpTo enqueues committing the balances for round committedRound-lookback.
@@ -612,7 +612,7 @@ func (au *accountUpdates) GetCreatorForRound(rnd basics.Round, cidx basics.Creat
 func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound basics.Round) {
 	var isCatchpointRound, hasMultipleIntermediateCatchpoint bool
 	var offset uint64
-	var dc deferedCommit
+	var dc deferredCommit
 	au.accountsMu.RLock()
 	defer func() {
 		au.accountsMu.RUnlock()
@@ -702,7 +702,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 		}
 	}
 
-	dc = deferedCommit{
+	dc = deferredCommit{
 		offset:   offset,
 		dbRound:  au.dbRound,
 		lookback: lookback,
@@ -740,7 +740,7 @@ type readCloseSizer struct {
 	size int64
 }
 
-// Size returns the length of the assiciated stream.
+// Size returns the length of the associated stream.
 func (r *readCloseSizer) Size() (int64, error) {
 	if r.size < 0 {
 		return 0, fmt.Errorf("unknown stream size")
@@ -847,20 +847,20 @@ func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (AccountTotal
 	return aul.au.totalsImpl(rnd)
 }
 
-// checkDup test to see if the given transaction id/lease already exists. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
-func (aul *accountUpdatesLedgerEvaluator) checkDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, txlease) error {
+// CheckDup test to see if the given transaction id/lease already exists. It's not needed by the accountUpdatesLedgerEvaluator and implemented as a stub.
+func (aul *accountUpdatesLedgerEvaluator) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, TxLease) error {
 	// this is a non-issue since this call will never be made on non-validating evaluation
 	return fmt.Errorf("accountUpdatesLedgerEvaluator: tried to check for dup during accountUpdates initialization ")
 }
 
-// LookupWithoutRewards returns the account balance for a given address at a given round, without the reward
+// lookupWithoutRewards returns the account balance for a given address at a given round, without the reward
 func (aul *accountUpdatesLedgerEvaluator) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
-	return aul.au.lookupWithoutRewardsImpl(rnd, addr, false /*don't sync*/)
+	return aul.au.lookupWithoutRewards(rnd, addr, false /*don't sync*/)
 }
 
 // GetCreatorForRound returns the asset/app creator for a given asset/app index at a given round
 func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
-	return aul.au.getCreatorForRoundImpl(rnd, cidx, ctype, false /* don't sync */)
+	return aul.au.getCreatorForRound(rnd, cidx, ctype, false /* don't sync */)
 }
 
 // totalsImpl returns the totals for a given round
@@ -991,7 +991,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	au.catchpointSlowWriting = make(chan struct{}, 1)
 	close(au.catchpointSlowWriting)
 	au.ctx, au.ctxCancel = context.WithCancel(context.Background())
-	au.committedOffset = make(chan deferedCommit, 1)
+	au.committedOffset = make(chan deferredCommit, 1)
 	au.commitSyncerClosed = make(chan struct{})
 	go au.commitSyncer(au.committedOffset)
 
@@ -1455,10 +1455,10 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	au.voters.newBlock(blk.BlockHeader)
 }
 
-// lookupWithRewardsImpl returns the account data for a given address at a given round.
+// lookupWithRewards returns the account data for a given address at a given round.
 // The rewards are added to the AccountData before returning. Note that the function doesn't update the account with the rewards,
 // even while it does return the AccoutData which represent the "rewarded" account data.
-func (au *accountUpdates) lookupWithRewardsImpl(rnd basics.Round, addr basics.Address) (data basics.AccountData, err error) {
+func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Address) (data basics.AccountData, err error) {
 	au.accountsMu.RLock()
 	needUnlock := true
 	defer func() {
@@ -1528,7 +1528,7 @@ func (au *accountUpdates) lookupWithRewardsImpl(rnd basics.Round, addr basics.Ad
 		}
 
 		if dbRound < currentDbRound {
-			au.log.Errorf("accountUpdates.lookupWithRewardsImpl: database round %d is behind in-memory round %d", dbRound, currentDbRound)
+			au.log.Errorf("accountUpdates.lookupWithRewards: database round %d is behind in-memory round %d", dbRound, currentDbRound)
 			return basics.AccountData{}, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 		}
 		au.accountsMu.RLock()
@@ -1539,8 +1539,8 @@ func (au *accountUpdates) lookupWithRewardsImpl(rnd basics.Round, addr basics.Ad
 	}
 }
 
-// lookupWithoutRewardsImpl returns the account data for a given address at a given round.
-func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics.Address, synchronized bool) (data basics.AccountData, validThrough basics.Round, err error) {
+// lookupWithoutRewards returns the account data for a given address at a given round.
+func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Address, synchronized bool) (data basics.AccountData, validThrough basics.Round, err error) {
 	needUnlock := false
 	if synchronized {
 		au.accountsMu.RLock()
@@ -1605,7 +1605,7 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 		}
 		if synchronized {
 			if dbRound < currentDbRound {
-				au.log.Errorf("accountUpdates.lookupWithoutRewardsImpl: database round %d is behind in-memory round %d", dbRound, currentDbRound)
+				au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d is behind in-memory round %d", dbRound, currentDbRound)
 				return basics.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 			}
 			au.accountsMu.RLock()
@@ -1615,14 +1615,14 @@ func (au *accountUpdates) lookupWithoutRewardsImpl(rnd basics.Round, addr basics
 			}
 		} else {
 			// in non-sync mode, we don't wait since we already assume that we're synchronized.
-			au.log.Errorf("accountUpdates.lookupWithoutRewardsImpl: database round %d mismatching in-memory round %d", dbRound, currentDbRound)
+			au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d mismatching in-memory round %d", dbRound, currentDbRound)
 			return basics.AccountData{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 		}
 	}
 }
 
-// getCreatorForRoundImpl returns the asset/app creator for a given asset/app index at a given round
-func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType, synchronized bool) (creator basics.Address, ok bool, err error) {
+// getCreatorForRound returns the asset/app creator for a given asset/app index at a given round
+func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType, synchronized bool) (creator basics.Address, ok bool, err error) {
 	unlock := false
 	if synchronized {
 		au.accountsMu.RLock()
@@ -1679,7 +1679,7 @@ func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.C
 		}
 		if synchronized {
 			if dbRound < currentDbRound {
-				au.log.Errorf("accountUpdates.getCreatorForRoundImpl: database round %d is behind in-memory round %d", dbRound, currentDbRound)
+				au.log.Errorf("accountUpdates.getCreatorForRound: database round %d is behind in-memory round %d", dbRound, currentDbRound)
 				return basics.Address{}, false, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 			}
 			au.accountsMu.RLock()
@@ -1688,7 +1688,7 @@ func (au *accountUpdates) getCreatorForRoundImpl(rnd basics.Round, cidx basics.C
 				au.accountsReadCond.Wait()
 			}
 		} else {
-			au.log.Errorf("accountUpdates.getCreatorForRoundImpl: database round %d mismatching in-memory round %d", dbRound, currentDbRound)
+			au.log.Errorf("accountUpdates.getCreatorForRound: database round %d mismatching in-memory round %d", dbRound, currentDbRound)
 			return basics.Address{}, false, &MismatchingDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
 		}
 	}
@@ -1723,7 +1723,7 @@ func (au *accountUpdates) roundOffset(rnd basics.Round) (offset uint64, err erro
 
 // commitSyncer is the syncer go-routine function which perform the database updates. Internally, it dequeues deferedCommits and
 // send the tasks to commitRound for completing the operation.
-func (au *accountUpdates) commitSyncer(deferedCommits chan deferedCommit) {
+func (au *accountUpdates) commitSyncer(deferedCommits chan deferredCommit) {
 	defer close(au.commitSyncerClosed)
 	for {
 		select {

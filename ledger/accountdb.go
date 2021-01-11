@@ -34,17 +34,17 @@ import (
 // accountsDbQueries is used to cache a prepared SQL statement to look up
 // the state of a single account.
 type accountsDbQueries struct {
-	listCreatablesStmt           *sql.Stmt
-	lookupStmt                   *sql.Stmt
-	lookupCreatorStmt            *sql.Stmt
-	deleteStoredCatchpoint       *sql.Stmt
-	insertStoredCatchpoint       *sql.Stmt
-	selectOldestsCatchpointFiles *sql.Stmt
-	selectCatchpointStateUint64  *sql.Stmt
-	deleteCatchpointState        *sql.Stmt
-	insertCatchpointStateUint64  *sql.Stmt
-	selectCatchpointStateString  *sql.Stmt
-	insertCatchpointStateString  *sql.Stmt
+	listCreatablesStmt          *sql.Stmt
+	lookupStmt                  *sql.Stmt
+	lookupCreatorStmt           *sql.Stmt
+	deleteStoredCatchpoint      *sql.Stmt
+	insertStoredCatchpoint      *sql.Stmt
+	selectOldestCatchpointFiles *sql.Stmt
+	selectCatchpointStateUint64 *sql.Stmt
+	deleteCatchpointState       *sql.Stmt
+	insertCatchpointStateUint64 *sql.Stmt
+	selectCatchpointStateString *sql.Stmt
+	insertCatchpointStateString *sql.Stmt
 }
 
 var accountsSchema = []string{
@@ -87,6 +87,7 @@ var creatablesMigration = []string{
 	`ALTER TABLE assetcreators ADD COLUMN ctype INTEGER DEFAULT 0`,
 }
 
+// createNormalizedOnlineBalanceIndex handles accountbase/catchpointbalances tables
 func createNormalizedOnlineBalanceIndex(idxname string, tablename string) string {
 	return fmt.Sprintf(`CREATE INDEX IF NOT EXISTS %s
 		ON %s ( normalizedonlinebalance, address, data )
@@ -175,17 +176,16 @@ func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.Consens
 
 // writeCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
 func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
-	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
+	insertAcctStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointbalances(address, normalizedonlinebalance, data) VALUES(?, ?, ?)")
 	if err != nil {
 		return err
 	}
 
 	for _, balance := range bals {
-		result, err := insertStmt.ExecContext(ctx, balance.address[:], balance.normalizedBalance, balance.encodedAccountData)
+		result, err := insertAcctStmt.ExecContext(ctx, balance.address[:], balance.normalizedBalance, balance.encodedAccountData)
 		if err != nil {
 			return err
 		}
-
 		aff, err := result.RowsAffected()
 		if err != nil {
 			return err
@@ -197,7 +197,7 @@ func writeCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, bals []norm
 	return nil
 }
 
-// writeCatchpointStagingBalances inserts all the account hashes in the provided array into the catchpoint pending hashes table catchpointpendinghashes.
+// writeCatchpointStagingHashes inserts all the account hashes in the provided array into the catchpoint pending hashes table catchpointpendinghashes.
 func writeCatchpointStagingHashes(ctx context.Context, tx *sql.Tx, bals []normalizedAccountBalance) error {
 	insertStmt, err := tx.PrepareContext(ctx, "INSERT INTO catchpointpendinghashes(data) VALUES(?)")
 	if err != nil {
@@ -275,14 +275,15 @@ func resetCatchpointStagingBalances(ctx context.Context, tx *sql.Tx, newCatchup 
 		// around after we rename the table from "catchpointbalances"
 		// to "accountbase".  To construct a unique index name, we
 		// use the current time.
-		idxname := fmt.Sprintf("onlineaccountbals%d", time.Now().UnixNano())
+		// Apply the same logic to
+		idxnameBalances := fmt.Sprintf("onlineaccountbals_idx_%d", time.Now().UnixNano())
 
 		s = append(s,
 			"CREATE TABLE IF NOT EXISTS catchpointassetcreators (asset integer primary key, creator blob, ctype integer)",
 			"CREATE TABLE IF NOT EXISTS catchpointbalances (address blob primary key, data blob, normalizedonlinebalance integer)",
 			"CREATE TABLE IF NOT EXISTS catchpointpendinghashes (data blob)",
 			"CREATE TABLE IF NOT EXISTS catchpointaccounthashes (id integer primary key, data blob)",
-			createNormalizedOnlineBalanceIndex(idxname, "catchpointbalances"),
+			createNormalizedOnlineBalanceIndex(idxnameBalances, "catchpointbalances"),
 		)
 	}
 
@@ -530,7 +531,7 @@ func accountsDbInit(r db.Queryable, w db.Queryable) (*accountsDbQueries, error) 
 		return nil, err
 	}
 
-	qs.selectOldestsCatchpointFiles, err = r.Prepare("SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?")
+	qs.selectOldestCatchpointFiles, err = r.Prepare("SELECT round, filename FROM storedcatchpoints WHERE pinned = 0 and round <= COALESCE((SELECT round FROM storedcatchpoints WHERE pinned = 0 ORDER BY round DESC LIMIT ?, 1),0) ORDER BY round ASC LIMIT ?")
 	if err != nil {
 		return nil, err
 	}
@@ -663,7 +664,7 @@ func (qs *accountsDbQueries) storeCatchpoint(ctx context.Context, round basics.R
 func (qs *accountsDbQueries) getOldestCatchpointFiles(ctx context.Context, fileCount int, filesToKeep int) (fileNames map[basics.Round]string, err error) {
 	err = db.Retry(func() (err error) {
 		var rows *sql.Rows
-		rows, err = qs.selectOldestsCatchpointFiles.QueryContext(ctx, filesToKeep, fileCount)
+		rows, err = qs.selectOldestCatchpointFiles.QueryContext(ctx, filesToKeep, fileCount)
 		if err != nil {
 			return
 		}
@@ -756,7 +757,7 @@ func (qs *accountsDbQueries) close() {
 		&qs.lookupCreatorStmt,
 		&qs.deleteStoredCatchpoint,
 		&qs.insertStoredCatchpoint,
-		&qs.selectOldestsCatchpointFiles,
+		&qs.selectOldestCatchpointFiles,
 		&qs.selectCatchpointStateUint64,
 		&qs.deleteCatchpointState,
 		&qs.insertCatchpointStateUint64,
@@ -813,42 +814,6 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParam
 	}
 
 	return res, rows.Err()
-}
-
-func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
-	rows, err := tx.Query("SELECT address, data FROM accountbase")
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-
-	bals = make(map[basics.Address]basics.AccountData)
-	for rows.Next() {
-		var addrbuf []byte
-		var buf []byte
-		err = rows.Scan(&addrbuf, &buf)
-		if err != nil {
-			return
-		}
-
-		var data basics.AccountData
-		err = protocol.Decode(buf, &data)
-		if err != nil {
-			return
-		}
-
-		var addr basics.Address
-		if len(addrbuf) != len(addr) {
-			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
-			return
-		}
-
-		copy(addr[:], addrbuf)
-		bals[addr] = data
-	}
-
-	err = rows.Err()
-	return
 }
 
 func accountsTotals(tx *sql.Tx, catchpointStaging bool) (totals AccountTotals, err error) {

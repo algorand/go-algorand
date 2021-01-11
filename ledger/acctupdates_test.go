@@ -1181,6 +1181,42 @@ func TestGetCatchpointStream(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func accountsAll(tx *sql.Tx) (bals map[basics.Address]basics.AccountData, err error) {
+	rows, err := tx.Query("SELECT address, data FROM accountbase")
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	bals = make(map[basics.Address]basics.AccountData)
+	for rows.Next() {
+		var addrbuf []byte
+		var buf []byte
+		err = rows.Scan(&addrbuf, &buf)
+		if err != nil {
+			return
+		}
+
+		var data basics.AccountData
+		err = protocol.Decode(buf, &data)
+		if err != nil {
+			return
+		}
+
+		var addr basics.Address
+		if len(addrbuf) != len(addr) {
+			err = fmt.Errorf("Account DB address length mismatch: %d != %d", len(addrbuf), len(addr))
+			return
+		}
+
+		copy(addr[:], addrbuf)
+		bals[addr] = data
+	}
+
+	err = rows.Err()
+	return
+}
+
 func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 
