@@ -28,9 +28,11 @@ import (
 	v2 "github.com/algorand/go-algorand/daemon/algod/api/server/v2"
 	"github.com/algorand/go-algorand/daemon/algod/api/server/v2/generated"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/apply"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // AccountIndexerResponse represents the Account Response object from querying indexer
@@ -55,19 +57,20 @@ type ApplicationIndexerResponse struct {
 	CurrentRound uint64 `json:"current-round"`
 }
 
-type balancesAdapter struct {
-	balances   map[basics.Address]basics.AccountData
-	txnGroup   []transactions.SignedTxn
-	groupIndex int
-	proto      config.ConsensusParams
-	round      uint64
+type localLedger struct {
+	balances        map[basics.Address]basics.AccountData
+	txnGroup        []transactions.SignedTxn
+	groupIndex      int
+	round           uint64
+	aidx            basics.AppIndex
+	latestTimestamp int64
 }
 
-func makeAppLedger(
+func makeBalancesAdapter(
 	balances map[basics.Address]basics.AccountData, txnGroup []transactions.SignedTxn,
-	groupIndex int, proto config.ConsensusParams, round uint64, latestTimestamp int64,
+	groupIndex int, proto string, round uint64, latestTimestamp int64,
 	appIdx basics.AppIndex, painless bool, indexerURL string, indexerToken string,
-) (logic.LedgerForLogic, AppState, error) {
+) (apply.Balances, AppState, error) {
 
 	if groupIndex >= len(txnGroup) {
 		return nil, AppState{}, fmt.Errorf("invalid groupIndex %d exceed txn group length %d", groupIndex, len(txnGroup))
@@ -104,11 +107,10 @@ func makeAppLedger(
 		}
 	}
 
-	ba := &balancesAdapter{
+	ll := &localLedger{
 		balances:   balances,
 		txnGroup:   txnGroup,
 		groupIndex: groupIndex,
-		proto:      proto,
 		round:      round,
 	}
 
@@ -176,9 +178,9 @@ func makeAppLedger(
 		}
 	}
 
-	appGlobals := ledger.AppTealGlobals{CurrentRound: basics.Round(round), LatestTimestamp: latestTimestamp}
-	ledger, err := ledger.MakeDebugAppLedger(ba, appIdx, states.schemas, appGlobals)
-	return ledger, states, err
+	ba := ledger.MakeDebugBalances(ll, basics.Round(round), protocol.ConsensusVersion(proto), latestTimestamp)
+	ll.aidx = appIdx
+	return ba, states, nil
 }
 
 func getAppCreatorFromIndexer(indexerURL string, indexerToken string, app basics.AppIndex) (basics.Address, error) {
@@ -268,23 +270,23 @@ func getRandomAddress() (basics.Address, error) {
 	return basics.Address(address), nil
 }
 
-func (ba *balancesAdapter) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
-	br, ok := ba.balances[addr]
-	if !ok {
-		return basics.BalanceRecord{}, nil
-	}
-	return basics.BalanceRecord{Addr: addr, AccountData: br}, nil
+func (l *localLedger) BlockHdr(basics.Round) (bookkeeping.BlockHeader, error) {
+	return bookkeeping.BlockHeader{}, nil
 }
 
-func (ba *balancesAdapter) Round() basics.Round {
-	return basics.Round(ba.round)
+func (l *localLedger) CheckDup(config.ConsensusParams, basics.Round, basics.Round, basics.Round, transactions.Txid, ledger.TxLease) error {
+	return nil
 }
 
-func (ba *balancesAdapter) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+func (l *localLedger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (basics.AccountData, basics.Round, error) {
+	return l.balances[addr], rnd, nil
+}
+
+func (l *localLedger) GetCreatorForRound(rnd basics.Round, cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	switch ctype {
 	case basics.AssetCreatable:
 		assetIdx := basics.AssetIndex(cidx)
-		for addr, br := range ba.balances {
+		for addr, br := range l.balances {
 			if _, ok := br.AssetParams[assetIdx]; ok {
 				return addr, true, nil
 			}
@@ -292,7 +294,7 @@ func (ba *balancesAdapter) GetCreator(cidx basics.CreatableIndex, ctype basics.C
 		return basics.Address{}, false, nil
 	case basics.AppCreatable:
 		appIdx := basics.AppIndex(cidx)
-		for addr, br := range ba.balances {
+		for addr, br := range l.balances {
 			if _, ok := br.AppParams[appIdx]; ok {
 				return addr, true, nil
 			}
@@ -300,20 +302,4 @@ func (ba *balancesAdapter) GetCreator(cidx basics.CreatableIndex, ctype basics.C
 		return basics.Address{}, false, nil
 	}
 	return basics.Address{}, false, fmt.Errorf("unknown creatable type %d", ctype)
-}
-
-func (ba *balancesAdapter) ConsensusParams() config.ConsensusParams {
-	return ba.proto
-}
-
-func (ba *balancesAdapter) PutWithCreatable(basics.BalanceRecord, *basics.CreatableLocator, *basics.CreatableLocator) error {
-	return nil
-}
-
-func (ba *balancesAdapter) Put(basics.BalanceRecord) error {
-	return nil
-}
-
-func (ba *balancesAdapter) Move(src, dst basics.Address, amount basics.MicroAlgos, srcRewards, dstRewards *basics.MicroAlgos) error {
-	return nil
 }

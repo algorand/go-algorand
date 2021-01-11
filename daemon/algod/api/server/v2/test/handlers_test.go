@@ -410,8 +410,8 @@ func tealDryrunTest(
 		require.NoError(t, err, string(data))
 
 		require.GreaterOrEqual(t, len(response.Txns), 1)
-		messages := *response.Txns[0].AppCallMessages
 		require.NotNil(t, response.Txns[0].AppCallMessages)
+		messages := *response.Txns[0].AppCallMessages
 		require.GreaterOrEqual(t, len(messages), 1)
 		require.Equal(t, expResult, messages[len(messages)-1])
 	}
@@ -481,13 +481,10 @@ func TestTealDryrun(t *testing.T) {
 	tealDryrunTest(t, &gdr, "json", 400, "", true)
 	gdr.ProtocolVersion = ""
 
-	// TODO(after applications) uncomment these two lines. The current
-	// protocol version does not support TEAL v2, which is required for
-	// application support.
-	// ddr := tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
-	// require.Equal(t, string(protocol.ConsensusCurrentVersion), ddr.ProtocolVersion)
-	gdr.ProtocolVersion = string(protocol.ConsensusFuture)
 	ddr := tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
+	require.Equal(t, string(protocol.ConsensusCurrentVersion), ddr.ProtocolVersion)
+	gdr.ProtocolVersion = string(protocol.ConsensusFuture)
+	ddr = tealDryrunTest(t, &gdr, "json", 200, "PASS", true)
 	require.Equal(t, string(protocol.ConsensusFuture), ddr.ProtocolVersion)
 
 	gdr.Apps[0].Params.ApprovalProgram = failOps.Program
