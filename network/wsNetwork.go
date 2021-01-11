@@ -724,8 +724,10 @@ func (wn *WebsocketNetwork) Start() {
 		wn.wg.Add(1)
 		go wn.broadcastThread()
 	}
-	wn.wg.Add(1)
-	go wn.prioWeightRefresh()
+	if wn.prioScheme != nil {
+		wn.wg.Add(1)
+		go wn.prioWeightRefresh()
+	}
 	wn.log.Infof("serving genesisID=%s on %#v with RandomID=%s", wn.GenesisID, wn.PublicAddress(), wn.RandomID)
 }
 
