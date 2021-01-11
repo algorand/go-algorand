@@ -26,6 +26,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -84,19 +85,31 @@ func (balances mockBalances) Round() basics.Round {
 	return basics.Round(8675309)
 }
 
-func (balances mockBalances) PutWithCreatable(basics.BalanceRecord, *basics.CreatableLocator, *basics.CreatableLocator) error {
+func (balances mockBalances) Allocate(basics.Address, basics.AppIndex, bool, basics.StateSchema) error {
 	return nil
 }
 
-func (balances mockBalances) Get(basics.Address, bool) (basics.BalanceRecord, error) {
-	return basics.BalanceRecord{}, nil
+func (balances mockBalances) Deallocate(basics.Address, basics.AppIndex, bool) error {
+	return nil
+}
+
+func (balances mockBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []byte) (bool, basics.EvalDelta, error) {
+	return false, basics.EvalDelta{}, nil
+}
+
+func (balances mockBalances) PutWithCreatable(basics.Address, basics.AccountData, *basics.CreatableLocator, *basics.CreatableLocator) error {
+	return nil
+}
+
+func (balances mockBalances) Get(basics.Address, bool) (basics.AccountData, error) {
+	return basics.AccountData{}, nil
 }
 
 func (balances mockBalances) GetCreator(idx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
 	return basics.Address{}, true, nil
 }
 
-func (balances mockBalances) Put(basics.BalanceRecord) error {
+func (balances mockBalances) Put(basics.Address, basics.AccountData) error {
 	return nil
 }
 
@@ -319,88 +332,3 @@ func generateTestObjects(numTxs, numAccs int) ([]transactions.Transaction, []tra
 
 	return txs, signed, secrets, addresses
 }
-
-/*
-func TestTxnValidation(t *testing.T) {
-	_, signed, _, _ := generateTestObjects(100, 50)
-	tc := ExplicitTxnContext{
-		Proto: config.Consensus[protocol.ConsensusCurrentVersion],
-	}
-
-	for i, stxn := range signed {
-		if stxn.Verify() != nil {
-			t.Errorf("signed transaction %#v did not verify", stxn)
-		}
-		txn := stxn.Transaction.(Payment)
-
-		tc.ExplicitRound = txn.First()+1
-		if txn.Alive(tc) != nil {
-			t.Errorf("transaction not alive during lifetime %v", txn)
-		}
-
-		tc.ExplicitRound = txn.First()
-		if txn.Alive(tc) != nil {
-			t.Errorf("transaction not alive at issuance %v", txn)
-		}
-
-		tc.ExplicitRound = txn.Last()
-		if txn.Alive(tc) != nil {
-			t.Errorf("transaction not alive at expiry %v", txn)
-		}
-
-		tc.ExplicitRound = txn.First()-1
-		if txn.Alive(tc) != nil {
-			t.Errorf("premature transaction alive %v", txn)
-		}
-
-		tc.ExplicitRound = txn.Last()+1
-		if txn.Alive(tc) != nil {
-			t.Errorf("expired transaction alive %v", txn)
-		}
-
-		badSig := stxn
-		otherTransaction := txn
-		otherTransaction.Note = []byte{42}
-		badSig.Transaction = &otherTransaction
-		badSig.InitCaches()
-		if badSig.Verify() == nil {
-			t.Errorf("modified transaction %#v verified incorrectly", badSig)
-		}
-
-		noSig := stxn
-		noSig.Sig = crypto.Signature{}
-		if noSig.Verify() == nil {
-			t.Errorf("transaction with no signature %#v verified incorrectly", noSig)
-		}
-
-		largeWindow := stxn
-		largeWindow.LastValid += basics.Round(config.Protocol.MaxTxnLife)
-		if largeWindow.Verify() == nil {
-			t.Errorf("transaction with large window %#v verified incorrectly", largeWindow)
-		}
-
-		badWindow := txn
-		badWindow.Payment.LastValid = badWindow.Payment.FirstValid - 1
-		if badWindow.Verify() == nil {
-			t.Errorf("transaction with bad window %#v verified incorrectly", badWindow)
-		}
-
-		badFee := txn
-		badFee.Payment.Fee = basics.MicroAlgos{}
-		if badFee.Verify() == nil {
-			t.Errorf("transaction with small fee %#v verified incorrectly", badFee)
-		}
-
-		overflow := txn
-		overflow.Payment.Amount = basics.MicroAlgos{}
-		overflow.Payment.Fee = basics.MicroAlgos{Raw: 10}
-		if overflow.Verify() == nil {
-			t.Errorf("transaction with overflowing amount %#v verified incorrectly", overflow)
-		}
-
-		if i > 5 {
-			break
-		}
-	}
-}
-*/
