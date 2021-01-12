@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -204,11 +204,11 @@ func (s *Service) fetchAndWrite(fetcher Fetcher, r basics.Round, prevFetchComple
 			if !hasLookback {
 				select {
 				case <-s.ctx.Done():
-					s.log.Debugf("fetchAndWrite(%v): Aborted while waiting for lookback block to ledger after failing once", r)
+					s.log.Infof("fetchAndWrite(%d): Aborted while waiting for lookback block to ledger after failing once : %v", r, err)
 					return false
 				case hasLookback = <-lookbackComplete:
 					if !hasLookback {
-						s.log.Debugf("fetchAndWrite(%v): lookback block doesn't exist, won't try to retrieve block again", r)
+						s.log.Infof("fetchAndWrite(%d): lookback block doesn't exist, won't try to retrieve block again : %v", r, err)
 						return false
 					}
 				}
@@ -262,11 +262,26 @@ func (s *Service) fetchAndWrite(fetcher Fetcher, r basics.Round, prevFetchComple
 			return false
 		case prevFetchSuccess := <-prevFetchCompleteChan:
 			if prevFetchSuccess {
-				err := s.ledger.AddBlock(*block, *cert)
+				// make sure the ledger wrote enough of the account data to disk, since we don't want the ledger to hold a large amount of data in memory.
+				proto, err := s.ledger.ConsensusParams(r.SubSaturate(1))
+				if err != nil {
+					s.log.Errorf("fetchAndWrite(%d): Unable to determine consensus params for round %d: %v", r, r-1, err)
+					return false
+				}
+				ledgerBacklogRound := r.SubSaturate(basics.Round(proto.MaxBalLookback))
+				select {
+				case <-s.ledger.Wait(ledgerBacklogRound):
+					// i.e. round r-320 is no longer in the blockqueue, so it's account data is either being currently written, or it was already written.
+				case <-s.ctx.Done():
+					s.log.Debugf("fetchAndWrite(%d): Aborted while waiting for ledger to complete writing up to round %d", r, ledgerBacklogRound)
+					return false
+				}
+
+				err = s.ledger.AddBlock(*block, *cert)
 				if err != nil {
 					switch err.(type) {
 					case ledger.BlockInLedgerError:
-						s.log.Debugf("fetchAndWrite(%v): block already in ledger", r)
+						s.log.Infof("fetchAndWrite(%d): block already in ledger", r)
 						return true
 					case protocol.Error:
 						if !s.protocolErrorLogged {
@@ -407,6 +422,7 @@ func (s *Service) pipelinedFetch(seedLookback uint64) {
 					return
 				}
 				delete(completedRounds, nextRound)
+
 				currentRoundComplete := make(chan bool, 2)
 				// len(taskCh) + (# pending writes to completed) increases by 1
 				taskCh <- s.pipelineCallback(fetcher, nextRound, currentRoundComplete, recentReqs[len(recentReqs)-1], recentReqs[0])
@@ -429,7 +445,10 @@ func (s *Service) periodicSync() {
 	case <-s.ctx.Done():
 		return
 	}
-	s.sync()
+	// if the catchup is disabled in the config file, just skip it.
+	if s.parallelBlocks != 0 {
+		s.sync()
+	}
 	stuckInARow := 0
 	sleepDuration := s.deadlineTimeout
 	for {
@@ -447,6 +466,10 @@ func (s *Service) periodicSync() {
 		case <-time.After(sleepDuration):
 			if sleepDuration < s.deadlineTimeout {
 				sleepDuration = s.deadlineTimeout
+				continue
+			}
+			// if the catchup is disabled in the config file, just skip it.
+			if s.parallelBlocks == 0 {
 				continue
 			}
 			// check to see if we're currently writing a catchpoint file. If so, wait longer before attempting again.

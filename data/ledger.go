@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -237,7 +237,7 @@ func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 			roundCirculation{
 				elements: [2]roundCirculationPair{
 					circulation.elements[1],
-					roundCirculationPair{
+					{
 						round:       r,
 						onlineMoney: totals.Online.Money},
 				},
@@ -271,7 +271,7 @@ func (l *Ledger) Seed(r basics.Round) (committee.Seed, error) {
 			roundSeed{
 				elements: [2]roundSeedPair{
 					seed.elements[1],
-					roundSeedPair{
+					{
 						round: r,
 						seed:  blockhdr.Seed,
 					},

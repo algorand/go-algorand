@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -41,26 +41,26 @@ func TestDecorateUnknownTransactionTypeError(t *testing.T) {
 	signedKeyregTx := transactions.SignedTxn{Txn: keyregTx}
 
 	testCases := []TestCase{
-		TestCase{
+		{
 			err:             errors.New(errBlockHashBeenDeletedArchival),
 			expectedOutcome: errors.New(errBlockHashBeenDeletedArchival),
 		},
-		TestCase{
+		{
 			err:             errors.New(errUnknownTransactionType),
 			txn:             node.TxnWithStatus{Txn: signedPaymentTx, ConfirmedRound: basics.Round(12345)},
 			expectedOutcome: fmt.Errorf(errInvalidTransactionTypeLedger, paymentTx.Type, paymentTx.ID().String(), basics.Round(12345)),
 		},
-		TestCase{
+		{
 			err:             errors.New(errUnknownTransactionType),
 			txn:             node.TxnWithStatus{Txn: signedKeyregTx, ConfirmedRound: basics.Round(5678)},
 			expectedOutcome: fmt.Errorf(errInvalidTransactionTypeLedger, keyregTx.Type, keyregTx.ID().String(), basics.Round(5678)),
 		},
-		TestCase{
+		{
 			err:             errors.New(errUnknownTransactionType),
 			txn:             node.TxnWithStatus{Txn: signedPaymentTx},
 			expectedOutcome: fmt.Errorf(errInvalidTransactionTypePending, paymentTx.Type, paymentTx.ID().String()),
 		},
-		TestCase{
+		{
 			err:             errors.New(errUnknownTransactionType),
 			txn:             node.TxnWithStatus{Txn: signedKeyregTx},
 			expectedOutcome: fmt.Errorf(errInvalidTransactionTypePending, keyregTx.Type, keyregTx.ID().String()),

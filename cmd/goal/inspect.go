@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -94,9 +94,9 @@ func (prog inspectProgram) MarshalText() ([]byte, error) {
 }
 
 func (prog *inspectProgram) UnmarshalText(text []byte) error {
-	program, err := logic.AssembleString(string(text))
+	ops, err := logic.AssembleString(string(text))
 	if err == nil {
-		*prog = program
+		*prog = ops.Program
 	}
 	return err
 }

@@ -6,12 +6,15 @@ echo
 date "+build_release begin PACKAGE DOCKER stage %Y%m%d_%H%M%S"
 echo
 
-ARCH_TYPE=$(./scripts/archtype.sh)
-OS_TYPE=$(./scripts/ostype.sh)
-BRANCH=${BRANCH:-$(./scripts/compute_branch.sh "$BRANCH")}
-CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
-PKG_ROOT_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
+if  [ -z "$NETWORK" ]; then
+    echo "[$0] NETWORK is missing."
+    exit 1
+fi
+
+CHANNEL=$(./scripts/release/mule/common/get_channel.sh "$NETWORK")
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
+OS_TYPE=$(./scripts/release/mule/common/ostype.sh)
+PKG_ROOT_DIR="./tmp/node_pkgs/$OS_TYPE/$ARCH_TYPE"
 ALGOD_INSTALL_TAR_FILE="$PKG_ROOT_DIR/node_${CHANNEL}_${OS_TYPE}-${ARCH_TYPE}_${VERSION}.tar.gz"
 
 if [ -f "$ALGOD_INSTALL_TAR_FILE" ]; then
@@ -31,17 +34,10 @@ DOCKERFILE="./docker/build/algod.Dockerfile"
 START_ALGOD_FILE="./docker/release/start_algod_docker.sh"
 ALGOD_DOCKER_INIT="./docker/release/algod_docker_init.sh"
 
-# Use go version specified by get_golang_version.sh
-if ! GOLANG_VERSION=$(./scripts/get_golang_version.sh)
-then
-    echo "${GOLANG_VERSION}"
-    exit 1
-fi
-
 echo "building '$DOCKERFILE' with install file $ALGOD_INSTALL_TAR_FILE"
 cp "$ALGOD_INSTALL_TAR_FILE" "/tmp/$INPUT_ALGOD_TAR_FILE"
 cp "$ALGOD_DOCKER_INIT" /tmp
-docker build --build-arg ALGOD_INSTALL_TAR_FILE="$INPUT_ALGOD_TAR_FILE" --build-arg GOLANG_VERSION="${GOLANG_VERSION}" /tmp -t "$DOCKER_IMAGE" -f "$DOCKERFILE"
+docker build --build-arg ALGOD_INSTALL_TAR_FILE="$INPUT_ALGOD_TAR_FILE" /tmp -t "$DOCKER_IMAGE" -f "$DOCKERFILE"
 
 mkdir -p "/tmp/$NEW_PKG_DIR"
 

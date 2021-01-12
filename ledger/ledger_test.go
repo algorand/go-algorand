@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -119,22 +119,11 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 	return
 }
 
-type DummyVerifiedTxnCache struct{}
-
-func (x DummyVerifiedTxnCache) Verified(txn transactions.SignedTxn, params verify.Params) bool {
-	return false
-}
-func (x DummyVerifiedTxnCache) EvalOk(cvers protocol.ConsensusVersion, txid transactions.Txid) (found bool, err error) {
-	return false, nil
-}
-func (x DummyVerifiedTxnCache) EvalRemember(cvers protocol.ConsensusVersion, txid transactions.Txid, err error) {
-}
-
 func (l *Ledger) appendUnvalidated(blk bookkeeping.Block) error {
 	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 	defer backlogPool.Shutdown()
-
-	vb, err := l.Validate(context.Background(), blk, DummyVerifiedTxnCache{}, backlogPool)
+	l.verifiedTxnCache = verify.GetMockedCache(false)
+	vb, err := l.Validate(context.Background(), blk, backlogPool)
 	if err != nil {
 		return fmt.Errorf("appendUnvalidated error in Validate: %s", err.Error())
 	}

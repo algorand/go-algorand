@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -128,9 +128,9 @@ int 1  // increment
 app_local_put
 int 1
 `
-	approval, err := logic.AssembleString(counter)
+	approvalOps, err := logic.AssembleString(counter)
 	require.NoError(t, err)
-	clearstate, err := logic.AssembleString("#pragma version 2\nint 1")
+	clearstateOps, err := logic.AssembleString("#pragma version 2\nint 1")
 	require.NoError(t, err)
 	schema := basics.StateSchema{
 		NumUint: 1,
@@ -138,7 +138,7 @@ int 1
 
 	// create the app
 	tx, err := client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approval, clearstate, schema, schema, nil, nil, nil, nil,
+		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil,
 	)
 	require.NoError(t, err)
 	tx, err = client.FillUnsignedTxTemplate(creator, 0, 0, fee, tx)
@@ -193,8 +193,8 @@ int 1
 		params = p
 		break
 	}
-	require.Equal(t, approval, params.ApprovalProgram)
-	require.Equal(t, clearstate, params.ClearStateProgram)
+	require.Equal(t, approvalOps.Program, params.ApprovalProgram)
+	require.Equal(t, clearstateOps.Program, params.ClearStateProgram)
 	require.Equal(t, schema, params.LocalStateSchema)
 	require.Equal(t, schema, params.GlobalStateSchema)
 	require.Equal(t, 1, len(params.GlobalState))
@@ -231,8 +231,8 @@ int 1
 	require.Equal(t, 1, len(ad.AppParams))
 	params, ok = ad.AppParams[appIdx]
 	require.True(t, ok)
-	require.Equal(t, approval, params.ApprovalProgram)
-	require.Equal(t, clearstate, params.ClearStateProgram)
+	require.Equal(t, approvalOps.Program, params.ApprovalProgram)
+	require.Equal(t, clearstateOps.Program, params.ClearStateProgram)
 	require.Equal(t, schema, params.LocalStateSchema)
 	require.Equal(t, schema, params.GlobalStateSchema)
 	require.Equal(t, 1, len(params.GlobalState))
@@ -357,9 +357,9 @@ int 1  // increment
 app_local_put
 int 1
 `
-	approval, err := logic.AssembleString(counter)
+	approvalOps, err := logic.AssembleString(counter)
 	require.NoError(t, err)
-	clearstate, err := logic.AssembleString("#pragma version 2\nint 1")
+	clearstateOps, err := logic.AssembleString("#pragma version 2\nint 1")
 	require.NoError(t, err)
 	schema := basics.StateSchema{
 		NumUint: 1,
@@ -367,7 +367,7 @@ int 1
 
 	// create the app
 	tx, err := client.MakeUnsignedAppCreateTx(
-		transactions.OptInOC, approval, clearstate, schema, schema, nil, nil, nil, nil,
+		transactions.OptInOC, approvalOps.Program, clearstateOps.Program, schema, schema, nil, nil, nil, nil,
 	)
 	require.NoError(t, err)
 	tx, err = client.FillUnsignedTxTemplate(creator, round, round+primaryNodeUnupgradedProtocol.DefaultUpgradeWaitRounds, fee, tx)
@@ -445,8 +445,8 @@ int 1
 		params = p
 		break
 	}
-	require.Equal(t, approval, params.ApprovalProgram)
-	require.Equal(t, clearstate, params.ClearStateProgram)
+	require.Equal(t, approvalOps.Program, params.ApprovalProgram)
+	require.Equal(t, clearstateOps.Program, params.ClearStateProgram)
 	require.Equal(t, schema, params.LocalStateSchema)
 	require.Equal(t, schema, params.GlobalStateSchema)
 	require.Equal(t, 1, len(params.GlobalState))
@@ -483,8 +483,8 @@ int 1
 	require.Equal(t, 1, len(ad.AppParams))
 	params, ok = ad.AppParams[appIdx]
 	require.True(t, ok)
-	require.Equal(t, approval, params.ApprovalProgram)
-	require.Equal(t, clearstate, params.ClearStateProgram)
+	require.Equal(t, approvalOps.Program, params.ApprovalProgram)
+	require.Equal(t, clearstateOps.Program, params.ClearStateProgram)
 	require.Equal(t, schema, params.LocalStateSchema)
 	require.Equal(t, schema, params.GlobalStateSchema)
 	require.Equal(t, 1, len(params.GlobalState))
