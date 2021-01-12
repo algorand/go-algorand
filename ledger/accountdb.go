@@ -120,10 +120,21 @@ var accountDBVersion = int32(4)
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
 // list.
 type persistedAccountData struct {
-	addr        basics.Address
+	// The address of the account. In contrasts to maps, having this value explicitly here allows us to use this
+	// data structure in queues directly, without "attaching" the address as the address as the map key.
+	addr basics.Address
+	// The underlaying account data
 	accountData basics.AccountData
-	rowid       int64
-	round       basics.Round
+	// The rowid, when available. If the entry was loaded from the disk, then we have the rowid for it. Entries
+	// that doesn't have rowid ( hence, rowid == 0 ) represent either deleted accounts or non-existing accounts.
+	rowid int64
+	// the round number that is associated with the accountData. This field is needed so that we can maintain a correct
+	// lruAccounts cache. We use it to ensure that the entries on the lruAccounts.accountsList are the latest ones.
+	// this becomes an issue since while we attempt to write an update to disk, we migth be reading an entry and placing
+	// it on the lruAccounts.pendingAccounts; The commitRound doesn't attempt to flush the pending accounts, but rather
+	// just write the latest ( which is correct ) to the lruAccounts.accountsList. later on, during on newBlockImpl, we
+	// want to ensure that the "real" written value isn't being overridden by the value from the pending accounts.
+	round basics.Round
 }
 
 // accountDeltaCount is an extention to accountDelta that is being used by the commitRound function for counting the
@@ -855,8 +866,8 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool)
 }
 
 // accountsNewRound updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
-// The updates.old entries are being updated to reflect the latest value that was written to the database.
-func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, creatables map[basics.CreatableIndex]common.ModifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (err error) {
+// The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
+func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, creatables map[basics.CreatableIndex]common.ModifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (updatedAccounts []persistedAccountData, err error) {
 
 	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteByRowIDStmt, insertStmt, updateStmt *sql.Stmt
 
@@ -879,6 +890,8 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 	defer updateStmt.Close()
 	var result sql.Result
 	var rowsAffected int64
+	updatedAccounts = make([]persistedAccountData, len(updates))
+	updatedAccountIdx := 0
 	for addr, data := range updates {
 		if data.old.rowid == 0 {
 			// zero rowid means we don't have a previous value.
@@ -889,8 +902,8 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 				normBalance := data.new.NormalizedOnlineBalance(proto)
 				result, err = insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data.new))
 				if err == nil {
-					data.old.rowid, err = result.LastInsertId()
-					data.old.accountData = data.new
+					updatedAccounts[updatedAccountIdx].rowid, err = result.LastInsertId()
+					updatedAccounts[updatedAccountIdx].accountData = data.new
 				}
 			}
 		} else {
@@ -900,8 +913,8 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 				result, err = deleteByRowIDStmt.Exec(data.old.rowid)
 				if err == nil {
 					// we deleted the entry successfully.
-					data.old.rowid = 0
-					data.old.accountData = basics.AccountData{}
+					updatedAccounts[updatedAccountIdx].rowid = 0
+					updatedAccounts[updatedAccountIdx].accountData = basics.AccountData{}
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", addr, data.old.rowid)
@@ -911,7 +924,9 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 				normBalance := data.new.NormalizedOnlineBalance(proto)
 				result, err = updateStmt.Exec(normBalance, protocol.Encode(&data.new), data.old.rowid)
 				if err == nil {
-					data.old.accountData = data.new
+					// rowid doesn't change on update.
+					updatedAccounts[updatedAccountIdx].rowid = data.old.rowid
+					updatedAccounts[updatedAccountIdx].accountData = data.new
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", addr, data.old.rowid)
@@ -924,9 +939,10 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 			return
 		}
 
-		// update the old entry so that we could store that as the baseAccounts in commitRound
-		data.old.round = lastUpdateRound
-		updates[addr] = data
+		// set the returned persisted account states so that we could store that as the baseAccounts in commitRound
+		updatedAccounts[updatedAccountIdx].round = lastUpdateRound
+		updatedAccounts[updatedAccountIdx].addr = addr
+		updatedAccountIdx++
 	}
 
 	if len(creatables) > 0 {
@@ -1001,10 +1017,10 @@ func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]common.AccountDelt
 	return
 }
 
-// accountsGet updates the entries on the deltas.old map that matches the provided addresses.
+// accountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
-func accountsGet(tx *sql.Tx, addresses []basics.Address, deltas map[basics.Address]accountDeltaCount) (err error) {
+func accountsLoadOld(tx *sql.Tx, addresses []basics.Address, deltas map[basics.Address]accountDeltaCount) (err error) {
 	if len(addresses) == 0 {
 		return nil
 	}

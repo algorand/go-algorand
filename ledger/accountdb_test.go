@@ -526,7 +526,7 @@ func TestAccountDBRound(t *testing.T) {
 	lastCreatableID := crypto.RandUint64() % 512
 	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
 	expectedDbImage := make(map[basics.CreatableIndex]common.ModifiedCreatable)
-	var baseAccounts mruAccounts
+	var baseAccounts lruAccounts
 	baseAccounts.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
 		var updates map[basics.Address]common.AccountDelta
@@ -538,11 +538,11 @@ func TestAccountDBRound(t *testing.T) {
 
 		updatesCnt, needLoadAddresses, _ := compactDeltas([]map[basics.Address]common.AccountDelta{updates}, nil, baseAccounts)
 
-		err = accountsGet(tx, needLoadAddresses, updatesCnt)
+		err = accountsLoadOld(tx, needLoadAddresses, updatesCnt)
 		require.NoError(t, err)
 		err = totalsNewRounds(tx, []map[basics.Address]common.AccountDelta{updates}, updatesCnt, []AccountTotals{{}}, []config.ConsensusParams{proto})
 		require.NoError(t, err)
-		err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
+		_, err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
 		err = updateAccountsRound(tx, basics.Round(i), 0)
 		require.NoError(t, err)

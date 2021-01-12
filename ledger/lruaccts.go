@@ -23,10 +23,10 @@ import (
 	"github.com/algorand/go-algorand/logging"
 )
 
-// mruAccounts provides a storage class for the most recently used accounts data.
+// lruAccounts provides a storage class for the most recently used accounts data.
 // It doesn't have any syncronization primitive on it's own and require to be
 // syncronized by the caller.
-type mruAccounts struct {
+type lruAccounts struct {
 	// accountsList contain the list of persistedAccountData, where the front ones are the most "fresh"
 	// and the ones on the back are the oldest.
 	accountsList *list.List
@@ -41,9 +41,9 @@ type mruAccounts struct {
 	pendingWritesWarnThreshold int
 }
 
-// init initializes the mruAccounts for use.
+// init initializes the lruAccounts for use.
 // thread locking semantics : write lock
-func (m *mruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
+func (m *lruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	m.accountsList = list.New()
 	m.accounts = make(map[basics.Address]*list.Element)
 	m.pendingAccounts = make(chan persistedAccountData, pendingWrites)
@@ -51,21 +51,21 @@ func (m *mruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesW
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
 }
 
-// read the persistedAccountData object that the mruAccounts has for the given address.
+// read the persistedAccountData object that the lruAccounts has for the given address.
 // thread locking semantics : read lock
-func (m *mruAccounts) read(addr basics.Address) (data persistedAccountData, has bool) {
+func (m *lruAccounts) read(addr basics.Address) (data persistedAccountData, has bool) {
 	if el := m.accounts[addr]; el != nil {
 		return el.Value.(persistedAccountData), true
 	}
 	return persistedAccountData{}, false
 }
 
-// flushPendingWrites flushes the pending writes to the main mruAccounts cache.
+// flushPendingWrites flushes the pending writes to the main lruAccounts cache.
 // thread locking semantics : write lock
-func (m *mruAccounts) flushPendingWrites() {
+func (m *lruAccounts) flushPendingWrites() {
 	pendingEntriesCount := len(m.pendingAccounts)
 	if pendingEntriesCount >= m.pendingWritesWarnThreshold {
-		m.log.Warnf("mruAccounts: number of entries in pendingAccounts(%d) exceed the warning threshold of %d", pendingEntriesCount, m.pendingWritesWarnThreshold)
+		m.log.Warnf("lruAccounts: number of entries in pendingAccounts(%d) exceed the warning threshold of %d", pendingEntriesCount, m.pendingWritesWarnThreshold)
 	}
 	for ; pendingEntriesCount > 0; pendingEntriesCount-- {
 		select {
@@ -81,19 +81,19 @@ func (m *mruAccounts) flushPendingWrites() {
 // writePending write a single persistedAccountData entry to the pendingAccounts buffer.
 // the function doesn't block, and in case of a buffer overflow the entry would not be added.
 // thread locking semantics : no lock is required.
-func (m *mruAccounts) writePending(acct persistedAccountData) {
+func (m *lruAccounts) writePending(acct persistedAccountData) {
 	select {
 	case m.pendingAccounts <- acct:
 	default:
 	}
 }
 
-// write a single persistedAccountData to the mruAccounts cache.
+// write a single persistedAccountData to the lruAccounts cache.
 // when writing the entry, the round number would be used to determine if it's a newer
 // version of what's already on the cache or not. In all cases, the entry is going
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
-func (m *mruAccounts) write(acctData persistedAccountData) {
+func (m *lruAccounts) write(acctData persistedAccountData) {
 	if el := m.accounts[acctData.addr]; el != nil {
 		// already exists; is it a newer ?
 		existing := el.Value.(persistedAccountData)
@@ -108,10 +108,10 @@ func (m *mruAccounts) write(acctData persistedAccountData) {
 	}
 }
 
-// resize adjust the current size of the mruAccounts cache, by dropping the least
+// prune adjust the current size of the lruAccounts cache, by dropping the least
 // recently used entries.
 // thread locking semantics : write lock
-func (m *mruAccounts) resize(newSize int) (removed int) {
+func (m *lruAccounts) prune(newSize int) (removed int) {
 	for {
 		if len(m.accounts) <= newSize {
 			break

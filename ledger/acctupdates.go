@@ -74,7 +74,7 @@ var merkleCommitterNodesPerPage = int64(116)
 // At the begining of a new round, the entries from this buffer are being flushed into the base accounts map.
 const baseAccountsPendingAccountsBufferSize = 100000
 
-// baseAccountsPendingAccountsWarnThreshold defines the threshold at which the mruAccounts would generate a warning
+// baseAccountsPendingAccountsWarnThreshold defines the threshold at which the lruAccounts would generate a warning
 // after we've surpassed a given pending account size. The warning is being generated when the pending accounts data
 // is being flushed into the main base account cache.
 const baseAccountsPendingAccountsWarnThreshold = 85000
@@ -221,7 +221,7 @@ type accountUpdates struct {
 	voters *votersTracker
 
 	// baseAccounts stores the most recently used accounts, at exactly dbRound
-	baseAccounts mruAccounts
+	baseAccounts lruAccounts
 }
 
 type deferredCommit struct {
@@ -347,7 +347,7 @@ func (au *accountUpdates) close() {
 	au.waitAccountsWriting()
 	// this would block until the commitSyncerClosed channel get closed.
 	<-au.commitSyncerClosed
-	au.baseAccounts.resize(0)
+	au.baseAccounts.prune(0)
 }
 
 // IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
@@ -1472,9 +1472,9 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta common.State
 
 	au.voters.newBlock(blk.BlockHeader)
 
-	// calling resize would drop old entries from the base accounts.
+	// calling prune would drop old entries from the base accounts.
 	newBaseAccountSize := (len(au.accounts) + 1) + baseAccountsPendingAccountsBufferSize
-	au.baseAccounts.resize(newBaseAccountSize)
+	au.baseAccounts.prune(newBaseAccountSize)
 }
 
 // lookupWithRewards returns the account data for a given address at a given round.
@@ -1855,6 +1855,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
+	var updatedPersistedAccounts []persistedAccountData
 	err := au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
@@ -1875,7 +1876,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 
-		err = accountsGet(tx, unavailableBaseAccounts, compactDeltas)
+		err = accountsLoadOld(tx, unavailableBaseAccounts, compactDeltas)
 		if err != nil {
 			return err
 		}
@@ -1892,7 +1893,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 		// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 		// so that we can update the base account back.
-		err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
+		updatedPersistedAccounts, err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
 		if err != nil {
 			return err
 		}
@@ -1953,9 +1954,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			macct.ndeltas -= cnt
 			au.accounts[addr] = macct
 		}
+	}
 
-		// the acctUpdate.old was updated by accountsNewRound and contains now the latest entry stored to the database.
-		au.baseAccounts.write(acctUpdate.old)
+	for _, persistedAcct := range updatedPersistedAccounts {
+		au.baseAccounts.write(persistedAcct)
 	}
 
 	for cidx, modCrt := range compactCreatableDeltas {
@@ -1998,7 +2000,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 // compactDeltas takes an arary of account map deltas ( one array entry per round ), and corresponding creatables array, and compact the arrays into a single
 // map that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes. For both the account deltas as well as for the creatables,
 // it counts the number of changes per round by specifying it in the ndeltas field of the accountDeltaCount/modifiedCreatable. The ndeltas field of the input creatableDeltas is ignored.
-func compactDeltas(accountDeltas []map[basics.Address]common.AccountDelta, creatableDeltas []map[basics.CreatableIndex]common.ModifiedCreatable, baseAccounts mruAccounts) (outAccountDeltas map[basics.Address]accountDeltaCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]common.ModifiedCreatable) {
+func compactDeltas(accountDeltas []map[basics.Address]common.AccountDelta, creatableDeltas []map[basics.CreatableIndex]common.ModifiedCreatable, baseAccounts lruAccounts) (outAccountDeltas map[basics.Address]accountDeltaCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]common.ModifiedCreatable) {
 	if len(accountDeltas) > 0 {
 		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
 		outAccountDeltas = make(map[basics.Address]accountDeltaCount, 1+len(accountDeltas[0])*len(accountDeltas))
@@ -2242,7 +2244,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 
 	// vaccumming the database would modify the some of the tables rowid, so we need to make sure any stored in-memory
 	// rowid are flushed.
-	au.baseAccounts.resize(0)
+	au.baseAccounts.prune(0)
 
 	startTime := time.Now()
 	vacuumExitCh := make(chan struct{}, 1)
