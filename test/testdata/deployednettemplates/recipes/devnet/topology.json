@@ -1,23 +1,23 @@
 { "Hosts":
   [
     {
-      "Name": "R1-DevNet",
+      "Name": "R1-DevNet-test",
       "Template": "AWS-US-EAST-1-m5d.4xl"
     },
     {
-      "Name": "R2-DevNet",
+      "Name": "R2-DevNet-test",
       "Template": "AWS-US-WEST-2-m5d.4xl"
     },
     {
-      "Name": "R3-DevNet",
+      "Name": "R3-DevNet-test",
       "Template": "AWS-SA-EAST-1-m5d.4xl"
     },
     {
-      "Name": "R4-DevNet",
+      "Name": "R4-DevNet-test",
       "Template": "AWS-EU-NORTH-1-m5d.4xl"
     },
     {
-      "Name": "R5-DevNet",
+      "Name": "R5-DevNet-test",
       "Template": "AWS_AP_SOUTHEAST-2-m5d.4xl"
     }
   ]

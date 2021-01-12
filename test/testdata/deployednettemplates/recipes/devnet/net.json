@@ -1,7 +1,7 @@
 {
 	"Hosts": [
 		{
-			"Name": "R1-DevNet",
+			"Name": "R1-DevNet-test",
 			"Group": "",
 			"Nodes": [
 				{
@@ -101,7 +101,7 @@
 			]
 		},
 		{
-			"Name": "R2-DevNet",
+			"Name": "R2-DevNet-test",
 			"Group": "",
 			"Nodes": [
 				{
@@ -201,7 +201,7 @@
 			]
 		},
 		{
-			"Name": "R3-DevNet",
+			"Name": "R3-DevNet-test",
 			"Group": "",
 			"Nodes": [
 				{
@@ -301,7 +301,7 @@
 			]
 		},
 		{
-			"Name": "R4-DevNet",
+			"Name": "R4-DevNet-test",
 			"Group": "",
 			"Nodes": [
 				{
@@ -401,7 +401,7 @@
 			]
 		},
 		{
-			"Name": "R5-DevNet",
+			"Name": "R5-DevNet-test",
 			"Group": "",
 			"Nodes": [
 				{
