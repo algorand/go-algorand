@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
+# shellcheck disable=2181
 
-set -ex
+set -exo pipefail
+
+./scripts/check_golang_version.sh dev
 
 function get_go_version {
     cd "$(dirname "$0")"
@@ -34,3 +37,4 @@ install_go_module golang.org/x/lint/golint
 install_go_module golang.org/x/tools/cmd/stringer
 install_go_module github.com/go-swagger/go-swagger github.com/go-swagger/go-swagger/cmd/swagger
 install_go_module github.com/algorand/msgp
+

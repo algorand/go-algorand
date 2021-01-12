@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,6 +33,7 @@ func (ph peersHeap) Pop() interface{} {
 	wn := ph.wn
 	end := len(wn.peers) - 1
 	p := wn.peers[end]
+	wn.peers[end] = nil // remove the entry from the peers list, so that the GC can recycle it's memory as needed.
 	wn.peers = wn.peers[:end]
 	return p
 }

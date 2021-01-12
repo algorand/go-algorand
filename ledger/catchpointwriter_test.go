@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -137,9 +137,8 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		os.RemoveAll(temporaryDirectroy)
 	}()
 
-	ml := makeMockLedgerForTracker(t, true)
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(testProtocolVersion, 10)
 	accts := randomAccounts(300, false)
 
 	au := &accountUpdates{}
@@ -236,9 +235,8 @@ func TestFullCatchpointWriter(t *testing.T) {
 		os.RemoveAll(temporaryDirectroy)
 	}()
 
-	ml := makeMockLedgerForTracker(t, true)
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
 	defer ml.close()
-	ml.blocks = randomInitChain(testProtocolVersion, 10)
 	accts := randomAccounts(BalancesPerCatchpointFileChunk*3, false)
 
 	au := &accountUpdates{}

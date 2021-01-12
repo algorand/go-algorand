@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -79,12 +79,12 @@ func TestWebDebuggerManual(t *testing.T) {
 		txn.Txn.Note,
 	}
 
-	program, err := AssembleString(testProgram)
+	ops, err := AssembleString(testProgram)
 	require.NoError(t, err)
 	ep := defaultEvalParams(nil, &txn)
 	ep.TxnGroup = txgroup
 	ep.Debugger = &WebDebuggerHook{URL: debugURL}
-	_, err = Eval(program, ep)
+	_, err = Eval(ops.Program, ep)
 	require.NoError(t, err)
 }
 
@@ -115,11 +115,11 @@ func (d *testDbgHook) Complete(state *DebugState) error {
 
 func TestDebuggerHook(t *testing.T) {
 	testDbg := testDbgHook{}
-	program, err := AssembleString(testProgram)
+	ops, err := AssembleString(testProgram)
 	require.NoError(t, err)
 	ep := defaultEvalParams(nil, nil)
 	ep.Debugger = &testDbg
-	_, err = Eval(program, ep)
+	_, err = Eval(ops.Program, ep)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, testDbg.register)

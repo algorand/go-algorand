@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -369,6 +369,11 @@ func TestLocal_DNSBootstrapArray(t *testing.T) {
 			args:               args{networkID: "devnet"},
 			wantBootstrapArray: []string{"devnet.cloudflare.com", "devnet.cloudfront.com"},
 		},
+		{name: "test3",
+			fields:             fields{DNSBootstrapID: ""},
+			args:               args{networkID: "devnet"},
+			wantBootstrapArray: []string{},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -376,7 +381,7 @@ func TestLocal_DNSBootstrapArray(t *testing.T) {
 				DNSBootstrapID: tt.fields.DNSBootstrapID,
 			}
 			if gotBootstrapArray := cfg.DNSBootstrapArray(tt.args.networkID); !reflect.DeepEqual(gotBootstrapArray, tt.wantBootstrapArray) {
-				t.Errorf("Local.DNSBootstrapArray() = %v, want %v", gotBootstrapArray, tt.wantBootstrapArray)
+				t.Errorf("Local.DNSBootstrapArray() = %#v, want %#v", gotBootstrapArray, tt.wantBootstrapArray)
 			}
 		})
 	}

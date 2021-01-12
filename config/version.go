@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -33,7 +33,7 @@ const VersionMajor = 2
 
 // VersionMinor is the Minor semantic version number (x.#.z) - changed when backwards-compatible features are introduced.
 // Not enforced until after initial public release (x > 0).
-const VersionMinor = 3
+const VersionMinor = 4
 
 // Version is the type holding our full version information.
 type Version struct {

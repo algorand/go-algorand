@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
-#
+
 # This script builds https://releases.algorand.com/index.html.
-#
-# To run:
-# ./generate_releases_page.py > index.html
 
 import sys
 import boto3

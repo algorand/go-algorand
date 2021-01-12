@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -117,6 +117,14 @@ var accountDBVersion = int32(4)
 type accountDelta struct {
 	old basics.AccountData
 	new basics.AccountData
+}
+
+// accountDeltaCount is an extention to accountDelta that is being used by the commitRound function for counting the
+// number of changes we've made per account. The ndeltas is used execlusively for consistency checking - making sure that
+// all the pending changes were written and that there are no outstanding writes missing.
+type accountDeltaCount struct {
+	accountDelta
+	ndeltas int
 }
 
 // catchpointState is used to store catchpoint related variables into the catchpointstate table.
@@ -872,7 +880,7 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool)
 }
 
 // accountsNewRound updates the accountbase and assetcreators by applying the provided deltas to the accounts / creatables.
-func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDelta, creatables map[basics.CreatableIndex]modifiedCreatable, proto config.ConsensusParams) (err error) {
+func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, creatables map[basics.CreatableIndex]modifiedCreatable, proto config.ConsensusParams) (err error) {
 
 	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteStmt, replaceStmt *sql.Stmt
 

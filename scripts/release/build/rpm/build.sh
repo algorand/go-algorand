@@ -19,12 +19,14 @@ then
     exit 1
 fi
 cd go-algorand
-# Install go version specified by get_golang_version.sh and build its own copy of go-algorand.
-if ! GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+
+if ! ./scripts/check_golang_version.sh
 then
-    echo "${GOLANG_VERSION}"
     exit 1
 fi
+# Get the go build version.
+GOLANG_VERSION=$(./scripts/get_golang_version.sh)
+
 cd "${HOME}"
 if ! curl -O "https://dl.google.com/go/go${GOLANG_VERSION}.linux-amd64.tar.gz"
 then

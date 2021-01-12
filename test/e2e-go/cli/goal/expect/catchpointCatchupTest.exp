@@ -19,10 +19,17 @@ proc spawnCatchpointCatchupWebProxy { TARGET_ENDPOINT RUNTIME REQUEST_DELAY } {
     upvar WP_SPAWN_ID WP_SPAWN_ID
     set WEBPROXY_LISTEN_ADDRESS ""
 
-    # the timeout is set here to take a long while since the command below would end up compiling the go source code before running it.
-    # on slow machines, this could take a long while.
-    set timeout 60
-    spawn go run ./catchpointCatchupWebProxy -targetEndpoint "$TARGET_ENDPOINT" -runtime $RUNTIME -requestDelay $REQUEST_DELAY
+    # compile the catchpointCatchupWebProxy, so we can kick it off quickly later on.
+    # this can take a while, especially if we compiled just the build-race version.
+    set timeout 240
+    spawn go install ./catchpointCatchupWebProxy
+    expect {
+        timeout {::AlgorandGoal::Abort "timed out compiling catchpointCatchupWebProxy"}
+        eof { ::AlgorandGoal::CheckEOF "failed to compile catchpointCatchupWebProxy"}
+    }
+
+    set timeout 5
+    spawn catchpointCatchupWebProxy -targetEndpoint "$TARGET_ENDPOINT" -runtime $RUNTIME -requestDelay $REQUEST_DELAY
     set WP_SPAWN_ID $spawn_id
     expect {
         -re {(^[0-9\.]+:[0-9]+)} { set WEBPROXY_LISTEN_ADDRESS $expect_out(1,string) }
@@ -86,7 +93,7 @@ if { [catch {
         timeout {::AlgorandGoal::Abort "timed out listing $TEST_ROOT_DIR/Primary/algod-listen.net"}
         eof { ::AlgorandGoal::CheckEOF "Unable to list $TEST_ROOT_DIR/Primary/algod-listen.net" }
     }
-    
+
     if { $PRIMARY_LISTEN_ADDRESS == "" } {
         ::AlgorandGoal::StopNode $TEST_ROOT_DIR/Primary
         puts "Primary node listening address could not be retrieved."
