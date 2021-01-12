@@ -1968,9 +1968,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			macct.ndeltas -= cnt
 			au.accounts[addr] = macct
 		}
-
-		// the acctUpdate.old was updated by accountsNewRound and contains now the latest entry stored to the database.
-		au.baseAccounts.write(acctUpdate.old)
 	}
 
 	for _, persistedAcct := range updatedPersistedAccounts {
