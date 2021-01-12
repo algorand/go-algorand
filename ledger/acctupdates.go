@@ -39,6 +39,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/common"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -100,21 +101,6 @@ type modifiedAccount struct {
 	ndeltas int
 }
 
-type modifiedCreatable struct {
-	// Type of the creatable: app or asset
-	ctype basics.CreatableType
-
-	// Created if true, deleted if false
-	created bool
-
-	// creator of the app/asset
-	creator basics.Address
-
-	// Keeps track of how many times this app/asset appears in
-	// accountUpdates.creatableDeltas
-	ndeltas int
-}
-
 type accountUpdates struct {
 	// constant variables ( initialized on initialize, and never changed afterward )
 
@@ -153,18 +139,18 @@ type accountUpdates struct {
 	dbRound basics.Round
 
 	// deltas stores updates for every round after dbRound.
-	deltas []map[basics.Address]accountDelta
+	deltas []map[basics.Address]common.AccountDelta
 
 	// accounts stores the most recent account state for every
 	// address that appears in deltas.
 	accounts map[basics.Address]modifiedAccount
 
 	// creatableDeltas stores creatable updates for every round after dbRound.
-	creatableDeltas []map[basics.CreatableIndex]modifiedCreatable
+	creatableDeltas []map[basics.CreatableIndex]common.ModifiedCreatable
 
 	// creatables stores the most recent state for every creatable that
 	// appears in creatableDeltas
-	creatables map[basics.CreatableIndex]modifiedCreatable
+	creatables map[basics.CreatableIndex]common.ModifiedCreatable
 
 	// protos stores consensus parameters dbRound and every
 	// round after it; i.e., protos is one longer than deltas.
@@ -403,7 +389,7 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 		// created/deleted asset indices in memory.
 		keys := make([]basics.CreatableIndex, 0, len(au.creatables))
 		for cidx, delta := range au.creatables {
-			if delta.ctype != ctype {
+			if delta.Ctype != ctype {
 				continue
 			}
 			if cidx <= maxCreatableIdx {
@@ -417,12 +403,12 @@ func (au *accountUpdates) listCreatables(maxCreatableIdx basics.CreatableIndex, 
 		deletedCreatables := make(map[basics.CreatableIndex]bool, len(keys))
 		for _, cidx := range keys {
 			delta := au.creatables[cidx]
-			if delta.created {
+			if delta.Created {
 				// Created but only exists in memory
 				unsyncedCreatables = append(unsyncedCreatables, basics.CreatableLocator{
-					Type:    delta.ctype,
+					Type:    delta.Ctype,
 					Index:   cidx,
-					Creator: delta.creator,
+					Creator: delta.Creator,
 				})
 			} else {
 				// Mark deleted creatables for exclusion from the results set
@@ -501,17 +487,17 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 		modifiedAccounts := make(map[basics.Address]*onlineAccount)
 		for o := uint64(0); o < offset; o++ {
 			for addr, d := range au.deltas[o] {
-				if d.new.Status != basics.Online {
+				if d.New.Status != basics.Online {
 					modifiedAccounts[addr] = nil
 					continue
 				}
 
-				if !(d.new.VoteFirstValid <= voteRnd && voteRnd <= d.new.VoteLastValid) {
+				if !(d.New.VoteFirstValid <= voteRnd && voteRnd <= d.New.VoteLastValid) {
 					modifiedAccounts[addr] = nil
 					continue
 				}
 
-				modifiedAccounts[addr] = accountDataToOnline(addr, &d.new, proto)
+				modifiedAccounts[addr] = accountDataToOnline(addr, &d.New, proto)
 			}
 		}
 
@@ -726,7 +712,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 
 // newBlock is the accountUpdates implementation of the ledgerTracker interface. This is the "external" facing function
 // which invokes the internal implementation after taking the lock.
-func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta StateDelta) {
+func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta common.StateDelta) {
 	au.accountsMu.Lock()
 	au.newBlockImpl(blk, delta)
 	au.accountsMu.Unlock()
@@ -832,7 +818,7 @@ type accountUpdatesLedgerEvaluator struct {
 	// the accountUpdatesLedgerEvaluator would access the underlying accountUpdates function directly, bypassing the balances mutex lock.
 	au *accountUpdates
 	// prevHeader is the previous header to the current one. The usage of this is only in the context of initializeCaches where we iteratively
-	// building the StateDelta, which requires a peek on the "previous" header information.
+	// building the common.StateDelta, which requires a peek on the "previous" header information.
 	prevHeader bookkeeping.BlockHeader
 }
 
@@ -890,7 +876,7 @@ func (au *accountUpdates) totalsImpl(rnd basics.Round) (totals AccountTotals, er
 // initializeCaches fills up the accountUpdates cache with the most recent ~320 blocks
 func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound, writingCatchpointRound basics.Round) (catchpointBlockDigest crypto.Digest, err error) {
 	var blk bookkeeping.Block
-	var delta StateDelta
+	var delta common.StateDelta
 
 	accLedgerEval := accountUpdatesLedgerEvaluator{
 		au: au,
@@ -922,7 +908,7 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 			catchpointBlockDigest = blk.Digest()
 		}
 
-		accLedgerEval.prevHeader = *delta.hdr
+		accLedgerEval.prevHeader = *delta.Hdr
 	}
 	return
 }
@@ -995,7 +981,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	au.deltas = nil
 	au.creatableDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
-	au.creatables = make(map[basics.CreatableIndex]modifiedCreatable)
+	au.creatables = make(map[basics.CreatableIndex]common.ModifiedCreatable)
 	au.deltasAccum = []int{0}
 	au.roundDigest = nil
 
@@ -1415,7 +1401,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Addre
 
 // newBlockImpl is the accountUpdates implementation of the ledgerTracker interface. This is the "internal" facing function
 // which assumes that no lock need to be taken.
-func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) {
+func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta common.StateDelta) {
 	proto := config.Consensus[blk.CurrentProtocol]
 	rnd := blk.Round()
 
@@ -1427,21 +1413,21 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	if rnd != au.latest()+1 {
 		au.log.Panicf("accountUpdates: newBlockImpl %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
 	}
-	au.deltas = append(au.deltas, delta.accts)
+	au.deltas = append(au.deltas, delta.Accts)
 	au.protos = append(au.protos, proto)
-	au.creatableDeltas = append(au.creatableDeltas, delta.creatables)
+	au.creatableDeltas = append(au.creatableDeltas, delta.Creatables)
 	au.roundDigest = append(au.roundDigest, blk.Digest())
-	au.deltasAccum = append(au.deltasAccum, len(delta.accts)+au.deltasAccum[len(au.deltasAccum)-1])
+	au.deltasAccum = append(au.deltasAccum, len(delta.Accts)+au.deltasAccum[len(au.deltasAccum)-1])
 
 	var ot basics.OverflowTracker
 	newTotals := au.roundTotals[len(au.roundTotals)-1]
 	allBefore := newTotals.All()
-	newTotals.applyRewards(delta.hdr.RewardsLevel, &ot)
+	newTotals.applyRewards(delta.Hdr.RewardsLevel, &ot)
 
 	au.baseAccounts.flushPendingWrites()
 
 	var previousAccountData basics.AccountData
-	for addr, data := range delta.accts {
+	for addr, data := range delta.Accts {
 		if latestAcctData, has := au.accounts[addr]; has {
 			previousAccountData = latestAcctData.data
 		} else if baseAccountData, has := au.baseAccounts.read(addr); has {
@@ -1457,20 +1443,20 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 		}
 
 		newTotals.delAccount(proto, previousAccountData, &ot)
-		newTotals.addAccount(proto, data.new, &ot)
+		newTotals.addAccount(proto, data.New, &ot)
 
 		macct := au.accounts[addr]
 		macct.ndeltas++
-		macct.data = data.new
+		macct.data = data.New
 		au.accounts[addr] = macct
 	}
 
-	for cidx, cdelta := range delta.creatables {
+	for cidx, cdelta := range delta.Creatables {
 		mcreat := au.creatables[cidx]
-		mcreat.creator = cdelta.creator
-		mcreat.created = cdelta.created
-		mcreat.ctype = cdelta.ctype
-		mcreat.ndeltas++
+		mcreat.Creator = cdelta.Creator
+		mcreat.Created = cdelta.Created
+		mcreat.Ctype = cdelta.Ctype
+		mcreat.Ndeltas++
 		au.creatables[cidx] = mcreat
 	}
 
@@ -1545,7 +1531,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 				offset--
 				d, ok := au.deltas[offset][addr]
 				if ok {
-					return d.new, nil
+					return d.New, nil
 				}
 			}
 		}
@@ -1624,7 +1610,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 				if ok {
 					// the returned validThrough here is not optimal, but it still correct. We could get a more accurate value by scanning
 					// the deltas forward, but this would be time consuming loop, which might not pay off.
-					return d.new, rnd, nil
+					return d.New, rnd, nil
 				}
 			}
 		} else {
@@ -1703,8 +1689,8 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 			// Check if we already have the asset/creator in cache
 			creatableDelta, ok := au.creatables[cidx]
 			if ok {
-				if creatableDelta.created && creatableDelta.ctype == ctype {
-					return creatableDelta.creator, true, nil
+				if creatableDelta.Created && creatableDelta.Ctype == ctype {
+					return creatableDelta.Creator, true, nil
 				}
 				return basics.Address{}, false, nil
 			}
@@ -1713,8 +1699,8 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 				offset--
 				creatableDelta, ok := au.creatableDeltas[offset][cidx]
 				if ok {
-					if creatableDelta.created && creatableDelta.ctype == ctype {
-						return creatableDelta.creator, true, nil
+					if creatableDelta.Created && creatableDelta.Ctype == ctype {
+						return creatableDelta.Creator, true, nil
 					}
 					return basics.Address{}, false, nil
 				}
@@ -1831,8 +1817,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+dbRound))) % au.catchpointInterval))
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
-	deltas := make([]map[basics.Address]accountDelta, offset, offset)
-	creatableDeltas := make([]map[basics.CreatableIndex]modifiedCreatable, offset, offset)
+	deltas := make([]map[basics.Address]common.AccountDelta, offset, offset)
+	creatableDeltas := make([]map[basics.CreatableIndex]common.ModifiedCreatable, offset, offset)
 	roundTotals := make([]AccountTotals, offset+1, offset+1)
 	protos := make([]config.ConsensusParams, offset+1, offset+1)
 	copy(deltas, au.deltas[:offset])
@@ -1973,18 +1959,18 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	}
 
 	for cidx, modCrt := range compactCreatableDeltas {
-		cnt := modCrt.ndeltas
+		cnt := modCrt.Ndeltas
 		mcreat, ok := au.creatables[cidx]
 		if !ok {
 			au.log.Panicf("inconsistency: flushed %d changes to creatable %d, but not in au.creatables", cnt, cidx)
 		}
 
-		if cnt > mcreat.ndeltas {
-			au.log.Panicf("inconsistency: flushed %d changes to creatable %d, but au.creatables had %d", cnt, cidx, mcreat.ndeltas)
-		} else if cnt == mcreat.ndeltas {
+		if cnt > mcreat.Ndeltas {
+			au.log.Panicf("inconsistency: flushed %d changes to creatable %d, but au.creatables had %d", cnt, cidx, mcreat.Ndeltas)
+		} else if cnt == mcreat.Ndeltas {
 			delete(au.creatables, cidx)
 		} else {
-			mcreat.ndeltas -= cnt
+			mcreat.Ndeltas -= cnt
 			au.creatables[cidx] = mcreat
 		}
 	}
@@ -2012,7 +1998,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 // compactDeltas takes an arary of account map deltas ( one array entry per round ), and corresponding creatables array, and compact the arrays into a single
 // map that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes. For both the account deltas as well as for the creatables,
 // it counts the number of changes per round by specifying it in the ndeltas field of the accountDeltaCount/modifiedCreatable. The ndeltas field of the input creatableDeltas is ignored.
-func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable, baseAccounts mruAccounts) (outAccountDeltas map[basics.Address]accountDeltaCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
+func compactDeltas(accountDeltas []map[basics.Address]common.AccountDelta, creatableDeltas []map[basics.CreatableIndex]common.ModifiedCreatable, baseAccounts mruAccounts) (outAccountDeltas map[basics.Address]accountDeltaCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]common.ModifiedCreatable) {
 	if len(accountDeltas) > 0 {
 		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
 		outAccountDeltas = make(map[basics.Address]accountDeltaCount, 1+len(accountDeltas[0])*len(accountDeltas))
@@ -2022,13 +2008,13 @@ func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDel
 				if prev, has := outAccountDeltas[addr]; has {
 					outAccountDeltas[addr] = accountDeltaCount{
 						old:     prev.old,
-						new:     acctDelta.new,
+						new:     acctDelta.New,
 						ndeltas: prev.ndeltas + 1,
 					}
 				} else {
 					// it's a new entry.
 					newEntry := accountDeltaCount{
-						new:     acctDelta.new,
+						new:     acctDelta.New,
 						ndeltas: 1,
 					}
 					if baseAccountData, has := baseAccounts.read(addr); has {
@@ -2044,22 +2030,22 @@ func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDel
 
 	if len(creatableDeltas) > 0 {
 		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
-		outCreatableDeltas = make(map[basics.CreatableIndex]modifiedCreatable, 1+len(creatableDeltas[0])*len(creatableDeltas))
+		outCreatableDeltas = make(map[basics.CreatableIndex]common.ModifiedCreatable, 1+len(creatableDeltas[0])*len(creatableDeltas))
 		for _, roundCreatable := range creatableDeltas {
 			for creatableIdx, creatable := range roundCreatable {
 				if prev, has := outCreatableDeltas[creatableIdx]; has {
-					outCreatableDeltas[creatableIdx] = modifiedCreatable{
-						ctype:   creatable.ctype,
-						created: creatable.created,
-						creator: creatable.creator,
-						ndeltas: prev.ndeltas + 1,
+					outCreatableDeltas[creatableIdx] = common.ModifiedCreatable{
+						Ctype:   creatable.Ctype,
+						Created: creatable.Created,
+						Creator: creatable.Creator,
+						Ndeltas: prev.Ndeltas + 1,
 					}
 				} else {
-					outCreatableDeltas[creatableIdx] = modifiedCreatable{
-						ctype:   creatable.ctype,
-						created: creatable.created,
-						creator: creatable.creator,
-						ndeltas: 1,
+					outCreatableDeltas[creatableIdx] = common.ModifiedCreatable{
+						Ctype:   creatable.Ctype,
+						Created: creatable.Created,
+						Creator: creatable.Creator,
+						Ndeltas: 1,
 					}
 				}
 			}

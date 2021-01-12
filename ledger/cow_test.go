@@ -24,6 +24,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/common"
 )
 
 type mockLedger struct {
@@ -34,7 +35,7 @@ func (ml *mockLedger) lookup(addr basics.Address) (basics.AccountData, error) {
 	return ml.balanceMap[addr], nil
 }
 
-func (ml *mockLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl txlease) error {
+func (ml *mockLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl common.Txlease) error {
 	return nil
 }
 
@@ -90,9 +91,9 @@ func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.
 	require.Equal(t, d, basics.AccountData{})
 }
 
-func applyUpdates(cow *roundCowState, updates map[basics.Address]accountDelta) {
+func applyUpdates(cow *roundCowState, updates map[basics.Address]common.AccountDelta) {
 	for addr, delta := range updates {
-		cow.put(addr, delta.old, delta.new, nil, nil)
+		cow.put(addr, delta.Old, delta.New, nil, nil)
 	}
 }
 

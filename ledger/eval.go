@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger/apply"
+	"github.com/algorand/go-algorand/ledger/common"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -69,7 +70,7 @@ func (x *roundCowBase) lookup(addr basics.Address) (acctData basics.AccountData,
 	return acctData, err
 }
 
-func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) error {
+func (x *roundCowBase) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl common.Txlease) error {
 	return x.l.CheckDup(x.proto, x.rnd+1, firstValid, lastValid, txid, TxLease{txl})
 }
 
@@ -593,7 +594,7 @@ func (eval *BlockEvaluator) testTransaction(txn transactions.SignedTxn, cow *rou
 
 	// Transaction already in the ledger?
 	txid := txn.ID()
-	err = cow.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
+	err = cow.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, common.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
 	if err != nil {
 		return err
 	}
@@ -740,7 +741,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 		}
 
 		// Transaction already in the ledger?
-		err := cow.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, txlease{sender: txn.Txn.Sender, lease: txn.Txn.Lease})
+		err := cow.checkDup(txn.Txn.First(), txn.Txn.Last(), txid, common.Txlease{Sender: txn.Txn.Sender, Lease: txn.Txn.Lease})
 		if err != nil {
 			return err
 		}
@@ -1066,16 +1067,16 @@ func (validator *evalTxValidator) run() {
 // Validate: eval(ctx, l, blk, true, txcache, executionPool)
 // AddBlock: eval(context.Background(), l, blk, false, txcache, nil)
 // tracker:  eval(context.Background(), l, blk, false, txcache, nil)
-func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (StateDelta, error) {
+func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (common.StateDelta, error) {
 	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
 	if err != nil {
-		return StateDelta{}, err
+		return common.StateDelta{}, err
 	}
 
 	// Next, transactions
 	paysetgroups, err := blk.DecodePaysetGroups()
 	if err != nil {
-		return StateDelta{}, err
+		return common.StateDelta{}, err
 	}
 	var txvalidator evalTxValidator
 	validationCtx, validationCancel := context.WithCancel(ctx)
@@ -1083,7 +1084,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	if validate {
 		_, ok := config.Consensus[blk.CurrentProtocol]
 		if !ok {
-			return StateDelta{}, protocol.Error(blk.CurrentProtocol)
+			return common.StateDelta{}, protocol.Error(blk.CurrentProtocol)
 		}
 		txvalidator.txcache = txcache
 		txvalidator.block = blk
@@ -1099,25 +1100,25 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	for _, txgroup := range paysetgroups {
 		select {
 		case <-ctx.Done():
-			return StateDelta{}, ctx.Err()
+			return common.StateDelta{}, ctx.Err()
 		case err, open := <-txvalidator.done:
 			// if we're not validating, then `txvalidator.done` would be nil, in which case this case statement would never be executed.
 			if open && err != nil {
-				return StateDelta{}, err
+				return common.StateDelta{}, err
 			}
 		default:
 		}
 
 		err = eval.TransactionGroup(txgroup)
 		if err != nil {
-			return StateDelta{}, err
+			return common.StateDelta{}, err
 		}
 	}
 
 	// Finally, procees any pending end-of-block state changes
 	err = eval.endOfBlock()
 	if err != nil {
-		return StateDelta{}, err
+		return common.StateDelta{}, err
 	}
 
 	// If validating, do final block checks that depend on our new state
@@ -1125,18 +1126,18 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		// wait for the validation to complete.
 		select {
 		case <-ctx.Done():
-			return StateDelta{}, ctx.Err()
+			return common.StateDelta{}, ctx.Err()
 		case err, open := <-txvalidator.done:
 			if !open {
 				break
 			}
 			if err != nil {
-				return StateDelta{}, err
+				return common.StateDelta{}, err
 			}
 		}
 		err = eval.finalValidation()
 		if err != nil {
-			return StateDelta{}, err
+			return common.StateDelta{}, err
 		}
 	}
 
@@ -1165,7 +1166,7 @@ func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionP
 // the work of applying the block's changes to the ledger state.
 type ValidatedBlock struct {
 	blk   bookkeeping.Block
-	delta StateDelta
+	delta common.StateDelta
 }
 
 // Block returns the underlying Block for a ValidatedBlock.

@@ -22,12 +22,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/common"
 	"github.com/algorand/go-algorand/protocol"
-	"github.com/stretchr/testify/require"
 )
 
 func getRandomAddress(a *require.Assertions) basics.Address {
@@ -49,14 +51,14 @@ type modsData struct {
 
 func getCow(creatables []modsData) *roundCowState {
 	cs := &roundCowState{
-		mods: StateDelta{
-			creatables: make(map[basics.CreatableIndex]modifiedCreatable),
-			hdr:        &bookkeeping.BlockHeader{},
+		mods: common.StateDelta{
+			Creatables: make(map[basics.CreatableIndex]common.ModifiedCreatable),
+			Hdr:        &bookkeeping.BlockHeader{},
 		},
 		proto: config.Consensus[protocol.ConsensusCurrentVersion],
 	}
 	for _, e := range creatables {
-		cs.mods.creatables[e.cidx] = modifiedCreatable{ctype: e.ctype, creator: e.addr, created: true}
+		cs.mods.Creatables[e.cidx] = common.ModifiedCreatable{Ctype: e.ctype, Creator: e.addr, Created: true}
 	}
 	return cs
 }
@@ -95,7 +97,7 @@ func TestLogicLedgerBalances(t *testing.T) {
 
 	addr1 := getRandomAddress(a)
 	ble := basics.MicroAlgos{Raw: 100}
-	c.mods.accts = map[basics.Address]accountDelta{addr1: {new: basics.AccountData{MicroAlgos: ble}}}
+	c.mods.Accts = map[basics.Address]common.AccountDelta{addr1: {New: basics.AccountData{MicroAlgos: ble}}}
 	bla, err := l.Balance(addr1)
 	a.NoError(err)
 	a.Equal(ble, bla)
@@ -115,9 +117,9 @@ func TestLogicLedgerGetters(t *testing.T) {
 	a.NotNil(l)
 
 	round := basics.Round(1234)
-	c.mods.hdr.Round = round
+	c.mods.Hdr.Round = round
 	ts := int64(11223344)
-	c.mods.prevTimestamp = ts
+	c.mods.PrevTimestamp = ts
 
 	addr1 := getRandomAddress(a)
 	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
@@ -152,9 +154,9 @@ func TestLogicLedgerAsset(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), fmt.Sprintf("asset %d does not exist", aidx))
 
-	c.mods.accts = map[basics.Address]accountDelta{
+	c.mods.Accts = map[basics.Address]common.AccountDelta{
 		addr1: {
-			new: basics.AccountData{
+			New: basics.AccountData{
 				AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}},
 			},
 		},
@@ -167,9 +169,9 @@ func TestLogicLedgerAsset(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), "has not opted in to asset")
 
-	c.mods.accts = map[basics.Address]accountDelta{
+	c.mods.Accts = map[basics.Address]common.AccountDelta{
 		addr1: {
-			new: basics.AccountData{
+			New: basics.AccountData{
 				AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}},
 				Assets:      map[basics.AssetIndex]basics.AssetHolding{assetIdx: {Amount: 99}},
 			},

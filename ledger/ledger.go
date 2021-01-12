@@ -32,6 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/common"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -485,7 +486,7 @@ func (l *Ledger) Totals(rnd basics.Round) (AccountTotals, error) {
 func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl TxLease) error {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl.txlease)
+	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl.Txlease)
 }
 
 // GetRoundTxIds returns a map of the transactions ids that we have for the given round
@@ -641,10 +642,10 @@ func (l *Ledger) trackerLog() logging.Logger {
 	return l.log
 }
 
-// trackerEvalVerified is used by the accountUpdates to reconstruct the StateDelta from a given block during it's loadFromDisk execution.
+// trackerEvalVerified is used by the accountUpdates to reconstruct the common.StateDelta from a given block during it's loadFromDisk execution.
 // when this function is called, the trackers mutex is expected already to be taken. The provided accUpdatesLedger would allow the
 // evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
-func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (StateDelta, error) {
+func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (common.StateDelta, error) {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
 	return eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
 }
@@ -662,16 +663,9 @@ func (l *Ledger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 	return l.verifiedTxnCache
 }
 
-// A txlease is a transaction (sender, lease) pair which uniquely specifies a
-// transaction lease.
-type txlease struct {
-	sender basics.Address
-	lease  [32]byte
-}
-
 // TxLease is an exported version of txlease
 type TxLease struct {
-	txlease
+	common.Txlease
 }
 
 var ledgerInitblocksdbCount = metrics.NewCounter("ledger_initblocksdb_count", "calls")

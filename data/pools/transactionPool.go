@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/common"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -462,7 +463,7 @@ func (pool *TransactionPool) Lookup(txid transactions.Txid) (tx transactions.Sig
 }
 
 // OnNewBlock excises transactions from the pool that are included in the specified Block or if they've expired
-func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta) {
+func (pool *TransactionPool) OnNewBlock(block bookkeeping.Block, delta common.StateDelta) {
 	var stats telemetryspec.ProcessBlockMetrics
 	var knownCommitted uint
 	var unknownCommitted uint

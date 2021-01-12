@@ -21,6 +21,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/common"
 )
 
 // TransactionInLedgerError is returned when a transaction cannot be added because it has already been done
@@ -36,13 +37,13 @@ func (tile TransactionInLedgerError) Error() string {
 // LeaseInLedgerError is returned when a transaction cannot be added because it has a lease that already being used in the relavant rounds
 type LeaseInLedgerError struct {
 	txid  transactions.Txid
-	lease txlease
+	lease common.Txlease
 }
 
 // Error implements the error interface for the LeaseInLedgerError stuct
 func (lile *LeaseInLedgerError) Error() string {
 	// format the lease as address.
-	addr := basics.Address(lile.lease.lease)
+	addr := basics.Address(lile.lease.Lease)
 	return fmt.Sprintf("transaction %v using an overlapping lease %s", lile.txid, addr.String())
 }
 

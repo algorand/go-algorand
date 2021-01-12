@@ -31,6 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
+	"github.com/algorand/go-algorand/ledger/common"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -1401,7 +1402,7 @@ func TestGetLastCatchpointLabel(t *testing.T) {
 // generate at least 3 asset and 3 app creatables, and return the ids
 // of the asset/app with at least 3 elements less or equal.
 func generateCreatables(numElementsPerSegement int) (
-	randomCtbs map[basics.CreatableIndex]modifiedCreatable,
+	randomCtbs map[basics.CreatableIndex]common.ModifiedCreatable,
 	assetID3,
 	appID3 basics.CreatableIndex,
 	err error) {
@@ -1413,7 +1414,7 @@ func generateCreatables(numElementsPerSegement int) (
 	for x := 0; x < 10; x++ {
 		// find the assetid greater than at least 2 assetids
 		for cID, crtble := range randomCtbs {
-			switch crtble.ctype {
+			switch crtble.Ctype {
 			case basics.AssetCreatable:
 				if assetID3 == 0 {
 					assetID3 = cID
@@ -1486,8 +1487,8 @@ func TestListAssetsAndApplications(t *testing.T) {
 	results, err = ledger.ListAssets(basics.AssetIndex(maxAsset), 100)
 	assetCount := 0
 	for id, ctb := range randomCtbs {
-		if ctb.ctype == basics.AssetCreatable &&
-			ctb.created &&
+		if ctb.Ctype == basics.AssetCreatable &&
+			ctb.Created &&
 			id <= maxAsset {
 			assetCount++
 		}
@@ -1504,8 +1505,8 @@ func TestListAssetsAndApplications(t *testing.T) {
 	results, err = ledger.ListApplications(basics.AppIndex(maxApp), 100)
 	appCount := 0
 	for id, ctb := range randomCtbs {
-		if ctb.ctype == basics.AppCreatable &&
-			ctb.created &&
+		if ctb.Ctype == basics.AppCreatable &&
+			ctb.Created &&
 			id <= maxApp {
 			appCount++
 		}

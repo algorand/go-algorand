@@ -40,6 +40,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/common"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/messagetracer"
@@ -776,7 +777,7 @@ func (node *AlgorandFullNode) IsArchival() bool {
 }
 
 // OnNewBlock implements the BlockListener interface so we're notified after each block is written to the ledger
-func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledger.StateDelta) {
+func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta common.StateDelta) {
 	if node.ledger.Latest() > block.Round() {
 		return
 	}

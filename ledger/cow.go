@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/common"
 )
 
 //   ___________________
@@ -36,7 +37,7 @@ import (
 
 type roundCowParent interface {
 	lookup(basics.Address) (basics.AccountData, error)
-	checkDup(basics.Round, basics.Round, transactions.Txid, txlease) error
+	checkDup(basics.Round, basics.Round, transactions.Txid, common.Txlease) error
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	compactCertLast() basics.Round
@@ -53,7 +54,7 @@ type roundCowState struct {
 	lookupParent roundCowParent
 	commitParent *roundCowState
 	proto        config.ConsensusParams
-	mods         StateDelta
+	mods         common.StateDelta
 
 	// storage deltas populated as side effects of AppCall transaction
 	// 1. Opt-in/Close actions (see Allocate/Deallocate)
@@ -62,49 +63,24 @@ type roundCowState struct {
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
 }
 
-// StateDelta describes the delta between a given round to the previous round
-type StateDelta struct {
-	// modified accounts
-	accts map[basics.Address]accountDelta
-
-	// new Txids for the txtail and TxnCounter, mapped to txn.LastValid
-	Txids map[transactions.Txid]basics.Round
-
-	// new txleases for the txtail mapped to expiration
-	txleases map[txlease]basics.Round
-
-	// new creatables creator lookup table
-	creatables map[basics.CreatableIndex]modifiedCreatable
-
-	// new block header; read-only
-	hdr *bookkeeping.BlockHeader
-
-	// last round for which we have seen a compact cert.
-	// zero if no compact cert seen.
-	compactCertSeen basics.Round
-
-	// previous block timestamp
-	prevTimestamp int64
-}
-
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64) *roundCowState {
 	return &roundCowState{
 		lookupParent: b,
 		commitParent: nil,
 		proto:        config.Consensus[hdr.CurrentProtocol],
-		mods: StateDelta{
-			accts:         make(map[basics.Address]accountDelta),
+		mods: common.StateDelta{
+			Accts:         make(map[basics.Address]common.AccountDelta),
 			Txids:         make(map[transactions.Txid]basics.Round),
-			txleases:      make(map[txlease]basics.Round),
-			creatables:    make(map[basics.CreatableIndex]modifiedCreatable),
-			hdr:           &hdr,
-			prevTimestamp: prevTimestamp,
+			Txleases:      make(map[common.Txlease]basics.Round),
+			Creatables:    make(map[basics.CreatableIndex]common.ModifiedCreatable),
+			Hdr:           &hdr,
+			PrevTimestamp: prevTimestamp,
 		},
 		sdeltas: make(map[basics.Address]map[storagePtr]*storageDelta),
 	}
 }
 
-func (cb *roundCowState) deltas() StateDelta {
+func (cb *roundCowState) deltas() common.StateDelta {
 	var err error
 	if len(cb.sdeltas) == 0 {
 		return cb.mods
@@ -115,34 +91,34 @@ func (cb *roundCowState) deltas() StateDelta {
 	//    SetKey/DelKey work only with sdeltas, so need to pull missing accounts
 	// 2. Call applyStorageDelta for every delta per account
 	for addr, smap := range cb.sdeltas {
-		var delta accountDelta
+		var delta common.AccountDelta
 		var exist bool
-		if delta, exist = cb.mods.accts[addr]; !exist {
+		if delta, exist = cb.mods.Accts[addr]; !exist {
 			ad, err := cb.lookup(addr)
 			if err != nil {
 				panic(fmt.Sprintf("fetching account data failed for addr %s: %s", addr.String(), err.Error()))
 			}
-			delta = accountDelta{old: ad, new: ad}
+			delta = common.AccountDelta{Old: ad, New: ad}
 		}
 		for aapp, storeDelta := range smap {
-			if delta.new, err = applyStorageDelta(delta.new, aapp, storeDelta); err != nil {
+			if delta.New, err = applyStorageDelta(delta.New, aapp, storeDelta); err != nil {
 				panic(fmt.Sprintf("applying storage delta failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
 			}
 		}
-		cb.mods.accts[addr] = delta
+		cb.mods.Accts[addr] = delta
 	}
 	return cb.mods
 }
 
 func (cb *roundCowState) rewardsLevel() uint64 {
-	return cb.mods.hdr.RewardsLevel
+	return cb.mods.Hdr.RewardsLevel
 }
 
 func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
-	delta, ok := cb.mods.creatables[cidx]
+	delta, ok := cb.mods.Creatables[cidx]
 	if ok {
-		if delta.created && delta.ctype == ctype {
-			return delta.creator, true, nil
+		if delta.Created && delta.Ctype == ctype {
+			return delta.Creator, true, nil
 		}
 		return basics.Address{}, false, nil
 	}
@@ -150,23 +126,23 @@ func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.Cre
 }
 
 func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, err error) {
-	d, ok := cb.mods.accts[addr]
+	d, ok := cb.mods.Accts[addr]
 	if ok {
-		return d.new, nil
+		return d.New, nil
 	}
 
 	return cb.lookupParent.lookup(addr)
 }
 
-func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl txlease) error {
+func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl common.Txlease) error {
 	_, present := cb.mods.Txids[txid]
 	if present {
 		return &TransactionInLedgerError{Txid: txid}
 	}
 
-	if cb.proto.SupportTransactionLeases && (txl.lease != [32]byte{}) {
-		expires, ok := cb.mods.txleases[txl]
-		if ok && cb.mods.hdr.Round <= expires {
+	if cb.proto.SupportTransactionLeases && (txl.Lease != [32]byte{}) {
+		expires, ok := cb.mods.Txleases[txl]
+		if ok && cb.mods.Hdr.Round <= expires {
 			return &LeaseInLedgerError{txid: txid, lease: txl}
 		}
 	}
@@ -179,8 +155,8 @@ func (cb *roundCowState) txnCounter() uint64 {
 }
 
 func (cb *roundCowState) compactCertLast() basics.Round {
-	if cb.mods.compactCertSeen != 0 {
-		return cb.mods.compactCertSeen
+	if cb.mods.CompactCertSeen != 0 {
+		return cb.mods.CompactCertSeen
 	}
 	return cb.lookupParent.compactCertLast()
 }
@@ -190,37 +166,37 @@ func (cb *roundCowState) blockHdr(r basics.Round) (bookkeeping.BlockHeader, erro
 }
 
 func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) {
-	prev, present := cb.mods.accts[addr]
+	prev, present := cb.mods.Accts[addr]
 	if present {
-		cb.mods.accts[addr] = accountDelta{old: prev.old, new: new}
+		cb.mods.Accts[addr] = common.AccountDelta{Old: prev.Old, New: new}
 	} else {
-		cb.mods.accts[addr] = accountDelta{old: old, new: new}
+		cb.mods.Accts[addr] = common.AccountDelta{Old: old, New: new}
 	}
 
 	if newCreatable != nil {
-		cb.mods.creatables[newCreatable.Index] = modifiedCreatable{
-			ctype:   newCreatable.Type,
-			creator: newCreatable.Creator,
-			created: true,
+		cb.mods.Creatables[newCreatable.Index] = common.ModifiedCreatable{
+			Ctype:   newCreatable.Type,
+			Creator: newCreatable.Creator,
+			Created: true,
 		}
 	}
 
 	if deletedCreatable != nil {
-		cb.mods.creatables[deletedCreatable.Index] = modifiedCreatable{
-			ctype:   deletedCreatable.Type,
-			creator: deletedCreatable.Creator,
-			created: false,
+		cb.mods.Creatables[deletedCreatable.Index] = common.ModifiedCreatable{
+			Ctype:   deletedCreatable.Type,
+			Creator: deletedCreatable.Creator,
+			Created: false,
 		}
 	}
 }
 
 func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {
 	cb.mods.Txids[txid] = txn.LastValid
-	cb.mods.txleases[txlease{sender: txn.Sender, lease: txn.Lease}] = txn.LastValid
+	cb.mods.Txleases[common.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
 }
 
 func (cb *roundCowState) sawCompactCert(rnd basics.Round) {
-	cb.mods.compactCertSeen = rnd
+	cb.mods.CompactCertSeen = rnd
 }
 
 func (cb *roundCowState) child() *roundCowState {
@@ -228,39 +204,39 @@ func (cb *roundCowState) child() *roundCowState {
 		lookupParent: cb,
 		commitParent: cb,
 		proto:        cb.proto,
-		mods: StateDelta{
-			accts:         make(map[basics.Address]accountDelta),
+		mods: common.StateDelta{
+			Accts:         make(map[basics.Address]common.AccountDelta),
 			Txids:         make(map[transactions.Txid]basics.Round),
-			txleases:      make(map[txlease]basics.Round),
-			creatables:    make(map[basics.CreatableIndex]modifiedCreatable),
-			hdr:           cb.mods.hdr,
-			prevTimestamp: cb.mods.prevTimestamp,
+			Txleases:      make(map[common.Txlease]basics.Round),
+			Creatables:    make(map[basics.CreatableIndex]common.ModifiedCreatable),
+			Hdr:           cb.mods.Hdr,
+			PrevTimestamp: cb.mods.PrevTimestamp,
 		},
 		sdeltas: make(map[basics.Address]map[storagePtr]*storageDelta),
 	}
 }
 
 func (cb *roundCowState) commitToParent() {
-	for addr, delta := range cb.mods.accts {
-		prev, present := cb.commitParent.mods.accts[addr]
+	for addr, delta := range cb.mods.Accts {
+		prev, present := cb.commitParent.mods.Accts[addr]
 		if present {
-			cb.commitParent.mods.accts[addr] = accountDelta{
-				old: prev.old,
-				new: delta.new,
+			cb.commitParent.mods.Accts[addr] = common.AccountDelta{
+				Old: prev.Old,
+				New: delta.New,
 			}
 		} else {
-			cb.commitParent.mods.accts[addr] = delta
+			cb.commitParent.mods.Accts[addr] = delta
 		}
 	}
 
 	for txid, lv := range cb.mods.Txids {
 		cb.commitParent.mods.Txids[txid] = lv
 	}
-	for txl, expires := range cb.mods.txleases {
-		cb.commitParent.mods.txleases[txl] = expires
+	for txl, expires := range cb.mods.Txleases {
+		cb.commitParent.mods.Txleases[txl] = expires
 	}
-	for cidx, delta := range cb.mods.creatables {
-		cb.commitParent.mods.creatables[cidx] = delta
+	for cidx, delta := range cb.mods.Creatables {
+		cb.commitParent.mods.Creatables[cidx] = delta
 	}
 	for addr, smod := range cb.sdeltas {
 		for aapp, nsd := range smod {
@@ -276,13 +252,13 @@ func (cb *roundCowState) commitToParent() {
 			}
 		}
 	}
-	cb.commitParent.mods.compactCertSeen = cb.mods.compactCertSeen
+	cb.commitParent.mods.CompactCertSeen = cb.mods.CompactCertSeen
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {
-	res := make([]basics.Address, len(cb.mods.accts))
+	res := make([]basics.Address, len(cb.mods.Accts))
 	i := 0
-	for addr := range cb.mods.accts {
+	for addr := range cb.mods.Accts {
 		res[i] = addr
 		i++
 	}

@@ -27,6 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/common"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -114,11 +115,6 @@ var accountsResetExprs = []string{
 // details about the content of each of the versions can be found in the upgrade functions upgradeDatabaseSchemaXXXX
 // and their descriptions.
 var accountDBVersion = int32(4)
-
-type accountDelta struct {
-	old basics.AccountData
-	new basics.AccountData
-}
 
 // persistedAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
@@ -860,7 +856,7 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool)
 
 // accountsNewRound updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
 // The updates.old entries are being updated to reflect the latest value that was written to the database.
-func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, creatables map[basics.CreatableIndex]modifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (err error) {
+func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, creatables map[basics.CreatableIndex]common.ModifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (err error) {
 
 	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteByRowIDStmt, insertStmt, updateStmt *sql.Stmt
 
@@ -947,10 +943,10 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 		defer deleteCreatableIdxStmt.Close()
 
 		for cidx, cdelta := range creatables {
-			if cdelta.created {
-				_, err = insertCreatableIdxStmt.Exec(cidx, cdelta.creator[:], cdelta.ctype)
+			if cdelta.Created {
+				_, err = insertCreatableIdxStmt.Exec(cidx, cdelta.Creator[:], cdelta.Ctype)
 			} else {
-				_, err = deleteCreatableIdxStmt.Exec(cidx, cdelta.ctype)
+				_, err = deleteCreatableIdxStmt.Exec(cidx, cdelta.Ctype)
 			}
 			if err != nil {
 				return
@@ -962,7 +958,7 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 }
 
 // totalsNewRounds updates the accountsTotals by applying series of round changes
-func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, compactUpdates map[basics.Address]accountDeltaCount, accountTotals []AccountTotals, protos []config.ConsensusParams) (err error) {
+func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]common.AccountDelta, compactUpdates map[basics.Address]accountDeltaCount, accountTotals []AccountTotals, protos []config.ConsensusParams) (err error) {
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx, false)
 	if err != nil {
@@ -987,8 +983,8 @@ func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, comp
 				return
 			}
 
-			totals.addAccount(protos[i], data.new, &ot)
-			accounts[addr] = data.new
+			totals.addAccount(protos[i], data.New, &ot)
+			accounts[addr] = data.New
 		}
 	}
 
