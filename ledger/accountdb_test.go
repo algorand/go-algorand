@@ -536,7 +536,7 @@ func TestAccountDBRound(t *testing.T) {
 
 		updatesCnt, needLoadAddresses, _ := compactDeltas([]map[basics.Address]accountDelta{updates}, nil, baseAccounts)
 
-		err = accountsGet(tx, needLoadAddresses, updatesCnt)
+		err = accountsLoadOld(tx, needLoadAddresses, updatesCnt)
 		require.NoError(t, err)
 		err = totalsNewRounds(tx, []map[basics.Address]accountDelta{updates}, updatesCnt, []AccountTotals{{}}, []config.ConsensusParams{proto})
 		require.NoError(t, err)

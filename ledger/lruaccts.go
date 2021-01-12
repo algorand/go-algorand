@@ -108,10 +108,10 @@ func (m *lruAccounts) write(acctData persistedAccountData) {
 	}
 }
 
-// resize adjust the current size of the lruAccounts cache, by dropping the least
+// prune adjust the current size of the lruAccounts cache, by dropping the least
 // recently used entries.
 // thread locking semantics : write lock
-func (m *lruAccounts) resize(newSize int) (removed int) {
+func (m *lruAccounts) prune(newSize int) (removed int) {
 	for {
 		if len(m.accounts) <= newSize {
 			break

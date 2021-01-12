@@ -62,7 +62,7 @@ func TestBasicLRUAccounts(t *testing.T) {
 		require.Equal(t, persistedAccountData{}, acct)
 	}
 
-	baseAcct.resize(accountsNum / 2)
+	baseAcct.prune(accountsNum / 2)
 
 	// verify expected (missing/existing) entries
 	for i := 0; i < accountsNum*2; i++ {

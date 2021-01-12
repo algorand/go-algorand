@@ -361,7 +361,7 @@ func (au *accountUpdates) close() {
 	au.waitAccountsWriting()
 	// this would block until the commitSyncerClosed channel get closed.
 	<-au.commitSyncerClosed
-	au.baseAccounts.resize(0)
+	au.baseAccounts.prune(0)
 }
 
 // IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
@@ -1486,9 +1486,9 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 
 	au.voters.newBlock(blk.BlockHeader)
 
-	// calling resize would drop old entries from the base accounts.
+	// calling prune would drop old entries from the base accounts.
 	newBaseAccountSize := (len(au.accounts) + 1) + baseAccountsPendingAccountsBufferSize
-	au.baseAccounts.resize(newBaseAccountSize)
+	au.baseAccounts.prune(newBaseAccountSize)
 }
 
 // lookupWithRewards returns the account data for a given address at a given round.
@@ -1889,7 +1889,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 
-		err = accountsGet(tx, unavailableBaseAccounts, compactDeltas)
+		err = accountsLoadOld(tx, unavailableBaseAccounts, compactDeltas)
 		if err != nil {
 			return err
 		}
@@ -2256,7 +2256,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 
 	// vaccumming the database would modify the some of the tables rowid, so we need to make sure any stored in-memory
 	// rowid are flushed.
-	au.baseAccounts.resize(0)
+	au.baseAccounts.prune(0)
 
 	startTime := time.Now()
 	vacuumExitCh := make(chan struct{}, 1)

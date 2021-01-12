@@ -124,10 +124,21 @@ type accountDelta struct {
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
 // list.
 type persistedAccountData struct {
-	addr        basics.Address
+	// The address of the account. In contrasts to maps, having this value explicitly here allows us to use this
+	// data structure in queues directly, without "attaching" the address as the address as the map key.
+	addr basics.Address
+	// The underlaying account data
 	accountData basics.AccountData
-	rowid       int64
-	round       basics.Round
+	// The rowid, when available. If the entry was loaded from the disk, then we have the rowid for it. Entries
+	// that doesn't have rowid ( hence, rowid == 0 ) represent either deleted accounts or non-existing accounts.
+	rowid int64
+	// the round number that is associated with the accountData. This field is needed so that we can maintain a correct
+	// lruAccounts cache. We use it to ensure that the entries on the lruAccounts.accountsList are the latest ones.
+	// this becomes an issue since while we attempt to write an update to disk, we migth be reading an entry and placing
+	// it on the lruAccounts.pendingAccounts; The commitRound doesn't attempt to flush the pending accounts, but rather
+	// just write the latest ( which is correct ) to the lruAccounts.accountsList. later on, during on newBlockImpl, we
+	// want to ensure that the "real" written value isn't being overridden by the value from the pending accounts.
+	round basics.Round
 }
 
 // accountDeltaCount is an extention to accountDelta that is being used by the commitRound function for counting the
@@ -1005,10 +1016,10 @@ func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, comp
 	return
 }
 
-// accountsGet updates the entries on the deltas.old map that matches the provided addresses.
+// accountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
-func accountsGet(tx *sql.Tx, addresses []basics.Address, deltas map[basics.Address]accountDeltaCount) (err error) {
+func accountsLoadOld(tx *sql.Tx, addresses []basics.Address, deltas map[basics.Address]accountDeltaCount) (err error) {
 	if len(addresses) == 0 {
 		return nil
 	}
