@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=2009,2093,2164
 
 FILENAME=$(basename -- "$0")
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
@@ -60,8 +61,8 @@ while [ "$1" != "" ]; do
         -d)
             shift
             THISDIR=$1
-            mkdir -p ${THISDIR} >/dev/null
-            pushd ${THISDIR} >/dev/null
+            mkdir -p "${THISDIR}" >/dev/null
+            pushd "${THISDIR}" >/dev/null
             THISDIR=$(pwd -P)
             popd >/dev/null
             DATADIRS+=(${THISDIR})
@@ -116,7 +117,7 @@ fi
 
 # If -d not specified, don't default any more
 if [ "${#DATADIRS[@]}" -eq 0 ]; then
-    echo "You must specify at least one data directory with `-d`"
+    echo "You must specify at least one data directory with \`-d\`"
     exit 1
 fi
 
@@ -307,8 +308,9 @@ function download_update() {
 }
 
 function check_and_download_update() {
-    check_for_update
-    if [ $? -ne 0 ]; then return 1; fi
+    if ! check_for_update; then
+        return 1
+    fi
 
     download_update
 }
@@ -321,10 +323,9 @@ function download_update_for_current_version() {
 
 function expand_update() {
     echo Expanding update...
-
-    tar -zxof ${TARFILE} -C ${UPDATESRCDIR}
-    if [ $? -ne 0 ]; then return 1; fi
-
+    if ! tar -zxof "${TARFILE}" -C "${UPDATESRCDIR}"; then
+        return 1
+    fi
     validate_update
 }
 
@@ -352,27 +353,31 @@ function run_systemd_action() {
 
     local action=$1
     local data_dir=$2
+    local process_owner
+    local system_service
 
+    process_owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod -d ${data_dir}"))
     system_service=$(is_system_service "${data_dir}")
+
     if [ "$system_service" -eq 0 ]; then
-        process_owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod -d ${data_dir}"))
-        if [ "$action" = "stop" ] && $IS_ROOT || $(grep sudo <(groups "$process_owner" &> /dev/null)); then
-            sudo -n systemctl "${action}" "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
+#        process_owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod -d ${data_dir}"))
+        if [ "$action" = "stop" ] && $IS_ROOT || grep sudo <(groups "$process_owner" &> /dev/null); then
+            sudo -n systemctl stop "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
         fi
     elif [ "$system_service" -ne 4 ]; then
         if [ "$action" = "start" ]; then
-            sudo -n systemctl "${action}" "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
+            sudo -n systemctl start "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
         fi
     else
         user_service=$(is_user_service "$data_dir")
         if [ "$user_service" -eq 0 ]; then
-            process_owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod -d ${data_dir}"))
+#            process_owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod -d ${data_dir}"))
             if [ "$action" = "stop" ] && [ "$(whoami)" = "$process_owner" ]; then
-                systemctl --user "${action}" "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
+                systemctl --user stop "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
             fi
         elif [ "$user_service" -ne 4 ]; then
             if [ "$action" = "start" ]; then
-                systemctl --user "${action}" "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
+                systemctl --user start "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
             fi
         else
             return 1
@@ -406,11 +411,11 @@ function shutdown_node() {
 
 function backup_binaries() {
     echo Backing up current binary files...
-    mkdir -p ${BINDIR}/backup
+    mkdir -p "${BINDIR}/backup"
     BACKUPFILES="algod kmd carpenter doberman goal update.sh updater diagcfg"
     # add node_exporter to the files list we're going to backup, but only we if had it previously deployed.
-    [ -f ${BINDIR}/node_exporter ] && BACKUPFILES="${BACKUPFILES} node_exporter"
-    tar -zcf ${BINDIR}/backup/bin-v${CURRENTVER}.tar.gz -C ${BINDIR} ${BACKUPFILES} >/dev/null 2>&1
+    [ -f "${BINDIR}/node_exporter" ] && BACKUPFILES="${BACKUPFILES} node_exporter"
+    tar -zcf "${BINDIR}/backup/bin-v${CURRENTVER}.tar.gz" -C "${BINDIR}" "${BACKUPFILES}" >/dev/null 2>&1
 }
 
 function backup_data() {
@@ -418,15 +423,15 @@ function backup_data() {
     BACKUPDIR="${CURDATADIR}/backup"
 
     echo "Backing up current data files from ${CURDATADIR}..."
-    mkdir -p ${BACKUPDIR}
-    BACKUPFILES="genesis.json wallet-genesis.id"
-    tar --no-recursion --exclude='*.log' --exclude='*.log.archive' --exclude='*.tar.gz' -zcf ${BACKUPDIR}/data-v${CURRENTVER}.tar.gz -C ${CURDATADIR} ${BACKUPFILES} >/dev/null 2>&1
+    mkdir -p "${BACKUPDIR}"
+    BACKUPFILES="genesis.json wallet-genesis.id update.sh"
+    tar --no-recursion --exclude='*.log' --exclude='*.log.archive' --exclude='*.tar.gz' -zcf "${BACKUPDIR}/data-v${CURRENTVER}.tar.gz" -C "${CURDATADIR}" "${BACKUPFILES}" >/dev/null 2>&1
 }
 
 function backup_current_version() {
     backup_binaries
-    for DD in ${DATADIRS[@]}; do
-        backup_data ${DD}
+    for DD in "${DATADIRS[@]}"; do
+        backup_data "${DD}"
     done
 }
 
@@ -487,7 +492,7 @@ function install_new_data() {
         CURDATADIR=$1
         echo "Installing new data files into ${CURDATADIR}..."
         ROLLBACKDATA+=(${CURDATADIR})
-        cp ${UPDATESRCDIR}/data/* ${CURDATADIR}
+        cp "${UPDATESRCDIR}/data/"* "${CURDATADIR}"
     fi
 }
 
@@ -601,13 +606,13 @@ function apply_fixups() {
     echo "Applying migration fixups..."
 
     # Delete obsolete algorand binary - renamed to 'goal'
-    rm ${BINDIR}/algorand >/dev/null 2>&1
+    rm "${BINDIR}/algorand" >/dev/null 2>&1
 
-    for DD in ${DATADIRS[@]}; do
-        clean_legacy_logs ${DD}
+    for DD in "${DATADIRS[@]}"; do
+        clean_legacy_logs "${DD}"
 
         # Purge obsolete cadaver files (now agreement.cdv[.archive])
-        rm -f ${DD}/service*.cadaver
+        rm -f "${DD}"/service*.cadaver
     done
 }
 
@@ -619,15 +624,14 @@ function apply_fixups() {
 # Unless it's an install
 if [ ! -d "${BINDIR}" ]; then
     if [ "${UPDATETYPE}" = "install" ]; then
-        mkdir -p ${BINDIR}
+        mkdir -p "${BINDIR}"
     else
         fail_and_exit "Missing or invalid binaries path specified '${BINDIR}'"
     fi
 fi
 
 if [ "${UPDATETYPE}" != "install" ]; then
-    check_install_valid
-    if [ $? -ne 0 ]; then
+    if ! check_install_valid; then
         echo "Unable to perform an update - installation does not appear valid"
         exit 1
     fi
@@ -649,8 +653,7 @@ if [ ${RESUME_INSTALL} -eq 0 ]; then
         exit $?
     fi
 
-    expand_update
-    if [ $? -ne 0 ]; then
+    if ! expand_update; then
         fail_and_exit "Error expanding update"
     fi
 
@@ -658,7 +661,7 @@ if [ ${RESUME_INSTALL} -eq 0 ]; then
     # Note that the SCRIPTPATH we're passing in should be our binaries directory, which is what we expect to be
     # passed as the last argument (if any)
     echo "Starting the new update script to complete the installation..."
-    exec "${UPDATESRCDIR}/bin/${FILENAME}" ${INSTALLOPT} -r -c ${CHANNEL} ${DATADIRSPEC} ${NOSTART} ${BINDIRSPEC} ${HOSTEDSPEC} ${GENESIS_NETWORK_DIR_SPEC} "${UNKNOWNARGS[@]}"
+    exec "${UPDATESRCDIR}/bin/${FILENAME}" ${INSTALLOPT} -r -c ${CHANNEL} ${DATADIRSPEC} ${NOSTART} ${BINDIRSPEC} ${HOSTEDSPEC} ${GENESIS_NETWORK_DIR_SPEC} ${UNKNOWNARGS[@]}
 
     # If we're still here, exec failed.
     fail_and_exit "Error executing the new update script - unable to continue"
@@ -684,23 +687,20 @@ fi
 
 ROLLBACK=1
 
-install_new_binaries
-if [ $? -ne 0 ]; then
+if ! install_new_binaries; then
     fail_and_exit "Error installing new files"
 fi
 
-for DD in ${DATADIRS[@]}; do
-    install_new_data ${DD}
-    if [ $? -ne 0 ]; then
+for DD in "${DATADIRS[@]}"; do
+    if ! install_new_data "${DD}"; then
         fail_and_exit "Error installing data files into ${DD}"
     fi
 done
 
 copy_genesis_files
 
-for DD in ${DATADIRS[@]}; do
-    check_for_new_ledger ${DD}
-    if [ $? -ne 0 ]; then
+for DD in "${DATADIRS[@]}"; do
+    if ! check_for_new_ledger "${DD}"; then
         fail_and_exit "Error updating ledger in ${DD}"
     fi
 done

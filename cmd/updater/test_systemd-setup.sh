@@ -5,7 +5,7 @@ if [ "$#" != 2 ]; then
   exit 1
 fi
 
-trap cleanup EXIT
+trap cleanup err exit
 
 USERNAME="$1"
 GROUPNAME="$2"
