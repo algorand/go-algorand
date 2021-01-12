@@ -181,7 +181,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	}()
 
 	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
-	defer ml.close()
+	defer ml.Close()
 	accts := randomAccounts(300, false)
 
 	au := &accountUpdates{}
@@ -198,7 +198,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
 	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
 
-	readDb := ml.trackerDB().rdb
+	readDb := ml.trackerDB().Rdb
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		writer := makeCatchpointWriter(context.Background(), fileName, tx, blocksRound, blockHeaderDigest, catchpointLabel)
 		for {
@@ -279,7 +279,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	}()
 
 	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
-	defer ml.close()
+	defer ml.Close()
 	accts := randomAccounts(BalancesPerCatchpointFileChunk*3, false)
 
 	au := &accountUpdates{}
@@ -295,7 +295,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	blocksRound := basics.Round(12345)
 	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
 	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
-	readDb := ml.trackerDB().rdb
+	readDb := ml.trackerDB().Rdb
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		writer := makeCatchpointWriter(context.Background(), fileName, tx, blocksRound, blockHeaderDigest, catchpointLabel)
 		for {
@@ -357,7 +357,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	err = l.trackerDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := applyCatchpointStagingBalances(ctx, tx, 0)
 		return err
 	})
