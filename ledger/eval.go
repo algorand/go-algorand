@@ -991,7 +991,12 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	if err != nil {
 		return StateDelta{}, err
 	}
-	go prefetchThread(ctx, eval.state.lookupParent, blk.Payset)
+
+	validationCtx, validationCancel := context.WithCancel(ctx)
+	defer validationCancel()
+
+	// If validationCtx or underlying ctx are Done, end prefetch
+	go prefetchThread(validationCtx, eval.state.lookupParent, blk.Payset)
 
 	// Next, transactions
 	paysetgroups, err := blk.DecodePaysetGroups()
@@ -999,8 +1004,6 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		return StateDelta{}, err
 	}
 	var txvalidator evalTxValidator
-	validationCtx, validationCancel := context.WithCancel(ctx)
-	defer validationCancel()
 	if validate {
 		_, ok := config.Consensus[blk.CurrentProtocol]
 		if !ok {
