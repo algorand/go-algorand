@@ -137,7 +137,7 @@ func (c *MockDebugControl) GetSource() (string, []byte) {
 	return "name", []byte("int 1")
 }
 
-func (c *MockDebugControl) GetStates(changes *logic.AppStateChange) AppState {
+func (c *MockDebugControl) GetStates(s *logic.DebugState) AppState {
 	return AppState{}
 }
 

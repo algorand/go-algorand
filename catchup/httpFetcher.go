@@ -75,7 +75,8 @@ func (hf *HTTPFetcher) GetBlockBytes(ctx context.Context, r basics.Round) (data 
 	if err != nil {
 		return nil, err
 	}
-	parsedURL.Path = hf.peer.PrepareURL(path.Join(parsedURL.Path, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(r), 36)))
+
+	parsedURL.Path = hf.net.SubstituteGenesisID(path.Join(parsedURL.Path, "/v1/{genesisID}/block/"+strconv.FormatUint(uint64(r), 36)))
 	blockURL := parsedURL.String()
 	hf.log.Debugf("block GET %#v peer %#v %T", blockURL, hf.peer, hf.peer)
 	request, err := http.NewRequest("GET", blockURL, nil)

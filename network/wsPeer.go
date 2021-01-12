@@ -25,7 +25,6 @@ import (
 	"net"
 	"net/http"
 	"runtime"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -214,10 +213,6 @@ type wsPeer struct {
 type HTTPPeer interface {
 	GetAddress() string
 	GetHTTPClient() *http.Client
-
-	// PrepareURL takes a URL that may have substitution parameters in it and returns a URL with those parameters filled in.
-	// E.g. /v1/{genesisID}/gossip -> /v1/1234/gossip
-	PrepareURL(string) string
 }
 
 // UnicastPeer is another possible interface for the opaque Peer.
@@ -252,11 +247,6 @@ func (wp *wsPeerCore) GetAddress() string {
 // http.Client will maintain a cache of connections with some keepalive.
 func (wp *wsPeerCore) GetHTTPClient() *http.Client {
 	return &wp.client
-}
-
-// PrepareURL substitutes placeholders like "{genesisID}" for their values.
-func (wp *wsPeerCore) PrepareURL(rawURL string) string {
-	return strings.Replace(rawURL, "{genesisID}", wp.net.GenesisID, -1)
 }
 
 // Version returns the matching version from network.SupportedProtocolVersions

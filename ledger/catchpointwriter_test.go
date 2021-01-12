@@ -91,11 +91,54 @@ func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
 		}
 		ad.Assets[basics.AssetIndex(0x1234123412341234-assetHolderAssets)] = ah
 	}
+
+	maxApps := currentConsensusParams.MaxAppsCreated
+	maxOptIns := currentConsensusParams.MaxAppsOptedIn
+	maxBytesLen := currentConsensusParams.MaxAppKeyLen
+	if maxBytesLen > currentConsensusParams.MaxAppBytesValueLen {
+		maxBytesLen = currentConsensusParams.MaxAppBytesValueLen
+	}
+	genKey := func() (string, basics.TealValue) {
+		len := int(crypto.RandUint64() % uint64(maxBytesLen))
+		if len == 0 {
+			return "k", basics.TealValue{Type: basics.TealUintType, Uint: 0}
+		}
+		key := make([]byte, len)
+		crypto.RandBytes(key)
+		return string(key), basics.TealValue{Type: basics.TealUintType, Bytes: string(key)}
+	}
+	startIndex := crypto.RandUint64() % 100000
+	ad.AppParams = make(map[basics.AppIndex]basics.AppParams, maxApps)
+	for aidx := startIndex; aidx < startIndex+uint64(maxApps); aidx++ {
+		ap := basics.AppParams{}
+		ap.GlobalState = make(basics.TealKeyValue)
+		for i := uint64(0); i < currentConsensusParams.MaxGlobalSchemaEntries/4; i++ {
+			k, v := genKey()
+			ap.GlobalState[k] = v
+		}
+		ad.AppParams[basics.AppIndex(aidx)] = ap
+		optins := maxApps
+		if maxApps > maxOptIns {
+			optins = maxOptIns
+		}
+		ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, optins)
+		keys := currentConsensusParams.MaxLocalSchemaEntries / 4
+		lkv := make(basics.TealKeyValue, keys)
+		for i := 0; i < optins; i++ {
+			for j := uint64(0); j < keys; j++ {
+				k, v := genKey()
+				lkv[k] = v
+			}
+		}
+		ad.AppLocalStates[basics.AppIndex(aidx)] = basics.AppLocalState{KeyValue: lkv}
+	}
+
 	encodedAd, err := ad.MarshalMsg(nil)
 	require.NoError(t, err)
 	er.AccountData = encodedAd
 	return er
 }
+
 func TestEncodedBalanceRecordEncoding(t *testing.T) {
 	er := makeTestEncodedBalanceRecord(t)
 	encodedBr, err := er.MarshalMsg(nil)
@@ -326,6 +369,5 @@ func TestFullCatchpointWriter(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, acct, acctData)
 		require.Equal(t, basics.Round(0), validThrough)
-
 	}
 }

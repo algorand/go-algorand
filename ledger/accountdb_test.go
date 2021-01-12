@@ -118,7 +118,7 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 		for i := uint64(0); i < appStatesCount; i++ {
 			ap := basics.AppLocalState{
 				Schema: basics.StateSchema{
-					NumUint:      crypto.RandUint64() % 5,
+					NumUint:      crypto.RandUint64()%5 + 1,
 					NumByteSlice: crypto.RandUint64() % 5,
 				},
 				KeyValue: make(map[string]basics.TealValue),
@@ -136,7 +136,7 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 				tv := basics.TealValue{
 					Type: basics.TealBytesType,
 				}
-				bytes := make([]byte, crypto.RandUint64()%512)
+				bytes := make([]byte, crypto.RandUint64()%uint64(config.MaxBytesKeyValueLen))
 				crypto.RandBytes(bytes[:])
 				tv.Bytes = string(bytes)
 				ap.KeyValue[appName] = tv
@@ -164,11 +164,11 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 				GlobalState:       make(basics.TealKeyValue),
 				StateSchemas: basics.StateSchemas{
 					LocalStateSchema: basics.StateSchema{
-						NumUint:      crypto.RandUint64() % 5,
+						NumUint:      crypto.RandUint64()%5 + 1,
 						NumByteSlice: crypto.RandUint64() % 5,
 					},
 					GlobalStateSchema: basics.StateSchema{
-						NumUint:      crypto.RandUint64() % 5,
+						NumUint:      crypto.RandUint64()%5 + 1,
 						NumByteSlice: crypto.RandUint64() % 5,
 					},
 				},
@@ -196,7 +196,7 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 				tv := basics.TealValue{
 					Type: basics.TealBytesType,
 				}
-				bytes := make([]byte, crypto.RandUint64()%512)
+				bytes := make([]byte, crypto.RandUint64()%uint64(config.MaxBytesKeyValueLen))
 				crypto.RandBytes(bytes[:])
 				tv.Bytes = string(bytes)
 				ap.GlobalState[appName] = tv

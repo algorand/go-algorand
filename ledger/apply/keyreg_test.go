@@ -23,6 +23,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/stretchr/testify/require"
 )
@@ -31,11 +32,11 @@ var feeSink = basics.Address{0x7, 0xda, 0xcb, 0x4b, 0x6d, 0x9e, 0xd1, 0x41, 0xb1
 
 // mock balances that support looking up particular balance records
 type keyregTestBalances struct {
-	addrs   map[basics.Address]basics.BalanceRecord
+	addrs   map[basics.Address]basics.AccountData
 	version protocol.ConsensusVersion
 }
 
-func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards bool) (basics.BalanceRecord, error) {
+func (balances keyregTestBalances) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
 	return balances.addrs[addr], nil
 }
 
@@ -43,11 +44,11 @@ func (balances keyregTestBalances) GetCreator(cidx basics.CreatableIndex, ctype 
 	return basics.Address{}, true, nil
 }
 
-func (balances keyregTestBalances) Put(basics.BalanceRecord) error {
+func (balances keyregTestBalances) Put(basics.Address, basics.AccountData) error {
 	return nil
 }
 
-func (balances keyregTestBalances) PutWithCreatable(basics.BalanceRecord, *basics.CreatableLocator, *basics.CreatableLocator) error {
+func (balances keyregTestBalances) PutWithCreatable(basics.Address, basics.AccountData, *basics.CreatableLocator, *basics.CreatableLocator) error {
 	return nil
 }
 
@@ -61,6 +62,18 @@ func (balances keyregTestBalances) ConsensusParams() config.ConsensusParams {
 
 func (balances keyregTestBalances) Round() basics.Round {
 	return basics.Round(4294967296)
+}
+
+func (balances keyregTestBalances) Allocate(basics.Address, basics.AppIndex, bool, basics.StateSchema) error {
+	return nil
+}
+
+func (balances keyregTestBalances) Deallocate(basics.Address, basics.AppIndex, bool) error {
+	return nil
+}
+
+func (balances keyregTestBalances) StatefulEval(logic.EvalParams, basics.AppIndex, []byte) (bool, basics.EvalDelta, error) {
+	return false, basics.EvalDelta{}, nil
 }
 
 func TestKeyregApply(t *testing.T) {
@@ -91,10 +104,10 @@ func TestKeyregApply(t *testing.T) {
 
 	tx.Sender = src
 
-	mockBal := keyregTestBalances{make(map[basics.Address]basics.BalanceRecord), protocol.ConsensusCurrentVersion}
+	mockBal := keyregTestBalances{make(map[basics.Address]basics.AccountData), protocol.ConsensusCurrentVersion}
 
 	// Going from offline to online should be okay
-	mockBal.addrs[src] = basics.BalanceRecord{Addr: src, AccountData: basics.AccountData{Status: basics.Offline}}
+	mockBal.addrs[src] = basics.AccountData{Status: basics.Offline}
 	err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
 	require.NoError(t, err)
 
@@ -106,7 +119,7 @@ func TestKeyregApply(t *testing.T) {
 		require.NoError(t, err)
 
 		// Nonparticipatory accounts should not be able to change status
-		mockBal.addrs[src] = basics.BalanceRecord{Addr: src, AccountData: basics.AccountData{Status: basics.NotParticipating}}
+		mockBal.addrs[src] = basics.AccountData{Status: basics.NotParticipating}
 		err = Keyreg(tx.KeyregTxnFields, tx.Header, mockBal, transactions.SpecialAddresses{FeeSink: feeSink}, nil)
 		require.Error(t, err)
 	}
