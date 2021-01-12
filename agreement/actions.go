@@ -151,7 +151,7 @@ func (a networkAction) do(ctx context.Context, s *Service) {
 	case protocol.ProposalPayloadTag:
 		msg := a.CompoundMessage
 		payload := transmittedPayload{
-			unauthenticatedProposal: msg.Proposal,
+			unauthenticatedProposal: msg.Proposal.Compressed(),
 			PriorVote:               msg.Vote,
 		}
 		data = protocol.Encode(&payload)

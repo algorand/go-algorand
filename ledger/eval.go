@@ -663,20 +663,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *app
 		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
 
-	// Validate applyData if we are validating an existing block.
-	// If we are validating and generating, we have no ApplyData yet.
-	if eval.validate && !eval.generate {
-		if eval.proto.ApplyData {
-			if !ad.Equal(applyData) {
-				return fmt.Errorf("transaction %v: applyData mismatch: %v != %v", txid, ad, applyData)
-			}
-		} else {
-			if !ad.Equal(transactions.ApplyData{}) {
-				return fmt.Errorf("transaction %v: applyData not supported", txid)
-			}
-		}
-	}
-
 	// Check if the transaction fits in the block, now that we can encode it.
 	*txib, err = eval.block.EncodeSignedTxn(txn, applyData)
 	if err != nil {
