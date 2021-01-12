@@ -1,0 +1,113 @@
+{
+	"NetworkName": "",
+	"VersionModifier": "",
+	"ConsensusProtocol": "",
+	"FirstPartKeyRound": 0,
+	"LastPartKeyRound": 3000000,
+	"PartKeyDilution": 0,
+	"Wallets": [
+		{
+			"Name": "Wallet1",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet2",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet3",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet4",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet5",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet6",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet7",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet8",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet9",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet10",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet11",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet12",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet13",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet14",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet15",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet16",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet17",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet18",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet19",
+			"Stake": 5,
+			"Online": true
+		},
+		{
+			"Name": "Wallet20",
+			"Stake": 5,
+			"Online": true
+		}
+	],
+	"FeeSink": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+	"RewardsPool": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ",
+	"Comment": ""
+}
