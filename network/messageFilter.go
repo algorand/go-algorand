@@ -48,7 +48,12 @@ func makeMessageFilter(bucketsCount, maxBucketSize int) *messageFilter {
 // CheckMessage checks if the given tag/msg already in the collection, and return true if it was there before the call.
 // Prepends our own random secret to the message to make it hard to abuse hash collisions.
 func (f *messageFilter) CheckIncomingMessage(tag protocol.Tag, msg []byte, add bool, promote bool) bool {
-	digest := crypto.Hash(append(append(f.nonce[:], []byte(tag)...), msg...))
+	hasher := crypto.NewHash()
+	hasher.Write(f.nonce[:])
+	hasher.Write([]byte(tag))
+	hasher.Write(msg)
+	var digest crypto.Digest
+	hasher.Sum(digest[:0])
 	return f.CheckDigest(digest, add, promote)
 }
 
@@ -83,7 +88,12 @@ func (f *messageFilter) CheckDigest(msgHash crypto.Digest, add bool, promote boo
 }
 
 func generateMessageDigest(tag protocol.Tag, msg []byte) crypto.Digest {
-	return crypto.Hash(append([]byte(tag), msg...))
+	hasher := crypto.NewHash()
+	hasher.Write([]byte(tag))
+	hasher.Write(msg)
+	var digest crypto.Digest
+	hasher.Sum(digest[:0])
+	return digest
 }
 
 func (f *messageFilter) find(digest crypto.Digest) (idx int, found bool) {
