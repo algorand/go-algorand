@@ -1869,6 +1869,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
+	var updatedPersistedAccounts []persistedAccountData
 	err := au.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
@@ -1906,7 +1907,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 		// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
 		// so that we can update the base account back.
-		err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
+		updatedPersistedAccounts, err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
 		if err != nil {
 			return err
 		}
@@ -1967,9 +1968,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			macct.ndeltas -= cnt
 			au.accounts[addr] = macct
 		}
+	}
 
-		// the acctUpdate.old was updated by accountsNewRound and contains now the latest entry stored to the database.
-		au.baseAccounts.write(acctUpdate.old)
+	for _, persistedAcct := range updatedPersistedAccounts {
+		au.baseAccounts.write(persistedAcct)
 	}
 
 	for cidx, modCrt := range compactCreatableDeltas {
