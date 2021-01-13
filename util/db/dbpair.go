@@ -14,35 +14,34 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package db
 
-import (
-	"github.com/algorand/go-algorand/util/db"
-)
-
-type dbPair struct {
-	rdb db.Accessor
-	wdb db.Accessor
+// Pair represents two accessors - read and write
+type Pair struct {
+	Rdb Accessor
+	Wdb Accessor
 }
 
-func (p dbPair) close() {
-	if p.rdb.Handle != nil {
-		p.rdb.Close()
+// Close the read and write accessors
+func (p Pair) Close() {
+	if p.Rdb.Handle != nil {
+		p.Rdb.Close()
 	}
-	if p.wdb.Handle != nil {
-		p.wdb.Close()
+	if p.Wdb.Handle != nil {
+		p.Wdb.Close()
 	}
 }
 
-func dbOpen(filename string, memory bool) (p dbPair, err error) {
-	p.rdb, err = db.MakeAccessor(filename, true, memory)
+// OpenPair opens the filename with both reading and writing accessors.
+func OpenPair(filename string, memory bool) (p Pair, err error) {
+	p.Rdb, err = MakeAccessor(filename, true, memory)
 	if err != nil {
 		return
 	}
 
-	p.wdb, err = db.MakeAccessor(filename, false, memory)
+	p.Wdb, err = MakeAccessor(filename, false, memory)
 	if err != nil {
-		p.rdb.Close()
+		p.Rdb.Close()
 		return
 	}
 
