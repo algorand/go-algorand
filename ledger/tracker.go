@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 // ledgerTracker defines part of the API for any state machine that
@@ -84,8 +85,8 @@ type ledgerTracker interface {
 // ledgerForTracker defines the part of the ledger that a tracker can
 // access.  This is particularly useful for testing trackers in isolation.
 type ledgerForTracker interface {
-	trackerDB() dbPair
-	blockDB() dbPair
+	trackerDB() db.Pair
+	blockDB() db.Pair
 	trackerLog() logging.Logger
 	trackerEvalVerified(bookkeeping.Block, ledgerForEvaluator) (StateDelta, error)
 

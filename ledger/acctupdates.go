@@ -143,7 +143,7 @@ type accountUpdates struct {
 	// dynamic variables
 
 	// Connection to the database.
-	dbs dbPair
+	dbs db.Pair
 
 	// Prepared SQL statements for fast accounts DB lookups.
 	accountsq *accountsDbQueries
@@ -533,7 +533,7 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 			var accts map[basics.Address]*onlineAccount
 			start := time.Now()
 			ledgerAccountsonlinetopCount.Inc(nil)
-			err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			err = au.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 				accts, err = accountsOnlineTop(tx, batchOffset, batchSize, proto)
 				if err != nil {
 					return
@@ -767,7 +767,7 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (ReadCloseSize
 	fileSize := int64(0)
 	start := time.Now()
 	ledgerGetcatchpointCount.Inc(nil)
-	err := au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := au.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		dbFileName, _, fileSize, err = getCatchpoint(tx, round)
 		return
 	})
@@ -942,7 +942,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	lastestBlockRound = l.Latest()
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
-	err = au.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		au.dbRound, err0 = au.accountsInitialize(ctx, tx)
 		if err0 != nil {
@@ -980,7 +980,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		return
 	}
 
-	au.accountsq, err = accountsDbInit(au.dbs.rdb.Handle, au.dbs.wdb.Handle)
+	au.accountsq, err = accountsDbInit(au.dbs.Rdb.Handle, au.dbs.Wdb.Handle)
 
 	au.lastCatchpointLabel, _, err = au.accountsq.readCatchpointStateString(context.Background(), catchpointStateLastCatchpoint)
 	if err != nil {
@@ -1870,7 +1870,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
 	var updatedPersistedAccounts []persistedAccountData
-	err := au.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
 			mc, err0 := makeMerkleCommitter(tx, false)
@@ -2120,7 +2120,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	var catchpointWriter *catchpointWriter
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
-	err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = au.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		catchpointWriter = makeCatchpointWriter(au.ctx, absCatchpointFileName, tx, committedRound, committedRoundDigest, label)
 		for more {
 			stepCtx, stepCancelFunction := context.WithTimeout(au.ctx, chunkExecutionDuration)
@@ -2280,7 +2280,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 	}()
 
 	ledgerVacuumCount.Inc(nil)
-	vacuumStats, err := au.dbs.wdb.Vacuum(ctx)
+	vacuumStats, err := au.dbs.Wdb.Vacuum(ctx)
 	close(vacuumExitCh)
 	vacuumLoggingAbort.Wait()
 
