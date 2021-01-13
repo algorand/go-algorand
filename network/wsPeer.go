@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"math/rand"
 	"net"
 	"net/http"
 	"runtime"
@@ -655,7 +654,7 @@ func (wp *wsPeer) sendPing() bool {
 	tagBytes := []byte(protocol.PingTag)
 	mbytes := make([]byte, len(tagBytes)+pingLength)
 	copy(mbytes, tagBytes)
-	rand.Read(mbytes[len(tagBytes):])
+	crypto.RandBytes(mbytes[len(tagBytes):])
 	wp.pingData = mbytes[len(tagBytes):]
 	sent := wp.writeNonBlock(mbytes, false, crypto.Digest{}, time.Now())
 
@@ -688,8 +687,14 @@ func (wp *wsPeer) Close() {
 	atomic.StoreInt32(&wp.didSignalClose, 1)
 	if atomic.CompareAndSwapInt32(&wp.didInnerClose, 0, 1) {
 		close(wp.closing)
-		wp.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(5*time.Second))
-		wp.conn.CloseWithoutFlush()
+		err := wp.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(5*time.Second))
+		if err != nil {
+			wp.net.log.Infof("failed to write CloseMessage to connection for %s", wp.conn.RemoteAddr().String())
+		}
+		err = wp.conn.CloseWithoutFlush()
+		if err != nil {
+			wp.net.log.Infof("failed to CloseWithoutFlush to connection for %s", wp.conn.RemoteAddr().String())
+		}
 	}
 }
 
