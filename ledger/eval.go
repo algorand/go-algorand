@@ -583,13 +583,14 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 			if eval.blockTxBytes+groupTxBytes > eval.proto.MaxTxnBytesPerBlock {
 				return ErrNoSpace
 			}
-			txad.ApplyData.CloseRewards = txib.ApplyData.CloseRewards
-			txad.ApplyData.ClosingAmount = txib.ApplyData.ClosingAmount
-			txad.ApplyData.ReceiverRewards = txib.ApplyData.ReceiverRewards
-			txad.ApplyData.SenderRewards = txib.ApplyData.SenderRewards
-			txad.ApplyData.EvalDelta = txib.ApplyData.EvalDelta
-			logging.Base().Infof("check applydata %d", txad.ApplyData.ClosingAmount)
 		}
+
+		txad.ApplyData.CloseRewards = txib.ApplyData.CloseRewards
+		txad.ApplyData.ClosingAmount = txib.ApplyData.ClosingAmount
+		txad.ApplyData.ReceiverRewards = txib.ApplyData.ReceiverRewards
+		txad.ApplyData.SenderRewards = txib.ApplyData.SenderRewards
+		txad.ApplyData.EvalDelta = txib.ApplyData.EvalDelta
+		logging.Base().Infof("check applydata %d", txad.ApplyData.ClosingAmount)
 
 		// Make sure all transactions in group have the same group value
 		if txad.SignedTxn.Txn.Group != txgroup[0].SignedTxn.Txn.Group {
