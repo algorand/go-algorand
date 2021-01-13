@@ -22,12 +22,6 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
-// AccountDelta is the accountsDelta
-type AccountDelta struct {
-	Old basics.AccountData
-	New basics.AccountData
-}
-
 // ModifiedCreatable defines the changes to a single single creatable state
 type ModifiedCreatable struct {
 	// Type of the creatable: app or asset
@@ -54,7 +48,7 @@ type Txlease struct {
 // StateDelta describes the delta between a given round to the previous round
 type StateDelta struct {
 	// modified accounts
-	Accts map[basics.Address]AccountDelta
+	Accts map[basics.Address]basics.AccountData
 
 	// new Txids for the txtail and TxnCounter, mapped to txn.LastValid
 	Txids map[transactions.Txid]basics.Round
