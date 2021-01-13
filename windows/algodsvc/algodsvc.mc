@@ -17,21 +17,21 @@ MessageId=3000
 Severity=Informational
 SymbolicName=MSG_ALGODSVC_STARTED
 Language=English
-Algorand Node Service has started. Algod executable '%1' using data directory '%2'
+Algorand Node Service has started for network %1. Algod executable '%2' using data directory '%3'
 .
 
 MessageId=3001
 Severity=Informational
 SymbolicName=MSG_ALGODSVC_EXIT
 Language=English
-Algorand Node Service is stopping. Reason: algod executable exited normally.
+Algorand Node Service is stopping for network '%1'. Reason: algod executable exited normally.
 .
 
 MessageId=3002
 Severity=Warning
 SymbolicName=MSG_ALGODSVC_TERMINATED
 Language=English
-Algorand Node Service is stopping. Reason: algod executable terminated abnormally with exit code: %1.
+Algorand Node Service is stopping for network '%1'. Reason: algod executable terminated abnormally with exit code: %2.
 .
 
 MessageId=3003
@@ -45,14 +45,43 @@ MessageId=3004
 Severity=Error
 SymbolicName=MSG_ALGODSVC_CREATEPROCESS
 Language=English
-Algorand Node Service could not start. The algod executable (%1) failed to start. Win32 error code is %2.
+Algorand Node Service could not start for network '%1'. Reason: The algod executable '%2' failed to start. CreateProcess Win32 error code is %3.
 .
 
 MessageId=3005
 Severity=Informational
 SymbolicName=MSG_ALGODSVC_STOPPED
 Language=English
-Algorand Node Service has been stopped.
+Algorand Node Service for network '%1' has been stopped.
 .
+
+MessageId=3006
+Severity=Error
+SymbolicName=MSG_ALGODSVC_ARGCOUNTERROR
+Language=English
+Algorand Node Service could not start. Invalid number of arguments at ServiceMain entry point.
+.
+
+MessageId=3007
+Severity=Error
+SymbolicName=MSG_ALGODSVC_INVALIDNETWORK
+Language=English
+Algorand Node Service could not start. Invalid network parameter (%1) must be testnet, mainnet or betanet.
+.
+
+MessageId=3007
+Severity=Error
+SymbolicName=MSG_ALGODSVC_INVALIDNODEDATADIR
+Language=English
+Algorand Node Service could not start. Invalid, non existent or non-accesible node data directory specified (%1).
+.
+
+MessageId=3008
+Severity=Informational
+SymbolicName=MSG_ALGODSVC_PREFLIGHTCONFIGDATA
+Language=English
+Algorand Node Service for network '%1'. Pre-flight configuration: algod.exe='%2' Node Data Directory='%3'
+.
+
 
 ; #endif 

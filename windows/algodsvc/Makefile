@@ -11,7 +11,7 @@ SERVICENAME=AlgodSvc
 SERVICEDISPLAYNAME="Algorand Node Windows Service" 
 CC=g++
 CFLAGS=-Wall -static -pedantic -O2 -g -fanalyzer -DFORTIFY_SOURCE=2 -fstack-protector
-LDFLAGS=
+LDFLAGS=-municode
 OUTNAME=algodsvc
 TARGET=$(OUTNAME).exe
 RCOUT=$(OUTNAME).rc
@@ -41,11 +41,9 @@ clean:
 	@rm -f $(MSGBIN)
 
 install:
-	$(SC) create $(SERVICENAME) binPath= "$(SVCEXE)" DisplayName= $(SERVICEDISPLAYNAME)
-	$(REG) add HKLM\SYSTEM\CurrentControlSet\Services\$(SERVICENAME)\Parameters /v NodeDataDirectory /t REG_SZ /d $(NODEDATADIR)
-	$(REG) add HKLM\SYSTEM\CurrentControlSet\Services\$(SERVICENAME)\Parameters /v AlgodExeFileName /t REG_SZ /d $(ALGODEXE)
+	$(SC) create $(SERVICENAME)_$(NETWORK) binPath= "$(SVCEXE) $(NETWORK) \"$(ALGODEXE)\" \"$(NODEDATADIR)\"" DisplayName= $(SERVICEDISPLAYNAME) obj= "NT AUTHORITY\NetworkService"
 	$(REG) add "HKLM\SYSTEM\CurrentControlSet\Services\EventLog\Application\Algorand Node Service" /v EventMessageFile /d $(SVCEXE)
 
 uninstall:
-	$(SC) delete $(SERVICENAME)
+	$(SC) delete $(SERVICENAME)_$(NETWORK)
 

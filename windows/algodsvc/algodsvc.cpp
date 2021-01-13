@@ -3,7 +3,6 @@
 //
 // (c) Randlabs 2021.
 //
-#define UNICODE
 #include "algodsvc.h"
 #include "dprintf.h"
 #include <Windows.h>
@@ -13,8 +12,11 @@
 // Globals
 //
 const int DEFAULT_WAIT_HINT_MS = 5000;
-WCHAR g_serviceName[] = L"AlgodSvc";
+WCHAR g_serviceName[] = L"AlgodSvc_XXXXXXX";
 WCHAR g_serviceDesc[] = L"Algorand Node Windows Service";
+WCHAR g_szNetwork[7] = {0};
+WCHAR g_szNodeDataDir[MAX_PATH] = {0};
+WCHAR g_szAlgodExePath[MAX_PATH] = {0};
 int g_svcCheckpoint = 0;
 SERVICE_STATUS_HANDLE g_hSvc = NULL;
 HANDLE g_hWaitAlgod = NULL;
@@ -39,9 +41,38 @@ void Log(DWORD id, std::vector<LPCWSTR> insertionStrings);
 // Program Entry point.
 //
 // --------------------------------------------------------------------------------------------------
-int main(int argc, char** argv)
+int wmain(int argc, wchar_t** argv)
 {
     int status = 0;
+
+    if (argc != 4)
+    {
+        Log(MSG_ALGODSVC_ARGCOUNTERROR, {});
+        return 1;
+    }
+
+    wcsncpy(g_szNetwork, argv[1], 7);
+    wcsncpy(g_szAlgodExePath, argv[2], MAX_PATH);
+    wcsncpy(g_szNodeDataDir, argv[3], MAX_PATH);
+
+    if (wcscmp(g_szNetwork, L"betanet") != 0 && 
+        wcscmp(g_szNetwork, L"testnet") != 0 &&
+        wcscmp(g_szNetwork, L"mainnet") != 0 )
+        {
+            Log(MSG_ALGODSVC_INVALIDNETWORK,{ g_szNetwork });
+            return ERROR_INVALID_PARAMETER;
+        }
+
+    wcsncpy(g_serviceName + 9, g_szNetwork ,7);
+    dprintfW(L"algodsvc: This service Name %s", g_serviceName);
+
+    if (GetFileAttributes(g_szNodeDataDir) == INVALID_FILE_ATTRIBUTES)
+    {
+        Log(MSG_ALGODSVC_INVALIDNODEDATADIR, { g_szNodeDataDir });
+        return ERROR_PATH_NOT_FOUND;
+    }
+
+    Log(MSG_ALGODSVC_PREFLIGHTCONFIGDATA, { g_szNetwork, g_szAlgodExePath, g_szNodeDataDir });
 
     SERVICE_TABLE_ENTRY serviceTable[] =
     {
@@ -61,8 +92,15 @@ int main(int argc, char** argv)
 //
 // The main routine for this service
 //
+// Arguments are as follows:
+// lpServiceArgVectors[0]           Service Name
+// lpServiceArgVectors[1]           Network type (testnet,mainnet or betanet)
+// lpServiceArgVectors[2]           Quoted full path to ALGOD.EXE
+// lpServiceArgVectors[3]           Quoted full path to Node Data Directory
+//
 void WINAPI ServiceMain (DWORD dwNumServicesArgs, LPWSTR *lpServiceArgVectors)
-{
+{    
+    dprintfW(L"%d",dwNumServicesArgs);
     g_hSvc = RegisterServiceCtrlHandlerEx(g_serviceName, HandlerProc, NULL);
     if (!g_hSvc)
     {
@@ -73,37 +111,24 @@ void WINAPI ServiceMain (DWORD dwNumServicesArgs, LPWSTR *lpServiceArgVectors)
     if (ServiceUpdateStatus(SERVICE_START_PENDING, 0, 0, g_svcCheckpoint++, DEFAULT_WAIT_HINT_MS))
     {
         // Start the algod node executable.
-
-        WCHAR szAlgodExeFileName[MAX_PATH]{'\0'};
-        WCHAR szNodeDataDir[MAX_PATH]{'\0'};
-        DWORD cbAlgodExeFileName = MAX_PATH * sizeof(WCHAR), cbNodeDataDir = MAX_PATH * sizeof(WCHAR);
-
-        if (!LoadConfiguration(szAlgodExeFileName, &cbAlgodExeFileName, szNodeDataDir, &cbNodeDataDir))
-        {
-            Log(MSG_ALGODSVC_CONFIGERROR, {});
-            ServiceUpdateStatus(SERVICE_STOPPED, ERROR_BAD_CONFIGURATION, 0, g_svcCheckpoint++, DEFAULT_WAIT_HINT_MS);
-            return;
-        }
-
-        dprintfW(L"algodsvc: Configuration loaded. AlgodExeFilename=%s NodeDataDir=%s", szAlgodExeFileName, szNodeDataDir);
-
+       
         WCHAR szCmdLine[1024]{'\0'};
-        wcsncpy(szCmdLine, szAlgodExeFileName, wcslen(szAlgodExeFileName));
+        wcsncpy(szCmdLine, g_szAlgodExePath, wcslen(g_szAlgodExePath));
         wcsncat(szCmdLine, L" -d ", 4);
-        wcsncat(szCmdLine, szNodeDataDir, wcslen(szNodeDataDir));
+        wcsncat(szCmdLine, g_szNodeDataDir, wcslen(g_szNodeDataDir));
 
         STARTUPINFO si;
         ZeroMemory(&si, sizeof(STARTUPINFO));
         ZeroMemory(&g_algodProcInfo, sizeof(PROCESS_INFORMATION));
 
-        dprintfW(L"algodsvc: invoking: %s %s", szAlgodExeFileName, szCmdLine);
+        dprintfW(L"algodsvc: invoking: %s %s", g_szAlgodExePath, szCmdLine);
         if (!CreateProcessW(NULL, szCmdLine, NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, NULL, &si, &g_algodProcInfo))
         {
             dprintfW(L"algodsvc: CreateProcess failed. Win32 Err: %d", GetLastError());
 
             wchar_t lasterr[255];
             StringCchPrintfW(lasterr, 255, L"%d", GetLastError());
-            Log(MSG_ALGODSVC_CREATEPROCESS, { lasterr });
+            Log(MSG_ALGODSVC_CREATEPROCESS, { g_szNetwork, g_szAlgodExePath, lasterr });
 
             ServiceUpdateStatus(SERVICE_STOPPED, GetLastError(), 0, g_svcCheckpoint++, DEFAULT_WAIT_HINT_MS);
             return;
@@ -120,7 +145,7 @@ void WINAPI ServiceMain (DWORD dwNumServicesArgs, LPWSTR *lpServiceArgVectors)
 
         g_stopAllowed = true;
         ServiceUpdateStatus(SERVICE_RUNNING, NO_ERROR, 0, g_svcCheckpoint++, DEFAULT_WAIT_HINT_MS);
-        Log(MSG_ALGODSVC_STARTED, { szAlgodExeFileName, szNodeDataDir });
+        Log(MSG_ALGODSVC_STARTED, { g_szNetwork, g_szAlgodExePath, g_szNodeDataDir });
     }
 }
 
@@ -136,13 +161,13 @@ VOID CALLBACK AlgodWaitOrTimerCallback(PVOID lpParameter, BOOLEAN TimerOrWaitFir
     ServiceUpdateStatus(SERVICE_STOP_PENDING, dwExit == 0 ? NO_ERROR : ERROR_PROCESS_ABORTED, 0, 1, DEFAULT_WAIT_HINT_MS);
     if (dwExit == 0)
     {
-        Log(MSG_ALGODSVC_EXIT, {});
+        Log(MSG_ALGODSVC_EXIT, { g_szNetwork });
     }
     else
     {
         wchar_t exit[255];
         StringCchPrintfW(exit, 255, L"%d", dwExit);
-        Log(MSG_ALGODSVC_TERMINATED, {exit});
+        Log(MSG_ALGODSVC_TERMINATED, { g_szNetwork, exit});
     }
 
     BOOL ret = UnregisterWait(g_hWaitAlgod);
@@ -268,7 +293,7 @@ BOOL ServiceUpdateStatus(DWORD currentState, DWORD win32ExitCode,
 
     if (currentState == SERVICE_STOPPED)
     {
-        Log(MSG_ALGODSVC_STOPPED,{});
+        Log(MSG_ALGODSVC_STOPPED,{ g_szNetwork });
     }
 
     BOOL ret =  SetServiceStatus(g_hSvc, &ss);
@@ -300,10 +325,9 @@ void Log(DWORD id, std::vector<LPCWSTR> insertionStrings)
         return;
     }
 
-    dprintfW(L"id=0x%08x ev= %d", id, SeverityToEventType(id));
-
     //  NOTE: &rgMsg[0] is possible due to C++ spec where std::vector is contiguous in memory.
 
     ReportEventW(hEventSrc, SeverityToEventType(id), 0, id, NULL, insertionStrings.size(), 0, &insertionStrings[0], NULL);
     DeregisterEventSource(hEventSrc);
 }
+
