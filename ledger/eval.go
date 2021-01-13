@@ -583,6 +583,12 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 			if eval.blockTxBytes+groupTxBytes > eval.proto.MaxTxnBytesPerBlock {
 				return ErrNoSpace
 			}
+			txad.ApplyData.CloseRewards = txib.ApplyData.CloseRewards
+			txad.ApplyData.ClosingAmount = txib.ApplyData.ClosingAmount
+			txad.ApplyData.ReceiverRewards = txib.ApplyData.ReceiverRewards
+			txad.ApplyData.SenderRewards = txib.ApplyData.SenderRewards
+			txad.ApplyData.EvalDelta = txib.ApplyData.EvalDelta
+			logging.Base().Infof("check applydata %d", txad.ApplyData.ClosingAmount)
 		}
 
 		// Make sure all transactions in group have the same group value
@@ -662,6 +668,24 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, appEval *app
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
+	if eval.validate {
+		//applyData.ClosingAmount = basics.MicroAlgos{uint64(1)}
+		logging.Base().Infof("set applydata")
+	}
+
+	//// Validate applyData if we are validating an existing block.
+	//// If we are validating and generating, we have no ApplyData yet.
+	//if eval.validate && !eval.generate {
+	//	if eval.proto.ApplyData && applyData != nil {
+	//		if !ad.Equal(applyData) {
+	//			return fmt.Errorf("transaction %v: applyData mismatch: %v != %v", txid, ad, applyData)
+	//		}
+	//	} else {
+	//		if !ad.Equal(transactions.ApplyData{}) {
+	//			return fmt.Errorf("transaction %v: applyData not supported", txid)
+	//		}
+	//	}
+	//}
 
 	// Check if the transaction fits in the block, now that we can encode it.
 	*txib, err = eval.block.EncodeSignedTxn(txn, applyData)
@@ -1028,7 +1052,12 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
 	delta, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
 	if err != nil {
+		logging.Base().Infof("applydataerror: %v", err)
 		return nil, err
+	}
+
+	for _, tx := range blk.Payset {
+		logging.Base().Infof("applydata: %v", tx.ApplyData)
 	}
 
 	vb := ValidatedBlock{
