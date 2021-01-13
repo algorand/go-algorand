@@ -352,7 +352,8 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	var totalOnline, totalOffline, totalNotPart uint64
 
 	for addr, data := range accts {
-		d, _, err := aq.lookup(addr)
+		pad, err := aq.lookup(addr)
+		d := pad.accountData
 		require.NoError(t, err)
 		require.Equal(t, d, data)
 
@@ -380,10 +381,10 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
 	require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
 
-	d, dbRound, err := aq.lookup(randomAddress())
+	d, err := aq.lookup(randomAddress())
 	require.NoError(t, err)
-	require.Equal(t, rnd, dbRound)
-	require.Equal(t, d, basics.AccountData{})
+	require.Equal(t, rnd, d.round)
+	require.Equal(t, d.accountData, basics.AccountData{})
 
 	onlineAccounts := make(map[basics.Address]*onlineAccount)
 	for addr, data := range accts {
@@ -431,9 +432,9 @@ func TestAccountDBInit(t *testing.T) {
 
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	tx, err := dbs.wdb.Handle.Begin()
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
 	defer tx.Rollback()
 
@@ -505,9 +506,9 @@ func TestAccountDBRound(t *testing.T) {
 
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	tx, err := dbs.wdb.Handle.Begin()
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
 	defer tx.Rollback()
 
@@ -523,6 +524,8 @@ func TestAccountDBRound(t *testing.T) {
 	lastCreatableID := crypto.RandUint64() % 512
 	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
 	expectedDbImage := make(map[basics.CreatableIndex]modifiedCreatable)
+	var baseAccounts lruAccounts
+	baseAccounts.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
 		var updates map[basics.Address]accountDelta
 		var newaccts map[basics.Address]basics.AccountData
@@ -531,10 +534,13 @@ func TestAccountDBRound(t *testing.T) {
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
 			expectedDbImage, numElementsPerSegement)
 
-		updatesCnt, _ := compactDeltas([]map[basics.Address]accountDelta{updates}, nil)
-		err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto)
+		updatesCnt, needLoadAddresses, _ := compactDeltas([]map[basics.Address]accountDelta{updates}, nil, baseAccounts)
+
+		err = accountsLoadOld(tx, needLoadAddresses, updatesCnt)
 		require.NoError(t, err)
-		err = totalsNewRounds(tx, []map[basics.Address]accountDelta{updates}, []AccountTotals{{}}, []config.ConsensusParams{proto})
+		err = totalsNewRounds(tx, []map[basics.Address]accountDelta{updates}, updatesCnt, []AccountTotals{{}}, []config.ConsensusParams{proto})
+		require.NoError(t, err)
+		_, err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
 		err = updateAccountsRound(tx, basics.Round(i), 0)
 		require.NoError(t, err)
@@ -709,8 +715,8 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 	return
 }
 
-func benchmarkInitBalances(b testing.TB, numAccounts int, dbs dbPair, proto config.ConsensusParams) (updates map[basics.Address]basics.AccountData) {
-	tx, err := dbs.wdb.Handle.Begin()
+func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto config.ConsensusParams) (updates map[basics.Address]basics.AccountData) {
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(b, err)
 
 	updates = generateRandomTestingAccountBalances(numAccounts)
@@ -724,8 +730,8 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs dbPair, proto conf
 	return
 }
 
-func cleanupTestDb(dbs dbPair, dbName string, inMemory bool) {
-	dbs.close()
+func cleanupTestDb(dbs db.Pair, dbName string, inMemory bool) {
+	dbs.Close()
 	if !inMemory {
 		os.Remove(dbName)
 	}
@@ -738,7 +744,7 @@ func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 	defer cleanupTestDb(dbs, fn, inMemory)
 
 	benchmarkInitBalances(b, b.N, dbs, proto)
-	tx, err := dbs.rdb.Handle.Begin()
+	tx, err := dbs.Rdb.Handle.Begin()
 	require.NoError(b, err)
 
 	b.ResetTimer()
@@ -771,7 +777,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 
 	accounts := benchmarkInitBalances(b, b.N, dbs, proto)
 
-	qs, err := accountsDbInit(dbs.rdb.Handle, dbs.wdb.Handle)
+	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
 	require.NoError(b, err)
 
 	// read all the balances in the database, shuffled
@@ -786,7 +792,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 	// only measure the actual fetch time
 	b.ResetTimer()
 	for _, addr := range addrs {
-		_, _, err = qs.lookup(addr)
+		_, err = qs.lookup(addr)
 		require.NoError(b, err)
 	}
 }
@@ -811,13 +817,13 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 		}
 
 		benchmarkInitBalances(b, startupAcct, dbs, proto)
-		dbs.wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
+		dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
 
 		// insert 1M accounts data, in batches of 1000
 		for batch := 0; batch <= batchCount; batch++ {
 			fmt.Printf("\033[M\r %d / %d accounts written", totalStartupAccountsNumber*batch/batchCount, totalStartupAccountsNumber)
 
-			tx, err := dbs.wdb.Handle.Begin()
+			tx, err := dbs.Wdb.Handle.Begin()
 
 			require.NoError(b, err)
 
@@ -833,8 +839,8 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 			err = tx.Commit()
 			require.NoError(b, err)
 		}
-		dbs.wdb.SetSynchronousMode(context.Background(), db.SynchronousModeFull, true)
-		tx, err := dbs.wdb.Handle.Begin()
+		dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeFull, true)
+		tx, err := dbs.Wdb.Handle.Begin()
 		require.NoError(b, err)
 		fmt.Printf("\033[M\r")
 		return tx, cleanup, err
@@ -930,12 +936,12 @@ func TestAccountsReencoding(t *testing.T) {
 	}
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
 	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
 
-	err := dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 		if err != nil {
 			return err
@@ -992,7 +998,7 @@ func TestAccountsReencoding(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		modifiedAccounts, err := reencodeAccounts(ctx, tx)
 		if err != nil {
 			return err
@@ -1011,9 +1017,9 @@ func TestAccountsReencoding(t *testing.T) {
 func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	err := dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 		if err != nil {
 			return err
@@ -1021,7 +1027,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	qs, err := accountsDbInit(dbs.rdb.Handle, dbs.wdb.Handle)
+	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
 	require.NoError(t, err)
 	require.NotNil(t, qs.listCreatablesStmt)
 	qs.close()
@@ -1089,7 +1095,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 
 		normalizedAccountBalances, err := prepareNormalizedBalances(balances.Balances, proto)
 		b.StartTimer()
-		err = l.trackerDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			err = writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
 			return
 		})
@@ -1101,7 +1107,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		last64KDuration := time.Now().Sub(last64KStart) - last64KAccountCreationTime
 		fmt.Printf("%-82s%-7d (last 64k) %-6d ns/account       %d accounts/sec\n", b.Name(), last64KSize, (last64KDuration / time.Duration(last64KSize)).Nanoseconds(), int(float64(last64KSize)/float64(last64KDuration.Seconds())))
 	}
-	stats, err := l.trackerDBs.wdb.Vacuum(context.Background())
+	stats, err := l.trackerDBs.Wdb.Vacuum(context.Background())
 	require.NoError(b, err)
 	fmt.Printf("%-82sdb fragmentation   %.1f%%\n", b.Name(), float32(stats.PagesBefore-stats.PagesAfter)*100/float32(stats.PagesBefore))
 	b.ReportMetric(float64(b.N)/float64((time.Now().Sub(accountsWritingStarted)-accountsGenerationDuration).Seconds()), "accounts/sec")

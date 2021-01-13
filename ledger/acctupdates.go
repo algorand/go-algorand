@@ -69,6 +69,15 @@ var trieCachedNodesCount = 9000
 // value was calibrated using BenchmarkCalibrateNodesPerPage
 var merkleCommitterNodesPerPage = int64(116)
 
+// baseAccountsPendingAccountsBufferSize defines the size of the base account pending accounts buffer size.
+// At the begining of a new round, the entries from this buffer are being flushed into the base accounts map.
+const baseAccountsPendingAccountsBufferSize = 100000
+
+// baseAccountsPendingAccountsWarnThreshold defines the threshold at which the lruAccounts would generate a warning
+// after we've surpassed a given pending account size. The warning is being generated when the pending accounts data
+// is being flushed into the main base account cache.
+const baseAccountsPendingAccountsWarnThreshold = 85000
+
 var trieMemoryConfig = merkletrie.MemoryConfig{
 	NodesCountPerPage:         merkleCommitterNodesPerPage,
 	CachedNodesCount:          trieCachedNodesCount,
@@ -134,7 +143,7 @@ type accountUpdates struct {
 	// dynamic variables
 
 	// Connection to the database.
-	dbs dbPair
+	dbs db.Pair
 
 	// Prepared SQL statements for fast accounts DB lookups.
 	accountsq *accountsDbQueries
@@ -224,6 +233,9 @@ type accountUpdates struct {
 
 	// voters keeps track of Merkle trees of online accounts, used for compact certificates.
 	voters *votersTracker
+
+	// baseAccounts stores the most recently used accounts, at exactly dbRound
+	baseAccounts lruAccounts
 }
 
 type deferredCommit struct {
@@ -349,6 +361,7 @@ func (au *accountUpdates) close() {
 	au.waitAccountsWriting()
 	// this would block until the commitSyncerClosed channel get closed.
 	<-au.commitSyncerClosed
+	au.baseAccounts.prune(0)
 }
 
 // IsWritingCatchpointFile returns true when a catchpoint file is being generated. The function is used by the catchup service
@@ -520,7 +533,7 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 			var accts map[basics.Address]*onlineAccount
 			start := time.Now()
 			ledgerAccountsonlinetopCount.Inc(nil)
-			err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+			err = au.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 				accts, err = accountsOnlineTop(tx, batchOffset, batchSize, proto)
 				if err != nil {
 					return
@@ -754,7 +767,7 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (ReadCloseSize
 	fileSize := int64(0)
 	start := time.Now()
 	ledgerGetcatchpointCount.Inc(nil)
-	err := au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := au.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		dbFileName, _, fileSize, err = getCatchpoint(tx, round)
 		return
 	})
@@ -929,7 +942,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	lastestBlockRound = l.Latest()
 	start := time.Now()
 	ledgerAccountsinitCount.Inc(nil)
-	err = au.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		var err0 error
 		au.dbRound, err0 = au.accountsInitialize(ctx, tx)
 		if err0 != nil {
@@ -967,7 +980,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 		return
 	}
 
-	au.accountsq, err = accountsDbInit(au.dbs.rdb.Handle, au.dbs.wdb.Handle)
+	au.accountsq, err = accountsDbInit(au.dbs.Rdb.Handle, au.dbs.Wdb.Handle)
 
 	au.lastCatchpointLabel, _, err = au.accountsq.readCatchpointStateString(context.Background(), catchpointStateLastCatchpoint)
 	if err != nil {
@@ -996,6 +1009,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	go au.commitSyncer(au.committedOffset)
 
 	lastBalancesRound = au.dbRound
+	au.baseAccounts.init(au.log, baseAccountsPendingAccountsBufferSize, baseAccountsPendingAccountsWarnThreshold)
 
 	return
 }
@@ -1358,8 +1372,8 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Addre
 	accumulatedChanges := 0
 
 	for addr, delta := range accountsDeltas {
-		if !delta.old.IsZero() {
-			deleteHash := accountHashBuilder(addr, delta.old, protocol.Encode(&delta.old))
+		if !delta.old.accountData.IsZero() {
+			deleteHash := accountHashBuilder(addr, delta.old.accountData, protocol.Encode(&delta.old.accountData))
 			deleted, err = au.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return err
@@ -1370,6 +1384,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Addre
 				accumulatedChanges++
 			}
 		}
+
 		if !delta.new.IsZero() {
 			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
 			added, err = au.balancesTrie.Add(addHash)
@@ -1410,7 +1425,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	}
 
 	if rnd != au.latest()+1 {
-		au.log.Panicf("accountUpdates: newBlock %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
+		au.log.Panicf("accountUpdates: newBlockImpl %d too far in the future, dbRound %d, deltas %d", rnd, au.dbRound, len(au.deltas))
 	}
 	au.deltas = append(au.deltas, delta.accts)
 	au.protos = append(au.protos, proto)
@@ -1423,8 +1438,25 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	allBefore := newTotals.All()
 	newTotals.applyRewards(delta.hdr.RewardsLevel, &ot)
 
+	au.baseAccounts.flushPendingWrites()
+
+	var previousAccountData basics.AccountData
 	for addr, data := range delta.accts {
-		newTotals.delAccount(proto, data.old, &ot)
+		if latestAcctData, has := au.accounts[addr]; has {
+			previousAccountData = latestAcctData.data
+		} else if baseAccountData, has := au.baseAccounts.read(addr); has {
+			previousAccountData = baseAccountData.accountData
+		} else {
+			// it's missing from the base accounts, so we'll try to load it from disk.
+			if acctData, err := au.accountsq.lookup(addr); err != nil {
+				au.log.Panicf("accountUpdates: newBlockImpl failed to lookup account %v when processing round %d : %v", addr, rnd, err)
+			} else {
+				previousAccountData = acctData.accountData
+				au.baseAccounts.write(acctData)
+			}
+		}
+
+		newTotals.delAccount(proto, previousAccountData, &ot)
 		newTotals.addAccount(proto, data.new, &ot)
 
 		macct := au.accounts[addr]
@@ -1443,16 +1475,20 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 	}
 
 	if ot.Overflowed {
-		au.log.Panicf("accountUpdates: newBlock %d overflowed totals", rnd)
+		au.log.Panicf("accountUpdates: newBlockImpl %d overflowed totals", rnd)
 	}
 	allAfter := newTotals.All()
 	if allBefore != allAfter {
-		au.log.Panicf("accountUpdates: sum of money changed from %d to %d", allBefore.Raw, allAfter.Raw)
+		au.log.Panicf("accountUpdates: newBlockImpl sum of money changed from %d to %d", allBefore.Raw, allAfter.Raw)
 	}
 
 	au.roundTotals = append(au.roundTotals, newTotals)
 
 	au.voters.newBlock(blk.BlockHeader)
+
+	// calling prune would drop old entries from the base accounts.
+	newBaseAccountSize := (len(au.accounts) + 1) + baseAccountsPendingAccountsBufferSize
+	au.baseAccounts.prune(newBaseAccountSize)
 }
 
 // lookupWithRewards returns the account data for a given address at a given round.
@@ -1469,6 +1505,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 	var offset uint64
 	var rewardsProto config.ConsensusParams
 	var rewardsLevel uint64
+	var persistedData persistedAccountData
 	withRewards := true
 	for {
 		currentDbRound := au.dbRound
@@ -1513,23 +1550,31 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			}
 		}
 
+		// check the baseAccounts -
+		if macct, has := au.baseAccounts.read(addr); has && macct.round == currentDbRound {
+			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
+			// would ensure that we promote this field.
+			au.baseAccounts.writePending(macct)
+			return macct.accountData, nil
+		}
+
 		au.accountsMu.RUnlock()
 		needUnlock = false
 
-		var dbRound basics.Round
 		// No updates of this account in the in-memory deltas; use on-disk DB.
 		// The check in roundOffset() made sure the round is exactly the one
 		// present in the on-disk DB.  As an optimization, we avoid creating
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
-		data, dbRound, err = au.accountsq.lookup(addr)
-		if dbRound == currentDbRound {
-			return data, err
+		persistedData, err = au.accountsq.lookup(addr)
+		if persistedData.round == currentDbRound {
+			au.baseAccounts.writePending(persistedData)
+			return persistedData.accountData, err
 		}
 
-		if dbRound < currentDbRound {
-			au.log.Errorf("accountUpdates.lookupWithRewards: database round %d is behind in-memory round %d", dbRound, currentDbRound)
-			return basics.AccountData{}, &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
+		if persistedData.round < currentDbRound {
+			au.log.Errorf("accountUpdates.lookupWithRewards: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
+			return basics.AccountData{}, &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 		}
 		au.accountsMu.RLock()
 		needUnlock = true
@@ -1552,6 +1597,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		}
 	}()
 	var offset uint64
+	var persistedData persistedAccountData
 	for {
 		currentDbRound := au.dbRound
 		currentDeltaLen := len(au.deltas)
@@ -1589,24 +1635,32 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			rnd = currentDbRound + basics.Round(currentDeltaLen)
 		}
 
+		// check the baseAccounts -
+		if macct, has := au.baseAccounts.read(addr); has {
+			// we don't technically need this, since it's already in the baseAccounts, however, writing this over
+			// would ensure that we promote this field.
+			au.baseAccounts.writePending(macct)
+			return macct.accountData, rnd, nil
+		}
+
 		if synchronized {
 			au.accountsMu.RUnlock()
 			needUnlock = false
 		}
-		var dbRound basics.Round
 		// No updates of this account in the in-memory deltas; use on-disk DB.
 		// The check in roundOffset() made sure the round is exactly the one
 		// present in the on-disk DB.  As an optimization, we avoid creating
 		// a separate transaction here, and directly use a prepared SQL query
 		// against the database.
-		data, dbRound, err = au.accountsq.lookup(addr)
-		if dbRound == currentDbRound {
-			return data, rnd, err
+		persistedData, err = au.accountsq.lookup(addr)
+		if persistedData.round == currentDbRound {
+			au.baseAccounts.writePending(persistedData)
+			return persistedData.accountData, rnd, err
 		}
 		if synchronized {
-			if dbRound < currentDbRound {
-				au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d is behind in-memory round %d", dbRound, currentDbRound)
-				return basics.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
+			if persistedData.round < currentDbRound {
+				au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d is behind in-memory round %d", persistedData.round, currentDbRound)
+				return basics.AccountData{}, basics.Round(0), &StaleDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 			}
 			au.accountsMu.RLock()
 			needUnlock = true
@@ -1615,8 +1669,8 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			}
 		} else {
 			// in non-sync mode, we don't wait since we already assume that we're synchronized.
-			au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d mismatching in-memory round %d", dbRound, currentDbRound)
-			return basics.AccountData{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: dbRound, memoryRound: currentDbRound}
+			au.log.Errorf("accountUpdates.lookupWithoutRewards: database round %d mismatching in-memory round %d", persistedData.round, currentDbRound)
+			return basics.AccountData{}, basics.Round(0), &MismatchingDatabaseRoundError{databaseRound: persistedData.round, memoryRound: currentDbRound}
 		}
 	}
 }
@@ -1792,6 +1846,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		committedRoundDigest = au.roundDigest[offset+uint64(lookback)-1]
 	}
 
+	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
+	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
+	compactDeltas, unavailableBaseAccounts, compactCreatableDeltas := compactDeltas(deltas, creatableDeltas, au.baseAccounts)
+
 	au.accountsMu.RUnlock()
 
 	// in committedUpTo, we expect that this function to update the catchpointWriting when
@@ -1803,10 +1861,6 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		}
 	}()
 
-	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
-	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
-	compactDeltas, compactCreatableDeltas := compactDeltas(deltas, creatableDeltas)
-
 	var catchpointLabel string
 	beforeUpdatingBalancesTime := time.Now()
 	var trieBalancesHash crypto.Digest
@@ -1815,7 +1869,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	err := au.dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	var updatedPersistedAccounts []persistedAccountData
+	err := au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {
 			mc, err0 := makeMerkleCommitter(tx, false)
@@ -1835,17 +1890,24 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 
-		err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto)
+		err = accountsLoadOld(tx, unavailableBaseAccounts, compactDeltas)
 		if err != nil {
 			return err
 		}
 
-		err = totalsNewRounds(tx, deltas[:offset], roundTotals[1:offset+1], protos[1:offset+1])
+		err = totalsNewRounds(tx, deltas[:offset], compactDeltas, roundTotals[1:offset+1], protos[1:offset+1])
 		if err != nil {
 			return err
 		}
 
 		err = au.accountsUpdateBalances(compactDeltas)
+		if err != nil {
+			return err
+		}
+
+		// the updates of the actual account data is done last since the accountsNewRound would modify the compactDeltas old values
+		// so that we can update the base account back.
+		updatedPersistedAccounts, err = accountsNewRound(tx, compactDeltas, compactCreatableDeltas, genesisProto, dbRound+basics.Round(offset))
 		if err != nil {
 			return err
 		}
@@ -1866,7 +1928,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	ledgerCommitroundMicros.AddMicrosecondsSince(start, nil)
 	if err != nil {
 		au.balancesTrie = nil
-		au.log.Warnf("unable to advance account snapshot: %v", err)
+		au.log.Warnf("unable to advance account snapshot (%d-%d): %v", dbRound, dbRound+basics.Round(offset), err)
 		return
 	}
 
@@ -1891,8 +1953,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
-	for addr, acctDltCnt := range compactDeltas {
-		cnt := acctDltCnt.ndeltas
+	for addr, acctUpdate := range compactDeltas {
+		cnt := acctUpdate.ndeltas
 		macct, ok := au.accounts[addr]
 		if !ok {
 			au.log.Panicf("inconsistency: flushed %d changes to %s, but not in au.accounts", cnt, addr)
@@ -1906,6 +1968,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			macct.ndeltas -= cnt
 			au.accounts[addr] = macct
 		}
+	}
+
+	for _, persistedAcct := range updatedPersistedAccounts {
+		au.baseAccounts.write(persistedAcct)
 	}
 
 	for cidx, modCrt := range compactCreatableDeltas {
@@ -1948,26 +2014,31 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 // compactDeltas takes an arary of account map deltas ( one array entry per round ), and corresponding creatables array, and compact the arrays into a single
 // map that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes. For both the account deltas as well as for the creatables,
 // it counts the number of changes per round by specifying it in the ndeltas field of the accountDeltaCount/modifiedCreatable. The ndeltas field of the input creatableDeltas is ignored.
-func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable) (outAccountDeltas map[basics.Address]accountDeltaCount, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
+func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable, baseAccounts lruAccounts) (outAccountDeltas map[basics.Address]accountDeltaCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
 	if len(accountDeltas) > 0 {
 		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
 		outAccountDeltas = make(map[basics.Address]accountDeltaCount, 1+len(accountDeltas[0])*len(accountDeltas))
+		unavailableBaseAccounts = make([]basics.Address, 0, 1+len(accountDeltas[0])*len(accountDeltas))
 		for _, roundDelta := range accountDeltas {
 			for addr, acctDelta := range roundDelta {
 				if prev, has := outAccountDeltas[addr]; has {
 					outAccountDeltas[addr] = accountDeltaCount{
-						accountDelta: accountDelta{
-							old: prev.old,
-							new: acctDelta.new,
-						},
+						old:     prev.old,
+						new:     acctDelta.new,
 						ndeltas: prev.ndeltas + 1,
 					}
 				} else {
 					// it's a new entry.
-					outAccountDeltas[addr] = accountDeltaCount{
-						accountDelta: acctDelta,
-						ndeltas:      1,
+					newEntry := accountDeltaCount{
+						new:     acctDelta.new,
+						ndeltas: 1,
 					}
+					if baseAccountData, has := baseAccounts.read(addr); has {
+						newEntry.old = baseAccountData
+					} else {
+						unavailableBaseAccounts = append(unavailableBaseAccounts, addr)
+					}
+					outAccountDeltas[addr] = newEntry
 				}
 			}
 		}
@@ -2049,7 +2120,7 @@ func (au *accountUpdates) generateCatchpoint(committedRound basics.Round, label 
 	var catchpointWriter *catchpointWriter
 	start := time.Now()
 	ledgerGeneratecatchpointCount.Inc(nil)
-	err = au.dbs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = au.dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		catchpointWriter = makeCatchpointWriter(au.ctx, absCatchpointFileName, tx, committedRound, committedRoundDigest, label)
 		for more {
 			stepCtx, stepCancelFunction := context.WithTimeout(au.ctx, chunkExecutionDuration)
@@ -2185,6 +2256,10 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 		return
 	}
 
+	// vaccumming the database would modify the some of the tables rowid, so we need to make sure any stored in-memory
+	// rowid are flushed.
+	au.baseAccounts.prune(0)
+
 	startTime := time.Now()
 	vacuumExitCh := make(chan struct{}, 1)
 	vacuumLoggingAbort := sync.WaitGroup{}
@@ -2205,7 +2280,7 @@ func (au *accountUpdates) vacuumDatabase(ctx context.Context) (err error) {
 	}()
 
 	ledgerVacuumCount.Inc(nil)
-	vacuumStats, err := au.dbs.wdb.Vacuum(ctx)
+	vacuumStats, err := au.dbs.Wdb.Vacuum(ctx)
 	close(vacuumExitCh)
 	vacuumLoggingAbort.Wait()
 
