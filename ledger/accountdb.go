@@ -115,11 +115,6 @@ var accountsResetExprs = []string{
 // and their descriptions.
 var accountDBVersion = int32(4)
 
-type accountDelta struct {
-	old basics.AccountData
-	new basics.AccountData
-}
-
 // persistedAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
 // list.
@@ -978,7 +973,7 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 }
 
 // totalsNewRounds updates the accountsTotals by applying series of round changes
-func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, compactUpdates map[basics.Address]accountDeltaCount, accountTotals []AccountTotals, protos []config.ConsensusParams) (err error) {
+func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]basics.AccountData, compactUpdates map[basics.Address]accountDeltaCount, accountTotals []AccountTotals, protos []config.ConsensusParams) (err error) {
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx, false)
 	if err != nil {
@@ -1003,8 +998,8 @@ func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]accountDelta, comp
 				return
 			}
 
-			totals.addAccount(protos[i], data.new, &ot)
-			accounts[addr] = data.new
+			totals.addAccount(protos[i], data, &ot)
+			accounts[addr] = data
 		}
 	}
 
