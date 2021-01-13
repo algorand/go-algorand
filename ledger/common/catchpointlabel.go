@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package common
 
 import (
 	"encoding/base32"
@@ -25,7 +25,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/common"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -40,10 +39,11 @@ type CatchpointLabel struct {
 	ledgerRound          basics.Round
 	ledgerRoundBlockHash crypto.Digest
 	balancesMerkleRoot   crypto.Digest
-	totals               common.AccountTotals
+	totals               AccountTotals
 }
 
-func makeCatchpointLabel(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest, balancesMerkleRoot crypto.Digest, totals common.AccountTotals) CatchpointLabel {
+// MakeCatchpointLabel creates a catchpoint label given the catchpoint label parameters.
+func MakeCatchpointLabel(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest, balancesMerkleRoot crypto.Digest, totals AccountTotals) CatchpointLabel {
 	return CatchpointLabel{
 		ledgerRound:          ledgerRound,
 		ledgerRoundBlockHash: ledgerRoundBlockHash,

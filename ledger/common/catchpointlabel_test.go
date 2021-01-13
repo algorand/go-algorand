@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package common
 
 import (
 	"testing"
@@ -23,7 +23,6 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/common"
 )
 
 func TestUniqueCatchpointLabel(t *testing.T) {
@@ -31,12 +30,12 @@ func TestUniqueCatchpointLabel(t *testing.T) {
 
 	ledgerRoundBlockHashes := []crypto.Digest{}
 	balancesMerkleRoots := []crypto.Digest{}
-	totals := []common.AccountTotals{}
+	totals := []AccountTotals{}
 	for i := 0; i < 10; i++ {
 		ledgerRoundBlockHashes = append(ledgerRoundBlockHashes, crypto.Hash([]byte{byte(i)}))
 		balancesMerkleRoots = append(balancesMerkleRoots, crypto.Hash([]byte{byte(i), byte(i), byte(1)}))
 		totals = append(totals,
-			common.AccountTotals{
+			AccountTotals{
 				RewardsLevel: uint64(i * 500000),
 			},
 		)
@@ -46,7 +45,7 @@ func TestUniqueCatchpointLabel(t *testing.T) {
 		for _, ledgerRoundHash := range ledgerRoundBlockHashes {
 			for _, balancesMerkleRoot := range balancesMerkleRoots {
 				for _, total := range totals {
-					label := makeCatchpointLabel(r, ledgerRoundHash, balancesMerkleRoot, total)
+					label := MakeCatchpointLabel(r, ledgerRoundHash, balancesMerkleRoot, total)
 					require.False(t, uniqueSet[label.String()])
 					uniqueSet[label.String()] = true
 				}
@@ -58,12 +57,12 @@ func TestUniqueCatchpointLabel(t *testing.T) {
 func TestCatchpointLabelParsing(t *testing.T) {
 	ledgerRoundBlockHashes := []crypto.Digest{}
 	balancesMerkleRoots := []crypto.Digest{}
-	totals := []common.AccountTotals{}
+	totals := []AccountTotals{}
 	for i := 0; i < 10; i++ {
 		ledgerRoundBlockHashes = append(ledgerRoundBlockHashes, crypto.Hash([]byte{byte(i)}))
 		balancesMerkleRoots = append(balancesMerkleRoots, crypto.Hash([]byte{byte(i), byte(i), byte(1)}))
 		totals = append(totals,
-			common.AccountTotals{
+			AccountTotals{
 				RewardsLevel: uint64(i * 500000),
 			},
 		)
@@ -73,7 +72,7 @@ func TestCatchpointLabelParsing(t *testing.T) {
 		for _, ledgerRoundHash := range ledgerRoundBlockHashes {
 			for _, balancesMerkleRoot := range balancesMerkleRoots {
 				for _, total := range totals {
-					label := makeCatchpointLabel(r, ledgerRoundHash, balancesMerkleRoot, total)
+					label := MakeCatchpointLabel(r, ledgerRoundHash, balancesMerkleRoot, total)
 					parsedRound, parsedHash, err := ParseCatchpointLabel(label.String())
 					require.Equal(t, r, parsedRound)
 					require.NotEqual(t, crypto.Digest{}, parsedHash)

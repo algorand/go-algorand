@@ -257,7 +257,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	cs.statsMu.Lock()
 	label := cs.stats.CatchpointLabel
 	cs.statsMu.Unlock()
-	round, _, err0 := ledger.ParseCatchpointLabel(label)
+	round, _, err0 := common.ParseCatchpointLabel(label)
 
 	if err0 != nil {
 		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to patse label : %v", err0))

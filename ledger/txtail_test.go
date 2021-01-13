@@ -71,7 +71,7 @@ func TestTxTailCheckdup(t *testing.T) {
 			var missingRoundErr *txtailMissingRound
 			require.Truef(t, errors.As(err, &missingRoundErr), "error a txtailMissingRound(%d) : %v ", rnd, err)
 		} else {
-			var txInLedgerErr *TransactionInLedgerError
+			var txInLedgerErr *common.TransactionInLedgerError
 			require.Truef(t, errors.As(err, &txInLedgerErr), "error a TransactionInLedgerError(%d) : %v ", rnd, err)
 		}
 	}
@@ -85,7 +85,7 @@ func TestTxTailCheckdup(t *testing.T) {
 			var missingRoundErr *txtailMissingRound
 			require.Truef(t, errors.As(err, &missingRoundErr), "error a txtailMissingRound(%d) : %v ", rnd, err)
 		} else {
-			var leaseInLedgerErr *LeaseInLedgerError
+			var leaseInLedgerErr *common.LeaseInLedgerError
 			require.Truef(t, errors.As(err, &leaseInLedgerErr), "error a LeaseInLedgerError(%d) : %v ", rnd, err)
 		}
 	}

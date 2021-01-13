@@ -196,7 +196,7 @@ func (bq *blockQueue) putBlock(blk bookkeeping.Block, cert agreement.Certificate
 		}
 		bq.mu.Lock()
 
-		return common.BlockInLedgerError{blk.Round(), nextRound}
+		return common.BlockInLedgerError{LastRound: blk.Round(), NextRound: nextRound}
 	}
 
 	if blk.Round() != nextRound {

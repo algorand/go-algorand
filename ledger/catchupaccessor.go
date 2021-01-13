@@ -168,7 +168,7 @@ func (c *CatchpointCatchupAccessorImpl) GetLabel(ctx context.Context) (label str
 // SetLabel set the catchpoint catchup label
 func (c *CatchpointCatchupAccessorImpl) SetLabel(ctx context.Context, label string) (err error) {
 	// verify it's parsable :
-	_, _, err = ParseCatchpointLabel(label)
+	_, _, err = common.ParseCatchpointLabel(label)
 	if err != nil {
 		return
 	}
@@ -647,7 +647,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 		return fmt.Errorf("block round in block header doesn't match block round in catchpoint")
 	}
 
-	catchpointLabelMaker := makeCatchpointLabel(blockRound, blk.Digest(), balancesHash, totals)
+	catchpointLabelMaker := common.MakeCatchpointLabel(blockRound, blk.Digest(), balancesHash, totals)
 
 	if catchpointLabel != catchpointLabelMaker.String() {
 		return fmt.Errorf("catchpoint hash mismatch; expected %s, calculated %s", catchpointLabel, catchpointLabelMaker.String())

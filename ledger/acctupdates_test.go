@@ -1167,7 +1167,7 @@ func TestGetCatchpointStream(t *testing.T) {
 	// File deleted, but record in the database
 	err = os.Remove(filepath.Join(temporaryDirectroy, "catchpoints", "2.catchpoint"))
 	reader, err = au.GetCatchpointStream(basics.Round(2))
-	require.Equal(t, ErrNoEntry{}, err)
+	require.Equal(t, common.ErrNoEntry{}, err)
 	require.Nil(t, reader)
 
 	// File on disk, but database lost the record

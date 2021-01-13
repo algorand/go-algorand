@@ -1736,7 +1736,7 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 
 // accountsCreateCatchpointLabel creates a catchpoint label and write it.
 func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Round, totals common.AccountTotals, ledgerBlockDigest crypto.Digest, trieBalancesHash crypto.Digest) (label string, err error) {
-	cpLabel := makeCatchpointLabel(committedRound, ledgerBlockDigest, trieBalancesHash, totals)
+	cpLabel := common.MakeCatchpointLabel(committedRound, ledgerBlockDigest, trieBalancesHash, totals)
 	label = cpLabel.String()
 	_, err = au.accountsq.writeCatchpointStateString(context.Background(), catchpointStateLastCatchpoint, label)
 	return
