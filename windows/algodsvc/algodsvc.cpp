@@ -64,7 +64,12 @@ int wmain(int argc, wchar_t** argv)
         }
 
     wcsncpy(g_serviceName + 9, g_szNetwork ,7);
-    dprintfW(L"algodsvc: This service Name %s", g_serviceName);
+    dprintfW(L"algodsvc: This service Name %s, parameters: %s %s %s", g_serviceName, g_szNetwork, g_szAlgodExePath, g_szNodeDataDir);
+
+    // Slash trailing slash that WiX may add, but not for root directory specs like "C:\"
+
+    if (g_szNodeDataDir[wcslen(g_szNodeDataDir) - 1] == L'\\' && wcslen(g_szNodeDataDir) > 3) 
+        g_szNodeDataDir[wcslen(g_szNodeDataDir) - 1] = (wchar_t)0;
 
     if (GetFileAttributes(g_szNodeDataDir) == INVALID_FILE_ATTRIBUTES)
     {
