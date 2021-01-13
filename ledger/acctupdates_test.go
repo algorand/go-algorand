@@ -201,7 +201,7 @@ func (au *accountUpdates) allBalances(rnd basics.Round) (bals map[basics.Address
 
 	for offset := uint64(0); offset < offsetLimit; offset++ {
 		for addr, delta := range au.deltas[offset] {
-			bals[addr] = delta.New
+			bals[addr] = delta
 		}
 	}
 	return
@@ -297,7 +297,7 @@ func checkAcctUpdatesConsistency(t *testing.T, au *accountUpdates) {
 	for _, rdelta := range au.deltas {
 		for addr, adelta := range rdelta {
 			macct := accounts[addr]
-			macct.data = adelta.New
+			macct.data = adelta
 			macct.ndeltas++
 			accounts[addr] = macct
 		}
@@ -350,16 +350,16 @@ func TestAcctUpdates(t *testing.T) {
 	for i := basics.Round(10); i < basics.Round(proto.MaxBalLookback+15); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
-		var updates map[basics.Address]common.AccountDelta
+		var updates map[basics.Address]basics.AccountData
 		var totals map[basics.Address]basics.AccountData
-		updates, totals, lastCreatableID = randomDeltasBalancedFull(1, accts[i-1], rewardLevel, lastCreatableID)
+		base := accts[i-1]
+		updates, totals, lastCreatableID = randomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
-		oldPool := accts[i-1][testPoolAddr]
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates[testPoolAddr] = common.AccountDelta{Old: oldPool, New: newPool}
+		updates[testPoolAddr] = newPool
 		totals[testPoolAddr] = newPool
 
 		blk := bookkeeping.Block{
@@ -373,7 +373,7 @@ func TestAcctUpdates(t *testing.T) {
 		au.newBlock(blk, common.StateDelta{
 			Accts:      updates,
 			Hdr:        &blk.BlockHeader,
-			Creatables: creatablesFromUpdates(updates, knownCreatables),
+			Creatables: creatablesFromUpdates(base, updates, knownCreatables),
 		})
 		accts = append(accts, totals)
 		rewardsLevels = append(rewardsLevels, rewardLevel)
@@ -441,10 +441,9 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
-		oldPool := accts[i-1][testPoolAddr]
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates[testPoolAddr] = common.AccountDelta{Old: oldPool, New: newPool}
+		updates[testPoolAddr] = newPool
 		totals[testPoolAddr] = newPool
 
 		blk := bookkeeping.Block{
@@ -532,10 +531,9 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(b, err)
 
-		oldPool := accts[i-1][testPoolAddr]
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates[testPoolAddr] = common.AccountDelta{Old: oldPool, New: newPool}
+		updates[testPoolAddr] = newPool
 		totals[testPoolAddr] = newPool
 
 		blk := bookkeeping.Block{
@@ -661,10 +659,9 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
-		oldPool := accts[i-1][testPoolAddr]
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates[testPoolAddr] = common.AccountDelta{Old: oldPool, New: newPool}
+		updates[testPoolAddr] = newPool
 		totals[testPoolAddr] = newPool
 
 		blk := bookkeeping.Block{
@@ -768,7 +765,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 		i := basics.Round(10)
 		roundCount := 50
 		for ; i < basics.Round(10+roundCount); i++ {
-			updates := make(map[basics.Address]common.AccountDelta)
+			updates := make(map[basics.Address]basics.AccountData)
 			moneyAccountsExpectedAmounts = append(moneyAccountsExpectedAmounts, make([]uint64, len(moneyAccounts)))
 			toAccount := moneyAccounts[0]
 			toAccountDataOld, validThrough, err := au.LookupWithoutRewards(i-1, toAccount)
@@ -788,10 +785,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 
 				fromAccountDataNew.MicroAlgos.Raw -= uint64(i - 10)
 				toAccountDataNew.MicroAlgos.Raw += uint64(i - 10)
-				updates[fromAccount] = common.AccountDelta{
-					Old: fromAccountDataOld,
-					New: fromAccountDataNew,
-				}
+				updates[fromAccount] = fromAccountDataNew
 
 				moneyAccountsExpectedAmounts[i][j] = fromAccountDataNew.MicroAlgos.Raw
 			}
@@ -830,10 +824,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 				}
 			}
 
-			updates[toAccount] = common.AccountDelta{
-				Old: toAccountDataOld,
-				New: toAccountDataNew,
-			}
+			updates[toAccount] = toAccountDataNew
 
 			blk := bookkeeping.Block{
 				BlockHeader: bookkeeping.BlockHeader{
@@ -1352,22 +1343,19 @@ func BenchmarkCompactDeltas(b *testing.B) {
 			b.N = 500
 		}
 		window := 5000
-		accountDeltas := make([]map[basics.Address]common.AccountDelta, b.N)
+		accountDeltas := make([]map[basics.Address]basics.AccountData, b.N)
 		addrs := make([]basics.Address, b.N*window)
 		for i := 0; i < len(addrs); i++ {
 			addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
 		}
 		for rnd := 0; rnd < b.N; rnd++ {
-			m := make(map[basics.Address]common.AccountDelta)
+			m := make(map[basics.Address]basics.AccountData)
 			start := 0
 			if rnd > 0 {
 				start = window/2 + (rnd-1)*window
 			}
 			for k := start; k < start+window; k++ {
-				m[addrs[k]] = common.AccountDelta{
-					Old: basics.AccountData{},
-					New: basics.AccountData{},
-				}
+				m[addrs[k]] = basics.AccountData{}
 			}
 
 			accountDeltas[rnd] = m
@@ -1385,14 +1373,14 @@ func TestCompactDeltas(t *testing.T) {
 	for i := 0; i < len(addrs); i++ {
 		addrs[i] = basics.Address(crypto.Hash([]byte{byte(i % 256), byte((i / 256) % 256), byte(i / 65536)}))
 	}
-	var accountDeltas []map[basics.Address]common.AccountDelta
+	var accountDeltas []map[basics.Address]basics.AccountData
 	var creatableDeltas []map[basics.CreatableIndex]common.ModifiedCreatable
 
-	accountDeltas = make([]map[basics.Address]common.AccountDelta, 1, 1)
+	accountDeltas = make([]map[basics.Address]basics.AccountData, 1, 1)
 	creatableDeltas = make([]map[basics.CreatableIndex]common.ModifiedCreatable, 1, 1)
-	accountDeltas[0] = make(map[basics.Address]common.AccountDelta)
+	accountDeltas[0] = make(map[basics.Address]basics.AccountData)
 	creatableDeltas[0] = make(map[basics.CreatableIndex]common.ModifiedCreatable)
-	accountDeltas[0][addrs[0]] = common.AccountDelta{Old: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}, New: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}}
+	accountDeltas[0][addrs[0]] = basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}
 	creatableDeltas[0][100] = common.ModifiedCreatable{Creator: addrs[2], Created: true}
 	var baseAccounts lruAccounts
 	baseAccounts.init(nil, 100, 80)
@@ -1407,10 +1395,10 @@ func TestCompactDeltas(t *testing.T) {
 	require.Equal(t, common.ModifiedCreatable{Creator: addrs[2], Created: true, Ndeltas: 1}, outCreatableDeltas[100])
 
 	// add another round
-	accountDeltas = append(accountDeltas, make(map[basics.Address]common.AccountDelta))
+	accountDeltas = append(accountDeltas, make(map[basics.Address]basics.AccountData))
 	creatableDeltas = append(creatableDeltas, make(map[basics.CreatableIndex]common.ModifiedCreatable))
-	accountDeltas[1][addrs[0]] = common.AccountDelta{Old: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 2}}, New: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 3}}}
-	accountDeltas[1][addrs[3]] = common.AccountDelta{Old: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 0}}, New: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 8}}}
+	accountDeltas[1][addrs[0]] = basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 3}}
+	accountDeltas[1][addrs[3]] = basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 8}}
 
 	creatableDeltas[1][100] = common.ModifiedCreatable{Creator: addrs[2], Created: false}
 	creatableDeltas[1][101] = common.ModifiedCreatable{Creator: addrs[4], Created: true}
@@ -1491,16 +1479,16 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 	for i := basics.Round(1); i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
 		rewardLevelDelta := crypto.RandUint64() % 5
 		rewardLevel += rewardLevelDelta
-		var updates map[basics.Address]common.AccountDelta
+		var updates map[basics.Address]basics.AccountData
 		var totals map[basics.Address]basics.AccountData
-		updates, totals, lastCreatableID = randomDeltasBalancedFull(1, accts[i-1], rewardLevel, lastCreatableID)
+		base := accts[i-1]
+		updates, totals, lastCreatableID = randomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
 		prevTotals, err := au.Totals(basics.Round(i - 1))
 		require.NoError(t, err)
 
-		oldPool := accts[i-1][testPoolAddr]
 		newPool := totals[testPoolAddr]
 		newPool.MicroAlgos.Raw -= prevTotals.RewardUnits() * rewardLevelDelta
-		updates[testPoolAddr] = common.AccountDelta{Old: oldPool, New: newPool}
+		updates[testPoolAddr] = newPool
 		totals[testPoolAddr] = newPool
 
 		blk := bookkeeping.Block{
@@ -1513,7 +1501,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		delta := common.StateDelta{
 			Accts:      updates,
 			Hdr:        &blk.BlockHeader,
-			Creatables: creatablesFromUpdates(updates, knownCreatables),
+			Creatables: creatablesFromUpdates(base, updates, knownCreatables),
 		}
 		au.newBlock(blk, delta)
 		au.committedUpTo(i)

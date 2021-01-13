@@ -58,7 +58,7 @@ func TestTxTailCheckdup(t *testing.T) {
 		txleases := make(map[common.Txlease]basics.Round)
 		txleases[common.Txlease{Sender: basics.Address(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(2)})), Lease: crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(3)})}] = rnd + leasevalidity
 
-		tail.newBlock(blk, common.StateDelta{Accts: make(map[basics.Address]common.AccountDelta), Hdr: &blk.BlockHeader, Txids: txids, Txleases: txleases})
+		tail.newBlock(blk, common.StateDelta{Accts: make(map[basics.Address]basics.AccountData), Hdr: &blk.BlockHeader, Txids: txids, Txleases: txleases})
 		tail.committedUpTo(rnd.SubSaturate(lookback))
 	}
 

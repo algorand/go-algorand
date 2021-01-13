@@ -974,7 +974,7 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 }
 
 // totalsNewRounds updates the accountsTotals by applying series of round changes
-func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]common.AccountDelta, compactUpdates map[basics.Address]accountDeltaCount, accountTotals []common.AccountTotals, protos []config.ConsensusParams) (err error) {
+func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]basics.AccountData, compactUpdates map[basics.Address]accountDeltaCount, accountTotals []common.AccountTotals, protos []config.ConsensusParams) (err error) {
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx, false)
 	if err != nil {
@@ -999,8 +999,8 @@ func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]common.AccountDelt
 				return
 			}
 
-			totals.AddAccount(protos[i], data.New, &ot)
-			accounts[addr] = data.New
+			totals.AddAccount(protos[i], data, &ot)
+			accounts[addr] = data
 		}
 	}
 
