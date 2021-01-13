@@ -22,11 +22,13 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 )
 
+// AccountDelta is the accountsDelta
 type AccountDelta struct {
 	Old basics.AccountData
 	New basics.AccountData
 }
 
+// ModifiedCreatable defines the changes to a single single creatable state
 type ModifiedCreatable struct {
 	// Type of the creatable: app or asset
 	Ctype basics.CreatableType
