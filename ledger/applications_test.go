@@ -95,7 +95,7 @@ func TestLogicLedgerBalances(t *testing.T) {
 
 	addr1 := getRandomAddress(a)
 	ble := basics.MicroAlgos{Raw: 100}
-	c.mods.accts = map[basics.Address]accountDelta{addr1: {new: basics.AccountData{MicroAlgos: ble}}}
+	c.mods.accts = map[basics.Address]basics.AccountData{addr1: {MicroAlgos: ble}}
 	bla, err := l.Balance(addr1)
 	a.NoError(err)
 	a.Equal(ble, bla)
@@ -152,11 +152,9 @@ func TestLogicLedgerAsset(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), fmt.Sprintf("asset %d does not exist", aidx))
 
-	c.mods.accts = map[basics.Address]accountDelta{
+	c.mods.accts = map[basics.Address]basics.AccountData{
 		addr1: {
-			new: basics.AccountData{
-				AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}},
-			},
+			AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}},
 		},
 	}
 	ap, err := l.AssetParams(assetIdx)
@@ -167,12 +165,10 @@ func TestLogicLedgerAsset(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), "has not opted in to asset")
 
-	c.mods.accts = map[basics.Address]accountDelta{
+	c.mods.accts = map[basics.Address]basics.AccountData{
 		addr1: {
-			new: basics.AccountData{
-				AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}},
-				Assets:      map[basics.AssetIndex]basics.AssetHolding{assetIdx: {Amount: 99}},
-			},
+			AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}},
+			Assets:      map[basics.AssetIndex]basics.AssetHolding{assetIdx: {Amount: 99}},
 		},
 	}
 
