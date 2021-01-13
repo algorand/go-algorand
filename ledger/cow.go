@@ -65,7 +65,7 @@ type roundCowState struct {
 // StateDelta describes the delta between a given round to the previous round
 type StateDelta struct {
 	// modified accounts
-	accts map[basics.Address]accountDelta
+	accts map[basics.Address]basics.AccountData
 
 	// new Txids for the txtail and TxnCounter, mapped to txn.LastValid
 	Txids map[transactions.Txid]basics.Round
@@ -93,7 +93,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimest
 		commitParent: nil,
 		proto:        config.Consensus[hdr.CurrentProtocol],
 		mods: StateDelta{
-			accts:         make(map[basics.Address]accountDelta),
+			accts:         make(map[basics.Address]basics.AccountData),
 			Txids:         make(map[transactions.Txid]basics.Round),
 			txleases:      make(map[txlease]basics.Round),
 			creatables:    make(map[basics.CreatableIndex]modifiedCreatable),
@@ -115,17 +115,17 @@ func (cb *roundCowState) deltas() StateDelta {
 	//    SetKey/DelKey work only with sdeltas, so need to pull missing accounts
 	// 2. Call applyStorageDelta for every delta per account
 	for addr, smap := range cb.sdeltas {
-		var delta accountDelta
+		var delta basics.AccountData
 		var exist bool
 		if delta, exist = cb.mods.accts[addr]; !exist {
 			ad, err := cb.lookup(addr)
 			if err != nil {
 				panic(fmt.Sprintf("fetching account data failed for addr %s: %s", addr.String(), err.Error()))
 			}
-			delta = accountDelta{old: ad, new: ad}
+			delta = ad
 		}
 		for aapp, storeDelta := range smap {
-			if delta.new, err = applyStorageDelta(delta.new, aapp, storeDelta); err != nil {
+			if delta, err = applyStorageDelta(delta, aapp, storeDelta); err != nil {
 				panic(fmt.Sprintf("applying storage delta failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
 			}
 		}
@@ -152,7 +152,7 @@ func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.Cre
 func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, err error) {
 	d, ok := cb.mods.accts[addr]
 	if ok {
-		return d.new, nil
+		return d, nil
 	}
 
 	return cb.lookupParent.lookup(addr)
@@ -189,13 +189,8 @@ func (cb *roundCowState) blockHdr(r basics.Round) (bookkeeping.BlockHeader, erro
 	return cb.lookupParent.blockHdr(r)
 }
 
-func (cb *roundCowState) put(addr basics.Address, old basics.AccountData, new basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) {
-	prev, present := cb.mods.accts[addr]
-	if present {
-		cb.mods.accts[addr] = accountDelta{old: prev.old, new: new}
-	} else {
-		cb.mods.accts[addr] = accountDelta{old: old, new: new}
-	}
+func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) {
+	cb.mods.accts[addr] = new
 
 	if newCreatable != nil {
 		cb.mods.creatables[newCreatable.Index] = modifiedCreatable{
@@ -229,7 +224,7 @@ func (cb *roundCowState) child() *roundCowState {
 		commitParent: cb,
 		proto:        cb.proto,
 		mods: StateDelta{
-			accts:         make(map[basics.Address]accountDelta),
+			accts:         make(map[basics.Address]basics.AccountData),
 			Txids:         make(map[transactions.Txid]basics.Round),
 			txleases:      make(map[txlease]basics.Round),
 			creatables:    make(map[basics.CreatableIndex]modifiedCreatable),
@@ -242,15 +237,7 @@ func (cb *roundCowState) child() *roundCowState {
 
 func (cb *roundCowState) commitToParent() {
 	for addr, delta := range cb.mods.accts {
-		prev, present := cb.commitParent.mods.accts[addr]
-		if present {
-			cb.commitParent.mods.accts[addr] = accountDelta{
-				old: prev.old,
-				new: delta.new,
-			}
-		} else {
-			cb.commitParent.mods.accts[addr] = delta
-		}
+		cb.commitParent.mods.accts[addr] = delta
 	}
 
 	for txid, lv := range cb.mods.Txids {
