@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/common"
 )
 
 func TestUniqueCatchpointLabel(t *testing.T) {
@@ -30,12 +31,12 @@ func TestUniqueCatchpointLabel(t *testing.T) {
 
 	ledgerRoundBlockHashes := []crypto.Digest{}
 	balancesMerkleRoots := []crypto.Digest{}
-	totals := []AccountTotals{}
+	totals := []common.AccountTotals{}
 	for i := 0; i < 10; i++ {
 		ledgerRoundBlockHashes = append(ledgerRoundBlockHashes, crypto.Hash([]byte{byte(i)}))
 		balancesMerkleRoots = append(balancesMerkleRoots, crypto.Hash([]byte{byte(i), byte(i), byte(1)}))
 		totals = append(totals,
-			AccountTotals{
+			common.AccountTotals{
 				RewardsLevel: uint64(i * 500000),
 			},
 		)
@@ -57,12 +58,12 @@ func TestUniqueCatchpointLabel(t *testing.T) {
 func TestCatchpointLabelParsing(t *testing.T) {
 	ledgerRoundBlockHashes := []crypto.Digest{}
 	balancesMerkleRoots := []crypto.Digest{}
-	totals := []AccountTotals{}
+	totals := []common.AccountTotals{}
 	for i := 0; i < 10; i++ {
 		ledgerRoundBlockHashes = append(ledgerRoundBlockHashes, crypto.Hash([]byte{byte(i)}))
 		balancesMerkleRoots = append(balancesMerkleRoots, crypto.Hash([]byte{byte(i), byte(i), byte(1)}))
 		totals = append(totals,
-			AccountTotals{
+			common.AccountTotals{
 				RewardsLevel: uint64(i * 500000),
 			},
 		)

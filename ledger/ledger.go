@@ -476,7 +476,7 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ba
 }
 
 // Totals returns the totals of all accounts at the end of round rnd.
-func (l *Ledger) Totals(rnd basics.Round) (AccountTotals, error) {
+func (l *Ledger) Totals(rnd basics.Round) (common.AccountTotals, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.Totals(rnd)

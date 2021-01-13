@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/common"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -61,7 +62,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 		Version:           catchpointFileVersion,
 		BalancesRound:     basics.Round(0),
 		BlocksRound:       basics.Round(0),
-		Totals:            AccountTotals{},
+		Totals:            common.AccountTotals{},
 		TotalAccounts:     accountsCount,
 		TotalChunks:       (accountsCount + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk,
 		Catchpoint:        "",

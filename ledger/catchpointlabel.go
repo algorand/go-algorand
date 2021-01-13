@@ -25,6 +25,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/common"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -39,10 +40,10 @@ type CatchpointLabel struct {
 	ledgerRound          basics.Round
 	ledgerRoundBlockHash crypto.Digest
 	balancesMerkleRoot   crypto.Digest
-	totals               AccountTotals
+	totals               common.AccountTotals
 }
 
-func makeCatchpointLabel(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest, balancesMerkleRoot crypto.Digest, totals AccountTotals) CatchpointLabel {
+func makeCatchpointLabel(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest, balancesMerkleRoot crypto.Digest, totals common.AccountTotals) CatchpointLabel {
 	return CatchpointLabel{
 		ledgerRound:          ledgerRound,
 		ledgerRoundBlockHash: ledgerRoundBlockHash,

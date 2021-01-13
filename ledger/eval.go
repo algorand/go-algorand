@@ -327,7 +327,7 @@ type BlockEvaluator struct {
 type ledgerForEvaluator interface {
 	ledgerForCowBase
 	GenesisHash() crypto.Digest
-	Totals(basics.Round) (AccountTotals, error)
+	Totals(basics.Round) (common.AccountTotals, error)
 	CompactCertVoters(basics.Round) (*VotersForRound, error)
 }
 

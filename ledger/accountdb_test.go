@@ -540,7 +540,7 @@ func TestAccountDBRound(t *testing.T) {
 
 		err = accountsLoadOld(tx, needLoadAddresses, updatesCnt)
 		require.NoError(t, err)
-		err = totalsNewRounds(tx, []map[basics.Address]common.AccountDelta{updates}, updatesCnt, []AccountTotals{{}}, []config.ConsensusParams{proto})
+		err = totalsNewRounds(tx, []map[basics.Address]common.AccountDelta{updates}, updatesCnt, []common.AccountTotals{{}}, []config.ConsensusParams{proto})
 		require.NoError(t, err)
 		_, err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)

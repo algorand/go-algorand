@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/common"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -598,7 +599,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 	rdb := c.ledger.trackerDB().Rdb
 	var balancesHash crypto.Digest
 	var blockRound basics.Round
-	var totals AccountTotals
+	var totals common.AccountTotals
 	var catchpointLabel string
 
 	catchpointLabel, _, err = c.accountsq.readCatchpointStateString(ctx, catchpointStateCatchupLabel)
@@ -765,7 +766,7 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 	ledgerCatchpointFinishBalsCount.Inc(nil)
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		var balancesRound uint64
-		var totals AccountTotals
+		var totals common.AccountTotals
 
 		sq, err := accountsDbInit(tx, tx)
 		if err != nil {

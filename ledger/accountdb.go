@@ -386,7 +386,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 	_, err = tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
 	if err == nil {
 		var ot basics.OverflowTracker
-		var totals AccountTotals
+		var totals common.AccountTotals
 
 		for addr, data := range initAccounts {
 			_, err = tx.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
@@ -395,7 +395,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 				return err
 			}
 
-			totals.addAccount(proto, data, &ot)
+			totals.AddAccount(proto, data, &ot)
 		}
 
 		if ot.Overflowed {
@@ -837,7 +837,7 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParam
 	return res, rows.Err()
 }
 
-func accountsTotals(tx *sql.Tx, catchpointStaging bool) (totals AccountTotals, err error) {
+func accountsTotals(tx *sql.Tx, catchpointStaging bool) (totals common.AccountTotals, err error) {
 	id := ""
 	if catchpointStaging {
 		id = "catchpointStaging"
@@ -851,7 +851,7 @@ func accountsTotals(tx *sql.Tx, catchpointStaging bool) (totals AccountTotals, e
 	return
 }
 
-func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool) error {
+func accountsPutTotals(tx *sql.Tx, totals common.AccountTotals, catchpointStaging bool) error {
 	id := ""
 	if catchpointStaging {
 		id = "catchpointStaging"
@@ -974,7 +974,7 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 }
 
 // totalsNewRounds updates the accountsTotals by applying series of round changes
-func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]common.AccountDelta, compactUpdates map[basics.Address]accountDeltaCount, accountTotals []AccountTotals, protos []config.ConsensusParams) (err error) {
+func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]common.AccountDelta, compactUpdates map[basics.Address]accountDeltaCount, accountTotals []common.AccountTotals, protos []config.ConsensusParams) (err error) {
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx, false)
 	if err != nil {
@@ -988,18 +988,18 @@ func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]common.AccountDelt
 	}
 
 	for i := 0; i < len(updates); i++ {
-		totals.applyRewards(accountTotals[i].RewardsLevel, &ot)
+		totals.ApplyRewards(accountTotals[i].RewardsLevel, &ot)
 
 		for addr, data := range updates[i] {
 
 			if oldAccountData, has := accounts[addr]; has {
-				totals.delAccount(protos[i], oldAccountData, &ot)
+				totals.DelAccount(protos[i], oldAccountData, &ot)
 			} else {
 				err = fmt.Errorf("missing old account data")
 				return
 			}
 
-			totals.addAccount(protos[i], data.New, &ot)
+			totals.AddAccount(protos[i], data.New, &ot)
 			accounts[addr] = data.New
 		}
 	}

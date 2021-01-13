@@ -158,7 +158,7 @@ type accountUpdates struct {
 
 	// totals stores the totals for dbRound and every round after it;
 	// i.e., totals is one longer than deltas.
-	roundTotals []AccountTotals
+	roundTotals []common.AccountTotals
 
 	// roundDigest stores the digest of the block for every round starting with dbRound and every round after it.
 	roundDigest []crypto.Digest
@@ -720,7 +720,7 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta common.StateDelt
 }
 
 // Totals returns the totals for a given round
-func (au *accountUpdates) Totals(rnd basics.Round) (totals AccountTotals, err error) {
+func (au *accountUpdates) Totals(rnd basics.Round) (totals common.AccountTotals, err error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 	return au.totalsImpl(rnd)
@@ -842,7 +842,7 @@ func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.
 }
 
 // Totals returns the totals for a given round
-func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (AccountTotals, error) {
+func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (common.AccountTotals, error) {
 	return aul.au.totalsImpl(rnd)
 }
 
@@ -863,7 +863,7 @@ func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, c
 }
 
 // totalsImpl returns the totals for a given round
-func (au *accountUpdates) totalsImpl(rnd basics.Round) (totals AccountTotals, err error) {
+func (au *accountUpdates) totalsImpl(rnd basics.Round) (totals common.AccountTotals, err error) {
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return
@@ -952,7 +952,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 			return err0
 		}
 
-		au.roundTotals = []AccountTotals{totals}
+		au.roundTotals = []common.AccountTotals{totals}
 		return nil
 	})
 	ledgerAccountsinitMicros.AddMicrosecondsSince(start, nil)
@@ -1422,7 +1422,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta common.State
 	var ot basics.OverflowTracker
 	newTotals := au.roundTotals[len(au.roundTotals)-1]
 	allBefore := newTotals.All()
-	newTotals.applyRewards(delta.Hdr.RewardsLevel, &ot)
+	newTotals.ApplyRewards(delta.Hdr.RewardsLevel, &ot)
 
 	au.baseAccounts.flushPendingWrites()
 
@@ -1442,8 +1442,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta common.State
 			}
 		}
 
-		newTotals.delAccount(proto, previousAccountData, &ot)
-		newTotals.addAccount(proto, data.New, &ot)
+		newTotals.DelAccount(proto, previousAccountData, &ot)
+		newTotals.AddAccount(proto, data.New, &ot)
 
 		macct := au.accounts[addr]
 		macct.ndeltas++
@@ -1735,7 +1735,7 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 }
 
 // accountsCreateCatchpointLabel creates a catchpoint label and write it.
-func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Round, totals AccountTotals, ledgerBlockDigest crypto.Digest, trieBalancesHash crypto.Digest) (label string, err error) {
+func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Round, totals common.AccountTotals, ledgerBlockDigest crypto.Digest, trieBalancesHash crypto.Digest) (label string, err error) {
 	cpLabel := makeCatchpointLabel(committedRound, ledgerBlockDigest, trieBalancesHash, totals)
 	label = cpLabel.String()
 	_, err = au.accountsq.writeCatchpointStateString(context.Background(), catchpointStateLastCatchpoint, label)
@@ -1819,7 +1819,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]map[basics.Address]common.AccountDelta, offset, offset)
 	creatableDeltas := make([]map[basics.CreatableIndex]common.ModifiedCreatable, offset, offset)
-	roundTotals := make([]AccountTotals, offset+1, offset+1)
+	roundTotals := make([]common.AccountTotals, offset+1, offset+1)
 	protos := make([]config.ConsensusParams, offset+1, offset+1)
 	copy(deltas, au.deltas[:offset])
 	copy(creatableDeltas, au.creatableDeltas[:offset])

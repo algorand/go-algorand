@@ -31,6 +31,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/common"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -80,14 +81,14 @@ type encodedBalanceRecord struct {
 type CatchpointFileHeader struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	Version           uint64        `codec:"version"`
-	BalancesRound     basics.Round  `codec:"balancesRound"`
-	BlocksRound       basics.Round  `codec:"blocksRound"`
-	Totals            AccountTotals `codec:"accountTotals"`
-	TotalAccounts     uint64        `codec:"accountsCount"`
-	TotalChunks       uint64        `codec:"chunksCount"`
-	Catchpoint        string        `codec:"catchpoint"`
-	BlockHeaderDigest crypto.Digest `codec:"blockHeaderDigest"`
+	Version           uint64               `codec:"version"`
+	BalancesRound     basics.Round         `codec:"balancesRound"`
+	BlocksRound       basics.Round         `codec:"blocksRound"`
+	Totals            common.AccountTotals `codec:"accountTotals"`
+	TotalAccounts     uint64               `codec:"accountsCount"`
+	TotalChunks       uint64               `codec:"chunksCount"`
+	Catchpoint        string               `codec:"catchpoint"`
+	BlockHeaderDigest crypto.Digest        `codec:"blockHeaderDigest"`
 }
 
 type catchpointFileBalancesChunk struct {
