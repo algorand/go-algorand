@@ -151,13 +151,13 @@ func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, fi
 		for rnd := firstChecked; rnd <= lastChecked; rnd++ {
 			expires, ok := t.recent[rnd].txleases[txl]
 			if ok && current <= expires {
-				return &LeaseInLedgerError{txid: txid, lease: txl}
+				return common.MakeLeaseInLedgerError(txid, txl)
 			}
 		}
 	}
 
 	if _, confirmed := t.lastValid[lastValid][txid]; confirmed {
-		return &TransactionInLedgerError{Txid: txid}
+		return common.TransactionInLedgerError{Txid: txid}
 	}
 	return nil
 }

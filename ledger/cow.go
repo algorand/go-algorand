@@ -137,13 +137,13 @@ func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, e
 func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl common.Txlease) error {
 	_, present := cb.mods.Txids[txid]
 	if present {
-		return &TransactionInLedgerError{Txid: txid}
+		return &common.TransactionInLedgerError{Txid: txid}
 	}
 
 	if cb.proto.SupportTransactionLeases && (txl.Lease != [32]byte{}) {
 		expires, ok := cb.mods.Txleases[txl]
 		if ok && cb.mods.Hdr.Round <= expires {
-			return &LeaseInLedgerError{txid: txid, lease: txl}
+			return common.MakeLeaseInLedgerError(txid, txl)
 		}
 	}
 

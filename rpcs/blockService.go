@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/common"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
@@ -178,7 +178,7 @@ func (bs *BlockService) ServeHTTP(response http.ResponseWriter, request *http.Re
 	encodedBlockCert, err := RawBlockBytes(bs.ledger, basics.Round(round))
 	if err != nil {
 		switch err.(type) {
-		case ledger.ErrNoEntry:
+		case common.ErrNoEntry:
 			// entry cound not be found.
 			response.Header().Set("Cache-Control", blockResponseMissingBlockCacheControl)
 			response.WriteHeader(http.StatusNotFound)
@@ -324,7 +324,7 @@ func topicBlockBytes(dataLedger *data.Ledger, round basics.Round, requestType st
 	blk, cert, err := dataLedger.EncodedBlockCert(round)
 	if err != nil {
 		switch err.(type) {
-		case ledger.ErrNoEntry:
+		case common.ErrNoEntry:
 		default:
 			logging.Base().Infof("BlockService topicBlockBytes: %s", err)
 		}
@@ -353,7 +353,7 @@ func RawBlockBytes(l *data.Ledger, round basics.Round) ([]byte, error) {
 	}
 
 	if len(cert) == 0 {
-		return nil, ledger.ErrNoEntry{Round: round}
+		return nil, common.ErrNoEntry{Round: round}
 	}
 
 	return protocol.EncodeReflect(PreEncodedBlockCert{

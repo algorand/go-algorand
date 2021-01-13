@@ -813,7 +813,7 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		hdr, err := node.ledger.BlockHdr(agreement.ParamsRound(r))
 		if err != nil {
 			switch err.(type) {
-			case ledger.ErrNoEntry:
+			case common.ErrNoEntry:
 				// No need to warn; expected during catchup.
 			default:
 				node.log.Warnf("Cannot look up block %d for deleting ephemeral keys: %v", agreement.ParamsRound(r), err)

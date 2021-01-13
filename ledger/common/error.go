@@ -14,14 +14,13 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package common
 
 import (
 	"fmt"
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/common"
 )
 
 // TransactionInLedgerError is returned when a transaction cannot be added because it has already been done
@@ -37,7 +36,15 @@ func (tile TransactionInLedgerError) Error() string {
 // LeaseInLedgerError is returned when a transaction cannot be added because it has a lease that already being used in the relavant rounds
 type LeaseInLedgerError struct {
 	txid  transactions.Txid
-	lease common.Txlease
+	lease Txlease
+}
+
+// MakeLeaseInLedgerError builds a LeaseInLedgerError object
+func MakeLeaseInLedgerError(txid transactions.Txid, lease Txlease) *LeaseInLedgerError {
+	return &LeaseInLedgerError{
+		txid:  txid,
+		lease: lease,
+	}
 }
 
 // Error implements the error interface for the LeaseInLedgerError stuct

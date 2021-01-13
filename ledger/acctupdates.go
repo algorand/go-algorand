@@ -778,7 +778,7 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (ReadCloseSize
 				return nil, err
 			}
 
-			return nil, ErrNoEntry{}
+			return nil, common.ErrNoEntry{}
 		}
 		// it's some other error.
 		return nil, fmt.Errorf("accountUpdates: getCatchpointStream: unable to open catchpoint file '%s' %v", catchpointPath, err)
@@ -802,7 +802,7 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (ReadCloseSize
 		}
 		return &readCloseSizer{ReadCloser: file, size: fileInfo.Size()}, nil
 	}
-	return nil, ErrNoEntry{}
+	return nil, common.ErrNoEntry{}
 }
 
 // functions below this line are all internal functions
@@ -838,7 +838,7 @@ func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.
 	if r == aul.prevHeader.Round {
 		return aul.prevHeader, nil
 	}
-	return bookkeeping.BlockHeader{}, ErrNoEntry{}
+	return bookkeeping.BlockHeader{}, common.ErrNoEntry{}
 }
 
 // Totals returns the totals for a given round
