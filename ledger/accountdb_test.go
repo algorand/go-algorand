@@ -227,19 +227,19 @@ func randomAccounts(niter int, simpleAccounts bool) map[basics.Address]basics.Ac
 	return res
 }
 
-func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData, imbalance int64) {
+func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates map[basics.Address]basics.AccountData, totals map[basics.Address]basics.AccountData, imbalance int64) {
 	updates, totals, imbalance, _ = randomDeltasImpl(niter, base, rewardsLevel, true, 0)
 	return
 }
 
-func randomDeltasFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData, imbalance int64, lastCreatableID uint64) {
+func randomDeltasFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates map[basics.Address]basics.AccountData, totals map[basics.Address]basics.AccountData, imbalance int64, lastCreatableID uint64) {
 	updates, totals, imbalance, lastCreatableID = randomDeltasImpl(niter, base, rewardsLevel, false, lastCreatableIDIn)
 	return
 }
 
-func randomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData, imbalance int64, lastCreatableID uint64) {
+func randomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates map[basics.Address]basics.AccountData, totals map[basics.Address]basics.AccountData, imbalance int64, lastCreatableID uint64) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	updates = make(map[basics.Address]accountDelta)
+	updates = make(map[basics.Address]basics.AccountData)
 	totals = make(map[basics.Address]basics.AccountData)
 
 	// copy base -> totals
@@ -283,7 +283,7 @@ func randomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 			} else {
 				new, lastCreatableID = randomFullAccountData(rewardsLevel, lastCreatableID)
 			}
-			updates[addr] = accountDelta{old: old, new: new}
+			updates[addr] = new
 			imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 			totals[addr] = new
 			break
@@ -300,7 +300,7 @@ func randomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 		} else {
 			new, lastCreatableID = randomFullAccountData(rewardsLevel, lastCreatableID)
 		}
-		updates[addr] = accountDelta{old: old, new: new}
+		updates[addr] = new
 		imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 		totals[addr] = new
 	}
@@ -308,17 +308,17 @@ func randomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 	return
 }
 
-func randomDeltasBalanced(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData) {
+func randomDeltasBalanced(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates map[basics.Address]basics.AccountData, totals map[basics.Address]basics.AccountData) {
 	updates, totals, _ = randomDeltasBalancedImpl(niter, base, rewardsLevel, true, 0)
 	return
 }
 
-func randomDeltasBalancedFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData, lastCreatableID uint64) {
+func randomDeltasBalancedFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates map[basics.Address]basics.AccountData, totals map[basics.Address]basics.AccountData, lastCreatableID uint64) {
 	updates, totals, lastCreatableID = randomDeltasBalancedImpl(niter, base, rewardsLevel, false, lastCreatableIDIn)
 	return
 }
 
-func randomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates map[basics.Address]accountDelta, totals map[basics.Address]basics.AccountData, lastCreatableID uint64) {
+func randomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates map[basics.Address]basics.AccountData, totals map[basics.Address]basics.AccountData, lastCreatableID uint64) {
 	var imbalance int64
 	if simple {
 		updates, totals, imbalance = randomDeltas(niter, base, rewardsLevel)
@@ -330,7 +330,7 @@ func randomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountD
 	newPool := oldPool
 	newPool.MicroAlgos.Raw += uint64(imbalance)
 
-	updates[testPoolAddr] = accountDelta{old: oldPool, new: newPool}
+	updates[testPoolAddr] = newPool
 	totals[testPoolAddr] = newPool
 
 	return updates, totals, lastCreatableID
@@ -432,9 +432,9 @@ func TestAccountDBInit(t *testing.T) {
 
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	tx, err := dbs.wdb.Handle.Begin()
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
 	defer tx.Rollback()
 
@@ -449,49 +449,63 @@ func TestAccountDBInit(t *testing.T) {
 }
 
 // creatablesFromUpdates calculates creatables from updates
-func creatablesFromUpdates(updates map[basics.Address]accountDelta, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]modifiedCreatable {
+func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates map[basics.Address]basics.AccountData, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]modifiedCreatable {
 	creatables := make(map[basics.CreatableIndex]modifiedCreatable)
 	for addr, update := range updates {
 		// no sets in Go, so iterate over
-		for idx := range update.old.Assets {
-			if _, ok := update.new.Assets[idx]; !ok {
-				creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
-					ctype:   basics.AssetCreatable,
-					created: false, // exists in old, not in new => deleted
-					creator: addr,
+		if ad, ok := base[addr]; ok {
+			for idx := range ad.Assets {
+				if _, ok := update.Assets[idx]; !ok {
+					creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
+						ctype:   basics.AssetCreatable,
+						created: false, // exists in base, not in new => deleted
+						creator: addr,
+					}
+				}
+			}
+			for idx := range ad.AppParams {
+				if _, ok := update.AppParams[idx]; !ok {
+					creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
+						ctype:   basics.AppCreatable,
+						created: false, // exists in base, not in new => deleted
+						creator: addr,
+					}
 				}
 			}
 		}
-		for idx := range update.new.Assets {
+		for idx := range update.Assets {
 			if seen[basics.CreatableIndex(idx)] {
 				continue
 			}
-			if _, ok := update.old.Assets[idx]; !ok {
+			ad, found := base[addr]
+			if found {
+				if _, ok := ad.Assets[idx]; !ok {
+					found = false
+				}
+			}
+			if !found {
 				creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
 					ctype:   basics.AssetCreatable,
-					created: true, // exists in new, not in old => created
+					created: true, // exists in new, not in base => created
 					creator: addr,
 				}
 			}
 			seen[basics.CreatableIndex(idx)] = true
 		}
-		for idx := range update.old.AppParams {
-			if _, ok := update.new.AppParams[idx]; !ok {
-				creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
-					ctype:   basics.AppCreatable,
-					created: false, // exists in old, not in new => deleted
-					creator: addr,
-				}
-			}
-		}
-		for idx := range update.new.AppParams {
+		for idx := range update.AppParams {
 			if seen[basics.CreatableIndex(idx)] {
 				continue
 			}
-			if _, ok := update.old.AppParams[idx]; !ok {
+			ad, found := base[addr]
+			if found {
+				if _, ok := ad.AppParams[idx]; !ok {
+					found = false
+				}
+			}
+			if !found {
 				creatables[basics.CreatableIndex(idx)] = modifiedCreatable{
 					ctype:   basics.AppCreatable,
-					created: true, // exists in new, not in old => created
+					created: true, // exists in new, not in base => created
 					creator: addr,
 				}
 			}
@@ -506,9 +520,9 @@ func TestAccountDBRound(t *testing.T) {
 
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	tx, err := dbs.wdb.Handle.Begin()
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
 	defer tx.Rollback()
 
@@ -527,18 +541,18 @@ func TestAccountDBRound(t *testing.T) {
 	var baseAccounts lruAccounts
 	baseAccounts.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
-		var updates map[basics.Address]accountDelta
+		var updates map[basics.Address]basics.AccountData
 		var newaccts map[basics.Address]basics.AccountData
 		updates, newaccts, _, lastCreatableID = randomDeltasFull(20, accts, 0, lastCreatableID)
 		accts = newaccts
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
 			expectedDbImage, numElementsPerSegement)
 
-		updatesCnt, needLoadAddresses, _ := compactDeltas([]map[basics.Address]accountDelta{updates}, nil, baseAccounts)
+		updatesCnt, needLoadAddresses, _ := compactDeltas([]map[basics.Address]basics.AccountData{updates}, nil, baseAccounts)
 
 		err = accountsLoadOld(tx, needLoadAddresses, updatesCnt)
 		require.NoError(t, err)
-		err = totalsNewRounds(tx, []map[basics.Address]accountDelta{updates}, updatesCnt, []AccountTotals{{}}, []config.ConsensusParams{proto})
+		err = totalsNewRounds(tx, []map[basics.Address]basics.AccountData{updates}, updatesCnt, []AccountTotals{{}}, []config.ConsensusParams{proto})
 		require.NoError(t, err)
 		_, err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
@@ -715,8 +729,8 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 	return
 }
 
-func benchmarkInitBalances(b testing.TB, numAccounts int, dbs dbPair, proto config.ConsensusParams) (updates map[basics.Address]basics.AccountData) {
-	tx, err := dbs.wdb.Handle.Begin()
+func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto config.ConsensusParams) (updates map[basics.Address]basics.AccountData) {
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(b, err)
 
 	updates = generateRandomTestingAccountBalances(numAccounts)
@@ -730,8 +744,8 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs dbPair, proto conf
 	return
 }
 
-func cleanupTestDb(dbs dbPair, dbName string, inMemory bool) {
-	dbs.close()
+func cleanupTestDb(dbs db.Pair, dbName string, inMemory bool) {
+	dbs.Close()
 	if !inMemory {
 		os.Remove(dbName)
 	}
@@ -744,7 +758,7 @@ func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 	defer cleanupTestDb(dbs, fn, inMemory)
 
 	benchmarkInitBalances(b, b.N, dbs, proto)
-	tx, err := dbs.rdb.Handle.Begin()
+	tx, err := dbs.Rdb.Handle.Begin()
 	require.NoError(b, err)
 
 	b.ResetTimer()
@@ -777,7 +791,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 
 	accounts := benchmarkInitBalances(b, b.N, dbs, proto)
 
-	qs, err := accountsDbInit(dbs.rdb.Handle, dbs.wdb.Handle)
+	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
 	require.NoError(b, err)
 
 	// read all the balances in the database, shuffled
@@ -817,13 +831,13 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 		}
 
 		benchmarkInitBalances(b, startupAcct, dbs, proto)
-		dbs.wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
+		dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
 
 		// insert 1M accounts data, in batches of 1000
 		for batch := 0; batch <= batchCount; batch++ {
 			fmt.Printf("\033[M\r %d / %d accounts written", totalStartupAccountsNumber*batch/batchCount, totalStartupAccountsNumber)
 
-			tx, err := dbs.wdb.Handle.Begin()
+			tx, err := dbs.Wdb.Handle.Begin()
 
 			require.NoError(b, err)
 
@@ -839,8 +853,8 @@ func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
 			err = tx.Commit()
 			require.NoError(b, err)
 		}
-		dbs.wdb.SetSynchronousMode(context.Background(), db.SynchronousModeFull, true)
-		tx, err := dbs.wdb.Handle.Begin()
+		dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeFull, true)
+		tx, err := dbs.Wdb.Handle.Begin()
 		require.NoError(b, err)
 		fmt.Printf("\033[M\r")
 		return tx, cleanup, err
@@ -936,12 +950,12 @@ func TestAccountsReencoding(t *testing.T) {
 	}
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
 	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
 
-	err := dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 		if err != nil {
 			return err
@@ -998,7 +1012,7 @@ func TestAccountsReencoding(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		modifiedAccounts, err := reencodeAccounts(ctx, tx)
 		if err != nil {
 			return err
@@ -1017,9 +1031,9 @@ func TestAccountsReencoding(t *testing.T) {
 func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	err := dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 		if err != nil {
 			return err
@@ -1027,7 +1041,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	qs, err := accountsDbInit(dbs.rdb.Handle, dbs.wdb.Handle)
+	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
 	require.NoError(t, err)
 	require.NotNil(t, qs.listCreatablesStmt)
 	qs.close()
@@ -1095,7 +1109,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 
 		normalizedAccountBalances, err := prepareNormalizedBalances(balances.Balances, proto)
 		b.StartTimer()
-		err = l.trackerDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			err = writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
 			return
 		})
@@ -1107,7 +1121,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		last64KDuration := time.Now().Sub(last64KStart) - last64KAccountCreationTime
 		fmt.Printf("%-82s%-7d (last 64k) %-6d ns/account       %d accounts/sec\n", b.Name(), last64KSize, (last64KDuration / time.Duration(last64KSize)).Nanoseconds(), int(float64(last64KSize)/float64(last64KDuration.Seconds())))
 	}
-	stats, err := l.trackerDBs.wdb.Vacuum(context.Background())
+	stats, err := l.trackerDBs.Wdb.Vacuum(context.Background())
 	require.NoError(b, err)
 	fmt.Printf("%-82sdb fragmentation   %.1f%%\n", b.Name(), float32(stats.PagesBefore-stats.PagesAfter)*100/float32(stats.PagesBefore))
 	b.ReportMetric(float64(b.N)/float64((time.Now().Sub(accountsWritingStarted)-accountsGenerationDuration).Seconds()), "accounts/sec")

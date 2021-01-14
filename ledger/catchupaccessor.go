@@ -118,8 +118,8 @@ const (
 
 // MakeCatchpointCatchupAccessor creates a CatchpointCatchupAccessor given a ledger
 func MakeCatchpointCatchupAccessor(ledger *Ledger, log logging.Logger) CatchpointCatchupAccessor {
-	rdb := ledger.trackerDB().rdb
-	wdb := ledger.trackerDB().wdb
+	rdb := ledger.trackerDB().Rdb
+	wdb := ledger.trackerDB().Wdb
 	accountsq, err := accountsDbInit(rdb.Handle, wdb.Handle)
 	if err != nil {
 		log.Warnf("unable to initialize account db in MakeCatchpointCatchupAccessor : %v", err)
@@ -180,7 +180,7 @@ func (c *CatchpointCatchupAccessorImpl) SetLabel(ctx context.Context, label stri
 
 // ResetStagingBalances resets the current staging balances, preparing for a new set of balances to be added
 func (c *CatchpointCatchupAccessorImpl) ResetStagingBalances(ctx context.Context, newCatchup bool) (err error) {
-	wdb := c.ledger.trackerDB().wdb
+	wdb := c.ledger.trackerDB().Wdb
 	if !newCatchup {
 		c.ledger.setSynchronousMode(ctx, c.ledger.synchronousMode)
 	}
@@ -266,7 +266,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingContent(ctx context.Contex
 	// the following fields are now going to be ignored. We could add these to the database and validate these
 	// later on:
 	// TotalAccounts, TotalAccounts, Catchpoint, BlockHeaderDigest, BalancesRound
-	wdb := c.ledger.trackerDB().wdb
+	wdb := c.ledger.trackerDB().Wdb
 	start := time.Now()
 	ledgerProcessstagingcontentCount.Inc(nil)
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -308,7 +308,7 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 		return fmt.Errorf("processStagingBalances received a chunk with no accounts")
 	}
 
-	wdb := c.ledger.trackerDB().wdb
+	wdb := c.ledger.trackerDB().Wdb
 	start := time.Now()
 	ledgerProcessstagingbalancesCount.Inc(nil)
 
@@ -405,8 +405,8 @@ func (c *CatchpointCatchupAccessorImpl) processStagingBalances(ctx context.Conte
 
 // BuildMerkleTrie would process the catchpointpendinghashes and insert all the items in it into the merkle trie
 func (c *CatchpointCatchupAccessorImpl) BuildMerkleTrie(ctx context.Context, progressUpdates func(uint64)) (err error) {
-	wdb := c.ledger.trackerDB().wdb
-	rdb := c.ledger.trackerDB().rdb
+	wdb := c.ledger.trackerDB().Wdb
+	rdb := c.ledger.trackerDB().Rdb
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		// creating the index can take a while, so ensure we don't generate false alerts for no good reason.
 		db.ResetTransactionWarnDeadline(ctx, tx, time.Now().Add(120*time.Second))
@@ -595,7 +595,7 @@ func (c *CatchpointCatchupAccessorImpl) GetCatchupBlockRound(ctx context.Context
 
 // VerifyCatchpoint verifies that the catchpoint is valid by reconstructing the label.
 func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, blk *bookkeeping.Block) (err error) {
-	rdb := c.ledger.trackerDB().rdb
+	rdb := c.ledger.trackerDB().Rdb
 	var balancesHash crypto.Digest
 	var blockRound basics.Round
 	var totals AccountTotals
@@ -660,7 +660,7 @@ func (c *CatchpointCatchupAccessorImpl) StoreBalancesRound(ctx context.Context, 
 	// calculate the balances round and store it. It *should* be identical to the one in the catchpoint file header, but we don't want to
 	// trust the one in the catchpoint file header, so we'll calculate it ourselves.
 	balancesRound := blk.Round() - basics.Round(config.Consensus[blk.CurrentProtocol].MaxBalLookback)
-	wdb := c.ledger.trackerDB().wdb
+	wdb := c.ledger.trackerDB().Wdb
 	start := time.Now()
 	ledgerStorebalancesroundCount.Inc(nil)
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
@@ -684,7 +684,7 @@ func (c *CatchpointCatchupAccessorImpl) StoreFirstBlock(ctx context.Context, blk
 	blockDbs := c.ledger.blockDB()
 	start := time.Now()
 	ledgerStorefirstblockCount.Inc(nil)
-	err = blockDbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = blockDbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		return blockStartCatchupStaging(tx, *blk)
 	})
 	ledgerStorefirstblockMicros.AddMicrosecondsSince(start, nil)
@@ -699,7 +699,7 @@ func (c *CatchpointCatchupAccessorImpl) StoreBlock(ctx context.Context, blk *boo
 	blockDbs := c.ledger.blockDB()
 	start := time.Now()
 	ledgerCatchpointStoreblockCount.Inc(nil)
-	err = blockDbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = blockDbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		return blockPutStaging(tx, *blk)
 	})
 	ledgerCatchpointStoreblockMicros.AddMicrosecondsSince(start, nil)
@@ -714,7 +714,7 @@ func (c *CatchpointCatchupAccessorImpl) FinishBlocks(ctx context.Context, applyC
 	blockDbs := c.ledger.blockDB()
 	start := time.Now()
 	ledgerCatchpointFinishblocksCount.Inc(nil)
-	err = blockDbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = blockDbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		if applyChanges {
 			return blockCompleteCatchup(tx)
 		}
@@ -732,7 +732,7 @@ func (c *CatchpointCatchupAccessorImpl) EnsureFirstBlock(ctx context.Context) (b
 	blockDbs := c.ledger.blockDB()
 	start := time.Now()
 	ledgerCatchpointEnsureblock1Count.Inc(nil)
-	err = blockDbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = blockDbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		blk, err = blockEnsureSingleBlock(tx)
 		return
 	})
@@ -760,7 +760,7 @@ func (c *CatchpointCatchupAccessorImpl) CompleteCatchup(ctx context.Context) (er
 
 // finishBalances concludes the catchup of the balances(tracker) database.
 func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err error) {
-	wdb := c.ledger.trackerDB().wdb
+	wdb := c.ledger.trackerDB().Wdb
 	start := time.Now()
 	ledgerCatchpointFinishBalsCount.Inc(nil)
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
