@@ -698,7 +698,6 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		txad.ApplyData.ReceiverRewards = txib.ApplyData.ReceiverRewards
 		txad.ApplyData.SenderRewards = txib.ApplyData.SenderRewards
 		txad.ApplyData.EvalDelta = txib.ApplyData.EvalDelta
-		logging.Base().Infof("check applydata %v", txad.ApplyData)
 
 		// Make sure all transactions in group have the same group value
 		if txad.SignedTxn.Txn.Group != txgroup[0].SignedTxn.Txn.Group {
@@ -776,10 +775,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	applyData, err := applyTransaction(txn.Txn, cow, evalParams, spec, cow.txnCounter())
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txid, err)
-	}
-	if eval.validate {
-		//applyData.ClosingAmount = basics.MicroAlgos{uint64(1)}
-		logging.Base().Infof("set applydata: %v", applyData)
 	}
 
 	//// Validate applyData if we are validating an existing block.
@@ -1173,12 +1168,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk *bookkeeping.Block, val
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
 	delta, err := eval(ctx, l, &blk, true, l.verifiedTxnCache, executionPool)
 	if err != nil {
-		logging.Base().Infof("applydataerror: %v", err)
 		return nil, err
-	}
-
-	for _, tx := range blk.Payset {
-		logging.Base().Infof("applydata: %v", tx.ApplyData)
 	}
 
 	vb := ValidatedBlock{
