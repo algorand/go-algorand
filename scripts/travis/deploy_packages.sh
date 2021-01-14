@@ -19,6 +19,11 @@ curl -sL -o ~/gimme https://raw.githubusercontent.com/travis-ci/gimme/master/gim
 chmod +x ~/gimme
 eval "$(~/gimme "${GOLANG_VERSION}")"
 
+if ! "${SCRIPTPATH}/../check_golang_version.sh"
+then
+    exit 1
+fi
+
 scripts/travis/build.sh
 
 export RELEASE_GENESIS_PROCESS=true
