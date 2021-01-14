@@ -34,7 +34,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
-	tools_network "github.com/algorand/go-algorand/tools/network"
+	toolsNetwork "github.com/algorand/go-algorand/tools/network"
 )
 
 const minLenBlockStr = 6 // the minimum size of a block filename (after padding with zeros) when using subfolders
@@ -193,7 +193,7 @@ func download() {
 				panic(err)
 			}
 
-			var resolver tools_network.Resolver
+			var resolver toolsNetwork.Resolver
 			resolver.SetFallbackResolverAddress(*dnsAddr)
 			_, records, err = resolver.LookupSRV(context.Background(), "algobootstrap", "tcp", bootstrapID)
 			if err != nil {

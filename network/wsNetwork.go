@@ -48,7 +48,7 @@ import (
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
-	tools_network "github.com/algorand/go-algorand/tools/network"
+	toolsNetwork "github.com/algorand/go-algorand/tools/network"
 	"github.com/algorand/go-algorand/tools/network/dnssec"
 	"github.com/algorand/go-algorand/util/metrics"
 )
@@ -1642,7 +1642,7 @@ func (wn *WebsocketNetwork) peersToPing() []*wsPeer {
 }
 
 func (wn *WebsocketNetwork) getDNSAddrs(dnsBootstrap string) []string {
-	srvPhonebook, err := tools_network.ReadFromSRV("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
+	srvPhonebook, err := toolsNetwork.ReadFromSRV("algobootstrap", "tcp", dnsBootstrap, wn.config.FallbackDNSResolverAddress, wn.config.DNSSecuritySRVEnforced())
 	if err != nil {
 		// only log this warning on testnet or devnet
 		if wn.NetworkID == config.Devnet || wn.NetworkID == config.Testnet {
