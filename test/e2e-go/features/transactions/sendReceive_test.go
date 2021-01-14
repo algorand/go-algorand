@@ -105,7 +105,7 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	curRound := curStatus.LastRound
 
 	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pongClient.DataDir()))
-	fixture.WaitForAllTxnsToConfirm(curRound+uint64(1), pingTxidsToAddresses)
+	fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pingTxidsToAddresses)
 
 	pingBalance, _ = fixture.GetBalanceAndRound(pingAccount)
 	pongBalance, _ = fixture.GetBalanceAndRound(pongAccount)
@@ -113,7 +113,7 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends i
 	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected.")
 
 	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pingClient.DataDir()))
-	fixture.WaitForAllTxnsToConfirm(curRound+uint64(1), pongTxidsToAddresses)
+	fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), pongTxidsToAddresses)
 
 	pingBalance, _ = fixture.GetBalanceAndRound(pingAccount)
 	pongBalance, _ = fixture.GetBalanceAndRound(pongAccount)
