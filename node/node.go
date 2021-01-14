@@ -40,7 +40,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
 	"github.com/algorand/go-algorand/ledger"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/network/messagetracer"
@@ -777,7 +777,7 @@ func (node *AlgorandFullNode) IsArchival() bool {
 }
 
 // OnNewBlock implements the BlockListener interface so we're notified after each block is written to the ledger
-func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta common.StateDelta) {
+func (node *AlgorandFullNode) OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta) {
 	if node.ledger.Latest() > block.Round() {
 		return
 	}
@@ -813,7 +813,7 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		hdr, err := node.ledger.BlockHdr(agreement.ParamsRound(r))
 		if err != nil {
 			switch err.(type) {
-			case common.ErrNoEntry:
+			case ledgercore.ErrNoEntry:
 				// No need to warn; expected during catchup.
 			default:
 				node.log.Warnf("Cannot look up block %d for deleting ephemeral keys: %v", agreement.ParamsRound(r), err)

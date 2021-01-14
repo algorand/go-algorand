@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 //   ___________________
@@ -37,7 +37,7 @@ import (
 
 type roundCowParent interface {
 	lookup(basics.Address) (basics.AccountData, error)
-	checkDup(basics.Round, basics.Round, transactions.Txid, common.Txlease) error
+	checkDup(basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
 	compactCertLast() basics.Round
@@ -54,7 +54,7 @@ type roundCowState struct {
 	lookupParent roundCowParent
 	commitParent *roundCowState
 	proto        config.ConsensusParams
-	mods         common.StateDelta
+	mods         ledgercore.StateDelta
 
 	// storage deltas populated as side effects of AppCall transaction
 	// 1. Opt-in/Close actions (see Allocate/Deallocate)
@@ -68,11 +68,11 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimest
 		lookupParent: b,
 		commitParent: nil,
 		proto:        config.Consensus[hdr.CurrentProtocol],
-		mods: common.StateDelta{
+		mods: ledgercore.StateDelta{
 			Accts:         make(map[basics.Address]basics.AccountData),
 			Txids:         make(map[transactions.Txid]basics.Round),
-			Txleases:      make(map[common.Txlease]basics.Round),
-			Creatables:    make(map[basics.CreatableIndex]common.ModifiedCreatable),
+			Txleases:      make(map[ledgercore.Txlease]basics.Round),
+			Creatables:    make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable),
 			Hdr:           &hdr,
 			PrevTimestamp: prevTimestamp,
 		},
@@ -80,7 +80,7 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimest
 	}
 }
 
-func (cb *roundCowState) deltas() common.StateDelta {
+func (cb *roundCowState) deltas() ledgercore.StateDelta {
 	var err error
 	if len(cb.sdeltas) == 0 {
 		return cb.mods
@@ -134,16 +134,16 @@ func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, e
 	return cb.lookupParent.lookup(addr)
 }
 
-func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl common.Txlease) error {
+func (cb *roundCowState) checkDup(firstValid, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
 	_, present := cb.mods.Txids[txid]
 	if present {
-		return &common.TransactionInLedgerError{Txid: txid}
+		return &ledgercore.TransactionInLedgerError{Txid: txid}
 	}
 
 	if cb.proto.SupportTransactionLeases && (txl.Lease != [32]byte{}) {
 		expires, ok := cb.mods.Txleases[txl]
 		if ok && cb.mods.Hdr.Round <= expires {
-			return common.MakeLeaseInLedgerError(txid, txl)
+			return ledgercore.MakeLeaseInLedgerError(txid, txl)
 		}
 	}
 
@@ -169,7 +169,7 @@ func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCre
 	cb.mods.Accts[addr] = new
 
 	if newCreatable != nil {
-		cb.mods.Creatables[newCreatable.Index] = common.ModifiedCreatable{
+		cb.mods.Creatables[newCreatable.Index] = ledgercore.ModifiedCreatable{
 			Ctype:   newCreatable.Type,
 			Creator: newCreatable.Creator,
 			Created: true,
@@ -177,7 +177,7 @@ func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCre
 	}
 
 	if deletedCreatable != nil {
-		cb.mods.Creatables[deletedCreatable.Index] = common.ModifiedCreatable{
+		cb.mods.Creatables[deletedCreatable.Index] = ledgercore.ModifiedCreatable{
 			Ctype:   deletedCreatable.Type,
 			Creator: deletedCreatable.Creator,
 			Created: false,
@@ -187,7 +187,7 @@ func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCre
 
 func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.Txid) {
 	cb.mods.Txids[txid] = txn.LastValid
-	cb.mods.Txleases[common.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
+	cb.mods.Txleases[ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
 }
 
 func (cb *roundCowState) sawCompactCert(rnd basics.Round) {
@@ -199,11 +199,11 @@ func (cb *roundCowState) child() *roundCowState {
 		lookupParent: cb,
 		commitParent: cb,
 		proto:        cb.proto,
-		mods: common.StateDelta{
+		mods: ledgercore.StateDelta{
 			Accts:         make(map[basics.Address]basics.AccountData),
 			Txids:         make(map[transactions.Txid]basics.Round),
-			Txleases:      make(map[common.Txlease]basics.Round),
-			Creatables:    make(map[basics.CreatableIndex]common.ModifiedCreatable),
+			Txleases:      make(map[ledgercore.Txlease]basics.Round),
+			Creatables:    make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable),
 			Hdr:           cb.mods.Hdr,
 			PrevTimestamp: cb.mods.PrevTimestamp,
 		},

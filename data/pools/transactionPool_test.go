@@ -32,7 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/ledger"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -547,7 +547,7 @@ func TestRememberForget(t *testing.T) {
 
 	err = mockLedger.AddValidatedBlock(*blk, agreement.Certificate{})
 	require.NoError(t, err)
-	transactionPool.OnNewBlock(blk.Block(), common.StateDelta{})
+	transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 
 	pending = transactionPool.PendingTxGroups()
 	require.Len(t, pending, 0)
@@ -609,7 +609,7 @@ func TestCleanUp(t *testing.T) {
 		err = mockLedger.AddValidatedBlock(*blk, agreement.Certificate{})
 		require.NoError(t, err)
 
-		transactionPool.OnNewBlock(blk.Block(), common.StateDelta{})
+		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 	}
 
 	pending := transactionPool.PendingTxGroups()
@@ -625,7 +625,7 @@ func TestCleanUp(t *testing.T) {
 		err = mockLedger.AddValidatedBlock(*blk, agreement.Certificate{})
 		require.NoError(t, err)
 
-		transactionPool.OnNewBlock(blk.Block(), common.StateDelta{})
+		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 		require.Zero(t, transactionPool.NumExpired(blk.Block().Round()))
 	}
 	require.Len(t, transactionPool.expiredTxCount, int(expiredHistory*proto.MaxTxnLife))
@@ -718,7 +718,7 @@ func TestFixOverflowOnNewBlock(t *testing.T) {
 	err = mockLedger.AddValidatedBlock(*block, agreement.Certificate{})
 	require.NoError(t, err)
 
-	transactionPool.OnNewBlock(block.Block(), common.StateDelta{})
+	transactionPool.OnNewBlock(block.Block(), ledgercore.StateDelta{})
 
 	pending = transactionPool.PendingTxGroups()
 	// only one transaction is missing
@@ -1148,7 +1148,7 @@ func BenchmarkTransactionPoolSteadyState(b *testing.B) {
 		err = l.AddValidatedBlock(*blk, agreement.Certificate{})
 		require.NoError(b, err)
 
-		transactionPool.OnNewBlock(blk.Block(), common.StateDelta{})
+		transactionPool.OnNewBlock(blk.Block(), ledgercore.StateDelta{})
 
 		fmt.Printf("BenchmarkTransactionPoolSteadyState: committed block %d\n", blk.Block().Round())
 	}

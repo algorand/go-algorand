@@ -34,7 +34,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -450,14 +450,14 @@ func TestAccountDBInit(t *testing.T) {
 }
 
 // creatablesFromUpdates calculates creatables from updates
-func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates map[basics.Address]basics.AccountData, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]common.ModifiedCreatable {
-	creatables := make(map[basics.CreatableIndex]common.ModifiedCreatable)
+func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates map[basics.Address]basics.AccountData, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]ledgercore.ModifiedCreatable {
+	creatables := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	for addr, update := range updates {
 		// no sets in Go, so iterate over
 		if ad, ok := base[addr]; ok {
 			for idx := range ad.Assets {
 				if _, ok := update.Assets[idx]; !ok {
-					creatables[basics.CreatableIndex(idx)] = common.ModifiedCreatable{
+					creatables[basics.CreatableIndex(idx)] = ledgercore.ModifiedCreatable{
 						Ctype:   basics.AssetCreatable,
 						Created: false, // exists in base, not in new => deleted
 						Creator: addr,
@@ -466,7 +466,7 @@ func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates m
 			}
 			for idx := range ad.AppParams {
 				if _, ok := update.AppParams[idx]; !ok {
-					creatables[basics.CreatableIndex(idx)] = common.ModifiedCreatable{
+					creatables[basics.CreatableIndex(idx)] = ledgercore.ModifiedCreatable{
 						Ctype:   basics.AppCreatable,
 						Created: false, // exists in base, not in new => deleted
 						Creator: addr,
@@ -485,7 +485,7 @@ func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates m
 				}
 			}
 			if !found {
-				creatables[basics.CreatableIndex(idx)] = common.ModifiedCreatable{
+				creatables[basics.CreatableIndex(idx)] = ledgercore.ModifiedCreatable{
 					Ctype:   basics.AssetCreatable,
 					Created: true, // exists in new, not in base => created
 					Creator: addr,
@@ -504,7 +504,7 @@ func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates m
 				}
 			}
 			if !found {
-				creatables[basics.CreatableIndex(idx)] = common.ModifiedCreatable{
+				creatables[basics.CreatableIndex(idx)] = ledgercore.ModifiedCreatable{
 					Ctype:   basics.AppCreatable,
 					Created: true, // exists in new, not in base => created
 					Creator: addr,
@@ -538,7 +538,7 @@ func TestAccountDBRound(t *testing.T) {
 	// lastCreatableID stores asset or app max used index to get rid of conflicts
 	lastCreatableID := crypto.RandUint64() % 512
 	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
-	expectedDbImage := make(map[basics.CreatableIndex]common.ModifiedCreatable)
+	expectedDbImage := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	var baseAccounts lruAccounts
 	baseAccounts.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
@@ -553,7 +553,7 @@ func TestAccountDBRound(t *testing.T) {
 
 		err = accountsLoadOld(tx, needLoadAddresses, updatesCnt)
 		require.NoError(t, err)
-		err = totalsNewRounds(tx, []map[basics.Address]basics.AccountData{updates}, updatesCnt, []common.AccountTotals{{}}, []config.ConsensusParams{proto})
+		err = totalsNewRounds(tx, []map[basics.Address]basics.AccountData{updates}, updatesCnt, []ledgercore.AccountTotals{{}}, []config.ConsensusParams{proto})
 		require.NoError(t, err)
 		_, err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
@@ -567,7 +567,7 @@ func TestAccountDBRound(t *testing.T) {
 // checkCreatables compares the expected database image to the actual databse content
 func checkCreatables(t *testing.T,
 	tx *sql.Tx, iteration int,
-	expectedDbImage map[basics.CreatableIndex]common.ModifiedCreatable) {
+	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
 
 	stmt, err := tx.Prepare("SELECT asset, creator, ctype FROM assetcreators")
 	require.NoError(t, err)
@@ -581,7 +581,7 @@ func checkCreatables(t *testing.T,
 	counter := 0
 	for rows.Next() {
 		counter++
-		mc := common.ModifiedCreatable{}
+		mc := ledgercore.ModifiedCreatable{}
 		var buf []byte
 		var asset basics.CreatableIndex
 		err := rows.Scan(&asset, &buf, &mc.Ctype)
@@ -604,9 +604,9 @@ func checkCreatables(t *testing.T,
 // loop 2: returns: * the elements 20->30
 //                  * random sample of elements from 10->20: created changed from true -> false
 func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
-	creatables map[basics.CreatableIndex]common.ModifiedCreatable,
-	expectedDbImage map[basics.CreatableIndex]common.ModifiedCreatable,
-	numElementsPerSegement int) map[basics.CreatableIndex]common.ModifiedCreatable {
+	creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
+	expectedDbImage map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
+	numElementsPerSegement int) map[basics.CreatableIndex]ledgercore.ModifiedCreatable {
 
 	iteration-- // 0-based here
 
@@ -616,7 +616,7 @@ func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
 		delSegmentStart = 0
 	}
 
-	newSample := make(map[basics.CreatableIndex]common.ModifiedCreatable)
+	newSample := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	stop := delSegmentEnd + numElementsPerSegement
 
 	for i := delSegmentStart; i < delSegmentEnd; i++ {
@@ -642,8 +642,8 @@ func randomCreatableSampling(iteration int, crtbsList []basics.CreatableIndex,
 }
 
 func randomCreatables(numElementsPerSegement int) ([]basics.CreatableIndex,
-	map[basics.CreatableIndex]common.ModifiedCreatable) {
-	creatables := make(map[basics.CreatableIndex]common.ModifiedCreatable)
+	map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
+	creatables := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	creatablesList := make([]basics.CreatableIndex, numElementsPerSegement*10)
 	uniqueAssetIds := make(map[basics.CreatableIndex]bool)
 
@@ -657,7 +657,7 @@ func randomCreatables(numElementsPerSegement int) ([]basics.CreatableIndex,
 
 // randomCreatable generates a random creatable.
 func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
-	assetIndex basics.CreatableIndex, mc common.ModifiedCreatable) {
+	assetIndex basics.CreatableIndex, mc ledgercore.ModifiedCreatable) {
 
 	var ctype basics.CreatableType
 
@@ -668,7 +668,7 @@ func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
 		ctype = basics.AppCreatable
 	}
 
-	creatable := common.ModifiedCreatable{
+	creatable := ledgercore.ModifiedCreatable{
 		Ctype:   ctype,
 		Created: (crypto.RandUint64() % 2) == 1,
 		Creator: randomAddress(),

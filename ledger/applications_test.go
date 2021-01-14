@@ -28,7 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -51,14 +51,14 @@ type modsData struct {
 
 func getCow(creatables []modsData) *roundCowState {
 	cs := &roundCowState{
-		mods: common.StateDelta{
-			Creatables: make(map[basics.CreatableIndex]common.ModifiedCreatable),
+		mods: ledgercore.StateDelta{
+			Creatables: make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable),
 			Hdr:        &bookkeeping.BlockHeader{},
 		},
 		proto: config.Consensus[protocol.ConsensusCurrentVersion],
 	}
 	for _, e := range creatables {
-		cs.mods.Creatables[e.cidx] = common.ModifiedCreatable{Ctype: e.ctype, Creator: e.addr, Created: true}
+		cs.mods.Creatables[e.cidx] = ledgercore.ModifiedCreatable{Ctype: e.ctype, Creator: e.addr, Created: true}
 	}
 	return cs
 }

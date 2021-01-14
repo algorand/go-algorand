@@ -24,7 +24,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -59,8 +59,8 @@ type ledgerTracker interface {
 	loadFromDisk(ledgerForTracker) error
 
 	// newBlock informs the tracker of a new block from round
-	// rnd and a given common.StateDelta as produced by BlockEvaluator.
-	newBlock(blk bookkeeping.Block, delta common.StateDelta)
+	// rnd and a given ledgercore.StateDelta as produced by BlockEvaluator.
+	newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta)
 
 	// committedUpTo informs the tracker that the database has
 	// committed all blocks up to and including rnd to persistent
@@ -89,7 +89,7 @@ type ledgerForTracker interface {
 	trackerDB() db.Pair
 	blockDB() db.Pair
 	trackerLog() logging.Logger
-	trackerEvalVerified(bookkeeping.Block, ledgerForEvaluator) (common.StateDelta, error)
+	trackerEvalVerified(bookkeeping.Block, ledgerForEvaluator) (ledgercore.StateDelta, error)
 
 	Latest() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
@@ -119,7 +119,7 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 	return nil
 }
 
-func (tr *trackerRegistry) newBlock(blk bookkeeping.Block, delta common.StateDelta) {
+func (tr *trackerRegistry) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	for _, lt := range tr.trackers {
 		lt.newBlock(blk, delta)
 	}

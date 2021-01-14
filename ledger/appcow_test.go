@@ -26,7 +26,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -43,7 +43,7 @@ func (ml *emptyLedger) lookup(addr basics.Address) (basics.AccountData, error) {
 	return basics.AccountData{}, nil
 }
 
-func (ml *emptyLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl common.Txlease) error {
+func (ml *emptyLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl ledgercore.Txlease) error {
 	return nil
 }
 

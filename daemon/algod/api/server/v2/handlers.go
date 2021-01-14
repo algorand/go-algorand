@@ -36,7 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
@@ -558,7 +558,7 @@ func (v2 *Handlers) getPendingTransactions(ctx echo.Context, max *uint64, format
 
 // startCatchup Given a catchpoint, it starts catching up to this catchpoint
 func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string) error {
-	_, _, err := common.ParseCatchpointLabel(catchpoint)
+	_, _, err := ledgercore.ParseCatchpointLabel(catchpoint)
 	if err != nil {
 		return badRequest(ctx, err, errFailedToParseCatchpoint, v2.Log)
 	}
@@ -584,7 +584,7 @@ func (v2 *Handlers) startCatchup(ctx echo.Context, catchpoint string) error {
 
 // abortCatchup Given a catchpoint, it aborts catching up to this catchpoint
 func (v2 *Handlers) abortCatchup(ctx echo.Context, catchpoint string) error {
-	_, _, err := common.ParseCatchpointLabel(catchpoint)
+	_, _, err := ledgercore.ParseCatchpointLabel(catchpoint)
 	if err != nil {
 		return badRequest(ctx, err, errFailedToParseCatchpoint, v2.Log)
 	}

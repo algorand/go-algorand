@@ -30,7 +30,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merkletrie"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -168,7 +168,7 @@ func (c *CatchpointCatchupAccessorImpl) GetLabel(ctx context.Context) (label str
 // SetLabel set the catchpoint catchup label
 func (c *CatchpointCatchupAccessorImpl) SetLabel(ctx context.Context, label string) (err error) {
 	// verify it's parsable :
-	_, _, err = common.ParseCatchpointLabel(label)
+	_, _, err = ledgercore.ParseCatchpointLabel(label)
 	if err != nil {
 		return
 	}
@@ -599,7 +599,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 	rdb := c.ledger.trackerDB().Rdb
 	var balancesHash crypto.Digest
 	var blockRound basics.Round
-	var totals common.AccountTotals
+	var totals ledgercore.AccountTotals
 	var catchpointLabel string
 
 	catchpointLabel, _, err = c.accountsq.readCatchpointStateString(ctx, catchpointStateCatchupLabel)
@@ -647,7 +647,7 @@ func (c *CatchpointCatchupAccessorImpl) VerifyCatchpoint(ctx context.Context, bl
 		return fmt.Errorf("block round in block header doesn't match block round in catchpoint")
 	}
 
-	catchpointLabelMaker := common.MakeCatchpointLabel(blockRound, blk.Digest(), balancesHash, totals)
+	catchpointLabelMaker := ledgercore.MakeCatchpointLabel(blockRound, blk.Digest(), balancesHash, totals)
 
 	if catchpointLabel != catchpointLabelMaker.String() {
 		return fmt.Errorf("catchpoint hash mismatch; expected %s, calculated %s", catchpointLabel, catchpointLabelMaker.String())
@@ -766,7 +766,7 @@ func (c *CatchpointCatchupAccessorImpl) finishBalances(ctx context.Context) (err
 	ledgerCatchpointFinishBalsCount.Inc(nil)
 	err = wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		var balancesRound uint64
-		var totals common.AccountTotals
+		var totals ledgercore.AccountTotals
 
 		sq, err := accountsDbInit(tx, tx)
 		if err != nil {

@@ -23,12 +23,12 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 type roundTxMembers struct {
 	txids    map[transactions.Txid]basics.Round
-	txleases map[common.Txlease]basics.Round // map of transaction lease to when it expires
+	txleases map[ledgercore.Txlease]basics.Round // map of transaction lease to when it expires
 	proto    config.ConsensusParams
 }
 
@@ -73,13 +73,13 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 
 		t.recent[old] = roundTxMembers{
 			txids:    make(map[transactions.Txid]basics.Round),
-			txleases: make(map[common.Txlease]basics.Round),
+			txleases: make(map[ledgercore.Txlease]basics.Round),
 			proto:    config.Consensus[blk.CurrentProtocol],
 		}
 		for _, txad := range payset {
 			tx := txad.SignedTxn
 			t.recent[old].txids[tx.ID()] = tx.Txn.LastValid
-			t.recent[old].txleases[common.Txlease{Sender: tx.Txn.Sender, Lease: tx.Txn.Lease}] = tx.Txn.LastValid
+			t.recent[old].txleases[ledgercore.Txlease{Sender: tx.Txn.Sender, Lease: tx.Txn.Lease}] = tx.Txn.LastValid
 			t.putLV(tx.Txn.LastValid, tx.ID())
 		}
 	}
@@ -90,7 +90,7 @@ func (t *txTail) loadFromDisk(l ledgerForTracker) error {
 func (t *txTail) close() {
 }
 
-func (t *txTail) newBlock(blk bookkeeping.Block, delta common.StateDelta) {
+func (t *txTail) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
 
 	if t.recent[rnd].txids != nil {
@@ -135,7 +135,7 @@ func (t txtailMissingRound) Error() string {
 
 // checkDup test to see if the given transaction id/lease already exists. It returns nil if neither exists, or
 // TransactionInLedgerError / LeaseInLedgerError respectively.
-func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl common.Txlease) error {
+func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl ledgercore.Txlease) error {
 	if lastValid < t.lowWaterMark {
 		return &txtailMissingRound{round: lastValid}
 	}
@@ -151,13 +151,13 @@ func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, fi
 		for rnd := firstChecked; rnd <= lastChecked; rnd++ {
 			expires, ok := t.recent[rnd].txleases[txl]
 			if ok && current <= expires {
-				return common.MakeLeaseInLedgerError(txid, txl)
+				return ledgercore.MakeLeaseInLedgerError(txid, txl)
 			}
 		}
 	}
 
 	if _, confirmed := t.lastValid[lastValid][txid]; confirmed {
-		return &common.TransactionInLedgerError{Txid: txid}
+		return &ledgercore.TransactionInLedgerError{Txid: txid}
 	}
 	return nil
 }

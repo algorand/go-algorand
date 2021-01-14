@@ -38,7 +38,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
@@ -1713,7 +1713,7 @@ func Transactions(ctx lib.ReqContext, context echo.Context) {
 		txs, err = ctx.Node.ListTxns(addr, basics.Round(fR), basics.Round(lR))
 		if err != nil {
 			switch err.(type) {
-			case common.ErrNoEntry:
+			case ledgercore.ErrNoEntry:
 				if !ctx.Node.IsArchival() {
 					lib.ErrorResponse(w, http.StatusInternalServerError, err, errBlockHashBeenDeletedArchival, ctx.Log)
 					return

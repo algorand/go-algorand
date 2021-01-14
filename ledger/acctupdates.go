@@ -39,7 +39,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/protocol"
@@ -146,11 +146,11 @@ type accountUpdates struct {
 	accounts map[basics.Address]modifiedAccount
 
 	// creatableDeltas stores creatable updates for every round after dbRound.
-	creatableDeltas []map[basics.CreatableIndex]common.ModifiedCreatable
+	creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 
 	// creatables stores the most recent state for every creatable that
 	// appears in creatableDeltas
-	creatables map[basics.CreatableIndex]common.ModifiedCreatable
+	creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable
 
 	// protos stores consensus parameters dbRound and every
 	// round after it; i.e., protos is one longer than deltas.
@@ -158,7 +158,7 @@ type accountUpdates struct {
 
 	// totals stores the totals for dbRound and every round after it;
 	// i.e., totals is one longer than deltas.
-	roundTotals []common.AccountTotals
+	roundTotals []ledgercore.AccountTotals
 
 	// roundDigest stores the digest of the block for every round starting with dbRound and every round after it.
 	roundDigest []crypto.Digest
@@ -712,7 +712,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 
 // newBlock is the accountUpdates implementation of the ledgerTracker interface. This is the "external" facing function
 // which invokes the internal implementation after taking the lock.
-func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta common.StateDelta) {
+func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	au.accountsMu.Lock()
 	au.newBlockImpl(blk, delta)
 	au.accountsMu.Unlock()
@@ -720,7 +720,7 @@ func (au *accountUpdates) newBlock(blk bookkeeping.Block, delta common.StateDelt
 }
 
 // Totals returns the totals for a given round
-func (au *accountUpdates) Totals(rnd basics.Round) (totals common.AccountTotals, err error) {
+func (au *accountUpdates) Totals(rnd basics.Round) (totals ledgercore.AccountTotals, err error) {
 	au.accountsMu.RLock()
 	defer au.accountsMu.RUnlock()
 	return au.totalsImpl(rnd)
@@ -778,7 +778,7 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (ReadCloseSize
 				return nil, err
 			}
 
-			return nil, common.ErrNoEntry{}
+			return nil, ledgercore.ErrNoEntry{}
 		}
 		// it's some other error.
 		return nil, fmt.Errorf("accountUpdates: getCatchpointStream: unable to open catchpoint file '%s' %v", catchpointPath, err)
@@ -802,7 +802,7 @@ func (au *accountUpdates) GetCatchpointStream(round basics.Round) (ReadCloseSize
 		}
 		return &readCloseSizer{ReadCloser: file, size: fileInfo.Size()}, nil
 	}
-	return nil, common.ErrNoEntry{}
+	return nil, ledgercore.ErrNoEntry{}
 }
 
 // functions below this line are all internal functions
@@ -818,7 +818,7 @@ type accountUpdatesLedgerEvaluator struct {
 	// the accountUpdatesLedgerEvaluator would access the underlying accountUpdates function directly, bypassing the balances mutex lock.
 	au *accountUpdates
 	// prevHeader is the previous header to the current one. The usage of this is only in the context of initializeCaches where we iteratively
-	// building the common.StateDelta, which requires a peek on the "previous" header information.
+	// building the ledgercore.StateDelta, which requires a peek on the "previous" header information.
 	prevHeader bookkeeping.BlockHeader
 }
 
@@ -838,11 +838,11 @@ func (aul *accountUpdatesLedgerEvaluator) BlockHdr(r basics.Round) (bookkeeping.
 	if r == aul.prevHeader.Round {
 		return aul.prevHeader, nil
 	}
-	return bookkeeping.BlockHeader{}, common.ErrNoEntry{}
+	return bookkeeping.BlockHeader{}, ledgercore.ErrNoEntry{}
 }
 
 // Totals returns the totals for a given round
-func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (common.AccountTotals, error) {
+func (aul *accountUpdatesLedgerEvaluator) Totals(rnd basics.Round) (ledgercore.AccountTotals, error) {
 	return aul.au.totalsImpl(rnd)
 }
 
@@ -863,7 +863,7 @@ func (aul *accountUpdatesLedgerEvaluator) GetCreatorForRound(rnd basics.Round, c
 }
 
 // totalsImpl returns the totals for a given round
-func (au *accountUpdates) totalsImpl(rnd basics.Round) (totals common.AccountTotals, err error) {
+func (au *accountUpdates) totalsImpl(rnd basics.Round) (totals ledgercore.AccountTotals, err error) {
 	offset, err := au.roundOffset(rnd)
 	if err != nil {
 		return
@@ -876,7 +876,7 @@ func (au *accountUpdates) totalsImpl(rnd basics.Round) (totals common.AccountTot
 // initializeCaches fills up the accountUpdates cache with the most recent ~320 blocks
 func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound, writingCatchpointRound basics.Round) (catchpointBlockDigest crypto.Digest, err error) {
 	var blk bookkeeping.Block
-	var delta common.StateDelta
+	var delta ledgercore.StateDelta
 
 	accLedgerEval := accountUpdatesLedgerEvaluator{
 		au: au,
@@ -952,7 +952,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 			return err0
 		}
 
-		au.roundTotals = []common.AccountTotals{totals}
+		au.roundTotals = []ledgercore.AccountTotals{totals}
 		return nil
 	})
 	ledgerAccountsinitMicros.AddMicrosecondsSince(start, nil)
@@ -981,7 +981,7 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 	au.deltas = nil
 	au.creatableDeltas = nil
 	au.accounts = make(map[basics.Address]modifiedAccount)
-	au.creatables = make(map[basics.CreatableIndex]common.ModifiedCreatable)
+	au.creatables = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
 	au.deltasAccum = []int{0}
 	au.roundDigest = nil
 
@@ -1401,7 +1401,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Addre
 
 // newBlockImpl is the accountUpdates implementation of the ledgerTracker interface. This is the "internal" facing function
 // which assumes that no lock need to be taken.
-func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta common.StateDelta) {
+func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	proto := config.Consensus[blk.CurrentProtocol]
 	rnd := blk.Round()
 
@@ -1735,8 +1735,8 @@ func (au *accountUpdates) getCreatorForRound(rnd basics.Round, cidx basics.Creat
 }
 
 // accountsCreateCatchpointLabel creates a catchpoint label and write it.
-func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Round, totals common.AccountTotals, ledgerBlockDigest crypto.Digest, trieBalancesHash crypto.Digest) (label string, err error) {
-	cpLabel := common.MakeCatchpointLabel(committedRound, ledgerBlockDigest, trieBalancesHash, totals)
+func (au *accountUpdates) accountsCreateCatchpointLabel(committedRound basics.Round, totals ledgercore.AccountTotals, ledgerBlockDigest crypto.Digest, trieBalancesHash crypto.Digest) (label string, err error) {
+	cpLabel := ledgercore.MakeCatchpointLabel(committedRound, ledgerBlockDigest, trieBalancesHash, totals)
 	label = cpLabel.String()
 	_, err = au.accountsq.writeCatchpointStateString(context.Background(), catchpointStateLastCatchpoint, label)
 	return
@@ -1818,8 +1818,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]map[basics.Address]basics.AccountData, offset, offset)
-	creatableDeltas := make([]map[basics.CreatableIndex]common.ModifiedCreatable, offset, offset)
-	roundTotals := make([]common.AccountTotals, offset+1, offset+1)
+	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, offset, offset)
+	roundTotals := make([]ledgercore.AccountTotals, offset+1, offset+1)
 	protos := make([]config.ConsensusParams, offset+1, offset+1)
 	copy(deltas, au.deltas[:offset])
 	copy(creatableDeltas, au.creatableDeltas[:offset])
@@ -2000,7 +2000,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 // compactDeltas takes an array of account map deltas ( one array entry per round ), and corresponding creatables array, and compact the arrays into a single
 // map that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes. For both the account deltas as well as for the creatables,
 // it counts the number of changes per round by specifying it in the ndeltas field of the accountDeltaCount/modifiedCreatable. The ndeltas field of the input creatableDeltas is ignored.
-func compactDeltas(accountDeltas []map[basics.Address]basics.AccountData, creatableDeltas []map[basics.CreatableIndex]common.ModifiedCreatable, baseAccounts lruAccounts) (outAccountDeltas map[basics.Address]accountDeltaCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]common.ModifiedCreatable) {
+func compactDeltas(accountDeltas []map[basics.Address]basics.AccountData, creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable, baseAccounts lruAccounts) (outAccountDeltas map[basics.Address]accountDeltaCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
 	if len(accountDeltas) > 0 {
 		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
 		outAccountDeltas = make(map[basics.Address]accountDeltaCount, 1+len(accountDeltas[0])*len(accountDeltas))
@@ -2032,18 +2032,18 @@ func compactDeltas(accountDeltas []map[basics.Address]basics.AccountData, creata
 
 	if len(creatableDeltas) > 0 {
 		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
-		outCreatableDeltas = make(map[basics.CreatableIndex]common.ModifiedCreatable, 1+len(creatableDeltas[0])*len(creatableDeltas))
+		outCreatableDeltas = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1+len(creatableDeltas[0])*len(creatableDeltas))
 		for _, roundCreatable := range creatableDeltas {
 			for creatableIdx, creatable := range roundCreatable {
 				if prev, has := outCreatableDeltas[creatableIdx]; has {
-					outCreatableDeltas[creatableIdx] = common.ModifiedCreatable{
+					outCreatableDeltas[creatableIdx] = ledgercore.ModifiedCreatable{
 						Ctype:   creatable.Ctype,
 						Created: creatable.Created,
 						Creator: creatable.Creator,
 						Ndeltas: prev.Ndeltas + 1,
 					}
 				} else {
-					outCreatableDeltas[creatableIdx] = common.ModifiedCreatable{
+					outCreatableDeltas[creatableIdx] = ledgercore.ModifiedCreatable{
 						Ctype:   creatable.Ctype,
 						Created: creatable.Created,
 						Creator: creatable.Creator,

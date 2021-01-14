@@ -31,7 +31,7 @@ import (
 
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -84,7 +84,7 @@ type CatchpointFileHeader struct {
 	Version           uint64               `codec:"version"`
 	BalancesRound     basics.Round         `codec:"balancesRound"`
 	BlocksRound       basics.Round         `codec:"blocksRound"`
-	Totals            common.AccountTotals `codec:"accountTotals"`
+	Totals            ledgercore.AccountTotals `codec:"accountTotals"`
 	TotalAccounts     uint64               `codec:"accountsCount"`
 	TotalChunks       uint64               `codec:"chunksCount"`
 	Catchpoint        string               `codec:"catchpoint"`

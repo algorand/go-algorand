@@ -19,7 +19,7 @@ package ledger
 import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/util/metrics"
 )
 
@@ -39,7 +39,7 @@ func (mt *metricsTracker) loadFromDisk(l ledgerForTracker) error {
 func (mt *metricsTracker) close() {
 }
 
-func (mt *metricsTracker) newBlock(blk bookkeeping.Block, delta common.StateDelta) {
+func (mt *metricsTracker) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	rnd := blk.Round()
 	mt.ledgerRound.Set(float64(rnd), map[string]string{})
 	mt.ledgerTransactionsTotal.Add(float64(len(blk.Payset)), map[string]string{})

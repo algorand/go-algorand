@@ -28,7 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 )
@@ -257,7 +257,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	cs.statsMu.Lock()
 	label := cs.stats.CatchpointLabel
 	cs.statsMu.Unlock()
-	round, _, err0 := common.ParseCatchpointLabel(label)
+	round, _, err0 := ledgercore.ParseCatchpointLabel(label)
 
 	if err0 != nil {
 		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to patse label : %v", err0))
@@ -465,7 +465,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			blk = &ledgerBlock
 		} else {
 			switch err.(type) {
-			case common.ErrNoEntry:
+			case ledgercore.ErrNoEntry:
 				// this is expected, ignore this one.
 			default:
 				cs.log.Warnf("processStageBlocksDownload encountered the following error when attempting to retrieve the block for round %d : %v", topBlock.Round()-basics.Round(blocksFetched), err)

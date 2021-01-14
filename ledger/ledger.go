@@ -32,7 +32,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/util/db"
 	"github.com/algorand/go-algorand/util/metrics"
@@ -476,7 +476,7 @@ func (l *Ledger) LookupWithoutRewards(rnd basics.Round, addr basics.Address) (ba
 }
 
 // Totals returns the totals of all accounts at the end of round rnd.
-func (l *Ledger) Totals(rnd basics.Round) (common.AccountTotals, error) {
+func (l *Ledger) Totals(rnd basics.Round) (ledgercore.AccountTotals, error) {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
 	return l.accts.Totals(rnd)
@@ -642,10 +642,10 @@ func (l *Ledger) trackerLog() logging.Logger {
 	return l.log
 }
 
-// trackerEvalVerified is used by the accountUpdates to reconstruct the common.StateDelta from a given block during it's loadFromDisk execution.
+// trackerEvalVerified is used by the accountUpdates to reconstruct the ledgercore.StateDelta from a given block during it's loadFromDisk execution.
 // when this function is called, the trackers mutex is expected already to be taken. The provided accUpdatesLedger would allow the
 // evaluator to shortcut the "main" ledger ( i.e. this struct ) and avoid taking the trackers lock a second time.
-func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (common.StateDelta, error) {
+func (l *Ledger) trackerEvalVerified(blk bookkeeping.Block, accUpdatesLedger ledgerForEvaluator) (ledgercore.StateDelta, error) {
 	// passing nil as the executionPool is ok since we've asking the evaluator to skip verification.
 	return eval(context.Background(), accUpdatesLedger, blk, false, l.verifiedTxnCache, nil)
 }
@@ -665,7 +665,7 @@ func (l *Ledger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 
 // TxLease is an exported version of txlease
 type TxLease struct {
-	common.Txlease
+	ledgercore.Txlease
 }
 
 var ledgerInitblocksdbCount = metrics.NewCounter("ledger_initblocksdb_count", "calls")

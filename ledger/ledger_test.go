@@ -31,7 +31,7 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/data/transactions/verify"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -1402,7 +1402,7 @@ func TestGetLastCatchpointLabel(t *testing.T) {
 // generate at least 3 asset and 3 app creatables, and return the ids
 // of the asset/app with at least 3 elements less or equal.
 func generateCreatables(numElementsPerSegement int) (
-	randomCtbs map[basics.CreatableIndex]common.ModifiedCreatable,
+	randomCtbs map[basics.CreatableIndex]ledgercore.ModifiedCreatable,
 	assetID3,
 	appID3 basics.CreatableIndex,
 	err error) {

@@ -27,7 +27,7 @@ import (
 	"github.com/algorand/go-algorand/agreement"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger/common"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -90,7 +90,7 @@ func blockGet(tx *sql.Tx, rnd basics.Round) (blk bookkeeping.Block, err error) {
 	err = tx.QueryRow("SELECT blkdata FROM blocks WHERE rnd=?", rnd).Scan(&buf)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			err = common.ErrNoEntry{Round: rnd}
+			err = ledgercore.ErrNoEntry{Round: rnd}
 		}
 
 		return
@@ -105,7 +105,7 @@ func blockGetHdr(tx *sql.Tx, rnd basics.Round) (hdr bookkeeping.BlockHeader, err
 	err = tx.QueryRow("SELECT hdrdata FROM blocks WHERE rnd=?", rnd).Scan(&buf)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			err = common.ErrNoEntry{Round: rnd}
+			err = ledgercore.ErrNoEntry{Round: rnd}
 		}
 
 		return
@@ -119,7 +119,7 @@ func blockGetEncodedCert(tx *sql.Tx, rnd basics.Round) (blk []byte, cert []byte,
 	err = tx.QueryRow("SELECT blkdata, certdata FROM blocks WHERE rnd=?", rnd).Scan(&blk, &cert)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			err = common.ErrNoEntry{Round: rnd}
+			err = ledgercore.ErrNoEntry{Round: rnd}
 		}
 
 		return
@@ -371,12 +371,12 @@ func blockEnsureSingleBlock(tx *sql.Tx) (blk bookkeeping.Block, err error) {
 	err = tx.QueryRow("SELECT MAX(rnd) FROM catchpointblocks").Scan(&max)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			err = common.ErrNoEntry{}
+			err = ledgercore.ErrNoEntry{}
 		}
 		return bookkeeping.Block{}, err
 	}
 	if !max.Valid {
-		return bookkeeping.Block{}, common.ErrNoEntry{}
+		return bookkeeping.Block{}, ledgercore.ErrNoEntry{}
 	}
 	round := basics.Round(max.Int64)
 
@@ -390,7 +390,7 @@ func blockEnsureSingleBlock(tx *sql.Tx) (blk bookkeeping.Block, err error) {
 	err = tx.QueryRow("SELECT blkdata FROM catchpointblocks WHERE rnd=?", round).Scan(&buf)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			err = common.ErrNoEntry{Round: round}
+			err = ledgercore.ErrNoEntry{Round: round}
 		}
 		return
 	}
