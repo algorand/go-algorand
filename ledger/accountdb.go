@@ -27,6 +27,7 @@ import (
 
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
 )
@@ -385,7 +386,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 	_, err = tx.Exec("INSERT INTO acctrounds (id, rnd) VALUES ('acctbase', 0)")
 	if err == nil {
 		var ot basics.OverflowTracker
-		var totals AccountTotals
+		var totals ledgercore.AccountTotals
 
 		for addr, data := range initAccounts {
 			_, err = tx.Exec("INSERT INTO accountbase (address, data) VALUES (?, ?)",
@@ -394,7 +395,7 @@ func accountsInit(tx *sql.Tx, initAccounts map[basics.Address]basics.AccountData
 				return err
 			}
 
-			totals.addAccount(proto, data, &ot)
+			totals.AddAccount(proto, data, &ot)
 		}
 
 		if ot.Overflowed {
@@ -836,7 +837,7 @@ func accountsOnlineTop(tx *sql.Tx, offset, n uint64, proto config.ConsensusParam
 	return res, rows.Err()
 }
 
-func accountsTotals(tx *sql.Tx, catchpointStaging bool) (totals AccountTotals, err error) {
+func accountsTotals(tx *sql.Tx, catchpointStaging bool) (totals ledgercore.AccountTotals, err error) {
 	id := ""
 	if catchpointStaging {
 		id = "catchpointStaging"
@@ -850,7 +851,7 @@ func accountsTotals(tx *sql.Tx, catchpointStaging bool) (totals AccountTotals, e
 	return
 }
 
-func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool) error {
+func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointStaging bool) error {
 	id := ""
 	if catchpointStaging {
 		id = "catchpointStaging"
@@ -866,7 +867,7 @@ func accountsPutTotals(tx *sql.Tx, totals AccountTotals, catchpointStaging bool)
 
 // accountsNewRound updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
 // The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
-func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, creatables map[basics.CreatableIndex]modifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (updatedAccounts []persistedAccountData, err error) {
+func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (updatedAccounts []persistedAccountData, err error) {
 
 	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteByRowIDStmt, insertStmt, updateStmt *sql.Stmt
 
@@ -958,10 +959,10 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 		defer deleteCreatableIdxStmt.Close()
 
 		for cidx, cdelta := range creatables {
-			if cdelta.created {
-				_, err = insertCreatableIdxStmt.Exec(cidx, cdelta.creator[:], cdelta.ctype)
+			if cdelta.Created {
+				_, err = insertCreatableIdxStmt.Exec(cidx, cdelta.Creator[:], cdelta.Ctype)
 			} else {
-				_, err = deleteCreatableIdxStmt.Exec(cidx, cdelta.ctype)
+				_, err = deleteCreatableIdxStmt.Exec(cidx, cdelta.Ctype)
 			}
 			if err != nil {
 				return
@@ -973,7 +974,7 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 }
 
 // totalsNewRounds updates the accountsTotals by applying series of round changes
-func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]basics.AccountData, compactUpdates map[basics.Address]accountDeltaCount, accountTotals []AccountTotals, protos []config.ConsensusParams) (err error) {
+func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]basics.AccountData, compactUpdates map[basics.Address]accountDeltaCount, accountTotals []ledgercore.AccountTotals, protos []config.ConsensusParams) (err error) {
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx, false)
 	if err != nil {
@@ -987,18 +988,18 @@ func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]basics.AccountData
 	}
 
 	for i := 0; i < len(updates); i++ {
-		totals.applyRewards(accountTotals[i].RewardsLevel, &ot)
+		totals.ApplyRewards(accountTotals[i].RewardsLevel, &ot)
 
 		for addr, data := range updates[i] {
 
 			if oldAccountData, has := accounts[addr]; has {
-				totals.delAccount(protos[i], oldAccountData, &ot)
+				totals.DelAccount(protos[i], oldAccountData, &ot)
 			} else {
 				err = fmt.Errorf("missing old account data")
 				return
 			}
 
-			totals.addAccount(protos[i], data, &ot)
+			totals.AddAccount(protos[i], data, &ot)
 			accounts[addr] = data
 		}
 	}
