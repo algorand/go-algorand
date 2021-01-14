@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package ledgercore
 
 import (
 	"github.com/algorand/go-algorand/config"
@@ -68,21 +68,24 @@ func (at *AccountTotals) statusField(status basics.Status) *AlgoCount {
 	}
 }
 
-func (at *AccountTotals) addAccount(proto config.ConsensusParams, data basics.AccountData, ot *basics.OverflowTracker) {
+// AddAccount adds an account algos from the total money
+func (at *AccountTotals) AddAccount(proto config.ConsensusParams, data basics.AccountData, ot *basics.OverflowTracker) {
 	sum := at.statusField(data.Status)
 	algos, _ := data.Money(proto, at.RewardsLevel)
 	sum.Money = ot.AddA(sum.Money, algos)
 	sum.RewardUnits = ot.Add(sum.RewardUnits, data.MicroAlgos.RewardUnits(proto))
 }
 
-func (at *AccountTotals) delAccount(proto config.ConsensusParams, data basics.AccountData, ot *basics.OverflowTracker) {
+// DelAccount removes an account algos from the total money
+func (at *AccountTotals) DelAccount(proto config.ConsensusParams, data basics.AccountData, ot *basics.OverflowTracker) {
 	sum := at.statusField(data.Status)
 	algos, _ := data.Money(proto, at.RewardsLevel)
 	sum.Money = ot.SubA(sum.Money, algos)
 	sum.RewardUnits = ot.Sub(sum.RewardUnits, data.MicroAlgos.RewardUnits(proto))
 }
 
-func (at *AccountTotals) applyRewards(rewardsLevel uint64, ot *basics.OverflowTracker) {
+// ApplyRewards adds the reward to the account totals based on the new rewards level
+func (at *AccountTotals) ApplyRewards(rewardsLevel uint64, ot *basics.OverflowTracker) {
 	rewardsPerUnit := ot.Sub(rewardsLevel, at.RewardsLevel)
 	at.RewardsLevel = rewardsLevel
 	at.Online.applyRewards(rewardsPerUnit, ot)

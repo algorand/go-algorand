@@ -106,11 +106,11 @@ func (al *logicLedger) AssetParams(assetIdx basics.AssetIndex) (basics.AssetPara
 }
 
 func (al *logicLedger) Round() basics.Round {
-	return al.cow.mods.hdr.Round
+	return al.cow.mods.Hdr.Round
 }
 
 func (al *logicLedger) LatestTimestamp() int64 {
-	return al.cow.mods.prevTimestamp
+	return al.cow.mods.PrevTimestamp
 }
 
 func (al *logicLedger) ApplicationID() basics.AppIndex {

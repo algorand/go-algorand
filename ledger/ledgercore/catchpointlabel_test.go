@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package ledgercore
 
 import (
 	"testing"
@@ -45,7 +45,7 @@ func TestUniqueCatchpointLabel(t *testing.T) {
 		for _, ledgerRoundHash := range ledgerRoundBlockHashes {
 			for _, balancesMerkleRoot := range balancesMerkleRoots {
 				for _, total := range totals {
-					label := makeCatchpointLabel(r, ledgerRoundHash, balancesMerkleRoot, total)
+					label := MakeCatchpointLabel(r, ledgerRoundHash, balancesMerkleRoot, total)
 					require.False(t, uniqueSet[label.String()])
 					uniqueSet[label.String()] = true
 				}
@@ -72,7 +72,7 @@ func TestCatchpointLabelParsing(t *testing.T) {
 		for _, ledgerRoundHash := range ledgerRoundBlockHashes {
 			for _, balancesMerkleRoot := range balancesMerkleRoots {
 				for _, total := range totals {
-					label := makeCatchpointLabel(r, ledgerRoundHash, balancesMerkleRoot, total)
+					label := MakeCatchpointLabel(r, ledgerRoundHash, balancesMerkleRoot, total)
 					parsedRound, parsedHash, err := ParseCatchpointLabel(label.String())
 					require.Equal(t, r, parsedRound)
 					require.NotEqual(t, crypto.Digest{}, parsedHash)

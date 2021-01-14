@@ -23,6 +23,7 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // notifier is a struct that encapsulates a single-shot channel; it will only be signaled once.
@@ -86,7 +87,7 @@ func (b *bulletin) loadFromDisk(l ledgerForTracker) error {
 func (b *bulletin) close() {
 }
 
-func (b *bulletin) newBlock(blk bookkeeping.Block, delta StateDelta) {
+func (b *bulletin) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 }
 
 func (b *bulletin) committedUpTo(rnd basics.Round) basics.Round {

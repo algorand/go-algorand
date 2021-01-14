@@ -28,7 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 	"github.com/algorand/go-algorand/network"
@@ -280,7 +280,7 @@ func (s *Service) fetchAndWrite(fetcher Fetcher, r basics.Round, prevFetchComple
 				err = s.ledger.AddBlock(*block, *cert)
 				if err != nil {
 					switch err.(type) {
-					case ledger.BlockInLedgerError:
+					case ledgercore.BlockInLedgerError:
 						s.log.Infof("fetchAndWrite(%d): block already in ledger", r)
 						return true
 					case protocol.Error:
