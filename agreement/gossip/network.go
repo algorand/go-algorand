@@ -32,7 +32,7 @@ import (
 
 var (
 	voteBufferSize     = 10000
-	proposalBufferSize = 2
+	proposalBufferSize = 25
 	bundleBufferSize   = 7
 )
 
