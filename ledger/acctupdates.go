@@ -153,7 +153,7 @@ type accountUpdates struct {
 	dbRound basics.Round
 
 	// deltas stores updates for every round after dbRound.
-	deltas []map[basics.Address]accountDelta
+	deltas []map[basics.Address]basics.AccountData
 
 	// accounts stores the most recent account state for every
 	// address that appears in deltas.
@@ -501,17 +501,17 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 		modifiedAccounts := make(map[basics.Address]*onlineAccount)
 		for o := uint64(0); o < offset; o++ {
 			for addr, d := range au.deltas[o] {
-				if d.new.Status != basics.Online {
+				if d.Status != basics.Online {
 					modifiedAccounts[addr] = nil
 					continue
 				}
 
-				if !(d.new.VoteFirstValid <= voteRnd && voteRnd <= d.new.VoteLastValid) {
+				if !(d.VoteFirstValid <= voteRnd && voteRnd <= d.VoteLastValid) {
 					modifiedAccounts[addr] = nil
 					continue
 				}
 
-				modifiedAccounts[addr] = accountDataToOnline(addr, &d.new, proto)
+				modifiedAccounts[addr] = accountDataToOnline(addr, &d, proto)
 			}
 		}
 
@@ -1457,11 +1457,11 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta StateDelta) 
 		}
 
 		newTotals.delAccount(proto, previousAccountData, &ot)
-		newTotals.addAccount(proto, data.new, &ot)
+		newTotals.addAccount(proto, data, &ot)
 
 		macct := au.accounts[addr]
 		macct.ndeltas++
-		macct.data = data.new
+		macct.data = data
 		au.accounts[addr] = macct
 	}
 
@@ -1545,7 +1545,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 				offset--
 				d, ok := au.deltas[offset][addr]
 				if ok {
-					return d.new, nil
+					return d, nil
 				}
 			}
 		}
@@ -1624,7 +1624,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 				if ok {
 					// the returned validThrough here is not optimal, but it still correct. We could get a more accurate value by scanning
 					// the deltas forward, but this would be time consuming loop, which might not pay off.
-					return d.new, rnd, nil
+					return d, rnd, nil
 				}
 			}
 		} else {
@@ -1831,7 +1831,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+dbRound))) % au.catchpointInterval))
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
-	deltas := make([]map[basics.Address]accountDelta, offset, offset)
+	deltas := make([]map[basics.Address]basics.AccountData, offset, offset)
 	creatableDeltas := make([]map[basics.CreatableIndex]modifiedCreatable, offset, offset)
 	roundTotals := make([]AccountTotals, offset+1, offset+1)
 	protos := make([]config.ConsensusParams, offset+1, offset+1)
@@ -2011,10 +2011,10 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 }
 
-// compactDeltas takes an arary of account map deltas ( one array entry per round ), and corresponding creatables array, and compact the arrays into a single
+// compactDeltas takes an array of account map deltas ( one array entry per round ), and corresponding creatables array, and compact the arrays into a single
 // map that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes. For both the account deltas as well as for the creatables,
 // it counts the number of changes per round by specifying it in the ndeltas field of the accountDeltaCount/modifiedCreatable. The ndeltas field of the input creatableDeltas is ignored.
-func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable, baseAccounts lruAccounts) (outAccountDeltas map[basics.Address]accountDeltaCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
+func compactDeltas(accountDeltas []map[basics.Address]basics.AccountData, creatableDeltas []map[basics.CreatableIndex]modifiedCreatable, baseAccounts lruAccounts) (outAccountDeltas map[basics.Address]accountDeltaCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]modifiedCreatable) {
 	if len(accountDeltas) > 0 {
 		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
 		outAccountDeltas = make(map[basics.Address]accountDeltaCount, 1+len(accountDeltas[0])*len(accountDeltas))
@@ -2024,13 +2024,13 @@ func compactDeltas(accountDeltas []map[basics.Address]accountDelta, creatableDel
 				if prev, has := outAccountDeltas[addr]; has {
 					outAccountDeltas[addr] = accountDeltaCount{
 						old:     prev.old,
-						new:     acctDelta.new,
+						new:     acctDelta,
 						ndeltas: prev.ndeltas + 1,
 					}
 				} else {
 					// it's a new entry.
 					newEntry := accountDeltaCount{
-						new:     acctDelta.new,
+						new:     acctDelta,
 						ndeltas: 1,
 					}
 					if baseAccountData, has := baseAccounts.read(addr); has {
