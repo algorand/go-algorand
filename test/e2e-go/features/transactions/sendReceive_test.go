@@ -40,13 +40,14 @@ func GenerateRandomBytes(n int) []byte {
 // this test checks that two accounts' balances stay up to date
 // as they send each other money many times
 func TestAccountsCanSendMoney(t *testing.T) {
+	numberOfSends := 25
 	if testing.Short() {
-		t.Skip()
+		numberOfSends = 3
 	}
-	testAccountsCanSendMoney(t, filepath.Join("nettemplates", "TwoNodes50Each.json"))
+	testAccountsCanSendMoney(t, filepath.Join("nettemplates", "TwoNodes50Each.json"), numberOfSends)
 }
 
-func testAccountsCanSendMoney(t *testing.T, templatePath string) {
+func testAccountsCanSendMoney(t *testing.T, templatePath string, numberOfSends int) {
 	t.Parallel()
 	a := require.New(t)
 
@@ -82,15 +83,16 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string) {
 	transactionFee := minTxnFee + 5
 	amountPongSendsPing := minAcctBalance
 	amountPingSendsPong := minAcctBalance * 3 / 2
-	const numberOfSends = 225
 
-	txidsToAddresses := make(map[string]string)
+	pongTxidsToAddresses := make(map[string]string)
+	pingTxidsToAddresses := make(map[string]string)
+
 	for i := 0; i < numberOfSends; i++ {
 		pongTx, err := pongClient.SendPaymentFromUnencryptedWallet(pongAccount, pingAccount, transactionFee, amountPongSendsPing, GenerateRandomBytes(8))
-		txidsToAddresses[pongTx.ID().String()] = pongAccount
+		pongTxidsToAddresses[pongTx.ID().String()] = pongAccount
 		a.NoError(err, "fixture should be able to send money (pong -> ping), error on send number %v", i)
 		pingTx, err := pingClient.SendPaymentFromUnencryptedWallet(pingAccount, pongAccount, transactionFee, amountPingSendsPong, GenerateRandomBytes(8))
-		txidsToAddresses[pingTx.ID().String()] = pingAccount
+		pingTxidsToAddresses[pingTx.ID().String()] = pingAccount
 		a.NoError(err, "fixture should be able to send money (ping -> pong), error on send number %v", i)
 		expectedPingBalance = expectedPingBalance - transactionFee - amountPingSendsPong + amountPongSendsPing
 		expectedPongBalance = expectedPongBalance - transactionFee - amountPongSendsPing + amountPingSendsPong
@@ -101,9 +103,20 @@ func testAccountsCanSendMoney(t *testing.T, templatePath string) {
 	}
 	curStatus, _ := pongClient.Status()
 	curRound := curStatus.LastRound
-	fixture.WaitForAllTxnsToConfirm(curRound+uint64(5), txidsToAddresses)
-	pingBalance, err = c.GetBalance(pingAccount)
-	pongBalance, err = c.GetBalance(pongAccount)
+
+	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pongClient.DataDir()))
+	fixture.WaitForAllTxnsToConfirm(curRound+uint64(1), pingTxidsToAddresses)
+
+	pingBalance, _ = fixture.GetBalanceAndRound(pingAccount)
+	pongBalance, _ = fixture.GetBalanceAndRound(pongAccount)
+	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected.")
+	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected.")
+
+	fixture.AlgodClient = fixture.GetAlgodClientForController(fixture.GetNodeControllerForDataDir(pingClient.DataDir()))
+	fixture.WaitForAllTxnsToConfirm(curRound+uint64(1), pongTxidsToAddresses)
+
+	pingBalance, _ = fixture.GetBalanceAndRound(pingAccount)
+	pongBalance, _ = fixture.GetBalanceAndRound(pongAccount)
 	a.True(expectedPingBalance <= pingBalance, "ping balance is different than expected.")
 	a.True(expectedPongBalance <= pongBalance, "pong balance is different than expected.")
 }
