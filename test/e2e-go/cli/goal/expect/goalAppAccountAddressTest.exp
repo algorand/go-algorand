@@ -7,7 +7,7 @@ log_user 1
 # * The test creates four additional accounts, opt-in one to the app, then passes the four accounts
 #   as --app-account flag to goal app call.
 # * The teal program writes the four passed account addresses into the local state of the caller and one
-# * additional account. 
+# * additional account.
 # * The test verifies the correct addresses are written to the local states of both.
 # * It also tests for the error when one flag is missing
 ###

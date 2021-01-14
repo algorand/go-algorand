@@ -42,8 +42,8 @@ type Ledger struct {
 	// Database connections to the DBs storing blocks and tracker state.
 	// We use potentially different databases to avoid SQLite contention
 	// during catchup.
-	trackerDBs dbPair
-	blockDBs   dbPair
+	trackerDBs db.Pair
+	blockDBs   db.Pair
 
 	// blockQ is the buffer of added blocks that will be flushed to
 	// persistent storage
@@ -131,16 +131,16 @@ func OpenLedger(
 		err = fmt.Errorf("OpenLedger.openLedgerDB %v", err)
 		return nil, err
 	}
-	l.trackerDBs.rdb.SetLogger(log)
-	l.trackerDBs.wdb.SetLogger(log)
-	l.blockDBs.rdb.SetLogger(log)
-	l.blockDBs.wdb.SetLogger(log)
+	l.trackerDBs.Rdb.SetLogger(log)
+	l.trackerDBs.Wdb.SetLogger(log)
+	l.blockDBs.Rdb.SetLogger(log)
+	l.blockDBs.Wdb.SetLogger(log)
 
 	l.setSynchronousMode(context.Background(), l.synchronousMode)
 
 	start := time.Now()
 	ledgerInitblocksdbCount.Inc(nil)
-	err = l.blockDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = l.blockDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return initBlocksDB(tx, l, []bookkeeping.Block{genesisInitState.Block}, cfg.Archival)
 	})
 	ledgerInitblocksdbMicros.AddMicrosecondsSince(start, nil)
@@ -213,7 +213,7 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	// Check that the genesis hash, if present, matches.
 	start := time.Now()
 	ledgerVerifygenhashCount.Inc(nil)
-	err = l.blockDBs.rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		latest, err := blockLatest(tx)
 		if err != nil {
 			return err
@@ -237,7 +237,7 @@ func (l *Ledger) verifyMatchingGenesisHash() (err error) {
 	return
 }
 
-func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs dbPair, err error) {
+func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs db.Pair, blockDBs db.Pair, err error) {
 	// Backwards compatibility: we used to store both blocks and tracker
 	// state in a single SQLite db file.
 	var trackerDBFilename string
@@ -258,12 +258,12 @@ func openLedgerDB(dbPathPrefix string, dbMem bool) (trackerDBs dbPair, blockDBs 
 	trackerDBFilename = dbPathPrefix + ".tracker.sqlite"
 	blockDBFilename = dbPathPrefix + ".block.sqlite"
 
-	trackerDBs, err = dbOpen(trackerDBFilename, dbMem)
+	trackerDBs, err = db.OpenPair(trackerDBFilename, dbMem)
 	if err != nil {
 		return
 	}
 
-	blockDBs, err = dbOpen(blockDBFilename, dbMem)
+	blockDBs, err = db.OpenPair(blockDBFilename, dbMem)
 	if err != nil {
 		return
 	}
@@ -277,13 +277,13 @@ func (l *Ledger) setSynchronousMode(ctx context.Context, synchronousMode db.Sync
 		return
 	}
 
-	err := l.blockDBs.wdb.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
+	err := l.blockDBs.Wdb.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
 	if err != nil {
 		l.log.Warnf("ledger.setSynchronousMode unable to set syncronous mode on blocks db: %v", err)
 		return
 	}
 
-	err = l.trackerDBs.wdb.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
+	err = l.trackerDBs.Wdb.SetSynchronousMode(ctx, synchronousMode, synchronousMode >= db.SynchronousModeFull)
 	if err != nil {
 		l.log.Warnf("ledger.setSynchronousMode unable to set syncronous mode on trackers db: %v", err)
 		return
@@ -366,8 +366,8 @@ func (l *Ledger) Close() {
 	l.trackers.close()
 
 	// last, we close the underlying database connections.
-	l.blockDBs.close()
-	l.trackerDBs.close()
+	l.blockDBs.Close()
+	l.trackerDBs.Close()
 }
 
 // RegisterBlockListeners registers listeners that will be called when a
@@ -481,10 +481,11 @@ func (l *Ledger) Totals(rnd basics.Round) (AccountTotals, error) {
 	return l.accts.Totals(rnd)
 }
 
-func (l *Ledger) checkDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl txlease) error {
+// CheckDup return whether a transaction is a duplicate one.
+func (l *Ledger) CheckDup(currentProto config.ConsensusParams, current basics.Round, firstValid basics.Round, lastValid basics.Round, txid transactions.Txid, txl TxLease) error {
 	l.trackerMu.RLock()
 	defer l.trackerMu.RUnlock()
-	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl)
+	return l.txTail.checkDup(currentProto, current, firstValid, lastValid, txid, txl.txlease)
 }
 
 // GetRoundTxIds returns a map of the transactions ids that we have for the given round
@@ -627,12 +628,12 @@ func (l *Ledger) GetCatchpointStream(round basics.Round) (ReadCloseSizer, error)
 }
 
 // ledgerForTracker methods
-func (l *Ledger) trackerDB() dbPair {
+func (l *Ledger) trackerDB() db.Pair {
 	return l.trackerDBs
 }
 
 // ledgerForTracker methods
-func (l *Ledger) blockDB() dbPair {
+func (l *Ledger) blockDB() db.Pair {
 	return l.blockDBs
 }
 
@@ -666,6 +667,11 @@ func (l *Ledger) VerifiedTransactionCache() verify.VerifiedTransactionCache {
 type txlease struct {
 	sender basics.Address
 	lease  [32]byte
+}
+
+// TxLease is an exported version of txlease
+type TxLease struct {
+	txlease
 }
 
 var ledgerInitblocksdbCount = metrics.NewCounter("ledger_initblocksdb_count", "calls")

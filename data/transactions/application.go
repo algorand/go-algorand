@@ -203,3 +203,22 @@ func (ac *ApplicationCallTxnFields) AddressByIndex(accountIdx uint64, sender bas
 	// accountIdx must be in [1, len(ac.Accounts)]
 	return ac.Accounts[accountIdx-1], nil
 }
+
+// IndexByAddress converts an address into an integer offset into [txn.Sender,
+// txn.Accounts[0], ...], returning the index at the first match. It returns
+// an error if there is no such match.
+func (ac *ApplicationCallTxnFields) IndexByAddress(target basics.Address, sender basics.Address) (uint64, error) {
+	// Index 0 always corresponds to the sender
+	if target == sender {
+		return 0, nil
+	}
+
+	// Otherwise we index into ac.Accounts
+	for idx, addr := range ac.Accounts {
+		if target == addr {
+			return uint64(idx) + 1, nil
+		}
+	}
+
+	return 0, fmt.Errorf("could not find offset of address %s", target)
+}

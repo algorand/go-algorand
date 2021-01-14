@@ -36,6 +36,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 func randomAddress() basics.Address {
@@ -117,7 +118,7 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 		for i := uint64(0); i < appStatesCount; i++ {
 			ap := basics.AppLocalState{
 				Schema: basics.StateSchema{
-					NumUint:      crypto.RandUint64() % 5,
+					NumUint:      crypto.RandUint64()%5 + 1,
 					NumByteSlice: crypto.RandUint64() % 5,
 				},
 				KeyValue: make(map[string]basics.TealValue),
@@ -135,7 +136,7 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 				tv := basics.TealValue{
 					Type: basics.TealBytesType,
 				}
-				bytes := make([]byte, crypto.RandUint64()%512)
+				bytes := make([]byte, crypto.RandUint64()%uint64(config.MaxBytesKeyValueLen))
 				crypto.RandBytes(bytes[:])
 				tv.Bytes = string(bytes)
 				ap.KeyValue[appName] = tv
@@ -163,11 +164,11 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 				GlobalState:       make(basics.TealKeyValue),
 				StateSchemas: basics.StateSchemas{
 					LocalStateSchema: basics.StateSchema{
-						NumUint:      crypto.RandUint64() % 5,
+						NumUint:      crypto.RandUint64()%5 + 1,
 						NumByteSlice: crypto.RandUint64() % 5,
 					},
 					GlobalStateSchema: basics.StateSchema{
-						NumUint:      crypto.RandUint64() % 5,
+						NumUint:      crypto.RandUint64()%5 + 1,
 						NumByteSlice: crypto.RandUint64() % 5,
 					},
 				},
@@ -195,7 +196,7 @@ func randomFullAccountData(rewardsLevel, lastCreatableID uint64) (basics.Account
 				tv := basics.TealValue{
 					Type: basics.TealBytesType,
 				}
-				bytes := make([]byte, crypto.RandUint64()%512)
+				bytes := make([]byte, crypto.RandUint64()%uint64(config.MaxBytesKeyValueLen))
 				crypto.RandBytes(bytes[:])
 				tv.Bytes = string(bytes)
 				ap.GlobalState[appName] = tv
@@ -351,7 +352,8 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	var totalOnline, totalOffline, totalNotPart uint64
 
 	for addr, data := range accts {
-		d, _, err := aq.lookup(addr)
+		pad, err := aq.lookup(addr)
+		d := pad.accountData
 		require.NoError(t, err)
 		require.Equal(t, d, data)
 
@@ -379,10 +381,10 @@ func checkAccounts(t *testing.T, tx *sql.Tx, rnd basics.Round, accts map[basics.
 	require.Equal(t, totals.Participating().Raw, totalOnline+totalOffline)
 	require.Equal(t, totals.All().Raw, totalOnline+totalOffline+totalNotPart)
 
-	d, dbRound, err := aq.lookup(randomAddress())
+	d, err := aq.lookup(randomAddress())
 	require.NoError(t, err)
-	require.Equal(t, rnd, dbRound)
-	require.Equal(t, d, basics.AccountData{})
+	require.Equal(t, rnd, d.round)
+	require.Equal(t, d.accountData, basics.AccountData{})
 
 	onlineAccounts := make(map[basics.Address]*onlineAccount)
 	for addr, data := range accts {
@@ -430,9 +432,9 @@ func TestAccountDBInit(t *testing.T) {
 
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	tx, err := dbs.wdb.Handle.Begin()
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
 	defer tx.Rollback()
 
@@ -504,9 +506,9 @@ func TestAccountDBRound(t *testing.T) {
 
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	tx, err := dbs.wdb.Handle.Begin()
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
 	defer tx.Rollback()
 
@@ -522,6 +524,8 @@ func TestAccountDBRound(t *testing.T) {
 	lastCreatableID := crypto.RandUint64() % 512
 	ctbsList, randomCtbs := randomCreatables(numElementsPerSegement)
 	expectedDbImage := make(map[basics.CreatableIndex]modifiedCreatable)
+	var baseAccounts lruAccounts
+	baseAccounts.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
 		var updates map[basics.Address]accountDelta
 		var newaccts map[basics.Address]basics.AccountData
@@ -530,10 +534,13 @@ func TestAccountDBRound(t *testing.T) {
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
 			expectedDbImage, numElementsPerSegement)
 
-		updatesCnt, _ := compactDeltas([]map[basics.Address]accountDelta{updates}, nil)
-		err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto)
+		updatesCnt, needLoadAddresses, _ := compactDeltas([]map[basics.Address]accountDelta{updates}, nil, baseAccounts)
+
+		err = accountsLoadOld(tx, needLoadAddresses, updatesCnt)
 		require.NoError(t, err)
-		err = totalsNewRounds(tx, []map[basics.Address]accountDelta{updates}, []AccountTotals{{}}, []config.ConsensusParams{proto})
+		err = totalsNewRounds(tx, []map[basics.Address]accountDelta{updates}, updatesCnt, []AccountTotals{{}}, []config.ConsensusParams{proto})
+		require.NoError(t, err)
+		_, err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)
 		err = updateAccountsRound(tx, basics.Round(i), 0)
 		require.NoError(t, err)
@@ -665,10 +672,7 @@ func randomCreatable(uniqueAssetIds map[basics.CreatableIndex]bool) (
 	return assetIdx, creatable
 }
 
-func benchmarkInitBalances(b testing.TB, numAccounts int, dbs dbPair, proto config.ConsensusParams) (updates map[basics.Address]basics.AccountData) {
-	tx, err := dbs.wdb.Handle.Begin()
-	require.NoError(b, err)
-
+func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.Address]basics.AccountData) {
 	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
 	updates = make(map[basics.Address]basics.AccountData, numAccounts)
@@ -708,14 +712,26 @@ func benchmarkInitBalances(b testing.TB, numAccounts int, dbs dbPair, proto conf
 			},
 		}
 	}
-	accountsInit(tx, updates, proto)
+	return
+}
+
+func benchmarkInitBalances(b testing.TB, numAccounts int, dbs db.Pair, proto config.ConsensusParams) (updates map[basics.Address]basics.AccountData) {
+	tx, err := dbs.Wdb.Handle.Begin()
+	require.NoError(b, err)
+
+	updates = generateRandomTestingAccountBalances(numAccounts)
+
+	err = accountsInit(tx, updates, proto)
+	require.NoError(b, err)
+	err = accountsAddNormalizedBalance(tx, proto)
+	require.NoError(b, err)
 	err = tx.Commit()
 	require.NoError(b, err)
 	return
 }
 
-func cleanupTestDb(dbs dbPair, dbName string, inMemory bool) {
-	dbs.close()
+func cleanupTestDb(dbs db.Pair, dbName string, inMemory bool) {
+	dbs.Close()
 	if !inMemory {
 		os.Remove(dbName)
 	}
@@ -728,7 +744,7 @@ func benchmarkReadingAllBalances(b *testing.B, inMemory bool) {
 	defer cleanupTestDb(dbs, fn, inMemory)
 
 	benchmarkInitBalances(b, b.N, dbs, proto)
-	tx, err := dbs.rdb.Handle.Begin()
+	tx, err := dbs.Rdb.Handle.Begin()
 	require.NoError(b, err)
 
 	b.ResetTimer()
@@ -761,7 +777,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 
 	accounts := benchmarkInitBalances(b, b.N, dbs, proto)
 
-	qs, err := accountsDbInit(dbs.rdb.Handle, dbs.wdb.Handle)
+	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
 	require.NoError(b, err)
 
 	// read all the balances in the database, shuffled
@@ -776,7 +792,7 @@ func benchmarkReadingRandomBalances(b *testing.B, inMemory bool) {
 	// only measure the actual fetch time
 	b.ResetTimer()
 	for _, addr := range addrs {
-		_, _, err = qs.lookup(addr)
+		_, err = qs.lookup(addr)
 		require.NoError(b, err)
 	}
 }
@@ -788,7 +804,129 @@ func BenchmarkReadingRandomBalancesRAM(b *testing.B) {
 func BenchmarkReadingRandomBalancesDisk(b *testing.B) {
 	benchmarkReadingRandomBalances(b, false)
 }
+func BenchmarkWritingRandomBalancesDisk(b *testing.B) {
+	totalStartupAccountsNumber := 5000000
+	batchCount := 1000
+	startupAcct := 5
+	initDatabase := func() (*sql.Tx, func(), error) {
+		proto := config.Consensus[protocol.ConsensusCurrentVersion]
+		dbs, fn := dbOpenTest(b, false)
+		setDbLogging(b, dbs)
+		cleanup := func() {
+			cleanupTestDb(dbs, fn, false)
+		}
 
+		benchmarkInitBalances(b, startupAcct, dbs, proto)
+		dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeOff, false)
+
+		// insert 1M accounts data, in batches of 1000
+		for batch := 0; batch <= batchCount; batch++ {
+			fmt.Printf("\033[M\r %d / %d accounts written", totalStartupAccountsNumber*batch/batchCount, totalStartupAccountsNumber)
+
+			tx, err := dbs.Wdb.Handle.Begin()
+
+			require.NoError(b, err)
+
+			acctsData := generateRandomTestingAccountBalances(totalStartupAccountsNumber / batchCount)
+			replaceStmt, err := tx.Prepare("INSERT INTO accountbase (address, normalizedonlinebalance, data) VALUES (?, ?, ?)")
+			require.NoError(b, err)
+			defer replaceStmt.Close()
+			for addr, acctData := range acctsData {
+				_, err = replaceStmt.Exec(addr[:], uint64(0), protocol.Encode(&acctData))
+				require.NoError(b, err)
+			}
+
+			err = tx.Commit()
+			require.NoError(b, err)
+		}
+		dbs.Wdb.SetSynchronousMode(context.Background(), db.SynchronousModeFull, true)
+		tx, err := dbs.Wdb.Handle.Begin()
+		require.NoError(b, err)
+		fmt.Printf("\033[M\r")
+		return tx, cleanup, err
+	}
+
+	selectAccounts := func(tx *sql.Tx) (accountsAddress [][]byte, accountsRowID []int) {
+		accountsAddress = make([][]byte, 0, totalStartupAccountsNumber+startupAcct)
+		accountsRowID = make([]int, 0, totalStartupAccountsNumber+startupAcct)
+
+		// read all the accounts to obtain the addrs.
+		rows, err := tx.Query("SELECT rowid, address FROM accountbase")
+		defer rows.Close()
+		for rows.Next() {
+			var addrbuf []byte
+			var rowid int
+			err = rows.Scan(&rowid, &addrbuf)
+			require.NoError(b, err)
+			accountsAddress = append(accountsAddress, addrbuf)
+			accountsRowID = append(accountsRowID, rowid)
+		}
+		return
+	}
+
+	tx, cleanup, err := initDatabase()
+	require.NoError(b, err)
+	defer cleanup()
+
+	accountsAddress, accountsRowID := selectAccounts(tx)
+
+	b.Run("ByAddr", func(b *testing.B) {
+		preparedUpdate, err := tx.Prepare("UPDATE accountbase SET data = ? WHERE address = ?")
+		require.NoError(b, err)
+		defer preparedUpdate.Close()
+		// updates accounts by address
+		randomAccountData := make([]byte, 200)
+		crypto.RandBytes(randomAccountData)
+		updateOrder := rand.Perm(len(accountsRowID))
+		b.ResetTimer()
+		startTime := time.Now()
+		for n := 0; n < b.N; n++ {
+			for _, acctIdx := range updateOrder {
+				res, err := preparedUpdate.Exec(randomAccountData[:], accountsAddress[acctIdx])
+				require.NoError(b, err)
+				rowsAffected, err := res.RowsAffected()
+				require.NoError(b, err)
+				require.Equal(b, int64(1), rowsAffected)
+				n++
+				if n == b.N {
+					break
+				}
+			}
+
+		}
+		b.ReportMetric(float64(int(time.Now().Sub(startTime))/b.N), "ns/acct_update")
+	})
+
+	b.Run("ByRowID", func(b *testing.B) {
+		preparedUpdate, err := tx.Prepare("UPDATE accountbase SET data = ? WHERE rowid = ?")
+		require.NoError(b, err)
+		defer preparedUpdate.Close()
+		// updates accounts by address
+		randomAccountData := make([]byte, 200)
+		crypto.RandBytes(randomAccountData)
+		updateOrder := rand.Perm(len(accountsRowID))
+		b.ResetTimer()
+		startTime := time.Now()
+		for n := 0; n < b.N; n++ {
+			for _, acctIdx := range updateOrder {
+				res, err := preparedUpdate.Exec(randomAccountData[:], accountsRowID[acctIdx])
+				require.NoError(b, err)
+				rowsAffected, err := res.RowsAffected()
+				require.NoError(b, err)
+				require.Equal(b, int64(1), rowsAffected)
+				n++
+				if n == b.N {
+					break
+				}
+			}
+		}
+		b.ReportMetric(float64(int(time.Now().Sub(startTime))/b.N), "ns/acct_update")
+
+	})
+
+	err = tx.Commit()
+	require.NoError(b, err)
+}
 func TestAccountsReencoding(t *testing.T) {
 	oldEncodedAccountsData := [][]byte{
 		{132, 164, 97, 108, 103, 111, 206, 5, 234, 236, 80, 164, 97, 112, 97, 114, 129, 206, 0, 3, 60, 164, 137, 162, 97, 109, 196, 32, 49, 54, 101, 102, 97, 97, 51, 57, 50, 52, 97, 54, 102, 100, 57, 100, 51, 97, 52, 56, 50, 52, 55, 57, 57, 97, 52, 97, 99, 54, 53, 100, 162, 97, 110, 167, 65, 80, 84, 75, 73, 78, 71, 162, 97, 117, 174, 104, 116, 116, 112, 58, 47, 47, 115, 111, 109, 101, 117, 114, 108, 161, 99, 196, 32, 183, 97, 139, 76, 1, 45, 180, 52, 183, 186, 220, 252, 85, 135, 185, 87, 156, 87, 158, 83, 49, 200, 133, 169, 43, 205, 26, 148, 50, 121, 28, 105, 161, 102, 196, 32, 183, 97, 139, 76, 1, 45, 180, 52, 183, 186, 220, 252, 85, 135, 185, 87, 156, 87, 158, 83, 49, 200, 133, 169, 43, 205, 26, 148, 50, 121, 28, 105, 161, 109, 196, 32, 60, 69, 244, 159, 234, 26, 168, 145, 153, 184, 85, 182, 46, 124, 227, 144, 84, 113, 176, 206, 109, 204, 245, 165, 100, 23, 71, 49, 32, 242, 146, 68, 161, 114, 196, 32, 183, 97, 139, 76, 1, 45, 180, 52, 183, 186, 220, 252, 85, 135, 185, 87, 156, 87, 158, 83, 49, 200, 133, 169, 43, 205, 26, 148, 50, 121, 28, 105, 161, 116, 205, 3, 32, 162, 117, 110, 163, 65, 80, 75, 165, 97, 115, 115, 101, 116, 129, 206, 0, 3, 60, 164, 130, 161, 97, 0, 161, 102, 194, 165, 101, 98, 97, 115, 101, 205, 98, 54},
@@ -798,12 +936,12 @@ func TestAccountsReencoding(t *testing.T) {
 	}
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
 	secrets := crypto.GenerateOneTimeSignatureSecrets(15, 500)
 	pubVrfKey, _ := crypto.VrfKeygenFromSeed([32]byte{0, 1, 2, 3})
 
-	err := dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 		if err != nil {
 			return err
@@ -860,7 +998,7 @@ func TestAccountsReencoding(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		modifiedAccounts, err := reencodeAccounts(ctx, tx)
 		if err != nil {
 			return err
@@ -879,9 +1017,9 @@ func TestAccountsReencoding(t *testing.T) {
 func TestAccountsDbQueriesCreateClose(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	err := dbs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		err = accountsInit(tx, make(map[basics.Address]basics.AccountData), config.Consensus[protocol.ConsensusCurrentVersion])
 		if err != nil {
 			return err
@@ -889,7 +1027,7 @@ func TestAccountsDbQueriesCreateClose(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
-	qs, err := accountsDbInit(dbs.rdb.Handle, dbs.wdb.Handle)
+	qs, err := accountsDbInit(dbs.Rdb.Handle, dbs.Wdb.Handle)
 	require.NoError(t, err)
 	require.NotNil(t, qs.listCreatablesStmt)
 	qs.close()
@@ -957,7 +1095,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 
 		normalizedAccountBalances, err := prepareNormalizedBalances(balances.Balances, proto)
 		b.StartTimer()
-		err = l.trackerDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
+		err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 			err = writeCatchpointStagingBalances(ctx, tx, normalizedAccountBalances)
 			return
 		})
@@ -969,7 +1107,7 @@ func benchmarkWriteCatchpointStagingBalancesSub(b *testing.B, ascendingOrder boo
 		last64KDuration := time.Now().Sub(last64KStart) - last64KAccountCreationTime
 		fmt.Printf("%-82s%-7d (last 64k) %-6d ns/account       %d accounts/sec\n", b.Name(), last64KSize, (last64KDuration / time.Duration(last64KSize)).Nanoseconds(), int(float64(last64KSize)/float64(last64KDuration.Seconds())))
 	}
-	stats, err := l.trackerDBs.wdb.Vacuum(context.Background())
+	stats, err := l.trackerDBs.Wdb.Vacuum(context.Background())
 	require.NoError(b, err)
 	fmt.Printf("%-82sdb fragmentation   %.1f%%\n", b.Name(), float32(stats.PagesBefore-stats.PagesAfter)*100/float32(stats.PagesBefore))
 	b.ReportMetric(float64(b.N)/float64((time.Now().Sub(accountsWritingStarted)-accountsGenerationDuration).Seconds()), "accounts/sec")
