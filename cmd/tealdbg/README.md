@@ -40,7 +40,7 @@ The debugger runs either local programs or accept HTTP connections from remote e
 configured to run with a remote debugger hook.
 
 Local debugger allows debugging TEAL from files (both sources and compiled) or from transaction(s)
-and balance records (see [Setting Debug Context](#setting-debug-context) for details).
+and balance records (see [Setting Execution Context](#setting-execution-context) for details).
 
 Remote debugger might be useful for debugging unit tests for TEAL (currently in Golang only) or for hacking **algod** `eval` and breaking on any TEAL evaluation.
 The protocol consist of three REST endpoints and one data structure describing the evaluator state.
