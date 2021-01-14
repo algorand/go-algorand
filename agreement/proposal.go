@@ -258,18 +258,15 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 	}
 
 	ve = ve.WithSeed(newSeed)
-	uncompressedProposal := makeProposal(ve, seedProof, period, address)
-	var compressedProposal proposal
-	compressedProposal.unauthenticatedProposal = uncompressedProposal.Compressed()
-	compressedProposal.ve = uncompressedProposal.ve
+	proposal := makeProposal(ve, seedProof, period, address)
 
 	value := proposalValue{
 		OriginalPeriod:   period,
 		OriginalProposer: address,
-		BlockDigest:      compressedProposal.Block.Digest(),
-		EncodingDigest:   crypto.HashObj(compressedProposal),
+		BlockDigest:      proposal.Block.Digest(),
+		EncodingDigest:   crypto.HashObj(proposal),
 	}
-	return uncompressedProposal, value, nil
+	return proposal, value, nil
 }
 
 // validate returns true if the proposal is valid.
