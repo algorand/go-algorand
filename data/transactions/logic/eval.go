@@ -1323,7 +1323,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 	case ConfigAsset:
 		sv.Uint = uint64(txn.ConfigAsset)
 	case ConfigAssetTotal:
-		sv.Uint = uint64(txn.AssetParams.Total)
+		sv.Uint = txn.AssetParams.Total
 	case ConfigAssetDecimals:
 		sv.Uint = uint64(txn.AssetParams.Decimals)
 	case ConfigAssetDefaultFrozen:
@@ -1355,7 +1355,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 		return
 	}
 
-	txnField := TxnField(field)
+	txnField := field
 	txnFieldType := TxnFieldTypes[txnField]
 	if txnFieldType != sv.argType() {
 		err = fmt.Errorf("%s expected field type is %s but got %s", txnField.String(), txnFieldType.String(), sv.argType().String())
@@ -1364,7 +1364,7 @@ func (cx *evalContext) txnFieldToStack(txn *transactions.Transaction, field TxnF
 }
 
 func opTxn(cx *evalContext) {
-	field := TxnField(uint64(cx.program[cx.pc+1]))
+	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -1387,7 +1387,7 @@ func opTxn(cx *evalContext) {
 }
 
 func opTxna(cx *evalContext) {
-	field := TxnField(uint64(cx.program[cx.pc+1]))
+	field := TxnField(cx.program[cx.pc+1])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -1417,7 +1417,7 @@ func opGtxn(cx *evalContext) {
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(uint64(cx.program[cx.pc+2]))
+	field := TxnField(cx.program[cx.pc+2])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -1430,7 +1430,7 @@ func opGtxn(cx *evalContext) {
 	}
 	var sv stackValue
 	var err error
-	if TxnField(field) == GroupIndex {
+	if field == GroupIndex {
 		// GroupIndex; asking this when we just specified it is _dumb_, but oh well
 		sv.Uint = uint64(gtxid)
 	} else {
@@ -1451,7 +1451,7 @@ func opGtxna(cx *evalContext) {
 		return
 	}
 	tx := &cx.TxnGroup[gtxid].Txn
-	field := TxnField(uint64(cx.program[cx.pc+2]))
+	field := TxnField(cx.program[cx.pc+2])
 	fs, ok := txnFieldSpecByField[field]
 	if !ok || fs.version > cx.version {
 		cx.err = fmt.Errorf("invalid txn field %d", field)
@@ -2041,7 +2041,7 @@ func opAssetParamsGet(cx *evalContext) {
 
 	var exist uint64 = 0
 	var value stackValue
-	if params, err := cx.Ledger.AssetParams(basics.AssetIndex(assetID)); err == nil {
+	if params, err := cx.Ledger.AssetParams(assetID); err == nil {
 		// params exist, read the value
 		exist = 1
 		value, err = cx.assetParamsEnumToValue(&params, paramIdx)

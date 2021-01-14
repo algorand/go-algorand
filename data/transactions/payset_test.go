@@ -32,7 +32,7 @@ func preparePayset(txnCount, acctCount int) Payset {
 			},
 		})
 	}
-	return Payset(stxnb)
+	return stxnb
 }
 func TestPaysetCommitsToTxnOrder(t *testing.T) {
 	for _, flat := range []bool{true, false} {

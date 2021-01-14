@@ -96,7 +96,7 @@ func randomObjectOfType(randtype uint64, width int, depth int) interface{} {
 	case objectUint32:
 		return uint32(crypto.RandUint64())
 	case objectUint64:
-		return uint64(crypto.RandUint64())
+		return crypto.RandUint64()
 	case objectInt8:
 		return int8(crypto.RandUint64())
 	case objectInt16:

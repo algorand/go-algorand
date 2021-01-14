@@ -97,7 +97,7 @@ func (f *GoalFixture) AccountNew(name string) (address string, err error) {
 	if lastSpaceIndex < 0 {
 		return "", fmt.Errorf("invalid account result: %s", stdout)
 	}
-	address = string(stdout[lastSpaceIndex+1:])
+	address = stdout[lastSpaceIndex+1:]
 	return
 }
 

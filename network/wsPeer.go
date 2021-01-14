@@ -388,7 +388,7 @@ func (wp *wsPeer) readLoop() {
 			wp.reportReadErr(err)
 			return
 		}
-		msg.Tag = Tag(string(tag[:]))
+		msg.Tag = Tag(tag[:])
 		slurper.Reset()
 		err = slurper.Read(reader)
 		if err != nil {

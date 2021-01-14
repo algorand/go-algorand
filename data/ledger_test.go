@@ -81,7 +81,7 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 	initAccounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 7654321})
 
 	incentivePoolBalanceAtGenesis := initAccounts[poolAddr].MicroAlgos
-	initialRewardsPerRound := incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
+	initialRewardsPerRound := incentivePoolBalanceAtGenesis.Raw / params.RewardsRateRefreshInterval
 	var emptyPayset transactions.Payset
 
 	initBlock := bookkeeping.Block{
@@ -259,7 +259,7 @@ func TestLedgerSeed(t *testing.T) {
 	blk := genesisInitState.Block
 	for rnd := basics.Round(1); rnd < basics.Round(32); rnd++ {
 		blk.BlockHeader.Round++
-		blk.BlockHeader.Seed[0] = byte(uint64(rnd))
+		blk.BlockHeader.Seed[0] = byte(rnd)
 		blk.BlockHeader.Seed[1] = byte(uint64(rnd) / 256)
 		blk.BlockHeader.Seed[2] = byte(uint64(rnd) / 65536)
 		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)

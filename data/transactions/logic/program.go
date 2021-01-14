@@ -26,7 +26,7 @@ type Program []byte
 
 // ToBeHashed implements crypto.Hashable
 func (lsl Program) ToBeHashed() (protocol.HashID, []byte) {
-	return protocol.Program, []byte(lsl)
+	return protocol.Program, lsl
 }
 
 // HashProgram takes program bytes and returns the Digest

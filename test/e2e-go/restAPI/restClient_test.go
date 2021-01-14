@@ -477,10 +477,10 @@ func TestAccountParticipationInfo(t *testing.T) {
 	dilution := uint64(100)
 	randomVotePKStr := randomString(32)
 	var votePK crypto.OneTimeSignatureVerifier
-	copy(votePK[:], []byte(randomVotePKStr))
+	copy(votePK[:], randomVotePKStr)
 	randomSelPKStr := randomString(32)
 	var selPK crypto.VRFVerifier
-	copy(selPK[:], []byte(randomSelPKStr))
+	copy(selPK[:], randomSelPKStr)
 	var gh crypto.Digest
 	copy(gh[:], params.GenesisHash)
 	tx := transactions.Transaction{

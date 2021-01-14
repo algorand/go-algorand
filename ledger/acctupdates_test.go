@@ -354,7 +354,7 @@ func TestAcctUpdates(t *testing.T) {
 		var totals map[basics.Address]basics.AccountData
 		base := accts[i-1]
 		updates, totals, lastCreatableID = randomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
-		prevTotals, err := au.Totals(basics.Round(i - 1))
+		prevTotals, err := au.Totals(i - 1)
 		require.NoError(t, err)
 
 		newPool := totals[testPoolAddr]
@@ -364,7 +364,7 @@ func TestAcctUpdates(t *testing.T) {
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -438,7 +438,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 		rewardLevel += rewardLevelDelta
 		updates, totals := randomDeltasBalanced(1, accts[i-1], rewardLevel)
 
-		prevTotals, err := au.Totals(basics.Round(i - 1))
+		prevTotals, err := au.Totals(i - 1)
 		require.NoError(t, err)
 
 		newPool := totals[testPoolAddr]
@@ -448,7 +448,7 @@ func TestAcctUpdatesFastUpdates(t *testing.T) {
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -528,7 +528,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		}
 
 		updates, totals := randomDeltasBalanced(accountChanges, accts[i-1], rewardLevel)
-		prevTotals, err := au.Totals(basics.Round(i - 1))
+		prevTotals, err := au.Totals(i - 1)
 		require.NoError(b, err)
 
 		newPool := totals[testPoolAddr]
@@ -538,7 +538,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -656,7 +656,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 		rewardLevel += rewardLevelDelta
 		updates, totals := randomDeltasBalanced(1, accts[i-1], rewardLevel)
 
-		prevTotals, err := au.Totals(basics.Round(i - 1))
+		prevTotals, err := au.Totals(i - 1)
 		require.NoError(t, err)
 
 		newPool := totals[testPoolAddr]
@@ -666,7 +666,7 @@ func TestLargeAccountCountCatchpointGeneration(t *testing.T) {
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -816,7 +816,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 						continue
 					}
 					require.NoError(t, err)
-					require.GreaterOrEqual(t, int64(validThrough), int64(basics.Round(checkRound-uint64(testback))))
+					require.GreaterOrEqual(t, int64(validThrough), int64(checkRound-uint64(testback)))
 					// if we received no error, we want to make sure the reported amount is correct.
 					require.Equalf(t, moneyAccountsExpectedAmounts[checkRound-uint64(testback)][j], acct.MicroAlgos.Raw, "Account index : %d\nRound number : %d", j, checkRound)
 					testback++
@@ -828,7 +828,7 @@ func TestAcctUpdatesUpdatesCorrectness(t *testing.T) {
 
 			blk := bookkeeping.Block{
 				BlockHeader: bookkeeping.BlockHeader{
-					Round: basics.Round(i),
+					Round: i,
 				},
 			}
 			blk.RewardsLevel = rewardLevel
@@ -1411,10 +1411,10 @@ func TestCompactDeltas(t *testing.T) {
 
 	require.Equal(t, uint64(1), outAccountDeltas[addrs[0]].old.accountData.MicroAlgos.Raw)
 	require.Equal(t, uint64(3), outAccountDeltas[addrs[0]].new.MicroAlgos.Raw)
-	require.Equal(t, int(2), outAccountDeltas[addrs[0]].ndeltas)
+	require.Equal(t, 2, outAccountDeltas[addrs[0]].ndeltas)
 	require.Equal(t, uint64(0), outAccountDeltas[addrs[3]].old.accountData.MicroAlgos.Raw)
 	require.Equal(t, uint64(8), outAccountDeltas[addrs[3]].new.MicroAlgos.Raw)
-	require.Equal(t, int(1), outAccountDeltas[addrs[3]].ndeltas)
+	require.Equal(t, 1, outAccountDeltas[addrs[3]].ndeltas)
 
 	require.Equal(t, addrs[2], outCreatableDeltas[100].Creator)
 	require.Equal(t, addrs[4], outCreatableDeltas[101].Creator)
@@ -1483,7 +1483,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		var totals map[basics.Address]basics.AccountData
 		base := accts[i-1]
 		updates, totals, lastCreatableID = randomDeltasBalancedFull(1, base, rewardLevel, lastCreatableID)
-		prevTotals, err := au.Totals(basics.Round(i - 1))
+		prevTotals, err := au.Totals(i - 1)
 		require.NoError(t, err)
 
 		newPool := totals[testPoolAddr]
@@ -1493,7 +1493,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 
 		blk := bookkeeping.Block{
 			BlockHeader: bookkeeping.BlockHeader{
-				Round: basics.Round(i),
+				Round: i,
 			},
 		}
 		blk.RewardsLevel = rewardLevel
@@ -1530,7 +1530,7 @@ func TestReproducibleCatchpointLabels(t *testing.T) {
 		for i := startingRound + 1; i <= basics.Round(testCatchpointLabelsCount*cfg.CatchpointInterval); i++ {
 			blk := bookkeeping.Block{
 				BlockHeader: bookkeeping.BlockHeader{
-					Round: basics.Round(i),
+					Round: i,
 				},
 			}
 			blk.RewardsLevel = rewardsLevels[i]

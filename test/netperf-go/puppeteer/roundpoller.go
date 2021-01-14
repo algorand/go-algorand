@@ -39,13 +39,13 @@ func readHostFile(telemetryHostFile string) (bytes []byte, err error) {
 	line, _, _ := reader.ReadLine()
 
 	if err == io.EOF {
-		return []byte(line), nil
+		return line, nil
 
 	}
 	if err != io.EOF && err != nil {
 		return nil, err
 	}
-	return []byte(line), nil
+	return line, nil
 
 }
 

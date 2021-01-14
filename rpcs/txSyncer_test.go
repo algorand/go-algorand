@@ -47,7 +47,7 @@ type mockPendingTxAggregate struct {
 func makeMockPendingTxAggregate(txCount int) mockPendingTxAggregate {
 	var secret [32]byte
 	crypto.RandBytes(secret[:])
-	sk := crypto.GenerateSignatureSecrets(crypto.Seed(secret))
+	sk := crypto.GenerateSignatureSecrets(secret)
 	mock := mockPendingTxAggregate{
 		txns: make([]transactions.SignedTxn, txCount),
 	}

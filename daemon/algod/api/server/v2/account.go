@@ -59,7 +59,7 @@ func AccountDataToAccount(
 			SelectionParticipationKey: record.SelectionID[:],
 			VoteFirstValid:            uint64(record.VoteFirstValid),
 			VoteLastValid:             uint64(record.VoteLastValid),
-			VoteKeyDilution:           uint64(record.VoteKeyDilution),
+			VoteKeyDilution:           record.VoteKeyDilution,
 		}
 	}
 

@@ -142,12 +142,12 @@ func MulAIntSaturate(a MicroAlgos, b int) MicroAlgos {
 
 // AddA adds 2 MicroAlgos values with overflow tracking
 func (t *OverflowTracker) AddA(a MicroAlgos, b MicroAlgos) MicroAlgos {
-	return MicroAlgos{Raw: t.Add(uint64(a.Raw), uint64(b.Raw))}
+	return MicroAlgos{Raw: t.Add(a.Raw, b.Raw)}
 }
 
 // SubA subtracts b from a with overflow tracking
 func (t *OverflowTracker) SubA(a MicroAlgos, b MicroAlgos) MicroAlgos {
-	return MicroAlgos{Raw: t.Sub(uint64(a.Raw), uint64(b.Raw))}
+	return MicroAlgos{Raw: t.Sub(a.Raw, b.Raw)}
 }
 
 // AddR adds 2 Round values with overflow tracking

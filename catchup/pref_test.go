@@ -119,13 +119,13 @@ func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *da
 		genesis[short] = startamt
 	}
 
-	genesis[basics.Address(sinkAddr)] = basics.AccountData{
+	genesis[sinkAddr] = basics.AccountData{
 		Status:     basics.NotParticipating,
-		MicroAlgos: basics.MicroAlgos{Raw: uint64(1e3 * minMoneyAtStart)},
+		MicroAlgos: basics.MicroAlgos{Raw: 1e3 * minMoneyAtStart},
 	}
-	genesis[basics.Address(poolAddr)] = basics.AccountData{
+	genesis[poolAddr] = basics.AccountData{
 		Status:     basics.NotParticipating,
-		MicroAlgos: basics.MicroAlgos{Raw: uint64(1e3 * minMoneyAtStart)},
+		MicroAlgos: basics.MicroAlgos{Raw: 1e3 * minMoneyAtStart},
 	}
 
 	var err error

@@ -487,7 +487,7 @@ func TestVoteTrackerRejectsTooManyEquivocators(t *testing.T) {
 	expectedOutputs := make([]event, Num*2)
 	for i := 0; i < int(2*Num); i++ {
 		Val := proposalValue{BlockDigest: randomBlockHash()}
-		inputVotes[i] = helper.MakeValidVoteAcceptedVal(t, int(i/2), soft, Val)
+		inputVotes[i] = helper.MakeValidVoteAcceptedVal(t, i/2, soft, Val)
 		expectedOutputs[i] = thresholdEvent{T: none}
 	}
 	// We should now have threshold many equivocators... should have panicked when the last equivocation was seen.
@@ -515,7 +515,7 @@ func TestVoteTrackerFiltersDuplicateVoteOnce(t *testing.T) {
 	const Num = 10
 	inputVotes := make([]event, Num+1)
 	expectedOutputs := make([]event, Num+1)
-	for i := 0; i < int(Num+1); i++ {
+	for i := 0; i < Num+1; i++ {
 		switch {
 		case i < Num:
 			inputVotes[i] = helper.MakeValidVoteAcceptedVal(t, i, next, Val1)
@@ -557,7 +557,7 @@ func TestVoteTrackerForwardsFirstEquivocation(t *testing.T) {
 
 	inputVotes := make([]event, V1V2Bound+1)
 	expectedOutputs := make([]event, V1V2Bound+1)
-	for i := 0; i < int(V1V2Bound+1); i++ {
+	for i := 0; i < V1V2Bound+1; i++ {
 		switch {
 		case i < V1Bound:
 			// these will eventually equivocate
@@ -610,7 +610,7 @@ func TestVoteTrackerFiltersFutureEquivocations(t *testing.T) {
 	const Num = 100
 	inputVotes := make([]event, Num)
 	expectedOutputs := make([]event, Num)
-	for i := 0; i < int(Num); i++ {
+	for i := 0; i < Num; i++ {
 		switch {
 		case i == 0:
 			Val := proposalValue{BlockDigest: randomBlockHash()}

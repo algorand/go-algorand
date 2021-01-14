@@ -77,7 +77,7 @@ type inspectLogicSig struct {
 type inspectProgram []byte
 
 func (prog inspectProgram) String() string {
-	text, err := logic.Disassemble([]byte(prog))
+	text, err := logic.Disassemble(prog)
 	if err != nil {
 		return err.Error()
 	}
@@ -89,7 +89,7 @@ func (prog inspectProgram) GoString() string {
 }
 
 func (prog inspectProgram) MarshalText() ([]byte, error) {
-	text, err := logic.Disassemble([]byte(prog))
+	text, err := logic.Disassemble(prog)
 	return []byte(text), err
 }
 
@@ -168,7 +168,7 @@ func msigFromInspect(msi inspectMultisigSig) crypto.MultisigSig {
 
 func lsigToInspect(lsig transactions.LogicSig) inspectLogicSig {
 	return inspectLogicSig{
-		Logic: inspectProgram(lsig.Logic),
+		Logic: lsig.Logic,
 		Sig:   lsig.Sig,
 		Msig:  msigToInspect(lsig.Msig),
 		Args:  lsig.Args,
@@ -177,7 +177,7 @@ func lsigToInspect(lsig transactions.LogicSig) inspectLogicSig {
 
 func lsigFromInspect(lsig inspectLogicSig) transactions.LogicSig {
 	return transactions.LogicSig{
-		Logic: []byte(lsig.Logic),
+		Logic: lsig.Logic,
 		Sig:   lsig.Sig,
 		Msig:  msigFromInspect(lsig.Msig),
 		Args:  lsig.Args,

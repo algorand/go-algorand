@@ -89,7 +89,7 @@ func (f *Filter) NumHashes() uint32 {
 // MarshalBinary defines how this filter should be encoded to binary
 func (f *Filter) MarshalBinary() ([]byte, error) {
 	data := make([]byte, len(f.data)+8)
-	n := uint32(f.numHashes)
+	n := f.numHashes
 	binary.BigEndian.PutUint32(data[0:4], n)
 	copy(data[4:8], f.prefix[:])
 	copy(data[8:], f.data)

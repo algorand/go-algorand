@@ -47,7 +47,7 @@ func TestMetricSegment(t *testing.T) {
 	})
 	metricService.Start(context.Background())
 
-	functionTime := time.Duration(400 * time.Millisecond)
+	functionTime := 400 * time.Millisecond
 	acceptedFunctionThreshold := 0.1 // 10 percent.
 	segment := MakeSegment(&MetricName{Name: "test_segment_name1", Description: "this is the metric test for segment object"})
 	segmentTest := func() {

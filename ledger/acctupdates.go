@@ -679,7 +679,7 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 	offset = uint64(newBase - au.dbRound)
 
 	// check to see if this is a catchpoint round
-	isCatchpointRound = ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+au.dbRound))) % au.catchpointInterval))
+	isCatchpointRound = ((offset + uint64(lookback+au.dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == ((offset + uint64(lookback+au.dbRound)) % au.catchpointInterval))
 
 	// calculate the number of pending deltas
 	pendingDeltas = au.deltasAccum[offset] - au.deltasAccum[0]
@@ -904,7 +904,7 @@ func (au *accountUpdates) initializeCaches(lastBalancesRound, lastestBlockRound,
 		au.newBlockImpl(blk, delta)
 		lastBalancesRound = next
 
-		if next == basics.Round(writingCatchpointRound) {
+		if next == writingCatchpointRound {
 			catchpointBlockDigest = blk.Digest()
 		}
 
@@ -1798,7 +1798,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 		// if this is an archival ledger, we might need to update the catchpointWriting variable.
 		if au.archivalLedger {
 			// determine if this was a catchpoint round
-			isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+dbRound))) % au.catchpointInterval))
+			isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == ((offset + uint64(lookback+dbRound)) % au.catchpointInterval))
 			if isCatchpointRound {
 				// it was a catchpoint round, so update the catchpointWriting to indicate that we're done.
 				atomic.StoreInt32(&au.catchpointWriting, 0)
@@ -1814,7 +1814,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	newBase := basics.Round(offset) + dbRound
 	flushTime := time.Now()
-	isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+dbRound))) % au.catchpointInterval))
+	isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == ((offset + uint64(lookback+dbRound)) % au.catchpointInterval))
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
 	deltas := make([]map[basics.Address]basics.AccountData, offset, offset)

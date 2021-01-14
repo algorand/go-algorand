@@ -128,7 +128,7 @@ func TestServerRemote(t *testing.T) {
 }
 
 func TestServerLocal(t *testing.T) {
-	txnBlob := []byte("[" + strings.Join([]string{string(txnSample), txnSample}, ",") + "]")
+	txnBlob := []byte("[" + strings.Join([]string{txnSample, txnSample}, ",") + "]")
 	dp := DebugParams{
 		ProgramNames: []string{"test"},
 		ProgramBlobs: [][]byte{{2, 0x20, 1, 1, 0x22}}, // version, intcb, int 1

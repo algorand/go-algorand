@@ -82,7 +82,7 @@ type DebugState struct {
 // GetProgramID returns program or execution ID that is string representation of sha256 checksum.
 // It is used later to link program on the user-facing side of the debugger with TEAL evaluator.
 func GetProgramID(program []byte) string {
-	hash := sha256.Sum256([]byte(program))
+	hash := sha256.Sum256(program)
 	return hex.EncodeToString(hash[:])
 }
 

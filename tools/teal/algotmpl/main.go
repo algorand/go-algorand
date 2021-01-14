@@ -167,7 +167,7 @@ func initCommandsFromDir(dirname string) error {
 		for _, param := range params[i].params {
 			var alloc string
 			vars[param.name] = &alloc
-			cmdName := strings.ToLower(string(param.name[len("TMPL_"):]))
+			cmdName := strings.ToLower(param.name[len("TMPL_"):])
 			subCmd.Flags().StringVar(vars[param.name], cmdName, "", param.descr)
 			subCmd.MarkFlagRequired(cmdName)
 		}

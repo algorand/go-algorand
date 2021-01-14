@@ -379,7 +379,7 @@ func (mtc *merkleTrieCache) commit() (CommitStats, error) {
 	for _, page := range pagesToCreate {
 		nodeIDs := mtc.pageToNIDsPtr[page]
 		pageContent := mtc.encodePage(nodeIDs, encodeBuffer)
-		err := mtc.committer.StorePage(uint64(page), pageContent)
+		err := mtc.committer.StorePage(page, pageContent)
 		if err != nil {
 			return CommitStats{}, err
 		}
@@ -389,27 +389,27 @@ func (mtc *merkleTrieCache) commit() (CommitStats, error) {
 
 	// delete the pages that we don't need anymore.
 	for page := range pagesToDelete {
-		err := mtc.committer.StorePage(uint64(page), nil)
+		err := mtc.committer.StorePage(page, nil)
 		if err != nil {
 			return CommitStats{}, err
 		}
 
 		// since the entire page was removed from memory, we can also remove it from the priority list.
-		element := mtc.pagesPrioritizationMap[uint64(page)]
+		element := mtc.pagesPrioritizationMap[page]
 		if element != nil {
 			mtc.pagesPrioritizationList.Remove(element)
-			delete(mtc.pagesPrioritizationMap, uint64(page))
+			delete(mtc.pagesPrioritizationMap, page)
 		}
 		stats.DeletedPageCount++
 
-		mtc.cachedNodeCount -= len(mtc.pageToNIDsPtr[uint64(page)])
-		delete(mtc.pageToNIDsPtr, uint64(page))
+		mtc.cachedNodeCount -= len(mtc.pageToNIDsPtr[page])
+		delete(mtc.pageToNIDsPtr, page)
 	}
 
 	// updated pages
 	for page, nodeIDs := range pagesToUpdate {
 		pageContent := mtc.encodePage(nodeIDs, encodeBuffer)
-		err := mtc.committer.StorePage(uint64(page), pageContent)
+		err := mtc.committer.StorePage(page, pageContent)
 		if err != nil {
 			return CommitStats{}, err
 		}
@@ -440,7 +440,7 @@ func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToC
 	for nodeID := range mtc.pendingCreatedNID {
 		nodePage := uint64(nodeID) / uint64(mtc.nodesPerPage)
 		if nil == createdPages[nodePage] {
-			createdPages[nodePage] = mtc.pageToNIDsPtr[uint64(nodePage)]
+			createdPages[nodePage] = mtc.pageToNIDsPtr[nodePage]
 		}
 	}
 
@@ -523,13 +523,13 @@ func (mtc *merkleTrieCache) reallocatePendingPages(stats *CommitStats) (pagesToC
 
 	// iterate over the existing list and ensure we don't delete any page that has active elements
 	for pageRemovalCandidate := range toRemovePages {
-		if len(mtc.pageToNIDsPtr[uint64(pageRemovalCandidate)]) == 0 {
+		if len(mtc.pageToNIDsPtr[pageRemovalCandidate]) == 0 {
 			// we have no nodes associated with this page, so
 			// it means that we can remove this page safely.
 			continue
 		}
 		// otherwise, it seems that this page has other live items, so we'd better keep it around.
-		toUpdatePages[pageRemovalCandidate] = mtc.pageToNIDsPtr[uint64(pageRemovalCandidate)]
+		toUpdatePages[pageRemovalCandidate] = mtc.pageToNIDsPtr[pageRemovalCandidate]
 		delete(toRemovePages, pageRemovalCandidate)
 	}
 

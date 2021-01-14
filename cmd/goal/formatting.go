@@ -169,7 +169,7 @@ func heuristicFormatStr(str string) string {
 	// otherwise, see if it's a 32 byte string that could be printed as an address
 	if len(str) == 32 {
 		var addr basics.Address
-		copy(addr[:], []byte(str))
+		copy(addr[:], str)
 		return addr.String()
 	}
 

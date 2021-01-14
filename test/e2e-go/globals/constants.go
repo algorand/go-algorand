@@ -23,7 +23,7 @@ import (
 )
 
 // MaxTimePerRound is the upper bound of expected time per round
-const MaxTimePerRound = time.Duration(10 * time.Second)
+const MaxTimePerRound = 10 * time.Second
 
 // TotalMoney is the total number of tokens in the system
 // This needs to be identical to the value in gen/generate.go

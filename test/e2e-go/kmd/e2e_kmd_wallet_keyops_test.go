@@ -367,7 +367,7 @@ func BenchmarkSignTransaction(b *testing.B) {
 	seed := crypto.Seed{}
 	crypto.RandBytes(seed[:])
 	secrets := crypto.GenerateSignatureSecrets(seed)
-	pk := crypto.PublicKey(secrets.SignatureVerifier)
+	pk := secrets.SignatureVerifier
 
 	// Import the key
 	req0 := kmdapi.APIV1POSTKeyImportRequest{

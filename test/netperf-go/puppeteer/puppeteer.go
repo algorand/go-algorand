@@ -78,7 +78,7 @@ func puppeteer(channel, jsonFile string) error {
 		return err
 	}
 	var s session
-	err = json.Unmarshal([]byte(jsonBytes), &s)
+	err = json.Unmarshal(jsonBytes, &s)
 	if err != nil {
 		return err
 	}

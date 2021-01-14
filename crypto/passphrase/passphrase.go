@@ -164,7 +164,7 @@ func toByteArray(arr []uint32) []byte {
 	var output []byte
 
 	for i := 0; i < len(arr); i++ {
-		buffer |= uint32(arr[i]) << numberOfBits
+		buffer |= arr[i] << numberOfBits
 		numberOfBits += 11
 
 		for numberOfBits >= 8 {

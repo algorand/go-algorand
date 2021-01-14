@@ -2243,7 +2243,7 @@ func TestAgreementCertificateDoesNotStallSingleRelay(t *testing.T) {
 			if err != nil {
 				panic(err)
 			}
-			if tp.Round() == basics.Round(startRound+2) {
+			if tp.Round() == startRound+2 {
 				params.exclude = relayID
 			}
 		}

@@ -1151,7 +1151,7 @@ func (sw *SQLiteWallet) SignProgram(data []byte, src crypto.Digest, pw []byte) (
 	}
 
 	// Fetch the required key
-	sk, err := sw.fetchSecretKey(crypto.Digest(src))
+	sk, err := sw.fetchSecretKey(src)
 	if err != nil {
 		return
 	}

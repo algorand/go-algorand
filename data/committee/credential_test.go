@@ -55,7 +55,7 @@ func TestAccountSelected(t *testing.T) {
 			leaders += credential.Weight
 		}
 
-		if (leaders < uint64(proto.NumProposers/2)) || (leaders > uint64(2*proto.NumProposers)) {
+		if (leaders < proto.NumProposers/2) || (leaders > 2*proto.NumProposers) {
 			t.Errorf("bad number of leaders %v expected %v", leaders, proto.NumProposers)
 		}
 
@@ -169,7 +169,7 @@ func TestPoorAccountSelectedLeaders(t *testing.T) {
 
 		}
 
-		if leaders[i] < uint64(0.5*float64(proto.NumProposers)) || (leaders[i] > uint64(2*proto.NumProposers)) {
+		if leaders[i] < uint64(0.5*float64(proto.NumProposers)) || (leaders[i] > 2*proto.NumProposers) {
 			failsLeaders++
 		}
 	}

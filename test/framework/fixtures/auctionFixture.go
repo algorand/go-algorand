@@ -631,7 +631,7 @@ func (f *AuctionFixture) GetCurrentPriceFromConsole(auction1 auction.RunningAuct
 // SettleAuctionBank is a utility function to invoke SettleAuction on AuctionBank to finalize the processing of auctions
 func (f *AuctionFixture) SettleAuctionBank(auctionKey string, auctionID uint64) (err error) {
 	var settleAuctionQuery auctionClient.SettleAuctionQuery
-	settleAuctionQuery.AuctionKey = string(auctionKey)
+	settleAuctionQuery.AuctionKey = auctionKey
 
 	settleAuctionQuery.OutcomesBlob, err = f.GetPaymentTransactionBytesFromFile(auctionID)
 	settleAuctionQuery.SigSettlementBlob, err = f.GetSettlementTransactionBytesFromFile(auctionID)
@@ -844,13 +844,13 @@ func (f *AuctionFixture) signBid(walletHandle []byte, password string, account s
 		return
 	}
 
-	signedBidNote = client.BytesBase64(protocol.Encode(&auction.NoteField{
+	signedBidNote = protocol.Encode(&auction.NoteField{
 		Type: auction.NoteBid,
 		SignedBid: auction.SignedBid{
 			Bid: bid,
 			Sig: sig,
 		},
-	}))
+	})
 
 	return
 }

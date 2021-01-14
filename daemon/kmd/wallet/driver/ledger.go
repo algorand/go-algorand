@@ -514,7 +514,7 @@ func (lw *LedgerWallet) sendTransactionOldStyle(tx transactions.Transaction) (si
 		return
 	}
 
-	copy(genbuf[:], []byte(tx.GenesisID))
+	copy(genbuf[:], tx.GenesisID)
 	msg = append(msg, genbuf[:]...)
 	msg = append(msg, tx.GenesisHash[:]...)
 

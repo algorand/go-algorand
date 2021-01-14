@@ -796,7 +796,7 @@ func assembleTxna(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.error(err)
 	}
 	fieldNum := fs.field
-	ops.Txna(uint64(fieldNum), uint64(arrayFieldIdx))
+	ops.Txna(uint64(fieldNum), arrayFieldIdx)
 	return nil
 }
 
@@ -858,7 +858,7 @@ func assembleGtxna(ops *OpStream, spec *OpSpec, args []string) error {
 		return ops.error(err)
 	}
 	fieldNum := fs.field
-	ops.Gtxna(gtid, uint64(fieldNum), uint64(arrayFieldIdx))
+	ops.Gtxna(gtid, uint64(fieldNum), arrayFieldIdx)
 	return nil
 }
 

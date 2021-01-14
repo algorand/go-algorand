@@ -268,7 +268,7 @@ func debugLocal(args []string) {
 		DdrBlob:          ddrBlob,
 		IndexerURL:       indexerURL,
 		IndexerToken:     indexerToken,
-		Round:            uint64(roundNumber),
+		Round:            roundNumber,
 		LatestTimestamp:  timestamp,
 		RunMode:          runMode.String(),
 		DisableSourceMap: noSourceMap,

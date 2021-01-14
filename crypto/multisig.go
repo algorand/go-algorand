@@ -92,7 +92,7 @@ func MultisigAddrGen(version, threshold uint8, pk []PublicKey) (addr Digest, err
 		return
 	}
 
-	buffer := append([]byte(multiSigString), byte(version), byte(threshold))
+	buffer := append([]byte(multiSigString), version, threshold)
 	for _, pki := range pk {
 		buffer = append(buffer, pki[:]...)
 	}
@@ -114,7 +114,7 @@ func MultisigAddrGenWithSubsigs(version uint8, threshold uint8,
 		return
 	}
 
-	buffer := append([]byte(multiSigString), byte(version), byte(threshold))
+	buffer := append([]byte(multiSigString), version, threshold)
 	for _, subsigsi := range subsigs {
 		buffer = append(buffer, subsigsi.Key[:]...)
 	}

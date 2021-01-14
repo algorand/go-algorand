@@ -168,9 +168,9 @@ func modelAssetParams(creator basics.Address, params basics.AssetParams) v1.Asse
 		Decimals:      params.Decimals,
 	}
 
-	paramsModel.UnitName = strings.TrimRight(string(params.UnitName[:]), "\x00")
-	paramsModel.AssetName = strings.TrimRight(string(params.AssetName[:]), "\x00")
-	paramsModel.URL = strings.TrimRight(string(params.URL[:]), "\x00")
+	paramsModel.UnitName = strings.TrimRight(params.UnitName[:], "\x00")
+	paramsModel.AssetName = strings.TrimRight(params.AssetName[:], "\x00")
+	paramsModel.URL = strings.TrimRight(params.URL[:], "\x00")
 	if params.MetadataHash != [32]byte{} {
 		paramsModel.MetadataHash = params.MetadataHash[:]
 	}
@@ -226,8 +226,8 @@ func modelTealKeyValue(kv basics.TealKeyValue) map[string]v1.TealValue {
 func modelAppParams(creator basics.Address, params basics.AppParams) v1.AppParams {
 	b64 := base64.StdEncoding
 	res := v1.AppParams{
-		ApprovalProgram:   b64.EncodeToString([]byte(params.ApprovalProgram)),
-		ClearStateProgram: b64.EncodeToString([]byte(params.ClearStateProgram)),
+		ApprovalProgram:   b64.EncodeToString(params.ApprovalProgram),
+		ClearStateProgram: b64.EncodeToString(params.ClearStateProgram),
 		GlobalStateSchema: modelSchema(params.GlobalStateSchema),
 		LocalStateSchema:  modelSchema(params.LocalStateSchema),
 		GlobalState:       modelTealKeyValue(params.GlobalState),
@@ -262,8 +262,8 @@ func applicationCallTxEncode(tx transactions.Transaction, ad transactions.ApplyD
 	b64 := base64.StdEncoding
 	app := v1.ApplicationCallTransactionType{
 		ApplicationID:     uint64(tx.ApplicationID),
-		ApprovalProgram:   b64.EncodeToString([]byte(tx.ApprovalProgram)),
-		ClearStateProgram: b64.EncodeToString([]byte(tx.ClearStateProgram)),
+		ApprovalProgram:   b64.EncodeToString(tx.ApprovalProgram),
+		ClearStateProgram: b64.EncodeToString(tx.ClearStateProgram),
 		LocalStateSchema:  modelSchema(tx.LocalStateSchema),
 		GlobalStateSchema: modelSchema(tx.GlobalStateSchema),
 		OnCompletion:      tx.OnCompletion.String(),
@@ -286,7 +286,7 @@ func applicationCallTxEncode(tx transactions.Transaction, ad transactions.ApplyD
 
 	encodedArgs := make([]string, 0, len(tx.ApplicationArgs))
 	for _, arg := range tx.ApplicationArgs {
-		encodedArgs = append(encodedArgs, b64.EncodeToString([]byte(arg)))
+		encodedArgs = append(encodedArgs, b64.EncodeToString(arg))
 	}
 
 	app.Accounts = encodedAccounts
@@ -733,12 +733,12 @@ func AccountInformation(ctx lib.ReqContext, context echo.Context) {
 
 	ledger := ctx.Node.Ledger()
 	lastRound := ledger.Latest()
-	record, err := ledger.Lookup(lastRound, basics.Address(addr))
+	record, err := ledger.Lookup(lastRound, addr)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return
 	}
-	recordWithoutPendingRewards, _, err := ledger.LookupWithoutRewards(lastRound, basics.Address(addr))
+	recordWithoutPendingRewards, _, err := ledger.LookupWithoutRewards(lastRound, addr)
 	if err != nil {
 		lib.ErrorResponse(w, http.StatusInternalServerError, err, errFailedLookingUpLedger, ctx.Log)
 		return

@@ -661,7 +661,7 @@ int 1
 	ops, err = AssembleStringWithVersion(text, AssemblerMaxVersion)
 	require.NoError(t, err)
 	var addr basics.Address
-	copy(addr[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
+	copy(addr[:], "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02")
 	ep.Ledger = makeTestLedger(
 		map[basics.Address]uint64{
 			addr: 1,

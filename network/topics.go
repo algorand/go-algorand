@@ -64,7 +64,7 @@ func (ts Topics) MarshallTopics() (b []byte) {
 		n := binary.PutUvarint(buffer[bidx:], uint64(len(val.key)))
 		bidx += n
 		// write the key
-		n = copy(buffer[bidx:], []byte(val.key))
+		n = copy(buffer[bidx:], val.key)
 		bidx += n
 
 		// write the data size

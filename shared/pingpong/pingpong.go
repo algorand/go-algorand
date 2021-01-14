@@ -559,7 +559,7 @@ func constructTxn(from, to string, fee, amt, aidx uint64, cinfo CreatablesInfo, 
 	const tagLen = uint32(len(pingpongTag))
 	const randomBaseLen = uint32(8)
 	const maxNoteFieldLen = uint32(1024)
-	var noteLength = uint32(tagLen) + randomBaseLen
+	var noteLength = tagLen + randomBaseLen
 	// if random note flag set, then append a random number of additional bytes
 	if cfg.RandomNote {
 		noteLength = noteLength + rand.Uint32()%(maxNoteFieldLen-noteLength)

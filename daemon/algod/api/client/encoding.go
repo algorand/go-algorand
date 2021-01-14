@@ -31,7 +31,7 @@ func (b *BytesBase64) UnmarshalText(text []byte) error {
 		return err
 	}
 
-	*b = BytesBase64(res)
+	*b = res
 	return nil
 }
 

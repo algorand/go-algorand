@@ -116,7 +116,7 @@ func TestMonotonicEncodeDecode(t *testing.T) {
 		if err != nil {
 			t.Errorf("decoding error: %v", err)
 		}
-		if !time.Time(c.(*Monotonic).zero).Equal(time.Time(c0.(*Monotonic).zero)) {
+		if !c.(*Monotonic).zero.Equal(c0.(*Monotonic).zero) {
 			t.Errorf("%v clock not encoded properly: %v != %v", descr, c, c0)
 		}
 	}

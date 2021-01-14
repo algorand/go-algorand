@@ -412,7 +412,7 @@ func tealValueToFieldDesc(name string, tv basics.TealValue) fieldDesc {
 func tealValueToString(tv *basics.TealValue, hint typeHint) string {
 	if hint == addressHint {
 		var a basics.Address
-		copy(a[:], []byte(tv.Bytes))
+		copy(a[:], tv.Bytes)
 		return a.String()
 	}
 	return tv.String()
@@ -716,7 +716,7 @@ func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (d
 	for _, fieldIdx := range []logic.TxnField{logic.ApplicationArgs, logic.Accounts} {
 		fieldID := encodeTxnArrayField(groupIndex, int(fieldIdx))
 		var length int
-		switch logic.TxnField(fieldIdx) {
+		switch fieldIdx {
 		case logic.Accounts:
 			length = len(txn.Accounts)
 		case logic.ApplicationArgs:
@@ -724,7 +724,7 @@ func makeTxnImpl(txn *transactions.Transaction, groupIndex int, preview bool) (d
 		}
 		field := makeArray(logic.TxnFieldNames[fieldIdx], length, fieldID)
 		if preview {
-			elems := txnFieldToArrayFieldDesc(txn, groupIndex, logic.TxnField(fieldIdx), length)
+			elems := txnFieldToArrayFieldDesc(txn, groupIndex, fieldIdx, length)
 			prop := makePreview(elems)
 			p := cdt.RuntimeObjectPreview{
 				Type:        "object",

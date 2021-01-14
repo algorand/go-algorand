@@ -83,7 +83,7 @@ func TestMergeConfig(t *testing.T) {
 		NetAddress                string
 		ShouldNotExist            int // Ensure we don't panic when config has members we've removed
 	}{}
-	testInt := int(123)
+	testInt := 123
 	testString := "testing123"
 	c1.GossipFanout = testInt
 	c1.MaxNumberOfTxnsPerAccount = testInt
@@ -477,7 +477,7 @@ func TestLocalStructTags(t *testing.T) {
 func TestGetVersionedDefaultLocalConfig(t *testing.T) {
 	for i := uint32(0); i < getLatestConfigVersion(); i++ {
 		localVersion := getVersionedDefaultLocalConfig(i)
-		require.Equal(t, uint32(i), localVersion.Version)
+		require.Equal(t, i, localVersion.Version)
 	}
 }
 

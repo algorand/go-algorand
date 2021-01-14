@@ -92,7 +92,7 @@ func testGenerateInitState(tb testing.TB, proto protocol.ConsensusVersion) (gene
 	initAccounts[sinkAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 7654321})
 
 	incentivePoolBalanceAtGenesis := initAccounts[poolAddr].MicroAlgos
-	initialRewardsPerRound := incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval)
+	initialRewardsPerRound := incentivePoolBalanceAtGenesis.Raw / params.RewardsRateRefreshInterval
 	var emptyPayset transactions.Payset
 
 	initBlock := bookkeeping.Block{
@@ -923,8 +923,8 @@ int 1                   // [1]
 		val1     byte
 		val2     byte
 	}{
-		{true, byte(value), byte(11), byte(17)},
-		{false, byte(value + 11 + 17), byte(13), byte(19)},
+		{true, value, byte(11), byte(17)},
+		{false, value + 11 + 17, byte(13), byte(19)},
 	}
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("groupped %v", test.groupped), func(t *testing.T) {

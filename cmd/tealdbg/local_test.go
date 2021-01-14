@@ -184,11 +184,11 @@ func makeSampleBalanceRecord(addr basics.Address, assetIdx basics.AssetIndex, ap
 			},
 			KeyValue: basics.TealKeyValue{
 				"lkeyint": {
-					Type: basics.TealType(basics.TealUintType),
+					Type: basics.TealUintType,
 					Uint: 1,
 				},
 				"lkeybyte": {
-					Type:  basics.TealType(basics.TealBytesType),
+					Type:  basics.TealBytesType,
 					Bytes: "local",
 				},
 			},
@@ -210,11 +210,11 @@ func makeSampleBalanceRecord(addr basics.Address, assetIdx basics.AssetIndex, ap
 			},
 			GlobalState: basics.TealKeyValue{
 				"gkeyint": {
-					Type: basics.TealType(basics.TealUintType),
+					Type: basics.TealUintType,
 					Uint: 2,
 				},
 				"gkeybyte": {
-					Type:  basics.TealType(basics.TealBytesType),
+					Type:  basics.TealBytesType,
 					Bytes: "global",
 				},
 			},
@@ -521,7 +521,7 @@ byte 0x676c6f62616c // global
 func TestDebugFromPrograms(t *testing.T) {
 	a := require.New(t)
 
-	txnBlob := []byte("[" + strings.Join([]string{string(txnSample), txnSample}, ",") + "]")
+	txnBlob := []byte("[" + strings.Join([]string{txnSample, txnSample}, ",") + "]")
 
 	l := LocalRunner{}
 	dp := DebugParams{
@@ -599,7 +599,7 @@ func TestDebugFromPrograms(t *testing.T) {
 func TestRunMode(t *testing.T) {
 	a := require.New(t)
 
-	txnBlob := []byte("[" + strings.Join([]string{string(txnSample), txnSample}, ",") + "]")
+	txnBlob := []byte("[" + strings.Join([]string{txnSample, txnSample}, ",") + "]")
 	l := LocalRunner{}
 
 	// check run mode auto on stateful code

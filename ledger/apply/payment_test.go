@@ -172,10 +172,10 @@ func TestCheckSpender(t *testing.T) {
 		},
 	}
 
-	tx.Sender = basics.Address(feeSink)
+	tx.Sender = feeSink
 	require.Error(t, checkSpender(tx.PaymentTxnFields, tx.Header, spec, mockBalV0.ConsensusParams()))
 
-	poolAddr := basics.Address(poolAddr)
+	poolAddr := poolAddr
 	tx.Receiver = poolAddr
 	require.NoError(t, checkSpender(tx.PaymentTxnFields, tx.Header, spec, mockBalV0.ConsensusParams()))
 

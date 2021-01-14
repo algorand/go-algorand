@@ -58,7 +58,7 @@ func TestAccount(t *testing.T) {
 		DefaultFrozen: true,
 		UnitName:      "unit2",
 	}
-	copy(assetParams2.MetadataHash[:], []byte("test2"))
+	copy(assetParams2.MetadataHash[:], "test2")
 	a := basics.AccountData{
 		Status:             basics.Online,
 		MicroAlgos:         basics.MicroAlgos{Raw: 80000000},

@@ -29,7 +29,7 @@ func TestClerkSendNoteEncoding(t *testing.T) {
 	a := require.New(t)
 
 	// wait for consensus on first round prior to sending transactions, time out after 2 minutes
-	err := fixture.WaitForRound(2, time.Duration(2*time.Minute))
+	err := fixture.WaitForRound(2, 2*time.Minute)
 	a.NoError(err)
 
 	// Send txn to 2nd account with a Note.

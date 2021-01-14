@@ -212,7 +212,7 @@ func TestTracker_Transition_Settle_Start(t *testing.T) {
 	am.ProcessMessage(genConfirmedTx(p, 2,
 		addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, State(Active), am.auctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 	require.Equal(t, p, am.Auctions[p.AuctionID].Params())
 }
 
@@ -306,7 +306,7 @@ func TestTracker_Transition_DoubleStart(t *testing.T) {
 	am.ProcessMessage(genConfirmedTx(p, 1,
 		addrs[AuctionKey], addrs[AuctionKey], secrets[AuctionKey]))
 
-	require.Equal(t, State(Active), am.auctionState(p.AuctionID))
+	require.Equal(t, Active, am.auctionState(p.AuctionID))
 	require.Equal(t, p, am.Auctions[p.AuctionID].Params())
 
 	p2 := mkParams2()

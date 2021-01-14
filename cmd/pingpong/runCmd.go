@@ -214,7 +214,7 @@ var runCmd = &cobra.Command{
 			cfg.RefreshTime = time.Duration(uint32(val)) * time.Second
 		}
 		if duration > 0 {
-			cfg.MaxRuntime = time.Duration(uint32(duration)) * time.Second
+			cfg.MaxRuntime = time.Duration(duration) * time.Second
 		}
 		if randomNote {
 			cfg.RandomNote = true

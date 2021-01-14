@@ -94,9 +94,9 @@ func main() {
 		}
 	}
 
-	fmt.Println("hash0:", encfn([]byte(hash0[:])))
-	fmt.Println("hash1:", encfn([]byte(hash1[:])))
+	fmt.Println("hash0:", encfn(hash0[:]))
+	fmt.Println("hash1:", encfn(hash1[:]))
 	fmt.Println("sub0:", encfn([]byte(substrings[0])))
 	fmt.Println("sub1:", encfn([]byte(substrings[1])))
-	fmt.Println("data:", encfn([]byte(data)))
+	fmt.Println("data:", encfn(data))
 }

@@ -141,7 +141,7 @@ func TestStartAndEndAuctionOneUserOneBid(t *testing.T) {
 	actualBalanceResp, _ := libGoalClient.AccountInformation(biddingAccount)
 	algosDesired := centsDeposited / pricePerAlgo.Price
 	actualBalance := actualBalanceResp.Amount
-	expectedBalance := initialBalance + uint64(algosDesired) - minTxnFee
+	expectedBalance := initialBalance + algosDesired - minTxnFee
 	r.True(actualBalance > expectedBalance, "bidder started with %d algos, then tried to buy %d algos, so should have at least %d algos. instead, have %d algos", initialBalance, algosDesired, expectedBalance, actualBalance)
 }
 

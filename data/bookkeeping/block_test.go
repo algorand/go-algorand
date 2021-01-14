@@ -294,7 +294,7 @@ func TestRewardsRate(t *testing.T) {
 	// next round should NOT refresh
 	prev.BlockHeader.Round = basics.Round(proto.RewardsRateRefreshInterval)
 	prev.BlockHeader.RewardsRecalculationRound = prev.BlockHeader.Round
-	incentivePoolBalance := basics.MicroAlgos{Raw: 1000 * uint64(proto.RewardsRateRefreshInterval)}
+	incentivePoolBalance := basics.MicroAlgos{Raw: 1000 * proto.RewardsRateRefreshInterval}
 
 	// make sure that RewardsRate stays the same
 	state := prev.NextRewardsState(prev.Round()+1, proto, incentivePoolBalance, 0)
@@ -311,11 +311,11 @@ func TestRewardsRateRefresh(t *testing.T) {
 	// next round SHOULD refresh
 	prev.BlockHeader.Round = basics.Round(proto.RewardsRateRefreshInterval - 1)
 	prev.BlockHeader.RewardsRecalculationRound = prev.Round() + 1
-	incentivePoolBalance := basics.MicroAlgos{Raw: 1000 * uint64(proto.RewardsRateRefreshInterval)}
+	incentivePoolBalance := basics.MicroAlgos{Raw: 1000 * proto.RewardsRateRefreshInterval}
 	// make sure that RewardsRate was recomputed
 	nextRound := prev.Round() + 1
 	state := prev.NextRewardsState(nextRound, proto, incentivePoolBalance, 0)
-	require.Equal(t, (incentivePoolBalance.Raw-proto.MinBalance)/uint64(proto.RewardsRateRefreshInterval), state.RewardsRate)
+	require.Equal(t, (incentivePoolBalance.Raw-proto.MinBalance)/proto.RewardsRateRefreshInterval, state.RewardsRate)
 	require.Equal(t, nextRound+basics.Round(proto.RewardsRateRefreshInterval), state.RewardsRecalculationRound)
 }
 

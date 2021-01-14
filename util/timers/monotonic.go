@@ -84,5 +84,5 @@ func (m *Monotonic) Decode(data []byte) (Clock, error) {
 }
 
 func (m *Monotonic) String() string {
-	return time.Time(m.zero).String()
+	return m.zero.String()
 }

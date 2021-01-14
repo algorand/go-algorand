@@ -289,7 +289,7 @@ var restartCmd = &cobra.Command{
 				}
 			}
 			// brief sleep to allow the node to finish shutting down
-			time.Sleep(time.Duration(time.Second))
+			time.Sleep(time.Second)
 
 			nodeArgs := nodecontrol.AlgodStartArgs{
 				PeerAddress:       peerDial,

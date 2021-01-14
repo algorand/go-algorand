@@ -486,7 +486,7 @@ func TestSlowHandlers(t *testing.T) {
 	lastnw := -1
 	totalWait := 0
 	for i := 0; i < 7; i++ {
-		waitTime := int(1 << uint64(i))
+		waitTime := 1 << uint64(i)
 		time.Sleep(time.Duration(waitTime) * time.Millisecond)
 		totalWait += waitTime
 		nw := slowCounter.numWaiters()
@@ -885,7 +885,7 @@ func BenchmarkWebsocketNetworkBasic(t *testing.B) {
 			return
 		}
 	}
-	netA.Broadcast(context.Background(), protocol.Tag("-1"), []byte("derp"), true, nil)
+	netA.Broadcast(context.Background(), "-1", []byte("derp"), true, nil)
 	t.Logf("sent %d", t.N)
 
 	for ireturned < uint64(t.N-1) {

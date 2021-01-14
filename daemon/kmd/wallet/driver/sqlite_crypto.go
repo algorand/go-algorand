@@ -252,7 +252,7 @@ func extractKeyWithIndex(derivationKey []byte, index uint64) (pk crypto.PublicKe
 	secrets := crypto.GenerateSignatureSecrets(seed)
 
 	// Return the generated public key and corresponding secret key
-	return crypto.PublicKey(secrets.SignatureVerifier), crypto.PrivateKey(secrets.SK), nil
+	return secrets.SignatureVerifier, crypto.PrivateKey(secrets.SK), nil
 }
 
 // fastHashWithSalt returns a salted hash of a password, using a fast hash function

@@ -444,7 +444,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	}
 
 	cs.statsMu.Lock()
-	cs.stats.TotalBlocks = uint64(lookback)
+	cs.stats.TotalBlocks = lookback
 	cs.stats.AcquiredBlocks = 0
 	cs.stats.VerifiedBlocks = 0
 	cs.statsMu.Unlock()

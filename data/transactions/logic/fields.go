@@ -412,11 +412,11 @@ var AssetParamsFieldTypes []StackType
 var assetParamsFields map[string]uint64
 
 func init() {
-	TxnFieldNames = make([]string, int(invalidTxnField))
+	TxnFieldNames = make([]string, invalidTxnField)
 	for fi := Sender; fi < invalidTxnField; fi++ {
 		TxnFieldNames[fi] = fi.String()
 	}
-	TxnFieldTypes = make([]StackType, int(invalidTxnField))
+	TxnFieldTypes = make([]StackType, invalidTxnField)
 	txnFieldSpecByField = make(map[TxnField]txnFieldSpec, len(TxnFieldNames))
 	for i, s := range txnFieldSpecs {
 		if int(s.field) != i {
@@ -445,7 +445,7 @@ func init() {
 		globalFieldSpecByName[gfn] = globalFieldSpecByField[GlobalField(i)]
 	}
 
-	AssetHoldingFieldNames = make([]string, int(invalidAssetHoldingField))
+	AssetHoldingFieldNames = make([]string, invalidAssetHoldingField)
 	for i := AssetBalance; i < invalidAssetHoldingField; i++ {
 		AssetHoldingFieldNames[int(i)] = i.String()
 	}
@@ -458,7 +458,7 @@ func init() {
 		assetHoldingFields[fn] = uint64(i)
 	}
 
-	AssetParamsFieldNames = make([]string, int(invalidAssetParamsField))
+	AssetParamsFieldNames = make([]string, invalidAssetParamsField)
 	for i := AssetTotal; i < invalidAssetParamsField; i++ {
 		AssetParamsFieldNames[int(i)] = i.String()
 	}

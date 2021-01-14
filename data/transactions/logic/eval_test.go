@@ -1380,7 +1380,7 @@ func TestTypeEnum(t *testing.T) {
 			}
 			for i, tt := range ttypes {
 				symbol := typeNames[i]
-				t.Run(string(symbol), func(t *testing.T) {
+				t.Run(symbol, func(t *testing.T) {
 					text := fmt.Sprintf(`txn TypeEnum
 int %s
 ==
@@ -1657,15 +1657,15 @@ int 1
 
 func makeSampleTxn() transactions.SignedTxn {
 	var txn transactions.SignedTxn
-	copy(txn.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
-	copy(txn.Txn.Receiver[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01"))
-	copy(txn.Txn.CloseRemainderTo[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02"))
-	copy(txn.Txn.VotePK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui03"))
-	copy(txn.Txn.SelectionPK[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui04"))
+	copy(txn.Txn.Sender[:], "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00")
+	copy(txn.Txn.Receiver[:], "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui01")
+	copy(txn.Txn.CloseRemainderTo[:], "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui02")
+	copy(txn.Txn.VotePK[:], "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui03")
+	copy(txn.Txn.SelectionPK[:], "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui04")
 	txn.Txn.XferAsset = 10
 	// This is not a valid transaction to have all these fields set this way
 	txn.Txn.Note = []byte("fnord")
-	copy(txn.Txn.Lease[:], []byte("woofwoof"))
+	copy(txn.Txn.Lease[:], "woofwoof")
 	txn.Txn.Fee.Raw = 1337
 	txn.Txn.FirstValid = 42
 	txn.Txn.LastValid = 1066
@@ -2044,7 +2044,7 @@ txn Sender
 	ops2, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	var txn2 transactions.SignedTxn
-	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
+	copy(txn2.Txn.Sender[:], "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00")
 	ep2 := defaultEvalParams(nil, &txn2)
 	pass, err := Eval(ops2.Program, ep2)
 	require.NoError(t, err)
@@ -2098,7 +2098,7 @@ txn Sender
 	ops3, err := AssembleStringWithVersion(source, AssemblerMaxVersion)
 	require.NoError(t, err)
 	var txn3 transactions.SignedTxn
-	copy(txn2.Txn.Sender[:], []byte("aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00"))
+	copy(txn2.Txn.Sender[:], "aoeuiaoeuiaoeuiaoeuiaoeuiaoeui00")
 	txgroup3 := make([]transactions.SignedTxn, 1)
 	txgroup3[0] = txn3
 	ep3 := defaultEvalParams(nil, &txn3)

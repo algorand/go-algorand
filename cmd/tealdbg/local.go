@@ -316,7 +316,7 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 	}
 
 	if dp.LatestTimestamp == 0 && ddr.LatestTimestamp != 0 {
-		dp.LatestTimestamp = int64(ddr.LatestTimestamp)
+		dp.LatestTimestamp = ddr.LatestTimestamp
 	}
 
 	// if program(s) specified then run from it

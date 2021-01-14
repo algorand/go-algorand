@@ -278,7 +278,7 @@ func (pm *connectionPerformanceMonitor) notifyStopping(msg *IncomingMessage) {
 	// time to wrap up.
 	if pm.msgCount > 0 {
 		for peer := range pm.monitoredConnections {
-			pm.connectionDelay[peer] /= int64(pm.msgCount)
+			pm.connectionDelay[peer] /= pm.msgCount
 		}
 	}
 	pm.advanceStage(pmStageStopped, msg.Received)

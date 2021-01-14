@@ -154,7 +154,7 @@ func SecretKeyToSignatureSecrets(sk PrivateKey) (secrets *SignatureSecrets, err 
 		return
 	}
 	secrets = &SignatureSecrets{
-		SignatureVerifier: SignatureVerifier(pk),
+		SignatureVerifier: pk,
 		SK:                ed25519PrivateKey(sk),
 	}
 	return
@@ -201,7 +201,7 @@ func (s *SignatureSecrets) Sign(message Hashable) Signature {
 // Caller is responsible for domain separation.
 func (s *SignatureSecrets) SignBytes(message []byte) Signature {
 	cryptoSigSecretsSignBytesTotal.Inc(map[string]string{})
-	return Signature(ed25519Sign(ed25519PrivateKey(s.SK), message))
+	return Signature(ed25519Sign(s.SK, message))
 }
 
 // Verify verifies that some holder of a cryptographic secret authentically

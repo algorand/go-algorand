@@ -280,7 +280,7 @@ func TestAbruptWrites(t *testing.T) {
 	defer wg.Wait()
 	go func() {
 		defer wg.Done()
-		for i := basics.Round(lastRound + 1); i <= basics.Round(numberOfBlocks); i++ {
+		for i := lastRound + 1; i <= basics.Round(numberOfBlocks); i++ {
 			time.Sleep(time.Duration(rand.Uint32()%5) * time.Millisecond)
 			blk, err := remote.Block(i)
 			require.NoError(t, err)
@@ -613,7 +613,7 @@ func testingenvWithUpgrade(
 			modifierBlk := blk
 			blkh := &modifierBlk.BlockHeader
 			blkh.NextProtocolSwitchOn = basics.Round(upgradeRound)
-			blkh.NextProtocol = protocol.ConsensusVersion("some-unsupported-protocol")
+			blkh.NextProtocol = "some-unsupported-protocol"
 
 			mLedger.blocks = append(mLedger.blocks, modifierBlk)
 			continue

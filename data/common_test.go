@@ -111,7 +111,7 @@ func testingenv(t testing.TB, numAccounts, numTxs int, offlineAccounts bool) (*L
 		}
 	}
 
-	genesis[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * uint64(proto.RewardsRateRefreshInterval)})
+	genesis[poolAddr] = basics.MakeAccountData(basics.NotParticipating, basics.MicroAlgos{Raw: 100000 * proto.RewardsRateRefreshInterval})
 
 	bootstrap := MakeGenesisBalances(genesis, poolAddr, sinkAddr)
 

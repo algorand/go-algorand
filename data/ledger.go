@@ -82,14 +82,14 @@ func makeGenesisBlock(proto protocol.ConsensusVersion, genesisBal GenesisBalance
 		return bookkeeping.Block{}, fmt.Errorf("unsupported protocol %s", proto)
 	}
 
-	poolAddr := basics.Address(genesisBal.rewardsPool)
+	poolAddr := genesisBal.rewardsPool
 	incentivePoolBalanceAtGenesis := genesisBal.balances[poolAddr].MicroAlgos
 
 	genesisRewardsState := bookkeeping.RewardsState{
 		FeeSink:                   genesisBal.feeSink,
 		RewardsPool:               genesisBal.rewardsPool,
 		RewardsLevel:              0,
-		RewardsRate:               incentivePoolBalanceAtGenesis.Raw / uint64(params.RewardsRateRefreshInterval),
+		RewardsRate:               incentivePoolBalanceAtGenesis.Raw / params.RewardsRateRefreshInterval,
 		RewardsResidue:            0,
 		RewardsRecalculationRound: basics.Round(params.RewardsRateRefreshInterval),
 	}
