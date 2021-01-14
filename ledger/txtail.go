@@ -157,7 +157,7 @@ func (t *txTail) checkDup(proto config.ConsensusParams, current basics.Round, fi
 	}
 
 	if _, confirmed := t.lastValid[lastValid][txid]; confirmed {
-		return common.TransactionInLedgerError{Txid: txid}
+		return &common.TransactionInLedgerError{Txid: txid}
 	}
 	return nil
 }
