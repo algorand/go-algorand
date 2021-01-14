@@ -1,6 +1,6 @@
 {
   "Hosts": [
- 
+
     {
       "Name": "AWS_AP_SOUTHEAST-2-c5.xlarge",
       "Provider": "AWS",

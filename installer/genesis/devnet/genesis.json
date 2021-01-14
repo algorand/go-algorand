@@ -17,276 +17,249 @@
       }
     },
     {
-      "addr": "E6JSNTY4PVCY3IRZ6XEDHEO6VIHCQ5KGXCIQKFQCMB2N6HXRY4IB43VSHI",
+      "addr": "XY64P4GPKZNOFVMDW2TWJVICFTA2Y7ZTMYZQOGE7V5YAPTUEKKEYK6CK5Y",
       "comment": "Wallet1",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "KsJHGwqm40hKgq91j3e5/RgK8XDiWloeN8FfYB4UKHs=",
-        "vote": "21YWFk+gtv9AP0vXPXHubfXSWwstKfbKwIIPOYB395I=",
+        "sel": "M1xJPuhPEvag07h1wyWpkM6UJXpLp/A643yVkXYSIH8=",
+        "vote": "iXThEgEULcWVLs0uPxCRmnoIltTua24K/NUkOdrFtTY=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "SEMQ3EH6AHVCXZDHCDH3OYBJJGGLHDUFGYVCTJUUJMLO4J5F4E6AIXH3R4",
+      "addr": "RGKDEXWEGG2UUB7P32MUC52IOHVZA7GPS5NBWJPUG2PKQQL7HTJJOTQB5U",
       "comment": "Wallet10",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "kRtZiTWtKjFbx58DxEllyZ0/7mQYjT4gdilgNLEEcIQ=",
-        "vote": "QN1+DlX+2JE8O0NiFTSH+50sXpTYT79HVIYf0YRp1P4=",
+        "sel": "aai/KhX/TtrLOQx0y45+QTIQ2Taym8/K7g49kNr8zbM=",
+        "vote": "DLGP0ejyfCn4Hqb/2SXEV3D+leod/oxkJEIxvAF4JWU=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "BIKIMTXSESQTR5BMPELZO2TFASGCGSXZ2ZA2MSHEUYLJNNXUGJCX6JV2TU",
+      "addr": "ZMKKOMSREYDH57HEKJ6Y2A7Y54GAVSE7VWJFD3YK2VYQ6I4YUHAX4RERO4",
       "comment": "Wallet11",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "GVGFHDix++jaHjeVqHQd2tvlkaJzPpkFOqM/xOV8HEs=",
-        "vote": "Qb20Au5yVWckwkgLS1VrCA867xrBwMwpWvvdVeOgbfE=",
+        "sel": "OIdduv4YSAGsJYk99eHq9P8R1A/gBT71s6G6nrKjOJ8=",
+        "vote": "WODud6n0YbA0jCOJzYleM2Zvr16Gh1Pqvn0acNDEA9s=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "7ERQUUQLQ5K6GVYVAFE25Z42OQMI5JCSBOWORHRT4GMSC3GZFWCOBI67YE",
+      "addr": "AKDVILZKWRGXONDRUDZO6ZFSIZK2CCAPKNW7KACYJCGW7P4FOROULO6C4I",
       "comment": "Wallet12",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "kBuLytQUQIp9NrAyYbXZk4L9Qf7voFh7B3t4zsdX9tc=",
-        "vote": "SOB4dO+4R93RvzXZop17kn4wS/YjnmELqQapQ0PDFZM=",
+        "sel": "QWfn31bd0y5QyQSZaM7big90k9ruSqIjyMJt34enaL8=",
+        "vote": "eQJJjDd6Is0uFT0EMXcS/KxrRErQFOZZFThKkXJBAZc=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "MIZXEAYWBLOMNXCU52OF6ZTYH7LP7W47SKLHIGKLTGEXJHQGD7RHGMUPQQ",
+      "addr": "RKKCNHWNTG2QPA5KFWATCHO354NTMFJAHGUMFOX3GJQH7EBPHJPD4GOZF4",
       "comment": "Wallet13",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "KqpOt2cIsDwGbnNhzRzET4/UR0NhPhKSCG6g86ewFQA=",
-        "vote": "FIwKS4PBidGgLmAqYMPlxOP0H2LlCF9GC9lWE8Jl4As=",
+        "sel": "4x1031t5CP0MQr0Sw1CcGXKZR8e73VBnBr0s52XOXbE=",
+        "vote": "tUBEx4oHeExTpJIs9TalKtWvOVFFPhOxH9MQueE7Duk=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "77FPBCDQOMSOUWOY47HWPGOKSTLQITEZ7QR7GU4TOV3KVIFV2YS3WQG2OI",
+      "addr": "VJXYXQIOBUQ7NRIAETYQOXYQ2V4GHC53HG3QT6KUTOWGA5Y5NVFXUA7SYE",
       "comment": "Wallet14",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "M71rgLk28vIZgk73ag1K+2cH33J9viIzXnsrbISmc4Q=",
-        "vote": "B7O1giNLhEIJWCcXUmZ9X4j/dsVw9Zm5dmXDbn+3ack=",
+        "sel": "JgKxdP44Hlos1bqXe39eIBEB+tyGOL0sGMiZO/4jVn8=",
+        "vote": "7yod5nUWWKyf4pWKqgA4gV8y1nGVWK295zJgRHJl0Ng=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "JDTPB2DSAH42CRL6SKZ3BZ37WIGCHAYRO6DT6PBJNV47566EVQLEOINXEY",
+      "addr": "L6MVY3DZ5CSGFZAKD7CWRCQARJF7BAIHYHZY5MSEJ73YH6I2IU4IK5YL3M",
       "comment": "Wallet15",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "sj1Ap7Wz5GmfQfAJTiv1+eoL0q/2IsER14jxMtxsQok=",
-        "vote": "P1igemO61V2fz9nb4jaiOaFbpnUZPhKuyNx3j09swSY=",
+        "sel": "v14aDE1x+sNKdRexNZQyRhIFsYtCx8SXDdHeGK0wkPo=",
+        "vote": "yp78XBYx5jy/NhVxE14oZ34OueN8GYcqx7gbVKai4j8=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "H6BA5HI7TTKCP76QFTO4EO4MKTOI6XM6R75QRZLGV2H4VAOXIMGCXGIH5Y",
+      "addr": "BLUL3XHAAQ2R25STDUQTGRP5J2SWLR4NRGJ4QY6GG4WQZDO34JSLRFQ5GU",
       "comment": "Wallet16",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "RjsQgzT6eUx88673bdCQm12TmDLi93v92s+E3TK1XWA=",
-        "vote": "tQtvPw70hZDbrROzsSz27UdN6EIPj2dQFTtzsY6pCVQ=",
+        "sel": "e5glrwCY6CGBGgFmuypM4mZaqu+iCjK9XdGAGWhYxik=",
+        "vote": "grAUq8lvCv6Etb8W8lNgICBueYeQ5K9e3X0BfSyshJo=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "FCHLCNFIQ3L5QELMQDADI6BU2ANK2A2ICKXXG7ACJBNEAB64J7UJUPJHJE",
+      "addr": "PNJSFP7GLGGEF4QPWU5NXPUE3DTLCNRTVFACWP4NX6IL4QXISN34VMLYRA",
       "comment": "Wallet17",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "22Dvgroawrb1g7LotUhbTOV/7g1Rn410I1X8CmDeT0A=",
-        "vote": "SGXiNwAfMRI00SYVpVClqTNJcwBrQF3X77DsWSAO5jo=",
+        "sel": "YAQY0J9B1VjMAnFxe1yVLsOCsgrXs0pcNRtYamXNcuY=",
+        "vote": "5/MREVtlAxN9PuJrO4JFLX9mLurrkkx29zJlQU7AddU=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "LKH4JTUIOE6I4PH4HVJN6PYZ23WGGWDVJGHM2YXI6IYV5TEECQSTNKMQ2E",
+      "addr": "WZCGBTJVCDJ6MB6IIQ7M7M7BYEFHOUXFRSWZWSQQYHYXERGUD7BM6CHRV4",
       "comment": "Wallet18",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "uzGW1wXnBiny4kB4JSpEbCVQvKE8BeO+/o/pdkgfFaY=",
-        "vote": "ahu0YwixBhpEc+Xvw5oqgwDMnemXHWk8g/Uf/EI5nmA=",
+        "sel": "2CSCP/TCXnHy3guquOqwVdwKuTZ2jSxnvDnEQO49BI0=",
+        "vote": "cmdTMrV5lwiTCdpEYsJZGP0kkPT8VC2jMef5vcf1TrA=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "QFH2SS4MGPFNUUDMNLKIUKX5HKAZRXT765WH7WTUBAQNEM7IJAVKAE6NWM",
+      "addr": "EXBEM64CPRFUWX3AZBVX7I4D7IIJ6L37CJYSQ7ZBQDY2GJXMLWUDUXEUAY",
       "comment": "Wallet19",
       "state": {
-        "algo": 400000000000000,
+        "algo": 500000000000000,
         "onl": 1,
-        "sel": "eE4Wcuz8VeGclgU99Q9rDpehNR+yP2afFYuDAxb/Ebo=",
-        "vote": "4wsLw785udvYCpn5jzdLqcEHmIQIbRPmbyPt4oTLD2U=",
+        "sel": "9g8pMDEX7eEe8ATPn2dE3xEL9tfIyce/P30a0QLRk/w=",
+        "vote": "BKucLr7ErBYdzemiGR9spDNU25GPY7wz7vsYLr0wam4=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "6SKIRCMLFSSY3EJUC6QGFM3TFIJH72ZYUHX7GCUBDBUBYCAHJBJ5PWB344",
+      "addr": "6IQWFLC4JJMEDNYTLRGCS7IJRBMIAEMO6DGEOKRDL6IQSBRCEXUCIRRRNQ",
       "comment": "Wallet2",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "j7WaD43EwoxM5U18kMWn5HfIdn/ICVuMmsj3O5EbFWM=",
-        "vote": "jAuOIqeQH81zZs4+6YBircvi63xXMN1MIABcOiuzXXs=",
+        "sel": "fTwADRZw5uDcCEuF57ju1XsozZpWfFv4Ij2aOSjZglU=",
+        "vote": "79BTRgK4OWdUx427nxYuxYjQ5JYQUFprmT30Eb2tcwc=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "OYD4RZDUBQBVQL4WEPTBVLU6YC7HWHDAS4MMTLQ643Q3O7JRQW6FTWXIWQ",
+      "addr": "HVLBAE3XUTVSAQJBR4S2ADK5SKXOGLRFLIQZMTGLXF5XBFKARB47GH2Q4U",
       "comment": "Wallet20",
       "state": {
-        "algo": 400000000000000,
+        "algo": 500000000000000,
         "onl": 1,
-        "sel": "9LdCYfMPglvbManNcmVLztu/yPhPPkaRaSKMzj5E24w=",
-        "vote": "ZbN0ELPvL5QizuLvVc7oInsju+irjDRcdYDNnKJV2bg=",
+        "sel": "Xfpuy5zH/hGHVNA+/Yz7LBTGFD59QPD9k0UZmD/9gHI=",
+        "vote": "HoWZCJ6TISQtVRLyZpsPVdOEsPN/SUS5+HSBVsIBW5k=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "SSKILTKR47YW2IXCJCNUK66ATVLMU53IV5SEC2IXQ4WEPV5EKCAVPCEKMA",
+      "addr": "WQMJ5MU5SFU42PAIBZIAD2HGRQTPIBFWH55DWTSEDVR2DFX4OWVZBIQLHA",
       "comment": "Wallet3",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "4cxWnAD3DoIel3OuRqOpYgtWP7J873g688P4pXPVhBc=",
-        "vote": "keW3j4bRW0uvd6ofaDNUuMBdz/v/eWZsLhdFIOlXWCg=",
+        "sel": "lXfHh0JkR0Dy4lOIOcb5GktBsgytNfy/djmLMjs9sfg=",
+        "vote": "7ERhaONsSVFe5Xe3iZjmfImAF7vHfn7HHujKuHj9bMQ=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "FE4FDICQLO63S33NL75GBDKAKPGX7B3UMRBBSM5V2JYO4LCLRSE4HQ4YJI",
+      "addr": "XXPVBAS333CLU2436WK4ESNP5MS2BQIAX2UB2FUH2OL6W2RISTV6HWAMVI",
       "comment": "Wallet4",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "AILWKIbgQzCSPaaYAMFek1mu6uWYqm2QoIvP97h9wFg=",
-        "vote": "YXmnzyrRI4c16DauzENAK9bOqatN7qjLAbWUp0L6qXM=",
+        "sel": "Vwziefxb7nwWdr/1H2J8j7oj9YQXINolU5mLV73psds=",
+        "vote": "h92uLqoVxL1A6FNQVYvH5dBNuWbS5qoVjP64D36VPHA=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "2N3Y42EA3OPXCOFPKRH4HFOF6FX7QUT45A7CZH4WXGGQDDYSHP6NZGNL24",
+      "addr": "KJXDQ5DFTQLFLIOI56O2RZBMCIEU6SB525YRFWIXYNAOJVGFRZPWRRRPSQ",
       "comment": "Wallet5",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "lOU6PeVi+AT4lc2tj90AoNQyw3un0Smzk9sOpKCWI1k=",
-        "vote": "PztZkAup9rAMUreL+HQXCy7mbM39PZ5xl+YiTT4L9YE=",
+        "sel": "nyS5F9fLj4j5QJihEI+j0Qo1NZJ3Y3WFqQlX13Wz8Pc=",
+        "vote": "OOkx07adIbQxZYWaQuqzfFsRRp7b9N3HkaBEzHC7siQ=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "UJ3HDASRQG2QRPZUS5TOESFIMIDB4ELNE7DO2WGO5LJQ2KT32VGFGGCQKA",
+      "addr": "MN4PWZMU46RP2S4IY6WGRVS7TOH2IF5TWB5NINCSHHHGXW56LHFSWDXCWM",
       "comment": "Wallet6",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "rPMShsyg18Ho9JOQQjcG2yhPMBM0JIgZsr5ndy+0buo=",
-        "vote": "TFVn1TMHAmcM+St5QLhaFG/dlSGqqlTdGjgjcfSax5M=",
+        "sel": "9Dhf3jy3AGEXdSvQ+Z5khK1vVhBtSMWMI8b9Nrcv9KM=",
+        "vote": "DktKtJWjvjrvHOC3+ZnYZq55fXqSB0xIdxkDAmq4jDc=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "QBQ5ODCH6PWCB5TFQVCOFLHSJKN6NYYB3E3HPCJJTTNRVM5XD3B3KPWFJA",
+      "addr": "D5HH5IRCH2TPBGY5G7CYHFBY6WBQLWKYFUCG2LTKPJLJQV2T5X2AF2FGTU",
       "comment": "Wallet7",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "cxhpl3wBnc9bVW6G5ePiya8nzPvUUaprIoTWvTXJmpY=",
-        "vote": "W8tVBEdWGDArQFj43qXDw18LRJKaGjgZWUv54tsus+A=",
+        "sel": "CEfy71Id8IpNAEwS/V3SXmrBBQktdmKekD8DVNvKVe4=",
+        "vote": "yrFaO6g1Ln9XvOT9KoccW06n9vpf9BbjTMtJWN13cls=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "WILFZPBQMJ7GYSPNA6JPXIZZUZ27XWDJ2NKC7WIODXXGOF73C4TEDEHE3U",
+      "addr": "WB25K2CNUZHJZDZC65JSDZK4DCB7PJS2HY6CENEDFIWDAGY5PUMESWLQNA",
       "comment": "Wallet8",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "SMSZnIm3GSD1Dr5AEq5ksxxCIqPIrn19WSDNtJSJuiM=",
-        "vote": "absDJtKafyc4KbrB1GnLcFGv8xQjuqB46gPXXTpIsTU=",
+        "sel": "faWUNU08900giL3F52zDgPSo075mGzJbFwfJLSVRdbY=",
+        "vote": "DMuzD8oVB6Qb7BEoiWD6iIwmRX1jS8OTFVu8b6aSL08=",
         "voteKD": 10000,
         "voteLst": 3000000
       }
     },
     {
-      "addr": "4LSVIF5EY2BQZ6GENL6GT4SQTKX3UVDTBDJXFESGY7GI7FXHZA522KMG5I",
+      "addr": "D2SP4JPC37SXIER4G4CQUQV4SYTSSXYI4UF2GFUZ7YWZUMC2MOGTQLKNEI",
       "comment": "Wallet9",
       "state": {
         "algo": 500000000000000,
         "onl": 1,
-        "sel": "h3aKVPyQSpXAI2zcDD2f1CCBqf9fQd4Z+oJjQ6erFLI=",
-        "vote": "nNfIrFtpPR6zo4hH6F7HCMA44PDcNOEWtDVRf7dnKe4=",
+        "sel": "skRYnkIpe3dnYe58Vi4QStzNeI3TnhOhmiQTdQsipGc=",
+        "vote": "vA4HN3yLMKrisDFkLSp5tZ3Ud6oUXs2eAJUamj1YfyI=",
         "voteKD": 10000,
         "voteLst": 3000000
-      }
-    },
-    {
-      "addr": "IDUTJEUIEVSMXTU4LGTJWZ2UE2E6TIODUKU6UW3FU3UKIQQ77RLUBBBFLA",
-      "comment": "bank",
-      "state": {
-        "algo": 100000000000000,
-        "onl": 1,
-        "sel": "6Rax2zpOehfDXHyyvMFJwc22A//Pm6rxW4MiEBGIwog=",
-        "vote": "5JbOqqGn1Ypw+uH3t2i61DcjWYo1AslT0jyOGgcVC6Y=",
-        "voteKD": 10000,
-        "voteLst": 3000000
-      }
-    },
-    {
-      "addr": "PNWOET7LLOWMBMLE4KOCELCX6X3D3Q4H2Q4QJASYIEOF7YIPPQBG3YQ5YI",
-      "comment": "pp1",
-      "state": {
-        "algo": 50000000000000
-      }
-    },
-    {
-      "addr": "F5FALDSUFYO5LQU4OQY2HPZTXSUPRHUAERZ7IDG5QCBC76AOHEPK2VUJ34",
-      "comment": "pp2",
-      "state": {
-        "algo": 50000000000000
       }
     }
   ],
   "fees": "A7NMWS3NT3IUDMLVO26ULGXGIIOUQ3ND2TXSER6EBGRZNOBOUIQXHIBGDE",
-  "id": "v1.0",
+  "id": "v1",
   "network": "devnet",
-  "proto": "https://github.com/algorand/spec/tree/a26ed78ed8f834e2b9ccb6eb7d3ee9f629a6e622",
-  "rwd": "7777777777777777777777777777777777777777777777777774MSJUVU",
-  "timestamp": 1560210489
+  "proto": "https://github.com/algorandfoundation/specs/tree/3a83c4c743f8b17adfd73944b4319c25722a6782",
+  "rwd": "7777777777777777777777777777777777777777777777777774MSJUVU"
 }
