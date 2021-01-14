@@ -698,7 +698,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 		txad.ApplyData.ReceiverRewards = txib.ApplyData.ReceiverRewards
 		txad.ApplyData.SenderRewards = txib.ApplyData.SenderRewards
 		txad.ApplyData.EvalDelta = txib.ApplyData.EvalDelta
-		logging.Base().Infof("check applydata %d", txad.ApplyData.ClosingAmount)
+		logging.Base().Infof("check applydata %v", txad.ApplyData)
 
 		// Make sure all transactions in group have the same group value
 		if txad.SignedTxn.Txn.Group != txgroup[0].SignedTxn.Txn.Group {
@@ -779,7 +779,7 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	}
 	if eval.validate {
 		//applyData.ClosingAmount = basics.MicroAlgos{uint64(1)}
-		logging.Base().Infof("set applydata")
+		logging.Base().Infof("set applydata: %v", applyData)
 	}
 
 	//// Validate applyData if we are validating an existing block.
@@ -1077,7 +1077,7 @@ func (validator *evalTxValidator) run() {
 // Validate: eval(ctx, l, blk, true, txcache, executionPool)
 // AddBlock: eval(context.Background(), l, blk, false, txcache, nil)
 // tracker:  eval(context.Background(), l, blk, false, txcache, nil)
-func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (StateDelta, error) {
+func eval(ctx context.Context, l ledgerForEvaluator, blk *bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (StateDelta, error) {
 	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
 	if err != nil {
 		return StateDelta{}, err
@@ -1097,7 +1097,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 			return StateDelta{}, protocol.Error(blk.CurrentProtocol)
 		}
 		txvalidator.txcache = txcache
-		txvalidator.block = blk
+		txvalidator.block = *blk
 		txvalidator.verificationPool = executionPool
 
 		txvalidator.ctx = validationCtx
@@ -1151,6 +1151,8 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 		}
 	}
 
+	blk.Payset = eval.block.Payset
+
 	return eval.state.deltas(), nil
 }
 
@@ -1159,7 +1161,7 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
-	delta, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
+	delta, err := eval(ctx, l, &blk, true, l.verifiedTxnCache, executionPool)
 	if err != nil {
 		logging.Base().Infof("applydataerror: %v", err)
 		return nil, err

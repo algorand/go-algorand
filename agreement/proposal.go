@@ -269,7 +269,7 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 		BlockDigest:      compressedProposal.Block.Digest(),
 		EncodingDigest:   crypto.HashObj(compressedProposal),
 	}
-	return compressedProposal, value, nil
+	return uncompressedProposal, value, nil
 }
 
 // validate returns true if the proposal is valid.
