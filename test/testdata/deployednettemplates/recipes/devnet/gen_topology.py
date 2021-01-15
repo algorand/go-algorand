@@ -1,7 +1,7 @@
 import json
 
-node_types = {"RN": 5}
-node_size = {"RN": "-m5d.4xl"}
+node_types = {"R": 5}
+node_size = {"R": "-m5d.4xl"}
 regions = [
     "AWS-US-EAST-1",
     "AWS-US-WEST-2",
@@ -9,7 +9,7 @@ regions = [
     "AWS-EU-NORTH-1",
     "AWS_AP_SOUTHEAST-2"
 ]
-network = "DevNet"
+network = "Devnet"
 
 host_elements = []
 region_count = len(regions)
