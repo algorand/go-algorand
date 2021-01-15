@@ -26,10 +26,24 @@ import (
 type logicLedger struct {
 	aidx    basics.AppIndex
 	creator basics.Address
-	cow     *roundCowState
+	cow     cowForLogicLedger
 }
 
-func makeLogicLedger(cow *roundCowState, aidx basics.AppIndex) (*logicLedger, error) {
+type cowForLogicLedger interface {
+	Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error)
+	GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
+	GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error)
+	BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (basics.EvalDelta, error)
+
+	SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue) error
+	DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) error
+
+	round() basics.Round
+	prevTimestamp() int64
+	allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error)
+}
+
+func newLogicLedger(cow cowForLogicLedger, aidx basics.AppIndex) (*logicLedger, error) {
 	if aidx == basics.AppIndex(0) {
 		return nil, fmt.Errorf("cannot make logic ledger for app index 0")
 	}
@@ -106,11 +120,11 @@ func (al *logicLedger) AssetParams(assetIdx basics.AssetIndex) (basics.AssetPara
 }
 
 func (al *logicLedger) Round() basics.Round {
-	return al.cow.mods.hdr.Round
+	return al.cow.round()
 }
 
 func (al *logicLedger) LatestTimestamp() int64 {
-	return al.cow.mods.prevTimestamp
+	return al.cow.prevTimestamp()
 }
 
 func (al *logicLedger) ApplicationID() basics.AppIndex {

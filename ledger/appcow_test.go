@@ -19,13 +19,16 @@ package ledger
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
@@ -42,7 +45,7 @@ func (ml *emptyLedger) lookup(addr basics.Address) (basics.AccountData, error) {
 	return basics.AccountData{}, nil
 }
 
-func (ml *emptyLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl txlease) error {
+func (ml *emptyLedger) checkDup(firstValid, lastValid basics.Round, txn transactions.Txid, txl ledgercore.Txlease) error {
 	return nil
 }
 
@@ -84,6 +87,26 @@ func (ml *emptyLedger) blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, erro
 
 func (ml *emptyLedger) compactCertLast() basics.Round {
 	return basics.Round(0)
+}
+
+type modsData struct {
+	addr  basics.Address
+	cidx  basics.CreatableIndex
+	ctype basics.CreatableType
+}
+
+func getCow(creatables []modsData) *roundCowState {
+	cs := &roundCowState{
+		mods: ledgercore.StateDelta{
+			Creatables: make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable),
+			Hdr:        &bookkeeping.BlockHeader{},
+		},
+		proto: config.Consensus[protocol.ConsensusCurrentVersion],
+	}
+	for _, e := range creatables {
+		cs.mods.Creatables[e.cidx] = ledgercore.ModifiedCreatable{Ctype: e.ctype, Creator: e.addr, Created: true}
+	}
+	return cs
 }
 
 // stateTracker tracks the expected state of an account's storage after a
@@ -736,4 +759,305 @@ func TestApplyStorageDelta(t *testing.T) {
 	data = applyAll(kv, &sdd)
 	testDuplicateKeys(data.AppParams[1].GlobalState, data.AppParams[2].GlobalState)
 	testDuplicateKeys(data.AppLocalStates[1].KeyValue, data.AppLocalStates[2].KeyValue)
+}
+
+func TestCowAllocated(t *testing.T) {
+	a := require.New(t)
+
+	aidx := basics.AppIndex(1)
+	c := getCow([]modsData{})
+
+	addr1 := getRandomAddress(a)
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+		addr1: {storagePtr{aidx, false}: &storageDelta{action: allocAction}},
+	}
+
+	a.True(c.allocated(addr1, aidx, false))
+
+	// ensure other requests go down to roundCowParent
+	a.Panics(func() { c.allocated(addr1, aidx+1, false) })
+	a.Panics(func() { c.allocated(getRandomAddress(a), aidx, false) })
+
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+		addr1: {storagePtr{aidx, true}: &storageDelta{action: allocAction}},
+	}
+	a.True(c.allocated(addr1, aidx, true))
+
+	// ensure other requests go down to roundCowParent
+	a.Panics(func() { c.allocated(addr1, aidx+1, true) })
+	a.Panics(func() { c.allocated(getRandomAddress(a), aidx, true) })
+}
+
+func TestCowGetCreator(t *testing.T) {
+	a := require.New(t)
+
+	addr := getRandomAddress(a)
+	aidx := basics.AppIndex(1)
+	c := getCow([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
+
+	creator, found, err := c.GetCreator(basics.CreatableIndex(aidx), basics.AssetCreatable)
+	a.NoError(err)
+	a.False(found)
+	a.Equal(creator, basics.Address{})
+
+	creator, found, err = c.GetCreator(basics.CreatableIndex(aidx), basics.AppCreatable)
+	a.NoError(err)
+	a.True(found)
+	a.Equal(addr, creator)
+
+	// ensure other requests go down to roundCowParent
+	a.Panics(func() { c.GetCreator(basics.CreatableIndex(aidx+1), basics.AppCreatable) })
+}
+
+func TestCowGetters(t *testing.T) {
+	a := require.New(t)
+
+	addr := getRandomAddress(a)
+	aidx := basics.AppIndex(1)
+	c := getCow([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
+
+	round := basics.Round(1234)
+	c.mods.Hdr.Round = round
+	ts := int64(11223344)
+	c.mods.PrevTimestamp = ts
+
+	a.Equal(round, c.round())
+	a.Equal(ts, c.prevTimestamp())
+}
+
+func TestCowGet(t *testing.T) {
+	a := require.New(t)
+
+	addr := getRandomAddress(a)
+	aidx := basics.AppIndex(1)
+	c := getCow([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
+
+	addr1 := getRandomAddress(a)
+	bre := basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 100}}
+	c.mods.Accts = map[basics.Address]basics.AccountData{addr1: bre}
+
+	bra, err := c.Get(addr1, true)
+	a.NoError(err)
+	a.Equal(bre, bra)
+
+	bra, err = c.Get(addr1, false)
+	a.NoError(err)
+	a.Equal(bre, bra)
+
+	// ensure other requests go down to roundCowParent
+	a.Panics(func() { c.Get(getRandomAddress(a), true) })
+}
+
+func TestCowGetKey(t *testing.T) {
+	a := require.New(t)
+
+	addr := getRandomAddress(a)
+	aidx := basics.AppIndex(1)
+	c := getCow([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
+
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+		addr: {storagePtr{aidx, true}: &storageDelta{action: deallocAction}},
+	}
+	_, ok, err := c.GetKey(addr, aidx, true, "gkey")
+	a.Error(err)
+	a.False(ok)
+	a.Contains(err.Error(), "cannot fetch key")
+
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+		addr: {storagePtr{aidx, true}: &storageDelta{action: allocAction}},
+	}
+	_, ok, err = c.GetKey(addr, aidx, true, "gkey")
+	a.NoError(err)
+	a.False(ok)
+	_, ok, err = c.GetKey(addr, aidx, true, "gkey")
+	a.NoError(err)
+	a.False(ok)
+
+	tv := basics.TealValue{Type: basics.TealUintType, Uint: 1}
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+		addr: {
+			storagePtr{aidx, true}: &storageDelta{
+				action: allocAction,
+				kvCow:  stateDelta{"gkey": valueDelta{new: tv, newExists: false}},
+			},
+		},
+	}
+	_, ok, err = c.GetKey(addr, aidx, true, "gkey")
+	a.NoError(err)
+	a.False(ok)
+
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+		addr: {
+			storagePtr{aidx, true}: &storageDelta{
+				action: allocAction,
+				kvCow:  stateDelta{"gkey": valueDelta{new: tv, newExists: true}},
+			},
+		},
+	}
+	val, ok, err := c.GetKey(addr, aidx, true, "gkey")
+	a.NoError(err)
+	a.True(ok)
+	a.Equal(tv, val)
+
+	// check local
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+		addr: {
+			storagePtr{aidx, false}: &storageDelta{
+				action: allocAction,
+				kvCow:  stateDelta{"lkey": valueDelta{new: tv, newExists: true}},
+			},
+		},
+	}
+
+	val, ok, err = c.GetKey(addr, aidx, false, "lkey")
+	a.NoError(err)
+	a.True(ok)
+	a.Equal(tv, val)
+
+	// ensure other requests go down to roundCowParent
+	a.Panics(func() { c.GetKey(getRandomAddress(a), aidx, false, "lkey") })
+	a.Panics(func() { c.GetKey(addr, aidx+1, false, "lkey") })
+}
+
+func TestCowSetKey(t *testing.T) {
+	a := require.New(t)
+
+	addr := getRandomAddress(a)
+	aidx := basics.AppIndex(1)
+	c := getCow([]modsData{
+		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
+	})
+
+	key := strings.Repeat("key", 100)
+	val := "val"
+	tv := basics.TealValue{Type: basics.TealBytesType, Bytes: val}
+	err := c.SetKey(addr, aidx, true, key, tv)
+	a.Error(err)
+	a.Contains(err.Error(), "key too long")
+
+	key = "key"
+	val = strings.Repeat("val", 100)
+	tv = basics.TealValue{Type: basics.TealBytesType, Bytes: val}
+	err = c.SetKey(addr, aidx, true, key, tv)
+	a.Error(err)
+	a.Contains(err.Error(), "value too long")
+
+	val = "val"
+	tv = basics.TealValue{Type: basics.TealBytesType, Bytes: val}
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+		addr: {storagePtr{aidx, true}: &storageDelta{action: deallocAction}},
+	}
+	err = c.SetKey(addr, aidx, true, key, tv)
+	a.Error(err)
+	a.Contains(err.Error(), "cannot set key")
+
+	counts := basics.StateSchema{}
+	maxCounts := basics.StateSchema{}
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+		addr: {
+			storagePtr{aidx, true}: &storageDelta{
+				action:    allocAction,
+				kvCow:     make(stateDelta),
+				counts:    &counts,
+				maxCounts: &maxCounts,
+			},
+		},
+	}
+	err = c.SetKey(addr, aidx, true, key, tv)
+	a.Error(err)
+	a.Contains(err.Error(), "exceeds schema bytes")
+
+	counts = basics.StateSchema{NumUint: 1}
+	maxCounts = basics.StateSchema{NumByteSlice: 1}
+	err = c.SetKey(addr, aidx, true, key, tv)
+	a.Error(err)
+	a.Contains(err.Error(), "exceeds schema integer")
+
+	tv2 := basics.TealValue{Type: basics.TealUintType, Uint: 1}
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+		addr: {
+			storagePtr{aidx, true}: &storageDelta{
+				action:    allocAction,
+				kvCow:     stateDelta{key: valueDelta{new: tv2, newExists: true}},
+				counts:    &counts,
+				maxCounts: &maxCounts,
+			},
+		},
+	}
+	err = c.SetKey(addr, aidx, true, key, tv)
+	a.NoError(err)
+
+	counts = basics.StateSchema{NumUint: 1}
+	maxCounts = basics.StateSchema{NumByteSlice: 1, NumUint: 1}
+	err = c.SetKey(addr, aidx, true, key, tv)
+	a.NoError(err)
+
+	// check local
+	addr1 := getRandomAddress(a)
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+		addr1: {
+			storagePtr{aidx, false}: &storageDelta{
+				action:    allocAction,
+				kvCow:     stateDelta{key: valueDelta{new: tv2, newExists: true}},
+				counts:    &counts,
+				maxCounts: &maxCounts,
+			},
+		},
+	}
+	err = c.SetKey(addr1, aidx, false, key, tv)
+	a.NoError(err)
+
+	// ensure other requests go down to roundCowParent
+	a.Panics(func() { c.SetKey(getRandomAddress(a), aidx, false, key, tv) })
+	a.Panics(func() { c.SetKey(addr, aidx+1, false, key, tv) })
+}
+
+func TestCowDelKey(t *testing.T) {
+	a := require.New(t)
+
+	addr := getRandomAddress(a)
+	aidx := basics.AppIndex(1)
+	c := getCow([]modsData{
+		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
+	})
+
+	key := "key"
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+		addr: {storagePtr{aidx, true}: &storageDelta{action: deallocAction}},
+	}
+	err := c.DelKey(addr, aidx, true, key)
+	a.Error(err)
+	a.Contains(err.Error(), "cannot del key")
+
+	counts := basics.StateSchema{}
+	maxCounts := basics.StateSchema{}
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+		addr: {
+			storagePtr{aidx, true}: &storageDelta{
+				action:    allocAction,
+				kvCow:     make(stateDelta),
+				counts:    &counts,
+				maxCounts: &maxCounts,
+			},
+		},
+	}
+	err = c.DelKey(addr, aidx, true, key)
+	a.NoError(err)
+
+	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
+		addr: {
+			storagePtr{aidx, false}: &storageDelta{
+				action:    allocAction,
+				kvCow:     make(stateDelta),
+				counts:    &counts,
+				maxCounts: &maxCounts,
+			},
+		},
+	}
+	err = c.DelKey(addr, aidx, false, key)
+	a.NoError(err)
+
+	// ensure other requests go down to roundCowParent
+	a.Panics(func() { c.DelKey(getRandomAddress(a), aidx, false, key) })
+	a.Panics(func() { c.DelKey(addr, aidx+1, false, key) })
 }

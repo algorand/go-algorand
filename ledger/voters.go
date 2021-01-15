@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/crypto/merklearray"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // The votersTracker maintains the Merkle tree for the most recent
@@ -136,7 +137,7 @@ func (vt *votersTracker) loadFromDisk(l ledgerForTracker, au *accountUpdates) er
 		hdr, err = l.BlockHdr(r)
 		if err != nil {
 			switch err.(type) {
-			case ErrNoEntry:
+			case ledgercore.ErrNoEntry:
 				// If we cannot retrieve a block to construct the tree
 				// then we must have already evicted that block, which
 				// must have been because compact certs weren't enabled
