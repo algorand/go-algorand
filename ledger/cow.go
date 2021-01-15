@@ -114,6 +114,14 @@ func (cb *roundCowState) rewardsLevel() uint64 {
 	return cb.mods.Hdr.RewardsLevel
 }
 
+func (cb *roundCowState) round() basics.Round {
+	return cb.mods.Hdr.Round
+}
+
+func (cb *roundCowState) prevTimestamp() int64 {
+	return cb.mods.PrevTimestamp
+}
+
 func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (creator basics.Address, ok bool, err error) {
 	delta, ok := cb.mods.Creatables[cidx]
 	if ok {
