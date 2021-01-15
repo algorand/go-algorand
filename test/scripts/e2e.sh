@@ -85,7 +85,7 @@ cd "${SCRIPT_PATH}"
 python3 -m venv ${TEMPDIR}/ve
 . ${TEMPDIR}/ve/bin/activate
 ${TEMPDIR}/ve/bin/pip3 install --upgrade pip
-${TEMPDIR}/ve/bin/pip3 install --upgrade py-algorand-sdk cryptography
+${TEMPDIR}/ve/bin/pip3 install --upgrade py-algorand-sdk cryptography tailer
 ${TEMPDIR}/ve/bin/python3 e2e_client_runner.py e2e_subs/*.sh
 deactivate
 

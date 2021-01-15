@@ -32,6 +32,8 @@ import threading
 # pip install py-algorand-sdk
 import algosdk
 
+import tailer
+
 logger = logging.getLogger(__name__)
 
 # less than 16kB of log we show the whole thing, otherwise the last 16kB
@@ -402,6 +404,12 @@ def main():
 
     # ensure 'network stop' and 'network delete' also make they job
     goal_network_stop(netdir, normal_cleanup=True)
+    if rs.errors:
+        count = 2000
+        logger.error("Dumping last %d lines of Node/node.log", count)
+        lines = tailer.tail(open(os.path.join(netdir, 'Node', 'node.log'), 'rt'), count)
+        for line in lines:
+            logger.error(line)
     if not args.keep_temps:
         goal_network_delete(netdir, normal_cleanup=True)
 
