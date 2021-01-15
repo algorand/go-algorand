@@ -1087,10 +1087,10 @@ func (validator *evalTxValidator) run() {
 
 // used by Ledger.Validate() Ledger.AddBlock() Ledger.trackerEvalVerified()(accountUpdates.loadFromDisk())
 //
-// Validate: eval(ctx, l, blk, true, txcache, executionPool)
-// AddBlock: eval(context.Background(), l, blk, false, txcache, nil)
-// tracker:  eval(context.Background(), l, blk, false, txcache, nil)
-func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool) (StateDelta, error) {
+// Validate: eval(ctx, l, blk, true, txcache, executionPool, true)
+// AddBlock: eval(context.Background(), l, blk, false, txcache, nil, true)
+// tracker:  eval(context.Background(), l, blk, false, txcache, nil, false)
+func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, validate bool, txcache verify.VerifiedTransactionCache, executionPool execpool.BacklogPool, usePrefetch bool) (StateDelta, error) {
 	eval, err := startEvaluator(l, blk.BlockHeader, len(blk.Payset), validate, false)
 	if err != nil {
 		return StateDelta{}, err
@@ -1100,7 +1100,9 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	defer validationCancel()
 
 	// If validationCtx or underlying ctx are Done, end prefetch
-	go prefetchThread(validationCtx, eval.state.lookupParent, blk.Payset)
+	if usePrefetch {
+		go prefetchThread(validationCtx, eval.state.lookupParent, blk.Payset)
+	}
 
 	// Next, transactions
 	paysetgroups, err := blk.DecodePaysetGroups()
@@ -1178,8 +1180,12 @@ func prefetchThread(ctx context.Context, state roundCowParent, payset []transact
 		}
 		state.lookup(addr)
 	}
-	bail := 10
 	for _, stxn := range payset {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 		state.lookup(stxn.Txn.Sender)
 		maybelookup(stxn.Txn.Receiver)
 		maybelookup(stxn.Txn.CloseRemainderTo)
@@ -1190,16 +1196,6 @@ func prefetchThread(ctx context.Context, state roundCowParent, payset []transact
 		for _, xa := range stxn.Txn.Accounts {
 			maybelookup(xa)
 		}
-		if bail == 0 {
-			bail = 10
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-		} else {
-			bail--
-		}
 	}
 }
 
@@ -1208,7 +1204,7 @@ func prefetchThread(ctx context.Context, state roundCowParent, payset []transact
 // not a valid block (e.g., it has duplicate transactions, overspends some
 // account, etc).
 func (l *Ledger) Validate(ctx context.Context, blk bookkeeping.Block, executionPool execpool.BacklogPool) (*ValidatedBlock, error) {
-	delta, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool)
+	delta, err := eval(ctx, l, blk, true, l.verifiedTxnCache, executionPool, true)
 	if err != nil {
 		return nil, err
 	}
