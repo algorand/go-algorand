@@ -19,17 +19,13 @@ package ledger
 import (
 	"crypto/rand"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
-	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/ledger/ledgercore"
-	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/data/transactions"
 )
 
 func getRandomAddress(a *require.Assertions) basics.Address {
@@ -43,42 +39,112 @@ func getRandomAddress(a *require.Assertions) basics.Address {
 	return basics.Address(address)
 }
 
-type modsData struct {
-	addr  basics.Address
+type creatableLocator struct {
 	cidx  basics.CreatableIndex
 	ctype basics.CreatableType
 }
+type storeLocator struct {
+	addr   basics.Address
+	aidx   basics.AppIndex
+	global bool
+}
+type mockCowForLogicLedger struct {
+	rnd    basics.Round
+	ts     int64
+	cr     map[creatableLocator]basics.Address
+	brs    map[basics.Address]basics.AccountData
+	stores map[storeLocator]basics.TealKeyValue
+}
 
-func getCow(creatables []modsData) *roundCowState {
-	cs := &roundCowState{
-		mods: ledgercore.StateDelta{
-			Creatables: make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable),
-			Hdr:        &bookkeeping.BlockHeader{},
-		},
-		proto: config.Consensus[protocol.ConsensusCurrentVersion],
+func (c *mockCowForLogicLedger) Get(addr basics.Address, withPendingRewards bool) (basics.AccountData, error) {
+	br, ok := c.brs[addr]
+	if !ok {
+		return basics.AccountData{}, fmt.Errorf("addr %s not in mock cow", addr.String())
 	}
+	return br, nil
+}
+
+func (c *mockCowForLogicLedger) GetCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error) {
+	addr, found := c.cr[creatableLocator{cidx, ctype}]
+	return addr, found, nil
+}
+
+func (c *mockCowForLogicLedger) GetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) (basics.TealValue, bool, error) {
+	kv, ok := c.stores[storeLocator{addr, aidx, global}]
+	if !ok {
+		return basics.TealValue{}, false, fmt.Errorf("no store for (%s %d %v) in mock cow", addr.String(), aidx, global)
+	}
+	tv, found := kv[key]
+	return tv, found, nil
+}
+
+func (c *mockCowForLogicLedger) BuildEvalDelta(aidx basics.AppIndex, txn *transactions.Transaction) (evalDelta basics.EvalDelta, err error) {
+	return basics.EvalDelta{}, nil
+}
+
+func (c *mockCowForLogicLedger) SetKey(addr basics.Address, aidx basics.AppIndex, global bool, key string, value basics.TealValue) error {
+	kv, ok := c.stores[storeLocator{addr, aidx, global}]
+	if !ok {
+		return fmt.Errorf("no store for (%s %d %v) in mock cow", addr.String(), aidx, global)
+	}
+	kv[key] = value
+	c.stores[storeLocator{addr, aidx, global}] = kv
+	return nil
+}
+
+func (c *mockCowForLogicLedger) DelKey(addr basics.Address, aidx basics.AppIndex, global bool, key string) error {
+	kv, ok := c.stores[storeLocator{addr, aidx, global}]
+	if !ok {
+		return fmt.Errorf("no store for (%s %d %v) in mock cow", addr.String(), aidx, global)
+	}
+	delete(kv, key)
+	c.stores[storeLocator{addr, aidx, global}] = kv
+	return nil
+}
+
+func (c *mockCowForLogicLedger) round() basics.Round {
+	return c.rnd
+}
+
+func (c *mockCowForLogicLedger) prevTimestamp() int64 {
+	return c.ts
+}
+
+func (c *mockCowForLogicLedger) allocated(addr basics.Address, aidx basics.AppIndex, global bool) (bool, error) {
+	_, found := c.stores[storeLocator{addr, aidx, global}]
+	return found, nil
+}
+
+func newCowMock(creatables []modsData) *mockCowForLogicLedger {
+	var m mockCowForLogicLedger
+	m.cr = make(map[creatableLocator]basics.Address, len(creatables))
 	for _, e := range creatables {
-		cs.mods.Creatables[e.cidx] = ledgercore.ModifiedCreatable{Ctype: e.ctype, Creator: e.addr, Created: true}
+		m.cr[creatableLocator{e.cidx, e.ctype}] = e.addr
 	}
-	return cs
+	return &m
 }
 
 func TestLogicLedgerMake(t *testing.T) {
 	a := require.New(t)
 
-	_, err := makeLogicLedger(nil, 0)
+	_, err := newLogicLedger(nil, 0)
 	a.Error(err)
 	a.Contains(err.Error(), "cannot make logic ledger for app index 0")
 
 	addr := getRandomAddress(a)
 	aidx := basics.AppIndex(1)
-	c := getCow([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
 
-	_, err = makeLogicLedger(c, 0)
+	c := &mockCowForLogicLedger{}
+	_, err = newLogicLedger(c, 0)
 	a.Error(err)
 	a.Contains(err.Error(), "cannot make logic ledger for app index 0")
 
-	l, err := makeLogicLedger(c, aidx)
+	_, err = newLogicLedger(c, aidx)
+	a.Error(err)
+	a.Contains(err.Error(), fmt.Sprintf("app %d does not exist", aidx))
+
+	c = newCowMock([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
+	l, err := newLogicLedger(c, aidx)
 	a.NoError(err)
 	a.NotNil(l)
 	a.Equal(aidx, l.aidx)
@@ -90,20 +156,17 @@ func TestLogicLedgerBalances(t *testing.T) {
 
 	addr := getRandomAddress(a)
 	aidx := basics.AppIndex(1)
-	c := getCow([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
-	l, err := makeLogicLedger(c, aidx)
+	c := newCowMock([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
+	l, err := newLogicLedger(c, aidx)
 	a.NoError(err)
 	a.NotNil(l)
 
 	addr1 := getRandomAddress(a)
 	ble := basics.MicroAlgos{Raw: 100}
-	c.mods.Accts = map[basics.Address]basics.AccountData{addr1: {MicroAlgos: ble}}
+	c.brs = map[basics.Address]basics.AccountData{addr1: {MicroAlgos: ble}}
 	bla, err := l.Balance(addr1)
 	a.NoError(err)
 	a.Equal(ble, bla)
-
-	// ensure other requests go down to roundCowParent
-	a.Panics(func() { l.Balance(getRandomAddress(a)) })
 }
 
 func TestLogicLedgerGetters(t *testing.T) {
@@ -111,28 +174,25 @@ func TestLogicLedgerGetters(t *testing.T) {
 
 	addr := getRandomAddress(a)
 	aidx := basics.AppIndex(1)
-	c := getCow([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
-	l, err := makeLogicLedger(c, aidx)
+	c := newCowMock([]modsData{{addr, basics.CreatableIndex(aidx), basics.AppCreatable}})
+	l, err := newLogicLedger(c, aidx)
 	a.NoError(err)
 	a.NotNil(l)
 
 	round := basics.Round(1234)
-	c.mods.Hdr.Round = round
+	c.rnd = round
 	ts := int64(11223344)
-	c.mods.PrevTimestamp = ts
+	c.ts = ts
 
 	addr1 := getRandomAddress(a)
-	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
-		addr1: {storagePtr{aidx, false}: &storageDelta{action: allocAction}},
-	}
-
+	c.stores = map[storeLocator]basics.TealKeyValue{{addr1, aidx, false}: {}}
 	a.Equal(aidx, l.ApplicationID())
 	a.Equal(round, l.Round())
 	a.Equal(ts, l.LatestTimestamp())
+	a.True(l.OptedIn(addr1, 0))
 	a.True(l.OptedIn(addr1, aidx))
-
-	// ensure other requests go down to roundCowParent
-	a.Panics(func() { l.OptedIn(getRandomAddress(a), aidx) })
+	a.False(l.OptedIn(addr, 0))
+	a.False(l.OptedIn(addr, aidx))
 }
 
 func TestLogicLedgerAsset(t *testing.T) {
@@ -142,11 +202,11 @@ func TestLogicLedgerAsset(t *testing.T) {
 	addr1 := getRandomAddress(a)
 	aidx := basics.AppIndex(1)
 	assetIdx := basics.AssetIndex(2)
-	c := getCow([]modsData{
+	c := newCowMock([]modsData{
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
 		{addr1, basics.CreatableIndex(assetIdx), basics.AssetCreatable},
 	})
-	l, err := makeLogicLedger(c, aidx)
+	l, err := newLogicLedger(c, aidx)
 	a.NoError(err)
 	a.NotNil(l)
 
@@ -154,10 +214,8 @@ func TestLogicLedgerAsset(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), fmt.Sprintf("asset %d does not exist", aidx))
 
-	c.mods.Accts = map[basics.Address]basics.AccountData{
-		addr1: {
-			AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}},
-		},
+	c.brs = map[basics.Address]basics.AccountData{
+		addr1: {AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}}},
 	}
 	ap, err := l.AssetParams(assetIdx)
 	a.NoError(err)
@@ -167,7 +225,7 @@ func TestLogicLedgerAsset(t *testing.T) {
 	a.Error(err)
 	a.Contains(err.Error(), "has not opted in to asset")
 
-	c.mods.Accts = map[basics.Address]basics.AccountData{
+	c.brs = map[basics.Address]basics.AccountData{
 		addr1: {
 			AssetParams: map[basics.AssetIndex]basics.AssetParams{assetIdx: {Total: 1000}},
 			Assets:      map[basics.AssetIndex]basics.AssetHolding{assetIdx: {Amount: 99}},
@@ -177,10 +235,6 @@ func TestLogicLedgerAsset(t *testing.T) {
 	ah, err := l.AssetHolding(addr1, assetIdx)
 	a.NoError(err)
 	a.Equal(uint64(99), ah.Amount)
-
-	// ensure other requests go down to roundCowParent
-	a.Panics(func() { l.AssetHolding(getRandomAddress(a), assetIdx) })
-	a.Panics(func() { l.AssetParams(assetIdx + 1) })
 }
 
 func TestLogicLedgerGetKey(t *testing.T) {
@@ -190,11 +244,11 @@ func TestLogicLedgerGetKey(t *testing.T) {
 	addr1 := getRandomAddress(a)
 	aidx := basics.AppIndex(1)
 	assetIdx := basics.AssetIndex(2)
-	c := getCow([]modsData{
+	c := newCowMock([]modsData{
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
 		{addr1, basics.CreatableIndex(assetIdx), basics.AssetCreatable},
 	})
-	l, err := makeLogicLedger(c, aidx)
+	l, err := newLogicLedger(c, aidx)
 	a.NoError(err)
 	a.NotNil(l)
 
@@ -203,69 +257,21 @@ func TestLogicLedgerGetKey(t *testing.T) {
 	a.False(ok)
 	a.Contains(err.Error(), fmt.Sprintf("app %d does not exist", assetIdx))
 
-	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
-		addr: {storagePtr{aidx, true}: &storageDelta{action: deallocAction}},
-	}
-	_, ok, err = l.GetGlobal(aidx, "gkey")
+	tv := basics.TealValue{Type: basics.TealUintType, Uint: 1}
+	c.stores = map[storeLocator]basics.TealKeyValue{{addr, aidx + 1, true}: {"gkey": tv}}
+	val, ok, err := l.GetGlobal(aidx, "gkey")
 	a.Error(err)
 	a.False(ok)
-	a.Contains(err.Error(), "cannot fetch key")
+	a.Contains(err.Error(), fmt.Sprintf("no store for (%s %d %v) in mock cow", addr, aidx, true))
 
-	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
-		addr: {storagePtr{aidx, true}: &storageDelta{action: allocAction}},
-	}
-	_, ok, err = l.GetGlobal(aidx, "gkey")
-	a.NoError(err)
-	a.False(ok)
-	_, ok, err = l.GetGlobal(0, "gkey")
-	a.NoError(err)
-	a.False(ok)
-
-	tv := basics.TealValue{Type: basics.TealUintType, Uint: 1}
-	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
-		addr: {
-			storagePtr{aidx, true}: &storageDelta{
-				action: allocAction,
-				kvCow:  stateDelta{"gkey": valueDelta{new: tv, newExists: false}},
-			},
-		},
-	}
-	val, ok, err := l.GetGlobal(aidx, "gkey")
-	a.NoError(err)
-	a.False(ok)
-
-	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
-		addr: {
-			storagePtr{aidx, true}: &storageDelta{
-				action: allocAction,
-				kvCow:  stateDelta{"gkey": valueDelta{new: tv, newExists: true}},
-			},
-		},
-	}
+	c.stores = map[storeLocator]basics.TealKeyValue{{addr, aidx, true}: {"gkey": tv}}
 	val, ok, err = l.GetGlobal(aidx, "gkey")
 	a.NoError(err)
 	a.True(ok)
 	a.Equal(tv, val)
 
-	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
-		addr: {
-			storagePtr{aidx, true}: &storageDelta{
-				action: remainAllocAction,
-				kvCow:  stateDelta{"gkey": valueDelta{new: tv, newExists: true}},
-			},
-		},
-	}
-
 	// check local
-	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
-		addr: {
-			storagePtr{aidx, false}: &storageDelta{
-				action: allocAction,
-				kvCow:  stateDelta{"lkey": valueDelta{new: tv, newExists: true}},
-			},
-		},
-	}
-
+	c.stores = map[storeLocator]basics.TealKeyValue{{addr, aidx, false}: {"lkey": tv}}
 	val, ok, err = l.GetLocal(addr, aidx, "lkey")
 	a.NoError(err)
 	a.True(ok)
@@ -277,89 +283,26 @@ func TestLogicLedgerSetKey(t *testing.T) {
 
 	addr := getRandomAddress(a)
 	aidx := basics.AppIndex(1)
-	c := getCow([]modsData{
+	c := newCowMock([]modsData{
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
 	})
-	l, err := makeLogicLedger(c, aidx)
+	l, err := newLogicLedger(c, aidx)
 	a.NoError(err)
 	a.NotNil(l)
 
-	key := strings.Repeat("key", 100)
-	val := "val"
-	tv := basics.TealValue{Type: basics.TealBytesType, Bytes: val}
-	err = l.SetGlobal(key, tv)
+	tv := basics.TealValue{Type: basics.TealUintType, Uint: 1}
+	err = l.SetGlobal("gkey", tv)
 	a.Error(err)
-	a.Contains(err.Error(), "key too long")
+	a.Contains(err.Error(), fmt.Sprintf("no store for (%s %d %v) in mock cow", addr, aidx, true))
 
-	key = "key"
-	val = strings.Repeat("val", 100)
-	tv = basics.TealValue{Type: basics.TealBytesType, Bytes: val}
-	err = l.SetGlobal(key, tv)
-	a.Error(err)
-	a.Contains(err.Error(), "value too long")
-
-	val = "val"
-	tv = basics.TealValue{Type: basics.TealBytesType, Bytes: val}
-	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
-		addr: {storagePtr{aidx, true}: &storageDelta{action: deallocAction}},
-	}
-	err = l.SetGlobal(key, tv)
-	a.Error(err)
-	a.Contains(err.Error(), "cannot set key")
-
-	counts := basics.StateSchema{}
-	maxCounts := basics.StateSchema{}
-	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
-		addr: {
-			storagePtr{aidx, true}: &storageDelta{
-				action:    allocAction,
-				kvCow:     make(stateDelta),
-				counts:    &counts,
-				maxCounts: &maxCounts,
-			},
-		},
-	}
-	err = l.SetGlobal(key, tv)
-	a.Error(err)
-	a.Contains(err.Error(), "exceeds schema bytes")
-
-	counts = basics.StateSchema{NumUint: 1}
-	maxCounts = basics.StateSchema{NumByteSlice: 1}
-	err = l.SetGlobal(key, tv)
-	a.Error(err)
-	a.Contains(err.Error(), "exceeds schema integer")
-
-	tv2 := basics.TealValue{Type: basics.TealUintType, Uint: 1}
-	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
-		addr: {
-			storagePtr{aidx, true}: &storageDelta{
-				action:    allocAction,
-				kvCow:     stateDelta{key: valueDelta{new: tv2, newExists: true}},
-				counts:    &counts,
-				maxCounts: &maxCounts,
-			},
-		},
-	}
-	err = l.SetGlobal(key, tv)
-	a.NoError(err)
-
-	counts = basics.StateSchema{NumUint: 1}
-	maxCounts = basics.StateSchema{NumByteSlice: 1, NumUint: 1}
-	err = l.SetGlobal(key, tv)
+	tv2 := basics.TealValue{Type: basics.TealUintType, Uint: 2}
+	c.stores = map[storeLocator]basics.TealKeyValue{{addr, aidx, true}: {"gkey": tv}}
+	err = l.SetGlobal("gkey", tv2)
 	a.NoError(err)
 
 	// check local
-	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
-		addr: {
-			storagePtr{aidx, false}: &storageDelta{
-				action:    allocAction,
-				kvCow:     stateDelta{key: valueDelta{new: tv2, newExists: true}},
-				counts:    &counts,
-				maxCounts: &maxCounts,
-			},
-		},
-	}
-	err = l.SetLocal(addr, key, tv)
+	c.stores = map[storeLocator]basics.TealKeyValue{{addr, aidx, false}: {"lkey": tv}}
+	err = l.SetLocal(addr, "lkey", tv2)
 	a.NoError(err)
 }
 
@@ -368,46 +311,24 @@ func TestLogicLedgerDelKey(t *testing.T) {
 
 	addr := getRandomAddress(a)
 	aidx := basics.AppIndex(1)
-	c := getCow([]modsData{
+	c := newCowMock([]modsData{
 		{addr, basics.CreatableIndex(aidx), basics.AppCreatable},
 	})
-	l, err := makeLogicLedger(c, aidx)
+	l, err := newLogicLedger(c, aidx)
 	a.NoError(err)
 	a.NotNil(l)
 
-	key := "key"
-	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
-		addr: {storagePtr{aidx, true}: &storageDelta{action: deallocAction}},
-	}
-	err = l.DelGlobal(key)
+	err = l.DelGlobal("gkey")
 	a.Error(err)
-	a.Contains(err.Error(), "cannot del key")
+	a.Contains(err.Error(), fmt.Sprintf("no store for (%s %d %v) in mock cow", addr, aidx, true))
 
-	counts := basics.StateSchema{}
-	maxCounts := basics.StateSchema{}
-	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
-		addr: {
-			storagePtr{aidx, true}: &storageDelta{
-				action:    allocAction,
-				kvCow:     make(stateDelta),
-				counts:    &counts,
-				maxCounts: &maxCounts,
-			},
-		},
-	}
-	err = l.DelGlobal(key)
+	tv := basics.TealValue{Type: basics.TealUintType, Uint: 1}
+	c.stores = map[storeLocator]basics.TealKeyValue{{addr, aidx, true}: {"gkey": tv}}
+	err = l.DelGlobal("gkey")
 	a.NoError(err)
 
-	c.sdeltas = map[basics.Address]map[storagePtr]*storageDelta{
-		addr: {
-			storagePtr{aidx, false}: &storageDelta{
-				action:    allocAction,
-				kvCow:     make(stateDelta),
-				counts:    &counts,
-				maxCounts: &maxCounts,
-			},
-		},
-	}
-	err = l.DelLocal(addr, key)
+	addr1 := getRandomAddress(a)
+	c.stores = map[storeLocator]basics.TealKeyValue{{addr1, aidx, false}: {"lkey": tv}}
+	err = l.DelLocal(addr1, "lkey")
 	a.NoError(err)
 }
