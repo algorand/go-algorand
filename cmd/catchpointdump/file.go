@@ -35,6 +35,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
@@ -211,7 +212,7 @@ func printAccountsDatabase(databaseName string, fileHeader ledger.CatchpointFile
 		printDumpingCatchpointProgressLine(0, 50, 0)
 
 		if fileHeader.Version == 0 {
-			var totals ledger.AccountTotals
+			var totals ledgercore.AccountTotals
 			id := ""
 			row := tx.QueryRow("SELECT online, onlinerewardunits, offline, offlinerewardunits, notparticipating, notparticipatingrewardunits, rewardslevel FROM accounttotals WHERE id=?", id)
 			err = row.Scan(&totals.Online.Money.Raw, &totals.Online.RewardUnits,

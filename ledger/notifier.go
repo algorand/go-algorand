@@ -23,16 +23,17 @@ import (
 
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 )
 
 // BlockListener represents an object that needs to get notified on new blocks.
 type BlockListener interface {
-	OnNewBlock(block bookkeeping.Block, delta StateDelta)
+	OnNewBlock(block bookkeeping.Block, delta ledgercore.StateDelta)
 }
 
 type blockDeltaPair struct {
 	block bookkeeping.Block
-	delta StateDelta
+	delta ledgercore.StateDelta
 }
 
 type blockNotifier struct {
@@ -100,7 +101,7 @@ func (bn *blockNotifier) register(listeners []BlockListener) {
 	bn.listeners = append(bn.listeners, listeners...)
 }
 
-func (bn *blockNotifier) newBlock(blk bookkeeping.Block, delta StateDelta) {
+func (bn *blockNotifier) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	bn.mu.Lock()
 	defer bn.mu.Unlock()
 	bn.pendingBlocks = append(bn.pendingBlocks, blockDeltaPair{block: blk, delta: delta})

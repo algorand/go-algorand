@@ -330,7 +330,7 @@ func makeStringResult(value string) cdt.RuntimeRemoteObject {
 // tealTypeMap maps TealType to JS type
 var tealTypeMap = map[basics.TealType]string{
 	basics.TealBytesType: "string",
-	basics.TealUintType:  "number",
+	basics.TealUintType:  "bigint",
 }
 
 type fieldDesc struct {
@@ -403,8 +403,8 @@ func tealValueToFieldDesc(name string, tv basics.TealValue) fieldDesc {
 			}
 		}
 	} else {
-		valType = "number"
-		value = strconv.Itoa(int(tv.Uint))
+		valType = "bigint"
+		value = strconv.FormatUint(tv.Uint, 10)
 	}
 	return fieldDesc{name, value, valType}
 }

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package ledgercore
 
 import (
 	"fmt"
@@ -36,13 +36,21 @@ func (tile TransactionInLedgerError) Error() string {
 // LeaseInLedgerError is returned when a transaction cannot be added because it has a lease that already being used in the relavant rounds
 type LeaseInLedgerError struct {
 	txid  transactions.Txid
-	lease txlease
+	lease Txlease
+}
+
+// MakeLeaseInLedgerError builds a LeaseInLedgerError object
+func MakeLeaseInLedgerError(txid transactions.Txid, lease Txlease) *LeaseInLedgerError {
+	return &LeaseInLedgerError{
+		txid:  txid,
+		lease: lease,
+	}
 }
 
 // Error implements the error interface for the LeaseInLedgerError stuct
 func (lile *LeaseInLedgerError) Error() string {
 	// format the lease as address.
-	addr := basics.Address(lile.lease.lease)
+	addr := basics.Address(lile.lease.Lease)
 	return fmt.Sprintf("transaction %v using an overlapping lease %s", lile.txid, addr.String())
 }
 
