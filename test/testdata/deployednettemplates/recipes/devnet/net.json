@@ -24,6 +24,18 @@
 						{
 							"Name": "Wallet1",
 							"ParticipationOnly": false
+						},
+						{
+							"Name": "bank",
+							"ParticipationOnly": false
+						},
+						{
+							"Name": "pp1",
+							"ParticipationOnly": false
+						},
+						{
+							"Name": "pp2",
+							"ParticipationOnly": false
 						}
 					],
 					"APIToken": "{{APIToken}}",

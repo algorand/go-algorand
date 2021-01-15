@@ -1,14 +1,29 @@
 {
 	"NetworkName": "",
-	"VersionModifier": "",
+    "VersionModifier": ".0",
 	"ConsensusProtocol": "",
 	"FirstPartKeyRound": 0,
-	"LastPartKeyRound": 3000000,
+	"LastPartKeyRound": 10000000,
 	"PartKeyDilution": 0,
 	"Wallets": [
 		{
+		  "Name": "bank",
+		  "Stake": 1,
+		  "Online": true
+		},
+		{
+		  "Name": "pp1",
+		  "Stake": 0.5,
+		  "Online": false
+		},
+		{
+		  "Name": "pp2",
+		  "Stake": 0.5,
+		  "Online": false
+		},
+		{
 			"Name": "Wallet1",
-			"Stake": 5,
+			"Stake": 3,
 			"Online": true
 		},
 		{
