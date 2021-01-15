@@ -409,7 +409,7 @@ func MakeDebugBalances(l ledgerForCowBase, round basics.Round, proto protocol.Co
 func (cb *roundCowState) StatefulEval(params logic.EvalParams, aidx basics.AppIndex, program []byte) (pass bool, evalDelta basics.EvalDelta, err error) {
 	// Make a child cow to eval our program in
 	calf := cb.child()
-	params.Ledger, err = makeLogicLedger(calf, aidx)
+	params.Ledger, err = newLogicLedger(calf, aidx)
 	if err != nil {
 		return false, basics.EvalDelta{}, err
 	}
