@@ -130,17 +130,26 @@ type persistedAccountData struct {
 	rowid int64
 	// the round number that is associated with the accountData. This field is needed so that we can maintain a correct
 	// lruAccounts cache. We use it to ensure that the entries on the lruAccounts.accountsList are the latest ones.
-	// this becomes an issue since while we attempt to write an update to disk, we migth be reading an entry and placing
+	// this becomes an issue since while we attempt to write an update to disk, we might be reading an entry and placing
 	// it on the lruAccounts.pendingAccounts; The commitRound doesn't attempt to flush the pending accounts, but rather
 	// just write the latest ( which is correct ) to the lruAccounts.accountsList. later on, during on newBlockImpl, we
 	// want to ensure that the "real" written value isn't being overridden by the value from the pending accounts.
 	round basics.Round
 }
 
-// accountDeltaCount is an extention to accountDelta that is being used by the commitRound function for counting the
-// number of changes we've made per account. The ndeltas is used execlusively for consistency checking - making sure that
+// accountDeltasWithCount is an extention to ledgercore.AccountDeltas that is being used by the commitRound function for counting the
+// number of changes we've made per account. The ndeltas is used exclusively for consistency checking - making sure that
 // all the pending changes were written and that there are no outstanding writes missing.
-type accountDeltaCount struct {
+type accountDeltasWithCount struct {
+	// actual data
+	deltas []accountDelta
+	// addresses for deltas
+	addresses []basics.Address
+	// cache for addr to deltas index resolution
+	cache map[basics.Address]int
+}
+
+type accountDelta struct {
 	old     persistedAccountData
 	new     basics.AccountData
 	ndeltas int
@@ -190,6 +199,52 @@ func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.Consens
 		normalizedAccountBalances[i].accountHash = accountHashBuilder(balance.Address, normalizedAccountBalances[i].accountData, balance.AccountData)
 	}
 	return
+}
+
+func (a *accountDeltasWithCount) get(addr basics.Address) (accountDelta, bool) {
+	idx, ok := a.cache[addr]
+	if !ok {
+		return accountDelta{}, false
+	}
+	return a.deltas[idx], true
+}
+
+func (a *accountDeltasWithCount) len() int {
+	return len(a.deltas)
+}
+
+func (a *accountDeltasWithCount) getByIdx(i int) (basics.Address, accountDelta) {
+	return a.addresses[i], a.deltas[i]
+}
+
+// upsert updates existing or inserts a new entry
+func (a *accountDeltasWithCount) upsert(addr basics.Address, delta accountDelta) {
+	if idx, exist := a.cache[addr]; exist { // nil map lookup is OK
+		a.deltas[idx] = delta
+		return
+	}
+	a.insert(addr, delta)
+}
+
+func (a *accountDeltasWithCount) insert(addr basics.Address, delta accountDelta) {
+	last := len(a.deltas)
+	a.deltas = append(a.deltas, delta)
+	a.addresses = append(a.addresses, addr)
+
+	if a.cache == nil {
+		a.cache = make(map[basics.Address]int)
+	}
+	a.cache[addr] = last
+}
+
+// upsertOld updates existing or inserts a new partial entry with only old field filled
+func (a *accountDeltasWithCount) upsertOld(old persistedAccountData) {
+	addr := old.addr
+	if idx, exist := a.cache[addr]; exist {
+		a.deltas[idx].old = old
+		return
+	}
+	a.insert(addr, accountDelta{old: old})
 }
 
 // writeCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
@@ -867,7 +922,7 @@ func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 
 // accountsNewRound updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
 // The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
-func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (updatedAccounts []persistedAccountData, err error) {
+func accountsNewRound(tx *sql.Tx, updates accountDeltasWithCount, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (updatedAccounts []persistedAccountData, err error) {
 
 	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteByRowIDStmt, insertStmt, updateStmt *sql.Stmt
 
@@ -890,9 +945,10 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 	defer updateStmt.Close()
 	var result sql.Result
 	var rowsAffected int64
-	updatedAccounts = make([]persistedAccountData, len(updates))
+	updatedAccounts = make([]persistedAccountData, updates.len())
 	updatedAccountIdx := 0
-	for addr, data := range updates {
+	for i := 0; i < updates.len(); i++ {
+		addr, data := updates.getByIdx(i)
 		if data.old.rowid == 0 {
 			// zero rowid means we don't have a previous value.
 			if data.new.IsZero() {
@@ -974,7 +1030,7 @@ func accountsNewRound(tx *sql.Tx, updates map[basics.Address]accountDeltaCount, 
 }
 
 // totalsNewRounds updates the accountsTotals by applying series of round changes
-func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]basics.AccountData, compactUpdates map[basics.Address]accountDeltaCount, accountTotals []ledgercore.AccountTotals, protos []config.ConsensusParams) (err error) {
+func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpdates accountDeltasWithCount, accountTotals []ledgercore.AccountTotals, protos []config.ConsensusParams) (err error) {
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx, false)
 	if err != nil {
@@ -982,15 +1038,17 @@ func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]basics.AccountData
 	}
 
 	// copy the updates base account map, since we don't want to modify the input map.
-	accounts := make(map[basics.Address]basics.AccountData, len(compactUpdates))
-	for addr, acctData := range compactUpdates {
+	accounts := make(map[basics.Address]basics.AccountData, compactUpdates.len())
+	for i := 0; i < compactUpdates.len(); i++ {
+		addr, acctData := compactUpdates.getByIdx(i)
 		accounts[addr] = acctData.old.accountData
 	}
 
 	for i := 0; i < len(updates); i++ {
 		totals.ApplyRewards(accountTotals[i].RewardsLevel, &ot)
 
-		for addr, data := range updates[i] {
+		for j := 0; j < updates[i].Len(); j++ {
+			addr, data := updates[i].GetByIdx(j)
 
 			if oldAccountData, has := accounts[addr]; has {
 				totals.DelAccount(protos[i], oldAccountData, &ot)
@@ -1020,7 +1078,7 @@ func totalsNewRounds(tx *sql.Tx, updates []map[basics.Address]basics.AccountData
 // accountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
-func accountsLoadOld(tx *sql.Tx, addresses []basics.Address, deltas map[basics.Address]accountDeltaCount) (err error) {
+func accountsLoadOld(tx *sql.Tx, addresses []basics.Address, deltas accountDeltasWithCount) (err error) {
 	if len(addresses) == 0 {
 		return nil
 	}
@@ -1041,20 +1099,14 @@ func accountsLoadOld(tx *sql.Tx, addresses []basics.Address, deltas map[basics.A
 				if err != nil {
 					return err
 				}
-				delta := deltas[addr]
-				delta.old = *persistedAcctData
-				deltas[addr] = delta
+				deltas.upsertOld(*persistedAcctData)
 			} else {
 				// to retain backward compatability, we will treat this condition as if we don't have the account.
-				delta := deltas[addr]
-				delta.old = persistedAccountData{addr: addr, rowid: rowid.Int64}
-				deltas[addr] = delta
+				deltas.upsertOld(persistedAccountData{addr: addr, rowid: rowid.Int64})
 			}
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
-			delta := deltas[addr]
-			delta.old = persistedAccountData{addr: addr}
-			deltas[addr] = delta
+			deltas.upsertOld(persistedAccountData{addr: addr})
 			err = nil
 		default:
 			// unexpected error - let the caller know that we couldn't complete the operation.

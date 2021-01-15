@@ -228,19 +228,18 @@ func randomAccounts(niter int, simpleAccounts bool) map[basics.Address]basics.Ac
 	return res
 }
 
-func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates map[basics.Address]basics.AccountData, totals map[basics.Address]basics.AccountData, imbalance int64) {
+func randomDeltas(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]basics.AccountData, imbalance int64) {
 	updates, totals, imbalance, _ = randomDeltasImpl(niter, base, rewardsLevel, true, 0)
 	return
 }
 
-func randomDeltasFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates map[basics.Address]basics.AccountData, totals map[basics.Address]basics.AccountData, imbalance int64, lastCreatableID uint64) {
+func randomDeltasFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]basics.AccountData, imbalance int64, lastCreatableID uint64) {
 	updates, totals, imbalance, lastCreatableID = randomDeltasImpl(niter, base, rewardsLevel, false, lastCreatableIDIn)
 	return
 }
 
-func randomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates map[basics.Address]basics.AccountData, totals map[basics.Address]basics.AccountData, imbalance int64, lastCreatableID uint64) {
+func randomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]basics.AccountData, imbalance int64, lastCreatableID uint64) {
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
-	updates = make(map[basics.Address]basics.AccountData)
 	totals = make(map[basics.Address]basics.AccountData)
 
 	// copy base -> totals
@@ -284,7 +283,7 @@ func randomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 			} else {
 				new, lastCreatableID = randomFullAccountData(rewardsLevel, lastCreatableID)
 			}
-			updates[addr] = new
+			updates.Upsert(addr, new)
 			imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 			totals[addr] = new
 			break
@@ -301,7 +300,7 @@ func randomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 		} else {
 			new, lastCreatableID = randomFullAccountData(rewardsLevel, lastCreatableID)
 		}
-		updates[addr] = new
+		updates.Upsert(addr, new)
 		imbalance += int64(old.WithUpdatedRewards(proto, rewardsLevel).MicroAlgos.Raw - new.MicroAlgos.Raw)
 		totals[addr] = new
 	}
@@ -309,17 +308,17 @@ func randomDeltasImpl(niter int, base map[basics.Address]basics.AccountData, rew
 	return
 }
 
-func randomDeltasBalanced(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates map[basics.Address]basics.AccountData, totals map[basics.Address]basics.AccountData) {
+func randomDeltasBalanced(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]basics.AccountData) {
 	updates, totals, _ = randomDeltasBalancedImpl(niter, base, rewardsLevel, true, 0)
 	return
 }
 
-func randomDeltasBalancedFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates map[basics.Address]basics.AccountData, totals map[basics.Address]basics.AccountData, lastCreatableID uint64) {
+func randomDeltasBalancedFull(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, lastCreatableIDIn uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]basics.AccountData, lastCreatableID uint64) {
 	updates, totals, lastCreatableID = randomDeltasBalancedImpl(niter, base, rewardsLevel, false, lastCreatableIDIn)
 	return
 }
 
-func randomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates map[basics.Address]basics.AccountData, totals map[basics.Address]basics.AccountData, lastCreatableID uint64) {
+func randomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountData, rewardsLevel uint64, simple bool, lastCreatableIDIn uint64) (updates ledgercore.AccountDeltas, totals map[basics.Address]basics.AccountData, lastCreatableID uint64) {
 	var imbalance int64
 	if simple {
 		updates, totals, imbalance = randomDeltas(niter, base, rewardsLevel)
@@ -331,7 +330,7 @@ func randomDeltasBalancedImpl(niter int, base map[basics.Address]basics.AccountD
 	newPool := oldPool
 	newPool.MicroAlgos.Raw += uint64(imbalance)
 
-	updates[testPoolAddr] = newPool
+	updates.Upsert(testPoolAddr, newPool)
 	totals[testPoolAddr] = newPool
 
 	return updates, totals, lastCreatableID
@@ -450,9 +449,10 @@ func TestAccountDBInit(t *testing.T) {
 }
 
 // creatablesFromUpdates calculates creatables from updates
-func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates map[basics.Address]basics.AccountData, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]ledgercore.ModifiedCreatable {
+func creatablesFromUpdates(base map[basics.Address]basics.AccountData, updates ledgercore.AccountDeltas, seen map[basics.CreatableIndex]bool) map[basics.CreatableIndex]ledgercore.ModifiedCreatable {
 	creatables := make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable)
-	for addr, update := range updates {
+	for i := 0; i < updates.Len(); i++ {
+		addr, update := updates.GetByIdx(i)
 		// no sets in Go, so iterate over
 		if ad, ok := base[addr]; ok {
 			for idx := range ad.Assets {
@@ -542,18 +542,18 @@ func TestAccountDBRound(t *testing.T) {
 	var baseAccounts lruAccounts
 	baseAccounts.init(nil, 100, 80)
 	for i := 1; i < 10; i++ {
-		var updates map[basics.Address]basics.AccountData
+		var updates ledgercore.AccountDeltas
 		var newaccts map[basics.Address]basics.AccountData
 		updates, newaccts, _, lastCreatableID = randomDeltasFull(20, accts, 0, lastCreatableID)
 		accts = newaccts
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
 			expectedDbImage, numElementsPerSegement)
 
-		updatesCnt, needLoadAddresses, _ := compactDeltas([]map[basics.Address]basics.AccountData{updates}, nil, baseAccounts)
+		updatesCnt, needLoadAddresses, _ := compactDeltas([]ledgercore.AccountDeltas{updates}, nil, baseAccounts)
 
 		err = accountsLoadOld(tx, needLoadAddresses, updatesCnt)
 		require.NoError(t, err)
-		err = totalsNewRounds(tx, []map[basics.Address]basics.AccountData{updates}, updatesCnt, []ledgercore.AccountTotals{{}}, []config.ConsensusParams{proto})
+		err = totalsNewRounds(tx, []ledgercore.AccountDeltas{updates}, updatesCnt, []ledgercore.AccountTotals{{}}, []config.ConsensusParams{proto})
 		require.NoError(t, err)
 		_, err = accountsNewRound(tx, updatesCnt, ctbsWithDeletes, proto, basics.Round(i))
 		require.NoError(t, err)

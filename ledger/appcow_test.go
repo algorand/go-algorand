@@ -97,10 +97,7 @@ type modsData struct {
 
 func getCow(creatables []modsData) *roundCowState {
 	cs := &roundCowState{
-		mods: ledgercore.StateDelta{
-			Creatables: make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable),
-			Hdr:        &bookkeeping.BlockHeader{},
-		},
+		mods:  ledgercore.MakeStateDelta(&bookkeeping.BlockHeader{}, 0),
 		proto: config.Consensus[protocol.ConsensusCurrentVersion],
 	}
 	for _, e := range creatables {
@@ -834,7 +831,7 @@ func TestCowGet(t *testing.T) {
 
 	addr1 := getRandomAddress(a)
 	bre := basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 100}}
-	c.mods.Accts = map[basics.Address]basics.AccountData{addr1: bre}
+	c.mods.Accts.Upsert(addr1, bre)
 
 	bra, err := c.Get(addr1, true)
 	a.NoError(err)

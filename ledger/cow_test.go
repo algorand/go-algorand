@@ -91,8 +91,9 @@ func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.
 	require.Equal(t, d, basics.AccountData{})
 }
 
-func applyUpdates(cow *roundCowState, updates map[basics.Address]basics.AccountData) {
-	for addr, delta := range updates {
+func applyUpdates(cow *roundCowState, updates ledgercore.AccountDeltas) {
+	for i := 0; i < updates.Len(); i++ {
+		addr, delta := updates.GetByIdx(i)
 		cow.put(addr, delta, nil, nil)
 	}
 }

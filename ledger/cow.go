@@ -68,15 +68,8 @@ func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimest
 		lookupParent: b,
 		commitParent: nil,
 		proto:        config.Consensus[hdr.CurrentProtocol],
-		mods: ledgercore.StateDelta{
-			Accts:         make(map[basics.Address]basics.AccountData),
-			Txids:         make(map[transactions.Txid]basics.Round),
-			Txleases:      make(map[ledgercore.Txlease]basics.Round),
-			Creatables:    make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable),
-			Hdr:           &hdr,
-			PrevTimestamp: prevTimestamp,
-		},
-		sdeltas: make(map[basics.Address]map[storagePtr]*storageDelta),
+		mods:         ledgercore.MakeStateDelta(&hdr, prevTimestamp),
+		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
 	}
 }
 
@@ -93,7 +86,7 @@ func (cb *roundCowState) deltas() ledgercore.StateDelta {
 	for addr, smap := range cb.sdeltas {
 		var delta basics.AccountData
 		var exist bool
-		if delta, exist = cb.mods.Accts[addr]; !exist {
+		if delta, exist = cb.mods.Accts.Get(addr); !exist {
 			ad, err := cb.lookup(addr)
 			if err != nil {
 				panic(fmt.Sprintf("fetching account data failed for addr %s: %s", addr.String(), err.Error()))
@@ -105,7 +98,7 @@ func (cb *roundCowState) deltas() ledgercore.StateDelta {
 				panic(fmt.Sprintf("applying storage delta failed for addr %s app %d: %s", addr.String(), aapp.aidx, err.Error()))
 			}
 		}
-		cb.mods.Accts[addr] = delta
+		cb.mods.Accts.Upsert(addr, delta)
 	}
 	return cb.mods
 }
@@ -134,7 +127,7 @@ func (cb *roundCowState) getCreator(cidx basics.CreatableIndex, ctype basics.Cre
 }
 
 func (cb *roundCowState) lookup(addr basics.Address) (data basics.AccountData, err error) {
-	d, ok := cb.mods.Accts[addr]
+	d, ok := cb.mods.Accts.Get(addr)
 	if ok {
 		return d, nil
 	}
@@ -174,7 +167,7 @@ func (cb *roundCowState) blockHdr(r basics.Round) (bookkeeping.BlockHeader, erro
 }
 
 func (cb *roundCowState) put(addr basics.Address, new basics.AccountData, newCreatable *basics.CreatableLocator, deletedCreatable *basics.CreatableLocator) {
-	cb.mods.Accts[addr] = new
+	cb.mods.Accts.Upsert(addr, new)
 
 	if newCreatable != nil {
 		cb.mods.Creatables[newCreatable.Index] = ledgercore.ModifiedCreatable{
@@ -207,22 +200,13 @@ func (cb *roundCowState) child() *roundCowState {
 		lookupParent: cb,
 		commitParent: cb,
 		proto:        cb.proto,
-		mods: ledgercore.StateDelta{
-			Accts:         make(map[basics.Address]basics.AccountData),
-			Txids:         make(map[transactions.Txid]basics.Round),
-			Txleases:      make(map[ledgercore.Txlease]basics.Round),
-			Creatables:    make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable),
-			Hdr:           cb.mods.Hdr,
-			PrevTimestamp: cb.mods.PrevTimestamp,
-		},
-		sdeltas: make(map[basics.Address]map[storagePtr]*storageDelta),
+		mods:         ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp),
+		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
 	}
 }
 
 func (cb *roundCowState) commitToParent() {
-	for addr, delta := range cb.mods.Accts {
-		cb.commitParent.mods.Accts[addr] = delta
-	}
+	cb.commitParent.mods.Accts.MergeAccounts(cb.mods.Accts)
 
 	for txid, lv := range cb.mods.Txids {
 		cb.commitParent.mods.Txids[txid] = lv
@@ -251,11 +235,5 @@ func (cb *roundCowState) commitToParent() {
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {
-	res := make([]basics.Address, len(cb.mods.Accts))
-	i := 0
-	for addr := range cb.mods.Accts {
-		res[i] = addr
-		i++
-	}
-	return res
+	return cb.mods.Accts.ModifiedAccounts()
 }

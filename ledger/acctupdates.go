@@ -139,7 +139,8 @@ type accountUpdates struct {
 	dbRound basics.Round
 
 	// deltas stores updates for every round after dbRound.
-	deltas []map[basics.Address]basics.AccountData
+	// deltas []map[basics.Address]basics.AccountData
+	deltas []ledgercore.AccountDeltas
 
 	// accounts stores the most recent account state for every
 	// address that appears in deltas.
@@ -489,7 +490,8 @@ func (au *accountUpdates) onlineTop(rnd basics.Round, voteRnd basics.Round, n ui
 		// is online and can vote in voteRnd.
 		modifiedAccounts := make(map[basics.Address]*onlineAccount)
 		for o := uint64(0); o < offset; o++ {
-			for addr, d := range au.deltas[o] {
+			for i := 0; i < au.deltas[o].Len(); i++ {
+				addr, d := au.deltas[o].GetByIdx(i)
 				if d.Status != basics.Online {
 					modifiedAccounts[addr] = nil
 					continue
@@ -1357,14 +1359,15 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 }
 
 // accountsUpdateBalances applies the given deltas map to the merkle trie
-func (au *accountUpdates) accountsUpdateBalances(accountsDeltas map[basics.Address]accountDeltaCount) (err error) {
+func (au *accountUpdates) accountsUpdateBalances(accountsDeltas accountDeltasWithCount) (err error) {
 	if au.catchpointInterval == 0 {
 		return nil
 	}
 	var added, deleted bool
 	accumulatedChanges := 0
 
-	for addr, delta := range accountsDeltas {
+	for i := 0; i < accountsDeltas.len(); i++ {
+		addr, delta := accountsDeltas.getByIdx(i)
 		if !delta.old.accountData.IsZero() {
 			deleteHash := accountHashBuilder(addr, delta.old.accountData, protocol.Encode(&delta.old.accountData))
 			deleted, err = au.balancesTrie.Delete(deleteHash)
@@ -1424,7 +1427,7 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	au.protos = append(au.protos, proto)
 	au.creatableDeltas = append(au.creatableDeltas, delta.Creatables)
 	au.roundDigest = append(au.roundDigest, blk.Digest())
-	au.deltasAccum = append(au.deltasAccum, len(delta.Accts)+au.deltasAccum[len(au.deltasAccum)-1])
+	au.deltasAccum = append(au.deltasAccum, delta.Accts.Len()+au.deltasAccum[len(au.deltasAccum)-1])
 
 	var ot basics.OverflowTracker
 	newTotals := au.roundTotals[len(au.roundTotals)-1]
@@ -1434,7 +1437,8 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 	au.baseAccounts.flushPendingWrites()
 
 	var previousAccountData basics.AccountData
-	for addr, data := range delta.Accts {
+	for i := 0; i < delta.Accts.Len(); i++ {
+		addr, data := delta.Accts.GetByIdx(i)
 		if latestAcctData, has := au.accounts[addr]; has {
 			previousAccountData = latestAcctData.data
 		} else if baseAccountData, has := au.baseAccounts.read(addr); has {
@@ -1538,7 +1542,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 			// priority if present.
 			for offset > 0 {
 				offset--
-				d, ok := au.deltas[offset][addr]
+				d, ok := au.deltas[offset].Get(addr)
 				if ok {
 					return d, nil
 				}
@@ -1615,7 +1619,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 			// priority if present.
 			for offset > 0 {
 				offset--
-				d, ok := au.deltas[offset][addr]
+				d, ok := au.deltas[offset].Get(addr)
 				if ok {
 					// the returned validThrough here is not optimal, but it still correct. We could get a more accurate value by scanning
 					// the deltas forward, but this would be time consuming loop, which might not pay off.
@@ -1826,7 +1830,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	isCatchpointRound := ((offset + uint64(lookback+dbRound)) > 0) && (au.catchpointInterval != 0) && (0 == (uint64((offset + uint64(lookback+dbRound))) % au.catchpointInterval))
 
 	// create a copy of the deltas, round totals and protos for the range we're going to flush.
-	deltas := make([]map[basics.Address]basics.AccountData, offset, offset)
+	deltas := make([]ledgercore.AccountDeltas, offset, offset)
 	creatableDeltas := make([]map[basics.CreatableIndex]ledgercore.ModifiedCreatable, offset, offset)
 	roundTotals := make([]ledgercore.AccountTotals, offset+1, offset+1)
 	protos := make([]config.ConsensusParams, offset+1, offset+1)
@@ -1948,7 +1952,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 	au.accountsMu.Lock()
 	// Drop reference counts to modified accounts, and evict them
 	// from in-memory cache when no references remain.
-	for addr, acctUpdate := range compactDeltas {
+	for i := 0; i < compactDeltas.len(); i++ {
+		addr, acctUpdate := compactDeltas.getByIdx(i)
 		cnt := acctUpdate.ndeltas
 		macct, ok := au.accounts[addr]
 		if !ok {
@@ -2009,22 +2014,23 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 // compactDeltas takes an array of account map deltas ( one array entry per round ), and corresponding creatables array, and compact the arrays into a single
 // map that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes. For both the account deltas as well as for the creatables,
 // it counts the number of changes per round by specifying it in the ndeltas field of the accountDeltaCount/modifiedCreatable. The ndeltas field of the input creatableDeltas is ignored.
-func compactDeltas(accountDeltas []map[basics.Address]basics.AccountData, creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable, baseAccounts lruAccounts) (outAccountDeltas map[basics.Address]accountDeltaCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
+func compactDeltas(accountDeltas []ledgercore.AccountDeltas, creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable, baseAccounts lruAccounts) (outAccountDeltas accountDeltasWithCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
 	if len(accountDeltas) > 0 {
-		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
-		outAccountDeltas = make(map[basics.Address]accountDeltaCount, 1+len(accountDeltas[0])*len(accountDeltas))
-		unavailableBaseAccounts = make([]basics.Address, 0, 1+len(accountDeltas[0])*len(accountDeltas))
+		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
+		size := accountDeltas[0].Len()*len(accountDeltas) + 1
+		unavailableBaseAccounts = make([]basics.Address, 0, size)
 		for _, roundDelta := range accountDeltas {
-			for addr, acctDelta := range roundDelta {
-				if prev, has := outAccountDeltas[addr]; has {
-					outAccountDeltas[addr] = accountDeltaCount{
+			for i := 0; i < roundDelta.Len(); i++ {
+				addr, acctDelta := roundDelta.GetByIdx(i)
+				if prev, has := outAccountDeltas.get(addr); has {
+					outAccountDeltas.upsert(addr, accountDelta{
 						old:     prev.old,
 						new:     acctDelta,
 						ndeltas: prev.ndeltas + 1,
-					}
+					})
 				} else {
 					// it's a new entry.
-					newEntry := accountDeltaCount{
+					newEntry := accountDelta{
 						new:     acctDelta,
 						ndeltas: 1,
 					}
@@ -2033,14 +2039,14 @@ func compactDeltas(accountDeltas []map[basics.Address]basics.AccountData, creata
 					} else {
 						unavailableBaseAccounts = append(unavailableBaseAccounts, addr)
 					}
-					outAccountDeltas[addr] = newEntry
+					outAccountDeltas.insert(addr, newEntry) // insert instead of upsert economizes one map lookup
 				}
 			}
 		}
 	}
 
 	if len(creatableDeltas) > 0 {
-		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a resonable starting point.
+		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
 		outCreatableDeltas = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1+len(creatableDeltas[0])*len(creatableDeltas))
 		for _, roundCreatable := range creatableDeltas {
 			for creatableIdx, creatable := range roundCreatable {
