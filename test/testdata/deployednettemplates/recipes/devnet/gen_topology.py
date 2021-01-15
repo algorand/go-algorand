@@ -26,4 +26,4 @@ for node_type in node_types.keys():
 
 ec2_hosts = {"Hosts": host_elements}
 with open("topology.json", "w") as f:
-    f.write(json.dumps(ec2_hosts, indent = 2))
+    f.write(json.dumps(ec2_hosts, indent = 2) + "\n")
