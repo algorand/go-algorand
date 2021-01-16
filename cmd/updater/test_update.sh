@@ -47,7 +47,7 @@ echo
 
 echo "Testing starting and stopping node, no systemd services installed..."
 
-LOGS=$(./update.sh -i -c stable -r -z -p ../node -d "$DATADIR" 2> /dev/null)
+LOGS=$(./update.sh -i -c stable -z -p "$BINDIR" -d "$DATADIR" 2> /dev/null)
 
 if [[ ! "$LOGS" =~ $NODE_STOPPED ]]
 then
@@ -80,7 +80,7 @@ sudo "$BINDIR/systemd-setup.sh" "$USER" "$USER"
 NODE_STOPPED="systemd system service: stop"
 NODE_STARTED="systemd system service: start"
 
-LOGS=$(sudo "$BINDIR/update.sh" -i -c stable -r -z -p "$BINDIR" -d "$DATADIR" 2> /dev/null)
+LOGS=$(sudo "$BINDIR/update.sh" -i -c stable -z -p "$BINDIR" -d "$DATADIR" 2> /dev/null)
 
 if [[ ! "$LOGS" =~ $NODE_STOPPED ]]
 then
@@ -116,7 +116,7 @@ echo "Testing starting and stopping node, systemd user service installed..."
 NODE_STOPPED="systemd user service: stop"
 NODE_STARTED="systemd user service: start"
 
-LOGS=$("$BINDIR/update.sh" -i -c stable -r -z -p "$BINDIR" -d "$DATADIR" 2> /dev/null)
+LOGS=$("$BINDIR/update.sh" -i -c stable -z -p "$BINDIR" -d "$DATADIR" 2> /dev/null)
 
 if [[ ! "$LOGS" =~ $NODE_STOPPED ]]
 then

@@ -21,7 +21,7 @@ GENESIS_NETWORK_DIR=""
 GENESIS_NETWORK_DIR_SPEC=""
 SKIP_UPDATE=0
 TOOLS_OUTPUT_DIR=""
-TESTING=false
+DRYRUN=false
 IS_ROOT=false
 if [ $EUID -eq 0 ]; then
     IS_ROOT=true
@@ -101,7 +101,7 @@ while [ "$1" != "" ]; do
             TOOLS_OUTPUT_DIR=$1
             ;;
         -z)
-            TESTING=true
+            DRYRUN=true
             ;;
         *)
             echo "Unknown option" "$1"
@@ -113,7 +113,7 @@ done
 
 # If this is an update, we'll validate that before doing anything else.
 # If this is an install, we'll create it.
-if [ ${RESUME_INSTALL} -eq 0 ]; then
+if [ ${RESUME_INSTALL} -eq 0 ] && ! $DRYRUN; then
     if [ "${BINDIR}" = "" ]; then
         BINDIR="${SCRIPTPATH}"
     fi
@@ -340,29 +340,21 @@ function validate_update() {
     return 0
 }
 
-function has_system_service() {
-    local dd="$1"
+function check_service() {
+    local service_type="$1"
+    local dd="$2"
     local path
 
-    path=$(awk -F= '{ print $2 }' <(systemctl show -p FragmentPath "algorand@$(systemd-escape "$dd")"))
+    if [ "$service_type" = "user" ]; then
+        path=$(awk -F= '{ print $2 }' <(systemctl --user show -p FragmentPath "algorand@$(systemd-escape "$dd")"))
+    else
+        path=$(awk -F= '{ print $2 }' <(systemctl show -p FragmentPath "algorand@$(systemd-escape "$dd")"))
+    fi
+
     if [ "$path" != "" ]; then
         return 0
     fi
-    return 1
-}
 
-function has_user_service() {
-    local dd="$1"
-    local path
-
-    path=$(awk -F= '{ print $2 }' <(systemctl --user show -p FragmentPath "algorand@$(systemd-escape "$dd")"))
-    if [ "$path" != "" ]; then
-        return 0
-#        state=$(systemctl --user show -p ActiveState --value "algorand@$(systemd-escape "$dd")")
-#        if [ "$state" = inactive ]; then
-#            systemctl --user start "algorand@$(systemd-escape "$dd")" &> /dev/null
-#        fi
-    fi
     return 1
 }
 
@@ -375,7 +367,7 @@ function run_systemd_action() {
     local data_dir=$2
     local process_owner
 
-    if has_system_service "$data_dir"; then
+    if check_service system "$data_dir"; then
         process_owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod -d ${data_dir}"))
         if $IS_ROOT || grep sudo <(groups "$process_owner" &> /dev/null); then
             if systemctl "$action" "algorand@$(systemd-escape "$data_dir")"; then
@@ -385,7 +377,7 @@ function run_systemd_action() {
         fi
     fi
 
-    if has_user_service "$data_dir"; then
+    if check_service user "$data_dir"; then
         if systemctl --user "$action" "algorand@$(systemd-escape "${data_dir}")"; then
             echo "systemd user service: $action"
             return 0
@@ -650,7 +642,7 @@ fi
 
 # If we're initiating an update/install, check for an update and if we have a new one,
 # expand it and invoke the new update.sh script.
-if [ ${RESUME_INSTALL} -eq 0 ]; then
+if [ ${RESUME_INSTALL} -eq 0 ] && ! $DRYRUN; then
     validate_channel_specified
 
     if [ "${UPDATETYPE}" = "migrate" ]; then
@@ -690,7 +682,7 @@ fi
 # Shutdown node before backing up so data is consistent and files aren't locked / in-use.
 shutdown_node
 
-if ! $TESTING; then
+if ! $DRYRUN; then
     if [ ${SKIP_UPDATE} -eq 0 ]; then
         backup_current_version
     fi
