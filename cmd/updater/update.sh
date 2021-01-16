@@ -21,6 +21,7 @@ GENESIS_NETWORK_DIR=""
 GENESIS_NETWORK_DIR_SPEC=""
 SKIP_UPDATE=0
 TOOLS_OUTPUT_DIR=""
+TESTING=false
 IS_ROOT=false
 if [ $EUID -eq 0 ]; then
     IS_ROOT=true
@@ -98,6 +99,9 @@ while [ "$1" != "" ]; do
         -gettools)
             shift
             TOOLS_OUTPUT_DIR=$1
+            ;;
+        -z)
+            TESTING=true
             ;;
         *)
             echo "Unknown option" "$1"
@@ -336,14 +340,30 @@ function validate_update() {
     return 0
 }
 
-function is_system_service() {
-    systemctl status "algorand@$(systemd-escape "$1")" &> /dev/null
-    echo $?
+function has_system_service() {
+    local dd="$1"
+    local path
+
+    path=$(awk -F= '{ print $2 }' <(systemctl show -p FragmentPath "algorand@$(systemd-escape "$dd")"))
+    if [ "$path" != "" ]; then
+        return 0
+    fi
+    return 1
 }
 
-function is_user_service() {
-    systemctl --user status "algorand@$(systemd-escape "$1")" &> /dev/null
-    echo $?
+function has_user_service() {
+    local dd="$1"
+    local path
+
+    path=$(awk -F= '{ print $2 }' <(systemctl --user show -p FragmentPath "algorand@$(systemd-escape "$dd")"))
+    if [ "$path" != "" ]; then
+        return 0
+#        state=$(systemctl --user show -p ActiveState --value "algorand@$(systemd-escape "$dd")")
+#        if [ "$state" = inactive ]; then
+#            systemctl --user start "algorand@$(systemd-escape "$dd")" &> /dev/null
+#        fi
+    fi
+    return 1
 }
 
 function run_systemd_action() {
@@ -354,35 +374,25 @@ function run_systemd_action() {
     local action=$1
     local data_dir=$2
     local process_owner
-    local system_service
 
-    process_owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod -d ${data_dir}"))
-    system_service=$(is_system_service "${data_dir}")
-
-    if [ "$system_service" -eq 0 ]; then
-#        process_owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod -d ${data_dir}"))
-        if [ "$action" = "stop" ] && $IS_ROOT || grep sudo <(groups "$process_owner" &> /dev/null); then
-            sudo -n systemctl stop "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
-        fi
-    elif [ "$system_service" -ne 4 ]; then
-        if [ "$action" = "start" ]; then
-            sudo -n systemctl start "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
-        fi
-    else
-        user_service=$(is_user_service "$data_dir")
-        if [ "$user_service" -eq 0 ]; then
-#            process_owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod -d ${data_dir}"))
-            if [ "$action" = "stop" ] && [ "$(whoami)" = "$process_owner" ]; then
-                systemctl --user stop "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
+    if has_system_service "$data_dir"; then
+        process_owner=$(awk '{ print $1 }' <(ps aux | grep "[a]lgod -d ${data_dir}"))
+        if $IS_ROOT || grep sudo <(groups "$process_owner" &> /dev/null); then
+            if systemctl "$action" "algorand@$(systemd-escape "$data_dir")"; then
+                echo "systemd system service: $action"
+                return 0
             fi
-        elif [ "$user_service" -ne 4 ]; then
-            if [ "$action" = "start" ]; then
-                systemctl --user start "algorand@$(systemd-escape "${data_dir}")" &> /dev/null
-            fi
-        else
-            return 1
         fi
     fi
+
+    if has_user_service "$data_dir"; then
+        if systemctl --user "$action" "algorand@$(systemd-escape "${data_dir}")"; then
+            echo "systemd user service: $action"
+            return 0
+        fi
+    fi
+
+    return 1
 }
 
 function shutdown_node() {
@@ -393,7 +403,7 @@ function shutdown_node() {
                 if [ -f "${DD}/algod.pid" ] || [ -f "${DD}"/**/kmd.pid ] ; then
                     echo Stopping node and waiting...
                     run_systemd_action stop "${DD}"
-                    ${BINDIR}/goal node stop -d "${DD}"
+                    "${BINDIR}/goal" node stop -d "${DD}"
                     sleep 5
                 else
                     echo "Node is running but not in ${DD} - not stopping"
@@ -424,7 +434,7 @@ function backup_data() {
 
     echo "Backing up current data files from ${CURDATADIR}..."
     mkdir -p "${BACKUPDIR}"
-    BACKUPFILES="genesis.json wallet-genesis.id update.sh"
+    BACKUPFILES="genesis.json wallet-genesis.id"
     tar --no-recursion --exclude='*.log' --exclude='*.log.archive' --exclude='*.tar.gz' -zcf "${BACKUPDIR}/data-v${CURRENTVER}.tar.gz" -C "${CURDATADIR}" "${BACKUPFILES}" >/dev/null 2>&1
 }
 
@@ -568,6 +578,7 @@ function startup_node() {
     fi
 
     if ! run_systemd_action start "${CURDATADIR}"; then
+        echo "No systemd services, starting node with goal."
         ${BINDIR}/goal node start -d "${CURDATADIR}" ${HOSTEDFLAG}
     fi
 }
@@ -679,37 +690,39 @@ fi
 # Shutdown node before backing up so data is consistent and files aren't locked / in-use.
 shutdown_node
 
-if [ ${SKIP_UPDATE} -eq 0 ]; then
-    backup_current_version
-fi
-
-# We don't care about return code - doesn't matter if we failed to archive
-
-ROLLBACK=1
-
-if ! install_new_binaries; then
-    fail_and_exit "Error installing new files"
-fi
-
-for DD in "${DATADIRS[@]}"; do
-    if ! install_new_data "${DD}"; then
-        fail_and_exit "Error installing data files into ${DD}"
+if ! $TESTING; then
+    if [ ${SKIP_UPDATE} -eq 0 ]; then
+        backup_current_version
     fi
-done
 
-copy_genesis_files
+    # We don't care about return code - doesn't matter if we failed to archive
 
-for DD in "${DATADIRS[@]}"; do
-    if ! check_for_new_ledger "${DD}"; then
-        fail_and_exit "Error updating ledger in ${DD}"
+    ROLLBACK=1
+
+    if ! install_new_binaries; then
+        fail_and_exit "Error installing new files"
     fi
-done
 
-if [ "${TESTROLLBACK}" != "" ]; then
-    fail_and_exit "Simulating update failure - rolling back"
+    for DD in "${DATADIRS[@]}"; do
+        if ! install_new_data "${DD}"; then
+            fail_and_exit "Error installing data files into ${DD}"
+        fi
+    done
+
+    copy_genesis_files
+
+    for DD in "${DATADIRS[@]}"; do
+        if ! check_for_new_ledger "${DD}"; then
+            fail_and_exit "Error updating ledger in ${DD}"
+        fi
+    done
+
+    if [ "${TESTROLLBACK}" != "" ]; then
+        fail_and_exit "Simulating update failure - rolling back"
+    fi
+
+    apply_fixups
 fi
-
-apply_fixups
 
 if [ "${NOSTART}" != "" ]; then
     echo "Install complete - restart node manually"

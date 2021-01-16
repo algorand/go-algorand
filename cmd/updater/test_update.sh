@@ -1,35 +1,8 @@
 #!/bin/bash
 
-set -e
-
-trap cleanup err exit
-
-cleanup() {
-    echo "Cleaning up..."
-    if $IS_SYSTEM_SERVICE
-    then
-        sudo -n systemctl stop "algorand@$(systemd-escape "$DATADIR")"
-        sudo -n rm -f /lib/systemd/system/algorand@.service
-        sudo -n systemctl daemon-reload
-    elif $IS_USER_SERVICE
-    then
-        systemctl --user stop "algorand@$(systemd-escape "$DATADIR")"
-        rm -f "$HOMEDIR/.config/systemd/user/algorand@.service"
-        systemctl --user daemon-reload
-    fi
-
-    if $IS_ROOT
-    then
-        sudo -n ./goal node stop -d "$DATADIR"
-    else
-        ./goal node stop -d "$DATADIR"
-    fi
-}
+#set -e
 
 DATADIR=data
-IS_ROOT=false
-IS_SYSTEM_SERVICE=false
-IS_USER_SERVICE=false
 
 if ! USERLINE=$(getent passwd "$USER"); then
     echo "[ERROR] \`$USER\' not found on system. Aborting..."
@@ -39,77 +12,107 @@ else
     DATADIR="$HOMEDIR/node/data"
 fi
 
-if [ "$EUID" -ne 0 ]
-then
-    IS_ROOT=true
-fi
-
-get_node_status() {
-    ./goal node status -d "$DATADIR" > /dev/null
-}
-
 NODE_STOPPED="The node was successfully stopped."
 NODE_STARTED="Algorand node successfully started!"
-#NODE_STARTED_GOAL="No systemd services, starting node with goal."
+NODE_STARTED_GOAL="No systemd services, starting node with goal."
 
-#while read -r line
-#do
-#    echo "$line"
-#    if [[ "$line" = "$NODE_STOPPED" ]]
-#    then
-#        if get_node_status
-#        then
-#            echo Node was not stopped.
-#            exit 1
-#        else
-#            echo Node was stopped successfully.
-#        fi
-#    fi
-#
-#    if [[ "$line" = "$NODE_STARTED" ]]
-#    then
-#        if ! get_node_status
-#        then
-#            echo Node was not started.
-#            exit 1
-#        else
-#            echo Node was started successfully.
-#        fi
-#    fi
-#done < <(./update.sh -i -c stable -r -z -p ../node -d "$DATADIR" 2> /dev/null)
+# Start the node manually so we can test that the node was first shut down.
+./goal node start -d "$DATADIR"
 
-sudo -n ./systemd-setup.sh btoll btoll
-IS_SYSTEM_SERVICE=true
+echo
+echo "-----------------------------------------------"
+echo
+
+echo "Testing starting and stopping node, no systemd services installed..."
+
+logs=$(./update.sh -i -c stable -r -z -p ../node -d "$DATADIR" 2> /dev/null)
+
+if [[ ! "$logs" =~ $NODE_STOPPED ]]
+then
+    echo "[ERROR] The node was not stopped."
+    exit 1
+fi
+
+if [[ ! "$logs" =~ $NODE_STARTED ]]
+then
+    echo "[ERROR] The node was not started."
+    exit 1
+fi
+
+if [[ ! "$logs" =~ $NODE_STARTED_GOAL ]]
+then
+    echo "[ERROR] The node was not started with goal."
+    exit 1
+fi
+
+echo "Tests passed."
+
+echo
+echo "-----------------------------------------------"
+echo
+
+echo "Testing starting and stopping node, systemd system service installed..."
+
+sudo ./systemd-setup.sh btoll btoll
 
 NODE_STOPPED="systemd system service: stop"
 NODE_STARTED="systemd system service: start"
 
-while read -r line
-do
-    echo "$line"
-    if [[ "$line" = "$NODE_STOPPED" ]]
-    then
-        if get_node_status
-        then
-            echo Node was not stopped.
-            exit 1
-        else
-            echo Node was stopped successfully.
-        fi
-    fi
+logs=$(sudo ./update.sh -i -c stable -r -z -p ../node -d "$DATADIR" 2> /dev/null)
 
-    if [[ "$line" = "$NODE_STARTED" ]]
-    then
-        if ! get_node_status
-        then
-            echo Node was not started.
-            exit 1
-        else
-            echo Node was started successfully.
-        fi
-    fi
-done < <(sudo -n ./update.sh -i -c stable -r -z -p ../node -d "$DATADIR" 2> /dev/null)
+if [[ ! "$logs" =~ $NODE_STOPPED ]]
+then
+    echo "[ERROR] The node was not stopped."
+    exit 1
+fi
 
-IS_SYSTEM_SERVICE=false
-IS_USER_SERVICE=true
+if [[ ! "$logs" =~ $NODE_STARTED ]]
+then
+    echo "[ERROR] The node was not started."
+    exit 1
+fi
+
+echo "Tests passed."
+echo
+echo "Cleaning up."
+
+sudo systemctl stop "algorand@$(systemd-escape "$DATADIR")"
+sudo rm -f /lib/systemd/system/algorand@.service
+sudo systemctl daemon-reload
+
+# Start the node manually so we can test that the node was first shut down.
+./goal node start -d "$DATADIR"
+
+echo
+echo "-----------------------------------------------"
+echo
+
+echo "Testing starting and stopping node, systemd user service installed..."
+
+./systemd-setup.sh btoll --user
+
+NODE_STOPPED="systemd user service: stop"
+NODE_STARTED="systemd user service: start"
+
+logs=$(./update.sh -i -c stable -r -z -p ../node -d "$DATADIR" 2> /dev/null)
+
+if [[ ! "$logs" =~ $NODE_STOPPED ]]
+then
+    echo "[ERROR] The node was not stopped."
+    exit 1
+fi
+
+if [[ ! "$logs" =~ $NODE_STARTED ]]
+then
+    echo "[ERROR] The node was not started."
+    exit 1
+fi
+
+echo "Tests passed."
+echo
+echo "Cleaning up."
+
+systemctl --user stop "algorand@$(systemd-escape "$DATADIR")"
+rm -f "$HOMEDIR/.config/systemd/user/algorand@.service"
+systemctl --user daemon-reload
 
