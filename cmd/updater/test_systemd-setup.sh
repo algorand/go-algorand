@@ -1,21 +1,65 @@
 #!/bin/bash
-
-if [ "$#" != 2 ]; then
-  echo "Usage: $0 username [group|--user]"
-  exit 1
-fi
+#
+# Test a systemd user service.
+# ./test_systemd-setup.sh -u $USER -g --user
+#
+# Test a systemd system service.
+# sudo ./test_systemd-setup.sh -u $USER -g $USER
+#
 
 trap cleanup err exit
-
-USERNAME="$1"
-GROUPNAME="$2"
-SYSTEM_SERVICE=/lib/systemd/system/algorand@.service
-SERVICE="$SYSTEM_SERVICE"
-IS_USER=false
 
 cleanup() {
     rm -f "$SERVICE"
 }
+
+BINDIR=.
+DATADIR=
+GROUPNAME=
+USERNAME=
+
+while getopts "b:d:g:u:" opt
+do
+    case "$opt" in
+        b)
+            BINDIR="$OPTARG"
+            ;;
+        d)
+            DATADIR="$OPTARG"
+            ;;
+        g)
+            GROUPNAME="$OPTARG"
+            ;;
+        u)
+            USERNAME="$OPTARG"
+            ;;
+        *)
+            echo "Unrecognized option"
+            exit 1
+            ;;
+    esac
+done
+
+if [ -z "$GROUPNAME" ] || [ -z "$USERNAME" ]
+then
+    echo "[ERROR] GROUPNAME=$GROUPNAME and USERNAME=$USERNAME are required parameters."
+    exit 1
+fi
+
+if [ -z "$DATADIR" ]
+then
+    if ! USERLINE=$(getent passwd "$USERNAME"); then
+        echo "[ERROR] \`$USER\' not found on system. Aborting..."
+        exit 1
+    else
+        HOMEDIR=$(awk -F: '{ print $6 }' <<< "$USERLINE")
+        DATADIR="$HOMEDIR/node/data"
+    fi
+fi
+
+SYSTEM_SERVICE=/lib/systemd/system/algorand@.service
+SERVICE="$SYSTEM_SERVICE"
+IS_USER=false
 
 get_homedir() {
     local user="$1"
@@ -30,19 +74,21 @@ get_homedir() {
     fi
 }
 
-start_service() {
+run_systemd_action() {
+    local action="$1"
+
     if $IS_USER; then
-        systemctl --user start algorand@"$(systemd-escape /home/btoll/node/data)"
+        systemctl --user "$action" algorand@"$(systemd-escape "$DATADIR")"
     else
-        systemctl start algorand@"$(systemd-escape /home/btoll/node/data)"
+        systemctl "$action" algorand@"$(systemd-escape "$DATADIR")"
     fi
 }
 
 stop_service() {
     if $IS_USER; then
-        systemctl --user stop algorand@"$(systemd-escape /home/btoll/node/data)"
+        systemctl --user stop algorand@"$(systemd-escape "$DATADIR")"
     else
-        systemctl stop algorand@"$(systemd-escape /home/btoll/node/data)"
+        systemctl stop algorand@"$(systemd-escape "$DATADIR")"
     fi
 }
 
@@ -69,16 +115,16 @@ verify_service_not_installed() {
     # not installed and vice-versa.
     echo Verify that a service was not installed.
     if $IS_USER; then
-        systemctl --user status algorand@"$(systemd-escape /home/btoll/node/data)" > /dev/null
+        systemctl --user status algorand@"$(systemd-escape "$DATADIR")" > /dev/null
     else
-        systemctl status algorand@"$(systemd-escape /home/btoll/node/data)" > /dev/null
+        systemctl status algorand@"$(systemd-escape "$DATADIR")" > /dev/null
     fi
     # To stdout:
     #   Exit code=1
     #   Failed to connect to bus: No such file or directory
     #
     #   Exit code=4
-    #   Unit algorand@-home-btoll-node-data.service could not be found.
+    #   Unit algorand@-home-kilgoretrout-node-data.service could not be found.
     EXIT_CODE="$?"
     if [ "$EXIT_CODE" -eq 1 ] || [ "$EXIT_CODE" -eq 4 ]; then
         echo An incorrect service was installed, aborting...
@@ -93,9 +139,9 @@ verify_service_status() {
     local active_status
 
     if $is_user; then
-        status=$(systemctl --user status algorand@"$(systemd-escape /home/btoll/node/data)")
+        status=$(systemctl --user status algorand@"$(systemd-escape "$DATADIR")")
     else
-        status=$(systemctl status algorand@"$(systemd-escape /home/btoll/node/data)")
+        status=$(systemctl status algorand@"$(systemd-escape "$DATADIR")")
     fi
 
     active_status="$(awk '/Active/ { print $2 }' <<< "$status")"
@@ -105,7 +151,7 @@ verify_service_status() {
     fi
 }
 
-./systemd-setup.sh "$USERNAME" "$GROUPNAME"
+"$BINDIR/systemd-setup.sh" "$USERNAME" "$GROUPNAME"
 
 if [ "$GROUPNAME" = --user ]; then
     IS_USER=true
@@ -123,12 +169,12 @@ if [ -f "$SERVICE" ]; then
     verify_service_status $IS_USER inactive
 
     echo Start the service...
-    start_service
+    run_systemd_action start
     verify_service_status $IS_USER active
     echo Service has been started.
 
     echo Stop the service...
-    stop_service
+    run_systemd_action stop
     verify_service_status $IS_USER inactive
     echo Service has been stopped.
 else
