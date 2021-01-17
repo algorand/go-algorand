@@ -1,5 +1,91 @@
 {
   "Hosts": [
+
+    {
+      "Name": "AWS_AP_SOUTHEAST-2-c5.xlarge",
+      "Provider": "AWS",
+      "Region": "ap-southeast-2",
+      "BaseConfiguration": "c5.xlarge"
+    },
+    {
+      "Name": "AWS_AP_SOUTHEAST-2-Small",
+      "Provider": "AWS",
+      "Region": "ap-southeast-2",
+      "BaseConfiguration": "c5.2xlarge"
+    },
+    {
+      "Name": "AWS_AP_SOUTHEAST-2-Large",
+      "Provider": "AWS",
+      "Region": "ap-southeast-2",
+      "BaseConfiguration": "c5.4xlarge"
+    },
+    {
+      "Name": "AWS_AP_SOUTHEAST-2-m5d.large",
+      "Provider": "AWS",
+      "Region": "ap-southeast-2",
+      "BaseConfiguration": "m5d.large"
+    },
+    {
+      "Name": "AWS_AP_SOUTHEAST-2-m5d.2xl",
+      "Provider": "AWS",
+      "Region": "ap-southeast-2",
+      "BaseConfiguration": "m5d.2xlarge"
+    },
+    {
+      "Name": "AWS_AP_SOUTHEAST-2-m5d.4xl",
+      "Provider": "AWS",
+      "Region": "ap-southeast-2",
+      "BaseConfiguration": "m5d.4xlarge"
+    },
+    {
+      "Name": "AWS_AP_SOUTHEAST-2-c5d.9xl",
+      "Provider": "AWS",
+      "Region": "ap-southeast-2",
+      "BaseConfiguration": "c5d.9xlarge"
+    },
+
+    {
+      "Name": "AWS-EU-NORTH-1-c5.xlarge",
+      "Provider": "AWS",
+      "Region": "eu-north-1",
+      "BaseConfiguration": "c5.xlarge"
+    },
+    {
+      "Name": "AWS-EU-NORTH-1-Small",
+      "Provider": "AWS",
+      "Region": "eu-north-1",
+      "BaseConfiguration": "c5.2xlarge"
+    },
+    {
+      "Name": "AWS-EU-NORTH-1-Large",
+      "Provider": "AWS",
+      "Region": "eu-north-1",
+      "BaseConfiguration": "c5.4xlarge"
+    },
+    {
+      "Name": "AWS-EU-NORTH-1-m5d.large",
+      "Provider": "AWS",
+      "Region": "eu-north-1",
+      "BaseConfiguration": "m5d.large"
+    },
+    {
+      "Name": "AWS-EU-NORTH-1-m5d.2xl",
+      "Provider": "AWS",
+      "Region": "eu-north-1",
+      "BaseConfiguration": "m5d.2xlarge"
+    },
+    {
+      "Name": "AWS-EU-NORTH-1-m5d.4xl",
+      "Provider": "AWS",
+      "Region": "eu-north-1",
+      "BaseConfiguration": "m5d.4xlarge"
+    },
+    {
+      "Name": "AWS-EU-NORTH-1-c5d.9xl",
+      "Provider": "AWS",
+      "Region": "eu-north-1",
+      "BaseConfiguration": "c5d.9xlarge"
+    },
     {
       "Name": "AWS-US-WEST-1-c5.xlarge",
       "Provider": "AWS",
@@ -444,24 +530,7 @@
       "Region": "eu-west-3",
       "BaseConfiguration": "c5d.9xlarge"
     },
-    {
-      "Name": "AWS-EU-NORTH-1-c5.xlarge",
-      "Provider": "AWS",
-      "Region": "eu-north-1",
-      "BaseConfiguration": "c5.xlarge"
-    },
-    {
-      "Name": "AWS-EU-NORTH-1-Small",
-      "Provider": "AWS",
-      "Region": "eu-north-1",
-      "BaseConfiguration": "c5.2xlarge"
-    },
-    {
-      "Name": "AWS-EU-NORTH-1-Large",
-      "Provider": "AWS",
-      "Region": "eu-north-1",
-      "BaseConfiguration": "c5.4xlarge"
-    },
+
     {
       "Name": "AWS-SA-EAST-1-c5.xlarge",
       "Provider": "AWS",
