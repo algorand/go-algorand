@@ -443,7 +443,7 @@ func TestAppCallApplyCreate(t *testing.T) {
 
 	b.balances = make(map[basics.Address]basics.AccountData)
 	b.balances[creator] = basics.AccountData{}
-	var ad *transactions.ApplyData = &transactions.ApplyData{}
+	var ad = &transactions.ApplyData{}
 
 	err = ApplicationCall(ac, h, &b, ad, &ep, txnCounter)
 	a.Error(err)
@@ -547,7 +547,7 @@ func TestAppCallApplyCreateOptIn(t *testing.T) {
 	var ep logic.EvalParams
 	var txnCounter uint64 = 1
 	appIdx := basics.AppIndex(txnCounter + 1)
-	var ad *transactions.ApplyData = &transactions.ApplyData{}
+	var ad = &transactions.ApplyData{}
 	var b testBalancesPass
 
 	b.balances = make(map[basics.Address]basics.AccountData)
@@ -789,7 +789,7 @@ func TestAppCallApplyCloseOut(t *testing.T) {
 		Sender: sender,
 	}
 	var ep logic.EvalParams
-	var ad *transactions.ApplyData = &transactions.ApplyData{}
+	var ad = &transactions.ApplyData{}
 	var b testBalances
 
 	b.balances = make(map[basics.Address]basics.AccountData)
@@ -873,7 +873,7 @@ func TestAppCallApplyUpdate(t *testing.T) {
 		Sender: sender,
 	}
 	var ep logic.EvalParams
-	var ad *transactions.ApplyData = &transactions.ApplyData{}
+	var ad = &transactions.ApplyData{}
 	var b testBalances
 
 	b.balances = make(map[basics.Address]basics.AccountData)
@@ -937,7 +937,7 @@ func TestAppCallApplyDelete(t *testing.T) {
 		Sender: sender,
 	}
 	var ep logic.EvalParams
-	var ad *transactions.ApplyData = &transactions.ApplyData{}
+	var ad = &transactions.ApplyData{}
 	var b testBalances
 
 	b.balances = make(map[basics.Address]basics.AccountData)
@@ -998,7 +998,7 @@ func TestAppCallApplyCreateClearState(t *testing.T) {
 	var ep logic.EvalParams
 	var txnCounter uint64 = 1
 	appIdx := basics.AppIndex(txnCounter + 1)
-	var ad *transactions.ApplyData = &transactions.ApplyData{}
+	var ad = &transactions.ApplyData{}
 	var b testBalancesPass
 
 	b.balances = make(map[basics.Address]basics.AccountData)
@@ -1046,7 +1046,7 @@ func TestAppCallApplyCreateDelete(t *testing.T) {
 	var ep logic.EvalParams
 	var txnCounter uint64 = 1
 	appIdx := basics.AppIndex(txnCounter + 1)
-	var ad *transactions.ApplyData = &transactions.ApplyData{}
+	var ad = &transactions.ApplyData{}
 	var b testBalancesPass
 
 	b.balances = make(map[basics.Address]basics.AccountData)

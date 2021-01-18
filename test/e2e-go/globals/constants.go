@@ -27,4 +27,4 @@ const MaxTimePerRound = 10 * time.Second
 
 // TotalMoney is the total number of tokens in the system
 // This needs to be identical to the value in gen/generate.go
-const TotalMoney uint64 = gen.TotalMoney
+const TotalMoney = gen.TotalMoney

@@ -109,7 +109,7 @@ func benchenv(t testing.TB, numAccounts, numBlocks int) (ledger, emptyLedger *da
 
 		startamt := basics.AccountData{
 			Status:      basics.Online,
-			MicroAlgos:  basics.MicroAlgos{Raw: uint64(minMoneyAtStart + (gen.Uint64() % (maxMoneyAtStart - minMoneyAtStart)))},
+			MicroAlgos:  basics.MicroAlgos{Raw: minMoneyAtStart + (gen.Uint64() % (maxMoneyAtStart - minMoneyAtStart))},
 			SelectionID: part.VRFSecrets().PK,
 			VoteID:      part.VotingSecrets().OneTimeSignatureVerifier,
 		}

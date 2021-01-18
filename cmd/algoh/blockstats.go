@@ -23,7 +23,7 @@ import (
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 )
 
-const downtimeLimit time.Duration = 5 * time.Minute
+const downtimeLimit = 5 * time.Minute
 
 type blockstats struct {
 	log           EventSender

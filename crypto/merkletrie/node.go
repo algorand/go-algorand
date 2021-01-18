@@ -41,9 +41,9 @@ func (n *node) leaf() bool {
 }
 
 // these sizing constants are being used exclusively in node.stats()
-var sliceSize int = int(unsafe.Sizeof([]byte{}))
-var bitsetSize int = int(unsafe.Sizeof(bitset{}))
-var childEntrySize int = int(unsafe.Sizeof(childEntry{}))
+var sliceSize = int(unsafe.Sizeof([]byte{}))
+var bitsetSize = int(unsafe.Sizeof(bitset{}))
+var childEntrySize = int(unsafe.Sizeof(childEntry{}))
 
 // stats recursively update the provided Stats structure with the current node information
 func (n *node) stats(cache *merkleTrieCache, stats *Stats, depth int) (err error) {

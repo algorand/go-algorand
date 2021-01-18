@@ -51,7 +51,7 @@ var (
 	dumpForDryrun   bool
 )
 
-var dumpForDryrunFormat cobraStringValue = *makeCobraStringValue("json", []string{"msgp"})
+var dumpForDryrunFormat = *makeCobraStringValue("json", []string{"msgp"})
 
 func addTxnFlags(cmd *cobra.Command) {
 	cmd.Flags().Uint64Var(&fee, "fee", 0, "The transaction fee (automatically determined by default), in microAlgos")

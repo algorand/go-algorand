@@ -1415,8 +1415,8 @@ func TestOnCompletionConstants(t *testing.T) {
 	t.Parallel()
 
 	// ensure all the OnCompetion values are in OnCompletionValues list
-	var max int = 100
-	var last int = max
+	var max = 100
+	var last = max
 	for i := 0; i < max; i++ {
 		oc := transactions.OnCompletion(i)
 		unknownStringer := "OnCompletion(" + strconv.FormatInt(int64(i), 10) + ")"

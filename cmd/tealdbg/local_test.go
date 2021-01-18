@@ -34,7 +34,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var txnSample string = `{
+var txnSample = `{
 	"sig": "+FQBnfGQMNxzwW85WjpSKfOYoEKqzTChhJ+h2WYEx9C8Zt5THdKvHLd3IkPO/usubboFG/0Wcvb8C5Ps1h+IBQ==",
 	"txn": {
 	  "amt": 1000,
@@ -97,7 +97,7 @@ func TestTxnMessagePackInput(t *testing.T) {
 	a.Equal(basics.MicroAlgos{Raw: 1000}, txnGroup[1].Txn.Amount)
 }
 
-var balanceSample string = `{
+var balanceSample = `{
 	"addr": "47YPQTIGQEO7T4Y4RWDYWEKV6RTR2UNBQXBABEEGM72ESWDQNCQ52OPASU",
 	"onl": 1,
 	"algo": 500000000,

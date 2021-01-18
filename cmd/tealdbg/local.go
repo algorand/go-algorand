@@ -56,7 +56,7 @@ func txnGroupFromParams(dp *DebugParams) (txnGroup []transactions.SignedTxn, err
 		return
 	}
 
-	var data []byte = dp.TxnBlob
+	var data = dp.TxnBlob
 
 	// 1. Attempt json - a single transaction
 	var txn transactions.SignedTxn
@@ -97,7 +97,7 @@ func balanceRecordsFromParams(dp *DebugParams) (records []basics.BalanceRecord, 
 		return
 	}
 
-	var data []byte = dp.BalanceBlob
+	var data = dp.BalanceBlob
 
 	// 1. Attempt json - a single record
 	var record basics.BalanceRecord

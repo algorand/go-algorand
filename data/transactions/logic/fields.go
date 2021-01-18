@@ -240,19 +240,19 @@ type OnCompletionConstType transactions.OnCompletion
 
 const (
 	// NoOp = transactions.NoOpOC
-	NoOp OnCompletionConstType = OnCompletionConstType(transactions.NoOpOC)
+	NoOp = OnCompletionConstType(transactions.NoOpOC)
 	// OptIn = transactions.OptInOC
-	OptIn OnCompletionConstType = OnCompletionConstType(transactions.OptInOC)
+	OptIn = OnCompletionConstType(transactions.OptInOC)
 	// CloseOut = transactions.CloseOutOC
-	CloseOut OnCompletionConstType = OnCompletionConstType(transactions.CloseOutOC)
+	CloseOut = OnCompletionConstType(transactions.CloseOutOC)
 	// ClearState = transactions.ClearStateOC
-	ClearState OnCompletionConstType = OnCompletionConstType(transactions.ClearStateOC)
+	ClearState = OnCompletionConstType(transactions.ClearStateOC)
 	// UpdateApplication = transactions.UpdateApplicationOC
-	UpdateApplication OnCompletionConstType = OnCompletionConstType(transactions.UpdateApplicationOC)
+	UpdateApplication = OnCompletionConstType(transactions.UpdateApplicationOC)
 	// DeleteApplication = transactions.DeleteApplicationOC
-	DeleteApplication OnCompletionConstType = OnCompletionConstType(transactions.DeleteApplicationOC)
+	DeleteApplication = OnCompletionConstType(transactions.DeleteApplicationOC)
 	// end of constants
-	invalidOnCompletionConst OnCompletionConstType = DeleteApplication + 1
+	invalidOnCompletionConst = DeleteApplication + 1
 )
 
 // OnCompletionNames is the string names of Txn.OnCompletion, array index is the const value

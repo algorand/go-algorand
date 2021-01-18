@@ -366,7 +366,7 @@ func prepareTxn(txn *transactions.Transaction, groupIndex int) []fieldDesc {
 			continue
 		}
 		var value string
-		var valType string = "string"
+		var valType = "string"
 		tv, err := logic.TxnFieldToTealValue(txn, groupIndex, logic.TxnField(field), 0)
 		if err != nil {
 			value = err.Error()

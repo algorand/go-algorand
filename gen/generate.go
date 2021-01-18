@@ -85,7 +85,7 @@ func GenerateGenesisFiles(genesisData GenesisData, consensus config.ConsensusPro
 	// Backwards compatibility with older genesis files: if the consensus
 	// protocol version is not specified, default to V0.
 	proto := genesisData.ConsensusProtocol
-	if proto == ("") {
+	if proto == "" {
 		proto = protocol.ConsensusCurrentVersion
 	}
 

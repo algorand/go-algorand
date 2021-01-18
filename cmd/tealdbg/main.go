@@ -123,7 +123,7 @@ type runModeValue struct {
 	*cobraStringValue
 }
 
-var frontend frontendValue = frontendValue{makeCobraStringValue("cdt", []string{"web"})}
+var frontend = frontendValue{makeCobraStringValue("cdt", []string{"web"})}
 var proto string
 var txnFile string
 var groupIndex int
@@ -133,7 +133,7 @@ var indexerURL string
 var indexerToken string
 var roundNumber uint64
 var timestamp int64
-var runMode runModeValue = runModeValue{makeCobraStringValue("auto", []string{"signature", "application"})}
+var runMode = runModeValue{makeCobraStringValue("auto", []string{"signature", "application"})}
 var port int
 var noFirstRun bool
 var noBrowserCheck bool
