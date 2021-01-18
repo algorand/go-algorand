@@ -1,0 +1,8 @@
+{
+    "AccountMnemonic":"",
+	"ClientURL":"http://127.0.0.1:8080",
+	"APIToken":"",
+    "RoundModulator": 140111,
+    "RoundOffset": 0,
+    "Fee": 1000
+}
