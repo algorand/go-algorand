@@ -164,7 +164,7 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKey *
 	var vers common.Version
 	vers, err = restClient.Versions()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "unable to check status : %v", err)
+		fmt.Fprintf(os.Stderr, "unable to get versions : %v", err)
 		return false
 	}
 	var genesisHash crypto.Digest
