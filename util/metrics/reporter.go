@@ -246,7 +246,7 @@ func (reporter *MetricReporter) tryInvokeNodeExporter(ctx context.Context) {
 		(*proc).Wait()
 		// status, _ :=
 		// logging.Base().Debugf("Node exporter process ended : %v", status)
-		(*proc) = nil
+		*proc = nil
 	}(&reporter.neProcess)
 	return
 }

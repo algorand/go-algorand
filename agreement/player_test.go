@@ -1332,7 +1332,7 @@ func TestPlayerDoesNotFastForwardOldThresholdEvents(t *testing.T) {
 	pV = &bottom
 	votes = make([]vote, int((next + 1).threshold(config.Consensus[protocol.ConsensusCurrentVersion])))
 	for i := 0; i < int((next + 1).threshold(config.Consensus[protocol.ConsensusCurrentVersion])); i++ {
-		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, (next + 1), *pV)
+		votes[i] = helper.MakeVerifiedVote(t, i, r, p-1, next + 1, *pV)
 	}
 	bun = unauthenticatedBundle{
 		Round:    r,

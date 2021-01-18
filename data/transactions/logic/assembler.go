@@ -1184,7 +1184,7 @@ const AssemblerDefaultVersion = 1
 
 // AssemblerMaxVersion is a maximum supported assembler version
 const AssemblerMaxVersion = LogicVersion
-const assemblerNoVersion = (^uint64(0))
+const assemblerNoVersion = ^uint64(0)
 
 // prependCBlocks completes the assembly by inserting cblocks if needed.
 func (ops *OpStream) prependCBlocks() []byte {

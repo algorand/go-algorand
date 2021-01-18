@@ -460,7 +460,7 @@ func doDryrunRequest(dr *DryrunRequest, response *generated.DryrunResponse) {
 							}
 						}
 						if !found {
-							(*acct.AppsLocalState) = append(*acct.AppsLocalState, ls)
+							*acct.AppsLocalState = append(*acct.AppsLocalState, ls)
 						}
 					}
 					dl.dr.Accounts[idx] = acct

@@ -570,7 +570,7 @@ func BenchmarkBalancesChanges(b *testing.B) {
 		return
 	}
 	// we want to fake the N to reflect the time it took us, if we were to wait an entire second.
-	singleIterationTime := deltaTime / time.Duration((uint64(b.N) - initialRounds))
+	singleIterationTime := deltaTime / time.Duration(uint64(b.N) - initialRounds)
 	b.N = int(time.Second / singleIterationTime)
 	// and now, wait for the reminder of the second.
 	time.Sleep(time.Second - deltaTime)

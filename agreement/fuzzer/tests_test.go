@@ -635,7 +635,7 @@ func TestUnstakedNetworkLinearGrowth(t *testing.T) {
 	// make sure that the max bandwidth is linear at most :
 	for i := 1; i < len(relayMaxBandwidth); i++ {
 		// the nodes ratio should be 2, but instead of assuming it, calculate it.
-		nodesRatio := float32((relayCount + nodeCount[i])) / float32(relayCount+nodeCount[i-1])
+		nodesRatio := float32(relayCount + nodeCount[i]) / float32(relayCount+nodeCount[i-1])
 
 		require.Truef(t, int(float32(relayMaxBandwidth[i])/nodesRatio) < relayMaxBandwidth[i-1],
 			"Network load with %d nodes was %s. Network load with %d nodes was %s. That's more than a %f ratio.",
@@ -953,7 +953,7 @@ func BenchmarkNetworkPerformance(b *testing.B) {
 	// make sure that the max bandwidth is linear at most :
 	for i := 1; i < len(relayMaxBandwidth); i++ {
 		// the nodes ratio should be 2, but instead of assuming it, calculate it.
-		nodesRatio := float32((relayCount + nodeCount[i])) / float32(relayCount+nodeCount[i-1])
+		nodesRatio := float32(relayCount + nodeCount[i]) / float32(relayCount+nodeCount[i-1])
 
 		require.Truef(b, int(float32(relayMaxBandwidth[i])/nodesRatio) < relayMaxBandwidth[i-1],
 			"Network load with %d nodes was %s. Network load with %d nodes was %s. That's more than a %f ratio.",

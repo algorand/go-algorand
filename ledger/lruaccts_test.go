@@ -90,7 +90,7 @@ func TestLRUAccountsPendingWrites(t *testing.T) {
 
 	for i := 0; i < accountsNum; i++ {
 		go func(i int) {
-			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
+			time.Sleep(time.Duration(crypto.RandUint64() % 50) * time.Millisecond)
 			acct := persistedAccountData{
 				addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				round:       basics.Round(i),
