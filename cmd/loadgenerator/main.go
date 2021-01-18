@@ -203,12 +203,9 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKey *
 			for x := base; x < transactionBlockSize; x += nroutines {
 				_, err = restClient.SendRawTransaction(txns[x])
 				if err != nil {
-					if strings.Contains(err.Error(), "txn dead") {
+					if strings.Contains(err.Error(), "txn dead") || strings.Contains(err.Error(), "below threshold") {
 						break
 					}
-					/*if strings.Contains(err.Error(), "below threshold") {
-						break
-					}*/
 					fmt.Fprintf(os.Stderr, "unable to send transaction : %v\n", err)
 				} else {
 					sent[base]++
