@@ -100,11 +100,11 @@ func newFixedInst(inst *Instruction) *fixedInst {
 	return &fixedInst{Instruction: inst}
 }
 
-func (f fixedInst) Convert() ([]*Instruction, error) {
+func (f *fixedInst) Convert() ([]*Instruction, error) {
 	return []*Instruction{f.Instruction}, nil
 }
 
-func (f fixedInst) LengthDelta() int {
+func (f *fixedInst) LengthDelta() int {
 	return 0
 }
 
@@ -148,7 +148,7 @@ func newMemWriteInst(inst *Instruction) *memWriteInst {
 	return &memWriteInst{Instruction: inst}
 }
 
-func (mw memWriteInst) Convert() ([]*Instruction, error) {
+func (mw *memWriteInst) Convert() ([]*Instruction, error) {
 	// 0x35 0xFF 0x26 0x01 len(i) {i} 0x28 0x34 0xFF op
 	return []*Instruction{
 		NewInstruction(0x35, []byte{0xFF}, mw.position),
@@ -159,7 +159,7 @@ func (mw memWriteInst) Convert() ([]*Instruction, error) {
 	}, nil
 }
 
-func (mw memWriteInst) LengthDelta() int {
+func (mw *memWriteInst) LengthDelta() int {
 	// new len is 10, old len was 2 so delta is 8
 	return 8
 }
