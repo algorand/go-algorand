@@ -832,7 +832,6 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 			}
 			continue
 		}
-		latestProto := config.Consensus[latestHdr.CurrentProtocol]
 
 		// If compact certs are enabled, we need to determine what signatures
 		// we already computed, since we can then delete ephemeral keys that
@@ -842,29 +841,6 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		if err != nil {
 			node.log.Warnf("Cannot look up latest compact cert sigs: %v", err)
 			continue
-		}
-
-		nextRoundFunc := func(part account.Participation) basics.Round {
-			// We need a key for round r+1 for agreement.
-			nextAgreement := r + 1
-
-			if latestProto.CompactCertRounds > 0 {
-				// We need a key for the next compact cert round.
-				// This would be CompactCertNextRound+1 (+1 because compact
-				// cert code uses the next round's ephemeral key), except
-				// if we already used that key to produce a signature (as
-				// reported in ccSigs).
-				nextCC := latestHdr.CompactCertNextRound + 1
-				if ccSigs[part.Parent] >= nextCC {
-					nextCC = ccSigs[part.Parent] + basics.Round(latestProto.CompactCertRounds) + 1
-				}
-
-				if nextCC < nextAgreement {
-					return nextCC
-				}
-			}
-
-			return nextAgreement
 		}
 
 		// We need to find the consensus protocol used to agree on block r,
@@ -884,7 +860,7 @@ func (node *AlgorandFullNode) oldKeyDeletionThread() {
 		agreementProto := config.Consensus[hdr.CurrentProtocol]
 
 		node.mu.Lock()
-		node.accountManager.DeleteOldKeys(nextRoundFunc, agreementProto)
+		node.accountManager.DeleteOldKeys(latestHdr, ccSigs, agreementProto)
 		node.mu.Unlock()
 	}
 }
