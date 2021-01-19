@@ -556,17 +556,12 @@ func (pool *TransactionPool) addToPendingBlockEvaluatorOnce(txgroup []transactio
 		}
 	}
 
-	txgroupad := make([]transactions.SignedTxnWithAD, len(txgroup))
-	for i, tx := range txgroup {
-		txgroupad[i].SignedTxn = tx
-	}
-
 	transactionGroupStartsTime := time.Time{}
 	if recomputing {
 		transactionGroupStartsTime = time.Now()
 	}
 
-	err := pool.pendingBlockEvaluator.TransactionGroup(txgroupad)
+	err := pool.pendingBlockEvaluator.TransactionGroup(txgroup)
 
 	if recomputing {
 		if !pool.assemblyResults.assemblyCompletedOrAbandoned {

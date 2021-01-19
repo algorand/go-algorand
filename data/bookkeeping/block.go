@@ -557,23 +557,23 @@ func (block Block) ContentsMatchHeader() bool {
 
 // DecodePaysetGroups decodes block.Payset using DecodeSignedTxn, and returns
 // the transactions in groups.
-func (block Block) DecodePaysetGroups() ([][]transactions.SignedTxnWithAD, error) {
-	var res [][]transactions.SignedTxnWithAD
-	var lastGroup []transactions.SignedTxnWithAD
+func (block Block) DecodePaysetGroups() ([][]transactions.SignedTxn, error) {
+	var res [][]transactions.SignedTxn
+	var lastGroup []transactions.SignedTxn
 	for _, txib := range block.Payset {
 		var err error
-		var stxnad transactions.SignedTxnWithAD
-		stxnad.SignedTxn, stxnad.ApplyData, err = block.DecodeSignedTxn(txib)
+		var stxn transactions.SignedTxn
+		stxn, _, err = block.DecodeSignedTxn(txib)
 		if err != nil {
 			return nil, err
 		}
 
-		if lastGroup != nil && (lastGroup[0].SignedTxn.Txn.Group != stxnad.SignedTxn.Txn.Group || lastGroup[0].SignedTxn.Txn.Group.IsZero()) {
+		if lastGroup != nil && (lastGroup[0].Txn.Group != stxn.Txn.Group || lastGroup[0].Txn.Group.IsZero()) {
 			res = append(res, lastGroup)
 			lastGroup = nil
 		}
 
-		lastGroup = append(lastGroup, stxnad)
+		lastGroup = append(lastGroup, stxn)
 	}
 	if lastGroup != nil {
 		res = append(res, lastGroup)
