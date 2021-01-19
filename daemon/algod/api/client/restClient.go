@@ -252,6 +252,21 @@ func (client RestClient) Status() (response generatedV2.NodeStatusResponse, err 
 	return
 }
 
+// WaitForBlock returns the node status after waiting for the given round.
+func (client RestClient) WaitForBlock(round basics.Round) (response generatedV2.NodeStatusResponse, err error) {
+	switch client.versionAffinity {
+	case APIVersionV2:
+		err = client.get(&response, fmt.Sprintf("/v2/status/wait-for-block-after/%d/", round), nil)
+	default:
+		var nodeStatus v1.NodeStatus
+		err = client.get(&nodeStatus, fmt.Sprintf("/v1/status/wait-for-block-after/%d/", round), nil)
+		if err == nil {
+			response = fillNodeStatusResponse(nodeStatus)
+		}
+	}
+	return
+}
+
 // HealthCheck does a health check on the the potentially running node,
 // returning an error if the API is down
 func (client RestClient) HealthCheck() error {
