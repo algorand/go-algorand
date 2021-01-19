@@ -11,6 +11,9 @@
 ##
 ## This assumes a directory layout where the algod binary lives at
 ## /home/algorand/node/algod and the data lives under /home/algorand/node/data.
+##
+## Note that not all distros currently support the user service feature.
+## Run `systemctl --user status` to determine if it's supported.
 
 [Unit]
 Description=Algorand daemon under %I
