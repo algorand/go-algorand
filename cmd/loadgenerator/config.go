@@ -25,12 +25,18 @@ import (
 const configFileName = "loadgenerator.config"
 
 type config struct {
+	// AccountMnemonic is the mnemonic of the account from which we would like to spend Algos.
 	AccountMnemonic string
-	ClientURL       *url.URL `json:"-"`
-	APIToken        string
-	RoundModulator  uint64
-	RoundOffset     uint64
-	Fee             uint64
+	// ClientURL is the url ( such as http://127.0.0.1:8080 ) that would be used to communicate with a node REST endpoint
+	ClientURL *url.URL `json:"-"`
+	// APIToken is the API token used to communicate with the node.
+	APIToken string
+	// RoundModulator is the modulator used to determine of the current round is the round at which transactions need to be sent.
+	RoundModulator uint64
+	// RoundOffset is the offset used to determine of the current round is the round at which transactions need to be sent.
+	RoundOffset uint64
+	// Fee is the amount of algos that would be specified in the transaction fee field.
+	Fee uint64
 }
 
 type fileConfig struct {

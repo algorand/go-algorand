@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +35,8 @@ import (
 )
 
 const transactionBlockSize = 800
+
+var nroutines = runtime.NumCPU() * 2
 
 func loadMnemonic(mnemonic string) crypto.Seed {
 	seedbytes, err := passphrase.MnemonicToKey(mnemonic)
@@ -86,15 +89,15 @@ func spendLoop(cfg config, privateKey *crypto.SignatureSecrets, publicKey basics
 	restClient := client.MakeRestClient(*cfg.ClientURL, cfg.APIToken)
 
 	for {
-		waitForSpendingRound(restClient, cfg)
+		waitForRound(restClient, cfg, true)
 		queueFull := generateTransactions(restClient, cfg, privateKey, publicKey)
 		if queueFull {
-			waitForNonSpendingRound(restClient, cfg)
+			waitForRound(restClient, cfg, false)
 		}
 	}
 }
 
-func waitForNonSpendingRound(restClient client.RestClient, cfg config) {
+func waitForRound(restClient client.RestClient, cfg config, spendingRound bool) {
 	var nodeStatus generatedV2.NodeStatusResponse
 	var err error
 	for {
@@ -104,52 +107,26 @@ func waitForNonSpendingRound(restClient client.RestClient, cfg config) {
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		if !isSpendRound(cfg, nodeStatus.LastRound) {
-			return
-		}
-	waitForNextBlock:
-		// wait for the next round.
-		nodeStatus, err = restClient.WaitForBlock(basics.Round(nodeStatus.LastRound))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "unable to wait for next round node status : %v", err)
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		if !isSpendRound(cfg, nodeStatus.LastRound) {
-			return
-		}
-		goto waitForNextBlock
-	}
-}
-
-func waitForSpendingRound(restClient client.RestClient, cfg config) {
-	var nodeStatus generatedV2.NodeStatusResponse
-	var err error
-	for {
-		nodeStatus, err = restClient.Status()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "unable to check status : %v", err)
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		if isSpendRound(cfg, nodeStatus.LastRound) {
+		if isSpendRound(cfg, nodeStatus.LastRound) == spendingRound {
 			// time to send transactions.
 			return
 		}
-		fmt.Printf("Current round %d, waiting for spending round %d\n", nodeStatus.LastRound, nextSpendRound(cfg, nodeStatus.LastRound))
-	waitForNextBlock:
-		// wait for the next round.
-		nodeStatus, err = restClient.WaitForBlock(basics.Round(nodeStatus.LastRound))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "unable to wait for next round node status : %v", err)
-			time.Sleep(1 * time.Second)
-			continue
+		if spendingRound {
+			fmt.Printf("Current round %d, waiting for spending round %d\n", nodeStatus.LastRound, nextSpendRound(cfg, nodeStatus.LastRound))
 		}
-		if isSpendRound(cfg, nodeStatus.LastRound) {
-			// time to send transactions.
-			return
+		for {
+			// wait for the next round.
+			nodeStatus, err = restClient.WaitForBlock(basics.Round(nodeStatus.LastRound))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "unable to wait for next round node status : %v", err)
+				time.Sleep(1 * time.Second)
+				break
+			}
+			if isSpendRound(cfg, nodeStatus.LastRound) == spendingRound {
+				// time to send transactions.
+				return
+			}
 		}
-		goto waitForNextBlock
 	}
 }
 
@@ -193,7 +170,6 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKey *
 	}
 
 	// create multiple go-routines to send all these requests.
-	const nroutines = 8
 	var sendWaitGroup sync.WaitGroup
 	sendWaitGroup.Add(nroutines)
 	sent := make([]int, nroutines, nroutines)
