@@ -19,8 +19,6 @@ package agreement
 import (
 	"context"
 	"fmt"
-	"github.com/algorand/go-algorand/data/transactions"
-
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
@@ -77,21 +75,8 @@ func (p unauthenticatedProposal) value() proposalValue {
 }
 
 func (p unauthenticatedProposal) Compressed() unauthenticatedProposal {
-	var block bookkeeping.Block
-	block.BlockHeader = p.BlockHeader
-	for _, stb := range p.Payset {
-		var newstb transactions.SignedTxnInBlock
-		newstb.SignedTxn = stb.SignedTxn
-		newstb.HasGenesisID = stb.HasGenesisID
-		newstb.HasGenesisHash = stb.HasGenesisHash
-		block.Payset = append(block.Payset, newstb)
-	}
-
-	var up unauthenticatedProposal
-	up.Block = block
-	up.SeedProof = p.SeedProof
-	up.OriginalPeriod = p.OriginalPeriod
-	up.OriginalProposer = p.OriginalProposer
+	up := p
+	up.Block = up.Block.Compressed()
 	return up
 }
 

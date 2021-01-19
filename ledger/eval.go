@@ -676,7 +676,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 	for gi, txad := range txgroup {
 		var txib transactions.SignedTxnInBlock
 
-		err := eval.transaction(txad.SignedTxn, evalParams[gi], txad.ApplyData, cow, &txib)
+		err := eval.transaction(txad.SignedTxn, evalParams[gi], cow, &txib)
 		if err != nil {
 			return err
 		}
@@ -730,7 +730,7 @@ func (eval *BlockEvaluator) transactionGroup(txgroup []transactions.SignedTxnWit
 // transaction tentatively executes a new transaction as part of this block evaluation.
 // If the transaction cannot be added to the block without violating some constraints,
 // an error is returned and the block evaluator state is unchanged.
-func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, ad transactions.ApplyData, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
+func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *logic.EvalParams, cow *roundCowState, txib *transactions.SignedTxnInBlock) error {
 	var err error
 
 	// Only compute the TxID once
@@ -773,20 +773,6 @@ func (eval *BlockEvaluator) transaction(txn transactions.SignedTxn, evalParams *
 	if err != nil {
 		return fmt.Errorf("transaction %v: %v", txid, err)
 	}
-
-	//// Validate applyData if we are validating an existing block.
-	//// If we are validating and generating, we have no ApplyData yet.
-	//if eval.validate && !eval.generate {
-	//	if eval.proto.ApplyData && applyData != nil {
-	//		if !ad.Equal(applyData) {
-	//			return fmt.Errorf("transaction %v: applyData mismatch: %v != %v", txid, ad, applyData)
-	//		}
-	//	} else {
-	//		if !ad.Equal(transactions.ApplyData{}) {
-	//			return fmt.Errorf("transaction %v: applyData not supported", txid)
-	//		}
-	//	}
-	//}
 
 	// Check if the transaction fits in the block, now that we can encode it.
 	*txib, err = eval.block.EncodeSignedTxn(txn, applyData)
