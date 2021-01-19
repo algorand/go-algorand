@@ -151,12 +151,14 @@ verify_service_status() {
     fi
 }
 
-"$BINDIR/systemd-setup.sh" "$USERNAME" "$GROUPNAME"
 
 if [ "$GROUPNAME" = --user ]; then
+    "$BINDIR/systemd-setup-user.sh" "$USERNAME"
     IS_USER=true
     HOMEDIR=$(get_homedir "$USERNAME")
     SERVICE="$HOMEDIR/.config/systemd/user/algorand@.service"
+else
+    "$BINDIR/systemd-setup.sh" "$USERNAME" "$GROUPNAME"
 fi
 
 if [ -f "$SERVICE" ]; then

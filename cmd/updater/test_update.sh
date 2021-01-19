@@ -111,7 +111,7 @@ echo
 
 echo "Testing starting and stopping node, systemd user service installed..."
 
-"$BINDIR/systemd-setup.sh" "$USER" --user
+"$BINDIR/systemd-setup-user.sh" "$USER"
 
 NODE_STOPPED="systemd user service: stop"
 NODE_STARTED="systemd user service: start"
