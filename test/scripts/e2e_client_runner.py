@@ -174,7 +174,7 @@ class RunSet:
         if self.algod and self.kmd:
             return
         # should run from inside self.lock
-        xrun(['goal', 'kmd', 'start', '-t', '200'], env=self.env, timeout=5)
+        xrun(['goal', 'kmd', 'start', '-t', '3600'], env=self.env, timeout=5)
         algodata = self.env['ALGORAND_DATA']
         self.kmd = openkmd(algodata)
         self.algod = openalgod(algodata)
@@ -279,6 +279,7 @@ def goal_network_stop(netdir, normal_cleanup=False):
     logger.info('stop network in %s', netdir)
     try:
         xrun(['goal', 'network', 'stop', '-r', netdir], timeout=10)
+        xrun(['goal', 'kmd', 'stop'], env=self.env, timeout=5)
     except Exception as e:
         logger.error('error stopping network', exc_info=True)
         if normal_cleanup:
