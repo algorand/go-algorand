@@ -61,10 +61,6 @@ type roundCowState struct {
 	// 2. Stateful TEAL evaluation (see SetKey/DelKey)
 	// must be incorporated into mods.accts before passing deltas forward
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
-
-	// next round for which we expect a compact cert.
-	// zero if no compact cert is expected.
-	compactCertNext basics.Round
 }
 
 func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64) *roundCowState {
@@ -167,8 +163,8 @@ func (cb *roundCowState) txnCounter() uint64 {
 }
 
 func (cb *roundCowState) compactCertNext() basics.Round {
-	if cb.mods.compactCertNext != 0 {
-		return cb.mods.compactCertNext
+	if cb.mods.CompactCertNext != 0 {
+		return cb.mods.CompactCertNext
 	}
 	return cb.lookupParent.compactCertNext()
 }
@@ -203,7 +199,7 @@ func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.T
 }
 
 func (cb *roundCowState) setCompactCertNext(rnd basics.Round) {
-	cb.mods.compactCertNext = rnd
+	cb.mods.CompactCertNext = rnd
 }
 
 func (cb *roundCowState) child() *roundCowState {
@@ -251,7 +247,7 @@ func (cb *roundCowState) commitToParent() {
 			}
 		}
 	}
-	cb.commitParent.mods.compactCertNext = cb.mods.compactCertNext
+	cb.commitParent.mods.CompactCertNext = cb.mods.CompactCertNext
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {
