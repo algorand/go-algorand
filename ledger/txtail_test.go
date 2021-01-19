@@ -27,12 +27,12 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/protocol"
 )
 
 func TestTxTailCheckdup(t *testing.T) {
-	ledger := makeMockLedgerForTracker(t, true)
-	ledger.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 1)
+	ledger := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	tail := txTail{}
 	require.NoError(t, tail.loadFromDisk(ledger))
@@ -55,37 +55,37 @@ func TestTxTailCheckdup(t *testing.T) {
 
 		txids := make(map[transactions.Txid]basics.Round)
 		txids[transactions.Txid(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(1)}))] = rnd + txvalidity
-		txleases := make(map[txlease]basics.Round)
-		txleases[txlease{sender: basics.Address(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(2)})), lease: crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(3)})}] = rnd + leasevalidity
+		txleases := make(map[ledgercore.Txlease]basics.Round)
+		txleases[ledgercore.Txlease{Sender: basics.Address(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(2)})), Lease: crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(3)})}] = rnd + leasevalidity
 
-		tail.newBlock(blk, StateDelta{accts: make(map[basics.Address]accountDelta), hdr: &blk.BlockHeader, Txids: txids, txleases: txleases})
+		tail.newBlock(blk, ledgercore.StateDelta{Accts: make(map[basics.Address]basics.AccountData), Hdr: &blk.BlockHeader, Txids: txids, Txleases: txleases})
 		tail.committedUpTo(rnd.SubSaturate(lookback))
 	}
 
 	// test txid duplication testing.
 	for rnd := basics.Round(1); rnd < lastRound; rnd++ {
 		txid := transactions.Txid(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(1)}))
-		err := tail.checkDup(proto, basics.Round(0), basics.Round(0), rnd+txvalidity, txid, txlease{})
+		err := tail.checkDup(proto, basics.Round(0), basics.Round(0), rnd+txvalidity, txid, ledgercore.Txlease{})
 		require.Errorf(t, err, "round %d", rnd)
 		if rnd < lastRound-lookback-txvalidity-1 {
 			var missingRoundErr *txtailMissingRound
 			require.Truef(t, errors.As(err, &missingRoundErr), "error a txtailMissingRound(%d) : %v ", rnd, err)
 		} else {
-			var txInLedgerErr *TransactionInLedgerError
+			var txInLedgerErr *ledgercore.TransactionInLedgerError
 			require.Truef(t, errors.As(err, &txInLedgerErr), "error a TransactionInLedgerError(%d) : %v ", rnd, err)
 		}
 	}
 
 	// test lease detection
 	for rnd := basics.Round(1); rnd < lastRound; rnd++ {
-		lease := txlease{sender: basics.Address(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(2)})), lease: crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(3)})}
+		lease := ledgercore.Txlease{Sender: basics.Address(crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(2)})), Lease: crypto.Hash([]byte{byte(rnd % 256), byte(rnd / 256), byte(3)})}
 		err := tail.checkDup(proto, rnd, basics.Round(0), rnd, transactions.Txid{}, lease)
 		require.Errorf(t, err, "round %d", rnd)
 		if rnd < lastRound-lookback-1 {
 			var missingRoundErr *txtailMissingRound
 			require.Truef(t, errors.As(err, &missingRoundErr), "error a txtailMissingRound(%d) : %v ", rnd, err)
 		} else {
-			var leaseInLedgerErr *LeaseInLedgerError
+			var leaseInLedgerErr *ledgercore.LeaseInLedgerError
 			require.Truef(t, errors.As(err, &leaseInLedgerErr), "error a LeaseInLedgerError(%d) : %v ", rnd, err)
 		}
 	}

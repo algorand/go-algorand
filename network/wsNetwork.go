@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/textproto"
@@ -198,6 +197,9 @@ type GossipNode interface {
 	// newly connecting peers.  This should be called before the network
 	// is started.
 	RegisterMessageInterest(protocol.Tag) error
+
+	// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
+	SubstituteGenesisID(rawURL string) string
 }
 
 // IncomingMessage represents a message arriving from some peer in our p2p network
@@ -637,7 +639,7 @@ func (wn *WebsocketNetwork) setup() {
 	wn.readBuffer = make(chan IncomingMessage, readBufferLen)
 
 	var rbytes [10]byte
-	rand.Read(rbytes[:])
+	crypto.RandBytes(rbytes[:])
 	wn.RandomID = base64.StdEncoding.EncodeToString(rbytes[:])
 
 	if wn.config.EnableIncomingMessageFilter {
@@ -728,8 +730,10 @@ func (wn *WebsocketNetwork) Start() {
 		wn.wg.Add(1)
 		go wn.broadcastThread()
 	}
-	wn.wg.Add(1)
-	go wn.prioWeightRefresh()
+	if wn.prioScheme != nil {
+		wn.wg.Add(1)
+		go wn.prioWeightRefresh()
+	}
 	wn.log.Infof("serving genesisID=%s on %#v with RandomID=%s", wn.GenesisID, wn.PublicAddress(), wn.RandomID)
 }
 
@@ -919,7 +923,10 @@ func (wn *WebsocketNetwork) checkIncomingConnectionVariables(response http.Respo
 		wn.log.Warn(filterASCII(fmt.Sprintf("new peer %#v genesis mismatch, mine=%#v theirs=%#v, headers %#v", request.RemoteAddr, wn.GenesisID, otherGenesisID, request.Header)))
 		networkConnectionsDroppedTotal.Inc(map[string]string{"reason": "mismatching genesis-id"})
 		response.WriteHeader(http.StatusPreconditionFailed)
-		response.Write([]byte("mismatching genesis ID"))
+		n, err := response.Write([]byte("mismatching genesis ID"))
+		if err != nil {
+			wn.log.Warnf("ws failed to write mismatching genesis ID response '%s' : n = %d err = %v", n, err)
+		}
 		return http.StatusPreconditionFailed
 	}
 
@@ -1084,9 +1091,15 @@ func (wn *WebsocketNetwork) messageHandlerThread() {
 				wn.wg.Add(1)
 				go wn.disconnectThread(msg.Sender, disconnectBadData)
 			case Broadcast:
-				wn.Broadcast(wn.ctx, msg.Tag, msg.Data, false, msg.Sender)
+				err := wn.Broadcast(wn.ctx, msg.Tag, msg.Data, false, msg.Sender)
+				if err != nil && err != errBcastQFull {
+					wn.log.Warnf("WebsocketNetwork.messageHandlerThread: WebsocketNetwork.Broadcast returned unexpected error %v", err)
+				}
 			case Respond:
-				msg.Sender.(*wsPeer).Respond(wn.ctx, msg, outmsg.Topics)
+				err := msg.Sender.(*wsPeer).Respond(wn.ctx, msg, outmsg.Topics)
+				if err != nil && err != wn.ctx.Err() {
+					wn.log.Warnf("WebsocketNetwork.messageHandlerThread: wsPeer.Respond returned unexpected error %v", err)
+				}
 			default:
 			}
 		case <-inactivityCheckTicker.C:
@@ -1134,7 +1147,10 @@ func (wn *WebsocketNetwork) checkSlowWritingPeers() {
 func (wn *WebsocketNetwork) sendFilterMessage(msg IncomingMessage) {
 	digest := generateMessageDigest(msg.Tag, msg.Data)
 	//wn.log.Debugf("send filter %s(%d) %v", msg.Tag, len(msg.Data), digest)
-	wn.Broadcast(context.Background(), protocol.MsgDigestSkipTag, digest[:], false, msg.Sender)
+	err := wn.Broadcast(context.Background(), protocol.MsgDigestSkipTag, digest[:], false, msg.Sender)
+	if err != nil && err != errBcastQFull {
+		wn.log.Warnf("WebsocketNetwork.sendFilterMessage: WebsocketNetwork.Broadcast returned unexpected error %v", err)
+	}
 }
 
 func (wn *WebsocketNetwork) broadcastThread() {
@@ -2081,4 +2097,9 @@ func (wn *WebsocketNetwork) RegisterMessageInterest(t protocol.Tag) error {
 
 	wn.messagesOfInterest[t] = true
 	return nil
+}
+
+// SubstituteGenesisID substitutes the "{genesisID}" with their network-specific genesisID.
+func (wn *WebsocketNetwork) SubstituteGenesisID(rawURL string) string {
+	return strings.Replace(rawURL, "{genesisID}", wn.GenesisID, -1)
 }

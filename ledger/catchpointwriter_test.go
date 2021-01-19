@@ -91,11 +91,54 @@ func makeTestEncodedBalanceRecord(t *testing.T) encodedBalanceRecord {
 		}
 		ad.Assets[basics.AssetIndex(0x1234123412341234-assetHolderAssets)] = ah
 	}
+
+	maxApps := currentConsensusParams.MaxAppsCreated
+	maxOptIns := currentConsensusParams.MaxAppsOptedIn
+	maxBytesLen := currentConsensusParams.MaxAppKeyLen
+	if maxBytesLen > currentConsensusParams.MaxAppBytesValueLen {
+		maxBytesLen = currentConsensusParams.MaxAppBytesValueLen
+	}
+	genKey := func() (string, basics.TealValue) {
+		len := int(crypto.RandUint64() % uint64(maxBytesLen))
+		if len == 0 {
+			return "k", basics.TealValue{Type: basics.TealUintType, Uint: 0}
+		}
+		key := make([]byte, len)
+		crypto.RandBytes(key)
+		return string(key), basics.TealValue{Type: basics.TealUintType, Bytes: string(key)}
+	}
+	startIndex := crypto.RandUint64() % 100000
+	ad.AppParams = make(map[basics.AppIndex]basics.AppParams, maxApps)
+	for aidx := startIndex; aidx < startIndex+uint64(maxApps); aidx++ {
+		ap := basics.AppParams{}
+		ap.GlobalState = make(basics.TealKeyValue)
+		for i := uint64(0); i < currentConsensusParams.MaxGlobalSchemaEntries/4; i++ {
+			k, v := genKey()
+			ap.GlobalState[k] = v
+		}
+		ad.AppParams[basics.AppIndex(aidx)] = ap
+		optins := maxApps
+		if maxApps > maxOptIns {
+			optins = maxOptIns
+		}
+		ad.AppLocalStates = make(map[basics.AppIndex]basics.AppLocalState, optins)
+		keys := currentConsensusParams.MaxLocalSchemaEntries / 4
+		lkv := make(basics.TealKeyValue, keys)
+		for i := 0; i < optins; i++ {
+			for j := uint64(0); j < keys; j++ {
+				k, v := genKey()
+				lkv[k] = v
+			}
+		}
+		ad.AppLocalStates[basics.AppIndex(aidx)] = basics.AppLocalState{KeyValue: lkv}
+	}
+
 	encodedAd, err := ad.MarshalMsg(nil)
 	require.NoError(t, err)
 	er.AccountData = encodedAd
 	return er
 }
+
 func TestEncodedBalanceRecordEncoding(t *testing.T) {
 	er := makeTestEncodedBalanceRecord(t)
 	encodedBr, err := er.MarshalMsg(nil)
@@ -137,9 +180,8 @@ func TestBasicCatchpointWriter(t *testing.T) {
 		os.RemoveAll(temporaryDirectroy)
 	}()
 
-	ml := makeMockLedgerForTracker(t, true)
-	defer ml.close()
-	ml.blocks = randomInitChain(testProtocolVersion, 10)
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
+	defer ml.Close()
 	accts := randomAccounts(300, false)
 
 	au := &accountUpdates{}
@@ -156,7 +198,7 @@ func TestBasicCatchpointWriter(t *testing.T) {
 	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
 	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
 
-	readDb := ml.trackerDB().rdb
+	readDb := ml.trackerDB().Rdb
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		writer := makeCatchpointWriter(context.Background(), fileName, tx, blocksRound, blockHeaderDigest, catchpointLabel)
 		for {
@@ -236,9 +278,8 @@ func TestFullCatchpointWriter(t *testing.T) {
 		os.RemoveAll(temporaryDirectroy)
 	}()
 
-	ml := makeMockLedgerForTracker(t, true)
-	defer ml.close()
-	ml.blocks = randomInitChain(testProtocolVersion, 10)
+	ml := makeMockLedgerForTracker(t, true, 10, testProtocolVersion)
+	defer ml.Close()
 	accts := randomAccounts(BalancesPerCatchpointFileChunk*3, false)
 
 	au := &accountUpdates{}
@@ -254,7 +295,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 	blocksRound := basics.Round(12345)
 	blockHeaderDigest := crypto.Hash([]byte{1, 2, 3})
 	catchpointLabel := fmt.Sprintf("%d#%v", blocksRound, blockHeaderDigest) // this is not a correct way to create a label, but it's good enough for this unit test
-	readDb := ml.trackerDB().rdb
+	readDb := ml.trackerDB().Rdb
 	err = readDb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		writer := makeCatchpointWriter(context.Background(), fileName, tx, blocksRound, blockHeaderDigest, catchpointLabel)
 		for {
@@ -316,7 +357,7 @@ func TestFullCatchpointWriter(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	err = l.trackerDBs.wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = l.trackerDBs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		err := applyCatchpointStagingBalances(ctx, tx, 0)
 		return err
 	})
@@ -328,6 +369,5 @@ func TestFullCatchpointWriter(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, acct, acctData)
 		require.Equal(t, basics.Round(0), validThrough)
-
 	}
 }

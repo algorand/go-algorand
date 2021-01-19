@@ -378,6 +378,10 @@ var MaxTxGroupSize int
 // of the consensus protocols. used for decoding purposes.
 var MaxAppProgramLen int
 
+// MaxBytesKeyValueLen is a maximum length of key or value across all protocols.
+// used for decoding purposes.
+var MaxBytesKeyValueLen int
+
 func checkSetMax(value int, curMax *int) {
 	if value > *curMax {
 		*curMax = value
@@ -404,6 +408,9 @@ func checkSetAllocBounds(p ConsensusParams) {
 	checkSetMax(int(p.LogicSigMaxSize), &MaxLogicSigMaxSize)
 	checkSetMax(p.MaxTxnNoteBytes, &MaxTxnNoteBytes)
 	checkSetMax(p.MaxTxGroupSize, &MaxTxGroupSize)
+	// MaxBytesKeyValueLen is max of MaxAppKeyLen and MaxAppBytesValueLen
+	checkSetMax(p.MaxAppKeyLen, &MaxBytesKeyValueLen)
+	checkSetMax(p.MaxAppBytesValueLen, &MaxBytesKeyValueLen)
 }
 
 // SaveConfigurableConsensus saves the configurable protocols file to the provided data directory.

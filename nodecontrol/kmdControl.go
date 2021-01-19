@@ -201,7 +201,7 @@ func (kc *KMDController) StartKMD(args KMDStartArgs) (alreadyRunning bool, err e
 			return false, errors.New("bad kmd data dir")
 		}
 		if (dataDirStat.Mode() & 0077) != 0 {
-			logging.Base().Errorf("%s: kmd data dir exists but is too permissive (%o)", kc.kmdDataDir, dataDirStat.Mode()&0777)
+			logging.Base().Errorf("%s: kmd data dir exists but is too permissive (%o), change to (%o)", kc.kmdDataDir, dataDirStat.Mode()&0777, DefaultKMDDataDirPerms)
 			return false, errors.New("kmd data dir not secure")
 		}
 	} else {
