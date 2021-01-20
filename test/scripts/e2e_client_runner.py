@@ -91,8 +91,8 @@ def _script_thread_inner(runset, scriptname):
         status = algod.status_after_block(round_num=round)
         round = status['lastRound']
 
-    if not ptxinfo:
-        sys.stderr.write('failed to initialize temporary test wallet account for test ({}):\n'.format(scriptname))
+    if ptxinfo is not None:
+        sys.stderr.write('failed to initialize temporary test wallet account for test ({}) for {} rounds.\n'.format(scriptname), max_init_wait_rounds)
         runset.done(scriptname, False, time.time() - start)
 
     env = dict(runset.env)
@@ -180,8 +180,8 @@ class RunSet:
         if self.algod and self.kmd:
             return
         # should run from inside self.lock
-        xrun(['goal', 'kmd', 'start', '-t', '3600'], env=self.env, timeout=5)
         algodata = self.env['ALGORAND_DATA']
+        xrun(['goal', 'kmd', 'start', '-t', '3600','-d', algodata], env=self.env, timeout=5)
         self.kmd = openkmd(algodata)
         self.algod = openalgod(algodata)
 
@@ -277,7 +277,7 @@ class RunSet:
 already_stopped = False
 already_deleted = False
 
-def goal_network_stop(netdir, normal_cleanup=False):
+def goal_network_stop(netdir, env, normal_cleanup=False):
     global already_stopped, already_deleted
     if already_stopped or already_deleted:
         return
@@ -285,7 +285,8 @@ def goal_network_stop(netdir, normal_cleanup=False):
     logger.info('stop network in %s', netdir)
     try:
         xrun(['goal', 'network', 'stop', '-r', netdir], timeout=10)
-        xrun(['goal', 'kmd', 'stop'], env=self.env, timeout=5)
+        algodata = env['ALGORAND_DATA']
+        xrun(['goal', 'kmd', 'stop', '-d', algodata], timeout=5)
     except Exception as e:
         logger.error('error stopping network', exc_info=True)
         if normal_cleanup:
@@ -388,7 +389,7 @@ def main():
     retcode = 0
     xrun(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(gopath, 'src/github.com/algorand/go-algorand/test/testdata/nettemplates/TwoNodes50EachFuture.json')], timeout=90)
     xrun(['goal', 'network', 'start', '-r', netdir], timeout=90)
-    atexit.register(goal_network_stop, netdir)
+    atexit.register(goal_network_stop, env, netdir)
 
     env['ALGORAND_DATA'] = os.path.join(netdir, 'Node')
     env['ALGORAND_DATA2'] = os.path.join(netdir, 'Primary')
@@ -408,7 +409,7 @@ def main():
     logger.info('statuses-json: %s', json.dumps(rs.statuses))
 
     # ensure 'network stop' and 'network delete' also make they job
-    goal_network_stop(netdir, normal_cleanup=True)
+    goal_network_stop(netdir, env, normal_cleanup=True)
     if not args.keep_temps:
         goal_network_delete(netdir, normal_cleanup=True)
 
