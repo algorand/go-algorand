@@ -92,7 +92,7 @@ def _script_thread_inner(runset, scriptname):
         round = status['lastRound']
 
     if ptxinfo is not None:
-        sys.stderr.write('failed to initialize temporary test wallet account for test ({}) for {} rounds.\n'.format(scriptname), max_init_wait_rounds)
+        sys.stderr.write('failed to initialize temporary test wallet account for test ({}) for {} rounds.\n'.format(scriptname, max_init_wait_rounds))
         runset.done(scriptname, False, time.time() - start)
 
     env = dict(runset.env)
