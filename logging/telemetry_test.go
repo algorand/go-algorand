@@ -332,4 +332,5 @@ func TestReadTelemetryConfigOrDefaultNoDataDir(t *testing.T) {
 	a.NotNil(cfg.UserName)
 	a.NotNil(cfg.Password)
 	a.NotNil(cfg.GUID)
+	a.NotEqual(t, TelemetryConfig{}, cfg)
 }
