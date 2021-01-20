@@ -90,11 +90,11 @@ func makeTelemetryState(cfg TelemetryConfig, hookFactory hookFactory) (*telemetr
 }
 
 // ReadTelemetryConfigOrDefault reads telemetry config from file or defaults if no config file found.
-func ReadTelemetryConfigOrDefault(dataDir *string, genesisID string) (cfg TelemetryConfig, err error) {
+func ReadTelemetryConfigOrDefault(dataDir string, genesisID string) (cfg TelemetryConfig, err error) {
 	err = nil
-	dataDirProvided := dataDir != nil && *dataDir != ""
+	dataDirProvided := dataDir != ""
 	if dataDirProvided {
-		configPath := filepath.Join(*dataDir, TelemetryConfigFilename)
+		configPath := filepath.Join(dataDir, TelemetryConfigFilename)
 		cfg, err = LoadTelemetryConfig(configPath)
 	}
 	if (err != nil && os.IsNotExist(err)) || !dataDirProvided {
