@@ -97,7 +97,7 @@ func ReadTelemetryConfigOrDefault(dataDir *string, genesisID string) (cfg Teleme
 		configPath := filepath.Join(*dataDir, TelemetryConfigFilename)
 		cfg, err = LoadTelemetryConfig(configPath)
 	}
-	if err != nil && os.IsNotExist(err) || !dataDirProvided {
+	if (err != nil && os.IsNotExist(err)) || !dataDirProvided {
 		var configPath string
 		configPath, err = config.GetConfigFilePath(TelemetryConfigFilename)
 		if err != nil {
