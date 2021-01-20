@@ -63,12 +63,12 @@ type roundCowState struct {
 	sdeltas map[basics.Address]map[storagePtr]*storageDelta
 }
 
-func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64) *roundCowState {
+func makeRoundCowState(b roundCowParent, hdr bookkeeping.BlockHeader, prevTimestamp int64, hint int) *roundCowState {
 	return &roundCowState{
 		lookupParent: b,
 		commitParent: nil,
 		proto:        config.Consensus[hdr.CurrentProtocol],
-		mods:         ledgercore.MakeStateDelta(&hdr, prevTimestamp),
+		mods:         ledgercore.MakeStateDelta(&hdr, prevTimestamp, hint),
 		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
 	}
 }
@@ -200,7 +200,7 @@ func (cb *roundCowState) child() *roundCowState {
 		lookupParent: cb,
 		commitParent: cb,
 		proto:        cb.proto,
-		mods:         ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp),
+		mods:         ledgercore.MakeStateDelta(cb.mods.Hdr, cb.mods.PrevTimestamp, 1),
 		sdeltas:      make(map[basics.Address]map[storagePtr]*storageDelta),
 	}
 }

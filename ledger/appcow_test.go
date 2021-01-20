@@ -97,7 +97,7 @@ type modsData struct {
 
 func getCow(creatables []modsData) *roundCowState {
 	cs := &roundCowState{
-		mods:  ledgercore.MakeStateDelta(&bookkeeping.BlockHeader{}, 0),
+		mods:  ledgercore.MakeStateDelta(&bookkeeping.BlockHeader{}, 0, 2),
 		proto: config.Consensus[protocol.ConsensusCurrentVersion],
 	}
 	for _, e := range creatables {
@@ -192,7 +192,7 @@ func TestCowStorage(t *testing.T) {
 	ml := emptyLedger{}
 	var bh bookkeeping.BlockHeader
 	bh.CurrentProtocol = protocol.ConsensusCurrentVersion
-	cow := makeRoundCowState(&ml, bh, 0)
+	cow := makeRoundCowState(&ml, bh, 0, 0)
 	allSptrs, allAddrs := randomAddrApps(10)
 
 	st := makeStateTracker()

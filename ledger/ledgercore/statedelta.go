@@ -79,12 +79,15 @@ type AccountDeltas struct {
 }
 
 // MakeStateDelta creates a new instance of StateDelta
-func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64) StateDelta {
+func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int) StateDelta {
 	return StateDelta{
-		Accts:         AccountDeltas{},
-		Txids:         make(map[transactions.Txid]basics.Round),
-		Txleases:      make(map[Txlease]basics.Round),
-		Creatables:    make(map[basics.CreatableIndex]ModifiedCreatable),
+		Accts: AccountDeltas{
+			accts:      make([]basics.BalanceRecord, 0, hint*2),
+			acctsCache: make(map[basics.Address]int, hint*2),
+		},
+		Txids:         make(map[transactions.Txid]basics.Round, hint),
+		Txleases:      make(map[Txlease]basics.Round, hint),
+		Creatables:    make(map[basics.CreatableIndex]ModifiedCreatable, hint),
 		Hdr:           hdr,
 		PrevTimestamp: prevTimestamp,
 	}

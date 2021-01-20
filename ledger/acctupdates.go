@@ -139,7 +139,6 @@ type accountUpdates struct {
 	dbRound basics.Round
 
 	// deltas stores updates for every round after dbRound.
-	// deltas []map[basics.Address]basics.AccountData
 	deltas []ledgercore.AccountDeltas
 
 	// accounts stores the most recent account state for every
@@ -1358,7 +1357,7 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 	return nil
 }
 
-// accountsUpdateBalances applies the given deltas map to the merkle trie
+// accountsUpdateBalances applies the given accountDeltasWithCount to the merkle trie
 func (au *accountUpdates) accountsUpdateBalances(accountsDeltas accountDeltasWithCount) (err error) {
 	if au.catchpointInterval == 0 {
 		return nil
