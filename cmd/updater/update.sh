@@ -393,7 +393,7 @@ function shutdown_node() {
         if [ -f "${BINDIR}/goal" ]; then
             for DD in "${DATADIRS[@]}"; do
                 if [ -f "${DD}/algod.pid" ] || [ -f "${DD}"/**/kmd.pid ] ; then
-                    echo Stopping node and waiting...
+                    echo "Stopping node with data directory ${DD} and waiting..."
                     run_systemd_action stop "${DD}"
                     "${BINDIR}/goal" node stop -d "${DD}"
                     sleep 5
