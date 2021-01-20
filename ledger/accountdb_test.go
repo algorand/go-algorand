@@ -1143,3 +1143,71 @@ func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
 		})
 	}
 }
+
+func TestAccountDeltasWithCount(t *testing.T) {
+	a := require.New(t)
+
+	ad := accountDeltasWithCount{}
+	data, idx := ad.get(basics.Address{})
+	a.Equal(-1, idx)
+	a.Equal(accountDelta{}, data)
+
+	addr := randomAddress()
+	data, idx = ad.get(addr)
+	a.Equal(-1, idx)
+	a.Equal(accountDelta{}, data)
+
+	a.Equal(0, ad.len())
+	a.Panics(func() { ad.getByIdx(0) })
+
+	sample1 := accountDelta{new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}}
+	ad.upsert(addr, sample1)
+	data, idx = ad.get(addr)
+	a.NotEqual(-1, idx)
+	a.Equal(sample1, data)
+
+	a.Equal(1, ad.len())
+	address, data := ad.getByIdx(0)
+	a.Equal(addr, address)
+	a.Equal(sample1, data)
+
+	sample2 := accountDelta{new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}}
+	ad.upsert(addr, sample2)
+	data, idx = ad.get(addr)
+	a.NotEqual(-1, idx)
+	a.Equal(sample2, data)
+
+	a.Equal(1, ad.len())
+	address, data = ad.getByIdx(0)
+	a.Equal(addr, address)
+	a.Equal(sample2, data)
+
+	ad.update(idx, sample2)
+	data, idx2 := ad.get(addr)
+	a.Equal(idx, idx2)
+	a.Equal(sample2, data)
+
+	a.Equal(1, ad.len())
+	address, data = ad.getByIdx(0)
+	a.Equal(addr, address)
+	a.Equal(sample2, data)
+
+	old1 := persistedAccountData{addr: addr, accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
+	ad.upsertOld(old1)
+	a.Equal(1, ad.len())
+	address, data = ad.getByIdx(0)
+	a.Equal(addr, address)
+	a.Equal(accountDelta{new: sample2.new, old: old1}, data)
+
+	addr1 := randomAddress()
+	old2 := persistedAccountData{addr: addr1, accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
+	ad.upsertOld(old2)
+	a.Equal(2, ad.len())
+	address, data = ad.getByIdx(0)
+	a.Equal(addr, address)
+	a.Equal(accountDelta{new: sample2.new, old: old1}, data)
+
+	address, data = ad.getByIdx(1)
+	a.Equal(addr1, address)
+	a.Equal(accountDelta{old: old2}, data)
+}
