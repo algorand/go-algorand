@@ -147,6 +147,8 @@ type accountDeltasWithCount struct {
 	addresses []basics.Address
 	// cache for addr to deltas index resolution
 	cache map[basics.Address]int
+	// misses holds indices of addresses for which old portion of delta needs to be loaded from disk
+	misses []int
 }
 
 type accountDelta struct {
@@ -201,6 +203,92 @@ func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.Consens
 	return
 }
 
+// makeCompactAccountDeltas takes an array of account map deltas ( one array entry per round ), and compacts the arrays into a single
+// data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
+// It counts the number of changes per round by specifying it in the ndeltas field of the accountDeltaCount/modifiedCreatable.
+func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAccounts lruAccounts) (outAccountDeltas accountDeltasWithCount) {
+	if len(accountDeltas) == 0 {
+		return
+	}
+
+	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
+	size := accountDeltas[0].Len()*len(accountDeltas) + 1
+	outAccountDeltas.cache = make(map[basics.Address]int, size)
+	outAccountDeltas.deltas = make([]accountDelta, 0, size)
+	outAccountDeltas.misses = make([]int, 0, size)
+
+	for _, roundDelta := range accountDeltas {
+		for i := 0; i < roundDelta.Len(); i++ {
+			addr, acctDelta := roundDelta.GetByIdx(i)
+			if prev, idx := outAccountDeltas.get(addr); idx != -1 {
+				outAccountDeltas.update(idx, accountDelta{ // update instead of upsert economizes one map lookup
+					old:     prev.old,
+					new:     acctDelta,
+					ndeltas: prev.ndeltas + 1,
+				})
+			} else {
+				// it's a new entry.
+				newEntry := accountDelta{
+					new:     acctDelta,
+					ndeltas: 1,
+				}
+				if baseAccountData, has := baseAccounts.read(addr); has {
+					newEntry.old = baseAccountData
+					outAccountDeltas.insert(addr, newEntry) // insert instead of upsert economizes one map lookup
+				} else {
+					outAccountDeltas.insertMissing(addr, newEntry)
+				}
+			}
+		}
+	}
+	return
+}
+
+// accountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
+// The round number of the persistedAccountData is not updated by this function, and the caller is responsible
+// for populating this field.
+func (a *accountDeltasWithCount) accountsLoadOld(tx *sql.Tx) (err error) {
+	if len(a.misses) == 0 {
+		return nil
+	}
+	selectStmt, err := tx.Prepare("SELECT rowid, data FROM accountbase WHERE address=?")
+	if err != nil {
+		return
+	}
+	defer selectStmt.Close()
+	var rowid sql.NullInt64
+	var acctDataBuf []byte
+	for _, idx := range a.misses {
+		addr := a.addresses[idx]
+		err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &acctDataBuf)
+		switch err {
+		case nil:
+			if len(acctDataBuf) > 0 {
+				persistedAcctData := &persistedAccountData{addr: addr, rowid: rowid.Int64}
+				err = protocol.Decode(acctDataBuf, &persistedAcctData.accountData)
+				if err != nil {
+					return err
+				}
+				a.updateOld(idx, *persistedAcctData)
+				// a.upsertOld(*persistedAcctData)
+			} else {
+				// to retain backward compatability, we will treat this condition as if we don't have the account.
+				a.updateOld(idx, persistedAccountData{addr: addr, rowid: rowid.Int64})
+				// a.upsertOld(persistedAccountData{addr: addr, rowid: rowid.Int64})
+			}
+		case sql.ErrNoRows:
+			// we don't have that account, just return an empty record.
+			a.updateOld(idx, persistedAccountData{addr: addr})
+			// a.upsertOld(persistedAccountData{addr: addr})
+			err = nil
+		default:
+			// unexpected error - let the caller know that we couldn't complete the operation.
+			return err
+		}
+	}
+	return
+}
+
 // get returns accountDelta by address and its position.
 // if no such entry -1 returned
 func (a *accountDeltasWithCount) get(addr basics.Address) (accountDelta, int) {
@@ -233,7 +321,7 @@ func (a *accountDeltasWithCount) update(idx int, delta accountDelta) {
 	a.deltas[idx] = delta
 }
 
-func (a *accountDeltasWithCount) insert(addr basics.Address, delta accountDelta) {
+func (a *accountDeltasWithCount) insert(addr basics.Address, delta accountDelta) int {
 	last := len(a.deltas)
 	a.deltas = append(a.deltas, delta)
 	a.addresses = append(a.addresses, addr)
@@ -242,6 +330,12 @@ func (a *accountDeltasWithCount) insert(addr basics.Address, delta accountDelta)
 		a.cache = make(map[basics.Address]int)
 	}
 	a.cache[addr] = last
+	return last
+}
+
+func (a *accountDeltasWithCount) insertMissing(addr basics.Address, delta accountDelta) {
+	idx := a.insert(addr, delta)
+	a.misses = append(a.misses, idx)
 }
 
 // upsertOld updates existing or inserts a new partial entry with only old field filled
@@ -252,6 +346,11 @@ func (a *accountDeltasWithCount) upsertOld(old persistedAccountData) {
 		return
 	}
 	a.insert(addr, accountDelta{old: old})
+}
+
+// updateOld updates existing or inserts a new partial entry with only old field filled
+func (a *accountDeltasWithCount) updateOld(idx int, old persistedAccountData) {
+	a.deltas[idx].old = old
 }
 
 // writeCatchpointStagingBalances inserts all the account balances in the provided array into the catchpoint balance staging table catchpointbalances.
@@ -1079,47 +1178,6 @@ func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpda
 		return
 	}
 
-	return
-}
-
-// accountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
-// The round number of the persistedAccountData is not updated by this function, and the caller is responsible
-// for populating this field.
-func accountsLoadOld(tx *sql.Tx, addresses []basics.Address, deltas accountDeltasWithCount) (err error) {
-	if len(addresses) == 0 {
-		return nil
-	}
-	selectStmt, err := tx.Prepare("SELECT rowid, data FROM accountbase WHERE address=?")
-	if err != nil {
-		return
-	}
-	defer selectStmt.Close()
-	var rowid sql.NullInt64
-	var acctDataBuf []byte
-	for _, addr := range addresses {
-		err = selectStmt.QueryRow(addr[:]).Scan(&rowid, &acctDataBuf)
-		switch err {
-		case nil:
-			if len(acctDataBuf) > 0 {
-				persistedAcctData := &persistedAccountData{addr: addr, rowid: rowid.Int64}
-				err = protocol.Decode(acctDataBuf, &persistedAcctData.accountData)
-				if err != nil {
-					return err
-				}
-				deltas.upsertOld(*persistedAcctData)
-			} else {
-				// to retain backward compatability, we will treat this condition as if we don't have the account.
-				deltas.upsertOld(persistedAccountData{addr: addr, rowid: rowid.Int64})
-			}
-		case sql.ErrNoRows:
-			// we don't have that account, just return an empty record.
-			deltas.upsertOld(persistedAccountData{addr: addr})
-			err = nil
-		default:
-			// unexpected error - let the caller know that we couldn't complete the operation.
-			return err
-		}
-	}
 	return
 }
 

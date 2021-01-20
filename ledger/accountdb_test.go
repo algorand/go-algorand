@@ -549,9 +549,8 @@ func TestAccountDBRound(t *testing.T) {
 		ctbsWithDeletes := randomCreatableSampling(i, ctbsList, randomCtbs,
 			expectedDbImage, numElementsPerSegement)
 
-		updatesCnt, needLoadAddresses, _ := compactDeltas([]ledgercore.AccountDeltas{updates}, nil, baseAccounts)
-
-		err = accountsLoadOld(tx, needLoadAddresses, updatesCnt)
+		updatesCnt := makeCompactAccountDeltas([]ledgercore.AccountDeltas{updates}, baseAccounts)
+		err = updatesCnt.accountsLoadOld(tx)
 		require.NoError(t, err)
 		err = totalsNewRounds(tx, []ledgercore.AccountDeltas{updates}, updatesCnt, []ledgercore.AccountTotals{{}}, []config.ConsensusParams{proto})
 		require.NoError(t, err)
@@ -1210,4 +1209,18 @@ func TestAccountDeltasWithCount(t *testing.T) {
 	address, data = ad.getByIdx(1)
 	a.Equal(addr1, address)
 	a.Equal(accountDelta{old: old2}, data)
+
+	ad.updateOld(0, old2)
+	a.Equal(2, ad.len())
+	address, data = ad.getByIdx(0)
+	a.Equal(addr, address)
+	a.Equal(accountDelta{new: sample2.new, old: old2}, data)
+
+	addr2 := randomAddress()
+	idx = ad.insert(addr2, sample2)
+	a.Equal(3, ad.len())
+	a.Equal(2, idx)
+	address, data = ad.getByIdx(idx)
+	a.Equal(addr2, address)
+	a.Equal(sample2, data)
 }

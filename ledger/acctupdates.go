@@ -1847,7 +1847,8 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	// compact all the deltas - when we're trying to persist multiple rounds, we might have the same account
 	// being updated multiple times. When that happen, we can safely omit the intermediate updates.
-	compactDeltas, unavailableBaseAccounts, compactCreatableDeltas := compactDeltas(deltas, creatableDeltas, au.baseAccounts)
+	compactDeltas := makeCompactAccountDeltas(deltas, au.baseAccounts)
+	compactCreatableDeltas := compactCreatableDeltas(creatableDeltas)
 
 	au.accountsMu.RUnlock()
 
@@ -1889,7 +1890,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 			treeTargetRound = dbRound + basics.Round(offset)
 		}
 
-		err = accountsLoadOld(tx, unavailableBaseAccounts, compactDeltas)
+		err = compactDeltas.accountsLoadOld(tx)
 		if err != nil {
 			return err
 		}
@@ -2011,64 +2012,34 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 }
 
-// compactDeltas takes an array of account map deltas ( one array entry per round ), and corresponding creatables array, and compact the arrays into a single
-// map that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes. For both the account deltas as well as for the creatables,
-// it counts the number of changes per round by specifying it in the ndeltas field of the accountDeltaCount/modifiedCreatable. The ndeltas field of the input creatableDeltas is ignored.
-func compactDeltas(accountDeltas []ledgercore.AccountDeltas, creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable, baseAccounts lruAccounts) (outAccountDeltas accountDeltasWithCount, unavailableBaseAccounts []basics.Address, outCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
-	if len(accountDeltas) > 0 {
-		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
-		size := accountDeltas[0].Len()*len(accountDeltas) + 1
-		unavailableBaseAccounts = make([]basics.Address, 0, size)
-		for _, roundDelta := range accountDeltas {
-			for i := 0; i < roundDelta.Len(); i++ {
-				addr, acctDelta := roundDelta.GetByIdx(i)
-				if prev, idx := outAccountDeltas.get(addr); idx != -1 {
-					outAccountDeltas.update(idx, accountDelta{ // update instead of upsert economizes one map lookup
-						old:     prev.old,
-						new:     acctDelta,
-						ndeltas: prev.ndeltas + 1,
-					})
-				} else {
-					// it's a new entry.
-					newEntry := accountDelta{
-						new:     acctDelta,
-						ndeltas: 1,
-					}
-					if baseAccountData, has := baseAccounts.read(addr); has {
-						newEntry.old = baseAccountData
-					} else {
-						unavailableBaseAccounts = append(unavailableBaseAccounts, addr)
-					}
-					outAccountDeltas.insert(addr, newEntry) // insert instead of upsert economizes one map lookup
+// compactCreatableDeltas takes an array of creatables map deltas ( one array entry per round ), and compact the array into a single
+// map that contains all the deltas changes. While doing that, the function eliminate any intermediate changes.
+// It counts the number of changes per round by specifying it in the ndeltas field of the modifiedCreatable.
+func compactCreatableDeltas(creatableDeltas []map[basics.CreatableIndex]ledgercore.ModifiedCreatable) (outCreatableDeltas map[basics.CreatableIndex]ledgercore.ModifiedCreatable) {
+	if len(creatableDeltas) == 0 {
+		return
+	}
+	// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
+	outCreatableDeltas = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1+len(creatableDeltas[0])*len(creatableDeltas))
+	for _, roundCreatable := range creatableDeltas {
+		for creatableIdx, creatable := range roundCreatable {
+			if prev, has := outCreatableDeltas[creatableIdx]; has {
+				outCreatableDeltas[creatableIdx] = ledgercore.ModifiedCreatable{
+					Ctype:   creatable.Ctype,
+					Created: creatable.Created,
+					Creator: creatable.Creator,
+					Ndeltas: prev.Ndeltas + 1,
+				}
+			} else {
+				outCreatableDeltas[creatableIdx] = ledgercore.ModifiedCreatable{
+					Ctype:   creatable.Ctype,
+					Created: creatable.Created,
+					Creator: creatable.Creator,
+					Ndeltas: 1,
 				}
 			}
 		}
 	}
-
-	if len(creatableDeltas) > 0 {
-		// the sizes of the maps here aren't super accurate, but would hopefully be a rough estimate for a reasonable starting point.
-		outCreatableDeltas = make(map[basics.CreatableIndex]ledgercore.ModifiedCreatable, 1+len(creatableDeltas[0])*len(creatableDeltas))
-		for _, roundCreatable := range creatableDeltas {
-			for creatableIdx, creatable := range roundCreatable {
-				if prev, has := outCreatableDeltas[creatableIdx]; has {
-					outCreatableDeltas[creatableIdx] = ledgercore.ModifiedCreatable{
-						Ctype:   creatable.Ctype,
-						Created: creatable.Created,
-						Creator: creatable.Creator,
-						Ndeltas: prev.Ndeltas + 1,
-					}
-				} else {
-					outCreatableDeltas[creatableIdx] = ledgercore.ModifiedCreatable{
-						Ctype:   creatable.Ctype,
-						Created: creatable.Created,
-						Creator: creatable.Creator,
-						Ndeltas: 1,
-					}
-				}
-			}
-		}
-	}
-
 	return
 }
 

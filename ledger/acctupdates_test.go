@@ -1362,7 +1362,7 @@ func BenchmarkCompactDeltas(b *testing.B) {
 		baseAccounts.init(nil, 100, 80)
 		b.ResetTimer()
 
-		compactDeltas(accountDeltas, []map[basics.CreatableIndex]ledgercore.ModifiedCreatable{{}}, baseAccounts)
+		makeCompactAccountDeltas(accountDeltas, baseAccounts)
 
 	})
 }
@@ -1379,11 +1379,12 @@ func TestCompactDeltas(t *testing.T) {
 	creatableDeltas[0][100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: true}
 	var baseAccounts lruAccounts
 	baseAccounts.init(nil, 100, 80)
-	outAccountDeltas, misssingAccounts, outCreatableDeltas := compactDeltas(accountDeltas, creatableDeltas, baseAccounts)
+	outAccountDeltas := makeCompactAccountDeltas(accountDeltas, baseAccounts)
+	outCreatableDeltas := compactCreatableDeltas(creatableDeltas)
 
 	require.Equal(t, accountDeltas[0].Len(), outAccountDeltas.len())
 	require.Equal(t, len(creatableDeltas[0]), len(outCreatableDeltas))
-	require.Equal(t, accountDeltas[0].Len(), len(misssingAccounts))
+	require.Equal(t, accountDeltas[0].Len(), len(outAccountDeltas.misses))
 
 	delta, _ := outAccountDeltas.get(addrs[0])
 	require.Equal(t, persistedAccountData{}, delta.old)
@@ -1400,7 +1401,8 @@ func TestCompactDeltas(t *testing.T) {
 	creatableDeltas[1][101] = ledgercore.ModifiedCreatable{Creator: addrs[4], Created: true}
 
 	baseAccounts.write(persistedAccountData{addr: addrs[0], accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
-	outAccountDeltas, misssingAccounts, outCreatableDeltas = compactDeltas(accountDeltas, creatableDeltas, baseAccounts)
+	outAccountDeltas = makeCompactAccountDeltas(accountDeltas, baseAccounts)
+	outCreatableDeltas = compactCreatableDeltas(creatableDeltas)
 
 	require.Equal(t, 2, outAccountDeltas.len())
 	require.Equal(t, 2, len(outCreatableDeltas))
