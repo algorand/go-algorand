@@ -69,7 +69,7 @@ func (p unauthenticatedProposal) value() proposalValue {
 	return proposalValue{
 		OriginalPeriod:   p.OriginalPeriod,
 		OriginalProposer: p.OriginalProposer,
-		BlockDigest:      p.Compressed().Digest(),
+		BlockDigest:      p.Digest(),
 		EncodingDigest:   crypto.HashObj(p.Compressed()),
 	}
 }
