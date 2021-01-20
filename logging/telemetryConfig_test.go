@@ -107,3 +107,15 @@ func Test_SanitizeTelemetryString(t *testing.T) {
 		require.Equal(t, test.expected, SanitizeTelemetryString(test.input, test.parts))
 	}
 }
+
+func TestLoadTelemetryConfig(t *testing.T) {
+	testLoggingConfigFileName := "../test/testdata/configs/logging/logging.config.test1"
+	tc, err := loadTelemetryConfig(testLoggingConfigFileName)
+	require.NoError(t, err)
+	require.Equal(t, true, tc.Enable)
+	// make sure the user name was loaded from the specified file
+	require.Equal(t, "test-user-name", tc.UserName)
+	// ensure we know how to default correctly if some of the fields in the configuration field aren't specified.
+	require.Equal(t, createTelemetryConfig().Password, tc.Password)
+
+}
