@@ -201,12 +201,14 @@ func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.Consens
 	return
 }
 
-func (a *accountDeltasWithCount) get(addr basics.Address) (accountDelta, bool) {
+// get returns accountDelta by address and its position.
+// if no such entry -1 returned
+func (a *accountDeltasWithCount) get(addr basics.Address) (accountDelta, int) {
 	idx, ok := a.cache[addr]
 	if !ok {
-		return accountDelta{}, false
+		return accountDelta{}, -1
 	}
-	return a.deltas[idx], true
+	return a.deltas[idx], idx
 }
 
 func (a *accountDeltasWithCount) len() int {
@@ -224,6 +226,11 @@ func (a *accountDeltasWithCount) upsert(addr basics.Address, delta accountDelta)
 		return
 	}
 	a.insert(addr, delta)
+}
+
+// update replaces specific entry by idx
+func (a *accountDeltasWithCount) update(idx int, delta accountDelta) {
+	a.deltas[idx] = delta
 }
 
 func (a *accountDeltasWithCount) insert(addr basics.Address, delta accountDelta) {

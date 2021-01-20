@@ -2022,8 +2022,8 @@ func compactDeltas(accountDeltas []ledgercore.AccountDeltas, creatableDeltas []m
 		for _, roundDelta := range accountDeltas {
 			for i := 0; i < roundDelta.Len(); i++ {
 				addr, acctDelta := roundDelta.GetByIdx(i)
-				if prev, has := outAccountDeltas.get(addr); has {
-					outAccountDeltas.upsert(addr, accountDelta{
+				if prev, idx := outAccountDeltas.get(addr); idx != -1 {
+					outAccountDeltas.update(idx, accountDelta{ // update instead of upsert economizes one map lookup
 						old:     prev.old,
 						new:     acctDelta,
 						ndeltas: prev.ndeltas + 1,

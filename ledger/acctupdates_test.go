@@ -1548,13 +1548,13 @@ func TestAccountDeltasWithCount(t *testing.T) {
 	a := require.New(t)
 
 	ad := accountDeltasWithCount{}
-	data, ok := ad.get(basics.Address{})
-	a.False(ok)
+	data, idx := ad.get(basics.Address{})
+	a.Equal(-1, idx)
 	a.Equal(accountDelta{}, data)
 
 	addr := randomAddress()
-	data, ok = ad.get(addr)
-	a.False(ok)
+	data, idx = ad.get(addr)
+	a.Equal(-1, idx)
 	a.Equal(accountDelta{}, data)
 
 	a.Equal(0, ad.len())
@@ -1562,8 +1562,8 @@ func TestAccountDeltasWithCount(t *testing.T) {
 
 	sample1 := accountDelta{new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 123}}}
 	ad.upsert(addr, sample1)
-	data, ok = ad.get(addr)
-	a.True(ok)
+	data, idx = ad.get(addr)
+	a.NotEqual(-1, idx)
 	a.Equal(sample1, data)
 
 	a.Equal(1, ad.len())
@@ -1573,8 +1573,18 @@ func TestAccountDeltasWithCount(t *testing.T) {
 
 	sample2 := accountDelta{new: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 456}}}
 	ad.upsert(addr, sample2)
-	data, ok = ad.get(addr)
-	a.True(ok)
+	data, idx = ad.get(addr)
+	a.NotEqual(-1, idx)
+	a.Equal(sample2, data)
+
+	a.Equal(1, ad.len())
+	address, data = ad.getByIdx(0)
+	a.Equal(addr, address)
+	a.Equal(sample2, data)
+
+	ad.update(idx, sample2)
+	data, idx2 := ad.get(addr)
+	a.Equal(idx, idx2)
 	a.Equal(sample2, data)
 
 	a.Equal(1, ad.len())
