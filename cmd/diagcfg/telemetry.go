@@ -55,7 +55,7 @@ func maybeUpdateDataDirFromEnv() {
 
 func readTelemetryConfigOrExit() logging.TelemetryConfig {
 	maybeUpdateDataDirFromEnv()
-	cfg, err := logging.ReadTelemetryConfigOrDefault(&dataDir, "")
+	cfg, err := logging.ReadTelemetryConfigOrDefault(dataDir, "")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, telemetryConfigReadError, err)
 		os.Exit(1)
@@ -112,7 +112,7 @@ var telemetryStatusCmd = &cobra.Command{
 	Long:  `Print the node's telemetry status`,
 	Run: func(cmd *cobra.Command, args []string) {
 		maybeUpdateDataDirFromEnv()
-		cfg, err := logging.ReadTelemetryConfigOrDefault(&dataDir, "")
+		cfg, err := logging.ReadTelemetryConfigOrDefault(dataDir, "")
 
 		// If error loading config, can't disable / no need to disable
 		if err != nil {
