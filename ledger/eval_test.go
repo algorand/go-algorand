@@ -82,7 +82,7 @@ func TestBlockEvaluator(t *testing.T) {
 
 	// Correct signature should work
 	st := txn.Sign(keys[0])
-	err = eval.Transaction(st, transactions.ApplyData{})
+	err = eval.Transaction(st)
 	require.NoError(t, err)
 
 	selfTxn := transactions.Transaction{
@@ -99,7 +99,7 @@ func TestBlockEvaluator(t *testing.T) {
 			Amount:   basics.MicroAlgos{Raw: 100},
 		},
 	}
-	err = eval.Transaction(selfTxn.Sign(keys[2]), transactions.ApplyData{})
+	err = eval.Transaction(selfTxn.Sign(keys[2]))
 	require.NoError(t, err)
 
 	validatedBlock, err := eval.GenerateBlock()
@@ -180,7 +180,7 @@ func TestRekeying(t *testing.T) {
 		require.NoError(t, err)
 
 		for _, stxn := range stxns {
-			err = eval.Transaction(stxn, transactions.ApplyData{})
+			err = eval.Transaction(stxn)
 			if err != nil {
 				return err
 			}
@@ -241,40 +241,36 @@ func TestPrepareEvalParams(t *testing.T) {
 	}
 
 	// Create some sample transactions
-	payment := transactions.SignedTxnWithAD{
-		SignedTxn: transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: protocol.PaymentTx,
-				Header: transactions.Header{
-					Sender: basics.Address{1, 2, 3, 4},
-				},
-				PaymentTxnFields: transactions.PaymentTxnFields{
-					Receiver: basics.Address{4, 3, 2, 1},
-					Amount:   basics.MicroAlgos{Raw: 100},
-				},
+	payment := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender: basics.Address{1, 2, 3, 4},
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: basics.Address{4, 3, 2, 1},
+				Amount:   basics.MicroAlgos{Raw: 100},
 			},
 		},
 	}
 
-	appcall1 := transactions.SignedTxnWithAD{
-		SignedTxn: transactions.SignedTxn{
-			Txn: transactions.Transaction{
-				Type: protocol.ApplicationCallTx,
-				Header: transactions.Header{
-					Sender: basics.Address{1, 2, 3, 4},
-				},
-				ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
-					ApplicationID: basics.AppIndex(1),
-				},
+	appcall1 := transactions.SignedTxn{
+		Txn: transactions.Transaction{
+			Type: protocol.ApplicationCallTx,
+			Header: transactions.Header{
+				Sender: basics.Address{1, 2, 3, 4},
+			},
+			ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+				ApplicationID: basics.AppIndex(1),
 			},
 		},
 	}
 
 	appcall2 := appcall1
-	appcall2.SignedTxn.Txn.ApplicationCallTxnFields.ApplicationID = basics.AppIndex(2)
+	appcall2.Txn.ApplicationCallTxnFields.ApplicationID = basics.AppIndex(2)
 
 	type evalTestCase struct {
-		group []transactions.SignedTxnWithAD
+		group []transactions.SignedTxn
 
 		// indicates if prepareAppEvaluators should return a non-nil
 		// appTealEvaluator for the txn at index i
@@ -283,15 +279,15 @@ func TestPrepareEvalParams(t *testing.T) {
 
 	// Create some groups with these transactions
 	cases := []evalTestCase{
-		{[]transactions.SignedTxnWithAD{payment}, []bool{false}},
-		{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}},
-		{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}},
-		{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}},
-		{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}},
-		{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}},
-		{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}},
-		{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}},
-		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}},
+		{[]transactions.SignedTxn{payment}, []bool{false}},
+		{[]transactions.SignedTxn{appcall1}, []bool{true}},
+		{[]transactions.SignedTxn{payment, payment}, []bool{false, false}},
+		{[]transactions.SignedTxn{appcall1, payment}, []bool{true, false}},
+		{[]transactions.SignedTxn{payment, appcall1}, []bool{false, true}},
+		{[]transactions.SignedTxn{appcall1, appcall2}, []bool{true, true}},
+		{[]transactions.SignedTxn{appcall1, appcall2, appcall1}, []bool{true, true, true}},
+		{[]transactions.SignedTxn{payment, appcall1, payment}, []bool{false, true, false}},
+		{[]transactions.SignedTxn{appcall1, payment, appcall2}, []bool{true, false, true}},
 	}
 
 	for i, testCase := range cases {
@@ -299,22 +295,15 @@ func TestPrepareEvalParams(t *testing.T) {
 			res := eval.prepareEvalParams(testCase.group)
 			require.Equal(t, len(res), len(testCase.group))
 
-			// Compute the expected transaction group without ApplyData for
-			// the test case
-			expGroupNoAD := make([]transactions.SignedTxn, len(testCase.group))
-			for j := range testCase.group {
-				expGroupNoAD[j] = testCase.group[j].SignedTxn
-			}
-
 			// Ensure non app calls have a nil evaluator, and that non-nil
 			// evaluators point to the right transactions and values
 			for j, present := range testCase.expected {
 				if present {
 					require.NotNil(t, res[j])
 					require.Equal(t, res[j].GroupIndex, j)
-					require.Equal(t, res[j].TxnGroup, expGroupNoAD)
+					require.Equal(t, res[j].TxnGroup, testCase.group)
 					require.Equal(t, *res[j].Proto, eval.proto)
-					require.Equal(t, *res[j].Txn, testCase.group[j].SignedTxn)
+					require.Equal(t, *res[j].Txn, testCase.group[j])
 				} else {
 					require.Nil(t, res[j])
 				}
@@ -404,23 +393,27 @@ ok:
 	stxn1 := appcall1.Sign(keys[0])
 	stxn2 := appcall2.Sign(keys[0])
 
-	g := []transactions.SignedTxnWithAD{
-		{
-			SignedTxn: stxn1,
-			ApplyData: transactions.ApplyData{
-				EvalDelta: basics.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
-					"creator": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
-				}},
+	g := []transactions.SignedTxn{
+		stxn1,
+		stxn2,
+	}
+
+	ad1 := transactions.ApplyData{
+		EvalDelta: basics.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
+			"creator": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
 		},
-		{
-			SignedTxn: stxn2,
-			ApplyData: transactions.ApplyData{
-				EvalDelta: basics.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
-					"caller": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
-				}},
+	}
+
+	ad2 := transactions.ApplyData{
+		EvalDelta: basics.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
+			"caller": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
 		},
 	}
 	err = eval.transactionGroup(g)
+	if err == nil {
+		require.Equal(t, eval.block.Payset[0].ApplyData, ad1)
+		require.Equal(t, eval.block.Payset[1].ApplyData, ad2)
+	}
 	return eval, addrs[0], err
 }
 
@@ -528,7 +521,7 @@ func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
 			},
 		}
 		st := txn.Sign(keys[sender])
-		err = bev.Transaction(st, transactions.ApplyData{})
+		err = bev.Transaction(st)
 		require.NoError(b, err)
 	}
 
