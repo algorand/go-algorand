@@ -18,6 +18,8 @@ package logging
 
 import (
 	"fmt"
+	"github.com/algorand/go-algorand/config"
+	"os"
 	"testing"
 	"time"
 
@@ -314,4 +316,20 @@ func TestLogHistoryLevels(t *testing.T) {
 	a.NotNil(data[4]["log"]) // Error
 	a.Nil(data[5]["log"])    // Panic - this is stack trace
 	a.NotNil(data[6]["log"]) // Panic
+}
+
+func TestReadTelemetryConfigOrDefaultNoDataDir(t *testing.T) {
+	a := require.New(t)
+	tempDir := os.TempDir()
+	originalGlobalConfigFileRoot, _ := config.GetGlobalConfigFileRoot()
+	config.SetGlobalConfigFileRoot(tempDir)
+
+	cfg, err := ReadTelemetryConfigOrDefault("", "")
+	config.SetGlobalConfigFileRoot(originalGlobalConfigFileRoot)
+
+	a.Nil(err)
+	a.NotNil(cfg)
+	a.NotNil(cfg.UserName)
+	a.NotNil(cfg.Password)
+	a.NotNil(cfg.GUID)
 }
