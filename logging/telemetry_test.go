@@ -18,15 +18,16 @@ package logging
 
 import (
 	"fmt"
-	"github.com/algorand/go-algorand/config"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 )
 
