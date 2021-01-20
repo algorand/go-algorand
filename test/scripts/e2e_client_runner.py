@@ -285,10 +285,16 @@ def goal_network_stop(netdir, env, normal_cleanup=False):
     logger.info('stop network in %s', netdir)
     try:
         xrun(['goal', 'network', 'stop', '-r', netdir], timeout=10)
-        algodata = env['ALGORAND_DATA']
-        xrun(['goal', 'kmd', 'stop', '-d', algodata], timeout=5)
     except Exception as e:
         logger.error('error stopping network', exc_info=True)
+        if normal_cleanup:
+            raise e
+    try:
+        algodata = env['ALGORAND_DATA']
+        logger.info('stop kmd in %s', algodata)
+        xrun(['goal', 'kmd', 'stop', '-d', algodata], timeout=5)
+    except Exception as e:
+        logger.error('error stopping kmd', exc_info=True)
         if normal_cleanup:
             raise e
     already_stopped = True
@@ -389,7 +395,7 @@ def main():
     retcode = 0
     xrun(['goal', 'network', 'create', '-r', netdir, '-n', 'tbd', '-t', os.path.join(gopath, 'src/github.com/algorand/go-algorand/test/testdata/nettemplates/TwoNodes50EachFuture.json')], timeout=90)
     xrun(['goal', 'network', 'start', '-r', netdir], timeout=90)
-    atexit.register(goal_network_stop, env, netdir)
+    atexit.register(goal_network_stop, netdir, env)
 
     env['ALGORAND_DATA'] = os.path.join(netdir, 'Node')
     env['ALGORAND_DATA2'] = os.path.join(netdir, 'Primary')
