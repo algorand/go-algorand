@@ -69,13 +69,24 @@ function install_windows_shellcheck() {
 }
 
 if [ "${OS}" = "linux" ]; then
+    DISTRIB=$("$SCRIPTPATH"/distribtype.sh)
     if ! which sudo > /dev/null; then
-        apt-get update
-        apt-get -y install sudo
+        if [ "${DISTRIB}" = "ubuntu" ]; then
+            apt-get update
+            apt-get -y install sudo
+        elif [ "${DISTRIB}" = "arch" ]; then
+            pacman -Syy 
+            pacman -S sudo
+        fi
     fi
-
-    sudo apt-get update
-    sudo apt-get install -y libboost-all-dev expect jq autoconf shellcheck sqlite3 python3-venv
+    
+    if [ "${DISTRIB}" = "ubuntu" ]; then
+        sudo apt-get update
+        sudo apt-get install -y libboost-all-dev expect jq autoconf shellcheck sqlite3 python3-venv
+    elif [ "${DISTRIB}" = "arch" ]; then
+        pacman -Syy
+        pacman -S boost boost-libs expect jq autoconf shellcheck sqlite python-virtualenv
+    fi
 elif [ "${OS}" = "darwin" ]; then
     brew update
     brew tap homebrew/cask
