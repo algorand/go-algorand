@@ -133,8 +133,9 @@ func loadTelemetryConfig(path string) (TelemetryConfig, error) {
 		return createTelemetryConfig(), err
 	}
 	defer f.Close()
-	cfg := createTelemetryConfig()
+	var cfg TelemetryConfig
 	var marshaledConfig MarshalingTelemetryConfig
+	marshaledConfig.TelemetryConfig = createTelemetryConfig()
 	dec := json.NewDecoder(f)
 	err = dec.Decode(&marshaledConfig)
 	cfg = marshaledConfig.TelemetryConfig
