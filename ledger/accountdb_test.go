@@ -695,10 +695,10 @@ func generateRandomTestingAccountBalances(numAccounts int) (updates map[basics.A
 	for i := 0; i < numAccounts; i++ {
 		addr := randomAddress()
 		updates[addr] = basics.AccountData{
-			MicroAlgos:         basics.MicroAlgos{Raw: 0x000ffffffffffffff},
+			MicroAlgos:         basics.MicroAlgos{Raw: 0x000ffffffffffffff / uint64(numAccounts)},
 			Status:             basics.NotParticipating,
 			RewardsBase:        uint64(i),
-			RewardedMicroAlgos: basics.MicroAlgos{Raw: 0x000ffffffffffffff},
+			RewardedMicroAlgos: basics.MicroAlgos{Raw: 0x000ffffffffffffff / uint64(numAccounts)},
 			VoteID:             secrets.OneTimeSignatureVerifier,
 			SelectionID:        pubVrfKey,
 			VoteFirstValid:     basics.Round(0x000ffffffffffffff),
