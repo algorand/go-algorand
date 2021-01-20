@@ -325,12 +325,13 @@ func TestReadTelemetryConfigOrDefaultNoDataDir(t *testing.T) {
 	config.SetGlobalConfigFileRoot(tempDir)
 
 	cfg, err := ReadTelemetryConfigOrDefault("", "")
+	defaultCfgSettings := createTelemetryConfig()
 	config.SetGlobalConfigFileRoot(originalGlobalConfigFileRoot)
 
 	a.Nil(err)
 	a.NotNil(cfg)
-	a.NotNil(cfg.UserName)
-	a.NotNil(cfg.Password)
-	a.NotNil(cfg.GUID)
-	a.NotEqual(t, TelemetryConfig{}, cfg)
+	a.NotEqual(TelemetryConfig{}, cfg)
+	a.Equal(defaultCfgSettings.UserName, cfg.UserName)
+	a.Equal(defaultCfgSettings.Password, cfg.Password)
+	a.Equal(len(defaultCfgSettings.GUID), len(cfg.GUID))
 }
