@@ -24,7 +24,7 @@ ESCROWV2=$(${gcmd} clerk compile "${TEMPDIR}/simple.teal" -o "${TEMPDIR}/simple.
 
 # Fund v1 escrow, v2 escrow, and ACCOUNTD
 ACCOUNTD=$(${gcmd} account new|awk '{ print $6 }')
-${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ESCROWV1}"
+${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ESCROWV1}" --noteb64 /v8AAAAAAP/////+/g==
 ${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ESCROWV2}"
 ${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ACCOUNTD}"
 
@@ -121,4 +121,3 @@ if [ "$BALANCEB" -ne 400000 ]; then
     date "+e2e_subs/rekey.sh FAIL wanted balance=400000 but got ${BALANCEB} %Y%m%d_%H%M%S"
     false
 fi
-
