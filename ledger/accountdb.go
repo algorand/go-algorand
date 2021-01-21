@@ -137,10 +137,10 @@ type persistedAccountData struct {
 	round basics.Round
 }
 
-// accountDeltasWithCount is an extention to ledgercore.AccountDeltas that is being used by the commitRound function for counting the
+// compactAccountDeltas and accountDelta is an extention to ledgercore.AccountDeltas that is being used by the commitRound function for counting the
 // number of changes we've made per account. The ndeltas is used exclusively for consistency checking - making sure that
 // all the pending changes were written and that there are no outstanding writes missing.
-type accountDeltasWithCount struct {
+type compactAccountDeltas struct {
 	// actual data
 	deltas []accountDelta
 	// addresses for deltas
@@ -203,10 +203,10 @@ func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.Consens
 	return
 }
 
-// makeCompactAccountDeltas takes an array of account map deltas ( one array entry per round ), and compacts the arrays into a single
+// makeCompactAccountDeltas takes an array of account AccountDeltas ( one array entry per round ), and compacts the arrays into a single
 // data structure that contains all the account deltas changes. While doing that, the function eliminate any intermediate account changes.
 // It counts the number of changes per round by specifying it in the ndeltas field of the accountDeltaCount/modifiedCreatable.
-func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAccounts lruAccounts) (outAccountDeltas accountDeltasWithCount) {
+func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAccounts lruAccounts) (outAccountDeltas compactAccountDeltas) {
 	if len(accountDeltas) == 0 {
 		return
 	}
@@ -247,7 +247,7 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAcco
 // accountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
 // The round number of the persistedAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
-func (a *accountDeltasWithCount) accountsLoadOld(tx *sql.Tx) (err error) {
+func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 	if len(a.misses) == 0 {
 		return nil
 	}
@@ -291,7 +291,7 @@ func (a *accountDeltasWithCount) accountsLoadOld(tx *sql.Tx) (err error) {
 
 // get returns accountDelta by address and its position.
 // if no such entry -1 returned
-func (a *accountDeltasWithCount) get(addr basics.Address) (accountDelta, int) {
+func (a *compactAccountDeltas) get(addr basics.Address) (accountDelta, int) {
 	idx, ok := a.cache[addr]
 	if !ok {
 		return accountDelta{}, -1
@@ -299,16 +299,16 @@ func (a *accountDeltasWithCount) get(addr basics.Address) (accountDelta, int) {
 	return a.deltas[idx], idx
 }
 
-func (a *accountDeltasWithCount) len() int {
+func (a *compactAccountDeltas) len() int {
 	return len(a.deltas)
 }
 
-func (a *accountDeltasWithCount) getByIdx(i int) (basics.Address, accountDelta) {
+func (a *compactAccountDeltas) getByIdx(i int) (basics.Address, accountDelta) {
 	return a.addresses[i], a.deltas[i]
 }
 
 // upsert updates existing or inserts a new entry
-func (a *accountDeltasWithCount) upsert(addr basics.Address, delta accountDelta) {
+func (a *compactAccountDeltas) upsert(addr basics.Address, delta accountDelta) {
 	if idx, exist := a.cache[addr]; exist { // nil map lookup is OK
 		a.deltas[idx] = delta
 		return
@@ -317,11 +317,11 @@ func (a *accountDeltasWithCount) upsert(addr basics.Address, delta accountDelta)
 }
 
 // update replaces specific entry by idx
-func (a *accountDeltasWithCount) update(idx int, delta accountDelta) {
+func (a *compactAccountDeltas) update(idx int, delta accountDelta) {
 	a.deltas[idx] = delta
 }
 
-func (a *accountDeltasWithCount) insert(addr basics.Address, delta accountDelta) int {
+func (a *compactAccountDeltas) insert(addr basics.Address, delta accountDelta) int {
 	last := len(a.deltas)
 	a.deltas = append(a.deltas, delta)
 	a.addresses = append(a.addresses, addr)
@@ -333,13 +333,13 @@ func (a *accountDeltasWithCount) insert(addr basics.Address, delta accountDelta)
 	return last
 }
 
-func (a *accountDeltasWithCount) insertMissing(addr basics.Address, delta accountDelta) {
+func (a *compactAccountDeltas) insertMissing(addr basics.Address, delta accountDelta) {
 	idx := a.insert(addr, delta)
 	a.misses = append(a.misses, idx)
 }
 
 // upsertOld updates existing or inserts a new partial entry with only old field filled
-func (a *accountDeltasWithCount) upsertOld(old persistedAccountData) {
+func (a *compactAccountDeltas) upsertOld(old persistedAccountData) {
 	addr := old.addr
 	if idx, exist := a.cache[addr]; exist {
 		a.deltas[idx].old = old
@@ -349,7 +349,7 @@ func (a *accountDeltasWithCount) upsertOld(old persistedAccountData) {
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
-func (a *accountDeltasWithCount) updateOld(idx int, old persistedAccountData) {
+func (a *compactAccountDeltas) updateOld(idx int, old persistedAccountData) {
 	a.deltas[idx].old = old
 }
 
@@ -1028,7 +1028,7 @@ func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 
 // accountsNewRound updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
 // The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
-func accountsNewRound(tx *sql.Tx, updates accountDeltasWithCount, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (updatedAccounts []persistedAccountData, err error) {
+func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (updatedAccounts []persistedAccountData, err error) {
 
 	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteByRowIDStmt, insertStmt, updateStmt *sql.Stmt
 
@@ -1136,7 +1136,7 @@ func accountsNewRound(tx *sql.Tx, updates accountDeltasWithCount, creatables map
 }
 
 // totalsNewRounds updates the accountsTotals by applying series of round changes
-func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpdates accountDeltasWithCount, accountTotals []ledgercore.AccountTotals, protos []config.ConsensusParams) (err error) {
+func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpdates compactAccountDeltas, accountTotals []ledgercore.AccountTotals, protos []config.ConsensusParams) (err error) {
 	var ot basics.OverflowTracker
 	totals, err := accountsTotals(tx, false)
 	if err != nil {

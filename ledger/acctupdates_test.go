@@ -1060,7 +1060,7 @@ func TestListCreatables(t *testing.T) {
 	// ******* All results are obtained from the database. Empty cache *******
 	// ******* No deletes	                                           *******
 	// sync with the database
-	var updates accountDeltasWithCount
+	var updates compactAccountDeltas
 	_, err = accountsNewRound(tx, updates, ctbsWithDeletes, proto, basics.Round(1))
 	require.NoError(t, err)
 	// nothing left in cache
@@ -1239,7 +1239,7 @@ func BenchmarkLargeMerkleTrieRebuild(b *testing.B) {
 	// at this point, the database was created. We want to fill the accounts data
 	accountsNumber := 6000000 * b.N
 	for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
-		var updates accountDeltasWithCount
+		var updates compactAccountDeltas
 		for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 			addr := randomAddress()
 			acctData := basics.AccountData{}
@@ -1311,7 +1311,7 @@ func BenchmarkLargeCatchpointWriting(b *testing.B) {
 	accountsNumber := 6000000 * b.N
 	err = ml.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		for i := 0; i < accountsNumber-5-2; { // subtract the account we've already created above, plus the sink/reward
-			var updates accountDeltasWithCount
+			var updates compactAccountDeltas
 			for k := 0; i < accountsNumber-5-2 && k < 1024; k++ {
 				addr := randomAddress()
 				acctData := basics.AccountData{}

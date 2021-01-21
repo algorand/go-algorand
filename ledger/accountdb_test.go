@@ -1143,10 +1143,10 @@ func BenchmarkWriteCatchpointStagingBalances(b *testing.B) {
 	}
 }
 
-func TestAccountDeltasWithCount(t *testing.T) {
+func TestCompactAccountDeltas(t *testing.T) {
 	a := require.New(t)
 
-	ad := accountDeltasWithCount{}
+	ad := compactAccountDeltas{}
 	data, idx := ad.get(basics.Address{})
 	a.Equal(-1, idx)
 	a.Equal(accountDelta{}, data)

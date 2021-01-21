@@ -1357,8 +1357,8 @@ func (au *accountUpdates) deleteStoredCatchpoints(ctx context.Context, dbQueries
 	return nil
 }
 
-// accountsUpdateBalances applies the given accountDeltasWithCount to the merkle trie
-func (au *accountUpdates) accountsUpdateBalances(accountsDeltas accountDeltasWithCount) (err error) {
+// accountsUpdateBalances applies the given compactAccountDeltas to the merkle trie
+func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDeltas) (err error) {
 	if au.catchpointInterval == 0 {
 		return nil
 	}
