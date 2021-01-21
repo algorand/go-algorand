@@ -48,7 +48,7 @@ type Txlease struct {
 // StateDelta describes the delta between a given round to the previous round
 type StateDelta struct {
 	// modified accounts
-	Accts map[basics.Address]basics.AccountData
+	Accts AccountDeltas
 
 	// new Txids for the txtail and TxnCounter, mapped to txn.LastValid
 	Txids map[transactions.Txid]basics.Round
@@ -62,10 +62,90 @@ type StateDelta struct {
 	// new block header; read-only
 	Hdr *bookkeeping.BlockHeader
 
-	// last round for which we have seen a compact cert.
-	// zero if no compact cert seen.
-	CompactCertSeen basics.Round
+	// next round for which we expect a compact cert.
+	// zero if no compact cert is expected.
+	CompactCertNext basics.Round
 
 	// previous block timestamp
 	PrevTimestamp int64
+}
+
+// AccountDeltas stores ordered accounts and allows fast lookup by address
+type AccountDeltas struct {
+	// actual data
+	accts []basics.BalanceRecord
+	// cache for addr to deltas index resolution
+	acctsCache map[basics.Address]int
+}
+
+// MakeStateDelta creates a new instance of StateDelta
+func MakeStateDelta(hdr *bookkeeping.BlockHeader, prevTimestamp int64, hint int) StateDelta {
+	return StateDelta{
+		Accts: AccountDeltas{
+			accts:      make([]basics.BalanceRecord, 0, hint*2),
+			acctsCache: make(map[basics.Address]int, hint*2),
+		},
+		Txids:         make(map[transactions.Txid]basics.Round, hint),
+		Txleases:      make(map[Txlease]basics.Round, hint),
+		Creatables:    make(map[basics.CreatableIndex]ModifiedCreatable, hint),
+		Hdr:           hdr,
+		PrevTimestamp: prevTimestamp,
+	}
+}
+
+// Get lookups AccountData by address
+func (ad *AccountDeltas) Get(addr basics.Address) (basics.AccountData, bool) {
+	idx, ok := ad.acctsCache[addr]
+	if !ok {
+		return basics.AccountData{}, false
+	}
+	return ad.accts[idx].AccountData, true
+}
+
+// ModifiedAccounts returns list of addresses of modified accounts
+func (ad *AccountDeltas) ModifiedAccounts() []basics.Address {
+	result := make([]basics.Address, len(ad.accts))
+	for i := 0; i < len(ad.accts); i++ {
+		result[i] = ad.accts[i].Addr
+	}
+	return result
+}
+
+// MergeAccounts applies other accounts into this StateDelta accounts
+func (ad *AccountDeltas) MergeAccounts(other AccountDeltas) {
+	for new := range other.accts {
+		ad.upsert(other.accts[new])
+	}
+}
+
+// Len returns number of stored accounts
+func (ad *AccountDeltas) Len() int {
+	return len(ad.accts)
+}
+
+// GetByIdx returns address and AccountData
+// It does NOT check boundaries.
+func (ad *AccountDeltas) GetByIdx(i int) (basics.Address, basics.AccountData) {
+	return ad.accts[i].Addr, ad.accts[i].AccountData
+}
+
+// Upsert adds new or updates existing account account
+func (ad *AccountDeltas) Upsert(addr basics.Address, data basics.AccountData) {
+	ad.upsert(basics.BalanceRecord{Addr: addr, AccountData: data})
+}
+
+func (ad *AccountDeltas) upsert(br basics.BalanceRecord) {
+	addr := br.Addr
+	if idx, exist := ad.acctsCache[addr]; exist { // nil map lookup is OK
+		ad.accts[idx] = br
+		return
+	}
+
+	last := len(ad.accts)
+	ad.accts = append(ad.accts, br)
+
+	if ad.acctsCache == nil {
+		ad.acctsCache = make(map[basics.Address]int)
+	}
+	ad.acctsCache[addr] = last
 }

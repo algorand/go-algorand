@@ -55,8 +55,11 @@ type roundCowBase struct {
 	// TxnCounter from previous block header.
 	txnCount uint64
 
-	// CompactCertLastRound from previous block header.
-	compactCertSeen basics.Round
+	// Round of the next expected compact cert.  In the common case this
+	// is CompactCertNextRound from previous block header, except when
+	// compact certs are first enabled, in which case this gets set
+	// appropriately at the first block where compact certs are enabled.
+	compactCertNextRnd basics.Round
 
 	// The current protocol consensus params.
 	proto config.ConsensusParams
@@ -105,8 +108,8 @@ func (x *roundCowBase) txnCounter() uint64 {
 	return x.txnCount
 }
 
-func (x *roundCowBase) compactCertLast() basics.Round {
-	return x.compactCertSeen
+func (x *roundCowBase) compactCertNext() basics.Round {
+	return x.compactCertNextRnd
 }
 
 func (x *roundCowBase) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
@@ -305,7 +308,7 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 }
 
 func (cs *roundCowState) compactCert(certRnd basics.Round, cert compactcert.Cert, atRound basics.Round) error {
-	lastCertRnd := cs.compactCertLast()
+	nextCertRnd := cs.compactCertNext()
 
 	certHdr, err := cs.blockHdr(certRnd)
 	if err != nil {
@@ -319,12 +322,12 @@ func (cs *roundCowState) compactCert(certRnd basics.Round, cert compactcert.Cert
 		return err
 	}
 
-	err = validateCompactCert(certHdr, cert, votersHdr, lastCertRnd, atRound)
+	err = validateCompactCert(certHdr, cert, votersHdr, nextCertRnd, atRound)
 	if err != nil {
 		return err
 	}
 
-	cs.sawCompactCert(certRnd)
+	cs.setCompactCertNext(certRnd + basics.Round(proto.CompactCertRounds))
 	return nil
 }
 
@@ -415,10 +418,22 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		}
 
 		base.txnCount = eval.prevHeader.TxnCounter
-		base.compactCertSeen = eval.prevHeader.CompactCertLastRound
+		base.compactCertNextRnd = eval.prevHeader.CompactCertNextRound
 		prevProto, ok = config.Consensus[eval.prevHeader.CurrentProtocol]
 		if !ok {
 			return nil, protocol.Error(eval.prevHeader.CurrentProtocol)
+		}
+
+		// Check if compact certs are being enabled as of this block.
+		if base.compactCertNextRnd == 0 && proto.CompactCertRounds != 0 {
+			// Determine the first block that will contain a Merkle
+			// commitment to the voters.  We need to account for the
+			// fact that the voters come from CompactCertVotersLookback
+			// rounds ago.
+			votersRound := (hdr.Round + basics.Round(proto.CompactCertVotersLookback)).RoundUpToMultipleOf(basics.Round(proto.CompactCertRounds))
+
+			// The first compact cert will appear CompactCertRounds after that.
+			base.compactCertNextRnd = votersRound + basics.Round(proto.CompactCertRounds)
 		}
 	}
 
@@ -444,7 +459,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		eval.block.BlockHeader.RewardsState = eval.prevHeader.NextRewardsState(hdr.Round, proto, incentivePoolData.MicroAlgos, prevTotals.RewardUnits())
 	}
 	// set the eval state with the current header
-	eval.state = makeRoundCowState(base, eval.block.BlockHeader, eval.prevHeader.TimeStamp)
+	eval.state = makeRoundCowState(base, eval.block.BlockHeader, eval.prevHeader.TimeStamp, paysetHint)
 
 	if validate {
 		err := eval.block.BlockHeader.PreCheck(eval.prevHeader)
@@ -970,7 +985,7 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			return err
 		}
 
-		eval.block.CompactCertLastRound = eval.state.compactCertLast()
+		eval.block.CompactCertNextRound = eval.state.compactCertNext()
 	}
 
 	return nil
@@ -1003,8 +1018,8 @@ func (eval *BlockEvaluator) finalValidation() error {
 		if eval.block.CompactCertVotersTotal != expectedVotersWeight {
 			return fmt.Errorf("CompactCertVotersTotal wrong: %v != %v", eval.block.CompactCertVotersTotal, expectedVotersWeight)
 		}
-		if eval.block.CompactCertLastRound != eval.state.compactCertLast() {
-			return fmt.Errorf("CompactCertLastRound wrong: %v != %v", eval.block.CompactCertLastRound, eval.state.compactCertLast())
+		if eval.block.CompactCertNextRound != eval.state.compactCertNext() {
+			return fmt.Errorf("CompactCertNextRound wrong: %v != %v", eval.block.CompactCertNextRound, eval.state.compactCertNext())
 		}
 	}
 
@@ -1042,7 +1057,7 @@ func (eval *BlockEvaluator) GenerateBlock() (*ValidatedBlock, error) {
 		delta: eval.state.deltas(),
 	}
 	eval.blockGenerated = true
-	eval.state = makeRoundCowState(eval.state, eval.block.BlockHeader, eval.prevHeader.TimeStamp)
+	eval.state = makeRoundCowState(eval.state, eval.block.BlockHeader, eval.prevHeader.TimeStamp, len(eval.block.Payset))
 	return &vb, nil
 }
 
