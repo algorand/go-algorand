@@ -442,7 +442,7 @@ func makePreview(fields []fieldDesc) (prop []cdt.RuntimePropertyPreview) {
 }
 
 func makeIntPreview(n int) (prop []cdt.RuntimePropertyPreview) {
-	prop = make([]cdt.RuntimePropertyPreview, 0, n)
+	prop = make([]cdt.RuntimePropertyPreview, 0)
 	for i := 0; i < n; i++ {
 		v := cdt.RuntimePropertyPreview{
 			Name:  strconv.Itoa(i),
@@ -695,18 +695,18 @@ func makeLocalScope(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescri
 
 func makeGlobals(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
 	fields := prepareGlobals(s.globals)
-	desc = make([]cdt.RuntimePropertyDescriptor, 0, len(fields))
-	for _, field := range fields {
-		desc = append(desc, makePrimitive(field))
+	desc = make([]cdt.RuntimePropertyDescriptor, len(fields))
+	for i, field := range fields {
+		desc[i] = makePrimitive(field)
 	}
 	return
 }
 
 func makeTxn(s *cdtState, preview bool) (desc []cdt.RuntimePropertyDescriptor) {
-	desc = make([]cdt.RuntimePropertyDescriptor, 0)
 	if len(s.txnGroup) > 0 && s.groupIndex < len(s.txnGroup) && s.groupIndex >= 0 {
 		return makeTxnImpl(&s.txnGroup[s.groupIndex].Txn, s.groupIndex, preview)
 	}
+	desc = make([]cdt.RuntimePropertyDescriptor, 0)
 	return
 }
 
