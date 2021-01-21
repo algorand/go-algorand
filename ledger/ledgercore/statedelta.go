@@ -62,9 +62,9 @@ type StateDelta struct {
 	// new block header; read-only
 	Hdr *bookkeeping.BlockHeader
 
-	// last round for which we have seen a compact cert.
-	// zero if no compact cert seen.
-	CompactCertSeen basics.Round
+	// next round for which we expect a compact cert.
+	// zero if no compact cert is expected.
+	CompactCertNext basics.Round
 
 	// previous block timestamp
 	PrevTimestamp int64

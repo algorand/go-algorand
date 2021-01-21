@@ -652,6 +652,10 @@ func (wn *WebsocketNetwork) setup() {
 	if wn.config.NetworkProtocolVersion != "" {
 		SupportedProtocolVersions = []string{wn.config.NetworkProtocolVersion}
 	}
+
+	if wn.relayMessages {
+		wn.RegisterMessageInterest(protocol.CompactCertSigTag)
+	}
 }
 
 // Start makes network connections and threads
