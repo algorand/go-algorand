@@ -65,6 +65,9 @@ func (p unauthenticatedProposal) ToBeHashed() (protocol.HashID, []byte) {
 }
 
 // value returns the proposal-value associated with this proposal.
+// EncodingDigest contains the hash of the compressed proposal
+// since when sending proposals we send the version that is
+// compressed.
 func (p unauthenticatedProposal) value() proposalValue {
 	return proposalValue{
 		OriginalPeriod:   p.OriginalPeriod,
@@ -243,18 +246,9 @@ func proposalForBlock(address basics.Address, vrf *crypto.VRFSecrets, ve Validat
 	}
 
 	ve = ve.WithSeed(newSeed)
-	uncompressedProposal := makeProposal(ve, seedProof, period, address)
-	var compressedProposal proposal
-	compressedProposal.unauthenticatedProposal = uncompressedProposal.Compressed()
-	compressedProposal.ve = uncompressedProposal.ve
-
-	value := proposalValue{
-		OriginalPeriod:   period,
-		OriginalProposer: address,
-		BlockDigest:      compressedProposal.Block.Digest(),
-		EncodingDigest:   crypto.HashObj(compressedProposal),
-	}
-	return uncompressedProposal, value, nil
+	proposal := makeProposal(ve, seedProof, period, address)
+	value := proposal.value()
+	return proposal, value, nil
 }
 
 // validate returns true if the proposal is valid.
