@@ -1,8 +1,8 @@
 #pragma version 2
 // Fetch app idx we want to read global state from
 int 1  // ForeignApps index
-// Fetch key "foo"
-byte base64 Zm9v
+// non-utf8 key
+byte 0xfefeffef0000112233
 
 // Get value
 app_global_get_ex
