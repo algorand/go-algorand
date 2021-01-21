@@ -256,6 +256,9 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 		return
 	}
 	defer selectStmt.Close()
+	defer func() {
+		a.misses = nil
+	}()
 	var rowid sql.NullInt64
 	var acctDataBuf []byte
 	for _, idx := range a.misses {
@@ -270,16 +273,13 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 					return err
 				}
 				a.updateOld(idx, *persistedAcctData)
-				// a.upsertOld(*persistedAcctData)
 			} else {
 				// to retain backward compatability, we will treat this condition as if we don't have the account.
 				a.updateOld(idx, persistedAccountData{addr: addr, rowid: rowid.Int64})
-				// a.upsertOld(persistedAccountData{addr: addr, rowid: rowid.Int64})
 			}
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
 			a.updateOld(idx, persistedAccountData{addr: addr})
-			// a.upsertOld(persistedAccountData{addr: addr})
 			err = nil
 		default:
 			// unexpected error - let the caller know that we couldn't complete the operation.
