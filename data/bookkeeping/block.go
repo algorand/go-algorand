@@ -136,9 +136,9 @@ type (
 		// expect from CompactCertVoters.
 		CompactCertVotersTotal basics.MicroAlgos `codec:"ccvt"`
 
-		// CompactCertLastRound is the last round for which we have committed
+		// CompactCertNextRound is the next round for which we will accept
 		// a CompactCert transaction.
-		CompactCertLastRound basics.Round `codec:"ccl"`
+		CompactCertNextRound basics.Round `codec:"ccn"`
 	}
 
 	// RewardsState represents the global parameters controlling the rate

@@ -40,7 +40,7 @@ type roundCowParent interface {
 	checkDup(basics.Round, basics.Round, transactions.Txid, ledgercore.Txlease) error
 	txnCounter() uint64
 	getCreator(cidx basics.CreatableIndex, ctype basics.CreatableType) (basics.Address, bool, error)
-	compactCertLast() basics.Round
+	compactCertNext() basics.Round
 	blockHdr(rnd basics.Round) (bookkeeping.BlockHeader, error)
 	getStorageCounts(addr basics.Address, aidx basics.AppIndex, global bool) (basics.StateSchema, error)
 	// note: getStorageLimits is redundant with the other methods
@@ -162,11 +162,11 @@ func (cb *roundCowState) txnCounter() uint64 {
 	return cb.lookupParent.txnCounter() + uint64(len(cb.mods.Txids))
 }
 
-func (cb *roundCowState) compactCertLast() basics.Round {
-	if cb.mods.CompactCertSeen != 0 {
-		return cb.mods.CompactCertSeen
+func (cb *roundCowState) compactCertNext() basics.Round {
+	if cb.mods.CompactCertNext != 0 {
+		return cb.mods.CompactCertNext
 	}
-	return cb.lookupParent.compactCertLast()
+	return cb.lookupParent.compactCertNext()
 }
 
 func (cb *roundCowState) blockHdr(r basics.Round) (bookkeeping.BlockHeader, error) {
@@ -198,8 +198,8 @@ func (cb *roundCowState) addTx(txn transactions.Transaction, txid transactions.T
 	cb.mods.Txleases[ledgercore.Txlease{Sender: txn.Sender, Lease: txn.Lease}] = txn.LastValid
 }
 
-func (cb *roundCowState) sawCompactCert(rnd basics.Round) {
-	cb.mods.CompactCertSeen = rnd
+func (cb *roundCowState) setCompactCertNext(rnd basics.Round) {
+	cb.mods.CompactCertNext = rnd
 }
 
 func (cb *roundCowState) child() *roundCowState {
@@ -247,7 +247,7 @@ func (cb *roundCowState) commitToParent() {
 			}
 		}
 	}
-	cb.commitParent.mods.CompactCertSeen = cb.mods.CompactCertSeen
+	cb.commitParent.mods.CompactCertNext = cb.mods.CompactCertNext
 }
 
 func (cb *roundCowState) modifiedAccounts() []basics.Address {

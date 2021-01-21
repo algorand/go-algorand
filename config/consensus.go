@@ -298,7 +298,7 @@ type ConsensusParams struct {
 	// to limit the maximum size of a single balance record
 	MaximumMinimumBalance uint64
 
-	// CompactCertRounds defines the frequency with with compact
+	// CompactCertRounds defines the frequency with which compact
 	// certificates are generated.  Every round that is a multiple
 	// of CompactCertRounds, the block header will include a Merkle
 	// commitment to the set of online accounts (that can vote after
@@ -817,6 +817,13 @@ func initConsensusProtocols() {
 
 	// FilterTimeout for period 0 should take a new optimized, configured value, need to revisit this later
 	vFuture.AgreementFilterTimeoutPeriod0 = 4 * time.Second
+
+	// Enable compact certificates.
+	vFuture.CompactCertRounds = 128
+	vFuture.CompactCertTopVoters = 1024 * 1024
+	vFuture.CompactCertVotersLookback = 16
+	vFuture.CompactCertWeightThreshold = 30
+	vFuture.CompactCertSecKQ = 128
 
 	Consensus[protocol.ConsensusFuture] = vFuture
 }

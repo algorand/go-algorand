@@ -341,6 +341,9 @@ func (au *accountUpdates) waitAccountsWriting() {
 
 // close closes the accountUpdates, waiting for all the child go-routine to complete
 func (au *accountUpdates) close() {
+	if au.voters != nil {
+		au.voters.close()
+	}
 	if au.ctxCancel != nil {
 		au.ctxCancel()
 	}
@@ -674,7 +677,9 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 		return
 	}
 
-	newBase = au.voters.lowestRound(newBase)
+	if au.voters != nil {
+		newBase = au.voters.lowestRound(newBase)
+	}
 
 	offset = uint64(newBase - au.dbRound)
 
@@ -706,7 +711,9 @@ func (au *accountUpdates) committedUpTo(committedRound basics.Round) (retRound b
 		dbRound:  au.dbRound,
 		lookback: lookback,
 	}
-	au.accountsWriting.Add(1)
+	if offset != 0 {
+		au.accountsWriting.Add(1)
+	}
 	return
 }
 
@@ -1470,11 +1477,13 @@ func (au *accountUpdates) newBlockImpl(blk bookkeeping.Block, delta ledgercore.S
 
 	au.roundTotals = append(au.roundTotals, newTotals)
 
-	au.voters.newBlock(blk.BlockHeader)
-
 	// calling prune would drop old entries from the base accounts.
 	newBaseAccountSize := (len(au.accounts) + 1) + baseAccountsPendingAccountsBufferSize
 	au.baseAccounts.prune(newBaseAccountSize)
+
+	if au.voters != nil {
+		au.voters.newBlock(blk.BlockHeader)
+	}
 }
 
 // lookupWithRewards returns the account data for a given address at a given round.
