@@ -64,11 +64,11 @@ func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int)
 		totalWeight: totalWeight,
 	}
 	s.latest--
-	s.addBlock()
+	s.addBlock(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].CompactCertRounds))
 	return s
 }
 
-func (s *testWorkerStubs) addBlock() {
+func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	s.latest++
 
 	hdr := bookkeeping.BlockHeader{}
@@ -81,11 +81,7 @@ func (s *testWorkerStubs) addBlock() {
 		hdr.CompactCertVoters[1] = 0x12
 	}
 
-	if s.latest == 0 {
-		hdr.CompactCertNextRound = 2 * basics.Round(config.Consensus[hdr.CurrentProtocol].CompactCertRounds)
-	} else {
-		hdr.CompactCertNextRound = s.blocks[s.latest-1].CompactCertNextRound
-	}
+	hdr.CompactCertNextRound = ccNextRound
 
 	s.blocks[s.latest] = hdr
 	if s.waiters[s.latest] != nil {
@@ -180,7 +176,7 @@ func (s *testWorkerStubs) advanceLatest(delta uint64) {
 	defer s.mu.Unlock()
 
 	for r := uint64(0); r < delta; r++ {
-		s.addBlock()
+		s.addBlock(s.blocks[s.latest].CompactCertNextRound)
 	}
 }
 
@@ -342,4 +338,41 @@ func TestWorkerInsufficientSigs(t *testing.T) {
 		t.Fatal("compact cert formed without enough sigs")
 	case <-time.After(time.Second):
 	}
+}
+
+func TestLatestSigsFromThisNode(t *testing.T) {
+	var keys []account.Participation
+	for i := 0; i < 10; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		keys = append(keys, newPartKey(t, parent))
+	}
+
+	s := newWorkerStubs(t, keys, 10)
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	s.advanceLatest(3*proto.CompactCertRounds - 2)
+
+	// Wait for a compact cert to be formed, so we know the signer thread is caught up.
+	_ = <-s.txmsg
+
+	latestSigs, err := w.LatestSigsFromThisNode()
+	require.NoError(t, err)
+	require.Equal(t, len(latestSigs), len(keys))
+	for _, k := range keys {
+		require.Equal(t, latestSigs[k.Parent], basics.Round(2*proto.CompactCertRounds))
+	}
+
+	// Add a block that claims the compact cert is formed.
+	s.addBlock(3 * basics.Round(proto.CompactCertRounds))
+
+	// Wait for the builder to discard the signatures.
+	time.Sleep(time.Second)
+
+	latestSigs, err = w.LatestSigsFromThisNode()
+	require.NoError(t, err)
+	require.Equal(t, len(latestSigs), 0)
 }
