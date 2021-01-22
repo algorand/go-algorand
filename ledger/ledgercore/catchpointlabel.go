@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with go-algorand.  If not, see <https://www.gnu.org/licenses/>.
 
-package ledger
+package ledgercore
 
 import (
 	"encoding/base32"
@@ -42,7 +42,8 @@ type CatchpointLabel struct {
 	totals               AccountTotals
 }
 
-func makeCatchpointLabel(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest, balancesMerkleRoot crypto.Digest, totals AccountTotals) CatchpointLabel {
+// MakeCatchpointLabel creates a catchpoint label given the catchpoint label parameters.
+func MakeCatchpointLabel(ledgerRound basics.Round, ledgerRoundBlockHash crypto.Digest, balancesMerkleRoot crypto.Digest, totals AccountTotals) CatchpointLabel {
 	return CatchpointLabel{
 		ledgerRound:          ledgerRound,
 		ledgerRoundBlockHash: ledgerRoundBlockHash,

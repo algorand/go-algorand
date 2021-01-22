@@ -64,17 +64,34 @@ func AcceptableCompactCertWeight(votersHdr bookkeeping.BlockHeader, firstValid b
 	}
 
 	// In the next proto.CompactCertRounds/2 blocks, linearly scale
-	// the acceptable weight from 100% to 0%.  If we are outside of
-	// that window, accept any weight.
-	if offset >= basics.Round(proto.CompactCertRounds/2) {
+	// the acceptable weight from 100% to CompactCertWeightThreshold.
+	// If we are outside of that window, accept any weight at or above
+	// CompactCertWeightThreshold.
+	provenWeight, overflowed := basics.Muldiv(total.ToUint64(), uint64(proto.CompactCertWeightThreshold), 1<<32)
+	if overflowed || provenWeight > total.ToUint64() {
+		// Shouldn't happen, but a safe fallback is to accept a larger cert.
+		logging.Base().Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow provenWeight",
+			total, proto.CompactCertRounds, certRound, firstValid)
 		return 0
 	}
 
-	w, overflowed := basics.Muldiv(total.ToUint64(), proto.CompactCertRounds/2-uint64(offset), proto.CompactCertRounds/2)
+	if offset >= basics.Round(proto.CompactCertRounds/2) {
+		return provenWeight
+	}
+
+	scaledWeight, overflowed := basics.Muldiv(total.ToUint64()-provenWeight, proto.CompactCertRounds/2-uint64(offset), proto.CompactCertRounds/2)
 	if overflowed {
 		// Shouldn't happen, but a safe fallback is to accept a larger cert.
-		logging.Base().Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow",
+		logging.Base().Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow scaledWeight",
 			total, proto.CompactCertRounds, certRound, firstValid)
+		return 0
+	}
+
+	w, overflowed := basics.OAdd(provenWeight, scaledWeight)
+	if overflowed {
+		// Shouldn't happen, but a safe fallback is to accept a larger cert.
+		logging.Base().Warnf("AcceptableCompactCertWeight(%d, %d, %d, %d) overflow provenWeight (%d) + scaledWeight (%d)",
+			total, proto.CompactCertRounds, certRound, firstValid, provenWeight, scaledWeight)
 		return 0
 	}
 
@@ -104,9 +121,9 @@ func CompactCertParams(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockH
 	}
 
 	totalWeight := votersHdr.CompactCertVotersTotal.ToUint64()
-	provenWeight, overflowed := basics.Muldiv(totalWeight, proto.CompactCertWeightThreshold, 100)
+	provenWeight, overflowed := basics.Muldiv(totalWeight, uint64(proto.CompactCertWeightThreshold), 1<<32)
 	if overflowed {
-		err = fmt.Errorf("overflow computing provenWeight[%d]: %d * %d / 100",
+		err = fmt.Errorf("overflow computing provenWeight[%d]: %d * %d / (1<<32)",
 			hdr.Round, totalWeight, proto.CompactCertWeightThreshold)
 		return
 	}
@@ -121,7 +138,7 @@ func CompactCertParams(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockH
 }
 
 // validateCompactCert checks that a compact cert is valid.
-func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert, votersHdr bookkeeping.BlockHeader, lastCertRnd basics.Round, atRound basics.Round) error {
+func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert, votersHdr bookkeeping.BlockHeader, nextCertRnd basics.Round, atRound basics.Round) error {
 	proto := config.Consensus[certHdr.CurrentProtocol]
 
 	if proto.CompactCertRounds == 0 {
@@ -138,9 +155,9 @@ func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert,
 			certHdr.Round, votersRound, votersHdr.Round)
 	}
 
-	if lastCertRnd != 0 && lastCertRnd != votersRound {
-		return fmt.Errorf("last cert from %d, but new cert is for %d (voters %d)",
-			lastCertRnd, certHdr.Round, votersRound)
+	if nextCertRnd == 0 || nextCertRnd != certHdr.Round {
+		return fmt.Errorf("expecting cert for %d, but new cert is for %d (voters %d)",
+			nextCertRnd, certHdr.Round, votersRound)
 	}
 
 	acceptableWeight := AcceptableCompactCertWeight(votersHdr, atRound)
