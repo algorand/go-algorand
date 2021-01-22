@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# TIMEOUT=300
+# TIMEOUT=320
 
 date '+assets-app start %Y%m%d_%H%M%S'
 
