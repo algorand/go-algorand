@@ -231,7 +231,7 @@ var homepage string = `
 
                 // Update stack and scratch
                 var stacktable = exec.querySelector(".stack");
-                updateMemory(stacktable, state["stack"])
+                updateMemory(stacktable, state["stack"] || [])
 
                 var scratchtable = exec.querySelector(".scratch");
                 updateMemory(scratchtable, state["scratch"])

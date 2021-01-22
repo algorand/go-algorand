@@ -440,7 +440,8 @@ func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
 	eval, addr, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 2})
 	require.NoError(t, err)
 	deltas := eval.state.deltas()
-	state := deltas.Accts[addr].AppParams[1].GlobalState
+	ad, _ := deltas.Accts.Get(addr)
+	state := ad.AppParams[1].GlobalState
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
 	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
 }
