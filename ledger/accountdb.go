@@ -116,10 +116,10 @@ var accountsResetExprs = []string{
 // and their descriptions.
 var accountDBVersion = int32(4)
 
-// persistedAccountData is used for representing a single account stored on the disk. In addition to the
+// dbAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
 // list.
-type persistedAccountData struct {
+type dbAccountData struct {
 	// The address of the account. In contrasts to maps, having this value explicitly here allows us to use this
 	// data structure in queues directly, without "attaching" the address as the address as the map key.
 	addr basics.Address
@@ -152,7 +152,7 @@ type compactAccountDeltas struct {
 }
 
 type accountDelta struct {
-	old     persistedAccountData
+	old     dbAccountData
 	new     basics.AccountData
 	ndeltas int
 }
@@ -245,7 +245,7 @@ func makeCompactAccountDeltas(accountDeltas []ledgercore.AccountDeltas, baseAcco
 }
 
 // accountsLoadOld updates the entries on the deltas.old map that matches the provided addresses.
-// The round number of the persistedAccountData is not updated by this function, and the caller is responsible
+// The round number of the dbAccountData is not updated by this function, and the caller is responsible
 // for populating this field.
 func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 	if len(a.misses) == 0 {
@@ -267,7 +267,7 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 		switch err {
 		case nil:
 			if len(acctDataBuf) > 0 {
-				persistedAcctData := &persistedAccountData{addr: addr, rowid: rowid.Int64}
+				persistedAcctData := &dbAccountData{addr: addr, rowid: rowid.Int64}
 				err = protocol.Decode(acctDataBuf, &persistedAcctData.accountData)
 				if err != nil {
 					return err
@@ -275,11 +275,11 @@ func (a *compactAccountDeltas) accountsLoadOld(tx *sql.Tx) (err error) {
 				a.updateOld(idx, *persistedAcctData)
 			} else {
 				// to retain backward compatability, we will treat this condition as if we don't have the account.
-				a.updateOld(idx, persistedAccountData{addr: addr, rowid: rowid.Int64})
+				a.updateOld(idx, dbAccountData{addr: addr, rowid: rowid.Int64})
 			}
 		case sql.ErrNoRows:
 			// we don't have that account, just return an empty record.
-			a.updateOld(idx, persistedAccountData{addr: addr})
+			a.updateOld(idx, dbAccountData{addr: addr})
 			err = nil
 		default:
 			// unexpected error - let the caller know that we couldn't complete the operation.
@@ -339,7 +339,7 @@ func (a *compactAccountDeltas) insertMissing(addr basics.Address, delta accountD
 }
 
 // upsertOld updates existing or inserts a new partial entry with only old field filled
-func (a *compactAccountDeltas) upsertOld(old persistedAccountData) {
+func (a *compactAccountDeltas) upsertOld(old dbAccountData) {
 	addr := old.addr
 	if idx, exist := a.cache[addr]; exist {
 		a.deltas[idx].old = old
@@ -349,7 +349,7 @@ func (a *compactAccountDeltas) upsertOld(old persistedAccountData) {
 }
 
 // updateOld updates existing or inserts a new partial entry with only old field filled
-func (a *compactAccountDeltas) updateOld(idx int, old persistedAccountData) {
+func (a *compactAccountDeltas) updateOld(idx int, old dbAccountData) {
 	a.deltas[idx].old = old
 }
 
@@ -799,10 +799,10 @@ func (qs *accountsDbQueries) lookupCreator(cidx basics.CreatableIndex, ctype bas
 	return
 }
 
-// lookup looks up for a the account data given it's address. It returns the persistedAccountData, which includes the current database round and the matching
+// lookup looks up for a the account data given it's address. It returns the dbAccountData, which includes the current database round and the matching
 // account data, if such was found. If no matching account data could be found for the given address, an empty account data would
 // be retrieved.
-func (qs *accountsDbQueries) lookup(addr basics.Address) (data persistedAccountData, err error) {
+func (qs *accountsDbQueries) lookup(addr basics.Address) (data dbAccountData, err error) {
 	err = db.Retry(func() error {
 		var buf []byte
 		var rowid sql.NullInt64
@@ -1027,8 +1027,8 @@ func accountsPutTotals(tx *sql.Tx, totals ledgercore.AccountTotals, catchpointSt
 }
 
 // accountsNewRound updates the accountbase and assetcreators tables by applying the provided deltas to the accounts / creatables.
-// The function returns a persistedAccountData for the modified accounts which can be stored in the base cache.
-func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (updatedAccounts []persistedAccountData, err error) {
+// The function returns a dbAccountData for the modified accounts which can be stored in the base cache.
+func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[basics.CreatableIndex]ledgercore.ModifiedCreatable, proto config.ConsensusParams, lastUpdateRound basics.Round) (updatedAccounts []dbAccountData, err error) {
 
 	var insertCreatableIdxStmt, deleteCreatableIdxStmt, deleteByRowIDStmt, insertStmt, updateStmt *sql.Stmt
 
@@ -1051,7 +1051,7 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 	defer updateStmt.Close()
 	var result sql.Result
 	var rowsAffected int64
-	updatedAccounts = make([]persistedAccountData, updates.len())
+	updatedAccounts = make([]dbAccountData, updates.len())
 	updatedAccountIdx := 0
 	for i := 0; i < updates.len(); i++ {
 		addr, data := updates.getByIdx(i)
@@ -1703,8 +1703,8 @@ func (iterator *catchpointPendingHashesIterator) Close() {
 	}
 }
 
-// before compares the round numbers of two persistedAccountData and determines if the current persistedAccountData
+// before compares the round numbers of two dbAccountData and determines if the current dbAccountData
 // happened before the other.
-func (pac *persistedAccountData) before(other *persistedAccountData) bool {
+func (pac *dbAccountData) before(other *dbAccountData) bool {
 	return pac.round < other.round
 }

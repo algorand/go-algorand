@@ -24,17 +24,17 @@ import (
 )
 
 // lruAccounts provides a storage class for the most recently used accounts data.
-// It doesn't have any syncronization primitive on it's own and require to be
-// syncronized by the caller.
+// It doesn't have any synchronization primitive on it's own and require to be
+// synchronized by the caller.
 type lruAccounts struct {
-	// accountsList contain the list of persistedAccountData, where the front ones are the most "fresh"
+	// accountsList contain the list of dbAccountData, where the front ones are the most "fresh"
 	// and the ones on the back are the oldest.
 	accountsList *list.List
 	// accounts provides fast access to the various elements in the list by using the account address
 	accounts map[basics.Address]*list.Element
 	// pendingAccounts are used as a way to avoid taking a write-lock. When the caller needs to "materialize" these,
 	// it would call flushPendingWrites and these would be merged into the accounts/accountsList
-	pendingAccounts chan persistedAccountData
+	pendingAccounts chan dbAccountData
 	// log interface; used for logging the threshold event.
 	log logging.Logger
 	// pendingWritesWarnThreshold is the threshold beyond we would write a warning for exceeding the number of pendingAccounts entries
@@ -46,18 +46,18 @@ type lruAccounts struct {
 func (m *lruAccounts) init(log logging.Logger, pendingWrites int, pendingWritesWarnThreshold int) {
 	m.accountsList = list.New()
 	m.accounts = make(map[basics.Address]*list.Element)
-	m.pendingAccounts = make(chan persistedAccountData, pendingWrites)
+	m.pendingAccounts = make(chan dbAccountData, pendingWrites)
 	m.log = log
 	m.pendingWritesWarnThreshold = pendingWritesWarnThreshold
 }
 
-// read the persistedAccountData object that the lruAccounts has for the given address.
+// read the dbAccountData object that the lruAccounts has for the given address.
 // thread locking semantics : read lock
-func (m *lruAccounts) read(addr basics.Address) (data persistedAccountData, has bool) {
+func (m *lruAccounts) read(addr basics.Address) (data dbAccountData, has bool) {
 	if el := m.accounts[addr]; el != nil {
-		return el.Value.(persistedAccountData), true
+		return el.Value.(dbAccountData), true
 	}
-	return persistedAccountData{}, false
+	return dbAccountData{}, false
 }
 
 // flushPendingWrites flushes the pending writes to the main lruAccounts cache.
@@ -78,25 +78,25 @@ func (m *lruAccounts) flushPendingWrites() {
 	return
 }
 
-// writePending write a single persistedAccountData entry to the pendingAccounts buffer.
+// writePending write a single dbAccountData entry to the pendingAccounts buffer.
 // the function doesn't block, and in case of a buffer overflow the entry would not be added.
 // thread locking semantics : no lock is required.
-func (m *lruAccounts) writePending(acct persistedAccountData) {
+func (m *lruAccounts) writePending(acct dbAccountData) {
 	select {
 	case m.pendingAccounts <- acct:
 	default:
 	}
 }
 
-// write a single persistedAccountData to the lruAccounts cache.
+// write a single dbAccountData to the lruAccounts cache.
 // when writing the entry, the round number would be used to determine if it's a newer
 // version of what's already on the cache or not. In all cases, the entry is going
 // to be promoted to the front of the list.
 // thread locking semantics : write lock
-func (m *lruAccounts) write(acctData persistedAccountData) {
+func (m *lruAccounts) write(acctData dbAccountData) {
 	if el := m.accounts[acctData.addr]; el != nil {
 		// already exists; is it a newer ?
-		existing := el.Value.(persistedAccountData)
+		existing := el.Value.(dbAccountData)
 		if existing.before(&acctData) {
 			// we update with a newer version.
 			el.Value = acctData
@@ -117,7 +117,7 @@ func (m *lruAccounts) prune(newSize int) (removed int) {
 			break
 		}
 		back := m.accountsList.Back()
-		delete(m.accounts, back.Value.(persistedAccountData).addr)
+		delete(m.accounts, back.Value.(dbAccountData).addr)
 		m.accountsList.Remove(back)
 		removed++
 	}

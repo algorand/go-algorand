@@ -1503,7 +1503,7 @@ func (au *accountUpdates) lookupWithRewards(rnd basics.Round, addr basics.Addres
 	var offset uint64
 	var rewardsProto config.ConsensusParams
 	var rewardsLevel uint64
-	var persistedData persistedAccountData
+	var persistedData dbAccountData
 	withRewards := true
 	for {
 		currentDbRound := au.dbRound
@@ -1595,7 +1595,7 @@ func (au *accountUpdates) lookupWithoutRewards(rnd basics.Round, addr basics.Add
 		}
 	}()
 	var offset uint64
-	var persistedData persistedAccountData
+	var persistedData dbAccountData
 	for {
 		currentDbRound := au.dbRound
 		currentDeltaLen := len(au.deltas)
@@ -1868,7 +1868,7 @@ func (au *accountUpdates) commitRound(offset uint64, dbRound basics.Round, lookb
 
 	start := time.Now()
 	ledgerCommitroundCount.Inc(nil)
-	var updatedPersistedAccounts []persistedAccountData
+	var updatedPersistedAccounts []dbAccountData
 	err := au.dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		treeTargetRound := basics.Round(0)
 		if au.catchpointInterval > 0 {

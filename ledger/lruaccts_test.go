@@ -34,7 +34,7 @@ func TestBasicLRUAccounts(t *testing.T) {
 	accountsNum := 50
 	// write 50 accounts
 	for i := 0; i < accountsNum; i++ {
-		acct := persistedAccountData{
+		acct := dbAccountData{
 			addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			round:       basics.Round(i),
 			rowid:       int64(i),
@@ -59,7 +59,7 @@ func TestBasicLRUAccounts(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseAcct.read(addr)
 		require.False(t, has)
-		require.Equal(t, persistedAccountData{}, acct)
+		require.Equal(t, dbAccountData{}, acct)
 	}
 
 	baseAcct.prune(accountsNum / 2)
@@ -78,7 +78,7 @@ func TestBasicLRUAccounts(t *testing.T) {
 			require.Equal(t, int64(i), acct.rowid)
 		} else {
 			require.False(t, has)
-			require.Equal(t, persistedAccountData{}, acct)
+			require.Equal(t, dbAccountData{}, acct)
 		}
 	}
 }
@@ -91,7 +91,7 @@ func TestLRUAccountsPendingWrites(t *testing.T) {
 	for i := 0; i < accountsNum; i++ {
 		go func(i int) {
 			time.Sleep(time.Duration((crypto.RandUint64() % 50)) * time.Millisecond)
-			acct := persistedAccountData{
+			acct := dbAccountData{
 				addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				round:       basics.Round(i),
 				rowid:       int64(i),
@@ -141,7 +141,7 @@ func TestLRUAccountsPendingWritesWarning(t *testing.T) {
 	baseAcct.init(log, pendingWritesBuffer, pendingWritesThreshold)
 	for j := 0; j < 50; j++ {
 		for i := 0; i < j; i++ {
-			acct := persistedAccountData{
+			acct := dbAccountData{
 				addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 				round:       basics.Round(i),
 				rowid:       int64(i),
@@ -165,7 +165,7 @@ func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
 	baseAcct.init(log, pendingWritesBuffer, pendingWritesThreshold)
 
 	for i := 0; i < pendingWritesBuffer*2; i++ {
-		acct := persistedAccountData{
+		acct := dbAccountData{
 			addr:        basics.Address(crypto.Hash([]byte{byte(i)})),
 			round:       basics.Round(i),
 			rowid:       int64(i),
@@ -192,6 +192,6 @@ func TestLRUAccountsOmittedPendingWrites(t *testing.T) {
 		addr := basics.Address(crypto.Hash([]byte{byte(i)}))
 		acct, has := baseAcct.read(addr)
 		require.False(t, has)
-		require.Equal(t, persistedAccountData{}, acct)
+		require.Equal(t, dbAccountData{}, acct)
 	}
 }
