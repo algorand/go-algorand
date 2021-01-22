@@ -421,3 +421,32 @@ func TestWorkerRestart(t *testing.T) {
 	require.True(t, formedAt > 1)
 	require.True(t, formedAt < 5)
 }
+
+func TestWorkerHandleSig(t *testing.T) {
+	var keys []account.Participation
+	for i := 0; i < 2; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		keys = append(keys, newPartKey(t, parent))
+	}
+
+	s := newWorkerStubs(t, keys, 10)
+	w := newTestWorker(t, s)
+	w.Start()
+	defer w.Shutdown()
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	s.advanceLatest(3 * proto.CompactCertRounds)
+
+	for i := 0; i < len(keys); i++ {
+		// Expect all signatures to be broadcast.
+		msg := <-s.sigmsg
+		res := w.handleSigMessage(network.IncomingMessage{
+			Data: msg,
+		})
+
+		// This should be a dup signature, so should not be broadcast
+		// but also not disconnected.
+		require.Equal(t, res.Action, network.Ignore)
+	}
+}
