@@ -615,7 +615,6 @@ func (eval *BlockEvaluator) TransactionGroup(txns []transactions.SignedTxn) erro
 // prepareEvalParams creates a logic.EvalParams for each ApplicationCall
 // transaction in the group
 func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxn) (res []*logic.EvalParams) {
-	var groupNoAD []transactions.SignedTxn
 	var minTealVersion uint64
 	res = make([]*logic.EvalParams, len(txgroup))
 	for i, txn := range txgroup {
@@ -624,19 +623,15 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxn) 
 			continue
 		}
 
-		// Initialize group without ApplyData lazily
-		if groupNoAD == nil {
-			groupNoAD = make([]transactions.SignedTxn, len(txgroup))
-			for j := range txgroup {
-				groupNoAD[j] = txgroup[j]
-			}
-			minTealVersion = logic.ComputeMinTealVersion(groupNoAD)
+		// Initialize minTealVersion lazily
+		if minTealVersion == 0 {
+			minTealVersion = logic.ComputeMinTealVersion(txgroup)
 		}
 
 		res[i] = &logic.EvalParams{
-			Txn:            &groupNoAD[i],
+			Txn:            &txgroup[i],
 			Proto:          &eval.proto,
-			TxnGroup:       groupNoAD,
+			TxnGroup:       txgroup,
 			GroupIndex:     i,
 			MinTealVersion: &minTealVersion,
 		}
