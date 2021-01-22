@@ -1191,7 +1191,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(addr, address)
 	a.Equal(sample2, data)
 
-	old1 := persistedAccountData{addr: addr, accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
+	old1 := dbAccountData{addr: addr, accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
 	ad.upsertOld(old1)
 	a.Equal(1, ad.len())
 	address, data = ad.getByIdx(0)
@@ -1199,7 +1199,7 @@ func TestCompactAccountDeltas(t *testing.T) {
 	a.Equal(accountDelta{new: sample2.new, old: old1}, data)
 
 	addr1 := randomAddress()
-	old2 := persistedAccountData{addr: addr1, accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
+	old2 := dbAccountData{addr: addr1, accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 789}}}
 	ad.upsertOld(old2)
 	a.Equal(2, ad.len())
 	address, data = ad.getByIdx(0)
