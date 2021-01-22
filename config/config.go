@@ -383,6 +383,10 @@ const LedgerFilenamePrefix = "ledger"
 // It is used to recover from node crashes.
 const CrashFilename = "crash.sqlite"
 
+// CompactCertFilename is the name of the compact certificate database file.
+// It is used to track in-progress compact certificates.
+const CompactCertFilename = "compactcert.sqlite"
+
 // ConfigurableConsensusProtocolsFilename defines a set of consensus prototocols that
 // are to be loaded from the data directory ( if present ), to override the
 // built-in supported consensus protocols.

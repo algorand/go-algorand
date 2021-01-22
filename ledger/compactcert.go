@@ -121,7 +121,7 @@ func CompactCertParams(votersHdr bookkeeping.BlockHeader, hdr bookkeeping.BlockH
 }
 
 // validateCompactCert checks that a compact cert is valid.
-func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert, votersHdr bookkeeping.BlockHeader, lastCertRnd basics.Round, atRound basics.Round) error {
+func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert, votersHdr bookkeeping.BlockHeader, nextCertRnd basics.Round, atRound basics.Round) error {
 	proto := config.Consensus[certHdr.CurrentProtocol]
 
 	if proto.CompactCertRounds == 0 {
@@ -138,9 +138,9 @@ func validateCompactCert(certHdr bookkeeping.BlockHeader, cert compactcert.Cert,
 			certHdr.Round, votersRound, votersHdr.Round)
 	}
 
-	if lastCertRnd != 0 && lastCertRnd != votersRound {
-		return fmt.Errorf("last cert from %d, but new cert is for %d (voters %d)",
-			lastCertRnd, certHdr.Round, votersRound)
+	if nextCertRnd == 0 || nextCertRnd != certHdr.Round {
+		return fmt.Errorf("expecting cert for %d, but new cert is for %d (voters %d)",
+			nextCertRnd, certHdr.Round, votersRound)
 	}
 
 	acceptableWeight := AcceptableCompactCertWeight(votersHdr, atRound)

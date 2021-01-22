@@ -71,7 +71,7 @@ func (ml *mockLedger) txnCounter() uint64 {
 	return 0
 }
 
-func (ml *mockLedger) compactCertLast() basics.Round {
+func (ml *mockLedger) compactCertNext() basics.Round {
 	return 0
 }
 
@@ -91,8 +91,9 @@ func checkCow(t *testing.T, cow *roundCowState, accts map[basics.Address]basics.
 	require.Equal(t, d, basics.AccountData{})
 }
 
-func applyUpdates(cow *roundCowState, updates map[basics.Address]basics.AccountData) {
-	for addr, delta := range updates {
+func applyUpdates(cow *roundCowState, updates ledgercore.AccountDeltas) {
+	for i := 0; i < updates.Len(); i++ {
+		addr, delta := updates.GetByIdx(i)
 		cow.put(addr, delta, nil, nil)
 	}
 }
@@ -101,7 +102,7 @@ func TestCowBalance(t *testing.T) {
 	accts0 := randomAccounts(20, true)
 	ml := mockLedger{balanceMap: accts0}
 
-	c0 := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, 0)
+	c0 := makeRoundCowState(&ml, bookkeeping.BlockHeader{}, 0, 0)
 	checkCow(t, c0, accts0)
 
 	c1 := c0.child()

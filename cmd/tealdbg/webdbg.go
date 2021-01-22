@@ -19,7 +19,6 @@ package main
 //go:generate ./bundle_home_html.sh
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -223,7 +222,8 @@ func (a *WebPageFrontend) subscribeHandler(w http.ResponseWriter, r *http.Reques
 	event := Notification{
 		Event: "connected",
 	}
-	err = ws.WriteJSON(&event)
+	enc := protocol.EncodeJSONStrict(&event)
+	err = ws.WriteMessage(websocket.TextMessage, enc)
 	if err != nil {
 		return
 	}
@@ -242,13 +242,8 @@ func (a *WebPageFrontend) subscribeHandler(w http.ResponseWriter, r *http.Reques
 	for {
 		select {
 		case notification := <-notifications:
-			var data bytes.Buffer
-			enc := protocol.NewJSONEncoder(&data)
-			err := enc.Encode(notification)
-			if err != nil {
-				return
-			}
-			err = ws.WriteMessage(websocket.TextMessage, data.Bytes())
+			enc := protocol.EncodeJSONStrict(&notification)
+			err = ws.WriteMessage(websocket.TextMessage, enc)
 			if err != nil {
 				return
 			}
