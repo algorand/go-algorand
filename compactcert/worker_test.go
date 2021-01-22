@@ -43,25 +43,27 @@ import (
 )
 
 type testWorkerStubs struct {
-	t           testing.TB
-	mu          deadlock.Mutex
-	latest      basics.Round
-	waiters     map[basics.Round]chan struct{}
-	blocks      map[basics.Round]bookkeeping.BlockHeader
-	keys        []account.Participation
-	sigmsg      chan []byte
-	txmsg       chan transactions.SignedTxn
-	totalWeight int
+	t             testing.TB
+	mu            deadlock.Mutex
+	latest        basics.Round
+	waiters       map[basics.Round]chan struct{}
+	blocks        map[basics.Round]bookkeeping.BlockHeader
+	keys          []account.Participation
+	keysForVoters []account.Participation
+	sigmsg        chan []byte
+	txmsg         chan transactions.SignedTxn
+	totalWeight   int
 }
 
 func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int) *testWorkerStubs {
 	s := &testWorkerStubs{
-		waiters:     make(map[basics.Round]chan struct{}),
-		blocks:      make(map[basics.Round]bookkeeping.BlockHeader),
-		sigmsg:      make(chan []byte, 1024),
-		txmsg:       make(chan transactions.SignedTxn, 1024),
-		keys:        keys,
-		totalWeight: totalWeight,
+		waiters:       make(map[basics.Round]chan struct{}),
+		blocks:        make(map[basics.Round]bookkeeping.BlockHeader),
+		sigmsg:        make(chan []byte, 1024),
+		txmsg:         make(chan transactions.SignedTxn, 1024),
+		keys:          keys,
+		keysForVoters: keys,
+		totalWeight:   totalWeight,
 	}
 	s.latest--
 	s.addBlock(2 * basics.Round(config.Consensus[protocol.ConsensusFuture].CompactCertRounds))
@@ -116,7 +118,7 @@ func (s *testWorkerStubs) CompactCertVoters(r basics.Round) (*ledger.VotersForRo
 		TotalWeight: basics.MicroAlgos{Raw: uint64(s.totalWeight)},
 	}
 
-	for i, k := range s.keys {
+	for i, k := range s.keysForVoters {
 		voters.AddrToPos[k.Parent] = uint64(i)
 		voters.Participants = append(voters.Participants, compactcert.Participant{
 			PK:          k.Voting.OneTimeSignatureVerifier,
@@ -180,9 +182,13 @@ func (s *testWorkerStubs) advanceLatest(delta uint64) {
 	}
 }
 
+func newTestWorkerDB(t testing.TB, s *testWorkerStubs, dba db.Accessor) *Worker {
+	return NewWorker(dba, logging.TestingLog(t), s, s, s, s)
+}
+
 func newTestWorker(t testing.TB, s *testWorkerStubs) *Worker {
 	dbs, _ := dbOpenTest(t, true)
-	return NewWorker(dbs.Wdb, logging.TestingLog(t), s, s, s, s)
+	return newTestWorkerDB(t, s, dbs.Wdb)
 }
 
 func newPartKey(t testing.TB, parent basics.Address) account.Participation {
@@ -375,4 +381,43 @@ func TestLatestSigsFromThisNode(t *testing.T) {
 	latestSigs, err = w.LatestSigsFromThisNode()
 	require.NoError(t, err)
 	require.Equal(t, len(latestSigs), 0)
+}
+
+func TestWorkerRestart(t *testing.T) {
+	var keys []account.Participation
+	for i := 0; i < 10; i++ {
+		var parent basics.Address
+		crypto.RandBytes(parent[:])
+		keys = append(keys, newPartKey(t, parent))
+	}
+
+	s := newWorkerStubs(t, keys, 10)
+
+	proto := config.Consensus[protocol.ConsensusFuture]
+	s.advanceLatest(3*proto.CompactCertRounds - 1)
+
+	dbRand := crypto.RandUint64()
+
+	formedAt := -1
+	for i := 0; formedAt < 0 && i < len(keys); i++ {
+		// Give one key at a time to the worker, and then shut it down,
+		// to make sure that it will correctly save and restore these
+		// signatures across restart.
+		s.keys = keys[i : i+1]
+		dbs, _ := dbOpenTestRand(t, true, dbRand)
+		w := newTestWorkerDB(t, s, dbs.Wdb)
+		w.Start()
+
+		// Check if the cert formed
+		select {
+		case <-s.txmsg:
+			formedAt = i
+		case <-time.After(time.Second):
+		}
+
+		w.Shutdown()
+	}
+
+	require.True(t, formedAt > 1)
+	require.True(t, formedAt < 5)
 }

@@ -31,8 +31,8 @@ import (
 	"github.com/algorand/go-algorand/util/db"
 )
 
-func dbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
-	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
+func dbOpenTestRand(t testing.TB, inMemory bool, rnd uint64) (db.Pair, string) {
+	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), rnd)
 	dbs, err := db.OpenPair(fn, inMemory)
 	require.NoErrorf(t, err, "Filename: %s\nInMemory: %v", fn, inMemory)
 
@@ -41,6 +41,10 @@ func dbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
 	dbs.Wdb.SetLogger(dblogger)
 
 	return dbs, fn
+}
+
+func dbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
+	return dbOpenTestRand(t, inMemory, crypto.RandUint64())
 }
 
 func TestPendingSigDB(t *testing.T) {

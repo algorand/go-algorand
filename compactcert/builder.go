@@ -194,6 +194,8 @@ func (ccw *Worker) builder(latest basics.Round) {
 	// if a compact cert has been committed, so that we can stop trying
 	// to build it.
 	for {
+		ccw.tryBuilding()
+
 		nextrnd := latest + 1
 		select {
 		case <-ccw.ctx.Done():
@@ -227,8 +229,6 @@ func (ccw *Worker) builder(latest basics.Round) {
 			ccw.broadcastSigs(r, proto)
 		}
 		latest = newLatest
-
-		ccw.tryBuilding()
 	}
 }
 
