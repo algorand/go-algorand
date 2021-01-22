@@ -280,7 +280,11 @@ func (cs *roundCowState) ConsensusParams() config.ConsensusParams {
 	return cs.proto
 }
 
-func (cs *roundCowState) compactCert(certRnd basics.Round, cert compactcert.Cert, atRound basics.Round) error {
+func (cs *roundCowState) compactCert(certRnd basics.Round, certType protocol.CompactCertType, cert compactcert.Cert, atRound basics.Round) error {
+	if certType != protocol.CompactCertBasic {
+		return fmt.Errorf("compact cert type %d not supported", certType)
+	}
+
 	nextCertRnd := cs.compactCertNext()
 
 	certHdr, err := cs.blockHdr(certRnd)
@@ -899,7 +903,7 @@ func applyTransaction(tx transactions.Transaction, balances *roundCowState, eval
 		err = apply.ApplicationCall(tx.ApplicationCallTxnFields, tx.Header, balances, &ad, evalParams, ctr)
 
 	case protocol.CompactCertTx:
-		err = balances.compactCert(tx.CertRound, tx.Cert, tx.Header.FirstValid)
+		err = balances.compactCert(tx.CertRound, tx.CertType, tx.Cert, tx.Header.FirstValid)
 
 	default:
 		err = fmt.Errorf("Unknown transaction type %v", tx.Type)
