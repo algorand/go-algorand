@@ -616,6 +616,7 @@ func (eval *BlockEvaluator) TransactionGroup(txns []transactions.SignedTxn) erro
 // transaction in the group
 func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxn) (res []*logic.EvalParams) {
 	var minTealVersion uint64
+	var tealVersionComputed bool
 	res = make([]*logic.EvalParams, len(txgroup))
 	for i, txn := range txgroup {
 		// Ignore any non-ApplicationCall transactions
@@ -624,8 +625,9 @@ func (eval *BlockEvaluator) prepareEvalParams(txgroup []transactions.SignedTxn) 
 		}
 
 		// Initialize minTealVersion lazily
-		if minTealVersion == 0 {
+		if !tealVersionComputed {
 			minTealVersion = logic.ComputeMinTealVersion(txgroup)
+			tealVersionComputed = true
 		}
 
 		res[i] = &logic.EvalParams{
