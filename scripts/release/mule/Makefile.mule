@@ -58,7 +58,7 @@ mule-package-%:
 
 mule-releases-page:
 	echo Generating the releases page...
-	cd scripts/release/mule/deploy/releases_page && ./generate_releases_page.sh
+	scripts/release/mule/deploy/releases_page/generate_releases_page.sh
 
 mule-sign:
 	scripts/release/mule/sign/sign.sh

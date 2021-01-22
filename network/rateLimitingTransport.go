@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@ var ErrConnectionQueueingTimeout = errors.New("rateLimitingTransport: queueing t
 
 // makeRateLimitingTransport creates a rate limiting http transport that would limit the requests rate
 // according to the entries in the phonebook.
-func makeRateLimitingTransport(phonebook Phonebook, queueingTimeout time.Duration, dialer *Dialer) rateLimitingTransport {
+func makeRateLimitingTransport(phonebook Phonebook, queueingTimeout time.Duration, dialer *Dialer, maxIdleConnsPerHost int) rateLimitingTransport {
 	defaultTransport := http.DefaultTransport.(*http.Transport)
 	return rateLimitingTransport{
 		phonebook: phonebook,
@@ -46,6 +46,7 @@ func makeRateLimitingTransport(phonebook Phonebook, queueingTimeout time.Duratio
 			IdleConnTimeout:       defaultTransport.IdleConnTimeout,
 			TLSHandshakeTimeout:   defaultTransport.TLSHandshakeTimeout,
 			ExpectContinueTimeout: defaultTransport.ExpectContinueTimeout,
+			MaxIdleConnsPerHost:   maxIdleConnsPerHost,
 		},
 		queueingTimeout: queueingTimeout,
 	}

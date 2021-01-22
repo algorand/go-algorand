@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -133,8 +133,9 @@ func loadTelemetryConfig(path string) (TelemetryConfig, error) {
 		return createTelemetryConfig(), err
 	}
 	defer f.Close()
-	cfg := createTelemetryConfig()
+	var cfg TelemetryConfig
 	var marshaledConfig MarshalingTelemetryConfig
+	marshaledConfig.TelemetryConfig = createTelemetryConfig()
 	dec := json.NewDecoder(f)
 	err = dec.Decode(&marshaledConfig)
 	cfg = marshaledConfig.TelemetryConfig

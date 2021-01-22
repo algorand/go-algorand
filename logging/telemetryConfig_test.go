@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -106,4 +106,16 @@ func Test_SanitizeTelemetryString(t *testing.T) {
 	for _, test := range tests {
 		require.Equal(t, test.expected, SanitizeTelemetryString(test.input, test.parts))
 	}
+}
+
+func TestLoadTelemetryConfig(t *testing.T) {
+	testLoggingConfigFileName := "../test/testdata/configs/logging/logging.config.test1"
+	tc, err := loadTelemetryConfig(testLoggingConfigFileName)
+	require.NoError(t, err)
+	require.Equal(t, true, tc.Enable)
+	// make sure the user name was loaded from the specified file
+	require.Equal(t, "test-user-name", tc.UserName)
+	// ensure we know how to default correctly if some of the fields in the configuration field aren't specified.
+	require.Equal(t, createTelemetryConfig().Password, tc.Password)
+
 }

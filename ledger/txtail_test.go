@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -31,8 +31,7 @@ import (
 )
 
 func TestTxTailCheckdup(t *testing.T) {
-	ledger := makeMockLedgerForTracker(t, true)
-	ledger.blocks = randomInitChain(protocol.ConsensusCurrentVersion, 1)
+	ledger := makeMockLedgerForTracker(t, true, 1, protocol.ConsensusCurrentVersion)
 	proto := config.Consensus[protocol.ConsensusCurrentVersion]
 	tail := txTail{}
 	require.NoError(t, tail.loadFromDisk(ledger))

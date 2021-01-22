@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -152,7 +152,7 @@ func TestGroupTransactionsDifferentSizes(t *testing.T) {
 
 		// broadcasting group should succeed
 		err = client.BroadcastTransactionGroup(stxns)
-		a.NoError(err)
+		a.NoErrorf(err, "group size = %d", gs)
 
 		// wait for the txids and check balances
 		_, curRound := fixture.GetBalanceAndRound(account0)

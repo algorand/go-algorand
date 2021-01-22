@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -442,11 +442,11 @@ func genBigNoOpAndBigHashes(numOps uint32, numHashes uint32, hashSize string) []
 	progParts = append(progParts, `int 1`)
 	progParts = append(progParts, `return`)
 	progAsm := strings.Join(progParts, "\n")
-	progBytes, err := logic.AssembleString(progAsm)
+	ops, err := logic.AssembleString(progAsm)
 	if err != nil {
 		panic(err)
 	}
-	return progBytes
+	return ops.Program
 }
 
 func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKeys uint32, numLocalKeys uint32) ([]byte, string) {
@@ -577,11 +577,11 @@ func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKe
 	progAsm := strings.Join(progParts, "\n")
 
 	// assemble
-	progBytes, err := logic.AssembleString(progAsm)
+	ops, err := logic.AssembleString(progAsm)
 	if err != nil {
 		panic(err)
 	}
-	return progBytes, progAsm
+	return ops.Program, progAsm
 }
 
 func sendAsGroup(txgroup []transactions.Transaction, client libgoal.Client, h []byte) (err error) {
