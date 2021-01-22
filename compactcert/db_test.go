@@ -36,9 +36,9 @@ func dbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
 	dbs, err := db.OpenPair(fn, inMemory)
 	require.NoErrorf(t, err, "Filename: %s\nInMemory: %v", fn, inMemory)
 
-        dblogger := logging.TestingLog(t)
-        dbs.Rdb.SetLogger(dblogger)
-        dbs.Wdb.SetLogger(dblogger)
+	dblogger := logging.TestingLog(t)
+	dbs.Rdb.SetLogger(dblogger)
+	dbs.Wdb.SetLogger(dblogger)
 
 	return dbs, fn
 }
@@ -47,20 +47,20 @@ func TestPendingSigDB(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 	defer dbs.Close()
 
-	err := dbs.Wdb.Atomic(func (ctx context.Context, tx *sql.Tx) error {
+	err := dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return initDB(tx)
 	})
 	require.NoError(t, err)
 
 	for r := basics.Round(0); r < basics.Round(100); r++ {
-		err = dbs.Wdb.Atomic(func (ctx context.Context, tx *sql.Tx) error {
+		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			var psig pendingSig
 			crypto.RandBytes(psig.signer[:])
 			return addPendingSig(tx, r, psig)
 		})
 		require.NoError(t, err)
 
-		err = dbs.Wdb.Atomic(func (ctx context.Context, tx *sql.Tx) error {
+		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			var psig pendingSig
 			crypto.RandBytes(psig.signer[:])
 			// watermark signers from this node: 4th byte is zero
@@ -72,14 +72,14 @@ func TestPendingSigDB(t *testing.T) {
 	}
 
 	for deletedBefore := basics.Round(0); deletedBefore < basics.Round(200); deletedBefore++ {
-		err = dbs.Wdb.Atomic(func (ctx context.Context, tx *sql.Tx) error {
+		err = dbs.Wdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			return deletePendingSigsBeforeRound(tx, deletedBefore)
 		})
 		require.NoError(t, err)
 
 		var psigs map[basics.Round][]pendingSig
 		var psigsThis map[basics.Round][]pendingSig
-		err = dbs.Rdb.Atomic(func (ctx context.Context, tx *sql.Tx) error {
+		err = dbs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 			var err error
 			psigs, err = getPendingSigs(tx)
 			if err != nil {
@@ -95,7 +95,7 @@ func TestPendingSigDB(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		expectedLen := 100-int(deletedBefore)
+		expectedLen := 100 - int(deletedBefore)
 		if expectedLen < 0 {
 			expectedLen = 0
 		}
