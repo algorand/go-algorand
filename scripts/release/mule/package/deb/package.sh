@@ -7,14 +7,17 @@ echo
 date "+build_release begin PACKAGE DEB stage %Y%m%d_%H%M%S"
 echo
 
-BRANCH=${BRANCH:-$(./scripts/compute_branch.sh)}
-CHANNEL=${CHANNEL:-$(./scripts/compute_branch_channel.sh "$BRANCH")}
+if [ -z "$NETWORK" ]; then
+    echo "[$0] NETWORK is missing."
+    exit 1
+fi
+
+CHANNEL=$("./scripts/release/mule/common/get_channel.sh" "$NETWORK")
 VERSION=${VERSION:-$(./scripts/compute_build_number.sh -f)}
 # A make target in Makefile.mule may pass the name as an argument.
 PACKAGE_NAME="$1"
 
-DEFAULTNETWORK=${DEFAULTNETWORK:-$(./scripts/compute_branch_network.sh "$BRANCH")}
-DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "$DEFAULTNETWORK")
+DEFAULT_RELEASE_NETWORK=$("./scripts/compute_branch_release_network.sh" "$NETWORK")
 export DEFAULT_RELEASE_NETWORK
 
 find tmp/node_pkgs -name "*${CHANNEL}*linux*${VERSION}*.tar.gz" | cut -d '/' -f3-4 | sort --unique | while read OS_ARCH; do

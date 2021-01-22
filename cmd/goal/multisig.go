@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -161,14 +161,16 @@ var signProgramCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf(fileReadError, programSource, err)
 			}
-			program, err = logic.AssembleString(string(text))
+			ops, err := logic.AssembleString(string(text))
 			if err != nil {
+				ops.ReportProblems(programSource)
 				reportErrorf("%s: %s", programSource, err)
 			}
 			if outname == "" {
 				outname = fmt.Sprintf("%s.lsig", programSource)
 			}
-			lsig.Logic = program
+			lsig.Logic = ops.Program
+			program = ops.Program
 		} else if logicSigFile != "" {
 			if progByteFile != "" {
 				reportErrorf(multisigProgramCollision)

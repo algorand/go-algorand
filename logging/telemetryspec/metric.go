@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -16,7 +16,11 @@
 
 package telemetryspec
 
-import "time"
+import (
+	"strconv"
+	"strings"
+	"time"
+)
 
 // Telemetry metrics
 
@@ -35,21 +39,24 @@ type MetricDetails interface {
 
 // AssembleBlockStats is the set of stats captured when we compute AssemblePayset
 type AssembleBlockStats struct {
-	StartCount          int
-	IncludedCount       int
-	InvalidCount        int
-	MinFee              uint64
-	MaxFee              uint64
-	AverageFee          uint64
-	MinLength           int
-	MaxLength           int
-	MinPriority         uint64
-	MaxPriority         uint64
-	CommittedCount      int
-	StopReason          string
-	TotalLength         uint64
-	EarlyCommittedCount uint64
-	Nanoseconds         int64
+	StartCount                int
+	IncludedCount             int // number of transactions that are included in a block
+	InvalidCount              int // number of transaction groups that are included in a block
+	MinFee                    uint64
+	MaxFee                    uint64
+	AverageFee                uint64
+	MinLength                 int
+	MaxLength                 int
+	MinPriority               uint64
+	MaxPriority               uint64
+	CommittedCount            int // number of transaction blocks that are included in a block
+	StopReason                string
+	TotalLength               uint64
+	EarlyCommittedCount       uint64 // number of transaction groups that were pending on the transaction pool but have been included in previous block
+	Nanoseconds               int64
+	ProcessingTime            transactionProcessingTimeDistibution
+	BlockGenerationDuration   uint64
+	TransactionsLoopStartTime int64
 }
 
 // AssembleBlockTimeout represents AssemblePayset exiting due to timeout
@@ -60,6 +67,9 @@ const AssembleBlockFull = "block-full"
 
 // AssembleBlockEmpty represents AssemblePayset exiting due to no more txns
 const AssembleBlockEmpty = "pool-empty"
+
+// AssembleBlockAbandon represents the block generation being abandoned since it won't be needed.
+const AssembleBlockAbandon = "block-abandon"
 
 const assembleBlockMetricsIdentifier Metric = "AssembleBlock"
 
@@ -128,4 +138,50 @@ type RoundTimingMetrics struct {
 // Identifier implements the required MetricDetails interface, retrieving the Identifier for this set of metrics.
 func (m RoundTimingMetrics) Identifier() Metric {
 	return roundTimingMetricsIdentifier
+}
+
+type transactionProcessingTimeDistibution struct {
+	// 10 buckets: 0-100Kns, 100Kns-200Kns .. 900Kns-1ms
+	// 9 buckets: 1ms-2ms .. 9ms-10ms
+	// 9 buckets: 10ms-20ms .. 90ms-100ms
+	// 9 buckets: 100ms-200ms .. 900ms-1s
+	// 1 bucket: 1s+
+	transactionBuckets [38]int
+}
+
+// MarshalJSON supports json.Marshaler interface
+// generate comma delimited text representing the transaction processing timing
+func (t transactionProcessingTimeDistibution) MarshalJSON() ([]byte, error) {
+	var outStr strings.Builder
+	outStr.WriteString("[")
+	for i, bucket := range t.transactionBuckets {
+		outStr.WriteString(strconv.Itoa(bucket))
+		if i != len(t.transactionBuckets)-1 {
+			outStr.WriteString(",")
+		}
+	}
+	outStr.WriteString("]")
+	return []byte(outStr.String()), nil
+}
+
+func (t *transactionProcessingTimeDistibution) AddTransaction(duration time.Duration) {
+	var idx int64
+	if duration < 10*time.Millisecond {
+		if duration < time.Millisecond {
+			idx = int64(duration / (100000 * time.Nanosecond))
+		} else {
+			idx = int64(10 + duration/(1*time.Millisecond))
+		}
+	} else {
+		if duration < 100*time.Millisecond {
+			idx = int64(19 + duration/(10*time.Millisecond))
+		} else if duration < time.Second {
+			idx = int64(28 + duration/(100*time.Millisecond))
+		} else {
+			idx = 37
+		}
+	}
+	if idx >= 0 && idx <= 37 {
+		t.transactionBuckets[idx]++
+	}
 }

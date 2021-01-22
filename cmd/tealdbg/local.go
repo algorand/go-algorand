@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -316,13 +316,13 @@ func (r *LocalRunner) Setup(dp *DebugParams) (err error) {
 			r.runs[i].program = data
 			if IsTextFile(data) {
 				source := string(data)
-				program, offsets, err := logic.AssembleStringWithVersionEx(source, r.proto.LogicSigVersion)
+				ops, err := logic.AssembleStringWithVersion(source, r.proto.LogicSigVersion)
 				if err != nil {
 					return err
 				}
-				r.runs[i].program = program
+				r.runs[i].program = ops.Program
 				if !dp.DisableSourceMap {
-					r.runs[i].offsetToLine = offsets
+					r.runs[i].offsetToLine = ops.OffsetToLine
 					r.runs[i].source = source
 				}
 			}

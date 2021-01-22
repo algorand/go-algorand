@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@
 package config
 
 var defaultLocal = Local{
-	Version:                                 13,
+	Version:                                 14,
 	AccountsRebuildSynchronousMode:          1,
 	AnnounceParticipationKey:                true,
 	Archival:                                false,
@@ -100,4 +100,5 @@ var defaultLocal = Local{
 	TxSyncServeResponseSize:                 1000000,
 	TxSyncTimeoutSeconds:                    30,
 	UseXForwardedForAddressField:            "",
+	VerifiedTranscationsCacheSize:           30000,
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,6 +19,7 @@ package agreement
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -87,21 +88,23 @@ func persist(log serviceLogger, crash db.Accessor, Round basics.Round, Period pe
 
 // reset deletes the existing recovery state from database.
 //
-// It returns whether the delete operation was successfull or not.
-func reset(log logging.Logger, crash db.Accessor) (err error) {
+// In case it's unable to clear the Service table, an error would get logged.
+func reset(log logging.Logger, crash db.Accessor) {
 	logging.Base().Infof("reset (agreement): resetting crash state")
 
-	err = crash.Atomic(func(ctx context.Context, tx *sql.Tx) (res error) {
+	err := crash.Atomic(func(ctx context.Context, tx *sql.Tx) (err error) {
 		// we could not retrieve our state, so wipe it
-		_, err := tx.Exec("delete from Service")
-		if err != nil {
-			res = fmt.Errorf("reset (agreement): failed to clear Service table")
-			return
-		}
-		return nil
+		_, err = tx.Exec("delete from Service")
+		return
 	})
-	return err
+
+	if err != nil {
+		logging.Base().Warnf("reset (agreement): failed to clear Service table - %v", err)
+	}
 }
+
+// errNoCrashStateAvailable returned by restore when the crash recovery state is not available in the crash recovery database table.
+var errNoCrashStateAvailable = errors.New("restore (agreement): no crash state available")
 
 // restore reads state from a crash database. It does not attempt to parse the encoded data.
 //
@@ -114,9 +117,17 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 		}
 	}()
 
-	crash.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+	err = crash.Atomic(func(ctx context.Context, tx *sql.Tx) error {
 		return agreeInstallDatabase(tx)
-	}) // ignore error
+	})
+
+	if err == nil {
+		// the above call was completed sucecssfully, which means that we've just created the table ( which wasn't there ! ).
+		// in that case, the table is guaranteed to be empty, and therefore we can return right here.
+		logging.Base().Infof("restore (agreement): crash state table initialized")
+		err = errNoCrashStateAvailable
+		return
+	}
 
 	err = crash.Atomic(func(ctx context.Context, tx *sql.Tx) (res error) {
 		var reset bool
@@ -143,10 +154,10 @@ func restore(log logging.Logger, crash db.Accessor) (raw []byte, err error) {
 			return err
 		}
 		if nrows != 1 {
-			logging.Base().Infof("restore (agreement): crash state not found (n = %v)", nrows)
+			logging.Base().Infof("restore (agreement): crash state not found (n = %d)", nrows)
 			reset = true
 			noCrashState = true // this is a normal case (we have leftover crash state from an old round)
-			return fmt.Errorf("restore (agreement): crash state not found (n = %v)", nrows)
+			return errNoCrashStateAvailable
 		}
 
 		row = tx.QueryRow("select data from Service")

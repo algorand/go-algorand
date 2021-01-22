@@ -6,6 +6,8 @@ agents:
     arch: amd64
     env:
       - TRAVIS_BRANCH=${GIT_BRANCH}
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
@@ -16,6 +18,8 @@ agents:
     arch: amd64
     env:
       - TRAVIS_BRANCH=${GIT_BRANCH}
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=amd64
@@ -26,6 +30,8 @@ agents:
     arch: arm64v8
     env:
       - TRAVIS_BRANCH=${GIT_BRANCH}
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm64v8
@@ -36,6 +42,8 @@ agents:
     arch: arm32v6
     env:
       - TRAVIS_BRANCH=${GIT_BRANCH}
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
       - ARCH=arm32v6
@@ -45,6 +53,8 @@ agents:
     version: scripts/configure_dev-deps.sh
     env:
       - TRAVIS_BRANCH=${GIT_BRANCH}
+      - NETWORK=$NETWORK
+      - VERSION=$VERSION
     buildArgs:
       - GOLANG_VERSION=`./scripts/get_golang_version.sh`
     volumes:

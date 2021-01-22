@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -37,7 +37,7 @@ type Dialer struct {
 
 // makeRateLimitingDialer creates a rate limiting dialer that would limit the connections
 // according to the entries in the phonebook.
-func makeRateLimitingDialer(phonebook Phonebook, resolver *dnssec.Resolver) Dialer {
+func makeRateLimitingDialer(phonebook Phonebook, resolver dnssec.ResolverIf) Dialer {
 	var innerDialer netDialer = &net.Dialer{
 		Timeout:   30 * time.Second,
 		KeepAlive: 30 * time.Second,

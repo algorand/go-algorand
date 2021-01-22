@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -95,8 +95,8 @@ func makeUnsignedASATx(appIdx uint64, creator basics.Address, round int) transac
 			creator[:],
 			creator[:],
 			creator[:],
-			[]byte{0, 0, 0, 1, 0, 0, 0, 0},
-			[]byte{0, 0, 0, 0, 0, 0, 0, 0},
+			{0, 0, 0, 1, 0, 0, 0, 0},
+			{0, 0, 0, 0, 0, 0, 0, 0},
 		}
 		tx.OnCompletion = transactions.NoOpOC
 		tx.ApprovalProgram = asaAppovalProgram
@@ -126,12 +126,6 @@ func makeUnsignedPaymentTx(sender basics.Address, round int) transactions.Transa
 			Amount:   basics.MicroAlgos{Raw: 1234},
 		},
 	}
-}
-
-type alwaysVerifiedCache struct{}
-
-func (vc *alwaysVerifiedCache) Verified(txn transactions.SignedTxn, params verify.Params) bool {
-	return true
 }
 
 func benchmarkFullBlocks(params testParams, b *testing.B) {
@@ -232,11 +226,11 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 				if createdAppIdx != 0 {
 					// Creator spends to an opted in acct
 					tx.ApplicationArgs = [][]byte{
-						[]byte{0, 0, 0, 0, 0, 0, 0, 1},
+						{0, 0, 0, 0, 0, 0, 0, 1},
 					}
 					tx.Accounts = []basics.Address{
 						accts[j%len(accts)],
-						basics.Address{},
+						{},
 					}
 				}
 			default:
@@ -322,10 +316,10 @@ func benchmarkFullBlocks(params testParams, b *testing.B) {
 	b.Logf("built %d blocks, each with %d txns", numBlocks, txPerBlock)
 
 	// eval + add all the (valid) blocks to the second ledger, measuring it this time
-	vc := alwaysVerifiedCache{}
+	vc := verify.GetMockedCache(true)
 	b.ResetTimer()
 	for _, blk := range blocks {
-		_, err = eval(context.Background(), l1, blk, true, &vc, nil)
+		_, err = eval(context.Background(), l1, blk, true, vc, nil)
 		require.NoError(b, err)
 		err = l1.AddBlock(blk, cert)
 		require.NoError(b, err)
@@ -401,7 +395,7 @@ func init() {
 	testCases[params.name] = params
 
 	// Int 1
-	progBytes, err := logic.AssembleStringV2(`int 1`)
+	ops, err := logic.AssembleStringWithVersion(`int 1`, 2)
 	if err != nil {
 		panic(err)
 	}
@@ -409,7 +403,7 @@ func init() {
 	params = testParams{
 		testType: "app",
 		name:     fmt.Sprintf("int-1"),
-		program:  progBytes,
+		program:  ops.Program,
 	}
 	testCases[params.name] = params
 
@@ -417,21 +411,23 @@ func init() {
 	params = testParams{
 		testType: "app",
 		name:     fmt.Sprintf("int-1-many-apps"),
-		program:  progBytes,
+		program:  ops.Program,
 		numApps:  10,
 	}
 	testCases[params.name] = params
 
 	// Assemble ASA programs
-	asaClearStateProgram, err = logic.AssembleStringV2(asaClearAsm)
+	ops, err = logic.AssembleStringWithVersion(asaClearAsm, 2)
 	if err != nil {
 		panic(err)
 	}
+	asaClearStateProgram = ops.Program
 
-	asaAppovalProgram, err = logic.AssembleStringV2(asaAppovalAsm)
+	ops, err = logic.AssembleStringWithVersion(asaAppovalAsm, 2)
 	if err != nil {
 		panic(err)
 	}
+	asaAppovalProgram = ops.Program
 
 	// ASAs
 	params = testParams{
@@ -475,11 +471,11 @@ func genBigNoOp(numOps int) []byte {
 	progParts = append(progParts, `int 1`)
 	progParts = append(progParts, `return`)
 	progAsm := strings.Join(progParts, "\n")
-	progBytes, err := logic.AssembleStringV2(progAsm)
+	ops, err := logic.AssembleStringWithVersion(progAsm, 2)
 	if err != nil {
 		panic(err)
 	}
-	return progBytes
+	return ops.Program
 }
 
 func genBigHashes(numHashes int, numPad int) []byte {
@@ -495,11 +491,11 @@ func genBigHashes(numHashes int, numPad int) []byte {
 	progParts = append(progParts, `int 1`)
 	progParts = append(progParts, `return`)
 	progAsm := strings.Join(progParts, "\n")
-	progBytes, err := logic.AssembleStringV2(progAsm)
+	ops, err := logic.AssembleStringWithVersion(progAsm, 2)
 	if err != nil {
 		panic(err)
 	}
-	return progBytes
+	return ops.Program
 }
 
 func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
@@ -638,7 +634,7 @@ func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
 	progAsm := strings.Join(progParts, "\n")
 
 	// assemble
-	progBytes, err := logic.AssembleStringV2(progAsm)
+	ops, err := logic.AssembleStringWithVersion(progAsm, 2)
 	if err != nil {
 		panic(err)
 	}
@@ -647,7 +643,7 @@ func genAppTestParams(numKeys int, bigDiffs bool, stateType string) testParams {
 		testType:   "app",
 		name:       fmt.Sprintf("bench-%s-%d-%s", stateType, numKeys, testDiffName),
 		schemaSize: uint64(numKeys),
-		program:    progBytes,
+		program:    ops.Program,
 	}
 }
 
@@ -714,7 +710,7 @@ func genAppTestParamsMaxClone(numKeys int) testParams {
 	progAsm := strings.Join(progParts, "\n")
 
 	// assemble
-	progBytes, err := logic.AssembleStringV2(progAsm)
+	ops, err := logic.AssembleStringWithVersion(progAsm, 2)
 	if err != nil {
 		panic(err)
 	}
@@ -723,7 +719,7 @@ func genAppTestParamsMaxClone(numKeys int) testParams {
 		testType:   "app",
 		name:       fmt.Sprintf("bench-%s-%d-%s", "global", numKeys, testDiffName),
 		schemaSize: uint64(numKeys),
-		program:    progBytes,
+		program:    ops.Program,
 	}
 }
 
