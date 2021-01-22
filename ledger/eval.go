@@ -390,7 +390,7 @@ func startEvaluator(l ledgerForEvaluator, hdr bookkeeping.BlockHeader, paysetHin
 		}
 
 		base.txnCount = eval.prevHeader.TxnCounter
-		base.compactCertNextRnd = eval.prevHeader.CompactCertNextRound
+		base.compactCertNextRnd = eval.prevHeader.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
 		prevProto, ok = config.Consensus[eval.prevHeader.CurrentProtocol]
 		if !ok {
 			return nil, protocol.Error(eval.prevHeader.CurrentProtocol)
@@ -951,13 +951,17 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			eval.block.TxnCounter = 0
 		}
 
+		var basicCompactCert bookkeeping.CompactCertState
 		var err error
-		eval.block.CompactCertVoters, eval.block.CompactCertVotersTotal, err = eval.compactCertVotersAndTotal()
+		basicCompactCert.CompactCertVoters, basicCompactCert.CompactCertVotersTotal, err = eval.compactCertVotersAndTotal()
 		if err != nil {
 			return err
 		}
 
-		eval.block.CompactCertNextRound = eval.state.compactCertNext()
+		basicCompactCert.CompactCertNextRound = eval.state.compactCertNext()
+
+		eval.block.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState)
+		eval.block.CompactCert[protocol.CompactCertBasic] = basicCompactCert
 	}
 
 	return nil
@@ -984,14 +988,19 @@ func (eval *BlockEvaluator) finalValidation() error {
 		if err != nil {
 			return err
 		}
-		if eval.block.CompactCertVoters != expectedVoters {
-			return fmt.Errorf("CompactCertVoters wrong: %v != %v", eval.block.CompactCertVoters, expectedVoters)
+		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters != expectedVoters {
+			return fmt.Errorf("CompactCertVoters wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVoters, expectedVoters)
 		}
-		if eval.block.CompactCertVotersTotal != expectedVotersWeight {
-			return fmt.Errorf("CompactCertVotersTotal wrong: %v != %v", eval.block.CompactCertVotersTotal, expectedVotersWeight)
+		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal != expectedVotersWeight {
+			return fmt.Errorf("CompactCertVotersTotal wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal, expectedVotersWeight)
 		}
-		if eval.block.CompactCertNextRound != eval.state.compactCertNext() {
-			return fmt.Errorf("CompactCertNextRound wrong: %v != %v", eval.block.CompactCertNextRound, eval.state.compactCertNext())
+		if eval.block.CompactCert[protocol.CompactCertBasic].CompactCertNextRound != eval.state.compactCertNext() {
+			return fmt.Errorf("CompactCertNextRound wrong: %v != %v", eval.block.CompactCert[protocol.CompactCertBasic].CompactCertNextRound, eval.state.compactCertNext())
+		}
+		for ccType := range eval.block.CompactCert {
+			if ccType != protocol.CompactCertBasic {
+				return fmt.Errorf("CompactCertType %d unexpected", ccType)
+			}
 		}
 	}
 
