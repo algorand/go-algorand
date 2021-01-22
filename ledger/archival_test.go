@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -678,6 +679,16 @@ func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInB
 
 func TestArchivalFromNonArchival(t *testing.T) {
 	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
+	var optlock sync.Mutex // deadlock.Opts.Disable itself becomes a race!
+	optlock.Lock()
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	optlock.Unlock()
+	defer func() {
+		optlock.Lock()
+		deadlock.Opts.Disable = deadlockDisable
+		optlock.Unlock()
+	}()
 	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
 	require.NoError(t, err)
 	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
