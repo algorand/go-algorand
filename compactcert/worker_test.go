@@ -40,27 +40,28 @@ import (
 	"github.com/algorand/go-algorand/network"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/db"
+	"github.com/algorand/go-deadlock"
 )
 
 type testWorkerStubs struct {
-	t       testing.TB
-	mu      sync.Mutex
-	latest  basics.Round
-	waiters map[basics.Round]chan struct{}
-	blocks  map[basics.Round]bookkeeping.BlockHeader
-	keys    []account.Participation
-	sigmsg  chan []byte
-	txmsg   chan transactions.SignedTxn
+	t           testing.TB
+	mu          deadlock.Mutex
+	latest      basics.Round
+	waiters     map[basics.Round]chan struct{}
+	blocks      map[basics.Round]bookkeeping.BlockHeader
+	keys        []account.Participation
+	sigmsg      chan []byte
+	txmsg       chan transactions.SignedTxn
 	totalWeight int
 }
 
 func newWorkerStubs(t testing.TB, keys []account.Participation, totalWeight int) *testWorkerStubs {
 	s := &testWorkerStubs{
-		waiters: make(map[basics.Round]chan struct{}),
-		blocks:  make(map[basics.Round]bookkeeping.BlockHeader),
-		sigmsg:  make(chan []byte, 1024),
-		txmsg:   make(chan transactions.SignedTxn, 1024),
-		keys:    keys,
+		waiters:     make(map[basics.Round]chan struct{}),
+		blocks:      make(map[basics.Round]bookkeeping.BlockHeader),
+		sigmsg:      make(chan []byte, 1024),
+		txmsg:       make(chan transactions.SignedTxn, 1024),
+		keys:        keys,
 		totalWeight: totalWeight,
 	}
 	s.latest--
@@ -229,11 +230,11 @@ func TestWorkerAllSigs(t *testing.T) {
 		for {
 			tx := <-s.txmsg
 			require.Equal(t, tx.Txn.Type, protocol.CompactCertTx)
-			if tx.Txn.CertRound < basics.Round(iter+2) * basics.Round(proto.CompactCertRounds) {
+			if tx.Txn.CertRound < basics.Round(iter+2)*basics.Round(proto.CompactCertRounds) {
 				continue
 			}
 
-			require.Equal(t, tx.Txn.CertRound, basics.Round(iter+2) * basics.Round(proto.CompactCertRounds))
+			require.Equal(t, tx.Txn.CertRound, basics.Round(iter+2)*basics.Round(proto.CompactCertRounds))
 
 			signedHdr, err := s.BlockHdr(tx.Txn.CertRound)
 			require.NoError(t, err)
@@ -286,10 +287,10 @@ func TestWorkerPartialSigs(t *testing.T) {
 	}
 
 	// Expect a compact cert to be formed in the next CompactCertRounds/2.
-	s.advanceLatest(proto.CompactCertRounds/2)
+	s.advanceLatest(proto.CompactCertRounds / 2)
 	tx := <-s.txmsg
 	require.Equal(t, tx.Txn.Type, protocol.CompactCertTx)
-	require.Equal(t, tx.Txn.CertRound, 2 * basics.Round(proto.CompactCertRounds))
+	require.Equal(t, tx.Txn.CertRound, 2*basics.Round(proto.CompactCertRounds))
 
 	signedHdr, err := s.BlockHdr(tx.Txn.CertRound)
 	require.NoError(t, err)
