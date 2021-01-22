@@ -238,9 +238,12 @@ func TestWorkerAllSigs(t *testing.T) {
 			signedHdr, err := s.BlockHdr(tx.Txn.CertRound)
 			require.NoError(t, err)
 
+			provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.CompactCertWeightThreshold), 1<<32)
+			require.False(t, overflowed)
+
 			ccparams := compactcert.Params{
 				Msg:          signedHdr,
-				ProvenWeight: uint64(s.totalWeight) * proto.CompactCertWeightThreshold / 100,
+				ProvenWeight: provenWeight,
 				SigRound:     basics.Round(signedHdr.Round + 1),
 				SecKQ:        proto.CompactCertSecKQ,
 			}
@@ -294,9 +297,12 @@ func TestWorkerPartialSigs(t *testing.T) {
 	signedHdr, err := s.BlockHdr(tx.Txn.CertRound)
 	require.NoError(t, err)
 
+	provenWeight, overflowed := basics.Muldiv(uint64(s.totalWeight), uint64(proto.CompactCertWeightThreshold), 1<<32)
+	require.False(t, overflowed)
+
 	ccparams := compactcert.Params{
 		Msg:          signedHdr,
-		ProvenWeight: uint64(s.totalWeight) * proto.CompactCertWeightThreshold / 100,
+		ProvenWeight: provenWeight,
 		SigRound:     basics.Round(signedHdr.Round + 1),
 		SecKQ:        proto.CompactCertSecKQ,
 	}
