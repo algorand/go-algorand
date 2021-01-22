@@ -62,6 +62,9 @@ type Worker struct {
 	ctx      context.Context
 	shutdown context.CancelFunc
 	wg       sync.WaitGroup
+
+	signed   basics.Round
+	signedCh chan struct{}
 }
 
 // NewWorker constructs a new Worker, as used by the node.
@@ -78,6 +81,7 @@ func NewWorker(db db.Accessor, log logging.Logger, accts Accounts, ledger Ledger
 		builders:  make(map[basics.Round]builder),
 		ctx:       ctx,
 		shutdown:  cancel,
+		signedCh:  make(chan struct{}, 1),
 	}
 }
 
@@ -98,11 +102,13 @@ func (ccw *Worker) Start() {
 	}
 	ccw.net.RegisterHandlers(handlers)
 
-	ccw.wg.Add(1)
-	go ccw.signer()
+	latest := ccw.ledger.Latest()
 
 	ccw.wg.Add(1)
-	go ccw.builder()
+	go ccw.signer(latest)
+
+	ccw.wg.Add(1)
+	go ccw.builder(latest)
 }
 
 // Shutdown stops any goroutines associated with this worker.
