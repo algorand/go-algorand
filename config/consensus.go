@@ -326,16 +326,18 @@ type ConsensusParams struct {
 	// accounts and balances) in the critical path.
 	CompactCertVotersLookback uint64
 
-	// CompactCertWeightThreshold is the percentage of top voters weight
+	// CompactCertWeightThreshold specifies the fraction of top voters weight
 	// that must sign the message (block header) for security.  The compact
 	// certificate ensures this threshold holds; however, forming a valid
 	// compact certificate requires a somewhat higher number of signatures,
 	// and the more signatures are collected, the smaller the compact cert
 	// can be.
 	//
-	// This threshold can be thought of as the maximum percentage of
+	// This threshold can be thought of as the maximum fraction of
 	// malicious weight that compact certificates defend against.
-	CompactCertWeightThreshold uint64
+	//
+	// The threshold is computed as CompactCertWeightThreshold/(1<<32).
+	CompactCertWeightThreshold uint32
 
 	// CompactCertSecKQ is the security parameter (k+q) for the compact
 	// certificate scheme.
@@ -822,7 +824,7 @@ func initConsensusProtocols() {
 	vFuture.CompactCertRounds = 128
 	vFuture.CompactCertTopVoters = 1024 * 1024
 	vFuture.CompactCertVotersLookback = 16
-	vFuture.CompactCertWeightThreshold = 30
+	vFuture.CompactCertWeightThreshold = (1 << 32) * 30 / 100
 	vFuture.CompactCertSecKQ = 128
 
 	Consensus[protocol.ConsensusFuture] = vFuture
