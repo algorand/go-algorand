@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# TIMEOUT=300
+# TIMEOUT=380
 
 date '+sectok-app start %Y%m%d_%H%M%S'
 
