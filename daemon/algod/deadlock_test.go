@@ -17,52 +17,41 @@
 package algod
 
 import (
-	"bytes"
 	"fmt"
-	"os"
-	"runtime"
+	"testing"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
+	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/logging"
 )
 
-type dumpLogger struct {
-	logging.Logger
-	*bytes.Buffer
-}
+func TestDeadlockLogging(t *testing.T) {
+	logFn := fmt.Sprintf("/tmp/test.%s.%d.log", t.Name(), crypto.RandUint64())
+	archiveFn := fmt.Sprintf("%s.archive", logFn)
 
-func (logger *dumpLogger) dump() {
-	logger.Error(logger.String())
-}
+	l := logging.Base()
+	logWriter := logging.MakeCyclicFileWriter(logFn, archiveFn, 65536, time.Hour)
+	l.SetOutput(logWriter)
 
-var logger = dumpLogger{Logger: logging.Base(), Buffer: bytes.NewBuffer(make([]byte, 0))}
+	setupDeadlockLogger()
 
-var deadlockPanic func()
-
-func setupDeadlockLogger() {
+	deadlockCh := make(chan struct{})
 	deadlockPanic = func() {
-		logger.Panic("potential deadlock detected")
+		close(deadlockCh)
 	}
 
-	deadlock.Opts.LogBuf = logger
-	deadlock.Opts.OnPotentialDeadlock = func() {
-		// Capture all goroutine stacks
-		var buf []byte
-		bufferSize := 256 * 1024
-		for {
-			buf = make([]byte, bufferSize)
-			if runtime.Stack(buf, true) < bufferSize {
-				break
-			}
-			bufferSize *= 2
+	var mu deadlock.RWMutex
+	defer func() {
+		r := recover()
+		if r != nil {
+			fmt.Printf("Recovered: %v\n", r)
 		}
+	}()
 
-		// Run this code in a separate goroutine because it might grab locks.
-		go func() {
-			logger.dump()
-			fmt.Fprintln(os.Stderr, string(buf))
-			deadlockPanic()
-		}()
-	}
+	mu.RLock()
+	mu.RLock()
+
+	_ = <- deadlockCh
 }
