@@ -24,6 +24,7 @@ ESCROWV2=$(${gcmd} clerk compile "${TEMPDIR}/simple.teal" -o "${TEMPDIR}/simple.
 
 # Fund v1 escrow, v2 escrow, and ACCOUNTD
 ACCOUNTD=$(${gcmd} account new|awk '{ print $6 }')
+# The Note attached to this transaction is a specific non-utf8 string to help test that tools are binary safe and not assuming a readable "string".
 ${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ESCROWV1}" --noteb64 /v8AAAAAAP/////+/g==
 ${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ESCROWV2}"
 ${gcmd} clerk send -a 10000000 -f "${ACCOUNT}" -t "${ACCOUNTD}"
