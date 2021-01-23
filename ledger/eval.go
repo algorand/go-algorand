@@ -955,17 +955,19 @@ func (eval *BlockEvaluator) endOfBlock() error {
 			eval.block.TxnCounter = 0
 		}
 
-		var basicCompactCert bookkeeping.CompactCertState
-		var err error
-		basicCompactCert.CompactCertVoters, basicCompactCert.CompactCertVotersTotal, err = eval.compactCertVotersAndTotal()
-		if err != nil {
-			return err
+		if eval.proto.CompactCertRounds > 0 {
+			var basicCompactCert bookkeeping.CompactCertState
+			var err error
+			basicCompactCert.CompactCertVoters, basicCompactCert.CompactCertVotersTotal, err = eval.compactCertVotersAndTotal()
+			if err != nil {
+				return err
+			}
+
+			basicCompactCert.CompactCertNextRound = eval.state.compactCertNext()
+
+			eval.block.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState)
+			eval.block.CompactCert[protocol.CompactCertBasic] = basicCompactCert
 		}
-
-		basicCompactCert.CompactCertNextRound = eval.state.compactCertNext()
-
-		eval.block.CompactCert = make(map[protocol.CompactCertType]bookkeeping.CompactCertState)
-		eval.block.CompactCert[protocol.CompactCertBasic] = basicCompactCert
 	}
 
 	return nil
