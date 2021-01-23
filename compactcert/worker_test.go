@@ -86,7 +86,9 @@ func (s *testWorkerStubs) addBlock(ccNextRound basics.Round) {
 	}
 
 	ccBasic.CompactCertNextRound = ccNextRound
-	hdr.CompactCert[protocol.CompactCertBasic] = ccBasic
+	hdr.CompactCert = map[protocol.CompactCertType]bookkeeping.CompactCertState{
+		protocol.CompactCertBasic: ccBasic,
+	}
 
 	s.blocks[s.latest] = hdr
 	if s.waiters[s.latest] != nil {
