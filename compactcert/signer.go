@@ -39,19 +39,20 @@ type sigFromAddr struct {
 	Sig    crypto.OneTimeSignature `codec:"sig"`
 }
 
-func (ccw *Worker) signer() {
+func (ccw *Worker) signer(latest basics.Round) {
 	var nextrnd basics.Round
 
+restart:
 	for {
-		latest := ccw.ledger.Latest()
 		latestHdr, err := ccw.ledger.BlockHdr(latest)
 		if err != nil {
 			ccw.log.Warnf("ccw.signer(): BlockHdr(latest %d): %v", latest, err)
 			time.Sleep(1 * time.Second)
+			latest = ccw.ledger.Latest()
 			continue
 		}
 
-		nextrnd := latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
+		nextrnd = latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
 		if nextrnd == 0 {
 			// Compact certs not enabled yet.  Keep monitoring new blocks.
 			nextrnd = latest + 1
@@ -66,10 +67,12 @@ func (ccw *Worker) signer() {
 			if err != nil {
 				ccw.log.Warnf("ccw.signer(): BlockHdr(next %d): %v", nextrnd, err)
 				time.Sleep(1 * time.Second)
-				continue
+				latest = ccw.ledger.Latest()
+				goto restart
 			}
 
 			ccw.signBlock(hdr)
+			ccw.signedBlock(nextrnd)
 			nextrnd++
 
 		case <-ccw.ctx.Done():
@@ -120,7 +123,7 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 
 	var sigs []sigFromAddr
 	var sigkeys []crypto.OneTimeSignatureVerifier
-	for _, key := range ccw.accts.Keys() {
+	for _, key := range keys {
 		if key.FirstValid <= sigKeyRound && sigKeyRound <= key.LastValid {
 			keyDilution := key.KeyDilution
 			if keyDilution == 0 {

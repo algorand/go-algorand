@@ -185,7 +185,7 @@ func (ccw *Worker) handleSig(sfa sigFromAddr, sender network.Peer) (network.Forw
 	return network.Broadcast, nil
 }
 
-func (ccw *Worker) builder() {
+func (ccw *Worker) builder(latest basics.Round) {
 	// We clock the building of compact certificates based on new
 	// blocks.  This is because the acceptable compact certificate
 	// size grows over time, so that we aim to construct an extremely
@@ -194,7 +194,9 @@ func (ccw *Worker) builder() {
 	// if a compact cert has been committed, so that we can stop trying
 	// to build it.
 	for {
-		nextrnd := ccw.ledger.Latest() + 1
+		ccw.tryBuilding()
+
+		nextrnd := latest + 1
 		select {
 		case <-ccw.ctx.Done():
 			ccw.wg.Done()
@@ -204,6 +206,8 @@ func (ccw *Worker) builder() {
 			// Continue on
 		}
 
+		// See if any new compact certificates were formed, according to
+		// the new block, which would mean we can clean up some builders.
 		hdr, err := ccw.ledger.BlockHdr(nextrnd)
 		if err != nil {
 			ccw.log.Warnf("ccw.builder: BlockHdr(%d): %v", nextrnd, err)
@@ -212,14 +216,19 @@ func (ccw *Worker) builder() {
 			ccw.deleteOldSigs(hdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound)
 		}
 
-		// Broadcast signatures based on the previous block that
-		// was agreed upon.  This ensures that, if we send a signature
+		// Broadcast signatures based on the previous block(s) that
+		// were agreed upon.  This ensures that, if we send a signature
 		// for block R, nodes will have already verified block R, because
 		// block R+1 has been formed.
 		proto := config.Consensus[hdr.CurrentProtocol]
-		ccw.broadcastSigs(nextrnd-1, proto)
+		newLatest := ccw.ledger.Latest()
+		for r := latest; r < newLatest; r++ {
+			// Wait for the signer to catch up; mostly relevant in tests.
+			ccw.waitForSignedBlock(r)
 
-		ccw.tryBuilding()
+			ccw.broadcastSigs(r, proto)
+		}
+		latest = newLatest
 	}
 }
 
@@ -238,6 +247,10 @@ func (ccw *Worker) builder() {
 // The broadcast schedule is randomized by the address of the block signer,
 // for load-balancing over time.
 func (ccw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams) {
+	if proto.CompactCertRounds == 0 {
+		return
+	}
+
 	ccw.mu.Lock()
 	defer ccw.mu.Unlock()
 
@@ -256,6 +269,13 @@ func (ccw *Worker) broadcastSigs(brnd basics.Round, proto config.ConsensusParams
 	}
 
 	for rnd, sigs := range roundSigs {
+		if rnd > brnd {
+			// Signature is for later block than brnd.  This could happen
+			// during catchup or testing.  The caller's loop will eventually
+			// invoke this function with a suitably high brnd.
+			continue
+		}
+
 		for _, sig := range sigs {
 			// Randomize which sigs get broadcast over time.
 			addr64 := binary.LittleEndian.Uint64(sig.signer[:])
@@ -329,6 +349,37 @@ func (ccw *Worker) tryBuilding() {
 		err = ccw.txnSender.BroadcastSignedTxGroup([]transactions.SignedTxn{stxn})
 		if err != nil {
 			ccw.log.Warnf("ccw.tryBuilding: broadcasting compact cert txn for %d: %v", rnd, err)
+		}
+	}
+}
+
+func (ccw *Worker) signedBlock(r basics.Round) {
+	ccw.mu.Lock()
+	ccw.signed = r
+	ccw.mu.Unlock()
+
+	select {
+	case ccw.signedCh <- struct{}{}:
+	default:
+	}
+}
+
+func (ccw *Worker) lastSignedBlock() basics.Round {
+	ccw.mu.Lock()
+	defer ccw.mu.Unlock()
+	return ccw.signed
+}
+
+func (ccw *Worker) waitForSignedBlock(r basics.Round) {
+	for {
+		if r <= ccw.lastSignedBlock() {
+			return
+		}
+
+		select {
+		case <-ccw.ctx.Done():
+			return
+		case <-ccw.signedCh:
 		}
 	}
 }

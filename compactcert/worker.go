@@ -22,10 +22,8 @@ import (
 	"sync"
 
 	"github.com/algorand/go-algorand/crypto/compactcert"
-	"github.com/algorand/go-algorand/data"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
-	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
@@ -42,12 +40,6 @@ type builder struct {
 	votersHdr bookkeeping.BlockHeader
 }
 
-// TransactionSender is an interface that captures the node's ability
-// to broadcast a new transaction.
-type TransactionSender interface {
-	BroadcastSignedTxGroup([]transactions.SignedTxn) error
-}
-
 // Worker builds compact certificates, by broadcasting
 // signatures using this node's participation keys, by collecting
 // signatures sent by others, and by sending out the resulting
@@ -59,9 +51,9 @@ type Worker struct {
 
 	db        db.Accessor
 	log       logging.Logger
-	accts     *data.AccountManager
-	ledger    *ledger.Ledger
-	net       network.GossipNode
+	accts     Accounts
+	ledger    Ledger
+	net       Network
 	txnSender TransactionSender
 
 	// builders is indexed by the round of the block being signed.
@@ -70,10 +62,13 @@ type Worker struct {
 	ctx      context.Context
 	shutdown context.CancelFunc
 	wg       sync.WaitGroup
+
+	signed   basics.Round
+	signedCh chan struct{}
 }
 
 // NewWorker constructs a new Worker, as used by the node.
-func NewWorker(db db.Accessor, log logging.Logger, accts *data.AccountManager, ledger *ledger.Ledger, net network.GossipNode, txnSender TransactionSender) *Worker {
+func NewWorker(db db.Accessor, log logging.Logger, accts Accounts, ledger Ledger, net Network, txnSender TransactionSender) *Worker {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Worker{
@@ -86,6 +81,7 @@ func NewWorker(db db.Accessor, log logging.Logger, accts *data.AccountManager, l
 		builders:  make(map[basics.Round]builder),
 		ctx:       ctx,
 		shutdown:  cancel,
+		signedCh:  make(chan struct{}, 1),
 	}
 }
 
@@ -106,11 +102,13 @@ func (ccw *Worker) Start() {
 	}
 	ccw.net.RegisterHandlers(handlers)
 
-	ccw.wg.Add(1)
-	go ccw.signer()
+	latest := ccw.ledger.Latest()
 
 	ccw.wg.Add(1)
-	go ccw.builder()
+	go ccw.signer(latest)
+
+	ccw.wg.Add(1)
+	go ccw.builder(latest)
 }
 
 // Shutdown stops any goroutines associated with this worker.
