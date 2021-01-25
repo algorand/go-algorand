@@ -198,7 +198,7 @@ func prepareNormalizedBalances(bals []encodedBalanceRecord, proto config.Consens
 		}
 		normalizedAccountBalances[i].normalizedBalance = normalizedAccountBalances[i].accountData.NormalizedOnlineBalance(proto)
 		normalizedAccountBalances[i].encodedAccountData = balance.AccountData
-		normalizedAccountBalances[i].accountHash = accountHashBuilder(balance.Address, normalizedAccountBalances[i].accountData, balance.AccountData)
+		normalizedAccountBalances[i].accountHash = accountHashBuilder(balance.Address, normalizedAccountBalances[i].accountData.RewardsBase, balance.AccountData)
 	}
 	return
 }
@@ -1543,7 +1543,7 @@ func (iterator *orderedAccountsIter) Next(ctx context.Context) (acct []accountAd
 				iterator.Close(ctx)
 				return
 			}
-			hash := accountHashBuilder(addr, accountData, buf)
+			hash := accountHashBuilder(addr, accountData.RewardsBase, buf)
 			_, err = iterator.insertStmt.ExecContext(ctx, addrbuf, hash)
 			if err != nil {
 				iterator.Close(ctx)
