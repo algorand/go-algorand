@@ -609,8 +609,8 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AssetParams")
 				return
 			}
-			if zb0014 > encodedMaxAssetsPerAccount {
-				err = msgp.ErrOverflow(uint64(zb0014), uint64(encodedMaxAssetsPerAccount))
+			if zb0014 > EncodedMaxAssetsPerAccount {
+				err = msgp.ErrOverflow(uint64(zb0014), uint64(EncodedMaxAssetsPerAccount))
 				err = msgp.WrapError(err, "struct-from-array", "AssetParams")
 				return
 			}
@@ -645,8 +645,8 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Assets")
 				return
 			}
-			if zb0016 > encodedMaxAssetsPerAccount {
-				err = msgp.ErrOverflow(uint64(zb0016), uint64(encodedMaxAssetsPerAccount))
+			if zb0016 > EncodedMaxAssetsPerAccount {
+				err = msgp.ErrOverflow(uint64(zb0016), uint64(EncodedMaxAssetsPerAccount))
 				err = msgp.WrapError(err, "struct-from-array", "Assets")
 				return
 			}
@@ -985,8 +985,8 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AssetParams")
 					return
 				}
-				if zb0029 > encodedMaxAssetsPerAccount {
-					err = msgp.ErrOverflow(uint64(zb0029), uint64(encodedMaxAssetsPerAccount))
+				if zb0029 > EncodedMaxAssetsPerAccount {
+					err = msgp.ErrOverflow(uint64(zb0029), uint64(EncodedMaxAssetsPerAccount))
 					err = msgp.WrapError(err, "AssetParams")
 					return
 				}
@@ -1019,8 +1019,8 @@ func (z *AccountData) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Assets")
 					return
 				}
-				if zb0031 > encodedMaxAssetsPerAccount {
-					err = msgp.ErrOverflow(uint64(zb0031), uint64(encodedMaxAssetsPerAccount))
+				if zb0031 > EncodedMaxAssetsPerAccount {
+					err = msgp.ErrOverflow(uint64(zb0031), uint64(EncodedMaxAssetsPerAccount))
 					err = msgp.WrapError(err, "Assets")
 					return
 				}
@@ -3331,8 +3331,8 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "AssetParams")
 				return
 			}
-			if zb0014 > encodedMaxAssetsPerAccount {
-				err = msgp.ErrOverflow(uint64(zb0014), uint64(encodedMaxAssetsPerAccount))
+			if zb0014 > EncodedMaxAssetsPerAccount {
+				err = msgp.ErrOverflow(uint64(zb0014), uint64(EncodedMaxAssetsPerAccount))
 				err = msgp.WrapError(err, "struct-from-array", "AssetParams")
 				return
 			}
@@ -3367,8 +3367,8 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				err = msgp.WrapError(err, "struct-from-array", "Assets")
 				return
 			}
-			if zb0016 > encodedMaxAssetsPerAccount {
-				err = msgp.ErrOverflow(uint64(zb0016), uint64(encodedMaxAssetsPerAccount))
+			if zb0016 > EncodedMaxAssetsPerAccount {
+				err = msgp.ErrOverflow(uint64(zb0016), uint64(EncodedMaxAssetsPerAccount))
 				err = msgp.WrapError(err, "struct-from-array", "Assets")
 				return
 			}
@@ -3713,8 +3713,8 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "AssetParams")
 					return
 				}
-				if zb0029 > encodedMaxAssetsPerAccount {
-					err = msgp.ErrOverflow(uint64(zb0029), uint64(encodedMaxAssetsPerAccount))
+				if zb0029 > EncodedMaxAssetsPerAccount {
+					err = msgp.ErrOverflow(uint64(zb0029), uint64(EncodedMaxAssetsPerAccount))
 					err = msgp.WrapError(err, "AssetParams")
 					return
 				}
@@ -3747,8 +3747,8 @@ func (z *BalanceRecord) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					err = msgp.WrapError(err, "Assets")
 					return
 				}
-				if zb0031 > encodedMaxAssetsPerAccount {
-					err = msgp.ErrOverflow(uint64(zb0031), uint64(encodedMaxAssetsPerAccount))
+				if zb0031 > EncodedMaxAssetsPerAccount {
+					err = msgp.ErrOverflow(uint64(zb0031), uint64(EncodedMaxAssetsPerAccount))
 					err = msgp.WrapError(err, "Assets")
 					return
 				}

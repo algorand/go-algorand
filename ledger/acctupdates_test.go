@@ -1400,7 +1400,7 @@ func TestCompactDeltas(t *testing.T) {
 	creatableDeltas[1][100] = ledgercore.ModifiedCreatable{Creator: addrs[2], Created: false}
 	creatableDeltas[1][101] = ledgercore.ModifiedCreatable{Creator: addrs[4], Created: true}
 
-	baseAccounts.write(dbAccountData{addr: addrs[0], accountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}})
+	baseAccounts.write(dbAccountData{addr: addrs[0], accountData: PersistedAccountData{AccountData: basics.AccountData{MicroAlgos: basics.MicroAlgos{Raw: 1}}}})
 	outAccountDeltas = makeCompactAccountDeltas(accountDeltas, baseAccounts)
 	outCreatableDeltas = compactCreatableDeltas(creatableDeltas)
 

@@ -80,6 +80,9 @@ var accountsSchema = []string{
 		id string primary key,
 		intval integer,
 		strval text)`,
+	`CREATE TABLE IF NOT EXISTS accountext (
+		id integer primary key,
+		data blob)`,
 }
 
 // TODO: Post applications, rename assetcreators -> creatables and rename
@@ -116,6 +119,60 @@ var accountsResetExprs = []string{
 // and their descriptions.
 var accountDBVersion = int32(4)
 
+// AssetsHoldingGroup TODO
+type AssetsHoldingGroup struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+
+	Count              uint32            `codec:"c"` // how many assets in this group
+	MinAssetIndex      basics.AssetIndex `codec:"m"`
+	DeltaMaxAssetIndex uint64            `codec:"d"`  // The delta is relative to MinAssetIndex
+	AssetGroupIndex    uint64            `codec:"gi"` // a forign key to the assetholdinggroups table
+}
+
+// ExtendedAssetHolding TODO
+type ExtendedAssetHolding struct {
+	_struct struct{}             `codec:",omitempty,omitemptyarray"`
+	Count   uint32               `codec:"c"`
+	Groups  []AssetsHoldingGroup `codec:"gs,allocbound=100"`
+
+	//msgp:ignore Loaded
+	loaded bool
+}
+
+// PersistedAccountData represents actual data stored in DB
+type PersistedAccountData struct {
+	_struct struct{} `codec:",omitempty,omitemptyarray"`
+	basics.AccountData
+	ExtendedAssetHolding ExtendedAssetHolding `codec:"eash"`
+}
+
+// SortAssetIndex is a copy from data/basics/sort.go
+//msgp:ignore SortAssetIndex
+//msgp:sort basics.AssetIndex SortAssetIndex
+type SortAssetIndex []basics.AssetIndex
+
+func (a SortAssetIndex) Len() int           { return len(a) }
+func (a SortAssetIndex) Less(i, j int) bool { return a[i] < a[j] }
+func (a SortAssetIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+// SortAppIndex is a copy from data/basics/sort.go
+//msgp:ignore SortAppIndex
+//msgp:sort basics.AppIndex SortAppIndex
+type SortAppIndex []basics.AppIndex
+
+func (a SortAppIndex) Len() int           { return len(a) }
+func (a SortAppIndex) Less(i, j int) bool { return a[i] < a[j] }
+func (a SortAppIndex) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+// EncodedMaxAssetsPerAccount and Co is a copy from basics package
+var EncodedMaxAssetsPerAccount = basics.EncodedMaxAssetsPerAccount
+
+// EncodedMaxAppLocalStates TODO
+var EncodedMaxAppLocalStates = basics.EncodedMaxAppLocalStates
+
+// EncodedMaxAppParams TODO
+var EncodedMaxAppParams = basics.EncodedMaxAppParams
+
 // dbAccountData is used for representing a single account stored on the disk. In addition to the
 // basics.AccountData, it also stores complete referencing information used to maintain the base accounts
 // list.
@@ -124,7 +181,7 @@ type dbAccountData struct {
 	// data structure in queues directly, without "attaching" the address as the address as the map key.
 	addr basics.Address
 	// The underlaying account data
-	accountData basics.AccountData
+	accountData PersistedAccountData
 	// The rowid, when available. If the entry was loaded from the disk, then we have the rowid for it. Entries
 	// that doesn't have rowid ( hence, rowid == 0 ) represent either deleted accounts or non-existing accounts.
 	rowid int64
@@ -1065,7 +1122,7 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 				result, err = insertStmt.Exec(addr[:], normBalance, protocol.Encode(&data.new))
 				if err == nil {
 					updatedAccounts[updatedAccountIdx].rowid, err = result.LastInsertId()
-					updatedAccounts[updatedAccountIdx].accountData = data.new
+					updatedAccounts[updatedAccountIdx].accountData = PersistedAccountData{AccountData: data.new}
 				}
 			}
 		} else {
@@ -1076,7 +1133,7 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 				if err == nil {
 					// we deleted the entry successfully.
 					updatedAccounts[updatedAccountIdx].rowid = 0
-					updatedAccounts[updatedAccountIdx].accountData = basics.AccountData{}
+					updatedAccounts[updatedAccountIdx].accountData = PersistedAccountData{}
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to delete accountbase row for account %v, rowid %d", addr, data.old.rowid)
@@ -1088,7 +1145,7 @@ func accountsNewRound(tx *sql.Tx, updates compactAccountDeltas, creatables map[b
 				if err == nil {
 					// rowid doesn't change on update.
 					updatedAccounts[updatedAccountIdx].rowid = data.old.rowid
-					updatedAccounts[updatedAccountIdx].accountData = data.new
+					updatedAccounts[updatedAccountIdx].accountData = PersistedAccountData{AccountData: data.new}
 					rowsAffected, err = result.RowsAffected()
 					if rowsAffected != 1 {
 						err = fmt.Errorf("failed to update accountbase row for account %v, rowid %d", addr, data.old.rowid)
@@ -1147,7 +1204,7 @@ func totalsNewRounds(tx *sql.Tx, updates []ledgercore.AccountDeltas, compactUpda
 	accounts := make(map[basics.Address]basics.AccountData, compactUpdates.len())
 	for i := 0; i < compactUpdates.len(); i++ {
 		addr, acctData := compactUpdates.getByIdx(i)
-		accounts[addr] = acctData.old.accountData
+		accounts[addr] = acctData.old.accountData.AccountData
 	}
 
 	for i := 0; i < len(updates); i++ {
