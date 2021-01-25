@@ -47,7 +47,6 @@ const (
 	catchpointFileStreamReadSize = 4096
 )
 
-var errNoPeersAvailable = fmt.Errorf("downloadLedger : no peers are available")
 var errNonHTTPPeer = fmt.Errorf("downloadLedger : non-HTTPPeer encountered")
 
 type ledgerFetcherReporter interface {
@@ -58,7 +57,7 @@ type ledgerFetcher struct {
 	net      network.GossipNode
 	accessor ledger.CatchpointCatchupAccessor
 	log      logging.Logger
-	peers    []network.Peer
+	peers    *peerSelector
 	reporter ledgerFetcherReporter
 	config   config.Local
 }
@@ -70,22 +69,20 @@ func makeLedgerFetcher(net network.GossipNode, accessor ledger.CatchpointCatchup
 		log:      log,
 		reporter: reporter,
 		config:   cfg,
+		peers:    makePeerSelector(net, []peerClass{{initialRank: 0, peerClass: network.PeersPhonebookRelays}}),
 	}
 }
 
 func (lf *ledgerFetcher) downloadLedger(ctx context.Context, round basics.Round) error {
-	if len(lf.peers) == 0 {
-		lf.peers = lf.net.GetPeers(network.PeersPhonebookRelays)
-		if len(lf.peers) == 0 {
-			return errNoPeersAvailable
-		}
+	peer, err := lf.peers.GetNextPeer()
+	if err != nil {
+		return err
 	}
-	peer, ok := lf.peers[0].(network.HTTPPeer)
-	lf.peers = lf.peers[1:]
+	httpPeer, ok := peer.(network.HTTPPeer)
 	if !ok {
 		return errNonHTTPPeer
 	}
-	return lf.getPeerLedger(ctx, peer, round)
+	return lf.getPeerLedger(ctx, httpPeer, round)
 }
 
 func (lf *ledgerFetcher) getPeerLedger(ctx context.Context, peer network.HTTPPeer, round basics.Round) error {
