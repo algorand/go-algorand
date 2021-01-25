@@ -135,7 +135,7 @@ type ExtendedAssetHolding struct {
 	Count   uint32               `codec:"c"`
 	Groups  []AssetsHoldingGroup `codec:"gs,allocbound=100"`
 
-	//msgp:ignore Loaded
+	//msgp:ignore loaded
 	loaded bool
 }
 
