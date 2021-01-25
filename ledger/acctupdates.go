@@ -1009,11 +1009,11 @@ func (au *accountUpdates) initializeFromDisk(l ledgerForTracker) (lastBalancesRo
 }
 
 // accountHashBuilder calculates the hash key used for the trie by combining the account address and the account data
-func accountHashBuilder(addr basics.Address, accountData basics.AccountData, encodedAccountData []byte) []byte {
+func accountHashBuilder(addr basics.Address, rewardsBase uint64, encodedAccountData []byte) []byte {
 	hash := make([]byte, 4+crypto.DigestSize)
 	// write out the lowest 32 bits of the reward base. This should improve the caching of the trie by allowing
 	// recent updated to be in-cache, and "older" nodes will be left alone.
-	for i, rewards := 3, accountData.RewardsBase; i >= 0; i, rewards = i-1, rewards>>8 {
+	for i, rewards := 3, rewardsBase; i >= 0; i, rewards = i-1, rewards>>8 {
 		// the following takes the rewards & 255 -> hash[i]
 		hash[i] = byte(rewards)
 	}
@@ -1368,7 +1368,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 	for i := 0; i < accountsDeltas.len(); i++ {
 		addr, delta := accountsDeltas.getByIdx(i)
 		if !delta.old.accountData.IsZero() {
-			deleteHash := accountHashBuilder(addr, delta.old.accountData, protocol.Encode(&delta.old.accountData))
+			deleteHash := accountHashBuilder(addr, delta.old.accountData.RewardsBase, protocol.Encode(&delta.old.accountData))
 			deleted, err = au.balancesTrie.Delete(deleteHash)
 			if err != nil {
 				return err
@@ -1381,7 +1381,7 @@ func (au *accountUpdates) accountsUpdateBalances(accountsDeltas compactAccountDe
 		}
 
 		if !delta.new.IsZero() {
-			addHash := accountHashBuilder(addr, delta.new, protocol.Encode(&delta.new))
+			addHash := accountHashBuilder(addr, delta.new.RewardsBase, protocol.Encode(&delta.new))
 			added, err = au.balancesTrie.Add(addHash)
 			if err != nil {
 				return err
