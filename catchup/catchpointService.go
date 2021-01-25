@@ -264,6 +264,7 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	}
 
 	// download balances file.
+	peerSelector := makePeerSelector(cs.net, []peerClass{{initialRank: 0, peerClass: network.PeersPhonebookRelays}})
 	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
 	attemptsCount := 0
 
@@ -277,14 +278,23 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 			}
 			return cs.abort(fmt.Errorf("processStageLedgerDownload failed to reset staging balances : %v", err))
 		}
-		err = ledgerFetcher.downloadLedger(cs.ctx, round)
+		peer, err := peerSelector.GetNextPeer()
+		if err != nil {
+			err = fmt.Errorf("catchpoint catchup was unable to obtain a list of peers to retrieve the catchpoint file from")
+			return cs.abort(err)
+		}
+		err = ledgerFetcher.downloadLedger(cs.ctx, peer, round)
 		if err == nil {
 			err = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedAccounts)
 			if err == nil {
 				break
 			}
 			// failed to build the merkle trie for the above catchpoint file.
+			peerSelector.RankPeer(peer, peerRankInvalidDownload)
+		} else {
+			peerSelector.RankPeer(peer, peerRankDownloadFailed)
 		}
+
 		// instead of testing for err == cs.ctx.Err() , we'll check on the context itself.
 		// this is more robust, as the http client library sometimes wrap the context canceled
 		// error with other errors.

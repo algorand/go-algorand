@@ -47,6 +47,15 @@ type peerPool struct {
 	peers []network.Peer
 }
 
+const (
+	// peerRankDownloadFailed is used for responses which could be temporary, such as missing files, or such that we don't
+	// have clear resolution
+	peerRankDownloadFailed = 900
+	// peerRankInvalidDownload is used for responses which are likely to be invalid - whether it's serving the wrong content
+	// or attempting to serve malicious content
+	peerRankInvalidDownload = 1000
+)
+
 var errPeerSelectorNoPeerPoolsAvailable = errors.New("no peer pools available")
 var errPeerSelectorNoPeersAvailable = errors.New("no peers available")
 

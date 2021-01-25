@@ -57,7 +57,7 @@ type ledgerFetcher struct {
 	net      network.GossipNode
 	accessor ledger.CatchpointCatchupAccessor
 	log      logging.Logger
-	peers    *peerSelector
+
 	reporter ledgerFetcherReporter
 	config   config.Local
 }
@@ -69,15 +69,10 @@ func makeLedgerFetcher(net network.GossipNode, accessor ledger.CatchpointCatchup
 		log:      log,
 		reporter: reporter,
 		config:   cfg,
-		peers:    makePeerSelector(net, []peerClass{{initialRank: 0, peerClass: network.PeersPhonebookRelays}}),
 	}
 }
 
-func (lf *ledgerFetcher) downloadLedger(ctx context.Context, round basics.Round) error {
-	peer, err := lf.peers.GetNextPeer()
-	if err != nil {
-		return err
-	}
+func (lf *ledgerFetcher) downloadLedger(ctx context.Context, peer network.Peer, round basics.Round) error {
 	httpPeer, ok := peer.(network.HTTPPeer)
 	if !ok {
 		return errNonHTTPPeer
