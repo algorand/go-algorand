@@ -32,7 +32,7 @@ const getAllAddresses = math.MaxInt32
 // currently, we have two roles : relay role and archiver role, which are mutually exclusive.
 type PhoneBookEntryRoles int
 
-// PhoneBookEntryRelayRole used for all the relays that are provided either via the algobootstrap SRV record.
+// PhoneBookEntryRelayRole used for all the relays that are provided either via the algobootstrap SRV record
 // or via a configuration file.
 const PhoneBookEntryRelayRole = 1
 
