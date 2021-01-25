@@ -93,7 +93,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	}
 	bloomParam := base64.URLEncoding.EncodeToString(bloomBytes)
 
-	peers := hts.peers.GetPeers(network.PeersPhonebook)
+	peers := hts.peers.GetPeers(network.PeersPhonebookRelays)
 	if len(peers) == 0 {
 		return nil, nil //errors.New("no peers to tx sync from")
 	}

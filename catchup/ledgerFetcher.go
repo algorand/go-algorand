@@ -75,7 +75,7 @@ func makeLedgerFetcher(net network.GossipNode, accessor ledger.CatchpointCatchup
 
 func (lf *ledgerFetcher) downloadLedger(ctx context.Context, round basics.Round) error {
 	if len(lf.peers) == 0 {
-		lf.peers = lf.net.GetPeers(network.PeersPhonebook)
+		lf.peers = lf.net.GetPeers(network.PeersPhonebookRelays)
 		if len(lf.peers) == 0 {
 			return errNoPeersAvailable
 		}
