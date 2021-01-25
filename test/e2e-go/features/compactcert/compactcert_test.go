@@ -117,7 +117,7 @@ func TestCompactCerts(t *testing.T) {
 				Msg:          nextCertBlockDecoded.Block.BlockHeader,
 				ProvenWeight: provenWeight,
 				SigRound:     basics.Round(nextCertBlock.Round + 1),
-				SecKQ:        128,
+				SecKQ:        consensusParams.CompactCertSecKQ,
 			}
 			verif := compactcert.MkVerifier(ccparams, votersRoot)
 			err = verif.Verify(&compactCert)
