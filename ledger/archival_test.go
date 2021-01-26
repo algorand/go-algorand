@@ -676,6 +676,102 @@ func makeSignedTxnInBlock(tx transactions.Transaction) transactions.SignedTxnInB
 	}
 }
 
+func TestArchivalFromNonArchival(t *testing.T) {
+	// Start in non-archival mode, add 2K blocks, restart in archival mode ensure only genesis block is there
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() {
+		deadlock.Opts.Disable = deadlockDisable
+	}()
+	dbTempDir, err := ioutil.TempDir(os.TempDir(), "testdir")
+	require.NoError(t, err)
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	dbPrefix := filepath.Join(dbTempDir, dbName)
+	defer os.RemoveAll(dbTempDir)
+
+	genesisInitState := getInitState()
+
+	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{}
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusFuture
+	genesisInitState.GenesisHash = crypto.Digest{1}
+	genesisInitState.Block.BlockHeader.GenesisHash = crypto.Digest{1}
+
+	balanceRecords := []basics.BalanceRecord{}
+
+	for i := 0; i < 50; i++ {
+		addr := basics.Address{}
+		_, err = rand.Read(addr[:])
+		require.NoError(t, err)
+		br := basics.BalanceRecord{AccountData: basics.MakeAccountData(basics.Offline, basics.MicroAlgos{Raw: 1234567890}), Addr: addr}
+		genesisInitState.Accounts[addr] = br.AccountData
+		balanceRecords = append(balanceRecords, br)
+	}
+
+	const inMem = false // use persistent storage
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = false
+
+	log := logging.TestingLog(t)
+	l, err := OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	blk := genesisInitState.Block
+
+	const maxBlocks = 2000
+	for i := 0; i < maxBlocks; i++ {
+		blk.BlockHeader.Round++
+		blk.BlockHeader.TimeStamp += int64(crypto.RandUint64() % 100 * 1000)
+		blk.Payset = transactions.Payset{}
+
+		for j := 0; j < 5; j++ {
+			x := (j + i) % len(balanceRecords)
+			creatorEncoded := balanceRecords[x].Addr.String()
+			tx, err := makeUnsignedAssetCreateTx(blk.BlockHeader.Round-1, blk.BlockHeader.Round+3, 100, false, creatorEncoded, creatorEncoded, creatorEncoded, creatorEncoded, "m", "m", "", nil)
+			require.NoError(t, err)
+			tx.Sender = balanceRecords[x].Addr
+			stxnib := makeSignedTxnInBlock(tx)
+			blk.Payset = append(blk.Payset, stxnib)
+			blk.BlockHeader.TxnCounter++
+		}
+
+		err := l.AddBlock(blk, agreement.Certificate{})
+		require.NoError(t, err)
+	}
+	l.WaitForCommit(blk.Round())
+
+	var latest, earliest basics.Round
+	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		latest, err = blockLatest(tx)
+		require.NoError(t, err)
+
+		earliest, err = blockEarliest(tx)
+		require.NoError(t, err)
+		return err
+	})
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(maxBlocks), latest)
+	require.True(t, basics.Round(0) < earliest, fmt.Sprintf("%d < %d", basics.Round(0), earliest))
+
+	// close and reopen the same DB, ensure the DB truncated
+	l.Close()
+
+	cfg.Archival = true
+	l, err = OpenLedger(log, dbPrefix, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	err = l.blockDBs.Rdb.Atomic(func(ctx context.Context, tx *sql.Tx) error {
+		latest, err = blockLatest(tx)
+		require.NoError(t, err)
+
+		earliest, err = blockEarliest(tx)
+		require.NoError(t, err)
+		return err
+	})
+	require.NoError(t, err)
+	require.Equal(t, basics.Round(0), earliest)
+	require.Equal(t, basics.Round(0), latest)
+}
+
 func checkTrackers(t *testing.T, wl *wrappedLedger, rnd basics.Round) (basics.Round, error) {
 	minMinSave := rnd
 	var minSave basics.Round

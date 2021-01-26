@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/algorand/go-deadlock"
 
 	"github.com/algorand/go-algorand/config"
@@ -1128,11 +1130,16 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	}
 
 	validationCtx, validationCancel := context.WithCancel(ctx)
-	defer validationCancel()
+	var wg sync.WaitGroup
+	defer func() {
+		validationCancel()
+		wg.Wait()
+	}()
 
 	// If validationCtx or underlying ctx are Done, end prefetch
 	if usePrefetch {
-		go prefetchThread(validationCtx, eval.state.lookupParent, blk.Payset)
+		wg.Add(1)
+		go prefetchThread(validationCtx, eval.state.lookupParent, blk.Payset, &wg)
 	}
 
 	// Next, transactions
@@ -1204,7 +1211,8 @@ func eval(ctx context.Context, l ledgerForEvaluator, blk bookkeeping.Block, vali
 	return eval.state.deltas(), nil
 }
 
-func prefetchThread(ctx context.Context, state roundCowParent, payset []transactions.SignedTxnInBlock) {
+func prefetchThread(ctx context.Context, state roundCowParent, payset []transactions.SignedTxnInBlock, wg *sync.WaitGroup) {
+	defer wg.Done()
 	maybelookup := func(addr basics.Address) {
 		if addr.IsZero() {
 			return
