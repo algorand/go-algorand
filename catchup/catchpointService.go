@@ -330,20 +330,38 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 		return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed to retrieve catchup block round : %v", err))
 	}
 
-	fetcherFactory := MakeNetworkFetcherFactory(cs.net, 10, nil, &cs.config)
+	peerSelector := makePeerSelector(cs.net, []peerClass{{initialRank: 0, peerClass: network.PeersPhonebookArchivers}, {initialRank: 1, peerClass: network.PeersPhonebookRelays}})
 	attemptsCount := 0
 	var blk *bookkeeping.Block
-	var client FetcherClient
 	// check to see if the current ledger might have this block. If so, we should try this first instead of downloading anything.
 	if ledgerBlock, err := cs.ledger.Block(blockRound); err == nil {
 		blk = &ledgerBlock
 	}
+
 	for {
 		attemptsCount++
 
+		peer := network.Peer(0)
+		blockDownloadDuration := time.Duration(0)
 		if blk == nil {
-			fetcher := fetcherFactory.New()
-			blk, _, client, err = fetcher.FetchBlock(cs.ctx, blockRound)
+			peer, err = peerSelector.GetNextPeer()
+			if err != nil {
+				err = fmt.Errorf("processStageLastestBlockDownload: unable to obtain a list of peers to retrieve the latest block from")
+				return cs.abort(err)
+			}
+			httpPeer, validPeer := peer.(network.HTTPPeer)
+			if !validPeer {
+				cs.log.Warnf("processStageLastestBlockDownload: non-HTTP peer was provided by the peer selector")
+
+				if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
+					// try again.
+					continue
+				}
+				return cs.abort(fmt.Errorf("processStageLastestBlockDownload: recurring non-HTTP peer was provided by the peer selector"))
+			}
+			fetcher := makeHTTPFetcher(cs.log, httpPeer, cs.net, &cs.config)
+			blockDownloadStartTime := time.Now()
+			blk, _, err = fetcher.FetchBlock(cs.ctx, blockRound)
 			if err != nil {
 				if cs.ctx.Err() != nil {
 					return cs.stopOrAbort()
@@ -352,12 +370,14 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 					// try again.
 					blk = nil
 					cs.log.Infof("processStageLastestBlockDownload: block %d download failed, another attempt will be made; err = %v", blockRound, err)
+					peerSelector.RankPeer(peer, peerRankDownloadFailed)
 					continue
 				}
 				return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed to get block %d : %v", blockRound, err))
 			}
 			// success
-			client.Close()
+			fetcher.Close()
+			blockDownloadDuration = time.Now().Sub(blockDownloadStartTime)
 		}
 
 		// check block protocol version support.
@@ -367,6 +387,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 				// try again.
 				blk = nil
+				peerSelector.RankPeer(peer, peerRankInvalidDownload)
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageLastestBlockDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol))
@@ -379,6 +400,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 				// try again.
 				blk = nil
+				peerSelector.RankPeer(peer, peerRankInvalidDownload)
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageLastestBlockDownload: downloaded block content does not match downloaded block header"))
@@ -394,10 +416,14 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 				// try again.
 				blk = nil
 				cs.log.Infof("processStageLastestBlockDownload: block %d verification against catchpoint failed, another attempt will be made; err = %v", blockRound, err)
+				peerSelector.RankPeer(peer, peerRankInvalidDownload)
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed when calling VerifyCatchpoint : %v", err))
 		}
+		// give a rank to the download, as the download was successfull.
+		peerRank := downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRankLowBlockTime, peerRankHighBlockTime)
+		peerSelector.RankPeer(peer, peerRank)
 
 		err = cs.ledgerAccessor.StoreBalancesRound(cs.ctx, blk)
 		if err != nil {
@@ -460,10 +486,9 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	cs.statsMu.Unlock()
 
 	prevBlock := &topBlock
-	fetcherFactory := MakeNetworkFetcherFactory(cs.net, 10, nil, &cs.config)
+	peerSelector := makePeerSelector(cs.net, []peerClass{{initialRank: 0, peerClass: network.PeersPhonebookArchivers}, {initialRank: 1, peerClass: network.PeersPhonebookRelays}})
 	blocksFetched := uint64(1) // we already got the first block in the previous step.
 	var blk *bookkeeping.Block
-	var client FetcherClient
 	for retryCount := uint64(1); blocksFetched <= lookback; {
 		if err := cs.ctx.Err(); err != nil {
 			return cs.stopOrAbort()
@@ -482,9 +507,27 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			}
 		}
 
+		peer := network.Peer(0)
+		blockDownloadDuration := time.Duration(0)
 		if blk == nil {
-			fetcher := fetcherFactory.New()
-			blk, _, client, err = fetcher.FetchBlock(cs.ctx, topBlock.Round()-basics.Round(blocksFetched))
+			peer, err = peerSelector.GetNextPeer()
+			if err != nil {
+				err = fmt.Errorf("processStageBlocksDownload: unable to obtain a list of peers to retrieve the latest block from")
+				return cs.abort(err)
+			}
+			httpPeer, validPeer := peer.(network.HTTPPeer)
+			if !validPeer {
+				cs.log.Warnf("processStageBlocksDownload: non-HTTP peer was provided by the peer selector")
+				if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
+					// try again.
+					retryCount++
+					continue
+				}
+				return cs.abort(fmt.Errorf("processStageBlocksDownload: recurring non-HTTP peer was provided by the peer selector"))
+			}
+			fetcher := makeHTTPFetcher(cs.log, httpPeer, cs.net, &cs.config)
+			blockDownloadStartTime := time.Now()
+			blk, _, err = fetcher.FetchBlock(cs.ctx, topBlock.Round()-basics.Round(blocksFetched))
 			if err != nil {
 				if cs.ctx.Err() != nil {
 					return cs.stopOrAbort()
@@ -493,12 +536,14 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 					// try again.
 					cs.log.Infof("Failed to download block %d on attempt %d out of %d. %v", topBlock.Round()-basics.Round(blocksFetched), retryCount, cs.config.CatchupBlockDownloadRetryAttempts, err)
 					retryCount++
+					peerSelector.RankPeer(peer, peerRankDownloadFailed)
 					continue
 				}
 				return cs.abort(fmt.Errorf("processStageBlocksDownload failed after multiple blocks download attempts"))
 			}
 			// success
-			client.Close()
+			fetcher.Close()
+			blockDownloadDuration = time.Now().Sub(blockDownloadStartTime)
 		}
 
 		cs.updateBlockRetrievalStatistics(1, 0)
@@ -508,6 +553,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			// not identical, retry download.
 			cs.log.Warnf("processStageBlocksDownload downloaded block(%d) did not match it's successor(%d) block hash %v != %v", blk.Round(), prevBlock.Round(), blk.Hash(), prevBlock.BlockHeader.Branch)
 			cs.updateBlockRetrievalStatistics(-1, 0)
+			peerSelector.RankPeer(peer, peerRankInvalidDownload)
 			if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 				// try again.
 				retryCount++
@@ -520,6 +566,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		if _, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
 			cs.log.Warnf("processStageBlocksDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol)
 			cs.updateBlockRetrievalStatistics(-1, 0)
+			peerSelector.RankPeer(peer, peerRankInvalidDownload)
 			if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 				// try again.
 				retryCount++
@@ -532,6 +579,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		if !blk.ContentsMatchHeader() {
 			cs.log.Warnf("processStageBlocksDownload: downloaded block content does not match downloaded block header")
 			// try again.
+			peerSelector.RankPeer(peer, peerRankInvalidDownload)
 			cs.updateBlockRetrievalStatistics(-1, 0)
 			if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 				// try again.
@@ -542,6 +590,8 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		}
 
 		cs.updateBlockRetrievalStatistics(0, 1)
+		peerRank := downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRankLowBlockTime, peerRankHighBlockTime)
+		peerSelector.RankPeer(peer, peerRank)
 
 		// all good, persist and move on.
 		err = cs.ledgerAccessor.StoreBlock(cs.ctx, blk)

@@ -19,6 +19,7 @@ package catchup
 import (
 	"errors"
 	"sort"
+	"time"
 
 	"github.com/algorand/go-deadlock"
 
@@ -48,12 +49,18 @@ type peerPool struct {
 }
 
 const (
+	peerRankLowBlockTime  = 100
+	peerRankHighBlockTime = 500
+
 	// peerRankDownloadFailed is used for responses which could be temporary, such as missing files, or such that we don't
 	// have clear resolution
 	peerRankDownloadFailed = 900
 	// peerRankInvalidDownload is used for responses which are likely to be invalid - whether it's serving the wrong content
 	// or attempting to serve malicious content
 	peerRankInvalidDownload = 1000
+
+	lowBlockDownloadThreshold  = 50 * time.Millisecond
+	highBlockDownloadThreshold = 8 * time.Second
 )
 
 var errPeerSelectorNoPeerPoolsAvailable = errors.New("no peer pools available")
@@ -179,6 +186,9 @@ func (ps *peerSelector) GetNextPeer() (peer network.Peer, err error) {
 }
 
 func (ps *peerSelector) RankPeer(peer network.Peer, rank int) {
+	if peer == nil {
+		return
+	}
 	ps.Lock()
 	defer ps.Unlock()
 
@@ -210,4 +220,15 @@ func (ps *peerSelector) findPeer(peer network.Peer) (poolIdx, peerIdx int) {
 		}
 	}
 	return -1, -1
+}
+
+// calculate the duration rank by mapping the range of [minDownloadDuration..maxDownloadDuration] into the rank range of [minRank..maxRank]
+func downloadDurationToRank(downloadDuration, minDownloadDuration, maxDownloadDuration time.Duration, minRank, maxRank int) (rank int) {
+	if downloadDuration < minDownloadDuration {
+		downloadDuration = minDownloadDuration
+	} else if downloadDuration > maxDownloadDuration {
+		downloadDuration = maxDownloadDuration
+	}
+	rank = minRank + int((downloadDuration-minDownloadDuration).Microseconds()*int64(maxRank-minRank)/(maxDownloadDuration-minDownloadDuration).Microseconds())
+	return
 }
