@@ -27,6 +27,7 @@ import (
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // AccountManager loads and manages accounts for the node
@@ -133,13 +134,13 @@ func (manager *AccountManager) DeleteOldKeys(latestHdr bookkeeping.BlockHeader, 
 			// We need a key for round r+1 for agreement.
 			nextRound := latestHdr.Round + 1
 
-			if latestHdr.CompactCertNextRound > 0 {
+			if latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound > 0 {
 				// We need a key for the next compact cert round.
 				// This would be CompactCertNextRound+1 (+1 because compact
 				// cert code uses the next round's ephemeral key), except
 				// if we already used that key to produce a signature (as
 				// reported in ccSigs).
-				nextCC := latestHdr.CompactCertNextRound + 1
+				nextCC := latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound + 1
 				if ccSigs[part.Parent] >= nextCC {
 					nextCC = ccSigs[part.Parent] + basics.Round(latestProto.CompactCertRounds) + 1
 				}
