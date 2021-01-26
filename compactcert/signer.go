@@ -25,6 +25,7 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/protocol"
 )
 
 // sigFromAddr encapsulates a signature on a block header, which
@@ -51,7 +52,7 @@ restart:
 			continue
 		}
 
-		nextrnd = latestHdr.CompactCertNextRound
+		nextrnd = latestHdr.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
 		if nextrnd == 0 {
 			// Compact certs not enabled yet.  Keep monitoring new blocks.
 			nextrnd = latest + 1
@@ -112,7 +113,7 @@ func (ccw *Worker) signBlock(hdr bookkeeping.BlockHeader) {
 		return
 	}
 
-	if votersHdr.CompactCertVoters.IsZero() {
+	if votersHdr.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsZero() {
 		// No voter commitment, perhaps because compact certs were
 		// just enabled.
 		return

@@ -144,10 +144,14 @@ func initNextBlockHeader(correctHeader *bookkeeping.BlockHeader, lastBlock bookk
 	}
 
 	if proto.CompactCertRounds > 0 {
-		if lastBlock.CompactCertNextRound == 0 {
-			correctHeader.CompactCertNextRound = (correctHeader.Round + basics.Round(proto.CompactCertVotersLookback)).RoundUpToMultipleOf(basics.Round(proto.CompactCertRounds)) + basics.Round(proto.CompactCertRounds)
+		var ccBasic bookkeeping.CompactCertState
+		if lastBlock.CompactCert[protocol.CompactCertBasic].CompactCertNextRound == 0 {
+			ccBasic.CompactCertNextRound = (correctHeader.Round + basics.Round(proto.CompactCertVotersLookback)).RoundUpToMultipleOf(basics.Round(proto.CompactCertRounds)) + basics.Round(proto.CompactCertRounds)
 		} else {
-			correctHeader.CompactCertNextRound = lastBlock.CompactCertNextRound
+			ccBasic.CompactCertNextRound = lastBlock.CompactCert[protocol.CompactCertBasic].CompactCertNextRound
+		}
+		correctHeader.CompactCert = map[protocol.CompactCertType]bookkeeping.CompactCertState{
+			protocol.CompactCertBasic: ccBasic,
 		}
 	}
 }

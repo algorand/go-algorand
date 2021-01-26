@@ -467,12 +467,13 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			UpgradePropose: string(b.UpgradePropose),
 			UpgradeApprove: b.UpgradeApprove,
 		},
-		CompactCertVotersTotal: b.CompactCertVotersTotal.ToUint64(),
-		CompactCertNextRound:   uint64(b.CompactCertNextRound),
+		CompactCertVotersTotal: b.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal.ToUint64(),
+		CompactCertNextRound:   uint64(b.CompactCert[protocol.CompactCertBasic].CompactCertNextRound),
 	}
 
-	if !b.CompactCertVoters.IsZero() {
-		block.CompactCertVoters = b.CompactCertVoters[:]
+	if !b.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsZero() {
+		voters := b.CompactCert[protocol.CompactCertBasic].CompactCertVoters
+		block.CompactCertVoters = voters[:]
 	}
 
 	// Transactions
