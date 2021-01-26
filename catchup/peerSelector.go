@@ -43,14 +43,24 @@ type peerClass struct {
 	peerClass   network.PeerOption
 }
 
+type peerPoolEntry struct {
+	peer  network.Peer
+	class peerClass
+}
+
 type peerPool struct {
 	rank  int
-	peers []network.Peer
+	peers []peerPoolEntry
 }
 
 const (
-	peerRankLowBlockTime  = 100
-	peerRankHighBlockTime = 500
+	peerRankInitialFirstPriority = 0
+	peerRank0LowBlockTime        = 1
+	peerRank0HighBlockTime       = 199
+
+	peerRankInitialSecondPriority = 200
+	peerRank1LowBlockTime         = 201
+	peerRank1HighBlockTime        = 399
 
 	// peerRankDownloadFailed is used for responses which could be temporary, such as missing files, or such that we don't
 	// have clear resolution
@@ -75,7 +85,7 @@ func makePeerSelector(net network.GossipNode, initialPeersClasses []peerClass) *
 	for _, initClass := range initialPeersClasses {
 		peers := net.GetPeers(initClass.peerClass)
 		for _, peer := range peers {
-			sortNeeded = sortNeeded || selector.addToPool(peer, initClass.initialRank)
+			sortNeeded = sortNeeded || selector.addToPool(peer, initClass.initialRank, initClass)
 		}
 	}
 	if sortNeeded {
@@ -84,18 +94,18 @@ func makePeerSelector(net network.GossipNode, initialPeersClasses []peerClass) *
 	return selector
 }
 
-func (ps *peerSelector) addToPool(peer network.Peer, rank int) bool {
+func (ps *peerSelector) addToPool(peer network.Peer, rank int, class peerClass) bool {
 	// see if we already have a list with that rank:
 	for i, peersList := range ps.pools {
 		if peersList.rank == rank {
 			// we found an existing group, add this peer to the list.
-			ps.pools[i] = peerPool{rank: rank, peers: append(peersList.peers, peer)}
+			ps.pools[i] = peerPool{rank: rank, peers: append(peersList.peers, peerPoolEntry{peer: peer, class: class})}
 			return false
 		} else if peersList.rank > rank {
 			break
 		}
 	}
-	ps.pools = append(ps.pools, peerPool{rank: rank, peers: []network.Peer{peer}})
+	ps.pools = append(ps.pools, peerPool{rank: rank, peers: []peerPoolEntry{{peer: peer, class: class}}})
 	return true
 }
 
@@ -118,8 +128,8 @@ func (ps *peerSelector) refreshAvailablePeers() {
 	evalPeers := make(map[string]network.Peer)
 	for _, pool := range ps.pools {
 		for _, localPeer := range pool.peers {
-			if peerAddress := peerAddress(localPeer); peerAddress != "" {
-				evalPeers[peerAddress] = localPeer
+			if peerAddress := peerAddress(localPeer.peer); peerAddress != "" {
+				evalPeers[peerAddress] = localPeer.peer
 			}
 		}
 	}
@@ -136,7 +146,7 @@ func (ps *peerSelector) refreshAvailablePeers() {
 				continue
 			}
 			// it's an entry which we did not had before.
-			sortNeeded = sortNeeded || ps.addToPool(peer, initClass.initialRank)
+			sortNeeded = sortNeeded || ps.addToPool(peer, initClass.initialRank, initClass)
 		}
 	}
 
@@ -144,7 +154,7 @@ func (ps *peerSelector) refreshAvailablePeers() {
 	for poolIdx := len(ps.pools) - 1; poolIdx >= 0; poolIdx-- {
 		pool := ps.pools[poolIdx]
 		for peerIdx := len(pool.peers) - 1; peerIdx >= 0; peerIdx-- {
-			peer := pool.peers[peerIdx]
+			peer := pool.peers[peerIdx].peer
 			if peerAddress := peerAddress(peer); peerAddress != "" {
 				if _, has := evalPeers[peerAddress]; has {
 					// need to be removed.
@@ -178,7 +188,7 @@ func (ps *peerSelector) GetNextPeer() (peer network.Peer, err error) {
 		}
 		// pick one of the peers at random.
 		peerIdx := crypto.RandUint64() % uint64(len(pool.peers))
-		peer = pool.peers[peerIdx]
+		peer = pool.peers[peerIdx].peer
 		return
 	}
 
@@ -193,19 +203,22 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) {
 	defer ps.Unlock()
 
 	poolIdx, peerIdx := ps.findPeer(peer)
-	if poolIdx >= 0 && peerIdx >= 0 {
-		// we need to remove the peer from the pool so we can place it in a different location.
-		pool := ps.pools[poolIdx]
-		if len(pool.peers) > 1 {
-			pool.peers = append(pool.peers[:peerIdx], pool.peers[peerIdx+1:]...)
-			ps.pools[poolIdx] = pool
-		} else {
-			// the last peer was removed from the pool; delete this pool.
-			ps.pools = append(ps.pools[:poolIdx], ps.pools[poolIdx+1:]...)
-		}
+	if poolIdx < 0 || peerIdx < 0 {
+		return
 	}
 
-	sortNeeded := ps.addToPool(peer, rank)
+	// we need to remove the peer from the pool so we can place it in a different location.
+	pool := ps.pools[poolIdx]
+	class := pool.peers[peerIdx].class
+	if len(pool.peers) > 1 {
+		pool.peers = append(pool.peers[:peerIdx], pool.peers[peerIdx+1:]...)
+		ps.pools[poolIdx] = pool
+	} else {
+		// the last peer was removed from the pool; delete this pool.
+		ps.pools = append(ps.pools[:poolIdx], ps.pools[poolIdx+1:]...)
+	}
+
+	sortNeeded := ps.addToPool(peer, rank, class)
 	if sortNeeded {
 		ps.sort()
 	}
@@ -213,13 +226,27 @@ func (ps *peerSelector) RankPeer(peer network.Peer, rank int) {
 
 func (ps *peerSelector) findPeer(peer network.Peer) (poolIdx, peerIdx int) {
 	for i, pool := range ps.pools {
-		for j, localPeer := range pool.peers {
-			if localPeer == peer {
+		for j, localPeerEntry := range pool.peers {
+			if localPeerEntry.peer == peer {
 				return i, j
 			}
 		}
 	}
 	return -1, -1
+}
+
+func (ps *peerSelector) PeerDownloadDurationToRank(peer network.Peer, blockDownloadDuration time.Duration) (rank int) {
+	poolIdx, peerIdx := ps.findPeer(peer)
+	if poolIdx < 0 || peerIdx < 0 {
+		return peerRankInvalidDownload
+	}
+
+	switch ps.pools[poolIdx].peers[peerIdx].class.initialRank {
+	case peerRankInitialFirstPriority:
+		return downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank0LowBlockTime, peerRank0HighBlockTime)
+	default: // i.e. peerRankInitialSecondPriority
+		return downloadDurationToRank(blockDownloadDuration, lowBlockDownloadThreshold, highBlockDownloadThreshold, peerRank1LowBlockTime, peerRank1HighBlockTime)
+	}
 }
 
 // calculate the duration rank by mapping the range of [minDownloadDuration..maxDownloadDuration] into the rank range of [minRank..maxRank]
@@ -229,6 +256,6 @@ func downloadDurationToRank(downloadDuration, minDownloadDuration, maxDownloadDu
 	} else if downloadDuration > maxDownloadDuration {
 		downloadDuration = maxDownloadDuration
 	}
-	rank = minRank + int((downloadDuration-minDownloadDuration).Microseconds()*int64(maxRank-minRank)/(maxDownloadDuration-minDownloadDuration).Microseconds())
+	rank = minRank + int((downloadDuration-minDownloadDuration).Nanoseconds()*int64(maxRank-minRank)/(maxDownloadDuration-minDownloadDuration).Nanoseconds())
 	return
 }
