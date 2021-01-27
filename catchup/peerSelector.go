@@ -38,16 +38,22 @@ type peerSelector struct {
 	pools       []peerPool
 }
 
+// peerClass defines the type of peer we want to have in a particular "class",
+// and define tnet network.PeerOption that would be used to retrieve that type of
+// peer
 type peerClass struct {
 	initialRank int
 	peerClass   network.PeerOption
 }
 
+// peerPoolEntry represents a single peer entry in the pool. It contains
+// the underlying network peer as well as the peer class.
 type peerPoolEntry struct {
 	peer  network.Peer
 	class peerClass
 }
 
+// peerPool is a single pool of peers that shares the same rank.
 type peerPool struct {
 	rank  int
 	peers []peerPoolEntry
@@ -69,6 +75,8 @@ const (
 	// or attempting to serve malicious content
 	peerRankInvalidDownload = 1000
 
+	// once a block is downloaded, the download duration is clamped into the range of [lowBlockDownloadThreshold..highBlockDownloadThreshold] and
+	// then mapped into the a ranking range.
 	lowBlockDownloadThreshold  = 50 * time.Millisecond
 	highBlockDownloadThreshold = 8 * time.Second
 )
