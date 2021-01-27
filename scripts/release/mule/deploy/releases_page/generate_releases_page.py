@@ -6,13 +6,13 @@ import sys
 import boto3
 
 staging_bucket = "algorand-dev-deb-repo"
-staging_prefix = "http://algorand-dev-deb-repo.s3-website-us-east-1.amazonaws.com/"
+#staging_prefix = "http://algorand-dev-deb-repo.s3-website-us-east-1.amazonaws.com/"
+staging_prefix = "https://algorand-dev-deb-repo.s3.amazonaws.com/"
 key_url = "https://releases.algorand.com/key.pub"
 releases_bucket = "algorand-releases"
 releases_prefix = "https://releases.algorand.com/"
 html_tpl = "html.tpl"
 styles_url = "releases_page.css"
-tokens = ["stable", "beta", "indexer"]
 
 def get_stage_release_set(response):
     prefix = None
@@ -116,11 +116,11 @@ def getContent(url):
 
     return content
 
-def build_page(channels):
+def build_page(tables):
     html = getContent(html_tpl).replace("{styles}", getContent(styles_url))
 
-    for n in tokens:
-        html = html.replace("".join(["{", n, "}"]), "".join(channels[n]))
+    for n in tables:
+        html = html.replace("".join(["{", n, "}"]), "".join(tables[n]))
 
     sys.stdout.write(html)
 
@@ -133,12 +133,16 @@ def get_furl(release_files, fname, skey):
 
 def main():
     s3 = boto3.client("s3")
-    channels = {}
+    tables = {}
 
     for channel in ["stable", "beta", "indexer"]:
-        staging_response = s3.list_objects_v2(Bucket=staging_bucket, Prefix="releases/" + channel + "/", MaxKeys=100)
+        staging_response = s3.list_objects_v2(Bucket=staging_bucket, Prefix="".join(("releases/", channel, "/")), MaxKeys=100)
         release_sets = get_stage_release_set(staging_response)
-        releases_response = s3.list_objects_v2(Bucket=releases_bucket)
+        if channel == "indexer":
+            prefix = "indexer/"
+        else:
+            prefix = "".join(("channel/", channel, "/"))
+        releases_response = s3.list_objects_v2(Bucket=releases_bucket, Prefix=prefix, MaxKeys=100)
         release_files = objects_by_fname(releases_response["Contents"])
 
         table = []
@@ -151,7 +155,7 @@ def main():
             for fname, info in files.items():
                 if "file" not in info:
                     continue
-                furl = get_furl(release_files, fname, info['file'])
+                furl = get_furl(release_files, fname, info["file"])
                 ftext = '<div class="fname"><a href="{}">{}</a></div>'.format(furl, fname)
                 sig = info.get(".sig")
                 stext = ""
@@ -183,9 +187,9 @@ def main():
             if len(files.items()) > 1:
                 table.append('<tbody><tr class="spacer"><td></td></tr></tbody>')
 
-        channels[channel] = table
+        tables[channel] = table
 
-    build_page(channels)
+    build_page(tables)
 
 if __name__ == "__main__":
     main()
