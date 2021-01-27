@@ -1,0 +1,12 @@
+#pragma version 2
+
+txn ApplicationID
+bz ok
+
+int 0
+byte "key"
+byte "value"
+app_local_put
+
+ok:
+int 1

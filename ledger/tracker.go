@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -24,7 +24,9 @@ import (
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
+	"github.com/algorand/go-algorand/util/db"
 )
 
 // ledgerTracker defines part of the API for any state machine that
@@ -57,8 +59,8 @@ type ledgerTracker interface {
 	loadFromDisk(ledgerForTracker) error
 
 	// newBlock informs the tracker of a new block from round
-	// rnd and a given StateDelta as produced by BlockEvaluator.
-	newBlock(blk bookkeeping.Block, delta StateDelta)
+	// rnd and a given ledgercore.StateDelta as produced by BlockEvaluator.
+	newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta)
 
 	// committedUpTo informs the tracker that the database has
 	// committed all blocks up to and including rnd to persistent
@@ -84,10 +86,10 @@ type ledgerTracker interface {
 // ledgerForTracker defines the part of the ledger that a tracker can
 // access.  This is particularly useful for testing trackers in isolation.
 type ledgerForTracker interface {
-	trackerDB() dbPair
-	blockDB() dbPair
+	trackerDB() db.Pair
+	blockDB() db.Pair
 	trackerLog() logging.Logger
-	trackerEvalVerified(bookkeeping.Block, ledgerForEvaluator) (StateDelta, error)
+	trackerEvalVerified(bookkeeping.Block, ledgerForEvaluator) (ledgercore.StateDelta, error)
 
 	Latest() basics.Round
 	Block(basics.Round) (bookkeeping.Block, error)
@@ -117,7 +119,7 @@ func (tr *trackerRegistry) loadFromDisk(l ledgerForTracker) error {
 	return nil
 }
 
-func (tr *trackerRegistry) newBlock(blk bookkeeping.Block, delta StateDelta) {
+func (tr *trackerRegistry) newBlock(blk bookkeeping.Block, delta ledgercore.StateDelta) {
 	for _, lt := range tr.trackers {
 		lt.newBlock(blk, delta)
 	}

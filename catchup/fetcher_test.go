@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -93,9 +93,6 @@ func (client *mockRPCClient) GetAddress() string {
 }
 func (client *mockRPCClient) GetHTTPClient() *http.Client {
 	return nil
-}
-func (client *mockRPCClient) PrepareURL(x string) string {
-	return strings.Replace(x, "{genesisID}", "test genesisID", -1)
 }
 
 type mockClientAggregator struct {
@@ -535,6 +532,10 @@ func (b *basicRPCNode) GetPeers(options ...network.PeerOption) []network.Peer {
 	return b.peers
 }
 
+func (b *basicRPCNode) SubstituteGenesisID(rawURL string) string {
+	return strings.Replace(rawURL, "{genesisID}", "test genesisID", -1)
+}
+
 type httpTestPeerSource struct {
 	peers []network.Peer
 	mocks.MockNetwork
@@ -549,14 +550,15 @@ func (s *httpTestPeerSource) RegisterHandlers(dispatch []network.TaggedMessageHa
 	s.dispatchHandlers = append(s.dispatchHandlers, dispatch...)
 }
 
+func (s *httpTestPeerSource) SubstituteGenesisID(rawURL string) string {
+	return strings.Replace(rawURL, "{genesisID}", "test genesisID", -1)
+}
+
 // implement network.HTTPPeer
 type testHTTPPeer string
 
 func (p *testHTTPPeer) GetAddress() string {
 	return string(*p)
-}
-func (p *testHTTPPeer) PrepareURL(x string) string {
-	return strings.Replace(x, "{genesisID}", "test genesisID", -1)
 }
 func (p *testHTTPPeer) GetHTTPClient() *http.Client {
 	return &http.Client{}

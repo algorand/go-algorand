@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -109,7 +109,7 @@ func runBuildNetwork() (err error) {
 	}
 	for _, kev := range miscStringStringTokens {
 		ab := strings.SplitN(kev, "=", 2)
-		buildConfig.MiscStringString = append(buildConfig.MiscStringString, "{{" + ab[0] + "}}", ab[1])
+		buildConfig.MiscStringString = append(buildConfig.MiscStringString, "{{"+ab[0]+"}}", ab[1])
 	}
 
 	networkTemplateFile := resolveFile(r.NetworkFile, templateBaseDir)

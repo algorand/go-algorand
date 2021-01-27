@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,7 +38,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
-	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/node"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/rpcs"
@@ -92,6 +92,8 @@ func txEncode(tx transactions.Transaction, ad transactions.ApplyData) (v1.Transa
 		res = assetFreezeTxEncode(tx, ad)
 	case protocol.ApplicationCallTx:
 		res = applicationCallTxEncode(tx, ad)
+	case protocol.CompactCertTx:
+		res = compactCertTxEncode(tx, ad)
 	default:
 		return res, errors.New(errUnknownTransactionType)
 	}
@@ -330,6 +332,17 @@ func assetFreezeTxEncode(tx transactions.Transaction, ad transactions.ApplyData)
 	}
 }
 
+func compactCertTxEncode(tx transactions.Transaction, ad transactions.ApplyData) v1.Transaction {
+	cc := v1.CompactCertTransactionType{
+		CertRound: uint64(tx.CompactCertTxnFields.CertRound),
+		Cert:      protocol.Encode(&tx.CompactCertTxnFields.Cert),
+	}
+
+	return v1.Transaction{
+		CompactCert: &cc,
+	}
+}
+
 func txWithStatusEncode(tr node.TxnWithStatus) (v1.Transaction, error) {
 	s, err := txEncode(tr.Txn.Txn, tr.ApplyData)
 	if err != nil {
@@ -454,6 +467,13 @@ func blockEncode(b bookkeeping.Block, c agreement.Certificate) (v1.Block, error)
 			UpgradePropose: string(b.UpgradePropose),
 			UpgradeApprove: b.UpgradeApprove,
 		},
+		CompactCertVotersTotal: b.CompactCert[protocol.CompactCertBasic].CompactCertVotersTotal.ToUint64(),
+		CompactCertNextRound:   uint64(b.CompactCert[protocol.CompactCertBasic].CompactCertNextRound),
+	}
+
+	if !b.CompactCert[protocol.CompactCertBasic].CompactCertVoters.IsZero() {
+		voters := b.CompactCert[protocol.CompactCertBasic].CompactCertVoters
+		block.CompactCertVoters = voters[:]
 	}
 
 	// Transactions
@@ -1713,7 +1733,7 @@ func Transactions(ctx lib.ReqContext, context echo.Context) {
 		txs, err = ctx.Node.ListTxns(addr, basics.Round(fR), basics.Round(lR))
 		if err != nil {
 			switch err.(type) {
-			case ledger.ErrNoEntry:
+			case ledgercore.ErrNoEntry:
 				if !ctx.Node.IsArchival() {
 					lib.ErrorResponse(w, http.StatusInternalServerError, err, errBlockHashBeenDeletedArchival, ctx.Log)
 					return

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -66,7 +66,7 @@ func Keyreg(keyreg transactions.KeyregTxnFields, header transactions.Header, bal
 	}
 
 	// Write the updated entry
-	err = balances.Put(record)
+	err = balances.Put(header.Sender, record)
 	if err != nil {
 		return err
 	}

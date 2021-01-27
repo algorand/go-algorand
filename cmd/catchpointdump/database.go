@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -48,6 +48,7 @@ var databaseCmd = &cobra.Command{
 			if err != nil {
 				reportErrorf("Unable to create file '%s' : %v", outFileName, err)
 			}
+			defer outFile.Close()
 		}
 		err = printAccountsDatabase(ledgerTrackerFilename, ledger.CatchpointFileHeader{}, outFile)
 		if err != nil {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -38,12 +38,16 @@ func (logger *dumpLogger) dump() {
 
 var logger = dumpLogger{Logger: logging.Base(), Buffer: bytes.NewBuffer(make([]byte, 0))}
 
+var deadlockPanic func()
+
 func setupDeadlockLogger() {
+	deadlockPanic = func() {
+		logger.Panic("potential deadlock detected")
+	}
+
 	deadlock.Opts.LogBuf = logger
 	deadlock.Opts.OnPotentialDeadlock = func() {
-		logger.dump()
-
-		// Capture all goroutine stacks and log to stderr
+		// Capture all goroutine stacks
 		var buf []byte
 		bufferSize := 256 * 1024
 		for {
@@ -53,7 +57,12 @@ func setupDeadlockLogger() {
 			}
 			bufferSize *= 2
 		}
-		fmt.Fprintln(os.Stderr, string(buf))
-		logger.Panic("potential deadlock detected")
+
+		// Run this code in a separate goroutine because it might grab locks.
+		go func() {
+			logger.dump()
+			fmt.Fprintln(os.Stderr, string(buf))
+			deadlockPanic()
+		}()
 	}
 }

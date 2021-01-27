@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -18,13 +18,16 @@ package logging
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
-	"github.com/algorand/go-deadlock"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
+	"github.com/algorand/go-deadlock"
+
+	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/logging/telemetryspec"
 )
 
@@ -314,4 +317,22 @@ func TestLogHistoryLevels(t *testing.T) {
 	a.NotNil(data[4]["log"]) // Error
 	a.Nil(data[5]["log"])    // Panic - this is stack trace
 	a.NotNil(data[6]["log"]) // Panic
+}
+
+func TestReadTelemetryConfigOrDefaultNoDataDir(t *testing.T) {
+	a := require.New(t)
+	tempDir := os.TempDir()
+	originalGlobalConfigFileRoot, _ := config.GetGlobalConfigFileRoot()
+	config.SetGlobalConfigFileRoot(tempDir)
+
+	cfg, err := ReadTelemetryConfigOrDefault("", "")
+	defaultCfgSettings := createTelemetryConfig()
+	config.SetGlobalConfigFileRoot(originalGlobalConfigFileRoot)
+
+	a.Nil(err)
+	a.NotNil(cfg)
+	a.NotEqual(TelemetryConfig{}, cfg)
+	a.Equal(defaultCfgSettings.UserName, cfg.UserName)
+	a.Equal(defaultCfgSettings.Password, cfg.Password)
+	a.Equal(len(defaultCfgSettings.GUID), len(cfg.GUID))
 }

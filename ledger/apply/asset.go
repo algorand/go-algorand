@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -102,7 +102,7 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 			Index:   basics.CreatableIndex(newidx),
 		}
 
-		return balances.PutWithCreatable(record, created, nil)
+		return balances.PutWithCreatable(header.Sender, record, created, nil)
 	}
 
 	// Re-configuration and destroying must be done by the manager key.
@@ -158,7 +158,7 @@ func AssetConfig(cc transactions.AssetConfigTxnFields, header transactions.Heade
 		record.AssetParams[cc.ConfigAsset] = params
 	}
 
-	return balances.PutWithCreatable(record, nil, deleted)
+	return balances.PutWithCreatable(creator, record, nil, deleted)
 }
 
 func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, amount uint64, bypassFreeze bool) error {
@@ -188,7 +188,7 @@ func takeOut(balances Balances, addr basics.Address, asset basics.AssetIndex, am
 	sndHolding.Amount = newAmount
 
 	snd.Assets[asset] = sndHolding
-	return balances.Put(snd)
+	return balances.Put(addr, snd)
 }
 
 func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amount uint64, bypassFreeze bool) error {
@@ -218,7 +218,7 @@ func putIn(balances Balances, addr basics.Address, asset basics.AssetIndex, amou
 	}
 
 	rcv.Assets[asset] = rcvHolding
-	return balances.Put(rcv)
+	return balances.Put(addr, rcv)
 }
 
 // AssetTransfer applies an AssetTransfer transaction using the Balances interface.
@@ -268,7 +268,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 				return fmt.Errorf("too many assets in account: %d > %d", len(snd.Assets), balances.ConsensusParams().MaxAssetsPerAccount)
 			}
 
-			err = balances.Put(snd)
+			err = balances.Put(source, snd)
 			if err != nil {
 				return err
 			}
@@ -355,7 +355,7 @@ func AssetTransfer(ct transactions.AssetTransferTxnFields, header transactions.H
 		}
 
 		delete(snd.Assets, ct.XferAsset)
-		err = balances.Put(snd)
+		err = balances.Put(source, snd)
 		if err != nil {
 			return err
 		}
@@ -390,5 +390,5 @@ func AssetFreeze(cf transactions.AssetFreezeTxnFields, header transactions.Heade
 
 	holding.Frozen = cf.AssetFrozen
 	record.Assets[cf.FreezeAsset] = holding
-	return balances.Put(record)
+	return balances.Put(cf.FreezeAccount, record)
 }

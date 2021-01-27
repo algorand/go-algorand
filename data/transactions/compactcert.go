@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -27,8 +27,9 @@ import (
 type CompactCertTxnFields struct {
 	_struct struct{} `codec:",omitempty,omitemptyarray"`
 
-	CertRound basics.Round     `codec:"certrnd"`
-	Cert      compactcert.Cert `codec:"cert"`
+	CertRound basics.Round             `codec:"certrnd"`
+	CertType  protocol.CompactCertType `codec:"certtype"`
+	Cert      compactcert.Cert         `codec:"cert"`
 }
 
 // Empty returns whether the CompactCertTxnFields are all zero,

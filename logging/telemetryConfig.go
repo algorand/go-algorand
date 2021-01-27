@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -83,11 +83,14 @@ func (cfg TelemetryConfig) Save(configPath string) error {
 	}
 	defer f.Close()
 
-	sanitizedCfg := cfg
-	sanitizedCfg.FilePath = ""
+	var marshaledConfig MarshalingTelemetryConfig
+	marshaledConfig.TelemetryConfig = cfg
+	marshaledConfig.TelemetryConfig.FilePath = ""
+	marshaledConfig.MinLogLevel = uint32(cfg.MinLogLevel)
+	marshaledConfig.ReportHistoryLevel = uint32(cfg.ReportHistoryLevel)
 
 	enc := json.NewEncoder(f)
-	err = enc.Encode(sanitizedCfg)
+	err = enc.Encode(marshaledConfig)
 	return err
 }
 
@@ -130,9 +133,14 @@ func loadTelemetryConfig(path string) (TelemetryConfig, error) {
 		return createTelemetryConfig(), err
 	}
 	defer f.Close()
-	cfg := createTelemetryConfig()
+	var cfg TelemetryConfig
+	var marshaledConfig MarshalingTelemetryConfig
+	marshaledConfig.TelemetryConfig = createTelemetryConfig()
 	dec := json.NewDecoder(f)
-	err = dec.Decode(&cfg)
+	err = dec.Decode(&marshaledConfig)
+	cfg = marshaledConfig.TelemetryConfig
+	cfg.MinLogLevel = logrus.Level(marshaledConfig.MinLogLevel)
+	cfg.ReportHistoryLevel = logrus.Level(marshaledConfig.ReportHistoryLevel)
 	cfg.FilePath = path
 
 	// Sanitize user-defined name.

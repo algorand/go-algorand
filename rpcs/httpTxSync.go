@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -93,7 +93,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 	}
 	bloomParam := base64.URLEncoding.EncodeToString(bloomBytes)
 
-	peers := hts.peers.GetPeers(network.PeersPhonebook)
+	peers := hts.peers.GetPeers(network.PeersPhonebookRelays)
 	if len(peers) == 0 {
 		return nil, nil //errors.New("no peers to tx sync from")
 	}
@@ -113,7 +113,7 @@ func (hts *HTTPTxSync) Sync(ctx context.Context, bloom *bloom.Filter) (txgroups 
 		hts.log.Warnf("txSync bad url %v: %s", hts.rootURL, err)
 		return nil, err
 	}
-	parsedURL.Path = hpeer.PrepareURL(path.Join(parsedURL.Path, TxServiceHTTPPath))
+	parsedURL.Path = hts.peers.SubstituteGenesisID(path.Join(parsedURL.Path, TxServiceHTTPPath))
 	syncURL := parsedURL.String()
 	hts.log.Infof("http sync from %s", syncURL)
 	params := url.Values{}

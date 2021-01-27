@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ import (
 )
 
 func testPhonebookAll(t *testing.T, set []string, ph Phonebook) {
-	actual := ph.GetAddresses(len(set))
+	actual := ph.GetAddresses(len(set), PhoneBookEntryRelayRole)
 	for _, got := range actual {
 		ok := false
 		for _, known := range set {
@@ -60,7 +60,7 @@ func testPhonebookUniform(t *testing.T, set []string, ph Phonebook, getsize int)
 	expected := (uniformityTestLength * getsize) / len(set)
 	counts := make([]int, len(set))
 	for i := 0; i < uniformityTestLength; i++ {
-		actual := ph.GetAddresses(getsize)
+		actual := ph.GetAddresses(getsize, PhoneBookEntryRelayRole)
 		for i, known := range set {
 			for _, xa := range actual {
 				if known == xa {
@@ -89,7 +89,7 @@ func TestArrayPhonebookAll(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = addressData{}
+		ph.data[e] = makePhonebookEntryData("", PhoneBookEntryRelayRole)
 	}
 	testPhonebookAll(t, set, ph)
 }
@@ -98,7 +98,7 @@ func TestArrayPhonebookUniform1(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = addressData{}
+		ph.data[e] = makePhonebookEntryData("", PhoneBookEntryRelayRole)
 	}
 	testPhonebookUniform(t, set, ph, 1)
 }
@@ -107,7 +107,7 @@ func TestArrayPhonebookUniform3(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
 	for _, e := range set {
-		ph.data[e] = addressData{}
+		ph.data[e] = makePhonebookEntryData("", PhoneBookEntryRelayRole)
 	}
 	testPhonebookUniform(t, set, ph, 3)
 }
@@ -118,9 +118,9 @@ func TestPhonebookExtension(t *testing.T) {
 	setA := []string{"a"}
 	moreB := []string{"b"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
-	ph.ReplacePeerList(setA, "default")
-	ph.ExtendPeerList(moreB, "default")
-	ph.ExtendPeerList(setA, "other")
+	ph.ReplacePeerList(setA, "default", PhoneBookEntryRelayRole)
+	ph.ExtendPeerList(moreB, "default", PhoneBookEntryRelayRole)
+	ph.ExtendPeerList(setA, "other", PhoneBookEntryRelayRole)
 	assert.Equal(t, 2, ph.Length())
 	assert.Equal(t, true, ph.data["a"].networkNames["default"])
 	assert.Equal(t, true, ph.data["a"].networkNames["other"])
@@ -133,16 +133,16 @@ func extenderThread(th *phonebookImpl, more []string, wg *sync.WaitGroup, repeti
 	for i := 0; i <= repetitions; i++ {
 		start := rand.Intn(len(more))
 		end := rand.Intn(len(more)-start) + start
-		th.ExtendPeerList(more[start:end], "default")
+		th.ExtendPeerList(more[start:end], "default", PhoneBookEntryRelayRole)
 	}
-	th.ExtendPeerList(more, "default")
+	th.ExtendPeerList(more, "default", PhoneBookEntryRelayRole)
 }
 
 func TestThreadsafePhonebookExtension(t *testing.T) {
 	set := []string{"a", "b", "c", "d", "e"}
 	more := []string{"f", "g", "h", "i", "j"}
 	ph := MakePhonebook(1, 1).(*phonebookImpl)
-	ph.ReplacePeerList(set, "default")
+	ph.ReplacePeerList(set, "default", PhoneBookEntryRelayRole)
 	wg := sync.WaitGroup{}
 	wg.Add(5)
 	for ti := 0; ti < 5; ti++ {
@@ -193,8 +193,8 @@ func TestMultiPhonebook(t *testing.T) {
 		phb = append(phb, e)
 	}
 	mp := MakePhonebook(1, 1*time.Millisecond)
-	mp.ReplacePeerList(pha, "pha")
-	mp.ReplacePeerList(phb, "phb")
+	mp.ReplacePeerList(pha, "pha", PhoneBookEntryRelayRole)
+	mp.ReplacePeerList(phb, "phb", PhoneBookEntryRelayRole)
 
 	testPhonebookAll(t, set, mp)
 	testPhonebookUniform(t, set, mp, 1)
@@ -212,8 +212,8 @@ func TestMultiPhonebookDuplicateFiltering(t *testing.T) {
 		phb = append(phb, e)
 	}
 	mp := MakePhonebook(1, 1*time.Millisecond)
-	mp.ReplacePeerList(pha, "pha")
-	mp.ReplacePeerList(phb, "phb")
+	mp.ReplacePeerList(pha, "pha", PhoneBookEntryRelayRole)
+	mp.ReplacePeerList(phb, "phb", PhoneBookEntryRelayRole)
 
 	testPhonebookAll(t, set, mp)
 	testPhonebookUniform(t, set, mp, 1)
@@ -232,7 +232,7 @@ func TestWaitAndAddConnectionTimeLongtWindow(t *testing.T) {
 
 	// Test the addresses are populated in the phonebook and a
 	// time can be added to one of them
-	entries.ReplacePeerList([]string{addr1, addr2}, "default")
+	entries.ReplacePeerList([]string{addr1, addr2}, "default", PhoneBookEntryRelayRole)
 	addrInPhonebook, waitTime, provisionalTime := entries.GetConnectionWaitTime(addr1)
 	require.Equal(t, true, addrInPhonebook)
 	require.Equal(t, time.Duration(0), waitTime)
@@ -319,7 +319,7 @@ func TestWaitAndAddConnectionTimeShortWindow(t *testing.T) {
 	addr1 := "addrABC"
 
 	// Init the data structures
-	entries.ReplacePeerList([]string{addr1}, "default")
+	entries.ReplacePeerList([]string{addr1}, "default", PhoneBookEntryRelayRole)
 
 	// add 3 values. should not wait
 	// value 1
@@ -362,4 +362,34 @@ func BenchmarkThreadsafePhonebook(b *testing.B) {
 		go threadTestThreadsafePhonebookExtensionLong(&wg, ph, 1000, repetitions)
 	}
 	wg.Wait()
+}
+
+// TestPhonebookRoles tests that the filtering by roles for different
+// phonebooks entries works as expected.
+func TestPhonebookRoles(t *testing.T) {
+	relaysSet := []string{"relay1", "relay2", "relay3"}
+	archiverSet := []string{"archiver1", "archiver2", "archiver3"}
+
+	ph := MakePhonebook(1, 1).(*phonebookImpl)
+	ph.ReplacePeerList(relaysSet, "default", PhoneBookEntryRelayRole)
+	ph.ReplacePeerList(archiverSet, "default", PhoneBookEntryArchiverRole)
+	require.Equal(t, len(relaysSet)+len(archiverSet), len(ph.data))
+	require.Equal(t, len(relaysSet)+len(archiverSet), ph.Length())
+
+	for _, role := range []PhoneBookEntryRoles{PhoneBookEntryRelayRole, PhoneBookEntryArchiverRole} {
+		for k := 0; k < 100; k++ {
+			for l := 0; l < 3; l++ {
+				entries := ph.GetAddresses(l, role)
+				if role == PhoneBookEntryRelayRole {
+					for _, entry := range entries {
+						require.Contains(t, entry, "relay")
+					}
+				} else if role == PhoneBookEntryArchiverRole {
+					for _, entry := range entries {
+						require.Contains(t, entry, "archiver")
+					}
+				}
+			}
+		}
+	}
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -19,8 +19,13 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime/pprof"
 	"testing"
+	"time"
 
+	"github.com/algorand/go-deadlock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/algorand/go-algorand/agreement"
@@ -29,6 +34,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/data/transactions"
+	"github.com/algorand/go-algorand/data/transactions/logic"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 	"github.com/algorand/go-algorand/util/execpool"
@@ -186,7 +192,7 @@ func TestRekeying(t *testing.T) {
 
 		backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
 		defer backlogPool.Shutdown()
-		_, err = l.Validate(context.Background(), validatedBlock.Block(), nil, backlogPool)
+		_, err = l.Validate(context.Background(), validatedBlock.Block(), backlogPool)
 		return err
 	}
 
@@ -223,7 +229,7 @@ func TestRekeying(t *testing.T) {
 	// TODO: More tests
 }
 
-func TestPrepareAppEvaluators(t *testing.T) {
+func TestPrepareEvalParams(t *testing.T) {
 	eval := BlockEvaluator{
 		prevHeader: bookkeeping.BlockHeader{
 			TimeStamp: 1234,
@@ -277,20 +283,20 @@ func TestPrepareAppEvaluators(t *testing.T) {
 
 	// Create some groups with these transactions
 	cases := []evalTestCase{
-		evalTestCase{[]transactions.SignedTxnWithAD{payment}, []bool{false}},
-		evalTestCase{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}},
-		evalTestCase{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}},
-		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}},
-		evalTestCase{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}},
-		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}},
-		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}},
-		evalTestCase{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}},
-		evalTestCase{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}},
+		{[]transactions.SignedTxnWithAD{payment}, []bool{false}},
+		{[]transactions.SignedTxnWithAD{appcall1}, []bool{true}},
+		{[]transactions.SignedTxnWithAD{payment, payment}, []bool{false, false}},
+		{[]transactions.SignedTxnWithAD{appcall1, payment}, []bool{true, false}},
+		{[]transactions.SignedTxnWithAD{payment, appcall1}, []bool{false, true}},
+		{[]transactions.SignedTxnWithAD{appcall1, appcall2}, []bool{true, true}},
+		{[]transactions.SignedTxnWithAD{appcall1, appcall2, appcall1}, []bool{true, true, true}},
+		{[]transactions.SignedTxnWithAD{payment, appcall1, payment}, []bool{false, true, false}},
+		{[]transactions.SignedTxnWithAD{appcall1, payment, appcall2}, []bool{true, false, true}},
 	}
 
 	for i, testCase := range cases {
 		t.Run(fmt.Sprintf("i=%d", i), func(t *testing.T) {
-			res := eval.prepareAppEvaluators(testCase.group)
+			res := eval.prepareEvalParams(testCase.group)
 			require.Equal(t, len(res), len(testCase.group))
 
 			// Compute the expected transaction group without ApplyData for
@@ -305,16 +311,260 @@ func TestPrepareAppEvaluators(t *testing.T) {
 			for j, present := range testCase.expected {
 				if present {
 					require.NotNil(t, res[j])
-					require.Equal(t, res[j].evalParams.GroupIndex, j)
-					require.Equal(t, res[j].evalParams.TxnGroup, expGroupNoAD)
-					require.Equal(t, *res[j].evalParams.Proto, eval.proto)
-					require.Equal(t, *res[j].evalParams.Txn, testCase.group[j].SignedTxn)
-					require.Equal(t, res[j].AppTealGlobals.CurrentRound, eval.prevHeader.Round+1)
-					require.Equal(t, res[j].AppTealGlobals.LatestTimestamp, eval.prevHeader.TimeStamp)
+					require.Equal(t, res[j].GroupIndex, j)
+					require.Equal(t, res[j].TxnGroup, expGroupNoAD)
+					require.Equal(t, *res[j].Proto, eval.proto)
+					require.Equal(t, *res[j].Txn, testCase.group[j].SignedTxn)
 				} else {
 					require.Nil(t, res[j])
 				}
 			}
 		})
 	}
+}
+
+func testLedgerCleanup(l *Ledger, dbName string, inMem bool) {
+	l.Close()
+	if !inMem {
+		hits, err := filepath.Glob(dbName + "*.sqlite")
+		if err != nil {
+			return
+		}
+		for _, fname := range hits {
+			os.Remove(fname)
+		}
+	}
+}
+
+func testEvalAppGroup(t *testing.T, schema basics.StateSchema) (*BlockEvaluator, basics.Address, error) {
+	genesisInitState, addrs, keys := genesis(10)
+
+	dbName := fmt.Sprintf("%s.%d", t.Name(), crypto.RandUint64())
+	const inMem = true
+	cfg := config.GetDefaultLocal()
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(t, err)
+	defer l.Close()
+
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+	eval, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	require.NoError(t, err)
+	eval.validate = true
+	eval.generate = false
+
+	ops, err := logic.AssembleString(`#pragma version 2
+	txn ApplicationID
+	bz create
+	byte "caller"
+	txn Sender
+	app_global_put
+	b ok
+create:
+	byte "creator"
+	txn Sender
+	app_global_put
+ok:
+	int 1`)
+	require.NoError(t, err, ops.Errors)
+	approval := ops.Program
+	ops, err = logic.AssembleString("#pragma version 2\nint 1")
+	require.NoError(t, err)
+	clear := ops.Program
+
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+	header := transactions.Header{
+		Sender:      addrs[0],
+		Fee:         minFee,
+		FirstValid:  newBlock.Round(),
+		LastValid:   newBlock.Round(),
+		GenesisHash: genHash,
+	}
+	appcall1 := transactions.Transaction{
+		Type:   protocol.ApplicationCallTx,
+		Header: header,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			GlobalStateSchema: schema,
+			ApprovalProgram:   approval,
+			ClearStateProgram: clear,
+		},
+	}
+
+	appcall2 := transactions.Transaction{
+		Type:   protocol.ApplicationCallTx,
+		Header: header,
+		ApplicationCallTxnFields: transactions.ApplicationCallTxnFields{
+			ApplicationID: 1,
+		},
+	}
+
+	var group transactions.TxGroup
+	group.TxGroupHashes = []crypto.Digest{crypto.HashObj(appcall1), crypto.HashObj(appcall2)}
+	appcall1.Group = crypto.HashObj(group)
+	appcall2.Group = crypto.HashObj(group)
+	stxn1 := appcall1.Sign(keys[0])
+	stxn2 := appcall2.Sign(keys[0])
+
+	g := []transactions.SignedTxnWithAD{
+		{
+			SignedTxn: stxn1,
+			ApplyData: transactions.ApplyData{
+				EvalDelta: basics.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
+					"creator": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
+				}},
+		},
+		{
+			SignedTxn: stxn2,
+			ApplyData: transactions.ApplyData{
+				EvalDelta: basics.EvalDelta{GlobalDelta: map[string]basics.ValueDelta{
+					"caller": {Action: basics.SetBytesAction, Bytes: string(addrs[0][:])}},
+				}},
+		},
+	}
+	err = eval.transactionGroup(g)
+	return eval, addrs[0], err
+}
+
+// TestEvalAppStateCountsWithTxnGroup ensures txns in a group can't violate app state schema limits
+// the test ensures that
+// commitToParent -> applyChild copies child's cow state usage counts into parent
+// and the usage counts correctly propagated from parent cow to child cow and back
+func TestEvalAppStateCountsWithTxnGroup(t *testing.T) {
+	_, _, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 1})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "store bytes count 2 exceeds schema bytes count 1")
+}
+
+// TestEvalAppAllocStateWithTxnGroup ensures roundCowState.deltas and applyStorageDelta
+// produce correct results when a txn group has storage allocate and storage update actions
+func TestEvalAppAllocStateWithTxnGroup(t *testing.T) {
+	eval, addr, err := testEvalAppGroup(t, basics.StateSchema{NumByteSlice: 2})
+	require.NoError(t, err)
+	deltas := eval.state.deltas()
+	ad, _ := deltas.Accts.Get(addr)
+	state := ad.AppParams[1].GlobalState
+	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["caller"])
+	require.Equal(t, basics.TealValue{Type: basics.TealBytesType, Bytes: string(addr[:])}, state["creator"])
+}
+
+func BenchmarkBlockEvaluatorRAMCrypto(b *testing.B) {
+	benchmarkBlockEvaluator(b, true, true)
+}
+func BenchmarkBlockEvaluatorRAMNoCrypto(b *testing.B) {
+	benchmarkBlockEvaluator(b, true, false)
+}
+func BenchmarkBlockEvaluatorDiskCrypto(b *testing.B) {
+	benchmarkBlockEvaluator(b, false, true)
+}
+func BenchmarkBlockEvaluatorDiskNoCrypto(b *testing.B) {
+	benchmarkBlockEvaluator(b, false, false)
+}
+
+// this variant focuses on benchmarking ledger.go `eval()`, the rest is setup, it runs eval() b.N times.
+func benchmarkBlockEvaluator(b *testing.B, inMem bool, withCrypto bool) {
+	deadlockDisable := deadlock.Opts.Disable
+	deadlock.Opts.Disable = true
+	defer func() { deadlock.Opts.Disable = deadlockDisable }()
+	start := time.Now()
+	genesisInitState, addrs, keys := genesis(100000)
+	dbName := fmt.Sprintf("%s.%d", b.Name(), crypto.RandUint64())
+	proto := config.Consensus[genesisInitState.Block.CurrentProtocol]
+	proto.MaxTxnBytesPerBlock = 1000000000 // very big, no limit
+	config.Consensus[protocol.ConsensusVersion(dbName)] = proto
+	genesisInitState.Block.CurrentProtocol = protocol.ConsensusVersion(dbName)
+	cfg := config.GetDefaultLocal()
+	cfg.Archival = true
+	l, err := OpenLedger(logging.Base(), dbName, inMem, genesisInitState, cfg)
+	require.NoError(b, err)
+	defer testLedgerCleanup(l, dbName, inMem)
+
+	dbName2 := dbName + "_2"
+	l2, err := OpenLedger(logging.Base(), dbName2, inMem, genesisInitState, cfg)
+	require.NoError(b, err)
+	defer testLedgerCleanup(l2, dbName2, inMem)
+
+	setupDone := time.Now()
+	setupTime := setupDone.Sub(start)
+	b.Logf("BenchmarkBlockEvaluator setup time %s", setupTime.String())
+
+	bepprof := os.Getenv("BLOCK_EVAL_PPROF")
+	if len(bepprof) > 0 {
+		profpath := dbName + "_cpuprof"
+		profout, err := os.Create(profpath)
+		if err != nil {
+			b.Fatal(err)
+			return
+		}
+		b.Logf("%s: cpu profile for b.N=%d", profpath, b.N)
+		pprof.StartCPUProfile(profout)
+		defer func() {
+			pprof.StopCPUProfile()
+			profout.Close()
+		}()
+	}
+
+	// test speed of block building
+	newBlock := bookkeeping.MakeBlock(genesisInitState.Block.BlockHeader)
+	bev, err := l.StartEvaluator(newBlock.BlockHeader, 0)
+	require.NoError(b, err)
+
+	genHash := genesisInitState.Block.BlockHeader.GenesisHash
+
+	numTxns := 50000
+
+	for i := 0; i < numTxns; i++ {
+		sender := i % len(addrs)
+		receiver := (i + 1) % len(addrs)
+		txn := transactions.Transaction{
+			Type: protocol.PaymentTx,
+			Header: transactions.Header{
+				Sender:      addrs[sender],
+				Fee:         minFee,
+				FirstValid:  newBlock.Round(),
+				LastValid:   newBlock.Round(),
+				GenesisHash: genHash,
+			},
+			PaymentTxnFields: transactions.PaymentTxnFields{
+				Receiver: addrs[receiver],
+				Amount:   basics.MicroAlgos{Raw: 100},
+			},
+		}
+		st := txn.Sign(keys[sender])
+		err = bev.Transaction(st, transactions.ApplyData{})
+		require.NoError(b, err)
+	}
+
+	validatedBlock, err := bev.GenerateBlock()
+	require.NoError(b, err)
+
+	blockBuildDone := time.Now()
+	blockBuildTime := blockBuildDone.Sub(setupDone)
+	b.ReportMetric(float64(blockBuildTime)/float64(numTxns), "ns/block_build_tx")
+
+	l.AddValidatedBlock(*validatedBlock, agreement.Certificate{})
+
+	avbDone := time.Now()
+	avbTime := avbDone.Sub(blockBuildDone)
+	b.ReportMetric(float64(avbTime)/float64(numTxns), "ns/AddValidatedBlock_tx")
+
+	backlogPool := execpool.MakeBacklog(nil, 0, execpool.LowPriority, nil)
+	defer backlogPool.Shutdown()
+
+	// test speed of block validation
+	// This should be the same as the eval line in ledger.go AddBlock()
+	// This is pulled out to isolate eval() time from db ops of AddValidatedBlock()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if withCrypto {
+			_, err = l2.Validate(context.Background(), validatedBlock.blk, backlogPool)
+		} else {
+			_, err = eval(context.Background(), l2, validatedBlock.blk, false, nil, nil, true)
+		}
+		require.NoError(b, err)
+	}
+
+	abDone := time.Now()
+	abTime := abDone.Sub(avbDone)
+	b.ReportMetric(float64(abTime)/float64(numTxns*b.N), "ns/eval_validate_tx")
+
+	b.StopTimer()
 }

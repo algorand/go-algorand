@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -57,9 +57,6 @@ type testHTTPPeer string
 func (p testHTTPPeer) GetAddress() string {
 	return string(p)
 }
-func (p *testHTTPPeer) PrepareURL(x string) string {
-	return strings.Replace(x, "{genesisID}", "test genesisID", -1)
-}
 func (p *testHTTPPeer) GetHTTPClient() *http.Client {
 	return &http.Client{}
 }
@@ -111,6 +108,10 @@ func (b *basicRPCNode) stop() {
 
 func (b *basicRPCNode) GetPeers(options ...network.PeerOption) []network.Peer {
 	return b.peers
+}
+
+func (b *basicRPCNode) SubstituteGenesisID(rawURL string) string {
+	return strings.Replace(rawURL, "{genesisID}", "test genesisID", -1)
 }
 
 func nodePair() (*basicRPCNode, *basicRPCNode) {

@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -28,6 +28,7 @@ import (
 	"github.com/algorand/go-algorand/data/basics"
 	"github.com/algorand/go-algorand/data/bookkeeping"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/network"
 )
@@ -43,6 +44,7 @@ type CatchpointCatchupStats struct {
 	CatchpointLabel   string
 	TotalAccounts     uint64
 	ProcessedAccounts uint64
+	VerifiedAccounts  uint64
 	TotalBlocks       uint64
 	AcquiredBlocks    uint64
 	VerifiedBlocks    uint64
@@ -255,14 +257,14 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 	cs.statsMu.Lock()
 	label := cs.stats.CatchpointLabel
 	cs.statsMu.Unlock()
-	round, _, err0 := ledger.ParseCatchpointLabel(label)
+	round, _, err0 := ledgercore.ParseCatchpointLabel(label)
 
 	if err0 != nil {
 		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to patse label : %v", err0))
 	}
 
 	// download balances file.
-	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs)
+	ledgerFetcher := makeLedgerFetcher(cs.net, cs.ledgerAccessor, cs.log, cs, cs.config)
 	attemptsCount := 0
 
 	for {
@@ -277,11 +279,15 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 		}
 		err = ledgerFetcher.downloadLedger(cs.ctx, round)
 		if err == nil {
-			break
+			err = cs.ledgerAccessor.BuildMerkleTrie(cs.ctx, cs.updateVerifiedAccounts)
+			if err == nil {
+				break
+			}
+			// failed to build the merkle trie for the above catchpoint file.
 		}
 		// instead of testing for err == cs.ctx.Err() , we'll check on the context itself.
 		// this is more robust, as the http client library sometimes wrap the context canceled
-		// error with other erros.
+		// error with other errors.
 		if cs.ctx.Err() != nil {
 			return cs.stopOrAbort()
 		}
@@ -298,6 +304,13 @@ func (cs *CatchpointCatchupService) processStageLedgerDownload() (err error) {
 		return cs.abort(fmt.Errorf("processStageLedgerDownload failed to update stage to CatchpointCatchupStateLastestBlockDownload : %v", err))
 	}
 	return nil
+}
+
+// updateVerifiedAccounts update the user's statistics for the given verified accounts
+func (cs *CatchpointCatchupService) updateVerifiedAccounts(verifiedAccounts uint64) {
+	cs.statsMu.Lock()
+	defer cs.statsMu.Unlock()
+	cs.stats.VerifiedAccounts = verifiedAccounts
 }
 
 // processStageLastestBlockDownload is the third catchpoint catchup stage. It downloads the latest block and verify that against the previously downloaded ledger.
@@ -328,6 +341,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 				if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 					// try again.
 					blk = nil
+					cs.log.Infof("processStageLastestBlockDownload: block %d download failed, another attempt will be made; err = %v", blockRound, err)
 					continue
 				}
 				return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed to get block %d : %v", blockRound, err))
@@ -369,6 +383,7 @@ func (cs *CatchpointCatchupService) processStageLastestBlockDownload() (err erro
 			if attemptsCount <= cs.config.CatchupBlockDownloadRetryAttempts {
 				// try again.
 				blk = nil
+				cs.log.Infof("processStageLastestBlockDownload: block %d verification against catchpoint failed, another attempt will be made; err = %v", blockRound, err)
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageLastestBlockDownload failed when calling VerifyCatchpoint : %v", err))
@@ -439,7 +454,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 	blocksFetched := uint64(1) // we already got the first block in the previous step.
 	var blk *bookkeeping.Block
 	var client FetcherClient
-	for attemptsCount := uint64(1); blocksFetched <= lookback; attemptsCount++ {
+	for retryCount := uint64(1); blocksFetched <= lookback; {
 		if err := cs.ctx.Err(); err != nil {
 			return cs.stopOrAbort()
 		}
@@ -450,7 +465,7 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			blk = &ledgerBlock
 		} else {
 			switch err.(type) {
-			case ledger.ErrNoEntry:
+			case ledgercore.ErrNoEntry:
 				// this is expected, ignore this one.
 			default:
 				cs.log.Warnf("processStageBlocksDownload encountered the following error when attempting to retrieve the block for round %d : %v", topBlock.Round()-basics.Round(blocksFetched), err)
@@ -464,9 +479,10 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 				if cs.ctx.Err() != nil {
 					return cs.stopOrAbort()
 				}
-				if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
+				if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 					// try again.
-					cs.log.Infof("Failed to download block %d on attempt %d out of %d. %v", topBlock.Round()-basics.Round(blocksFetched), attemptsCount, cs.config.CatchupBlockDownloadRetryAttempts, err)
+					cs.log.Infof("Failed to download block %d on attempt %d out of %d. %v", topBlock.Round()-basics.Round(blocksFetched), retryCount, cs.config.CatchupBlockDownloadRetryAttempts, err)
+					retryCount++
 					continue
 				}
 				return cs.abort(fmt.Errorf("processStageBlocksDownload failed after multiple blocks download attempts"))
@@ -482,8 +498,9 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			// not identical, retry download.
 			cs.log.Warnf("processStageBlocksDownload downloaded block(%d) did not match it's successor(%d) block hash %v != %v", blk.Round(), prevBlock.Round(), blk.Hash(), prevBlock.BlockHeader.Branch)
 			cs.updateBlockRetrievalStatistics(-1, 0)
-			if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
+			if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 				// try again.
+				retryCount++
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageBlocksDownload downloaded block(%d) did not match it's successor(%d) block hash %v != %v", blk.Round(), prevBlock.Round(), blk.Hash(), prevBlock.BlockHeader.Branch))
@@ -493,8 +510,9 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		if _, ok := config.Consensus[blk.BlockHeader.CurrentProtocol]; !ok {
 			cs.log.Warnf("processStageBlocksDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol)
 			cs.updateBlockRetrievalStatistics(-1, 0)
-			if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
+			if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 				// try again.
+				retryCount++
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageBlocksDownload: unsupported protocol version detected: '%v'", blk.BlockHeader.CurrentProtocol))
@@ -505,8 +523,9 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 			cs.log.Warnf("processStageBlocksDownload: downloaded block content does not match downloaded block header")
 			// try again.
 			cs.updateBlockRetrievalStatistics(-1, 0)
-			if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
+			if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 				// try again.
+				retryCount++
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageBlocksDownload: downloaded block content does not match downloaded block header"))
@@ -519,8 +538,9 @@ func (cs *CatchpointCatchupService) processStageBlocksDownload() (err error) {
 		if err != nil {
 			cs.log.Warnf("processStageBlocksDownload failed to store downloaded staging block for round %d", blk.Round())
 			cs.updateBlockRetrievalStatistics(-1, -1)
-			if attemptsCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
+			if retryCount <= uint64(cs.config.CatchupBlockDownloadRetryAttempts) {
 				// try again.
+				retryCount++
 				continue
 			}
 			return cs.abort(fmt.Errorf("processStageBlocksDownload failed to store downloaded staging block for round %d", blk.Round()))

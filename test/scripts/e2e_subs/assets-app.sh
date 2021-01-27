@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# TIMEOUT=300
+# TIMEOUT=320
 
 date '+assets-app start %Y%m%d_%H%M%S'
 
@@ -89,7 +89,7 @@ if [[ $RES != *"$ERR_APP_OI_STR2"* ]]; then
     date '+assets-app FAIL transfer succeeded on account which has not opted in %Y%m%d_%H%M%S'
     false
 fi
-    
+
 # xfer1 (2) creator -> alice
 ${xcmd} --from $CREATOR transfer --receiver $ALICE --amount $XFER1
 ${xcmd} --from $CREATOR transfer --receiver $ALICE --amount $XFER1

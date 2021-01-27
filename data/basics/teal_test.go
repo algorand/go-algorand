@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -76,39 +76,6 @@ func TestStateDeltaValid(t *testing.T) {
 	sd["intval"] = ValueDelta{Action: SetUintAction, Uint: 0}
 	sd["delval"] = ValueDelta{Action: DeleteAction, Uint: 0, Bytes: tooLongValue}
 	err = sd.Valid(&protoF)
-	a.NoError(err)
-}
-
-func TestSatisfiesSchema(t *testing.T) {
-	a := require.New(t)
-
-	tkv := TealKeyValue{}
-	schema := StateSchema{}
-	err := tkv.SatisfiesSchema(schema)
-	a.NoError(err)
-
-	tkv["key"] = TealValue{Type: TealType(10), Uint: 1}
-	err = tkv.SatisfiesSchema(schema)
-	a.Error(err)
-	a.Contains(err.Error(), "unknown type")
-
-	tkv["key"] = TealValue{Type: TealUintType, Uint: 1}
-	err = tkv.SatisfiesSchema(schema)
-	a.Error(err)
-	a.Contains(err.Error(), "exceeds schema integer count")
-
-	tkv["key"] = TealValue{Type: TealBytesType, Uint: 1, Bytes: "value"}
-	err = tkv.SatisfiesSchema(schema)
-	a.Error(err)
-	a.Contains(err.Error(), "exceeds schema bytes count")
-
-	schema.NumUint = 1
-	err = tkv.SatisfiesSchema(schema)
-	a.Error(err)
-	a.Contains(err.Error(), "exceeds schema bytes count")
-
-	schema.NumByteSlice = 1
-	err = tkv.SatisfiesSchema(schema)
 	a.NoError(err)
 }
 

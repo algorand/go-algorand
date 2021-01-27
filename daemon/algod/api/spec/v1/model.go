@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -524,6 +524,11 @@ type Transaction struct {
 	// required: true
 	ApplicationCall *ApplicationCallTransactionType `json:"app,omitempty"`
 
+	// CompactCert
+	//
+	// required: true
+	CompactCert *CompactCertTransactionType `json:"compactcert,omitempty"`
+
 	// FromRewards is the amount of pending rewards applied to the From
 	// account as part of this transaction.
 	//
@@ -766,6 +771,21 @@ type ApplicationCallTransactionType struct {
 	OnCompletion string `json:"oncompletion"`
 }
 
+// CompactCertTransactionType contains the additional fields for a compact cert transaction
+// swagger:model CompactCertTransactionType
+type CompactCertTransactionType struct {
+	// CertRound is the round whose block this compact cert refers to.
+	//
+	// required: true
+	CertRound uint64 `json:"rnd"`
+
+	// Cert is the msgpack encoding of the compact cert.
+	//
+	// required: true
+	// swagger:strfmt byte
+	Cert []byte `json:"cert"`
+}
+
 // TransactionList contains a list of transactions
 // swagger:model TransactionList
 type TransactionList struct {
@@ -916,6 +936,24 @@ type Block struct {
 
 	UpgradeState
 	UpgradeVote
+
+	// CompactCertVoters is the root of the merkle tree of voters for compact certs.
+	//
+	// required: true
+	// swagger:strfmt byte
+	CompactCertVoters []byte `json:"compactCertVoters"`
+
+	// CompactCertVotersTotal is the total amount of microalgos held by the voters in
+	// the CompactCertVoters merkle tree.
+	//
+	// required: true
+	CompactCertVotersTotal uint64 `json:"compactCertVotersTotal"`
+
+	// CompactCertNextRound is the next round for which a compact certificate is
+	// expected.
+	//
+	// required: true
+	CompactCertNextRound uint64 `json:"compactCertNextRound"`
 }
 
 // UpgradeState contains the information about a current state of an upgrade

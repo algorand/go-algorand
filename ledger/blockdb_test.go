@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -32,11 +32,12 @@ import (
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
+	"github.com/algorand/go-algorand/util/db"
 )
 
-func dbOpenTest(t testing.TB, inMemory bool) (dbPair, string) {
+func dbOpenTest(t testing.TB, inMemory bool) (db.Pair, string) {
 	fn := fmt.Sprintf("%s.%d", strings.ReplaceAll(t.Name(), "/", "."), crypto.RandUint64())
-	dbs, err := dbOpen(fn, inMemory)
+	dbs, err := db.OpenPair(fn, inMemory)
 	require.NoErrorf(t, err, "Filename : %s\nInMemory: %v", fn, inMemory)
 	return dbs, fn
 }
@@ -112,18 +113,18 @@ func checkBlockDB(t *testing.T, tx *sql.Tx, blocks []blockEntry) {
 	require.Error(t, err)
 }
 
-func setDbLogging(t testing.TB, dbs dbPair) {
+func setDbLogging(t testing.TB, dbs db.Pair) {
 	dblogger := logging.TestingLog(t)
-	dbs.rdb.SetLogger(dblogger)
-	dbs.wdb.SetLogger(dblogger)
+	dbs.Rdb.SetLogger(dblogger)
+	dbs.Wdb.SetLogger(dblogger)
 }
 
 func TestBlockDBEmpty(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	tx, err := dbs.wdb.Handle.Begin()
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
 	defer tx.Rollback()
 
@@ -135,9 +136,9 @@ func TestBlockDBEmpty(t *testing.T) {
 func TestBlockDBInit(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	tx, err := dbs.wdb.Handle.Begin()
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
 	defer tx.Rollback()
 
@@ -155,9 +156,9 @@ func TestBlockDBInit(t *testing.T) {
 func TestBlockDBAppend(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	tx, err := dbs.wdb.Handle.Begin()
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
 	defer tx.Rollback()
 
@@ -180,9 +181,9 @@ func TestBlockDBAppend(t *testing.T) {
 func TestFixGenesisPaysetHash(t *testing.T) {
 	dbs, _ := dbOpenTest(t, true)
 	setDbLogging(t, dbs)
-	defer dbs.close()
+	defer dbs.Close()
 
-	tx, err := dbs.wdb.Handle.Begin()
+	tx, err := dbs.Wdb.Handle.Begin()
 	require.NoError(t, err)
 	defer tx.Rollback()
 

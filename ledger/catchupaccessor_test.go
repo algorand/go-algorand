@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -30,6 +30,7 @@ import (
 	"github.com/algorand/go-algorand/config"
 	"github.com/algorand/go-algorand/crypto"
 	"github.com/algorand/go-algorand/data/basics"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -61,7 +62,7 @@ func benchmarkRestoringFromCatchpointFileHelper(b *testing.B) {
 		Version:           catchpointFileVersion,
 		BalancesRound:     basics.Round(0),
 		BlocksRound:       basics.Round(0),
-		Totals:            AccountTotals{},
+		Totals:            ledgercore.AccountTotals{},
 		TotalAccounts:     accountsCount,
 		TotalChunks:       (accountsCount + BalancesPerCatchpointFileChunk - 1) / BalancesPerCatchpointFileChunk,
 		Catchpoint:        "",

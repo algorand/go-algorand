@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@ import (
 	"github.com/algorand/go-algorand/data/committee"
 	"github.com/algorand/go-algorand/data/transactions"
 	"github.com/algorand/go-algorand/ledger"
+	"github.com/algorand/go-algorand/ledger/ledgercore"
 	"github.com/algorand/go-algorand/logging"
 	"github.com/algorand/go-algorand/protocol"
 )
@@ -237,7 +238,7 @@ func (l *Ledger) Circulation(r basics.Round) (basics.MicroAlgos, error) {
 			roundCirculation{
 				elements: [2]roundCirculationPair{
 					circulation.elements[1],
-					roundCirculationPair{
+					{
 						round:       r,
 						onlineMoney: totals.Online.Money},
 				},
@@ -271,7 +272,7 @@ func (l *Ledger) Seed(r basics.Round) (committee.Seed, error) {
 			roundSeed{
 				elements: [2]roundSeedPair{
 					seed.elements[1],
-					roundSeedPair{
+					{
 						round: r,
 						seed:  blockhdr.Seed,
 					},
@@ -333,7 +334,7 @@ func (l *Ledger) EnsureValidatedBlock(vb *ledger.ValidatedBlock, c agreement.Cer
 		logfn := logging.Base().Errorf
 
 		switch err.(type) {
-		case ledger.BlockInLedgerError:
+		case ledgercore.BlockInLedgerError:
 			logfn = logging.Base().Debugf
 		}
 
@@ -361,7 +362,7 @@ func (l *Ledger) EnsureBlock(block *bookkeeping.Block, c agreement.Certificate) 
 				logging.Base().Errorf("unrecoverable protocol error detected at block %d: %v", round, err)
 				protocolErrorLogged = true
 			}
-		case ledger.BlockInLedgerError:
+		case ledgercore.BlockInLedgerError:
 			logging.Base().Debugf("could not write block %d to the ledger: %v", round, err)
 			return // this error implies that l.LastRound() >= round
 		default:

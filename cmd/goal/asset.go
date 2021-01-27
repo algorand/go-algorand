@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Algorand, Inc.
+// Copyright (C) 2019-2021 Algorand, Inc.
 // This file is part of go-algorand
 //
 // go-algorand is free software: you can redistribute it and/or modify
@@ -71,8 +71,8 @@ func init() {
 	destroyAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "Asset ID to destroy")
 	destroyAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of asset to destroy")
 
-	configAssetCmd.Flags().StringVar(&assetManager, "manager", "", "Manager account to issue the config transaction (defaults to creator)")
-	configAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset to configure")
+	configAssetCmd.Flags().StringVar(&assetManager, "manager", "", "Manager account to issue the config transaction")
+	configAssetCmd.Flags().StringVar(&assetCreator, "creator", "", "Account address for asset to configure (defaults to manager)")
 	configAssetCmd.Flags().Uint64Var(&assetID, "assetid", 0, "Asset ID to configure")
 	configAssetCmd.Flags().StringVar(&assetUnitName, "asset", "", "Unit name of asset to configure")
 	configAssetCmd.Flags().StringVar(&assetNewManager, "new-manager", "", "New manager address")
@@ -145,7 +145,7 @@ func lookupAssetID(cmd *cobra.Command, creator string, client libgoal.Client) {
 	}
 
 	if !assetOrUnit {
-		reportErrorf("Either [--assetid] or [--unitname and --creator] must be specified")
+		reportErrorf("Missing required parameter [--assetid] or [--unitname and --creator] must be specified")
 	}
 
 	if !cmd.Flags().Changed("creator") {
@@ -265,6 +265,10 @@ var destroyAssetCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
 
+		if assetManager == "" && assetCreator == "" {
+			reportErrorf("Missing required parameter [--manager] or [--creator]")
+		}
+
 		if assetManager == "" {
 			assetManager = assetCreator
 		}
@@ -333,8 +337,8 @@ var configAssetCmd = &cobra.Command{
 		client := ensureFullClient(dataDir)
 		accountList := makeAccountsList(dataDir)
 
-		if assetManager == "" {
-			assetManager = assetCreator
+		if assetCreator == "" {
+			assetCreator = assetManager
 		}
 
 		creator := accountList.getAddressByName(assetCreator)
