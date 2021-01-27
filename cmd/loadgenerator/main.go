@@ -87,14 +87,18 @@ func nextSpendRound(cfg config, round uint64) uint64 {
 
 func spendLoop(cfg config, privateKey *crypto.SignatureSecrets, publicKey basics.Address) (err error) {
 	restClient := client.MakeRestClient(*cfg.ClientURL, cfg.APIToken)
-
 	for {
 		waitForRound(restClient, cfg, true)
 		queueFull := generateTransactions(restClient, cfg, privateKey, publicKey)
 		if queueFull {
 			waitForRound(restClient, cfg, false)
+			if !cfg.Repeat {
+				fmt.Fprintf(os.Stdout, "Repeat configuration flag set to false, terminating.\n")
+				break
+			}
 		}
 	}
+	return nil
 }
 
 func waitForRound(restClient client.RestClient, cfg config, spendingRound bool) {
@@ -177,12 +181,12 @@ func generateTransactions(restClient client.RestClient, cfg config, privateKey *
 		go func(base int) {
 			defer sendWaitGroup.Done()
 			for x := base; x < transactionBlockSize; x += nroutines {
-				_, err = restClient.SendRawTransaction(txns[x])
-				if err != nil {
-					if strings.Contains(err.Error(), "txn dead") || strings.Contains(err.Error(), "below threshold") {
+				_, err2 := restClient.SendRawTransaction(txns[x])
+				if err2 != nil {
+					if strings.Contains(err2.Error(), "txn dead") || strings.Contains(err2.Error(), "below threshold") {
 						break
 					}
-					fmt.Fprintf(os.Stderr, "unable to send transaction : %v\n", err)
+					fmt.Fprintf(os.Stderr, "unable to send transaction : %v\n", err2)
 				} else {
 					sent[base]++
 				}
